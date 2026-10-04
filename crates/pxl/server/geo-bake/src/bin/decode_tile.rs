@@ -11,28 +11,6 @@
 //!   decode_tile out/terrain/v7/_ocean            # a path works too
 //!   decode_tile --all                            # every page of every level, checked
 //!   decode_tile --all --version v7
-//!
-//! (`cargo run --manifest-path crates/Cargo.toml --profile server --bin
-//! decode_tile -- …`, from the repository root, where `out/` is.)
-//!
-//! A page is read by the model's own `decode_terrain`, so a page this cannot
-//! read is one the client cannot either. What it checks past that is the
-//! bake's contract: the elevation is the padded page's, the ground and the
-//! index lane the page's own size, nothing follows the tree, every packed
-//! cell names a type its channel gives out, and the index lane holds at least
-//! the page's own surface — what it says of the pages under it is the fold's
-//! (pxl-spec bake/fold.rs `fold_index`), whose laws are tested there. A cell's fields are indices into the pack's
-//! rows, and reading one past its row clamps to the row's last entry
-//! (pxl-spec bake/pack.rs), so a writer that disagrees with the reader draws
-//! the wrong ground rather than failing — which is why it is checked here.
-//! A bake that drifts is caught before it is published, which is what
-//! `--all` after `deno task bake:tiles` is for.
-//!
-//! For one page it also writes `heights.png` (the raster stretched to its own
-//! range, so a flat page is flat gray), one PNG a channel in the palette's
-//! colors, with `void` left black and an index the pack has no type for in
-//! magenta, and `decks.png`, the decks from above with their piers white.
-//! The picture is for the eye; the summary is the check.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -79,9 +57,7 @@ struct Page {
 fn decode(pkt: &[u8]) -> Result<Page, String> {
     let t = decode_terrain(pkt).map_err(|e| format!("not a page: {e:?}"))?;
     let (ele, cells, extent, occupancy, decks) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent().to_vec(), t.index.occupancy, t.decks);
-    // Nothing may follow: a page is exactly its tree, and bytes past it are a
-    // writer that disagrees with the reader, which only checks that the
-    // payload the header names is there.
+    // Nothing may follow the tree: the decoder only checks the payload is there.
     let at = WORD_SZ as usize;
     let payload = u32::from_le_bytes(pkt[at..at + 4].try_into().expect("a header word")) as usize;
     if payload + HDR_SZ as usize != pkt.len() {
@@ -167,8 +143,6 @@ fn print_summary(name: &str, s: &Summary) {
     }
 }
 
-/// The bores, and how deep each point's floor lies under the surface the
-/// page draws there: a bore cuts only where it is under.
 fn print_bores(page: &Page) {
     let bores: Vec<_> = page.decks.iter().filter(|d| d.form == Form::Bore).collect();
     if bores.is_empty() {
@@ -194,8 +168,6 @@ fn print_decks(decks: &Decks) {
         n => println!("  decks     {n}, {} points, tops {}..{}", decks.points.len(), tops[0], tops[1]),
     }
 }
-
-// ---- PNG ----
 
 fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&(data.len() as u32).to_be_bytes());
@@ -253,8 +225,6 @@ fn channel_png(page: &Page, f: usize) -> Vec<u8> {
     png(PAGE_CELLS, PAGE_CELLS, 3, &px)
 }
 
-/// The decks drawn from above: each covered cell its surface's color, the
-/// higher deck where two cross, and a pier white.
 fn decks_png(page: &Page) -> Vec<u8> {
     let n = PAGE_CELLS as i64;
     let mut top = vec![f64::NEG_INFINITY; (n * n) as usize];
@@ -270,8 +240,6 @@ fn decks_png(page: &Page) -> Vec<u8> {
     });
     png(PAGE_CELLS, PAGE_CELLS, 3, &px)
 }
-
-// ---- driver ----
 
 fn stored_pages(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
     for entry in std::fs::read_dir(dir)? {

@@ -12,19 +12,11 @@ use crate::mesh::paint::object::adapter::Painter;
 use crate::mesh::paint::terrain::adapter::ChunkSample;
 use crate::mesh::voxel_scan::{ScanContext, APRON, COL_SPAN};
 
-/// What stands in a column, from its bottom to its top exclusive, in z16
-/// cells: an object folded to a level cell, air where its material is none,
-/// or a deck's span.
+/// Bottom to top exclusive, in z16 cells: a folded object, air, or a deck's span.
 pub type Stands = (i32, i32, Option<(u32, u8)>);
 
-/// Writes a level chunk's runs into `direct`, an open direct writer: every
-/// column of the padded grid, the chunk's own and the apron's. `sample` is the
-/// chunk read from its level page; `cells` what the object layer folds to at
-/// the level, by level coordinate; `(cx0, cy0)` the chunk's own first column
-/// at that coordinate; `step` how many z16 cells a level cell spans.
-/// Heights are z16 cells. What stands in each column is gathered into
-/// `stands`, the caller's to keep, as one list ordered by column and height;
-/// an error where the heap refused it or the runs room.
+/// Every column of the padded grid, apron included. `step` is z16 cells a
+/// level cell spans; heights are z16 cells.
 pub fn write_level_runs(
     direct: &mut ScanContext,
     sample: &ChunkSample,
@@ -55,7 +47,6 @@ pub fn write_level_runs(
     let mut next = 0;
     for i in 0..columns {
         direct.direct_column(i as u32);
-        // The ground from `from` up to `to`, both exclusive at the top.
         let ground = |direct: &mut ScanContext, from: i32, to: i32| sample.ground_runs(i, from, to, |lo, hi, m, l| direct.direct_run(lo, hi, m, l));
         let mut z = sample.floor;
         while next < stands.len() && stands[next].0 == i as u32 {
@@ -68,7 +59,7 @@ pub fn write_level_runs(
             if let Some((m, l)) = stand {
                 direct.direct_run(lo, hi - 1, m, l)?;
             }
-            z = oz + s;
+            z = hi;
         }
         ground(direct, z, i32::MAX)?;
     }

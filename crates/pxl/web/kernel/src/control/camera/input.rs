@@ -21,6 +21,7 @@ use crate::control::camera::controller::{active, Active};
 use crate::control::camera::gesture::{linear, Anchor};
 use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3, world_struck_corner};
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
+use crate::control::interaction::{clear_hover, clear_hover_coord, hold, hover_at, tap, Holding};
 use crate::control::navigation::destination::cancel as cancel_destination;
 use crate::global::Global;
 use crate::layer::decor::hit::{raycast_decor, DecorStruck, Scattered};
@@ -28,7 +29,7 @@ use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::geometry::{anchor_center, object_aabb, object_center};
 use crate::layer::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, OccupiedEntry};
-use crate::layer::terrain::ground_snap::ground_or_raw;
+use crate::control::navigation::walk::stand_or_raw;
 use crate::shell::setting::store::settings_store;
 use crate::world::access::Hit;
 use crate::world::change::request_world_tick;
@@ -205,7 +206,7 @@ fn handle_tap(hovered: Pvf3) {
             // Recenter where a walker would stand across the struck face, by the
             // ground's own rule, so a pan after a tap changes nothing.
             let Some(approach) = camera_store().hovered_approach else { return };
-            let target = ground_or_raw(&anchor_center(&approach));
+            let target = stand_or_raw(&anchor_center(&approach));
             crate::control::navigation::destination::go_to(target, crate::control::camera::controller::Motion::Smooth);
         }
         ActiveTool::Eraser => {
@@ -261,16 +262,9 @@ fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
 
 /// A pan puts the map center by hand, so a pending destination is canceled.
 fn do_pan(dx: f64, dy: f64) {
-    match active() {
-        Active::Orbit => {
-            cancel_destination();
-            crate::control::camera::orbit::pan(dx, dy);
-        }
-        Active::Free => {
-            cancel_destination();
-            crate::control::camera::free::pan(dx, dy);
-        }
-        Active::Tracked => {}
+    if active() != Active::Tracked {
+        cancel_destination();
+        crate::control::camera::controller::pan(dx, dy);
     }
 }
 

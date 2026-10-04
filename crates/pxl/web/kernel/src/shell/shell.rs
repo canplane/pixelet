@@ -15,7 +15,6 @@ use crate::abi::cmd::{CompanionState, LocationState, LonLat, MapState, Orientati
 use crate::control::camera::controller::radius;
 use crate::control::camera::controller::Motion;
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
-use crate::control::interaction::holding;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
@@ -29,7 +28,6 @@ use crate::sched::turn::world_platform;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, SettingKey};
 use crate::shell::ui::scale::m_per_px;
-use crate::world::frame::view::view;
 
 /// The center page's place, broad to narrow. Every language is sent, so
 /// switching language re-reads rather than refetches.
@@ -68,7 +66,8 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let at = crate::control::camera::controller::map_center();
     let page = at.map(|c| L3_IDX(c.i));
     let center = at.map(|c| {
-        let g = epsg4326::unproject(c.i, c.f);
+        let mut g = [0.0; 3];
+        epsg4326::unproject(&mut g, c.i, c.f);
         LonLat { lon: g[0], lat: g[1] }
     });
     let values = SettingKey::ALL.map(|key| settings.get(key));
@@ -100,7 +99,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         zooming: crate::control::camera::controller::zooming(),
         compass: compass_state(),
         settings: &values,
-        m_per_px: m_per_px(view().height.max(1.0)),
+        m_per_px: m_per_px(),
         place: &|each| place_parts(page, each),
         previews: &previews[..preview_cnt],
     };
@@ -117,16 +116,16 @@ pub fn tracking_action(tracking: Tracking) {
         Tracking::Recenter => {
             // A fix's Z is altitude, absent on most and never the map's ground height.
             if let Some(device) = map_navigation().device_coord {
-                go_to_ground(device);
+                go_to_ground(device, Motion::Snap);
             }
             camera.is_follow_mode = false;
-            // A view far out comes back in; one brought nearer stays, as map apps do.
             crate::control::camera::controller::come_in_to_default();
         }
         Tracking::Follow => {
-            if request_orientation(world_platform().orientation) {
-                camera.is_follow_mode = true;
-            }
+            // The heading is asked for, and the map turns with it once it comes;
+            // where there is none, following is where one is alone.
+            request_orientation(world_platform().orientation);
+            camera.is_follow_mode = true;
         }
         Tracking::Unfollow => {
             camera.is_follow_mode = false;
@@ -135,17 +134,31 @@ pub fn tracking_action(tracking: Tracking) {
     }
 }
 
-/// A badge's height is its level's, coarser than where a walker stands, so
+/// A badge's height is its level's, coarser than where the center stands, so
 /// the center goes on the surface once it is known exactly.
-pub fn go_to(target: Pvf3) {
+fn go_on_ground(target: Pvf3, motion: Motion) {
     camera_store().is_follow_mode = false;
-    destination::go_to(target);
+    go_to_ground(target, motion);
 }
 
+/// A place, as the location button goes to one: a view far out comes in.
+pub fn go_to(target: Pvf3) {
+    go_on_ground(target, Motion::Smooth);
+    crate::control::camera::controller::come_in_to_default();
+}
+
+/// Nearer where the camera has a nearer to be: the orbit halves its distance.
+pub fn go_into(target: Pvf3) {
+    go_on_ground(target, Motion::Smooth);
+    if crate::control::camera::controller::active() == crate::control::camera::controller::Active::Orbit {
+        crate::control::camera::orbit::zoom_by(0.5);
+    }
+}
+
+/// A search's place, as the location button goes to one.
 pub fn go_to_degrees(lon: f64, lat: f64) {
-    camera_store().is_follow_mode = false;
-    let target = epsg4326::project(&[lon, lat, 0.0]);
-    go_to_ground(target, Motion::Snap);
+    go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
+    crate::control::camera::controller::come_in_to_default();
 }
 
 /// Set outright, for kernel tests and A/B comparisons at the same view.

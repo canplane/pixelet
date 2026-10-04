@@ -24,9 +24,6 @@
 //! tiers; the chunk stage (stage.rs) composes the frame — the camera, the
 //! anchor root's matrix, the frustum — and calls the tick.
 
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
-
-
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
 use pxl_render::look::globe::Globe;
@@ -45,7 +42,7 @@ use xpute_runtime::mem::section::span_of;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
-use xpute_runtime::global::Global;
+use crate::global::Global;
 use crate::layer::billboard::field::Billboards;
 use crate::layer::decor::build::Kind as DecorKind;
 use crate::layer::environment::state::EnvironmentDraw;
@@ -57,11 +54,13 @@ use crate::layer::model::store::Models;
 use crate::layer::object::store::EntryAt;
 use crate::mem::fixed::{lane, range, Range};
 use crate::param;
+use crate::sched::profiler::record::MB;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{mesh_step, BuildEvent, Builder, Cube, World};
 use crate::world::chunk::frontier::{self, cube_of, drawn_cube, pool_of, wanted_cube, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, surface_of, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
+use crate::world::paging::LEVELS;
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -332,7 +331,6 @@ pub struct Census {
     /// the frame's cap is what holds the screen back.
     pub commit_left: u32,
 }
-
 
 /// A slot's or a mount's number in a lane of `.fixed.mounts`, or none: one
 /// past the number, so a lane as it is laid, zeroed, reads as none.
@@ -1091,15 +1089,7 @@ impl Scheduler {
             while let (Some(at_slot), true) = (slot, left > 0) {
                 let m = slot_at(at_slot);
                 let n = left.min(m.capacity);
-                self.draw.draw_arena(
-                    m.group,
-                    m.first_box,
-                    n,
-                    at,
-                    unit,
-                    z_step,
-                    group_is_fine(m.group),
-                );
+                self.draw.draw_arena(m.group, m.first_box, n, at, unit, z_step, group_is_fine(m.group));
                 left -= n;
                 slot = self.meshes.next[at_slot].get();
             }
@@ -1665,86 +1655,4 @@ fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
         box_cnt,
         heights,
     });
-}
-
-/// Slot `index`'s surface as its tier of `step` holds it, a word a block:
-/// the lane's first (CHUNK_CELLS / step)² words.
-fn surface(index: usize, step: u32) -> &'static mut [u32] {
-    let (off, words) = surface_of(index);
-    let axis = CHUNK_CELLS / step;
-    xpute_core::ensure!(axis * axis <= words, ENOTRECOVERABLE, index, step);
-    // SAFETY: the slot's own lane in `.fixed.surface`, written only by the
-    // tier landing in the slot and read by what stands on it, both the chunk
-    // table's, on its one thread.
-    unsafe { lane(range(Range::Surface), off, (axis * axis) as usize) }
-}
-
-/// A cell-center height query needs no CPU copy of the mesh. Quantized tops
-/// use the mesh's own height scale, with zero reserved for an empty center.
-/// Written into the lane of the tier's first slot, which the slot's tier
-/// sizes (mesh_slot.rs `surface_of`), a block of boxes at a time: cleared
-/// with the first.
-fn surface_centers(index: usize, first: bool, words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) {
-    let axis = (CHUNK_CELLS / step) as usize;
-    let unit = step as f64 * GROUND.scale(level).side();
-    let tops = surface(index, step);
-    if first {
-        tops.fill(0);
-    }
-    if tops.is_empty() {
-        return;
-    }
-    for r in words.chunks_exact(stride) {
-        let (min, size) = box_bounds(r, unit, heights);
-        let x0 = ((min[0] / unit - 0.5).ceil().max(0.0) as usize).min(axis);
-        let y0 = ((min[1] / unit - 0.5).ceil().max(0.0) as usize).min(axis);
-        let x1 = (((min[0] + size[0]) / unit - 0.5).ceil().max(0.0) as usize).min(axis);
-        let y1 = (((min[1] + size[1]) / unit - 0.5).ceil().max(0.0) as usize).min(axis);
-        let (lo, span) = box_z(r);
-        let top = lo + span + 1;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                tops[y * axis + x] = tops[y * axis + x].max(top);
-            }
-        }
-    }
-}
-
-/// A chunk as it is drawn: its level, the unit address its first cell
-/// begins at, the step its drawn tier's cells are, and that tier's surface.
-/// What a layer standing things on the drawn ground reads
-/// (`Scheduler::surface_at`, a decor build's surface).
-pub struct Drawn<'a> {
-    pub level: u32,
-    pub base: IVec,
-    step: u32,
-    tops: &'a [u32],
-    heights: Heights,
-}
-
-impl Drawn<'_> {
-    /// The level of the cells the chunk is drawn in: a block of 2^s cells of
-    /// the chunk's level is a cell s levels up (pxl-spec space/pyramid.rs
-    /// `Cell`). The rule's steps are powers of two, so there is no step
-    /// this does not name.
-    pub fn cell_level(&self) -> u32 {
-        debug_assert!(self.step.is_power_of_two(), "a ladder step is a power of two");
-        self.level + self.step.trailing_zeros()
-    }
-
-    /// The top of the drawn surface under a point `x`, `y` units from the
-    /// chunk's corner: the block's it lies in.
-    pub fn top_under(&self, x: f64, y: f64) -> Option<f64> {
-        let unit = self.step as f64 * GROUND.scale(self.level).side();
-        self.top((x / unit) as u32, (y / unit) as u32)
-    }
-
-    /// The top of the drawn surface at the center of the `step` block at
-    /// (bx, by), in units; none where that center is empty. Samples share the
-    /// GPU mesh slot's lifetime, including a leaving piece's.
-    pub fn top(&self, bx: u32, by: u32) -> Option<f64> {
-        let axis = CHUNK_CELLS / self.step;
-        let top = (*self.tops.get((by * axis + bx) as usize)?).checked_sub(1)?;
-        Some(self.heights.floor + top as f64 * self.heights.step)
-    }
 }

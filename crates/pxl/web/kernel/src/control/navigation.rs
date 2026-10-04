@@ -6,3 +6,4 @@ pub mod bootstrap;
 pub mod destination;
 pub mod follow_mode;
 pub mod store;
+pub mod support;

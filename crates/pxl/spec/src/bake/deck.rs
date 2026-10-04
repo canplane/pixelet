@@ -179,47 +179,30 @@ pub struct Over {
     pub pier: bool,
 }
 
-/// What a line occupies of one column, in z16 cells, each `[lo, hi)`. The
-/// one rule the paint draws a line by and the query meets it by.
+/// What a deck occupies over one column, in z16 cells, each `[lo, hi)`: its
+/// slab under its top, and where a pier carries it, the pier from the
+/// ground to the slab. The one rule the paint draws a deck by and the query
+/// meets it by.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Occupies {
-    /// The way on the ground: where a bridge comes down to its end, or a
-    /// tunnel's floor is the ground's top. The column's top cell is its
-    /// surface.
-    Grade,
-    /// A slab under the surface, and a pier
-    /// from the ground to the slab where its section covers the column.
-    Above { slab: [i32; 2], pier: Option<[i32; 2]> },
-    /// Air from the surface up, to the ground where less than a bore's cover
-    /// would stand over it: an approach's cutting; the cell under it is the way's.
-    Through { air: [i32; 2] },
+pub struct Occupied {
+    pub slab: [i32; 2],
+    pub pier: Option<[i32; 2]>,
 }
 
 impl Over {
-    /// `cell_per_m`: z16 cells a ground metre on the column's page.
-    pub fn occupies(&self, ground: i32, cell_per_m: f64) -> Occupies {
-        // all the surface sweeps across the column, so a slab or a bore steps down to the
-        // next column's without a gap however steep it runs
-        let (low, top) = (round(self.low) as i32, round(self.top) as i32);
-        let slab = |floor: i32| {
-            let lo = (low - (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1)).max(floor);
-            Occupies::Above {
-                slab: [lo, top],
-                pier: (self.pier && lo > ground).then_some([ground, lo]),
-            }
-        };
-        // a deck or a bore is one whatever its height: the solve holds it off the ground
-        match self.form {
-            Form::Deck => slab(i32::MIN),
-            Form::Bore => Occupies::Through {
-                air: [low, top + clear_cells(headroom_m(self.kind), cell_per_m)],
-            },
-            // a road off the ground past a structure stands on piers as a deck does, and is
-            // open to the sky where it is cut in
-            Form::Grade if top > ground => slab(ground),
-            Form::Grade if top < ground => Occupies::Through { air: [low, ground] },
-            Form::Grade => Occupies::Grade,
+    /// Over a column whose ground stands `ground` cells high; none where the
+    /// deck is at or under the ground there — where a bridge comes down to
+    /// its end, which is the way on the ground.
+    pub fn occupies(&self, ground: i32) -> Option<Occupied> {
+        let top = self.top.round() as i32;
+        if top <= ground {
+            return None;
         }
+        let lo = (top - THICKNESS).max(ground);
+        Some(Occupied {
+            slab: [lo, top],
+            pier: (self.pier && lo > ground).then_some([ground, lo]),
+        })
     }
 }
 
@@ -247,13 +230,16 @@ impl Decks {
         (0..self.len()).map(|d| self.deck(d))
     }
 
-    /// Every deck over each column of a grid: column (i, j) the square of side
-    /// `step` about `origin + (i + ½, j + ½) · step` in the page's cells. A
-    /// column at a joint is reported for both segments; the caller joins them.
-    pub fn over_grid(&self, frame: Option<Frame>, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Over)) {
+    /// Every deck over each point of a grid laid on the page: `size` columns
+    /// by rows, point (i, j) at `origin + (i + ½, j + ½) · step` in the
+    /// page's cells — its own cells' centers at a step of one, and finer
+    /// than its cells where a chunk is drawn from a page over its own. Told
+    /// as `each(i, j, deck, over)`; a point under two of a deck's segments,
+    /// at a joint, is told of both, and the caller keeps the higher.
+    pub fn over_grid(&self, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Over)) {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - 0.5;
         for (d, deck) in self.iter().enumerate() {
-            let half = deck.reach();
+            let half = deck.half_width();
             for s in 0..deck.points.len().saturating_sub(1) {
                 let (a, b) = (deck.point(s), deck.point(s + 1));
                 let range = |k: usize| {
@@ -263,7 +249,7 @@ impl Decks {
                 for j in range(1) {
                     for i in range(0) {
                         let at = [origin[0] + (i as f64 + 0.5) * step, origin[1] + (j as f64 + 0.5) * step];
-                        if let Some(over) = deck.over_segment(frame, s, at, step) {
+                        if let Some(over) = deck.over_segment(s, at) {
                             each(i, j, d, over);
                         }
                     }

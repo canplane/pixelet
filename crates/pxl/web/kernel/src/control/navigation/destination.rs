@@ -10,25 +10,31 @@ use pxl_spec::space::pyramid::{LevelPage, GROUND};
 
 use crate::control::camera::controller::{put_center, Motion};
 use crate::control::navigation::support::{exact, unknown_z};
+use crate::global::Global;
 use crate::world::access::FINEST;
-use xpute_runtime::global::Global;
 
+/// The place named and not yet reached, its Z meaningless, and how it is to
+/// be reached.
 static DESTINATION: Global<Option<(Pvf3, Motion)>> = Global::new();
 
-fn destination() -> &'static mut Option<Pvf3> {
+fn destination() -> &'static mut Option<(Pvf3, Motion)> {
     DESTINATION.get(|| None)
 }
 
-/// A later destination or a `go_to` replaces it.
+/// The camera to stand over `at`'s X and Y, on the ground there, once that
+/// is known; its Z says nothing. A later destination or a `go_to` takes its
+/// place.
 pub fn go_to_ground(at: Pvf3, motion: Motion) {
-    *destination() = Some((at, motion));
+    *destination() = Some((unknown_z(&at), motion));
     crate::world::change::request_world_tick();
 }
 
-/// A pending destination is dropped: this was asked last.
+/// The camera put at `at` as it is: a place named with its height. A
+/// destination still waiting is dropped, since this is where the camera was
+/// asked to be last.
 pub fn go_to(at: Pvf3, motion: Motion) {
     cancel();
-    put_center(at);
+    put_center(at, motion);
 }
 
 /// The user put the map center by hand; reaching the destination after would
@@ -39,13 +45,13 @@ pub fn cancel() {
 
 /// Whose ground the terrain is asked for.
 pub fn page() -> Option<LevelPage> {
-    destination().map(|at| GROUND.cell_of(FINEST, &at).page())
+    destination().map(|(at, _)| GROUND.cell_of(FINEST, &at).page())
 }
 
 /// Only the exact ground puts it; a coarser page over it is not its ground.
 pub fn destination_step() {
-    let Some(at) = *destination() else { return };
-    let Some(ground) = Access::now().at(&at, FINEST).exact() else { return };
+    let Some((at, motion)) = *destination() else { return };
+    let Some(to) = exact(&at) else { return };
     *destination() = None;
-    put_center(pivot_over(&at, ground.top));
+    put_center(to, motion);
 }

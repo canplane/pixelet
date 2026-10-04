@@ -4,15 +4,17 @@
 //
 // - the map center is the eye pushed the radius along the look, the eye
 //   itself first person;
+// - a change of person leaves the map center where it is;
 // - a pinch keeps no debt past a limit;
 // - the look's coordinates hold over their whole domain: every tilt a
 //   rotation, and at either pole every heading the one direction.
 
 use super::*;
 use crate::control::camera::config::camera_cfg;
-use crate::serial;
+use crate::global::serial;
 use crate::shell::setting::store::OrbitObstacleMode;
 use crate::world::fixture::place;
+use crate::world::frame::coord::canonical_to_local;
 
 struct Rng(u64);
 
@@ -52,16 +54,65 @@ fn the_map_center_is_the_eye_pushed_the_radius_along_the_look() {
     }
 }
 
+/// The map center is the character's place, and a change of person moves
+/// the camera about it and never it (`take_mode`): third person to first
+/// and back, twice, it stays where it was; a move under way in the one is
+/// not carried into the other; and a change asked while a tracker holds the
+/// pose is not taken until it lets go.
+#[test]
+fn a_change_of_person_leaves_the_map_center() {
+    let _g = serial();
+    third_person();
+    // A canonical point keeps its fraction in 256ths of a unit, so the first
+    // change lands the map center within one of them; every change after
+    // keeps it exactly there, so round trips do not drift.
+    let near = |a: V3, b: V3, tol: f64| (0..3).all(|k| (a[k] - b[k]).abs() <= tol);
+    let mut rng = Rng(0xc0de);
+    for n in 0..100 {
+        let center = [rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 40.0];
+        let (dist, polar, azimuth) = (camera_cfg::view::MIN_DIST + rng.unit() * 2_000.0, rng.unit() * core::f64::consts::PI, rng.unit() * 6.0 - 3.0);
+        place(center, dist, polar, azimuth);
+        let mut first: Option<V3> = None;
+        for mode in [CameraMode::free, CameraMode::orbit, CameraMode::free, CameraMode::orbit] {
+            assert!(take_mode(mode), "{n}: the change to {mode:?} taken");
+            let got = center_local().unwrap();
+            assert!(near(got, center, 2.0 / 256.0), "{n}: moved by the change to {mode:?}: {got:?} vs {center:?}");
+            let first = *first.get_or_insert(got);
+            assert!(near(got, first, 1e-6), "{n}: drifted by the change to {mode:?}: {got:?} vs {first:?}");
+            let target = match mode {
+                CameraMode::free => crate::control::camera::free::target_center(),
+                CameraMode::orbit => crate::control::camera::orbit::target_center(),
+            };
+            let target = canonical_to_local(&target.unwrap(), view().origin);
+            assert!(near(target, got, 1e-6), "{n}: a move under way carried into {mode:?}");
+        }
+    }
+    // Under a tracker the change waits, and the base is left as it was.
+    controllers().tracked = Some(Tracked {
+        world_turn: mat4(),
+        world_at: [0.0; 3],
+        turn: mat4(),
+        at: [0.0; 3],
+    });
+    assert!(!take_mode(CameraMode::free), "taken under a tracker");
+    assert_eq!(controllers().base, CameraMode::orbit, "the base changed under a tracker");
+    controllers().tracked = None;
+    assert!(take_mode(CameraMode::free), "not taken once the tracker let go");
+    third_person();
+}
+
 /// A pinch is the fingers' spread against where it began, and keeps no
 /// debt: brought back untouched by a limit it asks the distance it began
 /// at; driven past one, the share refused is gone, and the first closing of
-/// the fingers zooms back out from where the limit held it. No ground is
-/// resident here, so the gate allows what is asked and the limits are the
+/// the fingers zooms back out from where the limit held it. The ground has
+/// no say here — the collision set to pass through — so the limits are the
 /// distance's own.
 #[test]
 fn a_pinch_keeps_no_debt() {
     let _g = serial();
     third_person();
+    let collision = settings_store().orbit_obstacle;
+    settings_store().orbit_obstacle = OrbitObstacleMode::through;
     place([0.0, 0.0, 10.0], 300.0, 0.9, 0.4);
     let from = camera_store().intent.dist;
     pinch_begin(100.0);
@@ -73,6 +124,7 @@ fn a_pinch_keeps_no_debt() {
     assert_eq!(camera_store().intent.dist, camera_cfg::view::MAX_DIST, "past the farthest");
     pinch(2.0e-3);
     assert_eq!(camera_store().intent.dist, camera_cfg::view::MAX_DIST / 2.0, "the closing went to the refused share");
+    settings_store().orbit_obstacle = collision;
     third_person();
 }
 

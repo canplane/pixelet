@@ -13,7 +13,7 @@ use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::{band, Bounds, Contents, DemandEstimator, Frustum, Observation, Requirement};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{span_of, LevelPage, GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{span_of, LevelPage, GROUND};
 use pxl_spec::space::v3::Aabb;
 
 use crate::kernel::kernel;
@@ -29,12 +29,6 @@ use crate::world::pyramid::Layer as _;
 pub fn eye() -> Option<[f64; 3]> {
     crate::control::camera::controller::camera().eye?;
     Some(view().eye_at())
-}
-
-/// The level the ground under the eye wants: what the floating origin is
-/// floored to, so a rebase moves the same on screen at every height.
-pub fn ground_level() -> u32 {
-    eye().map_or(0, |_| lod::level(eye_height()).clamp(0, TOP_LEVEL as i32) as u32)
 }
 
 pub fn frustum_of_view() -> Frustum {

@@ -95,8 +95,6 @@ fn a_multipolygon_is_flattened_to_one_polygon_each() {
     assert_eq!(g[1].points[0], [5.0, 5.0, 0.0]);
 }
 
-/// EWKB's SRID word is skipped — the pipeline is 3857 throughout — and its
-/// Z kept, which is a deck's top.
 #[test]
 fn ewkb_srid_is_skipped_and_z_kept() {
     let mut bytes = vec![1u8];
@@ -109,8 +107,6 @@ fn ewkb_srid_is_skipped_and_z_kept() {
     assert_eq!(g[0].points, vec![[1.0, 2.0, 99.0]]);
 }
 
-/// ISO's dimensions are thousands of the type, as `ST_AsBinary` writes a
-/// line with Z: 1002, and an M past it is passed over.
 #[test]
 fn iso_z_and_m_are_read() {
     let mut bytes = vec![1u8];

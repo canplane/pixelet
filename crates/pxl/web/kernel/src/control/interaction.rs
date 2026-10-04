@@ -15,6 +15,7 @@ use pxl_spec::space::v3::V3;
 pub use crate::abi::cmd::ActiveTool;
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
+use crate::global::Global;
 use crate::layer::decor::hit::{raycast_decor, DecorStruck, Scattered};
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::geometry::{anchor_center, object_aabb};

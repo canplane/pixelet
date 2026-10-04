@@ -63,6 +63,7 @@ export function SettingsModal(props: BaseModalProps) {
               <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
               <Separator />
               <SettingsSection section="display" />
+              <SettingsSection section="navigation" />
               <SettingsSection section="camera" />
               <SettingsSection section="editing" />
               <SettingsSection section="lighting" />

@@ -5,7 +5,7 @@
     "trigger_aria_label": "Settings",
     "close": "Close",
     "tabs": {
-      "effects": "Effects",
+      "effects": "Settings",
       "info": "Info"
     },
     "language": {
@@ -43,6 +43,22 @@
       "tilt_lock": {
         "label": "Lock Camera Tilt",
         "description": "Locks vertical camera rotation while leaving horizontal rotation free."
+      },
+      "camera_collision": {
+        "label": "Third-person camera collision",
+        "through": {
+          "label": "Pass through",
+          "description": "Passes through terrain and objects."
+        },
+        "stop": {
+          "label": "Stop",
+          "description": "Stops the camera control just short of the collision."
+        },
+        "climb": {
+          "label": "Climb over",
+          "description": "Rises over what blocks it; stops where the way up is blocked too."
+        },
+        "description": "What the third-person camera does when terrain or an object blocks it. First person has none."
       }
     },
     "lighting": {
@@ -91,6 +107,57 @@
         }
       }
     },
+    "camera": {
+      "section_title": "Camera",
+      "section_caption": "Rotation and the third-person view",
+      "tilt_lock": {
+        "label": "Lock tilt",
+        "description": "Fixes the tilt; turns left and right only."
+      },
+      "orbit_obstacle": {
+        "label": "Obstacles",
+        "through": {
+          "label": "Pass through",
+          "description": "Ignores obstacles and passes through."
+        },
+        "stop": {
+          "label": "Stop",
+          "description": "Stops just short of the obstacle."
+        },
+        "climb": {
+          "label": "Climb over",
+          "description": "Tilts the camera up to climb over what blocks it. Stops where the way up is blocked too."
+        },
+        "description": "What the third-person camera does when terrain or an object blocks it. Not used in first person."
+      }
+    },
+    "lighting": {
+      "section_title": "Light and shadow",
+      "section_caption": "Light, shadow and outlines",
+      "edge_shade": {
+        "label": "Block Outlines",
+        "description": "Darkens only edges exposed to open air, keeping flat ground seamless while outlining changes in height."
+      },
+      "ao": {
+        "label": "Shading",
+        "off": {
+          "label": "Off",
+          "description": "Applies uniform ambient lighting to all surfaces."
+        },
+        "corner": {
+          "label": "Corners",
+          "description": "Darkens contact areas and inside corners so blocks look grounded instead of floating. Light on performance."
+        },
+        "screen": {
+          "label": "Detailed (SSAO)",
+          "description": "Adds detailed contact shadows to corners and crevices for greater depth. This is the most demanding option because it processes the entire screen."
+        }
+      },
+      "rim_light": {
+        "label": "Rim Light",
+        "description": "Adds a subtle highlight around the edges of blocks, decor and characters to make them stand out from the background."
+      }
+    },
     "debug": {
       "section_title": "Debug",
       "section_caption": "Diagnostics for the view and the scheduler",
@@ -117,6 +184,27 @@
     "about": {
       "section_title": "About",
       "tagline": "Turn the real world into a canvas and build with blocks."
+    },
+    "map": {
+      "camera_mode": {
+        "label": "Camera",
+        "orbit": {
+          "label": "Third person",
+          "description": "The camera circles the place it looks at, and dragging moves that place."
+        },
+        "free": {
+          "label": "First person",
+          "description": "You look around where you stand; dragging walks you over the ground, your eye at your height over it."
+        }
+      },
+      "poi": {
+        "label": "Places",
+        "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
+      }
+    },
+    "navigation": {
+      "section_title": "Navigation",
+      "section_caption": "How the map center meets the world"
     }
   },
   "cubes": {

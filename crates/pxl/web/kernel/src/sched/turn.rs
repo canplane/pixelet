@@ -40,19 +40,22 @@ pub struct Platform {
     pub orientation: OrientationPlatform,
 }
 
-/// None while the eye is the map center: then the character is the one looking.
+/// The companion's place, from map_center in the local floating-origin frame —
+/// wherever the camera actually is, not the origin's cell's center. Only
+/// where the camera stands off it: where the eye is the map center, the
+/// character is the one looking.
 fn companion_props() -> Option<CompanionProps> {
-    if crate::control::camera::controller::radius() == 0.0 {
+    if crate::control::camera::controller::dist() == 0.0 {
         return None;
     }
     let map_center = crate::control::camera::controller::map_center()?;
-    let map_origin = view().origin;
+    let map_origin = local_world_origin();
     let local = crate::world::frame::coord::canonical_to_local(&map_center, map_origin);
+    let o = pxl_spec::space::pvf3::ivec::to_v3(map_origin);
     Some(CompanionProps {
         map_origin,
-        center_x: local[0],
-        center_y: local[1],
-        floor: crate::control::navigation::walk::floor_of(&map_center),
+        center: [o[0] + local[0], o[1] + local[1]],
+        floor: crate::control::navigation::support::floor_of(&map_center),
     })
 }
 

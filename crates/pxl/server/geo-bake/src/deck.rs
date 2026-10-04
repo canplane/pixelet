@@ -25,10 +25,8 @@
 //! solves every structure again with those tops, lower decks included, so a
 //! ramp over its own interchange's mainline clears it too.
 
-pub mod approach;
+pub mod clearance;
 pub mod elevation;
-pub mod memo;
-pub mod param;
 pub mod piece;
 pub mod profile;
 pub mod relate;

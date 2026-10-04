@@ -5,7 +5,7 @@
 //! open ocean (about 65% of the bbox) as no object, so a 404 means water and
 //! every such page shares one decoded tile, fetched under its own category.
 
-use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
+use pxl_spec::bake::deck::{self, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{decode_terrain_into, Block, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pyramid::LevelPage;
@@ -15,8 +15,10 @@ use xpute_runtime::mem::base::ptr_at;
 
 use crate::sched::profiler::record::Failure;
 
-use crate::io::demand::{Category, Phases, TaskPhaseName};
-use crate::io::sched::pending_count;
+use crate::global::Global;
+use crate::host::now;
+use crate::io::demand::{Ask, Category, Phases, TaskPhaseName};
+use crate::io::sched::{declare, pending_count};
 use crate::layer::terrain::fixed::{blocks_off, deck_off, ele_off, extent_off, ground_off, BLOCK_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::mem::fixed::{at, Range};
 use crate::shell::map_store::{map_store, MapStatus};
@@ -73,6 +75,7 @@ unsafe fn room_of(record: u32) -> PageRoom {
         lane(extent_off(record), EXTENT_LANE_BYTES),
         lane(blocks_off(record), BLOCK_LANE_BYTES),
     );
+    let deck_lane = |k: usize| lane(deck_off(record, k), DECK_LANE_BYTES[k]);
     // SAFETY: each lane is a block of the kernel's memory at its own size,
     // placed once and never freed, and the caller's contract makes it this
     // page's alone.
@@ -86,10 +89,9 @@ unsafe fn room_of(record: u32) -> PageRoom {
                 starts: core::slice::from_raw_parts_mut(ptr_at::<u32>(deck_lane(0)), MAX_DECKS + 1),
                 points: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(deck_lane(1)), MAX_POINTS),
                 tops: core::slice::from_raw_parts_mut(ptr_at::<i16>(deck_lane(2)), MAX_POINTS),
-                width: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(3)), MAX_DECKS),
-                kind: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(4)), MAX_DECKS),
-                form: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(5)), MAX_DECKS),
-                boxes: core::slice::from_raw_parts_mut(ptr_at::<[i16; 4]>(deck_lane(6)), MAX_BOXES),
+                piers: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(3)), MAX_POINTS),
+                width: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(4)), MAX_DECKS),
+                kind: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(5)), MAX_DECKS),
             },
         }
     }

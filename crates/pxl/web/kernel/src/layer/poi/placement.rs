@@ -191,7 +191,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) -> bool {
         return false;
     };
     match label {
-        Label::Count(..) => crate::control::camera::controller::focus(stands),
+        Label::Count(..) => crate::shell::shell::go_into(stands),
         _ => crate::shell::shell::go_to(stands),
     }
     true

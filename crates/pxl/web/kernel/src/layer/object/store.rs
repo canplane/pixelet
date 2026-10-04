@@ -1106,6 +1106,15 @@ impl Store {
         self.columns.get(&col_idx).is_some_and(|c| c.bands.contains_key(&(at[2].div_euclid(cells) as BandZ)))
     }
 
+    /// The cell over the highest band anything is kept in, in the column of
+    /// cell `[x, y]` (a `CELL`): no cell at it or above holds an object.
+    pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
+        let cells = CELL.count_in(BAND) as i64;
+        let col_idx = ivec::gather(x.div_euclid(cells), y.div_euclid(cells), 0);
+        let band = *self.columns.get(&col_idx)?.bands.keys().next_back()?;
+        Some((i64::from(band) + 1) * cells)
+    }
+
     /// What the objects fold to at cell `at` of `scale` (`fold_cell`), VOID
     /// where nothing: one read, wherever it is kept — a value that paints no
     /// voxel as it is, for the reader to count as nothing.

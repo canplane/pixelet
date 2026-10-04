@@ -12,40 +12,22 @@ use crate::abi::host::{root, storage, STORAGE_KEYS};
 use crate::host::development;
 use crate::io::file;
 use crate::sched::profiler::log::profiler_follow;
-pub use crate::shell::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
+pub use crate::shell::setting::schema_spec::{AoMode, OrbitObstacleMode, CameraMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
 use xpute_runtime::global::Global;
 
-/// Whether this build offers the setting at all.
-///
-/// A dev-only setting is not in the sheet outside a development build
-/// (feature/setting/schema.ts takes the table without them under
-/// `__IS_DEV__`, which is this same test), and what the sheet will not show
-/// must not be something the app is running under. Storage outlives the
-/// build that wrote it: a value set while the row was there would otherwise
-/// stay in force with nothing left to turn it off, and the only way back
-/// would be to clear the site's data.
-///
-/// `settings_load` drops what this says no to rather than carrying it: a
-/// value the page cannot reach is a state nothing agrees with, and what is
-/// kept is written from the store, so it leaves storage too.
-/// `set_setting` refuses it for the same reason: the row is gone from the
-/// sheet, but the command that sets it is not gone from the console.
-///
-/// A module built without the `dev` feature offers none, whatever the build
-/// says of itself, and runs each at its default.
-///
-/// Called from `settings_load` and after, which means it reads what
-/// WORLD_BOOT said of the build: the store is first read after it.
-pub fn is_offered(key: SettingKey) -> bool {
-    !key.dev() || (cfg!(feature = "dev") && development())
+/// A dev-only setting outside a development build is not offered: storage
+/// outlives the build, and a value with no row left to turn it off would stay
+/// in force. Loading drops it and `set_setting` refuses it from the console.
+pub fn is_offered(key: SettingKey, value: u32) -> bool {
+    !(key.dev() || key.dev_option(value)) || (cfg!(feature = "dev") && development())
 }
 
 impl Settings {
     /// Does nothing for a value the key may not hold, the current value, or a
     /// setting not offered (see `is_offered`).
     pub fn set_setting(&mut self, key: SettingKey, value: u32) {
-        if !is_offered(key) || self.get(key) == value || !self.set(key, value) {
+        if !is_offered(key, value) || self.get(key) == value || !self.set(key, value) {
             return;
         }
         if key.sources_chunks() {
@@ -68,7 +50,7 @@ impl Settings {
         let mut out = String::from("{");
         for key in SettingKey::ALL {
             let value = self.get(key);
-            if !is_offered(key) || value == Settings::DEFAULT.get(key) {
+            if !is_offered(key, value) || value == Settings::DEFAULT.get(key) {
                 continue;
             }
             if out.len() > 1 {
@@ -106,13 +88,13 @@ fn read_kept(kept: &str) -> Settings {
     let mut s = Settings::DEFAULT;
     if let Some(kept) = read_json(kept).filter(|v| v.kind() == JsonKind::Object) {
         for key in SettingKey::ALL {
-            let Some(v) = kept.get(key.name()).filter(|_| is_offered(key)) else { continue };
+            let Some(v) = kept.get(key.name()) else { continue };
             let value = match key.kind() {
                 SettingKind::Toggle => v.as_bool().map(u32::from),
                 SettingKind::Choice => v.as_str().and_then(|o| key.options().iter().position(|n| o.eq_str(n))).map(|i| i as u32),
                 SettingKind::Index => v.as_f64().filter(|n| n.fract() == 0.0 && *n >= 0.0 && *n <= u32::MAX as f64).map(|n| n as u32),
             };
-            if let Some(value) = value {
+            if let Some(value) = value.filter(|&value| is_offered(key, value)) {
                 s.set(key, value);
             }
         }

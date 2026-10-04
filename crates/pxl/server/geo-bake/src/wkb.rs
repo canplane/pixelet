@@ -1,11 +1,7 @@
 // pxl-geo-bake/wkb.rs
 
-//! Minimal WKB decoder shared by every source adapter that reads
-//! `ST_AsBinary(geom)` rows (terrain/pipeline/coast/adapter.rs,
-//! terrain/pipeline/overture/adapter.rs). Supports Point, LineString, Polygon
-//! and MultiPolygon. Accepts EWKB's flags (Z/SRID) and ISO's dimension
-//! thousands (Z, M, ZM), ignores SRID because the pipeline assumes 3857, and
-//! keeps a Z — a deck's top (terrain/pipeline/deck.rs) — where there is one.
+//! Minimal WKB decoder: Point, LineString, Polygon, MultiPolygon; EWKB flags
+//! and ISO dimensions. SRID is ignored (3857 assumed); Z is kept as a deck's top.
 
 use pxl_spec::space::adapter::epsg3857::G3857;
 
@@ -72,7 +68,6 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
 
     match base {
         1 => {
-            // Point
             let p = read_point(r, le, dims)?;
             Some(vec![WkbGeometry {
                 points: vec![p],
@@ -81,7 +76,6 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
             }])
         }
         2 => {
-            // LineString
             let pts = read_ring(r, le, dims)?;
             Some(vec![WkbGeometry {
                 points: pts,
@@ -125,14 +119,12 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
     }
 }
 
-/// Which coordinates past x and y a point carries.
 #[derive(Clone, Copy)]
 struct Dims {
     z: bool,
     m: bool,
 }
 
-/// A point, its Z kept and its M passed over.
 fn read_point(r: &mut Reader, le: bool, dims: Dims) -> Option<G3857> {
     let (x, y) = (r.f64(le)?, r.f64(le)?);
     let z = if dims.z { r.f64(le)? } else { 0.0 };

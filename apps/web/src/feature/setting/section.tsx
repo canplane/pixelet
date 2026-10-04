@@ -13,12 +13,17 @@ import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",
+  navigation: "location",
   camera: "move.3d",
   editing: "hammer",
   lighting: "sun.max",
   quality: "gauge.medium",
   debug: "ladybug",
 };
+
+function devOption(setting: Setting, option: string): boolean {
+  return "dev_options" in setting && (setting.dev_options as readonly string[]).includes(option);
+}
 
 /** Strings come from `settings.<section>.<key>` and, for a choice, `.<option>` under that. */
 export function SettingsSection(props: { section: SettingSection; children?: ReactNode }) {
@@ -61,7 +66,7 @@ function SettingControl(props: { name: SettingName }) {
     case "choice":
       return (
         <SettingGroup label={t(`${base}.label`)} cost={setting.cost} dev={setting.dev}>
-          {setting.options.map((option, i) => (
+          {setting.options.map((option, i) => (__IS_DEV__ || !devOption(setting, option)) && (
             <SettingChoiceRow
               key={option}
               label={t(`${base}.${option}.label`)}
@@ -69,6 +74,7 @@ function SettingControl(props: { name: SettingName }) {
               selected={value === i}
               onSelect={() => kernel_command(Command.SETTING_SET, encode_setting_set({ key, value: i }))}
               cost={setting.costs?.[i] || setting.cost}
+              dev={devOption(setting, option)}
             />
           ))}
         </SettingGroup>

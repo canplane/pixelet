@@ -81,9 +81,10 @@ struct DecorHit {
     pub t: f64,
 }
 
-/// None while it loads.
+/// The model each decor group is drawn with, in group order, none while it
+/// loads.
 fn group_models() -> impl Iterator<Item = Option<u32>> {
-    kind_assets().iter().flat_map(|e| e.models.iter().copied())
+    decor_bundle_assets().iter().flat_map(|e| e.models.iter().copied())
 }
 
 /// How far past a decor cell's own square a placed instance standing in it can

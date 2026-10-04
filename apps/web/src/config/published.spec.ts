@@ -15,7 +15,7 @@
  * by a level and a decimal index (pxl-spec bake/quadkey.rs).
  */
 export const PUBLISHED_VERSION = {
-  terrain: "v7",
+  terrain: "v8",
   poi: "v8",
   geocode: "v5",
 } as const;

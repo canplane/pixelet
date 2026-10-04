@@ -17,7 +17,8 @@ use crate::kernel::{kernel, with_world};
 use crate::layer::decor::build::DecorHide;
 use crate::layer::environment::state::globe;
 use crate::sched::profiler::record::{
-    profiler_record_frame, profiler_recording, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, MB,
+    profiler_record_frame, profiler_recording, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample,
+    TurnSample, WorkSample, MB,
 };
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};

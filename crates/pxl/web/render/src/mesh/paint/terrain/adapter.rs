@@ -9,11 +9,9 @@
 //! bands and a floor inside one would open another for a few voxels.
 
 use pxl_spec::bake::constant::{BAND_CELLS, U_PER_CELL};
-use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::bake::deck::{Decks, Occupies, Over};
-use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::bake::format::{ch_index, GroundChannelKey, GROUND_CH_KEYS};
-use pxl_spec::bake::ground::{channel_bit, shown_ground, ChannelMask, ShownGround, BASE};
+use pxl_spec::bake::ground::{shown_ground, ShownGround, BASE};
 use pxl_spec::bake::pack::{unpack, GroundCell};
 use pxl_spec::cell::cube::cube_types;
 use pxl_spec::procedural::{pier_stands, Frame};
@@ -23,7 +21,7 @@ use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 
 use crate::mesh::paint::palette::shader_meta::{rgb255, GROUND_LAYER_META};
 use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
-use crate::mesh::volume::{MaterialClasses, Volumes, Voxel, NO_LAYER};
+use crate::mesh::volume::{pack_material, MaterialClasses, Volumes, Voxel, NO_LAYER};
 use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
 use crate::mesh::{try_push, Refused};
 use std::sync::LazyLock;
@@ -115,17 +113,12 @@ fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &PageSource, corner: [
     let side = COL_SPAN as i64;
     let mut grown = Ok(());
     s.page.decks.over_grid(Some(s.frame), origin, 1.0 / n, [side, side], |cx, cy, d, o| {
-        if grown.is_ok() {
-            grown = try_push(over, (apron_col(cx as u32, cy as u32) as usize, d, o));
+        if grown.is_ok() && reads(ancestor_of([corner[0] + cx, corner[1] + cy], GROUND.page_cell_shamt())) {
+            grown = try_push(over, ((cy * side + cx) as usize, d, o));
         }
     });
     grown
 }
-
-fn pack(class: u8, rgb: [u8; 3]) -> u32 {
-    ((class as u32) << 24) | ((rgb[0] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[2] as u32
-}
-
 
 /// A building's concrete: nothing in the catalog is a pier's own.
 const PIER: (GroundChannelKey, u8) = (GroundChannelKey::STRUCTURE, cube_types::structure::building);
@@ -134,6 +127,7 @@ const PIER: (GroundChannelKey, u8) = (GroundChannelKey::STRUCTURE, cube_types::s
 pub struct PageView<'a> {
     pub cells: &'a [GroundCell],
     pub ele: &'a [i16],
+    pub decks: &'a Decks,
 }
 
 /// The page drawn in place of this one (its own, or a coarser one whose cell
@@ -172,16 +166,13 @@ pub struct ChunkSample {
     /// none overlapping; the apron's have none.
     pub span_at: Vec<u32>,
     pub spans: Vec<Span>,
-    /// The air a bore takes out of each column's ground, `[lo, hi)`, empty
-    /// where none does, and the way's material on the cell under it.
+    /// `[lo, hi)`, empty where none does.
     pub bore: Vec<Bore>,
     /// Each column's shown ground, nothing hidden: where a pier stands is the data's.
     shown: Vec<ShownGround>,
     over: Vec<(usize, usize, Over)>,
 }
 
-/// The air a bore takes out of a column, `[lo, hi)` in cells, and the
-/// surface of the way on its floor.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Bore {
     pub air: [i32; 2],
@@ -189,8 +180,7 @@ pub struct Bore {
     pub layer: u8,
 }
 
-/// A run off the ground: a deck's slab or a pier, from `lo` up to `hi`
-/// exclusive, in cells.
+/// `lo` up to `hi` exclusive, in cells.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Span {
     pub lo: i32,
@@ -247,27 +237,21 @@ impl ChunkSample {
                 } else {
                     [VOID; 4]
                 };
-                self.shown[i] = shown_ground(|k| u32::from(types[ch_index(k)]), 0);
+                self.shown[i] = shown_ground(|k| u32::from(types[ch_index(k)]));
 
                 let (mut material, mut layer) = (pack_material(tables.base_class, tables.base_rgb), tables.base_layer);
                 for (ch, &t) in types.iter().enumerate() {
                     if t == VOID {
                         continue;
                     }
-                    let c = &tables.channels[ch];
-                    if !c.has_color[t as usize] {
-                        continue;
+                    if let Some(m) = tables.of(GROUND_CH_KEYS[ch], t) {
+                        (material, layer) = m;
                     }
-                    rgb = c.rgb[t as usize];
-                    class = c.class;
-                    layer = if c.has_layer[t as usize] { c.layer[t as usize] } else { NO_LAYER as u8 };
                 }
-                self.material[i] = ((class as u32) << 24) | ((rgb[0] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[2] as u32;
+                self.material[i] = material;
                 self.layer_idx[i] = layer;
 
-                // The height every consumer of this page takes, shift and
-                // all (elevation.rs's ground_ele). An apron cell off the page
-                // has no channels to judge by and takes the raw height.
+                // An apron cell off the page has no channels and takes the raw height.
                 let lanes = on_page.then_some(GroundLanes { cells: page.cells });
                 let center = |v: i64| (v as f64 + 0.5) / n as f64;
                 let ele = ground_ele_at(page.ele, lanes, center(x), center(y)) as i32;
@@ -278,11 +262,7 @@ impl ChunkSample {
                 }
             }
         }
-        let shown = !skip[ch_index(GroundChannelKey::TRANSPORT)];
-        self.read_decks(if shown { Some(&around.own) } else { None }, first)?;
-        // One band-aligned floor shared by the whole chunk, under every peak
-        // and under every bore's floor, whose way is the ground's cell under
-        // its air.
+        self.read_decks(around, first)?;
         let bored = self.bore.iter().filter(|b| b.air[0] < b.air[1]).map(|b| b.air[0] - 1).min().unwrap_or(i32::MAX);
         self.floor = (min_ele.min(bored) - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
         Ok(())
@@ -292,8 +272,19 @@ impl ChunkSample {
     fn read_decks(&mut self, around: &Around, first: [i64; 2]) -> Result<(), Refused> {
         let mut over = core::mem::take(&mut self.over);
         over.clear();
-        let cell_per_m = own.map_or(0.0, |s| u_per_m(s.frame.corner[1]) / U_PER_CELL);
-        let built = collect_decks(&mut over, own, first).and_then(|()| self.spans_of(&mut over, cell_per_m));
+        let cell_per_m = u_per_m(around.own.frame.corner[1]) / U_PER_CELL;
+        let corner = first.map(|v| v - APRON as i64);
+        // A column with no page beside is read from the chunk's own, as its height is.
+        let beside = |[qx, qy]: [i64; 2]| if (qx, qy) == (0, 0) { None } else { around.beside[beside_index(qx, qy)].as_ref() };
+        let mut built = collect_decks(&mut over, &around.own, corner, [0, 0], |q| beside(q).is_none());
+        for qy in -1..=1 {
+            for qx in -1..=1 {
+                if let (Some(s), true) = (beside([qx, qy]), built.is_ok()) {
+                    built = collect_decks(&mut over, s, corner, [qx, qy], |q| q == [qx, qy]);
+                }
+            }
+        }
+        let built = built.and_then(|()| self.spans_of(&mut over, cell_per_m));
         self.over = over;
         built
     }
@@ -329,8 +320,6 @@ impl ChunkSample {
                         continue;
                     }
                     Occupies::Through { air } => {
-                        // Of two bores through one column, the one that takes
-                        // more of it.
                         if air[1] - air[0] > self.bore[col].air[1] - self.bore[col].air[0] {
                             self.bore[col] = Bore {
                                 air,
@@ -385,10 +374,9 @@ impl ChunkSample {
         Ok(())
     }
 
-    /// Column `i`'s ground from `from` up to `to` exclusive, lowest first,
-    /// as `run(lo, hi, material, layer)`, both ends inside: one run, or
-    /// where a bore goes through it, the ground under the bore's floor, the
-    /// way on the floor's cell, and the ground standing over its air.
+    /// The column's ground as inclusive runs: a top face at `ele` is cells up to
+    /// `ele − 1` (`hi − 1` below). Through a bore: the ground under its floor,
+    /// the way on the floor's cell, and the ground standing over its air.
     pub fn ground_runs<E>(&self, i: usize, from: i32, to: i32, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
         let top = (self.ele[i] as i32).min(to);
         let (m, l) = (self.material[i], self.layer_idx[i]);
@@ -403,8 +391,6 @@ impl ChunkSample {
         part(b.air[1], top, m, l)
     }
 
-    /// Column `i`'s runs, lowest first: its ground from `floor`, then what
-    /// stands off it, as `run(lo, hi, material, layer)`, both ends inside.
     pub fn column_runs<E>(&self, i: usize, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
         self.ground_runs(i, self.floor, i32::MAX, &mut run)?;
         for s in &self.spans[self.span_at[i] as usize..self.span_at[i + 1] as usize] {
@@ -415,6 +401,7 @@ impl ChunkSample {
 
     /// The apron's columns are not painted: the volume is the chunk's.
     pub fn paint(&self, volumes: &mut Volumes, volume: u32) -> bool {
+        let mut painted = true;
         for cy in 0..CHUNK_CELLS {
             for cx in 0..CHUNK_CELLS {
                 let _ = self.column_runs(apron_col(cx, cy) as usize, |lo, hi, material, layer_idx| {

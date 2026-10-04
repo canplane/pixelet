@@ -1,58 +1,91 @@
 // pxl-kernel/layer/character/companion.rs
 
-//! A companion (person + pet) at map_center. When map_center comes to rest it
-//! makes a fixed-duration catch-up walk there; in follow mode, where
-//! map_center is a ~1 Hz GPS stream that never rests, it instead glides at
-//! the world-scroll rate so the two cancel and it holds at screen center.
-//! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
+//! A companion (person + pet) that sits at map_center, its back to the camera
+//! and looking where the screen looks, until it has somewhere to walk to. Whenever map_center stops changing — after a
+//! drag, a click-to-navigate tween, a GPS recenter, whatever moved it — it
+//! makes a fixed-duration catch-up walk there and ends up facing its direction
+//! of travel, which it then just keeps. While map_center is still actively
+//! changing it stays put. On the way it steps as a walker does, from where
+//! it stood — down to the floor beside, up a step, held walking in place by
+//! a wall — and come to map_center it takes map_center's height:
+//! map_center is the character's place, and the walk only shows it getting
+//! there.
+//!
+//! Follow mode (is_follow_mode) is a different regime: map_center is a live
+//! ~1 Hz GPS stream, so the settle-then-dash above never gets to rest and its
+//! fixed dash curve fights the world-scroll damp. There the walker instead
+//! glides toward the target every frame at the world-scroll rate (the two
+//! cancel, holding it at screen center) and keeps its back to the camera by
+//! counter-rotating azimuth — a nav-app "you" marker, map spinning under it.
+//!
+//! Position/facing math lives in path.rs; this file reads that math and tells
+//! the scheduler's actor where to stand. The model is registered once per
+//! variant (layer/model/asset.rs) and shared with the settings variant
+//! picker's preview.
+//!
+//! Assets: Kenney's "Mini Characters" (person) and "Cube Pets" (pet) packs,
+//! both CC0, both real glTF.
 
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use crate::control::camera::approach::damp_alpha;
 use crate::control::camera::config::camera_cfg;
-use crate::control::camera::controller::damp_alpha;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::control::navigation::support::over;
-use crate::io::load::{load_image, Load};
+use crate::param::COMPANION_STEP_CELLS;
+use crate::global::Global;
+use crate::io::load::{load_gltf, load_image, Load};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::chat_bubble::chat_bubble_step;
-use crate::layer::character::path::{init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
+use crate::layer::character::path::{SettleTracker, WalkPlan};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::layer::model::asset::{register_model, ModelHandle};
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
-use crate::world::access::{support_revision, Access};
+use crate::world::access::Access;
 use crate::world::change::wake_at;
 use crate::world::frame::coord::{local_height, local_world_to_canonical};
-use crate::world::frame::view::view;
 
 pub const ACTORS_MAX: usize = Group::ALL.len();
 
 // Arbitrary, so the pet does not share the person's footprint.
-const PET_OFFSET: Vec2 = Vec2 { x: -0.6, y: -0.6 };
+const PET_OFFSET: [f64; 2] = [-0.6, -0.6];
 
-// A fixed duration, not a fixed speed (see sample_walk_plan).
+// Catch-up always takes this long, whatever the distance — see
+// sample_walk_plan for why a fixed duration beats a fixed speed here.
 const CATCHUP_DURATION_S: f64 = 0.6;
 
+// How long map_center has to sit still before we call it "settled" and plan a
+// catch-up — see update_settle_tracker for why this reacts to the target
+// itself rather than to any one specific gesture.
 const SETTLE_DELAY_S: f64 = 0.15;
 
-// The world scroll's own rate: the two cancel, holding the character at
-// screen center, so this is the only position smoothing in follow mode.
+// Follow mode only: glides toward the target with a plain per-frame
+// exponential lerp at the SAME rate the world scroll damps. Because the two run
+// at the same rate toward the same point, they cancel: the character's world
+// position stays at screen center. follow_mode.rs drops its own position
+// EMA to match, so this lerp is the one and only position-smoothing stage.
 const FOLLOW_LERP_K: f64 = camera_cfg::smooth::POS_DAMP;
 
 // +PI turns a model whose forward is -Y into the screen, back to the camera.
 const FOLLOW_FACING: f64 = core::f64::consts::PI;
 
-/// The screen's up laid on the ground is a quarter turn from east at heading zero.
+/// Turned against the azimuth, which is the screen's up laid on the ground.
 fn back_to_camera() -> f64 {
-    FOLLOW_FACING + view().up_heading() - core::f64::consts::FRAC_PI_2
+    FOLLOW_FACING - crate::control::camera::controller::azimuth()
 }
 
-// Under one GPS fix's travel at a walking pace (~0.5u), over the near-zero gap
-// a still map leaves. A rotate or pinch leaves such a gap, and a catch-up
-// across it would play the walk clip in place.
+// A gap narrower than this is not worth walking to: well under one GPS fix's
+// worth of travel (~0.5u at a walking pace) and over the near-zero gap a map
+// that has not moved leaves. Follow mode plays the walk clip while the glide
+// has this much to close and holds it LINGER longer before dropping to idle,
+// so it doesn't strobe once per fix; a catch-up is not planned at all across
+// a gap this small, which a rotate or a pinch leaves — the walk clip would
+// play in place and turn the walker to the heading of a zero-length step.
 const WALK_EPS: f64 = 0.03;
 const FOLLOW_WALK_LINGER_S: f64 = 1.5;
 
@@ -62,55 +95,40 @@ struct Held {
     skin: u32,
 }
 
-struct Surface {
-    x: f64,
-    y: f64,
-    hint: f64,
-    origin: Option<IVec>,
-    revision: [u32; 3],
-    z: Option<f64>,
-}
-
-struct Walker {
+struct Figure {
     variant: CharacterVariant,
     held: Option<Held>,
-    pose: [f64; 4],
+    at: [f64; 2],
+    heading: f64,
     actor_clip: Option<u32>,
     was_follow_mode: bool,
     walk_plan: Option<WalkPlan>,
-    /// Its falling edge, a gesture's end, fixes the destination.
+    /// The camera was under a pointer last turn: its falling edge is a
+    /// gesture's end, which is when a destination is fixed.
     was_dragging: bool,
     settle: SettleTracker,
+    /// Faces the camera exactly once — the moment it first has a pose to
+    /// resolve the camera against — and never again.
     initial_facing_done: bool,
-    /// To snap rather than glide across an L4 rebase.
-    prev_map_origin: IVec,
     follow_walk_until: f64,
-    /// In world units, since the frame's own Z moves on a rebase.
     stands_z: Option<f64>,
 }
 
-impl Walker {
-    fn new(variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> Walker {
-        Walker {
+impl Figure {
+    fn new(variant: &CharacterVariant, target: [f64; 2]) -> Figure {
+        Figure {
             variant: *variant,
             held: None,
-            pose: [0.0; 4],
+            at: [0.0; 2],
+            heading: 0.0,
             actor_clip: None,
             was_follow_mode: false,
             walk_plan: None,
             was_dragging: false,
-            settle: init_settle_tracker(target, 0.0),
+            settle: SettleTracker::new(target, 0.0),
             initial_facing_done: false,
-            prev_map_origin: map_origin,
             follow_walk_until: 0.0,
-            surface: Surface {
-                x: f64::NAN,
-                y: f64::NAN,
-                hint: f64::NAN,
-                origin: None,
-                revision: [u32::MAX; 3],
-                z: None,
-            },
+            stands_z: None,
         }
     }
 
@@ -124,7 +142,7 @@ impl Walker {
 
     /// Placed at the target on creation; walking from the frame's origin would
     /// take far too long.
-    fn acquire(&mut self, target: Vec2) {
+    fn acquire(&mut self, target: [f64; 2]) {
         let variant = self.variant;
         if self.held.is_some() {
             return;
@@ -136,7 +154,7 @@ impl Walker {
             return;
         };
         self.held = Some(Held { actor, model, skin });
-        self.pose = [target.x, target.y, 0.0, self.pose[3]];
+        self.at = target;
         self.set_ready(true);
     }
 
@@ -147,54 +165,60 @@ impl Walker {
         self.set_ready(false);
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn step(&mut self, ctx: &TickContext, map_origin: IVec, target: Vec2, arrive_z: f64, is_follow_mode: bool) {
+    fn step(&mut self, ctx: &TickContext, map_origin: IVec, target: [f64; 2], arrive_z: f64, is_follow_mode: bool) {
         let variant = self.variant;
         self.acquire(target);
         if self.held.is_none() {
             return;
         }
-        // Wall seconds: the tick's elapsed is clamped per delta, which stretches
-        // these spans across a gap where the world did not tick.
-        let now = xpute_runtime::clock::now() / 1000.0;
+        // Wall seconds. The settle delay, the catch-up walk and the follow
+        // linger are spans of real time; the tick's elapsed is a sum of deltas
+        // clamped at 0.1 s, which stretches every one of them across a gap
+        // where the world did not tick.
+        let now = crate::host::now() / 1000.0;
         let dragging = camera_store().camera_status == CameraStatus::Drag;
         let released = self.was_dragging && !dragging;
-        let (px, py, is_walking);
+        let gap = |a: [f64; 2], b: [f64; 2]| libm::hypot(a[0] - b[0], a[1] - b[1]);
+        let (mut at, is_walking);
 
         if is_follow_mode {
-            if rebased || !self.was_follow_mode {
-                px = target.x;
-                py = target.y;
-            } else {
+            at = if self.was_follow_mode {
                 let a = damp_alpha(FOLLOW_LERP_K, ctx.delta);
-                px = self.pose[0] + (target.x - self.pose[0]) * a;
-                py = self.pose[1] + (target.y - self.pose[1]) * a;
-            }
-            self.pose[3] = back_to_camera();
-            if (target.x - px).hypot(target.y - py) > WALK_EPS {
+                std::array::from_fn(|k| self.at[k] + (target[k] - self.at[k]) * a)
+            } else {
+                target
+            };
+            self.heading = back_to_camera();
+            if gap(target, at) > WALK_EPS {
                 self.follow_walk_until = now + FOLLOW_WALK_LINGER_S;
             }
             is_walking = now < self.follow_walk_until;
             self.walk_plan = None;
         } else {
-            // Rebase the tracker, or the delta accumulated while following reads as one
-            // giant dash.
+            // On the frame follow mode turns off, rebase the settle tracker to
+            // the live target so the accumulated while-following delta doesn't
+            // read as one giant just-settled dash.
             if self.was_follow_mode {
-                self.settle = init_settle_tracker(target, now);
+                self.settle = SettleTracker::new(target, now);
                 self.walk_plan = None;
             }
-            let update = update_settle_tracker(&self.settle, target, now, SETTLE_DELAY_S);
-            self.settle = update.tracker;
+            let just_settled = self.settle.update(target, now, SETTLE_DELAY_S);
             if self.settle.last_seen != self.settle.settled {
                 wake_at((self.settle.last_change_time + SETTLE_DELAY_S) * 1000.0);
             }
-            // A release fixes the destination at once: a pan begun inside the settle
-            // delay holds the target moving, so waiting would plan nothing. The settle
-            // tracker covers every other way the map moves.
+            // Where the walker is headed is decided when a gesture ends: the
+            // map stands where the pointer left it, and the walker leaves for
+            // there from wherever it has got to. The settle tracker answers
+            // for every other way the map moves — a search jump, a GPS
+            // recenter, a keyboard nudge — which is why a release is not the
+            // only trigger; but a release cannot wait for the tracker's
+            // delay, since a pan begun inside it holds the target moving and
+            // no catch-up was ever planned (camera/input.rs asks for the turn
+            // that carries the release).
             let destination = if released {
-                self.settle = init_settle_tracker(target, now);
+                self.settle = SettleTracker::new(target, now);
                 Some(target)
-            } else if update.just_settled {
+            } else if just_settled {
                 Some(self.settle.settled)
             } else {
                 None
@@ -202,10 +226,10 @@ impl Walker {
             if let Some(to) = destination {
                 // Re-planning toward the same place would restart the clock and slow the
                 // walk to a crawl.
-                let under_way = self.walk_plan.as_ref().is_some_and(|plan| (plan.target.x - to.x).hypot(plan.target.y - to.y) <= WALK_EPS);
-                if !under_way && (to.x - self.pose[0]).hypot(to.y - self.pose[1]) > WALK_EPS {
+                let under_way = self.walk_plan.as_ref().is_some_and(|plan| gap(plan.target, to) <= WALK_EPS);
+                if !under_way && gap(to, self.at) > WALK_EPS {
                     self.walk_plan = Some(WalkPlan {
-                        start: Vec2 { x: self.pose[0], y: self.pose[1] },
+                        start: self.at,
                         target: to,
                         start_time: now,
                         duration: CATCHUP_DURATION_S,
@@ -213,63 +237,51 @@ impl Walker {
                 }
             }
             // A plan in flight finishes even once the map moves again: dropping it
-            // stalled the walker during gestures and a run of quick pans ended in one jump.
-            let step = match &self.walk_plan {
-                Some(plan) => sample_walk_plan(plan, now),
-                None => WalkSample {
-                    x: self.pose[0],
-                    y: self.pose[1],
-                    heading: None,
-                },
-            };
-            if step.heading.is_none() {
+            // stalled the figure during gestures and a run of quick pans ended in one jump.
+            let (step, heading) = self.walk_plan.as_ref().map_or((self.at, None), |plan| plan.at(now));
+            if heading.is_none() {
                 self.walk_plan = None;
             }
-            px = step.x;
-            py = step.y;
-            is_walking = step.heading.is_some();
+            at = step;
+            is_walking = heading.is_some();
 
             // The actor's Y-up to Z-up turn maps the model's forward to +Y, hence +PI/2.
-            if let Some(heading) = step.heading {
-                self.pose[3] = heading + core::f64::consts::PI / 2.0;
+            if let Some(heading) = heading {
+                self.heading = heading + core::f64::consts::PI / 2.0;
             } else if !self.initial_facing_done {
-                self.pose[3] = back_to_camera();
+                self.heading = back_to_camera();
                 self.initial_facing_done = true;
             }
         }
 
-        self.prev_map_origin = map_origin;
         self.was_follow_mode = is_follow_mode;
         self.was_dragging = dragging;
 
-        // Z is what the walker stands on there (world/access.rs `support`):
-        // asked again only when something it depends on moved.
-        let s = &mut self.surface;
-        let revision = support_revision();
-        if s.x != px || s.y != py || s.origin != Some(map_origin) || s.revision != revision {
-            *s = Surface {
-                x: px,
-                y: py,
-                origin: Some(map_origin),
-                revision,
-                z: footing(map_origin, px, py),
-            };
+        // A wall holds it walking in place until the walk ends; following a fix
+        // there is no end to wait for, so a wall puts it at its target at once.
+        let arrived = gap(target, at) <= WALK_EPS;
+        let moved = at != self.at;
+        let stands = self.stands_z.get_or_insert(arrive_z);
+        if arrived {
+            *stands = arrive_z;
+        } else if moved {
+            match step_from(map_origin, at, *stands) {
+                Some(Some(z)) => *stands = z,
+                Some(None) if is_follow_mode => {
+                    at = target;
+                    *stands = arrive_z;
+                }
+                Some(None) => at = self.at,
+                None => {}
+            }
         }
-        self.pose[0] = px;
-        self.pose[1] = py;
-        if let Some(z) = s.z {
-            self.pose[2] = z;
-        }
+        self.at = at;
 
         let Some(held) = &self.held else { return };
         let sched = &mut kernel().sched;
         if let Some(a) = sched.models.actor(held.actor) {
-            a.at = [
-                ivec::to_real(ivec::X(map_origin)) + px,
-                ivec::to_real(ivec::Y(map_origin)) + py,
-                ivec::to_real(ivec::Z(map_origin)) + self.pose[2],
-            ];
-            a.rotation_z = self.pose[3] as f32;
+            a.at = [at[0], at[1], *stands];
+            a.rotation_z = self.heading as f32;
             a.visible = true;
         }
         let clip = if is_walking { variant.move_clip } else { IDLE_CLIP };
@@ -283,8 +295,8 @@ impl Walker {
 }
 
 struct Companion {
-    person: Option<Walker>,
-    pet: Option<Walker>,
+    person: Option<Figure>,
+    pet: Option<Figure>,
 }
 
 static COMPANION: Global<Companion> = Global::new();
@@ -293,26 +305,27 @@ fn companion() -> &'static mut Companion {
     COMPANION.get(|| Companion { person: None, pet: None })
 }
 
+/// In world units, so a rebase moves nothing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompanionProps {
     pub map_origin: IVec,
-    pub center_x: f64,
-    pub center_y: f64,
-    /// The top of the floor under the map center, in world units.
+    pub center: [f64; 2],
+    /// The top of the floor under the map center.
     pub floor: f64,
 }
 
-fn walker_for<'a>(slot: &'a mut Option<Walker>, variant: &CharacterVariant, target: Vec2, map_origin: IVec) -> &'a mut Walker {
+fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: [f64; 2]) -> &'a mut Figure {
     if slot.as_ref().is_some_and(|w| w.variant.number != variant.number) {
         if let Some(mut old) = slot.take() {
             old.release();
         }
     }
-    slot.get_or_insert_with(|| Walker::new(variant, target, map_origin))
+    slot.get_or_insert_with(|| Figure::new(variant, target))
 }
 
+/// The companion's turn, in the interaction phase; None removes it.
 pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
-    let c = companion();
+    let c = COMPANION.get(|| Companion { person: None, pet: None });
     let Some(p) = props else {
         for slot in [&mut c.person, &mut c.pet] {
             if let Some(mut w) = slot.take() {
@@ -329,18 +342,15 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);
     let is_follow_mode = camera_store().is_follow_mode;
 
-    let person_target = Vec2 { x: p.center_x, y: p.center_y };
-    let person = walker_for(&mut c.person, person_variant, person_target, p.map_origin);
+    let person_target = p.center;
+    let person = figure_for(&mut c.person, person_variant, person_target);
     person.step(ctx, p.map_origin, person_target, p.floor, is_follow_mode);
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
-    let pet_target = Vec2 {
-        x: p.center_x + PET_OFFSET.x,
-        y: p.center_y + PET_OFFSET.y,
-    };
-    let pet = walker_for(&mut c.pet, pet_variant, pet_target, p.map_origin);
+    let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
+    let pet = figure_for(&mut c.pet, pet_variant, pet_target);
     // Its own floor beside the person, stepped to from the person's height.
-    let pet_z = step_from(p.map_origin, [pet_target.x, pet_target.y], p.floor).flatten().unwrap_or(p.floor);
+    let pet_z = step_from(p.map_origin, pet_target, p.floor).flatten().unwrap_or(p.floor);
     pet.step(ctx, p.map_origin, pet_target, pet_z, is_follow_mode);
 }
 
@@ -350,9 +360,14 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
     [&c.person, &c.pet].into_iter().flatten().filter_map(|w| w.held.as_ref()).map(|h| (h.model.model, h.skin))
 }
 
-/// None inside where a wall holds it; None outside where no page is resident.
+// ---- where a walker steps ----
+
+/// Where a walker standing at height `stands`, in world units, stands at
+/// local `[x, y]` (world/access.rs `support`): the height, in world units;
+/// none inside where a wall holds it; none outside where no page over the
+/// point is resident.
 fn step_from(map_origin: IVec, [x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
     let o = ivec::to_v3(map_origin);
-    let at = local_world_to_canonical(&[x - o[0], y - o[1], local_height(over(stands), map_origin)], map_origin);
+    let at = *local_world_to_canonical(&mut Pvf3::default(), &[x - o[0], y - o[1], local_height(over(stands), map_origin)], map_origin);
     Access::now().support(&at, COMPANION_STEP_CELLS).value()
 }

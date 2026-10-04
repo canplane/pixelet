@@ -21,7 +21,6 @@ use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::text::text_width;
 use crate::world::access::Access;
-use crate::world::frame::coord::canonical_to_local;
 use crate::world::change::request_world_tick;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
@@ -167,30 +166,27 @@ impl Sketch {
     }
 }
 
-fn sketch(map_center: &Pvf3, map_origin: IVec) -> Sketch {
-    let mut s = Sketch::default();
-    let center = canonical_to_local(map_center, map_origin);
-    let ground = Access::now().floor_under(map_center).value().map(|top| local_height(top, map_origin));
-    let cell = floor3n(&[center[0], center[1], ground.unwrap_or(0.0)], U_PER_CELL);
-    s.cube(cell, U_PER_CELL);
-    s.point(center, BLACK);
-    // First person the eye is the map center, and nothing about it is seen.
-    if dist() == 0.0 {
-        return s;
+/// About the map center: the view's frame turns with the azimuth — right,
+/// forward and up — the world's never.
+fn sketch_frames(s: &mut Sketch) {
+    if crate::control::camera::controller::dist() == 0.0 {
+        return;
     }
-    let Some(pivot) = crate::control::camera::controller::center_local() else { return };
-    let (sin, cos) = (-crate::control::camera::controller::camera().yaw).sin_cos();
-    let heading_frame = move |p: V3| [pivot[0] + p[0] * cos - p[1] * sin, pivot[1] + p[0] * sin + p[1] * cos, pivot[2] + p[2]];
-    s.gyro(&heading_frame, [4.0, 0.0, 0.0], "heading (4,0,0)", false);
-    s.point(heading_frame([0.0, 0.0, 4.0]), Some("heading (0,0,4)"));
-    let world_frame = move |p: V3| [pivot[0] + p[0], pivot[1] + p[1], pivot[2] + p[2]];
-    s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], "north (world)", true);
+    let Some(center) = crate::control::camera::controller::center_local() else { return };
+    let (sin, cos) = libm::sincos(-crate::control::camera::controller::azimuth());
+    let view_frame = move |p: V3| [center[0] + p[0] * cos - p[1] * sin, center[1] + p[0] * sin + p[1] * cos, center[2] + p[2]];
+    s.gyro(&view_frame, [0.0, RING_RADIUS, 0.0], "forward");
+    s.point(view_frame([0.0, 0.0, RING_RADIUS]), Some("up"));
+    let world_frame = move |p: V3| [center[0] + p[0], center[1] + p[1], center[2] + p[2]];
+    s.gyro(&world_frame, [0.0, RING_RADIUS, 0.0], "north");
 }
 
 fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut s = Sketch::default();
 
-    let raw_v = canonical_to_local(map_center, map_origin);
+    // raw_v: the map center as placed, no elevation override. quant_v: the cell
+    // it floors to, ground-snapped — a cell, so a box.
+    let raw_v = local_of(map_center, map_origin);
     let ground = |at: &Pvf3| Access::now().floor_under(at).value().map(|top| crate::world::frame::coord::local_height(top, map_origin));
     let gnd_v = [raw_v[0], raw_v[1], ground(map_center).unwrap_or(0.0)];
     let mut quant_v = [0.0; 3];
@@ -219,7 +215,7 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
 }
 
 struct Gizmos {
-    /// Map center, origin, tiles' revision, and the view's yaw.
+    /// Map center, origin, tiles' revision, and the azimuth.
     built_for: Option<(Pvf3, IVec, u32, f64)>,
     drawn: Sketch,
     shown: bool,
@@ -312,7 +308,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         }
         return;
     };
-    let key = (center, map_origin, Terrain::pyramid().paging().revision(), crate::control::camera::controller::heading());
+    let key = (center, map_origin, Terrain::pyramid().paging().revision(), crate::control::camera::controller::azimuth());
     if g.built_for == Some(key) {
         write_labels(g);
         return;

@@ -5,20 +5,17 @@
 //! drawn eye eases to it, so a step comes as every other move does.
 
 use pxl_spec::space::lod::Tau;
+use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{add3, V3};
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
-use crate::control::camera::config::camera_cfg::free::EYE_HEIGHT_U;
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
-use crate::control::camera::config::camera_cfg::view::DEFAULT_DIST;
-use crate::control::camera::controller::{camera, eye_local, set_eye_local};
-use crate::control::camera::controller::{look_domain, units_per_px_at};
+use crate::control::camera::controller::look_domain;
+use crate::control::camera::controller::{camera, eye_local, map_center, set_eye_local};
 use crate::control::camera::store::camera_store;
-use crate::global::Global;
-use crate::world::access::{Access, Detail, Ray, FINEST};
-use crate::world::change::request_world_tick;
-use crate::world::frame::coord::{canonical_to_local, local_height, local_world_to_canonical};
+use crate::control::navigation::support::target;
+use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::view::{view, view_compose};
 use xpute_runtime::global::Global;
 
@@ -56,27 +53,30 @@ pub(crate) fn target_center() -> Option<Pvf3> {
 }
 
 pub(crate) fn put(at: Pvf3, snap: bool) {
-    let eye = at;
-    *to() = Some(eye);
+    *to() = Some(at);
     if snap {
-        set_eye_local(&canonical_to_local(&eye, view().origin));
+        set_eye_local(&target(to(), eye_local().unwrap_or_default(), view().origin));
     }
 }
 
 /// Whether still moving.
 pub(crate) fn turn(delta: f64) -> bool {
-    let walked = spend_travel(delta).is_some_and(|share| {
-        let Some(from) = eye_local() else { return false };
-        let mut to = [from[0] + share[0], from[1] + share[1], from[2]];
-        stand(&mut to);
-        set_eye_local(&to);
-        true
-    });
+    let mut moving = false;
+    if let Some(eye) = eye_local() {
+        let to = target(to(), eye, view().origin);
+        let (next, m) = approach_vec(eye, to, POS_DAMP, delta, EYE_EPS);
+        if next != eye {
+            set_eye_local(&next);
+        }
+        moving |= m;
+    }
     let vs = camera_store().intent;
     let cam = camera();
-    let heading = wrap(vs.azimuth - cam.yaw, -core::f64::consts::PI, core::f64::consts::PI);
-    let tilt = vs.polar - cam.pitch;
-    (cam.pitch, cam.yaw) = look_domain(cam.pitch + tilt * damp_alpha(CAM_DAMP, delta), cam.yaw + heading * damp_alpha(ROT_DAMP, delta));
+    let (polar, m) = approach_scalar(cam.polar, vs.polar, CAM_DAMP, delta, LOOK_EPS);
+    moving |= m;
+    let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, LOOK_EPS);
+    moving |= m;
+    (cam.polar, cam.azimuth) = look_domain(polar, azimuth);
     view_compose();
-    walked || heading.abs() > 1e-4 || tilt.abs() > 1e-4
+    moving
 }

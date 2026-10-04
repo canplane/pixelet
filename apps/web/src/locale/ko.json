@@ -5,7 +5,7 @@
     "trigger_aria_label": "설정",
     "close": "닫기",
     "tabs": {
-      "effects": "효과",
+      "effects": "설정",
       "info": "정보"
     },
     "language": {
@@ -40,9 +40,21 @@
           "description": "제자리에서 둘러봅니다. 드래그하면 땅 위를 걷고, 눈높이는 서 있는 땅을 따라갑니다."
         }
       },
-      "tilt_lock": {
-        "label": "카메라 기울기 고정",
-        "description": "카메라의 수직 회전을 고정하고 수평 회전만 허용합니다."
+      "orbit_obstacle": {
+        "label": "장애물 대응",
+        "through": {
+          "label": "통과",
+          "description": "지형과 물체를 그대로 통과합니다."
+        },
+        "stop": {
+          "label": "멈춤",
+          "description": "충돌 직전에서 카메라 조작을 멈춥니다."
+        },
+        "climb": {
+          "label": "타고 넘기",
+          "description": "충돌하면 위쪽으로 넘어갑니다. 위쪽도 막혀 있으면 멈춥니다."
+        },
+        "description": "3인칭에서 카메라가 지형이나 물체에 막힐 때의 동작입니다. 1인칭에는 적용되지 않습니다."
       }
     },
     "lighting": {
@@ -117,6 +129,27 @@
     "about": {
       "section_title": "정보",
       "tagline": "현실 세계를 캔버스 삼아 블록을 쌓습니다."
+    },
+    "map": {
+      "camera_mode": {
+        "label": "카메라",
+        "orbit": {
+          "label": "3인칭",
+          "description": "카메라가 바라보는 곳을 중심으로 돌고, 드래그하면 그곳이 움직입니다."
+        },
+        "free": {
+          "label": "1인칭",
+          "description": "제자리에서 둘러봅니다. 드래그하면 땅 위를 걷고, 눈높이는 서 있는 땅을 따라갑니다."
+        }
+      },
+      "poi": {
+        "label": "장소",
+        "description": "주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
+      }
+    },
+    "navigation": {
+      "section_title": "내비게이션",
+      "section_caption": "지도 중심이 세계와 맞닿는 방식을 설정합니다"
     }
   },
   "cubes": {

@@ -56,6 +56,7 @@ pub struct CameraStore {
     pub hovered_scattered: Option<Scattered>,
     /// What the controls ask of the camera (`Intent`).
     pub intent: Intent,
+    /// Follow mode flag.
     pub is_follow_mode: bool,
 }
 
@@ -71,7 +72,6 @@ impl CameraStore {
                 azimuth: DEFAULT_AZIMUTH,
                 polar: DEFAULT_POLAR,
             },
-            travel: [0.0; 2],
             is_follow_mode: false,
         }
     }

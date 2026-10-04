@@ -20,7 +20,7 @@
     "builds the chunks again."
   ],
   "SETTING_SECTIONS": {
-    "$value": ["display", "camera", "editing", "lighting", "quality", "debug", "character"],
+    "$value": ["display", "navigation", "camera", "lighting", "quality", "debug", "character", "map"],
     "$doc": [
       "The sheet's sections, in the order they are shown. `character` is not a",
       "section of the sheet at all — its two settings are picked from the",
@@ -48,11 +48,11 @@
       "  orbit — third person: the camera turns about the map center, its",
       "          radius ahead of the eye, and a drag moves the map center.",
       "  free  — first person: the eye is the map center and turns in place;",
-      "          a drag walks it over the ground, the eye at its height over",
-      "          the ground it reaches, and nothing moves it up or down."
+      "          a drag walks it as the orbit's center walks, the eye at its",
+      "          height over where the walk stands."
     ]
   },
-  "CAMERA_COLLISION_MODES": {
+  "ORBIT_OBSTACLE_MODES": {
     "$value": ["through", "stop", "climb"],
     "$doc": [
       "What terrain does to the camera.",
@@ -108,6 +108,14 @@
       "cost": "low",
       "sources_chunks": true
     },
+    "structures": {
+      "$doc": ["Whether the STRUCTURE ground channel is painted. The bake writes it", "either way (pxl-geo-bake terrain/pipeline/overture/policy.rs); this is a render decision."],
+      "kind": "toggle",
+      "default": true,
+      "section": "display",
+      "sources_chunks": true,
+      "dev": true
+    },
     "decor": {
       "$doc": [
         "Procedurally scattered decor only; what the player placed stays.",
@@ -157,34 +165,20 @@
       "options": "CAMERA_MODES",
       "section": "camera"
     },
-    "camera_collision": {
-      "$doc": [
-        "What the camera does when the controls would put it underground;",
-        "CAMERA_COLLISION_MODES says each. The default is climb, because the one",
-        "thing a map camera must not do is refuse to",
-        "move. stop is the more literal answer and the worse default: it hands",
-        "back a control that did nothing, which reads as the app being stuck",
-        "rather than as the ground being in the way."
-      ],
-      "kind": "choice",
-      "default": "climb",
-      "options": "CAMERA_COLLISION_MODES",
-      "section": "camera",
-      "dev": true
-    },
-    "ground_snap": {
-      "$doc": ["Panning re-samples the terrain height under the map center each step."],
+    "center_support": {
+      "$doc": ["The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."],
       "kind": "toggle",
       "default": true,
-      "section": "camera",
+      "section": "navigation",
       "dev": true
     },
-    "terrain_carving": {
-      "$doc": ["The eraser digs into the baked terrain where nothing is placed. Off by", "default: the terrain is real map data, not the player's scratch canvas."],
-      "kind": "toggle",
-      "default": false,
-      "section": "editing",
-      "dev": true
+    "orbit_obstacle": {
+      "$doc": ["What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each."],
+      "kind": "choice",
+      "default": "climb",
+      "options": "ORBIT_OBSTACLE_MODES",
+      "section": "camera",
+      "dev_options": ["through"]
     },
     "edge_shade": {
       "$doc": [

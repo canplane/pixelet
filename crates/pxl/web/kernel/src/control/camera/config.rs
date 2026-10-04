@@ -11,8 +11,9 @@ pub mod camera_cfg {
         pub const NEAR: f64 = 0.1;
     }
     pub mod view {
-        /// The orbit eye's least height over its floor: one cell, so the eye is never
-        /// in the cell its floor tops.
+        /// How far over the floor under it (world/access.rs `floor_under`) the
+        /// orbit's eye stands at least, where the collision setting holds it:
+        /// one cell, so the eye is never in the cell its floor tops.
         pub const EYE_CLEARANCE_U: f64 = 1.0;
 
         pub const DEFAULT_DIST: f64 = 16.0;
@@ -26,15 +27,6 @@ pub mod camera_cfg {
         /// pyramid's top level draws (about 24 km on the scale bar); past it no level
         /// is coarse enough.
         pub const MAX_DIST: f64 = 262144.0;
-    }
-    pub mod free {
-        /// How high the free camera's eye stands over the ground it walks
-        /// on, in units. A knob, set by eye and derived from nothing: no
-        /// relation to the lattice, the orbit's pivot or anything else
-        /// fixes it. Nor is it the eye's clearance (`view::EYE_CLEARANCE_U`),
-        /// which is how near the ground an eye may come and not where an eye
-        /// stands.
-        pub const EYE_HEIGHT_U: f64 = 1.5;
     }
     pub mod input {
         /// Stated against the screen, not as rad/px, to match azimuth's 1:1 arcball:

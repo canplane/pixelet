@@ -11,7 +11,6 @@ use std::collections::BinaryHeap;
 
 use crate::deck::param::PREFERRED_SLOPE;
 
-/// What one structure asks, by point.
 pub struct Problem<'a> {
     pub adj: &'a [Vec<(u32, f64)>],
     pub ground: &'a [f64],
@@ -69,7 +68,10 @@ fn envelope(p: &Problem, least: &[f64], most: &[f64], sign: f64, line: &[f64]) -
     for u in (0..n).filter(|&u| least[u].is_finite()) {
         near.from(p.adj, u as u32, p.halo[u]);
         let reached = || near.reached.iter().map(|&v| (v as usize, near.dist[v as usize]));
-        let pass = reached().filter(|&(w, d)| most[w].is_finite() && d > 0.0).map(|(w, d)| (least[u] - most[w]) / d).fold(PREFERRED_SLOPE, f64::max);
+        let pass = reached()
+            .filter(|&(w, d)| most[w].is_finite() && d > 0.0)
+            .map(|(w, d)| (least[u] - most[w]) / d)
+            .fold(PREFERRED_SLOPE, f64::max);
         for (v, d) in reached() {
             // steeper only to land on v's own by the halo, so no step there
             let slope = pass.max((least[u] - own(v)) / p.halo[u]);

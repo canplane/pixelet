@@ -91,14 +91,15 @@ interface SettingChoiceRowProps {
   selected: boolean;
   onSelect: () => void;
   cost?: SettingCost;
+  dev?: boolean;
 }
 
 /** The check slot keeps its width when empty, so selecting does not rewrap. */
 export function SettingChoiceRow(props: SettingChoiceRowProps) {
-  const { label, description, selected, onSelect, cost } = props;
+  const { label, description, selected, onSelect, cost, dev } = props;
   return (
     <Pressable onPress={onSelect} accessibilityRole="radio" aria-checked={selected} style={styles.row}>
-      <Described label={label} description={description} cost={cost} />
+      <Described label={label} description={description} cost={cost} dev={dev} />
       <View style={styles.check}>{selected && <Glyph glyph="checkmark" size={chrome.glyph} weight="semibold" color={color.chosen} />}</View>
     </Pressable>
   );

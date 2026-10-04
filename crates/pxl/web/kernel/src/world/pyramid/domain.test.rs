@@ -13,7 +13,7 @@ use crate::world::observer::cell_angle;
 use crate::world::fixture::{self, eye, World};
 
 fn ladder() -> Vec<Tau> {
-    (0..6).map(|k| Tau::of(2f64.powf(k as f64 / 2.0))).collect()
+    (0..6).map(|k| Tau::of(libm::pow(2f64, k as f64 / 2.0))).collect()
 }
 
 fn domain(o: Observation, world: &World) -> Domain {
@@ -35,7 +35,7 @@ fn around(eye: V3, radius: f64, z: f64) -> Vec<V3> {
         let r = radius * ring as f64 / 12.0;
         for k in 0..48 {
             let a = k as f64 / 48.0 * std::f64::consts::TAU;
-            out.push([eye[0] + r * a.cos(), eye[1] + r * a.sin(), z]);
+            out.push([eye[0] + r * libm::cos(a), eye[1] + r * libm::sin(a), z]);
         }
     }
     out
@@ -84,12 +84,12 @@ fn the_cover_stands_all_around_and_ground_with_no_answer_is_no_piece() {
 fn grazing_ground_refines_across_the_screen_and_not_along_its_depth() {
     let o = eye(EYE, Some([1.0, 0.0, 0.0]), FAR, GROUND);
     let mut d = domain(o, &World::flat(GROUND));
-    let half = (fixture::REFERENCE[0].atan() * 0.9).to_degrees() as i32;
+    let half = (libm::atan(fixture::REFERENCE[0]) * 0.9).to_degrees() as i32;
     for (tau, pieces, _) in cuts(&mut d) {
         for bearing in (-half..=half).step_by(5) {
             let b = (bearing as f64).to_radians();
             for r in [3.0, 30.0, 100.0, 400.0, 1_500.0, 6_000.0, 20_000.0, 29_000.0] {
-                let p = [EYE[0] + r * b.cos(), EYE[1] + r * b.sin(), GROUND - 0.5];
+                let p = [EYE[0] + r * libm::cos(b), EYE[1] + r * libm::sin(b), GROUND - 0.5];
                 let over = pieces_at(&pieces, p);
                 assert_eq!(over.len(), 1, "{tau:?}: {p:?} under {over:?}");
                 let level = over[0].level() as i32;
@@ -142,8 +142,6 @@ fn hidden_ground_keeps_its_depth() {
     }
 }
 
-/// With the source's top below the pyramid's, the cover is that level's
-/// chunks and nothing coarser is ever a piece or asked to split.
 #[test]
 fn the_cover_is_the_sources_top() {
     let top = 3;

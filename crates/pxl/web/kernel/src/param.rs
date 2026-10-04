@@ -184,11 +184,12 @@ pub const RESOLUTION_BUDGET_FLOOR_MS: f64 = 1000.0 / 60.0;
 /// A ratio change rebuilds the render targets, so changes are spaced out.
 pub const RESOLUTION_CHANGE_GAP_MS: f64 = 1000.0;
 
-// ---- a walker's step ----
+// ---- the companion's figures ----
 
-/// Cells a walker steps up onto; taller is a wall. Set by the product owner
+/// Cells a figure is drawn stepping up as it walks to the map center, and the
+/// pet beside the person; taller holds it. Set by the product owner
 /// (2026-10-02), derived from nothing.
-pub const STEP_CELLS: i64 = 4;
+pub const COMPANION_STEP_CELLS: i64 = 4;
 
 // ---- places' zooms ----
 

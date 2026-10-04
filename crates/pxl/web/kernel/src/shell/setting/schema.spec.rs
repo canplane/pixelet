@@ -31,8 +31,8 @@
 ///   orbit — third person: the camera turns about the map center, its
 ///           radius ahead of the eye, and a drag moves the map center.
 ///   free  — first person: the eye is the map center and turns in place;
-///           a drag walks it over the ground, the eye at its height over
-///           the ground it reaches, and nothing moves it up or down.
+///           a drag walks it as the orbit's center walks, the eye at its
+///           height over where the walk stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum CameraMode {
@@ -61,18 +61,18 @@ impl CameraMode {
 ///             reachable at the cost of an angle nobody asked for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum CameraCollisionMode {
+pub enum OrbitObstacleMode {
     through = 0,
     stop = 1,
     climb = 2,
 }
 
-impl CameraCollisionMode {
-    pub const ALL: [CameraCollisionMode; 3] = [CameraCollisionMode::through, CameraCollisionMode::stop, CameraCollisionMode::climb];
+impl OrbitObstacleMode {
+    pub const ALL: [OrbitObstacleMode; 3] = [OrbitObstacleMode::through, OrbitObstacleMode::stop, OrbitObstacleMode::climb];
 
     /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<CameraCollisionMode> {
-        CameraCollisionMode::ALL.get(index as usize).copied()
+    pub fn of(index: u32) -> Option<OrbitObstacleMode> {
+        OrbitObstacleMode::ALL.get(index as usize).copied()
     }
 }
 
@@ -178,42 +178,43 @@ pub enum SettingKey {
     /// height over the ground; to third the map center is laid on the ground
     /// and the eye steps back by the radius.
     camera_mode = 4,
-    /// What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each.
-    camera_collision = 5,
+    /// The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck.
+    surface_follow = 5,
+    /// What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each.
+    orbit_obstacle = 6,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
-    edge_shade = 6,
+    edge_shade = 7,
     /// A uniform on an already-compiled shader term; not a pass.
-    rim_light = 7,
+    rim_light = 8,
     /// corner, the occlusion a voxel world gets from its own geometry with no
     /// screen-space pass; screen, N8AO's screen-space pass, the costliest of
     /// the three. AO_MODES says each.
-    ao = 8,
+    ao = 9,
     /// The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
-    shadows = 9,
+    shadows = 10,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 10,
+    resolution = 11,
     /// The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
-    profiler = 11,
+    profiler = 12,
     /// Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs).
-    gizmos = 12,
-    person = 13,
-    pet = 14,
+    gizmos = 13,
+    person = 14,
+    pet = 15,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 15] = [
+    pub const ALL: [SettingKey; 16] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::poi,
         SettingKey::tilt_lock,
         SettingKey::camera_mode,
-        SettingKey::camera_collision,
-        SettingKey::ground_snap,
-        SettingKey::terrain_carving,
+        SettingKey::surface_follow,
+        SettingKey::orbit_obstacle,
         SettingKey::edge_shade,
         SettingKey::rim_light,
         SettingKey::ao,
@@ -237,9 +238,8 @@ impl SettingKey {
             SettingKey::poi => SettingKind::Toggle,
             SettingKey::tilt_lock => SettingKind::Toggle,
             SettingKey::camera_mode => SettingKind::Choice,
-            SettingKey::camera_collision => SettingKind::Choice,
-            SettingKey::ground_snap => SettingKind::Toggle,
-            SettingKey::terrain_carving => SettingKind::Toggle,
+            SettingKey::surface_follow => SettingKind::Toggle,
+            SettingKey::orbit_obstacle => SettingKind::Choice,
             SettingKey::edge_shade => SettingKind::Toggle,
             SettingKey::rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
@@ -260,9 +260,8 @@ impl SettingKey {
             SettingKey::poi => "poi",
             SettingKey::tilt_lock => "tilt_lock",
             SettingKey::camera_mode => "camera_mode",
-            SettingKey::camera_collision => "camera_collision",
-            SettingKey::ground_snap => "ground_snap",
-            SettingKey::terrain_carving => "terrain_carving",
+            SettingKey::surface_follow => "surface_follow",
+            SettingKey::orbit_obstacle => "orbit_obstacle",
             SettingKey::edge_shade => "edge_shade",
             SettingKey::rim_light => "rim_light",
             SettingKey::ao => "ao",
@@ -279,7 +278,7 @@ impl SettingKey {
     pub fn options(self) -> &'static [&'static str] {
         match self {
             SettingKey::camera_mode => &["orbit", "free"],
-            SettingKey::camera_collision => &["through", "stop", "climb"],
+            SettingKey::orbit_obstacle => &["through", "stop", "climb"],
             SettingKey::ao => &["off", "corner", "screen"],
             SettingKey::resolution => &["auto", "fixed", "low"],
             _ => &[],
@@ -288,7 +287,15 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::camera_collision | SettingKey::shadows)
+        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::center_support | SettingKey::shadows)
+    }
+
+    /// A choice's option a development build only offers.
+    pub fn dev_option(self, value: u32) -> bool {
+        match self {
+            SettingKey::orbit_obstacle => matches!(value, 0),
+            _ => false,
+        }
     }
 
     /// Read by a chunk's build, so a change builds the chunks again.
@@ -305,9 +312,8 @@ pub struct Settings {
     pub poi: bool,
     pub tilt_lock: bool,
     pub camera_mode: CameraMode,
-    pub camera_collision: CameraCollisionMode,
-    pub ground_snap: bool,
-    pub terrain_carving: bool,
+    pub surface_follow: bool,
+    pub orbit_obstacle: OrbitObstacleMode,
     pub edge_shade: bool,
     pub rim_light: bool,
     pub ao: AoMode,
@@ -327,9 +333,8 @@ impl Settings {
         poi: false,
         tilt_lock: false,
         camera_mode: CameraMode::orbit,
-        camera_collision: CameraCollisionMode::climb,
-        ground_snap: true,
-        terrain_carving: false,
+        surface_follow: true,
+        orbit_obstacle: OrbitObstacleMode::climb,
         edge_shade: true,
         rim_light: true,
         ao: AoMode::corner,
@@ -350,9 +355,8 @@ impl Settings {
             SettingKey::poi => self.poi as u32,
             SettingKey::tilt_lock => self.tilt_lock as u32,
             SettingKey::camera_mode => self.camera_mode as u32,
-            SettingKey::camera_collision => self.camera_collision as u32,
-            SettingKey::ground_snap => self.ground_snap as u32,
-            SettingKey::terrain_carving => self.terrain_carving as u32,
+            SettingKey::surface_follow => self.surface_follow as u32,
+            SettingKey::orbit_obstacle => self.orbit_obstacle as u32,
             SettingKey::edge_shade => self.edge_shade as u32,
             SettingKey::rim_light => self.rim_light as u32,
             SettingKey::ao => self.ao as u32,
@@ -377,12 +381,11 @@ impl Settings {
                 Some(o) => self.camera_mode = o,
                 None => return false,
             },
-            SettingKey::camera_collision => match CameraCollisionMode::of(value) {
-                Some(o) => self.camera_collision = o,
+            SettingKey::surface_follow if value <= 1 => self.surface_follow = value == 1,
+            SettingKey::orbit_obstacle => match OrbitObstacleMode::of(value) {
+                Some(o) => self.orbit_obstacle = o,
                 None => return false,
             },
-            SettingKey::ground_snap if value <= 1 => self.ground_snap = value == 1,
-            SettingKey::terrain_carving if value <= 1 => self.terrain_carving = value == 1,
             SettingKey::edge_shade if value <= 1 => self.edge_shade = value == 1,
             SettingKey::rim_light if value <= 1 => self.rim_light = value == 1,
             SettingKey::ao => match AoMode::of(value) {

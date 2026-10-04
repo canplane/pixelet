@@ -9,4 +9,3 @@ pub mod hit;
 pub mod instance;
 pub mod kind;
 pub mod scatter;
-pub mod volume;
