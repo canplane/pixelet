@@ -164,7 +164,7 @@ pub fn hover_cursor_step() {
     // An untextured white silhouette reads as a glitch, so the box ghost stands
     // in until model and skin both arrive.
     let is_decor_ghost = match (decor_assets, decor_pick) {
-        (Some(a), Some((variant, _, _))) => a.models.get(variant as usize).is_some_and(Option::is_some) && a.skins.get(variant as usize).is_some_and(Option::is_some),
+        (Some(a), Some((variant, _, _))) => a.models.get(variant as usize).is_some_and(Option::is_some) && a.skin(variant as usize).is_some(),
         _ => false,
     };
 
