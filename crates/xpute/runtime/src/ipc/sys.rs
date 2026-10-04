@@ -9,13 +9,19 @@ use core::panic::Location;
 
 use xpute_core::status::errno::Errno;
 
-use crate::ipc::stream::Stream;
+use crate::ipc::stream::{record_words, Stream};
 use crate::mem::base::off_of_slice;
 
 #[path = "sys.spec.rs"]
 pub mod spec;
 
 pub type Fd = u32;
+
+/// The most one descriptor records in a turn, its name `path` bytes long: its
+/// open, a read or a write, and its close, twice where it is stopped.
+pub const fn descriptor_turn_bytes(path: usize) -> usize {
+    4 * (record_words(3, Some(path)) + record_words(3, None) + 2 * record_words(1, None))
+}
 
 pub struct Sys {
     stream: Stream,

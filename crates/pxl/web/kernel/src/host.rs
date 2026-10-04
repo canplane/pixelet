@@ -8,7 +8,8 @@
 use core::panic::Location;
 
 use xpute_core::status::errno::Errno;
-use xpute_runtime::ipc::sys::Sys;
+use xpute_runtime::ipc::stream::record_words;
+use xpute_runtime::ipc::sys::{descriptor_turn_bytes, Sys};
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::abi::host::stream;
@@ -45,20 +46,8 @@ pub fn host_record(op: u32, args: &[u32], bytes: &[u8]) -> bool {
     true
 }
 
-/// A record's bytes in the stream: its op and count, its arguments, and its
-/// bytes as their count and then words.
-const fn record_bytes(args: usize, bytes: Option<usize>) -> usize {
-    4 * (2
-        + args
-        + match bytes {
-            Some(b) => 1 + b.div_ceil(4),
-            None => 0,
-        })
-}
-
-/// The most one file records in a turn: its open, then on its answer a read
-/// or a write, an image's decode and its close, and a stop's close.
-const FILE_TURN_BYTES: usize = record_bytes(3, Some(PATH_BYTES)) + record_bytes(3, None) + record_bytes(2, Some(0)) + 2 * record_bytes(1, None);
+/// The most one file records in a turn: its descriptor's, and an image's decode.
+const FILE_TURN_BYTES: usize = descriptor_turn_bytes(PATH_BYTES) + 4 * record_words(2, Some(0));
 
 /// What the calls that cannot wait may record in one turn, all of them files:
 /// each fetch credit's file answered and a new one opened on it, and the kept

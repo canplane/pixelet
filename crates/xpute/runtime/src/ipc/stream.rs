@@ -10,6 +10,15 @@
 
 pub const END: usize = 0;
 
+/// A record's words: its op and count, `args`, and `bytes` as their count then words.
+pub const fn record_words(args: usize, bytes: Option<usize>) -> usize {
+    2 + args
+        + match bytes {
+            Some(b) => 1 + b.div_ceil(4),
+            None => 0,
+        }
+}
+
 pub struct Stream {
     words: &'static mut [u32],
     head: usize,
@@ -38,8 +47,7 @@ impl Stream {
     /// Whether a record of `args` words and `bytes` would fit whole with
     /// `reserve` bytes still left after it.
     pub fn fits(&self, args: usize, bytes: Option<usize>, reserve: usize) -> bool {
-        let words = 2 + args + bytes.map_or(0, |b| 1 + b.div_ceil(4));
-        self.left() >= words * 4 + reserve
+        self.left() >= record_words(args, bytes) * 4 + reserve
     }
 
     pub fn open(&mut self, op: u32, n: usize) -> &mut [u32] {
@@ -53,8 +61,8 @@ impl Stream {
     }
 
     pub fn record(&mut self, op: u32, args: &[u32], tail: &[u32], bytes: Option<&[u8]>) {
-        let byte_words = bytes.map_or(0, |b| 1 + b.len().div_ceil(4));
-        let w = self.open(op, args.len() + tail.len() + byte_words);
+        let n = record_words(args.len() + tail.len(), bytes.map(<[u8]>::len)) - 2;
+        let w = self.open(op, n);
         w[..args.len()].copy_from_slice(args);
         w[args.len()..args.len() + tail.len()].copy_from_slice(tail);
         if let Some(b) = bytes {

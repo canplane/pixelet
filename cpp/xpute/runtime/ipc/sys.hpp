@@ -22,6 +22,12 @@ namespace xpute {
 
 using Fd = std::uint32_t;
 
+// The most one descriptor records in a turn, its name `path` bytes long: its
+// open, a read or a write, and its close, twice where it is stopped.
+constexpr std::uint64_t descriptor_turn_bytes(std::uint64_t path) noexcept {
+    return 4 * (record_words(3, path) + record_words(3, std::nullopt) + 2 * record_words(1, std::nullopt));
+}
+
 class Sys {
   public:
     // `at` is a range nothing else writes, named under SYS in the directory.

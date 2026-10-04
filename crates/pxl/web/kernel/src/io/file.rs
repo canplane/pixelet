@@ -13,6 +13,7 @@ use pxl_spec::bake::quadkey::PAGE_KEY_DEPTH;
 
 use crate::abi::host::{OBJECTS_PATH, SETTINGS_PATH};
 use crate::host::sys;
+use crate::io::load::LOADS;
 use xpute_runtime::global::Global;
 
 /// The longest name the kernel opens: a page's quadkey, a shared object's
@@ -23,15 +24,14 @@ pub const PATH_BYTES: usize = {
         PAGE_KEY_DEPTH as usize,
         OCEAN_KEY.len(),
         DICT_OBJECT.len(),
-        u32::MAX.ilog10() as usize + 1,
+        LOADS.ilog10() as usize + 1,
         SETTINGS_PATH.len(),
         OBJECTS_PATH.len(),
     ];
-    let (mut most, mut i) = (0, 0);
+    let mut most = 0;
+    let mut i = 0;
     while i < names.len() {
-        if names[i] > most {
-            most = names[i];
-        }
+        most = if names[i] > most { names[i] } else { most };
         i += 1;
     }
     most
@@ -58,8 +58,7 @@ fn files() -> &'static mut Files<Owner> {
 
 /// None where there is no host.
 pub fn open(root: u32, path: &str, owner: Owner) -> Option<Fd> {
-    xpute_core::ensure!(path.len() <= PATH_BYTES, EMSGSIZE, path.len());
-    Some(files().open(sys()?, root, path, owner))
+    Some(files().open(sys()?, root, named(path), owner))
 }
 
 /// `dst` is filled from the next turn on.
@@ -75,14 +74,18 @@ pub fn close(fd: Fd) {
     }
 }
 
+fn named(path: &str) -> &str {
+    xpute_core::ensure!(path.len() <= PATH_BYTES, EMSGSIZE, path.len());
+    path
+}
+
 pub fn held_for(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
     files().held_for(owner)
 }
 
 pub fn write_whole(root: u32, path: &str, bytes: Vec<u8>) {
-    xpute_core::ensure!(path.len() <= PATH_BYTES, EMSGSIZE, path.len());
     if let Some(sys) = sys() {
-        files().write_whole(sys, root, path, bytes, Owner::Write);
+        files().write_whole(sys, root, named(path), bytes, Owner::Write);
     }
 }
 
