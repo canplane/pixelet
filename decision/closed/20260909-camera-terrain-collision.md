@@ -29,15 +29,15 @@ nearly always a step higher there. This refused almost every gesture.
 **Spring arm.** Sweep from target toward the eye, shorten `dist` to the
 first hit, damp back out when clear. This is the conventional answer in
 third-person games and it was rejected on feel: the camera oscillates, and
-worse, shortening `dist` means the zoom level is no longer what the user
+worse, shortening `dist` means the zoom is no longer what the user
 set. Pushing back out also invites a feedback loop — the camera moves, the
 ground under it changes, the solve changes.
 
 **Refuse the step outright.** Correct, and it made one rule behave as two.
 A drag is a stream of tiny steps, so refusing each one that enters a hill
 reads naturally as "it stopped at the hill". The scale bar is a single jump
-to a named zoom level, and refusing that leaves a button that does nothing,
-with no feedback and a legitimate level that can never be reached.
+to a named zoom, and refusing that leaves a button that does nothing,
+with no feedback and a legitimate zoom that can never be reached.
 
 ## What survived
 
@@ -90,7 +90,7 @@ that reason. It grants every control and answers terrain at render time by
 raising the _drawn_ pitch toward straight down until the eye clears;
 `view_state.polar` is never written, so the pitch relaxes on its own once
 the ground does and `dist` stays exactly what the scale bar reads. The trade
-is explicit: every zoom level stays reachable — which `stop` cannot promise,
+is explicit: every zoom stays reachable — which `stop` cannot promise,
 since a hill close to the character caps how far in you can go — at the cost
 of an angle nobody asked for.
 

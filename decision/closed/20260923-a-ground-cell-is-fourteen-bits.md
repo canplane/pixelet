@@ -97,7 +97,7 @@ never decodes a page, so nothing here is generated into TypeScript.
 
 ## The wire is a separate question
 
-Measured over 195 real pages of levels 0 to 2, ground only:
+Measured over 195 real pages of z16 to z14, ground only:
 
 | four planes | mean a page  |
 | ----------- | ------------ |
@@ -149,7 +149,7 @@ the compressor's job.
 - `ele` is untouched, and is 0.3 MiB of the 125.
 - Whether the two spare bits are worth naming now or left alone.
 - The other half of `.fixed.terrain`'s size is that there are 125 records —
-  `WINDOW_LEVELS × HELD_AXIS²`, a ring held one wider than the ring drawn.
+  the window's five zooms × `HELD_AXIS²`, a ring held one wider than the ring drawn.
   That is the same shape
   [the mesh arena is a grid where it could be a pool](./20260923-what-is-heavy-and-what-gives-way.md)
   argues about for the device, and it is not this note's.

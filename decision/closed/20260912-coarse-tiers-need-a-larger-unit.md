@@ -45,7 +45,7 @@ chunk; step 8 works on a 2×2 block (128 cells), step 16 on a 4×4 block
 
 This is the ordinary arrangement for chunked terrain LOD: a quadtree over
 the world whose leaves are one geometry each, with the leaf size doubling
-per level. Everything here already speaks that language. Pages are 16
+per depth. Everything here already speaks that language. Pages are 16
 chunks on a side; a step-16 block is a quarter page.
 
 At the observed distribution: the 725 step-16 chunks become ~46 blocks.
