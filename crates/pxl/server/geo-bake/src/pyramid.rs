@@ -2,7 +2,7 @@
 
 //! A layer's pyramid on disk, folded by the same one-level function the client runs.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
@@ -48,13 +48,18 @@ impl PageSet {
     }
 
     pub fn read<L: Layer>(&self, p: LevelPage) -> Result<Option<L>, String> {
+        let Some(raw) = self.content(p)? else { return Ok(None) };
+        L::decode(&raw).map(Some).map_err(|e| format!("{}: {e}", self.path(p).display()))
+    }
+
+    /// A page's content, unpacked.
+    pub fn content(&self, p: LevelPage) -> Result<Option<Vec<u8>>, String> {
         let path = self.path(p);
         if !path.exists() {
             return Ok(None);
         }
         let stored = fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let raw = unpack(&stored).map_err(|e| format!("{}: {e}", path.display()))?;
-        L::decode(&raw).map(Some).map_err(|e| format!("{}: {e}", path.display()))
+        unpack(&stored).map(Some).map_err(|e| format!("{}: {e}", path.display()))
     }
 
     pub fn pages(&self, level: u32) -> Result<Vec<LevelPage>, String> {
@@ -121,6 +126,40 @@ pub fn build<L: Layer>(set: &PageSet, absent: &L, workers: usize) -> Result<u32,
         fs::remove_dir_all(&stale).map_err(|e| format!("{}: {e}", stale.display()))?;
     }
     Ok(top)
+}
+
+/// Folds again only what a change reaches: at each level, the parents whose
+/// `sources` read a page changed below, until a level changes nothing. A page
+/// is changed when its content differs, not its packed bytes, which a codec
+/// update re-packs alike.
+pub fn refold<L: Layer>(set: &PageSet, mut changed: HashSet<LevelPage>, absent: &L) -> Result<usize, String> {
+    let mut written = 0;
+    for level in 1..=TOP_LEVEL {
+        if changed.is_empty() {
+            break;
+        }
+        let mut candidates: BTreeSet<LevelPage> = set.pages(level)?.into_iter().collect();
+        candidates.extend(changed.iter().map(|c| c.parent()));
+        let mut next = HashSet::new();
+        for p in candidates {
+            if !L::sources(p).iter().any(|s| changed.contains(s)) {
+                continue;
+            }
+            let before = set.content(p)?;
+            let after = fold_stored(set, p, absent)?.map(|page| page.encode()).transpose()?;
+            if before == after {
+                continue;
+            }
+            match &after {
+                Some(raw) => set.write(p, &pack(raw, Level::Stored).map_err(|e| e.to_string())?)?,
+                None => set.remove(p)?,
+            }
+            next.insert(p);
+            written += 1;
+        }
+        changed = next;
+    }
+    Ok(written)
 }
 
 /// Drops every page its parent settles (`Folds::settles`), judged over the

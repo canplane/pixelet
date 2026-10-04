@@ -112,6 +112,8 @@ deno task bake:tiles --out ./out/terrain/<version> --force
 | `--limit <n>`       | stop after n pages (smoke test)                                    |
 | `--force`           | bake leaves already on disk again, and solve every structure again |
 | `--reclassify`      | ignore the cached land/ocean scan and redo it                      |
+| `--region <qk>`     | bake again only the land pages under a quadkey, repeatable         |
+| `--base <dir>`      | the version a region is baked over (default the published one)     |
 
 It runs long enough to want a log file rather than a terminal:
 
@@ -119,6 +121,23 @@ It runs long enough to want a log file rather than a terminal:
 ... > /tmp/bake.log 2>&1 &
 grep '^\[bake\] ' /tmp/bake.log | tail -2
 ```
+
+A fix that reaches one area need not bake every page again. `--region`
+bakes the land pages under a quadkey prefix again, by the code as it is now,
+and assembles a new version from `--base`: the base's pages linked whole, the
+region's leaves in place of the ones that differ, and folded again only the
+pages above whose `Folds::sources` read a page that changed, level by level,
+until a level changes nothing. Minutes, where a full bake is hours:
+
+```bash
+deno task bake:tiles --region 132110320312 --base ./out/terrain/<version>
+```
+
+Every page it writes is what a full bake of the same code writes; the pages
+outside the region keep the base's. So **the region must hold everything the
+change reaches**: a structure solved again that runs out of the region meets
+the base's solve of it at the edge. Choosing the region is the caller's job.
+The manifest records the base and the region's release, which may differ.
 
 Under `--build` beside `leaf/`, `structure/` keeps each
 solved structure so the pages it crosses solve it once: a cache nothing

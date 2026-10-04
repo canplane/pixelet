@@ -13,7 +13,16 @@
 //!   --limit <n>          stop after n land pages (smoke test)
 //!   --force              bake leaves that already exist on disk again, and solve every structure again
 //!   --reclassify         classify again though land_pages.json is current
+//!   --region <quadkey>   bake again only the land pages under it, repeatable; assemble then
+//!                        links --base whole and folds again only what those pages reach
+//!   --base <dir>         the version a region bake starts from (default the published one)
+//!
+//! A region bake gives its pages what a full bake of the same code gives them;
+//! the pages outside keep the base's. So a region must hold everything the
+//! change it is baked for reaches: a structure it solves again that runs out of
+//! it meets the base's solve of it at the region's edge.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -23,15 +32,16 @@ use std::time::Instant;
 
 use postgres::Client;
 use pxl_spec::bake::format::{encode_terrain, Terrain};
-use pxl_spec::bake::published::FORMAT;
+use pxl_spec::bake::published::{FORMAT, PUBLISHED_VERSION};
+use pxl_spec::bake::quadkey::{page_name, page_of_name};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::LevelPage;
+use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
 
 use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::{self, Coverage, Overture};
 use pxl_geo_bake::deck;
 use pxl_geo_bake::elevation::Raster;
-use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
+use pxl_geo_bake::pyramid::{build, refold, write_manifest, Layer, PageSet};
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf, bake_ocean, has_ground, land_pages, ocean_samples, write_land_pages, OCEAN_KEY};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, next_version, pack, refuse_mixed, unpack, Level};
@@ -52,6 +62,14 @@ struct Args {
     limit: Option<usize>,
     force: bool,
     reclassify: bool,
+    regions: Vec<LevelPage>,
+    base: Option<PathBuf>,
+}
+
+impl Args {
+    fn in_region(&self, page: IVec) -> bool {
+        self.regions.iter().any(|r| LevelPage::over(r.level, page) == *r)
+    }
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -63,6 +81,8 @@ fn parse_args() -> Result<Args, String> {
         limit: None,
         force: false,
         reclassify: false,
+        regions: Vec::new(),
+        base: None,
     };
 
     let mut flags = Flags::from_env();
@@ -79,6 +99,11 @@ fn parse_args() -> Result<Args, String> {
             "--limit" => args.limit = Some(flags.parse()?),
             "--force" => args.force = true,
             "--reclassify" => args.reclassify = true,
+            "--region" => {
+                let key = flags.value()?;
+                args.regions.push(page_of_name(&key).ok_or(format!("--region {key}: not a page's quadkey"))?);
+            }
+            "--base" => args.base = Some(PathBuf::from(flags.value()?)),
             other => return Err(format!("unknown flag: {other}")),
         }
     }
@@ -222,6 +247,79 @@ fn read_json(path: &Path) -> serde_json::Value {
     fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(serde_json::Value::Null)
 }
 
+/// Every file under `from` hard-linked under `to`, directories made.
+fn link_tree(from: &Path, to: &Path) -> Result<(), String> {
+    fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
+    for entry in fs::read_dir(from).map_err(|e| format!("{}: {e}", from.display()))? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+        if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+            link_tree(&src, &dst)?;
+        } else {
+            fs::hard_link(&src, &dst).map_err(|e| format!("{}: {e}", src.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// A region over a base: the base linked whole, the region's leaves in its
+/// leaves' place where they differ, and what those reach folded again.
+fn assemble_region(args: &Args, leaves: &PageSet, land: &[IVec], leaf: &serde_json::Value, built: Option<&str>) -> Result<(), String> {
+    let base = PageSet::new(args.base.clone().unwrap_or_else(|| Path::new("./out/terrain").join(PUBLISHED_VERSION.terrain)));
+    if !base.root.is_dir() {
+        return Err(format!("{}: no base to bake a region over; name one with --base", base.root.display()));
+    }
+    let tiles = PageSet::new(args.out.clone().unwrap_or_else(|| next_version("./out/terrain", FORMAT.terrain)));
+    if tiles.root.exists() {
+        fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
+    }
+    link_tree(&base.root, &tiles.root)?;
+
+    let region_land: HashSet<IVec> = land.iter().copied().filter(|&p| args.in_region(p)).collect();
+    let mut changed = HashSet::new();
+    for at in base.pages(0)? {
+        if args.in_region(at.page) && !region_land.contains(&at.page) {
+            tiles.remove(at)?;
+            changed.insert(at);
+        }
+    }
+    for &page in &region_land {
+        let at = LevelPage::new(0, page);
+        let fresh = leaves.content(at)?.ok_or_else(|| format!("{}: run --stage leaf with the region", leaves.path(at).display()))?;
+        if base.content(at)?.as_deref() == Some(fresh.as_slice()) {
+            continue;
+        }
+        tiles.remove(at)?;
+        fs::hard_link(leaves.path(at), tiles.path(at)).map_err(|e| format!("{}: {e}", leaves.path(at).display()))?;
+        changed.insert(at);
+    }
+    let ocean_packed = fs::read(tiles.root.join(OCEAN_KEY)).map_err(|e| format!("{}: {e}", tiles.root.display()))?;
+    let ocean = Terrain::decode(&unpack(&ocean_packed).map_err(|e| e.to_string())?)?;
+    let leaves_changed = changed.len();
+    let folded = refold(&tiles, changed, &ocean)?;
+    println!("[bake/region] {leaves_changed} leaves changed, {folded} pages above folded again -> {}", tiles.root.display());
+
+    let top = (1..=TOP_LEVEL).take_while(|&l| tiles.level_dir(l).exists()).last().unwrap_or(0);
+    let base_name = base.root.file_name().map(|n| n.to_string_lossy().to_string());
+    // The kind's one manifest describes the last bake, which is the base only if it says so.
+    let mut fields = read_json(&base.root.join("../manifest.json"));
+    if fields["version"].as_str() != base_name.as_deref() {
+        fields = serde_json::json!({});
+    }
+    let base_release = fields["release"].clone();
+    if let Some(f) = fields.as_object_mut() {
+        for measured in ["version", "updated_at", "git_sha", "content_encoding", "content_type", "objects", "bytes", "levels"] {
+            f.remove(measured);
+        }
+        f.insert("base".into(), serde_json::json!({ "version": base_name, "release": base_release }));
+        f.insert(
+            "regions".into(),
+            serde_json::json!({ "quadkeys": leaf["regions"], "release": leaf["release"], "leaf_git_sha": leaf["git_sha"] }),
+        );
+    }
+    write_manifest(&tiles, top, built, fields)
+}
+
 fn run() -> Result<(), String> {
     let built = git_sha();
     let args = parse_args()?;
@@ -269,17 +367,22 @@ fn run() -> Result<(), String> {
                 land
             }
         };
-        let targets = &land[..args.limit.map_or(land.len(), |n| n.min(land.len()))];
-        // solved structures, kept for the pages they cross; what a forced bake solves again
+        let targets: Vec<IVec> = match args.regions.is_empty() {
+            true => land[..args.limit.map_or(land.len(), |n| n.min(land.len()))].to_vec(),
+            false => land.iter().copied().filter(|&p| args.in_region(p)).collect(),
+        };
+        // A region's pages are baked again whatever is on disk, by the code that changed.
+        let fresh = args.force || !args.regions.is_empty();
+        // solved structures, kept for the pages they cross; what a fresh bake solves again
         let structures = args.build.join("structure");
-        if args.force {
+        if fresh {
             match fs::remove_dir_all(&structures) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
                 _ => {}
             }
         }
         fs::create_dir_all(leaves.level_dir(0)).map_err(|e| e.to_string())?;
-        if !args.force {
+        if !fresh {
             refuse_mixed(&leaves.level_dir(0))?;
         }
         // Each worker walks its own band of rows, zigzag, so a page's eight
@@ -304,7 +407,7 @@ fn run() -> Result<(), String> {
                         let at = LevelPage::new(0, page);
                         let mut flat = false;
                         let baked = (|| -> Result<Option<u64>, String> {
-                            if !args.force && leaves.path(at).exists() {
+                            if !fresh && leaves.path(at).exists() {
                                 return Ok(None);
                             }
                             let (terrain, off_raster) = bake_leaf(
@@ -358,6 +461,7 @@ fn run() -> Result<(), String> {
                 "land_pages": land.len(),
                 "flat_elevation_pages": t.flat_ele,
                 "release": source.release,
+                "regions": args.regions.iter().map(|&r| page_name(r).to_string()).collect::<Vec<_>>(),
                 "source": read_source_catalogs(&mut client, source),
             }),
         )?;
@@ -369,6 +473,9 @@ fn run() -> Result<(), String> {
     if args.stages.contains(&Stage::Assemble) {
         let leaf = read_json(&args.build.join("leaf.json"));
         let release = leaf["release"].as_str().ok_or("leaf.json names no release: run --stage leaf")?.to_string();
+        if !args.regions.is_empty() {
+            return assemble_region(&args, &leaves, &land, &leaf, built.as_deref());
+        }
         let tiles = PageSet::new(args.out.clone().unwrap_or_else(|| next_version("./out/terrain", FORMAT.terrain)));
         if tiles.root.exists() {
             fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
