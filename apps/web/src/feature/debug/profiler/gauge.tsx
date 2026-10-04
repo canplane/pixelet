@@ -19,7 +19,7 @@ import { alpha, color, font } from "@/shared/ui/theme.ts";
 
 const CENSUS_ROWS = 5;
 const SPAN_ROWS = 3;
-const LEVEL_ROWS = 3;
+const ZOOM_ROWS = 3;
 const MISSED_WARN_SHARE = 0.1;
 /** LoAF's own threshold for a long frame. */
 const LONG_FRAME_MS = 50;
@@ -169,7 +169,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           />
           <Row k="draws/triangles" v={`${f.last.draw_calls}/${tris(f.last.triangles)}`} />
           {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
-          {heaviest(f.zoom_tris.map((t, k) => ({ k, t })), (r) => r.t, LEVEL_ROWS).map((r) => <Row key={r.k} k={`  ${zoomName(r.k)} triangles`} v={tris(r.t)} />)}
+          {heaviest(f.zoom_tris.map((t, k) => ({ k, t })), (r) => r.t, ZOOM_ROWS).map((r) => <Row key={r.k} k={`  ${zoomName(r.k)} triangles`} v={tris(r.t)} />)}
           <Row k="fill" v={valueText("px", f.last.px)} warn={f.last.px > 12e6} />
           <Row k="bakes/scans per s" v={`${round(f.backlogPerS[1])}/${round(f.backlogPerS[0])}`} />
           <Row k="faces kept" v={`${pct(kept, possible)}%`} />

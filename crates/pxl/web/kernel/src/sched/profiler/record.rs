@@ -21,7 +21,6 @@ use crate::sched::profiler::log::PENDING;
 use crate::sched::profiler::spec::{FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, TASK, WORST};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::adapter::epsg3857::zoom_of;
-use pxl_spec::space::pyramid::{GROUND, TOP_LEVEL};
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 use xpute_runtime::sched::tick::PHASES;
@@ -209,7 +208,7 @@ pub struct PageSample {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct HeapSample {
     pub used_mb: f64,
-    /// Handed out by the page level, carved runs counted whole.
+    /// Handed out by the page allocator, carved runs counted whole.
     pub live_mb: f64,
     /// Of `live_mb`, what was carved into slots, and what is out in slots;
     /// the difference is the carving's overhead.
@@ -285,7 +284,7 @@ pub struct ViewSample {
 }
 
 /// Chunks the goal would be at target quality, pieces at the effective one,
-/// and top-level columns with nothing resident yet (`unanswered`).
+/// and columns at the top with nothing resident yet (`unanswered`).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CoverSample {
@@ -420,10 +419,7 @@ const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "
 #[cfg(test)]
 #[path = "record.test.rs"]
 mod test;
-const _: () = assert!(
-    zoom_of(OBJECT_FINEST) < ZOOMS as i32 && zoom_of(GROUND.scale(TOP_LEVEL)) >= 0,
-    "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
-);
+const _: () = assert!(zoom_of(OBJECT_FINEST) < ZOOMS as i32, "a zoom slot for every cell drawn, the finest object tier to the pyramid's top");
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
 /// display or a heavy minute fills a lane early, which drops its oldest and

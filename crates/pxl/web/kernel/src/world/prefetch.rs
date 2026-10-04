@@ -5,20 +5,20 @@
 
 use pxl_spec::space::lod::{pages_within, Tau};
 use pxl_spec::space::observation::Observation;
-use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
+use pxl_spec::space::pyramid::{Page, GROUND_Z, TOP_Z};
 
 pub trait Prefetch {
     /// Never a page finer than what is drawn there at `tau`.
-    fn speculate(&self, o: &Observation, tau: Tau, each: &mut dyn FnMut(LevelPage));
+    fn speculate(&self, o: &Observation, tau: Tau, each: &mut dyn FnMut(Page));
 }
 
 pub struct NoPrefetch;
 
 impl Prefetch for NoPrefetch {
-    fn speculate(&self, _o: &Observation, _tau: Tau, _each: &mut dyn FnMut(LevelPage)) {}
+    fn speculate(&self, _o: &Observation, _tau: Tau, _each: &mut dyn FnMut(Page)) {}
 }
 
-/// Every level's ring about the eye's foot, whatever it faces, so a turn
+/// Every zoom's ring about the eye's foot, whatever it faces, so a turn
 /// fetches nothing (the clipmap precedent: Tanner, Migdal and Jones).
 pub struct Reach {
     pub slack: f64,
@@ -26,17 +26,17 @@ pub struct Reach {
 }
 
 impl Prefetch for Reach {
-    fn speculate(&self, o: &Observation, tau: Tau, each: &mut dyn FnMut(LevelPage)) {
+    fn speculate(&self, o: &Observation, tau: Tau, each: &mut dyn FnMut(Page)) {
         let h = o.eye[2] - o.ground;
-        for level in 0..=TOP_LEVEL {
-            // The disc a level's end leaves on the ground past the eye's height; none
+        for z in (TOP_Z..=GROUND_Z).rev() {
+            // The disc a zoom's end leaves on the ground past the eye's height; none
             // where the eye is higher.
-            let end = tau.fault_radius(level);
+            let end = tau.fault_radius(z);
             if end <= h {
                 continue;
             }
             let ring = (end * end - h * h).sqrt();
-            pages_within(level, [o.eye[0], o.eye[1]], (ring * self.slack + self.margin).min(o.far)).for_each(&mut *each);
+            pages_within(z, [o.eye[0], o.eye[1]], (ring * self.slack + self.margin).min(o.far)).for_each(&mut *each);
         }
     }
 }

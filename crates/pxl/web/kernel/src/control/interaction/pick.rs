@@ -1,16 +1,17 @@
 // pxl-kernel/control/interaction/pick.rs
 
-//! The pointer's pick, asked of the access at terrain's finest level, which
+//! The pointer's pick, asked of the access at terrain's finest zoom, z16, which
 //! is what is on the screen about the eye; and what a hit means for a
 //! placement or an erase.
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pyramid::GROUND_Z;
 use pxl_spec::space::v3::{add3, V3};
 
 use crate::layer::object::store::{get_placed_object, Entry};
-use crate::world::access::{Access, Detail, Hit, Ray, Struck, FINEST};
+use crate::world::access::{Access, Detail, Hit, Ray, Struck};
 use crate::world::frame::coord::local_world_to_canonical;
 use crate::world::frame::view::view;
 use pxl_spec::space::v3::Aabb;
@@ -95,7 +96,7 @@ pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
         direction,
         reach: PICK_REACH_U,
     };
-    let hit = Access::now().first_hit(&ray, Detail::Level(FINEST)).value().flatten()?.moved(frame.map(|v| -v));
+    let hit = Access::now().first_hit(&ray, Detail::Zoom(GROUND_Z)).value().flatten()?.moved(frame.map(|v| -v));
     Some(PickResult { hit })
 }
 

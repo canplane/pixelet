@@ -80,12 +80,12 @@ impl PublishedVersion {
     }
 }
 
-/// What the published bake declares of itself to the client: `top_level`, the
-/// coarsest level of the pyramid it supplies whole, terrain and POI alike. The
+/// What the published bake declares of itself to the client: `top_z`, the
+/// coarsest zoom of the pyramid it supplies whole, terrain and POI alike. The
 /// client's floor is held there, all around the eye, and the far edge is where
-/// that level ends (pxl-kernel world/paging/floor.rs). The dev tile server
-/// answers the same object at the tile root's `source`, with its `--top-level`
+/// that zoom ends (pxl-kernel world/paging/floor.rs). The dev tile server
+/// answers the same object at the tile root's `source`, with its `--top-z`
 /// (pxl-geo-bake bin/serve_tiles.rs); neither is guessed from what fails.
-pub const PUBLISHED_TOP_LEVEL: u32 = 10;
+pub const PUBLISHED_TOP_Z: u32 = 6;
 
-const _: () = assert!(PUBLISHED_TOP_LEVEL <= crate::space::pyramid::TOP_LEVEL, "a published level over the pyramid's top");
+const _: () = assert!(PUBLISHED_TOP_Z >= crate::space::pyramid::TOP_Z, "a published zoom past the pyramid's top");

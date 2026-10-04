@@ -81,7 +81,7 @@ pub enum Why {
     /// On the line over a destination, which the camera waits for exactly.
     Destination,
     /// On the line over a fault, so a coarser answer is held wherever the view
-    /// looks and leaving a level shows its parent at once (Cesium's `preloadAncestors`).
+    /// looks and leaving a zoom shows its parent at once (Cesium's `preloadAncestors`).
     Ancestor,
     Fault,
     Hint,

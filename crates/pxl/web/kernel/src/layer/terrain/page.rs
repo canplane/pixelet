@@ -8,7 +8,7 @@
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{decode_terrain_into, Block, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::bake::pack::GroundCell;
-use pxl_spec::space::pyramid::LevelPage;
+use pxl_spec::space::pyramid::Page;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::mem::base::ptr_at;
@@ -31,7 +31,7 @@ static TERRAIN: Global<Pyramid<Terrain>> = Global::new();
 impl Layer for Terrain {
     const CATEGORY: Category = Category::terrain;
     const ON_ABSENT: Absent = Absent::Shared(OCEAN_CATEGORY);
-    // The leaves carry the terrain topic; the levels above are read through the
+    // The leaves carry the terrain topic; the zooms above are read through the
     // chunks that draw them.
 
     fn pyramid() -> &'static mut Pyramid<Terrain> {
@@ -50,7 +50,7 @@ impl Layer for Terrain {
 
     /// The ground under whatever this page is the finest resident one over
     /// changes, so chunks compare their sources next turn.
-    fn changed(_p: LevelPage, _present: bool) {
+    fn changed(_p: Page, _present: bool) {
         crate::world::chunk::source::chunk_sources_changed();
     }
 }

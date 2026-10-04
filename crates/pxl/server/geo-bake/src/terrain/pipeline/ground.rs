@@ -189,7 +189,7 @@ fn find_intersections(nodes: &[P], ys: f64, out: &mut Vec<f64>) {
     for i in 0..nodes.len() {
         let yi = nodes[i][1];
         let yj = nodes[j][1];
-        // Half-open in y, so a vertex on the scanline is crossed once and a level
+        // Half-open in y, so a vertex on the scanline is crossed once and a flat
         // edge never.
         if (yi <= ys && yj > ys) || (yj <= ys && yi > ys) {
             let t = (ys - yi) / (yj - yi);

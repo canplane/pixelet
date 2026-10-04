@@ -3,7 +3,7 @@
 use super::job;
 use crate::coverage::Coverage;
 use crate::terrain::leaf::{bake_ocean, ocean_samples};
-use pxl_spec::space::pyramid::LevelPage;
+use pxl_spec::space::pyramid::Page;
 
 /// Each page's rows the deck solve read and each structure it solved, kept
 /// for the pages around while the server runs.
@@ -14,7 +14,7 @@ pub(super) fn ocean() -> Result<Vec<u8>, String> {
     bake_ocean(&ocean_samples(&Coverage::of_source()?))
 }
 
-pub(super) fn execute(p: LevelPage, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
+pub(super) fn execute(p: Page, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
     use crate::terrain::{leaf, repository::TerrainRepository};
     use crate::util::unpack;
     use pxl_spec::bake::format::{decode_terrain, Terrain};

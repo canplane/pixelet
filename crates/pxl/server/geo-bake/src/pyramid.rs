@@ -1,13 +1,14 @@
 // pxl-geo-bake/pyramid.rs
 
-//! A layer's pyramid on disk, folded by the same one-level function the client runs.
+//! A layer's pyramid on disk, a directory a zoom, folded by the same
+//! one-zoom function the client runs.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
+use pxl_spec::space::pyramid::{Folds, Page, GROUND_Z, TOP_Z};
 
 use crate::util::{measure_output, pack, unpack, write_atomic, Level};
 
@@ -25,21 +26,21 @@ impl PageSet {
         PageSet { root: root.into() }
     }
 
-    pub fn level_dir(&self, level: u32) -> PathBuf {
-        self.root.join(level.to_string())
+    pub fn zoom_dir(&self, z: u32) -> PathBuf {
+        self.root.join(format!("z{z}"))
     }
 
-    pub fn path(&self, p: LevelPage) -> PathBuf {
-        self.level_dir(p.level).join(p.page.to_string())
+    pub fn path(&self, p: Page) -> PathBuf {
+        self.zoom_dir(p.z).join(p.page.to_string())
     }
 
-    pub fn write(&self, p: LevelPage, packed: &[u8]) -> Result<(), String> {
+    pub fn write(&self, p: Page, packed: &[u8]) -> Result<(), String> {
         let path = self.path(p);
-        fs::create_dir_all(self.level_dir(p.level)).map_err(|e| e.to_string())?;
+        fs::create_dir_all(self.zoom_dir(p.z)).map_err(|e| e.to_string())?;
         write_atomic(&path, packed).map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    pub fn remove(&self, p: LevelPage) -> Result<(), String> {
+    pub fn remove(&self, p: Page) -> Result<(), String> {
         let path = self.path(p);
         match fs::remove_file(&path) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", path.display())),
@@ -47,13 +48,13 @@ impl PageSet {
         }
     }
 
-    pub fn read<L: Layer>(&self, p: LevelPage) -> Result<Option<L>, String> {
+    pub fn read<L: Layer>(&self, p: Page) -> Result<Option<L>, String> {
         let Some(raw) = self.content(p)? else { return Ok(None) };
         L::decode(&raw).map(Some).map_err(|e| format!("{}: {e}", self.path(p).display()))
     }
 
     /// A page's content, unpacked.
-    pub fn content(&self, p: LevelPage) -> Result<Option<Vec<u8>>, String> {
+    pub fn content(&self, p: Page) -> Result<Option<Vec<u8>>, String> {
         let path = self.path(p);
         if !path.exists() {
             return Ok(None);
@@ -62,8 +63,8 @@ impl PageSet {
         unpack(&stored).map(Some).map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    pub fn pages(&self, level: u32) -> Result<Vec<LevelPage>, String> {
-        let dir = self.level_dir(level);
+    pub fn pages(&self, z: u32) -> Result<Vec<Page>, String> {
+        let dir = self.zoom_dir(z);
         if !dir.exists() {
             return Ok(Vec::new());
         }
@@ -71,7 +72,7 @@ impl PageSet {
         for entry in fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))? {
             let name = entry.map_err(|e| e.to_string())?.file_name();
             if let Some(page) = name.to_str().and_then(|n| n.parse::<IVec>().ok()) {
-                out.push(LevelPage::new(level, page));
+                out.push(Page::new(z, page));
             }
         }
         out.sort_unstable();
@@ -79,22 +80,22 @@ impl PageSet {
     }
 }
 
-pub fn parents(children: &[LevelPage]) -> Vec<LevelPage> {
-    let mut out: Vec<LevelPage> = children.iter().map(|c| c.parent()).collect();
+pub fn parents(children: &[Page]) -> Vec<Page> {
+    let mut out: Vec<Page> = children.iter().map(|c| c.parent()).collect();
     out.sort_unstable();
     out.dedup();
     out
 }
 
 /// None where it has no child: a parent exists exactly where a child does.
-pub fn fold_parent<'a, L: Layer>(parent: LevelPage, read: impl Fn(LevelPage) -> Option<&'a L>, absent: &'a L) -> Option<L> {
+pub fn fold_parent<'a, L: Layer>(parent: Page, read: impl Fn(Page) -> Option<&'a L>, absent: &'a L) -> Option<L> {
     if parent.children().iter().all(|&k| read(k).is_none()) {
         return None;
     }
     L::fold_page(parent, |p| Some(read(p).unwrap_or(absent)))
 }
 
-pub fn fold_stored<L: Layer>(set: &PageSet, parent: LevelPage, absent: &L) -> Result<Option<L>, String> {
+pub fn fold_stored<L: Layer>(set: &PageSet, parent: Page, absent: &L) -> Result<Option<L>, String> {
     let mut read = HashMap::new();
     for p in L::sources(parent) {
         if let Some(page) = set.read::<L>(p)? {
@@ -104,41 +105,41 @@ pub fn fold_stored<L: Layer>(set: &PageSet, parent: LevelPage, absent: &L) -> Re
     Ok(fold_parent(parent, |p| read.get(&p), absent))
 }
 
-/// Folds every level up to `TOP_LEVEL` or the first empty one. Correct only if
+/// Folds every zoom up to `TOP_Z` or the first empty one. Correct only if
 /// a parent of four absent pages is the absent page.
 pub fn build<L: Layer>(set: &PageSet, absent: &L, workers: usize) -> Result<u32, String> {
-    let fixed = L::fold_page(LevelPage::new(1, 0), |_| Some(absent)).ok_or("no parent over four absent children")?;
+    let fixed = L::fold_page(Page::new(GROUND_Z - 1, 0), |_| Some(absent)).ok_or("no parent over four absent children")?;
     if fixed != *absent {
-        return Err("the absent page does not fold to itself: one page cannot stand for every level's absence".into());
+        return Err("the absent page does not fold to itself: one page cannot stand for every zoom's absence".into());
     }
-    let mut top = 0;
-    for level in 1..=TOP_LEVEL {
-        let children = set.pages(level - 1)?;
+    let mut top = GROUND_Z;
+    for z in (TOP_Z..GROUND_Z).rev() {
+        let children = set.pages(z + 1)?;
         if children.is_empty() {
             break;
         }
         let at = std::time::Instant::now();
-        let n = fold_level(set, level, &children, absent, workers)?;
-        println!("[bake/pyramid] level {level}: {n} pages in {:.1}s", at.elapsed().as_secs_f64());
-        top = level;
+        let n = fold_zoom(set, z, &children, absent, workers)?;
+        println!("[bake/pyramid] z{z}: {n} pages in {:.1}s", at.elapsed().as_secs_f64());
+        top = z;
     }
-    for stale in (top + 1..).map(|l| set.level_dir(l)).take_while(|d| d.exists()) {
+    for stale in (0..top).rev().map(|z| set.zoom_dir(z)).take_while(|d| d.exists()) {
         fs::remove_dir_all(&stale).map_err(|e| format!("{}: {e}", stale.display()))?;
     }
     Ok(top)
 }
 
-/// Folds again only what a change reaches: at each level, the parents whose
-/// `sources` read a page changed below, until a level changes nothing. A page
+/// Folds again only what a change reaches: at each zoom, the parents whose
+/// `sources` read a page changed below, until a zoom changes nothing. A page
 /// is changed when its content differs, not its packed bytes, which a codec
 /// update re-packs alike.
-pub fn refold<L: Layer>(set: &PageSet, mut changed: HashSet<LevelPage>, absent: &L) -> Result<usize, String> {
+pub fn refold<L: Layer>(set: &PageSet, mut changed: HashSet<Page>, absent: &L) -> Result<usize, String> {
     let mut written = 0;
-    for level in 1..=TOP_LEVEL {
+    for z in (TOP_Z..GROUND_Z).rev() {
         if changed.is_empty() {
             break;
         }
-        let mut candidates: BTreeSet<LevelPage> = set.pages(level)?.into_iter().collect();
+        let mut candidates: BTreeSet<Page> = set.pages(z)?.into_iter().collect();
         candidates.extend(changed.iter().map(|c| c.parent()));
         let mut next = HashSet::new();
         for p in candidates {
@@ -166,9 +167,9 @@ pub fn refold<L: Layer>(set: &PageSet, mut changed: HashSet<LevelPage>, absent: 
 /// whole set before any is removed. Returns how many.
 pub fn prune<L: Layer>(set: &PageSet, top: u32) -> Result<usize, String> {
     let mut gone = Vec::new();
-    for level in 0..top {
-        let mut parents: HashMap<LevelPage, Option<L>> = HashMap::new();
-        for p in set.pages(level)? {
+    for z in top + 1..=GROUND_Z {
+        let mut parents: HashMap<Page, Option<L>> = HashMap::new();
+        for p in set.pages(z)? {
             let parent = p.parent();
             if let std::collections::hash_map::Entry::Vacant(e) = parents.entry(parent) {
                 e.insert(set.read::<L>(parent)?);
@@ -188,14 +189,14 @@ pub fn prune<L: Layer>(set: &PageSet, top: u32) -> Result<usize, String> {
 /// would describe an empty set.
 pub fn write_manifest(set: &PageSet, top: u32, built: Option<&str>, layer: serde_json::Value) -> Result<(), String> {
     let (mut objects, mut bytes) = measure_output(&set.root).map_err(|e| e.to_string())?;
-    let mut levels = Vec::new();
-    for l in 0..=top {
-        let (n, b) = measure_output(&set.level_dir(l)).map_err(|e| e.to_string())?;
-        levels.push(serde_json::json!({ "level": l, "objects": n, "bytes": b }));
+    let mut zooms = Vec::new();
+    for z in (top..=GROUND_Z).rev() {
+        let (n, b) = measure_output(&set.zoom_dir(z)).map_err(|e| e.to_string())?;
+        zooms.push(serde_json::json!({ "z": z, "objects": n, "bytes": b }));
         objects += n;
         bytes += b;
     }
-    let mut fields = serde_json::json!({ "objects": objects, "bytes": bytes, "levels": levels, "content_type": "application/octet-stream" });
+    let mut fields = serde_json::json!({ "objects": objects, "bytes": bytes, "zooms": zooms, "content_type": "application/octet-stream" });
     if let (Some(out), serde_json::Value::Object(layer)) = (fields.as_object_mut(), layer) {
         out.extend(layer);
     }
@@ -204,14 +205,14 @@ pub fn write_manifest(set: &PageSet, top: u32, built: Option<&str>, layer: serde
 
 /// A parent reads the 4×4 children around it, so each worker keeps only the
 /// four child rows its current parent row reads.
-fn fold_level<L: Layer>(set: &PageSet, level: u32, children: &[LevelPage], absent: &L, workers: usize) -> Result<usize, String> {
-    let here = set.level_dir(level);
+fn fold_zoom<L: Layer>(set: &PageSet, z: u32, children: &[Page], absent: &L, workers: usize) -> Result<usize, String> {
+    let here = set.zoom_dir(z);
     if here.exists() {
         fs::remove_dir_all(&here).map_err(|e| format!("{}: {e}", here.display()))?;
     }
     fs::create_dir_all(&here).map_err(|e| e.to_string())?;
     let targets = parents(children);
-    let mut rows: Vec<Vec<LevelPage>> = Vec::new();
+    let mut rows: Vec<Vec<Page>> = Vec::new();
     for p in &targets {
         match rows.last_mut() {
             Some(row) if ivec::Y(row[0].page) == ivec::Y(p.page) => row.push(*p),
@@ -226,8 +227,8 @@ fn fold_level<L: Layer>(set: &PageSet, level: u32, children: &[LevelPage], absen
     Ok(targets.len())
 }
 
-fn fold_band<L: Layer>(set: &PageSet, rows: &[Vec<LevelPage>], absent: &L) -> Result<(), String> {
-    let mut held: HashMap<LevelPage, Option<L>> = HashMap::new();
+fn fold_band<L: Layer>(set: &PageSet, rows: &[Vec<Page>], absent: &L) -> Result<(), String> {
+    let mut held: HashMap<Page, Option<L>> = HashMap::new();
     for row in rows {
         let y = ivec::Y(row[0].page);
         held.retain(|p, _| ivec::Y(p.page) >= 2 * y - 1);

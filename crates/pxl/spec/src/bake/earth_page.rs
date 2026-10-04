@@ -1,18 +1,18 @@
 // pxl-spec/bake/earth_page.rs
 
-//! The Earth's picture as a layer of the pyramid, at its top level alone, where
+//! The Earth's picture as a layer of the pyramid, at its top zoom alone, where
 //! a ground cell is a z6 pixel: per cell, Blue Marble's reflectance coded as
 //! sRGB, as a texture reads it, and in alpha the square root of the Black
-//! Marble's lights, so a village keeps its few levels. Row by row from the
+//! Marble's lights, so a village keeps its few steps of brightness. Row by row from the
 //! page's south edge, in the ground lattice's cell order. One XTP tree, as every
 //! other baked page is; a page with no object is answered by the global picture.
 
 use crate::bake::malformed;
-use crate::space::pyramid::{GROUND, TOP_LEVEL};
+use crate::space::pyramid::{GROUND, TOP_Z};
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
-pub const EARTH_LEVEL: u32 = TOP_LEVEL;
+pub const EARTH_Z: u32 = TOP_Z;
 
 /// A page's cells on a side, each a texel.
 pub const EARTH_TEXELS: u32 = GROUND.page_cells();

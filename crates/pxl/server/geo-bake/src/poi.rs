@@ -9,6 +9,7 @@ use pxl_spec::bake::poi_page::{self, kind_of, Place, PoiPage, POI_LATTICE};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pyramid::GROUND_Z;
 
 impl crate::pyramid::Layer for PoiPage {
     fn encode(&self) -> Result<Vec<u8>, String> {
@@ -40,7 +41,7 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
     let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8, String)>> = BTreeMap::new();
     for row in rows {
         let at = epsg3857::project(row.get(0), row.get(1), 0.0);
-        let leaf = POI_LATTICE.cell_of(0, &at).page();
+        let leaf = POI_LATTICE.cell_of(GROUND_Z, &at).page();
         if within.is_some_and(|w| leaf.page != w) || !coverage.contains(leaf.page) {
             continue;
         }
@@ -53,7 +54,7 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
             (
                 page,
                 PoiPage::of_places(
-                    0,
+                    GROUND_Z,
                     p.iter().map(|(at, name, kind, id)| {
                         (
                             *at,

@@ -1,6 +1,6 @@
 // pxl-spec/space.rs
 
-//! Positions and their structures: the fixed-point vector, the level
+//! Positions and their structures: the fixed-point vector, the space
 //! hierarchy, map projections and lattice structures.
 
 pub mod adapter;

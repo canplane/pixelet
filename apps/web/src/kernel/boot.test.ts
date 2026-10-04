@@ -72,7 +72,7 @@ CORE_DOORBELL.call(
   }),
   (r) => r,
 );
-CORE_DOORBELL.send(0, Command.WORLD_SOURCE, encode_world_source({ top_level: PUBLISHED_SOURCE.top_level }));
+CORE_DOORBELL.send(0, Command.WORLD_SOURCE, encode_world_source({ top_z: PUBLISHED_SOURCE.top_z }));
 
 /** A device that accepts every call: without one the world lists nothing to draw. */
 function inert(): unknown {

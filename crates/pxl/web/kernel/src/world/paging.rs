@@ -16,7 +16,7 @@ pub mod floor;
 use std::collections::HashMap;
 
 use pxl_spec::space::lod::FAULT_PAGES;
-use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
+use pxl_spec::space::pyramid::{Page, GROUND_Z, TOP_Z};
 
 use crate::io::demand::{Ask, Why};
 use crate::world::pyramid::Layer;
@@ -25,15 +25,16 @@ use floor::{Fallback, Floor};
 /// The record shared by every page the bake left empty; written once, never a frame.
 pub const ABSENT: u32 = 0;
 
-pub const LEVELS: u32 = TOP_LEVEL + 1;
+/// The zooms the pyramid holds, z16 to its top.
+pub const PYRAMID_ZOOMS: u32 = GROUND_Z - TOP_Z + 1;
 
 /// Only the eye. Another point observer would add its own faults.
 const OBSERVERS: u32 = 1;
 
-pub const LEVEL_DEMAND_PAGES: u32 = FAULT_PAGES;
+pub const ZOOM_DEMAND_PAGES: u32 = FAULT_PAGES;
 
 /// A destination's line from its z16 page to the top.
-pub const DESTINATION_PAGES: u32 = LEVELS;
+pub const DESTINATION_PAGES: u32 = PYRAMID_ZOOMS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Hold {
@@ -44,7 +45,7 @@ enum Hold {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Candidate {
-    pub page: LevelPage,
+    pub page: Page,
     pub hinted: bool,
 }
 
@@ -85,12 +86,12 @@ impl<L> Entry<L> {
 }
 
 pub struct Paging<L: Layer> {
-    pages: HashMap<LevelPage, Entry<L>>,
+    pages: HashMap<Page, Entry<L>>,
     /// The body every absent page reads, decoded once into `ABSENT`.
     shared: Option<L>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
-    going: Vec<LevelPage>,
+    going: Vec<Page>,
     /// Moves whenever a page is held, let go, or answered by the page over it.
     revision: u32,
     refused: u32,
@@ -102,10 +103,10 @@ pub struct Paging<L: Layer> {
 /// that asks only for the floor (`Layer::DEMANDS` false) asks for no fault, no
 /// line over one, no destination and nothing speculative.
 impl<L: Layer> Paging<L> {
-    const DEMAND_PAGES: u32 = if L::DEMANDS { OBSERVERS * LEVEL_DEMAND_PAGES * LEVELS } else { 0 };
+    const DEMAND_PAGES: u32 = if L::DEMANDS { OBSERVERS * ZOOM_DEMAND_PAGES * PYRAMID_ZOOMS } else { 0 };
 
-    /// The lines over the faults, every level's but the finest.
-    const ANCESTOR_PAGES: u32 = if L::DEMANDS { OBSERVERS * LEVEL_DEMAND_PAGES * (LEVELS - 1) } else { 0 };
+    /// The lines over the faults, every zoom's but the finest.
+    const ANCESTOR_PAGES: u32 = if L::DEMANDS { OBSERVERS * ZOOM_DEMAND_PAGES * (PYRAMID_ZOOMS - 1) } else { 0 };
 
     /// Held hard apart from the view: the floor and a destination's line. A new
     /// consumer that cannot take a coarser answer would declare its pages here.
@@ -119,7 +120,7 @@ impl<L: Layer> Paging<L> {
     /// page it asks for finds a frame free or held only as cache.
     const WORKSPACE: u32 = L::DEMANDS as u32;
 
-    /// Convergence: the faults and their lines share each level's ring, so a page
+    /// Convergence: the faults and their lines share each zoom's ring, so a page
     /// the view reads never gives up another the view reads.
     pub const FRAMES: u32 = Self::PINNED_PAGES + Self::DEMAND_PAGES;
 
@@ -151,47 +152,47 @@ impl<L: Layer> Default for Paging<L> {
     }
 }
 
-fn line(p: LevelPage) -> impl Iterator<Item = LevelPage> {
-    std::iter::successors(Some(p), |q| (q.level < TOP_LEVEL).then(|| q.parent()))
+fn line(p: Page) -> impl Iterator<Item = Page> {
+    std::iter::successors(Some(p), |q| (q.z > TOP_Z).then(|| q.parent()))
 }
 
 impl<L: Layer> Paging<L> {
-    fn entry(&self, p: LevelPage) -> Option<&Entry<L>> {
+    fn entry(&self, p: Page) -> Option<&Entry<L>> {
         self.pages.get(&p)
     }
 
     /// Past `ENTRIES` is a page kept for no reason the bound counts.
-    fn entry_mut(&mut self, p: LevelPage) -> &mut Entry<L> {
+    fn entry_mut(&mut self, p: Page) -> &mut Entry<L> {
         let full = self.pages.len() >= Self::ENTRIES as usize;
         self.pages.entry(p).or_insert_with(|| {
-            xpute_core::ensure!(!full, ENOTRECOVERABLE, p.level);
+            xpute_core::ensure!(!full, ENOTRECOVERABLE, p.z);
             Entry::NONE
         })
     }
 
-    fn held_as(&self, p: LevelPage) -> Option<&Held<L>> {
+    fn held_as(&self, p: Page) -> Option<&Held<L>> {
         self.entry(p)?.held.as_ref()
     }
 
-    pub fn resident(&self, p: LevelPage) -> bool {
+    pub fn resident(&self, p: Page) -> bool {
         self.held_as(p).is_some()
     }
 
     /// Held in a frame of its own, not the shared `ABSENT` record.
-    fn framed(&self, p: LevelPage) -> bool {
+    fn framed(&self, p: Page) -> bool {
         self.held_as(p).is_some_and(|h| h.record != ABSENT)
     }
 
     /// The frame a held page is in; none for one that reads `ABSENT`.
-    pub fn frame(&self, p: LevelPage) -> Option<u32> {
+    pub fn frame(&self, p: Page) -> Option<u32> {
         self.held_as(p).map(|h| h.record).filter(|&r| r != ABSENT)
     }
 
-    pub fn get(&self, p: LevelPage) -> Option<&L> {
+    pub fn get(&self, p: Page) -> Option<&L> {
         self.held_as(p).map(|h| &h.body)
     }
 
-    pub fn held(&self) -> impl Iterator<Item = (LevelPage, &L)> {
+    pub fn held(&self) -> impl Iterator<Item = (Page, &L)> {
         self.pages.iter().filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
     }
 
@@ -203,8 +204,8 @@ impl<L: Layer> Paging<L> {
         self.revision
     }
 
-    fn said(&self, q: LevelPage) -> bool {
-        if q.level >= TOP_LEVEL {
+    fn said(&self, q: Page) -> bool {
+        if q.z <= TOP_Z {
             return false;
         }
         let over = q.parent();
@@ -212,18 +213,18 @@ impl<L: Layer> Paging<L> {
         settled || self.entry(q).is_some_and(|e| e.answered)
     }
 
-    pub fn settled(&self, p: LevelPage) -> bool {
+    pub fn settled(&self, p: Page) -> bool {
         line(p).any(|q| self.said(q))
     }
 
     /// The finest resident page on `p`'s line: the fault's answer.
-    pub fn drawn_from(&self, p: LevelPage) -> Option<LevelPage> {
+    pub fn drawn_from(&self, p: Page) -> Option<Page> {
         line(p).find(|&q| self.resident(q))
     }
 
     /// The resident page that says `p`'s ground exactly; none where `p` is a
     /// fault. A resident page above that does not say `p` only draws it coarser.
-    pub fn source(&self, p: LevelPage) -> Option<LevelPage> {
+    pub fn source(&self, p: Page) -> Option<Page> {
         if self.resident(p) {
             return Some(p);
         }
@@ -243,7 +244,7 @@ impl<L: Layer> Paging<L> {
     /// Pages held in `ABSENT` or answered above are kept only while asked:
     /// they cost no frame, so nothing would ever evict them. Framed pages are
     /// left to normal turnover.
-    pub fn ask(&mut self, asks: &HashMap<LevelPage, Ask>) {
+    pub fn ask(&mut self, asks: &HashMap<Page, Ask>) {
         xpute_core::ensure!(asks.len() <= Self::ASKS as usize, ENOTRECOVERABLE, asks.len());
         let mut changed = false;
         for (p, e) in &mut self.pages {
@@ -276,15 +277,15 @@ impl<L: Layer> Paging<L> {
     }
 
     /// A page not yet held counts as taking one: whether it is empty is known only on arrival.
-    pub fn takes_frame(&self, p: LevelPage) -> bool {
+    pub fn takes_frame(&self, p: Page) -> bool {
         !self.settled(p) && (self.framed(p) || !self.resident(p))
     }
 
-    pub fn asked(&self, p: LevelPage) -> Option<Ask> {
+    pub fn asked(&self, p: Page) -> Option<Ask> {
         self.entry(p)?.ask
     }
 
-    fn hold(&self, p: LevelPage) -> Hold {
+    fn hold(&self, p: Page) -> Hold {
         let Some(e) = self.entry(p) else { return Hold::Cache };
         match e.ask.map(|a| a.why) {
             Some(Why::Floor | Why::Destination | Why::Ancestor) => Hold::Hard,
@@ -293,7 +294,7 @@ impl<L: Layer> Paging<L> {
         }
     }
 
-    fn hinted(&self, p: LevelPage) -> bool {
+    fn hinted(&self, p: Page) -> bool {
         self.asked(p).is_some_and(|a| a.why == Why::Hint)
     }
 
@@ -301,7 +302,7 @@ impl<L: Layer> Paging<L> {
     /// held only as cache (speculation never evicts other speculation). None
     /// only for a speculative page, counted; for anything stronger, none means
     /// the capacity bound is broken.
-    fn frame_for(&mut self, p: LevelPage, victim: &impl Victim) -> Option<u32> {
+    fn frame_for(&mut self, p: Page, victim: &impl Victim) -> Option<u32> {
         if self.framed(p) {
             return self.remove(p);
         }
@@ -319,7 +320,7 @@ impl<L: Layer> Paging<L> {
         // Sorted, so the policy sees the same list for the same state.
         candidates.sort_unstable_by_key(|c| c.page);
         let Some(at) = victim.victim(&candidates) else {
-            xpute_core::ensure!(speculative, ENOTRECOVERABLE, p.level);
+            xpute_core::ensure!(speculative, ENOTRECOVERABLE, p.z);
             self.refused += 1;
             return None;
         };
@@ -337,7 +338,7 @@ impl<L: Layer> Paging<L> {
 
     /// The frame is emptied first, so a body that fails to decode leaves it free
     /// rather than another page reading half-overwritten bytes.
-    pub fn admit<E>(&mut self, p: LevelPage, victim: &impl Victim, receive: impl FnOnce(u32) -> Result<L, E>) -> Result<(), E> {
+    pub fn admit<E>(&mut self, p: Page, victim: &impl Victim, receive: impl FnOnce(u32) -> Result<L, E>) -> Result<(), E> {
         let Some(record) = self.frame_for(p, victim) else { return Ok(()) };
         match receive(record) {
             Ok(page) => {
@@ -353,7 +354,7 @@ impl<L: Layer> Paging<L> {
     }
 
     /// Held only while something asks for it: nothing else would ever let it go.
-    pub fn set(&mut self, p: LevelPage, page: L) {
+    pub fn set(&mut self, p: Page, page: L) {
         if self.asked(p).is_none() {
             return;
         }
@@ -364,7 +365,7 @@ impl<L: Layer> Paging<L> {
     }
 
     /// `p` has no object: it reads the shared body, or waits for it.
-    pub fn absent(&mut self, p: LevelPage) {
+    pub fn absent(&mut self, p: Page) {
         if self.asked(p).is_none() {
             return;
         }
@@ -385,14 +386,14 @@ impl<L: Layer> Paging<L> {
 
     /// The shared body has come: every page waiting for it reads it.
     pub fn adopt_shared(&mut self, body: L) {
-        let waiting: Vec<LevelPage> = self.pages.iter().filter(|(_, e)| e.absent && e.held.is_none()).map(|(&p, _)| p).collect();
+        let waiting: Vec<Page> = self.pages.iter().filter(|(_, e)| e.absent && e.held.is_none()).map(|(&p, _)| p).collect();
         for p in waiting {
             self.set(p, body.clone());
         }
         self.shared = Some(body);
     }
 
-    pub fn answer_above(&mut self, p: LevelPage) {
+    pub fn answer_above(&mut self, p: Page) {
         if self.asked(p).is_none() {
             return;
         }
@@ -402,15 +403,15 @@ impl<L: Layer> Paging<L> {
         }
     }
 
-    fn put(&mut self, p: LevelPage, body: L, record: u32) {
-        let settles = if p.level > 0 { p.children().map(|c| body.settles(p, c)) } else { [false; 4] };
+    fn put(&mut self, p: Page, body: L, record: u32) {
+        let settles = if p.z < GROUND_Z { p.children().map(|c| body.settles(p, c)) } else { [false; 4] };
         self.entry_mut(p).held = Some(Held { body, record, settles });
         self.revision = self.revision.wrapping_add(1);
         L::changed(p, true);
     }
 
     /// Returns the frame `p` was in, if any, for the caller to fill or free.
-    fn remove(&mut self, p: LevelPage) -> Option<u32> {
+    fn remove(&mut self, p: Page) -> Option<u32> {
         let std::collections::hash_map::Entry::Occupied(mut e) = self.pages.entry(p) else { return None };
         let held = e.get_mut().held.take()?;
         if e.get().idle() {
