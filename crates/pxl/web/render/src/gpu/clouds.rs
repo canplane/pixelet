@@ -40,7 +40,7 @@ pub(crate) const TILE_TEXELS: u32 = 1024;
 /// A unit is a whole number of texels, so a unit's fraction is a texel
 /// coordinate exactly and the tile meets itself without a seam.
 pub(crate) const LATTICE_SHAMT: u32 = 12;
-const LATTICE_COUNT: u32 = 1 << (IVEC_X_W - LATTICE_SHAMT);
+pub(crate) const LATTICE_COUNT: u32 = 1 << (IVEC_X_W - LATTICE_SHAMT);
 const _: () = assert!(IVEC_X_W == IVEC_Y_W, "one lattice count for both axes");
 const _: () = assert!(LATTICE_COUNT.is_multiple_of(TILE_UNITS), "the world is whole tiles");
 

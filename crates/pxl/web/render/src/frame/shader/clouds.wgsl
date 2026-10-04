@@ -1,7 +1,8 @@
-// The cloud slab over the planet, marched at half the screen's size and laid
-// over the opaque world by cloud_composite.wgsl. It writes no depth: from below
-// it fills only the sky, from above it covers everything, so a peak above the
-// layer is wrong either way.
+// Three cloud layers over the planet — a cumulus slab marched, altocumulus and
+// cirrus sheets read once — drawn at half the screen's size and laid over the
+// opaque world by cloud_composite.wgsl. They write no depth: from below they
+// fill only the sky, from above they cover everything, so a peak above a layer
+// is wrong either way.
 
 struct Clouds {
   ray: mat3x3f,
@@ -24,6 +25,16 @@ const CLOUD_ALBEDO: f32 = 0.9;
 // Past this the layer is a sliver behind haze; from above the reach grows so
 // it still meets the horizon.
 const CLOUD_REACH_KM: f32 = 120.0;
+
+// Thins out over the reach's farther part.
+fn reach_fade(t: f32, reach: f32) -> f32 {
+  return 1.0 - smoothstep(0.6, 1.0, t / reach);
+}
+
+// The lattice's footprint where `dir` is `t` km on, before any branch takes a derivative.
+fn footprint_at(dir: vec3f, t: f32) -> f32 {
+  return max(length(fwidth(cloud_lattice(frame_camera_pos() + dir * (max(t, 0.0) / atmos_km_per_u())))), 1e-6);
+}
 
 struct CloudOut {
   @builtin(position) clip: vec4f,
@@ -84,11 +95,11 @@ const WEATHER_CROWDED: f32 = 0.75;
 
 // How much of a layer's field shows at lattice point `p`, its own per `salt`.
 // The base is split on the coarse lattice, so the weather stays on its ground
-// as the origin moves.
+// as the origin moves, and wraps with the map.
 fn weather(p: vec2f, salt: u32) -> f32 {
   let base = atmos_cloud_base();
   let at = (vec2f(base % vec2u(WEATHER_CELL)) + p) / f32(WEATHER_CELL);
-  let v = lattice_noise(base / WEATHER_CELL, at, 0xffffffffu, salt);
+  let v = lattice_noise(base / WEATHER_CELL, at, atmos_cloud_count() / WEATHER_CELL - 1u, salt);
   let even = 1.0 / (1.0 + exp(-LOGISTIC_SCALE * (v - 0.5) / WEATHER_SIGMA));
   return smoothstep(WEATHER_CLEAR, WEATHER_CROWDED, even);
 }
@@ -107,6 +118,7 @@ struct Sheet {
 
 const ALTOCUMULUS: Sheet = Sheet(4.5, 3u, 1.0, 0.6, 0x0a1cu);
 const CIRRUS: Sheet = Sheet(9.0, 1u, 4.0, 0.45, 0x0c1cu);
+const CUMULUS_SALT: u32 = 0x0c0cu;
 
 struct Layer {
   // Linear light times opacity, through the air to it.
@@ -134,7 +146,7 @@ fn sheet(s: Sheet, dir: vec3f, t: f32, footprint: f32, lit: vec3f, sky_light: ve
   let p = cloud_lattice(world);
   // Read a whole number of units off, so each layer has its own clouds.
   let field = cloud_opacity_finer(p + vec2f(f32(s.salt % CLOUD_TILE_UNITS)), footprint * s.softer, s.finer);
-  out.opacity = s.opacity * field * weather(p, s.salt) * (1.0 - smoothstep(0.6, 1.0, t / reach));
+  out.opacity = s.opacity * field * weather(p, s.salt) * reach_fade(t, reach);
   out.color = aerial(CLOUD_ALBEDO * lit, world, sky_light) * out.opacity;
   return out;
 }
@@ -170,10 +182,9 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   let alto_t = sheet_t(r0, mu, ALTOCUMULUS.km);
   let cirrus_t = sheet_t(r0, mu, CIRRUS.km);
 
-  // Derivatives, so taken before any branch.
-  let footprint = max(length(fwidth(cloud_lattice(frame_camera_pos() + dir * (t0 / atmos_km_per_u())))), 1e-6);
-  let alto_footprint = max(length(fwidth(cloud_lattice(frame_camera_pos() + dir * (max(alto_t, 0.0) / atmos_km_per_u())))), 1e-6);
-  let cirrus_footprint = max(length(fwidth(cloud_lattice(frame_camera_pos() + dir * (max(cirrus_t, 0.0) / atmos_km_per_u())))), 1e-6);
+  let footprint = footprint_at(dir, t0);
+  let alto_footprint = footprint_at(dir, alto_t);
+  let cirrus_footprint = footprint_at(dir, cirrus_t);
 
   var light = lit_by(atmos_sun_dir(), dir, clouds_sun_at(), shown());
   var sky = zenith_sky();
@@ -202,7 +213,7 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
       let r = sqrt(t * t + 2.0 * r0 * mu * t + r0 * r0);
       let height = clamp((r - base) / CLOUD_THICK_KM, 0.0, 1.0);
       let p = cloud_lattice(frame_camera_pos() + dir * (t / atmos_km_per_u()));
-      let opacity = cloud_opacity(p, footprint) * weather(p, 0x0c0cu);
+      let opacity = cloud_opacity(p, footprint) * weather(p, CUMULUS_SALT);
       let reaches = -log(max(1.0 - opacity, 1e-4)) / CLOUD_DEPTH;
       let density = extinction * clamp((reaches - height) / CLOUD_EDGE, 0.0, 1.0);
       if (density <= 0.0) {
@@ -221,7 +232,7 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
     }
     let opacity = 1.0 - through;
     if (opacity > 0.002) {
-      low.opacity = opacity * (1.0 - smoothstep(0.6, 1.0, t0 / reach));
+      low.opacity = opacity * reach_fade(t0, reach);
       let world = frame_camera_pos() + dir * (seen_at / opacity / atmos_km_per_u());
       low.color = aerial(color / opacity, world, sky_light) * low.opacity;
     }
