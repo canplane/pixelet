@@ -189,10 +189,6 @@ The rules below keep it one thing. They come from finding it several.
   coarsest level it supplies whole — the published version in its
   metadata, the tile server at `/tile/source` — and the floor is that
   level, not the pyramid's top.
-- **No test-only API, no adapter kept past the change that needed it.**
-  Tests keep the shared algebraic laws (a fold's fixed point, the lattice),
-  the wire and storage contracts, and stated invariants; one that restates
-  an implementation goes with it.
 - **Before calling it done, audit the symmetry of the whole tree**: terrain,
   POI and objects side by side, for anything one does its own way. An
   asymmetry is removed or explained.
@@ -339,7 +335,10 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   the mechanism is there at all, and whether deleting or replacing it makes
   the problem impossible — before optimizing it, extending it, guarding it
   or repairing it. Compatibility with an internal detail is worth nothing;
-  only a contract something outside this tree depends on is.
+  only a contract something outside this tree depends on is. Nor is diff
+  size a goal: a rewrite that leaves a smaller state space beats a patch
+  that does not, and machinery a change makes unnecessary goes with its
+  shims in the same change (2026-09-03, the terrain/decor pipeline desync).
 - **One fact, one owner; the rest derived.** Before keeping a value, ask
   whether it follows from another; if it does, compute it where it is read.
   Before a module reads a concept, ask whether it should know it or only
@@ -350,7 +349,12 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   it on a rebase, snaps it on a jump — is a second copy of a truth: remove
   the copy, do not tune the sync. Nor is a derived value written back into
   what it was derived from on every turn; where an outside event changes
-  the source, the event writes it once (the camera, 2026-10-01).
+  the source, the event writes it once (the camera, 2026-10-01). Where data
+  is copied, packed or reconciled across a boundary, ask whether both
+  representations are needed; where something is cleaned up, whether a
+  lifetime makes the cleanup unnecessary; where a capacity is short,
+  whether unrelated states compete for one bounded resource — a queue held
+  what was wanted and what was on the wire in one array (2026-09-23).
 - **Remove a state rather than handle it.** In order: make the bad state
   unrepresentable; remove the boundary that creates it; fold two
   representations into one; move ownership or lifetime so the conflict
@@ -358,15 +362,6 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   cleanup pass, a periodic sweep, a flag, a guard, a local patch. Some of
   those last are sometimes needed, but none of them is an architecture. Do
   not start at the end because the diff is smaller.
-- **Question a transformation before optimizing it.** Where data is copied,
-  packed, mirrored, synchronized or reconciled across a boundary, ask whether
-  both representations are needed. Where two things are kept in step, ask
-  whether one owner would do. Where something is cleaned up, ask whether a
-  lifetime makes the cleanup unnecessary. Where a capacity is short, ask
-  whether capacity is the problem or whether unrelated states are competing
-  for one bounded resource — a queue held what was wanted and what was on
-  the wire in one array, and the rows had credits added to them to pay for
-  it (2026-09-23).
 - **Correctness comes from invariants, not from cleanup.** State them before
   a substantial fix, in the form they will have to hold in: obsolete work
   cannot keep current demand from being represented; residency cannot exceed
@@ -379,17 +374,13 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
 - **Tests carry semantics, not architecture.** They are evidence of intended
   behavior, not a requirement to design around: one that encodes an
   implementation detail is changed or deleted with the detail. Write them
-  for what is externally meaningful and for the invariants. The order is
+  for what is externally meaningful — the shared algebraic laws (a fold's
+  fixed point, the lattice), the wire and storage contracts — and for the
+  invariants; no API exists for a test alone, and no adapter outlives the
+  change that needed it. The order is
   invariant, architecture, implementation, verification, then the tests
   worth keeping — never a regression test first and a minimal patch until it
   goes green.
-- **Profiling chooses between architectures; it does not justify work that
-  should not exist.** Work that is only there because of an unnecessary
-  representation or an unnecessary boundary is removed with the boundary,
-  whether or not it currently measures as cheap — and it is not optimized
-  before its deletion has been considered. Implementation size is not a
-  cost; server spend and end-user device load are (the valid cost axes;
-  turns spent and lines written are not among them).
 - **Remove work before adding machinery to speed it up.** Before a cache,
   an ordering, an index or any retained state, look for the work that can
   simply go. Every candidate is one of three things:
@@ -412,6 +403,8 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   derivation beats a synchronization. "Optimize it once it measures" is no
   reason to keep avoidable work: profiling ranks the trades, it is not a
   license for waste (2026-10-01, the audit after decor left the chunks).
+  The costs are server spend and end-user device load; implementation size,
+  turns spent and lines written are not among them.
 - **What a piece of memory being full means decides how it is sized.**
   Three kinds, and each says which it is:
   - **Must-fit state** — the resident terrain, the mesh slots' tables, the
@@ -431,12 +424,6 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   is shown, drops what someone placed or ends the module (2026-10-01, the
   `.fixed` audit, where a run set too small drew no chunk and a decor
   workspace too small left placed decor out).
-- **Diff size is not a goal.** A five-hundred-line rewrite that leaves a
-  smaller state space beats a twenty-line patch that does not. Do not keep
-  an API, a type, a test or a module to hold churn down, and when a change
-  makes old machinery unnecessary, delete the machinery and its shims in the
-  same breath. A correct larger rewrite beats rounds of patching a wrong
-  structure (2026-09-03, the terrain/decor pipeline desync).
 - **Split the assumptions before editing.** For any bug or slowness worth a
   change, name the symptom, the mechanism producing it, the assumptions that
   make that mechanism necessary, which of those are the product's and which
@@ -450,7 +437,8 @@ art where one exists (Minecraft's chunk model for grid content, Cesium's
   give both: the invariant, the resulting state space, what machinery goes,
   what machinery arrives, runtime cost, memory cost, migration cost. Never
   quietly take the one that preserves the most code. In the conversation, as
-  everything here is — not in a plan document.
+  everything here is: plan documents, approval gates and agent fan-outs are
+  overhead, skipped unless asked.
 - **Review against the new invariant before saying it is done.** What is left
   that exists only for the old architecture? What shim can go now? What
   duplicate representation remains? What still needs cleaning up that could
@@ -507,6 +495,4 @@ size.
   the index is shared, and a plain commit takes whatever another left
   staged. A build that fails on the working tree is not yet anyone's
   commit; say whose uncommitted file it is before calling main broken.
-- **Design in the conversation, not in a planning artifact.** Plan documents,
-  approval gates and agent fan-outs are overhead here; skip them unless asked.
 - Code, comments and documentation stay in English.
