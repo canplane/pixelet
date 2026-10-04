@@ -74,13 +74,20 @@ const DIRECTORY_ENTRIES: usize = 7;
 /// old shell's reads, surfaces, sensor watches and text requests will never
 /// be answered; a read left out keeps its credit forever, so all of it is
 /// let go here.
+/// A case lives on its surface, so it goes with it: a preview never closed
+/// held its actor for good.
+fn close_surface(handle: u32) {
+    if let Some(closed) = pxl_render::gpu::surface::surface_close(handle) {
+        pxl_render::gpu::renderer::surface_closed(closed);
+    }
+    crate::layer::character::preview::preview_close(handle);
+}
+
 fn host_attached(s: &mut State) {
     crate::io::sched::reset();
     let open: Vec<u32> = pxl_render::gpu::surface::surfaces().map(|surface| surface.handle).collect();
     for handle in open {
-        if let Some(closed) = pxl_render::gpu::surface::surface_close(handle) {
-            pxl_render::gpu::renderer::surface_closed(closed);
-        }
+        close_surface(handle);
     }
     crate::shell::shell::sensors_close();
     crate::text::text_forget();

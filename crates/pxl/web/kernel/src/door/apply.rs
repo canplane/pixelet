@@ -240,9 +240,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             Ok(Some(0))
         }
         Command::SURFACE_CLOSE => {
-            if let Some(closed) = pxl_render::gpu::surface::surface_close(abi::SurfaceClose::read(packet(pkt)?)?.surface) {
-                pxl_render::gpu::renderer::surface_closed(closed);
-            }
+            super::close_surface(abi::SurfaceClose::read(packet(pkt)?)?.surface);
             Ok(Some(0))
         }
         Command::SETTING_SET => {
