@@ -59,7 +59,7 @@ pub fn rank_of(kind: u8) -> u16 {
         "subway" | "station" => 40,
         "bus_station" => 50,
         "attraction" => 70,
-        "university" | "college" => 80,
+        "university" => 80,
         "school" | "kindergarten" => 85,
         "townhall" => 100,
         "park" => 120,

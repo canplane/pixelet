@@ -37,7 +37,6 @@
     "atm": { "icon": "🏧", "color": "#64b5f6" },
     "school": { "icon": "🏫", "color": "#81c784" },
     "university": { "icon": "🎓", "color": "#81c784" },
-    "college": { "icon": "🎓", "color": "#81c784" },
     "kindergarten": { "icon": "🧸", "color": "#81c784" },
     "library": { "icon": "📚", "color": "#81c784" },
     "supermarket": { "icon": "🛒", "color": "#9575cd" },

@@ -20,7 +20,7 @@
 
 /// Each kind's category, kind k at `KIND_CATEGORIES[k - 1]`: what the bake
 /// numbers a place by, and what the kernel ranks a kind by.
-pub const KIND_CATEGORIES: [&str; 36] = [
+pub const KIND_CATEGORIES: [&str; 35] = [
     "hospital",
     "clinic",
     "pharmacy",
@@ -34,7 +34,6 @@ pub const KIND_CATEGORIES: [&str; 36] = [
     "atm",
     "school",
     "university",
-    "college",
     "kindergarten",
     "library",
     "supermarket",
@@ -60,16 +59,16 @@ pub const KIND_CATEGORIES: [&str; 36] = [
 ];
 
 /// Each kind's badge icon, an emoji, kind k at `KIND_ICONS[k - 1]`.
-pub const KIND_ICONS: [&str; 36] = [
-    "🏥", "🏥", "💊", "🦷", "🍴", "☕", "🍔", "🍺", "🍺", "🏦", "🏧", "🏫", "🎓", "🎓", "🧸", "📚", "🛒", "🏪", "🛍️", "🛍️", "👕", "🚉", "🚉", "🚌", "⛽", "🅿️", "🏨", "🏨", "🌳", "🏛️", "🏛️", "⛪",
-    "🚓", "🚒", "📮", "🏛️",
+pub const KIND_ICONS: [&str; 35] = [
+    "🏥", "🏥", "💊", "🦷", "🍴", "☕", "🍔", "🍺", "🍺", "🏦", "🏧", "🏫", "🎓", "🧸", "📚", "🛒", "🏪", "🛍️", "🛍️", "👕", "🚉", "🚉", "🚌", "⛽", "🅿️", "🏨", "🏨", "🌳", "🏛️", "🏛️", "⛪", "🚓",
+    "🚒", "📮", "🏛️",
 ];
 
 /// Each kind's badge color as `0xRRGGBBAA`, kind k at `KIND_COLORS[k - 1]`.
-pub const KIND_COLORS: [u32; 36] = [
-    0xe57373ff, 0xe57373ff, 0xe57373ff, 0xe57373ff, 0xffb74dff, 0xa1887fff, 0xff8a65ff, 0xf06292ff, 0xf06292ff, 0x64b5f6ff, 0x64b5f6ff, 0x81c784ff, 0x81c784ff, 0x81c784ff, 0x81c784ff, 0x81c784ff,
-    0x9575cdff, 0x9575cdff, 0x9575cdff, 0x9575cdff, 0x9575cdff, 0xfdd835ff, 0xfdd835ff, 0xfdd835ff, 0x90a4aeff, 0x90a4aeff, 0x4dd0e1ff, 0x4dd0e1ff, 0x66bb6aff, 0xba68c8ff, 0xba68c8ff, 0xb0bec5ff,
-    0x7986cbff, 0x7986cbff, 0x7986cbff, 0x7986cbff,
+pub const KIND_COLORS: [u32; 35] = [
+    0xe57373ff, 0xe57373ff, 0xe57373ff, 0xe57373ff, 0xffb74dff, 0xa1887fff, 0xff8a65ff, 0xf06292ff, 0xf06292ff, 0x64b5f6ff, 0x64b5f6ff, 0x81c784ff, 0x81c784ff, 0x81c784ff, 0x81c784ff, 0x9575cdff,
+    0x9575cdff, 0x9575cdff, 0x9575cdff, 0x9575cdff, 0xfdd835ff, 0xfdd835ff, 0xfdd835ff, 0x90a4aeff, 0x90a4aeff, 0x4dd0e1ff, 0x4dd0e1ff, 0x66bb6aff, 0xba68c8ff, 0xba68c8ff, 0xb0bec5ff, 0x7986cbff,
+    0x7986cbff, 0x7986cbff, 0x7986cbff,
 ];
 
 /// The badge of a place of no kind the table names.
