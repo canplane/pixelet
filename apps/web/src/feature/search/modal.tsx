@@ -24,10 +24,10 @@ import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
 import { assembleLabel, localName, primaryLanguage } from "@/feature/map/geocode/label.ts";
 import { useCenterCoordinates, usePlaceLabel } from "@/feature/map/geocode/center.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
+import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 
 const DEBOUNCE_MS = 300;
 
-const EARTH_RADIUS_M = 6378137;
 const DEG_TO_RAD = Math.PI / 180;
 
 /** Great-circle meters, not world units scaled: Mercator stretches a meter

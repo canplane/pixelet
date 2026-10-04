@@ -16,7 +16,7 @@ pub type G4326 = [f64; 3];
 const LAT_MAX: f64 = 85.05112878;
 const LAT_MIN: f64 = -85.05112878;
 
-pub const EARTH_RADIUS_M: f64 = 6378137.0; // WGS84 a, EPSG:3857's sphere
+pub use crate::space::earth::EARTH_RADIUS_M;
 
 const DEG_TO_RAD: f64 = core::f64::consts::PI / 180.0;
 const RAD_TO_DEG: f64 = 180.0 / core::f64::consts::PI;
