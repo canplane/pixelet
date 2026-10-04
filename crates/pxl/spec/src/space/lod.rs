@@ -50,9 +50,9 @@ pub struct Tau(f64);
 impl Tau {
     pub const FINEST: Tau = Tau(1.0);
 
-    /// At least 1.
-    pub const fn of(scale: f64) -> Tau {
-        assert!(scale >= 1.0, "a quality finer than the criterion the fault bound is sized at");
+    /// At least 1: a finer quality than the criterion breaks the fault bound.
+    pub fn of(scale: f64) -> Tau {
+        xpute_core::ensure!(scale >= 1.0, EINVAL);
         Tau(scale)
     }
 
