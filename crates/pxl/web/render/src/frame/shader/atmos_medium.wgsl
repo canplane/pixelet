@@ -42,6 +42,8 @@ struct Atmosphere {
   cloud_gone_km: f32,
   // A lit city's radiance where the Earth's picture holds all of it.
   city_light: vec3f,
+  // How far from the eye the Earth layer's pages are held, in units.
+  earth_reach: f32,
   // The Earth layer's top-level pages about the eye: the south-west one, how
   // many stand across the window and around the world; then per page, row by
   // row, its layer plus one in four bits, zero where the global picture answers.
@@ -91,6 +93,7 @@ fn atmos_cloud_count() -> u32 { return bitcast<u32>(atmos_words[11].y); }
 fn atmos_cloud_altitude_km() -> f32 { return atmos_words[11].z; }
 fn atmos_cloud_gone_km() -> f32 { return atmos_words[11].w; }
 fn atmos_city_light() -> vec3f { return atmos_words[12].xyz; }
+fn atmos_earth_reach() -> f32 { return atmos_words[12].w; }
 fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[13]); }
 fn atmos_earth_pages() -> vec4u { return bitcast<vec4u>(atmos_words[14]); }
 
