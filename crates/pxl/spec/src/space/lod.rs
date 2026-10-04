@@ -13,6 +13,22 @@ use super::v3::Aabb;
 /// 192u at 1080 px and 50°.
 pub const SPLIT: f64 = 192.0;
 
+/// The view `SPLIT` is stated at: 1080 px high and 50° across it.
+pub const REFERENCE_VIEWPORT_H: f64 = 1080.0;
+pub const REFERENCE_FOV_DEG: f64 = 50.0;
+
+/// Pixels a unit at unit distance spans, for a viewport `viewport_h` high
+/// and `fov_deg` across it.
+pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
+    viewport_h / (2.0 * libm::tan((fov_deg * core::f64::consts::PI) / 360.0))
+}
+
+/// The pixels a cell spans at its level's split distance, at the reference
+/// view: about six.
+pub fn target_cell_px() -> f64 {
+    px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / SPLIT
+}
+
 /// Where ground stops being drawn at `level` at `Tau::FINEST`; any integer level.
 pub const fn split_distance(level: i32) -> f64 {
     SPLIT * GROUND.scale(0).up(level).side()
@@ -22,7 +38,7 @@ pub const fn split_distance(level: i32) -> f64 {
 /// with the surface angle in, the skyline would be drawn coarsest. Negative
 /// (finer than z16) near the eye.
 pub fn level(r: f64) -> i32 {
-    (r / split_distance(0)).log2().floor() as i32
+    libm::log2(r / split_distance(0)).floor() as i32
 }
 
 /// The criterion's one scale factor, at least 1: every level's split
@@ -82,7 +98,7 @@ pub fn squares_within(level: u32, at: [f64; 2], radius: f64) -> impl Iterator<It
     let (xs, ys) = (rows(at[0]), rows(at[1]));
     let gap = move |c: f64, i: i64| (i as f64 * span - c).max(c - (i + 1) as f64 * span).max(0.0);
     ys.flat_map(move |y| xs.clone().map(move |x| [x, y]))
-        .filter(move |&[x, y]| gap(at[0], x).hypot(gap(at[1], y)) <= radius)
+        .filter(move |&[x, y]| libm::hypot(gap(at[0], x), gap(at[1], y)) <= radius)
 }
 
 /// The cubes `side` wide meeting `b` inside `REACH`.

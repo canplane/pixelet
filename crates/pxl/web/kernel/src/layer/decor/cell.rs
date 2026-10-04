@@ -27,14 +27,15 @@ use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{object_col_revision, Store};
-use crate::param::IMPOSTOR_GONE_CELLS;
-use crate::shell::setting::store::{hidden_ground, settings_store};
+use crate::shell::setting::store::settings_store;
+use crate::world::change::request_world_tick;
 use crate::world::chunk::build::Builder;
 use crate::world::observation::{eye, observation};
 use crate::world::paging::floor;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use crate::world::quality;
+use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::bake::format::Terrain;
 use xpute_runtime::global::Global;
 use xpute_runtime::mem::heap::free;
@@ -210,6 +211,8 @@ fn solve(kinds: &[Kind], stack: &mut Vec<DecorCell>, out: &mut Vec<DecorCell>) {
     let tau = quality::effective().tau();
     let largest = largest_possible(kinds);
     let floor_px = target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS;
+    let view_reach = crate::layer::environment::fog::view_reach();
+    let reach = fault_radius(top).min(view_reach);
     let side = chunk_span_of(top);
     let (cx, cy) = ((eye[0] / side).floor() as i64, (eye[1] / side).floor() as i64);
     let n = (reach / side).ceil() as i64 + 1;
@@ -271,7 +274,7 @@ fn build(c: &mut Cells, cell: DecorCell, kinds: &[Kind], store: &Store, draw: &m
             own: PageSource { page: view, origin: [0, 0], n: 1 },
             beside: [None; 8],
         };
-        c.sample.read(&around, [tx0 as i64, ty0 as i64], hidden_ground(settings_store().structures)).ok()?;
+        c.sample.read(&around, [tx0 as i64, ty0 as i64]).ok()?;
     }
     c.placed.clear();
     c.placed.try_reserve(c.cols.len()).ok()?;
@@ -427,7 +430,7 @@ pub fn step(kinds: &[Kind], store: &Store, draw: &mut DrawList, hide: Option<Ent
 fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     let Some(eye) = eye() else { return };
     let model_px = decor_gone_px();
-    let sprite_px = *TARGET_CELL_PX * IMPOSTOR_GONE_CELLS;
+    let sprite_px = target_cell_px() * IMPOSTOR_GONE_CELLS;
     let sprites = &mut c.sprites;
     for (&cell, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
         let (x0, y0, _) = cell.rect();

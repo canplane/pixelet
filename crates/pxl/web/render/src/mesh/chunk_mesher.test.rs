@@ -25,7 +25,7 @@ fn set_of(span: u32, columns: &[Vec<Run>]) -> OwnedRunSet {
             set.g.push(run.rgb[1]);
             set.b.push(run.rgb[2]);
             set.layer_taps.push(run.layer);
-            set.material_class.push(MATERIAL_LAND);
+            set.material_class.push(MaterialClasses::LAND);
             set.sub_s.push(SUB_CELL_NONE);
             for lane in [&mut set.sub_ox, &mut set.sub_oy, &mut set.sub_oz] {
                 lane.push(0);

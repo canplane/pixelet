@@ -39,7 +39,7 @@ use crate::abi::host::{root, storage, STORAGE_KEYS};
 use crate::host::turn;
 use crate::io::file::{self, Owner};
 use crate::kernel::kernel;
-use crate::shell::setting::store::hidden_ground;
+use crate::layer::decor::build::{scatters_at, Draw};
 use crate::world::access::{Access, FINEST};
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
 use crate::world::chunk::source::{band_written, chunk_sources_changed};
@@ -588,14 +588,14 @@ fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
 /// matching a channel alone turned a bare-ground cube into road), and the
 /// cell must already hold an AIR leaf (ground type is per column, so without
 /// this every cube stacked on matching ground was dropped).
-fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube, structures: bool) -> bool {
+fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
     if size < U_PER_CELL {
         return false;
     }
     let Some(source) = terrain_style_cube_source(cube) else { return false };
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
     let Some(ground) = Access::now().at(at, FINEST).exact() else { return false };
-    let shown = shown_ground(|ch| channel_of(ground.cell, ch) as u32, hidden_ground(structures));
+    let shown = shown_ground(|ch| channel_of(ground.cell, ch) as u32);
     if shown.channel != source.channel || shown.type_id != source.terrain_num_id {
         return false;
     }
@@ -604,7 +604,11 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube, structure
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
 pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube) {
-    let val = if place_value_is_redundant(at, size, cube) { VOID } else { placeable_cube_num_id(cube) };
+    let val = if place_value_is_redundant(at, size, cube) {
+        VOID
+    } else {
+        placeable_cube_num_id(cube)
+    };
     write_object_value(at, size, val);
 }
 

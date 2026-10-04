@@ -51,7 +51,7 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
 }
 
 fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
-  let mu = dot(dir, atmos_up());
+  let mu = dot(dir, frame_up());
   if (meets_ground(r, mu) || dot(dir, atmos_sun_dir()) <= 0.0 || a >= 1.0 + w) {
     return vec3f(0.0);
   }
@@ -64,7 +64,7 @@ fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
 // Lommel-Seeliger, so a full Moon is as bright at its limb as at its center.
 fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
   let axis = atmos_moon_dir();
-  let mu = dot(dir, atmos_up());
+  let mu = dot(dir, frame_up());
   if (meets_ground(r, mu) || dot(dir, axis) <= 0.0 || a >= 1.0 + w) {
     return vec3f(0.0);
   }

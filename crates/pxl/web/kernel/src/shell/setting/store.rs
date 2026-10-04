@@ -1,21 +1,10 @@
 // pxl-kernel/shell/setting/store.rs
 
-//! The one settings store: what the sheet edits, what the drawer's character
-//! picker edits, and what every consumer reads, user-facing and dev alike.
-//!
-//! Two layers, read as one. schema.json's defaults are the fallback; what the
-//! user has set differently lies over them; the store is the two merged
-//! (schema.spec.rs `Settings`), so a consumer reads `poi` and never asks
-//! which layer it came from.
-//!
-//! What storage keeps of them is the kernel's too, one file below the storage
-//! root (io/file.rs): handed over unread at the boot, as a process is handed
-//! its environment, and written by the kernel whenever a setting changes. It is one object by name,
-//! `{"poi":true,"ao":"screen"}`: a setting and a choice's option are numbered
-//! by their place in schema.json, and a name outlives the order they are
-//! listed in. Only what differs from the default is kept: a default written
-//! to storage is not a default — it is a decision nobody made, and changing
-//! the value in the source would then reach only people with empty storage.
+//! The one settings store: schema.json's defaults with the user's choices
+//! over them. Storage keeps only what differs from the default, by name: a
+//! stored default would be a decision nobody made, and changing it in source
+//! would then reach only people with empty storage.
+
 
 use xpute_core::codec::json::{read_json, JsonKind};
 
@@ -50,15 +39,6 @@ use xpute_runtime::global::Global;
 /// WORLD_BOOT said of the build: the store is first read after it.
 pub fn is_offered(key: SettingKey) -> bool {
     !key.dev() || (cfg!(feature = "dev") && development())
-}
-
-/// `structures` off hides the structure channel.
-pub fn hidden_ground(structures: bool) -> ChannelMask {
-    if structures {
-        0
-    } else {
-        channel_bit(GroundChannelKey::STRUCTURE)
-    }
 }
 
 impl Settings {

@@ -44,14 +44,14 @@ use pxl_spec::space::pyramid::{LevelPage, GROUND};
 /// points, drawn at the two ratios it names.
 const SCREEN_PT: [f64; 2] = [375.0, 812.0];
 const RATIOS: [f64; 2] = [2.0, 3.0];
-/// The camera's vertical field of view (pxl-render look/lod.rs
+/// The camera's vertical field of view (pxl-spec space/lod.rs
 /// `REFERENCE_FOV_DEG`).
 const FOV_DEG: f64 = 50.0;
 /// One ray every this many points across and down: the steps' spread, not
 /// the frame's sum, is what is measured, and it is the same at any stride
 /// fine against the ground's cells.
 const STRIDE_PT: f64 = 3.0;
-/// How far a ray is asked, in units: past the visual range of the air.
+/// How far a ray is asked, in units: past the reach any view draws to.
 const REACH: f64 = 40_000.0;
 /// Rounds of cast and fetch before what is still lacked is taken as what
 /// cannot be had.
@@ -124,10 +124,10 @@ fn point(x: f64, y: f64) -> Pvf3 {
 /// The rays of a view through `eye`, one every `STRIDE_PT` points.
 fn rays(eye: [f64; 3], pitch_deg: f64) -> Vec<Ray> {
     let p = pitch_deg.to_radians();
-    let forward = [0.0, p.cos(), p.sin()];
+    let forward = [0.0, libm::cos(p), libm::sin(p)];
     let right = [1.0, 0.0, 0.0];
-    let up = [0.0, -p.sin(), p.cos()];
-    let half = (FOV_DEG.to_radians() / 2.0).tan();
+    let up = [0.0, -libm::sin(p), libm::cos(p)];
+    let half = libm::tan(FOV_DEG.to_radians() / 2.0);
     let aspect = SCREEN_PT[0] / SCREEN_PT[1];
     let (w, h) = ((SCREEN_PT[0] / STRIDE_PT) as usize, (SCREEN_PT[1] / STRIDE_PT) as usize);
     let mut out = Vec::with_capacity(w * h);

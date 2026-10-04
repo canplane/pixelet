@@ -21,14 +21,6 @@
         "label": "Decor",
         "description": "Shows trees, vehicles and other decor placed on the terrain automatically. Objects you place yourself are always shown."
       },
-      "poi": {
-        "label": "Places",
-        "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
-      },
-      "structures": {
-        "label": "Buildings",
-        "description": "Shows or hides buildings on the terrain."
-      },
       "textures": {
         "label": "Textures",
         "description": "Applies detailed textures to blocks instead of flat colors."

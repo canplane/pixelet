@@ -21,33 +21,24 @@ struct Badge {
   near: f32,
   far: f32,
   cell: f32,
-  vignette: f32,
-  viewport: vec2f,
-  planet: vec4f,
-  globe: vec4f,
+  _p: f32,
 };
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process.
-@group(0) @binding(0) var<uniform> badge_words: array<vec4f, 13>;
+@group(1) @binding(0) var<uniform> badge_words: array<vec4f, 10>;
 
 fn badge_view() -> mat4x4f { return mat4x4f(badge_words[0], badge_words[1], badge_words[2], badge_words[3]); }
 fn badge_proj() -> mat4x4f { return mat4x4f(badge_words[4], badge_words[5], badge_words[6], badge_words[7]); }
 fn badge_translation() -> vec3f { return badge_words[8].xyz; }
 fn badge_px_k() -> f32 { return badge_words[8].w; }
-fn badge_fade_start() -> f32 { return badge_words[9].x; }
-fn badge_fade_end() -> f32 { return badge_words[9].y; }
-fn badge_near() -> f32 { return badge_words[9].z; }
-fn badge_far() -> f32 { return badge_words[9].w; }
-fn badge_cell() -> f32 { return badge_words[10].x; }
-fn badge_vignette() -> f32 { return badge_words[10].y; }
-fn badge_viewport() -> vec2f { return badge_words[10].zw; }
-fn badge_planet() -> vec4f { return badge_words[11]; }
-fn badge_globe() -> vec4f { return badge_words[12]; }
+fn badge_near() -> f32 { return badge_words[9].x; }
+fn badge_far() -> f32 { return badge_words[9].y; }
+fn badge_cell() -> f32 { return badge_words[9].z; }
 
-@group(0) @binding(1) var<storage, read> instances: array<f32>;
-@group(1) @binding(0) var sheet: texture_2d<f32>;
-@group(1) @binding(1) var sheet_sampler: sampler;
+@group(1) @binding(1) var<storage, read> instances: array<f32>;
+@group(2) @binding(0) var sheet: texture_2d<f32>;
+@group(2) @binding(1) var sheet_sampler: sampler;
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -83,7 +74,7 @@ fn behind_world(clip: vec4f) -> bool {
 fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
   // BILLBOARD_FLOATS floats an instance.
   let k = ii * 10u;
-  let anchor = on_globe_of(vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge_translation(), badge_planet(), badge_globe());
+  let anchor = on_globe(vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge_translation());
   let size_px = vec2f(instances[k + 3u], instances[k + 4u]);
   let rect = vec4f(instances[k + 5u], instances[k + 6u], instances[k + 7u], instances[k + 8u]);
   let frac = instances[k + 9u];
@@ -136,7 +127,7 @@ fn fs(i: VertexOut) -> FragOut {
   var o: FragOut;
   // The sheet is premultiplied so its mips filter without a dark fringe.
   let color = texel.rgb / max(texel.a, 1e-4);
-  o.color = vec4f(to_srgb(grade(color) * vignette_of(i.clip.xy, badge_viewport(), badge_vignette())), texel.a);
+  o.color = vec4f(to_srgb(grade(color) * vignette_of(i.clip.xy, frame_viewport(), frame_vignette())), texel.a);
   o.depth = i.upright_z;
   return o;
 }

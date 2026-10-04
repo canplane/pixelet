@@ -156,9 +156,6 @@ pub enum SettingKey {
     /// but a tier over it carries one color and no layer to sample, so which
     /// color that is was baked in (mesh/chunk_mesher.rs).
     textures = 0,
-    /// Whether the STRUCTURE ground channel is painted. The bake writes it
-    /// either way (pxl-geo-bake terrain/pipeline/overture/policy.rs); this is a render decision.
-    structures = 1,
     /// Procedurally scattered decor only; what the player placed stays.
     ///
     /// Med because it is models rather than a shading term: a chunk builds its
@@ -169,58 +166,47 @@ pub enum SettingKey {
     /// the nearest tier without making far decor cheap, the impostor tier that
     /// would being decided and not built. The badge is an ordering, and this is
     /// the one to reach for before any shading term.
-    decor = 2,
+    decor = 1,
     /// The places' badges over the map, from the published POI pages.
-    poi = 3,
+    poi = 2,
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
     /// Off by default: the tilt is the one control a map view is expected to
     /// have, and locking it reads as the app being stuck.
-    tilt_lock = 4,
+    tilt_lock = 3,
     /// Which controller makes the camera's pose; CAMERA_MODES says each. To
     /// first person the person stands at the map center, the eye at its
     /// height over the ground; to third the map center is laid on the ground
     /// and the eye steps back by the radius.
-    camera_mode = 5,
-    /// What the camera does when the controls would put it underground;
-    /// CAMERA_COLLISION_MODES says each. The default is climb, because the one
-    /// thing a map camera must not do is refuse to
-    /// move. stop is the more literal answer and the worse default: it hands
-    /// back a control that did nothing, which reads as the app being stuck
-    /// rather than as the ground being in the way.
-    camera_collision = 6,
-    /// Panning re-samples the terrain height under the map center each step.
-    ground_snap = 7,
-    /// The eraser digs into the baked terrain where nothing is placed. Off by
-    /// default: the terrain is real map data, not the player's scratch canvas.
-    terrain_carving = 8,
+    camera_mode = 4,
+    /// What the camera does when the controls would put it underground; CAMERA_COLLISION_MODES says each.
+    camera_collision = 5,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
-    edge_shade = 9,
+    edge_shade = 6,
     /// A uniform on an already-compiled shader term; not a pass.
-    rim_light = 10,
+    rim_light = 7,
     /// corner, the occlusion a voxel world gets from its own geometry with no
     /// screen-space pass; screen, N8AO's screen-space pass, the costliest of
     /// the three. AO_MODES says each.
-    ao = 11,
+    ao = 8,
     /// The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
-    shadows = 12,
+    shadows = 9,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 13,
+    resolution = 10,
     /// The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
-    profiler = 14,
+    profiler = 11,
     /// Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs).
-    gizmos = 15,
-    person = 16,
-    pet = 17,
+    gizmos = 12,
+    person = 13,
+    pet = 14,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 18] = [
+    pub const ALL: [SettingKey; 15] = [
         SettingKey::textures,
-        SettingKey::structures,
         SettingKey::decor,
         SettingKey::poi,
         SettingKey::tilt_lock,
@@ -247,7 +233,6 @@ impl SettingKey {
     pub fn kind(self) -> SettingKind {
         match self {
             SettingKey::textures => SettingKind::Toggle,
-            SettingKey::structures => SettingKind::Toggle,
             SettingKey::decor => SettingKind::Toggle,
             SettingKey::poi => SettingKind::Toggle,
             SettingKey::tilt_lock => SettingKind::Toggle,
@@ -271,7 +256,6 @@ impl SettingKey {
     pub fn name(self) -> &'static str {
         match self {
             SettingKey::textures => "textures",
-            SettingKey::structures => "structures",
             SettingKey::decor => "decor",
             SettingKey::poi => "poi",
             SettingKey::tilt_lock => "tilt_lock",
@@ -304,12 +288,12 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::camera_collision | SettingKey::ground_snap | SettingKey::terrain_carving | SettingKey::shadows)
+        matches!(self, SettingKey::camera_collision | SettingKey::shadows)
     }
 
     /// Read by a chunk's build, so a change builds the chunks again.
     pub fn sources_chunks(self) -> bool {
-        matches!(self, SettingKey::textures | SettingKey::structures | SettingKey::decor)
+        matches!(self, SettingKey::textures | SettingKey::decor)
     }
 }
 
@@ -317,7 +301,6 @@ impl SettingKey {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
     pub textures: bool,
-    pub structures: bool,
     pub decor: bool,
     pub poi: bool,
     pub tilt_lock: bool,
@@ -340,7 +323,6 @@ impl Settings {
     /// Every setting at schema.json's default.
     pub const DEFAULT: Settings = Settings {
         textures: true,
-        structures: true,
         decor: true,
         poi: false,
         tilt_lock: false,
@@ -364,7 +346,6 @@ impl Settings {
     pub fn get(&self, key: SettingKey) -> u32 {
         match key {
             SettingKey::textures => self.textures as u32,
-            SettingKey::structures => self.structures as u32,
             SettingKey::decor => self.decor as u32,
             SettingKey::poi => self.poi as u32,
             SettingKey::tilt_lock => self.tilt_lock as u32,
@@ -389,7 +370,6 @@ impl Settings {
     pub fn set(&mut self, key: SettingKey, value: u32) -> bool {
         match key {
             SettingKey::textures if value <= 1 => self.textures = value == 1,
-            SettingKey::structures if value <= 1 => self.structures = value == 1,
             SettingKey::decor if value <= 1 => self.decor = value == 1,
             SettingKey::poi if value <= 1 => self.poi = value == 1,
             SettingKey::tilt_lock if value <= 1 => self.tilt_lock = value == 1,

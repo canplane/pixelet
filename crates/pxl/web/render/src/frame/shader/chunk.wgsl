@@ -95,9 +95,6 @@ fn srgb_to_linear(c: vec3f) -> vec3f {
   return select(high, low, c <= vec3f(0.04045));
 }
 
-// What is the same at every vertex of a face — the box's color, taps and
-// size, the face's normal, the draw's opacity, the frame's sky fill — is
-// flat: taken from one vertex rather than interpolated between equal values.
 struct VertexOut {
   @builtin(position) clip: vec4f,
   @location(0) @interpolate(flat) rgb: vec3f,
@@ -109,18 +106,14 @@ struct VertexOut {
   @location(6) world_pos: vec3f,
   @location(7) @interpolate(flat) faces: u32,
   @location(8) @interpolate(flat) opacity: f32,
-  // The air in front of the vertex (atmos_view.wgsl's Seen).
   @location(9) through: vec3f,
   @location(10) scattered: vec3f,
   @location(11) past: vec3f,
   @location(12) @interpolate(flat) fill: vec3f,
 };
 
-// Which draw record a box belongs to rides on `vertex_index`: the draw's
-// first vertex is the record's index times the cube, and no attribute steps
-// per vertex, so it slides nothing. The draw's own first box is its first
-// instance, where the instance-stepped attributes are fetched from
-// (gpu/renderer.rs's draw_meshes); `instance_index` is not read.
+// The draw record's index rides on vertex_index (first vertex = record index
+// times the cube); the first box is the draw's first instance.
 @vertex
 fn vs(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
   return chunk_vertex(v, words, true);
@@ -133,9 +126,6 @@ fn vs_coarse(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
   return chunk_vertex(v, words, false);
 }
 
-// The two again for the passes that write depth alone, the shadow map's and
-// the prepass the screen-space occlusion reads: the position and nothing
-// else, through the same `box_corner` and `corner_clip` as the lit pass.
 @vertex
 fn vs_depth(@builtin(vertex_index) v: u32, words: BoxWords) -> @builtin(position) vec4f {
   return chunk_depth(v, words, true);
@@ -146,9 +136,6 @@ fn vs_coarse_depth(@builtin(vertex_index) v: u32, words: BoxWords) -> @builtin(p
   return chunk_depth(v, words, false);
 }
 
-// A vertex of a box: its face, whether the mask keeps that face, its corner
-// in the box's [-0.5, 0.5] cube, the box's size and where the corner stands
-// on the globe.
 struct Corner {
   face: u32,
   shown: bool,
@@ -171,8 +158,7 @@ fn box_corner(k: u32, b: Box, place: vec3f) -> Corner {
   return c;
 }
 
-// A face the mask leaves out: every vertex of it at one point, a triangle of
-// no area, which the rasterizer drops.
+// A masked face collapses to one point, a zero-area triangle the rasterizer drops.
 fn corner_clip(c: Corner) -> vec4f {
   if (!c.shown) {
     return vec4f(0.0, 0.0, 0.0, 1.0);
@@ -392,8 +378,7 @@ fn sample_tap(layer: f32, image: u32, uv: vec2f, ddx: vec2f, ddy: vec2f, fallbac
   if (l >= arrayLength(&layer_slot)) {
     return fallback;
   }
-  let word = layer_slot[l];
-  let slot = select(word & 0xffffu, word >> 16u, is_side);
+  let slot = (layer_slot[l] >> (image * SLOT_BITS)) & NO_SLOT;
   if (slot == NO_SLOT) {
     return fallback;
   }
@@ -402,20 +387,17 @@ fn sample_tap(layer: f32, image: u32, uv: vec2f, ddx: vec2f, ddy: vec2f, fallbac
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
-  // A box with no layer of its own is its color and nothing else: that is
-  // every tier over a leaf's own cells, which are the only ones the texture
-  // pack is for (mesh/chunk_mesher.rs). The four samples are skipped with
-  // it, not taken and thrown away.
+  // Only leaf cells carry layers; the samples are skipped, not taken and discarded.
   let textured = i.layer_taps.x < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
   let ddx = dpdx(i.box_uv);
   let ddy = dpdy(i.box_uv);
   var taps = i.rgb;
   if (textured) {
-    let is_side = abs(i.normal.z) < 0.5;
-    taps = (sample_tap(i.layer_taps.x, is_side, i.box_uv, ddx, ddy, i.rgb)
-      + sample_tap(i.layer_taps.y, is_side, i.box_uv, ddx, ddy, i.rgb)
-      + sample_tap(i.layer_taps.z, is_side, i.box_uv, ddx, ddy, i.rgb)
-      + sample_tap(i.layer_taps.w, is_side, i.box_uv, ddx, ddy, i.rgb)) * 0.25;
+    let image = face_image(i.normal, i.box_uv.y, i.faces);
+    taps = (sample_tap(i.layer_taps.x, image, i.box_uv, ddx, ddy, i.rgb)
+      + sample_tap(i.layer_taps.y, image, i.box_uv, ddx, ddy, i.rgb)
+      + sample_tap(i.layer_taps.z, image, i.box_uv, ddx, ddy, i.rgb)
+      + sample_tap(i.layer_taps.w, image, i.box_uv, ddx, ddy, i.rgb)) * 0.25;
   }
   var base = taps;
   base = base * mix(1.0, 1.0 - frame_edge_strength(), edge_factor(i.local_pos, i.box_scale, i.normal, i.faces));

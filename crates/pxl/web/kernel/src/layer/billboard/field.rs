@@ -9,12 +9,20 @@ use pxl_render::gpu::api::bytes;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::abi::handle::Slots;
 
+use crate::layer::billboard::sheet::billboard_sheet;
 use crate::layer::model::store::Models;
 
 /// Anchor relative to the set's (3), logical size in pixels (2), sheet
 /// rectangle (4), anchor's place down the sprite, 0 top 1 bottom (1).
 /// badge.wgsl reads the same stride.
 pub const BILLBOARD_FLOATS: usize = 10;
+
+/// One instance: its anchor `at`, `size` in logical pixels, the sheet's
+/// `slot`, and where down the sprite the anchor stands.
+pub fn billboard_instance(at: V3, size: [f64; 2], slot: u32, down: f64) -> [f32; BILLBOARD_FLOATS] {
+    let sheet = billboard_sheet();
+    [at[0], at[1], at[2], size[0], size[1], sheet.u0(slot), sheet.v0(slot), sheet.u1(slot), sheet.v1(slot), down].map(|v| v as f32)
+}
 
 #[derive(Clone, Copy)]
 enum Anchor {
@@ -37,8 +45,7 @@ pub struct Billboards {
 
 impl Billboards {
     pub fn new_set(&mut self, order: u32) -> u32 {
-        // One set an order (order.rs `SETS_MAX`): an owner making a second
-        // before letting its first go is the bound broken.
+        // One set per order (order.rs `SETS_MAX`).
         xpute_core::ensure!(self.sets.iter().all(|(_, s)| s.order != order), ENOTRECOVERABLE, order);
         let set = Set {
             order,

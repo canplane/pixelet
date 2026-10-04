@@ -88,7 +88,7 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_PUCK_ZONE => wgsl!("frame", "globe", "grade", "finish", "puck", "puck_zone"),
         SHADER_PUCK_BEACON => wgsl!("frame", "globe", "grade", "finish", "place", "puck", "puck_beacon"),
-        SHADER_BADGE => wgsl!("globe", "grade", "depth", "badge_depth", "badge"),
+        SHADER_BADGE => wgsl!("frame", "globe", "grade", "depth", "badge_depth", "badge"),
         SHADER_SKY => wgsl!(
             "frame",
             "globe",
@@ -120,15 +120,15 @@ pub fn source(kind: u32) -> &'static str {
             "impostor"
         ),
         SHADER_IMPOSTOR_BAKE => wgsl!("impostor_bake"),
-        SHADER_AO_DOWNSAMPLE => wgsl!("ao_view", "ao_downsample"),
+        SHADER_AO_DOWNSAMPLE => wgsl!("frame", "globe", "ao_view", "ao_downsample"),
         SHADER_AO_SAMPLE => wgsl!("ao_view", "ao_sample"),
         SHADER_AO_BLUR => wgsl!("ao_view", "ao_blur"),
-        SHADER_AO_UPSAMPLE => wgsl!("ao_view", "ao_upsample"),
+        SHADER_AO_UPSAMPLE => wgsl!("frame", "globe", "ao_view", "ao_upsample"),
         SHADER_ATMOS_TRANSMITTANCE => wgsl!("atmos_medium", "atmos_pass", "atmos_transmittance"),
         SHADER_ATMOS_MULTISCATTER => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_multiscatter"),
-        SHADER_ATMOS_SKY_VIEW => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_skyview"),
-        SHADER_ATMOS_EXPOSURE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_pass", "atmos_exposure"),
-        SHADER_STARS => wgsl!("grade", "stars"),
+        SHADER_ATMOS_SKY_VIEW => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_skyview"),
+        SHADER_ATMOS_EXPOSURE => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_pass", "atmos_exposure"),
+        SHADER_STARS => wgsl!("frame", "globe", "grade", "stars"),
         SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
         SHADER_CLOUDS => wgsl!(
             "frame",
@@ -149,18 +149,11 @@ pub fn source(kind: u32) -> &'static str {
     }
 }
 
-pub const FRAME_FLOATS: usize = 84;
-/// Where each field of the frame uniform starts, in floats, in this order:
-/// view_proj, camera_pos, edge_strength, the environment's run (sun_dir
-/// through its padding, look/environment.rs's output as it is), low_spec,
-/// edge_width, rim_intensity, viewport, shadow_strength, shadow_texel,
-/// vignette, ao_strength, screen_ao, light_view_proj, the second light's run
-/// (other_dir through other_color, look/environment.rs's ENV_OTHER_LIGHT),
-/// the planet and the globe. The renderer reads the table rather than
-/// counting; the test below holds it to the struct.
-pub const FRAME_AT: [usize; 17] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80];
+pub const FRAME_FLOATS: usize = 88;
+/// Frame uniform field offsets in floats, in frame.wgsl's order; a test holds it to the struct.
+pub const FRAME_AT: [usize; 18] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84];
 #[cfg(test)]
-const FRAME_FIELDS: [&str; 17] = [
+const FRAME_FIELDS: [&str; 18] = [
     "view_proj",
     "camera_pos",
     "edge_strength",
@@ -178,6 +171,7 @@ const FRAME_FIELDS: [&str; 17] = [
     "other_dir",
     "planet",
     "globe",
+    "up",
 ];
 
 /// The pipelines, by id: draw.rs's, which a draw names (0 to 9, and the
@@ -468,7 +462,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_BADGE, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, BOTH, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, DEPTH]]), group(&SKIN)],
+            &[frame(BOTH), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, DEPTH]]), group(&SKIN)],
         ),
         // The gizmos: a line list over everything, no depth test.
         PIPELINE_DEBUG => record(
@@ -513,7 +507,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
         // Decor's impostors: a strip of four corners an instance, opaque
         // where the sprite covers and discarded where it does not, both sides.
-        PIPELINE_IMPOSTOR => record(
+        crate::frame::draw::PIPELINE_IMPOSTOR => record(
             Head {
                 topology: STRIP,
                 ..lit(SHADER_IMPOSTOR, CULL_NONE)
@@ -548,22 +542,22 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[],
             &[group(&[[0, VERTEX, UNIFORM], [1, BOTH, STORAGE]]), group(&[[0, FRAGMENT, TEXTURE_ARRAY], [1, FRAGMENT, SAMPLER]])],
         ),
-        PIPELINE_AO_DOWNSAMPLE => record(screen(SHADER_AO_DOWNSAMPLE), &[], &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, DEPTH]])]),
+        PIPELINE_AO_DOWNSAMPLE => record(screen(SHADER_AO_DOWNSAMPLE), &[], &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, DEPTH], [6, FRAGMENT, UNIFORM]])]),
         PIPELINE_AO_SAMPLE => record(
             screen(SHADER_AO_SAMPLE),
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, TEXTURE_UNFILTERED], [2, FRAGMENT, TEXTURE]])],
+            &[group(&[[1, FRAGMENT, TEXTURE_UNFILTERED], [2, FRAGMENT, TEXTURE], [6, FRAGMENT, UNIFORM]])],
         ),
         PIPELINE_AO_BLUR => record(
             screen(SHADER_AO_BLUR),
             &[],
             &[group(&[
-                [0, FRAGMENT, UNIFORM],
                 [1, FRAGMENT, TEXTURE_UNFILTERED],
                 [2, FRAGMENT, TEXTURE],
                 [3, FRAGMENT, TEXTURE],
                 [4, FRAGMENT, SAMPLER],
                 [5, FRAGMENT, UNIFORM_DYNAMIC],
+                [6, FRAGMENT, UNIFORM],
             ])],
         ),
         PIPELINE_AO_UPSAMPLE => record(
@@ -575,6 +569,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 [2, FRAGMENT, TEXTURE_UNFILTERED],
                 [3, FRAGMENT, TEXTURE],
                 [4, FRAGMENT, SAMPLER],
+                [6, FRAGMENT, UNIFORM],
             ])],
         ),
         PIPELINE_ATMOS_TRANSMITTANCE => record(screen(SHADER_ATMOS_TRANSMITTANCE), &[], &[group(&[AIR[0]])]),
@@ -582,12 +577,9 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_ATMOS_SKY_VIEW => record(
             screen(SHADER_ATMOS_SKY_VIEW),
             &[],
-            &[group(&[AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE], [14, FRAGMENT, UNIFORM]])],
+            &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE], [14, FRAGMENT, UNIFORM]])],
         ),
-        PIPELINE_ATMOS_EXPOSURE => record(screen(SHADER_ATMOS_EXPOSURE), &[], &[group(&[AIR[0], AIR[1], AIR[2], AIR[3]])]),
-        // The stars: a strip of four corners a star, added over the sky where
-        // the world left the far plane and under everything drawn after it;
-        // depth tested, never written.
+        PIPELINE_ATMOS_EXPOSURE => record(screen(SHADER_ATMOS_EXPOSURE), &[], &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3]])]),
         PIPELINE_STARS => record(
             Head {
                 topology: STRIP,
@@ -596,7 +588,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_STARS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]])],
+            &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]])],
         ),
         // From under the layer only where the world left the far plane; from over it everywhere.
         PIPELINE_CLOUDS => record(

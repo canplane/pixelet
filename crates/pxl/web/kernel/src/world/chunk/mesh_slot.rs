@@ -58,7 +58,6 @@
 //! (issue/20260923-a-coarse-cell-is-isotropic.md).
 
 use pxl_render::look::globe::MERCATOR_RADIUS_U;
-use pxl_render::look::lod::COARSEST;
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, TOP_LEVEL};
 
@@ -78,6 +77,9 @@ pub const COARSE_BOXES: u32 = crate::param::COARSE_BOXES;
 pub const COARSE_TIER_SLOTS: u32 = (2 * (CHUNK_CELLS / 2).pow(3)).div_ceil(COARSE_BOXES);
 
 pub const POOLS: usize = 3;
+
+/// The widest box a chunk's mesh is cut into, in its cells: one box a chunk.
+pub const COARSEST: u32 = 64;
 
 /// At its coarsest a chunk is one cell: its box and the floor under it.
 pub const COVER_BOXES: u32 = 2;

@@ -17,6 +17,8 @@ pub const NIGHT: usize = 4;
 /// Lighting run (24), stars' fade and clock (4), air (4), second light (8),
 /// sun direction (4), stars' frame (12), moon direction and sky brightness (4).
 pub const ENV_FLOATS: usize = 60;
+pub const ENV_FOG_NEAR: usize = 7;
+pub const ENV_FOG_FAR: usize = 11;
 pub const ENV_SKY: usize = 24;
 pub const ENV_AIR: usize = 28;
 pub const ENV_OTHER_LIGHT: usize = 32;
@@ -70,10 +72,10 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
         put3(o, at, f32s(&d));
         put3(o, at + 4, [color[0] as f32, color[1] as f32, color[2] as f32]);
     }
-    o[7] = light.fog_near as f32;
+    o[ENV_FOG_NEAR] = light.fog_near as f32;
     let ambient_i = c[AMBIENT + 3];
     put3(o, 8, [c[AMBIENT] * ambient_i, c[AMBIENT + 1] * ambient_i, c[AMBIENT + 2] * ambient_i]);
-    o[11] = light.fog_far as f32;
+    o[ENV_FOG_FAR] = light.fog_far as f32;
     o[15] = light.floor as f32;
 
     o[ENV_SKY] = light.stars as f32;
@@ -86,7 +88,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     put3(o, ENV_SUN, f32s(&sun_dir));
 
     // Faded out as the sun reaches the horizon, past which the eye is day-adapted.
-    let elongation = dot3(&sun_dir, &moon_dir).clamp(-1.0, 1.0).acos();
+    let elongation = libm::acos(dot3(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
     let night = 1.0 - smoothstep(-0.1, 0.0, sun_dir[2]);
     put3(o, ENV_MOON, f32s(&moon_dir));
     o[ENV_MOON + 3] = (MOONLIT_SKY * moon_phase_light(core::f64::consts::PI - elongation) * night) as f32;

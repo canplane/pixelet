@@ -4,7 +4,7 @@
 //! the settings, and everything the renderer is handed, since it reads
 //! nothing of the kernel on its own.
 
-use pxl_render::frame::stage::{stage_lane_mut, AO_STRENGTH, EDGE_STRENGTH, EDGE_WIDTH, STAGE_AT};
+use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
@@ -21,8 +21,8 @@ use crate::kernel::kernel;
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::layer::character::companion::companion_skins;
 use crate::layer::character::preview::preview_rows;
-use crate::layer::decor::asset_store::decor_bundle_assets;
-use crate::layer::environment::config::rim_cfg;
+use crate::layer::decor::asset_store::kind_assets;
+use crate::layer::environment::config::{ao_cfg, edge_cfg, rim_cfg};
 use crate::sched::profiler::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use crate::shell::setting::store::{settings_store, AoMode};
 use crate::text::text_raster;
@@ -55,11 +55,11 @@ pub fn stage_write(resolution: f64) {
     // past a split distance cells are drawn 2 × 2, so twice the level's cell
     // over the distance.
     s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(0);
-    s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { EDGE_STRENGTH } else { 0.0 };
-    s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { AO_STRENGTH } else { 0.0 };
+    s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { edge_cfg::STRENGTH } else { 0.0 };
+    s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { ao_cfg::STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
     s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
-    s[STAGE_AT::EDGE_WIDTH] = EDGE_WIDTH;
+    s[STAGE_AT::EDGE_WIDTH] = edge_cfg::WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { rim_cfg::INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
     s[STAGE_AT::RESOLUTION] = resolution;

@@ -11,14 +11,14 @@ use pxl_spec::space::v3::{add3, dot3, sub3};
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::distance_fade::distance_fade_far;
 use crate::layer::environment::state::globe;
-use crate::world::frame::view::{globe_anchor_local, ndc_to_px, view};
+use crate::world::frame::view::{globe_anchor_local, ndc_to_px, view, view_sees_sphere};
 
 /// A fraction of the distance, since the badge holds a constant screen size.
 /// Generous: one badge too many costs a sprite.
 const ANCHOR_REACH: f64 = 0.08;
 
 /// Indices into `batch`, in the root frame.
-pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, viewport_h: f64, out: &mut Vec<u32>) {
+pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>) {
     let v = view();
     let eye = v.pose.eye;
     let anchor = globe_anchor_local();
@@ -62,14 +62,13 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
         }
 
         mat4_transform_point(&mut ndc, &v.local_view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
-        let sx = (ndc[0] * 0.5 + 0.5) * viewport_w;
-        let sy = (-ndc[1] * 0.5 + 0.5) * viewport_h;
+        let [sx, sy] = ndc_to_px([ndc[0], ndc[1]]);
 
         let w = batch.w_px[i] as f64;
         let x0 = sx - w / 2.0;
         let y0 = sy - batch.anchor_px[i] as f64 * far;
         let (x1, y1) = (x0 + w, sy);
-        if x1 < 0.0 || y1 < 0.0 || x0 > viewport_w || y0 > viewport_h {
+        if x1 < 0.0 || y1 < 0.0 || x0 > v.width || y0 > v.height {
             continue;
         }
         batch.screen[i] = [x0, y0, x1, y1];

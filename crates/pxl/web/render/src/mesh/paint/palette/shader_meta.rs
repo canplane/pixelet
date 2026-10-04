@@ -10,8 +10,6 @@ use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
 use pxl_spec::cell::object::{block_cubes, ground_channel_types, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
 use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainLayerMeta {
@@ -76,63 +74,4 @@ fn layer_means() -> Vec<[u8; 3]> {
 
 pub fn layer_mean(layer: u32, rgb: [u8; 3]) -> [u8; 3] {
     LAYER_MEAN.get(layer as usize).copied().unwrap_or(rgb)
-}
-
-/// Flat arrays rather than a map: the per-cell decode was dominated by map
-/// lookups. `has` is separate because [0,0,0] is a real color.
-#[derive(Clone, Debug)]
-pub struct FlatChannelLookup {
-    pub rgb: [u8; 256 * 3],
-    pub has: [u8; 256],
-}
-
-pub type FlatGroundColorLookup = [Option<FlatChannelLookup>; 4];
-
-fn channel_slot(ch: GroundChannelKey) -> usize {
-    GROUND_CH_KEYS.iter().position(|k| *k == ch).or_bug(Errno::ENOTRECOVERABLE)
-}
-
-fn build_flat_color_lookup(meta: &[TerrainLayerMeta]) -> FlatGroundColorLookup {
-    let mut out: FlatGroundColorLookup = [None, None, None, None];
-    for m in meta {
-        let entry = out[channel_slot(m.ch_key)].get_or_insert(FlatChannelLookup { rgb: [0; 768], has: [0; 256] });
-        let [r, g, b] = rgb255(m.rgb);
-        let t = m.type_id as usize;
-        entry.rgb[t * 3] = r;
-        entry.rgb[t * 3 + 1] = g;
-        entry.rgb[t * 3 + 2] = b;
-        entry.has[t] = 1;
-    }
-    out
-}
-
-pub static GROUND_COLOR_LOOKUP_FLAT: LazyLock<FlatGroundColorLookup> = LazyLock::new(|| build_flat_color_lookup(&GROUND_LAYER_META));
-
-/// `has` is separate because layer 0 is a real slot.
-#[derive(Clone, Debug)]
-pub struct FlatLayerIndex {
-    pub index: [u8; 256],
-    pub has: [u8; 256],
-}
-
-pub type FlatLayerIndexLookup = [Option<FlatLayerIndex>; 4];
-
-fn build_flat_layer_index_lookup(meta: &[TerrainLayerMeta]) -> FlatLayerIndexLookup {
-    let mut out: FlatLayerIndexLookup = [None, None, None, None];
-    for m in meta {
-        let entry = out[channel_slot(m.ch_key)].get_or_insert(FlatLayerIndex { index: [0; 256], has: [0; 256] });
-        entry.index[m.type_id as usize] = m.layer_index as u8;
-        entry.has[m.type_id as usize] = 1;
-    }
-    out
-}
-
-pub static GROUND_LAYER_INDEX_LOOKUP_FLAT: LazyLock<FlatLayerIndexLookup> = LazyLock::new(|| build_flat_layer_index_lookup(&GROUND_LAYER_META));
-
-pub fn ground_color_lookup(ch: GroundChannelKey) -> Option<&'static FlatChannelLookup> {
-    GROUND_COLOR_LOOKUP_FLAT[channel_slot(ch)].as_ref()
-}
-
-pub fn ground_layer_index_lookup(ch: GroundChannelKey) -> Option<&'static FlatLayerIndex> {
-    GROUND_LAYER_INDEX_LOOKUP_FLAT[channel_slot(ch)].as_ref()
 }

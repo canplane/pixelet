@@ -5,29 +5,23 @@
 //! POOLED_BANDS band stores keep their lanes for reuse, since building them
 //! fresh was the heap's worst churn.
 
-// ---- the voxel ----
-//
-// What one voxel's bytes mean: its material class and color packed into a
-// word, its texture layer, and the inset of a box that fills only part of
-// its cell. Pure encoding, shared by the volume that stores voxels, the
-// scan that reads them into runs and the mesher that draws the runs.
-
+use crate::mesh::{grow, try_push, Refused};
 use pxl_spec::bake::constant::{band_of, BAND_CELLS};
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::abi::handle::Slots;
-use xpute_runtime::mem::base::{off_of_slice, ptr_at};
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
 
 use crate::mesh::voxel_scan::{BandView, ExtraView};
 
-/// A run whose material is a placed object: exempt from hiding its
-/// neighbors' faces, and drawn with its bottom face.
-pub const MATERIAL_OBJECT: u8 = 5;
-pub const MATERIAL_LAND: u8 = 1;
-
 pub const NO_LAYER: u32 = 255;
+
+/// One layer in all four of a box's texture taps.
+pub fn taps_of(layer_idx: u8) -> u32 {
+    layer_idx as u32 * 0x0101_0101
+}
 
 pub const SUB_CELL_NONE: u8 = 0;
 const SUB_CELL_SCALE: f64 = 256.0;
@@ -51,33 +45,28 @@ pub fn unpack_sub_cell_size(packed: u8) -> f64 {
     }
 }
 
-pub type MaterialClass = u32;
-
 pub struct MaterialClasses;
 
 impl MaterialClasses {
-    pub const AIR: MaterialClass = 0;
-    pub const LAND: MaterialClass = 1;
-    pub const WATER: MaterialClass = 2;
-    pub const TRANSPORT: MaterialClass = 3;
-    pub const STRUCTURE: MaterialClass = 4;
-    pub const OBJECT: MaterialClass = 5;
+    pub const AIR: u8 = 0;
+    pub const LAND: u8 = 1;
+    pub const WATER: u8 = 2;
+    pub const TRANSPORT: u8 = 3;
+    pub const STRUCTURE: u8 = 4;
+    /// Exempt from hiding its neighbors' faces, and drawn with its bottom face.
+    pub const OBJECT: u8 = 5;
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct VoxelMaterial {
-    pub material_class: MaterialClass,
-    pub r: u32,
-    pub g: u32,
-    pub b: u32,
-    pub layer_idx: u32,
+/// A voxel's material word, `0xCC_RRGGBB`: its class, then its color.
+pub fn pack_material(class: u8, [r, g, b]: [u8; 3]) -> u32 {
+    u32::from_be_bytes([class, r, g, b])
 }
 
-pub fn pack_material(material: &VoxelMaterial) -> u32 {
-    ((material.material_class & 255) << 24) | ((material.r & 255) << 16) | ((material.g & 255) << 8) | (material.b & 255)
+pub fn unpack_material(word: u32) -> (u8, [u8; 3]) {
+    let [class, r, g, b] = word.to_be_bytes();
+    (class, [r, g, b])
 }
 
-const BAND_MASK: u32 = BAND_CELLS - 1;
 const BAND_AREA: usize = (BAND_CELLS * BAND_CELLS) as usize;
 pub const BAND_VOXELS: usize = BAND_AREA * BAND_CELLS as usize;
 const MATERIAL_BYTES: u32 = BAND_VOXELS as u32 * 4;
@@ -86,7 +75,12 @@ const SUB_CELL_BYTES: u32 = BAND_VOXELS as u32 * 4;
 
 /// Column-major: Z is contiguous for paint and scan.
 pub fn band_voxel_idx(x: u32, y: u32, z: u32) -> usize {
-    ((y * BAND_CELLS + x) * BAND_CELLS + z) as usize
+    (band_col(x, y) * BAND_CELLS + z) as usize
+}
+
+/// A band's column, rows of `x` along `y`.
+pub fn band_col(x: u32, y: u32) -> u32 {
+    y * BAND_CELLS + x
 }
 
 pub const POOLED_BANDS: usize = 16;
@@ -114,9 +108,7 @@ impl Extras {
         self.col.len()
     }
 
-    /// One more entry; an error, and every lane as it was, where the heap
-    /// refused room — the lanes are grown before any is written, so they
-    /// never stand at different lengths.
+    /// Lanes are grown before any is written, so a refusal leaves them all as they were.
     fn push(&mut self, col: u32, z: i32, material: u32, layer_idx: u8, sub: u32) -> Result<(), Refused> {
         grow(&mut self.col, 1)?;
         grow(&mut self.z, 1)?;
@@ -152,11 +144,8 @@ impl Extras {
         self.sub.truncate(w);
     }
 
-    /// By column, every lane together, stably: a column's own entries stay in
-    /// the order they were appended, which is the order the scan reads them
-    /// back in. `order` is the caller's to keep, so a seal asks the heap for
-    /// nothing once it has held a band's worth; the lanes are permuted where
-    /// they lie, a cycle at a time.
+    /// Stable, so a column's entries keep the order the scan reads them in. The
+    /// lanes are permuted in place, a cycle at a time.
     fn sort_by_column(&mut self, order: &mut Vec<u32>) -> Result<(), Refused> {
         let n = self.len();
         order.clear();
@@ -184,7 +173,7 @@ impl Extras {
     }
 }
 
-/// A cell of the chunk: chunk-local x and y, absolute z.
+/// Chunk-local x and y, absolute z.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Cell {
     pub cx: u32,
@@ -218,26 +207,19 @@ pub struct Volume {
     pub sealed: bool,
 }
 
-/// band_z, three lane addresses (sub-cell 0 when none), extras' count, five extras lane addresses.
-pub const BAND_WORDS: usize = 10;
-
 #[derive(Clone, Copy, Default, Debug)]
 #[repr(C)]
 pub struct VolumeStat {
     pub allocated: u32,
     pub reused: u32,
-    pub refused: u32,
 }
 
 pub struct Volumes {
     stores: Vec<Store>,
-    /// Where a seal sorts a band's extras, kept from seal to seal.
     order: Vec<u32>,
-    /// Stores with their lanes, waiting for a band.
     free_stores: Vec<usize>,
     empty_stores: Vec<usize>,
     volumes: Slots<Volume>,
-    row: [u32; BAND_WORDS],
     pub stat: VolumeStat,
 }
 
@@ -255,7 +237,6 @@ impl Volumes {
             free_stores: Vec::new(),
             empty_stores: Vec::new(),
             volumes: Slots::new(),
-            row: [0; BAND_WORDS],
             stat: VolumeStat::default(),
         }
     }
@@ -286,14 +267,8 @@ impl Volumes {
             self.stat.reused += 1;
             return Some(s);
         }
-        let Some(material) = Guard::alloc(MATERIAL_BYTES) else {
-            self.stat.refused += 1;
-            return None;
-        };
-        let Some((layer_idx, _)) = alloc(LAYER_BYTES) else {
-            self.stat.refused += 1;
-            return None;
-        };
+        let material = Guard::alloc(MATERIAL_BYTES)?;
+        let (layer_idx, _) = alloc(LAYER_BYTES)?;
         let (material, _) = material.keep();
         self.stat.allocated += 1;
         if let Some(s) = self.empty_stores.pop() {
@@ -314,7 +289,6 @@ impl Volumes {
                 free((material, MATERIAL_BYTES));
                 free((layer_idx, LAYER_BYTES));
             }
-            self.stat.refused += 1;
             return None;
         }
         Some(self.stores.len() - 1)
@@ -381,8 +355,7 @@ impl Volumes {
             *self.layer(store).add(idx) = layer_idx;
         }
         if self.stores[store].extra.len() > 0 {
-            let col = (cy & BAND_MASK) * BAND_CELLS + (cx & BAND_MASK);
-            self.stores[store].extra.remove_at(col, z);
+            self.stores[store].extra.remove_at(band_col(cx, cy), z);
         }
         if sub >> 24 != SUB_CELL_NONE as u32 {
             let Some(lane) = self.ensure_sub_cell(store) else { return false };
@@ -409,8 +382,7 @@ impl Volumes {
         let (band_z, _) = Self::locate(z);
         let Some(b) = self.get_or_create_band(id, band_z) else { return false };
         let store = self.volume(id).bands[b].store;
-        let col = (cy & BAND_MASK) * BAND_CELLS + (cx & BAND_MASK);
-        self.stores[store].extra.push(col, z, material, layer_idx, sub).is_ok()
+        self.stores[store].extra.push(band_col(cx, cy), z, material, layer_idx, sub).is_ok()
     }
 
     pub fn fill_column(&mut self, id: u32, column: (u32, u32), z0: i32, z1: i32, v: Voxel) -> bool {
@@ -443,9 +415,8 @@ impl Volumes {
         true
     }
 
-    /// Closes the volume to painting and orders every band's extras by
-    /// column, which is what lets a column find its own during the scan.
-    /// False where the heap refused the sort its room.
+    /// Orders every band's extras by column so the scan can find a column's own.
+    /// False where the heap refused the sort room.
     pub fn seal(&mut self, id: u32) -> bool {
         self.volume(id).sealed = true;
         let mut order = core::mem::take(&mut self.order);
@@ -483,31 +454,30 @@ impl Volumes {
 
     /// # Safety
     /// The views are valid until the volume is painted again or released.
-    pub unsafe fn band_view(&mut self, id: u32, i: usize) -> BandView<'static> {
-        let row = *self.band_row(id, i);
-        let at = |w: u32| ptr_at::<u8>(w as usize);
+    pub unsafe fn band_view(&self, id: u32, i: usize) -> BandView<'static> {
+        let band = &self.volumes.get(id).or_bug(Errno::ENOTRECOVERABLE).bands[i];
+        let store = &self.stores[band.store];
+        let e = &store.extra;
+        let lane = |at: usize, len: usize| core::slice::from_raw_parts(ptr_at::<u8>(at).cast_const(), len);
         let voxels = BAND_VOXELS;
-        let n = row[4] as usize;
         BandView {
-            band_z: row[0] as i32,
-            material: core::slice::from_raw_parts(at(row[1]).cast::<u32>(), voxels),
-            layer_idx: core::slice::from_raw_parts(at(row[2]).cast_const(), voxels),
-            sub_cell: (row[3] != 0).then(|| core::slice::from_raw_parts(at(row[3]).cast_const(), voxels * 4)),
+            band_z: band.band_z,
+            material: core::slice::from_raw_parts(ptr_at::<u32>(store.material).cast_const(), voxels),
+            layer_idx: lane(store.layer_idx, voxels),
+            sub_cell: store.sub_cell.map(|(at, _)| lane(at, voxels * 4)),
             extra: ExtraView {
-                col: core::slice::from_raw_parts(at(row[5]).cast::<u32>(), n),
-                z: core::slice::from_raw_parts(at(row[6]).cast::<i32>(), n),
-                material: core::slice::from_raw_parts(at(row[7]).cast::<u32>(), n),
-                layer_idx: core::slice::from_raw_parts(at(row[8]), n),
-                sub: core::slice::from_raw_parts(at(row[9]).cast::<u32>(), n),
+                col: core::slice::from_raw_parts(e.col.as_ptr(), e.col.len()),
+                z: core::slice::from_raw_parts(e.z.as_ptr(), e.z.len()),
+                material: core::slice::from_raw_parts(e.material.as_ptr(), e.material.len()),
+                layer_idx: core::slice::from_raw_parts(e.layer_idx.as_ptr(), e.layer_idx.len()),
+                sub: core::slice::from_raw_parts(e.sub.as_ptr(), e.sub.len()),
             },
         }
     }
 
-    /// False, and `out` empty, where the heap refused it room.
-    ///
     /// # Safety
-    /// As `band_view`: valid until the volume is painted again or released.
-    pub unsafe fn band_views(&mut self, id: u32, out: &mut Vec<BandView<'static>>) {
+    /// As `band_view`'s.
+    pub unsafe fn band_views(&self, id: u32, out: &mut Vec<BandView<'static>>) -> bool {
         out.clear();
         let n = self.band_count(id);
         if grow(out, n).is_err() {
@@ -521,25 +491,5 @@ impl Volumes {
 
     pub fn band_count(&self, id: u32) -> usize {
         self.volumes.get(id).map_or(0, |v| v.bands.len())
-    }
-
-    /// Valid until the volume is painted again.
-    pub fn band_row(&mut self, id: u32, i: usize) -> &[u32; BAND_WORDS] {
-        let band = &self.volumes.get(id).or_bug(Errno::ENOTRECOVERABLE).bands[i];
-        let store = &self.stores[band.store];
-        let e = &store.extra;
-        self.row = [
-            band.band_z as u32,
-            store.material as u32,
-            store.layer_idx as u32,
-            store.sub_cell.map_or(0, |(at, _)| at as u32),
-            e.len() as u32,
-            off_of_slice(&raw const *e.col) as u32,
-            off_of_slice(&raw const *e.z) as u32,
-            off_of_slice(&raw const *e.material) as u32,
-            off_of_slice(&raw const *e.layer_idx) as u32,
-            off_of_slice(&raw const *e.sub) as u32,
-        ];
-        &self.row
     }
 }

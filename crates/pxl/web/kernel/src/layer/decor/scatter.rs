@@ -49,7 +49,9 @@ impl DecorRules {
     }
 
     pub fn allows(&self, cell: GroundCell) -> bool {
-        GroundChannelKey::ALL.iter().all(|&key| self.0[key as usize].allows(channel_of(cell, key)))
+        let shown = shown_ground(|key| u32::from(channel_of(cell, key)));
+        let t = shown.type_id as u8;
+        shown.channel as u8 == self.channel as u8 && self.types[(t >> 6) as usize] & (1 << (t & 63)) != 0
     }
 }
 

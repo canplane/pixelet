@@ -7,7 +7,7 @@ const EXPOSURE_BEARINGS: i32 = 16;
 
 @fragment
 fn fs(v: TableOut) -> @location(0) vec4f {
-  let mu_s = clamp(dot(atmos_sun_dir(), atmos_up()), -1.0, 1.0);
+  let mu_s = clamp(dot(atmos_sun_dir(), frame_up()), -1.0, 1.0);
   // Cosine-weighted rings, evenly spaced in sin² of the zenith angle, so the sum
   // is pi times their mean.
   var sky = vec3f(0.0);

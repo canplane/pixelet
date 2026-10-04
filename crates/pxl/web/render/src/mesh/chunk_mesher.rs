@@ -11,7 +11,7 @@ use xpute_core::math::scalar::round;
 
 use crate::look::color::linear;
 use crate::mesh::paint::palette::shader_meta::layer_mean;
-use crate::mesh::volume::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
+use crate::mesh::volume::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, MaterialClasses, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::voxel_scan::{OwnedRunSet, RunSet, COL_SPAN};
 use crate::mesh::{grow, Refused};
 use xpute_core::status::bug::OrBug;
@@ -81,7 +81,7 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 ///
 /// The coarse format drops the taps (only leaf cells are textured) and holds
 /// corner and width in a byte an axis: a level-k chunk is never drawn nearer
-/// than 192·2^k, so its cell is one to two TARGET_CELL_PX and an eighth of it
+/// than 192·2^k, so its cell is one to two `target_cell_px` (pxl-spec space/lod.rs) and an eighth of it
 /// is at most 1.5 px; its mesh is at most 32 cells across, so cell index and
 /// eighth fit a byte exactly. 24 and 16 bytes a box, against 84 a vertex once.
 pub const FINE_BOX_WORDS: u32 = 6;
@@ -118,7 +118,7 @@ impl Default for Heights {
 }
 
 impl Heights {
-    fn of(set: &RunSet, z_scale: f64) -> Heights {
+    fn of(set: &RunSet) -> Heights {
         let (mut lo, mut hi) = (i32::MAX, i32::MIN);
         for i in 0..set.count as usize {
             lo = lo.min(set.z0[i]);
@@ -127,9 +127,9 @@ impl Heights {
         if lo > hi {
             return Heights::default();
         }
-        let span = (hi - lo) as f64 * z_scale;
+        let span = (hi - lo) as f64;
         Heights {
-            floor: lo as f64 * z_scale,
+            floor: lo as f64,
             step: (span / Z_STEPS).max(f64::MIN_POSITIVE),
         }
     }
@@ -167,8 +167,7 @@ pub enum Step {
     /// Returned by every step until then.
     Full,
     Done,
-    /// The heap refused the bake's workspace room: the bake is over, and
-    /// asked for again once the heap has let something go.
+    /// The heap refused the workspace: the bake is over, and asked for again later.
     Refused,
 }
 
@@ -228,7 +227,6 @@ struct FineBake {
     /// A coarse tier's columns are `lod_step` wide, a level-k chunk's 2^k; a run's
     /// cell is a unit tall at every level.
     xy_scale: u32,
-    z_scale: u32,
     phase: u8,
     row: u32,
     emit_at: usize,
@@ -267,7 +265,6 @@ pub struct BakeContext {
     box_cnt: u32,
     open: Option<Open>,
     done: bool,
-    /// The heap refused a step's workspace room, which ends the bake.
     refused: bool,
     pub counters: Counters,
 }
@@ -300,13 +297,8 @@ impl BakeContext {
         }
     }
 
-    /// Opens a bake of `set` at `lod_step`, the set's columns `scale` units
-    /// across: 1 for a leaf chunk, 2^k for a level-k one. Heights are units at
-    /// every level. `textured` is whether the pack is drawn. `clip`, the
-    /// heights a chunk spans where its set is its whole column's, cuts the
-    /// set to them (`OwnedRunSet::clip_from`), and every step of the bake
-    /// reads the cut set in place of the one it is handed. One bake is open
-    /// at a time; an error where the heap refused the cut room.
+    /// `scale` is 1 for a leaf chunk, 2^k for level k. `clip` cuts a whole-column
+    /// set to the chunk's heights, and every step reads the cut set. One bake at a time.
     pub fn begin(&mut self, set: &RunSet, lod_step: u32, scale: u32, textured: bool, clip: Option<(i32, i32)>) -> Result<(), Refused> {
         xpute_core::ensure!(self.open.is_none(), ENOTRECOVERABLE);
         self.refused = false;
@@ -322,7 +314,7 @@ impl BakeContext {
         let (count, span, apron, heights) = {
             let cut = self.clipped.as_ref().map(OwnedRunSet::view);
             let set = cut.as_ref().unwrap_or(set);
-            (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, 1.0) } else { Heights::default() })
+            (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set) } else { Heights::default() })
         };
         self.textured = textured;
         xpute_core::ensure!(span as usize <= MAX_BAKE_SPAN, ENOSPC, span, MAX_BAKE_SPAN);
@@ -335,7 +327,7 @@ impl BakeContext {
         self.heights = heights;
         self.box_words = box_words(lod_step);
         self.open = Some(if lod_step == 1 {
-            Open::Fine(self.begin_fine(span, apron, scale, 1))
+            Open::Fine(self.begin_fine(span, apron, scale))
         } else {
             let inner = span - 2 * apron;
             xpute_core::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), EINVAL, lod_step, inner);
@@ -405,7 +397,7 @@ impl BakeContext {
     /// otherwise untouched until the block is full, or `finish` or `abort`.
     pub unsafe fn provide_mesh(&mut self, ptr: *mut u32, words: u32) {
         xpute_core::ensure!(self.mesh_words > 0 && (self.mesh.is_none() || self.full()), ENOTRECOVERABLE);
-        let left = self.mesh_words - self.box_cnt * self.box_words;
+        let left = self.left_words();
         xpute_core::ensure!(words >= self.box_words.min(left) && words <= left, ENOTRECOVERABLE, words, left);
         let words = words - words % self.box_words;
         self.mesh = Some(MeshTarget {
@@ -436,13 +428,12 @@ impl BakeContext {
         self.buckets.clear();
     }
 
-    fn begin_fine(&mut self, span: u32, apron: u32, xy_scale: u32, z_scale: u32) -> FineBake {
+    fn begin_fine(&mut self, span: u32, apron: u32, xy_scale: u32) -> FineBake {
         self.merge_run[..(span * span) as usize].fill(None);
         FineBake {
             span,
             apron,
             xy_scale,
-            z_scale,
             phase: 0,
             row: apron,
             emit_at: 0,
@@ -487,12 +478,12 @@ impl BakeContext {
                         let i = i as usize;
                         self.counters.total_runs += 1;
                         let mask = run_face_mask(set, span, cx, cy, i) | if set.z1[i] >= set.z0[i] { rim(cx, cy) } else { 0 };
-                        self.counters.faces_possible += if run_include_bottom(set, i) { FULL_FACE_CNT } else { OPEN_BOTTOM_FACE_CNT };
+                        self.counters.faces_possible += if run_include_bottom(set, col as usize, i) { FULL_FACE_CNT } else { OPEN_BOTTOM_FACE_CNT };
                         if mask & ALL_FACES == 0 {
                             self.counters.culled += 1;
                             continue;
                         }
-                        if set.sub_s[i] == SUB_CELL_NONE && mergeable.is_none() {
+                        if set.sub_s[i] == SUB_CELL_NONE && mergeable.is_none() && hung_floor(set, cx, cy, i).is_none() {
                             mergeable = Some((i as u32, mask));
                             continue;
                         }
@@ -583,7 +574,7 @@ impl BakeContext {
         }
 
         let unit = b.xy_scale as f64 * U_PER_CELL;
-        let z_unit = b.z_scale as f64 * U_PER_CELL;
+        let z_unit = U_PER_CELL;
         let apron = b.apron as f64;
         let emit_end = self.surviving.len().min(b.emit_at + BAKE_BOXES_PER_STEP * 6);
         let mut s_i = b.emit_at;
@@ -594,12 +585,13 @@ impl BakeContext {
             let depth = (set.z1[i] as f64 + 1.0 - set.z0[i] as f64) * z_unit;
             let (min_x, min_y, min_z, size_x, size_y, size_z);
             if sub_s == SUB_CELL_NONE {
+                let z0 = hung_floor(set, s[0], s[1], i).unwrap_or(set.z0[i]);
                 min_x = (cx - apron) * unit;
                 min_y = (cy - apron) * unit;
-                min_z = set.z0[i] as f64 * z_unit;
+                min_z = z0 as f64 * z_unit;
                 size_x = w * unit;
                 size_y = h * unit;
-                size_z = depth;
+                size_z = (set.z1[i] as f64 + 1.0 - z0 as f64) * z_unit;
             } else {
                 min_x = (cx - apron) * unit + unpack_sub_cell_fraction(set.sub_ox[i]) * unit;
                 min_y = (cy - apron) * unit + unpack_sub_cell_fraction(set.sub_oy[i]) * unit;
@@ -629,8 +621,7 @@ impl BakeContext {
         }
     }
 
-    /// Whether growth had room; where it had none the bake is refused, and
-    /// what the step goes on to write is thrown away with it.
+    /// Where growth had no room the bake is refused and the step's output discarded.
     fn room(&mut self, grown: Result<(), Refused>) -> bool {
         self.refused |= grown.is_err();
         grown.is_ok()
@@ -693,7 +684,17 @@ impl BakeContext {
                         return false;
                     }
                     self.coarse.start.push(self.coarse.z0.len() as u32);
-                    self.pack_coarse_cell(start, cnt, lod_step, bucket);
+                    let mut low: Option<i32> = None;
+                    for j in 0..lod_step {
+                        for k in 0..lod_step {
+                            let (cx, cy) = (bx * lod_step + k + set.apron, by * lod_step + j + set.apron);
+                            low = match (low, edge_low(set, cx, cy)) {
+                                (Some(a), Some(b)) => Some(a.min(b)),
+                                (a, b) => a.or(b),
+                            };
+                        }
+                    }
+                    self.pack_coarse_cell(start, cnt, lod_step, bucket, low);
                     self.buckets.truncate(start as usize);
                 }
             }
@@ -706,8 +707,8 @@ impl BakeContext {
                 return false;
             }
             self.coarse.start.push(self.coarse.z0.len() as u32);
-            self.heights = Heights::of(&self.coarse.view(), 1.0);
-            b.fine = Some(self.begin_fine(res, 0, lod_step * scale, 1));
+            self.heights = Heights::of(&self.coarse.view());
+            b.fine = Some(self.begin_fine(res, 0, lod_step * scale));
             b.phase = 2;
             return false;
         }
@@ -725,9 +726,7 @@ impl BakeContext {
                 return i;
             }
         }
-        // Where the heap refuses another bucket the bake is refused, and the
-        // run goes into the last one there is — kept from the context's
-        // first, so there always is one — which nothing reads.
+        // The run goes into the last bucket, which nothing reads, once refused.
         let grown = grow(&mut self.buckets, 1);
         if !self.room(grown) {
             return self.buckets.len() as u32 - 1;
@@ -750,7 +749,7 @@ impl BakeContext {
             // A sub-cell thing: volume the fraction cubed, each face the fraction squared, none hidden.
             let idx = self.find_or_create_bucket(start, cnt, run_z0.div_euclid(bucket));
             let acc = &mut self.buckets[idx as usize];
-            acc.ground |= set.material_class[i] != MATERIAL_OBJECT;
+            acc.ground |= set.material_class[i] != MaterialClasses::OBJECT;
             acc.add(frac * frac * frac * cell as f64, FULL_FACE_CNT as f64 * frac * frac, rgb);
             return cnt.max(idx - start + 1);
         }
@@ -761,7 +760,7 @@ impl BakeContext {
             let idx = self.find_or_create_bucket(start, cnt, bz);
             cnt = cnt.max(idx - start + 1);
             let acc = &mut self.buckets[idx as usize];
-            acc.ground |= set.material_class[i] != MATERIAL_OBJECT;
+            acc.ground |= set.material_class[i] != MaterialClasses::OBJECT;
             acc.add((hi - lo + 1) as f64, exposed_faces(set, col, i, lo, hi), rgb);
         }
         cnt
@@ -770,8 +769,6 @@ impl BakeContext {
     /// Buckets have distinct heights, so sorting visits them lowest first.
     /// `edge_low` is the lowest ground across the chunk's edge, which the skirt hangs to.
     fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, bucket: i32, edge_low: Option<i32>) {
-        // Two runs a bucket at most: the bucket's own, and ground under it
-        // (`under`).
         let grown = self.coarse.grow_runs(2 * cnt as usize);
         if !self.room(grown) {
             return;
@@ -794,7 +791,7 @@ impl BakeContext {
             // A sparse cell is inset by the cube root of its fill on every axis.
             let inset = (linear < 1.0).then(|| pack_inset(linear));
             let rgb = acc.color();
-            let taps = packed_taps(0, 0);
+            let taps = taps_of(NO_LAYER as u8);
             // A shrunk ground box leaves gaps that read as holes from above, so a ground
             // cell lays its full bottom face as a floor. The lowest box also hangs a skirt
             // a cell down, or a step between neighbors' floors showed daylight.
@@ -803,7 +800,7 @@ impl BakeContext {
             let under = if !acc.ground || floored {
                 None
             } else if lowest {
-                Some((bucket_lo - step, bucket_lo - 1))
+                Some(((bucket_lo - step).min(edge_low.map_or(i32::MAX, |low| low + 1)), bucket_lo - 1))
             } else if inset.is_some() {
                 Some((bucket_lo, bucket_lo - 1))
             } else {
@@ -817,7 +814,7 @@ impl BakeContext {
                 co.g.push(rgb[1]);
                 co.b.push(rgb[2]);
                 co.layer_taps.push(taps);
-                co.material_class.push(MATERIAL_LAND);
+                co.material_class.push(MaterialClasses::LAND);
                 co.sub_s.push(SUB_CELL_NONE);
                 for lane in [&mut co.sub_ox, &mut co.sub_oy, &mut co.sub_oz] {
                     lane.push(0);
@@ -826,7 +823,7 @@ impl BakeContext {
                 last_top = z1;
             }
             // A placed-things box hides none of its neighbors' faces and shows its underside.
-            let class = if acc.ground { MATERIAL_LAND } else { MATERIAL_OBJECT };
+            let class = if acc.ground { MaterialClasses::LAND } else { MaterialClasses::OBJECT };
             let co = &mut self.coarse;
             if let Some(o) = open.filter(|_| inset.is_none() && bucket_lo == last_top + 1) {
                 if [co.r[o], co.g[o], co.b[o]] == rgb && co.layer_taps[o] == taps && co.sub_s[o] == SUB_CELL_NONE && co.material_class[o] == class {
@@ -854,12 +851,12 @@ impl BakeContext {
 }
 
 /// Every lateral edge a crease, so each shades as a silhouette.
-pub const LONE_BOX_FACES: u32 = 0b11_1111 | (0b1111 << 18);
+const LONE_BOX_FACES: u32 = ALL_FACES | ALL_CREASES;
 /// The hover ghost's box, written as a bake writes one so it is lit as a placed cube is.
 pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) -> Heights {
     xpute_core::ensure!(m.len() == FINE_BOX_WORDS as usize, ENOTRECOVERABLE);
     let heights = Heights { floor: 0.0, step: size / Z_STEPS };
-    write_box(m, [0.0; 3], [size; 3], rgb, layer as u32 * 0x0101_0101, LONE_BOX_FACES, size, heights);
+    write_box(m, [0.0; 3], [size; 3], rgb, taps_of(layer), LONE_BOX_FACES, size, heights);
     heights
 }
 
@@ -991,7 +988,7 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
         if covered_to >= z1 {
             rel |= ABUTS_SIDE;
         }
-        if r_z0 <= z0 && r_z1 >= z1 && set.material_class[i] != MATERIAL_OBJECT {
+        if r_z0 <= z0 && r_z1 >= z1 && set.material_class[i] != MaterialClasses::OBJECT {
             rel |= HIDES_SIDE;
         }
         if r_z0 <= above && r_z1 >= above {
@@ -1007,9 +1004,11 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
     rel
 }
 
-/// A placed cube may stand clear of the ground, and an inset box rests on nothing.
-fn run_include_bottom(set: &RunSet, i: usize) -> bool {
-    set.material_class[i] == MATERIAL_OBJECT || set.sub_s[i] != SUB_CELL_NONE
+/// Only a column's lowest run rests on the ground; any run over it, a deck's
+/// slab or a placed cube, can be seen from below. A solid cell under it
+/// still hides the face (`run_faces`).
+fn run_include_bottom(set: &RunSet, col: usize, i: usize) -> bool {
+    i != set.start[col] as usize
 }
 
 fn wants_diagonal(mask: u32, a: u32, b: u32) -> bool {
@@ -1041,14 +1040,14 @@ fn run_face_mask(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
 }
 
 fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
-    let mask_all = if run_include_bottom(set, i) { ALL_FACES } else { OPEN_BOTTOM_FACES };
+    let col = cy * span + cx;
+    let mask_all = if run_include_bottom(set, col as usize, i) { ALL_FACES } else { OPEN_BOTTOM_FACES };
     if set.sub_s[i] != SUB_CELL_NONE {
         // A coarse box is the ground itself shrunk, so its underside is more ground.
-        let under = if set.material_class[i] == MATERIAL_OBJECT { 0 } else { UNDER_AS_TOP };
+        let under = if set.material_class[i] == MaterialClasses::OBJECT { 0 } else { UNDER_AS_TOP };
         return mask_all | ALL_CREASES | under;
     }
     let mut mask = mask_all;
-    let col = cy * span + cx;
     let (z0, z1) = (set.z0[i], set.z1[i]);
     // A filled cell above or below hides the face. Left in, the face between
     // stacked cubes striped them in the shadow map, which draws both sides.
@@ -1164,17 +1163,6 @@ fn srgb_of(rgb: [f64; 3]) -> [u8; 3] {
         let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * libm::pow(c, 1.0 / 2.4) - 0.055 };
         to_u8(s * 255.0) as u8
     })
-}
-
-fn packed_taps(taps: u32, tap_cnt: u32) -> u32 {
-    if tap_cnt == 0 {
-        return NO_LAYER * 0x0101_0101;
-    }
-    let mut packed = 0;
-    for i in 0..4 {
-        packed |= ((taps >> ((i % tap_cnt) * 8)) & 255) << (i * 8);
-    }
-    packed
 }
 
 fn to_u8(v: f64) -> u32 {

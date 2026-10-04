@@ -7,7 +7,7 @@
 @group(0) @binding(4) var blurred_sampler: sampler;
 
 fn depth_at(p: vec2i) -> f32 {
-  return textureLoad(scene_depth, clamp(p, vec2i(0), vec2i(ao_full()) - 1), 0);
+  return textureLoad(scene_depth, clamp(p, vec2i(0), vec2i(frame_viewport()) - 1), 0);
 }
 
 @fragment
@@ -17,9 +17,9 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   if (depth == 0.0) {
     return vec4f(1.0);
   }
-  let uv = i.clip.xy / ao_full();
+  let uv = i.clip.xy / frame_viewport();
   let pos = view_pos(depth, uv);
-  let normal = view_normal(fp, ao_full(), uv);
+  let normal = view_normal(fp, frame_viewport(), uv);
   let half_max = vec2i(ao_half()) - 1;
   var total = 0.0;
   var acc = vec4f(0.0);
@@ -44,7 +44,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     texel = textureSampleLevel(blurred, blurred_sampler, uv, 0.0);
   }
   var occlusion = pow(texel.r, AO_INTENSITY);
-  let fog = smoothstep(ao_fog_near(), ao_fog_far(), -pos.z);
+  let fog = smoothstep(frame_fog_near(), frame_fog_far(), -pos.z);
   occlusion = mix(occlusion, 1.0, fog);
   return vec4f(occlusion, 0.0, 0.0, 1.0);
 }

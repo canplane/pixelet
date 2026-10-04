@@ -4,9 +4,10 @@
 //! length patched in when it ends, so walk and packing are one pass. The direct
 //! path (`begin_direct`) writes runs one call each from a layer's own source.
 
-use pxl_spec::bake::constant::BAND_CELLS;
+use pxl_spec::bake::constant::{band_cell_z, BAND_CELLS};
 
-use crate::mesh::volume::{BAND_VOXELS, MATERIAL_OBJECT, SUB_CELL_NONE};
+use crate::mesh::paint::terrain::adapter::ChunkSample;
+use crate::mesh::volume::{band_col, taps_of, unpack_material, MaterialClasses, BAND_VOXELS, SUB_CELL_NONE};
 use crate::mesh::{grow, try_push, Refused};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -22,14 +23,6 @@ pub fn apron_col(cx: u32, cy: u32) -> u32 {
     (cy + APRON) * COL_SPAN + cx + APRON
 }
 
-/// Interior entries are never read; those columns come from the bands.
-pub struct Apron<'a> {
-    /// A column's top is one below.
-    pub ele: &'a [i16],
-    pub material: &'a [u32],
-    pub layer_idx: &'a [u8],
-    pub floor: i32,
-}
 const SCAN_ROWS_PER_STEP: u32 = 8;
 
 pub struct ExtraView<'a> {
@@ -82,8 +75,7 @@ pub enum ScanStep {
     /// Returned by every step until `provide_set` hands this many bytes.
     NeedSet(u32),
     Done,
-    /// The heap refused the runs room: the scan is over, and asked for
-    /// again once the heap has let something go.
+    /// The heap refused the runs room: the scan is over, and asked for again later.
     Refused,
 }
 
@@ -153,9 +145,6 @@ impl ScanContext {
         self.next_col = Some(col + 1);
     }
 
-    /// One full-cell run `[z0, z1]` of the column last started, in a
-    /// packed 0xCC_RRGGBB material on `layer_idx`; an error where the heap
-    /// refused the runs room.
     pub fn direct_run(&mut self, z0: i32, z1: i32, material: u32, layer_idx: u8) -> Result<(), Refused> {
         xpute_core::ensure!(self.next_col.is_some_and(|n| n > 0), ENOTRECOVERABLE);
         try_push(&mut self.runs, run_of(z0, z1, material, layer_idx))
@@ -171,7 +160,8 @@ impl ScanContext {
     }
 
     /// The rows are the padded ones, so every column is written in prefix-array order.
-    pub fn step(&mut self, bands: &[BandView], apron: &Apron) -> ScanStep {
+    /// The apron's columns are the sample's, as a chunk with no bands reads them.
+    pub fn step(&mut self, bands: &[BandView], apron: &ChunkSample) -> ScanStep {
         xpute_core::ensure!(self.open, ENOTRECOVERABLE);
         if self.packed {
             return ScanStep::Done;
@@ -206,14 +196,9 @@ impl ScanContext {
         }
     }
 
-    /// The one run an apron column holds: floor to its ground, or, where its
-    /// ground stands below the floor, the one cell at its top — what the
-    /// chunk's edge wall reaches down to (chunk_mesher.rs `edge_low`). It
-    /// is never painted or emitted, so it changes no occupancy.
-    fn apron_run(&mut self, apron: &Apron, col: usize) -> Result<(), Refused> {
-        let top = apron.ele[col] as i32 - 1;
-        let z0 = if top < apron.floor { top } else { apron.floor };
-        try_push(&mut self.runs, run_of(z0, top, apron.material[col], apron.layer_idx[col]))
+    fn apron_run(&mut self, apron: &ChunkSample, col: usize) -> Result<(), Refused> {
+        let runs = &mut self.runs;
+        apron.column_runs(col, |lo, hi, material, layer| try_push(runs, run_of(lo, hi, material, layer)))
     }
 
     fn set_bytes(&self) -> u32 {
@@ -275,14 +260,15 @@ impl ScanContext {
 }
 
 fn run_of(z0: i32, z1: i32, material: u32, layer_idx: u8) -> Run {
+    let (material_class, [r, g, b]) = unpack_material(material);
     Run {
         z0,
         z1,
         layer_taps: taps_of(layer_idx),
-        r: (material >> 16) as u8,
-        g: (material >> 8) as u8,
-        b: material as u8,
-        material_class: (material >> 24) as u8,
+        r,
+        g,
+        b,
+        material_class,
         sub_ox: 0,
         sub_oy: 0,
         sub_oz: 0,
@@ -296,7 +282,7 @@ fn push(runs: &mut Vec<Run>, run: Run) -> Result<usize, Refused> {
 }
 
 fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Result<(), Refused> {
-    let col = (cy * BAND_CELLS + cx) as usize;
+    let col = band_col(cx, cy) as usize;
     let mut open: Option<usize> = None;
     let mut previous_band_z: Option<i32> = None;
     for band in bands {
@@ -315,9 +301,8 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
                 open = None;
                 continue;
             }
-            let z = band.band_z * BAND_CELLS as i32 + local_z as i32;
-            let (r, g, b) = ((packed >> 16) as u8, (packed >> 8) as u8, packed as u8);
-            let material_class = (packed >> 24) as u8;
+            let z = band_cell_z(band.band_z) as i32 + local_z as i32;
+            let (material_class, [r, g, b]) = unpack_material(packed);
             let layer_idx = band.layer_idx[idx];
             let sub = band.sub_cell.map(|s| &s[idx * 4..idx * 4 + 4]);
             let sub_s = sub.map_or(SUB_CELL_NONE, |s| s[3]);
@@ -342,7 +327,7 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
                 open = None;
             } else if let Some(i) = open.filter(|&i| {
                 let o = &runs[i];
-                material_class != MATERIAL_OBJECT && o.r == r && o.g == g && o.b == b && o.layer_taps == taps_of(layer_idx) && o.material_class == material_class
+                material_class != MaterialClasses::OBJECT && o.r == r && o.g == g && o.b == b && o.layer_taps == taps_of(layer_idx) && o.material_class == material_class
             }) {
                 runs[i].z1 = z;
             } else {
@@ -369,7 +354,7 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
         if !e.col.is_empty() {
             let (lo, hi) = extra_range(e.col, col as u32);
             for i in lo..hi {
-                let m = e.material[i];
+                let (material_class, [r, g, b]) = unpack_material(e.material[i]);
                 let s = e.sub[i];
                 push(
                     runs,
@@ -377,10 +362,10 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
                         z0: e.z[i],
                         z1: e.z[i],
                         layer_taps: taps_of(e.layer_idx[i]),
-                        r: (m >> 16) as u8,
-                        g: (m >> 8) as u8,
-                        b: m as u8,
-                        material_class: (m >> 24) as u8,
+                        r,
+                        g,
+                        b,
+                        material_class,
                         sub_ox: s as u8,
                         sub_oy: (s >> 8) as u8,
                         sub_oz: (s >> 16) as u8,
@@ -391,10 +376,6 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Res
         }
     }
     Ok(())
-}
-
-fn taps_of(layer_idx: u8) -> u32 {
-    layer_idx as u32 * 0x0101_0101
 }
 
 fn extra_range(cols: &[u32], col: u32) -> (usize, usize) {
@@ -522,13 +503,8 @@ impl OwnedRunSet {
         }
     }
 
-    /// `set` cut to the heights `z0..z1`, in units: every run that reaches
-    /// into them, cut to them, and none that does not. What a chunk of the
-    /// view draws of the column its runs were read from, since a chunk is a
-    /// cube and its column's contents run through every chunk over it
-    /// (kernel world/pyramid/chunk.rs). A run cut at a face ends there as
-    /// any run ends, and the chunk beside it across that face draws the rest.
-    /// An error, and the cut empty, where the heap refused it room.
+    /// A chunk is a cube while its column's runs pass through every chunk over it,
+    /// so the set is cut to the chunk's heights; the chunk across a cut face draws the rest.
     pub fn clip_from(&mut self, set: &RunSet, z0: i32, z1: i32) -> Result<(), Refused> {
         self.clear();
         self.span = set.span;
@@ -559,7 +535,6 @@ impl OwnedRunSet {
         Ok(())
     }
 
-    /// Room for `n` more runs in every lane.
     pub(crate) fn grow_runs(&mut self, n: usize) -> Result<(), Refused> {
         grow(&mut self.z0, n)?;
         grow(&mut self.z1, n)?;

@@ -4,11 +4,12 @@
 //! case of the variant picker draws one actor in a pass of its own, with a
 //! blank shadow map.
 
+use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_PREPASS};
 use crate::gpu::api::{bytes, object, release, Gpu};
 use crate::gpu::api_spec::{address, compare, filter, format};
-use crate::gpu::pass::model::{draw_models, uniform_of, DrawUniforms, ModelDraw, Stage};
+use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, Stage};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{release_skin, skin_group, Blocks};
 
@@ -49,8 +50,7 @@ impl SkinnedPass {
         }
     }
 
-    /// Model `model`'s skin; the same image again changes nothing, and one not
-    /// yet arrived is asked for again next frame.
+    /// One not yet arrived is asked for again next frame.
     pub fn set_skin(&mut self, g: &Gpu, model: u32, image: u32) {
         let at = self
             .skins
@@ -77,8 +77,6 @@ impl SkinnedPass {
         self.skins.iter().find(|s| s.model == model && s.ids[2] != 0).map(|s| s.ids[2])
     }
 
-    /// Writes every skinned draw's uniforms in one write: the first six of
-    /// the draw's floats, padded.
     pub fn prepare<'a>(&mut self, g: &Gpu, draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]>, uniforms: &[f32]) {
         self.uniforms.write(g, self.lit.layouts[1], draws.len() as u32, draws, |buf, d| {
             let u = uniform_of(uniforms, d);
@@ -87,8 +85,6 @@ impl SkinnedPass {
         });
     }
 
-    /// The actors into the open pass at `stage`, after `prepare`, under group
-    /// 0 `frame`; `bound` is the group 0 the pass has.
     pub fn draw<'a>(&self, g: &Gpu, pass: u32, draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {
         let Some(slots) = self.uniforms.slots() else { return };
         let pipeline = match stage {
@@ -108,7 +104,6 @@ impl SkinnedPass {
         });
     }
 
-    /// Lets go of what the pass made on the device.
     pub fn release(mut self) {
         for s in self.skins {
             release_skin(s.ids);

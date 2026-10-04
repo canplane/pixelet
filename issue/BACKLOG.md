@@ -24,13 +24,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   stands behind a silhouette. No lane is added to a page until such a
   quantity is defined. The planet's horizon stays a separate, geometric
   limit.
-- **How the samples are drawn.** On the iPhone 13 mini, four shapes over the
-  same pages and views: today's boxes, the same as masked faces, a ray a
-  pixel, and a bounded observation a cell — what the rule asks for, a cell
-  being an angular footprint and not a sample point. The steps a cast pays
-  are measured already, and where on the screen they lie
-  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./20260928-what-is-drawn-is-what-the-screen-covers.md),
-  "the steps, measured").
+- **How the samples are drawn.** Raster against casting into the records,
+  on the iPhone 13 mini, with today's box format (36 unindexed vertices)
+  against faces alone; a blend on arrival — a chunk rebuilt
+  because its page came is swapped in whole today; decor as its own solver — instances at the asset's
+  level of detail and its lifetime off the chunk slot (its impostor far away
+  is in, 2026-10-01, and its hit's reach is the models' own).
 
 ## P1
 
@@ -46,7 +45,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   and `98e4f790` moved them onto the chunks the terrain draws; checked by
   the tests and the build only. Zoom and pan on the dev stack: decor and
   badges change with the ground under them, and no tree is lost or doubled
-  at a chunk's top or edge.
+  at a chunk's top or edge. `e7893bdb` moved the badges' globe and viewport
+  onto the frame's uniform: they stand, size and bend over the planet as
+  before. The gizmos' labels no longer blink while the camera moves. `01215a04`
+  and the commit after it moved the up, the viewport and the fog onto the
+  frame's uniform: the stars, the screen-space AO, the sky and the clouds
+  look as before.
 
 ## P3
 

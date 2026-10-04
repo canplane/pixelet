@@ -4,12 +4,13 @@
 //! instance buffer and its index list says which instances show. Skins are held
 //! by image, since several variants may name the same one.
 
+use crate::frame::draw::uniform_of;
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
 use crate::gpu::api::{object, Gpu};
 use crate::gpu::api_spec::{address, compare, filter, format};
 use crate::gpu::pass::impostor::Extent;
-use crate::gpu::pass::model::{draw_models, put_instances, uniform_of, DrawUniforms, ModelDraw, Stage};
+use crate::gpu::pass::model::{draw_models, put_instances, DrawUniforms, ModelDraw, Stage};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{release_skin, skin_group, Blocks, Draws};
 

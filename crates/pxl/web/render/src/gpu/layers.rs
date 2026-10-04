@@ -68,7 +68,6 @@ impl Mips {
         release(encoder);
     }
 
-    /// Lets go of the builder's sampler, for one made for a single chain.
     pub fn release(self) {
         release(self.sampler);
     }
@@ -115,9 +114,10 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
         // No side of its own means one image on every face, as Minecraft's cube_all.
         // The pack has no side without a bottom.
         let side = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Side)).or(top);
-        let word = slot_word(slot_of(&mut slots, top), slot_of(&mut slots, side));
+        let bottom = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Bottom)).or(top);
+        let word = slot_word(slot_of(&mut slots, top), slot_of(&mut slots, side), slot_of(&mut slots, bottom));
         if table.len() <= layer as usize {
-            table.resize(layer as usize + 1, slot_word(NO_SLOT, NO_SLOT));
+            table.resize(layer as usize + 1, NO_SLOTS);
         }
         table[layer as usize] = word;
     });
@@ -152,7 +152,7 @@ impl Layers {
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 4);
         let table = object();
-        let blank: Vec<u32> = vec![slot_word(NO_SLOT, NO_SLOT); table_len()];
+        let blank: Vec<u32> = vec![NO_SLOTS; table_len()];
         g.buffer(table, (blank.len() * 4) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(table, 0, bytes(&blank));
         // A chain is under four thirds of its first level.

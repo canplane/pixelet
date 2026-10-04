@@ -169,3 +169,13 @@ pub fn ndc_to_px([x, y]: [f64; 2]) -> [f64; 2] {
     let v = view();
     [(x * 0.5 + 0.5) * v.width, (-y * 0.5 + 0.5) * v.height]
 }
+
+pub fn view_sees_sphere(x: f64, y: f64, z: f64, radius: f64) -> bool {
+    let p = &view().planes;
+    for k in (0..24).step_by(4) {
+        if p[k] * x + p[k + 1] * y + p[k + 2] * z + p[k + 3] < -radius {
+            return false;
+        }
+    }
+    true
+}

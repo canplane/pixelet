@@ -7,17 +7,21 @@
 //! The floor is rounded down to a whole band, since a volume allocates whole
 //! bands and a floor inside one would open another for a few voxels.
 
-use pxl_spec::bake::constant::BAND_CELLS;
-use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
-use pxl_spec::bake::ground::{channel_bit, ChannelMask, BASE};
+use pxl_spec::bake::constant::{BAND_CELLS, U_PER_CELL};
+use pxl_spec::bake::deck::{Decks, Occupies, Over};
+use pxl_spec::bake::format::{ch_index, GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::bake::ground::{shown_ground, ShownGround, BASE};
 use pxl_spec::bake::pack::{unpack, GroundCell};
 use pxl_spec::cell::cube::cube_types;
+use pxl_spec::procedural::{pier_stands, Frame};
+use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::{ancestor_of, offset_in};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 
-use crate::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
+use crate::mesh::paint::palette::shader_meta::{rgb255, GROUND_LAYER_META};
 use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
-use crate::mesh::volume::{MaterialClasses, Volumes, Voxel, NO_LAYER};
+use crate::mesh::volume::{pack_material, MaterialClasses, Volumes, Voxel, NO_LAYER};
+use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
 use crate::mesh::{try_push, Refused};
 use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
 use std::sync::LazyLock;
@@ -26,16 +30,17 @@ const TERRAIN_Z_MARGIN: i32 = 4;
 const COL_SPAN2: usize = (COL_SPAN * COL_SPAN) as usize;
 
 /// In `GROUND_CH_KEYS`' order, which is the paint order: a later non-void type wins.
-pub const CHANNELS: usize = 4;
+pub const CHANNELS: usize = GROUND_CH_KEYS.len();
 
 const VOID: u8 = 0;
 
+/// Flat arrays rather than a map: the per-cell decode was dominated by map
+/// lookups. `has` is separate because [0,0,0] and layer 0 are real.
 #[derive(Clone, Copy)]
 pub struct Channel {
     pub rgb: [[u8; 3]; 256],
-    pub has_color: [bool; 256],
     pub layer: [u8; 256],
-    pub has_layer: [bool; 256],
+    pub has: [bool; 256],
     pub class: u8,
 }
 
@@ -43,9 +48,8 @@ impl Default for Channel {
     fn default() -> Self {
         Channel {
             rgb: [[0; 3]; 256],
-            has_color: [false; 256],
             layer: [0; 256],
-            has_layer: [false; 256],
+            has: [false; 256],
             class: 0,
         }
     }
@@ -61,12 +65,12 @@ pub struct Materials {
 pub static MATERIALS: LazyLock<Materials> = LazyLock::new(Materials::of_palette);
 
 fn class_of(ch: GroundChannelKey) -> u8 {
-    (match ch {
+    match ch {
         GroundChannelKey::LAND => MaterialClasses::LAND,
         GroundChannelKey::WATER => MaterialClasses::WATER,
         GroundChannelKey::STRUCTURE => MaterialClasses::STRUCTURE,
         GroundChannelKey::TRANSPORT => MaterialClasses::TRANSPORT,
-    }) as u8
+    }
 }
 
 impl Materials {
@@ -74,53 +78,46 @@ impl Materials {
     pub fn of(&self, ch: GroundChannelKey, t: u8) -> Option<(u32, u8)> {
         let c = &self.channels[ch_index(ch)];
         let t = t as usize;
-        c.has_color[t].then(|| (pack(c.class, c.rgb[t]), if c.has_layer[t] { c.layer[t] } else { NO_LAYER as u8 }))
+        c.has[t].then(|| (pack_material(c.class, c.rgb[t]), c.layer[t]))
     }
 
     fn of_palette() -> Materials {
-        let rgb_of = |ch, t: usize| ground_color_lookup(ch).filter(|c| c.has[t] != 0).map(|c| [c.rgb[t * 3], c.rgb[t * 3 + 1], c.rgb[t * 3 + 2]]);
-        let layer_of = |ch, t: usize| ground_layer_index_lookup(ch).filter(|l| l.has[t] != 0).map(|l| l.index[t]);
-        let base = BASE.type_id as usize;
-        let mut m = Materials {
-            channels: [Channel::default(); CHANNELS],
-            base_rgb: rgb_of(BASE.channel, base).unwrap_or([0; 3]),
-            base_layer: layer_of(BASE.channel, base).unwrap_or(NO_LAYER as u8),
-            base_class: class_of(BASE.channel),
-        };
-        for (dst, ch) in m.channels.iter_mut().zip(GROUND_CH_KEYS) {
+        let mut channels = [Channel::default(); CHANNELS];
+        for (dst, ch) in channels.iter_mut().zip(GROUND_CH_KEYS) {
             dst.class = class_of(ch);
-            for t in 0..256 {
-                if let Some(rgb) = rgb_of(ch, t) {
-                    (dst.rgb[t], dst.has_color[t]) = (rgb, true);
-                }
-                if let Some(layer) = layer_of(ch, t) {
-                    (dst.layer[t], dst.has_layer[t]) = (layer, true);
-                }
-            }
         }
-        m
+        for m in GROUND_LAYER_META.iter() {
+            let (dst, t) = (&mut channels[ch_index(m.ch_key)], m.type_id as usize);
+            (dst.rgb[t], dst.layer[t], dst.has[t]) = (rgb255(m.rgb), m.layer_index as u8, true);
+        }
+        let base = &channels[ch_index(BASE.channel)];
+        let t = BASE.type_id as usize;
+        let (base_rgb, base_layer) = if base.has[t] { (base.rgb[t], base.layer[t]) } else { ([0; 3], NO_LAYER as u8) };
+        Materials {
+            channels,
+            base_rgb,
+            base_layer,
+            base_class: class_of(BASE.channel),
+        }
     }
 }
 
-/// The decks over a chunk's own columns, from the page they are drawn from:
-/// a column, a deck and what it is there.
-fn collect_decks(over: &mut Vec<(usize, usize, Over)>, own: Option<&PageSource>, first: [i64; 2]) -> Result<(), Refused> {
-    let Some(s) = own else { return Ok(()) };
+/// The decks over the columns `s` is read for, the apron's too: a column the
+/// apron reads without its deck stands at another height than the chunk beside
+/// draws it, and the faces either side are shaded for a step that is not there.
+/// `s` is the page at `quadrant` beside the chunk's own and is read for the
+/// columns `reads` says; `corner` is the apron's first column in the own page's cells.
+fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &PageSource, corner: [i64; 2], quadrant: [i64; 2], reads: impl Fn([i64; 2]) -> bool) -> Result<(), Refused> {
     let n = f64::from(s.n);
-    let origin = [0, 1].map(|k| (s.origin[k] + first[k]) as f64 / n);
-    let side = CHUNK_CELLS as i64;
+    let origin = [0, 1].map(|k| (s.origin[k] + corner[k] - quadrant[k] * PAGE_CELLS as i64) as f64 / n);
+    let side = COL_SPAN as i64;
     let mut grown = Ok(());
-    s.page.decks.over_grid(origin, 1.0 / n, [side, side], |cx, cy, d, o| {
-        if grown.is_ok() {
-            grown = try_push(over, (apron_col(cx as u32, cy as u32) as usize, d, o));
+    s.page.decks.over_grid(Some(s.frame), origin, 1.0 / n, [side, side], |cx, cy, d, o| {
+        if grown.is_ok() && reads(ancestor_of([corner[0] + cx, corner[1] + cy], GROUND.page_cell_shamt())) {
+            grown = try_push(over, ((cy * side + cx) as usize, d, o));
         }
     });
     grown
-}
-
-/// A voxel material: the class over the color.
-fn pack(class: u8, rgb: [u8; 3]) -> u32 {
-    ((class as u32) << 24) | ((rgb[0] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[2] as u32
 }
 
 /// A building's concrete: nothing in the catalog is a pier's own.
@@ -202,17 +199,10 @@ impl Default for ChunkSample {
 }
 
 impl ChunkSample {
-    /// Samples the chunk whose first cell is `first` of its page's cells,
-    /// each cell from what the page it lies in is drawn from (`Around`).
-    /// Each cell takes the material of the source cell it lies in and the
-    /// height of the source's surface at its own center, so a cell read from
-    /// a coarser page is that page's ground at the chunk's step and nothing
-    /// invented. A channel in `hidden` is stepped over, as `shown_ground`
-    /// steps over it. Refused where the decks over it need more room than
-    /// the heap grants.
-    pub fn read(&mut self, around: &Around, first: [i64; 2], hidden: ChannelMask) -> Result<(), Refused> {
+    /// Each cell takes the material of the source cell it lies in and the source
+    /// surface's height at its own center, so a coarser page invents nothing.
+    pub fn read(&mut self, around: &Around, first: [i64; 2]) -> Result<(), Refused> {
         let tables = &*MATERIALS;
-        let skip = GROUND_CH_KEYS.map(|k| hidden & channel_bit(k) != 0);
         let mut min_ele = i32::MAX;
         let last = PAGE_CELLS as i32 - 1;
         for py in 0..COL_SPAN {
@@ -240,10 +230,11 @@ impl ChunkSample {
                 } else {
                     [VOID; 4]
                 };
+                self.shown[i] = shown_ground(|k| u32::from(types[ch_index(k)]));
 
-                let (mut material, mut layer) = (pack(tables.base_class, tables.base_rgb), tables.base_layer);
+                let (mut material, mut layer) = (pack_material(tables.base_class, tables.base_rgb), tables.base_layer);
                 for (ch, &t) in types.iter().enumerate() {
-                    if skip[ch] || t == VOID {
+                    if t == VOID {
                         continue;
                     }
                     let c = &tables.channels[ch];
@@ -268,16 +259,29 @@ impl ChunkSample {
                 }
             }
         }
-        let shown = !skip[ch_index(GroundChannelKey::TRANSPORT)];
-        self.read_decks(if shown { Some(&around.own) } else { None }, first)
+        self.read_decks(around, first)?;
+        let bored = self.bore.iter().filter(|b| b.air[0] < b.air[1]).map(|b| b.air[0] - 1).min().unwrap_or(i32::MAX);
+        self.floor = (min_ele.min(bored) - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
+        Ok(())
     }
 
-    /// The decks over the chunk's own columns, from the page they are drawn
-    /// from: each column's highest top of each deck, as its slab and pier.
-    fn read_decks(&mut self, own: Option<&PageSource>, first: [i64; 2]) -> Result<(), Refused> {
+    /// Each column's decks from the page its height is read from (`read`).
+    fn read_decks(&mut self, around: &Around, first: [i64; 2]) -> Result<(), Refused> {
         let mut over = core::mem::take(&mut self.over);
         over.clear();
-        let built = collect_decks(&mut over, own, first).and_then(|()| self.spans_of(&mut over));
+        let cell_per_m = u_per_m(around.own.frame.corner[1]) / U_PER_CELL;
+        let corner = first.map(|v| v - APRON as i64);
+        // A column with no page beside is read from the chunk's own, as its height is.
+        let beside = |[qx, qy]: [i64; 2]| if (qx, qy) == (0, 0) { None } else { around.beside[beside_index(qx, qy)].as_ref() };
+        let mut built = collect_decks(&mut over, &around.own, corner, [0, 0], |q| beside(q).is_none());
+        for qy in -1..=1 {
+            for qx in -1..=1 {
+                if let (Some(s), true) = (beside([qx, qy]), built.is_ok()) {
+                    built = collect_decks(&mut over, s, corner, [qx, qy], |q| q == [qx, qy]);
+                }
+            }
+        }
+        let built = built.and_then(|()| self.spans_of(&mut over, cell_per_m));
         self.over = over;
         built
     }
@@ -358,12 +362,16 @@ impl ChunkSample {
         Ok(())
     }
 
-    /// Column `i`'s runs, lowest first: its ground from `floor`, then what
-    /// stands off it, as `run(lo, hi, material, layer)`, both ends inside.
-    pub fn column_runs<E>(&self, i: usize, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
-        let top = self.ele[i] as i32 - 1;
-        if top >= self.floor {
-            run(self.floor, top, self.material[i], self.layer_idx[i])?;
+    /// The column's ground as inclusive runs: a top face at `ele` is cells up to
+    /// `ele − 1` (`hi − 1` below). Through a bore: the ground under its floor,
+    /// the way on the floor's cell, and the ground standing over its air.
+    pub fn ground_runs<E>(&self, i: usize, from: i32, to: i32, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
+        let top = (self.ele[i] as i32).min(to);
+        let (m, l) = (self.material[i], self.layer_idx[i]);
+        let mut part = |lo: i32, hi: i32, m: u32, l: u8| if lo.max(from) < hi { run(lo.max(from), hi - 1, m, l) } else { Ok(()) };
+        let b = self.bore[i];
+        if b.air[0] >= b.air[1] {
+            return part(from, top, m, l);
         }
         let floor = b.air[0];
         part(from, (floor - 1).min(top), m, l)?;

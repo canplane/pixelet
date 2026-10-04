@@ -36,6 +36,8 @@ struct Entry {
 struct Terrain {
     top: BTreeMap<String, BTreeMap<String, Entry>>,
     side: BTreeMap<String, Entry>,
+    #[serde(default)]
+    bottom: BTreeMap<String, Entry>,
 }
 
 #[derive(Deserialize)]
@@ -55,6 +57,7 @@ struct Manifest {
 pub enum Slot {
     Top { channel: String, ty: String },
     Side { ty: String },
+    Bottom { ty: String },
 }
 
 pub struct Item {
@@ -106,6 +109,9 @@ pub fn load(cube_dir: &Path) -> Result<Vec<Item>, String> {
     }
     for (ty, entry) in &manifest.terrain.side {
         push(format!("terrain.side.{ty}"), Slot::Side { ty: ty.clone() }, entry);
+    }
+    for (ty, entry) in &manifest.terrain.bottom {
+        push(format!("terrain.bottom.{ty}"), Slot::Bottom { ty: ty.clone() }, entry);
     }
     for (ty, entry) in &manifest.objects.block {
         push(

@@ -457,22 +457,34 @@ fn layout_entries(words: &[u32]) -> Vec<wgpu::BindGroupLayoutEntry> {
         .collect()
 }
 
-const TOPOLOGY: [wgpu::PrimitiveTopology; 3] = [wgpu::PrimitiveTopology::TriangleList, wgpu::PrimitiveTopology::TriangleStrip, wgpu::PrimitiveTopology::LineList];
-const COMPARE: [wgpu::CompareFunction; 4] = [
-    wgpu::CompareFunction::Always,
-    wgpu::CompareFunction::Greater,
-    wgpu::CompareFunction::GreaterEqual,
-    wgpu::CompareFunction::Less,
-];
-const VERTEX_FORMAT: [wgpu::VertexFormat; 7] = [
-    wgpu::VertexFormat::Float32,
-    wgpu::VertexFormat::Float32x2,
-    wgpu::VertexFormat::Float32x3,
-    wgpu::VertexFormat::Float32x4,
-    wgpu::VertexFormat::Uint32x4,
-    wgpu::VertexFormat::Uint32,
-    wgpu::VertexFormat::Uint32x2,
-];
+fn topology(code: u32) -> wgpu::PrimitiveTopology {
+    match code {
+        record::STRIP => wgpu::PrimitiveTopology::TriangleStrip,
+        record::LINES => wgpu::PrimitiveTopology::LineList,
+        _ => wgpu::PrimitiveTopology::TriangleList,
+    }
+}
+
+fn compare(code: u32) -> wgpu::CompareFunction {
+    match code {
+        record::GREATER => wgpu::CompareFunction::Greater,
+        record::GREATER_EQUAL => wgpu::CompareFunction::GreaterEqual,
+        record::LESS => wgpu::CompareFunction::Less,
+        _ => wgpu::CompareFunction::Always,
+    }
+}
+
+fn vertex_format(code: u32) -> wgpu::VertexFormat {
+    match code {
+        record::F32X2 => wgpu::VertexFormat::Float32x2,
+        record::F32X3 => wgpu::VertexFormat::Float32x3,
+        record::F32X4 => wgpu::VertexFormat::Float32x4,
+        record::U32X4 => wgpu::VertexFormat::Uint32x4,
+        record::U32 => wgpu::VertexFormat::Uint32,
+        record::U32X2 => wgpu::VertexFormat::Uint32x2,
+        _ => wgpu::VertexFormat::Float32,
+    }
+}
 
 const ALPHA_BLEND: wgpu::BlendState = wgpu::BlendState {
     color: wgpu::BlendComponent {
@@ -642,7 +654,7 @@ impl Gpu {
                     .map(|_| wgpu::VertexAttribute {
                         shader_location: next(),
                         offset: next() as u64,
-                        format: VERTEX_FORMAT[next() as usize],
+                        format: vertex_format(next()),
                     })
                     .collect();
                 (stride, step, attributes)
@@ -683,7 +695,7 @@ impl Gpu {
                 buffers: &buffers,
             },
             primitive: wgpu::PrimitiveState {
-                topology: TOPOLOGY[words[2] as usize],
+                topology: topology(words[2]),
                 cull_mode: (words[3] == record::CULL_BACK).then_some(wgpu::Face::Back),
                 front_face: wgpu::FrontFace::Ccw,
                 ..Default::default()
@@ -691,7 +703,7 @@ impl Gpu {
             depth_stencil: (words[5] != record::NO_DEPTH).then(|| wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: Some(words[4] != 0),
-                depth_compare: Some(COMPARE[words[5] as usize]),
+                depth_compare: Some(compare(words[5])),
                 stencil: Default::default(),
                 bias: wgpu::DepthBiasState {
                     constant: words[6] as i32,

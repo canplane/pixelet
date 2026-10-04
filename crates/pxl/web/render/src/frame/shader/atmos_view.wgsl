@@ -22,7 +22,7 @@ fn zenith_sky() -> vec3f {
 fn sky_fill() -> vec3f {
   var fill = textureLoad(exposure_texel, vec2i(1, 0), 0).rgb * atmos_white() * atmos_exposure();
   if (atmos_moon_light() > 0.0) {
-    fill += moon_view(atmos_up()) * moon_shown() * PI;
+    fill += moon_view(frame_up()) * moon_shown() * PI;
   }
   return fill;
 }
@@ -70,14 +70,14 @@ fn air_along(dir: vec3f) -> Air {
   if (atmos_moon_light() > 0.0) {
     air.light += moon_view(dir) * moon_shown();
   }
-  let mu = dot(dir, atmos_up());
+  let mu = dot(dir, frame_up());
   air.ground = meets_land(r, mu);
-  air.normal = atmos_up();
+  air.normal = frame_up();
   if (air.ground) {
     let d = to_land(r, mu);
     air.ground_km = d;
     air.end = transmittance_along(r, mu, d, true);
-    air.normal = normalize(atmos_up() * r + dir * d);
+    air.normal = normalize(frame_up() * r + dir * d);
   } else {
     air.end = transmittance_to_top(r, mu);
   }
@@ -119,14 +119,8 @@ fn air_light(dir: vec3f, fill: vec3f) -> AirLight {
   return l;
 }
 
-// What the eye sees along a ray to its end: the air's light, and where the
-// ray meets the planet, the ground's through the air. It is what lies past
-// the terrain's drawn edge, so a view from high up reads as ground in haze
-// there and not as sky under the horizon; and the ground is a flat face of
-// the land's color lit as shade.wgsl lights the terrain, by the frame's
-// lights, so the edge is no seam.
-// `fill` is sky_fill's, which a caller that reads it for more than this
-// takes once.
+// Past the terrain the ground is lit as shade.wgsl lights the terrain, so the
+// drawn edge is no seam.
 fn beyond(air: Air, fill: vec3f) -> vec3f {
   var light = air.light;
   if (air.ground) {
@@ -139,10 +133,6 @@ fn beyond(air: Air, fill: vec3f) -> vec3f {
   return light;
 }
 
-// Aerial perspective: what the air between the eye and `world_pos` does to
-// a color there — `through`, the segment's transmittance, dims it, and
-// `scattered`, the light the air along it takes and turns toward the eye,
-// fills it in (`air_light`), under the sky's fill `fill` (sky_fill).
 struct Veil {
   through: vec3f,
   scattered: vec3f,

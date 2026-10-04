@@ -21,12 +21,12 @@ use pxl_spec::space::pyramid::{chunk_scale, GROUND, TOP_LEVEL};
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
 use crate::world::chunk::build::mesh_step;
-use pxl_spec::space::hierarchy::Scale;
 use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};
 use crate::world::observation::Order;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::domain::Price;
 use crate::world::quality::fits;
+use pxl_spec::space::hierarchy::Scale;
 
 pub type Slots = [u32; POOLS];
 
