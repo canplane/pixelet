@@ -59,6 +59,7 @@ export const enum InputMinor {
   RECT = 0x01,
   POINTER = 0x02,
   WHEEL = 0x03,
+  KEYS = 0x06,
   TRACKING = 0x04,
   VIEW = 0x05,
   COMPASS_RESET = 0x07,
@@ -274,6 +275,8 @@ export const enum Command {
   /** What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer. */
   INPUT_HOLD = 0x110b,
   INPUT_WHEEL = 0x1103,
+  /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
+  INPUT_KEYS = 0x1106,
   /** A device answered; the kernel's renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs). */
   GPU_READY = 0x1401,
   /** The device went away, and every object on it. */
@@ -662,6 +665,16 @@ export interface InputWheel {
 
 export function encode_input_wheel(p: InputWheel): U8Array {
   return packet((b) => b.f64(p.delta_y));
+}
+
+/** Command.INPUT_KEYS's packet. */
+export interface InputKeys {
+  x: i32;
+  y: i32;
+}
+
+export function encode_input_keys(p: InputKeys): U8Array {
+  return packet((b) => b.i32(p.x).i32(p.y));
 }
 
 /** Command.GPU_READY's packet. */

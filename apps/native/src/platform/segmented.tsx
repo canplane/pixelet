@@ -9,7 +9,6 @@ import type { NativeSyntheticEvent, ViewProps } from "react-native";
 import { PANEL_CONTROL } from "@/shared/ui/panel.tsx";
 import type { SegmentedProps } from "@/shared/ui/segmented.ts";
 
-
 interface SegmentedControlProps extends ViewProps {
   labels: string[];
   selectedIndex: number;

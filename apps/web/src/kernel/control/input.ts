@@ -7,6 +7,7 @@ import {
   type ActiveTool,
   Command,
   encode_input_hold,
+  encode_input_keys,
   encode_input_pointer,
   encode_input_rect,
   encode_input_wheel,
@@ -25,6 +26,10 @@ export function kernel_pointer(phase: PointerPhase, kind: PointerKind, id: i32, 
 
 export function kernel_wheel(delta_y: f64): void {
   send_input(Command.INPUT_WHEEL, encode_input_wheel({ delta_y }));
+}
+
+export function kernel_keys(x: i32, y: i32): void {
+  send_input(Command.INPUT_KEYS, encode_input_keys({ x, y }));
 }
 
 export function kernel_rect(left: f64, top: f64, width: f64, height: f64): void {

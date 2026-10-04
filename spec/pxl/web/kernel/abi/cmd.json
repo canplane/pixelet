@@ -154,6 +154,10 @@
           "value": 3
         },
         {
+          "name": "KEYS",
+          "value": 6
+        },
+        {
           "name": "TRACKING",
           "value": 4
         },
@@ -1050,6 +1054,23 @@
             {
               "name": "delta_y",
               "type": "f64"
+            }
+          ]
+        },
+        {
+          "name": "INPUT_KEYS",
+          "value": 4358,
+          "doc": [
+            "The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down."
+          ],
+          "packet": [
+            {
+              "name": "x",
+              "type": "i32"
+            },
+            {
+              "name": "y",
+              "type": "i32"
             }
           ]
         },

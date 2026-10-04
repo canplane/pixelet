@@ -12,7 +12,7 @@ how each set gets built and checked; getting it into the bucket is
 [publish-bucket](../publish-bucket/SKILL.md).
 
 Background and the reasoning behind the design are in
-[issue/20260816-deployment-hosting.md](../../../issue/20260816-deployment-hosting.md).
+[decision/20260816-deployment-hosting.md](../../../decision/20260816-deployment-hosting.md).
 Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes
@@ -23,9 +23,13 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 | poi     | `deno task bake:poi`     | Overture places                                 | XTP counts, where a crowd splits                                   | no object       |
 | geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | XTP: a dictionary, and one per group of 16 × 16 pages with a label | no object       |
 
-Every tool writes to `./out/<kind>/<version>`, where the version defaults to
-`PUBLISHED_VERSION.<kind>` in `spec/pxl/spec/bake/published.json`
-and the last path segment of `--out` overrides it.
+Every tool writes to `./out/<kind>/<version>`. The version is
+`v<format>.<day>.<n>`: the kind's `FORMAT` in
+`spec/pxl/spec/bake/published.json`, the day the bake ran (UTC) and that
+day's count of bakes of the kind, from 1 — `v7.2026-10-04.1`
+(`pxl-spec bake/published.spec.rs` `version_name`). What it was baked from
+is the manifest's: the Overture release its tables were ingested from and the
+commit it was built at. The last path segment of `--out` overrides it.
 
 The bucket names a page by its **quadkey** and nothing else (publish-bucket).
 Geocode writes that name straight out, so for it the filename _is_ the object
@@ -38,8 +42,7 @@ Terrain goes first for geocode: it does not classify land itself, it
 read the `land_pages.json` terrain leaves next to its output directory
 (`--land-cache`, default `./out/terrain/land_pages.json`). Without a
 terrain bake on this machine, fetch the published copy from
-`s3://pixelet-tiles/_meta/land_pages.json` (see publish-bucket) — that is
-what the monthly workflow does.
+`s3://pixelet-tiles/_meta/land_pages.json` (see publish-bucket).
 
 Every object is packed in the encoding `util.rs`'s `CONTENT_ENCODING` names —
 zstd — and each manifest says so in `content_encoding`, which is what the
@@ -258,30 +261,25 @@ terrain's `land_pages.json`, not its tables.
 
 Verify `failed=` is zero and that `_dict` and a group open
 (`place_page::open_place_dict`, `open_place_group`). A group's name is a
-page's first eleven digits. The monthly workflow ingests Places
-for forward search and Divisions for geocode, then refreshes geocode only.
-POI is baked separately and is immutable.
+page's first eleven digits.
 
 ## Versions, and when the bake logic changes
 
-`PUBLISHED_VERSION` is what the client requests. Bumping one there is the
-whole change on the client's side; the bake tools read it for their
-default output directory.
+`PUBLISHED_VERSION` is what the client requests. Setting one there to a
+bake's folder name is the whole change on the client's side.
 
-A published **terrain** version is immutable: a change to `bake_terrain` or
-anything under `crates/pxl/server/geo-bake/src/terrain/` invalidates every existing tile
-and means a full re-bake into a **new** version — not a partial one, because
-a mixed bucket serves tiles from two pipelines with no way to tell them
-apart.
+A published version is immutable, for every kind: a page is never
+rewritten under a name a cache or an open client already holds, and going
+back is naming the version before. **Every bake is a new name**, whatever
+made it — a new Overture release, or a change to how a page is baked — and
+each kind is named on its own, since each is baked again on its own. A
+kind is baked again whole, never the pages that changed: a coarse page is
+folded from the ones under it, so a partial bake would leave the levels
+disagreeing, and a mixed folder would serve pages from two pipelines with no
+way to tell them apart.
 
-A **geocode** version names the page _format_, not the data: a data
-refresh rewrites the same prefix with newer Overture content. A
-format change (a new field, a new encoding) is a new version and a re-bake; a
-data refresh is not.
-
-A published **POI** version is immutable too, a data refresh included: a
-coarse page counts the leaves under it, so a partial refresh would leave the
-levels disagreeing with each other.
+Only a change to **how the client reads a page** — its format in
+`pxl-spec bake/` — bumps the kind's `FORMAT`.
 
 The local tile server shares one demand path across terrain, POI and geocode
 (`geo-bake/src/demand/`). `--cache` is the parent directory, default `out/dev`;

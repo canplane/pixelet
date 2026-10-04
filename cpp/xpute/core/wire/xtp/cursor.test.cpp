@@ -210,7 +210,7 @@ XPUTE_TEST(xtp_a_packet_reads_back_what_was_written) {
 
 XPUTE_TEST(xtp_a_packet_reads_wherever_it_lies) {
     std::array<std::uint8_t, 64> buf{};
-    PacketWriter w(std::span(buf).subspan(1));
+    PacketWriter w{std::span(buf).subspan(1)};
     const std::array<double, 2> xs{0.5, -4.0};
     w.f64_array(xs);
     std::span<const std::uint8_t> pkt = std::span(buf).subspan(1, w.finish().value());

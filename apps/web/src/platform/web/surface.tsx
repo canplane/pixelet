@@ -2,7 +2,7 @@
 
 /**
  * The canvas the kernel draws into on the web, and the page's input driver:
- * its box, pointer, wheel and the tab's visibility.
+ * its box, pointer, wheel, keys and the tab's visibility.
  */
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 
 import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_open, kernel_pointer, kernel_rect, kernel_visible, kernel_wheel } from "@/kernel/control/input.ts";
+import { keyDown, keyUp, releaseKeys } from "@/app/store/keyboard.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { surface_close, surface_open, surface_size } from "@/kernel/render/surface.ts";
 import { request_frame } from "@/kernel/sched.ts";
@@ -73,6 +74,12 @@ function openSurface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close
   };
 }
 
+/** A field's own keys, which the shell routes apart. */
+function inField(e: KeyboardEvent): boolean {
+  const target = e.target;
+  return target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select") !== null);
+}
+
 function pointerKind(e: PointerEvent): PointerKind {
   return e.pointerType === "touch" ? PointerKind.Touch : e.pointerType === "pen" ? PointerKind.Pen : PointerKind.Mouse;
 }
@@ -101,7 +108,16 @@ function drive(canvas: HTMLCanvasElement): () => void {
     sendRect();
     request_frame();
   };
-  const onVisibility = () => kernel_visible(document.visibilityState === "visible");
+  // A composed or shortcut key is the IME's or the browser's; Tab turns the dock mid-word too.
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.repeat || (e.isComposing && e.code !== "Tab") || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (keyDown(e.code, { shift: e.shiftKey, inField: inField(e) })) e.preventDefault();
+  };
+  const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
+  const onVisibility = () => {
+    if (document.visibilityState !== "visible") releaseKeys();
+    kernel_visible(document.visibilityState === "visible");
+  };
   const onPageHide = () => kernel_visible(false);
 
   canvas.addEventListener("pointerdown", onDown);
@@ -114,6 +130,10 @@ function drive(canvas: HTMLCanvasElement): () => void {
   globalThis.addEventListener("pointercancel", onUp);
   document.addEventListener("visibilitychange", onVisibility);
   globalThis.addEventListener("pagehide", onPageHide);
+  // Captured: react-native-web's TextInput stops a key's propagation before it bubbles here.
+  globalThis.addEventListener("keydown", onKeyDown, true);
+  globalThis.addEventListener("keyup", onKeyUp, true);
+  globalThis.addEventListener("blur", releaseKeys);
   const observer = new ResizeObserver(onResize);
   observer.observe(canvas);
 
@@ -123,6 +143,9 @@ function drive(canvas: HTMLCanvasElement): () => void {
   return () => {
     close();
     observer.disconnect();
+    globalThis.removeEventListener("blur", releaseKeys);
+    globalThis.removeEventListener("keyup", onKeyUp, true);
+    globalThis.removeEventListener("keydown", onKeyDown, true);
     globalThis.removeEventListener("pagehide", onPageHide);
     document.removeEventListener("visibilitychange", onVisibility);
     globalThis.removeEventListener("pointercancel", onUp);

@@ -5,7 +5,6 @@ import { type BakeKind, PUBLISHED_VERSION } from "./published.spec.ts";
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
 
-
 /** `<tile>/<kind>[/<version>]/<name>`: the kernel names the object, the
  * version is a deployment fact (a dev server bakes on demand, unversioned). */
 export function tileUrl(kind: BakeKind, name: string, published: boolean): string {

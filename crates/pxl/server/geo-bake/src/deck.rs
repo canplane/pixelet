@@ -156,7 +156,8 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<Solved, Stri
 
     // each free end's ground stretches, sampled where the ring's ground is held
     let asked: Vec<approach::Free> = free.iter().map(|f| approach_of(&f.piece, f.last)).collect();
-    let inside = |p: [f64; 2]| (0..2).all(|k| p[k] >= ring.bounds[0][k] && p[k] < ring.bounds[1][k]);
+    // a point is in the ring by the page the ground is read from, not by a second reckoning of its box
+    let inside = |p: [f64; 2]| ring.ground.contains_key(&elevation::page_of(p));
     // where a road meets the ground, once a point, so two ending on one share it
     let mut meeting: HashMap<(usize, u64), [f64; 3]> = HashMap::new();
     for b in &branches(&ring.ways, &asked, inside) {

@@ -105,7 +105,7 @@ deno task dev:local
 | `deno task dev:web`                  | The client alone, against those servers                               |
 | `deno task dev:geo`                  | pxl-geo only (`/geo`)                                                 |
 | `deno task dev:api`                  | pxl-api only (`/api`)                                                 |
-| `deno task dev:baked`                | The same, with the tiles read from the bakes under `./out`            |
+| `deno task dev:baked`                | `dev:local`, with the tiles read from the bakes under `./out`         |
 | `deno task dev:tiles`                | The dev tile server, demand-paging each page out of the bake          |
 | `deno task preview`                  | The production bundle, served locally, data from the live deployment  |
 | `deno task preview:{local,baked}`    | The production bundle over `dev:local`'s or `dev:baked`'s servers     |
@@ -161,7 +161,7 @@ filled by the bakes, offline
 
 The four roots are written in one file, `spec/pxl/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
 
-Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and **XTP**, a relocatable binary tree read without copying.
+Two formats were made here: **PVF3**, pixelet's packed fixed-point coordinate, and **XTP**, xpute's relocatable binary tree, read without copying.
 
 ---
 
@@ -214,19 +214,20 @@ Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and *
 ├── script/                   # the spec generator, the tree's checks, the deployment smoke
 ├── infra/                    # local and production compose files, and what fills db-geo:
 │                             #   geo/overture/ and geo/elevation/, each with init/ and script/
-└── issue/                    # Decisions and why, the backlog, experiment/ for measurements
+└── decision/                 # Each decision and why, closed/ for those no longer cited,
+                              #   experiment/ for measurements
 ```
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat.
 
-| Crate           | Directories                                                                                                         |
-| --------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `xpute-core`    | `abi` `alloc` `codec` `collection` `math` `status` `wire`, plus `golden`                                            |
-| `xpute-runtime` | `abi` `ipc` `mem` `sched`, plus `clock`, `global`                                                                   |
-| `pxl-spec`      | `asset` `bake` `cell` `space`, plus `place`, `route`                                                                |
-| `pxl-render`    | `mesh` `asset` `look` `frame` `gpu`                                                                                 |
-| `pxl-kernel`    | `abi` `door` `mem` `sched` `world` `layer` `io` `control` `shell`, plus `global`, `host`, `kernel`, `param`, `text` |
-| `pxl-geo-bake`  | `terrain` `deck` `geocode` `page` `demand`, plus `poi`, `pyramid`, and `bin`                                        |
+| Crate           | Directories                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| `xpute-core`    | `abi` `alloc` `codec` `collection` `math` `status` `wire`, plus `golden`                                  |
+| `xpute-runtime` | `abi` `ipc` `mem` `sched`, plus `clock`, `global`                                                         |
+| `pxl-spec`      | `asset` `bake` `cell` `space`, plus `place`, `procedural`, `route`                                        |
+| `pxl-render`    | `mesh` `asset` `look` `frame` `gpu`                                                                       |
+| `pxl-kernel`    | `abi` `door` `mem` `sched` `world` `layer` `io` `control` `shell`, plus `host`, `kernel`, `param`, `text` |
+| `pxl-geo-bake`  | `terrain` `deck` `geocode` `page` `demand` `bin`, plus `poi` `pyramid` and six helpers of one file        |
 
 The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
@@ -234,9 +235,9 @@ The casing in the tree is not mixed by accident. Rust, the xpute packages and th
 
 ## Learn More
 
-[AGENTS.md](./AGENTS.md) is how to work in the tree.
+[AGENTS.md](./AGENTS.md) is how to work in the tree, [BACKLOG.md](./BACKLOG.md) what is queued next, and [decision/](./decision/) why things went the way they did.
 
-Four files carry a `.xpute` infix: [README.xpute.md](./README.xpute.md) and [ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) — the system under the application, its memory, rings, turn, credits and wire formats — with `LICENSE.xpute` and `THIRD_PARTY_NOTICES.xpute.md` beside them. They belong to the xpute repository and live here because xpute is developed here. None of them names pixelet, which is what lets `script/export-xpute.ts` drop the infix and send them out as they are.
+Four files carry a `.xpute` infix: [README.xpute.md](./README.xpute.md) and [ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) — the system under the application, its memory, rings, turn, handles, contract and wire formats — with `LICENSE.xpute` and `THIRD_PARTY_NOTICES.xpute.md` beside them. They belong to the xpute repository and live here because xpute is developed here. None of them names pixelet, which is what lets `script/export-xpute.ts` drop the infix and send them out as they are.
 
 ---
 

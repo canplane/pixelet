@@ -24,7 +24,8 @@
     "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-api -- \"$@\"' --",
     "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --features serve --bin serve_tiles -- \"$@\"' --",
     "dev:web": { "command": "deno task --cwd apps/web dev:local", "dependencies": ["sync:build-number"] },
-    "dev:baked": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --baked ./out) & (deno task dev:web) & wait\"",
+    "dev:web:baked": { "command": "deno task --cwd apps/web dev:baked", "dependencies": ["sync:build-number"] },
+    "dev:baked": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --baked ./out) & (deno task dev:web:baked) & wait\"",
     "dev:native": "deno task --cwd apps/native start",
     // Only a hand deploy writes apps/web/.build_number, so it is refreshed before vite reads it.
     "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labeled from the cached number\" >&2'",

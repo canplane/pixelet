@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use super::*;
 use crate::space::lod::FAULT_PAGES;
 
-const TAUS: [Tau; 3] = [Tau::FINEST, Tau::of(1.5), Tau::of(8.0)];
+const TAU_SCALES: [f64; 3] = [1.0, 1.5, 8.0];
 
 #[derive(Clone, Copy)]
 struct Tower {
@@ -209,7 +209,7 @@ fn a_level_names_no_more_than_the_fault_bound_and_less_known_names_more() {
         };
         for frustum in [true, false] {
             let o = observation(look, fault_radius(TOP_LEVEL), world.planet, frustum);
-            for tau in TAUS {
+            for tau in TAU_SCALES.map(Tau::of) {
                 let (known, unknown) = (demand(&o, &world, tau), demand(&o, &Unknown, tau));
                 assert!(known.is_subset(&unknown), "look {k}, {tau:?}: bounds named a page nothing known did not");
                 for named in [known, unknown] {

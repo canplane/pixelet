@@ -9,14 +9,14 @@
 // stage of the build, which is why they are here rather than in any of them:
 //
 //   crates/pxl/web/kernel/src/mem/section.rs   the map — the fixed ranges and the heap
-//   crates/pxl/web/wasm/build.rs               the front — the linker flags and the
-//                                              ring addresses it writes for the module
-//   apps/web/src/kernel/mem.ts            the reservation the shell makes
+//   crates/pxl/web/kernel/src/door/layout.rs   the front — the rings and the directory
+//   crates/pxl/web/wasm/build.rs               the linker flags for the module
+//   apps/web/src/kernel/mem.ts                 the reservation the shell makes
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 
 /** Messages the submission ring holds, and so payloads: one a slot
- * (issue/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
+ * (decision/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
  * the ring checks, since a position is taken modulo it by masking. */
 export const SUBMISSION_CAPACITY: u32 = 2048 as number;
 

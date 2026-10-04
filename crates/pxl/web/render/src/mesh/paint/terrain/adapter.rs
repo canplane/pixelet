@@ -293,7 +293,7 @@ impl ChunkSample {
         let tables = &*MATERIALS;
         // A line over a column is all its segments sweep there; a station is one segment's,
         // so the pier is either's.
-        over.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+        over.sort_by_key(|a| (a.0, a.1));
         over.dedup_by(|b, a| {
             let same = (a.0, a.1) == (b.0, b.1);
             if same {

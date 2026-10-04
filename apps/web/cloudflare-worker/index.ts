@@ -10,7 +10,7 @@
  * R2 bucket, and `/geo/*` and `/api/*` are reverse-proxied to GEO_ORIGIN and API_ORIGIN as-is (see infra/README.md).
  * Keeping it on the app's own hostname is what makes them same-origin, so no
  * CORS policy exists to configure or get wrong — see
- * issue/20260816-deployment-hosting.md.
+ * decision/20260816-deployment-hosting.md.
  *
  * Lives outside src/ deliberately: this is the only server-side code in the
  * deployment, it targets the Workers runtime rather than the browser, and
@@ -87,9 +87,11 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  *   them by path. No version segment and none wanted: a changed file is a new
  *   name, which is what makes `immutable` true of it.
  *
- * The version is `v` and a number, and this pattern does not read which one:
- * the client asks for whatever `published.json` says, so a bump is a client
- * change and never a deploy of this file.
+ * The version is `v<format>.<YYYY-MM-DD>.<n>`, a format and the day it was
+ * baked, and this pattern does not read which one: the client asks for
+ * whatever `published.json` says, so a new one is a client change and never a
+ * deploy of this file. A bare `v<format>` is a client from before bakes were
+ * named by day, still open in a tab.
  *
  * **This exists for cost, not correctness.** A miss is still a billed R2
  * class-B operation, so without it anyone can walk the tile root and charge
@@ -107,8 +109,11 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * shell looks it up in a table it ships — so its shape is all there is to
  * match, and the hash in the stem is what makes that shape worth matching.
  */
-const KEY_RE =
-  /^(?:terrain\/v\d{1,3}\/(?:_ocean|[0-3]{5,15})|poi\/v\d{1,3}\/[0-3]{5,15}|geocode\/v\d{1,3}\/(?:_dict|[0-3]{11})|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$/;
+const VERSION = String.raw`v\d{1,3}(?:\.\d{4}-\d{2}-\d{2}\.\d+)?`;
+const KEY_RE = new RegExp(
+  String
+    .raw`^(?:terrain\/${VERSION}\/(?:_ocean|[0-3]{5,15})|poi\/${VERSION}\/[0-3]{5,15}|geocode\/${VERSION}\/(?:_dict|[0-3]{11})|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$`,
+);
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
  * cache has no meaning for is a header it leaves alone, which is the whole
@@ -196,10 +201,8 @@ export default {
     }
 
     // Edge cache in front of R2. Sound without any invalidation story because
-    // terrain, POI and assets are immutable and versioned by URL — a re-bake
-    // publishes a new prefix rather than replacing bytes — and the
-    // geocode prefixes, which are rewritten in place monthly, carry a one-day
-    // max-age the cache honors. This is also the only real cost control: R2 has no
+    // every bake and asset is immutable and versioned by URL — a bake publishes
+    // a new prefix rather than replacing bytes. This is also the only real cost control: R2 has no
     // spend limit, and class-B reads are the one meter that scales with
     // traffic, so every edge hit is a read that never happens.
     //

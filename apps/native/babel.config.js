@@ -26,7 +26,6 @@ const { readEnums, enumAt, stale: staleIn } = require(path.join(root, "apps/web/
 const TABLE = readEnums([path.join(root, "apps/web/src"), path.join(root, "packages"), path.join(root, "apps/native/src")]);
 const { exported: EXPORTED, local: LOCAL } = TABLE;
 
-
 /** The table is read once, when Metro loads this file, so an enum or a member
  * added since — a spec regenerated under a running Metro — is not in it. Left
  * alone, it bundles as a name nothing binds and throws on the device; said
@@ -121,6 +120,7 @@ module.exports = (api) => {
     __APP_ENV__: production ? "production" : "development",
     // Every route a dev server forwards is the published deployment's.
     __PUBLISHED_TILES__: true,
+    __DEV_SOURCE__: "remote",
   };
 
   /** Replaces each free name above with its value. */

@@ -1,7 +1,7 @@
 # Characters (the Actor tier)
 
 This directory is the current, only member of the "Actor" rendering tier —
-see [issue/20260907-world-rendering-tiers.md](/issue/20260907-world-rendering-tiers.md)
+see [decision/20260907-world-rendering-tiers.md](/decision/20260907-world-rendering-tiers.md)
 for the full taxonomy this belongs to. Kept as `character/`, not renamed to
 `actors/`, on purpose: "Character" is already a real user-facing concept
 (Settings > Character, the drawer's Character tab — which variant a person or

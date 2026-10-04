@@ -6,7 +6,10 @@
 #pragma once
 
 // Rust never fuses a multiply and an add; held here, not only in the flags.
+// GCC does not read the pragma, so there the flag alone holds it.
+#if defined(__clang__)
 #pragma STDC FP_CONTRACT OFF
+#endif
 
 #include <cmath>
 #include <limits>
