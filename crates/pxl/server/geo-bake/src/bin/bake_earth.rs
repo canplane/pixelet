@@ -33,8 +33,6 @@ const NIGHT: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/1
 /// NASA's tiling: a column a quarter of the world from 180° W, row 1 the north.
 const NIGHT_TILES: [[&str; 4]; 2] = [["A1", "B1", "C1", "D1"], ["A2", "B2", "C2", "D2"]];
 const GLOBAL: (u32, u32) = (2048, 1024);
-/// libwebp's lossy quality: a map seen kilometers wide shows nothing finer.
-const QUALITY: f32 = 90.0;
 
 /// Blue Marble's bytes are reflectance through a cubic spline, not sRGB
 /// (Stöckli et al. 2005, table 1): 0, 25, 75 and 100% are 0, 179, 240 and 255.
@@ -204,12 +202,18 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
             });
         }
     });
+    // Lossless: a page of one color is left out because the global picture reads
+    // the same there, which holds only if the picture keeps every byte; lossy, the
+    // open sea came back a step off the pages' and their edges showed.
     let mut config = webp::WebPConfig::new().map_err(|()| "a WebP config")?;
-    config.quality = QUALITY;
-    config.alpha_compression = 1;
+    config.lossless = 1;
     // libwebp otherwise rewrites the color under a zero alpha: the unlit Earth.
     config.exact = 1;
     let encoded = webp::Encoder::from_rgba(&bytes, GLOBAL.0, GLOBAL.1).encode_advanced(&config).map_err(|e| format!("{e:?}"))?;
+    let back = webp::Decoder::new(&encoded).decode().ok_or("the global picture does not decode")?;
+    if *back != bytes[..] {
+        return Err("the global picture does not keep its bytes, which a left-out page reads".into());
+    }
     write_atomic(out, &encoded).map_err(|e| e.to_string())?;
     println!("[earth] global -> {} ({} KiB)", out.display(), encoded.len() / 1024);
     Ok(())
