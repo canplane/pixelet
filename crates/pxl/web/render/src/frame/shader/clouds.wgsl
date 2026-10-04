@@ -129,7 +129,7 @@ fn sheet_t(r0: f32, mu: f32, km: f32) -> f32 {
   return select(at.y, at.x, r0 > r);
 }
 
-fn sheet(s: Sheet, dir: vec3f, t: f32, footprint: f32, lit: vec3f, at: Light, reach: f32) -> Layer {
+fn sheet(s: Sheet, dir: vec3f, t: f32, footprint: f32, lit: vec3f, reach: f32) -> Layer {
   var out: Layer;
   out.t = t;
   if (t <= 0.0 || t > reach) {
@@ -140,7 +140,7 @@ fn sheet(s: Sheet, dir: vec3f, t: f32, footprint: f32, lit: vec3f, at: Light, re
   // Read a whole number of units off, so each layer has its own clouds.
   let field = cloud_opacity_finer(p + vec2f(f32(s.salt % CLOUD_TILE_UNITS)), footprint * s.softer, s.finer);
   out.opacity = s.opacity * field * weather(p, s.salt) * reach_fade(t, reach);
-  out.color = aerial(CLOUD_ALBEDO * lit, world, at) * out.opacity;
+  out.color = aerial(CLOUD_ALBEDO * lit, world) * out.opacity;
   return out;
 }
 
@@ -180,8 +180,7 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   let cirrus_footprint = footprint_at(dir, cirrus_t);
 
   // The lights where the ray meets the layer, as any point's are; inside it
-  // light comes from every side, the sky's over it and the ground's under it,
-  // as in the air (air_light).
+  // light comes from every side, the sky's over it and the ground's under it.
   let at = light_of(frame_camera_pos() + dir * (max(t0, 0.0) / atmos_km_per_u()));
   let light = lit_by(frame_sun_dir(), dir, at.sun) + lit_by(frame_other_dir(), dir, at.other);
   let around = 0.5 * (at.fill + ground_bounce(at)) / PI;
@@ -223,12 +222,12 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
     if (opacity > 0.002) {
       low.opacity = opacity * reach_fade(t0, reach);
       let world = frame_camera_pos() + dir * (seen_at / opacity / atmos_km_per_u());
-      low.color = aerial(color / opacity, world, at) * low.opacity;
+      low.color = aerial(color / opacity, world) * low.opacity;
     }
   }
 
-  let alto = sheet(ALTOCUMULUS, dir, alto_t, alto_footprint, light + around, at, reach);
-  let high = sheet(CIRRUS, dir, cirrus_t, cirrus_footprint, light + around, at, reach);
+  let alto = sheet(ALTOCUMULUS, dir, alto_t, alto_footprint, light + around, reach);
+  let high = sheet(CIRRUS, dir, cirrus_t, cirrus_footprint, light + around, reach);
   // Three by their distance along the ray, nearest over.
   var a = low;
   var b = alto;

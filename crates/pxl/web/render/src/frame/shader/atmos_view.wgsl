@@ -3,6 +3,7 @@
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
 @group(0) @binding(16) var earth_map: texture_2d_array<f32>;
 @group(0) @binding(17) var earth_pages: texture_2d_array<f32>;
+@group(0) @binding(19) var aerial_lut: texture_2d<f32>;
 
 fn shown() -> vec3f {
   return atmos_white() * exposure();
@@ -93,33 +94,6 @@ fn air_along(dir: vec3f) -> Air {
   return air;
 }
 
-// Closed-form optical depth of an exponential layer along a flat segment;
-// a ratio of two table reads is noise at these lengths.
-fn layer_depth(h0: f32, h1: f32, d: f32, scale: f32) -> f32 {
-  let dh = h1 - h0;
-  if (abs(dh) < 1e-3) {
-    return d * exp(-(h0 + h1) * 0.5 / scale);
-  }
-  return d * scale * (exp(-h0 / scale) - exp(-h1 / scale)) / dh;
-}
-
-// Lit where the air is, not along the ray: a veil taken from the sky's ray
-// laid a bright line over the ground at the horizon toward a low sun.
-struct AirLight {
-  rayleigh: vec3f,
-  mie: vec3f,
-};
-
-fn air_light(dir: vec3f, light: Light) -> AirLight {
-  let c_sun = dot(dir, frame_sun_dir());
-  let c_other = dot(dir, frame_other_dir());
-  let around = 0.5 * (light.fill + ground_bounce(light)) / PI;
-  var l: AirLight;
-  l.rayleigh = light.sun * rayleigh_phase(c_sun) + light.other * rayleigh_phase(c_other) + around;
-  l.mie = light.sun * mie_phase(c_sun) + light.other * mie_phase(c_other) + around;
-  return l;
-}
-
 // The Earth's face where a ray meets the ground past the terrain, at the
 // latitude and longitude of `n`, the ground's up there in the map center's
 // east, north and up: its reflectance, and in alpha its lights' square root.
@@ -194,34 +168,49 @@ struct Veil {
   scattered: vec3f,
 };
 
-fn veil(world_pos: vec3f, light: Light) -> Veil {
+// What the air between the eye and a point leaves of it and lays over it: the
+// tables' transmittance, as the Earth past the terrain is dimmed, and the light
+// the aerial perspective gathered to that distance along that ray.
+fn air_to(world_pos: vec3f) -> Veil {
   var v: Veil;
-  let du = length(world_pos - frame_camera_pos());
+  let to = world_pos - frame_camera_pos();
+  let du = length(to);
   if (du < 1e-4) {
     v.through = vec3f(1.0);
     v.scattered = vec3f(0.0);
     return v;
   }
+  let r = camera_r();
+  let mu = dot(to / du, frame_up());
   let d = du * atmos_km_per_u();
-  let h0 = clamp(atmos_camera_altitude(), 0.0, atmos_top_radius() - atmos_bottom_radius());
-  let h1 = max(h0 + radius_of(world_pos) - camera_r(), 0.0);
-  let rayleigh = atmos_rayleigh_scattering() * layer_depth(h0, h1, d, atmos_rayleigh_scale_height());
-  let mie = atmos_mie_extinction() * layer_depth(h0, h1, d, atmos_mie_scale_height());
-  // Single scattering over a segment lit uniformly, short enough for that.
-  let depth = rayleigh + vec3f(mie);
-  let through = exp(-depth);
+  let through = transmittance_along(r, mu, d, meets_ground(r, mu));
   // The palette is no reflectance: dimmed by wavelength, a light sea's blue went
   // and its green stayed. The air's own light keeps its color, and the Earth's
   // picture, which is reflectance, is dimmed as it is past the terrain.
   v.through = mix(vec3f(dot(through, LUMA)), through, frame_earth_share());
-  let lit = air_light((world_pos - frame_camera_pos()) / du, light);
-  let turned = rayleigh * lit.rayleigh + mie * atmos_mie_scattering() / atmos_mie_extinction() * lit.mie;
-  v.scattered = (vec3f(1.0) - through) * turned / max(depth, vec3f(1e-6));
+  v.scattered = aerial_at(world_pos, r, mu, d) * exposure();
   return v;
 }
 
-fn aerial(color: vec3f, world_pos: vec3f, light: Light) -> vec3f {
-  let v = veil(world_pos, light);
+// The aerial perspective where a point falls on the screen, between the two
+// slices about its distance; nearer than the first, a share of it.
+fn aerial_at(world_pos: vec3f, r: f32, mu: f32, d: f32) -> vec3f {
+  let clip = frame_view_proj() * vec4f(world_pos, 1.0);
+  let ndc = clamp(clip.xy / max(clip.w, 1e-6), vec2f(-1.0), vec2f(1.0));
+  let x = coord_of(ndc.x * 0.5 + 0.5, AERIAL_SIZE.x);
+  let y = coord_of(ndc.y * 0.5 + 0.5, AERIAL_SIZE.y);
+  let s = sqrt(clamp(d / max(air_path(r, mu), 1e-6), 0.0, 1.0)) * AERIAL_SIZE.z - 1.0;
+  let k = clamp(floor(s), 0.0, AERIAL_SIZE.z - 1.0);
+  let near = textureSampleLevel(aerial_lut, atmos_sampler, vec2f((k + x) / AERIAL_SIZE.z, y), 0.0).rgb;
+  if (s < 0.0) {
+    return near * (s + 1.0);
+  }
+  let far = textureSampleLevel(aerial_lut, atmos_sampler, vec2f((min(k + 1.0, AERIAL_SIZE.z - 1.0) + x) / AERIAL_SIZE.z, y), 0.0).rgb;
+  return mix(near, far, s - k);
+}
+
+fn aerial(color: vec3f, world_pos: vec3f) -> vec3f {
+  let v = air_to(world_pos);
   return color * v.through + v.scattered;
 }
 
@@ -236,7 +225,7 @@ struct Seen {
 
 fn seen_from_eye(world_pos: vec3f) -> Seen {
   let light = light_of(world_pos);
-  let v = veil(world_pos, light);
+  let v = air_to(world_pos);
   var s: Seen;
   s.through = v.through;
   s.scattered = v.scattered;
