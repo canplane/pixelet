@@ -110,6 +110,8 @@ struct VertexOut {
   @location(10) scattered: vec3f,
   @location(11) past: vec3f,
   @location(12) @interpolate(flat) fill: vec3f,
+  @location(13) @interpolate(flat) sun: vec3f,
+  @location(14) @interpolate(flat) other: vec3f,
 };
 
 // The draw record's index rides on vertex_index (first vertex = record index
@@ -195,7 +197,9 @@ fn chunk_vertex(v: u32, words: BoxWords, fine: bool) -> VertexOut {
   o.through = seen.through;
   o.scattered = seen.scattered;
   o.past = seen.past;
-  o.fill = seen.fill;
+  o.sun = seen.light.sun;
+  o.other = seen.light.other;
+  o.fill = seen.light.fill;
   // Real-size tile UV, one repeat per cell; side faces put the box's top at v = 0.
   let is_side = abs(normal.z) < 0.5;
   if (is_side) {
@@ -407,6 +411,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let n = normalize(select(i.normal, vec3f(i.normal.xy, -i.normal.z), under));
   let k = frame_ao_strength() * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
   let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
-  let color = shade(base, n, i.world_pos, sun_lit(i.world_pos, n), open * screen_open(i.clip.xy), Seen(i.through, i.scattered, i.past, i.fill));
+  let color = shade(base, n, i.world_pos, sun_lit(i.world_pos, n), open * screen_open(i.clip.xy), Seen(i.through, i.scattered, i.past, Light(i.sun, i.other, i.fill)));
   return vec4f(finish(color, i.clip.xy), i.opacity);
 }

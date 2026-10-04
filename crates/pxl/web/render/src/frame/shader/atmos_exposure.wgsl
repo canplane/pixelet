@@ -18,13 +18,12 @@ fn meter_reference() -> f32 {
 
 @fragment
 fn fs(v: TableOut) -> @location(0) vec4f {
-  let fill = sky_fill();
   var sum = 0.0;
   for (var i = 0; i < METER_TAPS; i++) {
     let z = 1.0 - (f32(i) + 0.5) * 2.0 / f32(METER_TAPS);
     let s = sqrt(1.0 - z * z);
     let phi = GOLDEN_ANGLE * f32(i);
-    sum += dot(beyond(air_along(vec3f(s * cos(phi), s * sin(phi), z)), fill), LUMA);
+    sum += dot(beyond(air_along(vec3f(s * cos(phi), s * sin(phi), z))), LUMA);
   }
   let light = sum / f32(METER_TAPS) / meter_reference();
   let adapted = clamp(pow(1.0 / max(light, 1e-6), atmos_adaptation()), 1.0, atmos_max_adaptation());
