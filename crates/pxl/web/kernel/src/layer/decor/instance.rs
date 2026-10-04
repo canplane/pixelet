@@ -1,6 +1,6 @@
 // pxl-kernel/layer/decor/instance.rs
 
-//! A decor cell's instances as lanes, and the block they are laid into. A
+//! A chunk's decor instances as lanes, and the block they are laid into. A
 //! placed instance carries its entry's band and packed position; `hidden` is
 //! a flag so the hit test keeps seeing what the presentation leaves out.
 
@@ -23,8 +23,7 @@ pub(crate) struct Instance {
     pub(crate) pos: u32,
 }
 
-/// As many as the renderer's decor pass draws.
-pub const DECOR_GROUPS: usize = 64;
+pub use pxl_render::gpu::pass::decor::GROUPS as DECOR_GROUPS;
 
 /// Grows rather than being a `.fixed` range: placed instances are unbounded,
 /// and a fixed workspace would drop what someone placed. Where the heap
@@ -54,26 +53,9 @@ impl Default for DecorScratch {
 }
 
 impl DecorScratch {
-    /// Its lanes in `.fixed.decor`, as the module laid them. Made once: the
-    /// scheduler keeps the one there is.
-    pub fn laid() -> DecorScratch {
-        let decor = range(Range::Decor);
-        // SAFETY: the range's two lanes, which this scratch holds alone; the
-        // elements are plain numbers, and none is read before a build has
-        // written it.
-        let (instances, groups) = unsafe { (lane(decor, 0, DECOR_INSTANCES), lane(decor, INSTANCE_LANE_BYTES, DECOR_INSTANCES)) };
-        DecorScratch {
-            instances,
-            groups,
-            len: 0,
-            counts: [0; DECOR_GROUPS],
-            group_count: 0,
-            dropped: 0,
-        }
-    }
-
     pub(crate) fn clear(&mut self) {
-        self.len = 0;
+        self.instances.clear();
+        self.groups.clear();
         self.counts = [0; DECOR_GROUPS];
         self.group_count = 0;
     }
@@ -85,10 +67,10 @@ impl DecorScratch {
             self.instances.try_reserve(more)?;
             self.groups.try_reserve(more)?;
         }
-        self.instances[self.len] = instance;
-        self.groups[self.len] = group as u16;
-        self.len += 1;
+        self.instances.push(instance);
+        self.groups.push(group as u16);
         self.counts[group] += 1;
+        Ok(())
     }
 }
 

@@ -5,6 +5,9 @@ use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MIN_DIST};
 use crate::control::camera::controller::look_domain;
+use crate::global::Global;
+use crate::layer::decor::hit::Scattered;
+use crate::layer::object::store::EntryAt;
 use crate::world::change::request_world_tick;
 use xpute_runtime::global::Global;
 
@@ -48,10 +51,10 @@ pub struct CameraStore {
     pub camera_status: CameraStatus,
     pub hovered_coord: Option<Pvf3>,
     pub hovered_object_at: Option<EntryAt>,
-    /// A scattered decor has no entry.
+    /// The scattered decor under the cursor, if that is what is under it:
+    /// no entry, what is made there.
     pub hovered_scattered: Option<Scattered>,
-    /// Where a walker sent there starts from.
-    pub hovered_approach: Option<Pvf3>,
+    /// What the controls ask of the camera (`Intent`).
     pub intent: Intent,
     pub is_follow_mode: bool,
 }
@@ -62,6 +65,7 @@ impl CameraStore {
             camera_status: CameraStatus::Idle,
             hovered_coord: None,
             hovered_object_at: None,
+            hovered_scattered: None,
             intent: Intent {
                 dist: DEFAULT_DIST,
                 azimuth: DEFAULT_AZIMUTH,

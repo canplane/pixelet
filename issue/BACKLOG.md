@@ -26,31 +26,9 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   limit.
 - **How the samples are drawn.** Raster against casting into the records,
   on the iPhone 13 mini, with today's box format (36 unindexed vertices)
-  against faces alone; a blend on arrival — a chunk rebuilt
-  because its page came is swapped in whole today; decor as its own solver — instances at the asset's
-  level of detail and its lifetime off the chunk slot (its impostor far away
-  is in, 2026-10-01, and its hit's reach is the models' own).
+  against faces alone.
 
 ## P1
-
-- **Decor: the impostor tier.** Decided 2026-09-13
-  ([20260911-decor-identity-orientation-and-one-cell-format.md](./20260911-decor-identity-orientation-and-one-cell-format.md),
-  "Closed"): each variant rendered once to a sprite, far instances drawn
-  as a camera-facing quad through the billboard field. The criterion is
-  in and every shipped kind is on the nearest tier only; the impostor is
-  what would draw them further for two triangles each. Not a phone fix —
-  build it when a wider decor range is wanted.
-
-- **Decor and the badges on the drawn chunks, seen running.** `4da038fc`
-  and `98e4f790` moved them onto the chunks the terrain draws; checked by
-  the tests and the build only. Zoom and pan on the dev stack: decor and
-  badges change with the ground under them, and no tree is lost or doubled
-  at a chunk's top or edge. `e7893bdb` moved the badges' globe and viewport
-  onto the frame's uniform: they stand, size and bend over the planet as
-  before. The gizmos' labels no longer blink while the camera moves. `01215a04`
-  and the commit after it moved the up, the viewport and the fog onto the
-  frame's uniform: the stars, the screen-space AO, the sky and the clouds
-  look as before.
 
 ## P3
 

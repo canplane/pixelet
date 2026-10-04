@@ -29,9 +29,3 @@ pub mod published;
 pub mod quadkey;
 pub mod surface;
 pub mod way;
-
-/// A packet no bake writes, as every page reader refuses it.
-#[track_caller]
-pub(crate) fn malformed() -> MarshalError {
-    MarshalError::new(Errno::EBADMSG)
-}

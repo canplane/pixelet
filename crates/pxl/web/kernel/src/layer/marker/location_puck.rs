@@ -16,11 +16,9 @@ use crate::kernel::{kernel, with_world};
 use crate::layer::environment::fog::view_reach;
 use crate::layer::environment::theme::Theme;
 use crate::layer::environment::theme_clock::theme_key;
-use crate::world::access::Access;
+use crate::world::access::{support_revision, Access};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::table::Frame;
-use crate::world::observation::heights_revision;
-use xpute_runtime::global::Global;
 
 // A world-space footprint (4u), independent of U_PER_CELL; the .707 is a
 // one-cell diagonal correction.
@@ -69,9 +67,11 @@ struct Puck {
     last_known_device_coord: Option<Pvf3>,
     /// None until grounded, rather than drawing at a guessed height.
     last_known_center_z: Option<f64>,
-    /// The zone's center and the `heights_revision` it was grounded against: a
-    /// page arriving or an edit grounds it again.
-    zone_for: Option<(V3, (u32, u32))>,
+    /// The zone as last written: its center, and what it was grounded
+    /// against (world/access.rs `support_revision`). A zone sample can reach
+    /// a page not yet loaded; a page arriving, an object placed or carved, or
+    /// decor arriving grounds it again.
+    zone_for: Option<(V3, [u32; 3])>,
     beacon_for: Option<([f64; 2], bool)>,
     shown: bool,
 }
@@ -105,10 +105,11 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
     let raw = [pos[0], pos[1], center_z];
     let center_pos = floor3n(&raw, U_PER_CELL);
 
-    let revision = heights_revision();
+    let revision = support_revision();
     if p.zone_for != Some((center_pos, revision)) {
         p.zone_for = Some((center_pos, revision));
         let mut lane: Vec<f32> = Vec::with_capacity(p.samples.len() * ZONE_INSTANCE_FLOATS);
+        let mut v = [0.0; 3];
         for s in &p.samples {
             let v = add3(&center_pos, &s.off);
             let coord = projection::project(v[0], v[1], v[2]);

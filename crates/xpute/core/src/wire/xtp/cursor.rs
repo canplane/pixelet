@@ -77,9 +77,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// A typed-array leaf's elements, as the type it was written as: a read
-    /// of any other node, or of an array of another type, is EBADMSG rather
-    /// than its bytes read as another width.
+    /// An array of another element type is EBADMSG, never reinterpreted.
     pub fn get_array<T: ArrayElem>(&self) -> Result<&'a [T], MarshalError> {
         match self {
             Cursor::Node(c) if c.type_ == T::TYPE as u8 => c.array::<T>(),
@@ -115,8 +113,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// A string sequence's strings, read where they lie. A string that is not
-    /// UTF-8, or offsets that do not climb within the payload, are EBADMSG.
     pub fn get_strs(&self) -> Result<Strs<'a>, MarshalError> {
         match self {
             Cursor::Node(c) if c.type_ == SequenceType::STRS as u8 => c.strs(),
@@ -124,11 +120,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// `get<string>()` read where it lies: the packet's own bytes, with
-    /// nothing decoded into a string of its own — it outlives the cursor and
-    /// lives as long as the packet does. A string that is not UTF-8 is
-    /// EBADMSG, where the host's decode would have replaced what does not
-    /// read.
+    /// Invalid UTF-8 is EBADMSG here, where `get_str` replaces it.
     pub fn get_str_ref(&self) -> Result<&'a str, MarshalError> {
         match self {
             Cursor::Node(c) if c.type_ == SequenceType::STR as u8 => c.str_ref(),
@@ -467,8 +459,8 @@ impl<'a> NodeCursor<'a> {
         core::str::from_utf8(&bytes[payload_start as usize..(payload_start + nbyte) as usize]).map_err(|_| MarshalError::new(Errno::EBADMSG))
     }
 
-    /// A STRS payload: `len` + 1 offsets, each no less than the one before,
-    /// into the UTF-8 after them; every string checked before any is given.
+    /// `len` + 1 non-decreasing offsets into the UTF-8 after them; every
+    /// string is checked before any is given.
     fn strs(&self) -> Result<Strs<'a>, MarshalError> {
         let bad = || MarshalError::new(Errno::EBADMSG);
         if self.base + WORD_SZ > self.pkt.len() as u32 {
@@ -478,12 +470,17 @@ impl<'a> NodeCursor<'a> {
         let [n, _] = GET_WORD(self.pkt, self.base, &mut reg);
         let start = (self.base + WORD_SZ) as usize;
         let pkt: &'a [u8] = self.pkt;
-        let offs = pkt.get(start..start + 4 * (n as usize + 1)).ok_or_else(bad)?;
+        // In u64: a count a packet cannot hold must read as one, not wrap.
+        let lane = 4 * (n as u64 + 1);
+        if start as u64 + lane > pkt.len() as u64 {
+            return Err(bad());
+        }
+        let offs = &pkt[start..start + lane as usize];
         let strs = Strs { offs, blob: &[], len: n };
         let blob = start + offs.len();
         let total = strs.off(n as usize);
         let strs = Strs {
-            blob: pkt.get(blob..blob + total).ok_or_else(bad)?,
+            blob: pkt.get(blob..blob.checked_add(total).ok_or_else(bad)?).ok_or_else(bad)?,
             ..strs
         };
         for i in 0..n as usize {
@@ -495,7 +492,7 @@ impl<'a> NodeCursor<'a> {
         Ok(strs)
     }
 
-    // STR stores UTF-8 bytes with a trailing NUL on wire, while len excludes that terminator.
+    // On the wire a STR has a trailing NUL that `len` excludes.
     fn str_of(&self) -> Result<String, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -671,9 +668,7 @@ pub fn elements<'b, T: Copy>(a: &'b Array<'_>) -> &'b [T] {
 #[path = "cursor.test.rs"]
 mod test;
 
-/// A string sequence's strings, as they lie in the packet: `len` of them,
-/// each the span between two offsets into the UTF-8 after the offsets,
-/// checked when the sequence was read.
+/// Validated as UTF-8 when the sequence was read.
 #[derive(Clone, Copy, Debug)]
 pub struct Strs<'a> {
     offs: &'a [u8],
@@ -694,7 +689,6 @@ impl<'a> Strs<'a> {
         self.len == 0
     }
 
-    /// The string at `i`, or none past the end.
     pub fn get(&self, i: u32) -> Option<&'a str> {
         (i < self.len).then(|| {
             let blob: &'a [u8] = self.blob;
@@ -709,7 +703,6 @@ impl<'a> Strs<'a> {
     }
 }
 
-/// An element a typed-array leaf holds, and the leaf's type for it.
 pub trait ArrayElem: Copy {
     const TYPE: SequenceType;
 }

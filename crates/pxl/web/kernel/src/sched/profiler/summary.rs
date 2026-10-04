@@ -12,9 +12,9 @@ use crate::layer::billboard::sheet::billboard_sheet;
 use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, QualityBlock, RecBlock, HeldBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
 use crate::sched::profiler::log::window_counters;
 use crate::sched::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, put, FrameSample, Lane, Outcome, TaskRow, SPREAD_LIMIT};
+use crate::sched::profiler::block::TASK_PHASES;
 use crate::sched::profiler::spec::{LIMITS, SUMMARY};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
-use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::adapter::epsg4326;
@@ -36,7 +36,6 @@ pub fn overran(f: &FrameSample) -> bool {
 }
 
 const WORDS: usize = SUMMARY::WORDS as usize;
-const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 
@@ -215,15 +214,15 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let held = with_world(|_, sched| sched.held()).unwrap_or_default();
+    let retain = with_world(|_, sched| sched.retention()).unwrap_or_default();
     let (decor_cells, decor_instances) = crate::layer::decor::cell::counts();
     put(
         out,
-        SUMMARY::held::AT,
-        &HeldBlock {
-            run_sets: held.run_sets as f64,
-            run_set_mb: held.run_set_mb as f64,
-            tiers: held.tiers as f64,
+        SUMMARY::retain::AT,
+        &RetainBlock {
+            run_sets: retain.run_sets as f64,
+            run_set_mb: retain.run_set_mb as f64,
+            tiers: retain.tiers as f64,
             decor_cells: decor_cells as f64,
             decor_instances: decor_instances as f64,
             decor_bytes: crate::layer::decor::cell::bytes() as f64,

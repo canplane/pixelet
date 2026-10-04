@@ -76,16 +76,25 @@ pub fn bake_leaf(r: &mut deck::Reader<impl Store>, page: IVec) -> Result<(Terrai
     Ok((assemble(surface, lines), flat))
 }
 
-/// Synthesized rather than read, so the ocean page does not depend on which
-/// offshore page was sampled.
-fn empty_source() -> PageSource {
-    PageSource {
-        ele: None,
-        building_rows: Vec::new(),
-        segment_rows: Vec::new(),
-        base_rows: Vec::new(),
-        coast_rows: Vec::new(),
-    }
+/// The source packet an open-ocean page would produce: a flat zero elevation
+/// grid, no terrain features, no coastline rows. Synthesized rather than read
+/// from the DB so the fallback page is exactly "nothing here but water",
+/// independent of whichever far-offshore page happened to get sampled.
+fn empty_source() -> Vec<u8> {
+    let ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
+    let mut empty: TreeView<'_> = TreeView::new();
+    empty.branch(Some(&mut |_| {}));
+
+    let mut root: TreeView<'_> = TreeView::new();
+    root.branch(Some(&mut |r| {
+        r.i16_array(Some(&ele));
+        r.subtree(&empty); // buildings
+        r.subtree(&empty); // segments
+        r.subtree(&empty); // base
+        r.subtree(&empty); // coasts
+        r.subtree(&empty); // decks
+    }));
+    encoder().encode(&root, TreeEncoderOptions::default()).expect("empty source packet")
 }
 
 /// Checked to be page-independent: readers keep one decoded copy, which is

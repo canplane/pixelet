@@ -92,7 +92,7 @@ pub struct FrameInput<'a> {
     pub environment: &'a [f32],
     /// Each decor group's model block, by the list's handle (0 while it
     /// loads), its skin's image and its extent, in group order.
-    pub decor: &'a [(u32, Option<u32>, Extent)],
+    pub decor: &'a [(u32, Option<u32>, crate::gpu::pass::impostor::Extent)],
     /// The world's actors' models and the images they are skinned with.
     pub skins: &'a [(u32, u32)],
     pub cases: &'a [(u32, u32, u32)],
@@ -430,15 +430,17 @@ impl Blocks {
         }
     }
 
-    /// Where the turn's stream has no room, the buffer goes and the block is put
-    /// again whole once there is.
+    /// The block at `at` changed `len` bytes from byte `from`: written into
+    /// its buffer when it has one, and read from there when it is next put
+    /// on a device. Where the turn's stream has no room for them, the buffer
+    /// goes and the block is missing, put again whole once there is.
     fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, from: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };
         self.at[i] = at;
         let (Some(g), buffer @ 1..) = (g, self.buffer[i]) else { return };
-        let bytes = len.min(self.len[i]) & !3;
+        let bytes = len.min(self.len[i].saturating_sub(from)) & !3;
         if room(bytes) {
-            g.write_buffer(buffer, 0, memory(at, bytes));
+            g.write_buffer(buffer, from, memory(at + from, bytes));
         } else {
             release(self.group[i]);
             release(buffer);
@@ -651,7 +653,7 @@ pub struct Renderer {
     layers: Layers,
     moon: MoonMap,
     decor: DecorPass,
-    impostor: ImpostorPass,
+    impostor: crate::gpu::pass::impostor::ImpostorPass,
     skinned: SkinnedPass,
     puck: PuckPass,
     badges: BadgePass,
@@ -718,9 +720,18 @@ impl Renderer {
             chunk_coarse_depth: pipelines.build(g, PIPELINE_CHUNK_COARSE_DEPTH, format::CANVAS),
             chunk_coarse_prepass: pipelines.build(g, PIPELINE_CHUNK_COARSE_PREPASS, format::CANVAS),
             ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS)],
-            decor: DecorPass::new(g, &mut pipelines, device.align),
-            impostor: ImpostorPass::new(g, &mut pipelines, device.align),
-            skinned: SkinnedPass::new(g, &mut pipelines, device.align),
+            decor: DecorPass::new(g, &mut pipelines, frame_buffer, &shadow, ao.blank_entry(7), air, device.align),
+            impostor: crate::gpu::pass::impostor::ImpostorPass::new(g, &mut pipelines, frame_buffer, &shadow, ao.blank_entry(7), air, device.align),
+            skinned: SkinnedPass::new(
+                g,
+                &mut pipelines,
+                frame_buffer,
+                shadow.entries(1),
+                Some((shadow.light_frame, shadow.blank_entries(1))),
+                ao.blank_entry(7),
+                air,
+                device.align,
+            ),
             puck: PuckPass::new(g, &mut pipelines, frame_buffer),
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer),
@@ -777,6 +788,11 @@ impl Renderer {
         release(self.light_group);
         self.bind_group = self.chunk_group(g, self.frame_buffer, self.shadow.entries(1));
         self.light_group = self.chunk_group(g, self.shadow.light_frame, self.shadow.blank_entries(1));
+        let ao = self.ao.entry(7);
+        self.decor.rebind(g, self.frame_buffer, &self.shadow, ao);
+        self.impostor.rebind(g, self.frame_buffer, &self.shadow, ao);
+        self.skinned
+            .rebind(g, self.frame_buffer, self.shadow.entries(1), Some((self.shadow.light_frame, self.shadow.blank_entries(1))), ao);
     }
 
     /// Every lit pass's group 0 again: the occlusion map is a new object.
@@ -946,7 +962,8 @@ impl Renderer {
     }
 
     fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> FrameStat {
-        self.decor.set_models(input.decor);
+        let models: Vec<(u32, Option<u32>)> = input.decor.iter().map(|&(m, i, _)| (m, i)).collect();
+        self.decor.set_models(&models);
         self.impostor.set_models(input.decor);
         for &(model, image) in input.skins {
             self.skinned.set_skin(g, model, image);
@@ -974,11 +991,9 @@ impl Renderer {
         if !uniforms.is_empty() {
             g.write_buffer(self.draws_buffer, 0, bytes(uniforms));
         }
-        let mut order = core::mem::take(&mut self.order);
-        let draws = Draws::sort(records.as_chunks::<DRAW_WORDS>().0, &mut order);
-        self.decor.prepare(g, &draws, uniforms);
-        self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms);
-        self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms);
+        self.decor.prepare(g, draws, uniforms);
+        self.impostor.prepare(g, draws, uniforms);
+        self.skinned.prepare(g, draws, uniforms);
 
         let b = blocks();
         let encoder = object();
@@ -988,8 +1003,9 @@ impl Renderer {
         // ran: which were is told with the set, since a query no pass wrote
         // holds whatever an earlier frame left in it.
         let mut stamps: [Stamp; GPU_SPANS.len()] = core::array::from_fn(|span| Stamp::of(q, span));
+        // A variant's sprite, where its model or skin came or changed, before
+        // the world's pass reads the atlas.
         self.impostor.bake(g, encoder, &mut self.decor, b);
-        // The air's tables, where any is due, before any pass reads them.
         self.atmosphere.draw(g, encoder, &mut stamps[SPAN_AIR]);
         if self.shadows {
             let pass = self.shadow.begin(g, encoder, &mut stamps[SPAN_SHADOW]);
@@ -1010,11 +1026,14 @@ impl Renderer {
         g.current(world.handle, canvas_view);
         let pass = object();
         g.pass(pass, encoder, &pass_desc(canvas_view, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
-        let chunk = [self.chunk.pipeline, self.chunk_coarse.pipeline];
-        let mut bound = self.draw_opaque(g, pass, &draws, b, Stage::Lit, chunk, self.bind_group, self.models.frame);
-        // The impostors after every other opaque pipeline: alpha-tested, a
-        // fragment they discard is one the opaque world had to fill first.
-        self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, (self.models.frame, &mut bound));
+        g.set_pipeline(pass, self.chunk.pipeline);
+        g.set_bind_group(pass, 0, self.bind_group, &[]);
+        self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, FINE_BOX_BYTES, None);
+        g.set_pipeline(pass, self.chunk_coarse.pipeline);
+        self.draw_meshes(g, pass, draws, PIPELINE_CHUNK_COARSE, COARSE_BOX_BYTES, None);
+        self.decor.draw(g, pass, draws, b);
+        self.impostor.draw(g, pass, draws, b);
+        self.skinned.draw(g, pass, draws, b);
         // The sky and the stars after the opaque world, at the far plane, so
         // only a pixel it left empty runs the sky's shader: looking down at the
         // map, none does.
@@ -1124,7 +1143,7 @@ impl Renderer {
             let tris = match d[4] {
                 PIPELINE_CHUNK | PIPELINE_CHUNK_COARSE | PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[1] * 12,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
-                PIPELINE_IMPOSTOR => 2 * d[2],
+                crate::frame::draw::PIPELINE_IMPOSTOR => 2 * d[2],
                 PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, index_cnt)| index_cnt / 3),
                 PIPELINE_PUCK_ZONE => 12 * d[1],
                 PIPELINE_PUCK_BEACON => 8,
@@ -1220,7 +1239,10 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
 /// Blocks listed with no device wait in the table for the next one.
 fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
     let b = blocks();
-    // Frees first, so the table never holds a block beside its replacement.
+    // What goes, first: a block replaced in the same list is never there
+    // with its replacement, so the table holds no more than the owners do
+    // when the list is done. A handle freed in a list is never uploaded in
+    // it (draw.rs `DrawList::free` drops an upload not yet taken).
     for &handle in lists.frees {
         b.remove(handle);
     }
@@ -1228,10 +1250,7 @@ fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
         b.insert(g, u[0], u[1], u[2], u[3], u[4]);
     }
     for r in lists.rewrites.as_chunks::<REWRITE_WORDS>().0 {
-        b.rewrite(g, r[0], r[1], r[2]);
-    }
-    for &handle in lists.frees {
-        b.remove(handle);
+        b.rewrite(g, r[0], r[1], r[2], r[3]);
     }
     (lists.draws, lists.uniforms)
 }

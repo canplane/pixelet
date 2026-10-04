@@ -42,6 +42,10 @@ packets.4.type	32
 packets.4.deep	[[string:696e6e6572,number:1],number:3]
 packets.4.shallow.0	32:branch
 packets.4.shallow.1	138:number:3
+packets.5.name	strs
+packets.5.packet	585450000000000020000000ba0000000300000000000000000000000100000007000000070000006168c3a96c6c6f00
+packets.5.type	186
+packets.5.deep	[string:61,string:68c3a96c6c6f,string:]
 malformed.truncated_header	errno:-74
 malformed.bad_magic	errno:-74
 malformed.truncated_payload	errno:-74

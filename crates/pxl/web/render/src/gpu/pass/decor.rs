@@ -67,9 +67,7 @@ impl DecorPass {
         }
     }
 
-    /// Each group's model block and skin image as the kernel has them now, in
-    /// group order (0 for a model not yet registered); a group whose model or
-    /// skin changed lets its skin go.
+    /// 0 for a model not yet registered; a group whose model or skin changed lets its skin go.
     pub fn set_models(&mut self, groups: &[(u32, Option<u32>, Extent)]) {
         for (group, &(mesh, image, _)) in groups.iter().take(GROUPS).enumerate() {
             let gr = self.groups[group];
@@ -113,8 +111,6 @@ impl DecorPass {
         self.groups.get(group as usize).and_then(|gr| blocks.get(gr.mesh)).map_or(0, |(_, _, index_cnt)| index_cnt / 3)
     }
 
-    /// Writes every decor draw's uniforms in one write, the opaque ones' and
-    /// then the ghost's.
     pub fn prepare(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32]) {
         let (opaque, ghost) = (draws.of(PIPELINE_DECOR), draws.of(PIPELINE_GHOST_DECOR));
         let count = (opaque.len() + ghost.len()) as u32;
@@ -123,8 +119,6 @@ impl DecorPass {
         });
     }
 
-    /// The opaque decor into the open pass at `stage`, after `prepare`, under
-    /// group 0 `frame`; `bound` is the group 0 the pass has.
     pub fn draw(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {
         let pipeline = match stage {
             Stage::Lit => self.lit.pipeline,
@@ -134,13 +128,11 @@ impl DecorPass {
         self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, pipeline, frame);
     }
 
-    /// The ghost's decor, blended, after everything opaque.
     pub fn draw_ghosts(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, frame: (u32, &mut u32)) {
         self.draw_pipeline(g, pass, draws, blocks, PIPELINE_GHOST_DECOR, self.ghost.pipeline, frame);
     }
 
-    /// The draws of `which` under `pipeline`: the ghost's uniforms follow the
-    /// opaque ones' (`prepare`).
+    /// The ghost's uniforms follow the opaque ones' (`prepare`).
     #[allow(clippy::too_many_arguments)]
     fn draw_pipeline(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, which: u32, pipeline: u32, frame: (u32, &mut u32)) {
         let Some(slots) = self.uniforms.slots() else { return };

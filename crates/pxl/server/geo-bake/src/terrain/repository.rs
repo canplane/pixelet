@@ -29,16 +29,21 @@ const OVERTURE_TRANSPORTATION_SQL: &str = concat!(
     "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT ",
-    crate::segment_columns!(),
-    "
-FROM overture_transportation t, env
-WHERE t.geom && env.e"
-);
+SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags,
+  width_rules::text AS widths, access_restrictions::text AS access,
+  subclass, subclass_rules::text AS subclasses, ST_AsBinary(geom) AS geom_wkb
+FROM overture_transportation, env
+WHERE geom && env.e";
 
-/// How far past a page what is drawn on it can come from: a way at its
-/// widest, and a corridor's gap past another (pipeline/corridor.rs).
-pub const DRAWN_REACH_U: f64 = (WIDEST + GAP) * U_PER_CELL;
+/// The decks the offline solve wrote (deck/), whole: a deck is a line and
+/// the page keeps the run of it that crosses the page
+/// (terrain/pipeline/deck.rs).
+const OVERTURE_DECK_SQL: &str = "WITH env AS (
+  SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
+)
+SELECT gers_id, subtype, class, width_m, piers, ST_AsBinary(geom) AS geom_wkb
+FROM overture_deck, env
+WHERE geom && env.e";
 
 /// A page's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
 /// is baked is still the page's own cells.
@@ -148,7 +153,79 @@ impl TerrainRepository {
     pub fn fetch_page_source(&self, client: &mut Client, page_bbox: BBox3857) -> Result<PageSource, postgres::Error> {
         let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(page_bbox);
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
-        let wkb = |row: &postgres::Row| -> Box<[u8]> { row.get::<_, &[u8]>("geom_wkb").into() };
+        let z_cell_per_m = Z_CELL_PER_M(miny);
+
+        let ele = client
+            .query(&self.ele, &[&minx, &miny, &maxx, &maxy, &z_cell_per_m])?
+            .first()
+            .and_then(|row| row.get::<_, Option<Vec<i16>>>("ele"));
+
+        let building_rows = client
+            .query(&self.buildings, &bbox)?
+            .iter()
+            .map(|row| BuildingRow {
+                gers_id: row.get("gers_id"),
+                subtype: row.get("subtype"),
+                class: row.get("class"),
+                height: row.get("height"),
+                // `num_floors` is an `integer` column; the row model carries
+                // every number as f64, as the packet does.
+                num_floors: row.get::<_, Option<i32>>("num_floors").map(f64::from),
+                geom_wkb: wkb(row),
+            })
+            .collect();
+
+        let segment_rows = client
+            .query(&self.segments, &bbox)?
+            .iter()
+            .map(|row| SegmentRow {
+                gers_id: row.get("gers_id"),
+                subtype: row.get("subtype"),
+                class: row.get("class"),
+                flags: row.get("flags"),
+                widths: row.get("widths"),
+                access: row.get("access"),
+                subclass: row.get("subclass"),
+                subclasses: row.get("subclasses"),
+                geom_wkb: wkb(row),
+            })
+            .collect();
+
+        let base_rows = client
+            .query(&self.base, &bbox)?
+            .iter()
+            .map(|row| BaseRow {
+                gers_id: row.get("gers_id"),
+                source: row.get("source"),
+                subtype: row.get("subtype"),
+                class: row.get("class"),
+                geom_wkb: wkb(row),
+            })
+            .collect();
+
+        let coast_rows = client
+            .query(&self.coast, &bbox)?
+            .iter()
+            .map(|row| CoastRow {
+                id: row.get("id"),
+                geom_wkb: wkb(row),
+                covers_page: row.get("covers_page"),
+            })
+            .collect();
+
+        let deck_rows = client
+            .query(&self.deck, &bbox)?
+            .iter()
+            .map(|row| DeckRow {
+                gers_id: row.get("gers_id"),
+                subtype: row.get("subtype"),
+                class: row.get("class"),
+                width_m: row.get::<_, f32>("width_m").into(),
+                piers: row.get::<_, &[u8]>("piers").into(),
+                geom_wkb: wkb(row),
+            })
+            .collect();
+
         Ok(PageSource {
             ele: self.raster.page_grid(client, page_bbox)?,
             building_rows: client

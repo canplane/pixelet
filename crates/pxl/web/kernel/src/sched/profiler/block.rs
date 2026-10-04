@@ -12,7 +12,7 @@ use crate::sched::profiler::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUM
 
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
-const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
+pub const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
 const CATEGORIES: usize = crate::sched::profiler::spec::CATEGORY_NAMES.len();
 
 #[repr(C)]
@@ -136,7 +136,6 @@ pub struct CountersBlock {
     pub built_scans: f64,
     pub built_bakes: f64,
     pub built_starved: f64,
-    pub decor_dropped: f64,
     pub atlas_repacks: f64,
     pub atlas_uploads: f64,
 }
@@ -166,7 +165,7 @@ words!(CountersBlock, SUMMARY::counters::WORDS,
     bands_reused => SUMMARY::counters::bands_reused, bands_allocated => SUMMARY::counters::bands_allocated,
     built_direct => SUMMARY::counters::built_direct, built_scans => SUMMARY::counters::built_scans,
     built_bakes => SUMMARY::counters::built_bakes, built_starved => SUMMARY::counters::built_starved,
-    decor_dropped => SUMMARY::counters::decor_dropped, atlas_repacks => SUMMARY::counters::atlas_repacks,
+    atlas_repacks => SUMMARY::counters::atlas_repacks,
     atlas_uploads => SUMMARY::counters::atlas_uploads,
 );
 
@@ -190,17 +189,15 @@ pub struct HeldBlock {
     pub run_sets: f64,
     pub run_set_mb: f64,
     pub tiers: f64,
-    pub decor_steps: f64,
+    pub decor_cells: f64,
     pub decor_instances: f64,
-    pub on_bytes: f64,
-    pub off_bytes: f64,
-    pub budget_bytes: f64,
+    pub decor_bytes: f64,
 }
 
-words!(HeldBlock, SUMMARY::held::WORDS,
-    run_sets => SUMMARY::held::run_sets, run_set_mb => SUMMARY::held::run_set_mb,
-    tiers => SUMMARY::held::tiers, decor_cells => SUMMARY::held::decor_cells,
-    decor_instances => SUMMARY::held::decor_instances, decor_bytes => SUMMARY::held::decor_bytes,
+words!(RetainBlock, SUMMARY::retain::WORDS,
+    run_sets => SUMMARY::retain::run_sets, run_set_mb => SUMMARY::retain::run_set_mb,
+    tiers => SUMMARY::retain::tiers, decor_cells => SUMMARY::retain::decor_cells,
+    decor_instances => SUMMARY::retain::decor_instances, decor_bytes => SUMMARY::retain::decor_bytes,
 );
 
 #[repr(C)]

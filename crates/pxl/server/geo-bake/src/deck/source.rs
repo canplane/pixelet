@@ -17,19 +17,31 @@ use crate::terrain::repository::TerrainRepository;
 use crate::terrain::source::fetch_surface;
 use crate::util::{pack, unpack, write_atomic, Level};
 
-/// The tables the solve's queries name, for the catalog.
-pub const READS: [&str; 2] = ["FROM overture_transportation", "FROM overture_base_water"];
-
-const SEGMENTS_SQL: &str = concat!("SELECT ", crate::segment_columns!(), " FROM overture_transportation t WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)");
-
-/// Everything a solve reads of some pages: the bridge and tunnel rows, every
-/// way, the water, and the ground, as the client draws it, inside `bounds`.
-pub struct Input {
-    pub rows: Vec<Segment>,
-    pub ways: Vec<Way>,
-    pub water: Vec<Water>,
-    pub bounds: [[f64; 2]; 2],
-    pub ground: HashMap<IVec, Surface>,
+/// Every segment a bridge flag is on.
+pub fn bridge_rows(client: &mut Client) -> Result<Vec<BridgeRow>, postgres::Error> {
+    let rows = client.query(
+        "SELECT gers_id, subtype, class, COALESCE(road_flags, rail_flags)::text AS flags, level_rules::text AS levels,
+                width_rules::text AS widths, access_restrictions::text AS access,
+                subclass, subclass_rules::text AS subclasses, ST_AsBinary(geom) AS geom_wkb
+         FROM overture_transportation
+         WHERE COALESCE(road_flags, rail_flags)::text LIKE '%is_bridge%'",
+        &[],
+    )?;
+    Ok(rows
+        .iter()
+        .map(|r| BridgeRow {
+            gers_id: r.get("gers_id"),
+            subtype: r.get("subtype"),
+            class: r.get("class"),
+            flags: r.get("flags"),
+            levels: r.get("levels"),
+            widths: r.get("widths"),
+            access: r.get("access"),
+            subclass: r.get("subclass"),
+            subclasses: r.get("subclasses"),
+            geom_wkb: r.get::<_, &[u8]>("geom_wkb").into(),
+        })
+        .collect())
 }
 
 /// One page's rows, as a page's other rows are read: whatever overlaps it.
@@ -129,11 +141,66 @@ pub fn read_pages(client: &mut Client, repo: &TerrainRepository, pages: &[IVec],
             for k in 0..2 {
                 (lo[k], hi[k]) = (lo[k].min(corner[k]), hi[k].max(corner[k]));
             }
-        }
-        let p = store.page(client, repo, at)?;
-        ground.insert(at, p.surface());
-        ways.extend(p.ways.into_iter().map(|r| (r.gers_id.clone(), r)));
-        water.extend(p.water.into_iter().map(|w| (w.2.clone(), w)));
+        })
+        .collect())
+}
+
+/// Where a piece crosses one of a lower level: the upper's piece and how far
+/// along it, the lower's and how far along it, in metres.
+pub struct DeckCrossing {
+    pub upper: usize,
+    pub upper_at: f64,
+    pub lower: usize,
+    pub lower_at: f64,
+}
+
+pub fn decks_crossing(client: &mut Client) -> Result<Vec<DeckCrossing>, postgres::Error> {
+    let rows = client.query(
+        "SELECT u.id AS upper, ST_LineLocatePoint(u.geom, d.geom) * ST_Length(u.geom) AS upper_at,
+                l.id AS lower, ST_LineLocatePoint(l.geom, d.geom) * ST_Length(l.geom) AS lower_at
+         FROM deck_piece u
+         JOIN deck_piece l ON l.geom && u.geom AND l.level < u.level AND ST_Intersects(l.geom, u.geom)
+         CROSS JOIN LATERAL ST_Dump(ST_Intersection(u.geom, l.geom)) d
+         WHERE GeometryType(d.geom) = 'POINT'",
+        &[],
+    )?;
+    Ok(rows
+        .iter()
+        .map(|r| DeckCrossing {
+            upper: r.get::<_, i32>("upper") as usize,
+            upper_at: r.get("upper_at"),
+            lower: r.get::<_, i32>("lower") as usize,
+            lower_at: r.get("lower_at"),
+        })
+        .collect())
+}
+
+/// A solved deck, as `overture_deck` holds it.
+pub struct DeckOut<'a> {
+    pub piece: &'a Piece,
+    /// Each point, its top in metres as Z.
+    pub points: Vec<[f64; 3]>,
+    pub piers: Vec<u8>,
+}
+
+/// `overture_deck`, made again whole: the bake reads it a page at a time
+/// (terrain/repository.rs).
+pub fn write(client: &mut Client, decks: &[DeckOut]) -> Result<(), postgres::Error> {
+    client.batch_execute(
+        "DROP TABLE IF EXISTS overture_deck;
+         CREATE TABLE overture_deck (gers_id TEXT NOT NULL, subtype TEXT NOT NULL, class TEXT, width_m REAL NOT NULL, piers BYTEA NOT NULL, geom GEOMETRY(LineStringZ, 3857) NOT NULL);",
+    )?;
+    for batch in decks.chunks(BATCH) {
+        let gers: Vec<&str> = batch.iter().map(|d| d.piece.gers_id.as_str()).collect();
+        let subtypes: Vec<&str> = batch.iter().map(|d| d.piece.subtype.as_str()).collect();
+        let classes: Vec<Option<&str>> = batch.iter().map(|d| d.piece.class.as_deref()).collect();
+        let widths: Vec<f32> = batch.iter().map(|d| d.piece.width_m as f32).collect();
+        let piers: Vec<&[u8]> = batch.iter().map(|d| d.piers.as_slice()).collect();
+        let lines: Vec<String> = batch.iter().map(|d| wkt(d.points.iter().map(|q| format!("{} {} {:.2}", q[0], q[1], q[2])), true)).collect();
+        client.execute(
+            "INSERT INTO overture_deck SELECT g, s, c, m, p, ST_GeomFromText(w, 3857) FROM unnest($1::text[], $2::text[], $3::text[], $4::real[], $5::bytea[], $6::text[]) AS t(g, s, c, m, p, w)",
+            &[&gers, &subtypes, &classes, &widths, &piers, &lines],
+        )?;
     }
     let ways: Vec<Segment> = ways.into_values().collect();
     Ok(Input {

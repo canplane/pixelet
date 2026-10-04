@@ -51,9 +51,10 @@ pub const PIPELINE_CHUNK_COARSE: u32 = 32;
 /// screen for its model: the decor block's instances, a quad each
 /// (gpu/pass/impostor.rs).
 pub const PIPELINE_IMPOSTOR: u32 = 34;
-/// Words a rewrite record holds: the handle, and the block's address and
-/// length, whose bytes replace the buffer's.
-pub const REWRITE_WORDS: usize = 3;
+/// Words a rewrite record holds: the handle, the block's address, and the
+/// byte offset into it and length of the bytes that replace the buffer's
+/// there.
+pub const REWRITE_WORDS: usize = 4;
 
 #[derive(Default)]
 pub struct DrawList {
@@ -111,11 +112,14 @@ impl DrawList {
         self.rewrite_part(handle, at, 0, bytes);
     }
 
+    /// `bytes` of the block behind `handle` changed, `from` bytes into it:
+    /// those go to the GPU again, at the same place in its buffer. A rewrite
+    /// of the same part already listed stands.
     pub fn rewrite_part(&mut self, handle: u32, at: u32, from: u32, bytes: u32) {
         if handle == 0 || self.rewrites.as_chunks::<REWRITE_WORDS>().0.iter().any(|r| r[0] == handle && r[2] == from) {
             return;
         }
-        self.rewrites.extend_from_slice(&[handle, at, bytes]);
+        self.rewrites.extend_from_slice(&[handle, at, from, bytes]);
     }
 
     pub fn begin_frame(&mut self) {
@@ -159,16 +163,27 @@ impl DrawList {
         self.draws.extend_from_slice(&[handle, vertex_cnt, index_cnt, uniform, pipeline]);
     }
 
-    /// Words are exact in an f32 up to 2^24.
+    /// Instances of decor group `group` in block `handle`, under `pipeline`
+    /// (the model, its ghost, or its sprite): `count` of them, each named by
+    /// a word of the index list at word `index` of the block, read from the
+    /// group's lanes at word `offset`, `stride` instances long
+    /// (crates/pxl/web/kernel/src/layer/decor/build.rs's layout). Words are
+    /// exact in a float to 2^24.
     #[allow(clippy::too_many_arguments)]
     pub fn draw_instances(&mut self, pipeline: u32, handle: u32, group: u32, count: u32, lanes: [u32; 3], translation: [f32; 3], opacity: f32) {
         let [offset, stride, index] = lanes;
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
-        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, 1.0, 0.0, 0.0, 0.0]);
-        self.draws.extend_from_slice(&[handle, group, count, uniform, PIPELINE_DECOR]);
+        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, opacity, stride as f32, index as f32, 0.0]);
+        self.draws.extend_from_slice(&[handle, group, count, uniform, pipeline]);
     }
 
-    /// Uploads, rewrites and frees start fresh; draws stay until the next frame.
+    /// The draws the last frame listed.
+    pub fn draw_count(&self) -> u32 {
+        (self.draws.len() / DRAW_WORDS) as u32
+    }
+
+    /// Hands the lists to the renderer. Uploads, rewrites and frees start
+    /// fresh; the draws stay until the next frame writes them.
     pub fn take(&mut self) -> Lists<'_> {
         let [uploads, rewrites, frees] = &mut self.taken;
         core::mem::swap(uploads, &mut self.uploads);

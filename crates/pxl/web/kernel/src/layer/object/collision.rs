@@ -4,6 +4,8 @@ use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::hierarchy::{share, Scale};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
+use crate::layer::decor::build::scatters_at;
+use crate::layer::decor::kind::KINDS;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{holds_entry, objects_at, Entry, EntryKind};
 

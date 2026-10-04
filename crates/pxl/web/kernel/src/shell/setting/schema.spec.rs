@@ -288,7 +288,7 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::camera_collision | SettingKey::shadows)
+        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::camera_collision | SettingKey::shadows)
     }
 
     /// Read by a chunk's build, so a change builds the chunks again.

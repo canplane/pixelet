@@ -10,17 +10,15 @@ struct Draw {
   index: u32,
 };
 
-// Held as vec4 words, each field read from its own by `draw_<field>()`:
-// what the host and a shader share has no room inside it for a driver to
-// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
-// and nothing builds the struct back, with which Safari's WebGPU lost its
-// GPU process.
+// Read field by field from vec4 words, never as a struct: a struct here lost
+// Safari's WebGPU its GPU process.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, 2>;
 
 fn draw_translation() -> vec3f { return draw_words[0].xyz; }
 fn draw_offset() -> u32 { return bitcast<u32>(draw_words[0].w); }
-fn draw_count() -> u32 { return bitcast<u32>(draw_words[1].x); }
+fn draw_stride() -> u32 { return bitcast<u32>(draw_words[1].x); }
 fn draw_opacity() -> f32 { return draw_words[1].y; }
+fn draw_index() -> u32 { return bitcast<u32>(draw_words[1].w); }
 
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;
@@ -38,8 +36,6 @@ struct VertexOut {
   @location(0) uv: vec2f,
   @location(1) normal: vec3f,
   @location(2) world_pos: vec3f,
-  // The air in front of the vertex (atmos_view.wgsl's Seen); the sky's fill
-  // is the frame's, flat.
   @location(3) through: vec3f,
   @location(4) scattered: vec3f,
   @location(5) past: vec3f,
@@ -50,8 +46,7 @@ fn lane(k: u32, i: u32) -> f32 {
   return bitcast<f32>(block[draw_offset() + k * draw_stride() + i]);
 }
 
-// Where an instance's vertex stands, and its spin: one function, so the
-// depth passes place it where the lit pass does.
+// One function, so the depth passes place a vertex where the lit pass does.
 struct Placed {
   world: vec3f,
   spin: f32,
@@ -83,7 +78,6 @@ fn vs(v: VertexIn) -> VertexOut {
   return o;
 }
 
-// The position alone, for the passes that write depth and nothing else.
 @vertex
 fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
   return frame_view_proj() * vec4f(placed(v).world, 1.0);

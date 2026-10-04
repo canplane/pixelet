@@ -62,6 +62,8 @@ pub enum Load {
 }
 
 impl Load {
+    /// Its number, the path it is opened at below the assets' root: an
+    /// asset's own, the sheet one past the last.
     pub fn number(self) -> u32 {
         match self {
             Load::Asset(a) => a as u32,

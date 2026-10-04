@@ -39,6 +39,7 @@ export const SETTINGS = {
     kind: "toggle",
     default: true,
     section: "display",
+    dev: true,
     cost: "low",
   },
   /** Procedurally scattered decor only; what the player placed stays.
@@ -56,6 +57,7 @@ export const SETTINGS = {
     kind: "toggle",
     default: true,
     section: "display",
+    dev: true,
     cost: "med",
   },
   /** The places' badges over the map, from the published POI pages. */
@@ -195,50 +197,6 @@ export const SETTINGS = {
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */
 export const SETTINGS_SHIPPED = {
-  /** Ground color from the art pack (four taps of the layer array per
-   * fragment) instead of the flat per-instance average. The chunk shader's
-   * `frame.low_spec` is this, inverted.
-   *
-   * Low because the four taps are all of it: fill rate, which scales with
-   * the screen and not with the world, and nothing else — no geometry, no
-   * pass of its own, and no work off the GPU past an atlas the client
-   * already holds.
-   *
-   * It sources the chunks: the shader samples a leaf's layer or does not,
-   * but a tier over it carries one color and no layer to sample, so which
-   * color that is was baked in (mesh/chunk_mesher.rs). */
-  textures: {
-    key: 0 as number,
-    kind: "toggle",
-    default: true,
-    section: "display",
-    cost: "low",
-  },
-  /** Whether the STRUCTURE ground channel is painted. The bake writes it
-   * either way (pxl-geo-bake terrain/pipeline/overture/policy.rs); this is a render decision. */
-  structures: {
-    key: 1 as number,
-    kind: "toggle",
-    default: true,
-    section: "display",
-  },
-  /** Procedurally scattered decor only; what the player placed stays.
-   *
-   * Med because it is models rather than a shading term: a chunk builds its
-   * decor and the frame draws it, so what it costs follows what is in view.
-   * It has been the frame's own bottleneck — 20260912-what-to-render-when.md
-   * reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
-   * frames missing a vsync — and the projected-size criterion holds it to
-   * the nearest tier without making far decor cheap, the impostor tier that
-   * would being decided and not built. The badge is an ordering, and this is
-   * the one to reach for before any shading term. */
-  decor: {
-    key: 1 as number,
-    kind: "toggle",
-    default: true,
-    section: "display",
-    cost: "med",
-  },
   /** The places' badges over the map, from the published POI pages. */
   poi: {
     key: 2 as number,

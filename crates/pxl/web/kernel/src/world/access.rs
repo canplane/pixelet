@@ -37,14 +37,11 @@
 //! does yet (world/paging.rs `HARD_PAGES`).
 
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
-use pxl_spec::bake::constant::{CellZ, CELL, U_PER_CELL};
+use pxl_spec::bake::constant::{CellZ, CELL, CELL_STEPS, OBJECT_FINEST, U_PER_CELL};
 use pxl_spec::bake::deck::Occupies;
-use pxl_spec::procedural::{pier_stands, Frame};
-use pxl_spec::space::adapter::epsg3857::u_per_m;
-use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::bake::fold::majority;
-use pxl_spec::bake::format::{drawn, Terrain};
-use pxl_spec::bake::pack::{channel_of, GroundCell};
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_decor, object_value_is_voxel};
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::space::adapter::epsg3857::u_per_m;
@@ -60,8 +57,8 @@ use pxl_spec::space::xy::TO_XY;
 
 use crate::io::demand::Category;
 use crate::kernel::kernel;
+use crate::layer::decor::volume::{decor_column, decor_volume_revision};
 use crate::layer::object::store::{objects_revision, EntryAt, EntryCursor, Store};
-use crate::param::STEP_CELLS;
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
 use xpute_core::math::scalar::round;
@@ -233,8 +230,17 @@ struct Region {
     terrain: Option<((f64, f64), bool)>,
 }
 
-/// Folds sub-cell fill to the cell by majority, a level at a time, with the
-/// objects' tie rule (`majority`).
+/// Changes whenever what `Access::support` answers may: the terrain held,
+/// the objects, and what decor fills. What keeps a support asks again when
+/// it does.
+pub fn support_revision() -> [u32; 3] {
+    [Terrain::pyramid().revision(), objects_revision(), decor_volume_revision()]
+}
+
+/// Whether a cell whose sub-cells at the objects' finest are `filled` is:
+/// the eight under each parent by majority, a level at a time up to the
+/// cell, the tie by the level as the objects' fold has it (pxl-spec
+/// bake/fold.rs `majority`).
 fn filled_cell(filled: impl Fn([i64; 3]) -> bool) -> bool {
     const N: usize = CELL_STEPS as usize;
     let mut v = [false; N * N * N];
@@ -246,11 +252,8 @@ fn filled_cell(filled: impl Fn([i64; 3]) -> bool) -> bool {
         scale = scale.up(1);
         let h = m / 2;
         for k in 0..h * h * h {
-            let parent = [k % h, k / h % h, k / (h * h)].map(|c| c as i64);
-            let eight: [bool; 8] = core::array::from_fn(|slot| {
-                let [x, y, z] = child_of(parent, slot).map(|c| c as usize);
-                v[(z * m + y) * m + x]
-            });
+            let [x, y, z] = [k % h, k / h % h, k / (h * h)].map(|c| c * 2);
+            let eight: [bool; 8] = core::array::from_fn(|c| v[((z + (c >> 2)) * m + y + (c >> 1 & 1)) * m + x + (c & 1)]);
             v[k] = majority(eight, scale.above(CELL));
         }
         m = h;
@@ -279,14 +282,27 @@ impl<'a> Access<'a> {
         self.ground(GROUND.cell_of(level, at))
     }
 
-    /// Down to the first solid's top, or up at most `rise` cells; taller gives none.
-    pub fn support(&self, at: &Pvf3, rise: i64) -> Answer<Option<f64>> {
-        let [ix, iy, iz] = CELL.index_of(at);
-        self.stand([ix, iy], Some(iz))
-    }
-
-    /// `support` from the drawn surface, ignoring `at`'s height (a fix, a search result).
-    pub fn surface_support(&self, at: &Pvf3) -> Answer<f64> {
+    /// Where a thing stands at `at`: what a walker, the location puck and a
+    /// move's destination stand on. It is asked on the 1u lattice, the cell
+    /// the ground and a carve are made in, and a cell is solid where it is
+    /// filled. What fills it is composed at the objects' finest, sub-cell by
+    /// sub-cell, the authored over what is made: an object's leaf where one
+    /// says a cube or air; under no leaf, decor's volume (layer/decor/
+    /// volume.rs), then the ground — under its top and out of a bore's air —
+    /// or a deck. Then the filled sub-cells fold to the cell by majority, a
+    /// level at a time as the objects' do (layer/object/store.rs
+    /// `fold_cell`), but of filled against empty and not of which cube, so a
+    /// cell seven eighths filled with three kinds of cube is filled, and a
+    /// small cube, a small bite or a small mesh is what is seen and picked
+    /// and not what is stood on.
+    ///
+    /// From the surface drawn there it goes down through the empty cells
+    /// under it to the first solid's top — a carve, a bore come out at the
+    /// surface — or up through the solid cells over it to where they end — a
+    /// stack of cubes — or stays. Only what touches the surface moves it: a
+    /// deck with air under it, or a bore with ground over it, leaves a thing
+    /// on the surface, since nothing says it is on the one or in the other.
+    pub fn support(&self, at: &Pvf3) -> Answer<f64> {
         let [ix, iy, _] = CELL.index_of(at);
         // From the surface there is no wall, so it is never none.
         self.stand([ix, iy], None).map(Option::unwrap_or_default)
@@ -314,6 +330,35 @@ impl<'a> Access<'a> {
     fn stand_climbing(&self, [ix, iy]: [i64; 2], from: Option<i64>, rise: Option<i64>) -> Answer<Option<f64>> {
         self.cells([ix, iy], |top, ceiling, solid| {
             let side = CELL.side();
+            let top = (c.top / side).round() as i64;
+            let mut decor = Vec::new();
+            decor_column(self.objects, ix, iy, &mut decor);
+            // What is made at height `z`: the ground and the lines over it.
+            let made = |z: f64| {
+                let inside = |[lo, hi]: [f64; 2]| z >= lo && z < hi;
+                (z < top as f64 * side && !c.lines.air.is_some_and(inside)) || c.lines.boxes.iter().any(|&b| inside(b))
+            };
+            let n = CELL_STEPS as i64;
+            let fine = OBJECT_FINEST.side();
+            let solid = |cz: i64| {
+                let fills = decor.iter().find(|&&(z, _)| z == cz).map(|(_, s)| s);
+                if fills.is_none() && !self.objects.may_hold([ix, iy, cz]) {
+                    return made((cz as f64 + 0.5) * side);
+                }
+                filled_cell(|[x, y, z]| {
+                    let k = (z * n + y) * n + x;
+                    let v = u32::from(self.objects.folded_value(OBJECT_FINEST, [ix * n + x, iy * n + y, cz * n + z]));
+                    if object_value_is_voxel(v) {
+                        !object_value_is_air(v)
+                    } else if fills.is_some_and(|s| s[k as usize / 64] >> (k % 64) & 1 != 0) {
+                        true
+                    } else {
+                        made(((cz * n + z) as f64 + 0.5) * fine)
+                    }
+                })
+            };
+            // As far as a position reaches, so a shaft or a stack of any
+            // height is followed to its end.
             let [lo, hi] = [REACH.min[2] / side, REACH.max[2] / side].map(|z| z as i64);
             let start = from.unwrap_or(top);
             let climb = rise.unwrap_or(hi - start);

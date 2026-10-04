@@ -4,6 +4,7 @@
 //! once per kind; the scatter itself is build.rs's.
 
 use pxl_spec::bake::format::GroundChannelKey;
+use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::cell::cube_types;
 use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
@@ -12,29 +13,10 @@ use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
 /// shows its last painted channel (`shown_ground`), so a tree stands only
 /// where no water, way or structure is over the land.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Rule {
-    Any,
-    /// Nothing painted.
-    Void,
-    /// One of the types whose bits are set.
-    OneOf([u64; 4]),
+pub struct DecorRules {
+    channel: GroundChannelKey,
+    types: [u64; 4],
 }
-
-impl Rule {
-    fn allows(&self, t: u8) -> bool {
-        match self {
-            Rule::Any => true,
-            Rule::Void => t == cube_types::common::void,
-            Rule::OneOf(bits) => bits[(t >> 6) as usize] & (1 << (t & 63)) != 0,
-        }
-    }
-}
-
-/// A kind's rule per ground channel, by the channel's number: what a kind's
-/// file writes and what the scatter tests, one and the same. A channel no
-/// rule names takes anything.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct DecorRules([Rule; 4]);
 
 impl DecorRules {
     pub const fn on(channel: GroundChannelKey, types: &[u8]) -> DecorRules {
@@ -44,8 +26,7 @@ impl DecorRules {
             bits[(types[i] >> 6) as usize] |= 1 << (types[i] & 63);
             i += 1;
         }
-        self.0[channel as usize] = Rule::OneOf(bits);
-        self
+        DecorRules { channel, types: bits }
     }
 
     pub fn allows(&self, cell: GroundCell) -> bool {

@@ -24,7 +24,7 @@ use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use std::collections::{HashMap, TryReserveError};
 use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::Block;
+use xpute_runtime::mem::heap::{alloc, free, Block};
 
 use crate::layer::object::store::{object_col_revision, Store};
 use crate::mem::fixed::{at, Range};
@@ -52,13 +52,47 @@ pub fn object_fold(scale: Scale) -> Scale {
 }
 
 
-/// `.fixed.bake`: the open bake writes its mesh here one slot's worth at a
-/// time, so it is sized to the largest slot.
+
+// ---- the build as the kernel runs it ----
+//
+// A chunk's build, from its sources to its meshes, a chunk at a time under
+// the frame's budget.
+//
+// The scheduler says which chunks exist, what each is made of (its terrain
+// page's lanes and the settings that change what they paint), and which
+// tiers it still lacks; each tick it hands over the order to take them in
+// and a budget. A chunk's runs come the direct way — one run a column
+// from the terrain, when no object stands in its column — or by painting
+// the terrain and the objects into a volume and scanning it. Its tiers are
+// baked from those runs, one bake and one scan open in the whole world at a
+// time. What comes out is events: a tier's mesh, handed over whole, and what
+// the chunk's runs hold.
+//
+// A chunk's runs are a block of the heap, exactly as large as the runs its
+// column holds, held from the moment they are made until every tier of the
+// chunk is baked from them: the tiers are what lasts, on the device, so a
+// set is not kept for a tier asked later but the chunk's tiers are all baked
+// while it is there. Two sets at most, so that one is filled while the other
+// is baked from; a chunk that finds both held waits.
+//
+// Not a range of `.fixed`: how many runs a column holds is what stands in
+// it, every band of it up to the top of the world, and no size that would
+// fit a range holds every column. A range too small for a column refused
+// its chunk, which then drew nothing — the world wrong for want of a
+// workspace. The heap asked for the size the scan has counted refuses only
+// when the memory is out.
+
+/// The workspace: `.fixed.bake`, where the one bake open writes its mesh a
+/// slot's worth at a time, each block handed to its slot before the next
+/// is written (world/chunk/mesh_slot.rs). As large as any one slot, and no
+/// larger, whatever the mesh. It keeps nothing across frames; what is kept
+/// is the slots.
 pub const BAKE_BYTES: u32 = {
     let (fine, coarse) = (FINE_BOXES * FINE_BOX_WORDS, COARSE_BOXES * COARSE_BOX_WORDS);
     4 * if fine > coarse { fine } else { coarse }
 };
 
+/// Run sets held at once: one filled while the other is baked from.
 pub const RUN_SETS: usize = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -99,19 +133,23 @@ struct RunHold {
 }
 
 impl Drop for RunHold {
+    /// The runs' block goes back to the heap with the hold.
     fn drop(&mut self) {
         if let Some(r) = self.runs.take() {
-            // SAFETY: the hold's own block; every bake from it ends before the hold does.
+            // SAFETY: the block the hold took for its runs; every view of it
+            // is a bake from this hold, which ends before the hold does.
             unsafe { free(r.block) };
         }
     }
 }
 
-/// `fold`: the scale objects were folded to, if any; only scales that fold to
-/// it may bake from these runs.
+/// A chunk's runs: the heap block they are packed in, the bytes of it they
+/// fill, how many — and the scale its objects were folded to where it
+/// painted any (`object_fold`), which only the cubes that fold to it are
+/// baked from.
 #[derive(Clone, Copy)]
 struct Runs {
-    set: usize,
+    block: (usize, u32),
     bytes: u32,
     count: u32,
     fold: Option<Scale>,
@@ -655,25 +693,17 @@ impl Builder {
                 Progress::Blocked
             }
             ScanStep::NeedSet(bytes) => {
-                let Some((set, at)) = self.set_of(id, bytes) else {
+                let Some(block) = self.set_of(id, bytes) else {
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
-                // SAFETY: the run set the chunk holds, past the bytes asked for.
-                unsafe { self.scan.provide_set(ptr_at::<u8>(at), bytes) };
+                // SAFETY: the block just taken for the chunk's runs, the bytes asked for.
+                unsafe { self.scan.provide_set(ptr_at::<u8>(block.0), bytes) };
                 let count = self.scan.finish();
                 let job = self.scan_job.take().unwrap();
                 world.volumes.release(job.volume);
                 self.stat.scans += 1;
-                self.keep_runs(
-                    id,
-                    Runs {
-                        block,
-                        bytes,
-                        count,
-                        fold: Some(fold),
-                    },
-                );
+                self.keep_runs(id, Runs { block, bytes, count, fold: Some(fold) });
                 Progress::Busy
             }
         }
@@ -829,45 +859,49 @@ impl Builder {
     }
 
     /// Closes the direct runs written for chunk `id` into its run set: kept
-    /// as its runs, or the chunk refused where the set has no room.
+    /// as its runs, or the chunk refused where the heap has no room.
     fn close_direct(&mut self, world: &mut World, id: u32) -> Progress {
         let bytes = self.direct.close_direct();
-        let Some((set, at)) = self.set_of(id, bytes) else {
+        let Some(block) = self.set_of(id, bytes) else {
             self.direct.abort();
             self.refuse(world, id);
             return Progress::Blocked;
         };
         // SAFETY: as for a scan's set.
-        unsafe { self.direct.provide_set(ptr_at::<u8>(at), bytes) };
+        unsafe { self.direct.provide_set(ptr_at::<u8>(block.0), bytes) };
         let count = self.direct.finish();
         self.stat.direct += 1;
-        self.keep_runs(id, Runs { set, bytes, count, fold: None });
+        self.keep_runs(id, Runs { block, bytes, count, fold: None });
         Progress::Busy
     }
 
-    /// The run set chunk `id` holds and where it lies, when `bytes` fit it.
-    /// A set past it is refused, and the set given back.
-    fn set_of(&mut self, id: u32, bytes: u32) -> Option<(usize, usize)> {
-        let set = self.run_set_for(id)?;
-        match at(Range::Run(set), 0, bytes) {
-            Some(at) => Some((set, at as usize)),
-            None => {
-                self.leave_runs(id);
-                None
-            }
+    /// A heap block of `bytes` for chunk `id`'s runs, in the run set its
+    /// column holds; none, and the set given back, where every set is
+    /// another column's or the heap refuses.
+    fn set_of(&mut self, id: u32, bytes: u32) -> Option<(usize, u32)> {
+        self.run_set_for(id)?;
+        let block = alloc(bytes);
+        if block.is_none() {
+            self.leave_runs(id);
         }
+        block
     }
 
     fn keep_runs(&mut self, id: u32, runs: Runs) {
         let set = self.hold_of(id).or_bug(Errno::ENOTRECOVERABLE);
-        self.run_holds[set].as_mut().or_bug(Errno::ENOTRECOVERABLE).runs = Some(runs);
+        let hold = self.run_holds[set].as_mut().or_bug(Errno::ENOTRECOVERABLE);
+        if let Some(old) = hold.runs.replace(runs) {
+            // SAFETY: the block the hold's earlier runs were in, which nothing
+            // bakes from now that the new runs stand in their place.
+            unsafe { free(old.block) };
+        }
     }
 
     fn run_set(runs: &Runs) -> RunSet<'static> {
         let bytes = pxl_render::mesh::voxel_scan::run_set_bytes(runs.count, COL_SPAN) as usize;
-        let set_at = at(Range::Run(runs.set), 0, bytes as u32).or_bug(Errno::ENOTRECOVERABLE) as usize;
-        // SAFETY: the chunk's own set, held until its runs are let go.
-        unsafe { RunSet::carve(core::slice::from_raw_parts(ptr_at::<u8>(set_at), bytes), runs.count, COL_SPAN, APRON) }
+        xpute_core::ensure!(bytes as u32 <= runs.block.1, ENOTRECOVERABLE);
+        // SAFETY: the chunk's own block, held until its runs are let go.
+        unsafe { RunSet::carve(core::slice::from_raw_parts(ptr_at::<u8>(runs.block.0), bytes), runs.count, COL_SPAN, APRON) }
     }
 
     fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {

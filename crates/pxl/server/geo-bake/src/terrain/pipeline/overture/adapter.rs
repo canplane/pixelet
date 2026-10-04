@@ -8,8 +8,8 @@ use pxl_spec::bake::format::{BaseRow, BuildingRow, SegmentRow};
 use crate::deck::Drawn;
 use pxl_spec::space::adapter::epsg3857::G3857;
 
-use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, merged, split_ranged};
-use crate::terrain::pipeline::overture::policy::UNSEEN_FLAGS;
+use crate::terrain::pipeline::overture::between::{flag_ranges, split_ranged};
+use crate::terrain::pipeline::overture::policy::{DECK_FLAGS, UNSEEN_FLAGS};
 use crate::terrain::pipeline::overture::width::{WayColumns, WayShape};
 use crate::wkb::{wkb_to_geometries, WkbGeometry};
 
@@ -32,7 +32,7 @@ pub struct OvertureSegmentRawFeature {
     pub class: Option<String>,
     pub is_unseen: bool,
     pub is_deck: bool,
-    pub cut: [bool; 2],
+    /// What it says of its width over the piece (overture/width.rs).
     pub shape: WayShape,
     pub geometry: WkbGeometry,
     pub center: G3857,
@@ -94,6 +94,7 @@ pub fn from_building_row(row: &BuildingRow) -> Vec<OvertureRawFeature> {
         .collect()
 }
 
+/// What a segment row's columns say of the way along its length.
 trait Columns {
     fn columns(&self) -> WayColumns<'_>;
 }
@@ -110,23 +111,25 @@ impl Columns for SegmentRow {
     }
 }
 
-/// Connectors are skipped. A segment is cut where an unseen flag starts or
-/// stops, and where a line the deck solve draws along it does, so the paint
-/// ends where the line begins.
-pub fn from_segment_row(row: &SegmentRow, drawn: &[Drawn]) -> Vec<OvertureRawFeature> {
-    let unseen = flag_ranges(row.flags.as_deref(), UNSEEN_FLAGS, cell_of(length_of(&row.geom_wkb)));
-    let deck = merged(drawn.iter().filter(|c| c.gers_id == row.gers_id).map(|c| c.range).collect(), 0.0);
+/// Transportation's segments only — a connector is routing topology and is
+/// skipped. A segment is cut where an unseen flag or its bridge starts or
+/// stops, since Overture puts a flag on a range of a segment's length rather
+/// than on the whole of it: one segment of a subway line runs over a bridge,
+/// along the surface and into a tunnel.
+pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
+    let flags = row.flags.as_deref();
+    let (unseen, deck) = (flag_ranges(flags, UNSEEN_FLAGS), flag_ranges(flags, DECK_FLAGS));
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
-        .flat_map(|g| pieces(g, &unseen))
-        .map(|(is_unseen, g)| {
+        .flat_map(|g| split_ranged(g, [&unseen, &deck]))
+        .map(|([is_unseen, is_deck], [a, b], g)| {
+            let mid = (a + b) / 2.0;
             OvertureRawFeature::Segment(OvertureSegmentRawFeature {
                 gers_id: row.gers_id.clone(),
                 subtype: row.subtype.clone(),
                 class: row.class.clone(),
                 is_unseen,
                 is_deck,
-                cut: [a > 0.0, b < 1.0],
                 shape: WayShape::at(row.columns(), mid),
                 center: center_of(&g),
                 geometry: g,

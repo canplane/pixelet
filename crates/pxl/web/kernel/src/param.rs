@@ -89,6 +89,8 @@ pub const ARENA_COARSE_GROUPS: u32 = 5;
 /// coarser cube; the coarsest fills one (asserted in mesh_slot.rs).
 pub const COARSE_BOXES: u32 = 4551;
 
+
+
 // ---- decor's tiers ----
 
 /// How small, in the tier's cells on the screen, a decor kind may get and
@@ -99,6 +101,12 @@ pub const COARSE_BOXES: u32 = 4551;
 /// cell an instance is a pixel or two that reads as noise.
 pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
 
+/// Changes the world's change log keeps (kernel.rs): what a reader that fell
+/// behind can still catch up from before it has to read everything again.
+pub const JOURNAL_CAPACITY: u32 = 4096;
+
+
+
 // ---- per-frame work caps (world/chunk/table.rs, io/policy.rs) ----
 
 /// A page's chunks, so a page of flat ground starts building in the frame it arrives.
@@ -106,7 +114,9 @@ pub const STARTS_PER_FRAME: u32 = PAGE_CHUNKS * PAGE_CHUNKS;
 
 pub const COMMITS_PER_FRAME: u32 = 8;
 
-/// Attempts one pump starts; credits already bound what is out.
+
+/// The most attempts one pump starts (io/policy.rs). The credits already
+/// bound what is out; this bounds only how fast they are taken up.
 pub const INTAKE: u32 = u32::MAX;
 
 // ---- latency hiding ----

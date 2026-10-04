@@ -97,7 +97,15 @@ unsafe fn room_of(record: u32) -> PageRoom {
 
 pub fn terrain_step() {
     let terrain = Terrain::pyramid();
-    terrain.step(crate::control::navigation::destination::page());
+    // A page waiting on the shared tile is held as a page in `ABSENT` is:
+    // while something asks for it.
+    if eye().is_some() {
+        ocean().waiting.retain(|&p| terrain.asked(p));
+    }
+    let o = ocean();
+    let ocean_wants: &[(u64, Ask)] = if o.terrain.is_none() && !o.waiting.is_empty() { &[(0, Ask::PLAIN)] } else { &[] };
+    declare(OCEAN_CATEGORY, ocean_wants);
+    terrain.step(crate::control::navigation::destination::page(), &crate::layer::decor::cell::pages());
     crate::world::pyramid::cover::step::<Terrain>();
     // Derived from the scheduler so a superseded batch cannot leave a stale
     // Success. A failed fetch keeps its want and is retried, so it reads as Loading.

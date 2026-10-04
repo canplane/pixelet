@@ -13,7 +13,6 @@ pub mod chunk;
 pub mod cover;
 pub mod domain;
 
-use std::any::TypeId;
 use std::collections::HashMap;
 
 use pxl_spec::space::lod::Tau;
@@ -88,11 +87,6 @@ pub struct Pyramid<L: Layer> {
     demand: Vec<LevelPage>,
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
-    /// What each consumer derived from this layer reads of it, as it last said.
-    required: Vec<(TypeId, Vec<LevelPage>)>,
-    /// Their union, as last observed with, and the one being made.
-    readers: Vec<LevelPage>,
-    union: Vec<LevelPage>,
     /// Reused across observations so observing stops allocating once warm.
     asks: HashMap<LevelPage, Ask>,
     hints: Vec<(Order, LevelPage)>,
@@ -106,9 +100,6 @@ impl<L: Layer> Default for Pyramid<L> {
             demand: Vec::new(),
             wants: Vec::new(),
             last: None,
-            required: Vec::new(),
-            readers: Vec::new(),
-            union: Vec::new(),
             asks: HashMap::with_capacity(ASKS as usize),
             hints: Vec::new(),
         }
@@ -116,6 +107,19 @@ impl<L: Layer> Default for Pyramid<L> {
 }
 
 impl<L: Layer> Pyramid<L> {
+    /// A resident page. None past the pyramid's top too, which is what a top
+    /// page's parent is.
+    pub fn get(&self, p: LevelPage) -> Option<&L> {
+        self.paging.get(p)
+    }
+
+    /// Whether `p` is no page because one over it says its ground
+    /// (`Paging::settled`).
+    pub fn settled(&self, p: LevelPage) -> bool {
+        self.paging.settled(p)
+    }
+
+    /// What is held, and how.
     pub fn paging(&self) -> &Paging<L> {
         &self.paging
     }
@@ -166,10 +170,7 @@ impl<L: Layer> Pyramid<L> {
     }
 
     /// Builds the asks for `o`: the estimator's demand, the floor, the
-    /// destination's line, `readers`, and speculation up to `allowance`.
-    ///
-    /// A reader's page is demanded only inside its level's fault radius, where
-    /// the demand bound already counts it, and a hint past that. Speculation
+    /// destination's line, and speculation up to `allowance`. Speculation
     /// only takes frames left over after everything hard and demanded, so
     /// nothing is fetched just to find no frame.
     #[allow(clippy::too_many_arguments)]
@@ -200,12 +201,6 @@ impl<L: Layer> Pyramid<L> {
             for &p in &demand {
                 let at = self.paging.source(p).unwrap_or(p);
                 ask(&mut asks, at, Ask { why: Why::Fault, order: order(o, p) });
-            }
-            let foot = [o.eye[0], o.eye[1]];
-            for &p in readers {
-                if pages_within(p.level, foot, fault_radius(p.level)).any(|q| q == p) {
-                    ask(&mut asks, p, Ask { why: Why::Fault, order: order(o, p) });
-                }
             }
             // More demanded than the structure's bound means the capacity is broken too.
             let mut read = [0u32; TOP_LEVEL as usize + 1];
@@ -278,24 +273,11 @@ impl<L: Layer> Pyramid<L> {
     }
 
     /// The layer's turn. Quality is decided first so asks match what is drawn.
-    /// Observes again whenever anything in `Seen` or `readers` changed.
+    /// Observes again whenever anything in `Seen` changed.
     ///
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground. `far` cuts the
     /// observation where the layer stops being drawn.
-    /// The pages consumer `C` reads of this layer for what it derives from
-    /// them, in place of what it said before; the step asks for them.
-    pub fn require<C: 'static>(&mut self, pages: &[LevelPage]) {
-        let id = TypeId::of::<C>();
-        match self.required.iter_mut().find(|(k, _)| *k == id) {
-            Some((_, held)) => {
-                held.clear();
-                held.extend_from_slice(pages);
-            }
-            None => self.required.push((id, pages.to_vec())),
-        }
-    }
-
     pub fn step(&mut self, destination: Option<LevelPage>) {
         let Some(top) = floor::level() else { return };
         // demand follows the published goal
@@ -328,24 +310,12 @@ impl<L: Layer> Pyramid<L> {
             },
         });
         let seen = (o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::revision());
-        let readers_moved = {
-            let mut union = core::mem::take(&mut self.union);
-            union.clear();
-            union.extend(self.required.iter().flat_map(|(_, pages)| pages.iter().copied()));
-            union.sort_unstable();
-            union.dedup();
-            let moved = union != self.readers;
-            self.union = core::mem::replace(&mut self.readers, union);
-            moved
-        };
-        if self.last != Some(seen) || readers_moved {
+        if self.last != Some(seen) {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.level < top).then(|| q.parent())));
-            let readers = core::mem::take(&mut self.readers);
             self.observe(
                 o.as_ref(),
                 live.as_ref(),
                 line,
-                &readers,
                 &Known,
                 &ByFootprints {
                     tau,
@@ -356,7 +326,6 @@ impl<L: Layer> Pyramid<L> {
                 tau,
                 param::HINT_ALLOWANCE,
             );
-            self.readers = readers;
             // Observing can let pages go, moving the revision: record the state after it.
             self.last = Some((o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::revision()));
         }

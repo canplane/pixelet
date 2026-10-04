@@ -11,7 +11,6 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
 use super::way;
-use crate::procedural::{pier_covers, Frame};
 use crate::space::hierarchy::child_of;
 use crate::space::pyramid::{GROUND, PAGE_CELLS};
 use xpute_core::math::scalar::round;
@@ -168,8 +167,9 @@ pub struct Deck<'a> {
     pub form: Form,
 }
 
-/// A line over one column: the lowest and highest its road surface runs
-/// across the column, in z16 cells, and whether its pier's section covers it.
+/// What a deck is over a column — one it covers as a way covers the ground
+/// (bake/way.rs): its top there, in z16 cells, its kind, and whether a pier
+/// carries it there.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Over {
     pub low: f64,
@@ -282,13 +282,15 @@ impl Decks {
         })
     }
 
-    /// The lowest surface of a line that can sink inside the box, conservatively.
-    pub fn lowest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
-        let mut low = None;
-        for bore in self.iter().filter(|d| d.form.sinks()) {
-            let half = bore.footprint();
-            for s in 0..bore.points.len().saturating_sub(1) {
-                let (a, b) = (bore.point(s), bore.point(s + 1));
+    /// The highest top any deck has inside the `[x0, x1) × [y0, y1)` cells,
+    /// conservatively: a deck's highest point counts wherever its line comes
+    /// within its reach of the box.
+    pub fn highest_in(&self, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> Option<i16> {
+        let mut top = None;
+        for deck in self.iter() {
+            let half = deck.reach();
+            for s in 0..deck.points.len().saturating_sub(1) {
+                let (a, b) = (deck.point(s), deck.point(s + 1));
                 if a[0].max(b[0]) + half < x0 || a[0].min(b[0]) - half > x1 || a[1].max(b[1]) + half < y0 || a[1].min(b[1]) - half > y1 {
                     continue;
                 }
@@ -321,8 +323,15 @@ impl Deck<'_> {
         self.points[i].map(|v| f64::from(v) / POINT_SCALE)
     }
 
-    pub fn half_width(&self) -> f64 {
-        f64::from(self.width) / POINT_SCALE / 2.0
+    /// Its width in the page's cells.
+    pub fn width_cells(&self) -> f64 {
+        f64::from(self.width) / POINT_SCALE
+    }
+
+    /// How far from its line it covers a cell's center, in the page's cells
+    /// (bake/way.rs).
+    pub fn reach(&self) -> f64 {
+        way::reach(self.width_cells())
     }
 
     /// How far from its line the client may draw it, in the page's cells:
@@ -343,29 +352,24 @@ impl Deck<'_> {
         b
     }
 
-    /// What segment `s` is over the column of side `side` about `at`, if the
-    /// deck covers `at`: the surface it runs through across the column, and,
-    /// given where the page lies, whether `at` is inside the section of a pier
-    /// at a station of this segment.
-    fn over_segment(&self, frame: Option<Frame>, s: usize, at: [f64; 2], side: f64) -> Option<Over> {
+    /// What segment `s` is over `at`: the top at the nearest point of the
+    /// segment, if the deck covers `at`. A pier stands at a point and takes
+    /// the cell its point is in, at least, and half the deck's width across.
+    fn over_segment(&self, s: usize, at: [f64; 2]) -> Option<Over> {
         let (a, b) = (self.point(s), self.point(s + 1));
         let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
         let len2 = dx * dx + dy * dy;
-        let t = along(a, [dx, dy], at);
-        // a line ends square where it begins and ends, as the ground cuts a way, so the
-        // next line and the paint start where it stops; its joints stay round
-        if (s == 0 && t < 0.0) || (s + 2 == self.points.len() && t > 1.0) {
-            return None;
-        }
-        let t = t.clamp(0.0, 1.0);
+        let t = if len2 > 0.0 { (((at[0] - a[0]) * dx + (at[1] - a[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
         let near = [a[0] + dx * t, a[1] + dy * t];
-        if !way::covers(self.width_cells(), libm::hypot(at[0] - near[0], at[1] - near[1])) {
+        if !way::covers(self.width_cells(), (at[0] - near[0]).hypot(at[1] - near[1])) {
             return None;
         }
-        // the column's square spans this much of the segment either side of `t`
-        let reach = if len2 > 0.0 { side / 2.0 * (dx.abs() + dy.abs()) / len2 } else { 0.0 };
-        let z = |t: f64| f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t.clamp(0.0, 1.0);
-        let (z0, z1) = (z(t - reach), z(t + reach));
+        let top = f64::from(self.tops[s]) + (f64::from(self.tops[s + 1]) - f64::from(self.tops[s])) * t;
+        let pier_radius = (self.width_cells() / 4.0).max(0.5);
+        let on = |i: usize| self.piers[i] != 0 && {
+            let p = self.point(i);
+            (at[0] - p[0]).abs() <= pier_radius && (at[1] - p[1]).abs() <= pier_radius
+        };
         Some(Over {
             low: z0.min(z1),
             top: z0.max(z1),

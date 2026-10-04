@@ -117,6 +117,7 @@ pub fn source(kind: u32) -> &'static str {
             "shade",
             "finish",
             "shadow",
+            "ao_map",
             "impostor"
         ),
         SHADER_IMPOSTOR_BAKE => wgsl!("impostor_bake"),

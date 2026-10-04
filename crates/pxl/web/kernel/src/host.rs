@@ -1,13 +1,9 @@
 // pxl-kernel/host.rs
 //
-// What the kernel asks of the host that is not a command it answers, made as
-// xpute's system calls (xpute-runtime ipc/sys.rs): its files (io/file.rs),
-// and the kernel's own calls — a text laid out or drawn (text.rs,
-// abi/host.json). The host runs
-// them once the turn has returned, so what one asks is done by the time the
-// next turn rises — and what it names is kept that long. Only the clock is
-// still called: a turn measures its own budget mid-turn, when the host cannot
-// run. A native test has no stream, and storage keeps nothing there.
+// What the kernel asks of the host, as xpute system calls recorded during a
+// turn and run by the host after it returns, so they are done before the
+// next turn rises. Only the clock is called directly, since a turn measures
+// its budget mid-turn.
 
 use core::panic::Location;
 
@@ -20,7 +16,6 @@ use xpute_runtime::global::Global;
 
 static SYS: Global<Option<Sys>> = Global::new();
 
-/// The system calls, where there is a host to run them.
 pub fn sys() -> Option<&'static mut Sys> {
     SYS.get(|| None).as_mut()
 }

@@ -6,51 +6,9 @@
 //!   .fixed    ranges sized at compile time, never freed (fixed.rs)
 //!   heap      everything left, one allocator
 //!
-//!   module    the stack at the bottom (`--stack-first`, so an overflow wraps
-//!             past zero and traps), the rings at addresses pxl-wasm's
-//!             build.rs fixes, and then `.rodata`, `.data` and `.bss`, which
-//!             the same build.rs keeps out of the rings' way with
-//!             `--global-base`. All of it the linker's or build.rs's; nothing
-//!             here places any of it, and where it ends is what the linker
-//!             says (`__data_end`), not a number chosen in advance.
-//!   .fixed    what the kernel places once and never frees: ranges of a size
-//!             known at compile time, laid end to end from the first page past
-//!             the module's data. Which ranges those are is fixed.rs's, not
-//!             this file's — here it is one span and its width.
-//!   heap      everything left, ascending from the page past the last of the
-//!             fixed ranges to the end of the memory. One allocator answers
-//!             all of it — a slab of size classes over a buddy of pages
-//!             (xpute-core alloc/slab.rs over alloc/buddy_tree.rs) — so a
-//!             band's lanes, a fetch body and a `String` all come out of the
-//!             same range and give back into it.
-//!
-//! **The fixed ranges are not `.bss`, and the difference is deliberate.** Both
-//! are a size known at compile time, zeroed, never freed, reached by index
-//! arithmetic; a 50 MiB `static [u8; N]` would land in the same place and
-//! work. What it would lose is that the size is *decided* here. `.bss` is what
-//! the compiler happens to put there, and a range this large is a choice about
-//! how much world is resident — it should not read as compiler output, and the
-//! reasoning for it should not have to be recovered from a linker map.
-//!
-//! Where each lands, at the two memories the shell reserves. Everything but
-//! the heap is the same on both: the terrain is what a view can hold,
-//! not a share of what the device happens to have.
-//!
-//! ```text
-//!              offset         end            phone        desktop
-//!   module     0              ~32.7 MiB      the linker's
-//!   .fixed     ~32.7 MiB      ~108.9 MiB     76.21 MiB    76.21 MiB
-//!   heap       ~108.9 MiB     —              ~403.1 MiB   ~915.1 MiB
-//! ```
-//!
-//! What everything in front of the heap is checked against is MIN_HEAP_BYTES —
-//! the heap a phone is guaranteed — asked once at compile time of the lowest
-//! the heap could begin, and once at boot of where it actually began.
-//!
-//! A section begins on a page (PAGE_BYTES) and ends where its content does;
-//! the next begins on the first page past that. Where a section ends is no
-//! one's business but its own, so the terrain is what it holds and not a byte
-//! more, and what is left over is under a page.
+//! `.fixed` is not `.bss` on purpose: its size is a decision about how much
+//! world is resident, not compiler output. Everything ahead of the heap is
+//! checked against MIN_HEAP_BYTES, at compile time and again at boot.
 
 use xpute_runtime::mem::section::{align_up, Section};
 

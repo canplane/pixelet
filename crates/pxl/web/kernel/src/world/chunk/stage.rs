@@ -9,6 +9,9 @@ use pxl_spec::space::v3::sub3;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
+use crate::layer::decor::build::DecorHide;
+use crate::global::Global;
+use crate::host::now;
 use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::decor::build::DecorHide;
@@ -18,7 +21,6 @@ use crate::sched::profiler::record::{
 };
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
-use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
 use crate::world::chunk::table::{builds, Census, Frame};
 use crate::world::frame::view::{globe_anchor_local, view, view_resize};
 use crate::world::pyramid::Layer;
@@ -134,18 +136,23 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         delta_s: ctx.delta,
         remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,
-        center_z: origin[2] + anchor[2],
+        center_z: ivec::to_real(ivec::Z(v.origin)) + anchor[2],
         globe: Some(globe()),
     };
 
     let t0 = now();
     let draw = with_world(|world, sched| sched.tick(world, frame, &now)).unwrap_or(false);
-    // Decor lists after the chunks have listed theirs.
+    // Decor, its own layer: its frontier, its blocks and how each is drawn,
+    // after the chunks have listed theirs (layer/decor/cell.rs).
     {
         let k = kernel();
         let edits = crate::layer::object::store::render_edits();
-        let hide = edits.hide.filter(|_| edits.hide_in.1);
-        crate::layer::decor::cell::step(crate::layer::decor::build::kinds(), &k.objects, &mut k.sched.draw, hide, frame.eye);
+        let hide = edits
+            .hide
+            .filter(|_| edits.hide_in.1)
+            .map(DecorHide::Placed)
+            .or(crate::layer::decor::cell::scattered_hide().map(DecorHide::Scattered));
+        crate::layer::decor::cell::step(&crate::layer::decor::kind::KINDS, &k.objects, &mut k.sched, hide, frame.eye, &ctx.budget);
     }
     crate::layer::poi::placement::step(ctx);
     let sched = &mut kernel().sched;

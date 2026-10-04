@@ -76,7 +76,7 @@ function program(code: u32, w: U32Array, a: u32): void {
     case op.IMAGE_DECODE: {
       // Taken now: the kernel may close the file in this turn.
       const [fd, image] = [w[a], w[a + 1]];
-      const bytes = SYS.bytes(fd);
+      const bytes = FILES.bytes(fd);
       // Answered after the record run, never inside it, as an open is
       // (@xpute/runtime/ipc/sys.ts).
       void (async () => {

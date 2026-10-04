@@ -5,73 +5,13 @@
 //! (glTF, PNG) have no predictable bound and stay in the heap. Ranges are
 //! reached only through `range`, `at` or `lane`, which check the range's end.
 //!
-//! The map above (section.rs) knows `.fixed` as one span between the module's
-//! data and the heap — how wide it is, and that it begins on a page. What is
-//! inside it is here, so that adding a range is a line in this file and
-//! nothing in the map.
-//!
-//! A range is placed once when the module boots, never freed, and of a size
-//! settled at compile time. That is the whole of what makes one belong here,
-//! and a thing whose size has a bound that sits near what it holds at its
-//! ordinary fill belongs here too, at its bound: the heap is what is left
-//! over for what is asked for, refused and given back, and a thing that is
-//! never given back only makes the heap harder to reason about.
-//!
-//! Whose format a thing is decides whether it can be confined here. The
-//! kernel's own formats — a baked page, a slot table, a stream, a key map
-//! over the assets — have bounds the design sets. An external one — a glTF,
-//! a PNG, whatever an outside tool writes — has none that can be predicted,
-//! so its body stays in the heap, even though the shipped assets are listed
-//! with their bytes at compile time (pxl-spec asset/ingested.spec.rs): only
-//! the table that names them could be here, never what they hold.
-//!
-//! A range is reached through `range`, `at` or `lane`, which check what is
-//! asked for against the range's end — nothing adds to a range's offset by
-//! itself, so nothing written through one can land in the next.
-//!
-//! Ranges, in the order they are laid, those that serve one thing side by
-//! side:
-//!
-//! The ground as it is held.
-//!
-//!   .fixed.terrain   the resident terrain, one record a page, every record
-//!                    the same size, the first of them the open ocean every
-//!                    page the bake left as no object reads (world/
-//!                    paging.rs `ABSENT`; layer/terrain/fixed.rs). Which
-//!                    page lies in which record is residency's, so the
-//!                    range is laid out once and its records change hands.
-//!
-//! A chunk as it is built, in the order its work runs.
-//!
-//!   .fixed.runs      the run sets a chunk's tiers are baked from, two: one
-//!                    filled while the other is baked from (world/chunk/
-//!                    build.rs). A set is let go once its chunk's tiers are
-//!                    all on the device, which is what keeps them.
-//!   .fixed.bake      the workspace: the one mesh a chunk bake has open,
-//!                    written there and sent to its slot on the device the
-//!                    moment it is done (world/chunk/build.rs): a mesh has
-//!                    no home in the memory, since the device is where it
-//!                    is drawn from.
-//!   .fixed.mounts    the chunk table's own (world/chunk/table.rs): who holds
-//!                    each mesh slot and what each is chained to, which slot
-//!                    each mount's chunk is in, the mounts free and the chunks
-//!                    mounted in order, each sized by the slots.
-//!   .fixed.decor     where one decor cell's instances are gathered before
-//!                    they are laid into its block (layer/decor/instance.rs).
-//!
-//! The renderer's.
-//!
-//!   .fixed.blocks    its table of the blocks the draw list named (pxl-render
-//!                    gpu/renderer.rs).
-//!   .fixed.gpu       the stream its calls cross to the host in (pxl-render
-//!                    gpu/api.rs), written each turn from the start.
-//!
-//! What the kernel says to the shell.
-//!
-//!   .fixed.host      the stream the kernel's other asks of the host cross in
-//!                    (host.rs), the same way.
-//!   .fixed.profiler  the profiler's rings (sched/profiler/record.rs), which
-//!                    the shell reads where they lie.
+//!   .fixed.terrain   resident terrain, one record per page; record 0 is `ABSENT`
+//!   .fixed.bake      the one open bake's mesh, before it goes to its slot
+//!   .fixed.mounts    the chunk table's lanes
+//!   .fixed.blocks    the renderer's block table
+//!   .fixed.gpu       the GPU call stream to the host
+//!   .fixed.host      the kernel's other host calls
+//!   .fixed.profiler  the profiler's rings, read in place by the shell
 
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -83,52 +23,35 @@ use pxl_render::gpu::renderer::{block_slots, blocks_bytes};
 
 use crate::abi::host::stream as host_stream;
 
-use crate::layer::decor::instance::DECOR_BYTES;
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
 use crate::mem::section::{map, PAGE_BYTES};
-use crate::param::RUN_SET_BYTES;
 use crate::sched::profiler::record::PROFILER_BYTES;
-use crate::world::chunk::build::{BAKE_BYTES, RUN_SETS};
-use crate::world::chunk::mesh_slot::SURFACE_BYTES;
+use crate::world::chunk::build::BAKE_BYTES;
 use crate::world::chunk::table::MOUNTS_BYTES;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Range {
     Terrain,
-    /// Run set `n`, below RUN_SETS.
-    Run(usize),
     Bake,
-    Surface,
     Mounts,
-    Decor,
     Blocks,
     Gpu,
     Host,
     Profiler,
 }
 
-const COUNT: usize = 9 + RUN_SETS;
+const COUNT: usize = 7;
 
 impl Range {
     const fn index(self) -> usize {
         match self {
             Range::Terrain => 0,
-            Range::Run(set) => {
-                // A run set past the ones there are. Const, so no bug report:
-                // the panic names its place and nothing else.
-                if set >= RUN_SETS {
-                    panic!()
-                }
-                1 + set
-            }
-            Range::Bake => 1 + RUN_SETS,
-            Range::Surface => 2 + RUN_SETS,
-            Range::Mounts => 3 + RUN_SETS,
-            Range::Decor => 4 + RUN_SETS,
-            Range::Blocks => 5 + RUN_SETS,
-            Range::Gpu => 6 + RUN_SETS,
-            Range::Host => 7 + RUN_SETS,
-            Range::Profiler => 8 + RUN_SETS,
+            Range::Bake => 1,
+            Range::Mounts => 2,
+            Range::Blocks => 3,
+            Range::Gpu => 4,
+            Range::Host => 5,
+            Range::Profiler => 6,
         }
     }
 }
@@ -136,36 +59,20 @@ impl Range {
 /// None is let go.
 pub const MODELS_MAX: usize = crate::layer::character::variant::MODELS_MAX + crate::layer::decor::asset_store::MODELS_MAX;
 
-/// Actors at once at most: the companion's walkers and a case's on every
-/// surface.
 pub const ACTORS_MAX: usize = crate::layer::character::companion::ACTORS_MAX + crate::layer::character::preview::CASES_MAX;
 
-/// Blocks only one of which is ever held: the location puck's zone, the
-/// hover ghost and the debug lines.
 const SINGLE_BLOCKS: usize = 3;
 
-/// The most blocks the renderer's table names at once: each owner's bound —
-/// decor's cells (layer/decor/cell.rs `BLOCKS_MAX`), the models and the
-/// actors' joint palettes, a billboard set's instances an order, and the
-/// blocks one of which is held — summed, so the table cannot fill.
+/// Each owner's bound summed, so the table cannot fill. The renderer frees
+/// a list's blocks before taking its uploads, so it never holds more.
 pub const MAX_LIVE_BLOCKS: usize = crate::layer::decor::cell::BLOCKS_MAX + MODELS_MAX + ACTORS_MAX + crate::layer::billboard::order::SETS_MAX + SINGLE_BLOCKS;
 
-/// The table's slots, from that bound at the table's load (pxl-render
-/// gpu/renderer.rs `block_slots`).
 pub const BLOCK_SLOTS: usize = block_slots(MAX_LIVE_BLOCKS);
 
-/// Each range's bytes, in address order. What a range holds is its own
-/// affair; this says how many bytes it takes and nothing more.
 const RANGES: [u32; COUNT] = {
     let mut r = [0; COUNT];
     r[Range::Terrain.index()] = TERRAIN_BYTES;
-    let mut set = 0;
-    while set < RUN_SETS {
-        r[Range::Run(set).index()] = RUN_SET_BYTES;
-        set += 1;
-    }
     r[Range::Bake.index()] = BAKE_BYTES;
-    r[Range::Surface.index()] = SURFACE_BYTES;
     r[Range::Mounts.index()] = MOUNTS_BYTES;
     r[Range::Blocks.index()] = blocks_bytes(BLOCK_SLOTS);
     r[Range::Gpu.index()] = stream::BYTES;
@@ -176,14 +83,12 @@ const RANGES: [u32; COUNT] = {
 
 pub const BYTES: u32 = span_of(&RANGES, PAGE_BYTES);
 
-/// Range `r`. The memory is laid out as the module boots (door.rs), before
-/// anything reads a range, so a range asked for before it is a bug.
+/// Asking before boot lays out memory is a bug.
 pub fn range(r: Range) -> Section {
     map().or_bug(Errno::ENOTRECOVERABLE).fixed.nth(&RANGES, PAGE_BYTES, r.index())
 }
 
-/// Where `bytes` from `off` into range `r` lie: none where they would run
-/// past the range's end.
+/// None where the bytes would run past the range's end.
 pub fn at(r: Range, off: u32, bytes: u32) -> Option<u32> {
     range(r).at(off, bytes)
 }
@@ -200,4 +105,3 @@ pub unsafe fn lane<T>(s: Section, off: u32, n: usize) -> &'static mut [T] {
     // SAFETY: inside `s`, aligned, and the caller's alone.
     unsafe { core::slice::from_raw_parts_mut(ptr_at::<T>(at as usize), n) }
 }
-

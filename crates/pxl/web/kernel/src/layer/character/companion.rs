@@ -20,13 +20,13 @@ use crate::layer::character::path::{init_settle_tracker, sample_walk_plan, updat
 use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::layer::character::variant_spec::IDLE_CLIP;
-use crate::layer::model::asset::ModelHandle;
+use crate::layer::model::asset::{register_model, ModelHandle};
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
-use crate::world::access::{Access, FINEST};
+use crate::world::access::{support_revision, Access};
 use crate::world::change::wake_at;
 use crate::world::frame::coord::{local_height, local_world_to_canonical};
-use xpute_runtime::global::Global;
+use crate::world::frame::view::view;
 
 pub const ACTORS_MAX: usize = Group::ALL.len();
 
@@ -67,8 +67,7 @@ struct Surface {
     y: f64,
     hint: f64,
     origin: Option<IVec>,
-    revision: u32,
-    tiles: u32,
+    revision: [u32; 3],
     z: Option<f64>,
 }
 
@@ -109,8 +108,7 @@ impl Walker {
                 y: f64::NAN,
                 hint: f64::NAN,
                 origin: None,
-                revision: u32::MAX,
-                tiles: u32::MAX,
+                revision: [u32::MAX; 3],
                 z: None,
             },
         }
@@ -244,23 +242,18 @@ impl Walker {
         self.was_follow_mode = is_follow_mode;
         self.was_dragging = dragging;
 
-        // A wall holds it walking in place until the walk ends; following a fix
-        // there is no end to wait for, so a wall puts it at its target at once.
-        let arrived = (target.x - px).hypot(target.y - py) <= WALK_EPS;
-        let moved = (px, py) != (self.pose[0], self.pose[1]);
-        let stands = self.stands_z.get_or_insert(arrive_z);
-        if arrived {
-            *stands = arrive_z;
-        } else if moved {
-            match step_from(map_origin, [px, py], *stands) {
-                Some(Some(z)) => *stands = z,
-                Some(None) if is_follow_mode => {
-                    (px, py) = (target.x, target.y);
-                    *stands = arrive_z;
-                }
-                Some(None) => (px, py) = (self.pose[0], self.pose[1]),
-                None => {}
-            }
+        // Z is what the walker stands on there (world/access.rs `support`):
+        // asked again only when something it depends on moved.
+        let s = &mut self.surface;
+        let revision = support_revision();
+        if s.x != px || s.y != py || s.origin != Some(map_origin) || s.revision != revision {
+            *s = Surface {
+                x: px,
+                y: py,
+                origin: Some(map_origin),
+                revision,
+                z: footing(map_origin, px, py),
+            };
         }
         self.pose[0] = px;
         self.pose[1] = py;

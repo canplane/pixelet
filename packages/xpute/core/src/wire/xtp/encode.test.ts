@@ -37,6 +37,7 @@ Deno.test("the encoder writes the bytes the typescript writes", async () => {
   check("typed u16", (t) => t.set(new Uint16Array([1, 2, 3])));
   check("typed f32", (t) => t.f32_array(new Float32Array([0.5, -2.0])));
   check("bitset", (t) => t.bitset(new Uint8Array([1, 0, 1, 1, 0, 0, 0, 0, 1]) as U8Array));
+  check("strs", (t) => t.strs(["a", "héllo", ""]));
   check("branch mixed", (t) => t.set([42, "hello", true, null, 1n << 40n, [1, 2], new Int32Array([7])]));
   check("branch null child", (t) =>
     t.branch((b) => {

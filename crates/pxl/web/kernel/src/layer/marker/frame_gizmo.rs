@@ -165,11 +165,6 @@ impl Sketch {
         }
         self.point(to_local(vertex), Some(label));
     }
-
-    pub fn append(&mut self, other: &Sketch) {
-        self.vertices.extend_from_slice(&other.vertices);
-        self.labels.extend_from_slice(&other.labels);
-    }
 }
 
 fn sketch(map_center: &Pvf3, map_origin: IVec) -> Sketch {

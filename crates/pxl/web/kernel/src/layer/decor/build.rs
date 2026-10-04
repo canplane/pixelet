@@ -1,7 +1,6 @@
 // pxl-kernel/layer/decor/build.rs
 
-//! The decor layer: the kinds taught to the scheduler, and a decor cell's
-//! build. Scattered decor is never stored: it is a pure function of terrain
+//! A chunk's decor build. Scattered decor is never stored: it is a pure function of terrain
 //! and a fixed seed, and a cell holding a placed object filters its
 //! candidate out at build time.
 
@@ -10,67 +9,64 @@ use pxl_spec::space::lod::target_cell_px;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
-use pxl_spec::cell::object::decor_num_id;
-use pxl_spec::cell::DecorId;
+use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
-use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
+use pxl_spec::space::v3::Aabb;
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, TryReserveError};
 
-use pxl_spec::cell::cube_types;
 
-use crate::global::Global;
 use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
-use crate::layer::decor::kind::DecorKindDef;
+use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
-use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
-use crate::layer::object::store::{At, EntryAt, Store};
+use crate::layer::object::store::{At, EntryAt, Store, AIR};
+use crate::world::access::{Access, FINEST};
+use crate::world::pyramid::Layer as _;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::constant::CELL;
 use pxl_spec::bake::deck::Decks;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use xpute_core::math::scalar::round;
 
-const AIR: u32 = cube_types::common::air as u32;
 
-/// A kind is drawn as a model while it covers at least two of a tier's cells
-/// on screen (twelve pixels at the reference viewport, by eye, where Google's
-/// maps stop drawing buildings in 3D), then as a sprite down to
-/// `IMPOSTOR_GONE_CELLS`. No fade: the edge is per instance, so it staggers.
+// Fixed, arbitrary — the one thing every kind's own placement ultimately
+// derives from (alongside its own seed tag). Changing this reshuffles every
+// decoration in the world. A seed derivation masks to 64 bits.
+pub const DECOR_MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
+
+/// How far a kind is drawn, from its size and nothing else.
+///
+/// One criterion for every kind, the terrain tiers' own: what decides whether a
+/// thing is drawn is how large it is to the eye. A kind brings its extent — the
+/// largest dimension of its models, in world units — and never a threshold. At
+/// the far edge of a tier's band, a cell projects to TARGET_CELL_PX; an extent
+/// of E cells projects to E times that over the step. A thing that would cover
+/// fewer pixels than two of the tier's cells is not drawn: at that size its
+/// absence makes no visible difference, and the tier's cubes are already
+/// coarser than it. Twelve pixels at the reference viewport — the middle of the
+/// range at which Google's map products stop drawing a building in 3D
+/// (decided by eye).
+///
+/// No fade: a kind is drawn at full density up to its last tier and not past
+/// it. What softens the edge is the blend across a band boundary, which
+/// staggers the tier change across chunks. Cost is the low-poly tier's problem,
+/// not the criterion's; a tree and a car of the same size are drawn to the same
+/// range.
 pub fn decor_gone_px() -> f64 {
-    target_cell_px() * 2.0
+    *TARGET_CELL_PX * 2.0
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DecorTier {
-    Model,
-    /// A quad an instance: too small for a model's triangles, large enough to be seen.
-    Impostor,
-    Gone,
+/// Under this a kind's sprite is not drawn.
+pub fn decor_sprite_px() -> f64 {
+    target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS
 }
 
-pub fn decor_tier(extent_u: f64, lod_step: u32) -> DecorTier {
-    let projected_px = (extent_u / U_PER_CELL) * target_cell_px() / lod_step as f64;
-    if projected_px >= decor_gone_px() {
-        DecorTier::Model
-    } else if projected_px >= target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS {
-        DecorTier::Impostor
-    } else {
-        DecorTier::Gone
-    }
-}
-
-pub fn decor_density(extent_u: f64, lod_step: u32) -> f64 {
-    if decor_tier(extent_u, lod_step) == DecorTier::Gone {
-        0.0
-    } else {
-        1.0
-    }
+fn decor_shown(extent_u: f64, lod_step: u32) -> bool {
+    (extent_u / U_PER_CELL) * target_cell_px() / lod_step as f64 >= decor_sprite_px()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -80,19 +76,8 @@ pub struct DecorVariantAsset {
     pub skin: Asset,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct DecorKindBundle {
-    pub seed: DecorKindSeed,
-    pub rules: DecorRules,
-    pub variants: Vec<DecorVariantAsset>,
-    /// None for a kind with no user-placeable equivalent.
-    pub decor_id: Option<DecorId>,
-    /// The largest dimension over every variant's model, in world units.
-    pub extent: f64,
-}
-
-/// The largest of `values`, a NaN kept rather than dropped.
-fn largest(values: impl Iterator<Item = f64>) -> f64 {
+/// NaN is kept rather than dropped.
+pub fn largest(values: impl Iterator<Item = f64>) -> f64 {
     values.fold(0.0, |a: f64, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) })
 }
 
@@ -101,45 +86,6 @@ fn largest(values: impl Iterator<Item = f64>) -> f64 {
 /// drawn (layer/decor/cell.rs `present`).
 pub fn variant_extent(v: &DecorVariantAsset) -> f64 {
     largest(v.model.ingested().extent.unwrap_or([0.0; 3]).into_iter())
-}
-
-/// Binds a kind's seed and rules to its variants, and measures the kind's
-/// extent over all of them.
-pub fn bind_models(def: &DecorKindDef) -> DecorKindBundle {
-    let extent = largest(def.variants.iter().map(variant_extent));
-    DecorKindBundle {
-        seed: def.seed,
-        rules: def.rules,
-        variants: def.variants.to_vec(),
-        decor_id: def.decor_id,
-        extent,
-    }
-}
-
-static KINDS: Global<Vec<Kind>> = Global::new();
-
-/// The decor kinds, in the order they were taught — the order of the groups
-/// in every decor block.
-pub fn kinds() -> &'static [Kind] {
-    KINDS.get(Vec::new)
-}
-
-/// Teaches every kind, in bundle order — the order of the groups in the
-/// decor blocks: each kind's variants in variant order, one group a variant.
-pub fn teach_decor_kinds(bundles: &[&DecorKindBundle]) {
-    let kinds = KINDS.get(Vec::new);
-    kinds.clear();
-    for bundle in bundles {
-        kinds.push(Kind {
-            tag: bundle.seed.tag,
-            density: bundle.seed.density,
-            variant_count: bundle.variants.len() as u32,
-            align_transport: bundle.seed.orientation == DecorOrientationMode::AlignTransport,
-            extent: bundle.extent,
-            decor_value: bundle.decor_id.map(decor_num_id),
-            rules: bundle.rules,
-        });
-    }
 }
 
 /// Seeded only by the placed object's position, its one stable identity, so
@@ -164,17 +110,6 @@ impl Rng {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct Kind {
-    pub tag: u64,
-    pub density: f64,
-    pub variant_count: u32,
-    pub align_transport: bool,
-    pub extent: f64,
-    pub decor_value: Option<u32>,
-    pub rules: DecorRules,
-}
-
 pub struct DecorBuild<'s> {
     scratch: &'s DecorScratch,
 }
@@ -197,7 +132,7 @@ pub struct Ground<'a> {
 
 pub struct Placed {
     pub col_idx: IVec,
-    /// The column's corner relative to the decor cell drawing it, in units.
+    /// The column's corner relative to the chunk drawing it, in units.
     pub ox: f64,
     pub oy: f64,
     /// A coarser cell draws several columns' decor and names none of their
@@ -238,8 +173,8 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
         return None;
     }
     let mut rng = Rng::new(candidate.seed);
-    let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
-    let rotation = if kind.align_transport {
+    let variant = ((rng.unit() * kind.variant_count() as f64).floor() as u32).min(kind.variant_count() - 1);
+    let rotation = if kind.align_transport() {
         let flip = rng.unit() < 0.5;
         transport_aligned_rotation(cells, cell_x, cell_y, flip)
     } else {
@@ -256,57 +191,136 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
 /// What the z16 scatter stands of `value` in the cell `at` lies in, with
 /// nothing written there. None where the page is not resident.
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
-    let kind = kinds().iter().find(|k| k.decor_value == Some(value))?;
+    let kind = KINDS.iter().find(|k| k.decor_value() == Some(value))?;
     let z16 = GROUND.cell_of(0, at);
     let page = Terrain::pyramid().paging().get(z16.page())?;
     let ground = Access::now().at(at, FINEST).exact()?;
     let [ix, iy, iz] = CELL.index_of(at);
-    let candidate = scatter_at(kind.tag, kind.density, [ix, iy])?;
+    let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;
     (iz == round(ground.top / CELL.side()) as i64).then(|| draw(kind, candidate, &page.ground.cells, &page.decks, z16.in_page()))?
 }
 
+/// The decor a cell draws hidden: what the eraser is over, previewed gone
+/// while it is (layer/marker/hover_cursor.rs). Hidden and not left out, so
+/// the hit that put the eraser there still meets it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecorHide {
+    /// A placed instance, by its entry.
+    Placed(EntryAt),
+    /// A scattered one, by the cell it stands in.
+    Scattered([i64; 3]),
+}
+
+impl DecorHide {
+    pub fn placed(self) -> Option<EntryAt> {
+        match self {
+            DecorHide::Placed(at) => Some(at),
+            DecorHide::Scattered(_) => None,
+        }
+    }
+}
+
+/// What a kind's scatter draws at a cell of a level: the z16 cell it stands
+/// for (`representative`), and that cell's own draws.
+pub struct Draw {
+    pub gx: i64,
+    pub gy: i64,
+    pub variant: u32,
+    pub rotation: f64,
+    pub scale: f64,
+}
+
+/// `kind`'s candidate at the cell `at` of `level`, `page_at` its place in
+/// the page whose `cells` and `lines` it reads: none where the kind may not
+/// stand on what is drawn there, or its density leaves it out.
+///
+/// A scatter fills only a cell whose shown ground is its own (scatter.rs
+/// `DecorRules`) and that no line of any form is in — a deck over it, a ramp
+/// or a cutting in it, a bore under it: where something stands over the
+/// ground or cuts into it, nothing is scattered.
+pub fn draw(kind: &Kind, cells: &[GroundCell], lines: &Decks, level: u32, at: [i64; 2], page_at: [u32; 2]) -> Option<Draw> {
+    let [cell_x, cell_y] = page_at;
+    if !kind.rules.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
+        return None;
+    }
+    let (gx, gy) = representative(kind.tag, level, at[0], at[1]);
+    // The z16 cell's own stream: its page's seed, the kind's, and its place
+    // in its page.
+    let z16 = GROUND.cell_of(0, &GROUND.scale(0).base_of([gx, gy, 0]));
+    let [px, py] = z16.in_page().map(u64::from);
+    let kind_seed = derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, z16.page().page), kind.tag);
+    let mut rng = Rng::new(derive_seed_u64(kind_seed, (px << 16) | py));
+    if rng.unit() >= kind.density {
+        return None;
+    }
+    let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
+    let rotation = if kind.align_transport {
+        let flip = rng.unit() < 0.5;
+        transport_aligned_rotation(cells, cell_x, cell_y, flip)
+    } else {
+        rng.unit() * core::f64::consts::PI * 2.0
+    };
+    let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
+    // Asked after the draws, so a page's lines are walked for the cells a
+    // kind would fill and no other.
+    if lines.over_point([f64::from(cell_x) + 0.5, f64::from(cell_y) + 0.5]).next().is_some() {
+        return None;
+    }
+    Some(Draw { gx, gy, variant, rotation, scale })
+}
+
+/// What the scatter stands of decor value `value` in the cell `at` lies in,
+/// as z16 draws it with nothing written there: the kind's candidate at that
+/// z16 cell, on the ground drawn there. None where the cell's page is not
+/// resident, which says nothing of it.
+pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
+    let kind = kinds().iter().find(|k| k.decor_value == Some(value))?;
+    let z16 = GROUND.cell_of(0, at);
+    let page = Terrain::pyramid().get(z16.page())?;
+    let ground = Access::now().at(at, FINEST).exact()?;
+    let [ix, iy, iz] = CELL.index_of(at);
+    (iz == (ground.top / CELL.side()).round() as i64).then(|| draw(kind, &page.ground.cells, &page.decks, 0, [ix, iy], z16.in_page()))?
+}
+
 impl<'s> DecorBuild<'s> {
-    /// None where the heap refused scratch room, and the cell is not built.
+    /// Builds every kind's instances at world step `step` into `scratch`:
+    /// the decor placed in `placed`'s columns, `hide` flagged hidden, and
+    /// where `decor`, the scatter over `ground`. A cell scatters from its
+    /// own level's page, so decoration reaches as far as the ground it
+    /// stands on is drawn, a kind as far as it covers the pixels it is drawn
+    /// at (`decor_density`). A cell is a whole column: every instance over
+    /// it, at any height. None where the heap refused the scratch room for
+    /// them, and the cell is not built.
     #[allow(clippy::too_many_arguments)]
     /// Only what stands in `chunk`, the region of the chunk drawing it; the
     /// ground may be a coarser chunk's over it.
-    pub fn build(
-        scratch: &'s mut DecorScratch,
-        kinds: &[&Kind],
-        ground: Option<&Ground>,
-        placed: &[Placed],
-        hide: Option<DecorHide>,
-        store: &Store,
-        step: u32,
-        decor: bool,
-        chunk: Aabb,
-    ) -> Option<DecorBuild<'s>> {
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[&Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<DecorHide>, store: &Store, step: u32, decor: bool, chunk: Aabb) -> Option<DecorBuild<'s>> {
         scratch.clear();
         for kind in kinds {
-            if kind.variant_count == 0 {
+            if kind.variant_count() == 0 {
                 continue;
             }
             // Past what a block holds, the kinds after have none.
             let first = scratch.group_count;
-            if first + kind.variant_count as usize > DECOR_GROUPS {
+            if first + kind.variant_count() as usize > DECOR_GROUPS {
                 break;
             }
-            scratch.group_count += kind.variant_count as usize;
-            if decor_density(kind.extent, step) == 0.0 {
+            scratch.group_count += kind.variant_count() as usize;
+            if !decor_shown(kind.extent(), step) {
                 continue;
             }
             for column in placed {
-                Self::placed(scratch, kind, first, column, hide, store, heights);
+                Self::placed(scratch, kind, first, column, hide.and_then(DecorHide::placed), store, chunk).ok()?;
             }
             if let Some(ground) = ground.filter(|_| decor) {
-                Self::scatter(scratch, kind, first, ground, store, heights);
+                Self::scatter(scratch, kind, first, ground, hide, store, chunk).ok()?;
             }
         }
-        DecorBuild { scratch }
+        Some(DecorBuild { scratch })
     }
 
-    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store) -> Result<(), TryReserveError> {
-        let (Some(value), Some(e)) = (kind.decor_value, store.entries(column.col_idx)) else {
+    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
+        let (Some(value), Some(e)) = (kind.decor_value(), store.entries(column.col_idx)) else {
             return Ok(());
         };
         let (bands, poss, states) = (e.band, e.pos, e.state);
@@ -323,9 +337,9 @@ impl<'s> DecorBuild<'s> {
                 step: [x, y, z],
             };
             // Turned and varied by position, as the placing ghost predicted.
-            let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count);
+            let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count());
             let [lx, ly, lz] = at.local();
-            if lz < z0 || lz >= z1 {
+            if !(chunk.min[2]..chunk.max[2]).contains(&lz) {
                 continue;
             }
             let hidden = hide == Some(e.at(k));
@@ -342,14 +356,15 @@ impl<'s> DecorBuild<'s> {
                     band: if column.hittable { bands[k] as u32 } else { NO_ENTRY },
                     pos,
                 },
-            );
+            )?;
         }
+        Ok(())
     }
 
     /// Whether a kind may stand on a cell, and its transport alignment, are read
     /// off the level's own cells: a tree above z16 stands on the grass the view
     /// sees, not on z16 cells it cannot.
-    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store) -> Result<(), TryReserveError> {
+    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
         let (cells, lines) = (ground.page.cells, ground.page.decks);
         let (level, atom) = (GROUND.scale(ground.level), GROUND.scale(0));
         let (lx0, ly0) = (level.index(ground.x0), level.index(ground.y0));
@@ -357,7 +372,7 @@ impl<'s> DecorBuild<'s> {
         let min = [atom.index(ground.x0), atom.index(ground.y0)];
         let span = i64::from(CHUNK_CELLS) * per;
         let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
-        scatter(kind.tag, kind.density, ground.level, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
+        scatter(kind.seed.tag, kind.seed.density, ground.level, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
         for i in 0..scratch.candidates.len() {
             let candidate = scratch.candidates[i];
             let (dx, dy) = ((candidate.cell[0] - min[0]).div_euclid(per) as u32, (candidate.cell[1] - min[1]).div_euclid(per) as u32);
@@ -365,6 +380,11 @@ impl<'s> DecorBuild<'s> {
                 continue;
             };
             let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;
+            let at = [(gx as f64 + 0.5) * atom.side(), (gy as f64 + 0.5) * atom.side(), f64::from(ele)];
+            // In the chunk holding the cell it stands on.
+            if !((0..2).all(|k| (chunk.min[k]..chunk.max[k]).contains(&at[k])) && chunk.min[2] < at[2] && at[2] <= chunk.max[2]) {
+                continue;
+            }
             // A leaf in the cell overrides the scatter: a cube or air hides it, the leaf gone brings it back.
             if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some()) {
                 continue;
@@ -373,8 +393,7 @@ impl<'s> DecorBuild<'s> {
             if ground.folded.is_some_and(filled) {
                 continue;
             }
-            let (x, y) = ((gx as f64 + 0.5) * atom.side() - ground.x0 as f64, (gy as f64 + 0.5) * atom.side() - ground.y0 as f64);
-            let z = ele as f64;
+            let [x, y, z] = [at[0] - chunk.min[0], at[1] - chunk.min[1], at[2]];
             let hidden = ground.level == 0 && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
             scratch.push(
                 first + variant as usize,
@@ -400,12 +419,20 @@ impl<'s> DecorBuild<'s> {
             Some(lo) => [lo, z.fold(lo, f32::max)],
             None => [0.0, 0.0],
         }
+        Ok(())
     }
 
+    /// Each instance with the group it is drawn in.
+    pub(crate) fn each(&self) -> impl Iterator<Item = (usize, &Instance)> {
+        self.scratch.groups.iter().map(|&g| g as usize).zip(&self.scratch.instances)
+    }
+
+    /// The instances the block holds.
     pub fn instances(&self) -> usize {
         self.scratch.instances.len()
     }
 
+    /// The block's size in bytes (instance.rs `GroupLanes`).
     pub fn bytes(&self) -> u32 {
         let s = self.scratch;
         let words: usize = 1 + s.group_count + s.counts[..s.group_count].iter().map(|&n| GroupLanes::words(n as usize)).sum::<usize>();
@@ -431,7 +458,7 @@ impl<'s> DecorBuild<'s> {
             k += GroupLanes::words(n);
         }
         let mut rank = [0usize; DECOR_GROUPS];
-        for (i, &g) in s.instances[..s.len].iter().zip(&s.groups[..s.len]) {
+        for (i, &g) in s.instances.iter().zip(&s.groups) {
             let (lane, r) = (lanes[g as usize], rank[g as usize]);
             for (l, v) in [i.x, i.y, i.z, i.rotation, i.scale].into_iter().enumerate() {
                 *words.add(lane.f32_at(l, r)) = v.to_bits();

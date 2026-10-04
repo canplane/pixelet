@@ -1,6 +1,36 @@
 // pxl-spec/bake/format.rs
 
-//! A baked terrain page and its wire: `[ele, cells, extent, occupancy, decks]`.
+//! Terrain format helpers for baked page payloads.
+//!
+//! The wire field order is defined here.
+//!
+//! Layer model:
+//! - L3 page = terrain transport / storage unit
+//! - terrain = static terrain layer carried by that page
+//! - ground  = categorical 2D terrain channels
+//! - ele     = elevation raster payload for that terrain layer
+//!
+//! In other words:
+//!   L3 page
+//!     -> terrain layer
+//!          -> ground
+//!          -> ele
+//!
+//! raw wire   = [ele, buildings, segments, base, coasts, decks]
+//!   buildings = [[gers_id, subtype, class, height, num_floors, geom_wkb], ...]
+//!   segments  = [[gers_id, subtype, class, flags, widths, access, subclass, subclasses, geom_wkb], ...]
+//!   base      = [[gers_id, source, subtype, class, geom_wkb], ...]  (source: land_use|water|land|infrastructure)
+//!   coasts    = [[id, geom_wkb, covers_page], ...]
+//!   decks     = [[gers_id, subtype, class, width_m, piers, geom_wkb], ...]  (LineStringZ, the top in m)
+//!
+//! baked wire = [ele, cells, extent, occupancy, decks]
+//!   cells     = one u16 a cell, the four ground channels packed into it
+//!               (bake/pack.rs), which is the shape the client holds too
+//!   extent    = the index lane's (lowest, highest) a cell, in `EXTENT`'s
+//!               cell order, flattened to i16 pairs (`Index`)
+//!   occupancy = one u8: which of the page and its four children are pages
+//!               (`Occupancy`)
+//!   decks     = the ways the page carries above its ground (bake/deck.rs)
 
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
@@ -19,6 +49,62 @@ pub const GROUND_LANE: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
 pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 pub const EXTENT_LANE: usize = (EXTENT.page_cells() * EXTENT.page_cells()) as usize;
 pub const BLOCK_LANE: usize = EXTENT.page_blocks() as usize;
+
+// ---- DB ----
+
+pub struct BuildingRow {
+    pub gers_id: String,
+    pub subtype: Option<String>,
+    pub class: Option<String>,
+    pub height: Option<f64>,
+    pub num_floors: Option<f64>,
+    pub geom_wkb: Box<[u8]>, // WKB
+}
+
+pub struct SegmentRow {
+    pub gers_id: String,
+    pub subtype: String,
+    pub class: Option<String>,
+    /// Raw JSON text of the segment's `road_flags` or `rail_flags`, whichever
+    /// its subtype carries.
+    pub flags: Option<String>,
+    /// Raw JSON text of its `width_rules`.
+    pub widths: Option<String>,
+    /// Raw JSON text of its `access_restrictions`.
+    pub access: Option<String>,
+    /// Its `subclass`, and the raw JSON text of its `subclass_rules`.
+    pub subclass: Option<String>,
+    pub subclasses: Option<String>,
+    pub geom_wkb: Box<[u8]>, // WKB
+}
+
+pub struct BaseRow {
+    pub gers_id: String,
+    pub source: String, // "land_use" | "water" | "land" | "infrastructure"
+    pub subtype: Option<String>,
+    pub class: Option<String>,
+    pub geom_wkb: Box<[u8]>, // WKB
+}
+
+/// A deck as the offline solve left it (pxl-geo-bake deck/): its way's
+/// subtype, class and width in metres, its line with the deck's top in
+/// metres as Z, and a byte a point, 1 where a pier stands under it.
+pub struct DeckRow {
+    pub gers_id: String,
+    pub subtype: String,
+    pub class: Option<String>,
+    pub width_m: f64,
+    pub piers: Box<[u8]>,
+    pub geom_wkb: Box<[u8]>, // WKB, LineString Z
+}
+
+pub struct CoastRow {
+    pub id: String,
+    pub geom_wkb: Box<[u8]>, // WKB
+    pub covers_page: bool,
+}
+
+// ---- Ground ----
 
 pub use crate::cell::cube_type::GroundChannelKey;
 

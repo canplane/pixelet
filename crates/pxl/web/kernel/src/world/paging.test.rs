@@ -130,7 +130,6 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
             Some(&observation()),
             None,
             core::iter::empty(),
-            &[],
             &Unknown,
             &ByBounds { tau: Tau::FINEST },
             prefetch,

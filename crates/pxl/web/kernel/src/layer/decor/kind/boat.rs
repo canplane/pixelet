@@ -7,7 +7,7 @@ use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::cell::cube_types::Water;
 
 use crate::layer::decor::build::DecorVariantAsset;
-use crate::layer::decor::kind::DecorKindDef;
+use crate::layer::decor::kind::Kind;
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 
 const VARIANTS: [DecorVariantAsset; 4] = [
@@ -29,7 +29,7 @@ const VARIANTS: [DecorVariantAsset; 4] = [
     },
 ];
 
-pub const DEF: DecorKindDef = DecorKindDef {
+pub const DEF: Kind = Kind {
     seed: DecorKindSeed {
         tag: 0xb0a75eed0002dec0,
         // Rivers are a few cells wide, so the per-cell rate reads far denser than on
@@ -37,10 +37,7 @@ pub const DEF: DecorKindDef = DecorKindDef {
         density: 0.002,
         orientation: DecorOrientationMode::Random,
     },
-    rules: DecorRules::ANY
-        .void(GroundChannelKey::STRUCTURE)
-        .void(GroundChannelKey::TRANSPORT)
-        .one_of(GroundChannelKey::WATER, &[Water::river as u8, Water::lake as u8]),
+    rules: DecorRules::on(GroundChannelKey::WATER, &[Water::river as u8, Water::lake as u8]),
     variants: &VARIANTS,
     decor_id: None,
 };

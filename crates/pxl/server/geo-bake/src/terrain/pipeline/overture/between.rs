@@ -94,17 +94,10 @@ pub fn value_at(column: Option<&str>, at: f64) -> Option<f64> {
     rules(column).iter().find(|r| range_of(r).is_some_and(|[a, b]| (a..=b).contains(&at))).and_then(|r| r["value"].as_f64())
 }
 
-/// The text value of the rule of a values column (`subclass_rules`) that
-/// holds at fraction `at`.
-pub fn text_at(column: Option<&str>, at: f64) -> Option<String> {
-    rules(column)
-        .iter()
-        .find(|r| range_of(r).is_some_and(|[a, b]| (a..=b).contains(&at)))
-        .and_then(|r| r["value"].as_str().map(str::to_string))
-}
-
-pub fn flag_at(flags: Option<&str>, wanted: &[&str], cell: f64, at: f64) -> bool {
-    flag_ranges(flags, wanted, cell).iter().any(|&[a, b]| (a..=b).contains(&at))
+/// Whether any of `wanted` holds at fraction `at` among a flags column's
+/// rules.
+pub fn flag_at(flags: Option<&str>, wanted: &[&str], at: f64) -> bool {
+    flag_ranges(flags, wanted).iter().any(|&[a, b]| (a..=b).contains(&at))
 }
 
 /// A line cut wherever a range of any of `sets` starts or ends, each piece

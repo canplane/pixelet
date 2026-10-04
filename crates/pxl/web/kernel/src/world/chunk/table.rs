@@ -24,30 +24,30 @@
 //! tiers; the chunk stage (stage.rs) composes the frame — the camera, the
 //! anchor root's matrix, the frustum — and calls the tick.
 
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 
-use std::collections::HashMap;
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
 use pxl_render::look::globe::Globe;
-use pxl_render::mesh::chunk_mesher::{box_bounds, Heights};
+use pxl_render::mesh::chunk_mesher::{box_bounds, box_z, Heights};
 use pxl_render::mesh::paint::terrain::adapter::beside_index;
 use pxl_render::mesh::voxel_scan::APRON;
 
 use crate::sched::profiler::record::ZOOMS;
 use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::observation::Bounds as _;
-use pxl_spec::space::pyramid::{chunk_scale, GROUND};
-use pxl_spec::space::observation::Frustum;
-use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
+use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pyramid::TOP_LEVEL;
+use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::alloc;
 use xpute_runtime::mem::section::span_of;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
 use xpute_runtime::global::Global;
 use crate::layer::billboard::field::Billboards;
+use crate::layer::decor::build::Kind as DecorKind;
 use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::debug_lines::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
@@ -57,15 +57,11 @@ use crate::layer::model::store::Models;
 use crate::layer::object::store::EntryAt;
 use crate::mem::fixed::{lane, range, Range};
 use crate::param;
-use crate::sched::profiler::record::MB;
 use crate::shell::setting::store::settings_store;
-use crate::world::chunk::build::{mesh_step, BuildEvent, Builder, World};
-use pxl_spec::space::hierarchy::Scale;
-use crate::world::chunk::frontier::{scale_of, pool_of, Env, Frontier, Now, Slots};
-use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
+use crate::world::chunk::build::{mesh_step, BuildEvent, Builder, Cube, World};
+use crate::world::chunk::frontier::{self, cube_of, drawn_cube, pool_of, wanted_cube, Env, Frontier, Now, Slots};
+use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, surface_of, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
-use crate::world::paging::LEVELS;
-use pxl_spec::space::hierarchy::Scale;
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -100,6 +96,8 @@ pub struct Frame {
     /// What is left of the turn's quota, not the quota itself.
     pub remaining_ms: f64,
     pub hard_slack_ms: f64,
+    /// The globe's anchor's height, in units: what the camera's height over
+    /// the sea is measured up from.
     pub center_z: f64,
     pub globe: Option<Globe>,
 }
@@ -134,40 +132,6 @@ pub struct ChunkHeld {
     pub run_sets: u32,
     pub run_set_mb: u32,
     pub tiers: u32,
-    /// Decor: per-tier blocks.
-    pub decor_steps: u32,
-    /// The instances those blocks hold, which is what they cost to draw.
-    pub decor_instances: u32,
-}
-
-/// A decor block a chunk holds: its cube and bytes, and the
-/// renderer's handle. Each group's lanes are where the block's own header
-/// says.
-#[derive(Clone, Copy)]
-pub struct Decor {
-    cube: Cube,
-    generation: u32,
-    /// Where the block is in the memory, and its size.
-    pub at: u32,
-    pub bytes: u32,
-    handle: u32,
-}
-
-impl Decor {
-    /// Gives the block back and its handle with it: one lifetime, the slot's.
-    fn release(self, draw: &mut DrawList) {
-        draw.free(self.handle);
-        release_block(self.at as usize, self.bytes);
-    }
-
-    /// Each group's first lane word in the block and its count
-    /// (decor/instance.rs's decor_groups).
-    fn groups(&self) -> impl Iterator<Item = (u32, u32)> {
-        // SAFETY: the block the scheduler wrote at `at`, `bytes` long, held
-        // for as long as this decor is.
-        let words: &[u32] = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(self.at as usize), self.bytes as usize / 4) };
-        decor_groups(words)
-    }
 }
 
 #[derive(Clone)]
@@ -192,12 +156,19 @@ struct Slot {
     /// The layout's tiers plus the last one landed. A source change keeps the
     /// old generation's tiers drawn until a layout of the new one is applied.
     tiers: Held<Tier>,
-    /// The applied layout's primary scale and generation; none until one is, or
-    /// once its tier is gone.
-    layout: Option<(Scale, u32)>,
-    desired: Scale,
+    layout_primary: Cube,
+    /// The generation the layout's tiers and decor are drawn from.
+    layout_generation: u32,
+    layout_ready: bool,
+    /// The cube the rule wants it drawn in now.
+    desired: Cube,
+    /// The heap's release count when its decor was last refused a
+    /// block: not committed again until a block is given back.
+    refused: Option<u32>,
+    /// What the builder was last told the chunk is made of, and what its
+    /// decor was last built from: a change of either is a rebuild of the
+    /// one it names (`sources_step`).
     sources: Sources,
-    decor_sources: DecorSources,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -212,16 +183,6 @@ struct Sources {
     /// finer page arriving rebuilds the chunk and its shared edges.
     read_from: Option<u32>,
     beside_from: [Option<u32>; 8],
-}
-
-/// What a chunk's decor is made of: the revision of the columns it draws the
-/// placed decor of, the setting, and the hidden entry where it is decor
-/// there.
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct DecorSources {
-    revision: u32,
-    shown: bool,
-    hide: Option<EntryAt>,
 }
 
 impl Sources {
@@ -242,17 +203,6 @@ impl Sources {
                 }
                 from
             },
-        }
-    }
-}
-
-impl DecorSources {
-    fn of(k: Chunk, edits: RenderEdits) -> DecorSources {
-        let (level, base) = (k.level(), k.corner());
-        DecorSources {
-            revision: decor_revision_of(k),
-            shown: settings_store().decor,
-            hide: edits.hide.filter(|at| edits.hide_in.1 && decor_draws(level, base, at.col_idx) && draws_band(k, at.band_idx)),
         }
     }
 }
@@ -315,7 +265,41 @@ impl Slot {
         }
     }
 
-    /// Slots held for it and not yet taken: none while it has a tier of the target scale.
+    fn tier(&self, cube: Cube, generation: u32) -> Option<&Tier> {
+        self.tiers.iter().find(|t| t.cube == cube && t.generation == generation)
+    }
+
+    /// The pool its desired tier takes.
+    fn desired_pool(&self) -> Pool {
+        Pool::of(self.level(), mesh_step(self.desired, self.level()))
+    }
+
+    /// The slots of its pool its desired tier fills, of the sources as of
+    /// `generation`.
+    fn desired_slots(&self, generation: u32) -> (Pool, u32) {
+        (self.desired_pool(), self.slots_for(self.desired, generation))
+    }
+
+    /// Whether it draws a cube other than the one it wants.
+    fn recubes(&self) -> bool {
+        self.layout_ready && self.layout_primary != self.desired
+    }
+
+    /// The cube it builds now: the one it wants, but for a drawn piece the
+    /// frontier has not yet let change cube, the one it shows — rebuilt in
+    /// its own slot when its sources change, so an edit shows whatever the
+    /// arena's room.
+    fn target(&self) -> Cube {
+        if self.role == Role::Drawn && self.recubes() && !self.recube {
+            self.layout_primary
+        } else {
+            self.desired
+        }
+    }
+
+    /// The pool slots are held in for it and not yet taken, and how many:
+    /// what it builds has not landed, and it has no tier of that cube to
+    /// build into.
     fn reserves(&self, generation: u32) -> Option<(Pool, u32)> {
         let scale = self.target();
         (!self.tiers.iter().any(|t| t.scale == scale)).then(|| (pool_of(self.chunk, scale), self.slots_for(scale, generation)))
@@ -333,6 +317,7 @@ pub struct Census {
     pub offscreen_pending: u32,
     pub oldest_visible_ms: f64,
     pub oldest_offscreen_ms: f64,
+    /// Chunks built for a move and ready, waiting on the rest of it.
     pub ready_waiting: u32,
     pub slot_waits: u32,
     pub wait_levels: u32,
@@ -504,10 +489,11 @@ pub struct Scheduler {
     /// An input changed that no recheck has seen; the next tick rechecks every
     /// chunk. Frames are requested until then, or the world stops at the last frame.
     view_dirty: bool,
-    retained_on: f64,
-    retained_off: f64,
     pub census: Census,
     counts: ChunkCounts,
+    /// The decor kinds, in the order decor/build.rs taught them — the order of
+    /// the groups in every decor block.
+    pub(crate) decor_kinds: Vec<DecorKind>,
     /// The chunks the build task advances, in the one order, as the last
     /// tick left them.
     builds: Vec<u32>,
@@ -622,10 +608,9 @@ impl Scheduler {
             domain_seen: u32::MAX,
             frame: None,
             view_dirty: true,
-            retained_on: 0.0,
-            retained_off: 0.0,
             census: Census::default(),
             counts: ChunkCounts::default(),
+            decor_kinds: Vec::new(),
             scratch: Scratch::default(),
             builds: Vec::new(),
             landed: Vec::new(),
@@ -642,34 +627,31 @@ impl Scheduler {
         self.find(&c).map_or(1, |i| self.slots[i].slots_for(scale, self.generation(i)))
     }
 
+    /// Forgets every kind taught, so they can be taught again.
+    pub fn decor_forget(&mut self) {
+        self.decor_kinds.clear();
+    }
+
+    /// How many slots chunk `c`'s tier of `cube` fills, as far as is known
+    /// of its current sources: what the frontier and the quality policy
+    /// count it by (frontier.rs `need`).
+    pub fn slots_of(&self, c: Chunk, cube: Cube) -> u32 {
+        self.find(&c).map_or(1, |i| self.slots[i].slots_for(cube, self.generation(i)))
+    }
+
+    /// Which telling of the slots tiers need this is (`slots_of`).
     /// Refinements and changes of cube since load, and the most changes to
     /// what is drawn between two of the frontier's steps.
     pub fn pace(&self) -> [u32; 3] {
         [self.refined, self.retiered, self.changes_peak]
     }
 
-    /// Each mounted chunk, whether it is drawn, and whether it is in the frustum.
-    pub fn mounted(&self, out: &mut Vec<(Chunk, bool, bool)>) {
+    /// Each mounted chunk, and whether it is drawn and in the frustum now.
+    pub fn mounted(&self, out: &mut Vec<(Chunk, bool)>) {
         out.clear();
-        out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn, s.in_frustum)));
+        out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn && s.in_frustum)));
     }
 
-    /// The finest drawn chunk holding `p`, as zooms: its cells', its tier's,
-    /// and those of the page it is read from.
-    pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
-        let s = (0..LEVELS).find_map(|level| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk == Chunk::of(level, p)))?;
-        Some((
-            zoom_of(GROUND.scale(s.level())),
-            s.layout.map(|(scale, _)| zoom_of(scale)),
-            s.sources.read_from.map(|l| zoom_of(GROUND.scale(l))),
-        ))
-    }
-
-    pub fn drawn_revision(&self) -> u32 {
-        self.drawn_revision
-    }
-
-    /// Which telling of the slots tiers need this is (`slots_of`).
     pub fn needs_revision(&self) -> u32 {
         self.meshes.needs
     }
@@ -695,10 +677,12 @@ impl Scheduler {
             need: None,
             retier: false,
             tiers: Held::EMPTY,
-            layout: None,
-            desired: chunk_scale(level),
+            layout_primary: frontier::coarsest(level),
+            layout_generation: 0,
+            layout_ready: false,
+            desired: frontier::coarsest(level),
+            refused: None,
             sources,
-            decor_sources: DecorSources::of(k, edits),
         };
         slot.unmeasured();
         if let Some(frame) = self.frame {
@@ -724,17 +708,8 @@ impl Scheduler {
         self.counts.removed += 1;
         self.builder.remove(world, id);
         settle(&mut self.meshes, &self.builder);
-        let before = self.slots[i].retained();
-        if self.slots[i].has(IN_FRUSTUM) {
-            self.retained_on -= before;
-        } else {
-            self.retained_off -= before;
-        }
         for t in self.slots[i].tiers.iter() {
             let_go(&mut self.meshes, t.slot.index, id);
-        }
-        for d in self.slots[i].decor.iter() {
-            d.release(&mut self.draw);
         }
         self.slots.swap_remove(i);
         if i < self.slots.len() {
@@ -788,11 +763,6 @@ impl Scheduler {
                 self.slots[i].sources = sources;
                 self.source(world, i);
             }
-            let decor = DecorSources::of(k, edits);
-            if decor != self.slots[i].decor_sources {
-                self.slots[i].decor_sources = decor;
-                self.decor_now(world, i);
-            }
         }
     }
 
@@ -829,12 +799,21 @@ impl Scheduler {
         worked
     }
 
+    /// The model decor group `group` is drawn with.
+    pub fn decor_model(&mut self, group: u32, model: u32) {
+        let g = group as usize;
+        if self.decor_models.len() <= g {
+            self.decor_models.resize(g + 1, None);
+        }
+        self.decor_models[g] = Some(model);
+    }
+
     /// The counts since the last frame sample, taken.
     pub fn take_counts(&mut self) -> ChunkCounts {
         core::mem::take(&mut self.counts)
     }
 
-    /// What the chunks hold, with the run sets `.fixed.runs` has lent as the
+    /// What the chunks hold, with the run sets held for them as the
     /// builder counts them (`Builder::run_sets`).
     pub fn held(&self) -> ChunkHeld {
         let (run_sets, run_bytes) = self.builder.run_sets();
@@ -845,13 +824,12 @@ impl Scheduler {
         };
         for s in &self.slots {
             out.tiers += s.tiers.len() as u32;
-            out.decor_steps += s.decor.len() as u32;
-            out.decor_instances += s.decor.iter().flat_map(|d| d.groups()).map(|(_, n)| n).sum::<u32>();
         }
         out
     }
 
-    /// Free slots per pool after what mounted chunks will take.
+    /// Slots each pool has that no tier holds and no chunk mounted will
+    /// take: what the frontier may start moves in.
     fn free(&self) -> Slots {
         let mut free = ARENA;
         for (at, h) in self.meshes.holder.iter().enumerate() {
@@ -1015,6 +993,8 @@ impl Scheduler {
         let pending_total = sc.pending.len() as u32;
 
         let commits = under_budget(&sc.pending, param::COMMITS_PER_FRAME, deadline, hard, now, |i| self.commit(world, i));
+        // What the pass never looked at, which is what a cap on how many may
+        // land costs when there are more of them than it lets through.
         let commit_left = sc.pending.len() as u32 - commits.visited;
         let mut committed = commits.ran;
 
@@ -1026,7 +1006,6 @@ impl Scheduler {
         }
         committed += core::mem::take(&mut self.build_committed);
 
-        self.reclaim(&sc.order);
         self.scratch = sc;
         let animating = self.models.tick(&mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
         self.draw_frame(&frame);
@@ -1067,8 +1046,6 @@ impl Scheduler {
         c.chained = core::mem::take(&mut self.meshes.chained);
         c.fine_peak = core::mem::take(&mut self.meshes.fine_peak);
         c.coarse_peak = core::mem::take(&mut self.meshes.coarse_peak);
-        c.retained_on = self.retained_on;
-        c.retained_off = self.retained_off;
         let moving = c.waiting > 0 || c.ready_waiting > 0;
         self.census = c;
         committed > 0 || pending_total > committed || moving || self.view_dirty || animating
@@ -1091,11 +1068,18 @@ impl Scheduler {
             if s.role == Role::Building || !s.in_frustum {
                 continue;
             }
-            let (x0, y0) = s.base();
-            let translation = DrawList::translation([x0, y0, 0.0], frame.eye);
-            let Some(t) = s.tier(scale, generation) else { continue };
-            // Slots are recycled between chunks, so a chunk must draw only from a slot
-            // it holds; otherwise it can draw another chunk's ground.
+            let translation = DrawList::translation([s.base_x(), s.base_y(), 0.0], frame.eye);
+            let cube = s.layout_primary;
+            let Some(t) = s.tier(cube, s.layout_generation) else { continue };
+            // A chunk draws only from a slot it holds. The slot is room
+            // and not an address (world/chunk/mesh_slot.rs), so it is
+            // handed from one chunk to another while the kernel runs —
+            // and a long-lived thing holding a recyclable address is how
+            // one chunk comes to draw another's ground. It cannot here:
+            // the only reference to a slot is the `Tier` inside the chunk
+            // that took it, a slot is free only once that tier is gone,
+            // and this looks the tier up again every frame. The assert is
+            // what says so out loud, at an array index a draw.
             xpute_core::ensure!(holder[t.slot.index] == Nth::of(s.id as usize), ENOTRECOVERABLE);
             if t.box_cnt == 0 {
                 continue;
@@ -1177,7 +1161,7 @@ impl Scheduler {
             s.order = order;
             let was = s.in_frustum;
             if visible != was {
-                s.in_frustum = visible;
+                s.set(IN_FRUSTUM, visible);
                 self.view_dirty = true;
             }
         }
@@ -1225,7 +1209,7 @@ impl Scheduler {
         if !s.retiers() {
             s.retier = false;
         }
-        let pending = s.layout != Some((s.target(), current));
+        let pending = !s.layout_ready || s.layout_primary != s.target() || s.layout_generation != current;
         self.set_pending(i, pending, now);
         let s = &mut self.slots[i];
         if !s.pending() {
@@ -1233,13 +1217,14 @@ impl Scheduler {
         }
     }
 
-    fn release_tiers(&mut self, i: usize, keep: impl Fn(Scale, u32) -> bool) {
+    /// Lets go of chunk `i`'s tiers and decor but those `keep` names, and of
+    /// the slots only they held; its layout too where its primary goes.
+    fn release_tiers(&mut self, i: usize, keep: impl Fn(Cube, u32) -> bool) {
         let s = &mut self.slots[i];
-        prune(s, &mut self.meshes, |t| keep(t.scale, t.generation), None);
-        if s.layout.is_some_and(|(p, g)| s.tier(p, g).is_none()) {
-            s.layout = None;
+        prune(s, &mut self.meshes, |t| keep(t.cube, t.generation), None);
+        if s.tier(s.layout_primary, s.layout_generation).is_none() {
+            s.layout_ready = false;
         }
-        self.account(i, before);
     }
 
     /// Whether the chunk holds `primary` of the current generation; asks the
@@ -1284,7 +1269,7 @@ impl Scheduler {
         }
         let (p, generation) = (s.target(), self.generation(i));
         let asked = self.ask(world, i, p);
-        if !asked || !self.ensure_decor(world, i, p, generation) {
+        if !asked {
             return false;
         }
         let s = &self.slots[i];
@@ -1296,45 +1281,11 @@ impl Scheduler {
             self.changes += 1;
         }
         let s = &mut self.slots[i];
-        s.retier = s.retiers() && s.retier;
+        s.recube = s.recubes() && s.recube;
         self.set_pending(i, false, 0.0);
         true
     }
 
-    /// The retain budget: off-screen decor past it, or the heap pressed
-    /// (`heap_pressed`), is given back farthest first. A block refused since
-    /// the last pass is pressure too, whatever the numbers say: the heap has
-    /// room in bytes but not in one piece, and what gives it back in pieces
-    /// that join is the off-screen decor, farthest first. Decor is all a
-    /// chunk holds in the heap: its runs are `.fixed.runs`'s and its tiers
-    /// are on the device. What is given back is built again once its chunk
-    /// is on screen (`recheck`).
-    fn reclaim(&mut self, order: &[usize]) {
-        let budget = self.frame.map_or(f64::INFINITY, |f| f.retain_budget_bytes);
-        let refused = self.builder.stat.starved != self.refused_seen;
-        self.refused_seen = self.builder.stat.starved;
-        let cap = if refused { param::RECLAIMS_WHEN_REFUSED } else { param::RECLAIMS_PER_FRAME };
-        let mut freed = 0;
-        // Farthest first: the order puts what the view does not see last,
-        // the farthest of it at the end.
-        for &i in order.iter().rev() {
-            if freed >= cap || !(refused || self.retained_off > budget || heap_pressed()) {
-                break;
-            }
-            if self.slots[i].has(IN_FRUSTUM) || self.slots[i].retained() <= 0.0 {
-                continue;
-            }
-            let before = self.slots[i].retained();
-            let s = &mut self.slots[i];
-            let draw = &mut self.draw;
-            for d in s.decor.take().iter() {
-                d.release(draw);
-            }
-            s.decor_whole = false;
-            self.account(i, before);
-            freed += 1;
-        }
-    }
 }
 
 fn same_view(a: &Frame, b: &Frame) -> bool {
@@ -1486,10 +1437,6 @@ impl<T: Copy> Held<T> {
         self.retain(|_| false);
     }
 
-    /// Everything held, leaving nothing.
-    fn take(&mut self) -> Held<T> {
-        core::mem::replace(self, Held::EMPTY)
-    }
 }
 
 fn chained(meshes: &Meshes, at: usize, n: u32) -> Option<usize> {

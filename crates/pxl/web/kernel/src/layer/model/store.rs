@@ -13,7 +13,9 @@ use xpute_runtime::abi::handle::Slots;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
-/// Translation, rotation; anything else is scale.
+use crate::layer::model::occupancy::Occupancy;
+
+/// A channel's path: translation, rotation; anything else is scale.
 const T: u8 = 0;
 const R: u8 = 1;
 
@@ -60,6 +62,8 @@ pub struct Model {
     scale: f32,
     /// Unscaled bounding sphere for a hit test to reject by.
     radius: f32,
+    /// What it fills, in its own frame and units.
+    occupancy: Option<Occupancy>,
 }
 
 #[derive(Clone, Copy)]
@@ -154,12 +158,21 @@ fn slerp(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [q[0] / n, q[1] / n, q[2] / n, q[3] / n]
 }
 
+/// Floats a key: four for a rotation, three otherwise.
+fn width(path: u8) -> usize {
+    if path == R {
+        4
+    } else {
+        3
+    }
+}
+
 fn sample(ch: &Channel, time: f32, out: &mut [f32; 10]) {
     let n = ch.times.len();
     if n == 0 {
         return;
     }
-    let width = if ch.path == R { 4 } else { 3 };
+    let width = width(ch.path);
     let at = |k: usize| &ch.values[k * width..k * width + width];
     let (k0, k1, t) = if time <= ch.times[0] {
         (0, 0, 0.0)
@@ -222,6 +235,7 @@ impl Models {
             order: Vec::new(),
             scale: 1.0,
             radius: 0.0,
+            occupancy: None,
         };
         self.models.push(model);
         Some(((self.models.len() - 1) as u32, at))
@@ -251,7 +265,7 @@ impl Models {
     pub fn channel(&mut self, model: u32, clip: u32, joint: u32, path: u8, step: bool, times: &[f32], values: &[f32]) {
         let Some(m) = self.models.get_mut(model as usize) else { return };
         let Some(c) = m.clips.get_mut(clip as usize) else { return };
-        let width = if path == R { 4 } else { 3 };
+        let width = width(path);
         let values = values[..times.len() * width].to_vec();
         let times = times.to_vec();
         c.channels.push(Channel { joint, path, step, times, values });
@@ -265,6 +279,8 @@ impl Models {
         m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.index_cnt);
         let positions = core::slice::from_raw_parts(ptr_at::<f32>(m.at), m.vertex_cnt as usize * 3);
         m.radius = positions.as_chunks::<3>().0.iter().map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).fold(0.0f32, f32::max).sqrt();
+        let indices = core::slice::from_raw_parts(ptr_at::<u32>(m.at).add(m.vertex_cnt as usize * MODEL_VERTEX_WORDS as usize), m.index_cnt as usize);
+        m.occupancy = Occupancy::of(positions, indices);
         let n = m.parent.len();
         let mut placed = vec![false; n];
         m.order.clear();
@@ -299,6 +315,12 @@ impl Models {
             radius: m.radius,
             scale: m.scale,
         })
+    }
+
+    /// What a model fills, in its own frame and units; none for one with no
+    /// extent.
+    pub fn occupancy(&self, model: u32) -> Option<&Occupancy> {
+        self.models.get(model as usize)?.occupancy.as_ref()
     }
 
     pub fn new_actor(&mut self, draw: &mut DrawList, model: u32) -> Option<u32> {

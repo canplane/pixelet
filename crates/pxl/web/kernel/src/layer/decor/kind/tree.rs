@@ -10,7 +10,7 @@ use pxl_spec::cell::cube_types::Land;
 use pxl_spec::cell::decor_types::Decor;
 
 use crate::layer::decor::build::DecorVariantAsset;
-use crate::layer::decor::kind::DecorKindDef;
+use crate::layer::decor::kind::Kind;
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 
 /// Each variant's colormap is per pack, since Kenney keeps textures outside the glb.
@@ -53,7 +53,7 @@ const VARIANTS: [DecorVariantAsset; 9] = [
     },
 ];
 
-pub const DEF: DecorKindDef = DecorKindDef {
+pub const DEF: Kind = Kind {
     seed: DecorKindSeed {
         // Arbitrary; changing it reshuffles every tree.
         tag: 0x7ee5eed7eec0de1,
@@ -61,11 +61,7 @@ pub const DEF: DecorKindDef = DecorKindDef {
         density: 0.04,
         orientation: DecorOrientationMode::Random,
     },
-    rules: DecorRules::ANY
-        .void(GroundChannelKey::WATER)
-        .void(GroundChannelKey::STRUCTURE)
-        .void(GroundChannelKey::TRANSPORT)
-        .one_of(GroundChannelKey::LAND, &[Land::green_light as u8, Land::green_deep as u8, Land::bare as u8]),
+    rules: DecorRules::on(GroundChannelKey::LAND, &[Land::green_light as u8, Land::green_deep as u8, Land::bare as u8]),
     variants: &VARIANTS,
     decor_id: Some(Decor::tree),
 };

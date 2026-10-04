@@ -22,7 +22,7 @@ use crate::layer::billboard::sheet::billboard_sheet;
 use crate::layer::character::companion::companion_skins;
 use crate::layer::character::preview::preview_rows;
 use crate::layer::decor::asset_store::kind_assets;
-use crate::layer::environment::config::{ao_cfg, edge_cfg, rim_cfg};
+use crate::layer::environment::config::rim_cfg;
 use crate::sched::profiler::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use crate::shell::setting::store::{settings_store, AoMode};
 use crate::text::text_raster;
@@ -68,12 +68,15 @@ pub fn stage_write(resolution: f64) {
 pub fn stage_render() {
     let lists = kernel().sched.draw.take();
     let models = &kernel().sched.models;
-    let mut decor = [(0u32, None); GROUPS];
-    let variants = decor_bundle_assets()
-        .iter()
-        .flat_map(|entry| (0..entry.models.len()).map(move |v| (entry.models[v], entry.skins.get(v).copied().flatten())));
-    for (slot, (model, image)) in decor.iter_mut().zip(variants) {
-        *slot = (model.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle), image);
+    let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
+    let variants = kind_assets().iter().flat_map(|entry| {
+        (0..entry.models.len()).map(move |v| {
+            let extent = entry.kind.variants.get(v).and_then(|a| a.model.ingested().extent).unwrap_or([0.0; 3]);
+            (entry.models[v], entry.skins.get(v).copied().flatten(), extent.map(|e| e as f32))
+        })
+    });
+    for (slot, (model, image, extent)) in decor.iter_mut().zip(variants) {
+        *slot = (model.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle), image, extent);
     }
     let mut skins = [(0u32, 0u32); 2];
     let mut skin_cnt = 0;

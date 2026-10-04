@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
+use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::mat4::{mat4_transform_direction, mat4_transform_point};
 use xpute_runtime::mem::base::ptr_at;
 
@@ -20,7 +21,6 @@ pub struct ModelHandle {
     pub model: u32,
     /// One per animation in file order, so a clip's number is its animation's index.
     pub clip_count: u32,
-    pub triangles: u32,
 }
 
 const IDENTITY: [f32; 16] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
@@ -76,7 +76,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
 
     with_world(|_, sched| {
         let (model, block) = sched.models.new_model(vertex_cnt, index_cnt, joint_cnt)?;
-        let n = (vertex_cnt * 16 + index_cnt) as usize;
+        let n = (vertex_cnt * MODEL_VERTEX_WORDS + index_cnt) as usize;
         // SAFETY: the model's block, `n` words, ours until sealed.
         let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), n) };
         let lane = |k: usize| k * vertex_cnt as usize;
@@ -135,7 +135,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
                 hi = hi.max(at_y);
             }
             for (i, &index) in prim.index.iter().enumerate() {
-                words[lane(16) + i0 + i] = v0 as u32 + index;
+                words[lane(MODEL_VERTEX_WORDS as usize) + i0 + i] = v0 as u32 + index;
             }
             v0 += count;
             i0 += prim.index.len();
@@ -194,7 +194,6 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
         Some(ModelHandle {
             model,
             clip_count: gltf.animations.len() as u32,
-            triangles: index_cnt / 3,
         })
     })
     .flatten()

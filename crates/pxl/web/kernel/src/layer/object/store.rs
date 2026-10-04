@@ -40,6 +40,7 @@ use crate::host::turn;
 use crate::io::file::{self, Owner};
 use crate::kernel::kernel;
 use crate::layer::decor::build::{scatters_at, Draw};
+use crate::shell::setting::store::hidden_ground;
 use crate::world::access::{Access, FINEST};
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
 use crate::world::chunk::source::{band_written, chunk_sources_changed};
@@ -250,7 +251,31 @@ pub fn objects_at(at: &Pvf3) -> Vec<Entry> {
     out
 }
 
-pub fn get_placed_object(at: EntryAt) -> Option<Entry> {
+/// Whether any leaf is written in the cell `at` lies in, air included: what
+/// a scattered decor standing there yields to.
+pub fn holds_entry(at: &Pvf3) -> bool {
+    let [ix, iy, iz] = CELL.index_of(at);
+    cell_run(ix, iy, iz).is_some()
+}
+
+/// Every object claiming the cell `at` stands in.
+pub fn objects_at(at: &Pvf3) -> Vec<OccupiedEntry> {
+    let [ix, iy, iz] = CELL.index_of(at);
+    get_objects_in_cell(ix, iy, iz)
+}
+
+/// A cube as a node of the hierarchy: its side, and its index at that side,
+/// the corner lowered to its own lattice as the store files it (`At`). Two
+/// cubes share space exactly when one's node lies under the other's
+/// (hierarchy.rs `share`), since every cube sits on its own size's lattice.
+pub fn cube_node(corner: &Pvf3, size: f64) -> (Scale, [i64; 3]) {
+    let side = Scale::of_side(size);
+    (side, side.index_of(corner))
+}
+
+/// One object by its address, or None — the address says which cell it is
+/// in, so this reads one cell's entries, not every object's.
+pub fn get_placed_object(at: EntryAt) -> Option<OccupiedEntry> {
     let [ix, iy, iz] = cursor_at(at).cell();
     let mut found = None;
     each_cell_entry(ix, iy, iz, &mut |entry| {
@@ -612,11 +637,21 @@ pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube) {
     write_object_value(at, size, val);
 }
 
-/// Placing the decor a scatter stands in a cell an erase emptied writes
-/// VOID, so the scattered instance returns as it was.
+/// Same write path as place(), just tagged with a decor kind instead of a
+/// color — and the same law: placing the decor the scatter itself stands in
+/// a cell an erase emptied takes the erase back, VOID rather than a leaf
+/// repeating what is made there, so the scattered instance returns as it
+/// was, its own variant and turn.
 pub fn place_decor(at: &Pvf3, size: f64, decor_id: DecorId) {
     let value = if restores_scattered(at, size, decor_id).is_some() { VOID } else { decor_num_id(decor_id) };
     write_object_value(at, size, value);
+}
+
+/// The scattered instance placing `decor_id` at `at` brings back, where it
+/// is one an erase took away (`place_decor`): what the placement's preview
+/// shows, since it is what the placement leaves.
+pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Draw> {
+    (size >= U_PER_CELL && object_value_is_air(read_state(at))).then(|| scatters_at(decor_num_id(decor_id), at))?
 }
 
 /// The scattered instance `place_decor` would bring back, for its preview.
@@ -1063,21 +1098,17 @@ impl Store {
         Ok(())
     }
 
-    /// False says nothing is placed in that band cell; true only that something may be.
+    /// Whether anything is kept in the band cell `at` (a `CELL`) lies in: false
+    /// says nothing is placed there, true only that something may be.
     pub fn may_hold(&self, at: [i64; 3]) -> bool {
-        let [x, y, band] = ancestor_of(at, BAND.above(CELL) as u32);
-        self.columns.get(&ivec::gather(x, y, 0)).is_some_and(|c| c.bands.contains_key(&(band as BandZ)))
+        let cells = CELL.count_in(BAND) as i64;
+        let col_idx = ivec::gather(at[0].div_euclid(cells), at[1].div_euclid(cells), 0);
+        self.columns.get(&col_idx).is_some_and(|c| c.bands.contains_key(&(at[2].div_euclid(cells) as BandZ)))
     }
 
-    /// The cell over the highest band in the column of cell `[x, y]`.
-    pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
-        let levels = BAND.above(CELL) as u32;
-        let [cx, cy] = ancestor_of([x, y], levels);
-        let band = *self.columns.get(&ivec::gather(cx, cy, 0))?.bands.keys().next_back()?;
-        Some(first_descendant_of([i64::from(band) + 1], levels)[0])
-    }
-
-    /// VOID where nothing; a non-voxel value is returned as is.
+    /// What the objects fold to at cell `at` of `scale` (`fold_cell`), VOID
+    /// where nothing: one read, wherever it is kept — a value that paints no
+    /// voxel as it is, for the reader to count as nothing.
     pub fn folded_value(&self, scale: Scale, at: [i64; 3]) -> u16 {
         if scale >= BAND {
             return self.folds.get(&(scale, at)).copied().unwrap_or(VOID as u16);
