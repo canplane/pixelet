@@ -1,5 +1,7 @@
 {
-  "_meta": { "source": "land/water: Blue Marble Next Generation's July 2004 surface reflectance, the median over a named place of each kind (forest Jirisan and Taebaek, paddy Gimje plain, urban Seoul and Tokyo cores, bare Gobi, sand Sahara, sea the open Pacific), sRGB-coded; structure/transport: OpenStreetMap Carto; block: hand-picked" },
+  "_meta": {
+    "source": "land/water: Blue Marble Next Generation's July 2004 surface reflectance, the median over a named place of each kind (forest Jirisan and Taebaek, paddy Gimje plain, urban Seoul and Tokyo cores, bare Gobi, sand Sahara, sea the open Pacific), sRGB-coded; structure/transport: OpenStreetMap Carto; block: hand-picked"
+  },
   "common": {
     "unknown": { "hex": "#D9D0CC", "note": "A cell whose data is missing or invalid, a visible neutral gray so it reads as not known rather than as whatever drew last." }
   },
