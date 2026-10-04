@@ -46,7 +46,7 @@ async function turn(delta = 1 / 60): Promise<Snapshot> {
   CORE_DOORBELL.send(
     0,
     Command.WORLD_FRAME,
-    encode_world_frame({ width: 1280, height: 720, dpr: 1, delta_s: delta, frame_ms: 1000 / 60, interactive: true, credits: 6, unix_ms: 0, hours: 12, minutes: 0, seconds: 0, day_start_ms: 0 }),
+    encode_world_frame({ width: 1280, height: 720, dpr: 1, delta_s: delta, frame_ms: 1000 / 60, interactive: true, credits: 6, unix_ms: 0 }),
   );
   CORE_DOORBELL.ring(8);
   await new Promise((resolve) => setTimeout(resolve, 0));
