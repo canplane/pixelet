@@ -112,6 +112,11 @@ cell is one unit — and any cell's zoom follows from its size alone
 ([`adapter/3857.rs`](./adapter/3857.rs) `zoom_of`). A page is no part of it: a page only bundles cells into a
 file, and its name's length follows its size, never a zoom.
 
+**A zoom names a cell's resolution, never an extent.** A z16 cell is the
+standard's z16 pixel; a z16 chunk is 64 × 64 z16 cells and a z16 page
+512 × 512, each its own count of cells. So a page at z is not the standard's
+z tile: it is two of them a side, a z6 page as wide as a z5 tile.
+
 ## The pyramid is not a tier
 
 A terrain page is fetched at several resolutions, z16 to z6, and those
