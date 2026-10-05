@@ -72,7 +72,7 @@ pub(crate) const PAGE_BITS: u32 = 4;
 const _: () = assert!(EARTH_LAYERS < 1 << PAGE_BITS && FAULT_PAGES <= 32 / PAGE_BITS * 4, "the window's layers fit their word");
 
 /// The size bake_earth writes the Earth's global picture at.
-const EARTH_SIZE: (u32, u32) = (2048, 2048);
+const EARTH_SIZE: (u32, u32) = (2048, 1024);
 
 /// Transmittance, multiple scattering, sky view, exposure, irradiance, aerial
 /// perspective, moonlit sky.
