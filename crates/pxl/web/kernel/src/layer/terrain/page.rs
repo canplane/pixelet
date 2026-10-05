@@ -7,7 +7,6 @@
 
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{decode_terrain_into, Block, GroundCell, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
-use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pyramid::{Page, GROUND_Z};
 use xpute_core::status::bug::OrBug;
@@ -19,6 +18,7 @@ use crate::sched::profiler::record::Failure;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::layer::terrain::fixed::{blocks_off, deck_off, ele_off, extent_off, ground_off, BLOCK_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::mem::fixed::{at, Range};
+use crate::world::access::Access;
 use crate::world::pyramid::{Layer, Pyramid};
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
@@ -90,10 +90,10 @@ unsafe fn room_of(record: u32) -> PageRoom {
     }
 }
 
-/// The source has nothing under `at`: the finest page held over it is void.
+/// The source has nothing under `at`: the ground cell there, as the finest
+/// page held over it gives it, is void.
 pub fn void_under(at: &Pvf3) -> bool {
-    let paging = Terrain::pyramid().paging();
-    paging.drawn_from(Page::over(GROUND_Z, L3_IDX(at.i))).and_then(|q| paging.get(q)).is_some_and(Terrain::is_void)
+    Access::now().at(at, GROUND_Z).value().is_some_and(|g| g.top().is_none())
 }
 
 pub fn terrain_step() {
