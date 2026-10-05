@@ -24,23 +24,12 @@ use crate::param;
 use crate::sched::profiler::record::Failure;
 use crate::world::observation::{heights_revision, observation, ByFootprints, Known, Order};
 use crate::world::paging::floor::{self, Fallback, Floor};
-use crate::world::paging::{Candidate, Paging, Victim, ABSENT, DESTINATION_PAGES, ZOOM_DEMAND_PAGES};
+use crate::world::paging::{Candidate, Paging, Victim, DESTINATION_PAGES, ZOOM_DEMAND_PAGES};
 use crate::world::prefetch::{NoPrefetch, Prefetch};
 use crate::world::quality;
 
-/// What answers a page the bucket has no object for.
-pub enum Absent {
-    /// The page over it, which settles it; at the top, `Layer::empty`.
-    Above,
-    /// The one body every such page shares, fetched under the category and
-    /// held in `ABSENT`.
-    Shared(Category),
-}
-
 pub trait Layer: Folds + Clone + 'static {
     const CATEGORY: Category;
-
-    const ON_ABSENT: Absent = Absent::Above;
 
     /// False for a layer that holds only the floor: it asks for no fault, no
     /// destination and nothing speculative, and its residency is sized so.
@@ -147,28 +136,22 @@ impl<L: Layer> Pyramid<L> {
         &self.demand
     }
 
+    /// Whether every page the view needs has its answer; speculation aside.
+    pub fn answered(&self) -> bool {
+        self.asks.iter().all(|(&p, a)| a.why == Why::Hint || self.paging.answered(p))
+    }
+
     pub fn adopt(&mut self, p: Page, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
         self.admit(p, |record| L::receive(record, pkt, phases))
     }
 
-    /// The body every absent page shares, decoded once into `ABSENT`.
-    pub fn adopt_shared(&mut self, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
-        if self.paging.has_shared() {
-            return Ok(());
-        }
-        let body = L::receive(ABSENT, pkt, phases)?;
-        self.paging.adopt_shared(body);
-        Ok(())
-    }
-
-    /// The bucket has no object for `p`: answered as the layer says.
+    /// The bucket has no object for `p`: the page over it says its ground,
+    /// and at the source's top, where none is over it, `Layer::empty`.
     pub fn absent(&mut self, p: Page) {
-        match L::ON_ABSENT {
-            Absent::Shared(_) => self.paging.absent(p),
-            Absent::Above => match L::empty() {
-                Some(empty) if p.z <= TOP_Z => self.paging.set(p, empty),
-                _ => self.paging.answer_above(p),
-            },
+        let top = L::TOP.or(floor::top()).unwrap_or(TOP_Z);
+        match L::empty() {
+            Some(empty) if p.z <= top => self.paging.set(p, empty),
+            _ => self.paging.answer_above(p),
         }
     }
 
@@ -269,7 +252,7 @@ impl<L: Layer> Pyramid<L> {
             });
             hints.sort_unstable();
             hints.dedup_by_key(|h| h.1);
-            // Settled or `ABSENT` pages take no frame but still count against `ASKS`.
+            // Settled or empty pages take no frame but still count against `ASKS`.
             let mut pages = Paging::<L>::ASKS.saturating_sub(asks.len() as u32);
             for &(order, p) in &hints {
                 let new = u32::from(self.paging.takes_frame(p));
@@ -352,13 +335,6 @@ impl<L: Layer> Pyramid<L> {
             self.last = Some((o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::revision()));
         }
         declare(L::CATEGORY, &self.wants);
-        self.declare_shared();
-    }
-
-    fn declare_shared(&self) {
-        if let Absent::Shared(category) = L::ON_ABSENT {
-            declare(category, if self.paging.awaits_shared() { &[(0, Ask::PLAIN)] } else { &[] });
-        }
     }
 
     /// A layer the view does not show keeps what it holds and asks for nothing.
@@ -367,7 +343,6 @@ impl<L: Layer> Pyramid<L> {
         self.asks.clear();
         self.paging.ask(&self.asks);
         declare(L::CATEGORY, &[]);
-        self.declare_shared();
         self.last = None;
     }
 }

@@ -37,9 +37,11 @@ pub fn canonical_to_local(p: &Pvf3, origin: IVec) -> V3 {
     add3(&at, &projection::unproject(0, p.f))
 }
 
+/// Through `project`, the one door into PVF3: X goes round, Y and Z stop at
+/// the edge.
 pub fn local_world_to_canonical(local: &V3, map_origin: IVec) -> Pvf3 {
-    let p = projection::project(local[0], local[1], local[2]);
-    Pvf3 { i: ivec::add(p.i, map_origin), ..p }
+    let o = ivec::to_v3(map_origin);
+    projection::project(o[0] + local[0], o[1] + local[1], o[2] + local[2])
 }
 
 /// The nearest canonical point to `local`, unlike `local_world_to_canonical`

@@ -43,6 +43,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **Subway bores.** Every tunnel flag is a bore now, so a subway's lines are
   drawn underground and stretch each chunk's bounds down; whether that cost
   stays is not decided.
+- **The view washed out from the globe.** Zoomed out over Korea near
+  sunset, the frame settled very bright a few seconds after it was dark;
+  the eye's exposure, not the sun, which stood where it should.
+- **The ground dark under a low sun.** `ADAPTATION` 0.5 (`pxl-render
+  look/atmosphere.rs`) opens the eye for half the light a sinking sun takes
+  away, so at 3° the ground shows about two stops under noon while a clear
+  day outside reads bright; a hyperparameter to settle.
 
 ## Parked, with the reason on file
 

@@ -414,7 +414,8 @@ pub fn start(ladder: &[Tau], extra: u32) {
     let everything = made.key.is_none_or(|(_, (_, objects), tau, _)| tau != key.2 || objects != key.1 .1);
     made.key = Some(key);
     let resident: HashSet<Page> = Terrain::pyramid().paging().held().map(|(p, _)| p).collect();
-    let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(|p| p.rect()).collect();
+    let near = |(x, y, s): (f64, f64, f64)| (pxl_spec::space::pvf3::nearest(x + s / 2.0, o.eye[0]) - s / 2.0, y, s);
+    let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(|p| near(p.rect())).collect();
     made.work[0] += made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), everything, &moved);
     made.resident = resident;
     let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Box::new(Known)));

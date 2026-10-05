@@ -28,7 +28,6 @@
   ],
   "CATEGORY_NAMES": [
     "terrain",
-    "ocean",
     "poi",
     "geocode",
     "geocode_dict",

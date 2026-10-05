@@ -205,3 +205,36 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
     let hit = access.first_hit(&down(at), Detail::Zoom(GROUND_Z)).value().flatten().unwrap();
     assert_eq!(hit.point[2], 10.0, "{hit:?}");
 }
+
+/// A ray in the frame that runs on round the world meets, past the
+/// antimeridian, the ground and the objects stored under the lane's copy.
+#[test]
+fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
+    let _g = serial();
+    let n = pxl_spec::space::pyramid::pages_around(GROUND_Z);
+    let flat = || {
+        let cells = vec![ground::land; SPAN * SPAN];
+        Terrain::leaf(vec![5; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
+    };
+    let page = |x: i64| pxl_spec::space::pyramid::page_at(GROUND_Z, [x, 0]);
+    let paging = resident(&[(page(n / 2 - 1), flat()), (page(n / 2), flat())]);
+    let seam = pxl_spec::space::pvf3::ROUND / 2.0;
+    let top = Access::new(&paging, &Store::default()).at(&point(-seam + 20.5, 100.5), GROUND_Z).value().unwrap().top().unwrap();
+
+    let mut store = Store::default();
+    let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
+    write(&mut store, [-seam + 40.0, 100.0, top], CELL, red);
+    let access = Access::new(&paging, &store);
+
+    let ground = access.first_hit(&down([seam + 20.5, 100.5]), Detail::Zoom(GROUND_Z)).exact().flatten().unwrap();
+    assert_eq!([ground.point[0], ground.point[2]], [seam + 20.5, top], "{ground:?}");
+
+    let along = Ray {
+        origin: [seam - 30.0, 100.5, top + 0.5],
+        direction: [1.0, 0.0, 0.0],
+        reach: 200.0,
+    };
+    let hit = access.first_hit(&along, Detail::Zoom(GROUND_Z)).exact().flatten().unwrap();
+    assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
+    assert_eq!(hit.point[0], seam + 40.0, "{hit:?}");
+}

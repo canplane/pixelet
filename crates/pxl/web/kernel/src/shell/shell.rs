@@ -25,6 +25,8 @@ use crate::layer::character::preview::{preview_rows, CASES_MAX};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::geocode::fetcher::center_group;
 use crate::layer::geocode::store as geocode_store;
+use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::format::Terrain;
 use crate::sched::turn::world_platform;
 use crate::shell::setting::store::{settings_store, SettingKey};
 use crate::shell::ui::scale::m_per_px;
@@ -78,10 +80,12 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     }
     let snapshot = Snapshot {
         map: MapState {
-            status: match (crate::world::observation::eye(), crate::kernel::kernel().sched.shows_ground()) {
-                (None, _) => MapStatus::Idle,
-                (_, false) => MapStatus::Loading,
-                (_, true) => MapStatus::Success,
+            // Loaded once ground is drawn, or every page the view needs has answered,
+            // which over a source's void leaves nothing to draw.
+            status: match crate::world::observation::eye() {
+                None => MapStatus::Idle,
+                Some(_) if crate::kernel::kernel().sched.shows_ground() || Terrain::pyramid().answered() => MapStatus::Success,
+                Some(_) => MapStatus::Loading,
             },
             is_off_center: map_navigation().is_off_center,
             center,

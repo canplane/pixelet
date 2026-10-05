@@ -8,7 +8,7 @@
 //!   decode_tile 12720250262323200                # one leaf: summary + PNGs
 //!   decode_tile 3179787687624704 --z 14          # a page at a coarser zoom
 //!   decode_tile 12720250262323200 --out /tmp/page
-//!   decode_tile out/terrain/v7/_ocean            # a path works too
+//!   decode_tile out/terrain/v8/z16/12720250262323200  # a path works too
 //!   decode_tile --all                            # every page of every zoom, checked
 //!   decode_tile --all --version v7
 

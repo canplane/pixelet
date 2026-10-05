@@ -100,6 +100,12 @@ impl Folds for Terrain {
         neighborhood(p).to_vec()
     }
 
+    /// A child the page marks as no page is its own ground already: open
+    /// water, or nothing at all under a void page.
+    fn settles(&self, p: Page, child: Page) -> bool {
+        p.children().iter().position(|&c| c == child).is_some_and(|slot| !self.index.occupancy.has_child(slot))
+    }
+
     fn fold_page<'a>(p: Page, held: impl Fn(Page) -> Option<&'a Self>) -> Option<Self> {
         fold_terrain(neighborhood(p).map(held), p.z)
     }

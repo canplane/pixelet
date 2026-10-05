@@ -95,9 +95,6 @@ pub struct Block {
     pub span: u16,
 }
 
-/// The object every page of open water resolves to.
-pub const OCEAN_KEY: &str = "_ocean";
-
 /// A partial version's list, beside its pages: the full version it overlays
 /// and the pages it writes or removes over it, by quadkey. A version without
 /// one is full.
@@ -189,7 +186,25 @@ pub struct Terrain {
     pub index: Index,             // bounds over the page and all under it: no one page holds them
 }
 
+// Made on first use: a constant array of zeros would ship in the module's data.
+static VOID_ELE: std::sync::LazyLock<Vec<i16>> = std::sync::LazyLock::new(|| vec![0; ELE_LANE]);
+static VOID_CELLS: std::sync::LazyLock<Vec<GroundCell>> = std::sync::LazyLock::new(|| vec![crate::cell::cube::cube_types::sentinel::void; GROUND_LANE]);
+
 impl Terrain {
+    /// Where the source has nothing at all: void cells, which give no surface,
+    /// so nothing is drawn while the ground is still known and stays asked
+    /// for, and no child, so none is asked for under it.
+    pub fn void() -> Terrain {
+        Terrain {
+            ground: Ground {
+                cells: Cow::Borrowed(&VOID_CELLS[..]),
+            },
+            decks: Decks::default(),
+            ele: Cow::Borrowed(&VOID_ELE[..]),
+            index: Index::new(vec![[0, 0]; EXTENT_LANE], Occupancy::ZERO),
+        }
+    }
+
     /// A z16 page, its index taken from its own surface and decks.
     pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> Terrain {
         let extent = extent_of(&ele, &decks);

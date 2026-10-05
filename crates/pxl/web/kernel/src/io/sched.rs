@@ -53,7 +53,7 @@ const fn bound(category: Category) -> usize {
         Category::poi => Paging::<PoiPage>::FRAMES as usize,
         Category::earth => Paging::<Earth>::FRAMES as usize,
         Category::asset => 2 * LOADS,
-        Category::ocean | Category::geocode | Category::geocode_dict => 1,
+        Category::geocode | Category::geocode_dict => 1,
     }
 }
 

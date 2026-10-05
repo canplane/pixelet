@@ -8,8 +8,8 @@
 use pxl_spec::space::hierarchy::{ancestor_of, child_of, offset_in, parent_of, Scale};
 use pxl_spec::space::indexer::{L2, L3};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::{chunk_scale, chunk_span_of, page_at, Page, CHUNK_CELLS, PAGE_CELLS, TOP_Z};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pyramid::{chunk_scale, chunk_span_of, page_at, page_rows, wrap_index, Page, CHUNK_CELLS, PAGE_CELLS, TOP_Z};
 use pxl_spec::space::v3::Aabb;
 
 pub const CHILDREN: usize = 8;
@@ -51,9 +51,18 @@ impl Chunk {
         self.z
     }
 
+    /// As PVF3 names it: the copy the lane holds, which `of` makes. A chunk
+    /// the view counts on round the world is the same chunk under this name.
+    pub fn named(self) -> Chunk {
+        let [x, y, h] = self.at;
+        Chunk {
+            z: self.z,
+            at: [wrap_index(chunk_scale(self.z), x), y, h],
+        }
+    }
+
     pub fn page(self) -> Page {
-        let [x, y] = ancestor_of(self.column().1, PAGE_STEPS);
-        Page::new(self.z, ivec::gather(x, y, 0))
+        page_at(self.z, ancestor_of(self.column().1, PAGE_STEPS))
     }
 
     pub fn in_page(self) -> (u32, u32) {
@@ -72,22 +81,24 @@ impl Chunk {
         };
         let page = self.page();
         let [px, py] = [ivec::X(page.page), ivec::Y(page.page)];
-        let z = self.z;
+        let (z, rows) = (self.z, page_rows(self.z));
         steps(y0)
             .flat_map(move |qy| steps(x0).map(move |qx| [qx, qy]))
-            .filter(|&q| q != [0, 0])
+            .filter(move |&[qx, qy]| [qx, qy] != [0, 0] && rows.contains(&(py + qy)))
             .map(move |[qx, qy]| ([qx, qy], page_at(z, [px + qx, py + qy])))
     }
 
-    /// The column's corner at no height: what the 2D stores key it by.
+    /// The column's corner at no height, as PVF3 names it: what the 2D stores
+    /// key it by. Where it stands is `rect`'s.
     pub fn corner(self) -> IVec {
         let [x, y, _] = self.at;
         chunk_scale(self.z).base_of([x, y, 0]).i
     }
 
+    /// From the index, which runs on round the world as the view's frame does.
     pub fn rect(self) -> (f64, f64, f64) {
-        let base = Pvf3 { i: self.corner(), f: 0 };
-        (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), chunk_span_of(self.z))
+        let span = chunk_span_of(self.z);
+        (self.at[0] as f64 * span, self.at[1] as f64 * span, span)
     }
 
     /// From the index, not the corner point: a point's height is 16 bits

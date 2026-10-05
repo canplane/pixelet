@@ -22,7 +22,7 @@ use xpute_runtime::global::Global;
 
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pvf3::{ivec, projection, REACH};
+use pxl_spec::space::pvf3::{nearest, projection, REACH};
 use pxl_spec::space::pyramid::{Cell, GROUND, GROUND_Z};
 use pxl_spec::space::v3::len3;
 use std::collections::HashSet;
@@ -90,7 +90,7 @@ pub fn step(ctx: &mut TickContext) {
         return;
     }
     let origin = view().origin;
-    let base = ivec::to_v3(origin);
+    let base = view().chart();
     let pages = PoiPage::pyramid();
     if crate::world::pyramid::domain::current().is_none() {
         return;
@@ -133,8 +133,9 @@ pub fn step(ctx: &mut TickContext) {
                     .map(|(place, _, at)| (Label::Place { page: src, place }, cell.inner_at(GROUND, GROUND_Z, at)));
                 let mid = cell.mid();
                 let mid = projection::unproject(mid.i, mid.f);
+                let mid = [nearest(mid[0], chunk.rect().0), mid[1]];
                 for (shown, (label, ground)) in [(Shown::All, all)].into_iter().chain(major.map(|m| (Shown::Major, m))) {
-                    if m == 0 && Chunk::of(chunk.z(), &ground.mid()).column() != chunk.column() {
+                    if m == 0 && Chunk::of(chunk.z(), &ground.mid()).column() != chunk.named().column() {
                         continue;
                     }
                     // Counted only by the chunk the top of what stands there is in, so a

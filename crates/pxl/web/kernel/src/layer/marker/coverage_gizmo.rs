@@ -99,7 +99,7 @@ impl CoverageGizmo {
         let lined: HashSet<Page> = Terrain::pyramid().demand().iter().map(|&p| line_top(p, top)).collect();
         let floor_only = |p: Page| p.z <= top && !lined.contains(&p);
         let over: HashSet<Chunk> = drawn.iter().flat_map(|d| d.ancestors()).collect();
-        let origin = ivec::to_v3(v.origin);
+        let origin = v.chart();
         let mut lines = Lines::default();
         for &g in goal {
             let covered = drawn.binary_search(&g).is_ok() || over.contains(&g) || g.ancestors().any(|a| drawn.binary_search(&a).is_ok());

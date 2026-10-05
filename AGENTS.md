@@ -112,7 +112,8 @@ any limit (a coarser zoom extends it), each zoom's cells twice as wide as
 the next finer's; a page is 512 cells a side at every zoom and named by its
 place in that zoom's page grid. A zoom names only a cell's scale (256-pixel
 tiles): terrain's cell is z16, objects' go to z19. A page's size, its key or
-its grid never defines a zoom. The rules below keep it one thing. They come
+its grid never defines a zoom, and a zoom never gives a page's or a chunk's
+extent: that is its count of cells. The rules below keep it one thing. They come
 from finding it several.
 
 - **The view keeps only what an observer can tell apart.** The world is

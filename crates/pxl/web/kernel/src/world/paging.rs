@@ -22,8 +22,8 @@ use crate::io::demand::{Ask, Why};
 use crate::world::pyramid::Layer;
 use floor::{Fallback, Floor};
 
-/// The record shared by every page the bake left empty; written once, never a frame.
-pub const ABSENT: u32 = 0;
+/// The record of a page held without a frame: an empty page, its body its own.
+pub const ABSENT: u32 = u32::MAX;
 
 /// The zooms the pyramid holds, z16 to its top.
 pub const PYRAMID_ZOOMS: u32 = GROUND_Z - TOP_Z + 1;
@@ -67,9 +67,6 @@ struct Entry<L> {
     ask: Option<Ask>,
     /// The bucket has no object for it, so the page over it says its ground.
     answered: bool,
-    /// The bucket has no object for it, and it reads the body every such
-    /// page shares, once that has come.
-    absent: bool,
 }
 
 impl<L> Entry<L> {
@@ -77,7 +74,6 @@ impl<L> Entry<L> {
         held: None,
         ask: None,
         answered: false,
-        absent: false,
     };
 
     fn idle(&self) -> bool {
@@ -87,8 +83,6 @@ impl<L> Entry<L> {
 
 pub struct Paging<L: Layer> {
     pages: HashMap<Page, Entry<L>>,
-    /// The body every absent page reads, decoded once into `ABSENT`.
-    shared: Option<L>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
     going: Vec<Page>,
@@ -124,7 +118,7 @@ impl<L: Layer> Paging<L> {
     /// the view reads never gives up another the view reads.
     pub const FRAMES: u32 = Self::PINNED_PAGES + Self::DEMAND_PAGES;
 
-    pub const RECORDS: u32 = 1 + Self::FRAMES;
+    pub const RECORDS: u32 = Self::FRAMES;
 
     /// A fault's line is among the demand's asks; speculation takes at most the frames.
     pub const ASKS: u32 = Self::PINNED_PAGES + Self::DEMAND_PAGES + if L::DEMANDS { Self::FRAMES } else { 0 };
@@ -140,9 +134,8 @@ impl<L: Layer> Default for Paging<L> {
         let () = Self::SAFE;
         Paging {
             pages: HashMap::with_capacity(Self::ENTRIES as usize),
-            shared: None,
             // Lowest first, as the frames are taken.
-            free: (ABSENT + 1..Self::RECORDS).rev().collect(),
+            free: (0..Self::RECORDS).rev().collect(),
             going: Vec::with_capacity(Self::ENTRIES as usize),
             revision: 0,
             refused: 0,
@@ -178,12 +171,12 @@ impl<L: Layer> Paging<L> {
         self.held_as(p).is_some()
     }
 
-    /// Held in a frame of its own, not the shared `ABSENT` record.
+    /// Held in a frame of its own, not as an empty page.
     fn framed(&self, p: Page) -> bool {
         self.held_as(p).is_some_and(|h| h.record != ABSENT)
     }
 
-    /// The frame a held page is in; none for one that reads `ABSENT`.
+    /// The frame a held page is in; none for an empty one.
     pub fn frame(&self, p: Page) -> Option<u32> {
         self.held_as(p).map(|h| h.record).filter(|&r| r != ABSENT)
     }
@@ -204,13 +197,16 @@ impl<L: Layer> Paging<L> {
         self.revision
     }
 
+    /// Answered for itself, the top too, or settled by the page over it.
     fn said(&self, q: Page) -> bool {
+        if self.entry(q).is_some_and(|e| e.answered) {
+            return true;
+        }
         if q.z <= TOP_Z {
             return false;
         }
         let over = q.parent();
-        let settled = self.held_as(over).is_some_and(|h| over.children().iter().zip(h.settles).any(|(&c, s)| c == q && s));
-        settled || self.entry(q).is_some_and(|e| e.answered)
+        self.held_as(over).is_some_and(|h| over.children().iter().zip(h.settles).any(|(&c, s)| c == q && s))
     }
 
     pub fn settled(&self, p: Page) -> bool {
@@ -241,7 +237,7 @@ impl<L: Layer> Paging<L> {
         }
     }
 
-    /// Pages held in `ABSENT` or answered above are kept only while asked:
+    /// Empty pages and pages answered above are kept only while asked:
     /// they cost no frame, so nothing would ever evict them. Framed pages are
     /// left to normal turnover.
     pub fn ask(&mut self, asks: &HashMap<Page, Ask>) {
@@ -364,33 +360,9 @@ impl<L: Layer> Paging<L> {
         self.put(p, page, ABSENT);
     }
 
-    /// `p` has no object: it reads the shared body, or waits for it.
-    pub fn absent(&mut self, p: Page) {
-        if self.asked(p).is_none() {
-            return;
-        }
-        match &self.shared {
-            Some(body) => self.set(p, body.clone()),
-            None => self.entry_mut(p).absent = true,
-        }
-    }
-
-    /// Whether an asked page waits for the shared body.
-    pub fn awaits_shared(&self) -> bool {
-        self.shared.is_none() && self.pages.values().any(|e| e.absent && e.ask.is_some())
-    }
-
-    pub fn has_shared(&self) -> bool {
-        self.shared.is_some()
-    }
-
-    /// The shared body has come: every page waiting for it reads it.
-    pub fn adopt_shared(&mut self, body: L) {
-        let waiting: Vec<Page> = self.pages.iter().filter(|(_, e)| e.absent && e.held.is_none()).map(|(&p, _)| p).collect();
-        for p in waiting {
-            self.set(p, body.clone());
-        }
-        self.shared = Some(body);
+    /// Held, or answered by the page over it: nothing more will come for it.
+    pub fn answered(&self, p: Page) -> bool {
+        self.resident(p) || self.entry(p).is_some_and(|e| e.answered)
     }
 
     pub fn answer_above(&mut self, p: Page) {

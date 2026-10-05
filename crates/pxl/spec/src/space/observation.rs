@@ -7,7 +7,8 @@
 //! left out is ground that never refines.
 
 use super::lod::{cubes_meeting, fault_radius, Tau};
-use super::pyramid::{page_at, span_of, Page, GROUND_Z, TOP_Z};
+use super::pvf3::nearest_box;
+use super::pyramid::{page_at, page_rows, span_of, Page, GROUND_Z, TOP_Z};
 use super::v3::{dot3, Aabb, V3};
 
 /// Six planes, normals in, `n · x + d ≥ 0` inside, in world units.
@@ -58,6 +59,7 @@ impl Observation {
     /// planet's curvature. An unbounded box is always seen.
     pub fn measure(&self, b: &Aabb) -> Measure {
         let e = self.eye;
+        let b = &nearest_box(b, e[0]);
         let gap = |b: &Aabb, k: usize| (b.min[k] - e[k]).max(e[k] - b.max[k]).max(0.0);
         let reach = |b: &Aabb, k: usize| (e[k] - b.min[k]).abs().max((b.max[k] - e[k]).abs());
         let (along, reach_along) = (libm::hypot(gap(b, 0), gap(b, 1)), libm::hypot(reach(b, 0), reach(b, 1)));
@@ -141,7 +143,8 @@ impl Storage for Paged {
             let first = (r.region.min[k] / span).floor() as i64;
             first..=((r.region.max[k] / span).ceil() as i64 - 1).max(first)
         };
-        for y in rows(1) {
+        let ys = page_rows(r.z);
+        for y in rows(1).filter(|y| ys.contains(y)) {
             for x in rows(0) {
                 each(page_at(r.z, [x, y]));
             }

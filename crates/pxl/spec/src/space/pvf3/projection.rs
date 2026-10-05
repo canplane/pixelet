@@ -8,14 +8,25 @@ use super::fvec;
 use super::fvec::FVec;
 use super::ivec;
 use super::ivec::IVec;
+use super::core::ONE;
 use super::pvf3::Pvf3;
+use super::REACH;
 use crate::space::v3::V3;
 
+/// The one door from doubles into PVF3: X goes round the world, Y and Z
+/// stop at their lanes' ends (`REACH`, half-open).
 pub fn project(x: f64, y: f64, z: f64) -> Pvf3 {
+    let [_, y, z] = within([x, y, z]);
     Pvf3 {
         i: ivec::gather(ivec::from_real(x), ivec::from_real(y), ivec::from_real(z)),
         f: fvec::gather(fvec::from_real(x), fvec::from_real(y), fvec::from_real(z)),
     }
+}
+
+/// `v` with Y and Z held inside `REACH`, as `project` stores them.
+pub fn within(v: V3) -> V3 {
+    let top = |k: usize| REACH.max[k] - 1.0 / ONE as f64;
+    [v[0], v[1].clamp(REACH.min[1], top(1)), v[2].clamp(REACH.min[2], top(2))]
 }
 
 fn unproject_comp(i_comp: i64, f_comp: i64) -> f64 {

@@ -103,3 +103,19 @@ fn a_parent_cell_and_its_child_block_are_one_relation() {
         }
     }
 }
+
+/// X goes round the world and Y stops at the Mercator square's edge, and a
+/// stored X stands for an eye at its nearest copy.
+#[test]
+fn a_point_goes_round_in_x_and_stops_at_the_edge_in_y() {
+    use crate::space::pvf3::{nearest, projection, REACH, ROUND};
+    let half = ROUND / 2.0;
+    assert_eq!(projection::project(half + 3.0, REACH.max[1] + 100.0, 0.0), projection::project(-half + 3.0, REACH.max[1], 0.0));
+    assert_eq!(nearest(-half + 3.0, half - 1.0), half + 3.0);
+    assert_eq!(nearest(half - 1.0, -half + 3.0), -half - 1.0);
+    for z in [TOP_Z, GROUND_Z] {
+        let n = pages_around(z);
+        assert_eq!(page_at(z, [n / 2, 0]), page_at(z, [-n / 2, 0]));
+        assert!(!page_rows(z).contains(&(n / 2)));
+    }
+}
