@@ -1,6 +1,6 @@
 # Every size is a zoom
 
-**2026-10-06** — decided in conversation; to be built. It carries on from
+**2026-10-06** — decided in conversation and built the same day. It carries on from
 [a zoom names a page grid](./20261006-a-zoom-names-a-page-grid.md), whose
 page-grid zoom is the tile zoom here, every value unchanged.
 

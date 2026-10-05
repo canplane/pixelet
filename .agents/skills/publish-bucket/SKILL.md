@@ -17,19 +17,19 @@ how it gets there and how you know it arrived.
 
 | Prefix                  | Object                      | Named by               | Policy                                                        |
 | ----------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
-| `terrain/<version>/`    | packed XTP page             | quadkey, 5–15          | immutable; a re-bake is a new version                         |
-| `poi/<version>/`        | XTP count page              | quadkey, 5–15          | immutable; a re-bake is a new version                         |
-| `geocode/<version>/`    | XTP group page, `_dict`     | quadkey, 11            | immutable; a re-bake is a new version                         |
+| `terrain/<version>/`    | packed XTP tile             | quadkey, 5–15          | immutable; a re-bake is a new version                         |
+| `poi/<version>/`        | XTP count tile              | quadkey, 5–15          | immutable; a re-bake is a new version                         |
+| `geocode/<version>/`    | XTP group tile, `_dict`     | quadkey, 11            | immutable; a re-bake is a new version                         |
 | `asset/`                | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
-| `_meta/land_pages.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |
+| `_meta/land_tiles.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |
 | `_meta/build-counter`   | the official build count    | fixed name             | mutable; taken and written by CI's gate, never by hand        |
 
-A page is named by its **quadkey**: the Web Mercator tile key at the zoom the
-page is held at, one base-4 digit a zoom, coarsest first (pxl-spec
+A tile is named by its **quadkey**: the Web Mercator tile key at the zoom the
+tile is held at, one base-4 digit a zoom, coarsest first (pxl-spec
 bake/quadkey.rs). The length is the zoom, so nothing writes a zoom down, and
 the three bakes differ only in how long a name they have — terrain and POI 5
 to 15 digits for the pyramid they share, geocode 11 because a group covers 16
-pages a side. They land in one space, so
+tiles a side. They land in one space, so
 `terrain/<v>/13211032`, `poi/<v>/13211032` and `geocode/<v>/13211032` are the
 same ground, and **one prefix is one region across all three at every zoom**.
 That is what a later split of the bucket would be: a prefix match, not a
@@ -77,7 +77,7 @@ checksums (v2 sends `x-amz-checksum-*` headers R2 refuses), set
 copy is the same one. The free month has a million, and nothing stops at it:
 the guarantee that the bucket cannot bill covers its reads, which all pass
 the Worker's fail-closed plan, and not its writes. A new terrain version is
-every page of the pyramid — the sum of `objects` over the bake manifest's
+every tile of the pyramid — the sum of `objects` over the bake manifest's
 `zooms`, 227,310 for v6 — and a POI version likewise, so four terrain
 publishes in a month, or one rename done twice, is past it. September 2026
 went to 1.67M on bakes re-published and the quadkey rename run twice.
@@ -91,13 +91,13 @@ deno task usage     # Class A this month against the million, and the rest
 and set the manifest's object count against what is left. A sync re-run
 after an interruption is cheap — it skips an object already there — and a
 full version costs a pyramid's worth, where a partial one (below) costs only
-the pages it lists. Deleting an old version is free, unless a published
+the tiles it lists. Deleting an old version is free, unless a published
 partial version names it as its base.
 
 ### Terrain
 
 Terrain and POI are the bakes whose disk layout is not the bucket's. They keep
-`z<zoom>/<page index>` because the pyramid's fold (`geo-bake/src/pyramid.rs`) clears a zoom's directory so
+`z<zoom>/<tile index>` because the pyramid's fold (`geo-bake/src/pyramid.rs`) clears a zoom's directory so
 that a parent cannot outlive a child it no longer has, and clears the zooms
 past the top so that a zoom a run did not fold is not part of the set — both
 invariants a flat tree would have to restate as a rule about name lengths. So
@@ -116,16 +116,16 @@ aws s3 sync ./out/terrain/<version>.bucket s3://pixelet-tiles/terrain/<version> 
   --content-encoding "$(jq -r .content_encoding out/terrain/manifest.json)" \
   --cache-control "public, max-age=31536000, immutable"
 
-aws s3 cp ./out/terrain/land_pages.json s3://pixelet-tiles/_meta/land_pages.json \
+aws s3 cp ./out/terrain/land_tiles.json s3://pixelet-tiles/_meta/land_tiles.json \
   --profile r2 --endpoint-url $R2 --content-type application/json
 ```
 
 A version a region bake made is partial: `rekey_tiles link` finds its
-`_snapshot` and links only the pages it lists as written, and the list. Its
+`_snapshot` and links only the tiles it lists as written, and the list. Its
 base must already be in the bucket; the Worker reads the list and answers
-every other page from the base
+every other tile from the base
 ([20261004-a-snapshot-of-a-subtree.md](../../../decision/20261004-a-snapshot-of-a-subtree.md)).
-The list goes up last, after the pages it names, as plain JSON:
+The list goes up last, after the tiles it names, as plain JSON:
 
 ````bash
 aws s3 sync ./out/terrain/<version>.bucket s3://pixelet-tiles/terrain/<version> \
@@ -133,7 +133,7 @@ aws s3 sync ./out/terrain/<version>.bucket s3://pixelet-tiles/terrain/<version> 
 aws s3 cp ./out/terrain/<version>.bucket/_snapshot s3://pixelet-tiles/terrain/<version>/_snapshot \
   --profile r2 --endpoint-url $R2 --content-type application/json
 ``` **A full version a published
-partial names as its base is never deleted**: every page the partial does not
+partial names as its base is never deleted**: every tile the partial does not
 list is read from it.
 
 **Never overwrite an existing version in place**, of any kind — publish a new
@@ -154,7 +154,7 @@ so one version holds one encoding.
 
 ### POI
 
-The same two steps as terrain, from `poi/` and with no `land_pages.json`:
+The same two steps as terrain, from `poi/` and with no `land_tiles.json`:
 
 ```bash
 version=$(jq -r .PUBLISHED_VERSION.poi spec/pxl/spec/bake/published.json)
@@ -168,9 +168,9 @@ aws s3 sync ./out/poi/<version>.bucket s3://pixelet-tiles/poi/<version> \
   --cache-control "public, max-age=31536000, immutable"
 ````
 
-A page its parent settles is no object — the tree stops where no cell over a
-page holds two places — and the client reads its ground from the page over it,
-so a missing page is never an error to repair. The client shows POI only outside production until
+A tile its parent settles is no object — the tree stops where no cell over a
+tile holds two places — and the client reads its ground from the tile over it,
+so a missing tile is never an error to repair. The client shows POI only outside production until
 the layer is switched on there.
 
 ### Geocode
@@ -220,7 +220,7 @@ deploy`'s bundle check fails if a model or image byte is back in the bundle.
 # object count should match the bake's manifest `objects`
 aws s3 ls s3://pixelet-tiles/terrain/<version>/ --profile r2 --endpoint-url $R2 --recursive | wc -l
 
-# metadata must have survived: expect the manifest's ContentEncoding on a page,
+# metadata must have survived: expect the manifest's ContentEncoding on a tile,
 # ContentType model/gltf-binary and no ContentEncoding on a glb
 aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<quadkey> --profile r2 --endpoint-url $R2
 aws s3api head-object --bucket pixelet-tiles --key asset/<sha256> --profile r2 --endpoint-url $R2
@@ -264,7 +264,7 @@ request can be correct while every cached hit after it is double-compressed.
 Compare both responses against the stored size, and check `cf-cache-status`
 to confirm the second one actually hit.
 
-Also confirm an unbaked ocean page returns **404 `text/plain`**, not
+Also confirm an unbaked ocean tile returns **404 `text/plain`**, not
 `index.html`: that is what a missing `run_worker_first` produces, and the
 client would try to decode the HTML as terrain. An asset answers
 `model/gltf-binary` or `image/png` with no `content-encoding`.

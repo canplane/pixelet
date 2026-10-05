@@ -365,7 +365,7 @@ fn run() -> Result<(), String> {
     let args = parse_args()?;
     let leaves = TileSet::new(args.build.join("leaf"));
     let coverage = Coverage::of_source()?;
-    let land_cache = args.out.as_deref().and_then(Path::parent).unwrap_or(Path::new("./out/terrain")).join("land_pages.json");
+    let land_cache = args.out.as_deref().and_then(Path::parent).unwrap_or(Path::new("./out/terrain")).join("land_tiles.json");
     let (source, mut checked) = match args.stages.iter().any(|&s| s != Stage::Assemble) {
         true => Overture::reading(&leaf::READS).map(|(s, c)| (Some(s), Some(c)))?,
         false => (None, None),
@@ -489,7 +489,7 @@ fn run() -> Result<(), String> {
             &args.build.join("leaf.json"),
             &serde_json::json!({
                 "git_sha": built,
-                "land_pages": land.len(),
+                "land_tiles": land.len(),
                 "release": source.release,
                 "regions": args.regions.iter().map(|&r| tile_name(r).to_string()).collect::<Vec<_>>(),
                 "source": read_source_catalogs(&mut client, source),
@@ -536,7 +536,7 @@ fn run() -> Result<(), String> {
                 "bbox_4326": coverage::source_bbox()?,
                 "ingest_bbox": coverage.ingest_bbox(),
                 "candidate_pages": coverage.tiles().len(),
-                "land_pages": land.len(),
+                "land_tiles": land.len(),
                 "release": release,
                 "source": leaf["source"],
                 "built": { "leaf_git_sha": leaf["git_sha"] },

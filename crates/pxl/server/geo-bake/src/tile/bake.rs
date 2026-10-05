@@ -57,7 +57,7 @@ pub fn bake<T>(
 
     let (objects, bytes) = measure_output(&args.out).map_err(|e| e.to_string())?;
     let mut fields = serde_json::json!({
-        "land_pages": land.len(),
+        "land_tiles": land.len(),
         "objects": objects,
         "bytes": bytes,
         // This invocation only, so a resumed run's zero means "nothing to do".

@@ -31,7 +31,7 @@ impl Args {
     pub fn parse(default_out: PathBuf) -> Result<Args, String> {
         let mut args = Args {
             out: default_out,
-            land_cache: PathBuf::from("./out/terrain/land_pages.json"),
+            land_cache: PathBuf::from("./out/terrain/land_tiles.json"),
             concurrency: 8,
             limit: None,
             force: false,

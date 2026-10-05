@@ -120,7 +120,7 @@ xcrun simctl launch <id> me.plei.pixelet
 ```
 
 A Release, since the simulator reaching Metro has not been tried. It has
-drawn the terrain from the served pages and named the place. A headset has
+drawn the terrain from the served tiles and named the place. A headset has
 not run it yet.
 
 ### What has gone wrong

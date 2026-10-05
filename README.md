@@ -12,11 +12,11 @@ _Started on December 15, 2025._
 
 The client is a small operating system. A Rust **kernel** holds the world, schedules its own work and draws; a TypeScript **shell** drives it the way a driver drives a device, and decides nothing about the world. The same two run in a browser tab and in a device app: in the tab the kernel is one WebAssembly module drawing through the page's WebGPU, and on a device it is linked into a React Native app and draws through wgpu. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./ARCHITECTURE.xpute.md), which is generic and knows nothing of any of this. What follows is pixelet's own.
 
-- **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 512² blocks, a ground raster of OpenStreetMap Carto's looks and an elevation raster each. A page is fetched into one of a fixed number of records in memory and kept there until a page the view wants needs the room.
+- **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into tiles of 512² cells, a ground raster of OpenStreetMap Carto's looks and an elevation raster each. A tile is fetched into one of a fixed number of records in memory and kept there until a tile the view wants needs the room.
 - **One coordinate, 96 bits of fixed point.** A position is two packed words — three integer fields for which block, three 8-bit fractions for where inside it — so it resolves to 1/256 of a block. The arithmetic is integer, so it is the same bits on every machine, and the X field is cyclic, so the world wraps at the longitude seam.
-- **The view is cubes about the eye.** What is drawn is decided from the eye alone, in three dimensions: a chunk is a cube of its zoom, 64 of its cells a side, and it is split into eight while its cells would cover too much of the screen. A cube with nothing in it is never made, so the air costs nothing, and everything a view asks for — pages fetched, chunks built, records given up — goes in one order out from the eye. Storage stays 2D; only the addresses are 3D.
-- **Terrain and what you build meet only when a chunk is built.** The chunk is a cube, Minecraft's section at 64 blocks a side rather than 16. The ground is a dense raster for a whole page; placed objects are a sparse tree per 64³ band, and an object belongs to the cube its band is in. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
-- **What a view holds is bounded before anything is fetched.** Every page a view reads lies within a fixed reach of the eye, at most 3 × 3 a zoom, so the records pages live in are sized for it at compile time and a page the view reads never has to push out another. What it asks for is only what it drew coarser than it wanted; the rest is speculation, which takes only room nothing else holds.
+- **The view is cubes about the eye.** What is drawn is decided from the eye alone, in three dimensions: a chunk is a cube of its zoom, 64 of its cells a side, and it is split into eight while its cells would cover too much of the screen. A cube with nothing in it is never made, so the air costs nothing, and everything a view asks for — tiles fetched, chunks built, records given up — goes in one order out from the eye. Storage stays 2D; only the addresses are 3D.
+- **Terrain and what you build meet only when a chunk is built.** The chunk is a cube, Minecraft's section at 64 cells a side rather than 16. The ground is a dense raster for a whole tile; placed objects are a sparse tree per 64³ band, and an object belongs to the cube its band is in. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
+- **What a view holds is bounded before anything is fetched.** Every tile a view reads lies within a fixed reach of the eye, at most 3 × 3 a zoom, so the records tiles live in are sized for it at compile time and a tile the view reads never has to push out another. What it asks for is only what it drew coarser than it wanted; the rest is speculation, which takes only room nothing else holds.
 - **Numbers, not strings.** Commands, catalogs, assets and messages are numbered once in JSON under `spec/`, and both languages are generated from it. Nothing is ever looked up by name.
 
 ---
@@ -32,14 +32,14 @@ A block on screen has come a long way: a provider's geometry, a bake, a fetch, a
               db-geo (PostGIS) ──▶ pxl-geo-bake
                               │
                               ▼
-                   a page of 512² blocks:
+                    a tile of 512² cells:
              a Carto look a cell, and elevation
 ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┼ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
                               ▼             fetched by version, into a record
                       a terrain record
                               │
 the player's placements ──────┤
-a sparse tree per band        ▼             one L2 chunk, a 64³ cube
+a sparse tree per band        ▼             one chunk, a 64³ cube
                 terrain paint + object paint
                               │
                               ▼
@@ -53,13 +53,13 @@ a sparse tree per band        ▼             one L2 chunk, a 64³ cube
      draw list ──▶ WebGPU          a hit, from the same runs
 ```
 
-`pxl-geo-bake` bakes, `pxl-kernel` holds the pages and schedules the builds, and `pxl-render` paints, scans, meshes and draws: through the page's WebGPU in a tab, through wgpu on a device.
+`pxl-geo-bake` bakes, `pxl-kernel` holds the tiles and schedules the builds, and `pxl-render` paints, scans, meshes and draws: through the page's WebGPU in a tab, through wgpu on a device.
 
 Above the dashed line is served as files; below it runs on the client, on the turn's quota.
 
 The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell forwards events, does the I/O the kernel names, renders the UI, and on a page turns the renderer's calls into WebGPU. What it renders from is the kernel's snapshot: one packet of UI state, written after a turn that changed it. What each frame and task cost goes to a read-only profiler, which nothing that schedules is allowed to read.
 
-Almost nothing is computed at request time. Pages and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a page under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked.
+Almost nothing is computed at request time. Tiles and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a tile under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked.
 
 [ARCHITECTURE.md](./ARCHITECTURE.md) is how the application is built, in three parts: the world it addresses — the levels, the coordinate, where the ground comes from — then the client that holds it, then the engine that computes with it.
 
@@ -106,7 +106,7 @@ deno task dev:local
 | `deno task dev:geo`                  | pxl-geo only (`/geo`)                                                 |
 | `deno task dev:api`                  | pxl-api only (`/api`)                                                 |
 | `deno task dev:baked`                | `dev:local`, with the tiles read from the bakes under `./out`         |
-| `deno task dev:tiles`                | The dev tile server, demand-paging each page out of the bake          |
+| `deno task dev:tiles`                | The dev tile server, baking each tile out of the source when missed   |
 | `deno task preview`                  | The production bundle, served locally, data from the live deployment  |
 | `deno task preview:{local,baked}`    | The production bundle over `dev:local`'s or `dev:baked`'s servers     |
 | `deno task build:web`                | Build the client                                                      |
@@ -141,10 +141,10 @@ To measure the client, use `preview` (`localhost:4173`). It is the bundle as the
 | Shell     | TypeScript, React 19 in React Native: react-native-web and Vite on a page, Expo on a device                              | the browser, served by the Worker; the device app     |
 | Kernel    | Rust, no wasm-bindgen; `embassy-executor`: one WebAssembly module on a page, a static library linked into the device app | 512 MiB on a phone and 1 GiB elsewhere, reserved once |
 | Rendering | WebGPU (WGSL), driven from the kernel: the browser's, or wgpu over Metal on an iPhone and Vulkan on Android              | the device's GPU                                      |
-| Edge      | Cloudflare Worker + R2                                                                                                   | the client, the baked pages, the assets               |
+| Edge      | Cloudflare Worker + R2                                                                                                   | the client, the baked tiles, the assets               |
 | Servers   | Rust: axum, tokio-postgres — one per URL root, one database each                                                         | one VM behind Caddy                                   |
 | Databases | PostgreSQL: `db-main`, and `db-geo` with PostGIS                                                                         | the same VM                                           |
-| Geodata   | Overture Maps + GEDTM30, ingested into db-geo, baked into pages                                                          | offline, into R2                                      |
+| Geodata   | Overture Maps + GEDTM30, ingested into db-geo, baked into tiles                                                          | offline, into R2                                      |
 | Workspace | Deno drives every task, the Rust ones included                                                                           | —                                                     |
 
 ```text
@@ -199,7 +199,7 @@ Two formats were made here: **PVF3**, pixelet's packed fixed-point coordinate, a
 │       │   ├── geo-spec/     #     pxl-geo-spec: geographic provider values (Overture today)
 │       │   ├── geo/          #     pxl-geo: the world's data server (/geo)
 │       │   ├── api/          #     pxl-api: the application server (/api)
-│       │   └── geo-bake/     #     pxl-geo-bake: the three page bakes and the dev tile server
+│       │   └── geo-bake/     #     pxl-geo-bake: the three tile bakes and the dev tile server
 │       └── tool/             #   pxl-tool: the ingest and the bakes that write files the tree keeps
 ├── packages/                 # The TypeScript workspace packages
 │   └── xpute/
@@ -227,7 +227,7 @@ A crate's root holds its modules, the directories sorted by kind and the one-fil
 | `pxl-spec`      | `asset` `bake` `cell` `space`, plus `place`, `procedural`, `route`                                        |
 | `pxl-render`    | `mesh` `asset` `look` `frame` `gpu`                                                                       |
 | `pxl-kernel`    | `abi` `door` `mem` `sched` `world` `layer` `io` `control` `shell`, plus `host`, `kernel`, `param`, `text` |
-| `pxl-geo-bake`  | `terrain` `deck` `geocode` `page` `demand` `bin`, plus `poi` `pyramid` and six helpers of one file        |
+| `pxl-geo-bake`  | `terrain` `deck` `geocode` `tile` `demand` `bin`, plus `poi` `pyramid` and six helpers of one file        |
 
 The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
