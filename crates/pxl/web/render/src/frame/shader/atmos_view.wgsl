@@ -140,8 +140,9 @@ fn earth_face(n: vec3f, octaves: f32) -> vec4f {
   let global = textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0);
   let flat = off_globe_of(planet_center() + n * frame_planet().z, frame_planet(), frame_globe());
   let mercator = vec2f(center_lon, log(frame_globe().x)) + flat / frame_globe().w;
-  // A page, a z6 pixel a texel, takes over from the global picture's z3 over
-  // the octave a pixel goes from a z5 cell, at the pages' reach, to a z6 one.
+  // A page, a ground cell a texel, takes over from the global picture, eight
+  // times coarser, over the octave a pixel goes from two cells, at the pages'
+  // reach, to one.
   let share = clamp(-octaves, 0.0, 1.0);
   if (share <= 0.0) {
     return global;

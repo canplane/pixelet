@@ -24,7 +24,6 @@ pub fn reach_at(altitude: f64) -> f64 {
     horizon(altitude.max(0.0)) + horizon(r * HIGHEST_GROUND)
 }
 
-
 /// From the point's own height, so a cave's floor counts in a cave; the
 /// datum where nothing is held.
 fn ground_under(at: [f64; 3]) -> f64 {

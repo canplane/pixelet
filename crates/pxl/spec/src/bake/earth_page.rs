@@ -1,7 +1,7 @@
 // pxl-spec/bake/earth_page.rs
 
-//! The Earth's picture as a layer of the pyramid, at its top zoom alone, where
-//! a ground cell is a z6 pixel: per cell, Blue Marble's reflectance coded as
+//! The Earth's picture as a layer of the pyramid, at its top zoom alone, a
+//! ground cell a texel: per cell, Blue Marble's reflectance coded as
 //! sRGB, as a texture reads it, and in alpha the square root of the Black
 //! Marble's lights, so a village keeps its few steps of brightness. Row by row from the
 //! page's south edge, in the ground lattice's cell order. One XTP tree, as every

@@ -5,7 +5,7 @@
 //! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
 //! eight tiles). Each is averaged in linear light over what a texel covers.
 //!  - The Earth layer's pages (pxl-spec bake/earth_page.rs) at its top zoom, a
-//!    z6 pixel a texel, to `./out/earth/<version>/<quadkey>`. A page that is one
+//!    ground cell a texel, to `./out/earth/<version>/<quadkey>`. A page that is one
 //!    color says nothing the global picture does not, and has no object.
 //!  - The global picture every page falls back to, 2048 × 1024, to
 //!    `asset/sky/earth/07.webp`.
