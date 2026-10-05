@@ -59,12 +59,11 @@ const SHADOW_TEXEL: usize = FRAME_AT[9];
 const VIGNETTE: usize = FRAME_AT[10];
 const AO_STRENGTH: usize = FRAME_AT[11];
 const SCREEN_AO: usize = FRAME_AT[12];
-const EARTH_SHARE: usize = FRAME_AT[13];
-const LIGHT_VIEW_PROJ: usize = FRAME_AT[14];
-const OTHER: usize = FRAME_AT[15];
-pub(crate) const PLANET: usize = FRAME_AT[16];
-pub(crate) const GLOBE: usize = FRAME_AT[17];
-const UP: usize = FRAME_AT[18];
+const LIGHT_VIEW_PROJ: usize = FRAME_AT[13];
+const OTHER: usize = FRAME_AT[14];
+pub(crate) const PLANET: usize = FRAME_AT[15];
+pub(crate) const GLOBE: usize = FRAME_AT[16];
+const UP: usize = FRAME_AT[17];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_FLOATS: usize = 16;
@@ -844,7 +843,6 @@ impl Renderer {
         u[AO_STRENGTH] = s[STAGE_AT::AO_STRENGTH] as f32;
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
-        u[EARTH_SHARE] = s[STAGE_AT::EARTH_SHARE] as f32;
         if self.screen_ao {
             self.ao.lay_out(g, &proj, width, height);
         }

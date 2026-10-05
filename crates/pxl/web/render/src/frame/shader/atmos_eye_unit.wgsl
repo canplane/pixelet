@@ -4,3 +4,7 @@
 fn exposure() -> f32 {
   return 1.0;
 }
+
+fn night_share() -> f32 {
+  return 0.0;
+}

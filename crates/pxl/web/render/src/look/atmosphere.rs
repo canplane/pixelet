@@ -33,12 +33,14 @@ pub const SUN_ANGULAR_RADIUS: f64 = 0.004675;
 /// The one eye the sky and the ground are seen by: the lights are for a sun of
 /// illuminance 1, and this shows a face under a high sun at about its albedo.
 pub const EXPOSURE: f64 = 3.0;
-/// A half, not one: the illuminance falls with the direct sun long before the
-/// sky dims, and following it fully washes a low sun's sky out white.
-pub const ADAPTATION: f64 = 0.5;
-/// Seven stops: how far the eye opens once the sun is gone, which is how bright
-/// a night reads. The moon and the night sky do not close it.
-pub const MAX_ADAPTATION: f64 = 128.0;
+/// How much of the light's fall from noon the land under the eye shows, the
+/// eye taking back the rest: a sun 3° up shows about two thirds of a stop
+/// under noon, so a dusk still reads.
+pub const SHOWN_FALL: f64 = 0.15;
+/// How far under noon the land shows at most, which is how dark a night reads;
+/// past it the eye takes back all, so a night is dim and never black. The
+/// cities' lights are on by then.
+pub const NIGHT_STOPS: f64 = 1.5;
 
 /// #9fb4d6, linear: light as the night eye reads it, bluer than it is.
 pub const NIGHT_COLOR: [f64; 3] = [0.3467, 0.4564, 0.6724];

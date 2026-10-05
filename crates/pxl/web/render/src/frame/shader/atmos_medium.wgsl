@@ -20,8 +20,8 @@ struct Atmosphere {
   ground_albedo: f32,
   sun_angular_radius: f32,
   exposure: f32,
-  max_adaptation: f32,
-  adaptation: f32,
+  night_stops: f32,
+  shown_fall: f32,
   moon_dir: vec3f,
   moon_light: f32,
   // The same for every pixel, so the CPU computes it once.
@@ -78,8 +78,8 @@ fn atmos_ozone_half_width() -> f32 { return atmos_words[5].z; }
 fn atmos_ground_albedo() -> f32 { return atmos_words[5].w; }
 fn atmos_sun_angular_radius() -> f32 { return atmos_words[6].x; }
 fn atmos_exposure() -> f32 { return atmos_words[6].y; }
-fn atmos_max_adaptation() -> f32 { return atmos_words[6].z; }
-fn atmos_adaptation() -> f32 { return atmos_words[6].w; }
+fn atmos_night_stops() -> f32 { return atmos_words[6].z; }
+fn atmos_shown_fall() -> f32 { return atmos_words[6].w; }
 fn atmos_moon_dir() -> vec3f { return atmos_words[7].xyz; }
 fn atmos_moon_light() -> f32 { return atmos_words[7].w; }
 fn atmos_sun_seen() -> vec3f { return atmos_words[8].xyz; }

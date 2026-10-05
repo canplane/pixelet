@@ -911,11 +911,8 @@ impl Scheduler {
         self.markers.draw(&mut self.draw, frame.eye);
         self.debug.draw(&mut self.draw, frame.eye);
         self.coverage.draw(&mut self.draw, frame.eye);
-        // Once the view has gone over to the Earth's picture the ground would
-        // leave every pixel to it (shade.wgsl), so none is listed.
-        let slots = if crate::world::frame::stage::earth_share() >= 1.0 { &[][..] } else { &self.slots[..] };
         let holder = &self.meshes.holder;
-        for s in slots {
+        for s in &self.slots {
             let Some((scale, generation)) = s.layout else { continue };
             if s.role == Role::Building || !s.in_frustum {
                 continue;
