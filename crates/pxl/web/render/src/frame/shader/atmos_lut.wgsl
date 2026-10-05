@@ -1,5 +1,5 @@
-// The table holds optical depth: differences of it stay exact where a ratio of
-// two near-zero transmittances drew a black line along the horizon.
+// The table holds optical depth, so a stretch's is a difference: a ratio of two
+// transmittances near zero is not exact.
 fn depth_to_top(r: f32, mu: f32) -> vec3f {
   return textureSampleLevel(transmittance_lut, atmos_sampler, transmittance_uv(r, mu), 0.0).rgb;
 }
@@ -21,7 +21,7 @@ fn sun_transmittance(r: f32, mu_s: f32) -> vec3f {
 // no case of its own.
 fn depth_along(r: f32, mu: f32, low: vec3f, t: f32) -> vec3f {
   let out = r * mu + t;
-  let rt = max(sqrt(max(r * r + 2.0 * r * mu * t + t * t, 0.0)), atmos_bottom_radius());
+  let rt = max(radius_along(r, mu, t), atmos_bottom_radius());
   return sign(out) * (low - depth_to_top(rt, min(abs(out) / rt, 1.0)));
 }
 
@@ -37,12 +37,6 @@ fn ray_low(r: f32, mu: f32, end: f32) -> vec3f {
 // No air past the ground: a ray stops where it meets it.
 fn short_of_ground(r: f32, mu: f32, t: f32) -> f32 {
   return select(t, min(t, to_ground(r, mu)), meets_ground(r, mu));
-}
-
-// The height `t` km along the ray, `rt` from the center there: the difference
-// of two radii lost a short step near the ground.
-fn height_along(r: f32, mu: f32, t: f32, rt: f32) -> f32 {
-  return max(r - atmos_bottom_radius() + t * (2.0 * r * mu + t) / (rt + r), 0.0);
 }
 
 // (1 - exp(-x)) / x, without the cancellation where x is small.

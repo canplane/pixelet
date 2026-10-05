@@ -203,17 +203,13 @@ fn air_segments(dir: vec3f, d: vec3f) -> array<Veil, 3> {
   return v;
 }
 
-fn air_segment(dir: vec3f, d: f32) -> Veil {
-  return air_segments(dir, vec3f(d))[2];
-}
-
 fn air_to(world_pos: vec3f) -> Veil {
   let to = world_pos - frame_camera_pos();
   let du = length(to);
   if (du < 1e-4) {
     return Veil(vec3f(1.0), vec3f(0.0));
   }
-  let v = air_segment(to / du, du * atmos_km_per_u());
+  let v = air_segments(to / du, vec3f(du * atmos_km_per_u()))[2];
   return Veil(v.through, v.scattered * exposure());
 }
 

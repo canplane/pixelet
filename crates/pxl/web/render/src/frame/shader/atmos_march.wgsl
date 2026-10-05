@@ -24,9 +24,16 @@ fn air_source(m: Medium, r: f32, up: vec3f, toward: vec3f, phase: vec2f) -> vec3
 
 // Knots gather about the ray's lowest point: the eye looking up, the ground
 // looking down, the tangent looking across.
-fn air_knot(a: f32, b: f32, low: f32, u: f32) -> f32 {
-  let x = mix(-sqrt(low - a), sqrt(b - low), u);
-  return low + x * abs(x);
+fn air_knot(a: f32, b: f32, lowest: f32, u: f32) -> f32 {
+  let x = mix(-sqrt(lowest - a), sqrt(b - lowest), u);
+  return lowest + x * abs(x);
+}
+
+// What a stretch sends from its start to depth `x` into it, the light per unit
+// of depth running straight from `ja` to `jb` across it, of which `x` is the
+// share `rise`; `left` is exp(-x).
+fn stretch(ja: vec3f, jb: vec3f, x: vec3f, rise: vec3f, left: vec3f) -> vec3f {
+  return ja * x * extinction_weight(x) + (jb - ja) * rise * (extinction_weight(x) - left);
 }
 
 // From radius `r`, whose up is `up`, to each of `d` km along `dir`, nearest
@@ -35,10 +42,9 @@ fn air_knot(a: f32, b: f32, low: f32, u: f32) -> f32 {
 // of the sun's.
 fn gather(r: f32, up: vec3f, dir: vec3f, d: vec3f, sun: vec3f, moon: vec3f, moon_light: f32, knots: i32) -> array<Veil, 3> {
   let mu = dot(up, dir);
-  let top = atmos_top_radius();
   let end = short_of_ground(r, mu, d.z);
   let low = ray_low(r, mu, end);
-  let a = min(max(-r * mu - sqrt(max(r * r * (mu * mu - 1.0) + top * top, 0.0)), 0.0), end);
+  let a = min(to_sphere(r, mu, atmos_top_radius()), end);
   let lowest = clamp(-r * mu, a, end);
   let sun_phase = vec2f(rayleigh_phase(dot(dir, sun)), mie_phase(dot(dir, sun)));
   let moon_phase = vec2f(rayleigh_phase(dot(dir, moon)), mie_phase(dot(dir, moon)));
@@ -59,11 +65,11 @@ fn gather(r: f32, up: vec3f, dir: vec3f, d: vec3f, sun: vec3f, moon: vec3f, moon
       let x = clamp(depth_along(r, mu, low, d[read]) - da, vec3f(0.0), y);
       let rise = select(vec3f(0.0), x / y, y > vec3f(0.0));
       let left = exp(-x);
-      out[read] = Veil(through * left, light + through * (ja * x * extinction_weight(x) + (jb - ja) * rise * (extinction_weight(x) - left)));
+      out[read] = Veil(through * left, light + through * stretch(ja, jb, x, rise, left));
       read++;
     }
     let left = exp(-y);
-    light += through * (ja * y * extinction_weight(y) + (jb - ja) * (extinction_weight(y) - left));
+    light += through * stretch(ja, jb, y, vec3f(1.0), left);
     through *= left;
     da = db;
     ja = jb;
@@ -76,9 +82,10 @@ fn gather(r: f32, up: vec3f, dir: vec3f, d: vec3f, sun: vec3f, moon: vec3f, moon
 
 // What the air `t` km along the ray sends toward the eye per unit of its depth.
 fn per_depth(r: f32, up: vec3f, dir: vec3f, t: f32, sun: vec3f, sun_phase: vec2f, moon: vec3f, moon_phase: vec2f, moon_light: f32) -> vec3f {
+  let mu = dot(up, dir);
   let p = up * r + dir * t;
-  let pr = length(p);
-  let m = medium_at(height_along(r, dot(up, dir), t, pr));
+  let pr = radius_along(r, mu, t);
+  let m = medium_at(height_along(r, mu, t, pr));
   var source = air_source(m, pr, p / pr, sun, sun_phase);
   if (moon_light > 0.0) {
     source += air_source(m, pr, p / pr, moon, moon_phase) * moon_light;

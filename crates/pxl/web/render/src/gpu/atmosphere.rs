@@ -73,8 +73,9 @@ const _: () = assert!(EARTH_LAYERS < 1 << PAGE_BITS && FAULT_PAGES <= 32 / PAGE_
 /// The size bake_earth writes the Earth's global picture at.
 const EARTH_SIZE: (u32, u32) = (2048, 1024);
 
+const TABLES: usize = 6;
 /// Transmittance, multiple scattering, sky view, exposure, irradiance, moonlit sky.
-pub(crate) const SIZES: [(u32, u32); 6] = [(256, 64), (32, 32), (192, 108), (1, 1), (64, 16), (192, 108)];
+pub(crate) const SIZES: [(u32, u32); TABLES] = [(256, 64), (32, 32), (192, 108), (1, 1), (64, 16), (192, 108)];
 pub(crate) const TRANSMITTANCE: usize = 0;
 pub(crate) const MULTISCATTER: usize = 1;
 pub(crate) const SKY_VIEW: usize = 2;
@@ -92,9 +93,9 @@ pub struct Atmosphere {
     uniform: u32,
     words: [f32; ATMOS_FLOATS],
     sampler: u32,
-    views: [u32; 6],
+    views: [u32; TABLES],
     passes: [Built; 5],
-    groups: [u32; 6],
+    groups: [u32; TABLES],
     baked: bool,
     drawn_for: Option<(f32, f32)>,
     moon_drawn_for: Option<(f32, f32)>,
@@ -146,9 +147,9 @@ impl Atmosphere {
 
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
-        let mut textures = [0; 6];
-        let mut views = [0; 6];
-        for k in 0..6 {
+        let mut textures = [0; TABLES];
+        let mut views = [0; TABLES];
+        for k in 0..TABLES {
             textures[k] = object();
             let (w, h) = SIZES[k];
             g.texture(textures[k], w, h, 1, format::RGBA16F, 1, texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT);
@@ -170,7 +171,7 @@ impl Atmosphere {
             sampler,
             views,
             passes,
-            groups: [0; 6],
+            groups: [0; TABLES],
             baked: false,
             drawn_for: None,
             moon_drawn_for: None,
@@ -209,7 +210,7 @@ impl Atmosphere {
         };
         // The exposure reads the air but what it writes.
         let unexposed: Vec<u32> = air.as_chunks::<5>().0.iter().map(|c| c[0]).filter(|&b| b != 13).collect();
-        let reads: [(usize, Vec<u32>); 6] = [
+        let reads: [(usize, Vec<u32>); TABLES] = [
             (TRANSMITTANCE, of(&[8], &[])),
             (MULTISCATTER, of(&medium, &[])),
             (IRRADIANCE, of(&medium, &[multiscatter])),
