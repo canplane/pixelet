@@ -49,21 +49,17 @@ fn luminance(c: [f64; 3]) -> f64 {
 }
 
 pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
-    // Both lights are summed so the light does not snap from one direction to the
-    // other where their intensities cross at dusk. Each is written as it comes
-    // to the air, and the air a point is under takes its share there
-    // (atmos_view.wgsl's light_at); the brighter where the eye stands casts
-    // the shadow, whose map is the eye's.
+    // Both lights, summed so the light does not snap where they cross at dusk,
+    // each as it reaches the air; the brighter at the eye casts the shadow.
     let sun_dir = norm3(&light.sun);
     let w = white();
     let moon_dir = norm3(&light.moon);
-    // Night as the sky shows it, past which the stars are lost in the day.
+    // The stars are lost in the day.
     let night = 1.0 - smoothstep(-0.1, 0.0, sun_dir[2]);
     let elongation = libm::acos(dot3(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
     let phase = moon_phase_light(core::f64::consts::PI - elongation);
-    // By day the sun leaves the Moon nothing, so its light and its sky are
-    // not worked out at all.
-    let moon_color: [f64; 3] = core::array::from_fn(|k| NIGHT_COLOR[k] * MOON_LIGHT * phase * night * w[k]);
+    // Wherever the Moon is up; by day the sun outshines it.
+    let moon_color: [f64; 3] = core::array::from_fn(|k| NIGHT_COLOR[k] * MOON_LIGHT * phase * w[k]);
     let here = |d: &[f64; 3], c: &[f64; 3]| {
         let t = light_at(light.ground_km, d[2]);
         luminance(core::array::from_fn(|k| c[k] * t[k]))
@@ -89,7 +85,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     put3(o, ENV_SUN, f32s(&sun_dir));
 
     put3(o, ENV_MOON, f32s(&moon_dir));
-    o[ENV_MOON + 3] = (MOON_LIGHT * phase * night) as f32;
+    o[ENV_MOON + 3] = (MOON_LIGHT * phase) as f32;
 
     let columns: [V3; 3] = core::array::from_fn(|k| light.star_frame.map(|row| row[k]));
     for (k, column) in columns.iter().enumerate() {

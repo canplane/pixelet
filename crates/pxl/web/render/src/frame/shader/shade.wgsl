@@ -25,6 +25,6 @@ fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, frag: vec2f, lit: f32, open:
   if (interleaved_gradient(frag) < fade) {
     discard;
   }
-  let color = albedo * surface_light(n, lit, seen.light) * open * (1.0 + rim(n, world_pos));
+  let color = albedo * surface_light(n, up_at(world_pos), lit, seen.light) * open * (1.0 + rim(n, world_pos));
   return color * seen.through + seen.scattered;
 }

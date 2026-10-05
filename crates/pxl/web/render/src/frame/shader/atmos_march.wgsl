@@ -1,7 +1,6 @@
-// The light a ray from radius `r` along `dir` gathers from a light toward
-// `toward` over its first `reach` km, both in the frame whose up is +z, per
-// unit of that light: single scattering marched, with Hillaire's table for the
-// orders past it.
+// What a ray from `r` along `dir`, up +z, gathers over its first `reach` km
+// from a light of one toward `toward`: single scattering marched, Hillaire's
+// table for the orders past it.
 
 @group(0) @binding(12) var multiscatter_lut: texture_2d<f32>;
 
@@ -15,7 +14,7 @@ fn sky_radiance(r: f32, dir: vec3f, toward: vec3f, reach: f32, steps: i32) -> ve
   let phase_r = rayleigh_phase(c);
   let phase_m = mie_phase(c);
   let d = min(air_path(r, mu), reach);
-  // From above the atmosphere a ray starts where it enters the air, if it does.
+  // From above the air, where the ray enters it.
   var start = 0.0;
   if (r > atmos_top_radius()) {
     let disc = r * r * (mu * mu - 1.0) + atmos_top_radius() * atmos_top_radius();
@@ -31,7 +30,7 @@ fn sky_radiance(r: f32, dir: vec3f, toward: vec3f, reach: f32, steps: i32) -> ve
   }
   var through = vec3f(1.0);
   var light = vec3f(0.0);
-  // Squared steps: the air is densest and the view changes most near the eye.
+  // Squared toward the eye, where the air is densest.
   for (var i = 0; i < steps; i++) {
     let t0 = f32(i) / f32(steps);
     let t1 = f32(i + 1) / f32(steps);

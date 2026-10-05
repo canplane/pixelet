@@ -1,8 +1,6 @@
-// Bruneton's irradiance table: the sky's light on an up-facing face at each
-// altitude for each height of a light, per unit of it, drawn once per device.
-// What a surface is lit by is read at its own height, never the eye's. Alpha:
-// the sky's mean luminance over the upper hemisphere, white balanced, what the
-// eye's meter reads of it.
+// Bruneton's irradiance table, once per device: the sky's light on an up-facing
+// face by altitude and a light's height, per unit of it, read at the surface's
+// own height. Alpha: the sky's mean luminance over the hemisphere, white balanced.
 
 const IRRADIANCE_RINGS: i32 = 8;
 const IRRADIANCE_BEARINGS: i32 = 16;
@@ -14,9 +12,8 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let mu_s = unit_of(uv.x, IRRADIANCE_SIZE.x) * 2.0 - 1.0;
   let r = atmos_bottom_radius() + unit_of(uv.y, IRRADIANCE_SIZE.y) * (atmos_top_radius() - atmos_bottom_radius());
   let sun = vec3f(sqrt(max(1.0 - mu_s * mu_s, 0.0)), 0.0, mu_s);
-  // Cosine-weighted rings, evenly spaced in sin² of the zenith angle, so the sum
-  // is pi times their mean; each over its cosine, half their mean is the mean
-  // over the hemisphere.
+  // Rings even in sin² of the zenith: the sum is pi times their mean, and each
+  // over its cosine, half the mean is the hemisphere's.
   var sky = vec3f(0.0);
   var seen = vec3f(0.0);
   for (var i = 0; i < IRRADIANCE_RINGS; i++) {
