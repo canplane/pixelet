@@ -5,7 +5,7 @@
 //! placement or an erase.
 
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pyramid::GROUND_Z;
 use pxl_spec::space::v3::{add3, V3};
@@ -90,7 +90,7 @@ pub struct PickResult {
 
 /// In the root frame, from the eye.
 pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
-    let frame = ivec::to_v3(view().origin);
+    let frame = view().chart();
     let ray = Ray {
         origin: add3(&origin, &frame),
         direction,

@@ -19,7 +19,6 @@ use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle, Credit};
 use crate::layer::earth::{self, Earth};
 use crate::layer::geocode::store as geocode_store;
-use crate::layer::terrain::page::OCEAN_KEY;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::change::world_edge;
 use crate::world::pyramid::Layer;
@@ -38,7 +37,6 @@ impl fmt::Display for DemandName {
         let key = self;
         match key.0 {
             Category::terrain => write!(f, "{}", page_name(Page::of_subject(key.1))),
-            Category::ocean => f.write_str(OCEAN_KEY),
             Category::poi | Category::earth => write!(f, "{}", page_name(Page::of_subject(key.1))),
             Category::geocode => write!(f, "{}", group_name(key.1)),
             Category::geocode_dict => f.write_str(DICT_OBJECT),
@@ -180,8 +178,7 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     settle(key, outcome, Some(phases), fail);
 }
 
-/// Open water for a terrain page, no label for a geocode group. The ocean
-/// tile must exist, so its absence is a fault.
+/// The page over it for a pyramid page, no label for a geocode group.
 fn absent(category: Category, subject: u64) -> Result<(), Errno> {
     match category {
         Category::terrain => Terrain::pyramid().absent(Page::of_subject(subject)),
@@ -190,7 +187,6 @@ fn absent(category: Category, subject: u64) -> Result<(), Errno> {
         Category::geocode => geocode_store::absent_group(subject),
         // A bake with no dictionary names nothing: an answer, so not asked again.
         Category::geocode_dict => geocode_store::absent_dict(),
-        Category::ocean => return Err(Errno::ENOENT),
         Category::asset => return Err(Errno::ENOTRECOVERABLE),
     };
     Ok(())
@@ -203,11 +199,6 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
     match category {
         Category::terrain => {
             let result = Terrain::pyramid().adopt(Page::of_subject(subject), view(b), phases);
-            release(block);
-            result
-        }
-        Category::ocean => {
-            let result = Terrain::pyramid().adopt_shared(view(b), phases);
             release(block);
             result
         }

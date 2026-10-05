@@ -51,7 +51,7 @@ impl Layer for Earth {
 static UPLOADS: Global<Vec<Option<Block>>> = Global::new();
 
 fn uploads() -> &'static mut Vec<Option<Block>> {
-    UPLOADS.get(|| vec![None; Paging::<Earth>::RECORDS as usize])
+    UPLOADS.get(|| vec![None; Paging::<Earth>::FRAMES as usize])
 }
 
 fn view<'a>((at, bytes): Block) -> &'a [u8] {
@@ -91,7 +91,7 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
     for (record, slot) in uploads().iter_mut().enumerate() {
         let Some(block) = *slot else { continue };
         let Ok(texels) = earth_page::decode(view(block)) else { continue };
-        if !write(record as u32 - 1, texels) {
+        if !write(record as u32, texels) {
             return;
         }
         release(slot.take());
@@ -116,7 +116,7 @@ pub fn earth_window() -> ([i32; 2], [u32; FAULT_PAGES as usize]) {
         if uploads()[record as usize].is_none() {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
-            layers[(dy * FAULT_ACROSS + dx) as usize] = record;
+            layers[(dy * FAULT_ACROSS + dx) as usize] = record + 1;
         }
     }
     ([x0 as i32, y0 as i32], layers)

@@ -24,7 +24,7 @@ use pxl_spec::space::indexer::{L2, L2_IDX};
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::REACH;
 use pxl_spec::space::pyramid::{page_scale, Cell, Page, EXTENT, GROUND, GROUND_Z, TOP_Z};
 use pxl_spec::space::v3::{add3, Aabb, V3};
@@ -476,12 +476,13 @@ impl<'a> Access<'a> {
     /// Far edge of the largest resident index cell coarser than `z` the ray
     /// passes over entirely, or none. Never past `until`, where another zoom applies.
     fn clear(&self, ray: &Ray, t: f64, z: u32, until: f64) -> Option<f64> {
-        let at = on_ground(&ray.at(t + NUDGE));
+        let from = ray.at(t + NUDGE);
+        let at = on_ground(&from);
         (TOP_Z..z).find_map(|coarser| {
             let body = self.terrain.get(GROUND.cell_of(coarser, &at).page())?;
             let e = EXTENT.cell_of(coarser, &at);
             let [_, hi] = drawn(body.index.extent()[e.index() as usize]);
-            let out = exit(ray, corner(e.scale(), &at), e.scale().side()).min(until).max(t + NUDGE);
+            let out = exit(ray, corner(e.scale(), &from), e.scale().side()).min(until).max(t + NUDGE);
             let (za, zb) = (ray.at(t)[2], ray.at(out)[2]);
             (za.min(zb) > hi as f64 * U_PER_CELL).then_some(out)
         })
@@ -503,7 +504,7 @@ impl<'a> Access<'a> {
             None => (page_scale, None),
         };
         Region {
-            base: corner(scale, &at),
+            base: corner(scale, p),
             side: scale.side(),
             page,
             terrain,
@@ -681,7 +682,7 @@ impl<'a> Access<'a> {
             met = if z == GROUND_Z {
                 let steps = L2.above(CELL) as u32;
                 let [cx, cy] = ancestor_of([x, y], steps);
-                let col_idx = pxl_spec::space::pvf3::ivec::gather(cx, cy, 0);
+                let col_idx = crate::layer::object::store::column_at([cx, cy]);
                 let entries = self.cell_entries(col_idx, offset_in([x, y], steps), h);
                 let corner = first_descendant_of([cx, cy], steps).map(|v| v as f64 * side);
                 object_hit(ray, entries, corner)
@@ -803,11 +804,11 @@ fn on_ground(p: &V3) -> Pvf3 {
     projection::project(p[0], p[1], 0.0)
 }
 
-/// The corner of `scale`'s cell under `at`, in units.
-fn corner(scale: Scale, at: &Pvf3) -> [f64; 2] {
-    let [ix, iy, _] = scale.index_of(at);
-    let base = scale.base_of([ix, iy, 0]);
-    [pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base))]
+/// The corner of `scale`'s cell under `p`, in the frame `p` is in: a ray
+/// across the antimeridian walks on, where the cell's stored X wraps.
+fn corner(scale: Scale, p: &V3) -> [f64; 2] {
+    let side = scale.side();
+    [(p[0] / side).floor() * side, (p[1] / side).floor() * side]
 }
 
 /// Where `cell`'s center falls in the page `src` it is drawn from, in that page's cells.

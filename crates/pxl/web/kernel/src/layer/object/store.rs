@@ -25,8 +25,8 @@ use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
-use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{span_of, GROUND, GROUND_Z, TOP_Z};
+use pxl_spec::space::pvf3::{REACH, ROUND};
+use pxl_spec::space::pyramid::{around, span_of, wrap_cell, wrap_index, GROUND, GROUND_Z, TOP_Z};
 use pxl_spec::space::sparse_tree::mem;
 use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree};
 use pxl_spec::space::v3::{Aabb, V3};
@@ -61,6 +61,11 @@ pub use pxl_spec::bake::constant::EntryAt;
 /// stored and hit-tested but never drawn.
 fn column_of(cell: [i64; 3]) -> IVec {
     L2_IDX(TO_XY(CELL.base_of(cell).i))
+}
+
+/// A column's key from its index, which may run on round the world.
+pub fn column_at([x, y]: [i64; 2]) -> IVec {
+    ivec::gather(wrap_index(BAND, x), y, 0)
 }
 
 /// The cell at a column's corner, on z = 0.
@@ -687,6 +692,14 @@ fn fold_cell(children: &[u16], scale: Scale) -> u16 {
 
 const TOP_CELL: Scale = GROUND.side_at(TOP_Z);
 
+/// A top cube's X as the index keys it, and how many rounds of the world the
+/// asker's frame stands from it: a query or a ray across the antimeridian is
+/// moved to the stored copy, and what it meets moved back.
+fn named_top(x: i64) -> (i64, i64) {
+    let named = wrap_index(INDEX_TOP, x);
+    (named, (x - named) / around(INDEX_TOP))
+}
+
 /// The coarsest cube the index keeps: as tall as `REACH` and as wide as the
 /// coarsest page, so any query box meets at most eight of them.
 const INDEX_TOP: Scale = {
@@ -806,7 +819,10 @@ impl Store {
         for z in range(2) {
             for y in range(1) {
                 for x in range(0) {
-                    go(self, query, finest, INDEX_TOP, [x, y, z], enter);
+                    let (named, round) = named_top(x);
+                    let (dx, cells) = (round as f64 * ROUND, |s: Scale| round * around(s));
+                    let q = query.moved([-dx, 0.0, 0.0]);
+                    go(self, &q, finest, INDEX_TOP, [named, y, z], &mut |s, [cx, cy, cz], bound| enter(s, [cx + cells(s), cy, cz], &bound.moved([dx, 0.0, 0.0])));
                 }
             }
         }
@@ -823,7 +839,7 @@ impl Store {
         let mut refused = Ok(());
         self.visit_in(&query, BAND, &mut |[x, y, _], _| {
             if refused.is_ok() {
-                refused = try_push(out, ivec::gather(x, y, 0));
+                refused = try_push(out, column_at([x, y]));
             }
         });
         refused?;
@@ -843,8 +859,11 @@ impl Store {
     /// order, until `each` stops it. A cube is entered only where the ray
     /// crosses its bound grown to whole cells of `scale`.
     pub fn along_ray(&self, origin: V3, direction: V3, (t0, t1): (f64, f64), scale: Scale, each: &mut dyn FnMut([i64; 3]) -> bool) {
-        let ray = (origin, direction);
-        cells_along(ray, (t0, t1), INDEX_TOP.side(), &mut |at, span| self.along_ray_from(ray, span, scale, INDEX_TOP, at, each));
+        cells_along((origin, direction), (t0, t1), INDEX_TOP.side(), &mut |[x, y, z], span| {
+            let (named, round) = named_top(x);
+            let from = [origin[0] - round as f64 * ROUND, origin[1], origin[2]];
+            self.along_ray_from((from, direction), span, scale, INDEX_TOP, [named, y, z], &mut |[cx, cy, cz]| each([cx + round * around(scale), cy, cz]))
+        });
     }
 
     fn along_ray_from(&self, ray: (V3, V3), span: (f64, f64), scale: Scale, node: Scale, at: [i64; 3], each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
@@ -935,7 +954,7 @@ impl Store {
                 max: [to[0] as f64 * side, to[1] as f64 * side, REACH.max[2]],
             };
             self.visit_in(&query, target, &mut |at, _| {
-                if let Some(&v) = self.folds.get(&(target, at)).filter(|_| inside(at[0], at[1])) {
+                if let Some(&v) = self.folds.get(&(target, wrap_cell(target, at))).filter(|_| inside(at[0], at[1])) {
                     if refused.is_ok() {
                         refused = try_insert(out, at, u32::from(v));
                     }
@@ -945,7 +964,7 @@ impl Store {
             let cells = target.count_in(BAND) as i64;
             for cy in from[1].div_euclid(cells)..=(to[1] - 1).div_euclid(cells) {
                 for cx in from[0].div_euclid(cells)..=(to[0] - 1).div_euclid(cells) {
-                    let Some(column) = self.columns.get(&ivec::gather(cx, cy, 0)) else { continue };
+                    let Some(column) = self.columns.get(&column_at([cx, cy])) else { continue };
                     for (&band_idx, tree) in &column.bands {
                         let band = [cx, cy, i64::from(band_idx)];
                         mem::walk_to(
@@ -992,25 +1011,25 @@ impl Store {
     /// False says nothing is placed in that band cell; true only that something may be.
     pub fn may_hold(&self, at: [i64; 3]) -> bool {
         let [x, y, band] = ancestor_of(at, BAND.above(CELL) as u32);
-        self.columns.get(&ivec::gather(x, y, 0)).is_some_and(|c| c.bands.contains_key(&(band as BandZ)))
+        self.columns.get(&column_at([x, y])).is_some_and(|c| c.bands.contains_key(&(band as BandZ)))
     }
 
     /// The cell over the highest band in the column of cell `[x, y]`.
     pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
         let steps = BAND.above(CELL) as u32;
         let [cx, cy] = ancestor_of([x, y], steps);
-        let band = *self.columns.get(&ivec::gather(cx, cy, 0))?.bands.keys().next_back()?;
+        let band = *self.columns.get(&column_at([cx, cy]))?.bands.keys().next_back()?;
         Some(first_descendant_of([i64::from(band) + 1], steps)[0])
     }
 
     /// VOID where nothing; a non-voxel value is returned as is.
     pub fn folded_value(&self, scale: Scale, at: [i64; 3]) -> u16 {
         if scale >= BAND {
-            return self.folds.get(&(scale, at)).copied().unwrap_or(VOID as u16);
+            return self.folds.get(&(scale, wrap_cell(scale, at))).copied().unwrap_or(VOID as u16);
         }
         let steps = BAND.above(scale) as u32;
         let [x, y, band] = ancestor_of(at, steps);
-        let Some(tree) = self.columns.get(&ivec::gather(x, y, 0)).and_then(|c| c.bands.get(&(band as BandZ))) else {
+        let Some(tree) = self.columns.get(&column_at([x, y])).and_then(|c| c.bands.get(&(band as BandZ))) else {
             return VOID as u16;
         };
         let key = band_key(first_descendant_of(offset_in(at, steps), scale.above(OBJECT_FINEST) as u32).map(|c| c as u32));

@@ -15,12 +15,12 @@ use pxl_spec::space::pyramid::{EXTENT, PAGE_CELLS};
 use crate::world::paging::Paging;
 use pxl_spec::bake::format::Terrain;
 
-const RECORDS: u32 = Paging::<Terrain>::RECORDS;
+const FRAMES: u32 = Paging::<Terrain>::FRAMES;
 
 /// One page's ground: a `GroundCell` a cell, no stride and no padding.
 pub const GROUND_LANE_BYTES: u32 = PAGE_CELLS * PAGE_CELLS * core::mem::size_of::<GroundCell>() as u32;
 
-pub const GROUND_BYTES: u32 = RECORDS * GROUND_LANE_BYTES;
+pub const GROUND_BYTES: u32 = FRAMES * GROUND_LANE_BYTES;
 
 /// Rounded up to a whole cache line.
 const fn deck_lane(count: usize, size: usize) -> u32 {
@@ -38,7 +38,7 @@ pub const DECK_LANE_BYTES: [u32; 7] = [
     deck_lane(MAX_BOXES, 8),
 ];
 
-pub const DECK_BYTES: u32 = RECORDS * {
+pub const DECK_BYTES: u32 = FRAMES * {
     let mut sum = 0;
     let mut k = 0;
     while k < DECK_LANE_BYTES.len() {
@@ -51,16 +51,16 @@ pub const DECK_BYTES: u32 = RECORDS * {
 /// Inner samples plus the two-cell skirt bicubic reads at the edges.
 pub const ELE_LANE_BYTES: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN * 2;
 
-pub const ELE_PLANE_BYTES: u32 = RECORDS * ELE_LANE_BYTES;
+pub const ELE_PLANE_BYTES: u32 = FRAMES * ELE_LANE_BYTES;
 
 /// Two i16 a cell of the index lattice.
 pub const EXTENT_LANE_BYTES: u32 = EXTENT.page_cells() * EXTENT.page_cells() * 4;
 
-pub const EXTENT_PLANE_BYTES: u32 = RECORDS * EXTENT_LANE_BYTES;
+pub const EXTENT_PLANE_BYTES: u32 = FRAMES * EXTENT_LANE_BYTES;
 
 pub const BLOCK_LANE_BYTES: u32 = BLOCK_LANE as u32 * core::mem::size_of::<Block>() as u32;
 
-pub const BLOCK_PLANE_BYTES: u32 = RECORDS * BLOCK_LANE_BYTES;
+pub const BLOCK_PLANE_BYTES: u32 = FRAMES * BLOCK_LANE_BYTES;
 
 pub const TERRAIN_BYTES: u32 = GROUND_BYTES + DECK_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES + BLOCK_PLANE_BYTES;
 
@@ -77,7 +77,7 @@ pub const fn deck_off(record: u32, lane: usize) -> u32 {
     let mut plane = GROUND_BYTES;
     let mut k = 0;
     while k < lane {
-        plane += RECORDS * DECK_LANE_BYTES[k];
+        plane += FRAMES * DECK_LANE_BYTES[k];
         k += 1;
     }
     plane + record * DECK_LANE_BYTES[lane]

@@ -52,7 +52,7 @@ impl Category {
     /// An asset belongs to no bake and is asked for by its own command.
     pub fn bake(self) -> Option<BakeKind> {
         match self {
-            Category::terrain | Category::ocean => Some(BakeKind::terrain),
+            Category::terrain => Some(BakeKind::terrain),
             Category::poi => Some(BakeKind::poi),
             Category::earth => Some(BakeKind::earth),
             Category::geocode | Category::geocode_dict => Some(BakeKind::geocode),

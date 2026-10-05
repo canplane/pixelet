@@ -282,14 +282,35 @@ pub const fn neighbor_index(qx: i64, qy: i64) -> usize {
 
 /// How many pages at `z` stand around the world, and as many from its south edge to its north.
 pub const fn pages_around(z: u32) -> i64 {
-    1i64 << (IVEC_X_W as i32 - page_scale(z).shamt())
+    around(page_scale(z))
+}
+
+/// How many of `side`'s cells stand around the world.
+pub const fn around(side: Scale) -> i64 {
+    1i64 << (IVEC_X_W as i32 - side.shamt())
+}
+
+/// The rows of pages at `z`, south to north; past them is no page.
+pub fn page_rows(z: u32) -> std::ops::Range<i64> {
+    let n = pages_around(z);
+    -n / 2..n / 2
+}
+
+/// An X index of `side`'s cells as PVF3 names it: round the world, the
+/// copy the lane holds. A key made from an index goes through it.
+pub fn wrap_index(side: Scale, x: i64) -> i64 {
+    let across = around(side);
+    (x + across / 2).rem_euclid(across) - across / 2
+}
+
+/// A cell of `side` named as `wrap_index` names its X.
+pub fn wrap_cell(side: Scale, [x, y, z]: [i64; 3]) -> [i64; 3] {
+    [wrap_index(side, x), y, z]
 }
 
 /// The page at `z` at (x, y), X wrapped around the world.
 pub fn page_at(z: u32, [x, y]: [i64; 2]) -> Page {
-    let across = pages_around(z);
-    let wrap = |x: i64| (x + across / 2).rem_euclid(across) - across / 2;
-    Page::new(z, ivec::gather(wrap(x), y, 0))
+    Page::new(z, ivec::gather(wrap_index(page_scale(z), x), y, 0))
 }
 
 /// Where a page's own children sit in its neighborhood, in `slot_of`'s order.

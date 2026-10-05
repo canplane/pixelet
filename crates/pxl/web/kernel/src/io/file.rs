@@ -7,7 +7,6 @@
 use xpute_runtime::ipc::file::Files;
 use xpute_runtime::ipc::sys::Fd;
 
-use pxl_spec::bake::format::OCEAN_KEY;
 use pxl_spec::bake::place_page::DICT_OBJECT;
 use pxl_spec::bake::quadkey::PAGE_KEY_DEPTH;
 
@@ -38,12 +37,12 @@ impl Kept {
     }
 }
 
-/// The longest name the kernel opens: a page's quadkey, a shared object's
+/// The longest name the kernel opens: a page's quadkey, the dictionary's
 /// name, an asset's number or a kept file's path. A longer one is a bug, so
 /// the host stream's reserve can count on it.
 pub const PATH_BYTES: usize = {
     let mut most = PAGE_KEY_DEPTH as usize;
-    let names = [OCEAN_KEY.len(), DICT_OBJECT.len(), LOADS.ilog10() as usize + 1];
+    let names = [DICT_OBJECT.len(), LOADS.ilog10() as usize + 1];
     let mut i = 0;
     while i < names.len() + Kept::ALL.len() {
         let len = if i < names.len() { names[i] } else { Kept::ALL[i - names.len()].path().len() };

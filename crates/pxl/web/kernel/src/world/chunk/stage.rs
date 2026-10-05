@@ -4,7 +4,6 @@
 //! and runs the table's pass; in the report phase it hands the frame's
 //! numbers to the profiler.
 
-use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::v3::sub3;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
@@ -119,7 +118,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     view_resize(ctx.state.width, ctx.state.height);
     let v = view();
 
-    let origin = ivec::to_v3(v.origin);
+    let origin = v.chart();
 
     let anchor = globe_anchor_local();
     let e = v.pose.eye;
