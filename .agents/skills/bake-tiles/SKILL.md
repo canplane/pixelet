@@ -146,12 +146,6 @@ removes over it, so the bucket holds only those
 A region baked over a partial version lists its changes over that one's
 full base, earlier partial's included.
 
-Under `--build` beside `leaf/`, `structure/` keeps each
-solved structure so the pages it crosses solve it once: a cache nothing
-reads as a fact, deleted by `--force` and safe to delete any time. A run
-resumed after a change to the solve must be `--force`d, or it reuses
-structures the old solve made.
-
 What it produces, beside `leaf/` under `--build` with a `leaf.json` of what
 built it:
 

@@ -413,14 +413,6 @@ fn run() -> Result<(), String> {
         };
         // A region's pages are baked again whatever is on disk, by the code that changed.
         let fresh = args.force || !args.regions.is_empty();
-        // solved structures, kept for the pages they cross; what a fresh bake solves again
-        let structures = args.build.join("structure");
-        if fresh {
-            match fs::remove_dir_all(&structures) {
-                Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
-                _ => {}
-            }
-        }
         fs::create_dir_all(leaves.zoom_dir(GROUND_Z)).map_err(|e| e.to_string())?;
         if !fresh {
             refuse_mixed(&leaves.zoom_dir(GROUND_Z))?;
@@ -435,7 +427,7 @@ fn run() -> Result<(), String> {
         std::thread::scope(|scope| {
             let all = rows.len();
             for walk in &walks {
-                let (totals, leaves, raster, structures) = (&totals, &leaves, &raster, &structures);
+                let (totals, leaves, raster) = (&totals, &leaves, &raster);
                 scope.spawn(move || {
                     let mut db = match connect(source, raster) {
                         Ok(db) => db,
@@ -455,7 +447,6 @@ fn run() -> Result<(), String> {
                                     client: &mut db.client,
                                     repo: &db.repo,
                                     store: &mut held,
-                                    memo: structures,
                                 },
                                 page,
                             )?;

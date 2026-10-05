@@ -27,11 +27,12 @@ const fn deck_lane(count: usize, size: usize) -> u32 {
     ((count * size).div_ceil(64) * 64) as u32
 }
 
-/// Plane order: deck starts, points, tops, width, kind, form, boxes.
-pub const DECK_LANE_BYTES: [u32; 7] = [
+/// Plane order: deck starts, points, tops, width, kind, form, clear, boxes.
+pub const DECK_LANE_BYTES: [u32; 8] = [
     deck_lane(MAX_DECKS + 1, 4),
     deck_lane(MAX_POINTS, 4),
     deck_lane(MAX_POINTS, 2),
+    deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),

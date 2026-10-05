@@ -68,7 +68,7 @@ pub fn has_ground(client: &mut Client, pages: &[IVec]) -> Result<Vec<bool>, post
 /// A leaf: its decks solved, its surface painted around their lines, the two
 /// one page; and whether it lies off the elevation raster, so flat.
 pub fn bake_leaf(r: &mut deck::Reader<impl Store>, page: IVec) -> Result<(Terrain, bool), String> {
-    let solved = deck::solve_page(r, page)?;
+    let (solved, _) = deck::solve_page(r, page)?;
     let (surface, flat) = fetch_surface(r.repo, r.client, page, &solved.drawn)?;
     let lines = bake_decks(&solved.lines, epsg3857::get_page_bbox(page)[0]).ok_or("a page's decks overflow a record")?;
     Ok((assemble(surface, lines), flat))

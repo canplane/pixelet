@@ -28,7 +28,6 @@ pub(super) fn execute(p: Page, cache: &std::path::Path, out: &std::path::Path, s
                 client: &mut client,
                 repo: &repo,
                 store: &mut crate::deck::source::Disk(&memo),
-                memo: &memo.join("structure"),
             };
             Ok(Some(leaf::bake_leaf(reader, p.page)?.0))
         },
