@@ -43,8 +43,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   } else {
     texel = textureSampleLevel(blurred, blurred_sampler, uv, 0.0);
   }
-  var occlusion = pow(texel.r, AO_INTENSITY);
-  let fog = smoothstep(frame_fog_near(), frame_fog_far(), -pos.z);
-  occlusion = mix(occlusion, 1.0, fog);
-  return vec4f(occlusion, 0.0, 0.0, 1.0);
+  return vec4f(pow(texel.r, AO_INTENSITY), 0.0, 0.0, 1.0);
 }

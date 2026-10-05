@@ -16,7 +16,6 @@ use pxl_spec::space::v3::{add3, V3};
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{pose, rebase};
-use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
 use crate::world::frame::coord::origin_for;
 use pxl_spec::space::lod;
@@ -64,7 +63,8 @@ impl View {
             height: 1.0,
             fov: camera_cfg::projection::FOV,
             near: camera_cfg::projection::NEAR,
-            far: render_cfg::FAR_CLIP,
+            // Set with the camera; reversed depth takes an endless far until then.
+            far: f64::INFINITY,
             view_matrix: mat4(),
             inv_view_matrix: mat4(),
             proj: mat4(),
@@ -155,10 +155,10 @@ pub fn view_compose() {
     mat4_mul(&mut v.view_matrix, &v.pose.rotation, &to_eye);
     let vm = v.view_matrix;
     mat4_invert(&mut v.inv_view_matrix, &vm);
-    // Read the height from the view in hand: `eye()` would borrow the view again.
-    let height = height_at(v.eye_at());
-    v.near = near_clip_at(height);
-    v.far = far_clip_at(height);
+    // Read the eye from the view in hand: `eye()` would borrow the view again.
+    let altitude = v.eye_at()[2];
+    v.near = near_clip_at(altitude);
+    v.far = far_clip_at(altitude);
     mat4_perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near, v.far);
     let proj = v.proj;
     mat4_mul(&mut v.local_view_proj, &proj, &vm);
