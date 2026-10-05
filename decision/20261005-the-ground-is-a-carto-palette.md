@@ -57,10 +57,14 @@ range is the same palette:
 | 255        | `unknown`: a byte no bake wrote | ground and objects |
 | 256 and up | `air`, the user's colors, decor | objects alone      |
 
-`void` is where the terrain gives no surface: the column there draws no
-ground and stops no ray, while an object placed there stands as any other
-does. Whether a page has arrived is the query's to say (`world/access.rs`),
-never a cell's.
+`void` is where the terrain gives no surface: past the source's coverage,
+where a page has no object and the fold reads it as void, and the column there
+draws no ground and stops no ray, while an object placed there stands as any
+other does. Inside the coverage a page with no object is open sea, since only
+a page with nothing drawn in it is left unbaked; a coarser one is the fold of
+those under it, so absence folds as every page does and no shared ocean page
+is baked or published (`geo-bake terrain/absent.rs`). Whether a page has
+arrived is the query's to say (`world/access.rs`), never a cell's.
 
 The ground is the palette's subset an object can also be: placing a block of
 forest stores the forest's number, so a terrain-styled cube needs no encoding

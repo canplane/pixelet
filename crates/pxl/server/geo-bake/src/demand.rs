@@ -7,7 +7,7 @@ mod pyramid;
 mod terrain;
 
 use cache::Cache;
-use pxl_spec::bake::format::{Terrain, OCEAN_KEY};
+use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::space::pyramid::{Folds, Page};
 use std::path::PathBuf;
@@ -59,25 +59,13 @@ struct Dataset {
     cache: Cache,
     source: Source,
 }
-/// What a kind's pages come from: a pyramid layer's coverage, the pages a
-/// fold reads, and the one object every absent page is, if it has one; or
-/// geocode's groups, which no coverage gates.
+/// What a kind's pages come from: a pyramid layer's coverage and the pages a
+/// fold reads, or geocode's groups, which no coverage gates.
 enum Source {
-    Pyramid {
-        coverage: crate::coverage::Coverage,
-        sources: fn(Page) -> Vec<Page>,
-        shared: Option<(&'static str, Vec<u8>)>,
-    },
+    Pyramid { coverage: crate::coverage::Coverage, sources: fn(Page) -> Vec<Page> },
     Geocode,
 }
 impl Source {
-    fn shared(&self) -> Option<(&'static str, &[u8])> {
-        match self {
-            Source::Pyramid { shared: Some((name, bytes)), .. } => Some((name, bytes)),
-            _ => None,
-        }
-    }
-
     fn holds(&self, p: Page) -> bool {
         match self {
             Source::Pyramid { coverage, .. } => coverage.meets(p.z, p.page),
@@ -93,8 +81,6 @@ impl Source {
     }
 }
 impl Dataset {
-    /// The shared object is published before the generation answers anything:
-    /// written by the folds, concurrent atomic writes raced on one staging path.
     fn open(base: &std::path::Path, kind: Kind, runner: &Runner) -> Result<Self, String> {
         let data = Self {
             cache: Cache::new(base.join(kind.name()), runner.admission.clone(), std::time::Duration::from_secs(runner.limits.seconds))?,
@@ -102,19 +88,14 @@ impl Dataset {
                 Kind::Terrain => Source::Pyramid {
                     coverage: Coverage::of_source()?,
                     sources: Terrain::sources,
-                    shared: Some((OCEAN_KEY, terrain::ocean()?)),
                 },
                 Kind::Poi => Source::Pyramid {
                     coverage: Coverage::of_source()?,
                     sources: PoiPage::sources,
-                    shared: None,
                 },
                 Kind::Geocode => Source::Geocode,
             },
         };
-        if let Some((name, bytes)) = data.source.shared() {
-            data.cache.publish(name, Some(bytes))?;
-        }
         Ok(data)
     }
 }

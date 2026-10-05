@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use postgres::Client;
-use pxl_spec::bake::format::{encode_terrain, Terrain, SNAPSHOT_KEY};
+use pxl_spec::bake::format::{encode_terrain, SNAPSHOT_KEY};
 use pxl_spec::bake::published::{FORMAT, PUBLISHED_VERSION};
 use pxl_spec::bake::quadkey::{page_name, page_of_name};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -42,10 +42,11 @@ use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::{self, Coverage, Overture};
 use pxl_geo_bake::deck;
 use pxl_geo_bake::elevation::Raster;
-use pxl_geo_bake::pyramid::{build, refold, write_manifest, Layer, PageSet};
-use pxl_geo_bake::terrain::leaf::{self, bake_leaf, bake_ocean, has_ground, land_pages, ocean_samples, write_land_pages, OCEAN_KEY};
+use pxl_geo_bake::pyramid::{build, refold, write_manifest, PageSet};
+use pxl_geo_bake::terrain::absent::Absence;
+use pxl_geo_bake::terrain::leaf::{self, bake_leaf, has_ground, land_pages, write_land_pages};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
-use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, next_version, pack, refuse_mixed, unpack, Level};
+use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, next_version, pack, refuse_mixed, Level};
 
 const CLASSIFY_BATCH: usize = 2000;
 
@@ -315,10 +316,8 @@ fn assemble_region(args: &Args, leaves: &PageSet, land: &[IVec], leaf: &serde_js
         fs::hard_link(leaves.path(at), tiles.path(at)).map_err(|e| format!("{}: {e}", leaves.path(at).display()))?;
         changed.insert(at);
     }
-    let ocean_packed = fs::read(tiles.root.join(OCEAN_KEY)).map_err(|e| format!("{}: {e}", tiles.root.display()))?;
-    let ocean = Terrain::decode(&unpack(&ocean_packed).map_err(|e| e.to_string())?)?;
     let leaves_changed = changed.len();
-    let folded = refold(&tiles, changed, &ocean)?;
+    let folded = refold(&tiles, changed, &Absence::new(Coverage::of_source()?))?;
     println!("[bake/region] {leaves_changed} leaves changed, {folded} pages above folded again -> {}", tiles.root.display());
 
     // Uploaded, the version is its changes over one full version, never over
@@ -522,11 +521,6 @@ fn run() -> Result<(), String> {
         }
         fs::create_dir_all(tiles.zoom_dir(GROUND_Z)).map_err(|e| e.to_string())?;
 
-        let ocean_raw = bake_ocean(&ocean_samples(&coverage))?;
-        let ocean_packed = pack(ocean_raw.as_slice(), Level::Stored).map_err(|e| e.to_string())?;
-        fs::write(tiles.root.join(OCEAN_KEY), &ocean_packed).map_err(|e| e.to_string())?;
-        println!("[bake/ocean] wrote {OCEAN_KEY}: {} (page-independent: verified)", fmt_bytes(ocean_packed.len() as f64));
-
         let t = over_pages(
             "assemble",
             targets,
@@ -542,8 +536,7 @@ fn run() -> Result<(), String> {
             return Err(format!("{} pages failed to assemble", t.failed));
         }
 
-        let ocean = Terrain::decode(&unpack(&ocean_packed).map_err(|e| e.to_string())?)?;
-        let top = build(&tiles, &ocean, args.concurrency)?;
+        let top = build(&tiles, &Absence::new(coverage.clone()), args.concurrency)?;
         write_manifest(
             &tiles,
             top,
@@ -553,7 +546,6 @@ fn run() -> Result<(), String> {
                 "ingest_bbox": coverage.ingest_bbox(),
                 "candidate_pages": coverage.pages().len(),
                 "land_pages": land.len(),
-                "ocean_key": OCEAN_KEY,
                 "release": release,
                 "source": leaf["source"],
                 "built": { "leaf_git_sha": leaf["git_sha"] },
