@@ -10,7 +10,7 @@ const INITIAL: Snapshot = {
   map: { status: MapStatus.Idle, is_off_center: false, center: null, outside: false },
   location: { status: DevicePoseStatus.Idle, has_location: false, error: null },
   companion: { person_ready: false, pet_ready: false },
-  holding: { tool: ActiveTool.Pointer, channel: null, cube: 0, decor: 0, tier: 0 },
+  holding: { tool: ActiveTool.Pointer, cube: 0, decor: 0, tier: 0 },
   orientation: { status: DevicePoseStatus.Idle, error: null },
   azimuth: 0,
   is_follow_mode: false,

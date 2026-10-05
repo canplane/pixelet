@@ -12,8 +12,7 @@ use xpute_core::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::deck::fold_decks;
-use super::format::{Ground, Index, Occupancy, Terrain, GROUND_CH_KEYS};
-use super::pack::{channel_of, with_channel, GroundCell};
+use super::format::{Ground, Index, Occupancy, Terrain};
 use super::surface::extent_of;
 use crate::space::pyramid::{neighbor_index, neighborhood, Folds, Page, CHILDREN, EXTENT, GROUND};
 
@@ -35,18 +34,12 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], z: i32) -> T {
     half.unwrap_or(tie)
 }
 
-/// Each ground channel folded on its own, so a road never takes the land's
-/// vote under it.
+/// A cell is one look, so the majority is the look's.
 pub fn fold_ground(children: [&Ground; 4], z: u32) -> Ground {
     let out = (0..PAGE_CELLS * PAGE_CELLS)
         .map(|index| {
             let (q, block) = GROUND.child_block(index);
-            let four = block.map(|i| children[q].cells[i as usize]);
-            let mut cell = 0 as GroundCell;
-            for key in GROUND_CH_KEYS {
-                cell = with_channel(cell, key, majority(four.map(|f| channel_of(f, key)), z as i32));
-            }
-            cell
+            majority(block.map(|i| children[q].cells[i as usize]), z as i32)
         })
         .collect::<Vec<_>>();
     Ground { cells: out.into() }

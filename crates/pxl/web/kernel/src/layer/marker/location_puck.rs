@@ -94,7 +94,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
 
     let pos = projection::unproject(device.i, device.f);
     // The fix names a place and not how high.
-    if let Some(z) = Access::now().surface_support(&device).value() {
+    if let Some(z) = Access::now().surface_support(&device).value().flatten() {
         p.last_known_center_z = Some(z);
     }
     let Some(center_z) = p.last_known_center_z else {
@@ -112,7 +112,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
             let coord = projection::project(v[0], v[1], v[2]);
             // An unloaded neighbor page falls back to the center's height; 0 would sink
             // or launch that instance.
-            let delta_ele = Access::now().surface_support(&coord).value().unwrap_or(center_pos[2]) - center_pos[2];
+            let delta_ele = Access::now().surface_support(&coord).value().flatten().unwrap_or(center_pos[2]) - center_pos[2];
             let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
             let v = center3n(&lifted, U_PER_CELL);
             lane.extend([

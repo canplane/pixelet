@@ -3,6 +3,7 @@
 //! A layer's pyramid on disk, a directory a zoom, folded by the same
 //! one-zoom function the client runs.
 
+use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
@@ -12,9 +13,22 @@ use pxl_spec::space::pyramid::{Folds, Page, GROUND_Z, TOP_Z};
 
 use crate::util::{measure_output, pack, unpack, write_atomic, Level};
 
-pub trait Layer: Folds + PartialEq + Send + Sync {
+pub trait Layer: Folds + Clone + PartialEq + Send + Sync + 'static {
     fn encode(&self) -> Result<Vec<u8>, String>;
     fn decode(raw: &[u8]) -> Result<Self, String>;
+}
+
+/// What a page the set holds no object for is. The pyramid is correct only
+/// if a parent's is the fold of its children's, as every other page is.
+pub trait Absent<L: Layer>: Sync {
+    fn at(&self, p: Page) -> Cow<'_, L>;
+}
+
+/// One page for every absence, which folds to itself.
+impl<L: Layer> Absent<L> for L {
+    fn at(&self, _p: Page) -> Cow<'_, L> {
+        Cow::Borrowed(self)
+    }
 }
 
 pub struct PageSet {
@@ -88,14 +102,15 @@ pub fn parents(children: &[Page]) -> Vec<Page> {
 }
 
 /// None where it has no child: a parent exists exactly where a child does.
-pub fn fold_parent<'a, L: Layer>(parent: Page, read: impl Fn(Page) -> Option<&'a L>, absent: &'a L) -> Option<L> {
+pub fn fold_parent<'a, L: Layer>(parent: Page, read: impl Fn(Page) -> Option<&'a L>, absent: &impl Absent<L>) -> Option<L> {
     if parent.children().iter().all(|&k| read(k).is_none()) {
         return None;
     }
-    L::fold_page(parent, |p| Some(read(p).unwrap_or(absent)))
+    let filled: HashMap<Page, Cow<'_, L>> = L::sources(parent).into_iter().filter(|&p| read(p).is_none()).map(|p| (p, absent.at(p))).collect();
+    L::fold_page(parent, |p| read(p).or_else(|| filled.get(&p).map(|c| c.as_ref())))
 }
 
-pub fn fold_stored<L: Layer>(set: &PageSet, parent: Page, absent: &L) -> Result<Option<L>, String> {
+pub fn fold_stored<L: Layer>(set: &PageSet, parent: Page, absent: &impl Absent<L>) -> Result<Option<L>, String> {
     let mut read = HashMap::new();
     for p in L::sources(parent) {
         if let Some(page) = set.read::<L>(p)? {
@@ -105,13 +120,8 @@ pub fn fold_stored<L: Layer>(set: &PageSet, parent: Page, absent: &L) -> Result<
     Ok(fold_parent(parent, |p| read.get(&p), absent))
 }
 
-/// Folds every zoom up to `TOP_Z` or the first empty one. Correct only if
-/// a parent of four absent pages is the absent page.
-pub fn build<L: Layer>(set: &PageSet, absent: &L, workers: usize) -> Result<u32, String> {
-    let fixed = L::fold_page(Page::new(GROUND_Z - 1, 0), |_| Some(absent)).ok_or("no parent over four absent children")?;
-    if fixed != *absent {
-        return Err("the absent page does not fold to itself: one page cannot stand for every zoom's absence".into());
-    }
+/// Folds every zoom up to `TOP_Z` or the first empty one.
+pub fn build<L: Layer>(set: &PageSet, absent: &impl Absent<L>, workers: usize) -> Result<u32, String> {
     let mut top = GROUND_Z;
     for z in (TOP_Z..GROUND_Z).rev() {
         let children = set.pages(z + 1)?;
@@ -133,7 +143,7 @@ pub fn build<L: Layer>(set: &PageSet, absent: &L, workers: usize) -> Result<u32,
 /// `sources` read a page changed below, until a zoom changes nothing. A page
 /// is changed when its content differs, not its packed bytes, which a codec
 /// update re-packs alike.
-pub fn refold<L: Layer>(set: &PageSet, mut changed: HashSet<Page>, absent: &L) -> Result<usize, String> {
+pub fn refold<L: Layer>(set: &PageSet, mut changed: HashSet<Page>, absent: &impl Absent<L>) -> Result<usize, String> {
     let mut written = 0;
     for z in (TOP_Z..GROUND_Z).rev() {
         if changed.is_empty() {
@@ -205,7 +215,7 @@ pub fn write_manifest(set: &PageSet, top: u32, built: Option<&str>, layer: serde
 
 /// A parent reads the 4×4 children around it, so each worker keeps only the
 /// four child rows its current parent row reads.
-fn fold_zoom<L: Layer>(set: &PageSet, z: u32, children: &[Page], absent: &L, workers: usize) -> Result<usize, String> {
+fn fold_zoom<L: Layer>(set: &PageSet, z: u32, children: &[Page], absent: &impl Absent<L>, workers: usize) -> Result<usize, String> {
     let here = set.zoom_dir(z);
     if here.exists() {
         fs::remove_dir_all(&here).map_err(|e| format!("{}: {e}", here.display()))?;
@@ -227,7 +237,7 @@ fn fold_zoom<L: Layer>(set: &PageSet, z: u32, children: &[Page], absent: &L, wor
     Ok(targets.len())
 }
 
-fn fold_band<L: Layer>(set: &PageSet, rows: &[Vec<Page>], absent: &L) -> Result<(), String> {
+fn fold_band<L: Layer>(set: &PageSet, rows: &[Vec<Page>], absent: &impl Absent<L>) -> Result<(), String> {
     let mut held: HashMap<Page, Option<L>> = HashMap::new();
     for row in rows {
         let y = ivec::Y(row[0].page);

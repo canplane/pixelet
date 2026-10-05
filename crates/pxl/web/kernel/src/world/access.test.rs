@@ -4,9 +4,8 @@
 // parent as the bake folds them, and objects written into a store.
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::format::{Ground, GroundChannelKey};
-use pxl_spec::bake::pack::with_channel;
-use pxl_spec::cell::cube_types;
+use pxl_spec::bake::format::Ground;
+use pxl_spec::cell::cube_types::{self, ground, sentinel};
 use pxl_spec::cell::object::{placeable_cube_num_id, PlaceableCube};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pyramid::{Folds, PAGE_CELLS};
@@ -43,16 +42,20 @@ fn rough_leaf(rng: &mut Rng) -> Terrain {
     let ele = (0..PADDED * PADDED).map(|_| if rng.below(6) == 0 { rng.below(300) - 40 } else { rng.below(12) } as i16).collect();
     let cells = (0..SPAN * SPAN)
         .map(|_| {
-            let land = if rng.below(3) == 0 { cube_types::land::bare } else { cube_types::land::green_light };
-            let water = if rng.below(4) == 0 { cube_types::water::river } else { 0 };
-            with_channel(with_channel(0, GroundChannelKey::LAND, land), GroundChannelKey::WATER, water)
+            if rng.below(4) == 0 {
+                ground::water
+            } else if rng.below(3) == 0 {
+                ground::land
+            } else {
+                ground::park
+            }
         })
         .collect::<Vec<_>>();
     Terrain::leaf(ele, Ground { cells: cells.into() }, Default::default())
 }
 
 fn zero_page() -> Terrain {
-    let cells = vec![with_channel(0, GroundChannelKey::LAND, cube_types::land::sea); SPAN * SPAN];
+    let cells = vec![ground::water; SPAN * SPAN];
     Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
 }
 
@@ -112,7 +115,7 @@ fn a_zooms_ray_meets_the_objects_in_the_cells_the_zoom_draws_from() {
     let cell = GROUND.side_at(z).side();
     let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
     let (bx, by) = ((x0 / cell).floor() * cell + 4.0 * cell, (y0 / cell).floor() * cell + 4.0 * cell);
-    let bare = Access::new(&paging, &Store::default()).at(&point(bx, by), z).value().unwrap().top;
+    let bare = Access::new(&paging, &Store::default()).at(&point(bx, by), z).value().unwrap().top().unwrap();
     let bz = ((bare / cell).floor() + 3.0) * cell;
 
     // Five of the cell's eight: the bottom four and one over them.
@@ -145,6 +148,64 @@ fn a_zooms_ray_meets_the_objects_in_the_cells_the_zoom_draws_from() {
     assert_eq!((hit.struck, hit.point), (Struck::Ground, ground.point));
 }
 
+/// Past the coverage the terrain gives no surface: nothing stands and no ray
+/// stops there, and what is placed there stands as anywhere.
+#[test]
+fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
+    let _g = serial();
+    let leaf = top().children()[0];
+    let void = Terrain::leaf(
+        vec![0; PADDED * PADDED],
+        Ground {
+            cells: vec![sentinel::void; SPAN * SPAN].into(),
+        },
+        Default::default(),
+    );
+    let paging = resident(&[(leaf, void)]);
+    let (x0, y0, _) = leaf.rect();
+    let at = [x0 + 10.5, y0 + 10.5];
+
+    let empty = Store::default();
+    let access = Access::new(&paging, &empty);
+    assert_eq!(access.at(&point(at[0], at[1]), GROUND_Z).value().unwrap().top(), None);
+    assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(None));
+    assert_eq!(access.first_hit(&down(at), Detail::Zoom(GROUND_Z)).value().flatten(), None);
+
+    let mut store = Store::default();
+    let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
+    write(&mut store, [x0 + 10.0, y0 + 10.0, 5.0], CELL, red);
+    let access = Access::new(&paging, &store);
+    assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(6.0)));
+    let hit = access.first_hit(&down(at), Detail::Zoom(GROUND_Z)).value().flatten().unwrap();
+    assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
+}
+
+/// A deck stands on its own, not on the ground under it: over a void cell
+/// the query meets its slab where the renderer draws it.
+#[test]
+fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
+    use pxl_spec::bake::deck::{Builder, Form, POINT_SCALE};
+    let _g = serial();
+    let leaf = top().children()[0];
+    let mut decks = Builder::default();
+    decks.push([([0.0, 10.5], 10), ([40.0, 10.5], 10)], 4 * POINT_SCALE as u8, ground::residential_road, Form::Deck, 0);
+    let void = Terrain::leaf(
+        vec![0; PADDED * PADDED],
+        Ground {
+            cells: vec![sentinel::void; SPAN * SPAN].into(),
+        },
+        decks.finish(),
+    );
+    let paging = resident(&[(leaf, void)]);
+    let (x0, y0, _) = leaf.rect();
+    let at = [x0 + 20.5, y0 + 10.5];
+    let store = Store::default();
+    let access = Access::new(&paging, &store);
+    assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(10.0)));
+    let hit = access.first_hit(&down(at), Detail::Zoom(GROUND_Z)).value().flatten().unwrap();
+    assert_eq!(hit.point[2], 10.0, "{hit:?}");
+}
+
 /// A ray in the frame that runs on round the world meets, past the
 /// antimeridian, the ground and the objects stored under the lane's copy.
 #[test]
@@ -152,13 +213,13 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let _g = serial();
     let n = pxl_spec::space::pyramid::pages_around(GROUND_Z);
     let flat = || {
-        let cells = vec![with_channel(0, GroundChannelKey::LAND, cube_types::land::bare); SPAN * SPAN];
+        let cells = vec![ground::land; SPAN * SPAN];
         Terrain::leaf(vec![5; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
     };
     let page = |x: i64| pxl_spec::space::pyramid::page_at(GROUND_Z, [x, 0]);
     let paging = resident(&[(page(n / 2 - 1), flat()), (page(n / 2), flat())]);
     let seam = pxl_spec::space::pvf3::ROUND / 2.0;
-    let top = Access::new(&paging, &Store::default()).at(&point(-seam + 20.5, 100.5), GROUND_Z).value().unwrap().top;
+    let top = Access::new(&paging, &Store::default()).at(&point(-seam + 20.5, 100.5), GROUND_Z).value().unwrap().top().unwrap();
 
     let mut store = Store::default();
     let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));

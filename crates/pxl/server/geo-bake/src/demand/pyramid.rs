@@ -5,7 +5,7 @@
 
 use super::job::{self, Job, Publication, Runner};
 use super::{Dataset, Failure, Kind};
-use crate::pyramid::{fold_stored, Layer, PageSet};
+use crate::pyramid::{fold_stored, Absent, Layer, PageSet};
 use crate::util::{pack, Level};
 use pxl_spec::bake::quadkey::page_of_name;
 use pxl_spec::space::pyramid::{Page, GROUND_Z};
@@ -15,9 +15,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, name: &str, top: u32) -> Result<Option<String>, Failure> {
-    if data.source.shared().is_some_and(|(shared, _)| shared == name) {
-        return Ok(Some(name.into()));
-    }
     let p = page_of_name(name).ok_or(Failure::BadName)?;
     if p.z < top {
         return Err(Failure::Unavailable);
@@ -56,8 +53,8 @@ fn fault(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Page) -> Pin<Bo
     })
 }
 
-pub(super) fn execute<L: Layer>(p: Page, cache: &Path, out: &Path, leaf: impl FnOnce() -> Result<Option<L>, String>, absent: impl FnOnce() -> Result<L, String>) -> Result<(), String> {
-    let page = if p.z == GROUND_Z { leaf()? } else { fold_stored(&PageSet::new(cache), p, &absent()?)? };
+pub(super) fn execute<L: Layer>(p: Page, cache: &Path, out: &Path, leaf: impl FnOnce() -> Result<Option<L>, String>, absent: &impl Absent<L>) -> Result<(), String> {
+    let page = if p.z == GROUND_Z { leaf()? } else { fold_stored(&PageSet::new(cache), p, absent)? };
     let packet = page.map(|page| pack(&page.encode()?, Level::Live).map_err(|e| e.to_string())).transpose()?;
     job::write_packet(out, packet.as_deref())
 }

@@ -37,125 +37,90 @@
   "terrain": {
     "top": {
       "land": {
-        "bare": {
+        "land": {
           "sourceCreationId": "3fa1408f-bec7-4064-a1e5-7503bb9f0b75",
           "url": "https://image-assets.jianhua.art/public/1788239899203_f274ni.png",
-          "file": "terrain/land_bare.png",
+          "file": "terrain/land_land.png",
           "paletteHex": null,
           "style": "cute-painted-fantasy-v1"
         },
-        "sea": {
-          "sourceCreationId": "46ab5b3c-9a5c-4d9c-a7fc-9c0e651ff142",
-          "url": "https://image-assets.jianhua.art/public/1788247934925_wbrjrk.png",
-          "file": "terrain/land_sea.png",
-          "paletteHex": "#AAD3DF",
-          "style": "cute-painted-fantasy-v1"
-        },
-        "green_deep": {
+        "forest": {
           "sourceCreationId": "1ba7d0e2-86eb-4ec7-ae43-cb4e1a072c51",
           "url": "https://image-assets.jianhua.art/public/1788240099279_h5nu3k.png",
-          "file": "terrain/land_green_deep.png",
-          "paletteHex": "#ADD19E",
+          "file": "terrain/land_forest.png",
+          "paletteHex": "#add19e",
           "style": "cute-painted-fantasy-v1"
         },
-        "green_light": {
+        "park": {
           "sourceCreationId": "ef392e6c-d107-4122-9784-35164fa447d0",
           "url": "https://image-assets.jianhua.art/public/1788243532116_zhqyrj.png",
-          "file": "terrain/land_green_light.png",
-          "paletteHex": "#C8FACC",
+          "file": "terrain/land_park.png",
+          "paletteHex": "#c8facc",
           "style": "cute-painted-fantasy-v1"
         },
         "sand": {
           "sourceCreationId": "49e4f964-e67e-4817-adf0-cda64fc31d89",
           "url": "https://image-assets.jianhua.art/public/1788240067134_tdnvij.png",
           "file": "terrain/land_sand.png",
-          "paletteHex": "#F5E9C6",
+          "paletteHex": "#f5e9c6",
           "style": "cute-painted-fantasy-v1"
         },
         "residential": {
           "sourceCreationId": "66315a08-f248-4ee8-b084-499e046a40d3",
           "url": "https://image-assets.jianhua.art/public/1788240097974_mltqzi.png",
           "file": "terrain/land_residential.png",
-          "paletteHex": "#E0DFDF",
+          "paletteHex": "#e0dfdf",
           "style": "cute-painted-fantasy-v1"
         },
         "commercial": {
           "sourceCreationId": "e28f2ad5-9fbd-4b11-b5d7-60768fd62552",
           "url": "https://image-assets.jianhua.art/public/1788243538152_3vmpyn.png",
           "file": "terrain/land_commercial.png",
-          "paletteHex": "#F2DAD9",
+          "paletteHex": "#f2dad9",
           "style": "cute-painted-fantasy-v1"
         },
         "industrial": {
           "sourceCreationId": "d9065f96-eae0-40c1-92eb-0820c7d45da4",
           "url": "https://image-assets.jianhua.art/public/1788243530803_gfgaqk.png",
           "file": "terrain/land_industrial.png",
-          "paletteHex": "#EBDBE8",
+          "paletteHex": "#ebdbe8",
           "style": "cute-painted-fantasy-v1"
         },
-        "sports": {
+        "pitch": {
           "sourceCreationId": "de79df25-f17b-4701-8082-212c73334de8",
           "url": "https://image-assets.jianhua.art/public/1788243529671_2s6yxd.png",
-          "file": "terrain/land_sports.png",
-          "paletteHex": "#88E0BE",
+          "file": "terrain/land_pitch.png",
+          "paletteHex": "#88e0be",
           "style": "cute-painted-fantasy-v1"
         },
-        "education": {
+        "societal_amenities": {
           "sourceCreationId": "f152f4fc-221e-4d56-a930-de285b725c13",
           "url": "https://image-assets.jianhua.art/public/1788243667574_xf60cs.png",
-          "file": "terrain/land_education.png",
-          "paletteHex": "#FFFFE5",
-          "style": "cute-painted-fantasy-v1"
-        },
-        "medical": {
-          "sourceCreationId": "272941e9-770b-4148-8040-b4f2a100e3b5",
-          "url": "https://image-assets.jianhua.art/public/1788243548021_p2nla8.png",
-          "file": "terrain/land_medical.png",
-          "paletteHex": "#FFFFE5",
-          "style": "cute-painted-fantasy-v1"
-        },
-        "public": {
-          "sourceCreationId": "4b42f6b3-c5e0-4479-b5bd-a3db09308589",
-          "url": "https://image-assets.jianhua.art/public/1788243532608_irhpxc.png",
-          "file": "terrain/land_public.png",
-          "paletteHex": "#FFFFE5",
+          "file": "terrain/land_societal_amenities.png",
+          "paletteHex": "#ffffe5",
           "style": "cute-painted-fantasy-v1"
         },
         "apron": {
           "sourceCreationId": "cd98e0f3-bda7-49a1-acd1-89c9665bf7a5",
           "url": "https://image-assets.jianhua.art/public/1788243554256_8dke04.png",
           "file": "terrain/land_apron.png",
-          "paletteHex": "#DADAE0",
+          "paletteHex": "#dadae0",
           "style": "cute-painted-fantasy-v1"
         },
-        "helipad": {
-          "sourceCreationId": "acd3cd30-2c74-45ae-b07a-93e422d78440",
-          "url": "https://image-assets.jianhua.art/public/1788243659718_g0q6dy.png",
-          "file": "terrain/land_helipad.png",
-          "paletteHex": "#BBBBCC",
+        "parking": {
+          "sourceCreationId": "f74c2b58-588c-4ebb-8448-890be04938fd",
+          "url": "https://image-assets.jianhua.art/public/1788246024497_zb5tce.png",
+          "file": "terrain/land_parking.png",
+          "paletteHex": "#eeeeee",
           "style": "cute-painted-fantasy-v1"
         }
       },
       "water": {
-        "river": {
-          "sourceCreationId": "d993b32f-94f6-483d-bd7e-78c2134f9488",
-          "url": "https://image-assets.jianhua.art/public/1788247942278_dfopi3.png",
-          "file": "terrain/water_river.png",
-          "paletteHex": "#AAD3DF",
-          "style": "cute-painted-fantasy-v1"
-        },
-        "lake": {
-          "sourceCreationId": "b1c5293e-9849-4885-bcec-b69a61fe6206",
-          "url": "https://image-assets.jianhua.art/public/1788247915684_e9lf0r.png",
-          "file": "terrain/water_lake.png",
-          "paletteHex": "#AAD3DF",
-          "style": "cute-painted-fantasy-v1"
-        },
-        "wetland": {
-          "sourceCreationId": "d89d2c23-e472-4096-9ae3-c397305cd41c",
-          "url": "https://image-assets.jianhua.art/public/1788247934742_s31ytm.png",
-          "file": "terrain/water_wetland.png",
-          "paletteHex": "#AAD3DF",
+        "water": {
+          "sourceCreationId": "46ab5b3c-9a5c-4d9c-a7fc-9c0e651ff142",
+          "url": "https://image-assets.jianhua.art/public/1788247934925_wbrjrk.png",
+          "file": "terrain/water_water.png",
+          "paletteHex": "#aad3df",
           "style": "cute-painted-fantasy-v1"
         }
       },
@@ -164,294 +129,217 @@
           "sourceCreationId": "27a21edf-f128-4bf1-8014-a1621470999a",
           "url": "https://image-assets.jianhua.art/public/1788245875228_61mb2m.png",
           "file": "terrain/structure_building.png",
-          "paletteHex": "#D9D0C9",
+          "paletteHex": "#d9d0c9",
           "style": "cute-painted-fantasy-v1"
         },
-        "building_station": {
+        "building_major": {
           "sourceCreationId": "edebea51-8038-411d-8e27-f2d40ef6ffb7",
           "url": "https://image-assets.jianhua.art/public/1788245867189_c0fr2q.png",
-          "file": "terrain/structure_building_station.png",
-          "paletteHex": "#C4B6AB",
-          "style": "cute-painted-fantasy-v1"
-        },
-        "building_medical": {
-          "sourceCreationId": "3215b18e-f4b9-41be-b169-9c3a87cbd6d3",
-          "url": "https://image-assets.jianhua.art/public/1788245866862_7jsw6f.png",
-          "file": "terrain/structure_building_medical.png",
-          "paletteHex": "#D9D0C9",
-          "style": "cute-painted-fantasy-v1"
-        },
-        "building_education": {
-          "sourceCreationId": "5d2198e1-e32c-44d0-9554-eba42a5cd19d",
-          "url": "https://image-assets.jianhua.art/public/1788245869557_apfxi7.png",
-          "file": "terrain/structure_building_education.png",
-          "paletteHex": "#D9D0C9",
-          "style": "cute-painted-fantasy-v1"
-        },
-        "building_public": {
-          "sourceCreationId": "6eef275d-6427-4935-9fa1-7906f69a41bb",
-          "url": "https://image-assets.jianhua.art/public/1788245867860_l5h3tc.png",
-          "file": "terrain/structure_building_public.png",
-          "paletteHex": "#D9D0C9",
+          "file": "terrain/structure_building_major.png",
+          "paletteHex": "#c4b6ab",
           "style": "cute-painted-fantasy-v1"
         }
       },
       "transport": {
-        "road_default": {
+        "residential_road": {
           "sourceCreationId": "860fb7a2-cde6-4887-a759-c639799a1fc8",
           "url": "https://image-assets.jianhua.art/public/1788310646067_udpara.png",
-          "file": "terrain/transport_road_default.png",
-          "paletteHex": "#FFFFFF",
+          "file": "terrain/transport_residential_road.png",
+          "paletteHex": "#ffffff",
           "style": "cute-painted-fantasy-v1"
         },
-        "road_motorway": {
+        "motorway": {
           "sourceCreationId": "4def327a-afc9-4341-8172-1fae3c05728f",
           "url": "https://image-assets.jianhua.art/public/1788310642559_ug9e3q.png",
-          "file": "terrain/transport_road_motorway.png",
-          "paletteHex": "#E892A2",
+          "file": "terrain/transport_motorway.png",
+          "paletteHex": "#e892a2",
           "style": "cute-painted-fantasy-v1"
         },
-        "road_primary": {
+        "primary": {
           "sourceCreationId": "d18155bf-32b8-4753-8ef4-89b0ca31edd2",
           "url": "https://image-assets.jianhua.art/public/1788310647296_er18yf.png",
-          "file": "terrain/transport_road_primary.png",
-          "paletteHex": "#FCD6A4",
+          "file": "terrain/transport_primary.png",
+          "paletteHex": "#fcd6a4",
           "style": "cute-painted-fantasy-v1"
         },
-        "road_secondary": {
+        "secondary": {
           "sourceCreationId": "f535d17b-d34d-4a75-8d5e-f28c71e53648",
           "url": "https://image-assets.jianhua.art/public/1788310646101_5du0tx.png",
-          "file": "terrain/transport_road_secondary.png",
-          "paletteHex": "#F7FABF",
+          "file": "terrain/transport_secondary.png",
+          "paletteHex": "#f7fabf",
           "style": "cute-painted-fantasy-v1"
         },
         "pedestrian": {
           "sourceCreationId": "c1e0d0fd-d5c8-42fa-9c2b-849f4fa83dbe",
           "url": "https://image-assets.jianhua.art/public/1788246031917_3096st.png",
           "file": "terrain/transport_pedestrian.png",
-          "paletteHex": "#DDDDE8",
+          "paletteHex": "#dddde8",
           "style": "cute-painted-fantasy-v1"
         },
-        "parking": {
-          "sourceCreationId": "f74c2b58-588c-4ebb-8448-890be04938fd",
-          "url": "https://image-assets.jianhua.art/public/1788246024497_zb5tce.png",
-          "file": "terrain/transport_parking.png",
-          "paletteHex": "#EEEEEE",
-          "style": "cute-painted-fantasy-v1"
-        },
-        "rail_main": {
+        "rail": {
           "sourceCreationId": "88c7f0ee-dcb4-4379-9829-5f73abc2d22d",
           "url": "https://image-assets.jianhua.art/public/1788309712316_kapoe6.png",
-          "file": "terrain/transport_rail_main.png",
+          "file": "terrain/transport_rail.png",
           "paletteHex": "#707070",
           "style": "cute-painted-fantasy-v1"
         },
-        "rail_subway": {
+        "subway": {
           "sourceCreationId": "6ae9bc33-2955-46fd-b96b-d3ee2dac7511",
           "url": "https://image-assets.jianhua.art/public/1788309914445_m6uv6b.png",
-          "file": "terrain/transport_rail_subway.png",
+          "file": "terrain/transport_subway.png",
           "paletteHex": "#999999",
           "style": "cute-painted-fantasy-v1"
         },
-        "runway": {
+        "aeroway": {
           "sourceCreationId": "6e270afa-7cfa-4fb6-8fc0-f7812b09529b",
           "url": "https://image-assets.jianhua.art/public/1788310653403_9hmltm.png",
-          "file": "terrain/transport_runway.png",
-          "paletteHex": "#BBBBCC",
-          "style": "cute-painted-fantasy-v1"
-        },
-        "taxiway": {
-          "sourceCreationId": "726a8301-9518-4d50-9aef-24f7d0c7cc85",
-          "url": "https://image-assets.jianhua.art/public/1788310650130_t9ewok.png",
-          "file": "terrain/transport_taxiway.png",
-          "paletteHex": "#BBBBCC",
+          "file": "terrain/transport_aeroway.png",
+          "paletteHex": "#bbbbcc",
           "style": "cute-painted-fantasy-v1"
         }
       }
     },
     "side": {
-      "bare": {
+      "land": {
         "sourceCreationId": "f770e5ed-bb6c-4fc4-a826-59e3cfc661b4",
         "url": "https://image-assets.jianhua.art/public/1788243271391_ajtb22.png",
-        "file": "terrain/side_bare.png",
+        "file": "terrain/side_land.png",
         "paletteHex": null,
         "style": "cute-painted-fantasy-v1"
       },
-      "green_deep": {
+      "forest": {
         "sourceCreationId": "ebb6e42a-6113-4207-bb2e-9e9e2c9f443a",
         "url": "https://image-assets.jianhua.art/public/1788240461312_skxejj.png",
-        "file": "terrain/side_green_deep.png",
-        "paletteHex": "#ADD19E",
+        "file": "terrain/side_forest.png",
+        "paletteHex": "#add19e",
         "style": "cute-painted-fantasy-v1"
       },
-      "green_light": {
+      "park": {
         "sourceCreationId": "b2fe634c-9f3b-4e9e-8bb7-eea675f0786a",
         "url": "https://image-assets.jianhua.art/public/1788240460528_2g7082.png",
-        "file": "terrain/side_green_light.png",
-        "paletteHex": "#C8FACC",
+        "file": "terrain/side_park.png",
+        "paletteHex": "#c8facc",
         "style": "cute-painted-fantasy-v1"
       },
-      "sports": {
+      "pitch": {
         "sourceCreationId": "27b5c38d-febe-4b5c-9f45-f6c38ba617e8",
         "url": "https://image-assets.jianhua.art/public/1788240463772_kbgjsl.png",
-        "file": "terrain/side_sports.png",
-        "paletteHex": "#88E0BE",
+        "file": "terrain/side_pitch.png",
+        "paletteHex": "#88e0be",
         "style": "cute-painted-fantasy-v1"
       },
       "sand": {
         "sourceCreationId": "760defce-8dc0-427a-b535-d849d6ca226d",
         "url": "https://image-assets.jianhua.art/public/1788240461661_0vywmu.png",
         "file": "terrain/side_sand.png",
-        "paletteHex": "#F5E9C6",
+        "paletteHex": "#f5e9c6",
         "style": "cute-painted-fantasy-v1"
       },
       "residential": {
         "sourceCreationId": "b8019b46-799b-403b-8279-69929ec26bd9",
         "url": "https://image-assets.jianhua.art/public/1788240461566_fbyhv3.png",
         "file": "terrain/side_residential.png",
-        "paletteHex": "#E0DFDF",
+        "paletteHex": "#e0dfdf",
         "style": "cute-painted-fantasy-v1"
       },
       "commercial": {
         "sourceCreationId": "6df9afe9-95ce-4680-b324-c5e92a53a340",
         "url": "https://image-assets.jianhua.art/public/1788240462408_hsgwwn.png",
         "file": "terrain/side_commercial.png",
-        "paletteHex": "#F2DAD9",
+        "paletteHex": "#f2dad9",
         "style": "cute-painted-fantasy-v1"
       },
       "industrial": {
         "sourceCreationId": "57e60e27-7bd0-4868-9f59-c8ee6215cd1e",
         "url": "https://image-assets.jianhua.art/public/1788240462475_6mh1xi.png",
         "file": "terrain/side_industrial.png",
-        "paletteHex": "#EBDBE8",
+        "paletteHex": "#ebdbe8",
         "style": "cute-painted-fantasy-v1"
       },
-      "education": {
+      "societal_amenities": {
         "sourceCreationId": "fb0a261d-f898-45e0-bcb3-0bbffcaad675",
         "url": "https://image-assets.jianhua.art/public/1788240471255_r8id7d.png",
-        "file": "terrain/side_education.png",
-        "paletteHex": "#FFFFE5",
-        "style": "cute-painted-fantasy-v1"
-      },
-      "medical": {
-        "sourceCreationId": "472ba096-320f-431e-b333-712e80261204",
-        "url": "https://image-assets.jianhua.art/public/1788240461186_1t0v98.png",
-        "file": "terrain/side_medical.png",
-        "paletteHex": "#FFFFE5",
-        "style": "cute-painted-fantasy-v1"
-      },
-      "public": {
-        "sourceCreationId": "941390d1-330b-4434-9d73-9de2d967529d",
-        "url": "https://image-assets.jianhua.art/public/1788240462356_llhjvb.png",
-        "file": "terrain/side_public.png",
-        "paletteHex": "#FFFFE5",
+        "file": "terrain/side_societal_amenities.png",
+        "paletteHex": "#ffffe5",
         "style": "cute-painted-fantasy-v1"
       },
       "apron": {
         "sourceCreationId": "74d2eb91-181c-403e-8977-1434508b802e",
         "url": "https://image-assets.jianhua.art/public/1788240521756_1boz2x.png",
         "file": "terrain/side_apron.png",
-        "paletteHex": "#DADAE0",
-        "style": "cute-painted-fantasy-v1"
-      },
-      "helipad": {
-        "sourceCreationId": "75cab513-b9dd-414f-b49b-db009cc4344f",
-        "url": "https://image-assets.jianhua.art/public/1788240519310_yl3gts.png",
-        "file": "terrain/side_helipad.png",
-        "paletteHex": "#BBBBCC",
+        "paletteHex": "#dadae0",
         "style": "cute-painted-fantasy-v1"
       }
     },
     "bottom": {
-      "bare": {
+      "land": {
         "sourceCreationId": "4784de86-303d-4de7-a7da-da28f446cbdc",
         "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/2672f7de-7685-4529-a599-47935acbd835.png",
-        "file": "terrain/bottom_bare.png",
+        "file": "terrain/bottom_land.png",
         "paletteHex": null,
         "style": "cute-painted-fantasy-v1"
       },
-      "green_deep": {
+      "forest": {
         "sourceCreationId": "36bec971-d8d3-4a94-96bc-488f41031b25",
         "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/ec46172f-a659-4e87-99f7-e20db059fa22.png",
-        "file": "terrain/bottom_green_deep.png",
-        "paletteHex": "#ADD19E",
+        "file": "terrain/bottom_forest.png",
+        "paletteHex": "#add19e",
         "style": "cute-painted-fantasy-v1"
       },
-      "green_light": {
+      "park": {
         "sourceCreationId": "0c1bc181-7ff2-4316-a9c1-153566b352c3",
         "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/e39ef483-fa71-4d2c-a5f9-491c62e7adb8.png",
-        "file": "terrain/bottom_green_light.png",
-        "paletteHex": "#C8FACC",
+        "file": "terrain/bottom_park.png",
+        "paletteHex": "#c8facc",
         "style": "cute-painted-fantasy-v1"
       },
-      "sports": {
+      "pitch": {
         "sourceCreationId": "b1039902-e240-451a-8003-793bcfb88e47",
         "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/5b99cb3c-7adc-4769-bde6-590ca45497f5.png",
-        "file": "terrain/bottom_sports.png",
-        "paletteHex": "#88E0BE",
+        "file": "terrain/bottom_pitch.png",
+        "paletteHex": "#88e0be",
         "style": "cute-painted-fantasy-v1"
       },
       "sand": {
         "sourceCreationId": "185674bf-5f00-4e92-951e-afaaf38e33b6",
         "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/e97cce52-d566-48f8-b02c-70fafc76d759.png",
         "file": "terrain/bottom_sand.png",
-        "paletteHex": "#F5E9C6",
+        "paletteHex": "#f5e9c6",
         "style": "cute-painted-fantasy-v1"
       },
       "residential": {
         "sourceCreationId": "a6da25f7-f190-46d6-a6d6-ea165bd086ba",
         "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/baf3358f-14a2-410b-bc04-e6184b862307.png",
         "file": "terrain/bottom_residential.png",
-        "paletteHex": "#E0DFDF",
+        "paletteHex": "#e0dfdf",
         "style": "cute-painted-fantasy-v1"
       },
       "commercial": {
         "sourceCreationId": "42cc7f72-c05f-4eab-a42b-f2c94894ca60",
         "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/5e38706e-66a4-4a12-a8d4-ab4b027a1349.png",
         "file": "terrain/bottom_commercial.png",
-        "paletteHex": "#F2DAD9",
+        "paletteHex": "#f2dad9",
         "style": "cute-painted-fantasy-v1"
       },
       "industrial": {
         "sourceCreationId": "a57fb713-ce0e-41f1-8373-d5ef8b4619de",
         "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/c47e06e9-3f02-4272-b2ab-8cbab1c3ee5c.png",
         "file": "terrain/bottom_industrial.png",
-        "paletteHex": "#EBDBE8",
+        "paletteHex": "#ebdbe8",
         "style": "cute-painted-fantasy-v1"
       },
-      "education": {
+      "societal_amenities": {
         "sourceCreationId": "2b3adca2-fb7e-445d-999d-c3fb23501214",
         "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/e9896a2d-14d2-4e2a-96aa-2ea3c39cfbc9.png",
-        "file": "terrain/bottom_education.png",
-        "paletteHex": "#FFFFE5",
-        "style": "cute-painted-fantasy-v1"
-      },
-      "medical": {
-        "sourceCreationId": "25df9871-8d2a-4ba6-bc05-a8d8de2044c6",
-        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/bba1a61d-ae55-49be-820e-572ece57059b.png",
-        "file": "terrain/bottom_medical.png",
-        "paletteHex": "#FFFFE5",
-        "style": "cute-painted-fantasy-v1"
-      },
-      "public": {
-        "sourceCreationId": "215d0c91-9b73-40c3-8dae-9eba8733f91a",
-        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/1cf7886d-6a0e-4bab-9f9f-5c541c4b7b07.png",
-        "file": "terrain/bottom_public.png",
-        "paletteHex": "#FFFFE5",
+        "file": "terrain/bottom_societal_amenities.png",
+        "paletteHex": "#ffffe5",
         "style": "cute-painted-fantasy-v1"
       },
       "apron": {
         "sourceCreationId": "6f052ae5-ff35-41d9-b190-da6c4d45a5a8",
         "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/4113cbaa-9017-4365-8f06-86d631e24198.png",
         "file": "terrain/bottom_apron.png",
-        "paletteHex": "#DADAE0",
-        "style": "cute-painted-fantasy-v1"
-      },
-      "helipad": {
-        "sourceCreationId": "517f9f20-8fb6-453d-af3d-ed904b923d31",
-        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/9399c2d7-c871-4dd4-99a1-4d00cc4322e5.png",
-        "file": "terrain/bottom_helipad.png",
-        "paletteHex": "#BBBBCC",
+        "paletteHex": "#dadae0",
         "style": "cute-painted-fantasy-v1"
       }
     }
@@ -462,7 +350,7 @@
         "sourceCreationId": "3d09245c-44b0-4e28-aee4-e486ca502373",
         "url": "https://image-assets.jianhua.art/public/1788315172961_9vlmc0.png",
         "file": "block/block_white.png",
-        "paletteHex": "#F7F7F7",
+        "paletteHex": "#f7f7f7",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
@@ -470,7 +358,7 @@
         "sourceCreationId": "9fca7c3f-06c5-48ac-ae3d-41864559da0e",
         "url": "https://image-assets.jianhua.art/public/1788315269172_djslb9.png",
         "file": "block/block_grey.png",
-        "paletteHex": "#8D8D8D",
+        "paletteHex": "#8d8d8d",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
@@ -478,7 +366,7 @@
         "sourceCreationId": "b69889bb-a4f0-47b2-ba3a-b14878ab3d87",
         "url": "https://image-assets.jianhua.art/public/1788315261438_7t0ont.png",
         "file": "block/block_dark_grey.png",
-        "paletteHex": "#3F3F3F",
+        "paletteHex": "#3f3f3f",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
@@ -494,7 +382,7 @@
         "sourceCreationId": "1e6afa59-0844-4229-9ccf-97901f311fd5",
         "url": "https://image-assets.jianhua.art/public/1788315170220_v1eec5.png",
         "file": "block/block_red.png",
-        "paletteHex": "#B01313",
+        "paletteHex": "#b01313",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
@@ -502,7 +390,7 @@
         "sourceCreationId": "c3ec2969-7bca-4859-b164-69e1bcd2a4eb",
         "url": "https://image-assets.jianhua.art/public/1788315260133_qfhnz0.png",
         "file": "block/block_pink.png",
-        "paletteHex": "#FF8787",
+        "paletteHex": "#ff8787",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
@@ -510,7 +398,7 @@
         "sourceCreationId": "cba0d230-c167-4840-bec7-49a2fa9136c2",
         "url": "https://image-assets.jianhua.art/public/1788315261073_6zmq29.png",
         "file": "block/block_brown.png",
-        "paletteHex": "#572B00",
+        "paletteHex": "#572b00",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
@@ -518,7 +406,7 @@
         "sourceCreationId": "db2c73b0-cf2f-4a3e-905b-7643c3d831ab",
         "url": "https://image-assets.jianhua.art/public/1788315266431_jhpb9n.png",
         "file": "block/block_orange.png",
-        "paletteHex": "#D44E14",
+        "paletteHex": "#d44e14",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
@@ -526,7 +414,7 @@
         "sourceCreationId": "f18e4a30-33ef-4715-9e2e-8f39b5f357e5",
         "url": "https://image-assets.jianhua.art/public/1788315259054_7il26e.png",
         "file": "block/block_yellow.png",
-        "paletteHex": "#FFE611",
+        "paletteHex": "#ffe611",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
@@ -534,7 +422,7 @@
         "sourceCreationId": "6384c139-3357-411f-bc86-08b2be5c2652",
         "url": "https://image-assets.jianhua.art/public/1788315259272_sbdvbc.png",
         "file": "block/block_green.png",
-        "paletteHex": "#60DC1E",
+        "paletteHex": "#60dc1e",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
@@ -550,7 +438,7 @@
         "sourceCreationId": "5ebdff86-4f80-4637-8367-6cda140f3d11",
         "url": "https://image-assets.jianhua.art/public/1788315263432_jolcy2.png",
         "file": "block/block_cyan.png",
-        "paletteHex": "#008C94",
+        "paletteHex": "#008c94",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
@@ -566,7 +454,7 @@
         "sourceCreationId": "d9a5592c-8488-4ebe-9365-8ae894fa2608",
         "url": "https://image-assets.jianhua.art/public/1788315305638_x5znqn.png",
         "file": "block/block_violet.png",
-        "paletteHex": "#57039F",
+        "paletteHex": "#57039f",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
@@ -574,7 +462,7 @@
         "sourceCreationId": "6dcb92ea-a98d-4556-a517-fba5587347a3",
         "url": "https://image-assets.jianhua.art/public/1788315308387_rozdg7.png",
         "file": "block/block_magenta.png",
-        "paletteHex": "#C9036D",
+        "paletteHex": "#c9036d",
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       }

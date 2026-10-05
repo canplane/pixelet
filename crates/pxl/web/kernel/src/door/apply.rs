@@ -118,7 +118,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             Ok(Some(0))
         }
         Command::INPUT_HOLD => {
-            use pxl_spec::cell::object::placeable_cube;
+            use pxl_spec::cell::object::placeable_cube_of;
             use pxl_spec::cell::DecorId;
             let p = abi::InputHold::read(packet(pkt)?)?;
             let mut holding = holding();
@@ -126,10 +126,10 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             holding.object_tier = p.tier;
             match p.tool {
                 abi::ActiveTool::Object => {
-                    holding.object_cube = or_refuse(placeable_cube(p.channel, p.value), Errno::EINVAL)?;
+                    holding.object_cube = or_refuse(placeable_cube_of(p.value), Errno::EINVAL)?;
                 }
                 abi::ActiveTool::Decor => {
-                    holding.decor_id = or_refuse(u8::try_from(p.value).ok().and_then(DecorId::of), Errno::EINVAL)?;
+                    holding.decor_id = or_refuse(u16::try_from(p.value).ok().and_then(DecorId::of), Errno::EINVAL)?;
                 }
                 abi::ActiveTool::Pointer | abi::ActiveTool::Eraser => {}
             }

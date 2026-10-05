@@ -11,7 +11,3 @@ impl Swatch {
         Swatch { rgb }
     }
 }
-
-/// A catalog's channels and types by name, in declaration order, for tools
-/// that print them; nothing at runtime looks one up through it.
-pub type Channels = [(&'static str, &'static [(&'static str, u8)])];

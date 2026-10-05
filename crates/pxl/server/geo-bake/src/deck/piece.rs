@@ -3,10 +3,11 @@
 //! A segment's bridge or tunnel ranges, less what is not built or gone.
 
 use pxl_spec::bake::deck::Form;
-use pxl_spec::space::adapter::epsg3857::{from_db, scale_at, G3857};
+use pxl_spec::space::adapter::epsg3857::G3857;
 
+use crate::deck::way::Polyline;
 use crate::segment::Segment;
-use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, split_ranged, value_at, without, Line};
+use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, split_ranged, value_at, without, Line, Range};
 use crate::terrain::pipeline::overture::policy::{BORE_FLAGS, DECK_FLAGS, UNSEEN_FLAGS};
 use crate::terrain::pipeline::overture::width::{width_m, WayShape};
 use crate::wkb::wkb_to_geometries;
@@ -16,8 +17,8 @@ pub struct Piece {
     pub gers_id: String,
     pub subtype: String,
     pub class: Option<String>,
-    /// OSM's `layer`, an order, not a height; an untagged bridge is 1.
-    pub level: i64,
+    /// OSM's `layer` where the source gives one (`level_rules`).
+    pub layer: Option<i64>,
     pub width_m: f64,
     pub form: Form,
     pub points: Vec<G3857>,
@@ -26,7 +27,8 @@ pub struct Piece {
     /// How far along its way, the way it runs, it starts, in DB coordinates:
     /// what its samples are laid from, so a clipped piece's fall where the whole's do.
     pub start: f64,
-    /// Its way's whole length, in DB coordinates.
+    /// Its own length and its way's whole, in DB coordinates.
+    pub length: f64,
     pub way_length: f64,
 }
 
@@ -40,14 +42,18 @@ pub enum End {
 }
 
 impl End {
+    /// The vertex at `p`. `+ 0.0` makes −0 the bits of 0, as `==` has it.
+    pub fn at(p: [f64; 2]) -> End {
+        End::Vertex((p[0] + 0.0).to_bits(), (p[1] + 0.0).to_bits())
+    }
+
     /// The end at fraction `at` of segment `gers_id`, which runs from `first`
-    /// to `last`. `+ 0.0` makes −0 the bits of 0, as `==` has it.
+    /// to `last`.
     pub fn of(gers_id: &str, [first, last]: [G3857; 2], at: f64) -> End {
-        let vertex = |p: G3857| End::Vertex((p[0] + 0.0).to_bits(), (p[1] + 0.0).to_bits());
         if at == 0.0 {
-            vertex(first)
+            End::at([first[0], first[1]])
         } else if at == 1.0 {
-            vertex(last)
+            End::at([last[0], last[1]])
         } else {
             End::Cut(gers_id.to_string(), (at + 0.0).to_bits())
         }
@@ -56,12 +62,8 @@ impl End {
 
 impl Piece {
     /// Its way and where on it it starts: a piece in no other place.
-    pub fn id(&self) -> (&str, u64) {
-        (&self.gers_id, self.start.to_bits())
-    }
-
-    pub fn end(&self, last: bool) -> &End {
-        &self.ends[usize::from(last)]
+    pub fn id(&self) -> (String, u64) {
+        (self.gers_id.clone(), self.start.to_bits())
     }
 
     /// Whether any of it lies in `[lo, hi]`.
@@ -74,16 +76,6 @@ impl Piece {
         }
         (0..2).all(|k| a[k] <= hi[k] && b[k] >= lo[k])
     }
-
-    /// A length along the piece in DB coordinates, in ground metres.
-    pub fn to_m(&self, db: f64) -> f64 {
-        db / scale_at(from_db(self.points[0][1]))
-    }
-
-    /// Where `m` ground metres along the piece is on its way, as a fraction.
-    pub fn on_way(&self, m: f64) -> f64 {
-        (self.start + m * scale_at(from_db(self.points[0][1]))) / self.way_length
-    }
 }
 
 pub fn pieces_of(row: &Segment, form: Form) -> Vec<Piece> {
@@ -94,10 +86,15 @@ pub fn pieces_of(row: &Segment, form: Form) -> Vec<Piece> {
         Form::Grade => return Vec::new(), // no flag makes one
     };
     let cell = cell_of(length_of(&row.geom_wkb));
-    let deck = without(&flag_ranges(flags, on, cell), &flag_ranges(flags, &less, cell));
+    pieces_over(row, form, &without(&flag_ranges(flags, on, cell), &flag_ranges(flags, &less, cell)))
+}
+
+/// The pieces of `row` over `deck`, its ranges of the form, as fractions of its length.
+pub fn pieces_over(row: &Segment, form: Form, deck: &[Range]) -> Vec<Piece> {
     if deck.is_empty() {
         return Vec::new();
     }
+    let deck = deck.to_vec();
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
         .filter_map(|g| {
@@ -114,11 +111,12 @@ pub fn pieces_of(row: &Segment, form: Form) -> Vec<Piece> {
                 gers_id: row.gers_id.clone(),
                 subtype: row.subtype.clone(),
                 class: row.class.clone(),
-                level: value_at(row.levels.as_deref(), mid).map_or(1, |v| v as i64),
+                layer: value_at(row.levels.as_deref(), mid).map(|v| v as i64),
                 width_m: width_m(&row.subtype, row.class.as_deref(), shape),
                 form,
                 ends: [End::of(&row.gers_id, whole, a), End::of(&row.gers_id, whole, b)],
                 start: a * length,
+                length: Polyline::of(g.points.iter().map(|p| [p[0], p[1]])).length(),
                 way_length: length,
                 points: g.points,
             }

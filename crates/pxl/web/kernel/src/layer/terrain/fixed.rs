@@ -8,8 +8,8 @@
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::deck::{MAX_BOXES, MAX_DECKS, MAX_POINTS};
+use pxl_spec::bake::format::GroundCell;
 use pxl_spec::bake::format::{Block, BLOCK_LANE};
-use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pyramid::{EXTENT, PAGE_CELLS};
 
 use crate::world::paging::Paging;
@@ -27,11 +27,12 @@ const fn deck_lane(count: usize, size: usize) -> u32 {
     ((count * size).div_ceil(64) * 64) as u32
 }
 
-/// Plane order: deck starts, points, tops, width, kind, form, boxes.
-pub const DECK_LANE_BYTES: [u32; 7] = [
+/// Plane order: deck starts, points, tops, width, kind, form, clear, boxes.
+pub const DECK_LANE_BYTES: [u32; 8] = [
     deck_lane(MAX_DECKS + 1, 4),
     deck_lane(MAX_POINTS, 4),
     deck_lane(MAX_POINTS, 2),
+    deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),
     deck_lane(MAX_DECKS, 1),

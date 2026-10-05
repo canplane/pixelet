@@ -15,7 +15,6 @@ import {
   type PointerKind,
   type PointerPhase,
 } from "@/kernel/abi/cmd.spec.ts";
-import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { permissionFollow } from "@platform/sensor.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame, ring_now, send_input, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
@@ -36,8 +35,8 @@ export function kernel_rect(left: f64, top: f64, width: f64, height: f64): void 
   CORE_DOORBELL.send(0, Command.INPUT_RECT, encode_input_rect({ left, top, width, height }));
 }
 
-export function kernel_hold(tool: ActiveTool, channel: GroundChannelKey | null, value: u32, tier: u32): void {
-  send_input(Command.INPUT_HOLD, encode_input_hold({ tool, channel, value, tier }));
+export function kernel_hold(tool: ActiveTool, value: u32, tier: u32): void {
+  send_input(Command.INPUT_HOLD, encode_input_hold({ tool, value, tier }));
 }
 
 export function kernel_open(viewport: () => Viewport): () => void {
