@@ -187,12 +187,16 @@ fn beyond(air: Air) -> vec3f {
 
 /* the air before a point */
 
-// Within 2% of a fine march from orbit to the ground, and a tenth of that near it.
-const AIR_KNOTS: i32 = 8;
+// The light per unit of depth bends sharply only in the ozone: under it three
+// knots err less than eight do from over it, a percent or two. Crossing the
+// line, the whole frame steps by that much at once and shows no flicker.
+fn air_knots() -> i32 {
+  return select(8, 3, atmos_camera_altitude() < atmos_ozone_center() - atmos_ozone_half_width());
+}
 
 // The points `d` km along `dir`, nearest first, unexposed.
 fn air_segments(dir: vec3f, d: vec3f) -> array<Veil, 3> {
-  var v = gather(camera_r(), frame_up(), dir, d, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), AIR_KNOTS);
+  var v = gather(camera_r(), frame_up(), dir, d, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), air_knots());
   for (var i = 0; i < 3; i++) {
     v[i].scattered *= atmos_white();
   }
