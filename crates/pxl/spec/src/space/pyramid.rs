@@ -303,6 +303,11 @@ pub fn wrap_index(side: Scale, x: i64) -> i64 {
     (x + across / 2).rem_euclid(across) - across / 2
 }
 
+/// A cell of `side` named as `wrap_index` names its X.
+pub fn wrap_cell(side: Scale, [x, y, z]: [i64; 3]) -> [i64; 3] {
+    [wrap_index(side, x), y, z]
+}
+
 /// The page at `z` at (x, y), X wrapped around the world.
 pub fn page_at(z: u32, [x, y]: [i64; 2]) -> Page {
     Page::new(z, ivec::gather(wrap_index(page_scale(z), x), y, 0))

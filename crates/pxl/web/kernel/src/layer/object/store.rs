@@ -26,7 +26,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
 use pxl_spec::space::pvf3::{REACH, ROUND};
-use pxl_spec::space::pyramid::{around, span_of, wrap_index, GROUND, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{around, span_of, wrap_cell, wrap_index, GROUND, GROUND_Z, TOP_Z};
 use pxl_spec::space::sparse_tree::mem;
 use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree};
 use pxl_spec::space::v3::{Aabb, V3};
@@ -700,18 +700,6 @@ fn named_top(x: i64) -> (i64, i64) {
     (named, (x - named) / around(INDEX_TOP))
 }
 
-/// A cell of `side` as the folds key it.
-fn named(side: Scale, [x, y, z]: [i64; 3]) -> [i64; 3] {
-    [wrap_index(side, x), y, z]
-}
-
-fn moved(b: &Aabb, dx: f64) -> Aabb {
-    Aabb {
-        min: [b.min[0] + dx, b.min[1], b.min[2]],
-        max: [b.max[0] + dx, b.max[1], b.max[2]],
-    }
-}
-
 /// The coarsest cube the index keeps: as tall as `REACH` and as wide as the
 /// coarsest page, so any query box meets at most eight of them.
 const INDEX_TOP: Scale = {
@@ -833,8 +821,8 @@ impl Store {
                 for x in range(0) {
                     let (named, round) = named_top(x);
                     let (dx, cells) = (round as f64 * ROUND, |s: Scale| round * around(s));
-                    let q = moved(query, -dx);
-                    go(self, &q, finest, INDEX_TOP, [named, y, z], &mut |s, [cx, cy, cz], bound| enter(s, [cx + cells(s), cy, cz], &moved(bound, dx)));
+                    let q = query.moved([-dx, 0.0, 0.0]);
+                    go(self, &q, finest, INDEX_TOP, [named, y, z], &mut |s, [cx, cy, cz], bound| enter(s, [cx + cells(s), cy, cz], &bound.moved([dx, 0.0, 0.0])));
                 }
             }
         }
@@ -966,7 +954,7 @@ impl Store {
                 max: [to[0] as f64 * side, to[1] as f64 * side, REACH.max[2]],
             };
             self.visit_in(&query, target, &mut |at, _| {
-                if let Some(&v) = self.folds.get(&(target, named(target, at))).filter(|_| inside(at[0], at[1])) {
+                if let Some(&v) = self.folds.get(&(target, wrap_cell(target, at))).filter(|_| inside(at[0], at[1])) {
                     if refused.is_ok() {
                         refused = try_insert(out, at, u32::from(v));
                     }
@@ -1037,7 +1025,7 @@ impl Store {
     /// VOID where nothing; a non-voxel value is returned as is.
     pub fn folded_value(&self, scale: Scale, at: [i64; 3]) -> u16 {
         if scale >= BAND {
-            return self.folds.get(&(scale, named(scale, at))).copied().unwrap_or(VOID as u16);
+            return self.folds.get(&(scale, wrap_cell(scale, at))).copied().unwrap_or(VOID as u16);
         }
         let steps = BAND.above(scale) as u32;
         let [x, y, band] = ancestor_of(at, steps);

@@ -39,12 +39,9 @@ pub fn nearest(x: f64, about: f64) -> f64 {
 
 /// `b` moved round the world to the copy nearest `about`.
 pub fn nearest_box(b: &Aabb, about: f64) -> Aabb {
-    if !b.min[0].is_finite() || !b.max[0].is_finite() {
+    let x = (b.min[0] + b.max[0]) / 2.0;
+    if !x.is_finite() {
         return *b;
     }
-    let shift = nearest(b.min[0], about - (b.max[0] - b.min[0]) / 2.0) - b.min[0];
-    Aabb {
-        min: [b.min[0] + shift, b.min[1], b.min[2]],
-        max: [b.max[0] + shift, b.max[1], b.max[2]],
-    }
+    b.moved([nearest(x, about) - x, 0.0, 0.0])
 }

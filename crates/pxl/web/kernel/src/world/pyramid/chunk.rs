@@ -9,7 +9,7 @@ use pxl_spec::space::hierarchy::{ancestor_of, child_of, offset_in, parent_of, Sc
 use pxl_spec::space::indexer::{L2, L3};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_scale, chunk_span_of, page_at, page_rows, wrap_index, Page, CHUNK_CELLS, PAGE_CELLS, TOP_Z};
+use pxl_spec::space::pyramid::{chunk_scale, chunk_span_of, page_at, page_rows, wrap_cell, Page, CHUNK_CELLS, PAGE_CELLS, TOP_Z};
 use pxl_spec::space::v3::Aabb;
 
 pub const CHILDREN: usize = 8;
@@ -54,10 +54,9 @@ impl Chunk {
     /// As PVF3 names it: the copy the lane holds, which `of` makes. A chunk
     /// the view counts on round the world is the same chunk under this name.
     pub fn named(self) -> Chunk {
-        let [x, y, h] = self.at;
         Chunk {
             z: self.z,
-            at: [wrap_index(chunk_scale(self.z), x), y, h],
+            at: wrap_cell(chunk_scale(self.z), self.at),
         }
     }
 
