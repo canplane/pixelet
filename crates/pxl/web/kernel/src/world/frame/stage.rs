@@ -31,22 +31,12 @@ use crate::text::text_raster;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::stage::set_host_frame_stat;
 use crate::world::frame::resolution::resolution_observe;
-use crate::world::observation::observation;
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
 /// season, as Google Earth and Cesium keep one mosaic.
 const EARTH: Asset = Asset::sky_earth_07_webp;
 
 use crate::world::frame::view::{globe_anchor_local, view};
-
-/// How far the view has gone over to the Earth's picture: over the octave
-/// the eye rises through to the observation's far edge, past which the floor
-/// holds nothing.
-pub(crate) fn earth_share() -> f64 {
-    let Some(o) = observation() else { return 0.0 };
-    let over = (o.eye[2] - o.ground).max(0.0);
-    (libm::log2(over / o.far) + 1.0).clamp(0.0, 1.0)
-}
 
 const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");
 
@@ -80,7 +70,6 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { rim_cfg::INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
     s[STAGE_AT::RESOLUTION] = resolution;
-    s[STAGE_AT::EARTH_SHARE] = earth_share();
 }
 
 pub fn stage_render() {

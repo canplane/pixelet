@@ -184,9 +184,9 @@ pub fn source(kind: u32) -> &'static str {
 
 pub const FRAME_FLOATS: usize = 88;
 /// Frame uniform field offsets in floats, in frame.wgsl's order; a test holds it to the struct.
-pub const FRAME_AT: [usize; 19] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 51, 52, 68, 76, 80, 84];
+pub const FRAME_AT: [usize; 18] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84];
 #[cfg(test)]
-const FRAME_FIELDS: [&str; 19] = [
+const FRAME_FIELDS: [&str; 18] = [
     "view_proj",
     "camera_pos",
     "edge_strength",
@@ -200,7 +200,6 @@ const FRAME_FIELDS: [&str; 19] = [
     "vignette",
     "ao_strength",
     "screen_ao",
-    "earth_share",
     "light_view_proj",
     "other_dir",
     "planet",

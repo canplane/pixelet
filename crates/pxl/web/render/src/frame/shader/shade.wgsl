@@ -20,12 +20,8 @@ fn interleaved_gradient(frag: vec2f) -> f32 {
 // `open` scales all of the light, the sun's too: no shadow is drawn by default,
 // and over the sky's light alone a corner went unmarked in the sun.
 fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, frag: vec2f, lit: f32, open: vec3f, seen: Seen) -> vec3f {
-  // The ground gives a pixel to the Earth past it by leaving it, and the sky
-  // pass draws the Earth there, the one place it is drawn: near the ground's
-  // drawn edge, a smoothstep on distance from the eye, a sphere, so the band
-  // hides it toward the screen's corners as at its middle; and everywhere as
-  // the view goes over to the Earth's picture.
-  let fade = max(smoothstep(frame_fog_near(), frame_fog_far(), length(world_pos - frame_camera_pos())), frame_earth_share());
+  // Leave pixels to the sky pass's Earth only near the drawn edge.
+  let fade = smoothstep(frame_fog_near(), frame_fog_far(), length(world_pos - frame_camera_pos()));
   if (interleaved_gradient(frag) < fade) {
     discard;
   }
