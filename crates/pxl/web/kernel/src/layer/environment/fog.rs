@@ -58,24 +58,22 @@ pub fn view_reach() -> f64 {
     reach_at(eye_height())
 }
 
-/// Never under 1, so a street view keeps its precision and a zoom out is only
-/// a change of scale.
+/// Against a street view's reach, never under 1, so a street view keeps its
+/// precision and a zoom out is only a change of scale.
 fn scale(reach: f64) -> f64 {
-    (reach / render_cfg::FOG_FAR).max(1.0)
+    (reach / doublings_reach_at(0.0)).max(1.0)
 }
 
-/// Fade start and end. Where the data runs out before the reach, the band
-/// crossfades over the edge of what is drawn.
+/// Where the screen's occlusion fades out, ending where drawing does.
 pub fn band_at(height: f64, drawn: f64) -> (f64, f64) {
     let far = reach_at(height).min(drawn);
-    (far * (render_cfg::FOG_NEAR / render_cfg::FOG_FAR), far)
+    (far * render_cfg::BAND_START, far)
 }
 
 pub fn near_clip_at(height: f64) -> f64 {
     camera_cfg::projection::NEAR * scale(reach_at(height))
 }
 
-/// Past the reach, so the band completes inside the frustum.
 pub fn far_clip_at(height: f64) -> f64 {
-    reach_at(height) * (render_cfg::FAR_CLIP / render_cfg::FOG_FAR)
+    reach_at(height) * render_cfg::FAR_CLIP
 }

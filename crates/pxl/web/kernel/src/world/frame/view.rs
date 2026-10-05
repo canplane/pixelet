@@ -16,7 +16,6 @@ use pxl_spec::space::v3::{add3, V3};
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{pose, rebase};
-use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
 use crate::world::frame::coord::origin_for;
 use pxl_spec::space::lod;
@@ -64,7 +63,7 @@ impl View {
             height: 1.0,
             fov: camera_cfg::projection::FOV,
             near: camera_cfg::projection::NEAR,
-            far: render_cfg::FAR_CLIP,
+            far: crate::layer::environment::fog::doublings_reach_at(0.0) * crate::layer::environment::config::render_cfg::FAR_CLIP,
             view_matrix: mat4(),
             inv_view_matrix: mat4(),
             proj: mat4(),

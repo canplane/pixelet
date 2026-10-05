@@ -1,16 +1,12 @@
 // pxl-kernel/layer/environment/config.rs
 
-/// The fog band's and far clip's tuning, kept as ratios of FOG_FAR: the band
-/// fades the ground into the sky's own light where the nearer of the horizon
-/// and the drawn zooms ends it, so the edge is no seam.
+/// The band at the drawn edge and the far clip, as shares of the reach.
 pub mod render_cfg {
-    /// 1.5 × FOG_FAR, so the band completes inside the frustum.
-    pub const FAR_CLIP: f64 = 9216.0;
-    /// 0.75 × FOG_FAR. Narrow: it only hides the edge; the haze is the air's.
-    pub const FOG_NEAR: f64 = 4608.0;
-    /// Five zooms coarser than z16 draw step 2^5, which the LOD rule wants out
-    /// to 192 · 2^5.
-    pub const FOG_FAR: f64 = 6144.0;
+    /// Where the screen's occlusion starts to fade, before it would darken
+    /// the edge against the sky. Narrow: the haze is the air's.
+    pub const BAND_START: f64 = 0.75;
+    /// Past the reach, so the band completes inside the frustum.
+    pub const FAR_CLIP: f64 = 1.5;
 }
 
 /// Fresnel rim highlight, applied to everything lit since one shader lights
