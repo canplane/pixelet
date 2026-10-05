@@ -3,15 +3,14 @@
 //! The atmosphere's uniform and its tables: transmittance, multiple scattering
 //! and the sky's irradiance once per device; the sun's and moon's sky views
 //! redrawn only when the light's height or the camera's altitude moves (the
-//! table is kept relative to the light's azimuth); and every frame the aerial
-//! perspective along the screen's rays and the exposure.
+//! table is kept relative to the light's azimuth); and every frame the exposure.
 
 use pxl_spec::bake::earth_page::{EARTH_TEXELS, EARTH_Z};
 use pxl_spec::space::lod::{fault_radius, FAULT_ACROSS, FAULT_PAGES};
 use pxl_spec::space::pyramid::pages_around;
 use pxl_spec::space::v3::V3;
 
-use crate::frame::shader::record::{PIPELINE_ATMOS_AERIAL, PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
+use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::clouds::CloudField;
@@ -74,16 +73,15 @@ const _: () = assert!(EARTH_LAYERS < 1 << PAGE_BITS && FAULT_PAGES <= 32 / PAGE_
 /// The size bake_earth writes the Earth's global picture at.
 const EARTH_SIZE: (u32, u32) = (2048, 1024);
 
-/// Transmittance, multiple scattering, sky view, exposure, irradiance, aerial
-/// perspective, moonlit sky.
-pub(crate) const SIZES: [(u32, u32); 7] = [(256, 64), (32, 32), (192, 108), (1, 1), (64, 16), (1024, 32), (192, 108)];
+const TABLES: usize = 6;
+/// Transmittance, multiple scattering, sky view, exposure, irradiance, moonlit sky.
+pub(crate) const SIZES: [(u32, u32); TABLES] = [(256, 64), (32, 32), (192, 108), (1, 1), (64, 16), (192, 108)];
 pub(crate) const TRANSMITTANCE: usize = 0;
 pub(crate) const MULTISCATTER: usize = 1;
 pub(crate) const SKY_VIEW: usize = 2;
 const EXPOSURE_TEXEL: usize = 3;
 pub(crate) const IRRADIANCE: usize = 4;
-pub(crate) const AERIAL: usize = 5;
-const MOON_VIEW: usize = 6;
+const MOON_VIEW: usize = 5;
 
 /// About a thousandth of a radian near the horizon, where the colors move fastest.
 const SUN_MU_STEP: f32 = 2e-4;
@@ -95,9 +93,9 @@ pub struct Atmosphere {
     uniform: u32,
     words: [f32; ATMOS_FLOATS],
     sampler: u32,
-    views: [u32; 7],
-    passes: [Built; 6],
-    groups: [u32; 7],
+    views: [u32; TABLES],
+    passes: [Built; 5],
+    groups: [u32; TABLES],
     baked: bool,
     drawn_for: Option<(f32, f32)>,
     moon_drawn_for: Option<(f32, f32)>,
@@ -108,7 +106,7 @@ pub struct Atmosphere {
 }
 
 impl Atmosphere {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> Atmosphere {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> Atmosphere {
         let uniform = object();
         g.buffer(uniform, word_bytes(ATMOS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let white = model::white();
@@ -149,9 +147,9 @@ impl Atmosphere {
 
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
-        let mut textures = [0; 7];
-        let mut views = [0; 7];
-        for k in 0..7 {
+        let mut textures = [0; TABLES];
+        let mut views = [0; TABLES];
+        for k in 0..TABLES {
             textures[k] = object();
             let (w, h) = SIZES[k];
             g.texture(textures[k], w, h, 1, format::RGBA16F, 1, texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT);
@@ -164,7 +162,6 @@ impl Atmosphere {
             PIPELINE_ATMOS_SKY_VIEW,
             PIPELINE_ATMOS_EXPOSURE,
             PIPELINE_ATMOS_IRRADIANCE,
-            PIPELINE_ATMOS_AERIAL,
         ]
         .map(|id| pipelines.build(g, id, format::RGBA16F));
 
@@ -174,7 +171,7 @@ impl Atmosphere {
             sampler,
             views,
             passes,
-            groups: [0; 7],
+            groups: [0; TABLES],
             baked: false,
             drawn_for: None,
             moon_drawn_for: None,
@@ -213,15 +210,13 @@ impl Atmosphere {
         };
         // The exposure reads the air but what it writes.
         let unexposed: Vec<u32> = air.as_chunks::<5>().0.iter().map(|c| c[0]).filter(|&b| b != 13).collect();
-        let reads: [(usize, Vec<u32>); 7] = [
+        let reads: [(usize, Vec<u32>); TABLES] = [
             (TRANSMITTANCE, of(&[8], &[])),
             (MULTISCATTER, of(&medium, &[])),
             (IRRADIANCE, of(&medium, &[multiscatter])),
             // The views are measured from the frame's up.
             (SKY_VIEW, of(&medium, &[multiscatter, light(0.0), frame])),
             (MOON_VIEW, of(&medium, &[multiscatter, light(1.0), frame])),
-            // The screen's rays are the sky's words.
-            (AERIAL, of(&medium, &[multiscatter, frame, buffer_entry(1, sky_buffer)])),
             (EXPOSURE_TEXEL, of(&unexposed, &[frame])),
         ];
         for (k, entries) in reads {
@@ -242,7 +237,7 @@ impl Atmosphere {
         e[30..35].copy_from_slice(&[16, resource::VIEW, self.earth.view, 0, 0]);
         e[35..40].copy_from_slice(&[17, resource::VIEW, self.earth_pages.1, 0, 0]);
         e[40..45].copy_from_slice(&[18, resource::VIEW, self.views[IRRADIANCE], 0, 0]);
-        e[45..50].copy_from_slice(&[19, resource::VIEW, self.views[AERIAL], 0, 0]);
+        e[45..50].copy_from_slice(&[12, resource::VIEW, self.views[MULTISCATTER], 0, 0]);
         e
     }
 
@@ -328,8 +323,6 @@ impl Atmosphere {
             self.table(g, encoder, MOON_VIEW, stamp);
             self.moon_drawn_for = Some(moon);
         }
-        // After the views they read, before the frame that shows them.
-        self.table(g, encoder, AERIAL, stamp);
         self.table(g, encoder, EXPOSURE_TEXEL, stamp);
     }
 

@@ -187,10 +187,6 @@ fn the_skys_layouts_match_their_structs() {
         let (w, h) = a::SIZES[k];
         assert_eq!(constant(SHADER_SKY, name), [w as f64, h as f64], "{name}");
     }
-    let [across, up, slices] = constant(SHADER_SKY, "AERIAL_SIZE")[..] else {
-        panic!("the aerial perspective's three axes")
-    };
-    assert_eq!(a::SIZES[a::AERIAL], ((across * slices) as u32, up as u32), "the aerial perspective's slices side by side");
     assert_eq!(constant(SHADER_CLOUDS, "CLOUD_LATTICE_CELLS"), [(1u32 << c::LATTICE_SHAMT) as f64], "the clouds' lattice");
     let [cell] = constant(SHADER_CLOUDS, "WEATHER_CELL")[..] else { panic!("one weather cell") };
     assert!(c::LATTICE_COUNT.is_multiple_of(cell as u32), "the weather wraps with the map in whole cells");

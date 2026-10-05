@@ -145,6 +145,17 @@ fn meets_ground(r: f32, mu: f32) -> bool {
   return meets_sphere(r, mu, atmos_bottom_radius());
 }
 
+// From radius `r` at cosine `mu`, `t` km along the ray.
+fn radius_along(r: f32, mu: f32, t: f32) -> f32 {
+  return sqrt(max(r * r + 2.0 * r * mu * t + t * t, 0.0));
+}
+
+// Over the ground, `rt` the radius there: the difference of two radii lost a
+// short step near the ground.
+fn height_along(r: f32, mu: f32, t: f32, rt: f32) -> f32 {
+  return max(r - atmos_bottom_radius() + t * (2.0 * r * mu + t) / (rt + r), 0.0);
+}
+
 fn to_top(r: f32, mu: f32) -> f32 {
   return max(-r * mu + sqrt(max(r * r * (mu * mu - 1.0) + atmos_top_radius() * atmos_top_radius(), 0.0)), 0.0);
 }
@@ -187,8 +198,6 @@ const TRANSMITTANCE_SIZE: vec2f = vec2f(256.0, 64.0);
 const MULTISCATTER_SIZE: vec2f = vec2f(32.0, 32.0);
 const SKY_VIEW_SIZE: vec2f = vec2f(192.0, 108.0);
 const IRRADIANCE_SIZE: vec2f = vec2f(64.0, 16.0);
-// Hillaire's aerial perspective: across, up, and slices side by side along each ray.
-const AERIAL_SIZE: vec3f = vec3f(32.0, 32.0, 32.0);
 
 // Bruneton's: rows where transmittance changes.
 fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
@@ -234,7 +243,8 @@ fn horizon_dip(r: f32) -> f32 {
   return acos(clamp(v_horizon / r, -1.0, 1.0));
 }
 
-// Hillaire's: zenith squared toward the horizon, azimuth toward the sun.
+// Hillaire's directions: across, the azimuth from the light's, squared toward
+// it; up, the zenith, squared toward the horizon from either side.
 fn sky_view_uv(r: f32, mu: f32, light_cos: f32) -> vec2f {
   let beta = horizon_dip(r);
   let zenith_horizon = PI - beta;
@@ -249,4 +259,27 @@ fn sky_view_uv(r: f32, mu: f32, light_cos: f32) -> vec2f {
   }
   let x = sqrt(clamp(-light_cos * 0.5 + 0.5, 0.0, 1.0));
   return vec2f(coord_of(x, SKY_VIEW_SIZE.x), coord_of(y, SKY_VIEW_SIZE.y));
+}
+
+// The direction at `unit`, `sky_view_uv`'s from 0 to 1, up +z and the light's azimuth +x.
+fn view_dir(r: f32, unit: vec2f) -> vec3f {
+  let beta = horizon_dip(r);
+  let zenith_horizon = PI - beta;
+  var mu: f32;
+  if (unit.y < 0.5) {
+    let c = 1.0 - 2.0 * unit.y;
+    mu = cos(zenith_horizon * (1.0 - c * c));
+  } else {
+    let c = 2.0 * unit.y - 1.0;
+    mu = cos(zenith_horizon + beta * c * c);
+  }
+  let light_cos = 1.0 - 2.0 * unit.x * unit.x;
+  let s = sqrt(max(1.0 - mu * mu, 0.0));
+  return vec3f(s * light_cos, s * sqrt(max(1.0 - light_cos * light_cos, 0.0)), mu);
+}
+
+// A light at cosine `mu_s` over the horizon, as `view_dir` measures it.
+fn view_light(mu_s: f32) -> vec3f {
+  let m = clamp(mu_s, -1.0, 1.0);
+  return vec3f(sqrt(max(1.0 - m * m, 0.0)), 0.0, m);
 }
