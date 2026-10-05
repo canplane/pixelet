@@ -37,7 +37,9 @@ pub fn is_unknown(at: &Pvf3) -> bool {
 /// that face, on the floor under it.
 pub fn stand(at: &Pvf3) -> Pvf3 {
     match Access::now().floor_under(at) {
-        Answer::Exact(top) => stand_over(at, top),
+        Answer::Exact(Some(top)) => stand_over(at, top),
+        // Nothing to stand on: the point keeps its height.
+        Answer::Exact(None) => *at,
         Answer::Coarser(..) | Answer::Nothing(_) => unknown_z(at),
     }
 }
@@ -56,19 +58,20 @@ fn stand_over(at: &Pvf3, top: f64) -> Pvf3 {
     with_z(at, pvf3::from_real(over(top)))
 }
 
-/// An unknown Z on the surface of the finest ground known there.
-fn standing(at: &Pvf3) -> Answer<Pvf3> {
+/// An unknown Z on the surface of the finest ground known there; none where
+/// nothing stands.
+fn standing(at: &Pvf3) -> Answer<Option<Pvf3>> {
     if !is_unknown(at) {
-        return Answer::Exact(*at);
+        return Answer::Exact(Some(*at));
     }
-    Access::now().surface_support(at).map(|top| stand_over(at, top))
+    Access::now().surface_support(at).map(|top| top.map(|top| stand_over(at, top)))
 }
 
 /// Where `at` is drawn in the frame at `origin`; at `held`'s height where nothing is known.
 pub fn resolve(at: &Pvf3, held: V3, origin: IVec) -> V3 {
     match standing(at) {
-        Answer::Exact(p) | Answer::Coarser(p, _) => canonical_to_local(&p, origin),
-        Answer::Nothing(_) => {
+        Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => canonical_to_local(&p, origin),
+        Answer::Exact(None) | Answer::Coarser(None, _) | Answer::Nothing(_) => {
             let l = canonical_to_local(at, origin);
             [l[0], l[1], held[2]]
         }
@@ -77,7 +80,7 @@ pub fn resolve(at: &Pvf3, held: V3, origin: IVec) -> V3 {
 
 /// An unknown Z once z16 gives it.
 pub fn exact(at: &Pvf3) -> Option<Pvf3> {
-    standing(at).exact()
+    standing(at).exact().flatten()
 }
 
 /// `resolve` for a camera's target, writing z16's Z into it once known.
@@ -113,7 +116,8 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) ->
         Passage::Blocked => return *from,
     }
     match Access::now().floor_under(&at) {
-        Answer::Exact(top) => stand_over(&at, top),
+        Answer::Exact(Some(top)) => stand_over(&at, top),
+        Answer::Exact(None) => at,
         _ => unknown_z(&at),
     }
 }

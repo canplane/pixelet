@@ -37,7 +37,7 @@ pub fn reach_at(height: f64) -> f64 {
 /// datum where nothing is held.
 fn ground_under(at: [f64; 3]) -> f64 {
     let point = projection::project(at[0], at[1], at[2]);
-    Access::now().floor_under(&point).value().unwrap_or(0.0)
+    Access::now().floor_under(&point).value().flatten().unwrap_or(0.0)
 }
 
 /// Where the sky draws its own ground, so the terrain does not stand over it.

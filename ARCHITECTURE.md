@@ -69,18 +69,11 @@ The Web Mercator adapter (EPSG:3857) gives the unit its meaning: `1u` is one L1 
 
 Terrain is the baked, canonical geography — what the source says is there, changed only by a rebake — and objects are the world people author and change. That is the line between them, not dimension: terrain holds 3D things too, and an object may never move. Terrain is a **surface**, which is 2.5D, and the **decks** carried above it, which are not; the camera, the observation and the scheduler know neither, and read terrain through its chunks, its index and its query.
 
-Terrain arrives as L3 pages: four rasters of ground type, and one of elevation, padded so that bicubic sampling can reach past a page's edge — the surface — and the page's decks.
+Terrain arrives as L3 pages: a raster of ground and one of elevation, padded so that bicubic sampling can reach past a page's edge — the surface — and the page's decks.
 
-| Channel     | Contents                                  |
-| ----------- | ----------------------------------------- |
-| `LAND`      | ground surface: bare, green, sand, rock … |
-| `WATER`     | inland water: river, lake, wetland …      |
-| `TRANSPORT` | roads, paths, railways                    |
-| `STRUCTURE` | buildings and constructed surfaces        |
+A ground cell is one byte, a look from OpenStreetMap Carto, the style openstreetmap.org draws with: `forest`, `residential_road`, `building`, each Carto's color, numbered in the order Carto paints (`spec/pxl/spec/cell/cube_type.json`). The numbers are one value space with the objects': the looks are a subset of what a placed block can be, so a block of forest stores forest's number, and what only an object can be — air, the placed colors, decor — lies past the byte. `0` is void and `255` unknown, so memory filled with `0xFF` reads as ground no bake wrote. Each look carries the kind the renderer draws it as — land, water, transport or a structure — and may stand a step off its height: water and a building one below (the catalog's `shift`).
 
-The rows are in the one order the channels have (`GROUND_CH_KEYS`, `pxl-spec bake/format.rs`): the order a page stores them in and the order a cell is painted in, a later channel's non-void type winning, so a building that overlaps a road keeps its cells.
-
-Sea is a `LAND` value (`sea = 129`, `spec/pxl/spec/cell/cube_type.json`). A page stores each channel as a dense index into that channel's few types rather than the catalog's number, so all four pack into one 16-bit cell (`pxl-spec bake/pack.rs`). The channels are rasterized from Overture's Buildings, Transportation and Base themes, the coastline from Base's `water`. A cell is painted by what covers its center, and only what is seen from above: a tunnel, an indoor passage, a way not built or gone and a ferry's route are left off it. A type may stand a step off its height — water and a building one below (the catalog's `shift`).
+The bake maps Overture's Buildings, Transportation and Base rows to a look as Carto maps the OpenStreetMap tag each class comes from, and paints them in Carto's order — its layers, landcover, water, highway areas, roads, aeroways, but buildings over the roads; within a layer its own sort, a larger area first or a road's `z`; then the source's id, so no row order decides a cell (`pxl-geo-bake overture/policy.rs`, `terrain/pipeline/feature.rs` `Rank`). The coastline comes from Base's `water`, and it alone says where the sea is. A cell is painted by what covers its center, and only what is seen from above: a tunnel, an indoor passage, a way not built or gone and a ferry's route are left off it. Why a cell is a Carto look and not channels of what the land is used for is [the ground is a Carto palette](./decision/20261005-the-ground-is-a-carto-palette.md).
 
 A deck is a way carried over the surface — a bridge, a viaduct — kept as a line with a top along it, a width and the type its surface shows (`pxl-spec bake/deck.rs`): sparse, stacked where an interchange stacks, and nothing on a page that has none. A chunk draws the decks over its columns as runs above its ground — a slab under each top, a pier down to the ground where one stands — and the index lane and the query count them as they count the ground. Their heights are solved from a page and the eight around it, structure by structure, from where each comes down to the ground and what it has to clear (`pxl-geo-bake deck.rs`); why decks are lines in the terrain page and not a lane or objects is [ways off the ground](./decision/20261001-ways-off-the-ground.md).
 
@@ -129,7 +122,7 @@ Overture rows and the elevation raster, from PostGIS
   → deck solve (every bridge and tunnel reaching the page, solved whole: its lines, and the ranges of ways they draw)
   → overture/policy (row → feature: its shape, the cell it paints, its rank)
   → corridor (the gap between two ways that are one strip of road, paved)
-  → ground (features rasterized into the ground channels, the coast's land over the sea)
+  → ground (features rasterized into one look a cell, the coast's land over the sea)
   → encode_terrain (elevation + ground + lines → XTP)
 ```
 
@@ -137,7 +130,7 @@ Rasterizing is the bulk of it: polygons are filled even-odd with holes, and line
 
 Every land page is baked once into a versioned prefix. Open ocean is one shared page, since every one of them would be identical.
 
-Those pages are the leaves, z16. A view from farther away wants fewer, coarser pages, so the bake stacks coarser zooms on them: a page at z covers the 2 × 2 pages at z + 1 under it at half their resolution and is the same record as a leaf, named by its place in its zoom's page grid as a quadkey (`bake/quadkey.rs`), so that a page's name is one digit shorter than its children's and a prefix of them. It is folded from the zoom below with no database in the loop — each ground channel by a majority of the four cells under it, the elevation by an average that reads past the page's edge — and the fold is `pxl-spec`'s (`bake/fold.rs`), one function for the offline bake and the dev tile server. Open water folds to itself, which is what lets the one ocean page serve every zoom.
+Those pages are the leaves, z16. A view from farther away wants fewer, coarser pages, so the bake stacks coarser zooms on them: a page at z covers the 2 × 2 pages at z + 1 under it at half their resolution and is the same record as a leaf, named by its place in its zoom's page grid as a quadkey (`bake/quadkey.rs`), so that a page's name is one digit shorter than its children's and a prefix of them. It is folded from the zoom below with no database in the loop — the ground by a majority of the four cells under it, the elevation by an average that reads past the page's edge — and the fold is `pxl-spec`'s (`bake/fold.rs`), one function for the offline bake and the dev tile server. Open water folds to itself, which is what lets the one ocean page serve every zoom.
 
 The dev tile server (`geo-bake demand/`) serves every pyramid layer the same way (`demand/pyramid.rs`): a leaf baked from the layer's source when it is asked for, a page above it folded from the zoom below exactly as the offline bake folds (`pyramid.rs`), and nothing past `--top-z`, the one guard every layer shares. With `--baked` it bakes nothing and serves finished bakes from a directory as they are — at the published version, or the version a request names as a production build's does — so a bake is looked at before it is uploaded.
 

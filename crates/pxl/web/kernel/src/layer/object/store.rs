@@ -13,11 +13,7 @@ use pxl_spec::bake::constant::{
     band_cell_z, band_of, in_cell, pack_pos, unpack_pos, BandZ, CellZ, BAND, BAND_CELL_SHAMT, BAND_UNITS, CELL, OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, STEP_UNITS, U_PER_CELL,
 };
 use pxl_spec::bake::fold::majority;
-use pxl_spec::bake::ground::shown_ground;
-use pxl_spec::bake::pack::channel_of;
-use pxl_spec::cell::object::{
-    decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube,
-};
+use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::hierarchy::{ancestor_of, at_walk_order, child_of, first_descendant_of, offset_in, parent_of, walk_order, Scale};
@@ -521,20 +517,18 @@ fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
     }
 }
 
-/// Whether a whole-cell terrain-styled pick only undoes a carve: the terrain
-/// must *show* that ground there (shown_ground, as the shader resolves it;
-/// matching a channel alone turned a bare-ground cube into road), and the
-/// cell must already hold an AIR leaf (ground type is per column, so without
-/// this every cube stacked on matching ground was dropped).
+/// Whether a whole-cell pick of a look only undoes a carve: the terrain must
+/// show that look there, and the cell must already hold an AIR leaf (the look
+/// is per column, so without this every cube stacked on matching ground was
+/// dropped).
 fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
     if size < U_PER_CELL {
         return false;
     }
-    let Some(source) = terrain_style_cube_source(cube) else { return false };
+    let PlaceableCube::Ground(look) = cube else { return false };
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
     let Some(ground) = Access::now().at(at, GROUND_Z).exact() else { return false };
-    let shown = shown_ground(|ch| channel_of(ground.cell, ch) as u32);
-    if shown.channel != source.channel || shown.type_id != source.terrain_num_id {
+    if ground.cell != look as u8 {
         return false;
     }
     object_value_is_air(read_state(at))
@@ -561,7 +555,7 @@ pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Dra
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
 /// baked terrain, which has no leaf of its own to delete.
 pub fn place_air(at: &Pvf3, size: f64) {
-    write_object_value(at, size, cube_types::common::air as u32);
+    write_object_value(at, size, cube_types::object::air as u32);
 }
 
 pub fn remove(at: EntryAt) {
@@ -592,9 +586,9 @@ fn band_is_empty(tree: &SparseTree<u16>) -> bool {
     empty
 }
 
-pub const VOID: u32 = cube_types::common::void as u32;
-pub const AIR: u32 = cube_types::common::air as u32;
-pub const UNKNOWN: u32 = cube_types::common::unknown as u32;
+pub const VOID: u32 = cube_types::sentinel::void as u32;
+pub const AIR: u32 = cube_types::object::air as u32;
+pub const UNKNOWN: u32 = cube_types::sentinel::unknown as u32;
 const _: () = assert!(VOID == 0);
 
 pub(crate) struct Column {

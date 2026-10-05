@@ -14,5 +14,5 @@ pub mod decor;
 pub mod object;
 pub mod r#type;
 
-pub use cube::{cube_types, GroundChannelKey};
+pub use cube::{cube_types, Kind};
 pub use decor::{decor_types, DecorId};

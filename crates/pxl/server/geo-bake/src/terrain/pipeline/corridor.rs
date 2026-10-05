@@ -7,11 +7,9 @@
 
 use std::collections::HashMap;
 
-use pxl_spec::bake::format::GroundChannelKey;
-use pxl_spec::bake::way;
-use pxl_spec::cell::cube::cube_types;
+use pxl_spec::bake::way::{self, PATHS};
 
-use crate::terrain::pipeline::feature::{Feature, Joins};
+use crate::terrain::pipeline::feature::{Feature, Joins, Layer, Rank};
 
 pub(crate) const GAP: f64 = 1.0;
 
@@ -27,7 +25,7 @@ struct Seg {
 }
 
 pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
-    let line = |f: &Feature| !f.closed && f.cell.key == GroundChannelKey::TRANSPORT;
+    let line = |f: &Feature| !f.closed && f.rank.layer == Layer::Road;
     let gap = GAP;
     let mut buckets: HashMap<(i64, i64), Vec<Seg>> = HashMap::new();
     let mut widest = 0.0f64;
@@ -43,9 +41,10 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
     let mut out = Vec::new();
     for (i, f) in feats.iter().enumerate().filter(|(_, f)| line(f)) {
         let Some(joins) = f.joins else { continue };
-        let partner = |g: &Feature| match joins {
-            Joins::Road => g.joins != Some(Joins::Road) && g.cell.value != cube_types::transport::pedestrian,
-            Joins::Carriageway => g.joins == Some(Joins::Carriageway) && g.cell == f.cell,
+        let partner = |other: &Feature| match joins {
+            // A sidewalk paves to a road, never to another path.
+            Joins::Road => other.joins != Some(Joins::Road) && !PATHS.contains(&other.cell),
+            Joins::Carriageway => other.joins == Some(Joins::Carriageway) && other.cell == f.cell,
         };
         let reach = way::reach(f.width);
         let mut strip: Vec<([f64; 2], [f64; 2])> = Vec::new();
@@ -70,7 +69,8 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
                 let search = reach + widest + gap;
                 let (bx, by) = ((p[0] / BUCKET).floor() as i64, (p[1] / BUCKET).floor() as i64);
                 let span = (search / BUCKET).ceil() as i64;
-                let mut best: Option<(f64, [f64; 2])> = None;
+                // The nearest partner; an equal distance falls to its rank, then the point, so no row order picks it.
+                let mut best: Option<(f64, &Rank, [f64; 2])> = None;
                 for x in bx - span..=bx + span {
                     for y in by - span..=by + span {
                         for s in buckets.get(&(x, y)).into_iter().flatten() {
@@ -87,14 +87,21 @@ pub fn corridor_fills(feats: &[Feature]) -> Vec<Feature> {
                             let q = [s.a[0] + dx * u, s.a[1] + dy * u];
                             let d = libm::hypot(p[0] - q[0], p[1] - q[1]);
                             let between = d - reach - way::reach(g.width);
-                            if between > 0.0 && between < gap && best.is_none_or(|(bd, _)| d < bd) {
-                                best = Some((d, q));
+                            let nearer = |&(bd, br, bq): &(f64, &Rank, [f64; 2])| {
+                                d.total_cmp(&bd)
+                                    .then_with(|| g.rank.cmp(br))
+                                    .then_with(|| q[0].total_cmp(&bq[0]))
+                                    .then_with(|| q[1].total_cmp(&bq[1]))
+                                    .is_lt()
+                            };
+                            if between > 0.0 && between < gap && best.as_ref().is_none_or(nearer) {
+                                best = Some((d, &g.rank, q));
                             }
                         }
                     }
                 }
                 match best {
-                    Some((_, q)) => strip.push((p, q)),
+                    Some((_, _, q)) => strip.push((p, q)),
                     None => flush(&mut strip, &mut out),
                 }
             }
@@ -112,7 +119,10 @@ fn fill(f: &Feature, quad: [[f64; 2]; 4]) -> Feature {
         width: f.width,
         cut: f.cut,
         cell: f.cell,
-        rank: f.rank.saturating_sub(1),
+        rank: Rank {
+            order: f.rank.order - 1,
+            ..f.rank.clone()
+        },
         joins: None,
     }
 }

@@ -6,8 +6,8 @@
 //! every such page shares one decoded tile, fetched under its own category.
 
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
+use pxl_spec::bake::format::GroundCell;
 use pxl_spec::bake::format::{decode_terrain_into, Block, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
-use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pyramid::Page;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;

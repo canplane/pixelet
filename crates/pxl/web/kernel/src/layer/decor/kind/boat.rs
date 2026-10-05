@@ -3,8 +3,7 @@
 //! Boats on open river and lake water; wetland is too shallow.
 
 use pxl_spec::asset::ingested::Asset;
-use pxl_spec::bake::format::GroundChannelKey;
-use pxl_spec::cell::cube_types::Water;
+use pxl_spec::cell::cube_types::ground as g;
 use pxl_spec::cell::decor_types::Decor;
 
 use crate::layer::decor::build::DecorVariantAsset;
@@ -38,7 +37,7 @@ pub const DEF: Kind = Kind {
         density: 0.002,
         orientation: DecorOrientationMode::Random,
     },
-    rules: DecorRules::on(GroundChannelKey::WATER, &[Water::river as u8, Water::lake as u8]),
+    rules: DecorRules::on(&[g::water]),
     variants: &VARIANTS,
     decor_id: Some(Decor::boat),
 };

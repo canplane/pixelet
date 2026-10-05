@@ -12,7 +12,7 @@ _Started on December 15, 2025._
 
 The client is a small operating system. A Rust **kernel** holds the world, schedules its own work and draws; a TypeScript **shell** drives it the way a driver drives a device, and decides nothing about the world. The same two run in a browser tab and in a device app: in the tab the kernel is one WebAssembly module drawing through the page's WebGPU, and on a device it is linked into a React Native app and draws through wgpu. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./ARCHITECTURE.xpute.md), which is generic and knows nothing of any of this. What follows is pixelet's own.
 
-- **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 512² blocks, four channels of ground type and one elevation raster each. A page is fetched into one of a fixed number of records in memory and kept there until a page the view wants needs the room.
+- **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 512² blocks, a ground raster of OpenStreetMap Carto's looks and an elevation raster each. A page is fetched into one of a fixed number of records in memory and kept there until a page the view wants needs the room.
 - **One coordinate, 96 bits of fixed point.** A position is two packed words — three integer fields for which block, three 8-bit fractions for where inside it — so it resolves to 1/256 of a block. The arithmetic is integer, so it is the same bits on every machine, and the X field is cyclic, so the world wraps at the longitude seam.
 - **The view is cubes about the eye.** What is drawn is decided from the eye alone, in three dimensions: a chunk is a cube of its zoom, 64 of its cells a side, and it is split into eight while its cells would cover too much of the screen. A cube with nothing in it is never made, so the air costs nothing, and everything a view asks for — pages fetched, chunks built, records given up — goes in one order out from the eye. Storage stays 2D; only the addresses are 3D.
 - **Terrain and what you build meet only when a chunk is built.** The chunk is a cube, Minecraft's section at 64 blocks a side rather than 16. The ground is a dense raster for a whole page; placed objects are a sparse tree per 64³ band, and an object belongs to the cube its band is in. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
@@ -33,7 +33,7 @@ A block on screen has come a long way: a provider's geometry, a bake, a fetch, a
                               │
                               ▼
                    a page of 512² blocks:
-             four ground channels and elevation
+             a Carto look a cell, and elevation
 ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┼ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
                               ▼             fetched by version, into a record
                       a terrain record

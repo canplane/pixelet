@@ -25,7 +25,7 @@ import { openModal } from "@/app/modal.tsx";
 import { chatFits, holdTier, holdTool, useInHand, useUiStore } from "@/app/store/ui.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
-import { type PlaceableCube, placeableCubeId, sameCube } from "@/catalog/cell/mod.ts";
+import { type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
 
@@ -196,7 +196,7 @@ function SwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<SizeGe
   const ref = useRef<View | null>(null);
   const swatchCue = useUiStore((s) => s.swatchCue);
   useEffect(() => {
-    if (swatchCue.cube && sameCube(swatchCue.cube, cube) && ref.current) sizes.cue(ref.current, swatchCue.open);
+    if (swatchCue.cube === cube && ref.current) sizes.cue(ref.current, swatchCue.open);
   }, [swatchCue]);
 
   const handlers = useSizeGesture(ref, {

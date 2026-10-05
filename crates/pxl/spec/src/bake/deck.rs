@@ -66,10 +66,10 @@ pub fn headroom_m(kind: u8) -> f64 {
 }
 
 fn by_kind(kind: u8, [road, path, rail]: [f64; 3]) -> f64 {
-    use crate::cell::cube::cube_types::transport as t;
+    use crate::cell::cube::cube_types::ground as g;
     match kind {
-        k if k == t::rail_main || k == t::rail_subway => rail,
-        k if k == t::pedestrian => path,
+        k if k == g::rail || k == g::subway => rail,
+        k if super::way::PATHS.contains(&k) => path,
         _ => road,
     }
 }

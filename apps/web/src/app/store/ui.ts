@@ -2,10 +2,10 @@
 
 import { create } from "zustand";
 
-import type { i32, u32, u8 } from "@xpute/core/abi/word.ts";
+import type { i32, u16, u32 } from "@xpute/core/abi/word.ts";
 import type { HoldingState } from "@/kernel/abi/cmd.spec.ts";
-import { cube_types, GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
-import { decorKinds, type PlaceableCube, placeableCubes, sameCube } from "@/catalog/cell/mod.ts";
+import { cube_types } from "@/catalog/cell/cube_type.spec.ts";
+import { decorKinds, type PlaceableCube, placeableCubes } from "@/catalog/cell/mod.ts";
 import { ActiveTool, Command, encode_chat_send } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_fits, kernel_hold, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
@@ -20,16 +20,16 @@ const MAX_CHAT_LINES = 10;
 let nextChatLineId = 0;
 
 // The hotbar's MRU list, across cube and decor; the tool says which catalog a pick's number is in.
-type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
+type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u16 };
 
 function isSamePick(a: RecentPick, b: RecentPick): boolean {
-  if (a.tool === ActiveTool.Object) return b.tool === ActiveTool.Object && sameCube(a.cube, b.cube);
+  if (a.tool === ActiveTool.Object) return b.tool === ActiveTool.Object && a.cube === b.cube;
   return b.tool === ActiveTool.Decor && a.kind === b.kind;
 }
 
 // A stored pick may name something the catalog no longer gives out.
 function isKnownPick(pick: RecentPick): boolean {
-  if (pick.tool === ActiveTool.Object) return placeableCubes.some((cube) => sameCube(cube, pick.cube));
+  if (pick.tool === ActiveTool.Object) return placeableCubes.includes(pick.cube);
   return pick.tool === ActiveTool.Decor && decorKinds.includes(pick.kind);
 }
 
@@ -44,7 +44,7 @@ interface UiState {
   // Advanced only by selectCube/selectDecor, which also switch the tool.
   recentPicks: RecentPick[];
   selectCube: (cube: PlaceableCube) => void;
-  selectDecor: (kind: u8) => void;
+  selectDecor: (kind: u16) => void;
 
   chatLines: ChatLine[];
   appendChatLine: (text: string) => void;
@@ -68,13 +68,13 @@ interface SwatchCue {
 
 // One per placeable genre, so a fresh hotbar hints at everything placeable; as many as the hotbar holds.
 const SEED: readonly RecentPick[] = [
-  { tool: ActiveTool.Object, cube: { channel: null, type: cube_types.block.white } },
-  { tool: ActiveTool.Object, cube: { channel: GroundChannelKey.LAND, type: cube_types.land.bare } },
-  { tool: ActiveTool.Object, cube: { channel: GroundChannelKey.WATER, type: cube_types.water.river } },
-  { tool: ActiveTool.Object, cube: { channel: GroundChannelKey.STRUCTURE, type: cube_types.structure.building } },
-  { tool: ActiveTool.Object, cube: { channel: GroundChannelKey.TRANSPORT, type: cube_types.transport.road_default } },
-  { tool: ActiveTool.Object, cube: { channel: null, type: cube_types.block.red } },
-  { tool: ActiveTool.Object, cube: { channel: null, type: cube_types.block.blue } },
+  { tool: ActiveTool.Object, cube: cube_types.object.white },
+  { tool: ActiveTool.Object, cube: cube_types.ground.land },
+  { tool: ActiveTool.Object, cube: cube_types.ground.water },
+  { tool: ActiveTool.Object, cube: cube_types.ground.building },
+  { tool: ActiveTool.Object, cube: cube_types.ground.residential_road },
+  { tool: ActiveTool.Object, cube: cube_types.object.red },
+  { tool: ActiveTool.Object, cube: cube_types.object.blue },
   { tool: ActiveTool.Decor, kind: decorKinds[0] },
 ];
 
@@ -109,7 +109,7 @@ function save(s: UiState): void {
 /** What is held stays as the tool or the tier changes. */
 function hold(tool: ActiveTool, tier: u32): void {
   const h = kernel_snapshot().holding;
-  kernel_hold(tool, h.channel, tool === ActiveTool.Decor ? h.decor : h.cube, tier);
+  kernel_hold(tool, tool === ActiveTool.Decor ? h.decor : h.cube, tier);
 }
 
 export function holdTool(tool: ActiveTool): void {
@@ -120,20 +120,16 @@ export function holdTier(tier: u32): void {
   hold(kernel_snapshot().holding.tool, tier);
 }
 
-export function heldCube(h: HoldingState): PlaceableCube {
-  return { channel: h.channel, type: h.cube };
-}
-
 const stored = load();
 
 export const useUiStore = create<UiState>()((set) => ({
   recentPicks: stored.picks,
   selectCube: (cube) => {
-    kernel_hold(ActiveTool.Object, cube.channel, cube.type, kernel_snapshot().holding.tier);
+    kernel_hold(ActiveTool.Object, cube, kernel_snapshot().holding.tier);
     set((state) => ({ recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Object, cube }) }));
   },
   selectDecor: (kind) => {
-    kernel_hold(ActiveTool.Decor, null, kind, kernel_snapshot().holding.tier);
+    kernel_hold(ActiveTool.Decor, kind, kernel_snapshot().holding.tier);
     set((state) => ({ recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Decor, kind }) }));
   },
 
@@ -146,7 +142,7 @@ export const useUiStore = create<UiState>()((set) => ({
     const h = kernel_snapshot().holding;
     if (h.tool !== ActiveTool.Object) return;
     holdTier(Math.min(OBJECT_TIERS - 1, Math.max(0, h.tier + delta)));
-    useUiStore.getState().cueSwatch(heldCube(h), true);
+    useUiStore.getState().cueSwatch(h.cube, true);
   },
 
   chatLines: [],
@@ -164,7 +160,7 @@ export function chatFits(text: string): boolean {
 }
 
 export function useInHand(pick: RecentPick): boolean {
-  return useKernel(({ holding: h }) => pick.tool === ActiveTool.Object ? h.tool === ActiveTool.Object && sameCube(heldCube(h), pick.cube) : h.tool === ActiveTool.Decor && h.decor === pick.kind);
+  return useKernel(({ holding: h }) => pick.tool === ActiveTool.Object ? h.tool === ActiveTool.Object && h.cube === pick.cube : h.tool === ActiveTool.Decor && h.decor === pick.kind);
 }
 
 useUiStore.subscribe((s, prev) => {

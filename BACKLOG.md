@@ -18,6 +18,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   ([20260928-what-is-drawn-is-what-the-screen-covers.md](./decision/20260928-what-is-drawn-is-what-the-screen-covers.md),
   "the steps, measured").
 
+## P1
+
+- **POI and reverse geocode follow Carto.** The ground is Carto's looks
+  (decision/20261005-the-ground-is-a-carto-palette.md); a place's icon and
+  its kind's label are still Overture's taxonomy as the search list names it
+  (`pxl-geo-spec overture/properties.rs`), where Carto's `amenity-points.mss`
+  gives each tag an icon and a color.
+
 ## P2
 
 - **A bore's approach that stops short of a bridge.** At Uidong (37.2977,

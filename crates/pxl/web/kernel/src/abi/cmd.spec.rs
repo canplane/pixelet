@@ -828,9 +828,7 @@ impl CompanionState {
 /// What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held.
 pub struct HoldingState {
     pub tool: ActiveTool,
-    /// The held cube's ground channel; absent for a flat color.
-    pub channel: Option<pxl_spec::bake::format::GroundChannelKey>,
-    /// The held cube's type in its channel.
+    /// The held cube, by its number in the catalog's one value space.
     pub cube: u32,
     pub decor: u32,
     pub tier: u32,
@@ -838,11 +836,10 @@ pub struct HoldingState {
 
 impl HoldingState {
     /// The children it is written as.
-    pub const FIELDS: u32 = 5;
+    pub const FIELDS: u32 = 4;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.tool as u32));
-        w.u32(self.channel.map(|m| m as u32));
         w.u32(Some(self.cube));
         w.u32(Some(self.decor));
         w.u32(Some(self.tier));
@@ -1195,9 +1192,7 @@ impl InputPointer {
 #[derive(Clone, Copy, Debug)]
 pub struct InputHold {
     pub tool: ActiveTool,
-    /// The ground channel the held cube stands in for; absent for a flat color, a decor kind or nothing.
-    pub channel: Option<pxl_spec::bake::format::GroundChannelKey>,
-    /// The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive.
+    /// The held cube or decor kind, by its number in the catalog's one value space (cube_type.json).
     pub value: u32,
     /// The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs).
     pub tier: u32,
@@ -1208,12 +1203,8 @@ impl InputHold {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputHold {
             tool: ActiveTool::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
-            channel: match f.at(1)?.opt() {
-                Some(c) => Some(pxl_spec::bake::format::GroundChannelKey::of(integer::<u8>(c.get_number()?)?).ok_or_else(|| unknown())?),
-                None => None,
-            },
-            value: integer::<u32>(f.at(2)?.get_number()?)?,
-            tier: integer::<u32>(f.at(3)?.get_number()?)?,
+            value: integer::<u32>(f.at(1)?.get_number()?)?,
+            tier: integer::<u32>(f.at(2)?.get_number()?)?,
         })
     }
 }
