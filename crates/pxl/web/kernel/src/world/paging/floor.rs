@@ -8,7 +8,7 @@
 //! Its zoom is the source's declared top (`declare`), never guessed from
 //! what fails. Until declared, nothing is observed.
 
-use pxl_spec::space::lod::{fault_radius, pages_within, FAULT_PAGES};
+use pxl_spec::space::lod::{pages_within, FAULT_PAGES};
 use pxl_spec::space::observation::Observation;
 use pxl_spec::space::pyramid::{Page, TOP_Z};
 
@@ -43,10 +43,9 @@ impl Fallback for TopRing {
     const PAGES: u32 = FAULT_PAGES;
 
     fn floor(o: &Observation, each: impl FnMut(Page)) {
-        let far = o.far.min(fault_radius(o.top));
         let over = (o.eye[2] - o.ground).max(0.0);
-        if over < far {
-            pages_within(o.top, [o.eye[0], o.eye[1]], (far * far - over * over).sqrt()).for_each(each);
+        if over < o.far {
+            pages_within(o.top, [o.eye[0], o.eye[1]], (o.far * o.far - over * over).sqrt()).for_each(each);
         }
     }
 }
