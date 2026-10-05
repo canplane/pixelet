@@ -35,16 +35,16 @@ fn air_knot(a: f32, b: f32, low: f32, u: f32) -> f32 {
 // of the sun's.
 fn gather(r: f32, up: vec3f, dir: vec3f, d: vec3f, sun: vec3f, moon: vec3f, moon_light: f32, knots: i32) -> array<Veil, 3> {
   let mu = dot(up, dir);
-  let low = ray_low(r, mu);
   let top = atmos_top_radius();
   let end = short_of_ground(r, mu, d.z);
+  let low = ray_low(r, mu, end);
   let a = min(max(-r * mu - sqrt(max(r * r * (mu * mu - 1.0) + top * top, 0.0)), 0.0), end);
   let lowest = clamp(-r * mu, a, end);
   let sun_phase = vec2f(rayleigh_phase(dot(dir, sun)), mie_phase(dot(dir, sun)));
   let moon_phase = vec2f(rayleigh_phase(dot(dir, moon)), mie_phase(dot(dir, moon)));
-  var da = depth_along(r, mu, low, a);
   // No air lies between the eye and where the ray enters it.
-  let eye = da;
+  var through = vec3f(1.0);
+  var da = depth_along(r, mu, low, a);
   var ja = per_depth(r, up, dir, a, sun, sun_phase, moon, moon_phase, moon_light);
   var light = vec3f(0.0);
   var out: array<Veil, 3>;
@@ -58,15 +58,18 @@ fn gather(r: f32, up: vec3f, dir: vec3f, d: vec3f, sun: vec3f, moon: vec3f, moon
     while (read < 2 && d[read] < end && d[read] <= tb) {
       let x = clamp(depth_along(r, mu, low, d[read]) - da, vec3f(0.0), y);
       let rise = select(vec3f(0.0), x / y, y > vec3f(0.0));
-      out[read] = Veil(exp(eye - da - x), light + exp(eye - da) * (ja * x * extinction_weight(x) + (jb - ja) * rise * (extinction_weight(x) - exp(-x))));
+      let left = exp(-x);
+      out[read] = Veil(through * left, light + through * (ja * x * extinction_weight(x) + (jb - ja) * rise * (extinction_weight(x) - left)));
       read++;
     }
-    light += exp(eye - da) * (ja * y * extinction_weight(y) + (jb - ja) * (extinction_weight(y) - exp(-y)));
+    let left = exp(-y);
+    light += through * (ja * y * extinction_weight(y) + (jb - ja) * (extinction_weight(y) - left));
+    through *= left;
     da = db;
     ja = jb;
   }
   for (; read < 3; read++) {
-    out[read] = Veil(exp(eye - da), light);
+    out[read] = Veil(through, light);
   }
   return out;
 }

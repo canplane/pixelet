@@ -112,7 +112,7 @@ fn air_along(dir: vec3f) -> Air {
   if (air.ground) {
     // The light is the sky view's, gathered to the ground along this ray.
     let d = to_land(r, mu);
-    let low = ray_low(r, mu);
+    let low = ray_low(r, mu, d);
     air.end = exp(depth_along(r, mu, low, 0.0) - depth_along(r, mu, low, d));
     air.normal = normalize(frame_up() * r + dir * d);
     air.octaves = log2(d / atmos_km_per_u() / atmos_earth_reach());
