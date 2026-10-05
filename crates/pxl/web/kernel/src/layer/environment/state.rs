@@ -5,8 +5,8 @@
 
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_render::look::globe::Globe;
-use pxl_spec::space::adapter::{epsg3857, epsg4326};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::adapter::epsg3857;
+use pxl_spec::space::adapter::epsg4326::G4326;
 use pxl_spec::space::v3::{len3, V3};
 
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
@@ -25,7 +25,7 @@ use xpute_runtime::global::Global;
 const ENV_CLOCK_FRAME_MS: f64 = 2000.0;
 
 struct Environment {
-    observed_center: Option<Pvf3>,
+    observed_center: Option<G4326>,
     observed_lat: f64,
     observed_lon: f64,
     clock_frame_at: f64,
@@ -61,8 +61,7 @@ pub fn map_environment_step() {
     let center = globe_anchor();
     if center != e.observed_center {
         e.observed_center = center;
-        if let Some(c) = center {
-            let g = epsg4326::unproject(c.i, c.f);
+        if let Some(g) = center {
             e.observed_lon = g[0];
             e.observed_lat = g[1];
         }

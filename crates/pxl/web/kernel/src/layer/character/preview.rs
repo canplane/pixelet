@@ -5,7 +5,6 @@
 //! model is registered again at one unit tall, since the cases compare
 //! silhouettes, not scale.
 
-use pxl_spec::space::pvf3::ivec;
 
 use crate::io::load::{load_image, Load};
 use crate::kernel::{kernel, with_world};
@@ -80,8 +79,7 @@ pub fn preview_step(ctx: &mut TickContext) {
     }
     // Under the map origin: the case reads the actor's place from an f32
     // uniform, which cannot resolve a unit-tall model millions of units out.
-    let origin = view().origin;
-    let mut at = ivec::to_v3(origin);
+    let mut at = view().chart();
     at[2] -= CASE_DEPTH_U;
     for case in &mut c.cases {
         if case.model.is_none() {

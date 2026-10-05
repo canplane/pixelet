@@ -566,7 +566,7 @@ impl Scheduler {
     /// The finest drawn chunk holding `p`, as zooms: its cells', its tier's,
     /// and those of the page it is read from.
     pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
-        let s = (TOP_Z..=GROUND_Z).rev().find_map(|z| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk == Chunk::of(z, p)))?;
+        let s = (TOP_Z..=GROUND_Z).rev().find_map(|z| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk.named() == Chunk::of(z, p)))?;
         Some((s.z() as i32, s.layout.map(|(scale, _)| zoom_of(scale)), s.sources.read_from.map(|z| z as i32)))
     }
 

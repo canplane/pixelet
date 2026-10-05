@@ -11,9 +11,8 @@ use pxl_spec::space::indexer::{L2, L3};
 use pxl_spec::space::lod::fault_radius;
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::{band, Bounds, Contents, DemandEstimator, Frustum, Observation, Requirement};
-use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_scale, page_scale, span_of, Page, GROUND, GROUND_Z};
+use pxl_spec::space::pyramid::{chunk_scale, page_at, page_scale, span_of, Page, GROUND, GROUND_Z};
 use pxl_spec::space::v3::Aabb;
 
 use crate::kernel::kernel;
@@ -33,7 +32,7 @@ pub fn eye() -> Option<[f64; 3]> {
 
 pub fn frustum_of_view() -> Frustum {
     let v = view();
-    v.frustum.about(ivec::to_v3(v.origin).map(|c| -c))
+    v.frustum.about(v.chart().map(|c| -c))
 }
 
 /// Out to where the air ends the ground or the source's top ends, whichever
@@ -107,8 +106,7 @@ struct Node {
 
 /// None where no terrain page over the node is resident.
 fn read(z: u32, node: (Scale, [i64; 2])) -> Option<Node> {
-    let [x, y] = ancestor_of(node.1, page_scale(z).above(node.0) as u32);
-    let page = Page::new(z, ivec::gather(x, y, 0));
+    let page = page_at(z, ancestor_of(node.1, page_scale(z).above(node.0) as u32));
     let relief = Access::now().relief(page, node).value()?;
     Some(Node {
         ground: relief.extent,

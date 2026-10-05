@@ -48,7 +48,7 @@ pub fn draws_band(k: PyramidChunk, band: BandZ) -> bool {
 /// units of a ±32,768 lane, so the height fits 11 bits and the zoom, counted
 /// from the top, the 4 above.
 fn chunk_key(k: PyramidChunk) -> i64 {
-    let [x, y, h] = k.node().1;
+    let [x, y, h] = k.named().node().1;
     ivec::gather(x, y, ((k.z() - TOP_Z) as i64) << 11 | (h & 0x7ff)) as i64
 }
 
@@ -81,5 +81,7 @@ const NEAR: [(i64, i64); 9] = [(-1, -1), (0, -1), (1, -1), (-1, 0), (0, 0), (1, 
 fn folds_into(z: u32, base: IVec, col: IVec) -> bool {
     let (cell, o, last) = (GROUND.side_at(z), FROM_L2_IDX(col), i64::from(L1.count_in(L2)) - 1);
     let across = |b: i64, o: i64| cell.index(o) <= cell.index(b) + CHUNK_CELLS as i64 && cell.index(o + last) >= cell.index(b) - 1;
-    across(ivec::X(base), ivec::X(o)) && across(ivec::Y(base), ivec::Y(o))
+    // The column's copy nearest the chunk, so a fold across the antimeridian is met.
+    let ox = pxl_spec::space::pvf3::nearest(ivec::X(o) as f64, ivec::X(base) as f64) as i64;
+    across(ivec::X(base), ox) && across(ivec::Y(base), ivec::Y(o))
 }

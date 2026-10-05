@@ -6,7 +6,7 @@
 
 use super::adapter::epsg3857::side_at_zoom;
 use super::pvf3::REACH;
-use super::pyramid::{page_at, span_of, Page, GROUND_Z, TOP_Z};
+use super::pyramid::{page_at, page_rows, span_of, Page, GROUND_Z, TOP_Z};
 use super::v3::Aabb;
 
 /// The criterion as a distance per cell side: a zoom is drawn from `SPLIT`
@@ -88,7 +88,8 @@ pub const FAULT_PAGES: u32 = FAULT_ACROSS * FAULT_ACROSS;
 
 /// Every page at `z` with ground within `radius` of `at`.
 pub fn pages_within(z: u32, at: [f64; 2], radius: f64) -> impl Iterator<Item = Page> {
-    squares_within(z, at, radius).map(move |xy| page_at(z, xy))
+    let ys = page_rows(z);
+    squares_within(z, at, radius).filter(move |&[_, y]| ys.contains(&y)).map(move |xy| page_at(z, xy))
 }
 
 /// `pages_within` before X wraps.

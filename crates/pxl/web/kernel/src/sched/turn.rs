@@ -47,7 +47,7 @@ fn companion_props() -> Option<CompanionProps> {
     let map_center = crate::control::camera::controller::map_center()?;
     let map_origin = view().origin;
     let local = crate::world::frame::coord::canonical_to_local(&map_center, map_origin);
-    let o = pxl_spec::space::pvf3::ivec::to_v3(map_origin);
+    let o = view().chart();
     Some(CompanionProps {
         map_origin,
         center: [o[0] + local[0], o[1] + local[1]],

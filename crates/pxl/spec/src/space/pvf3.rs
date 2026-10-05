@@ -17,8 +17,11 @@ pub use ivec::IVec;
 pub use pvec::{Fvec, Ivec, PVec, PVecTraits};
 pub use pvf3::Pvf3;
 
-use self::core::{IVEC_Y_W, IVEC_Z_W};
+use self::core::{IVEC_X_W, IVEC_Y_W, IVEC_Z_W};
 use super::v3::Aabb;
+
+/// One round of the world: the X lane's whole span, in units.
+pub const ROUND: f64 = (1u64 << IVEC_X_W) as f64;
 
 /// Every point a position can name, in units. X is unbounded: the lane is one world round.
 pub const REACH: Aabb = {
@@ -28,3 +31,20 @@ pub const REACH: Aabb = {
         max: [f64::INFINITY, y, z],
     }
 };
+
+/// The copy of `x` nearest `about`: where a stored X stands for an eye at `about`.
+pub fn nearest(x: f64, about: f64) -> f64 {
+    about + (x - about + ROUND / 2.0).rem_euclid(ROUND) - ROUND / 2.0
+}
+
+/// `b` moved round the world to the copy nearest `about`.
+pub fn nearest_box(b: &Aabb, about: f64) -> Aabb {
+    if !b.min[0].is_finite() || !b.max[0].is_finite() {
+        return *b;
+    }
+    let shift = nearest(b.min[0], about - (b.max[0] - b.min[0]) / 2.0) - b.min[0];
+    Aabb {
+        min: [b.min[0] + shift, b.min[1], b.min[2]],
+        max: [b.max[0] + shift, b.max[1], b.max[2]],
+    }
+}
