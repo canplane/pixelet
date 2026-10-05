@@ -22,7 +22,7 @@ fn light_at(r: f32, up: vec3f) -> Light {
   var l: Light;
   l.sun = frame_sun_color() * sun_transmittance(r, dot(up, frame_sun_dir())) * e;
   l.other = frame_other_color() * sun_transmittance(r, dot(up, frame_other_dir())) * e;
-  let sky = sky_irradiance(r, dot(up, atmos_sun_dir())) + sky_irradiance(r, dot(up, atmos_moon_dir())) * atmos_moon_light();
+  let sky = sky_ground(r, dot(up, atmos_sun_dir())).rgb + sky_ground(r, dot(up, atmos_moon_dir())).rgb * atmos_moon_light();
   l.fill = (sky * atmos_white() + atmos_night_sky()) * e;
   return l;
 }
@@ -70,7 +70,6 @@ struct Air {
   light: vec3f,
   end: vec3f,
   ground: bool,
-  ground_km: f32,
   // The ground past the terrain is lit on its own slope of the sphere.
   normal: vec3f,
 };
@@ -87,7 +86,6 @@ fn air_along(dir: vec3f) -> Air {
   air.normal = frame_up();
   if (air.ground) {
     let d = to_land(r, mu);
-    air.ground_km = d;
     air.end = transmittance_along(r, mu, d, true);
     air.normal = normalize(frame_up() * r + dir * d);
   } else {
@@ -96,11 +94,12 @@ fn air_along(dir: vec3f) -> Air {
   return air;
 }
 
-// The Earth's face where a ray meets the ground past the terrain `km` from the
-// eye, at the latitude and longitude of `n`, the ground's up there in the map
-// center's east, north and up: its reflectance, and in alpha its lights' square
-// root.
-fn earth_face(n: vec3f, km: f32) -> vec4f {
+// The Earth's face where a ray meets the ground past the terrain, `n` the
+// ground's up there in the map center's east, north and up: its reflectance,
+// and in alpha its lights' square root. The global picture is the sphere's,
+// read at the point's latitude and longitude; the pages are the flat map's,
+// read at the point the globe's own inverse gives, where the kernel holds them.
+fn earth_face(n: vec3f) -> vec4f {
   let sin_lat = frame_globe().y;
   let cos_lat = frame_globe().z;
   let center_lon = atmos_center_lon();
@@ -108,21 +107,23 @@ fn earth_face(n: vec3f, km: f32) -> vec4f {
   let north = vec3f(-sin_lat * cos(center_lon), -sin_lat * sin(center_lon), cos_lat);
   let up = vec3f(cos_lat * cos(center_lon), cos_lat * sin(center_lon), sin_lat);
   let p = east * n.x + north * n.y + up * n.z;
-  let lon = atan2(p.y, p.x);
-  let lat = asin(clamp(p.z, -1.0, 1.0));
-  let uv = vec2f(fract(lon / TAU + 0.5), 0.5 - lat / PI);
+  let uv = vec2f(fract(atan2(p.y, p.x) / TAU + 0.5), 0.5 - asin(clamp(p.z, -1.0, 1.0)) / PI);
   let global = textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0);
+  let flat = off_globe_of(planet_center() + n * frame_planet().z, frame_planet(), frame_globe());
+  let mercator = vec2f(center_lon, log(frame_globe().x)) + flat / frame_globe().w;
   // The Earth layer's page there, a z6 pixel a texel, where the window holds
   // one, taking over from the global picture, a z3 one, over the octave in
   // which a pixel goes from covering a z5 cell, at the pages' reach, to a z6
-  // one. Distance alone decides it, as it decides what is held; a page not
-  // held yet leaves the global picture.
-  let share = clamp(log2(atmos_earth_reach() * atmos_km_per_u() / max(km, 1e-6)), 0.0, 1.0);
+  // one. The floor's distance alone decides it, as it decides what is held; a
+  // page not held yet leaves the global picture.
+  let eye = off_globe_of(frame_camera_pos(), frame_planet(), frame_globe());
+  let over = (atmos_camera_altitude() - atmos_land_altitude_km()) / atmos_km_per_u();
+  let share = clamp(log2(atmos_earth_reach() / max(length(vec3f(flat - eye, over)), 1e-6)), 0.0, 1.0);
   if (share <= 0.0) {
     return global;
   }
   let w = atmos_earth_window();
-  let at = vec2f(lon, asinh(tan(lat))) / TAU * f32(w.w);
+  let at = mercator / TAU * f32(w.w);
   let page = vec2i(floor(at));
   let d = vec2i(((page.x - w.x) % w.w + w.w) % w.w, page.y - w.y);
   if (all(d >= vec2i(0)) && all(d < vec2i(w.z))) {
@@ -169,7 +170,7 @@ fn beyond(air: Air) -> vec3f {
   var light = air.light;
   if (air.ground) {
     let n = air.normal;
-    let face = earth_face(n, air.ground_km);
+    let face = earth_face(n);
     light += air.end * (face.rgb * surface_light(n, 1.0, light_at(land_radius(), n)) + city_shown(face.a));
   }
   return light;

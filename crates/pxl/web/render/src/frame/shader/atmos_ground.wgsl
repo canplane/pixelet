@@ -9,7 +9,3 @@ fn sky_ground(r: f32, mu_s: f32) -> vec4f {
   let y = coord_of(clamp((r - atmos_bottom_radius()) / (atmos_top_radius() - atmos_bottom_radius()), 0.0, 1.0), IRRADIANCE_SIZE.y);
   return textureSampleLevel(irradiance_lut, atmos_sampler, vec2f(x, y), 0.0);
 }
-
-fn sky_irradiance(r: f32, mu_s: f32) -> vec3f {
-  return sky_ground(r, mu_s).rgb;
-}

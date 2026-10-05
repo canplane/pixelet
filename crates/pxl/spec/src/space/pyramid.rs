@@ -22,8 +22,8 @@ use crate::bake::constant::{CELL, DECK_CELL, EXTENT_CELL};
 /// The ground's cell, the pyramid's finest.
 pub const GROUND_Z: u32 = zoom_of(CELL) as u32;
 
-/// The coarsest folded zoom. A page there spans about 9° of latitude and the
-/// page-constant vertical scale is already 12% off.
+/// The coarsest folded zoom: where the pyramid stops for now, not a limit. A
+/// coarser one extends it.
 pub const TOP_Z: u32 = 6;
 
 /// `scale` as the ground's cell grows from z16 to `z`. Pages and chunks are

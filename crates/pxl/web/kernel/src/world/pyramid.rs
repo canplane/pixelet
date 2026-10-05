@@ -138,6 +138,11 @@ impl<L: Layer> Pyramid<L> {
         self.observation.as_ref()
     }
 
+    /// The floor's pages as last observed.
+    pub fn floor(&self) -> impl Iterator<Item = Page> + '_ {
+        self.last.iter().flat_map(|seen| seen.1.iter().flatten().copied())
+    }
+
     pub fn demand(&self) -> &[Page] {
         &self.demand
     }
