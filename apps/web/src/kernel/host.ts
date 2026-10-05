@@ -108,7 +108,7 @@ function program(code: u32, w: U32Array, a: u32): void {
 type Open = (path: string, signal: AbortSignal) => U8Array | Promise<U8Array>;
 
 /** Where STORAGE's files are kept: the keys they had before the kernel named them. */
-const STORAGE_KEYS: Record<string, string> = { [SETTINGS_PATH]: "pxl:settings", [OBJECTS_PATH]: "pxl:object:v10" };
+const STORAGE_KEYS: Record<string, string> = { [SETTINGS_PATH]: "pxl:settings", [OBJECTS_PATH]: "pxl:object:v11" };
 
 function storage_key(path: string): string {
   const key = STORAGE_KEYS[path];

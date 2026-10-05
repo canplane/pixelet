@@ -18,6 +18,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   ([20260928-what-is-drawn-is-what-the-screen-covers.md](./decision/20260928-what-is-drawn-is-what-the-screen-covers.md),
   "the steps, measured").
 
+## P1
+
+- **POI and reverse geocode follow Carto.** The ground is Carto's looks
+  (decision/20261005-the-ground-is-a-carto-palette.md); a place's icon and
+  its kind's label are still Overture's taxonomy as the search list names it
+  (`pxl-geo-spec overture/properties.rs`), where Carto's `amenity-points.mss`
+  gives each tag an icon and a color.
+
 ## P2
 
 - **A bore's approach that stops short of a bridge.** At Uidong (37.2977,
@@ -35,13 +43,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **Subway bores.** Every tunnel flag is a bore now, so a subway's lines are
   drawn underground and stretch each chunk's bounds down; whether that cost
   stays is not decided.
-- **Past the coverage, a coarse page is baked as sea.** A page over the
-  coverage's edge folds the children outside it as ocean (`pxl-spec
-  bake/fold.rs` `fold_ele`), which the client cannot tell from real water;
-  folding them as VOID needs only the edge's pages baked again.
-- **The bake's `_ocean` page.** The client no longer reads it (a missing
-  page is drawn from the one over it), but the fold and the tile server
-  still make it (`geo-bake terrain/leaf.rs` `bake_ocean`, `demand.rs`).
+- **The view washed out from the globe.** Zoomed out over Korea near
+  sunset, the frame settled very bright a few seconds after it was dark;
+  the eye's exposure, not the sun, which stood where it should.
+- **The ground dark under a low sun.** `ADAPTATION` 0.5 (`pxl-render
+  look/atmosphere.rs`) opens the eye for half the light a sinking sun takes
+  away, so at 3° the ground shows about two stops under noon while a clear
+  day outside reads bright; a hyperparameter to settle.
 
 ## Parked, with the reason on file
 

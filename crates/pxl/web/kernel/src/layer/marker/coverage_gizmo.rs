@@ -165,7 +165,7 @@ impl Lines {
     /// ground.
     fn lay(&self, lane: &mut Vec<f32>, origin: V3, access: &Access) {
         let ground = |x: f64, y: f64| -> [f64; 3] {
-            let z = access.surface_support(&projection::project(x, y, 0.0)).value().unwrap_or(0.0);
+            let z = access.surface_support(&projection::project(x, y, 0.0)).value().flatten().unwrap_or(0.0);
             [x - origin[0], y - origin[1], z - origin[2]]
         };
         let mut ends: Vec<(f64, bool, Mark)> = Vec::new();

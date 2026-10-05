@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use postgres::types::ToSql;
+use pxl_spec::bake::format::GroundCell;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 
@@ -43,7 +44,7 @@ pub struct PageRows {
     water: Vec<(String, Option<String>, Vec<u8>)>,
     /// Its ground as the client draws it: the elevation and the cells whose shift goes on it.
     ele: Vec<i16>,
-    cells: Vec<u16>,
+    cells: Vec<GroundCell>,
 }
 
 impl PageRows {

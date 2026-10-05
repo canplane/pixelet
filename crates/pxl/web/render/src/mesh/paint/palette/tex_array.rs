@@ -1,14 +1,17 @@
 // pxl-render/mesh/paint/palette/tex_array.rs
 
-use pxl_spec::cell::cube_types;
+use pxl_spec::cell::cube::cube_types::{Block, Ground};
+use pxl_spec::cell::object::{placeable_cubes, PlaceableCube};
 
-use pxl_spec::cell::object::block_cubes;
+/// The texture array's layers, one a placeable cube in the catalog's order, so
+/// a cube of a look is drawn as its ground is.
+pub const LAYERS: usize = Block::ALL.len() + Ground::ALL.len();
 
-use crate::mesh::paint::palette::shader_meta::GROUND_LAYER_META;
+pub fn palette() -> impl Iterator<Item = PlaceableCube> {
+    placeable_cubes.iter().copied()
+}
 
-/// Object colors, numbered right after every ground layer. Only the 15 flat
-/// colors: terrain-styled cubes reuse their ground layer rather than get their own.
 #[allow(non_snake_case)]
-pub fn OBJECT_LAYER_IDX(block: cube_types::Block) -> Option<u32> {
-    block_cubes().iter().position(|b| *b == block).map(|i| (GROUND_LAYER_META.len() + i) as u32)
+pub fn LAYER_IDX(cube: PlaceableCube) -> u32 {
+    palette().position(|c| c == cube).expect("a cube of the catalog") as u32
 }

@@ -13,7 +13,7 @@ use pxl_spec::space::pvf3::ivec::IVec;
 
 use crate::mesh::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
 
-const AIR: u32 = cube_types::common::air as u32;
+const AIR: u32 = cube_types::object::air as u32;
 
 #[derive(Clone, Copy)]
 pub struct Entries<'a> {

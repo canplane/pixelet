@@ -1,7 +1,7 @@
 // pxl-spec/bake/deck.test.rs
 
 use super::*;
-use crate::bake::ground::{GroundChannelKey, ShownGround};
+use crate::cell::cube::cube_types::ground;
 use crate::procedural::{pier_stands, Frame, PIER_ALONG, PIER_STEP_M};
 use crate::space::adapter::epsg3857::u_per_m;
 
@@ -53,14 +53,7 @@ fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() 
         panic!("no pier over ground at 5")
     };
     assert_eq!(pier, [5, 19]);
-    let land = ShownGround {
-        channel: GroundChannelKey::LAND,
-        type_id: 1,
-    };
-    let road = ShownGround {
-        channel: GroundChannelKey::TRANSPORT,
-        type_id: 1,
-    };
+    let (land, road) = (ground::grass, ground::primary);
     assert_eq!(pier_stands(pier, land, d.over_point(frame, at, 1.0), 5, 0.5), Some(pier));
     assert_eq!(pier_stands(pier, road, d.over_point(frame, at, 1.0), 5, 0.5), None);
     let mut under = Builder::default();
@@ -129,11 +122,11 @@ fn a_full_parent_keeps_its_widest_lines_within_both_bounds() {
 
 #[test]
 fn each_form_is_drawn_from_its_surface() {
-    use crate::cell::cube::cube_types::transport as t;
+    use crate::cell::cube::cube_types::ground as t;
     let over = |form: Form, top: f64| Over {
         low: top,
         top,
-        kind: t::road_primary,
+        kind: t::primary,
         form,
         pier: false,
     };

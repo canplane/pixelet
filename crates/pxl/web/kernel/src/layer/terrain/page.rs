@@ -6,8 +6,7 @@
 //! open water; at the source's top, it is void.
 
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
-use pxl_spec::bake::format::{decode_terrain_into, Block, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
-use pxl_spec::bake::pack::GroundCell;
+use pxl_spec::bake::format::{decode_terrain_into, Block, GroundCell, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pyramid::{Page, GROUND_Z};

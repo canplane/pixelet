@@ -8,8 +8,8 @@
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::deck::{MAX_BOXES, MAX_DECKS, MAX_POINTS};
+use pxl_spec::bake::format::GroundCell;
 use pxl_spec::bake::format::{Block, BLOCK_LANE};
-use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pyramid::{EXTENT, PAGE_CELLS};
 
 use crate::world::paging::Paging;

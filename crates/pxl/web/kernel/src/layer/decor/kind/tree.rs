@@ -5,8 +5,7 @@
 //! not natural, ground.
 
 use pxl_spec::asset::ingested::Asset;
-use pxl_spec::bake::format::GroundChannelKey;
-use pxl_spec::cell::cube_types::Land;
+use pxl_spec::cell::cube_types::ground as g;
 use pxl_spec::cell::decor_types::Decor;
 
 use crate::layer::decor::build::DecorVariantAsset;
@@ -61,7 +60,7 @@ pub const DEF: Kind = Kind {
         density: 0.04,
         orientation: DecorOrientationMode::Random,
     },
-    rules: DecorRules::on(GroundChannelKey::LAND, &[Land::green_light as u8, Land::green_deep as u8, Land::bare as u8]),
+    rules: DecorRules::on(&[g::park, g::forest, g::land]),
     variants: &VARIANTS,
     decor_id: Some(Decor::tree),
 };

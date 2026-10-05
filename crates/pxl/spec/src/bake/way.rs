@@ -6,6 +6,12 @@
 
 use core::f64::consts::FRAC_1_SQRT_2;
 
+use super::format::GroundCell;
+use crate::cell::cube::cube_types::ground;
+
+/// The looks of a way for feet, a bicycle or a horse rather than a vehicle.
+pub const PATHS: [GroundCell; 4] = [ground::footway, ground::cycleway, ground::bridleway, ground::pedestrian];
+
 /// How far from its line a way of `width` cells covers a cell's center.
 pub fn reach(width: f64) -> f64 {
     (width * 0.5).max(FRAC_1_SQRT_2)
