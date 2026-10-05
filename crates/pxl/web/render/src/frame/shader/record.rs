@@ -556,7 +556,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 AIR[6],
                 AIR[7],
                 AIR[8],
-                AIR[9],
+                AIR_UNREAD[9],
             ])],
         ),
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
