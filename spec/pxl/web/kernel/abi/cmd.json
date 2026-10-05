@@ -44,15 +44,6 @@
       "doc": [
         "variant.json's group, by its number."
       ]
-    },
-    {
-      "name": "GroundChannelKey",
-      "rs": "pxl_spec::bake::format::GroundChannelKey",
-      "ts": "@/catalog/cell/cube_type.spec.ts",
-      "repr": "u8",
-      "doc": [
-        "A ground channel by its identity (cube_type.json)."
-      ]
     }
   ],
   "enums": [
@@ -1010,18 +1001,10 @@
               "type": "ActiveTool"
             },
             {
-              "name": "channel",
-              "type": "GroundChannelKey",
-              "optional": true,
-              "doc": [
-                "The ground channel the held cube stands in for; absent for a flat color, a decor kind or nothing."
-              ]
-            },
-            {
               "name": "value",
               "type": "u32",
               "doc": [
-                "The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive."
+                "The held cube or decor kind, by its number in the catalog's one value space (cube_type.json)."
               ]
             },
             {
@@ -1570,18 +1553,10 @@
           "type": "ActiveTool"
         },
         {
-          "name": "channel",
-          "type": "GroundChannelKey",
-          "optional": true,
-          "doc": [
-            "The held cube's ground channel; absent for a flat color."
-          ]
-        },
-        {
           "name": "cube",
           "type": "u32",
           "doc": [
-            "The held cube's type in its channel."
+            "The held cube, by its number in the catalog's one value space."
           ]
         },
         {

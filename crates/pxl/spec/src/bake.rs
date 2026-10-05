@@ -14,7 +14,6 @@ pub mod ground;
 pub mod named;
 #[path = "bake/object.spec.rs"]
 pub mod object;
-pub mod pack;
 pub mod place_page;
 #[path = "bake/poi_badge.spec.rs"]
 pub mod poi_badge;

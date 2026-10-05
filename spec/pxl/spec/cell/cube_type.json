@@ -1,161 +1,371 @@
 {
   "base": {
-    "channel": "land",
-    "type": "bare",
+    "type": "land",
     "doc": [
-      "What a cell shows when no ground channel has painted it: a cell with",
-      "nothing on it is still ground, not nothing."
+      "What a cell shows when nothing painted it: a cell with nothing on it is",
+      "still land, as Carto's background is."
     ]
   },
-  "channels": [
+  "sentinel": [
     {
-      "name": "common",
-      "entries": [
-        {
-          "name": "void",
-          "value": 0,
-          "doc": [
-            "unset — no data painted at this cell for this channel; also the",
-            "object-placement sparse tree's own absence marker (a cell with",
-            "genuinely no entry at all reads back as this same 0, since a sparse",
-            "tree's own \"nothing stored here\" and a dense raster's own \"nothing",
-            "painted here\" are the same concept either way)."
-          ]
-        },
-        {
-          "name": "air",
-          "value": 128,
-          "doc": [
-            "explicit object-layer air: retain this leaf, erase lower layers —",
-            "a real, present leaf, unlike void above. Only ever a real value",
-            "within the object-placement encoding (mod.ts) — no baked terrain",
-            "channel below can ever actually hold this byte, it's registered",
-            "here purely as a shared constant."
-          ]
-        },
-        {
-          "name": "unknown",
-          "value": 255,
-          "doc": [
-            "missing / invalid / unresolved data"
-          ]
-        }
+      "name": "void",
+      "value": 0,
+      "doc": [
+        "nothing painted: the ground before a bake writes it, and an object cell no leaf holds"
       ]
     },
     {
-      "name": "land",
-      "entries": [
-        { "name": "bare", "value": 1, "doc": ["bare ground"] },
-        {
-          "name": "sea",
-          "value": 129,
-          "shift": -1,
-          "doc": [
-            "sea water (MSB-partitioned)"
-          ]
-        },
-        { "section": "natural" },
-        {
-          "name": "green_deep",
-          "value": 10,
-          "doc": [
-            "deep green / forest / mountain"
-          ]
-        },
-        {
-          "name": "green_light",
-          "value": 11,
-          "doc": [
-            "light green / park / grass"
-          ]
-        },
-        { "name": "sand", "value": 12, "doc": ["sand / rock"] },
-        { "section": "landuse" },
-        { "name": "residential", "value": 20, "doc": ["residential area"] },
-        { "name": "commercial", "value": 21, "doc": ["commercial area"] },
-        { "name": "industrial", "value": 22, "doc": ["industrial area"] },
-        { "name": "sports", "value": 23, "doc": ["sports area"] },
-        { "name": "education", "value": 24, "doc": ["education area"] },
-        { "name": "medical", "value": 25, "doc": ["medical area"] },
-        { "name": "public", "value": 26, "doc": ["public area"] },
-        { "section": "aeroway areas" },
-        { "name": "apron", "value": 30, "doc": ["apron"] },
-        { "name": "helipad", "value": 31, "doc": ["helipad"] }
-      ]
-    },
-    {
-      "name": "water",
-      "entries": [
-        { "name": "river", "value": 1, "shift": -1, "doc": ["flowing water"] },
-        { "name": "lake", "value": 2, "shift": -1, "doc": ["still water"] },
-        { "name": "wetland", "value": 3, "shift": -1, "doc": ["wetland"] }
-      ]
-    },
-    {
-      "name": "structure",
-      "entries": [
-        { "section": "buildings" },
-        { "name": "building", "value": 1, "shift": -1, "doc": ["generic building"] },
-        {
-          "name": "building_station",
-          "value": 2,
-          "shift": -1,
-          "doc": [
-            "station / terminal building"
-          ]
-        },
-        { "name": "building_education", "value": 3, "shift": -1, "doc": ["education building"] },
-        { "name": "building_medical", "value": 4, "shift": -1, "doc": ["medical building"] },
-        { "name": "building_public", "value": 5, "shift": -1, "doc": ["public building"] }
-      ]
-    },
-    {
-      "name": "transport",
-      "entries": [
-        { "section": "roads" },
-        { "name": "road_default", "value": 1, "doc": ["minor road: residential, unclassified, living street (OpenMapTiles minor)"] },
-        { "name": "road_motorway", "value": 2, "doc": ["motorway"] },
-        { "name": "road_trunk", "value": 7, "doc": ["trunk road"] },
-        { "name": "road_primary", "value": 3, "doc": ["primary road"] },
-        { "name": "road_secondary", "value": 4, "doc": ["secondary road"] },
-        { "name": "road_tertiary", "value": 8, "doc": ["tertiary road"] },
-        { "name": "road_service", "value": 9, "doc": ["service road: a driveway, a parking aisle, an alley"] },
-        { "name": "track", "value": 12, "doc": ["track: an agricultural or forest way"] },
-        { "name": "pedestrian", "value": 5, "doc": ["path: footway, cycleway, steps, path, pedestrian street (OpenMapTiles path)"] },
-        { "name": "parking", "value": 6, "doc": ["parking area"] },
-        { "section": "rails" },
-        { "name": "rail_main", "value": 10, "doc": ["main rail"] },
-        { "name": "rail_subway", "value": 11, "doc": ["transit rail: subway, light rail, tram, monorail (OpenMapTiles transit)"] },
-        { "section": "aeroway lines" },
-        { "name": "runway", "value": 20, "doc": ["runway"] },
-        { "name": "taxiway", "value": 21, "doc": ["taxiway"] }
-      ]
-    },
-    {
-      "name": "block",
-      "note": [
-        "Flat user-painted colors only — no sentinels of its own.",
-        "cube_types.common.void (sparse-tree absence) and .air (explicit erase)",
-        "already cover every non-color case a placed cube's own byte can mean;",
-        "every real key here is a real, pickable color."
-      ],
-      "entries": [
-        { "name": "white", "value": 130 },
-        { "name": "grey", "value": 131 },
-        { "name": "dark_grey", "value": 132 },
-        { "name": "black", "value": 133 },
-        { "name": "red", "value": 134 },
-        { "name": "orange", "value": 135 },
-        { "name": "brown", "value": 136 },
-        { "name": "yellow", "value": 137 },
-        { "name": "green", "value": 138 },
-        { "name": "dark_green", "value": 139 },
-        { "name": "cyan", "value": 140 },
-        { "name": "blue", "value": 141 },
-        { "name": "violet", "value": 142 },
-        { "name": "magenta", "value": 143 },
-        { "name": "pink", "value": 144 }
+      "name": "unknown",
+      "value": 255,
+      "doc": [
+        "a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown"
       ]
     }
-  ]
+  ],
+  "ground": {
+    "note": [
+      "The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in",
+      "the order Carto paints (decision/20261005-the-ground-is-a-carto-palette.md).",
+      "`kind` is how the renderer draws it; `shift` how far off the sampled",
+      "height it stands."
+    ],
+    "entries": [
+      { "section": "landcover" },
+      {
+        "name": "land",
+        "value": 1,
+        "kind": "land",
+        "doc": [
+          "land no feature covers, and what Carto draws no fill for: Carto's background, @land-color"
+        ]
+      },
+      {
+        "name": "bare_ground",
+        "value": 2,
+        "kind": "land",
+        "doc": ["bare rock, scree, shingle: Carto @bare_ground"]
+      },
+      { "name": "sand", "value": 3, "kind": "land", "doc": ["sand: Carto @sand"] },
+      { "name": "beach", "value": 4, "kind": "land", "doc": ["beach and shoal: Carto @beach"] },
+      {
+        "name": "mud",
+        "value": 5,
+        "kind": "land",
+        "doc": ["mud: Carto @mud, its 30% over @land-color, as a cell is opaque"]
+      },
+      { "name": "heath", "value": 6, "kind": "land", "doc": ["heath and bog: Carto @heath"] },
+      { "name": "scrub", "value": 7, "kind": "land", "doc": ["scrub and mangrove: Carto @scrub"] },
+      {
+        "name": "grass",
+        "value": 8,
+        "kind": "land",
+        "doc": [
+          "grass, meadow, garden, village green, marsh, wet meadow: Carto @grass"
+        ]
+      },
+      { "name": "park", "value": 9, "kind": "land", "doc": ["park: Carto @park"] },
+      {
+        "name": "leisure",
+        "value": 10,
+        "kind": "land",
+        "doc": [
+          "playground, recreation ground, stadium, sports centre: Carto @leisure, lighten(@park, 5%)"
+        ]
+      },
+      { "name": "pitch", "value": 11, "kind": "land", "doc": ["pitch and track: Carto @pitch"] },
+      {
+        "name": "forest",
+        "value": 12,
+        "kind": "land",
+        "doc": ["forest, wood, swamp: Carto @forest"]
+      },
+      {
+        "name": "orchard",
+        "value": 13,
+        "kind": "land",
+        "doc": ["orchard, vineyard, plant nursery: Carto @orchard"]
+      },
+      {
+        "name": "allotments",
+        "value": 14,
+        "kind": "land",
+        "doc": ["allotments: Carto @allotments"]
+      },
+      {
+        "name": "farmland",
+        "value": 15,
+        "kind": "land",
+        "doc": ["farmland and greenhouses: Carto @farmland"]
+      },
+      { "name": "farmyard", "value": 16, "kind": "land", "doc": ["farmyard: Carto @farmyard"] },
+      {
+        "name": "campsite",
+        "value": 17,
+        "kind": "land",
+        "doc": ["campsite and golf course: Carto @campsite"]
+      },
+      {
+        "name": "cemetery",
+        "value": 18,
+        "kind": "land",
+        "doc": ["cemetery and grave yard: Carto @cemetery"]
+      },
+      {
+        "name": "residential",
+        "value": 19,
+        "kind": "land",
+        "doc": ["residential: Carto @residential"]
+      },
+      { "name": "garages", "value": 20, "kind": "land", "doc": ["garages: Carto @garages"] },
+      { "name": "retail", "value": 21, "kind": "land", "doc": ["retail: Carto @retail"] },
+      {
+        "name": "commercial",
+        "value": 22,
+        "kind": "land",
+        "doc": ["commercial: Carto @commercial"]
+      },
+      {
+        "name": "industrial",
+        "value": 23,
+        "kind": "land",
+        "doc": ["industrial, railway, works: Carto @industrial"]
+      },
+      {
+        "name": "power",
+        "value": 24,
+        "kind": "land",
+        "doc": ["power plant and substation: Carto @power, darken(@industrial, 5%)"]
+      },
+      {
+        "name": "construction",
+        "value": 25,
+        "kind": "land",
+        "doc": ["construction and brownfield: Carto @construction"]
+      },
+      {
+        "name": "landfill",
+        "value": 26,
+        "kind": "land",
+        "doc": ["landfill: Carto's landuse_landfill, a value with no name"]
+      },
+      { "name": "quarry", "value": 27, "kind": "land", "doc": ["quarry: Carto @quarry"] },
+      {
+        "name": "societal_amenities",
+        "value": 28,
+        "kind": "land",
+        "doc": [
+          "school, college, university, hospital, clinic: Carto @societal_amenities"
+        ]
+      },
+      {
+        "name": "place_of_worship",
+        "value": 29,
+        "kind": "land",
+        "doc": ["a religious site: Carto @place_of_worship"]
+      },
+      {
+        "name": "fire_station",
+        "value": 30,
+        "kind": "land",
+        "doc": [
+          "fire station and police: Carto's amenity_fire_station and amenity_police, one value with no name"
+        ]
+      },
+      {
+        "name": "prison",
+        "value": 31,
+        "kind": "land",
+        "doc": ["prison: Carto's amenity_prison, a value with no name"]
+      },
+      {
+        "name": "transportation_area",
+        "value": 32,
+        "kind": "land",
+        "doc": ["aerodrome, bus station, ferry terminal: Carto @transportation-area"]
+      },
+      { "name": "rest_area", "value": 33, "kind": "land", "doc": ["rest area: Carto @rest_area"] },
+      { "name": "parking", "value": 34, "kind": "land", "doc": ["parking: Carto @parking"] },
+      { "name": "apron", "value": 35, "kind": "land", "doc": ["apron: Carto @apron"] },
+      { "section": "water" },
+      { "name": "glacier", "value": 36, "kind": "land", "doc": ["glacier: Carto @glacier, drawn with the water areas"] },
+      {
+        "name": "water",
+        "value": 37,
+        "kind": "water",
+        "shift": -1,
+        "doc": ["sea, lake, river, canal, any water: Carto @water-color"]
+      },
+      { "section": "buildings" },
+      {
+        "name": "building",
+        "value": 38,
+        "kind": "structure",
+        "shift": -1,
+        "doc": ["a building: Carto @building-fill"]
+      },
+      {
+        "name": "building_major",
+        "value": 39,
+        "kind": "structure",
+        "shift": -1,
+        "doc": [
+          "a place of worship, a terminal, a station: Carto @building-major-fill at z16 and finer, as a cell is z16"
+        ]
+      },
+      { "section": "roads, by Carto's z" },
+      {
+        "name": "footway",
+        "value": 40,
+        "kind": "transport",
+        "doc": ["footway, steps, path: Carto @footway-fill, @steps-fill"]
+      },
+      {
+        "name": "cycleway",
+        "value": 41,
+        "kind": "transport",
+        "doc": ["cycleway: Carto @cycleway-fill"]
+      },
+      {
+        "name": "bridleway",
+        "value": 42,
+        "kind": "transport",
+        "doc": ["bridleway: Carto @bridleway-fill"]
+      },
+      {
+        "name": "track",
+        "value": 43,
+        "kind": "transport",
+        "doc": ["track, an agricultural or forest way: Carto @track-fill"]
+      },
+      {
+        "name": "bus_guideway",
+        "value": 44,
+        "kind": "transport",
+        "doc": ["bus guideway: Carto @bus-guideway-fill"]
+      },
+      {
+        "name": "service",
+        "value": 45,
+        "kind": "transport",
+        "doc": [
+          "service road, a driveway, a parking aisle, an alley: Carto @service-fill"
+        ]
+      },
+      {
+        "name": "pedestrian",
+        "value": 46,
+        "kind": "transport",
+        "doc": ["pedestrian street: Carto @pedestrian-fill"]
+      },
+      {
+        "name": "living_street",
+        "value": 47,
+        "kind": "transport",
+        "doc": ["living street: Carto @living-street-fill"]
+      },
+      {
+        "name": "residential_road",
+        "value": 48,
+        "kind": "transport",
+        "doc": ["residential and unclassified: Carto @residential-fill"]
+      },
+      {
+        "name": "road",
+        "value": 49,
+        "kind": "transport",
+        "doc": ["a road of no known class: Carto @road-fill"]
+      },
+      {
+        "name": "raceway",
+        "value": 50,
+        "kind": "transport",
+        "doc": ["raceway: Carto @raceway-fill"]
+      },
+      {
+        "name": "tertiary",
+        "value": 51,
+        "kind": "transport",
+        "doc": ["tertiary: Carto @tertiary-fill"]
+      },
+      {
+        "name": "secondary",
+        "value": 52,
+        "kind": "transport",
+        "doc": ["secondary: Carto @secondary-fill"]
+      },
+      {
+        "name": "primary",
+        "value": 53,
+        "kind": "transport",
+        "doc": ["primary: Carto @primary-fill"]
+      },
+      { "name": "trunk", "value": 54, "kind": "transport", "doc": ["trunk: Carto @trunk-fill"] },
+      {
+        "name": "motorway",
+        "value": 55,
+        "kind": "transport",
+        "doc": ["motorway: Carto @motorway-fill"]
+      },
+      {
+        "name": "platform",
+        "value": 56,
+        "kind": "transport",
+        "doc": ["platform: Carto @platform-fill"]
+      },
+      {
+        "name": "subway",
+        "value": 57,
+        "kind": "transport",
+        "doc": [
+          "subway, light rail, tram, monorail: Carto's railway_subway, a value with no name"
+        ]
+      },
+      {
+        "name": "rail",
+        "value": 58,
+        "kind": "transport",
+        "doc": ["rail: Carto's railway_rail, a value with no name"]
+      },
+      { "section": "aeroways" },
+      {
+        "name": "aeroway",
+        "value": 59,
+        "kind": "transport",
+        "doc": [
+          "runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill"
+        ]
+      }
+    ]
+  },
+  "object": {
+    "note": [
+      "What only an object can be: past a byte, so no ground cell holds it. An",
+      "object's value is a u16 whose byte range is the ground's palette."
+    ],
+    "entries": [
+      {
+        "name": "air",
+        "value": 256,
+        "doc": [
+          "explicit air: retains this leaf and erases the layers under it; no ground cell can hold it, as it is past a byte"
+        ]
+      },
+      { "section": "colors" },
+      { "name": "white", "value": 257 },
+      { "name": "grey", "value": 258 },
+      { "name": "dark_grey", "value": 259 },
+      { "name": "black", "value": 260 },
+      { "name": "red", "value": 261 },
+      { "name": "orange", "value": 262 },
+      { "name": "brown", "value": 263 },
+      { "name": "yellow", "value": 264 },
+      { "name": "green", "value": 265 },
+      { "name": "dark_green", "value": 266 },
+      { "name": "cyan", "value": 267 },
+      { "name": "blue", "value": 268 },
+      { "name": "violet", "value": 269 },
+      { "name": "magenta", "value": 270 },
+      { "name": "pink", "value": 271 }
+    ]
+  }
 }

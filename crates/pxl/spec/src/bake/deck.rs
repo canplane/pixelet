@@ -28,51 +28,8 @@ pub const LINE_PAST: f64 = 1.0;
 /// bridge, and how far past a page anything drawn on it can come from is bounded.
 pub const WIDEST: f64 = u8::MAX as f64 / POINT_SCALE;
 
-// ---- in ground metres, where the source gives none ----
-
-// clear under a deck
-pub const ROAD_CLEARANCE_M: f64 = 4.5; // over a road: UNECE AGR Annex II III.4
-
-// Arnis's deck heights over a path or a track, less the slab under them
-pub const PATH_CLEARANCE_M: f64 = 5.0 - DECK_THICKNESS_M; // a footway, path or cycleway
-pub const RAIL_CLEARANCE_M: f64 = 8.0 - DECK_THICKNESS_M; // a railway: its catenary, 6 over the bed
-pub const DECK_THICKNESS_M: f64 = 2.0; // a deck's slab under its surface: Arnis's structure depth
-
-// clear inside a bore
-pub const ROAD_HEADROOM_M: f64 = ROAD_CLEARANCE_M; // AGR's overhead clearance holds in a tunnel too
-pub const PATH_HEADROOM_M: f64 = 2.5; // pixelet's, no source found
-pub const RAIL_HEADROOM_M: f64 = 8.0; // pixelet's, no source found
-pub const BORE_COVER_M: f64 = 3.0; // a bore's shell over its headroom: pixelet's, no source found
-
-/// The steepest a way under or through a structure is taken to climb, so a
-/// clearance holds across the road on any of them.
-pub const MAX_GRADE: f64 = 0.30;
-
-/// Whole cells clear for `m` metres across a road, `cell_per_m` cells a metre:
-/// up to `MAX_GRADE` the clear height stands higher by the grade's secant, and
-/// a least rounds up.
-pub fn clear_cells(m: f64, cell_per_m: f64) -> i32 {
-    libm::ceil(m * libm::hypot(1.0, MAX_GRADE) * cell_per_m) as i32
-}
-
-/// What a way of transport type `kind` needs clear under a deck over it.
-pub fn clearance_m(kind: u8) -> f64 {
-    by_kind(kind, [ROAD_CLEARANCE_M, PATH_CLEARANCE_M, RAIL_CLEARANCE_M])
-}
-
-/// What a way of transport type `kind` needs clear over it in its bore.
-pub fn headroom_m(kind: u8) -> f64 {
-    by_kind(kind, [ROAD_HEADROOM_M, PATH_HEADROOM_M, RAIL_HEADROOM_M])
-}
-
-fn by_kind(kind: u8, [road, path, rail]: [f64; 3]) -> f64 {
-    use crate::cell::cube::cube_types::transport as t;
-    match kind {
-        k if k == t::rail_main || k == t::rail_subway => rail,
-        k if k == t::pedestrian => path,
-        _ => road,
-    }
-}
+/// A deck's slab under its surface, in ground metres: Arnis's `DECK_STRUCTURE_DEPTH`.
+pub const DECK_THICKNESS_M: f64 = 2.0;
 
 /// What a line is, from the source's flags alone; the byte is the wire's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -142,6 +99,7 @@ pub struct Decks {
     pub width: Cow<'static, [u8]>,        // 1/POINT_SCALE page cell: the source's
     pub kind: Cow<'static, [u8]>,         // transport type: the source's class, the slab's material
     pub form: Cow<'static, [u8]>,         // `Form`: the source's flags
+    pub clear: Cow<'static, [u8]>,        // a bore's clear space over its surface, in z16 cells: solved
     /// Derived: a tree of boxes over the points in order, each the segments it
     /// covers widened by their reach, in points; what `over_point` walks.
     pub boxes: Cow<'static, [[i16; 4]]>,
@@ -160,6 +118,7 @@ pub struct Deck<'a> {
     pub width: u8,
     pub kind: u8,
     pub form: Form,
+    pub clear: u8,
 }
 
 /// A line over one column: the lowest and highest its road surface runs
@@ -171,6 +130,7 @@ pub struct Over {
     pub kind: u8,
     pub form: Form,
     pub pier: bool,
+    pub clear: u8,
 }
 
 /// What a line occupies of one column, in z16 cells, each `[lo, hi)`; the
@@ -192,22 +152,17 @@ impl Over {
         // all the surface sweeps across the column, so a slab or a bore steps down to the
         // next column's without a gap however steep it runs
         let (low, top) = (round(self.low) as i32, round(self.top) as i32);
-        let slab = |floor: i32| {
-            let lo = (low - (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1)).max(floor);
-            Occupies::Above {
-                slab: [lo, top],
-                pier: (self.pier && lo > ground).then_some([ground, lo]),
-            }
-        };
-        // a deck or a bore is one whatever its height: the solve holds it off the ground
         match self.form {
-            Form::Deck => slab(i32::MIN),
-            Form::Bore => Occupies::Through {
-                air: [low, top + clear_cells(headroom_m(self.kind), cell_per_m)],
-            },
-            // a road off the ground past a structure stands on piers as a deck does, and is
-            // open to the sky where it is cut in
-            Form::Grade if top > ground => slab(ground),
+            Form::Deck => {
+                let lo = low - (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1);
+                Occupies::Above {
+                    slab: [lo, top],
+                    pier: (self.pier && lo > ground).then_some([ground, lo]),
+                }
+            }
+            Form::Bore => Occupies::Through { air: [low, top + i32::from(self.clear)] },
+            // a way on the ground moves the ground with it: filled up to it, cut down to it
+            Form::Grade if top > ground => Occupies::Above { slab: [ground, top], pier: None },
             Form::Grade if top < ground => Occupies::Through { air: [low, ground] },
             Form::Grade => Occupies::Grade,
         }
@@ -231,6 +186,7 @@ impl Decks {
             width: self.width[d],
             kind: self.kind[d],
             form: Form::of(self.form[d]),
+            clear: self.clear[d],
         }
     }
 
@@ -356,6 +312,7 @@ impl Deck<'_> {
             kind: self.kind,
             form: self.form,
             pier: self.form != Form::Bore && frame.is_some_and(|f| pier_covers(f, self.width_cells(), a, [dx, dy], near, at)),
+            clear: self.clear,
         })
     }
 }
@@ -392,7 +349,7 @@ pub fn fold_decks(children: [&Decks; 4], z: u32) -> Decks {
             let points: Vec<[f64; 2]> = (0..deck.points.len()).map(|i| deck.point(i)).map(|[x, y]| [(x + qx) / 2.0, (y + qy) / 2.0]).collect();
             let keep = simplify(&points, deck.tops, 0.5, height_tolerance);
             let kept: Vec<([f64; 2], i16)> = (0..points.len()).filter(|&i| keep[i]).map(|i| (points[i], deck.tops[i])).collect();
-            lines.push((kept, width, deck.kind, deck.form));
+            lines.push((kept, width, deck.kind, deck.form, deck.clear));
         }
     }
     let mut widest: Vec<usize> = (0..lines.len()).collect();
@@ -407,7 +364,7 @@ pub fn fold_decks(children: [&Decks; 4], z: u32) -> Decks {
     }
     let mut out = Builder::default();
     for (line, _) in lines.into_iter().zip(admitted).filter(|(_, a)| *a) {
-        out.push(line.0, line.1, line.2, line.3);
+        out.push(line.0, line.1, line.2, line.3, line.4);
     }
     debug_assert!(out.fits());
     out.finish()
@@ -456,11 +413,12 @@ pub struct Builder {
     width: Vec<u8>,
     kind: Vec<u8>,
     form: Vec<u8>,
+    clear: Vec<u8>,
 }
 
 impl Builder {
     /// A line of fewer than two points, or of no width, is dropped.
-    pub fn push(&mut self, points: impl IntoIterator<Item = ([f64; 2], i16)>, width: u8, kind: u8, form: Form) {
+    pub fn push(&mut self, points: impl IntoIterator<Item = ([f64; 2], i16)>, width: u8, kind: u8, form: Form, clear: u8) {
         let at = self.points.len();
         for ([x, y], top) in points {
             let q = |v: f64| round(v * POINT_SCALE).clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16;
@@ -476,6 +434,7 @@ impl Builder {
         self.width.push(width);
         self.kind.push(kind);
         self.form.push(form.byte());
+        self.clear.push(clear);
     }
 
     pub fn fits(&self) -> bool {
@@ -493,12 +452,13 @@ impl Builder {
             width: self.width.into(),
             kind: self.kind.into(),
             form: self.form.into(),
+            clear: self.clear.into(),
             boxes: boxes.into(),
         }
     }
 }
 
-// decks = [starts, points (flattened), tops, width, kind, form]
+// decks = [starts, points (flattened), tops, width, kind, form, clear]
 pub fn write_branch<'a>(decks: &'a Decks, b: &mut BranchViewImpl<'a>) {
     b.branch(Some(&mut |d| {
         d.u32_array(Some(&decks.starts))
@@ -506,7 +466,8 @@ pub fn write_branch<'a>(decks: &'a Decks, b: &mut BranchViewImpl<'a>) {
             .i16_array(Some(&decks.tops))
             .u8_array(Some(&decks.width))
             .u8_array(Some(&decks.kind))
-            .u8_array(Some(&decks.form));
+            .u8_array(Some(&decks.form))
+            .u8_array(Some(&decks.clear));
     }));
 }
 
@@ -517,6 +478,7 @@ pub struct Lanes<'a> {
     width: &'a [u8],
     kind: &'a [u8],
     form: &'a [u8],
+    clear: &'a [u8],
 }
 
 /// Refused unless the lanes are one page's decks, consistently sized and within a record's room.
@@ -533,10 +495,12 @@ pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
         width: d.at(3)?.get_array::<u8>()?,
         kind: d.at(4)?.get_array::<u8>()?,
         form: d.at(5)?.get_array::<u8>()?,
+        clear: d.at(6)?.get_array::<u8>()?,
     };
     let n = lanes.width.len();
     let shaped = lanes.kind.len() == n
         && lanes.form.len() == n
+        && lanes.clear.len() == n
         && starts.len() == n + 1
         && lanes.tops.len() == points.len()
         && n <= MAX_DECKS
@@ -559,6 +523,7 @@ impl Lanes<'_> {
             width: self.width.to_vec().into(),
             kind: self.kind.to_vec().into(),
             form: self.form.to_vec().into(),
+            clear: self.clear.to_vec().into(),
             boxes: boxes.into(),
         }
     }
@@ -578,6 +543,7 @@ impl Lanes<'_> {
             width: put(room.width, self.width).into(),
             kind: put(room.kind, self.kind).into(),
             form: put(room.form, self.form).into(),
+            clear: put(room.clear, self.clear).into(),
             boxes: (&*boxes).into(),
         }
     }
@@ -699,6 +665,7 @@ pub struct Room {
     pub width: &'static mut [u8],
     pub kind: &'static mut [u8],
     pub form: &'static mut [u8],
+    pub clear: &'static mut [u8],
     pub boxes: &'static mut [[i16; 4]],
 }
 

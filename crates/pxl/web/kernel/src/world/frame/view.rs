@@ -4,15 +4,15 @@
 //! all in the root frame (the world's axes, against the floating origin). A
 //! controller makes the pose; nothing here knows which.
 
+use pxl_spec::space::adapter::epsg3857;
+use pxl_spec::space::adapter::epsg4326::{self, G4326};
 use pxl_spec::space::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_mul, mat4_perspective, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4};
 use pxl_spec::space::observation::Frustum;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::adapter::epsg4326::{self, G4326};
-use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::nearest;
 use pxl_spec::space::pvf3::{projection, ROUND};
-use xpute_core::math::scalar::round;
 use pxl_spec::space::v3::{add3, V3};
+use xpute_core::math::scalar::round;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{pose, rebase};

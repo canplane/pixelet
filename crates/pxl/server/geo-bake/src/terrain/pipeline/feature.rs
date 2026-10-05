@@ -3,17 +3,51 @@
 //! What the ground paints: a shape in the page's cells and the cell it paints.
 
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::bake::format::GroundChannelKey;
+use pxl_spec::bake::format::GroundCell;
 use pxl_spec::space::adapter::epsg3857::{from_db, G3857};
+use xpute_core::math::scalar::round;
 
 use crate::wkb::WkbGeometry;
 
 pub type P = [f64; 2];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Cell {
-    pub key: GroundChannelKey,
-    pub value: u8,
+/// OpenStreetMap Carto's layers in the order `project.mml` stacks them
+/// (gravitystorm/openstreetmap-carto 1cc4b89), but buildings over roads: a
+/// way is painted at its width, which would bury a small building Carto draws
+/// beside a hairline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Layer {
+    Landcover,
+    Water,
+    /// `highway-area-fill`: pedestrian areas, platforms, an aeroway's areas.
+    RoadArea,
+    Road,
+    Building,
+    Aeroway,
+}
+
+/// Later paints over earlier, compared in field order: Carto's sort within
+/// the layer, then the source's id, so no row order decides; only one
+/// source's parts share a rank.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Rank {
+    pub layer: Layer,
+    pub order: i64,
+    /// Carto's `feature` (`landuse_forest`), its tie within landcover.
+    pub feature: &'static str,
+    pub id: Box<str>,
+}
+
+impl Rank {
+    pub fn new(layer: Layer, order: i64, feature: &'static str, id: &str) -> Rank {
+        Rank { layer, order, feature, id: id.into() }
+    }
+
+    /// Carto sorts an area layer by `way_area`, larger first: the whole
+    /// source's, so every page and every part of it ranks alike.
+    pub fn by_area(layer: Layer, way_area: f64, feature: &'static str, id: &str) -> Rank {
+        Rank::new(layer, -(round(way_area) as i64), feature, id)
+    }
 }
 
 /// The way beside it that it shares one paved strip with; the gap is paved too.
@@ -32,9 +66,8 @@ pub struct Feature {
     pub width: f64,
     /// Ends a flag or a line cuts: square, not rounded.
     pub cut: [bool; 2],
-    pub cell: Cell,
-    /// Later paints over earlier.
-    pub rank: u32,
+    pub cell: GroundCell,
+    pub rank: Rank,
     pub joins: Option<Joins>,
 }
 
@@ -51,7 +84,7 @@ pub fn closes(g: &WkbGeometry) -> bool {
 
 impl Feature {
     /// An area, or a line of no width, from a geometry; None where it has no points.
-    pub fn of(g: &WkbGeometry, page_min: G3857, cell: Cell, rank: u32) -> Option<Feature> {
+    pub fn of(g: &WkbGeometry, page_min: G3857, cell: GroundCell, rank: Rank) -> Option<Feature> {
         (!g.points.is_empty()).then(|| Feature {
             points: g.points.iter().map(|&p| local(p, page_min)).collect(),
             holes: g.holes.iter().map(|ring| ring.iter().map(|&p| local(p, page_min)).collect()).collect(),

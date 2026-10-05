@@ -1,13 +1,13 @@
 // pxl-spec/bake/deck.test.rs
 
 use super::*;
-use crate::bake::ground::{GroundChannelKey, ShownGround};
+use crate::cell::cube::cube_types::ground;
 use crate::procedural::{pier_stands, Frame, PIER_ALONG, PIER_STEP_M};
 use crate::space::adapter::epsg3857::u_per_m;
 
 fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Decks {
     let mut b = Builder::default();
-    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t)), (width_cells * POINT_SCALE) as u8, 3, Form::Deck);
+    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t)), (width_cells * POINT_SCALE) as u8, 3, Form::Deck, 0);
     b.finish()
 }
 
@@ -53,18 +53,11 @@ fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() 
         panic!("no pier over ground at 5")
     };
     assert_eq!(pier, [5, 19]);
-    let land = ShownGround {
-        channel: GroundChannelKey::LAND,
-        type_id: 1,
-    };
-    let road = ShownGround {
-        channel: GroundChannelKey::TRANSPORT,
-        type_id: 1,
-    };
+    let (land, road) = (ground::grass, ground::primary);
     assert_eq!(pier_stands(pier, land, d.over_point(frame, at, 1.0), 5, 0.5), Some(pier));
     assert_eq!(pier_stands(pier, road, d.over_point(frame, at, 1.0), 5, 0.5), None);
     let mut under = Builder::default();
-    under.push([([0.0, 3.0], 10), ([40.0, 3.0], 10)], 4 * POINT_SCALE as u8, 3, Form::Deck);
+    under.push([([0.0, 3.0], 10), ([40.0, 3.0], 10)], 4 * POINT_SCALE as u8, 3, Form::Deck, 0);
     let under = under.finish();
     let column = d.over_point(frame, at, 1.0).chain(under.over_point(frame, at, 1.0));
     assert_eq!(pier_stands(pier, land, column, 5, 0.5), None);
@@ -97,7 +90,7 @@ fn a_full_parent_keeps_its_widest_lines_within_both_bounds() {
     let line = |b: &mut Builder, n: usize, y: f64, width_cells: f64| {
         // A zigzag two parent cells deep, which no simplification shortens.
         let points = (0..n).map(|i| ([i as f64 * 0.25, y + 4.0 * (i % 2) as f64], 40));
-        b.push(points, (width_cells * POINT_SCALE) as u8, 3, Form::Deck);
+        b.push(points, (width_cells * POINT_SCALE) as u8, 3, Form::Deck, 0);
     };
     // Points: four lines of 2000 and a short one; the narrowest long line does not fit, the short one does.
     let mut children: Vec<Decks> = (0..3)
@@ -129,29 +122,29 @@ fn a_full_parent_keeps_its_widest_lines_within_both_bounds() {
 
 #[test]
 fn each_form_is_drawn_from_its_surface() {
-    use crate::cell::cube::cube_types::transport as t;
+    use crate::cell::cube::cube_types::ground as t;
     let over = |form: Form, top: f64| Over {
         low: top,
         top,
-        kind: t::road_primary,
+        kind: t::primary,
         form,
         pier: false,
+        clear: 3,
     };
-    // Two cells a metre: a 2 m slab is 4 cells; a road's 4.5 m clear across a 30% grade
-    // is 9.4 cells straight up, so 10.
+    // Two cells a metre: a 2 m slab is 4 cells; a bore is clear its line's cells over its surface.
     let cpm = 2.0;
     assert_eq!(over(Form::Deck, 30.0).occupies(10, cpm), Occupies::Above { slab: [26, 30], pier: None });
-    assert_eq!(over(Form::Bore, 10.0).occupies(40, cpm), Occupies::Through { air: [10, 20] });
-    // a road raised past a structure is a slab, down to the ground where it is thinner
+    assert_eq!(over(Form::Bore, 10.0).occupies(40, cpm), Occupies::Through { air: [10, 13] });
+    // a way on the ground moves the ground: filled up to it, cut down to it
     assert_eq!(over(Form::Grade, 14.0).occupies(10, cpm), Occupies::Above { slab: [10, 14], pier: None });
-    assert_eq!(over(Form::Grade, 20.0).occupies(10, cpm), Occupies::Above { slab: [16, 20], pier: None });
+    assert_eq!(over(Form::Grade, 20.0).occupies(10, cpm), Occupies::Above { slab: [10, 20], pier: None });
     assert_eq!(over(Form::Grade, 10.0).occupies(14, cpm), Occupies::Through { air: [10, 14] });
     assert_eq!(over(Form::Grade, 10.0).occupies(10, cpm), Occupies::Grade);
     // a surface falling 8 cells across a column is solid over all of it, and a bore clear over all of it
     let steep = Over { low: 22.0, ..over(Form::Deck, 30.0) };
     assert_eq!(steep.occupies(10, cpm), Occupies::Above { slab: [18, 30], pier: None });
     let steep = Over { low: 10.0, ..over(Form::Bore, 18.0) };
-    assert_eq!(steep.occupies(40, cpm), Occupies::Through { air: [10, 28] });
+    assert_eq!(steep.occupies(40, cpm), Occupies::Through { air: [10, 21] });
 }
 
 /// Every segment tried, in order: what the boxes must answer.
@@ -186,7 +179,7 @@ fn the_boxes_answer_what_every_segment_does() {
                 })
                 .collect();
             let width = if line % 5 == 0 { u8::MAX } else { 1 + (rng() * 64.0) as u8 };
-            b.push(points, width, 3, if line % 3 == 0 { Form::Bore } else { Form::Deck });
+            b.push(points, width, 3, if line % 3 == 0 { Form::Bore } else { Form::Deck }, 3);
         }
         let d = b.finish();
         for k in 0..2000 {

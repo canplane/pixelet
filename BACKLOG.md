@@ -18,30 +18,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   ([20260928-what-is-drawn-is-what-the-screen-covers.md](./decision/20260928-what-is-drawn-is-what-the-screen-covers.md),
   "the steps, measured").
 
-## P2
+## P1
 
-- **A bore's approach that stops short of a bridge.** At Uidong (37.2977,
-  127.0580) a Grade line leaving a tunnel ends 4 cells under the ground where
-  a deck starts at +5, a 9-cell step: the stretch's `across` lookup
-  (`geo-bake deck/approach.rs` `branches`) seems not to find the deck's end,
-  so neither reaches the ground nor meets the other.
-- **A bore's swept air against its cover.** The paint clears from the lowest
-  to the highest surface a column sweeps (`pxl-spec bake/deck.rs`
-  `occupies`); the solve's ceiling (`geo-bake deck.rs` `clear_m`) does not
-  know the sweep, so on a steep step the air eats into the 3 m cover.
-- **Clearance by the road's own grade.** `clear_cells` holds a clearance
-  across the road at `MAX_GRADE`'s secant for every way; the segment's own
-  grade would give each what it needs.
-- **Subway bores.** Every tunnel flag is a bore now, so a subway's lines are
-  drawn underground and stretch each chunk's bounds down; whether that cost
-  stays is not decided.
-- **Past the coverage, a coarse page is baked as sea.** A page over the
-  coverage's edge folds the children outside it as ocean (`pxl-spec
-  bake/fold.rs` `fold_ele`), which the client cannot tell from real water;
-  folding them as VOID needs only the edge's pages baked again.
-- **The bake's `_ocean` page.** The client no longer reads it (a missing
-  page is drawn from the one over it), but the fold and the tile server
-  still make it (`geo-bake terrain/leaf.rs` `bake_ocean`, `demand.rs`).
+- **POI and reverse geocode follow Carto.** The ground is Carto's looks
+  (decision/20261005-the-ground-is-a-carto-palette.md); a place's icon and
+  its kind's label are still Overture's taxonomy as the search list names it
+  (`pxl-geo-spec overture/properties.rs`), where Carto's `amenity-points.mss`
+  gives each tag an icon and a color.
 
 ## Parked, with the reason on file
 
