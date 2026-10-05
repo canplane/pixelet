@@ -5,7 +5,7 @@
 //! an object the device does not hold does nothing, as a WebGPU error does on the page.
 
 use std::num::NonZeroU64;
-use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
 use xpute_runtime::abi::handle::handle_slot;
@@ -390,7 +390,11 @@ fn texture_format(code: u32) -> wgpu::TextureFormat {
 }
 
 fn filter_mode(code: u32) -> wgpu::FilterMode {
-    if code == filter::LINEAR { wgpu::FilterMode::Linear } else { wgpu::FilterMode::Nearest }
+    if code == filter::LINEAR {
+        wgpu::FilterMode::Linear
+    } else {
+        wgpu::FilterMode::Nearest
+    }
 }
 
 fn mipmap_mode(code: u32) -> wgpu::MipmapFilterMode {

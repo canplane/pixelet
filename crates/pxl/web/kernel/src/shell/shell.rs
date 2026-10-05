@@ -25,11 +25,11 @@ use crate::layer::character::preview::{preview_rows, CASES_MAX};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::geocode::fetcher::center_group;
 use crate::layer::geocode::store as geocode_store;
-use crate::world::pyramid::Layer as _;
-use pxl_spec::bake::format::Terrain;
 use crate::sched::turn::world_platform;
 use crate::shell::setting::store::{settings_store, SettingKey};
 use crate::shell::ui::scale::m_per_px;
+use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::format::Terrain;
 
 /// The center page's place, broad to narrow. Every language is sent, so
 /// switching language re-reads rather than refetches.

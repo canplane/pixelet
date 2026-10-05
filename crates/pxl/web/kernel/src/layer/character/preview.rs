@@ -5,7 +5,6 @@
 //! model is registered again at one unit tall, since the cases compare
 //! silhouettes, not scale.
 
-
 use crate::io::load::{load_image, Load};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::variant::{character_variant, model_of, CharacterVariant, Group};

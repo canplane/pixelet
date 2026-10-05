@@ -6,12 +6,12 @@
 //! table is kept relative to the light's azimuth); and every frame the exposure.
 
 use pxl_spec::bake::earth_page::{EARTH_TEXELS, EARTH_Z};
-use pxl_spec::space::lod::{FAULT_ACROSS, FAULT_PAGES, fault_radius};
+use pxl_spec::space::lod::{fault_radius, FAULT_ACROSS, FAULT_PAGES};
 use pxl_spec::space::pyramid::pages_around;
 use pxl_spec::space::v3::V3;
 
 use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
-use crate::gpu::api::{Gpu, Stamp, buffer_entry, buffer_usage, bytes, object, pass_desc, release, room, texture_usage, word_bytes};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::clouds::CloudField;
 use crate::gpu::image_map::ImageMap;
@@ -339,7 +339,11 @@ impl Atmosphere {
 
 /// The moonlit sky is drawn by the sky view's pass.
 fn pass_of(table: usize) -> usize {
-    if table == MOON_VIEW { SKY_VIEW } else { table }
+    if table == MOON_VIEW {
+        SKY_VIEW
+    } else {
+        table
+    }
 }
 
 fn moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {
