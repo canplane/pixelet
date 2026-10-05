@@ -220,7 +220,23 @@ pub struct Terrain {
     pub index: Index,             // bounds over the page and all under it: no one page holds them
 }
 
+// Made on first use: a constant array of zeros would ship in the module's data.
+static VOID_ELE: std::sync::LazyLock<Vec<i16>> = std::sync::LazyLock::new(|| vec![0; ELE_LANE]);
+static VOID_CELLS: std::sync::LazyLock<Vec<GroundCell>> = std::sync::LazyLock::new(|| vec![0; GROUND_LANE]);
+
 impl Terrain {
+    /// Where the source has nothing at all: void cells at sea level, so
+    /// nothing is drawn while the ground is still known and stays asked for,
+    /// and no child, so none is asked for under it.
+    pub fn void() -> Terrain {
+        Terrain {
+            ground: Ground { cells: Cow::Borrowed(&VOID_CELLS[..]) },
+            decks: Decks::default(),
+            ele: Cow::Borrowed(&VOID_ELE[..]),
+            index: Index::new(vec![[0, 0]; EXTENT_LANE], Occupancy::ZERO),
+        }
+    }
+
     /// A z16 page, its index taken from its own surface and decks.
     pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> Terrain {
         let extent = extent_of(&ele, &decks);

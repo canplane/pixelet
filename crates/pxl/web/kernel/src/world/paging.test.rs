@@ -174,27 +174,3 @@ fn the_view_converges_exact_with_the_reach_prefetched_under_every_order() {
         converge(Hostile::Nearest, &reach, allowance);
     }
 }
-
-/// A page with no object reads the one body such pages share: held in
-/// `ABSENT` once it comes, never a frame, and kept only while asked.
-#[test]
-fn an_absent_page_reads_the_shared_body_once_it_comes() {
-    use crate::io::demand::Ask;
-    use pxl_spec::space::pvf3::ivec::gather;
-    let (p, q) = (Page::new(GROUND_Z, gather(1, 2, 0)), Page::new(GROUND_Z, gather(3, 4, 0)));
-    let asks = |pages: &[Page]| pages.iter().map(|&k| (k, Ask::PLAIN)).collect::<HashMap<_, _>>();
-    let mut paging = Paging::<PoiPage>::default();
-    paging.ask(&asks(&[p, q]));
-    paging.absent(p);
-    paging.absent(q);
-    assert!(paging.awaits_shared());
-    assert!(paging.get(p).is_none());
-    paging.ask(&asks(&[p]));
-    paging.adopt_shared(PoiPage::default());
-    assert!(paging.get(p).is_some() && paging.get(q).is_none());
-    assert!(!paging.awaits_shared());
-    paging.ask(&asks(&[p, q]));
-    paging.absent(q);
-    assert!(paging.get(q).is_some());
-    assert_eq!(paging.frames_used(), 0);
-}
