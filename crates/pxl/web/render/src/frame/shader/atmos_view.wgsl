@@ -106,6 +106,8 @@ struct Air {
   ground: bool,
   // The ground past the terrain is lit on its own slope of the sphere.
   normal: vec3f,
+  // Its distance from the eye against the Earth layer's reach, in octaves.
+  octaves: f32,
 };
 
 fn air_along(dir: vec3f) -> Air {
@@ -122,6 +124,7 @@ fn air_along(dir: vec3f) -> Air {
     let d = to_land(r, mu);
     air.end = transmittance_along(r, mu, d, true);
     air.normal = normalize(frame_up() * r + dir * d);
+    air.octaves = log2(d / atmos_km_per_u() / atmos_earth_reach());
   } else {
     air.end = transmittance_to_top(r, mu);
   }
@@ -134,7 +137,7 @@ fn air_along(dir: vec3f) -> Air {
 // Reflectance, and in alpha its lights' square root, where `n` is the ground's up
 // in the map center's east, north and up. The global picture is read at the
 // point's latitude and longitude, a held page at the globe's inverse of it.
-fn earth_face(n: vec3f) -> vec4f {
+fn earth_face(n: vec3f, octaves: f32) -> vec4f {
   let sin_lat = frame_globe().y;
   let cos_lat = frame_globe().z;
   let center_lon = atmos_center_lon();
@@ -148,9 +151,7 @@ fn earth_face(n: vec3f) -> vec4f {
   let mercator = vec2f(center_lon, log(frame_globe().x)) + flat / frame_globe().w;
   // A page, a z6 pixel a texel, takes over from the global picture's z3 over
   // the octave a pixel goes from a z5 cell, at the pages' reach, to a z6 one.
-  let eye = off_globe_of(frame_camera_pos(), frame_planet(), frame_globe());
-  let over = (atmos_camera_altitude() - atmos_land_altitude_km()) / atmos_km_per_u();
-  let share = clamp(log2(atmos_earth_reach() / max(length(vec3f(flat - eye, over)), 1e-6)), 0.0, 1.0);
+  let share = clamp(-octaves, 0.0, 1.0);
   if (share <= 0.0) {
     return global;
   }
@@ -177,13 +178,17 @@ fn city_shown(lights: f32, up: vec3f) -> vec3f {
 // Doubled, picked by eye beside the original; the cities are not its to scale.
 const EARTH_GAIN: f32 = 2.0;
 
-// Lit by the terrain's own light, so the drawn edge is no seam; no shadow map reaches it.
+// Lit by the terrain's own light, so the drawn edge is no seam; no shadow map
+// reaches it. It comes in over the octave to the Earth layer's reach, where
+// the terrain ends seen from the globe; nearer, the ground is the voxels' or
+// the air's alone.
 fn beyond(air: Air) -> vec3f {
   var light = air.light;
-  if (air.ground) {
+  let shown = clamp(air.octaves + 1.0, 0.0, 1.0);
+  if (air.ground && shown > 0.0) {
     let n = air.normal;
-    let face = earth_face(n);
-    light += air.end * (EARTH_GAIN * face.rgb * surface_light(n, n, 1.0, light_at(land_radius(), n)) + city_shown(face.a, n));
+    let face = earth_face(n, air.octaves);
+    light += air.end * shown * (EARTH_GAIN * face.rgb * surface_light(n, n, 1.0, light_at(land_radius(), n)) + city_shown(face.a, n));
   }
   return light;
 }
