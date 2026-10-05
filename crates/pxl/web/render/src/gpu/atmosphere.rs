@@ -43,8 +43,8 @@ pub(crate) const OZONE_HALF_WIDTH: usize = 22;
 pub(crate) const GROUND_ALBEDO: usize = 23;
 pub(crate) const SUN_ANGULAR_RADIUS: usize = 24;
 pub(crate) const EXPOSURE: usize = 25;
-pub(crate) const MAX_ADAPTATION: usize = 26;
-pub(crate) const ADAPTATION: usize = 27;
+pub(crate) const NIGHT_STOPS: usize = 26;
+pub(crate) const SHOWN_FALL: usize = 27;
 pub(crate) const MOON_DIR: usize = 28;
 pub(crate) const MOON_LIGHT: usize = 31;
 pub(crate) const SUN_SEEN: usize = 32;
@@ -138,8 +138,8 @@ impl Atmosphere {
             (GROUND_ALBEDO, model::GROUND_ALBEDO),
             (SUN_ANGULAR_RADIUS, model::SUN_ANGULAR_RADIUS),
             (EXPOSURE, model::EXPOSURE),
-            (MAX_ADAPTATION, model::MAX_ADAPTATION),
-            (ADAPTATION, model::ADAPTATION),
+            (NIGHT_STOPS, model::NIGHT_STOPS),
+            (SHOWN_FALL, model::SHOWN_FALL),
         ] {
             words[at] = v as f32;
         }

@@ -19,11 +19,20 @@ struct Light {
 
 fn light_at(r: f32, up: vec3f) -> Light {
   let e = exposure();
+  var l = light_unexposed(r, up);
+  l.sun *= e;
+  l.other *= e;
+  l.fill *= e;
+  return l;
+}
+
+// The same before the eye: what the exposure meters.
+fn light_unexposed(r: f32, up: vec3f) -> Light {
   var l: Light;
-  l.sun = frame_sun_color() * sun_transmittance(r, dot(up, frame_sun_dir())) * e;
-  l.other = frame_other_color() * sun_transmittance(r, dot(up, frame_other_dir())) * e;
+  l.sun = frame_sun_color() * sun_transmittance(r, dot(up, frame_sun_dir()));
+  l.other = frame_other_color() * sun_transmittance(r, dot(up, frame_other_dir()));
   let sky = sky_ground(r, dot(up, atmos_sun_dir())).rgb + sky_ground(r, dot(up, atmos_moon_dir())).rgb * atmos_moon_light();
-  l.fill = (sky * atmos_white() + atmos_night_sky()) * e;
+  l.fill = sky * atmos_white() + atmos_night_sky();
   return l;
 }
 
@@ -137,11 +146,10 @@ fn earth_face(n: vec3f) -> vec4f {
   return global;
 }
 
-// The lights come on as the eye opens: by day the night eye's gain on them
-// would show every city lit at noon.
+// The lights come on as the land goes toward night: by day the night eye's
+// gain on them would show every city lit at noon.
 fn city_shown(lights: f32) -> vec3f {
-  let night = (exposure() / atmos_exposure() - 1.0) / (atmos_max_adaptation() - 1.0);
-  return atmos_city_light() * lights * lights * exposure() * clamp(night, 0.0, 1.0);
+  return atmos_city_light() * lights * lights * exposure() * night_share();
 }
 
 // The share of the light that keeps its direction; the rest, what an up-facing
@@ -164,6 +172,10 @@ fn surface_light(n: vec3f, lit: f32, l: Light) -> vec3f {
   return mix(up, directed, DIRECTED) / PI;
 }
 
+// The picture's reflectance doubled, picked by eye beside the original so the
+// land reads by day and its outline by night; city lights are not its to scale.
+const EARTH_GAIN: f32 = 2.0;
+
 // Past the terrain the ground is lit by the terrain's own light, so the drawn
 // edge is no seam; no shadow map reaches it.
 fn beyond(air: Air) -> vec3f {
@@ -171,7 +183,7 @@ fn beyond(air: Air) -> vec3f {
   if (air.ground) {
     let n = air.normal;
     let face = earth_face(n);
-    light += air.end * (face.rgb * surface_light(n, 1.0, light_at(land_radius(), n)) + city_shown(face.a));
+    light += air.end * (EARTH_GAIN * face.rgb * surface_light(n, 1.0, light_at(land_radius(), n)) + city_shown(face.a));
   }
   return light;
 }

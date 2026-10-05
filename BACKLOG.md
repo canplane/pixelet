@@ -42,13 +42,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **The bake's `_ocean` page.** The client no longer reads it (a missing
   page is drawn from the one over it), but the fold and the tile server
   still make it (`geo-bake terrain/leaf.rs` `bake_ocean`, `demand.rs`).
-- **The view washed out from the globe.** Zoomed out over Korea near
-  sunset, the frame settled very bright a few seconds after it was dark;
-  the eye's exposure, not the sun, which stood where it should.
-- **The ground dark under a low sun.** `ADAPTATION` 0.5 (`pxl-render
-  look/atmosphere.rs`) opens the eye for half the light a sinking sun takes
-  away, so at 3° the ground shows about two stops under noon while a clear
-  day outside reads bright; a hyperparameter to settle.
 
 ## Parked, with the reason on file
 

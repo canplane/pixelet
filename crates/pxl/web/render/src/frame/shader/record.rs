@@ -631,11 +631,22 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE]])],
         ),
         PIPELINE_ATMOS_IRRADIANCE => record(screen(SHADER_ATMOS_IRRADIANCE), &[], &[group(&[AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE]])]),
-        // The air but the exposure it writes.
+        // The light on the land under the eye: the air's words and the tables it is lit by.
         PIPELINE_ATMOS_EXPOSURE => record(
             screen(SHADER_ATMOS_EXPOSURE),
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[5], AIR[6], AIR[7], AIR[8], AIR_UNREAD[9]])],
+            &[group(&[
+                [0, FRAGMENT, UNIFORM],
+                AIR[0],
+                AIR[1],
+                AIR_UNREAD[2],
+                AIR[3],
+                AIR_UNREAD[5],
+                AIR_UNREAD[6],
+                AIR_UNREAD[7],
+                AIR[8],
+                AIR_UNREAD[9],
+            ])],
         ),
         PIPELINE_STARS => record(
             Head {
