@@ -13,8 +13,6 @@ use crate::look::atmosphere::{light_at, moon_phase_light, white, MOON_LIGHT, NIG
 /// air (4), second light (8), sun direction (4), stars' frame (12), moon
 /// direction and sky brightness (4).
 pub const ENV_FLOATS: usize = 60;
-pub const ENV_FOG_NEAR: usize = 7;
-pub const ENV_FOG_FAR: usize = 11;
 pub const ENV_SKY: usize = 24;
 pub const ENV_AIR: usize = 28;
 pub const ENV_OTHER_LIGHT: usize = 32;
@@ -29,8 +27,6 @@ pub struct Light {
     /// The stars' fade in from the first frame, 0 to 1.
     pub stars: f64,
     pub time: f64,
-    pub fog_near: f64,
-    pub fog_far: f64,
     pub altitude_km: f64,
     pub km_per_u: f64,
     pub latitude: f64,
@@ -71,9 +67,6 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
         put3(o, at, f32s(&d));
         put3(o, at + 4, [color[0] as f32, color[1] as f32, color[2] as f32]);
     }
-    o[ENV_FOG_NEAR] = light.fog_near as f32;
-    o[ENV_FOG_FAR] = light.fog_far as f32;
-
     o[ENV_SKY] = (light.stars * night) as f32;
     o[ENV_SKY + 1] = light.time as f32;
     o[ENV_SKY + 2] = light.longitude as f32;

@@ -13,13 +13,6 @@ use pxl_spec::space::pyramid::PAGE_CHUNKS;
 /// asking finer is held at `SPLIT`.
 pub const CENTER_CELL_LOGICAL_PX: f64 = 6.0;
 
-// ---- the view's reach ----
-
-/// Most doublings of distance drawn past the ground under the eye: the fog's
-/// far edge, about 12 km on the ground and 32 km from 1 km up. Bounds the
-/// zooms a view draws whatever the horizon allows.
-pub const VIEW_DOUBLINGS: u32 = 5;
-
 // ---- what refinement observes ----
 
 /// The estimator's tile side, in radians (about 10°, 77 rays on a 16:9

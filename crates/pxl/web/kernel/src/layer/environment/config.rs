@@ -1,11 +1,7 @@
 // pxl-kernel/layer/environment/config.rs
 
-/// The band at the drawn edge and the far clip, as shares of the reach.
 pub mod render_cfg {
-    /// Where the screen's occlusion starts to fade, before it would darken
-    /// the edge against the sky. Narrow: the haze is the air's.
-    pub const BAND_START: f64 = 0.75;
-    /// Past the reach, so the band completes inside the frustum.
+    /// The far clip against the reach: past it, so ground at the reach is whole.
     pub const FAR_CLIP: f64 = 1.5;
 }
 

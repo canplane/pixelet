@@ -7,9 +7,9 @@ struct Frame {
   sun_dir: vec3f,
   low_spec: f32,
   sun_color: vec3f,
-  fog_near: f32,
+  _p8: f32,
   _p10: vec3f,
-  fog_far: f32,
+  _p12: f32,
   _p6: vec3f,
   _p11: f32,
   _p7: vec3f,
@@ -46,8 +46,6 @@ fn frame_edge_strength() -> f32 { return frame_words[4].w; }
 fn frame_sun_dir() -> vec3f { return frame_words[5].xyz; }
 fn frame_low_spec() -> f32 { return frame_words[5].w; }
 fn frame_sun_color() -> vec3f { return frame_words[6].xyz; }
-fn frame_fog_near() -> f32 { return frame_words[6].w; }
-fn frame_fog_far() -> f32 { return frame_words[7].w; }
 fn frame_edge_width() -> f32 { return frame_words[9].w; }
 fn frame_rim_intensity() -> f32 { return frame_words[10].w; }
 fn frame_viewport() -> vec2f { return frame_words[11].xy; }
