@@ -1,5 +1,15 @@
 # The surface a way runs on
 
+**Status: aborted** on 2026-10-06, before any of it was baked. The contract
+below led to a rule set (a step of at most 1u first, clear space and cover
+next, a straight line between a structure's ends adjusted where it
+collides) and a solver over each page's 1-ring that took 30 to 50 s a page,
+125 s for nine pages at its fastest, and still left seams apart. It was dropped for
+[bridges and tunnels as Arnis solves them](../20261006-bridges-and-tunnels-as-arnis-solves-them.md):
+the same tags stand as Arnis stands them, solved in tens of milliseconds a
+page. Nothing below is what the bake does or aims at; the files it names
+are gone.
+
 **2026-10-05** — a draft, written to be argued with. Sections 1 to 3 state
 what is to be guaranteed and how a failure is judged; section 4 is open and
 lists the choices with the cases that tell them apart; section 5 names no

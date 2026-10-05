@@ -82,7 +82,8 @@ unsafe fn room_of(record: u32) -> PageRoom {
                 width: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(3)), MAX_DECKS),
                 kind: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(4)), MAX_DECKS),
                 form: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(5)), MAX_DECKS),
-                boxes: core::slice::from_raw_parts_mut(ptr_at::<[i16; 4]>(deck_lane(6)), MAX_BOXES),
+                clear: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(6)), MAX_DECKS),
+                boxes: core::slice::from_raw_parts_mut(ptr_at::<[i16; 4]>(deck_lane(7)), MAX_BOXES),
             },
         }
     }

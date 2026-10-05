@@ -10,23 +10,22 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::ground::cell_shift;
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
+use pxl_spec::space::adapter::epsg3857::from_db;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
 
 use crate::terrain::bake::Surface;
 
-/// Heights at points from the pages' surfaces, as the client's
+/// Heights at points from the pages' surfaces, in cells, as the client's
 /// `ground_ele_at` reads them; a point's page must be held.
-pub fn sample(surfaces: &HashMap<IVec, Surface>, points: &[[f64; 2]]) -> Result<Vec<f64>, String> {
+pub fn sample_cells(surfaces: &HashMap<IVec, Surface>, points: &[[f64; 2]]) -> Result<Vec<i32>, String> {
     points
         .iter()
         .map(|&[x, y]| {
             let page = page_of([x, y]);
             let surface = surfaces.get(&page).ok_or_else(|| format!("page {page} is not held"))?;
             let [min, _] = epsg3857::get_page_bbox(page);
-            let cell_per_m = u_per_m(from_db(min[1])) / U_PER_CELL;
             let (tx, ty) = (from_db(x - min[0]) / U_PER_CELL, from_db(y - min[1]) / U_PER_CELL);
             let on_page = (0.0..f64::from(PAGE_CELLS)).contains(&tx) && (0.0..f64::from(PAGE_CELLS)).contains(&ty);
             let shift = if on_page {
@@ -34,7 +33,7 @@ pub fn sample(surfaces: &HashMap<IVec, Surface>, points: &[[f64; 2]]) -> Result<
             } else {
                 0
             };
-            Ok(f64::from(bicubic(&surface.ele, tx, ty) + shift) / cell_per_m)
+            Ok(i32::from(bicubic(&surface.ele, tx, ty) + shift))
         })
         .collect()
 }

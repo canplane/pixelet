@@ -1,5 +1,11 @@
 # Ways that are not on the ground
 
+**Status: its solve is withdrawn** by
+[20261006-bridges-and-tunnels-as-arnis-solves-them.md](./20261006-bridges-and-tunnels-as-arnis-solves-them.md)
+— heights are Arnis's, taken whole, not reinterpreted, and the clearances
+and constants below are not the bake's. What stands is how a deck is
+stored: a line in the terrain page.
+
 **2026-10-01** — a design conversation and the first half of its code.
 
 The ground is a surface, and a page paints only what lies on it. Until
