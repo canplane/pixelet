@@ -6,16 +6,15 @@
 
 use core::fmt;
 
-use crate::space::indexer::L3;
-use crate::space::pvf3::core::IVEC_X_W;
 use crate::space::pvf3::ivec::{self, IVec};
-use crate::space::pyramid::{pages_around, Page, LEAF_Z, TOP_Z};
+use crate::space::pyramid::{around, Page, LEAF_Z, TOP_Z};
+use crate::space::zoom::Zoom;
 
-/// A leaf's name length: the bits of its page grid, which is one world
-/// of pages. It follows the page's size, never the zoom.
-pub const PAGE_KEY_DEPTH: u32 = IVEC_X_W - L3.shamt() as u32;
+/// A leaf's name length: the bits of its page grid, which is one world of
+/// pages, so its zoom.
+pub const PAGE_KEY_DEPTH: u32 = LEAF_Z as u32;
 
-const _: () = assert!(pages_around(TOP_Z) > 1, "every zoom's page has a name");
+const _: () = assert!(around(TOP_Z) > 1, "every zoom's page has a name");
 
 /// x in the low bit, y in the high one.
 const DIGITS: &str = "0123";
@@ -70,8 +69,8 @@ pub fn index_of(key: &str) -> Option<(u32, IVec)> {
 }
 
 /// The bits of the page grid at `z`, a name's length.
-fn depth_at(z: u32) -> u32 {
-    pages_around(z).trailing_zeros()
+fn depth_at(z: Zoom) -> u32 {
+    around(z).trailing_zeros()
 }
 
 pub fn page_name(p: Page) -> Quadkey {

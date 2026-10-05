@@ -23,7 +23,7 @@ use crate::world::pyramid::Layer;
 use floor::{Fallback, Floor};
 
 /// The zooms the pyramid holds, z15 to its top.
-pub const PYRAMID_ZOOMS: u32 = LEAF_Z - TOP_Z + 1;
+pub const PYRAMID_ZOOMS: u32 = (LEAF_Z - TOP_Z + 1) as u32;
 
 /// Only the eye. Another point observer would add its own faults.
 const OBSERVERS: u32 = 1;

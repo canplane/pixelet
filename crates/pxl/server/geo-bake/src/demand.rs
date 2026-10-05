@@ -13,6 +13,7 @@ use pxl_spec::space::pyramid::{Folds, Page};
 use std::path::PathBuf;
 
 use crate::coverage::Coverage;
+use pxl_spec::space::zoom::Zoom;
 use std::sync::{Arc, Mutex};
 
 pub mod job;
@@ -105,10 +106,10 @@ pub struct Server {
     runner: Arc<Runner>,
     base: PathBuf,
     current: Mutex<[Arc<Dataset>; 3]>,
-    top_z: u32,
+    top_z: Zoom,
 }
 impl Server {
-    pub fn open(workers: usize, base: PathBuf, top_z: u32, limits: Limits) -> Result<Self, String> {
+    pub fn open(workers: usize, base: PathBuf, top_z: Zoom, limits: Limits) -> Result<Self, String> {
         let owner = claim(&base)?;
         let runner = Arc::new(Runner::new(workers, limits)?);
         let current = [Kind::Terrain, Kind::Poi, Kind::Geocode]

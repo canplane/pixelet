@@ -14,6 +14,7 @@ use crate::control::navigation::support::{in_cell, passage, Passage};
 use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
 use crate::world::access::{Access, Answer};
 use crate::world::frame::coord::world_to_canonical;
+use pxl_spec::space::zoom::index_of;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewTriple {
@@ -54,7 +55,7 @@ fn climb_rise(at: &ViewPose) -> Option<f64> {
     let (local, eye) = eye(at);
     let center = world_to_canonical(&at.target);
     let access = Access::now();
-    let ground = match passage(&center, [local[0] - at.target[0], local[1] - at.target[1]], CELL.index_of(&eye)[2]) {
+    let ground = match passage(&center, [local[0] - at.target[0], local[1] - at.target[1]], index_of(CELL, &eye)[2]) {
         Passage::Open(cz) => access.floor_under(&in_cell(&eye, cz)),
         Passage::Unknown => access.floor_under(&eye),
         Passage::Blocked => return None,

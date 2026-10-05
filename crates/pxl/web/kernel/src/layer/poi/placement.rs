@@ -25,6 +25,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{nearest, projection, REACH};
 use pxl_spec::space::pyramid::{Cell, GROUND, LEAF_Z};
 use pxl_spec::space::v3::len3;
+use pxl_spec::space::zoom::{count, Zoom};
 use std::collections::HashSet;
 
 #[derive(Default)]
@@ -66,7 +67,7 @@ fn shown_at(units_per_px: f64) -> Option<Shown> {
 }
 
 /// None where nothing over it is known.
-fn top_at(at: &Pvf3, z: u32) -> Option<f64> {
+fn top_at(at: &Pvf3, z: Zoom) -> Option<f64> {
     let xy = projection::unproject(at.i, at.f);
     let (high, low) = (REACH.max[2], REACH.min[2]);
     let ray = Ray {
@@ -108,8 +109,8 @@ pub fn step(ctx: &mut TickContext) {
         let Some(poi) = pages.paging().get(src) else { continue };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.
-        let (side, cell) = (chunk.column().0, POI_LATTICE.side_at(src.z));
-        let m = if cell <= side { cell.count_in(side) } else { 0 };
+        let (side, cell) = (chunk.column().0, POI_LATTICE.cell_zoom(src.z));
+        let m = if cell >= side { count(cell, side) } else { 0 };
         let [x0, y0] = POI_LATTICE.cell_of(src.z, &Pvf3 { i: chunk.corner(), f: 0 }).in_page();
         let (h0, h1) = chunk.z_range();
         for ty in y0..y0 + m.max(1) {

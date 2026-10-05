@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::{Folds, Page, LEAF_Z, TOP_Z};
+use pxl_spec::space::zoom::Zoom;
 
 use crate::util::{measure_output, pack, unpack, write_atomic, Level};
 
@@ -40,7 +41,7 @@ impl PageSet {
         PageSet { root: root.into() }
     }
 
-    pub fn zoom_dir(&self, z: u32) -> PathBuf {
+    pub fn zoom_dir(&self, z: Zoom) -> PathBuf {
         self.root.join(format!("z{z}"))
     }
 
@@ -77,7 +78,7 @@ impl PageSet {
         unpack(&stored).map(Some).map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    pub fn pages(&self, z: u32) -> Result<Vec<Page>, String> {
+    pub fn pages(&self, z: Zoom) -> Result<Vec<Page>, String> {
         let dir = self.zoom_dir(z);
         if !dir.exists() {
             return Ok(Vec::new());
@@ -121,7 +122,7 @@ pub fn fold_stored<L: Layer>(set: &PageSet, parent: Page, absent: &impl Absent<L
 }
 
 /// Folds every zoom up to `TOP_Z` or the first empty one.
-pub fn build<L: Layer>(set: &PageSet, absent: &impl Absent<L>, workers: usize) -> Result<u32, String> {
+pub fn build<L: Layer>(set: &PageSet, absent: &impl Absent<L>, workers: usize) -> Result<Zoom, String> {
     let mut top = LEAF_Z;
     for z in (TOP_Z..LEAF_Z).rev() {
         let children = set.pages(z + 1)?;
@@ -175,7 +176,7 @@ pub fn refold<L: Layer>(set: &PageSet, mut changed: HashSet<Page>, absent: &impl
 
 /// Drops every page its parent settles (`Folds::settles`), judged over the
 /// whole set before any is removed. Returns how many.
-pub fn prune<L: Layer>(set: &PageSet, top: u32) -> Result<usize, String> {
+pub fn prune<L: Layer>(set: &PageSet, top: Zoom) -> Result<usize, String> {
     let mut gone = Vec::new();
     for z in top + 1..=LEAF_Z {
         let mut parents: HashMap<Page, Option<L>> = HashMap::new();
@@ -197,7 +198,7 @@ pub fn prune<L: Layer>(set: &PageSet, top: u32) -> Result<usize, String> {
 
 /// Measured from disk, not the run: a resumed run that skipped everything
 /// would describe an empty set.
-pub fn write_manifest(set: &PageSet, top: u32, built: Option<&str>, layer: serde_json::Value) -> Result<(), String> {
+pub fn write_manifest(set: &PageSet, top: Zoom, built: Option<&str>, layer: serde_json::Value) -> Result<(), String> {
     let (mut objects, mut bytes) = measure_output(&set.root).map_err(|e| e.to_string())?;
     let mut zooms = Vec::new();
     for z in (top..=LEAF_Z).rev() {
@@ -215,7 +216,7 @@ pub fn write_manifest(set: &PageSet, top: u32, built: Option<&str>, layer: serde
 
 /// A parent reads the 4×4 children around it, so each worker keeps only the
 /// four child rows its current parent row reads.
-fn fold_zoom<L: Layer>(set: &PageSet, z: u32, children: &[Page], absent: &impl Absent<L>, workers: usize) -> Result<usize, String> {
+fn fold_zoom<L: Layer>(set: &PageSet, z: Zoom, children: &[Page], absent: &impl Absent<L>, workers: usize) -> Result<usize, String> {
     let here = set.zoom_dir(z);
     if here.exists() {
         fs::remove_dir_all(&here).map_err(|e| format!("{}: {e}", here.display()))?;

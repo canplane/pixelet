@@ -5,37 +5,37 @@
 //! made. Its page and place in the page derive from its column, so they
 //! cannot disagree with where it is.
 
-use pxl_spec::space::hierarchy::{ancestor_of, child_of, offset_in, parent_of, Scale};
-use pxl_spec::space::indexer::{L2, L3};
+use pxl_spec::space::hierarchy::{ancestor_of, child_of, offset_in, parent_of};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_scale, chunk_span_of, page_at, page_rows, wrap_cell, Page, CHUNK_CELLS, PAGE_CELLS, TOP_Z};
+use pxl_spec::space::pyramid::{chunk_zoom, page_at, page_rows, wrap_cell, Page, CHUNK_CELLS, LEAF_Z, PAGE_CELLS, TOP_Z};
 use pxl_spec::space::v3::Aabb;
+use pxl_spec::space::zoom::{base_of, index_of, units, Zoom};
 
 pub const CHILDREN: usize = 8;
 
 /// A page is this many steps over a chunk.
-const PAGE_STEPS: u32 = L3.above(L2) as u32;
+const PAGE_STEPS: u32 = (chunk_zoom(LEAF_Z) - LEAF_Z) as u32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Chunk {
     /// The zoom of its cells.
-    z: u32,
+    z: Zoom,
     at: [i64; 3],
 }
 
 impl Chunk {
-    pub fn of(z: u32, at: &Pvf3) -> Chunk {
-        Chunk { z, at: chunk_scale(z).index_of(at) }
+    pub fn of(z: Zoom, at: &Pvf3) -> Chunk {
+        Chunk { z, at: index_of(chunk_zoom(z), at) }
     }
 
-    pub fn at(z: u32, at: [i64; 3]) -> Chunk {
+    pub fn at(z: Zoom, at: [i64; 3]) -> Chunk {
         Chunk { z, at }
     }
 
     /// As the bounds of a range in chunk order.
-    pub fn column_of(z: u32, at: &Pvf3) -> std::ops::RangeInclusive<Chunk> {
-        let [x, y, _] = chunk_scale(z).index_of(at);
+    pub fn column_of(z: Zoom, at: &Pvf3) -> std::ops::RangeInclusive<Chunk> {
+        let [x, y, _] = index_of(chunk_zoom(z), at);
         Chunk { z, at: [x, y, i64::MIN] }..=Chunk { z, at: [x, y, i64::MAX] }
     }
 
@@ -47,7 +47,7 @@ impl Chunk {
         }
     }
 
-    pub fn z(self) -> u32 {
+    pub fn z(self) -> Zoom {
         self.z
     }
 
@@ -55,7 +55,7 @@ impl Chunk {
     pub fn named(self) -> Chunk {
         Chunk {
             z: self.z,
-            at: wrap_cell(chunk_scale(self.z), self.at),
+            at: wrap_cell(chunk_zoom(self.z), self.at),
         }
     }
 
@@ -89,25 +89,25 @@ impl Chunk {
     /// The corner at no height, as the 2D stores key it; where it stands is `rect`'s.
     pub fn corner(self) -> IVec {
         let [x, y, _] = self.at;
-        chunk_scale(self.z).base_of([x, y, 0]).i
+        base_of(chunk_zoom(self.z), [x, y, 0]).i
     }
 
     /// From the index, which runs on round the world as the view's frame does.
     pub fn rect(self) -> (f64, f64, f64) {
-        let span = chunk_span_of(self.z);
+        let span = units(chunk_zoom(self.z));
         (self.at[0] as f64 * span, self.at[1] as f64 * span, span)
     }
 
     /// From the index, not the corner point: a point's height is 16 bits
     /// (±32,768 units) and a z5 chunk is 65,536 tall.
     pub fn z_range(self) -> (f64, f64) {
-        let span = chunk_span_of(self.z);
+        let span = units(chunk_zoom(self.z));
         let z0 = self.at[2] as f64 * span;
         (z0, z0 + span)
     }
 
     pub fn region(self) -> Aabb {
-        let span = chunk_span_of(self.z);
+        let span = units(chunk_zoom(self.z));
         let (x0, y0, _) = self.rect();
         let z0 = self.z_range().0;
         Aabb {
@@ -116,13 +116,13 @@ impl Chunk {
         }
     }
 
-    pub fn node(self) -> (Scale, [i64; 3]) {
-        (chunk_scale(self.z), self.at)
+    pub fn node(self) -> (Zoom, [i64; 3]) {
+        (chunk_zoom(self.z), self.at)
     }
 
-    pub fn column(self) -> (Scale, [i64; 2]) {
+    pub fn column(self) -> (Zoom, [i64; 2]) {
         let [x, y, _] = self.at;
-        (chunk_scale(self.z), [x, y])
+        (chunk_zoom(self.z), [x, y])
     }
 
     pub fn parent(self) -> Option<Chunk> {

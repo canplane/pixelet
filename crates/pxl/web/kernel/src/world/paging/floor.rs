@@ -12,16 +12,17 @@ use pxl_spec::space::lod::{pages_within, FAULT_PAGES};
 use pxl_spec::space::observation::Observation;
 use pxl_spec::space::pyramid::{Page, TOP_Z};
 
+use pxl_spec::space::zoom::Zoom;
 use xpute_runtime::global::Global;
 
-static DECLARED: Global<Option<u32>> = Global::new();
+static DECLARED: Global<Option<Zoom>> = Global::new();
 
-pub fn declare(top_z: u32) {
+pub fn declare(top_z: Zoom) {
     xpute_core::ensure!(top_z >= TOP_Z, EINVAL, top_z);
     *DECLARED.get(Default::default) = Some(top_z);
 }
 
-pub fn top() -> Option<u32> {
+pub fn top() -> Option<Zoom> {
     *DECLARED.get(Default::default)
 }
 

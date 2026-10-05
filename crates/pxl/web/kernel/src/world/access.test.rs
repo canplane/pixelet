@@ -15,6 +15,7 @@ use super::*;
 use crate::layer::object::store::{At, Write};
 use crate::serial;
 use crate::world::paging::{Candidate, Victim};
+use pxl_spec::space::zoom::{units, Zoom};
 
 const PADDED: usize = ELE_PADDED_SPAN as usize;
 const SPAN: usize = PAGE_CELLS as usize;
@@ -91,14 +92,14 @@ fn down(at: [f64; 2]) -> Ray {
     }
 }
 
-fn write(store: &mut Store, corner: V3, side: Scale, state: u32) {
+fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
     let at = projection::project(corner[0], corner[1], corner[2]);
     let a = At::of_cube(&at, side);
     store.write([Write {
         col_idx: a.col_idx,
         band_idx: a.band,
         at: a.step,
-        scale: side,
+        cell_zoom: side,
         state,
     }]);
 }
@@ -112,7 +113,7 @@ fn a_zooms_ray_meets_the_objects_in_the_cells_the_zoom_draws_from() {
     let paging = resident(&[(top(), parent), leaves[0].clone()]);
     let (x0, y0, _) = leaves[0].0.rect();
     let z = LEAF_Z - 1;
-    let cell = GROUND.side_at(z).side();
+    let cell = units(GROUND.cell_zoom(z));
     let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
     let (bx, by) = ((x0 / cell).floor() * cell + 4.0 * cell, (y0 / cell).floor() * cell + 4.0 * cell);
     let bare = Access::new(&paging, &Store::default()).at(&point(bx, by), z).value().unwrap().top().unwrap();
@@ -211,7 +212,7 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
 #[test]
 fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let _g = serial();
-    let n = pxl_spec::space::pyramid::pages_around(LEAF_Z);
+    let n = pxl_spec::space::pyramid::around(LEAF_Z);
     let flat = || {
         let cells = vec![ground::land; SPAN * SPAN];
         Terrain::leaf(vec![5; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())

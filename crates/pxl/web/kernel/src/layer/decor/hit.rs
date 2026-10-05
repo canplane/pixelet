@@ -4,9 +4,8 @@
 //! leaf chunks' decor: decor paints no voxel, so the access's ray passes through
 //! it. A placed instance resolves to its entry; a scattered one to its cell.
 
-use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::indexer::L2_IDX;
-use pxl_spec::space::pvf3::ivec::{self};
+use pxl_spec::bake::constant::{BAND, CELL};
+use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pyramid::LEAF_Z;
 use pxl_spec::space::v3::{cross3, dot3, sub3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
@@ -17,6 +16,8 @@ use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
 use crate::world::chunk::table::Scheduler;
+use pxl_spec::space::indexer::idx;
+use pxl_spec::space::zoom::index_of;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DecorStruck {
@@ -42,7 +43,7 @@ pub fn raycast_decor(origin: V3, direction: V3, max_dist: f64) -> Option<DecorSt
     let hit = hit_decor(sched, origin, direction, max_dist)?;
     if hit.band == NO_ENTRY {
         return Some(DecorStruck::Scattered(Scattered {
-            cell: CELL.index_of(&crate::world::frame::coord::world_to_canonical(&hit.at)),
+            cell: index_of(CELL, &crate::world::frame::coord::world_to_canonical(&hit.at)),
             group: hit.group,
             at: hit.at,
             rotation: hit.rotation,
@@ -53,7 +54,7 @@ pub fn raycast_decor(origin: V3, direction: V3, max_dist: f64) -> Option<DecorSt
     Some(DecorStruck::Placed(EntryAt {
         col_idx: {
             let (x0, y0, _) = hit.cell.rect();
-            L2_IDX(ivec::gather(x0 as i64, y0 as i64, 0))
+            idx(BAND, ivec::gather(x0 as i64, y0 as i64, 0))
         },
         band_idx: hit.band as i32,
         pos: hit.pos,

@@ -5,7 +5,7 @@
 
 use super::pvf3::{ivec, IVec};
 
-/// Drops Z: pages are keyed by X/Y only, so `L3_IDX(map_center.i)` must pass
+/// Drops Z: pages are keyed by X/Y only, so a leaf index of the map center must pass
 /// through this before it is compared with a page key. A nonzero Z there
 /// dominates a Chebyshev distance and rejects everything.
 pub fn TO_XY(i: IVec) -> IVec {

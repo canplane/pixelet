@@ -1,77 +1,75 @@
 // pxl-spec/space/pyramid.rs
 
-//! The pyramid: pages of a page grid, from the leaves at z15 up to z5. A zoom
-//! names the grid alone, 2^z pages around the world, and each zoom up a page
-//! is twice as wide; a layer's cell is its page's side over the layer's own
-//! count of cells, the same at every zoom. Cell placement, page membership,
+//! The pyramid: pages of a page grid, from the leaves at z15 up to z5, a
+//! page's zoom its size's (`zoom.rs`), so 2^z of them stand around the world;
+//! a layer's cell is its page's side over the layer's own count of cells,
+//! the same at every zoom, so its cells' zoom is its page's plus a constant. Cell placement, page membership,
 //! folding order and cell centers are decided here only; a layer owns what a
 //! cell carries and how it folds (`Folds`).
 
-use super::hierarchy::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of, Scale};
-use super::indexer::{L2, L3, L3_IDX};
+use super::hierarchy::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of};
+use super::indexer::idx;
 use super::pvf3::core::FRAC_W;
-use super::pvf3::core::IVEC_X_W;
 use super::pvf3::ivec::{self, IVec};
-use super::pvf3::projection;
 use super::pvf3::pvf3::{self, Pvf3};
-use super::pvf3::REACH;
+use super::pvf3::{projection, REACH};
 use super::v3::Aabb;
 use super::xy::TO_XY;
+use super::zoom::{base_of, count, index_of, shamt, units, Zoom, FINEST_Z};
 use crate::bake::constant::{CELL, DECK_CELL, EXTENT_CELL};
 
-/// The leaves' zoom: an L3 page, as many of them around as the X lane holds.
-pub const LEAF_Z: u32 = IVEC_X_W - L3.shamt() as u32;
+/// The leaves' zoom: a ground page is 512 cells a side.
+pub const LEAF_Z: Zoom = CELL - 9;
 
 /// The coarsest folded zoom: where the pyramid stops for now, not a limit. A
 /// coarser one extends it.
-pub const TOP_Z: u32 = 5;
+pub const TOP_Z: Zoom = 5;
 
-/// `scale`, fixed in units on a leaf (L3, L2, a layer's cell), as its page grows to `z`.
-const fn at_zoom(scale: Scale, z: u32) -> Scale {
-    scale.up(LEAF_Z as i32 - z as i32)
-}
+/// A chunk is 64 cells a side: its zoom is its cells' less this.
+pub const CHUNK_STEPS: Zoom = 6;
 
 /// A layer's lattice: its cell is its page's side over its own count of
-/// cells, the same at every zoom; held as the cell on a leaf.
+/// cells, the same at every zoom; held as the cell's zoom on a leaf.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Lattice {
-    cell: Scale,
+    cell: Zoom,
 }
 
 impl Lattice {
-    pub const fn new(cell: Scale) -> Lattice {
-        if cell.shamt() + FRAC_W as i32 <= 0 || cell.shamt() > L2.shamt() {
+    /// Finer than a point resolves, or coarser than a leaf's chunk, holds no page.
+    pub const fn new(cell: Zoom) -> Lattice {
+        if cell >= FINEST_Z || cell < CELL - CHUNK_STEPS {
             panic!()
         }
         Lattice { cell }
     }
 
-    /// Its cell where the ground's is `z`'s.
-    pub const fn side_at(self, z: u32) -> Scale {
-        at_zoom(self.cell, z)
+    /// Its cells' zoom on a page at `z`.
+    pub const fn cell_zoom(self, z: Zoom) -> Zoom {
+        z + self.page_cell_shamt() as Zoom
     }
 
-    /// The zoom whose cell is `s`, past the pyramid's either end alike.
-    pub const fn z_of(self, s: Scale) -> i32 {
-        LEAF_Z as i32 - s.above(self.cell)
+    /// The page zoom whose cells are at `cell_zoom`, past the pyramid's either end alike.
+    pub const fn z_of(self, cell_zoom: Zoom) -> i32 {
+        cell_zoom as i32 - self.page_cell_shamt() as i32
     }
 
     /// `page_cells` as a shift.
     pub const fn page_cell_shamt(self) -> u32 {
-        L3.above(self.cell) as u32
+        (self.cell - LEAF_Z) as u32
     }
 
     /// How many of its finest cells stand across one at `z`.
-    pub const fn finest_in(self, z: u32) -> u32 {
-        self.cell.count_in(self.side_at(z))
+    pub const fn finest_in(self, z: Zoom) -> u32 {
+        count(self.cell, self.cell_zoom(z))
     }
 
     pub const fn page_cells(self) -> u32 {
-        self.cell.count_in(L3)
+        count(self.cell, LEAF_Z)
     }
 
     pub const fn chunk_cells(self) -> u32 {
-        self.cell.count_in(L2)
+        count(self.cell, chunk_zoom(LEAF_Z))
     }
 
     pub const fn cell_index(self, tx: u32, ty: u32) -> u32 {
@@ -79,9 +77,9 @@ impl Lattice {
     }
 
     /// The cell at `z` a point stands in; a point, since a cell may be finer than a unit.
-    pub fn cell_of(self, z: u32, at: &Pvf3) -> Cell {
-        let page = Page::over(z, L3_IDX(at.i));
-        let [x, y, _] = self.side_at(z).index_of(at);
+    pub fn cell_of(self, z: Zoom, at: &Pvf3) -> Cell {
+        let page = Page::over(z, idx(LEAF_Z, at.i));
+        let [x, y, _] = index_of(self.cell_zoom(z), at);
         let [x0, y0] = first_descendant_of([ivec::X(page.page), ivec::Y(page.page)], self.page_cell_shamt());
         Cell {
             lattice: self,
@@ -97,7 +95,7 @@ impl Lattice {
 
     pub fn cell_base(self, page: Page, tx: u32, ty: u32) -> Pvf3 {
         let [x0, y0] = first_descendant_of([ivec::X(page.page), ivec::Y(page.page)], self.page_cell_shamt());
-        self.side_at(page.z).base_of([x0 + i64::from(tx), y0 + i64::from(ty), 0])
+        base_of(self.cell_zoom(page.z), [x0 + i64::from(tx), y0 + i64::from(ty), 0])
     }
 
     // A page's four children form one 2n × 2n block a zoom finer, slot q at (q & 1, q >> 1).
@@ -121,7 +119,7 @@ impl Lattice {
 
     /// The cells of this lattice under `outer`'s cell `index` of the same page, row by row.
     pub fn under(self, outer: Lattice, index: u32) -> impl Iterator<Item = u32> {
-        let n = self.cell.count_in(outer.cell);
+        let n = count(self.cell, outer.cell);
         let [x0, y0] = outer.in_page(index).map(|v| v * n);
         (0..n).flat_map(move |dy| (0..n).map(move |dx| self.cell_index(x0 + dx, y0 + dy)))
     }
@@ -171,20 +169,20 @@ pub const PAGE_CHUNKS: u32 = PAGE_CELLS / CHUNK_CELLS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Page {
-    /// The zoom of its cells.
-    pub z: u32,
+    /// Its zoom, which is its size's.
+    pub z: Zoom,
     /// Z is zero.
     pub page: IVec,
 }
 
 impl Page {
-    pub fn new(z: u32, page: IVec) -> Page {
+    pub fn new(z: Zoom, page: IVec) -> Page {
         Page { z, page: TO_XY(page) }
     }
 
     /// The page at `z` a leaf lies under.
-    pub fn over(z: u32, leaf: IVec) -> Page {
-        let [x, y] = ancestor_of([ivec::X(leaf), ivec::Y(leaf)], LEAF_Z - z);
+    pub fn over(z: Zoom, leaf: IVec) -> Page {
+        let [x, y] = ancestor_of([ivec::X(leaf), ivec::Y(leaf)], u32::from(LEAF_Z - z));
         Page::new(z, ivec::gather(x, y, 0))
     }
 
@@ -205,25 +203,25 @@ impl Page {
         })
     }
 
-    pub fn node(self) -> (Scale, [i64; 2]) {
-        (page_scale(self.z), self.at())
+    pub fn node(self) -> (Zoom, [i64; 2]) {
+        (self.z, self.at())
     }
 
     /// Its first leaf.
     pub fn first_leaf(self) -> IVec {
-        let [x, y] = first_descendant_of(self.at(), LEAF_Z - self.z);
+        let [x, y] = first_descendant_of(self.at(), u32::from(LEAF_Z - self.z));
         ivec::gather(x, y, 0)
     }
 
     pub fn span(self) -> f64 {
-        span_of(self.z)
+        units(self.z)
     }
 
     /// South-west corner and side, in units.
     pub fn rect(self) -> (f64, f64, f64) {
-        let (side, [x, y]) = self.node();
-        let base = side.base_of([x, y, 0]);
-        (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), side.side())
+        let (z, [x, y]) = self.node();
+        let base = base_of(z, [x, y, 0]);
+        (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), units(z))
     }
 
     /// The page as a box of the world: its square, every height.
@@ -241,26 +239,13 @@ impl Page {
     }
 
     pub fn of_subject(subject: u64) -> Page {
-        Page::new(ivec::Z(subject) as u32, subject)
+        Page::new(ivec::Z(subject) as Zoom, subject)
     }
 }
 
-/// A page's side at `z`.
-pub const fn page_scale(z: u32) -> Scale {
-    at_zoom(L3, z)
-}
-
-pub const fn span_of(z: u32) -> f64 {
-    page_scale(z).side()
-}
-
-/// A chunk's side at `z`.
-pub const fn chunk_scale(z: u32) -> Scale {
-    at_zoom(L2, z)
-}
-
-pub const fn chunk_span_of(z: u32) -> f64 {
-    chunk_scale(z).side()
+/// A ground chunk's zoom on a page at `z`.
+pub const fn chunk_zoom(z: Zoom) -> Zoom {
+    GROUND.cell_zoom(z) - CHUNK_STEPS
 }
 
 /// The 4×4 pages a zoom finer around a page's children, each at
@@ -279,36 +264,31 @@ pub const fn neighbor_index(qx: i64, qy: i64) -> usize {
     ((qx + 1) + 4 * (qy + 1)) as usize
 }
 
-/// How many pages at `z` stand around the world, and as many from its south edge to its north.
-pub const fn pages_around(z: u32) -> i64 {
-    around(page_scale(z))
-}
-
-/// How many of `side`'s cells stand around the world.
-pub const fn around(side: Scale) -> i64 {
-    1i64 << (IVEC_X_W as i32 - side.shamt())
+/// How many cells at `z` stand around the world, and as many from its south edge to its north.
+pub const fn around(z: Zoom) -> i64 {
+    1i64 << z
 }
 
 /// The rows of pages at `z`, south to north; past them is no page.
-pub fn page_rows(z: u32) -> std::ops::Range<i64> {
-    let n = pages_around(z);
+pub fn page_rows(z: Zoom) -> std::ops::Range<i64> {
+    let n = around(z);
     -n / 2..n / 2
 }
 
-/// An X index of `side`'s cells as the lane holds it; every key goes through it.
-pub fn wrap_index(side: Scale, x: i64) -> i64 {
-    let across = around(side);
+/// An X index of `z`'s cells as the lane holds it; every key goes through it.
+pub fn wrap_index(z: Zoom, x: i64) -> i64 {
+    let across = around(z);
     (x + across / 2).rem_euclid(across) - across / 2
 }
 
-/// A cell of `side` named as `wrap_index` names its X.
-pub fn wrap_cell(side: Scale, [x, y, z]: [i64; 3]) -> [i64; 3] {
-    [wrap_index(side, x), y, z]
+/// A cell at `z` named as `wrap_index` names its X.
+pub fn wrap_cell(z: Zoom, [x, y, h]: [i64; 3]) -> [i64; 3] {
+    [wrap_index(z, x), y, h]
 }
 
 /// The page at `z` at (x, y), X wrapped around the world.
-pub fn page_at(z: u32, [x, y]: [i64; 2]) -> Page {
-    Page::new(z, ivec::gather(wrap_index(page_scale(z), x), y, 0))
+pub fn page_at(z: Zoom, [x, y]: [i64; 2]) -> Page {
+    Page::new(z, ivec::gather(wrap_index(z, x), y, 0))
 }
 
 /// Where a page's own children sit in its neighborhood, in `slot_of`'s order.
@@ -336,12 +316,14 @@ impl Cell {
         self.index
     }
 
-    pub fn z(self) -> u32 {
+    /// Its page's zoom.
+    pub fn z(self) -> Zoom {
         self.page.z
     }
 
-    pub fn scale(self) -> Scale {
-        self.lattice.side_at(self.page.z)
+    /// Its own.
+    pub fn zoom(self) -> Zoom {
+        self.lattice.cell_zoom(self.page.z)
     }
 
     pub fn in_page(self) -> [u32; 2] {
@@ -355,40 +337,40 @@ impl Cell {
 
     pub fn mid(self) -> Pvf3 {
         let base = self.base();
-        let half = 1i64 << (FRAC_W as i32 + self.scale().shamt() - 1);
+        let half = 1i64 << (FRAC_W as i32 + shamt(self.zoom()) - 1);
         pvf3::gather(pvf3::X(&base) + half, pvf3::Y(&base) + half, 0)
     }
 
     pub fn side(self) -> f64 {
-        self.scale().side()
+        units(self.zoom())
     }
 
     /// The cell `steps` zooms coarser it lies in.
-    pub fn up(self, steps: u32) -> Cell {
+    pub fn up(self, steps: Zoom) -> Cell {
         self.lattice.cell_of(self.page.z - steps, &self.base())
     }
 
     /// Where `inner`, no coarser and inside this cell, lies in it, in `inner`'s sides.
     pub fn offset_of(self, inner: Cell) -> [u32; 2] {
         let (outer, inner_base) = (self.base(), inner.base());
-        let shift = FRAC_W as i32 + inner.scale().shamt();
+        let shift = FRAC_W as i32 + shamt(inner.zoom());
         let lane = |o: i64, i: i64| ((i - o) >> shift) as u32;
         [lane(pvf3::X(&outer), pvf3::X(&inner_base)), lane(pvf3::Y(&outer), pvf3::Y(&inner_base))]
     }
 
     /// Where this cell lies in the page `steps` zooms coarser, in its own sides.
-    pub fn in_page_above(self, steps: u32) -> [i64; 2] {
+    pub fn in_page_above(self, steps: Zoom) -> [i64; 2] {
         let up = self.up(steps);
         let [ax, ay] = up.in_page();
-        let n = self.scale().count_in(up.scale()) as i64;
+        let n = count(self.zoom(), up.zoom()) as i64;
         let [ox, oy] = up.offset_of(self);
         [ax as i64 * n + ox as i64, ay as i64 * n + oy as i64]
     }
 
     /// `offset_of`'s inverse.
-    pub fn inner_at(self, lattice: Lattice, z: u32, offset: [u32; 2]) -> Cell {
+    pub fn inner_at(self, lattice: Lattice, z: Zoom, offset: [u32; 2]) -> Cell {
         let base = self.base();
-        let shift = FRAC_W as i32 + lattice.side_at(z).shamt();
+        let shift = FRAC_W as i32 + shamt(lattice.cell_zoom(z));
         let at = pvf3::gather(pvf3::X(&base) + ((offset[0] as i64) << shift), pvf3::Y(&base) + ((offset[1] as i64) << shift), 0);
         lattice.cell_of(z, &at)
     }

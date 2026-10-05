@@ -26,7 +26,7 @@ use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::quadkey::page_name;
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::pvf3::pvf3;
-use pxl_spec::space::pyramid::{page_at, pages_around, GROUND};
+use pxl_spec::space::pyramid::{around, page_at, GROUND};
 
 const DAY: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74393/world.topo.200407.3x21600x10800.jpg";
 const NIGHT: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144897/BlackMarble_2016_";
@@ -271,7 +271,7 @@ fn run() -> Result<(), String> {
     global(&day_plate, &night_plate, Path::new("asset/sky/earth/07.webp"))?;
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     // Every page of the zoom: the Mercator square, one world across and as high.
-    let half = pages_around(EARTH_Z) / 2;
+    let half = around(EARTH_Z) / 2;
     let pages: Vec<[i64; 2]> = (-half..half).flat_map(|y| (-half..half).map(move |x| [x, y])).collect();
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
     let written = std::sync::atomic::AtomicU32::new(0);

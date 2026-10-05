@@ -18,27 +18,27 @@ use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::lod::{cubes_meeting, fault_radius, Tau};
-use pxl_spec::space::observation::{Bounds, Contents, Observation};
+use pxl_spec::space::observation::{Bounds, Contents, Observation, Requirement};
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_span_of, Page, LEAF_Z};
+use pxl_spec::space::pyramid::{chunk_zoom, Page, LEAF_Z};
 use pxl_spec::space::v3::Aabb;
 
 use crate::world::access::Access;
 use crate::world::chunk::mesh_slot::POOLS;
 use crate::world::observation::{heights_revision, observation, Known, Order};
 use crate::world::observer::{cell_angle, EdgeRays, Footprint, Lens, Sight};
-use pxl_spec::space::observation::Requirement;
 use xpute_runtime::global::Global;
 
 use super::chunk::Chunk;
 use super::Layer as _;
+use pxl_spec::space::zoom::{units, Zoom};
 
 /// Most pieces the cover can be: every chunk at the top meeting the far
 /// edge's box (`Observation::reach`), clamped to the position lane. An
 /// interval of `d` meets at most ⌊d / side⌋ + 2 chunks, and the reach is
 /// 2 · `SPLIT` / `CHUNK_CELLS` chunks each way at every zoom.
-pub const fn cover_pieces(top: u32, planet: f64) -> u32 {
-    let (far, side) = (fault_radius(top), chunk_span_of(top));
+pub const fn cover_pieces(top: Zoom, planet: f64) -> u32 {
+    let (far, side) = (fault_radius(top), units(chunk_zoom(top)));
     let reach = [2.0 * far, 2.0 * far, 2.0 * far + far * far / (2.0 * planet)];
     let (mut n, mut k) = (1, 0);
     while k < 3 {
@@ -52,8 +52,8 @@ pub const fn cover_pieces(top: u32, planet: f64) -> u32 {
 
 /// How near a chunk at `z` must come for its error to cross a cell:
 /// the error is at most its diagonal over its distance less the diagonal.
-fn split_reach(z: u32, tau: Tau) -> f64 {
-    3f64.sqrt() * chunk_span_of(z) * (1.0 + 1.0 / cell_angle(tau))
+fn split_reach(z: Zoom, tau: Tau) -> f64 {
+    3f64.sqrt() * units(chunk_zoom(z)) * (1.0 + 1.0 / cell_angle(tau))
 }
 
 pub struct Cut {
@@ -244,7 +244,7 @@ impl Domain {
             // A cover piece is drawn one cell per chunk (`drawn_scale`) and measured
             // as drawn: half that cell across, and the box's full height.
             (Contents::Holds { bound, .. }, _) if self.outermost(c) => {
-                let half = chunk_span_of(c.z()) / 2.0;
+                let half = units(chunk_zoom(c.z())) / 2.0;
                 (bound, [half, half, bound.extent()[2]])
             }
             (Contents::Holds { bound, error }, _) => (bound, error),
@@ -507,7 +507,7 @@ impl Domain {
         let top = self.o.top;
         let mut roots = core::mem::take(&mut self.roots);
         roots.clear();
-        for at in cubes_meeting(chunk_span_of(top), self.o.reach(self.o.far)) {
+        for at in cubes_meeting(units(chunk_zoom(top)), self.o.reach(self.o.far)) {
             let c = Chunk::at(top, at);
             if Order::of(&self.o, &c.region()).near >= self.o.far {
                 continue;

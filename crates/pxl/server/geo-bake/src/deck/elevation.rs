@@ -11,9 +11,9 @@ use pxl_spec::bake::ground::cell_shift;
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::adapter::epsg3857::from_db;
-use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::indexer::idx;
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
+use pxl_spec::space::pyramid::{GROUND, LEAF_Z, PAGE_CELLS};
 
 use crate::terrain::bake::Surface;
 
@@ -40,5 +40,5 @@ pub fn sample_cells(surfaces: &HashMap<IVec, Surface>, points: &[[f64; 2]]) -> R
 
 pub fn page_of([x, y]: [f64; 2]) -> IVec {
     let at = epsg3857::project(x, y, 0.0);
-    L3_IDX(at.i)
+    idx(LEAF_Z, at.i)
 }

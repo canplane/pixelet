@@ -9,6 +9,7 @@ use pxl_spec::space::lod::{fault_radius, Tau};
 use pxl_spec::space::observation::{ByBounds, Contents, Frustum, Unknown};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::v3::Aabb;
+use pxl_spec::space::zoom::Zoom;
 
 const HEIGHT: f64 = 1000.0;
 
@@ -38,7 +39,7 @@ fn named(o: &Observation) -> Vec<Page> {
 struct Flat;
 
 impl Bounds for Flat {
-    fn contents(&self, _z: u32, region: Aabb) -> Contents {
+    fn contents(&self, _z: Zoom, region: Aabb) -> Contents {
         let ground = Aabb {
             min: [region.min[0], region.min[1], 0.0],
             max: [region.max[0], region.max[1], 0.0],

@@ -10,6 +10,7 @@ use pxl_spec::space::v3::{add3, Aabb, V3};
 
 use crate::world::observer::{Footprint, Grid, Met, Observer, OnTile, Sight};
 use crate::world::pyramid::domain::{Domain, Price};
+use pxl_spec::space::zoom::{units, Zoom};
 
 #[derive(Clone)]
 pub struct World {
@@ -40,7 +41,7 @@ impl Bounds for World {
     /// The ground's lowest is its top cell's floor, as the index lane bounds
     /// it. Flat, it rises a cell's step over an index cell; a box is off by all
     /// of itself.
-    fn contents(&self, z: u32, region: Aabb) -> Contents {
+    fn contents(&self, z: Zoom, region: Aabb) -> Contents {
         if !self.answered {
             return Contents::Unknown;
         }
@@ -52,7 +53,7 @@ impl Bounds for World {
             }
             .meet(region)
         };
-        let cell = GROUND.side_at(z).side();
+        let cell = units(GROUND.cell_zoom(z));
         let (mut bound, mut rise): (Option<Aabb>, f64) = (None, 0.0);
         if let Some(g) = column(self.ground - 1.0 - self.slack, self.ground + self.slack) {
             bound = Some(g);

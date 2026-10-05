@@ -4,10 +4,10 @@
 //! faults can name about a point. Both depend only on the lattice, so the
 //! resident bound is proved before anything of the world or screen is known.
 
-use super::hierarchy::Scale;
 use super::pvf3::REACH;
-use super::pyramid::{page_at, page_rows, span_of, Page, GROUND, LEAF_Z, TOP_Z};
+use super::pyramid::{page_at, page_rows, Page, GROUND, LEAF_Z, TOP_Z};
 use super::v3::Aabb;
+use super::zoom::{units, Zoom, UNIT_Z};
 
 /// The criterion as a distance per cell side: a zoom is drawn from `SPLIT`
 /// of its cells away out to twice that. 192 hands the finest tier off at
@@ -30,16 +30,17 @@ pub fn target_cell_px() -> f64 {
     px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / SPLIT
 }
 
-/// Where ground starts being drawn with cells of `s` at `Tau::FINEST`, going out.
-pub const fn split_distance(s: Scale) -> f64 {
-    SPLIT * s.side()
+/// Where ground starts being drawn with cells at `cell_zoom` at `Tau::FINEST`, going out.
+pub const fn split_distance(cell_zoom: Zoom) -> f64 {
+    SPLIT * units(cell_zoom)
 }
 
-/// The cell a pixel covers at `r` from the eye: the widest whose split
-/// distance is within `r`. Distance only: with the surface angle in, the
-/// skyline would be drawn coarsest. Finer than the ground's near the eye.
-pub fn cell_at(r: f64) -> Scale {
-    Scale::of(libm::floor(libm::log2(r / SPLIT)) as i32)
+/// The cell zoom a pixel covers at `r` from the eye: the widest cell whose
+/// split distance is within `r`. Distance only: with the surface angle in,
+/// the skyline would be drawn coarsest. Finer than the ground's near the
+/// eye, held to what a zoom can name.
+pub fn cell_at(r: f64) -> Zoom {
+    (UNIT_Z as f64 - libm::floor(libm::log2(r / SPLIT))).clamp(0.0, Zoom::MAX as f64) as Zoom
 }
 
 /// The criterion's one scale factor, at least 1: every zoom's split
@@ -61,46 +62,46 @@ impl Tau {
         self.0
     }
 
-    pub const fn split_distance(self, s: Scale) -> f64 {
-        split_distance(s) / self.0
+    pub const fn split_distance(self, cell_zoom: Zoom) -> f64 {
+        split_distance(cell_zoom) / self.0
     }
 
-    pub fn cell_at(self, r: f64) -> Scale {
+    pub fn cell_at(self, r: f64) -> Zoom {
         cell_at(r * self.0)
     }
 
-    /// The zoom the ground is drawn from at `r`: its cell's, held to the pyramid.
-    pub fn z_at(self, r: f64) -> u32 {
-        GROUND.z_of(self.cell_at(r)).clamp(TOP_Z as i32, LEAF_Z as i32) as u32
+    /// The page zoom the ground is drawn from at `r`: its cells', held to the pyramid.
+    pub fn z_at(self, r: f64) -> Zoom {
+        GROUND.z_of(self.cell_at(r)).clamp(TOP_Z as i32, LEAF_Z as i32) as Zoom
     }
 
-    pub const fn fault_radius(self, z: u32) -> f64 {
+    pub const fn fault_radius(self, z: Zoom) -> f64 {
         fault_radius(z) / self.0
     }
 }
 
 /// How far from an observer's foot a fault at `z` can lie: the split
 /// distance of the ground's cell a zoom coarser. Bounds the run along the ground too.
-pub const fn fault_radius(z: u32) -> f64 {
-    split_distance(GROUND.side_at(z - 1))
+pub const fn fault_radius(z: Zoom) -> f64 {
+    split_distance(GROUND.cell_zoom(z - 1))
 }
 
 /// The most pages a zoom's faults span along an axis: ⌊d / page⌋ + 2, the same at every zoom.
-pub const FAULT_ACROSS: u32 = (2.0 * fault_radius(LEAF_Z) / span_of(LEAF_Z)) as u32 + 2;
+pub const FAULT_ACROSS: u32 = (2.0 * fault_radius(LEAF_Z) / units(LEAF_Z)) as u32 + 2;
 
 /// The most pages a zoom's faults name about one observer.
 pub const FAULT_PAGES: u32 = FAULT_ACROSS * FAULT_ACROSS;
 
 /// Every page at `z` with ground within `radius` of `at`.
-pub fn pages_within(z: u32, at: [f64; 2], radius: f64) -> impl Iterator<Item = Page> {
+pub fn pages_within(z: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Page> {
     let ys = page_rows(z);
     squares_within(z, at, radius).filter(move |&[_, y]| ys.contains(&y)).map(move |xy| page_at(z, xy))
 }
 
 /// `pages_within` before X wraps.
-pub fn squares_within(z: u32, at: [f64; 2], radius: f64) -> impl Iterator<Item = [i64; 2]> {
+pub fn squares_within(z: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = [i64; 2]> {
     xpute_core::ensure!(z >= TOP_Z, EINVAL);
-    let span = span_of(z);
+    let span = units(z);
     let rows = |c: f64| ((c - radius) / span).floor() as i64..=((c + radius) / span).floor() as i64;
     let (xs, ys) = (rows(at[0]), rows(at[1]));
     let gap = move |c: f64, i: i64| (i as f64 * span - c).max(c - (i + 1) as f64 * span).max(0.0);

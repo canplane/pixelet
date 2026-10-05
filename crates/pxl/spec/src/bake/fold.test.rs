@@ -12,11 +12,11 @@ const PADDED: usize = ELE_PADDED_SPAN as usize;
 fn an_area_keeps_what_fills_half_its_four_and_ties_alternate_corners() {
     assert_eq!(majority([7, 7, 7, 1], CELL), 7);
     assert_eq!(majority([7, 7, 1, 2], CELL), 7);
-    assert_eq!(majority([1, 7, 2, 7], CELL.up(1)), 7);
+    assert_eq!(majority([1, 7, 2, 7], CELL - 1), 7);
     // No majority: the tie child, first under an odd step from the cell and last under an even one.
-    assert_eq!(majority([7, 1, 2, 3], CELL.up(1)), 7);
-    assert_eq!(majority([7, 1, 2, 3], CELL.up(2)), 3);
-    assert_eq!(majority([7, 7, 1, 1], CELL.up(2)), 1);
+    assert_eq!(majority([7, 1, 2, 3], CELL - 1), 7);
+    assert_eq!(majority([7, 1, 2, 3], CELL - 2), 3);
+    assert_eq!(majority([7, 7, 1, 1], CELL - 2), 1);
 }
 
 /// A page whose cell is `f` of it.
@@ -26,7 +26,7 @@ fn plane(f: impl Fn(usize, usize) -> u8) -> Ground {
     }
 }
 
-fn fold(children: [&Ground; 4], z: u32) -> Vec<u8> {
+fn fold(children: [&Ground; 4], z: Zoom) -> Vec<u8> {
     fold_ground(children, z).cells.to_vec()
 }
 
@@ -156,13 +156,13 @@ fn elevation_rounds_its_halves_to_even() {
 #[test]
 fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
     let (a, b, empty) = (5, 9, 0);
-    assert_eq!(majority([a, empty, empty, empty, empty, empty, empty, empty], CELL.up(1)), empty);
-    assert_eq!(majority([a, a, a, a, empty, empty, empty, empty], CELL.up(1)), a);
-    assert_eq!(majority([empty, a, a, a, a, a, empty, empty], CELL.up(2)), a);
+    assert_eq!(majority([a, empty, empty, empty, empty, empty, empty, empty], CELL - 1), empty);
+    assert_eq!(majority([a, a, a, a, empty, empty, empty, empty], CELL - 1), a);
+    assert_eq!(majority([empty, a, a, a, a, a, empty, empty], CELL - 2), a);
     let halves = [a, b, a, b, b, a, b, a];
-    assert_eq!(majority(halves, CELL.up(1)), halves[0]);
-    assert_eq!(majority(halves, CELL.up(2)), halves[7]);
-    assert_eq!(majority(halves, CELL.down(1)), halves[0], "a side finer than the cell alternates the same way");
+    assert_eq!(majority(halves, CELL - 1), halves[0]);
+    assert_eq!(majority(halves, CELL - 2), halves[7]);
+    assert_eq!(majority(halves, CELL + 1), halves[0], "a side finer than the cell alternates the same way");
 }
 
 /// The open ocean: flat water at sea level, no page.

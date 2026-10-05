@@ -27,6 +27,7 @@ use crate::world::paging::floor::{self, Fallback, Floor};
 use crate::world::paging::{Candidate, Paging, Victim, DESTINATION_PAGES, ZOOM_DEMAND_PAGES};
 use crate::world::prefetch::{NoPrefetch, Prefetch};
 use crate::world::quality;
+use pxl_spec::space::zoom::Zoom;
 
 pub trait Layer: Folds + Clone + 'static {
     const CATEGORY: Category;
@@ -39,7 +40,7 @@ pub trait Layer: Folds + Clone + 'static {
     /// differs from the ground's declared top (`floor::top`). Its floor is
     /// then that zoom's whole fault ring about the eye: it is drawn past where
     /// the ground stops.
-    const TOP: Option<u32> = None;
+    const TOP: Option<Zoom> = None;
 
     /// How far from the eye the layer draws anything; past it nothing of it
     /// is asked for.

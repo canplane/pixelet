@@ -8,8 +8,9 @@
 
 use super::lod::{cubes_meeting, fault_radius, Tau};
 use super::pvf3::nearest_box;
-use super::pyramid::{page_at, page_rows, span_of, Page, GROUND, LEAF_Z, TOP_Z};
+use super::pyramid::{page_at, page_rows, Page, GROUND, LEAF_Z, TOP_Z};
 use super::v3::{dot3, Aabb, V3};
+use super::zoom::{units, Zoom};
 
 /// Six planes, normals in, `n · x + d ≥ 0` inside, in world units.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -40,7 +41,7 @@ pub struct Observation {
     /// Never past `fault_radius(top)`.
     pub far: f64,
     /// The coarsest zoom the source supplies whole; no sample asks for coarser.
-    pub top: u32,
+    pub top: Zoom,
     /// In units: ground `d` from the eye is drawn `d² / 2R` under where it is stored.
     pub planet: f64,
     /// The ground under the eye as last known; not part of what is required.
@@ -86,7 +87,7 @@ impl Observation {
 /// What stands in `region` known at `z`; the leaves' for anything finer.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Requirement {
-    pub z: u32,
+    pub z: Zoom,
     pub region: Aabb,
 }
 
@@ -117,13 +118,13 @@ impl Contents {
 /// What is known of the world. Never less than the truth, and at a coarser
 /// zoom never less than at a finer one under it.
 pub trait Bounds {
-    fn contents(&self, z: u32, region: Aabb) -> Contents;
+    fn contents(&self, z: Zoom, region: Aabb) -> Contents;
 }
 
 pub struct Unknown;
 
 impl Bounds for Unknown {
-    fn contents(&self, _z: u32, _region: Aabb) -> Contents {
+    fn contents(&self, _z: Zoom, _region: Aabb) -> Contents {
         Contents::Unknown
     }
 }
@@ -138,7 +139,7 @@ pub struct Paged;
 impl Storage for Paged {
     /// Every page under the region; edges are inclusive south and west only.
     fn pages(&self, r: &Requirement, each: &mut dyn FnMut(Page)) {
-        let span = span_of(r.z);
+        let span = units(r.z);
         let rows = |k: usize| {
             let first = (r.region.min[k] / span).floor() as i64;
             first..=((r.region.max[k] / span).ceil() as i64 - 1).max(first)
@@ -166,8 +167,8 @@ pub struct ByBounds {
 
 /// The distances `z` is required over: its split distance (0 for the leaves) to the
 /// next coarser zoom's, or to the far edge for the top. None past the far edge.
-pub fn band(o: &Observation, tau: Tau, z: u32) -> Option<(f64, f64)> {
-    let from = if z == LEAF_Z { 0.0 } else { tau.split_distance(GROUND.side_at(z)) };
+pub fn band(o: &Observation, tau: Tau, z: Zoom) -> Option<(f64, f64)> {
+    let from = if z == LEAF_Z { 0.0 } else { tau.split_distance(GROUND.cell_zoom(z)) };
     let to = if z == o.top { fault_radius(z) } else { tau.fault_radius(z) };
     (from <= o.far).then_some((from, to))
 }
@@ -177,7 +178,7 @@ impl DemandEstimator for ByBounds {
         xpute_core::ensure!(o.top >= TOP_Z && o.far <= fault_radius(o.top), EINVAL);
         for z in (o.top..=LEAF_Z).rev() {
             let Some((from, to)) = band(o, self.tau, z) else { break };
-            let span = span_of(z);
+            let span = units(z);
             for at in cubes_meeting(span, o.reach(to.min(o.far))) {
                 let region = Aabb {
                     min: at.map(|c| c as f64 * span),

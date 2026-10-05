@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pyramid::{span_of, Page, LEAF_Z};
+use pxl_spec::space::pyramid::{Page, LEAF_Z};
 use pxl_spec::space::v3::V3;
 
 use crate::layer::marker::debug_lines::DebugLines;
@@ -22,6 +22,7 @@ use crate::world::frame::view::view;
 use crate::world::paging::floor;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer as _;
+use pxl_spec::space::zoom::{units, Zoom};
 
 /// What an edge marks, lowest first: a stretch takes the highest over it.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -86,7 +87,7 @@ impl CoverageGizmo {
         }
         let v = view();
         // Its lines are f32 about a leaf's corner under the eye, near enough to resolve.
-        let span = span_of(LEAF_Z);
+        let span = units(LEAF_Z);
         let about = v.pose.eye.map(|c| (c / span).floor() * span);
         let about = [about[0], about[1], 0.0];
         let seen = (revisions.0, revisions.1, revisions.2, about.map(f64::to_bits));
@@ -133,7 +134,7 @@ impl CoverageGizmo {
     }
 }
 
-fn line_top(mut p: Page, top: u32) -> Page {
+fn line_top(mut p: Page, top: Zoom) -> Page {
     while p.z > top {
         p = p.parent();
     }

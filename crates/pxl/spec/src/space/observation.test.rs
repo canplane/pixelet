@@ -24,7 +24,7 @@ struct World {
 }
 
 impl Bounds for World {
-    fn contents(&self, _z: u32, region: Aabb) -> Contents {
+    fn contents(&self, _z: Zoom, region: Aabb) -> Contents {
         let (lo, hi) = (region.min, region.max);
         let over = |t: &&Tower| t.x[0] <= hi[0] && t.x[1] >= lo[0] && t.y[0] <= hi[1] && t.y[1] >= lo[1];
         let top = self.towers.iter().filter(over).map(|t| t.h).fold(0.0, f64::max);
@@ -149,7 +149,7 @@ fn exact(world: &World, look: Look, far: f64, tau: Tau) -> HashSet<Page> {
         }
         let at = [look.eye[0] + r * v[0], look.eye[1] + r * v[1]];
         let z = tau.z_at(r);
-        let span = span_of(z);
+        let span = units(z);
         out.insert(page_at(z, at.map(|c| (c / span).floor() as i64)));
     }
     out
@@ -226,7 +226,7 @@ fn a_zoom_names_no_more_than_the_fault_bound_and_less_known_names_more() {
 #[test]
 fn paged_storage_maps_a_square_to_its_page_and_ground_to_every_page_under_it() {
     for z in [LEAF_Z, 13, TOP_Z] {
-        let span = span_of(z);
+        let span = units(z);
         for [x, y] in [[0i64, 0], [-3, 5], [17, -11]] {
             let mut pages = Vec::new();
             let (x0, y0) = (x as f64 * span, y as f64 * span);

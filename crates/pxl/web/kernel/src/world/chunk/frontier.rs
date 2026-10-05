@@ -19,7 +19,7 @@
 
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pyramid::{chunk_scale, GROUND, LEAF_Z, TOP_Z};
+use pxl_spec::space::pyramid::{chunk_zoom, GROUND, LEAF_Z, TOP_Z};
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
 use crate::world::chunk::build::mesh_step;
@@ -28,7 +28,7 @@ use crate::world::observation::Order;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::domain::Price;
 use crate::world::quality::fits;
-use pxl_spec::space::hierarchy::Scale;
+use pxl_spec::space::zoom::Zoom;
 
 pub type Slots = [u32; POOLS];
 
@@ -40,40 +40,41 @@ pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS, 0];
 /// for each refinement in flight holding the piece it replaces.
 pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1], 0];
 
-/// The scale the rule wants at `near`: a cell twice the LOD's, since terrain
-/// draws its cells averaged 2 × 2, on past a leaf's down to the objects' finest.
-fn wanted_scale(near: f64, tau: Tau) -> Scale {
-    tau.cell_at(near).up(1).max(OBJECT_FINEST).min(chunk_scale(TOP_Z))
+/// The cell zoom the rule wants at `near`: a cell twice the LOD's, since
+/// terrain draws its cells averaged 2 × 2, on past a leaf's down to the
+/// objects' finest.
+fn wanted_zoom(near: f64, tau: Tau) -> Zoom {
+    tau.cell_at(near).saturating_sub(1).clamp(chunk_zoom(TOP_Z), OBJECT_FINEST)
 }
 
-/// A wanted scale as a chunk at `z` draws it: clamped to its own cells
+/// A wanted cell zoom as a chunk at `z` draws it: clamped to its own cells
 /// averaged 2 × 2, and finer than its cells only on the leaves where it holds
-/// objects. The outermost (cover) pieces always take the coarsest scale, one
+/// objects. The outermost (cover) pieces always take the coarsest cell zoom, one
 /// slot each.
 ///
-/// A chunk read from a coarser page still uses its own scale: drawing it at
+/// A chunk read from a coarser page still uses its own cell zoom: drawing it at
 /// that page's cells made blocks over the sea after a jump (2026-09-26).
-fn drawn_scale(scale: Scale, z: u32, outermost: bool, objects: bool) -> Scale {
+fn drawn_zoom(cell_zoom: Zoom, z: Zoom, outermost: bool, objects: bool) -> Zoom {
     if outermost {
-        return chunk_scale(z);
+        return chunk_zoom(z);
     }
-    let own = GROUND.side_at(z);
+    let own = GROUND.cell_zoom(z);
     let finest = match (z == LEAF_Z, objects) {
         (true, true) => OBJECT_FINEST,
         (true, false) => own,
-        (false, _) => own.up(1),
+        (false, _) => own - 1,
     };
-    scale.clamp(finest, own.up(1))
+    cell_zoom.clamp(own - 1, finest)
 }
 
-/// The quality alone moves the scale; a mesh too big for one slot fills more
+/// The quality alone moves the cell zoom; a mesh too big for one slot fills more
 /// slots and is never drawn coarser for it.
-pub fn scale_of(c: Chunk, outermost: bool, near: f64, tau: Tau, objects: bool) -> Scale {
-    drawn_scale(wanted_scale(near, tau), c.z(), outermost, objects)
+pub fn zoom_of(c: Chunk, outermost: bool, near: f64, tau: Tau, objects: bool) -> Zoom {
+    drawn_zoom(wanted_zoom(near, tau), c.z(), outermost, objects)
 }
 
-pub fn pool_of(c: Chunk, scale: Scale) -> Pool {
-    Pool::of(c.z(), mesh_step(scale, c.z()))
+pub fn pool_of(c: Chunk, cell_zoom: Zoom) -> Pool {
+    Pool::of(c.z(), mesh_step(cell_zoom, c.z()))
 }
 
 /// Slots per pool, counted before allocation. A leaf piece also takes a coarse
@@ -84,11 +85,11 @@ pub struct Need<F> {
     pub admit: bool,
 }
 
-impl<F: Fn(Chunk, Scale) -> u32> Price for Need<F> {
+impl<F: Fn(Chunk, Zoom) -> u32> Price for Need<F> {
     fn piece(&self, c: Chunk, outermost: bool, near: f64, tau: Tau) -> Slots {
-        let scale = scale_of(c, outermost, near, tau, false);
-        let k = (self.slots)(c, scale);
-        match pool_of(c, scale) {
+        let cell_zoom = zoom_of(c, outermost, near, tau, false);
+        let k = (self.slots)(c, cell_zoom);
+        match pool_of(c, cell_zoom) {
             Pool::Coarse => [0, k, 0],
             Pool::Cover => [0, 0, k],
             Pool::Fine => [k, 1, 0],

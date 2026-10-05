@@ -1,7 +1,7 @@
 // pxl-spec/space/sparse_tree/tree.rs
 
-use crate::space::hierarchy::Scale;
 use crate::space::pvf3::{pvf3, IVec, Ivec, PVecTraits, Pvf3};
+use crate::space::zoom::{shamt, Zoom};
 
 use super::mem as st_mem;
 pub use super::mem::SparseTreeLayout;
@@ -13,8 +13,8 @@ pub struct SparseTree<T: Copy + Default + PartialEq> {
 }
 
 /// The leaf key at min resolution; the fraction is dropped.
-fn to_key(coord: &Pvf3, min: Scale) -> IVec {
-    pvf3::sh(coord, -min.shamt()).i
+fn to_key(coord: &Pvf3, min: Zoom) -> IVec {
+    pvf3::sh(coord, -shamt(min)).i
 }
 
 pub fn alloc<T: Copy + Default + PartialEq>(layout: SparseTreeLayout, cap: u32) -> SparseTree<T> {
@@ -52,7 +52,7 @@ where
 }
 
 /// `level` above `tree.layout.min` claims a whole block at once.
-pub fn write<T: Copy + Default + PartialEq>(tree: &mut SparseTree<T>, coord: &Pvf3, val: T, level: Scale) {
+pub fn write<T: Copy + Default + PartialEq>(tree: &mut SparseTree<T>, coord: &Pvf3, val: T, level: Zoom) {
     let key: IVec = to_key(coord, tree.layout.min);
     st_mem::set::<Ivec, T>(&mut tree.mem, &tree.layout, key, val, level, 0);
 }
@@ -71,8 +71,8 @@ pub fn compact<T: Copy + Default + PartialEq>(tree: &mut SparseTree<T>) -> &mut 
     tree
 }
 
-/// Every maximal uniform leaf block: corner in min-level units and the block's own scale.
-pub fn walk<T: Copy + Default + PartialEq>(tree: &SparseTree<T>, visit: &mut dyn FnMut(i32, i32, i32, Scale, T)) {
+/// Every maximal uniform leaf block: corner in min-level units and the block's own zoom.
+pub fn walk<T: Copy + Default + PartialEq>(tree: &SparseTree<T>, visit: &mut dyn FnMut(i32, i32, i32, Zoom, T)) {
     st_mem::walk(&tree.mem, &tree.layout, visit, 0);
 }
 

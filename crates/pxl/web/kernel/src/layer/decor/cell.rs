@@ -11,12 +11,11 @@ use std::collections::HashMap;
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource};
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, LEAF_Z};
 use pxl_spec::space::v3::{len3, sub3, V3};
 use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::alloc;
+use xpute_runtime::mem::heap::{alloc, free};
 use xpute_runtime::sched::frame_budget::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
@@ -33,9 +32,11 @@ use crate::world::chunk::table::Scheduler;
 use crate::world::observation::{eye, observation};
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
+use pxl_spec::bake::constant::BAND;
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::indexer::{from_idx, idx};
+use pxl_spec::space::zoom::{index, Zoom};
 use xpute_runtime::global::Global;
-use xpute_runtime::mem::heap::free;
 
 struct Block {
     at: u32,
@@ -61,7 +62,7 @@ impl Block {
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Sources {
     /// The zoom of the page it is built from, coarser until its own comes.
-    read_from: u32,
+    read_from: Zoom,
     revision: u32,
     shown: bool,
     hide: Option<DecorHide>,
@@ -114,7 +115,7 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
     let inside = |x: i64, y: i64| (x0..x0 + side).contains(&(x as f64)) && (y0..y0 + side).contains(&(y as f64));
     let hide = hide.filter(|h| match *h {
         DecorHide::Placed(at) => {
-            let o = FROM_L2_IDX(at.col_idx);
+            let o = from_idx(BAND, at.col_idx);
             inside(ivec::X(o), ivec::Y(o))
         }
         DecorHide::Scattered([x, y, _]) => chunk.z() == LEAF_Z && inside(x, y),
@@ -157,7 +158,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
     c.placed.clear();
     c.placed.try_reserve(c.cols.len()).ok()?;
     c.placed.extend(c.cols.iter().map(|&col_idx| {
-        let o = FROM_L2_IDX(col_idx);
+        let o = from_idx(BAND, col_idx);
         Placed {
             col_idx,
             ox: ivec::X(o) as f64 - cx0,
@@ -165,8 +166,8 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
             hittable: chunk.z() == LEAF_Z,
         }
     }));
-    let target = GROUND.side_at(z);
-    let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
+    let target = GROUND.cell_zoom(z);
+    let (cx, cy, span) = (index(target, x0), index(target, y0), CHUNK_CELLS as i64);
     match z < LEAF_Z && sources.shown {
         true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
         false => c.folded.clear(),
@@ -179,7 +180,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         y0,
         tx0,
         ty0,
-        col_idx: (z == LEAF_Z).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
+        col_idx: (z == LEAF_Z).then(|| idx(BAND, ivec::gather(x0, y0, 0))),
         folded: (z < LEAF_Z).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);

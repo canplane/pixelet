@@ -8,8 +8,8 @@ fn zoom_at(r: f64) -> i32 {
 }
 
 /// Feet on a page's corners, edges and inside, either side of the origin.
-fn feet(z: u32) -> Vec<[f64; 2]> {
-    let span = span_of(z);
+fn feet(z: Zoom) -> Vec<[f64; 2]> {
+    let span = units(z);
     let fractions = [0.0, 1e-9, 0.25, 0.5, 0.75, 1.0 - 1e-9];
     let mut out = Vec::new();
     for [px, py] in [[0.0, 0.0], [-3.0, 5.0], [17.0, -11.0]] {
@@ -22,7 +22,7 @@ fn feet(z: u32) -> Vec<[f64; 2]> {
     out
 }
 
-fn faults(z: u32, foot: [f64; 2]) -> Vec<Page> {
+fn faults(z: Zoom, foot: [f64; 2]) -> Vec<Page> {
     pages_within(z, foot, fault_radius(z)).collect()
 }
 
@@ -63,7 +63,7 @@ fn a_hit_asks_for_a_page_inside_the_fault_bound() {
                         if asked != z as i32 {
                             continue;
                         }
-                        let [x, y] = [at[0] / span_of(z), at[1] / span_of(z)].map(|c| c.floor() as i64);
+                        let [x, y] = [at[0] / units(z), at[1] / units(z)].map(|c| c.floor() as i64);
                         assert!(pages.contains(&page_at(z, [x, y])), "z{z}: a hit {run} along the ground from {foot:?}");
                     }
                 }
@@ -85,8 +85,8 @@ fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {
 #[test]
 fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
     let mut last = i32::MAX;
-    for k in 0..4000 {
-        let r = 0.01 * 1.01f64.powi(k);
+    // Inside the world: no cell is coarser than z0's.
+    for r in (0..).map(|k| 0.01 * 1.01f64.powi(k)).take_while(|r| r * 32.0 < split_distance(0)) {
         let z = zoom_at(r);
         assert!(z <= last, "{r}: z{z} after z{last}");
         last = z;
@@ -95,7 +95,7 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
         }
     }
     for z in TOP_Z as i32..=LEAF_Z as i32 + 3 {
-        assert_eq!(zoom_at(split_distance(GROUND.side_at(z as u32))), z, "a zoom begins at its split distance");
-        assert_eq!(zoom_at(split_distance(GROUND.side_at(z as u32 - 1)) * (1.0 - 1e-12)), z, "and ends where the next coarser begins");
+        assert_eq!(zoom_at(split_distance(GROUND.cell_zoom(z as Zoom))), z, "a zoom begins at its split distance");
+        assert_eq!(zoom_at(split_distance(GROUND.cell_zoom(z as Zoom - 1)) * (1.0 - 1e-12)), z, "and ends where the next coarser begins");
     }
 }

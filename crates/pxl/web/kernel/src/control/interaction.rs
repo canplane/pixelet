@@ -21,6 +21,7 @@ use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, Entry, EntryAt};
 use crate::world::access::Hit;
 use crate::world::frame::view::view_ray;
+use pxl_spec::space::zoom::base_of;
 use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -152,12 +153,12 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     // A scattered decor is passed through.
     hover.approach = Some(match &struck {
         Some(Struck::Object(o)) => world_adjacent_corner(&hit, U_PER_CELL, Some(&object_aabb(o))),
-        Some(Struck::Scattered(s)) => CELL.base_of(s.cell),
+        Some(Struck::Scattered(s)) => base_of(CELL, s.cell),
         None => world_adjacent_corner(&hit, U_PER_CELL, None),
     });
     hover.coord = Some(match struck {
         Some(Struck::Object(o)) => o.corner(),
-        Some(Struck::Scattered(s)) => CELL.base_of(s.cell),
+        Some(Struck::Scattered(s)) => base_of(CELL, s.cell),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
         None => world_struck_corner(&hit, U_PER_CELL),
     });
@@ -185,7 +186,7 @@ pub(crate) fn tap(ndc_x: f64, ndc_y: f64) {
         ActiveTool::Eraser => {
             match (hover.object_at, hover.scattered) {
                 (Some(at), _) => remove(at),
-                (None, Some(s)) => place_air(&CELL.base_of(s.cell), U_PER_CELL),
+                (None, Some(s)) => place_air(&base_of(CELL, s.cell), U_PER_CELL),
                 // AIR, not VOID: terrain has no leaf to delete. A whole cell, never the
                 // size tier: the scan emits nothing for a zero material whatever its
                 // sub-cell bytes, so a smaller leaf would save a bite nobody took.

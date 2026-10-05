@@ -14,6 +14,7 @@ use super::{malformed, way};
 use crate::procedural::{pier_covers, Frame};
 use crate::space::hierarchy::child_of;
 use crate::space::pyramid::{GROUND, PAGE_CELLS};
+use crate::space::zoom::Zoom;
 use xpute_core::math::scalar::round;
 
 /// Points are in eighths of the page's cell, which an `i16` holds far past the page's edge.
@@ -336,7 +337,7 @@ pub fn footprint(width: f64) -> f64 {
 
 /// Decks one zoom coarser, at `z`: half a cell wide or more, simplified to
 /// half a cell, widest first within a record.
-pub fn fold_decks(children: [&Decks; 4], z: u32) -> Decks {
+pub fn fold_decks(children: [&Decks; 4], z: Zoom) -> Decks {
     let n = f64::from(PAGE_CELLS);
     // The parent's half cell of height, in leaf cells.
     let height_tolerance = f64::from(GROUND.finest_in(z)) / 2.0;

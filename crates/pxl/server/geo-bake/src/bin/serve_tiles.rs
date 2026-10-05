@@ -22,6 +22,7 @@ use pxl_server::admin_auth::admin_auth;
 use pxl_spec::bake::published::{PUBLISHED_TOP_Z, PUBLISHED_VERSION};
 use pxl_spec::bake::quadkey::page_of_name;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
+use pxl_spec::space::zoom::Zoom;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -33,7 +34,7 @@ enum Pages {
 
 struct App {
     pages: Pages,
-    top_z: u32,
+    top_z: Zoom,
     asset_dir: PathBuf,
     out: PathBuf,
 }
@@ -186,7 +187,7 @@ fn run() -> Result<(), String> {
     let mut asset_dir = PathBuf::from("./out/asset");
     let mut workers: usize = 4;
     let mut cache = PathBuf::from("./out/dev");
-    let mut top_z: u32 = 12;
+    let mut top_z: Zoom = 12;
     let mut baked: Option<PathBuf> = None;
     let mut out = PathBuf::from("./out");
 

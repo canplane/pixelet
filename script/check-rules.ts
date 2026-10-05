@@ -131,7 +131,7 @@ for (const f of files) {
 }
 
 const LATTICE_OWNERS = ["crates/pxl/spec/src/space/", "crates/pxl/spec/src/bake/constant.rs"];
-const SHIFT = /(\b(L[1-4]|L[2-4]_RANGE|PAGE_CELLS|CHUNK_CELLS)\b|\.shamt\(\))[^;]*(<<|>>)|(<<|>>)[^;]*(\bL[1-4]\b|\.shamt\(\))/;
+const SHIFT = /(\b(PAGE_CELLS|CHUNK_CELLS)\b|\bshamt\()[^;]*(<<|>>)|(<<|>>)[^;]*\bshamt\(/;
 const IN_PAGE = /[%/]\s*PAGE_CELLS\b|(rem|div)_euclid\(\s*PAGE_CELLS\b|\*\s*PAGE_CELLS\b(\s+as\s+\w+)?\s*\+/;
 
 for (const f of files) {

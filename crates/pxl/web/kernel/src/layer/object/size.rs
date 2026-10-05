@@ -4,13 +4,14 @@
 //! never by length, so changing the cell rescales every tier.
 
 use pxl_spec::bake::constant::{CELL, OBJECT_TIERS};
+use pxl_spec::space::zoom::{units, Zoom};
 
 /// Tier `i` is the cell `i` steps finer, coarsest first.
 pub const OBJECT_SIZES: [f64; OBJECT_TIERS] = {
     let mut sizes = [0.0; OBJECT_TIERS];
     let mut i = 0;
     while i < OBJECT_TIERS {
-        sizes[i] = CELL.down(i as u32).side();
+        sizes[i] = units(CELL + i as Zoom);
         i += 1;
     }
     sizes

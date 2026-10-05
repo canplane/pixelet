@@ -9,10 +9,11 @@
 
 use crate::bake::malformed;
 use crate::space::pyramid::{GROUND, TOP_Z};
+use crate::space::zoom::Zoom;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
-pub const EARTH_Z: u32 = TOP_Z;
+pub const EARTH_Z: Zoom = TOP_Z;
 
 /// A page's cells on a side, each a texel.
 pub const EARTH_TEXELS: u32 = GROUND.page_cells();

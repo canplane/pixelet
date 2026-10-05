@@ -9,8 +9,8 @@ use std::borrow::Cow;
 
 use pxl_spec::bake::format::{Ground, Occupancy, Terrain, ELE_LANE};
 use pxl_spec::cell::cube::cube_types::{ground, sentinel};
-use pxl_spec::space::indexer::L3_IDX;
-use pxl_spec::space::pyramid::{page_scale, Folds, Page, GROUND, LEAF_Z, PAGE_CELLS};
+use pxl_spec::space::indexer::idx;
+use pxl_spec::space::pyramid::{Folds, Page, GROUND, LEAF_Z, PAGE_CELLS};
 
 use crate::coverage::Coverage;
 use crate::pyramid::Absent;
@@ -46,7 +46,7 @@ impl Absence {
     /// cell lies in one leaf, where the four children's majority is that page's too.
     fn by_cell(&self, p: Page) -> Terrain {
         let cells = (0..PAGE_CELLS * PAGE_CELLS).map(|i| {
-            if self.coverage.contains(L3_IDX(GROUND.cell_at(p, i).base().i)) {
+            if self.coverage.contains(idx(LEAF_Z, GROUND.cell_at(p, i).base().i)) {
                 ground::water
             } else {
                 sentinel::void
@@ -66,7 +66,7 @@ impl Absent<Terrain> for Absence {
             Cow::Borrowed(&self.sea)
         } else if !self.coverage.meets(p.z, p.page) {
             Cow::Borrowed(&self.void)
-        } else if GROUND.side_at(p.z).above(page_scale(LEAF_Z)) <= 0 {
+        } else if GROUND.cell_zoom(p.z) >= LEAF_Z {
             Cow::Owned(self.by_cell(p))
         } else {
             let children = p.children().map(|c| self.at(c));

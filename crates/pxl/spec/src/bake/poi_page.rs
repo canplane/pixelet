@@ -20,12 +20,13 @@ use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, T
 
 use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
+use crate::space::zoom::Zoom;
 
 /// Places are counted in cells 2^6 ground cells wide, so no two cells'
 /// badges overlap: a zoom draws its ground cell at three pixels or more,
 /// and the widest badge is under 192 pixels, which s = 6 covers and s = 5
 /// does not.
-pub const POI_LATTICE: Lattice = Lattice::new(CELL.up(6));
+pub const POI_LATTICE: Lattice = Lattice::new(CELL - 6);
 
 const CELLS: u32 = POI_LATTICE.page_cells() * POI_LATTICE.page_cells();
 
@@ -40,7 +41,7 @@ const KINDS_MAX: usize = 256;
 
 // A position is an offset in leaf cells inside a POI cell, a half-word a lane.
 const _: () = assert!(
-    POI_LATTICE.side_at(TOP_Z).above(GROUND.side_at(LEAF_Z)) <= 16,
+    GROUND.cell_zoom(LEAF_Z) - POI_LATTICE.cell_zoom(TOP_Z) <= 16,
     "a POI cell's leaf cells no longer fit a half-word a lane"
 );
 
@@ -229,7 +230,7 @@ pub struct PoiPage {
 impl PoiPage {
     /// A page at `z` from places all in that page, names cut to
     /// `NAME_CHARS`; `complete` is false where the source gave only some.
-    pub fn of_places<'a>(z: u32, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>, complete: bool) -> PoiPage {
+    pub fn of_places<'a>(z: Zoom, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>, complete: bool) -> PoiPage {
         let cut: Vec<_> = places
             .into_iter()
             .map(|(point, place)| {

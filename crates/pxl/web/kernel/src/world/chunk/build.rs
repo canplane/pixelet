@@ -14,8 +14,7 @@ use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
-use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, CELL, OBJECT_FINEST};
-use pxl_spec::space::indexer::L2_IDX;
+use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, BAND_CELLS, CELL, OBJECT_FINEST};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use std::collections::{HashMap, TryReserveError};
 use xpute_runtime::mem::base::ptr_at;
@@ -25,26 +24,26 @@ use crate::layer::marker::hover_cursor::render_edits;
 use crate::layer::object::store::{object_col_revision, Store};
 use crate::mem::fixed::{at, Range};
 use crate::shell::setting::store::settings_store;
-use pxl_spec::bake::constant::BAND_CELLS;
 
 use crate::world::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES, OCCUPANCY};
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::hierarchy::Scale;
+use pxl_spec::space::indexer::idx;
+use pxl_spec::space::zoom::{count, index, Zoom};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-/// How many of a zoom's cells a scale spans along an axis (the mesher's step).
-pub fn mesh_step(scale: Scale, z: u32) -> u32 {
-    let own = GROUND.side_at(z);
-    own.count_in(scale.max(own))
+/// How many of a zoom's cells a cell zoom spans along an axis (the mesher's step).
+pub fn mesh_step(cell_zoom: Zoom, z: Zoom) -> u32 {
+    let own = GROUND.cell_zoom(z);
+    count(own, cell_zoom.min(own))
 }
 
-/// Objects fold to the scale, clamped between their finest tier and a cell;
+/// Objects fold to the cell zoom, clamped between their finest tier and a cell;
 /// past a cell the mesher averages them with the ground.
-pub fn object_fold(scale: Scale) -> Scale {
-    scale.clamp(OBJECT_FINEST, CELL)
+pub fn object_fold(cell_zoom: Zoom) -> Zoom {
+    cell_zoom.clamp(CELL, OBJECT_FINEST)
 }
 
 // A chunk's runs live in a heap block exactly as large as its column needs,
@@ -65,17 +64,12 @@ pub const RUN_SETS: usize = 2;
 pub enum BuildEvent {
     /// All slots for a tier are asked for at once, before any is written. If
     /// refused, the bake is thrown away and the need recorded (`Slot::need`).
-    Reserve {
-        id: u32,
-        generation: u32,
-        scale: Scale,
-        boxes: u32,
-    },
+    Reserve { id: u32, generation: u32, cell_zoom: Zoom, boxes: u32 },
     /// One slot's worth of boxes (less for the last) at `at` in `.fixed.bake`.
     Part {
         id: u32,
         generation: u32,
-        scale: Scale,
+        cell_zoom: Zoom,
         at: u32,
         first: u32,
         box_cnt: u32,
@@ -84,16 +78,16 @@ pub enum BuildEvent {
     Tier {
         id: u32,
         generation: u32,
-        scale: Scale,
+        cell_zoom: Zoom,
         box_cnt: u32,
         heights: Heights,
     },
 }
 
-/// A column split across scale boundaries is several chunks; its runs are
+/// A column split across cell zoom boundaries is several chunks; its runs are
 /// made once and each chunk bakes its cut of them.
 struct RunHold {
-    column: (Scale, [i64; 2]),
+    column: (Zoom, [i64; 2]),
     users: Vec<u32>,
     runs: Option<Runs>,
 }
@@ -107,14 +101,14 @@ impl Drop for RunHold {
     }
 }
 
-/// `fold`: the scale objects were folded to, if any; only scales that fold to
+/// `fold`: the cell zoom objects were folded to, if any; only cell zooms that fold to
 /// it may bake from these runs.
 #[derive(Clone, Copy)]
 struct Runs {
     block: (usize, u32),
     bytes: u32,
     count: u32,
-    fold: Option<Scale>,
+    fold: Option<Zoom>,
 }
 
 /// Where a page's ground is read from: itself (`n` = 1) or the nearest
@@ -138,7 +132,7 @@ impl Source {
             page,
             frame: Frame::of(src),
             origin: corner.in_page_above(p.z - src.z),
-            n: GROUND.side_at(p.z).count_in(GROUND.side_at(src.z)),
+            n: count(GROUND.cell_zoom(p.z), GROUND.cell_zoom(src.z)),
         })
     }
 
@@ -174,14 +168,14 @@ impl Read {
 struct Chunk {
     at: PyramidChunk,
     generation: u32,
-    want: [Option<Scale>; 2],
+    want: [Option<Zoom>; 2],
     /// Heap release count at the last refusal: until something is freed the same
     /// request would fail, so the chunk is skipped.
     refused: Option<u32>,
 }
 
 impl Chunk {
-    fn z(&self) -> u32 {
+    fn z(&self) -> Zoom {
         self.at.z()
     }
 
@@ -190,7 +184,7 @@ impl Chunk {
     }
 
     fn col_idx(&self) -> IVec {
-        L2_IDX(self.base())
+        idx(BAND, self.base())
     }
 
     fn read(&self) -> Option<Read> {
@@ -206,11 +200,11 @@ impl Chunk {
         })
     }
 
-    fn wants(&self, scale: Scale) -> bool {
-        self.want.contains(&Some(scale))
+    fn wants(&self, cell_zoom: Zoom) -> bool {
+        self.want.contains(&Some(cell_zoom))
     }
 
-    fn wanted(&self) -> impl Iterator<Item = Scale> + '_ {
+    fn wanted(&self) -> impl Iterator<Item = Zoom> + '_ {
         self.want.iter().copied().flatten()
     }
 }
@@ -219,7 +213,7 @@ impl Chunk {
 struct ScanJob {
     id: u32,
     volume: u32,
-    fold: Scale,
+    fold: Zoom,
     paint: Option<PaintJob>,
 }
 
@@ -239,7 +233,7 @@ const PAINT_VOXELS: usize = (BAND_CELLS * BAND_CELLS) as usize;
 
 struct BakeJob {
     id: u32,
-    scale: Scale,
+    cell_zoom: Zoom,
     generation: u32,
     mesh: Option<Block>,
     handed: u32,
@@ -313,7 +307,7 @@ pub struct Builder {
     claimed: Claims,
     folded: HashMap<[i64; 3], u32>,
     stands: Vec<(u32, Stands)>,
-    /// A leaf chunk's objects folded to its scale, for scales coarser than an object's finest tier.
+    /// A leaf chunk's objects folded to its cell zoom, for cell zooms coarser than an object's finest tier.
     fold_band: Vec<BandZ>,
     fold_pos: Vec<u32>,
     fold_state: Vec<u32>,
@@ -385,15 +379,15 @@ impl Builder {
         }
     }
 
-    pub fn baking(&self) -> Option<(u32, Scale, u32)> {
-        self.bake_job.as_ref().map(|j| (j.id, j.scale, j.generation))
+    pub fn baking(&self) -> Option<(u32, Zoom, u32)> {
+        self.bake_job.as_ref().map(|j| (j.id, j.cell_zoom, j.generation))
     }
 
     /// A bake of a tier no longer wanted gives its slot back now.
-    pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Scale>; 2]) {
+    pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Zoom>; 2]) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
         c.want = want;
-        let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.scale));
+        let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.cell_zoom));
         if stale {
             self.abort_bake();
         }
@@ -483,9 +477,9 @@ impl Builder {
         }
     }
 
-    fn unwant(&mut self, id: u32, scale: Scale) {
+    fn unwant(&mut self, id: u32, cell_zoom: Zoom) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
-        for w in c.want.iter_mut().filter(|w| **w == Some(scale)) {
+        for w in c.want.iter_mut().filter(|w| **w == Some(cell_zoom)) {
             *w = None;
         }
         if c.wanted().next().is_none() {
@@ -545,7 +539,7 @@ impl Builder {
         if c.refused.is_some_and(|r| r == crate::host::heap_stat().releases) {
             return Progress::Blocked;
         }
-        // Runs folded for another scale draw the wrong objects: remake them.
+        // Runs folded for another cell zoom draw the wrong objects: remake them.
         let next = c.wanted().next().or_bug(Errno::ENOTRECOVERABLE);
         if self.runs_of(id).is_some_and(|r| r.fold.is_some_and(|f| f != object_fold(next))) && !matches!(&self.bake_job, Some(j) if j.id == id) {
             self.drop_runs(id);
@@ -587,7 +581,7 @@ impl Builder {
             };
             self.claimed.clear();
             let fold = object_fold(self.chunks[&id].wanted().next().or_bug(Errno::ENOTRECOVERABLE));
-            let folded = fold > OBJECT_FINEST;
+            let folded = fold < OBJECT_FINEST;
             if folded && self.fold_objects(world, col_idx, fold).is_err() {
                 world.volumes.release(volume);
                 self.refuse(world, id);
@@ -667,15 +661,15 @@ impl Builder {
         Some(volume)
     }
 
-    /// Fills the fold lanes with a column's entries at `scale` (`Store::fold_entries`),
+    /// Fills the fold lanes with a column's entries at `cell_zoom` (`Store::fold_entries`),
     /// leaving out the hidden entry. Errors where the heap refused room.
-    fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) -> Result<(), TryReserveError> {
+    fn fold_objects(&mut self, world: &mut World, col_idx: IVec, cell_zoom: Zoom) -> Result<(), TryReserveError> {
         let (band, pos, state) = (&mut self.fold_band, &mut self.fold_pos, &mut self.fold_state);
         band.clear();
         pos.clear();
         state.clear();
         let mut refused = Ok(());
-        world.store.fold_entries(col_idx, scale, render_edits().hide, &mut |b, [x, y, z], s, v| {
+        world.store.fold_entries(col_idx, cell_zoom, render_edits().hide, &mut |b, [x, y, z], s, v| {
             if refused.is_ok() {
                 refused = (|| {
                     band.try_reserve(1)?;
@@ -769,10 +763,10 @@ impl Builder {
             self.refuse(world, id);
             return Progress::Blocked;
         }
-        let target = GROUND.side_at(z);
+        let target = GROUND.cell_zoom(z);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         // One cell of apron, which a fold reads (`folds_into`).
-        let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
+        let (cx, cy, span) = (index(target, x0), index(target, y0), CHUNK_CELLS as i64);
         if world
             .store
             .fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], render_edits().hide, &mut self.folded)
@@ -787,7 +781,7 @@ impl Builder {
             &self.sample,
             world.painter,
             &self.folded,
-            (target.index(x0), target.index(y0)),
+            (index(target, x0), index(target, y0)),
             GROUND.finest_in(z),
             &mut self.stands,
         );
@@ -847,17 +841,17 @@ impl Builder {
             if self.bake_job.is_some() {
                 return Progress::Blocked;
             }
-            let scale = c.wanted().next().unwrap();
+            let cell_zoom = c.wanted().next().unwrap();
             // Runs span the whole column; this chunk bakes only its own heights.
             let (z0, z1) = c.at.z_range();
             let clip = Some((z0 as i32, z1 as i32));
-            if self.bake.begin(&set, mesh_step(scale, c.z()), GROUND.finest_in(c.z()), settings_store().textures, clip).is_err() {
+            if self.bake.begin(&set, mesh_step(cell_zoom, c.z()), GROUND.finest_in(c.z()), settings_store().textures, clip).is_err() {
                 self.refuse(world, id);
                 return Progress::Blocked;
             }
             self.bake_job = Some(BakeJob {
                 id,
-                scale,
+                cell_zoom,
                 generation: c.generation,
                 mesh: None,
                 handed: 0,
@@ -874,19 +868,19 @@ impl Builder {
                 // All slots are held at once or the bake is thrown away: a mesh is never
                 // cut, never baked coarser, and never waits while holding the one bake.
                 let job = self.bake_job.as_ref().unwrap();
-                let step = mesh_step(job.scale, c.z());
+                let step = mesh_step(job.cell_zoom, c.z());
                 let (words_a_box, room_a_slot) = (box_words(step), capacity(c.z(), step));
                 let boxes = words / words_a_box;
                 let asked = BuildEvent::Reserve {
                     id,
                     generation: job.generation,
-                    scale: job.scale,
+                    cell_zoom: job.cell_zoom,
                     boxes,
                 };
                 if !emit(asked) {
                     let job = self.bake_job.take().unwrap();
                     self.bake.abort();
-                    self.unwant(id, job.scale);
+                    self.unwant(id, job.cell_zoom);
                     return Progress::Busy;
                 }
                 let block = boxes.min(room_a_slot) * words_a_box;
@@ -906,13 +900,13 @@ impl Builder {
                 if gpu().is_some() && device_ready() && !room(bytes) {
                     return Progress::Blocked;
                 }
-                let step = mesh_step(job.scale, c.z());
+                let step = mesh_step(job.cell_zoom, c.z());
                 let words_a_box = box_words(step);
                 let n = bytes / 4 / words_a_box;
                 emit(BuildEvent::Part {
                     id,
                     generation: job.generation,
-                    scale: job.scale,
+                    cell_zoom: job.cell_zoom,
                     at: at as u32,
                     first: job.handed,
                     box_cnt: n,
@@ -943,18 +937,18 @@ impl Builder {
                     emit(BuildEvent::Part {
                         id,
                         generation: job.generation,
-                        scale: job.scale,
+                        cell_zoom: job.cell_zoom,
                         at: at as u32,
                         first: job.handed,
                         box_cnt: mesh.box_cnt - job.handed,
                         heights: mesh.heights,
                     });
                 }
-                self.unwant(id, job.scale);
+                self.unwant(id, job.cell_zoom);
                 emit(BuildEvent::Tier {
                     id,
                     generation: job.generation,
-                    scale: job.scale,
+                    cell_zoom: job.cell_zoom,
                     box_cnt: mesh.box_cnt,
                     heights: mesh.heights,
                 });

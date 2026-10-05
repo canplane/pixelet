@@ -2,10 +2,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use pxl_spec::space::hierarchy::Scale;
-use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_span_of, LEAF_Z};
+use pxl_spec::space::pvf3::{ivec, Pvf3};
+use pxl_spec::space::pyramid::{chunk_zoom, LEAF_Z};
 use pxl_spec::space::v3::V3;
 
 use super::*;
@@ -13,28 +11,28 @@ use super::*;
 use crate::allocations;
 use crate::world::fixture::{self, eye, World};
 use crate::world::pyramid::domain::Domain;
+use pxl_spec::space::zoom::{units, Zoom};
 
-/// Objects go finer than the ground's scale only within the leaves' reach.
+/// Objects go finer than the ground's cell zoom only within the leaves' reach.
 #[test]
 fn objects_draw_the_grounds_cube_and_go_finer_only_under_the_leaves() {
-    let leaf = GROUND.side_at(LEAF_Z);
-    for shamt in -6..=8 {
-        let scale = Scale::of(shamt);
-        let (ground, objects) = (drawn_scale(scale, LEAF_Z, false, false), drawn_scale(scale, LEAF_Z, false, true));
-        if scale >= leaf {
-            assert_eq!(objects, ground, "{scale:?}");
+    let leaf = GROUND.cell_zoom(LEAF_Z);
+    for cell_zoom in 16..=30 {
+        let (ground, objects) = (drawn_zoom(cell_zoom, LEAF_Z, false, false), drawn_zoom(cell_zoom, LEAF_Z, false, true));
+        if cell_zoom <= leaf {
+            assert_eq!(objects, ground, "z{cell_zoom}");
         } else {
-            assert_eq!(ground, leaf, "{scale:?}");
-            assert_eq!(objects, scale.max(OBJECT_FINEST), "{scale:?}");
+            assert_eq!(ground, leaf, "z{cell_zoom}");
+            assert_eq!(objects, cell_zoom.min(OBJECT_FINEST), "z{cell_zoom}");
         }
     }
 }
 
 /// 16 × 16 leaf chunks.
-const ROOT: u32 = 4;
+const ROOT: Zoom = 4;
 
-fn at(z: u32, x: i64, y: i64) -> Chunk {
-    let side = chunk_span_of(LEAF_Z) as i64;
+fn at(z: Zoom, x: i64, y: i64) -> Chunk {
+    let side = units(chunk_zoom(LEAF_Z)) as i64;
     Chunk::of(
         z,
         &Pvf3 {
@@ -45,7 +43,7 @@ fn at(z: u32, x: i64, y: i64) -> Chunk {
 }
 
 /// Every chunk at `z` over the root's ground.
-fn chunks_at(z: u32) -> Vec<Chunk> {
+fn chunks_at(z: Zoom) -> Vec<Chunk> {
     let steps = LEAF_Z - z;
     let n = 1i64 << (ROOT - steps);
     let step = 1i64 << steps;
@@ -56,10 +54,10 @@ fn chunks_at(z: u32) -> Vec<Chunk> {
 
 /// The ground at `fine` inside the square `[0, w)` of leaf chunks and at
 /// `coarse` outside it; all `coarse` where `w` is zero.
-fn goal(fine: u32, coarse: u32, w: i64) -> Vec<Chunk> {
+fn goal(fine: Zoom, coarse: Zoom, w: i64) -> Vec<Chunk> {
     let inside = |c: &Chunk| {
         let (x, y, side) = c.rect();
-        let unit = chunk_span_of(LEAF_Z);
+        let unit = units(chunk_zoom(LEAF_Z));
         x + side <= w as f64 * unit && y + side <= w as f64 * unit
     };
     let mut out: Vec<Chunk> = chunks_at(fine).into_iter().filter(|c| inside(c)).collect();
@@ -368,7 +366,7 @@ fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
             }
             let cut = d.cut_at(k);
             let (tau, pieces) = (cut.tau(), cut.pieces().to_vec());
-            let of = |pool: Pool| pieces.iter().filter(|&&c| pool_of(c, scale_of(c, d.outermost(c), d.order_of(c).near, tau, false)) == pool).count() as u32;
+            let of = |pool: Pool| pieces.iter().filter(|&&c| pool_of(c, zoom_of(c, d.outermost(c), d.order_of(c).near, tau, false)) == pool).count() as u32;
             assert!(
                 n[k][Pool::Coarse as usize] + n[k][Pool::Cover as usize] >= pieces.len() as u32,
                 "height {height}, {tau:?}: coarse under the cut"

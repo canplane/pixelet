@@ -12,11 +12,11 @@ use pxl_render::mesh::chunk_mesher::{box_bounds, Heights};
 use pxl_render::mesh::paint::terrain::adapter::beside_index;
 use pxl_render::mesh::voxel_scan::APRON;
 
-use crate::sched::profiler::record::ZOOMS;
+use crate::sched::profiler::record::{MB, ZOOMS};
 use pxl_spec::space::observation::Bounds as _;
 use pxl_spec::space::observation::Frustum;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_scale, GROUND, LEAF_Z, TOP_Z};
+use pxl_spec::space::pyramid::{chunk_zoom, GROUND, LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::section::span_of;
@@ -27,20 +27,18 @@ use crate::layer::billboard::field::Billboards;
 use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::coverage_gizmo::CoverageGizmo;
 use crate::layer::marker::debug_lines::DebugLines;
-use crate::layer::marker::hover_cursor::GhostDraw;
-use crate::layer::marker::hover_cursor::{render_edits, RenderEdits};
+use crate::layer::marker::hover_cursor::{render_edits, GhostDraw, RenderEdits};
 use crate::layer::marker::location_puck::Markers;
 use crate::layer::model::store::Models;
 use crate::layer::object::store::EntryAt;
 use crate::mem::fixed::{lane, range, Range};
 use crate::param;
-use crate::sched::profiler::record::MB;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{mesh_step, BuildEvent, Builder, World};
-use crate::world::chunk::frontier::{pool_of, scale_of, Env, Frontier, Now, Slots};
+use crate::world::chunk::frontier::{pool_of, zoom_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
-use pxl_spec::space::hierarchy::Scale;
+use pxl_spec::space::zoom::Zoom;
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -50,8 +48,9 @@ use crate::world::observation::{Known, Order};
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::domain::{self, Domain};
 use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::constant::BAND;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::indexer::L2_IDX;
+use pxl_spec::space::indexer::idx;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Role {
@@ -86,7 +85,7 @@ impl Frame {
 
 #[derive(Clone, Copy)]
 struct Tier {
-    scale: Scale,
+    cell_zoom: Zoom,
     generation: u32,
     bounds: Option<Aabb>,
     /// First slot of the chain the tier's boxes fill (`Meshes::next`).
@@ -123,18 +122,18 @@ struct Slot {
     fresh: bool,
     /// Since when it has wanted a build; none while it wants none.
     pending_since: Option<f64>,
-    /// Slots a tier needs, for (generation, scale), found when a bake did not
+    /// Slots a tier needs, for (generation, cell zoom), found when a bake did not
     /// fit (`BuildEvent::Reserve`); not asked for again until that many are free.
-    need: Option<(u32, Scale, u32)>,
-    /// A drawn piece the frontier let build another scale; a slot is held for it.
+    need: Option<(u32, Zoom, u32)>,
+    /// A drawn piece the frontier let build another cell zoom; a slot is held for it.
     retier: bool,
     /// The layout's tiers plus the last one landed. A source change keeps the
     /// old generation's tiers drawn until a layout of the new one is applied.
     tiers: Held<Tier>,
-    /// The applied layout's primary scale and generation; none until one is, or
+    /// The applied layout's primary cell zoom and generation; none until one is, or
     /// once its tier is gone.
-    layout: Option<(Scale, u32)>,
-    desired: Scale,
+    layout: Option<(Zoom, u32)>,
+    desired: Zoom,
     sources: Sources,
 }
 
@@ -148,8 +147,8 @@ struct Sources {
     carve: Option<EntryAt>,
     /// Zoom of the page the chunk and each apron neighbour are read from, so a
     /// finer page arriving rebuilds the chunk and its shared edges.
-    read_from: Option<u32>,
-    beside_from: [Option<u32>; 8],
+    read_from: Option<Zoom>,
+    beside_from: [Option<Zoom>; 8],
 }
 
 impl Sources {
@@ -175,7 +174,7 @@ impl Sources {
 }
 
 impl Slot {
-    fn z(&self) -> u32 {
+    fn z(&self) -> Zoom {
         self.chunk.z()
     }
 
@@ -195,8 +194,8 @@ impl Slot {
         self.radius = b.radius();
     }
 
-    fn slots_for(&self, scale: Scale, generation: u32) -> u32 {
-        self.need.filter(|&(g, c, _)| g == generation && c == scale).map_or(1, |(_, _, k)| k)
+    fn slots_for(&self, cell_zoom: Zoom, generation: u32) -> u32 {
+        self.need.filter(|&(g, c, _)| g == generation && c == cell_zoom).map_or(1, |(_, _, k)| k)
     }
 
     fn pending(&self) -> bool {
@@ -208,27 +207,27 @@ impl Slot {
         self.pending() && self.layout.is_some()
     }
 
-    fn tier(&self, scale: Scale, generation: u32) -> Option<&Tier> {
-        self.tiers.iter().find(|t| t.scale == scale && t.generation == generation)
+    fn tier(&self, cell_zoom: Zoom, generation: u32) -> Option<&Tier> {
+        self.tiers.iter().find(|t| t.cell_zoom == cell_zoom && t.generation == generation)
     }
 
     fn retiers(&self) -> bool {
         self.layout.is_some_and(|(p, _)| p != self.desired)
     }
 
-    /// The scale it builds now: the desired one, except a drawn piece the frontier
-    /// has not let retier rebuilds its shown scale in place, so an edit still shows.
-    fn target(&self) -> Scale {
+    /// The cell zoom it builds now: the desired one, except a drawn piece the frontier
+    /// has not let retier rebuilds its shown cell zoom in place, so an edit still shows.
+    fn target(&self) -> Zoom {
         match self.layout {
             Some((p, _)) if self.role == Role::Drawn && self.retiers() && !self.retier => p,
             _ => self.desired,
         }
     }
 
-    /// Slots held for it and not yet taken: none while it has a tier of the target scale.
+    /// Slots held for it and not yet taken: none while it has a tier of the target cell zoom.
     fn reserves(&self, generation: u32) -> Option<(Pool, u32)> {
-        let scale = self.target();
-        (!self.tiers.iter().any(|t| t.scale == scale)).then(|| (pool_of(self.chunk, scale), self.slots_for(scale, generation)))
+        let cell_zoom = self.target();
+        (!self.tiers.iter().any(|t| t.cell_zoom == cell_zoom)).then(|| (pool_of(self.chunk, cell_zoom), self.slots_for(cell_zoom, generation)))
     }
 }
 
@@ -445,8 +444,8 @@ struct Pieces<'a> {
 
 impl Env for Pieces<'_> {
     fn slots(&self, c: Chunk) -> (Pool, u32) {
-        let scale = scale_of(c, self.d.outermost(c), self.d.order_of(c).near, self.d.tau(), false);
-        (pool_of(c, scale), self.table.slots_of(c, scale))
+        let cell_zoom = zoom_of(c, self.d.outermost(c), self.d.order_of(c).near, self.d.tau(), false);
+        (pool_of(c, cell_zoom), self.table.slots_of(c, cell_zoom))
     }
 
     fn buildable(&self, c: Chunk) -> bool {
@@ -511,8 +510,8 @@ impl Scheduler {
         }
     }
 
-    pub fn slots_of(&self, c: Chunk, scale: Scale) -> u32 {
-        self.find(&c).map_or(1, |i| self.slots[i].slots_for(scale, self.generation(i)))
+    pub fn slots_of(&self, c: Chunk, cell_zoom: Zoom) -> u32 {
+        self.find(&c).map_or(1, |i| self.slots[i].slots_for(cell_zoom, self.generation(i)))
     }
 
     pub fn pace(&self) -> [u32; 3] {
@@ -568,7 +567,7 @@ impl Scheduler {
         let s = (TOP_Z..=LEAF_Z)
             .rev()
             .find_map(|z| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk.named() == Chunk::of(z, p)))?;
-        Some((s.z() as i32, s.layout.map(|(scale, _)| GROUND.z_of(scale)), s.sources.read_from.map(|z| z as i32)))
+        Some((s.z() as i32, s.layout.map(|(cell_zoom, _)| GROUND.z_of(cell_zoom)), s.sources.read_from.map(|z| z as i32)))
     }
 
     /// Whether the last frame drew any ground on screen.
@@ -606,7 +605,7 @@ impl Scheduler {
             retier: false,
             tiers: Held::EMPTY,
             layout: None,
-            desired: chunk_scale(z),
+            desired: chunk_zoom(z),
             sources,
         };
         slot.unmeasured();
@@ -826,7 +825,7 @@ impl Scheduler {
     }
 
     /// The arena was recreated with the device: forget every tier. A layout kept
-    /// ready over lost tiers would draw nothing until its scale changed.
+    /// ready over lost tiers would draw nothing until its cell zoom changed.
     fn lose_meshes(&mut self) {
         let epoch = arena_epoch();
         if epoch == self.meshes.epoch {
@@ -914,13 +913,13 @@ impl Scheduler {
         self.coverage.draw(&mut self.draw, frame.eye);
         let holder = &self.meshes.holder;
         for s in &self.slots {
-            let Some((scale, generation)) = s.layout else { continue };
+            let Some((cell_zoom, generation)) = s.layout else { continue };
             if s.role == Role::Building || !s.in_frustum {
                 continue;
             }
             let (x0, y0) = s.base();
             let translation = DrawList::translation([crate::world::frame::coord::unwrap_x(x0, frame.eye[0]), y0, 0.0], frame.eye);
-            let Some(t) = s.tier(scale, generation) else { continue };
+            let Some(t) = s.tier(cell_zoom, generation) else { continue };
             // Slots are recycled between chunks, so a chunk must draw only from a slot
             // it holds; otherwise it can draw another chunk's ground.
             xpute_core::ensure!(holder[t.slot.index] == Nth::of(s.id as usize), ENOTRECOVERABLE);
@@ -929,7 +928,7 @@ impl Scheduler {
             }
             // Mesh heights are steps from the tier's floor, so the floor goes in the translation.
             let at = [translation[0], translation[1], translation[2] + t.heights.floor as f32];
-            let (unit, z_step) = ((mesh_step(scale, s.z()) * GROUND.finest_in(s.z())) as f32, t.heights.step as f32);
+            let (unit, z_step) = ((mesh_step(cell_zoom, s.z()) * GROUND.finest_in(s.z())) as f32, t.heights.step as f32);
             let (mut left, mut slot) = (t.box_cnt, Some(t.slot.index));
             while let (Some(at_slot), true) = (slot, left > 0) {
                 let m = slot_at(at_slot);
@@ -938,7 +937,7 @@ impl Scheduler {
                 left -= n;
                 slot = self.meshes.next[at_slot].get();
             }
-            self.zoom_boxes[GROUND.z_of(t.scale) as usize] += t.box_cnt;
+            self.zoom_boxes[GROUND.z_of(t.cell_zoom) as usize] += t.box_cnt;
         }
     }
 
@@ -980,17 +979,17 @@ impl Scheduler {
         settle(&mut self.meshes, &self.builder);
     }
 
-    /// Sets the desired scale and whether the chunk is pending. A drawn piece
-    /// wanting another scale waits for the frontier (`materialize`); a building
+    /// Sets the desired cell zoom and whether the chunk is pending. A drawn piece
+    /// wanting another cell zoom waits for the frontier (`materialize`); a building
     /// chunk drops a tier no longer wanted.
     fn recheck(&mut self, world: &mut World, i: usize, now: f64) {
         self.slots[i].fresh = false;
         let Some(d) = domain::current() else { return };
         let s = &self.slots[i];
         let (z, chunk) = (s.z(), s.chunk);
-        let objects = z == LEAF_Z && world.store.entries(L2_IDX(chunk.corner())).is_some();
+        let objects = z == LEAF_Z && world.store.entries(idx(BAND, chunk.corner())).is_some();
         let current = self.generation(i);
-        let desired = scale_of(chunk, d.outermost(chunk), d.order_of(chunk).near, d.tau(), objects);
+        let desired = zoom_of(chunk, d.outermost(chunk), d.order_of(chunk).near, d.tau(), objects);
         if self.slots[i].role == Role::Building && self.slots[i].layout.is_some_and(|(p, _)| p != desired) {
             self.release_tiers(i, |_, _| false);
         }
@@ -1007,9 +1006,9 @@ impl Scheduler {
         }
     }
 
-    fn release_tiers(&mut self, i: usize, keep: impl Fn(Scale, u32) -> bool) {
+    fn release_tiers(&mut self, i: usize, keep: impl Fn(Zoom, u32) -> bool) {
         let s = &mut self.slots[i];
-        prune(s, &mut self.meshes, |t| keep(t.scale, t.generation), None);
+        prune(s, &mut self.meshes, |t| keep(t.cell_zoom, t.generation), None);
         if s.layout.is_some_and(|(p, g)| s.tier(p, g).is_none()) {
             s.layout = None;
         }
@@ -1017,7 +1016,7 @@ impl Scheduler {
 
     /// Whether the chunk holds `primary` of the current generation; asks the
     /// builder otherwise, unless the tier is known not to fit the free slots.
-    fn ask(&mut self, world: &mut World, i: usize, primary: Scale) -> bool {
+    fn ask(&mut self, world: &mut World, i: usize, primary: Zoom) -> bool {
         let generation = self.generation(i);
         let s = &self.slots[i];
         let lacks = s.tier(primary, generation).is_none();
@@ -1030,7 +1029,7 @@ impl Scheduler {
         !lacks
     }
 
-    fn apply_layout(&mut self, i: usize, primary: Scale, generation: u32) {
+    fn apply_layout(&mut self, i: usize, primary: Zoom, generation: u32) {
         self.counts.layouts += 1;
         let s = &mut self.slots[i];
         s.layout = Some((primary, generation));
@@ -1042,7 +1041,7 @@ impl Scheduler {
 
     fn trim(&mut self, i: usize) {
         let layout = self.slots[i].layout;
-        self.release_tiers(i, move |scale, generation| layout == Some((scale, generation)));
+        self.release_tiers(i, move |cell_zoom, generation| layout == Some((cell_zoom, generation)));
     }
 
     fn commit(&mut self, world: &mut World, i: usize) -> bool {
@@ -1222,7 +1221,7 @@ fn chained(meshes: &Meshes, at: usize, n: u32) -> Option<usize> {
 struct Landing {
     id: u32,
     generation: u32,
-    scale: Scale,
+    cell_zoom: Zoom,
     first: usize,
     slots: u32,
     /// Slots of the tier it is rebuilt over, which it writes over.
@@ -1233,7 +1232,7 @@ struct Landing {
 /// Holds every slot a tier of `boxes` fills at once, or records the need and
 /// refuses; a rebuild reuses the old tier's slots and claims only the extra.
 fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) -> bool {
-    let BuildEvent::Reserve { id, generation, scale, boxes } = e else { return false };
+    let BuildEvent::Reserve { id, generation, cell_zoom, boxes } = e else { return false };
     // One bake is open at a time: a leftover landing is from one that closed
     // without landing.
     if let Some(l) = meshes.landing.take() {
@@ -1241,32 +1240,32 @@ fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent
     }
     let Some(i) = place[id as usize].get() else { return false };
     let s = &slots[i];
-    if scale != s.target() {
+    if cell_zoom != s.target() {
         return false;
     }
     let z = s.z();
-    let pool = pool_of(s.chunk, scale);
-    let k = boxes.div_ceil(capacity(z, mesh_step(scale, z))).max(1);
-    let over = s.tiers.iter().find(|t| t.scale == scale).map(|t| t.slot.index);
+    let pool = pool_of(s.chunk, cell_zoom);
+    let k = boxes.div_ceil(capacity(z, mesh_step(cell_zoom, z))).max(1);
+    let over = s.tiers.iter().find(|t| t.cell_zoom == cell_zoom).map(|t| t.slot.index);
     let taken = match over {
         Some(first) => Some((first, (0..).take_while(|&n| chained(meshes, first, n).is_some()).count() as u32)),
         None => claim(meshes, pool, k, id).map(|first| (first, 0)),
     };
     let Some((first, held)) = taken else {
-        return refuse(slots, i, meshes, generation, scale, k);
+        return refuse(slots, i, meshes, generation, cell_zoom, k);
     };
     if held > 0 && k > held {
         let last = chained(meshes, first, held - 1).unwrap_or(first);
         let more = claim(meshes, pool, k - held, id);
         match more {
             Some(more) => meshes.next[last] = Nth::of(more),
-            None => return refuse(slots, i, meshes, generation, scale, k),
+            None => return refuse(slots, i, meshes, generation, cell_zoom, k),
         }
     }
     meshes.landing = Some(Landing {
         id,
         generation,
-        scale,
+        cell_zoom,
         first,
         slots: k,
         over: held,
@@ -1279,7 +1278,7 @@ fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent
 /// call that can close a bake.
 fn settle(meshes: &mut Meshes, builder: &Builder) {
     let open = builder.baking();
-    if let Some(l) = meshes.landing.take_if(|l| open != Some((l.id, l.scale, l.generation))) {
+    if let Some(l) = meshes.landing.take_if(|l| open != Some((l.id, l.cell_zoom, l.generation))) {
         release(meshes, l);
     }
 }
@@ -1294,12 +1293,12 @@ fn release(meshes: &mut Meshes, l: Landing) {
     }
 }
 
-fn refuse(slots: &mut [Slot], i: usize, meshes: &mut Meshes, generation: u32, scale: Scale, k: u32) -> bool {
-    slots[i].need = Some((generation, scale, k));
+fn refuse(slots: &mut [Slot], i: usize, meshes: &mut Meshes, generation: u32, cell_zoom: Zoom, k: u32) -> bool {
+    slots[i].need = Some((generation, cell_zoom, k));
     slots[i].fresh = true;
     meshes.needs = meshes.needs.wrapping_add(1);
     meshes.waits += 1;
-    meshes.wait_zooms |= 1 << GROUND.z_of(scale);
+    meshes.wait_zooms |= 1 << GROUND.z_of(cell_zoom);
     false
 }
 
@@ -1307,7 +1306,7 @@ fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     let BuildEvent::Part {
         id,
         generation,
-        scale,
+        cell_zoom,
         at,
         first,
         box_cnt,
@@ -1316,12 +1315,12 @@ fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     else {
         return;
     };
-    let Some(l) = meshes.landing.as_ref().filter(|l| (l.id, l.generation, l.scale) == (id, generation, scale)) else {
+    let Some(l) = meshes.landing.as_ref().filter(|l| (l.id, l.generation, l.cell_zoom) == (id, generation, cell_zoom)) else {
         return;
     };
     let Some(i) = place[id as usize].get() else { return };
     let z = slots[i].z();
-    let step = mesh_step(scale, z);
+    let step = mesh_step(cell_zoom, z);
     let head = slot_at(l.first);
     let n = first / head.capacity;
     let Some(slot) = chained(meshes, l.first, n).map(slot_at) else { return };
@@ -1365,7 +1364,7 @@ fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     let BuildEvent::Tier {
         id,
         generation,
-        scale,
+        cell_zoom,
         box_cnt,
         heights,
     } = e
@@ -1374,30 +1373,30 @@ fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     };
     let Some(i) = place[id as usize].get() else { return };
     let s = &slots[i];
-    if s.tier(scale, generation).is_some() || scale != s.target() {
+    if s.tier(cell_zoom, generation).is_some() || cell_zoom != s.target() {
         return;
     }
     let landing = match meshes.landing.take() {
-        Some(l) if (l.id, l.generation, l.scale) == (id, generation, scale) => l,
+        Some(l) if (l.id, l.generation, l.cell_zoom) == (id, generation, cell_zoom) => l,
         other => {
             meshes.landing = other;
             // An empty mesh reserved nothing; it takes one slot here.
             if box_cnt > 0 {
                 return;
             }
-            let over = s.tiers.iter().find(|t| t.scale == scale).map(|t| t.slot.index);
+            let over = s.tiers.iter().find(|t| t.cell_zoom == cell_zoom).map(|t| t.slot.index);
             let taken = match over {
                 Some(first) => Some(first),
-                None => claim(meshes, pool_of(s.chunk, scale), 1, id),
+                None => claim(meshes, pool_of(s.chunk, cell_zoom), 1, id),
             };
             let Some(first) = taken else {
-                refuse(slots, i, meshes, generation, scale, 1);
+                refuse(slots, i, meshes, generation, cell_zoom, 1);
                 return;
             };
             Landing {
                 id,
                 generation,
-                scale,
+                cell_zoom,
                 first,
                 slots: 1,
                 over: 0,
@@ -1418,7 +1417,7 @@ fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     let slot = slot_at(landing.first);
     let s = &mut slots[i];
     let layout = s.layout;
-    prune(s, meshes, |t| layout == Some((t.scale, t.generation)), Some(slot.index));
+    prune(s, meshes, |t| layout == Some((t.cell_zoom, t.generation)), Some(slot.index));
     // An older-generation tier on the same slots now shows these boxes.
     for t in s.tiers.iter_mut().filter(|t| t.slot.index == slot.index) {
         t.box_cnt = box_cnt;
@@ -1426,7 +1425,7 @@ fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
         t.heights = heights;
     }
     s.tiers.push(Tier {
-        scale,
+        cell_zoom,
         generation,
         bounds: landing.bounds,
         slot,

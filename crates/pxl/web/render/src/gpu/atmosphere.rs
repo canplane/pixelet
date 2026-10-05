@@ -7,7 +7,7 @@
 
 use pxl_spec::bake::earth_page::{EARTH_TEXELS, EARTH_Z};
 use pxl_spec::space::lod::{fault_radius, FAULT_ACROSS, FAULT_PAGES};
-use pxl_spec::space::pyramid::pages_around;
+use pxl_spec::space::pyramid::around;
 use pxl_spec::space::v3::V3;
 
 use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
@@ -143,7 +143,7 @@ impl Atmosphere {
         words[SUN_DIR + 2] = 1.0;
         words[EARTH_REACH] = fault_radius(EARTH_Z) as f32;
         words[EARTH_WINDOW + 2] = f32::from_bits(FAULT_ACROSS);
-        words[EARTH_WINDOW + 3] = f32::from_bits(pages_around(EARTH_Z) as u32);
+        words[EARTH_WINDOW + 3] = f32::from_bits(around(EARTH_Z) as u32);
 
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);

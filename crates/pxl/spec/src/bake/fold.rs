@@ -7,21 +7,20 @@
 //! average, which preserves a column's volume. The index lane is carried up
 //! from the children's extents and widened by the parent's own surface.
 
-use crate::space::pyramid::PAGE_CELLS;
+use crate::space::pyramid::{neighbor_index, neighborhood, Folds, Page, CHILDREN, EXTENT, GROUND, PAGE_CELLS};
 use xpute_core::math::scalar::round;
 
 use super::constant::{ele_index, CELL, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::deck::fold_decks;
 use super::format::{Ground, Index, Occupancy, Terrain};
 use super::surface::extent_of;
-use crate::space::hierarchy::Scale;
-use crate::space::pyramid::{neighbor_index, neighborhood, Folds, Page, CHILDREN, EXTENT, GROUND};
+use crate::space::zoom::Zoom;
 
 /// The value filling more than half of a 2×2 (or 2×2×2) block, `v[dx + 2·dy +
 /// 4·dz]`; otherwise the tie child's. The tie corner alternates with the
-/// parent cell's side, since a fixed corner drifts the map half a coarse cell a step.
-pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Scale) -> T {
-    let tie = v[if parent.above(CELL).rem_euclid(2) == 1 { 0 } else { N - 1 }];
+/// parent cell's zoom, since a fixed corner drifts the map half a coarse cell a step.
+pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
+    let tie = v[if (parent ^ CELL) & 1 == 1 { 0 } else { N - 1 }];
     let count = |x: T| v.iter().filter(|&&y| y == x).count();
     let mut half = None;
     for &x in &v {
@@ -36,11 +35,11 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Scale) -> T {
 }
 
 /// A cell is one look, so the majority is the look's.
-pub fn fold_ground(children: [&Ground; 4], z: u32) -> Ground {
+pub fn fold_ground(children: [&Ground; 4], z: Zoom) -> Ground {
     let out = (0..PAGE_CELLS * PAGE_CELLS)
         .map(|index| {
             let (q, block) = GROUND.child_block(index);
-            majority(block.map(|i| children[q].cells[i as usize]), GROUND.side_at(z))
+            majority(block.map(|i| children[q].cells[i as usize]), GROUND.cell_zoom(z))
         })
         .collect::<Vec<_>>();
     Ground { cells: out.into() }
@@ -115,7 +114,7 @@ impl Folds for Terrain {
 /// A parent from the 4×4 pages around its children; None if any of its own
 /// four is missing. A missing ring page only degrades the padding, so a zoom
 /// out folds from what the client already holds.
-fn fold_terrain(around: [Option<&Terrain>; 16], z: u32) -> Option<Terrain> {
+fn fold_terrain(around: [Option<&Terrain>; 16], z: Zoom) -> Option<Terrain> {
     let child = |q: usize| around[CHILDREN[q]];
     let children = [child(0)?, child(1)?, child(2)?, child(3)?];
     let ground = fold_ground(children.map(|t| &t.ground), z);

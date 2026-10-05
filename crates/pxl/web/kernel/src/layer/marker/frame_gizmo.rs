@@ -77,7 +77,7 @@ impl Sketch {
 fn sketch(map_center: &Pvf3) -> Sketch {
     let center = to_world(map_center);
     let mut s = Sketch { about: center, lines: Vec::new() };
-    let ground = Access::now().floor_under(map_center).value().flatten().map(|top| top);
+    let ground = Access::now().floor_under(map_center).value().flatten();
     let cell = floor3n(&[center[0], center[1], ground.unwrap_or(0.0)], U_PER_CELL);
     s.cube(cell, U_PER_CELL);
     s.point(center, BLACK);

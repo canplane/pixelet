@@ -10,7 +10,7 @@
 //! lane's bounds instead, since a coarse drawn surface can sit below a peak.
 
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
-use pxl_spec::bake::constant::{CellZ, CELL, CELL_STEPS, OBJECT_FINEST, U_PER_CELL};
+use pxl_spec::bake::constant::{CellZ, BAND, CELL, CELL_STEPS, OBJECT_FINEST, U_PER_CELL};
 use pxl_spec::bake::deck::Occupies;
 use pxl_spec::bake::fold::majority;
 use pxl_spec::bake::format::{drawn, GroundCell, Terrain};
@@ -18,14 +18,12 @@ use pxl_spec::cell::cube_types::sentinel;
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_decor, object_value_is_voxel};
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::space::adapter::epsg3857::u_per_m;
-use pxl_spec::space::hierarchy::{ancestor_of, child_of, first_descendant_of, offset_in, Scale};
-use pxl_spec::space::indexer::{L2, L2_IDX};
+use pxl_spec::space::hierarchy::{ancestor_of, child_of, first_descendant_of, offset_in};
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{page_scale, Cell, Page, EXTENT, GROUND, LEAF_Z, TOP_Z};
+use pxl_spec::space::pvf3::{projection, REACH};
+use pxl_spec::space::pyramid::{chunk_zoom, Cell, Page, EXTENT, GROUND, LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::{add3, Aabb, V3};
 use pxl_spec::space::xy::TO_XY;
 
@@ -34,6 +32,8 @@ use crate::kernel::kernel;
 use crate::layer::object::store::{Entry, EntryAt, Store};
 use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
+use pxl_spec::space::indexer::idx;
+use pxl_spec::space::zoom::{base_of, count, cube, index_of, units, Zoom};
 use xpute_core::math::scalar::round;
 
 /// Probe distance past a boundary, in units: far below the lattice's finest
@@ -42,19 +42,19 @@ const NUDGE: f64 = 1e-6;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Detail {
-    Zoom(u32),
+    Zoom(Zoom),
     /// The zoom the LOD rule wants at each distance from the origin, so a
     /// ray's walk takes about as many steps per zoom whatever the zoom.
     Distance(Tau),
 }
 
 impl Detail {
-    fn at(self, t: f64) -> (u32, f64) {
+    fn at(self, t: f64) -> (Zoom, f64) {
         match self {
             Detail::Zoom(z) => (z, f64::INFINITY),
             Detail::Distance(tau) => {
                 let z = tau.z_at(t);
-                let until = if z == TOP_Z { f64::INFINITY } else { tau.split_distance(GROUND.side_at(z - 1)) };
+                let until = if z == TOP_Z { f64::INFINITY } else { tau.split_distance(GROUND.cell_zoom(z - 1)) };
                 (z, until)
             }
         }
@@ -220,9 +220,9 @@ fn filled_cell(filled: impl Fn([i64; 3]) -> bool) -> bool {
     for (k, f) in v.iter_mut().enumerate() {
         *f = filled([k % N, k / N % N, k / (N * N)].map(|c| c as i64));
     }
-    let (mut m, mut scale) = (N, OBJECT_FINEST);
-    while scale < CELL {
-        scale = scale.up(1);
+    let (mut m, mut cell_zoom) = (N, OBJECT_FINEST);
+    while cell_zoom > CELL {
+        cell_zoom -= 1;
         let h = m / 2;
         for k in 0..h * h * h {
             let parent = [k % h, k / h % h, k / (h * h)].map(|c| c as i64);
@@ -230,7 +230,7 @@ fn filled_cell(filled: impl Fn([i64; 3]) -> bool) -> bool {
                 let [x, y, z] = child_of(parent, slot).map(|c| c as usize);
                 v[(z * m + y) * m + x]
             });
-            v[k] = majority(eight, scale);
+            v[k] = majority(eight, cell_zoom);
         }
         m = h;
     }
@@ -252,44 +252,44 @@ impl<'a> Access<'a> {
         }
     }
 
-    pub fn at(&self, at: &Pvf3, z: u32) -> Answer<Ground> {
+    pub fn at(&self, at: &Pvf3, z: Zoom) -> Answer<Ground> {
         self.ground(GROUND.cell_of(z, at))
     }
 
     /// Down to the first solid's top, or up at most `rise` cells; taller gives none.
     pub fn support(&self, at: &Pvf3, rise: i64) -> Answer<Option<f64>> {
-        let [ix, iy, iz] = CELL.index_of(at);
+        let [ix, iy, iz] = index_of(CELL, at);
         self.stand_climbing([ix, iy], Some(iz), Some(rise))
     }
 
     /// `support` from the drawn surface, ignoring `at`'s height (a fix, a search
     /// result); none where nothing stands, a column with no surface and nothing placed.
     pub fn surface_support(&self, at: &Pvf3) -> Answer<Option<f64>> {
-        let [ix, iy, _] = CELL.index_of(at);
+        let [ix, iy, _] = index_of(CELL, at);
         self.stand_climbing([ix, iy], None, None)
     }
 
     /// `support` rising any height; none where nothing stands under `at`.
     pub fn floor_under(&self, at: &Pvf3) -> Answer<Option<f64>> {
-        let [ix, iy, iz] = CELL.index_of(at);
+        let [ix, iy, iz] = index_of(CELL, at);
         self.stand_climbing([ix, iy], Some(iz), None)
     }
 
     /// First solid cell over `at`; none under open sky.
     pub fn ceiling_over(&self, at: &Pvf3) -> Answer<Option<i64>> {
-        let [ix, iy, iz] = CELL.index_of(at);
+        let [ix, iy, iz] = index_of(CELL, at);
         self.cells([ix, iy], |_, ceiling, solid| (iz + 1..ceiling).find(|&cz| solid(cz)))
     }
 
     /// First open cell at or over `at`.
     pub fn open_from(&self, at: &Pvf3) -> Answer<i64> {
-        let [ix, iy, iz] = CELL.index_of(at);
+        let [ix, iy, iz] = index_of(CELL, at);
         self.cells([ix, iy], |_, ceiling, solid| (iz..ceiling).find(|&cz| !solid(cz)).unwrap_or(iz.max(ceiling)))
     }
 
     fn stand_climbing(&self, [ix, iy]: [i64; 2], from: Option<i64>, rise: Option<i64>) -> Answer<Option<f64>> {
         self.cells([ix, iy], |top, ceiling, solid| {
-            let side = CELL.side();
+            let side = units(CELL);
             let [lo, hi] = [REACH.min[2] / side, REACH.max[2] / side].map(|z| z as i64);
             // With no surface, the search starts at the highest solid, or at the reach's floor.
             let start = from.or(top).unwrap_or(ceiling).max(lo);
@@ -311,14 +311,14 @@ impl<'a> Access<'a> {
     /// Ground top, ceiling and solidity of a column, in cells; sub-cells fold by majority.
     fn cells<R>(&self, [ix, iy]: [i64; 2], f: impl FnOnce(Option<i64>, i64, &dyn Fn(i64) -> bool) -> R) -> Answer<R> {
         self.composed([ix, iy]).map(|c| {
-            let side = CELL.side();
+            let side = units(CELL);
             let top = c.top.map(|t| round(t / side) as i64);
             let made = |z: f64| {
                 let inside = |[lo, hi]: [f64; 2]| z >= lo && z < hi;
                 (top.is_some_and(|t| z < t as f64 * side) && !c.lines.air.is_some_and(inside)) || c.lines.boxes.iter().any(|&b| inside(b))
             };
             let n = CELL_STEPS as i64;
-            let fine = OBJECT_FINEST.side();
+            let fine = units(OBJECT_FINEST);
             let solid = |cz: i64| {
                 if !self.objects.may_hold([ix, iy, cz]) {
                     return made((cz as f64 + 0.5) * side);
@@ -339,10 +339,10 @@ impl<'a> Access<'a> {
 
     fn composed(&self, cell: [i64; 2]) -> Answer<Composed> {
         let [ix, iy] = cell;
-        let base = CELL.base_of([ix, iy, 0]);
+        let base = base_of(CELL, [ix, iy, 0]);
         let ground = self.ground(GROUND.cell_of(LEAF_Z, &base));
-        let [kx, ky, _] = L2.index_of(&base);
-        let col_idx = L2_IDX(TO_XY(base.i));
+        let [kx, ky, _] = index_of(chunk_zoom(LEAF_Z), &base);
+        let col_idx = idx(BAND, TO_XY(base.i));
         let local = [ix - kx * cells_across(), iy - ky * cells_across()];
         ground.map(|g| Composed {
             cell,
@@ -356,7 +356,7 @@ impl<'a> Access<'a> {
     /// Whether ground is there where it reaches: not bore air, and not taken by
     /// an object's voxel entry (air entries included).
     fn holds(&self, c: &Composed, cz: i64) -> bool {
-        let z = cz as f64 * CELL.side();
+        let z = cz as f64 * units(CELL);
         !c.lines.air.is_some_and(|[lo, hi]| z >= lo && z < hi) && !self.taken(c.col_idx, c.local, cz)
     }
 
@@ -373,7 +373,7 @@ impl<'a> Access<'a> {
 
     /// The zoom the ground under `at` is known at; a step there is bounded by
     /// that zoom's cell.
-    pub fn known_z(&self, at: &Pvf3) -> Option<u32> {
+    pub fn known_z(&self, at: &Pvf3) -> Option<Zoom> {
         let page = GROUND.cell_of(LEAF_Z, at).page();
         match self.terrain.source(page) {
             Some(_) => Some(LEAF_Z),
@@ -396,19 +396,19 @@ impl<'a> Access<'a> {
     /// Bound on the ground over a node of `page`'s zoom and every zoom finer than
     /// it, from one block of the index lane. For deciding descent, never for
     /// what is drawn.
-    pub fn relief(&self, page: Page, (side, at): (Scale, [i64; 2])) -> Answer<Relief> {
+    pub fn relief(&self, page: Page, (side, at): (Zoom, [i64; 2])) -> Answer<Relief> {
         let Some((src, body)) = self.drawn_from(page) else {
             return Answer::Nothing(lack(page));
         };
-        let index = EXTENT.side_at(src.z);
-        let first = EXTENT.cell_of(src.z, &side.base_of([at[0], at[1], 0]));
-        let across = if side > index { index.count_in(side) } else { 1 };
+        let index = EXTENT.cell_zoom(src.z);
+        let first = EXTENT.cell_of(src.z, &base_of(side, [at[0], at[1], 0]));
+        let across = if side < index { count(index, side) } else { 1 };
         let b = body.index.over(first.in_page(), across);
         self.answer(
             page,
             Relief {
                 extent: (f64::from(b.lo) * U_PER_CELL, f64::from(b.hi) * U_PER_CELL),
-                slope: f64::from(b.span) * U_PER_CELL / index.side(),
+                slope: f64::from(b.span) * U_PER_CELL / units(index),
             },
         )
     }
@@ -447,7 +447,7 @@ impl<'a> Access<'a> {
         }
     }
 
-    fn ground_first(&self, ray: &Ray, (t0, t1): (f64, f64), z: u32, lack: &mut Option<Lack>, answered: &mut bool) -> Option<Hit> {
+    fn ground_first(&self, ray: &Ray, (t0, t1): (f64, f64), z: Zoom, lack: &mut Option<Lack>, answered: &mut bool) -> Option<Hit> {
         let mut t = t0;
         while t < t1 {
             self.visit();
@@ -483,37 +483,36 @@ impl<'a> Access<'a> {
 
     /// Far edge of the largest resident index cell coarser than `z` the ray
     /// passes over entirely, or none. Never past `until`, where another zoom applies.
-    fn clear(&self, ray: &Ray, t: f64, z: u32, until: f64) -> Option<f64> {
+    fn clear(&self, ray: &Ray, t: f64, z: Zoom, until: f64) -> Option<f64> {
         let from = ray.at(t + NUDGE);
         let at = on_ground(&from);
         (TOP_Z..z).find_map(|coarser| {
             let body = self.terrain.get(GROUND.cell_of(coarser, &at).page())?;
             let e = EXTENT.cell_of(coarser, &at);
             let [_, hi] = drawn(body.index.extent()[e.index() as usize]);
-            let out = exit(ray, corner(e.scale(), &from), e.scale().side()).min(until).max(t + NUDGE);
+            let out = exit(ray, corner(e.zoom(), &from), units(e.zoom())).min(until).max(t + NUDGE);
             let (za, zb) = (ray.at(t)[2], ray.at(out)[2]);
             (za.min(zb) > hi as f64 * U_PER_CELL).then_some(out)
         })
     }
 
-    fn region(&self, p: &V3, z: u32) -> Region {
+    fn region(&self, p: &V3, z: Zoom) -> Region {
         let at = on_ground(p);
         let page = GROUND.cell_of(z, &at).page();
-        let page_scale = page_scale(z);
-        let (scale, terrain) = match self.drawn_from(page) {
+        let (cell_zoom, terrain) = match self.drawn_from(page) {
             Some((src, body)) => {
                 // The drawn-from page's index cell, or the asked page if smaller: one bound
                 // and one page across it.
                 let e = EXTENT.cell_of(src.z, &at);
                 let [lo, hi] = drawn(body.index.extent()[e.index() as usize]);
                 let exact = self.terrain.source(page).is_some();
-                (e.scale().min(page_scale), Some(((lo as f64 * U_PER_CELL, hi as f64 * U_PER_CELL), exact)))
+                (e.zoom().max(z), Some(((lo as f64 * U_PER_CELL, hi as f64 * U_PER_CELL), exact)))
             }
-            None => (page_scale, None),
+            None => (z, None),
         };
         Region {
-            base: corner(scale, p),
-            side: scale.side(),
+            base: corner(cell_zoom, p),
+            side: units(cell_zoom),
             page,
             terrain,
         }
@@ -522,8 +521,8 @@ impl<'a> Access<'a> {
     /// Walks cell columns at `z` inside `r` (Amanatides–Woo). Stops on the
     /// region's cells, not on `t1`: the two distances round differently, and a
     /// column past the edge would be read as this region's.
-    fn walk(&self, ray: &Ray, r: &Region, t0: f64, t1: f64, z: u32) -> Option<Hit> {
-        let side = GROUND.side_at(z).side();
+    fn walk(&self, ray: &Ray, r: &Region, t0: f64, t1: f64, z: Zoom) -> Option<Hit> {
+        let side = units(GROUND.cell_zoom(z));
         let across = (r.side / side) as i64;
         let first = r.base.map(|v| (v / side).floor() as i64);
         let inside = |c: [i64; 2]| (0..2).all(|k| (first[k]..first[k] + across).contains(&c[k]));
@@ -563,7 +562,7 @@ impl<'a> Access<'a> {
     fn lines_over(&self, cell: Cell, ground_height: f64) -> Lines {
         let mut lines = Lines::default();
         let Some((src, body)) = self.drawn_from(cell.page()) else { return lines };
-        let (at, side) = (sample_in(cell, src), 1.0 / GROUND.side_at(cell.z()).count_in(GROUND.side_at(src.z)) as f64);
+        let (at, side) = (sample_in(cell, src), 1.0 / count(GROUND.cell_zoom(cell.z()), GROUND.cell_zoom(src.z)) as f64);
         let ground = round(ground_height / U_PER_CELL) as i32;
         let units = |[lo, hi]: [i32; 2]| [f64::from(lo) * U_PER_CELL, f64::from(hi) * U_PER_CELL];
         let page = Frame::of(src);
@@ -603,7 +602,7 @@ impl<'a> Access<'a> {
     }
 
     fn column(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64) -> Option<Hit> {
-        let side = CELL.side();
+        let side = units(CELL);
         let c = self.composed([ix, iy]).value()?;
         let ground = self.ground_column(ray, &c, t0, t1);
         self.with_decks(ray, &c.lines.boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
@@ -613,7 +612,7 @@ impl<'a> Access<'a> {
     /// entry and not in bore air. Steps by cell only once under the top.
     fn ground_column(&self, ray: &Ray, c: &Composed, t0: f64, t1: f64) -> Option<Hit> {
         let ([ix, iy], top) = (c.cell, c.top?);
-        let side = CELL.side();
+        let side = units(CELL);
         let (za, zb) = (ray.at(t0)[2], ray.at(t1)[2]);
         let dz = ray.direction[2];
         let at_z = |z: f64| (z - ray.origin[2]) / dz;
@@ -653,19 +652,19 @@ impl<'a> Access<'a> {
         }
     }
 
-    fn folded(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64, z: u32) -> Option<Hit> {
-        let scale = GROUND.side_at(z);
-        let side = scale.side();
-        let cell = GROUND.cell_of(z, &scale.base_of([ix, iy, 0]));
+    fn folded(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64, z: Zoom) -> Option<Hit> {
+        let cell_zoom = GROUND.cell_zoom(z);
+        let side = units(cell_zoom);
+        let cell = GROUND.cell_of(z, &base_of(cell_zoom, [ix, iy, 0]));
         let g = self.ground(cell).value()?;
         let ground = g.top().and_then(|top| self.folded_ground(ray, [ix, iy], top, t0, t1, z));
         let lines = self.lines_over(cell, g.height);
         self.with_decks(ray, &lines.boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
     }
 
-    fn folded_ground(&self, ray: &Ray, [ix, iy]: [i64; 2], top: f64, t0: f64, t1: f64, z: u32) -> Option<Hit> {
-        let scale = GROUND.side_at(z);
-        let side = scale.side();
+    fn folded_ground(&self, ray: &Ray, [ix, iy]: [i64; 2], top: f64, t0: f64, t1: f64, z: Zoom) -> Option<Hit> {
+        let cell_zoom = GROUND.cell_zoom(z);
+        let side = units(cell_zoom);
         let (za, zb) = (ray.at(t0)[2], ray.at(t1)[2]);
         let (t, normal) = if za <= top {
             (t0 > 0.0).then(|| (t0, wall_normal(ray, t0, side)))?
@@ -682,21 +681,21 @@ impl<'a> Access<'a> {
     /// First object the ray meets, nearest first (`Store::along_ray`). On the leaves
     /// voxel entries are hit at their own boxes; above the leaves the folded cell is
     /// hit whole, matching what that zoom draws.
-    fn objects(&self, ray: &Ray, (t0, t1): (f64, f64), z: u32) -> Option<Hit> {
-        let scale = GROUND.side_at(z);
-        let side = scale.side();
+    fn objects(&self, ray: &Ray, (t0, t1): (f64, f64), z: Zoom) -> Option<Hit> {
+        let cell_zoom = GROUND.cell_zoom(z);
+        let side = units(cell_zoom);
         let mut met = None;
-        self.objects.along_ray(ray.origin, ray.direction, (t0, t1), scale, &mut |[x, y, h]| {
+        self.objects.along_ray(ray.origin, ray.direction, (t0, t1), cell_zoom, &mut |[x, y, h]| {
             met = if z == LEAF_Z {
-                let steps = L2.above(CELL) as u32;
+                let steps = u32::from(CELL - chunk_zoom(LEAF_Z));
                 let [cx, cy] = ancestor_of([x, y], steps);
                 let col_idx = crate::layer::object::store::column_at([cx, cy]);
                 let entries = self.cell_entries(col_idx, offset_in([x, y], steps), h);
                 let corner = first_descendant_of([cx, cy], steps).map(|v| v as f64 * side);
                 object_hit(ray, entries, corner)
             } else {
-                let v = u32::from(self.objects.folded_value(scale, [x, y, h]));
-                (object_value_is_voxel(v) && !object_value_is_air(v)).then(|| cell_hit(ray, [x, y, h], scale, t0)).flatten()
+                let v = u32::from(self.objects.folded_value(cell_zoom, [x, y, h]));
+                (object_value_is_voxel(v) && !object_value_is_air(v)).then(|| cell_hit(ray, [x, y, h], cell_zoom, t0)).flatten()
             };
             met.is_some()
         });
@@ -730,7 +729,7 @@ impl<'a> Access<'a> {
 }
 
 fn cells_across() -> i64 {
-    CELL.count_in(L2) as i64
+    count(CELL, chunk_zoom(LEAF_Z)) as i64
 }
 
 fn exit(ray: &Ray, base: [f64; 2], side: f64) -> f64 {
@@ -784,11 +783,11 @@ fn ray_box(ray: &Ray, cube: Aabb) -> Option<(f64, V3)> {
 
 /// Where the ray meets the whole cell; if already inside at `from`, there,
 /// through the nearest side. None if it starts inside.
-fn cell_hit(ray: &Ray, cell: [i64; 3], scale: Scale, from: f64) -> Option<Hit> {
-    let cube = scale.cube(cell);
+fn cell_hit(ray: &Ray, cell: [i64; 3], cell_zoom: Zoom, from: f64) -> Option<Hit> {
+    let cube = cube(cell_zoom, cell);
     let (t, normal) = match ray_box(ray, cube) {
         Some((t, normal)) if t >= from => (t, normal),
-        _ => (cube.holds(ray.at(from)) && from > 0.0).then(|| (from, wall_normal(ray, from, scale.side())))?,
+        _ => (cube.holds(ray.at(from)) && from > 0.0).then(|| (from, wall_normal(ray, from, units(cell_zoom))))?,
     };
     Some(hit(ray, t, normal, cube, Struck::Objects))
 }
@@ -812,16 +811,16 @@ fn on_ground(p: &V3) -> Pvf3 {
     projection::project(p[0], p[1], 0.0)
 }
 
-/// The corner of `scale`'s cell under `p`, in the frame `p` is in: a ray
+/// The corner of `cell_zoom`'s cell under `p`, in the frame `p` is in: a ray
 /// across the antimeridian walks on, where the cell's stored X wraps.
-fn corner(scale: Scale, p: &V3) -> [f64; 2] {
-    let side = scale.side();
+fn corner(cell_zoom: Zoom, p: &V3) -> [f64; 2] {
+    let side = units(cell_zoom);
     [(p[0] / side).floor() * side, (p[1] / side).floor() * side]
 }
 
 /// Where `cell`'s center falls in the page `src` it is drawn from, in that page's cells.
 fn sample_in(cell: Cell, src: Page) -> [f64; 2] {
-    let n = GROUND.side_at(cell.z()).count_in(GROUND.side_at(src.z)) as f64;
+    let n = count(GROUND.cell_zoom(cell.z()), GROUND.cell_zoom(src.z)) as f64;
     cell.in_page_above(cell.z() - src.z).map(|o| (o as f64 + 0.5) / n)
 }
 

@@ -5,6 +5,8 @@ use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::pvf3::ivec;
 
 use super::*;
+use pxl_spec::space::indexer::from_idx;
+use pxl_spec::space::zoom::{count, units, Zoom};
 use xpute_core::math::rng::SplitMix64;
 
 // Far-apart corners per test: the store is kernel-global across the binary.
@@ -17,8 +19,14 @@ fn entries(store: &Store, col_idx: IVec) -> Vec<(i32, u32, u32)> {
     (0..e.band.len()).map(|k| (e.band[k], e.pos[k], e.state[k])).collect()
 }
 
-fn write(store: &mut Store, col_idx: IVec, band_idx: BandZ, at: [u32; 3], scale: Scale, state: u32) -> BTreeSet<(IVec, BandZ)> {
-    store.write([Write { col_idx, band_idx, at, scale, state }])
+fn write(store: &mut Store, col_idx: IVec, band_idx: BandZ, at: [u32; 3], cell_zoom: Zoom, state: u32) -> BTreeSet<(IVec, BandZ)> {
+    store.write([Write {
+        col_idx,
+        band_idx,
+        at,
+        cell_zoom,
+        state,
+    }])
 }
 
 #[test]
@@ -56,7 +64,7 @@ fn a_merged_block_comes_back_as_its_cells_each_found_where_it_lies() {
             col_idx: 1,
             band_idx: -1,
             at: [x * CELL_STEPS, y * CELL_STEPS, z * CELL_STEPS],
-            scale: CELL,
+            cell_zoom: CELL,
             state: 5,
         }
     });
@@ -80,14 +88,14 @@ fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
         col_idx: 3,
         band_idx: 0,
         at: [x, y, z],
-        scale: OBJECT_FINEST,
+        cell_zoom: OBJECT_FINEST,
         state: 2,
     };
     store.write([
         Write { band_idx: 1, ..finest(8, 0, 0) },
         finest(9, 1, 0),
         finest(8, 0, 0),
-        Write { scale: CELL, ..finest(0, 8, 0) },
+        Write { cell_zoom: CELL, ..finest(0, 8, 0) },
         finest(1, 0, 0),
         finest(0, 0, 1),
     ]);
@@ -121,19 +129,19 @@ impl Rng {
 
 /// Whole cells in band 0 of one column, and what the store keeps folded at
 /// `z`, with the column's corner in that zoom's cells.
-fn folded(cells: &[(u32, u32, u32, u32)], z: u32) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
+fn folded(cells: &[(u32, u32, u32, u32)], z: Zoom) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
     let mut store = Store::default();
     let col_idx = ivec::gather(1, -1, 0);
-    let step = OBJECT_FINEST.count_in(CELL);
+    let step = count(OBJECT_FINEST, CELL);
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
         col_idx,
         band_idx: 0,
         at: [x * step, y * step, z * step],
-        scale: CELL,
+        cell_zoom: CELL,
         state,
     }));
-    let target = GROUND.side_at(z);
-    let per = target.count_in(BAND) as i64;
+    let target = GROUND.cell_zoom(z);
+    let per = count(target, BAND) as i64;
     let corner = [per, -per];
     let mut out = HashMap::new();
     store.fold_at(target, corner, [corner[0] + per, corner[1] + per], None, &mut out).unwrap();
@@ -176,7 +184,7 @@ fn entry_boxes(store: &Store) -> Vec<Aabb> {
     let mut out = Vec::new();
     for &col_idx in store.columns.keys() {
         let e = store.entries(col_idx).unwrap();
-        let corner = FROM_L2_IDX(col_idx);
+        let corner = from_idx(BAND, col_idx);
         for k in 0..e.band.len() {
             let (x, y, z, own) = unpack_pos(e.pos[k]);
             let min = [
@@ -186,7 +194,7 @@ fn entry_boxes(store: &Store) -> Vec<Aabb> {
             ];
             out.push(Aabb {
                 min,
-                max: min.map(|v| v + own.side()),
+                max: min.map(|v| v + units(own)),
             });
         }
     }
@@ -259,17 +267,17 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
 fn a_paint_finer_than_a_cube_takes_it_whole() {
     let mut store = Store::default();
     let col_idx = ivec::gather(1, -1, 0);
-    let step = OBJECT_FINEST.count_in(CELL);
+    let step = count(OBJECT_FINEST, CELL);
     store.write([Write {
         col_idx,
         band_idx: 0,
         at: [3 * step, 4 * step, 5 * step],
-        scale: CELL,
+        cell_zoom: CELL,
         state: red(),
     }]);
-    for target in [OBJECT_FINEST.up(1), CELL.down(1)] {
+    for target in [OBJECT_FINEST - 1, CELL + 1] {
         let mut out = Vec::new();
-        store.fold_entries(col_idx, target, None, &mut |band, at, scale, v| out.push((band, at, scale, v)));
+        store.fold_entries(col_idx, target, None, &mut |band, at, cell_zoom, v| out.push((band, at, cell_zoom, v)));
         assert_eq!(out, [(0, [3 * step, 4 * step, 5 * step], CELL, red())]);
     }
 }

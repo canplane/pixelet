@@ -8,7 +8,6 @@ pub mod placement;
 
 use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
 use pxl_spec::bake::poi_page::{self, PoiPage};
-use pxl_spec::space::adapter::epsg3857::side_at_zoom;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::io::demand::{Category, Phases};
@@ -16,6 +15,8 @@ use crate::param::{POI_ALL_ZOOM, POI_MAJOR_ZOOM};
 use crate::sched::profiler::record::Failure;
 use crate::shell::setting::store::settings_store;
 use crate::world::pyramid::{Layer, Pyramid};
+use pxl_spec::space::adapter::epsg3857::cell_zoom_of;
+use pxl_spec::space::zoom::units;
 use xpute_runtime::global::Global;
 
 static POI: Global<Pyramid<PoiPage>> = Global::new();
@@ -41,8 +42,8 @@ impl Layer for PoiPage {
 }
 
 /// The units a logical pixel spans where the view is at each zoom.
-pub const ALL_UNITS_PER_PX: f64 = side_at_zoom(POI_ALL_ZOOM).side();
-pub const MAJOR_UNITS_PER_PX: f64 = side_at_zoom(POI_MAJOR_ZOOM).side();
+pub const ALL_UNITS_PER_PX: f64 = units(cell_zoom_of(POI_ALL_ZOOM));
+pub const MAJOR_UNITS_PER_PX: f64 = units(cell_zoom_of(POI_MAJOR_ZOOM));
 
 pub fn enabled() -> bool {
     settings_store().poi

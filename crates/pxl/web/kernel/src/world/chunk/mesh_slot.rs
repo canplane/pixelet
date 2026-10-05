@@ -17,6 +17,7 @@ use pxl_spec::space::pyramid::{CHUNK_CELLS, LEAF_Z, TOP_Z};
 
 use crate::param::{ARENA_COARSE_GROUPS, ARENA_GROUP_SLOTS};
 use crate::world::pyramid::domain::cover_pieces;
+use pxl_spec::space::zoom::Zoom;
 
 const SLOTS: u32 = ARENA_GROUP_SLOTS;
 const COARSE_GROUPS: u32 = ARENA_COARSE_GROUPS;
@@ -57,7 +58,7 @@ pub enum Pool {
 }
 
 impl Pool {
-    pub const fn of(z: u32, step: u32) -> Pool {
+    pub const fn of(z: Zoom, step: u32) -> Pool {
         if step == CHUNK_CELLS {
             Pool::Cover
         } else if z == LEAF_Z && step == 1 {
@@ -108,7 +109,7 @@ impl Pool {
 
 pub const ARENA: [u32; POOLS] = [Pool::Fine.slots(), Pool::Coarse.slots(), Pool::Cover.slots()];
 
-pub const fn capacity(z: u32, step: u32) -> u32 {
+pub const fn capacity(z: Zoom, step: u32) -> u32 {
     Pool::of(z, step).boxes()
 }
 

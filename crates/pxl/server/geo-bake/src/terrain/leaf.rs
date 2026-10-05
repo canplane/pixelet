@@ -10,7 +10,6 @@ use postgres::types::ToSql;
 use postgres::Client;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::adapter::epsg3857::{self, to_db};
-use pxl_spec::space::indexer::L3;
 use pxl_spec::space::pvf3::ivec::IVec;
 
 use crate::coverage::Coverage;
@@ -102,7 +101,7 @@ pub fn write_land_pages(path: &Path, coverage: &Coverage, release: &str, land: &
 
 fn land_key(coverage: &Coverage, release: &str) -> serde_json::Value {
     serde_json::json!({
-        "l3_shamt": L3.shamt(),
+        "leaf_z": pxl_spec::space::pyramid::LEAF_Z,
         "x": [coverage.x.0, coverage.x.1],
         "y": [coverage.y.0, coverage.y.1],
         "ground": format!("{GROUND:016x}"),

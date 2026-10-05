@@ -9,12 +9,13 @@ use crate::pyramid::{fold_stored, Absent, Layer, PageSet};
 use crate::util::{pack, Level};
 use pxl_spec::bake::quadkey::page_of_name;
 use pxl_spec::space::pyramid::{Page, LEAF_Z};
+use pxl_spec::space::zoom::Zoom;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 
-pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, name: &str, top: u32) -> Result<Option<String>, Failure> {
+pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, name: &str, top: Zoom) -> Result<Option<String>, Failure> {
     let p = page_of_name(name).ok_or(Failure::BadName)?;
     if p.z < top {
         return Err(Failure::Unavailable);

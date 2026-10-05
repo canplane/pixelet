@@ -10,6 +10,7 @@ use pxl_spec::cell::object::{decor_ids, decor_num_id, placeable_cube_num_id, pla
 
 use crate::mesh::paint::object::material::solid_material;
 use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::zoom::count;
 
 use crate::mesh::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
 
@@ -168,7 +169,7 @@ impl Painter {
         if kind == Kind::Decor || kind == Kind::Untaught {
             return Some(0);
         }
-        let (x, y, z, scale) = unpack_pos(pos);
+        let (x, y, z, cell_zoom) = unpack_pos(pos);
         let ([cx, cy, cz], into) = in_cell([x, y, z]);
         let z = band_cell_z(band) as CellZ + cz as CellZ;
         let is_air = kind == Kind::Air;
@@ -178,9 +179,9 @@ impl Painter {
             (self.materials[state as usize], self.layers[state as usize])
         };
 
-        let sub = if scale < CELL {
+        let sub = if cell_zoom > CELL {
             let [ox, oy, oz] = into.map(|v| pack_sub_cell_fraction(v as f64 / CELL_STEPS as f64));
-            let sz = pack_sub_cell_fraction(1.0 / scale.count_in(CELL) as f64);
+            let sz = pack_sub_cell_fraction(1.0 / count(cell_zoom, CELL) as f64);
             ox | (oy << 8) | (oz << 16) | (sz << 24)
         } else {
             (SUB_CELL_NONE as u32) << 24

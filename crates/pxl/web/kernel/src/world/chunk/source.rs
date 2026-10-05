@@ -4,16 +4,17 @@
 //! bands it draws, and their revisions. A chunk is a cube, so an object
 //! written is in one chunk per zoom, not every chunk over its column.
 
-use pxl_spec::bake::constant::BandZ;
+use pxl_spec::bake::constant::{BandZ, BAND, CELL};
 use pxl_spec::space::hierarchy::ancestor_of;
-use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, LEAF_Z, TOP_Z};
+use pxl_spec::space::pyramid::{chunk_zoom, CHUNK_CELLS, GROUND, LEAF_Z, TOP_Z};
 
 use crate::kernel::with_world;
 use crate::world::change::{bump_world, world_changes, TIERS_CHUNK};
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
+use pxl_spec::space::indexer::{from_idx, idx};
+use pxl_spec::space::zoom::{count, index, Zoom};
 use xpute_runtime::global::Global;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
@@ -31,9 +32,9 @@ pub fn chunk_sources_step() {
 
 /// A leaf chunk draws its own column; a coarser one draws every column under
 /// it and its apron, folded.
-pub fn tiers_draw(z: u32, base: IVec, col: IVec) -> bool {
+pub fn tiers_draw(z: Zoom, base: IVec, col: IVec) -> bool {
     if z == LEAF_Z {
-        col == L2_IDX(base)
+        col == idx(BAND, base)
     } else {
         folds_into(z, base, col)
     }
@@ -41,7 +42,7 @@ pub fn tiers_draw(z: u32, base: IVec, col: IVec) -> bool {
 
 /// A band is a leaf chunk's height, so it lies in one chunk per zoom.
 pub fn draws_band(k: PyramidChunk, band: BandZ) -> bool {
-    ancestor_of([i64::from(band)], LEAF_Z - k.z())[0] == k.node().1[2]
+    ancestor_of([i64::from(band)], u32::from(LEAF_Z - k.z()))[0] == k.node().1[2]
 }
 
 /// One word: the coordinate, with the zoom beside the height. A band is 64
@@ -61,10 +62,10 @@ pub fn objects_revision_of(k: PyramidChunk) -> u32 {
 /// Moves exactly the chunks whose tiers draw the band: the one holding it at
 /// each zoom, and coarser than a leaf's its neighbours through the fold's apron.
 pub fn band_written(col: IVec, band: BandZ) {
-    let corner = Pvf3 { i: FROM_L2_IDX(col), f: 0 };
+    let corner = Pvf3 { i: from_idx(BAND, col), f: 0 };
     for z in TOP_Z..=LEAF_Z {
         let column = PyramidChunk::of(z, &corner);
-        let home = column.beside(0, 0, ancestor_of([i64::from(band)], LEAF_Z - z)[0] - column.node().1[2]);
+        let home = column.beside(0, 0, ancestor_of([i64::from(band)], u32::from(LEAF_Z - z))[0] - column.node().1[2]);
         let near: &[(i64, i64)] = if z == LEAF_Z { &[(0, 0)] } else { &NEAR };
         for &(dx, dy) in near {
             let k = home.beside(dx, dy, 0);
@@ -78,9 +79,9 @@ pub fn band_written(col: IVec, band: BandZ) {
 const NEAR: [(i64, i64); 9] = [(-1, -1), (0, -1), (1, -1), (-1, 0), (0, 0), (1, 0), (-1, 1), (0, 1), (1, 1)];
 
 /// Its own cells and the one-cell apron a fold reads.
-fn folds_into(z: u32, base: IVec, col: IVec) -> bool {
-    let (cell, o, last) = (GROUND.side_at(z), FROM_L2_IDX(col), i64::from(L1.count_in(L2)) - 1);
-    let across = |b: i64, o: i64| cell.index(o) <= cell.index(b) + CHUNK_CELLS as i64 && cell.index(o + last) >= cell.index(b) - 1;
+fn folds_into(z: Zoom, base: IVec, col: IVec) -> bool {
+    let (cell, o, last) = (GROUND.cell_zoom(z), from_idx(BAND, col), i64::from(count(CELL, chunk_zoom(LEAF_Z))) - 1);
+    let across = |b: i64, o: i64| index(cell, o) <= index(cell, b) + CHUNK_CELLS as i64 && index(cell, o + last) >= index(cell, b) - 1;
     // The column's copy nearest the chunk, so a fold across the antimeridian is met.
     let ox = pxl_spec::space::pvf3::nearest(ivec::X(o) as f64, ivec::X(base) as f64) as i64;
     across(ivec::X(base), ox) && across(ivec::Y(base), ivec::Y(o))

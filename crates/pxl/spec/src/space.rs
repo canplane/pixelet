@@ -17,3 +17,4 @@ pub mod pyramid;
 pub mod sparse_tree;
 pub mod v3;
 pub mod xy;
+pub mod zoom;

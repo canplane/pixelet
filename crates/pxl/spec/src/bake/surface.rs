@@ -85,7 +85,7 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
 /// Per `EXTENT` cell, the lowest and highest of the surface (overshoot
 /// included), any deck top and any bore floor. Saturates at i16, about 78 km.
 pub fn extent_of(page_ele: &[i16], decks: &Decks) -> Vec<[i16; 2]> {
-    let n = CELL.count_in(EXTENT_CELL) as f64;
+    let n = crate::space::zoom::count(CELL, EXTENT_CELL) as f64;
     let side = EXTENT.page_cells();
     (0..side * side)
         .map(|index| {

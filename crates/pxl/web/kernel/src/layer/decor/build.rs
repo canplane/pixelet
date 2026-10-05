@@ -7,7 +7,7 @@
 use pxl_render::gpu::api::word_bytes;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
-use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
+use pxl_spec::bake::constant::{unpack_pos, CELL, U_PER_CELL};
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -24,11 +24,10 @@ use crate::layer::object::store::{At, EntryAt, Store, AIR};
 use crate::world::access::Access;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::asset::ingested::Asset;
-use pxl_spec::bake::constant::CELL;
 use pxl_spec::bake::deck::Decks;
-use pxl_spec::bake::format::GroundCell;
-use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::format::{GroundCell, Terrain};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::zoom::{count, index, index_of, units, Zoom};
 use xpute_core::math::scalar::round;
 
 /// A kind is drawn as a model while it covers at least two of a tier's cells
@@ -93,7 +92,7 @@ pub struct DecorBuild<'s> {
 pub struct Ground<'a> {
     pub page: &'a PageView<'a>,
     pub sample: &'a ChunkSample,
-    pub z: u32,
+    pub z: Zoom,
     pub x0: i64,
     pub y0: i64,
     pub tx0: u32,
@@ -169,9 +168,9 @@ pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let leaf = GROUND.cell_of(LEAF_Z, at);
     let page = Terrain::pyramid().paging().get(leaf.page())?;
     let ground = Access::now().at(at, LEAF_Z).exact()?;
-    let [ix, iy, iz] = CELL.index_of(at);
+    let [ix, iy, iz] = index_of(CELL, at);
     let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;
-    (ground.top().map(|top| round(top / CELL.side()) as i64) == Some(iz)).then(|| draw(kind, candidate, &page.ground.cells, &page.decks, leaf.in_page()))?
+    (ground.top().map(|top| round(top / units(CELL)) as i64) == Some(iz)).then(|| draw(kind, candidate, &page.ground.cells, &page.decks, leaf.in_page()))?
 }
 
 impl<'s> DecorBuild<'s> {
@@ -224,8 +223,8 @@ impl<'s> DecorBuild<'s> {
                 continue;
             }
             let pos = poss[k];
-            let (x, y, z, scale) = unpack_pos(pos);
-            let size = scale.side();
+            let (x, y, z, cell_zoom) = unpack_pos(pos);
+            let size = units(cell_zoom);
             let at = At {
                 col_idx: column.col_idx,
                 band: bands[k],
@@ -261,10 +260,10 @@ impl<'s> DecorBuild<'s> {
     /// sees, not on leaf cells it cannot.
     fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
         let (cells, lines) = (ground.page.cells, ground.page.decks);
-        let (own, atom) = (GROUND.side_at(ground.z), GROUND.side_at(LEAF_Z));
-        let (lx0, ly0) = (own.index(ground.x0), own.index(ground.y0));
-        let per = i64::from(atom.count_in(own));
-        let min = [atom.index(ground.x0), atom.index(ground.y0)];
+        let (own, atom) = (GROUND.cell_zoom(ground.z), GROUND.cell_zoom(LEAF_Z));
+        let (lx0, ly0) = (index(own, ground.x0), index(own, ground.y0));
+        let per = i64::from(count(atom, own));
+        let min = [index(atom, ground.x0), index(atom, ground.y0)];
         let span = i64::from(CHUNK_CELLS) * per;
         let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
         scatter(kind.seed.tag, kind.seed.density, ground.z, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
@@ -275,7 +274,7 @@ impl<'s> DecorBuild<'s> {
                 continue;
             };
             let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;
-            let at = [(gx as f64 + 0.5) * atom.side(), (gy as f64 + 0.5) * atom.side(), f64::from(ele)];
+            let at = [(gx as f64 + 0.5) * units(atom), (gy as f64 + 0.5) * units(atom), f64::from(ele)];
             // In the chunk holding the cell it stands on.
             if !((0..2).all(|k| (chunk.min[k]..chunk.max[k]).contains(&at[k])) && chunk.min[2] < at[2] && at[2] <= chunk.max[2]) {
                 continue;
@@ -284,7 +283,7 @@ impl<'s> DecorBuild<'s> {
             if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some()) {
                 continue;
             }
-            let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, own.index(ele as i64)]).is_some_and(|&s| s != AIR);
+            let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, index(own, ele as i64)]).is_some_and(|&s| s != AIR);
             if ground.folded.is_some_and(filled) {
                 continue;
             }

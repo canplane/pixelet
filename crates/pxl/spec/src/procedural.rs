@@ -15,6 +15,7 @@ use crate::cell::cube::Kind;
 use crate::space::adapter::epsg3857::u_per_m;
 use crate::space::pvf3::ivec::gather;
 use crate::space::pyramid::{Page, GROUND, LEAF_Z, PAGE_CELLS, TOP_Z};
+use crate::space::zoom::Zoom;
 
 /// Changing it reshuffles everything scattered.
 pub const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
@@ -27,14 +28,14 @@ const KEPT: f64 = 0.25; // a zoom keeps one in four of the next finer's
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Candidate {
     pub cell: [i64; 2], // the leaf cell it stands at, at every zoom
-    pub born: u32,      // the coarsest zoom it stands at
+    pub born: Zoom,     // the coarsest zoom it stands at
     pub seed: u64,      // its own draws: variant, heading, size
 }
 
 /// A Poisson process, never a grid: a block at zoom m bears a Poisson count
 /// of candidates born there, each at a uniform leaf cell, and a candidate born
 /// at m stands at every zoom from m finer. A cell at any zoom then holds `density`.
-fn each_candidate(tag: u64, density: f64, z: u32, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
+fn each_candidate(tag: u64, density: f64, z: Zoom, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
     let kind = derive_seed_u64(MASTER_SEED, tag);
     for born in (TOP_Z..=z).rev() {
         let side = BLOCK * i64::from(GROUND.finest_in(born));
@@ -75,7 +76,7 @@ fn poisson(mean: f64, u: f64) -> u64 {
 
 /// What stands at `z` in `region` (leaf cells, `[min, max)`), one a cell:
 /// of two on one cell the coarser stays, so a zoom keeps what it had.
-pub fn scatter(tag: u64, density: f64, z: u32, region: [[i64; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
+pub fn scatter(tag: u64, density: f64, z: Zoom, region: [[i64; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
     out.clear();
     let mut grown = Ok(());
     each_candidate(tag, density, z, region, |c| {
