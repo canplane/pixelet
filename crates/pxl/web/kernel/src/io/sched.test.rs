@@ -69,7 +69,7 @@ fn failed<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
 #[test]
 fn saying_the_same_set_again_changes_nothing() {
     let mut l = scheduler();
-    let want = [(1u64, ask(Why::Fault, 0.0))];
+    let want = [(1u64, ask(Why::Demand, 0.0))];
     l.declare(Category::terrain, &want, 0.0);
     l.pump(0.0);
     assert_eq!(started(&mut l).len(), 1);
@@ -83,7 +83,7 @@ fn saying_the_same_set_again_changes_nothing() {
 #[test]
 fn an_answer_is_asked_once() {
     let mut l = scheduler();
-    l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 0.0);
+    l.declare(Category::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
     ok(&mut l, key, 0.0);
@@ -91,7 +91,7 @@ fn an_answer_is_asked_once() {
     assert!(started(&mut l).is_empty(), "an answered want was asked again");
     assert!(stopped(&mut l).is_empty());
     assert_eq!(l.pending_count(Category::terrain), 0);
-    l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 1.0);
+    l.declare(Category::terrain, &[(1, ask(Why::Demand, 0.0))], 1.0);
     l.pump(1.0);
     assert_eq!(started(&mut l).len(), 1);
 }
@@ -99,13 +99,13 @@ fn an_answer_is_asked_once() {
 #[test]
 fn a_failure_waits_rather_than_asking_straight_back() {
     let mut l = scheduler();
-    l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 0.0);
+    l.declare(Category::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
     failed(&mut l, key, 0.0);
     // A failure is not a withdrawal.
     for t in 0..5 {
-        l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], t as f64);
+        l.declare(Category::terrain, &[(1, ask(Why::Demand, 0.0))], t as f64);
         l.pump(t as f64);
         assert!(started(&mut l).is_empty(), "held back, not re-asked every turn");
     }
@@ -121,7 +121,7 @@ fn a_current_demand_is_said_whatever_old_work_is_draining() {
     l.pump(0.0);
     let out = started(&mut l);
     assert_eq!(out.len(), 2);
-    l.declare(Category::terrain, &[(3, ask(Why::Fault, 0.0))], 0.0);
+    l.declare(Category::terrain, &[(3, ask(Why::Demand, 0.0))], 0.0);
     assert_eq!(l.counts().0, 1, "the new want is representable with both credits spent");
     l.pump(0.0);
     // What the camera left is stopped the turn it leaves, and its credits
@@ -142,7 +142,7 @@ fn a_running_attempt_is_never_stopped_for_a_better_want() {
     l.declare(Category::terrain, &[(1, ask(Why::Hint, 5.0)), (2, ask(Why::Hint, 0.0))], 0.0);
     l.pump(0.0);
     assert!(stopped(&mut l).is_empty(), "distance says which to start, not which to restart");
-    l.declare(Category::terrain, &[(1, ask(Why::Hint, 5.0)), (3, ask(Why::Fault, 9.0))], 0.0);
+    l.declare(Category::terrain, &[(1, ask(Why::Hint, 5.0)), (3, ask(Why::Demand, 9.0))], 0.0);
     l.pump(0.0);
     assert!(stopped(&mut l).is_empty(), "a class better waits for a free credit");
     assert!(started(&mut l).is_empty(), "and starts nothing meanwhile");
@@ -169,7 +169,7 @@ impl Serve for Restless {
 fn every_want_is_served_at_rest() {
     let mut l = RequestScheduler::new(Restless);
     l.set_credits(2);
-    let mut wanted: Vec<(u64, Ask)> = (0..12).map(|k| (k, ask(Why::Fault, (k * 7 % 12) as f64))).collect();
+    let mut wanted: Vec<(u64, Ask)> = (0..12).map(|k| (k, ask(Why::Demand, (k * 7 % 12) as f64))).collect();
     let mut out: Vec<u64> = Vec::new();
     for turn in 0..200 {
         l.declare(Category::poi, &wanted, turn as f64);
@@ -195,10 +195,10 @@ fn every_want_is_served_at_rest() {
 fn an_asset_shares_the_credits_and_is_never_withdrawn() {
     let mut l = scheduler();
     l.set_credits(1);
-    l.declare(Category::terrain, &[(1, ask(Why::Fault, 0.0))], 0.0);
+    l.declare(Category::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
     l.declare(Category::asset, &[(7, Ask::PLAIN)], 0.0);
     l.pump(0.0);
-    assert_eq!(started(&mut l).len(), 1, "one credit, one read — an asset does not go beside the pages");
+    assert_eq!(started(&mut l).len(), 1, "one credit, one read — an asset does not go beside the tiles");
     assert_eq!(l.pending_count(Category::asset), 1);
     assert_eq!(l.counts().0, 1, "and it is what is waiting");
 }

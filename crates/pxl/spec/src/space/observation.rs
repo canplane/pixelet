@@ -1,14 +1,14 @@
 // pxl-spec/space/observation.rs
 
-//! What an observation requires, before anything is a page: information at a
+//! What an observation requires, before anything is a tile: information at a
 //! zoom over a region (`Requirement`). A layer's storage maps a requirement
-//! to pages (`Storage`). An estimator names a superset of the exact demand
+//! to tiles (`Storage`). An estimator names a superset of the exact demand
 //! from what is known (`DemandEstimator`); never less, since a requirement
 //! left out is ground that never refines.
 
-use super::lod::{cubes_meeting, fault_radius, Tau};
+use super::lod::{cubes_meeting, demand_reach, Tau};
 use super::pvf3::nearest_box;
-use super::pyramid::{page_at, page_rows, Page, GROUND, LEAF_Z, TOP_Z};
+use super::pyramid::{tile_at, tile_rows, Tile, GROUND, LEAF_Z, TOP_Z};
 use super::v3::{dot3, Aabb, V3};
 use super::zoom::{units, Zoom};
 
@@ -38,7 +38,7 @@ pub struct Observation {
     pub eye: [f64; 3],
     /// None for every direction.
     pub frustum: Option<Frustum>,
-    /// Never past `fault_radius(top)`.
+    /// Never past `demand_reach(top)`.
     pub far: f64,
     /// The coarsest zoom the source supplies whole; no sample asks for coarser.
     pub top: Zoom,
@@ -130,24 +130,24 @@ impl Bounds for Unknown {
 }
 
 pub trait Storage {
-    fn pages(&self, r: &Requirement, each: &mut dyn FnMut(Page));
+    fn tiles(&self, r: &Requirement, each: &mut dyn FnMut(Tile));
 }
 
-/// The pyramid's 2D pages, as terrain and places keep them.
-pub struct Paged;
+/// The pyramid's 2D tiles, as terrain and places keep them.
+pub struct Tiled;
 
-impl Storage for Paged {
-    /// Every page under the region; edges are inclusive south and west only.
-    fn pages(&self, r: &Requirement, each: &mut dyn FnMut(Page)) {
+impl Storage for Tiled {
+    /// Every tile under the region; edges are inclusive south and west only.
+    fn tiles(&self, r: &Requirement, each: &mut dyn FnMut(Tile)) {
         let span = units(r.z);
         let rows = |k: usize| {
             let first = (r.region.min[k] / span).floor() as i64;
             first..=((r.region.max[k] / span).ceil() as i64 - 1).max(first)
         };
-        let ys = page_rows(r.z);
+        let ys = tile_rows(r.z);
         for y in rows(1).filter(|y| ys.contains(y)) {
             for x in rows(0) {
-                each(page_at(r.z, [x, y]));
+                each(tile_at(r.z, [x, y]));
             }
         }
     }
@@ -169,13 +169,13 @@ pub struct ByBounds {
 /// next coarser zoom's, or to the far edge for the top. None past the far edge.
 pub fn band(o: &Observation, tau: Tau, z: Zoom) -> Option<(f64, f64)> {
     let from = if z == LEAF_Z { 0.0 } else { tau.split_distance(GROUND.cell_zoom(z)) };
-    let to = if z == o.top { fault_radius(z) } else { tau.fault_radius(z) };
+    let to = if z == o.top { demand_reach(z) } else { tau.demand_reach(z) };
     (from <= o.far).then_some((from, to))
 }
 
 impl DemandEstimator for ByBounds {
     fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement)) {
-        xpute_core::ensure!(o.top >= TOP_Z && o.far <= fault_radius(o.top), EINVAL);
+        xpute_core::ensure!(o.top >= TOP_Z && o.far <= demand_reach(o.top), EINVAL);
         for z in (o.top..=LEAF_Z).rev() {
             let Some((from, to)) = band(o, self.tau, z) else { break };
             let span = units(z);

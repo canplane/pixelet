@@ -8,8 +8,8 @@ mod terrain;
 
 use cache::Cache;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::poi_page::PoiPage;
-use pxl_spec::space::pyramid::{Folds, Page};
+use pxl_spec::bake::poi_tile::PoiTile;
+use pxl_spec::space::pyramid::{Folds, Tile};
 use std::path::PathBuf;
 
 use crate::coverage::Coverage;
@@ -60,21 +60,21 @@ struct Dataset {
     cache: Cache,
     source: Source,
 }
-/// What a kind's pages come from: a pyramid layer's coverage and the pages a
+/// What a kind's tiles come from: a pyramid layer's coverage and the tiles a
 /// fold reads, or geocode's groups, which no coverage gates.
 enum Source {
-    Pyramid { coverage: crate::coverage::Coverage, sources: fn(Page) -> Vec<Page> },
+    Pyramid { coverage: crate::coverage::Coverage, sources: fn(Tile) -> Vec<Tile> },
     Geocode,
 }
 impl Source {
-    fn holds(&self, p: Page) -> bool {
+    fn holds(&self, p: Tile) -> bool {
         match self {
-            Source::Pyramid { coverage, .. } => coverage.meets(p.z, p.page),
+            Source::Pyramid { coverage, .. } => coverage.meets(p.z, p.tile),
             Source::Geocode => true,
         }
     }
 
-    fn sources(&self, p: Page) -> Vec<Page> {
+    fn sources(&self, p: Tile) -> Vec<Tile> {
         match self {
             Source::Pyramid { sources, .. } => sources(p),
             Source::Geocode => unreachable!("geocode is no pyramid"),
@@ -92,7 +92,7 @@ impl Dataset {
                 },
                 Kind::Poi => Source::Pyramid {
                     coverage: Coverage::of_source()?,
-                    sources: PoiPage::sources,
+                    sources: PoiTile::sources,
                 },
                 Kind::Geocode => Source::Geocode,
             },
@@ -147,7 +147,7 @@ impl Server {
     }
 }
 
-/// Clears what a killed server left that is not a page: staging and a
+/// Clears what a killed server left that is not a tile: staging and a
 /// half-done purge.
 fn prune(root: &std::path::Path) -> Result<(), String> {
     for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {

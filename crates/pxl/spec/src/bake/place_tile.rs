@@ -1,8 +1,8 @@
-// pxl-spec/bake/place_page.rs
+// pxl-spec/bake/place_tile.rs
 
 //! The reverse-geocode bake's output: a dictionary of places named by many
-//! pages, fetched once, and one object per group of 16 × 16 leaf pages
-//! holding its labels, a label index per page and its own local places.
+//! tiles, fetched once, and one object per group of 16 × 16 leaf tiles
+//! holding its labels, a label index per tile and its own local places.
 //! Readers view the packet in place; names are XTP string leaves so a
 //! place is reached by index.
 
@@ -14,24 +14,24 @@ use xpute_core::wire::xtp::{encoder, BranchViewImpl, NodeView, TreeEncoderOption
 use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
 
-use crate::bake::quadkey::{quadkey_of, Quadkey, PAGE_KEY_DEPTH};
+use crate::bake::quadkey::{quadkey_of, Quadkey, TILE_KEY_DEPTH};
 use crate::place::PlaceRank;
 use crate::space::pvf3::ivec::IVec;
 use xpute_core::status::bug::OrBug;
 
 pub const DICT_OBJECT: &str = "_dict";
 
-/// 16 pages on a side.
+/// 16 tiles on a side.
 pub const GROUP_SHAMT: u32 = 4;
 
-pub const GROUP_KEY_DEPTH: u32 = PAGE_KEY_DEPTH - GROUP_SHAMT;
+pub const GROUP_KEY_DEPTH: u32 = TILE_KEY_DEPTH - GROUP_SHAMT;
 
 pub fn group_name(group_idx: IVec) -> Quadkey {
     quadkey_of(GROUP_KEY_DEPTH, group_idx)
 }
-pub const GROUP_PAGES: usize = 1 << (2 * GROUP_SHAMT);
+pub const GROUP_TILES: usize = 1 << (2 * GROUP_SHAMT);
 
-/// From the low bits of its page index.
+/// From the low bits of its tile index.
 pub fn leaf_slot(x: i64, y: i64) -> usize {
     let mask = (1i64 << GROUP_SHAMT) - 1;
     ((y & mask) << GROUP_SHAMT | (x & mask)) as usize
@@ -98,7 +98,7 @@ pub struct PlaceRef<'a> {
     pub rank: PlaceRank,
     /// The source's own name, in whatever language it holds.
     pub name: &'a str,
-    /// From a place near the page rather than one containing it.
+    /// From a place near the tile rather than one containing it.
     pub approx: bool,
     names: NamesView<'a>,
     at: u32,
@@ -133,8 +133,8 @@ pub fn open_place_dict(pkt: &[u8]) -> Result<PlacesView<'_>, MarshalError> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlaceGroup {
     pub labels: Vec<Vec<u32>>,
-    /// Per page; `NO_LABEL` outside every known place.
-    pub pages: Vec<u16>,
+    /// Per tile; `NO_LABEL` outside every known place.
+    pub tiles: Vec<u16>,
     pub locals: Vec<Named>,
 }
 
@@ -156,7 +156,7 @@ pub fn encode_place_group(group: &PlaceGroup) -> Result<Vec<u8>, MarshalError> {
     let (ranks, names) = place_lanes(&group.locals);
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
-        b.u32_array(Some(&starts)).u32_array(Some(&flat)).u16_array(Some(&group.pages));
+        b.u32_array(Some(&starts)).u32_array(Some(&flat)).u16_array(Some(&group.tiles));
         write_places(b, &ranks, &names);
     }));
     encoder().encode(&t, TreeEncoderOptions::default())
@@ -166,7 +166,7 @@ pub fn encode_place_group(group: &PlaceGroup) -> Result<Vec<u8>, MarshalError> {
 pub struct PlaceGroupView<'a> {
     starts: &'a [u32],
     flat: &'a [u32],
-    pages: &'a [u16],
+    tiles: &'a [u16],
     locals: PlacesView<'a>,
 }
 
@@ -175,10 +175,10 @@ pub fn open_place_group(pkt: &[u8]) -> Result<PlaceGroupView<'_>, MarshalError> 
     let view = PlaceGroupView {
         starts: root.at(0)?.get_array::<u32>()?,
         flat: root.at(1)?.get_array::<u32>()?,
-        pages: root.at(2)?.get_array::<u16>()?,
+        tiles: root.at(2)?.get_array::<u16>()?,
         locals: read_places(&root, 3)?,
     };
-    if view.pages.len() != GROUP_PAGES {
+    if view.tiles.len() != GROUP_TILES {
         return Err(malformed());
     }
     if view.starts.is_empty() || view.starts.windows(2).any(|w| w[0] > w[1]) || *view.starts.last().or_bug(Errno::ENOTRECOVERABLE) as usize > view.flat.len() {
@@ -189,7 +189,7 @@ pub fn open_place_group(pkt: &[u8]) -> Result<PlaceGroupView<'_>, MarshalError> 
 
 impl<'a> PlaceGroupView<'a> {
     pub fn label_of(&self, slot: usize) -> Option<&'a [u32]> {
-        let label = *self.pages.get(slot)?;
+        let label = *self.tiles.get(slot)?;
         if label == NO_LABEL {
             return None;
         }
@@ -210,5 +210,5 @@ impl<'a> PlaceGroupView<'a> {
 }
 
 #[cfg(test)]
-#[path = "place_page.test.rs"]
+#[path = "place_tile.test.rs"]
 mod test;

@@ -77,7 +77,7 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
       <Row k="hover (u)" v={hovering ? `${Math.floor(v.hover_x)}, ${Math.floor(v.hover_y)}, ${Math.floor(v.hover_z)}` : "-"} />
       <Row k="hover" v={geo(v.hover_lat, v.hover_lon)} />
       <Row k="hover altitude" v={metres(v.hover_alt)} />
-      <Row k="chunk/tier/page" v={hovering ? `${zoomName(v.chunk_zoom)}/${zoomName(v.tier_zoom)}/${zoomName(v.read_zoom)}` : "-"} warn={v.read_zoom < v.chunk_zoom} />
+      <Row k="chunk/tier/tile" v={hovering ? `${zoomName(v.chunk_zoom)}/${zoomName(v.tier_zoom)}/${zoomName(v.read_zoom)}` : "-"} warn={v.read_zoom < v.chunk_zoom} />
     </>
   );
 }
@@ -208,8 +208,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           />
           <Row k="refused/largest free" v={`${f.last.heap_refusals}/${n1(f.last.heap_largest_free_mb)} MB`} warn={f.last.heap_refusals > 0} />
           <Row
-            k="pages"
-            v={`${f.last.pages_total}${f.last.pages_total > 0 ? ` ${zoomName(f.last.zoom_pages.findLastIndex((n) => n > 0))}..${zoomName(f.last.zoom_pages.findIndex((n) => n > 0))}` : ""}`}
+            k="tiles"
+            v={`${f.last.tiles_total}${f.last.tiles_total > 0 ? ` ${zoomName(f.last.zoom_tiles.findLastIndex((n) => n > 0))}..${zoomName(f.last.zoom_tiles.findIndex((n) => n > 0))}` : ""}`}
           />
           <Row k="kernel memory" v={`${round(kernel_memory().byteLength / 1048576)} MB`} />
           <Row k="buffers/arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}/${valueText("_mb", f.last.arena_mb)}`} />

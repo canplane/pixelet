@@ -319,7 +319,7 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
     [&c.person, &c.pet].into_iter().flatten().filter_map(|w| w.held.as_ref()).map(|h| (h.model.model, h.skin))
 }
 
-/// None inside where a wall holds it; None outside where no page is resident.
+/// None inside where a wall holds it; None outside where no tile is resident.
 fn step_from([x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
     let at = world_to_canonical(&[x, y, over(stands)]);
     Access::now().support(&at, COMPANION_STEP_CELLS).value()

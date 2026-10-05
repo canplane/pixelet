@@ -224,7 +224,7 @@ pub mod LIMITS {
     pub const KEYS: &[&str] = &["PHASES_MAX", "REASONS", "STEP_SLOTS", "ZOOMS"];
 }
 
-/// One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z.
+/// One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const dt_ms: u32 = 1;
@@ -259,9 +259,9 @@ pub mod FRAME {
     pub const mounts_added: u32 = 82;
     pub const mounts_removed: u32 = 83;
     pub const mounts_layouts: u32 = 84;
-    pub const pages_total: u32 = 85;
-    pub const zoom_pages: u32 = 86;
-    pub const pages_poi: u32 = 110;
+    pub const tiles_total: u32 = 85;
+    pub const zoom_tiles: u32 = 86;
+    pub const tiles_poi: u32 = 110;
     pub const heap_used_mb: u32 = 111;
     pub const heap_live_mb: u32 = 112;
     pub const heap_run_mb: u32 = 113;
@@ -331,9 +331,9 @@ pub mod FRAME {
         "mounts_added",
         "mounts_removed",
         "mounts_layouts",
-        "pages_total",
-        "zoom_pages",
-        "pages_poi",
+        "tiles_total",
+        "zoom_tiles",
+        "tiles_poi",
         "heap_used_mb",
         "heap_live_mb",
         "heap_run_mb",
@@ -392,14 +392,14 @@ pub mod FRAME_GROUPS {
     pub const cap: &[&str] = &["cap_commit_left", "cap_mount_left", "cap_mount_full", "cap_record_refused"];
     pub const work: &[&str] = &["work_scans", "work_bakes", "work_fine_peak", "work_coarse_peak"];
     pub const q: &[&str] = &["q_terrain", "q_poi"];
-    pub const pages: &[&str] = &["pages_total", "zoom_pages", "pages_poi"];
+    pub const tiles: &[&str] = &["tiles_total", "zoom_tiles", "tiles_poi"];
     pub const cover: &[&str] = &["cover_rule", "cover_drawn", "cover_gaps"];
     pub const view: &[&str] = &["view_rays", "view_visits"];
     pub const device: &[&str] = &["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"];
     pub const heap: &[&str] = &["heap_used_mb", "heap_live_mb", "heap_run_mb", "heap_slot_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"];
     pub const ring: &[&str] = &["ring_cq_peak", "ring_held_peak"];
     pub const KEYS: &[&str] = &[
-        "pace", "turn", "gpu", "lod", "mounts", "stale", "slot", "cap", "work", "q", "pages", "cover", "view", "device", "heap", "ring",
+        "pace", "turn", "gpu", "lod", "mounts", "stale", "slot", "cap", "work", "q", "tiles", "cover", "view", "device", "heap", "ring",
     ];
 }
 
@@ -699,7 +699,7 @@ pub mod SUMMARY {
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "used_mb", "requests", "WORDS"];
     }
-    /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from.
+    /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from.
     pub mod view {
         pub const AT: u32 = 630;
         pub const dist: u32 = 0;

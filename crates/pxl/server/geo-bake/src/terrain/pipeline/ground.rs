@@ -1,18 +1,18 @@
 // pxl-geo-bake/terrain/pipeline/ground.rs
 
-//! Rasterizes features into the page's ground cells, rows south to north.
+//! Rasterizes features into the tile's ground cells, rows south to north.
 //! Bounds are `i64` so a negative one skips a loop rather than wrapping in
 //! `u32`.
 
 use pxl_spec::bake::format::{Ground, GroundCell};
 use pxl_spec::bake::way;
 use pxl_spec::cell::cube::cube_types::ground;
-use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
+use pxl_spec::space::pyramid::{GROUND, TILE_CELLS};
 
 use crate::terrain::pipeline::feature::{Feature, Layer, P};
 
-const PAGE_AREA: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
-const SPAN: i64 = PAGE_CELLS as i64;
+const TILE_AREA: usize = (TILE_CELLS * TILE_CELLS) as usize;
+const SPAN: i64 = TILE_CELLS as i64;
 
 /// A cell is painted by what covers its center, the same center elevation
 /// and decks are sampled at.
@@ -26,7 +26,7 @@ fn cell_idx(x: i64, y: i64) -> usize {
 /// left water, fixed before any feature paints, since a salt pond paints water too.
 type Sea<'a> = Option<&'a [bool]>;
 
-/// A page's land against the sea: none of it, all of it, or the land
+/// A tile's land against the sea: none of it, all of it, or the land
 /// polygons of a shore, each its outer ring and holes.
 pub enum Coast {
     Sea,
@@ -35,7 +35,7 @@ pub enum Coast {
 }
 
 pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
-    let mut cells = vec![ground::water; PAGE_AREA];
+    let mut cells = vec![ground::water; TILE_AREA];
     match coast {
         Coast::Sea => {}
         Coast::Land => cells.fill(ground::BASE),

@@ -77,7 +77,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  *   pyramid as terrain's are: how many places stand in each of its cells. A
  *   page with none is no object.
  * - `geocode/<version>/<quadkey>`, 11 digits, because a reverse-geocode object
- *   covers a group of 16 pages a side (pxl-spec bake/place_page.rs's
+ *   covers a group of 16 pages a side (pxl-spec bake/place_tile.rs's
  *   `GROUP_SHAMT`). Plus the one `_dict` the whole set is read against, since
  *   a group names the places its pages are in by number into it. A missing
  *   group means "no page under it is in any place", which the kernel's

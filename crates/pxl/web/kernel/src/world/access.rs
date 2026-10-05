@@ -3,7 +3,7 @@
 //! Queries over what is resident: a layer's value at a point (`at`), the
 //! first thing a ray meets (`first_hit`), and a conservative bound for descent
 //! (`relief`). A query never fetches or holds anything; it returns an exact
-//! answer, a coarser one with the page it lacked, or nothing and that page.
+//! answer, a coarser one with the tile it lacked, or nothing and that tile.
 //!
 //! Answers come from the drawn surface (`ground_ele_at`), so picks stand on
 //! what is on screen. Whether a ray may skip ground is decided from the index
@@ -23,15 +23,15 @@ use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{projection, REACH};
-use pxl_spec::space::pyramid::{chunk_zoom, Cell, Page, EXTENT, GROUND, LEAF_Z, TOP_Z};
+use pxl_spec::space::pyramid::{chunk_zoom, Cell, Tile, EXTENT, GROUND, LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::{add3, Aabb, V3};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::io::demand::Category;
 use crate::kernel::kernel;
 use crate::layer::object::store::{Entry, EntryAt, Store};
-use crate::world::paging::Paging;
 use crate::world::pyramid::{Layer as _, Pyramid};
+use crate::world::residency::Residency;
 use pxl_spec::space::indexer::idx;
 use pxl_spec::space::zoom::{base_of, count, cube, index_of, units, Zoom};
 use xpute_core::math::scalar::round;
@@ -64,7 +64,7 @@ impl Detail {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Lack {
     pub layer: Category,
-    pub page: Page,
+    pub tile: Tile,
 }
 
 /// A coarser answer carries what it lacked, so none passes for exact.
@@ -108,7 +108,7 @@ impl<T> Answer<T> {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Relief {
-    /// Lowest and highest ground, in units; read from a coarser page this is
+    /// Lowest and highest ground, in units; read from a coarser tile this is
     /// wider, never narrower.
     pub extent: (f64, f64),
     /// Steepest rise over run: the largest span of an index cell over its side,
@@ -190,7 +190,7 @@ impl Hit {
 
 #[derive(Clone, Copy)]
 pub struct Access<'a> {
-    terrain: &'a Paging<Terrain>,
+    terrain: &'a Residency<Terrain>,
     objects: &'a Store,
     visits: Option<&'a std::cell::Cell<u64>>,
 }
@@ -199,16 +199,16 @@ impl Access<'static> {
     pub fn now() -> Access<'static> {
         let pyramid: &'static Pyramid<Terrain> = Terrain::pyramid();
         let objects: &'static Store = &kernel().objects;
-        Access::new(pyramid.paging(), objects)
+        Access::new(pyramid.residency(), objects)
     }
 }
 
-/// A square across which neither the page nor the index cell changes.
+/// A square across which neither the tile nor the index cell changes.
 struct Region {
     base: [f64; 2],
     side: f64,
-    page: Page,
-    /// Index bounds and whether read from the page asked; none if nothing is resident.
+    tile: Tile,
+    /// Index bounds and whether read from the tile asked; none if nothing is resident.
     terrain: Option<((f64, f64), bool)>,
 }
 
@@ -238,7 +238,7 @@ fn filled_cell(filled: impl Fn([i64; 3]) -> bool) -> bool {
 }
 
 impl<'a> Access<'a> {
-    pub fn new(terrain: &'a Paging<Terrain>, objects: &'a Store) -> Access<'a> {
+    pub fn new(terrain: &'a Residency<Terrain>, objects: &'a Store) -> Access<'a> {
         Access { terrain, objects, visits: None }
     }
 
@@ -360,52 +360,52 @@ impl<'a> Access<'a> {
         !c.lines.air.is_some_and(|[lo, hi]| z >= lo && z < hi) && !self.taken(c.col_idx, c.local, cz)
     }
 
-    /// Height at the cell's center in the drawn-from page, sampled as
-    /// `ChunkSample::read` samples a chunk drawn from a coarser page.
+    /// Height at the cell's center in the drawn-from tile, sampled as
+    /// `ChunkSample::read` samples a chunk drawn from a coarser tile.
     fn ground(&self, cell: Cell) -> Answer<Ground> {
-        let page = cell.page();
-        let Some((src, body)) = self.drawn_from(page) else { return Answer::Nothing(lack(page)) };
+        let tile = cell.tile();
+        let Some((src, body)) = self.drawn_from(tile) else { return Answer::Nothing(lack(tile)) };
         let [tx, ty] = sample_in(cell, src);
         let cell = body.ground.cells[GROUND.cell_index(tx as u32, ty as u32) as usize];
         let height = ground_ele_at(&body.ele, Some(GroundLanes::of(&body.ground)), tx, ty) as f64 * U_PER_CELL;
-        self.answer(page, Ground { height, cell })
+        self.answer(tile, Ground { height, cell })
     }
 
     /// The zoom the ground under `at` is known at; a step there is bounded by
     /// that zoom's cell.
     pub fn known_z(&self, at: &Pvf3) -> Option<Zoom> {
-        let page = GROUND.cell_of(LEAF_Z, at).page();
-        match self.terrain.source(page) {
+        let tile = GROUND.cell_of(LEAF_Z, at).tile();
+        match self.terrain.source(tile) {
             Some(_) => Some(LEAF_Z),
-            None => self.drawn_from(page).map(|(src, _)| src.z),
+            None => self.drawn_from(tile).map(|(src, _)| src.z),
         }
     }
 
-    fn drawn_from(&self, page: Page) -> Option<(Page, &'a Terrain)> {
-        let src = self.terrain.drawn_from(page)?;
+    fn drawn_from(&self, tile: Tile) -> Option<(Tile, &'a Terrain)> {
+        let src = self.terrain.drawn_from(tile)?;
         Some((src, self.terrain.get(src)?))
     }
 
-    fn answer<T>(&self, page: Page, v: T) -> Answer<T> {
-        match self.terrain.source(page) {
+    fn answer<T>(&self, tile: Tile, v: T) -> Answer<T> {
+        match self.terrain.source(tile) {
             Some(_) => Answer::Exact(v),
-            None => Answer::Coarser(v, lack(page)),
+            None => Answer::Coarser(v, lack(tile)),
         }
     }
 
-    /// Bound on the ground over a node of `page`'s zoom and every zoom finer than
+    /// Bound on the ground over a node of `tile`'s zoom and every zoom finer than
     /// it, from one block of the index lane. For deciding descent, never for
     /// what is drawn.
-    pub fn relief(&self, page: Page, (side, at): (Zoom, [i64; 2])) -> Answer<Relief> {
-        let Some((src, body)) = self.drawn_from(page) else {
-            return Answer::Nothing(lack(page));
+    pub fn relief(&self, tile: Tile, (side, at): (Zoom, [i64; 2])) -> Answer<Relief> {
+        let Some((src, body)) = self.drawn_from(tile) else {
+            return Answer::Nothing(lack(tile));
         };
         let index = EXTENT.cell_zoom(src.z);
         let first = EXTENT.cell_of(src.z, &base_of(side, [at[0], at[1], 0]));
         let across = if side < index { count(index, side) } else { 1 };
-        let b = body.index.over(first.in_page(), across);
+        let b = body.index.over(first.in_tile(), across);
         self.answer(
-            page,
+            tile,
             Relief {
                 extent: (f64::from(b.lo) * U_PER_CELL, f64::from(b.hi) * U_PER_CELL),
                 slope: f64::from(b.span) * U_PER_CELL / units(index),
@@ -420,7 +420,7 @@ impl<'a> Access<'a> {
     ///
     /// Ground is walked region by region: skipped where the ray stays above the
     /// index bound, walked cell by cell otherwise. A coarse or missing region
-    /// the ray may enter is the lack. Resident coarser pages are tried first
+    /// the ray may enter is the lack. Resident coarser tiles are tried first
     /// (`clear`) so far-off ground is skipped in one test per zoom.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
         let mut lack: Option<Lack> = None;
@@ -464,11 +464,11 @@ impl<'a> Access<'a> {
                 Some((_, exact)) => {
                     *answered = true;
                     if under && !exact {
-                        lack.get_or_insert(self::lack(r.page));
+                        lack.get_or_insert(self::lack(r.tile));
                     }
                 }
                 None => {
-                    lack.get_or_insert(self::lack(r.page));
+                    lack.get_or_insert(self::lack(r.tile));
                 }
             }
             if under {
@@ -487,7 +487,7 @@ impl<'a> Access<'a> {
         let from = ray.at(t + NUDGE);
         let at = on_ground(&from);
         (TOP_Z..z).find_map(|coarser| {
-            let body = self.terrain.get(GROUND.cell_of(coarser, &at).page())?;
+            let body = self.terrain.get(GROUND.cell_of(coarser, &at).tile())?;
             let e = EXTENT.cell_of(coarser, &at);
             let [_, hi] = drawn(body.index.extent()[e.index() as usize]);
             let out = exit(ray, corner(e.zoom(), &from), units(e.zoom())).min(until).max(t + NUDGE);
@@ -498,14 +498,14 @@ impl<'a> Access<'a> {
 
     fn region(&self, p: &V3, z: Zoom) -> Region {
         let at = on_ground(p);
-        let page = GROUND.cell_of(z, &at).page();
-        let (cell_zoom, terrain) = match self.drawn_from(page) {
+        let tile = GROUND.cell_of(z, &at).tile();
+        let (cell_zoom, terrain) = match self.drawn_from(tile) {
             Some((src, body)) => {
-                // The drawn-from page's index cell, or the asked page if smaller: one bound
-                // and one page across it.
+                // The drawn-from tile's index cell, or the asked tile if smaller: one bound
+                // and one tile across it.
                 let e = EXTENT.cell_of(src.z, &at);
                 let [lo, hi] = drawn(body.index.extent()[e.index() as usize]);
-                let exact = self.terrain.source(page).is_some();
+                let exact = self.terrain.source(tile).is_some();
                 (e.zoom().max(z), Some(((lo as f64 * U_PER_CELL, hi as f64 * U_PER_CELL), exact)))
             }
             None => (z, None),
@@ -513,7 +513,7 @@ impl<'a> Access<'a> {
         Region {
             base: corner(cell_zoom, p),
             side: units(cell_zoom),
-            page,
+            tile,
             terrain,
         }
     }
@@ -561,13 +561,13 @@ impl<'a> Access<'a> {
     /// Decks and bore air over a cell, as the chunk paints them (`Over::occupies`).
     fn lines_over(&self, cell: Cell, ground_height: f64) -> Lines {
         let mut lines = Lines::default();
-        let Some((src, body)) = self.drawn_from(cell.page()) else { return lines };
+        let Some((src, body)) = self.drawn_from(cell.tile()) else { return lines };
         let (at, side) = (sample_in(cell, src), 1.0 / count(GROUND.cell_zoom(cell.z()), GROUND.cell_zoom(src.z)) as f64);
         let ground = round(ground_height / U_PER_CELL) as i32;
         let units = |[lo, hi]: [i32; 2]| [f64::from(lo) * U_PER_CELL, f64::from(hi) * U_PER_CELL];
-        let page = Frame::of(src);
-        let frame = Some(page);
-        let cell_per_m = u_per_m(page.corner[1]) / U_PER_CELL;
+        let tile = Frame::of(src);
+        let frame = Some(tile);
+        let cell_per_m = u_per_m(tile.corner[1]) / U_PER_CELL;
         let [tx, ty] = at.map(|v| v as u32);
         let look = body.ground.cells[GROUND.cell_index(tx, ty) as usize];
         for o in body.decks.over_point(frame, at, side) {
@@ -802,8 +802,8 @@ fn hit(ray: &Ray, t: f64, normal: V3, cube: Aabb, struck: Struck) -> Hit {
     }
 }
 
-fn lack(page: Page) -> Lack {
-    Lack { layer: Category::terrain, page }
+fn lack(tile: Tile) -> Lack {
+    Lack { layer: Category::terrain, tile }
 }
 
 /// A point's place on the ground lattice, its height dropped.
@@ -818,10 +818,10 @@ fn corner(cell_zoom: Zoom, p: &V3) -> [f64; 2] {
     [(p[0] / side).floor() * side, (p[1] / side).floor() * side]
 }
 
-/// Where `cell`'s center falls in the page `src` it is drawn from, in that page's cells.
-fn sample_in(cell: Cell, src: Page) -> [f64; 2] {
+/// Where `cell`'s center falls in the tile `src` it is drawn from, in that tile's cells.
+fn sample_in(cell: Cell, src: Tile) -> [f64; 2] {
     let n = count(GROUND.cell_zoom(cell.z()), GROUND.cell_zoom(src.z)) as f64;
-    cell.in_page_above(cell.z() - src.z).map(|o| (o as f64 + 0.5) / n)
+    cell.in_tile_above(cell.z() - src.z).map(|o| (o as f64 + 0.5) / n)
 }
 
 #[cfg(test)]

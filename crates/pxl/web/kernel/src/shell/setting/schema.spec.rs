@@ -167,7 +167,7 @@ pub enum SettingKey {
     /// would being decided and not built. The badge is an ordering, and this is
     /// the one to reach for before any shading term.
     decor = 1,
-    /// The places' badges over the map, from the published POI pages.
+    /// The places' badges over the map, from the published POI tiles.
     poi = 2,
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
     /// Off by default: the tilt is the one control a map view is expected to
@@ -200,7 +200,7 @@ pub enum SettingKey {
     resolution = 11,
     /// The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
     debug_overlay = 12,
-    /// Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the pages and the origin's cell (layer/marker/coverage_gizmo.rs).
+    /// Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (layer/marker/coverage_gizmo.rs).
     gizmos = 13,
     person = 14,
     pet = 15,

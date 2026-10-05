@@ -1,15 +1,15 @@
 // pxl-kernel/layer/geocode/store.rs
 
 //! The reverse-geocode bake's two packets, resident: the dictionary, and the
-//! one group the map center is in. A group spans sixteen pages a side, so
+//! one group the map center is in. A group spans sixteen tiles a side, so
 //! holding more buys little. Each is a view over the heap block the shell
 //! fetched into, so names are never decoded into strings.
 //!
-//! A 404 is an answer: the bake wrote no object, so no page under it is in
+//! A 404 is an answer: the bake wrote no object, so no tile under it is in
 //! any place, and only moving to another group asks again. A failed fetch is
 //! not one; its want waits out the request scheduler's retry.
 
-use pxl_spec::bake::place_page::{open_place_dict, open_place_group, PlaceGroupView, PlacesView};
+use pxl_spec::bake::place_tile::{open_place_dict, open_place_group, PlaceGroupView, PlacesView};
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::mem::base::ptr_at;

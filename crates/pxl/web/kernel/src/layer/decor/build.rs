@@ -5,7 +5,7 @@
 //! candidate out at build time.
 
 use pxl_render::gpu::api::word_bytes;
-use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
+use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, TileView};
 use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{unpack_pos, CELL, U_PER_CELL};
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
@@ -90,7 +90,7 @@ pub struct DecorBuild<'s> {
 }
 
 pub struct Ground<'a> {
-    pub page: &'a PageView<'a>,
+    pub tile: &'a TileView<'a>,
     pub sample: &'a ChunkSample,
     pub z: Zoom,
     pub x0: i64,
@@ -138,10 +138,10 @@ pub struct Draw {
     pub scale: f64,
 }
 
-/// What `candidate` draws in the page's cell `page_at`: none off the kind's
+/// What `candidate` draws in the tile's cell `tile_at`: none off the kind's
 /// ground or under a line.
-pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Decks, page_at: [u32; 2]) -> Option<Draw> {
-    let [cell_x, cell_y] = page_at;
+pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Decks, tile_at: [u32; 2]) -> Option<Draw> {
+    let [cell_x, cell_y] = tile_at;
     if !kind.rules.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
         return None;
     }
@@ -162,15 +162,15 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
 }
 
 /// What the leaf scatter stands of `value` in the cell `at` lies in, with
-/// nothing written there. None where the page is not resident.
+/// nothing written there. None where the tile is not resident.
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let kind = KINDS.iter().find(|k| k.decor_value() == Some(value))?;
     let leaf = GROUND.cell_of(LEAF_Z, at);
-    let page = Terrain::pyramid().paging().get(leaf.page())?;
+    let tile = Terrain::pyramid().residency().get(leaf.tile())?;
     let ground = Access::now().at(at, LEAF_Z).exact()?;
     let [ix, iy, iz] = index_of(CELL, at);
     let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;
-    (ground.top().map(|top| round(top / units(CELL)) as i64) == Some(iz)).then(|| draw(kind, candidate, &page.ground.cells, &page.decks, leaf.in_page()))?
+    (ground.top().map(|top| round(top / units(CELL)) as i64) == Some(iz)).then(|| draw(kind, candidate, &tile.ground.cells, &tile.decks, leaf.in_tile()))?
 }
 
 impl<'s> DecorBuild<'s> {
@@ -259,7 +259,7 @@ impl<'s> DecorBuild<'s> {
     /// off the zoom's own cells: a tree coarser than a leaf's stands on the grass the view
     /// sees, not on leaf cells it cannot.
     fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
-        let (cells, lines) = (ground.page.cells, ground.page.decks);
+        let (cells, lines) = (ground.tile.cells, ground.tile.decks);
         let (own, atom) = (GROUND.cell_zoom(ground.z), GROUND.cell_zoom(LEAF_Z));
         let (lx0, ly0) = (index(own, ground.x0), index(own, ground.y0));
         let per = i64::from(count(atom, own));

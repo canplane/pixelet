@@ -13,7 +13,7 @@ use crate::kernel::{kernel, with_world};
 use crate::layer::decor::build::DecorHide;
 use crate::layer::environment::state::globe;
 use crate::sched::profiler::record::{
-    profiler_record_frame, profiler_recording, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample,
+    profiler_record_frame, profiler_recording, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample,
     TurnSample, ViewSample, WorkSample, MB,
 };
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
@@ -22,7 +22,7 @@ use crate::world::chunk::table::{builds, Census, Frame};
 use crate::world::frame::view::{sea_under_eye, view, view_resize};
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::poi_page::PoiPage;
+use pxl_spec::bake::poi_tile::PoiTile;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 
@@ -184,12 +184,12 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         return;
     }
     let host = c.host.clone();
-    let mut pages = PageSample::default();
-    for (p, _) in Terrain::pyramid().paging().held() {
-        pages.by_zoom[p.z as usize] += 1.0;
+    let mut tiles = TileSample::default();
+    for (p, _) in Terrain::pyramid().residency().held() {
+        tiles.by_zoom[p.z as usize] += 1.0;
     }
-    pages.total = pages.by_zoom.iter().sum();
-    pages.poi = PoiPage::pyramid().paging().held().count() as f64;
+    tiles.total = tiles.by_zoom.iter().sum();
+    tiles.poi = PoiTile::pyramid().residency().held().count() as f64;
     let mut gpu = host.gpu;
     for (tris, boxes) in gpu.zoom_tris.iter_mut().zip(census.zoom_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;
@@ -220,12 +220,12 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             oldest_release_ms: census.oldest_offscreen_ms,
             oldest_visible_ms: census.oldest_visible_ms,
         },
-        pages,
+        tiles,
         heap: heap_sample(),
         rings,
         work,
         q_terrain: pending_count(Terrain::CATEGORY) as f64,
-        q_poi: pending_count(PoiPage::CATEGORY) as f64,
+        q_poi: pending_count(PoiTile::CATEGORY) as f64,
         stale: StaleSample {
             hidden: census.ready_waiting as f64,
             slot_waits: census.slot_waits as f64,
@@ -239,9 +239,9 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             let domain = crate::world::pyramid::domain::current();
             // NaN: step 0 is past the arena
             let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
-            // The goal's pieces a resident page draws.
-            let paging = Terrain::pyramid().paging();
-            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| paging.drawn_from(c.page()).is_some()).count());
+            // The goal's pieces a resident tile draws.
+            let residency = Terrain::pyramid().residency();
+            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.drawn_from(c.tile()).is_some()).count());
             CoverSample {
                 rule,
                 drawn: drawn as f64,

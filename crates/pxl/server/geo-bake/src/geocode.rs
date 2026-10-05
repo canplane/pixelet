@@ -6,10 +6,10 @@ use std::collections::HashMap;
 
 use xpute_core::status::error::MarshalError;
 
-use pxl_spec::bake::place_page::{encode_place_dict, Named};
+use pxl_spec::bake::place_tile::{encode_place_dict, Named};
 
-/// A place many pages share is carried by its dictionary id; one only a few
-/// pages share is carried inline by its group.
+/// A place many tiles share is carried by its dictionary id; one only a few
+/// tiles share is carried inline by its group.
 pub enum PartSource {
     Shared(String),
     Local { place: Named, approx: bool },

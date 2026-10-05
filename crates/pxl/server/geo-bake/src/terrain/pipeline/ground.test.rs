@@ -6,7 +6,7 @@ use crate::terrain::pipeline::feature::{Joins, Rank};
 
 /// Column 10 of a way 3 cells wide ending on a cell edge at y 20.
 fn painted(cut: [bool; 2]) -> Vec<i64> {
-    let mut cells = vec![0 as GroundCell; PAGE_AREA];
+    let mut cells = vec![0 as GroundCell; TILE_AREA];
     render_linear_feat(&[[10.5, 10.0], [10.5, 20.0]], 1, &mut cells, 3.0, cut, None);
     (0..SPAN).filter(|&y| cells[cell_idx(10, y)] == 1).collect()
 }
@@ -64,8 +64,8 @@ fn the_sea_is_the_coast_s_not_a_color_painted_over_land() {
 }
 
 #[test]
-fn a_source_ranks_alike_on_every_page_it_is_clipped_to() {
-    // A pond's sliver on this page is smaller than the grass over it; the pond's whole is not.
+fn a_source_ranks_alike_on_every_tile_it_is_clipped_to() {
+    // A pond's sliver on this tile is smaller than the grass over it; the pond's whole is not.
     let features = [
         area([0.0, 0.0, 10.0, 100.0], 10_000.0, ground::water, Layer::Landcover, "pond"),
         area([0.0, 40.0, 30.0, 60.0], 1_200.0, ground::grass, Layer::Landcover, "grass"),
@@ -74,7 +74,7 @@ fn a_source_ranks_alike_on_every_page_it_is_clipped_to() {
 }
 
 #[test]
-fn a_page_s_ground_does_not_depend_on_its_rows_order() {
+fn a_tile_s_ground_does_not_depend_on_its_rows_order() {
     let mut features = vec![
         area([10.0, 10.0, 30.0, 30.0], 400.0, ground::park, Layer::Landcover, "a"),
         area([10.0, 10.0, 30.0, 30.0], 400.0, ground::grass, Layer::Landcover, "b"),

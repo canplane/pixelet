@@ -42,7 +42,7 @@
       "path": "/tile",
       "bundle": "shell",
       "$doc": [
-        "Baked pages — terrain, POI and reverse geocode — by kind, version and",
+        "Baked tiles — terrain, POI and reverse geocode — by kind, version and",
         "quadkey. Its own root for the reason the asset root is: the bake puts",
         "them in the bucket and the edge serves them, so neither server answers",
         "them, and the edge tells them from the geo server's routes by the root",
@@ -62,7 +62,7 @@
   },
 
   "branches": {
-    "SEARCH_URL": { "under": "GEO_ROOT", "name": "search", "bundle": "shell", "$doc": ["Forward search, the one geo query with no finite page to bake it against."] },
+    "SEARCH_URL": { "under": "GEO_ROOT", "name": "search", "bundle": "shell", "$doc": ["Forward search, the one geo query with no finite tile to bake it against."] },
     "GEO_INTERNAL": {
       "under": "GEO_ROOT",
       "name": "internal",

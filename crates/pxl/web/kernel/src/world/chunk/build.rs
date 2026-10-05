@@ -4,14 +4,14 @@
 //! decision about a chunk is the table's (table.rs); this acts on what it asks.
 
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::pyramid::{Page, CHUNK_CELLS, GROUND, LEAF_Z};
+use pxl_spec::space::pyramid::{Tile, CHUNK_CELLS, GROUND, LEAF_Z};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::column::{write_column_runs, Stands};
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
-use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource, PageView};
+use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, TileSource, TileView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, BAND_CELLS, CELL, OBJECT_FINEST};
@@ -111,34 +111,34 @@ struct Runs {
     fold: Option<Zoom>,
 }
 
-/// Where a page's ground is read from: itself (`n` = 1) or the nearest
-/// resident page over it (`drawn_from`).
+/// Where a tile's ground is read from: itself (`n` = 1) or the nearest
+/// resident tile over it (`drawn_from`).
 #[derive(Clone, Copy)]
 struct Source {
-    page: &'static Terrain,
+    tile: &'static Terrain,
     frame: Frame,
     origin: [i64; 2],
     n: u32,
 }
 
 impl Source {
-    /// Found by key, so a page that is gone never yields another page's bytes.
-    fn of(p: Page) -> Option<Source> {
+    /// Found by key, so a tile that is gone never yields another tile's bytes.
+    fn of(p: Tile) -> Option<Source> {
         let pyramid = Terrain::pyramid();
-        let src = pyramid.paging().drawn_from(p)?;
-        let page = pyramid.paging().get(src)?;
+        let src = pyramid.residency().drawn_from(p)?;
+        let tile = pyramid.residency().get(src)?;
         let corner = GROUND.cell_at(p, GROUND.cell_index(0, 0));
         Some(Source {
-            page,
+            tile,
             frame: Frame::of(src),
-            origin: corner.in_page_above(p.z - src.z),
+            origin: corner.in_tile_above(p.z - src.z),
             n: count(GROUND.cell_zoom(p.z), GROUND.cell_zoom(src.z)),
         })
     }
 
-    fn view(&self) -> PageSource<'static> {
-        PageSource {
-            page: Builder::page_view(self.page),
+    fn view(&self) -> TileSource<'static> {
+        TileSource {
+            tile: Builder::tile_view(self.tile),
             frame: self.frame,
             origin: self.origin,
             n: self.n,
@@ -146,7 +146,7 @@ impl Source {
     }
 }
 
-/// The apron reads each neighbour's page from what that neighbour is drawn
+/// The apron reads each neighbour's tile from what that neighbour is drawn
 /// from, so a shared edge is one surface.
 #[derive(Clone, Copy)]
 struct Read {
@@ -189,12 +189,12 @@ impl Chunk {
 
     fn read(&self) -> Option<Read> {
         let mut beside = [None; 8];
-        for ([qx, qy], p) in self.at.pages_beside(APRON) {
+        for ([qx, qy], p) in self.at.tiles_beside(APRON) {
             beside[beside_index(qx, qy)] = Source::of(p);
         }
-        let (x0, y0) = self.at.in_page();
+        let (x0, y0) = self.at.in_tile();
         Some(Read {
-            own: Source::of(self.at.page())?,
+            own: Source::of(self.at.tile())?,
             beside,
             first: [x0 as i64, y0 as i64],
         })
@@ -243,7 +243,7 @@ struct BakeJob {
 enum Progress {
     Busy,
     Done,
-    /// Waiting on another chunk's slot, a refused heap block, or a page.
+    /// Waiting on another chunk's slot, a refused heap block, or a tile.
     Blocked,
 }
 
@@ -554,7 +554,7 @@ impl Builder {
 
     fn advance_runs(&mut self, world: &mut World, id: u32) -> Progress {
         let c = &self.chunks[&id];
-        // Page gone under a scan: give up the scan slot, as the page may not return
+        // Tile gone under a scan: give up the scan slot, as the tile may not return
         // before the chunk goes.
         let Some(read) = c.read() else {
             self.abort_scan_of(world, id);
@@ -643,11 +643,11 @@ impl Builder {
         world.store.entries(col_idx).is_some() || render_edits().carve.is_some_and(|c| c.col_idx == col_idx)
     }
 
-    pub fn page_view(page: &Terrain) -> PageView<'_> {
-        PageView {
-            cells: &page.ground.cells,
-            ele: &page.ele,
-            decks: &page.decks,
+    pub fn tile_view(tile: &Terrain) -> TileView<'_> {
+        TileView {
+            cells: &tile.ground.cells,
+            ele: &tile.ele,
+            decks: &tile.decks,
         }
     }
 
@@ -751,7 +751,7 @@ impl Builder {
         self.close_direct(world, id)
     }
 
-    /// A coarse chunk's runs, written directly from its page's ground and the
+    /// A coarse chunk's runs, written directly from its tile's ground and the
     /// objects folded to its zoom (mesh/paint/column.rs).
     fn column_runs(&mut self, world: &mut World, id: u32, read: Read) -> Progress {
         if self.run_set_for(id).is_none() {

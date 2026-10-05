@@ -145,8 +145,8 @@ struct Sources {
     objects_revision: u32,
     hide: Option<EntryAt>,
     carve: Option<EntryAt>,
-    /// Zoom of the page the chunk and each apron neighbour are read from, so a
-    /// finer page arriving rebuilds the chunk and its shared edges.
+    /// Zoom of the tile the chunk and each apron neighbour are read from, so a
+    /// finer tile arriving rebuilds the chunk and its shared edges.
     read_from: Option<Zoom>,
     beside_from: [Option<Zoom>; 8],
 }
@@ -161,11 +161,11 @@ impl Sources {
             objects_revision: objects_revision_of(k),
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
-            read_from: Terrain::pyramid().paging().drawn_from(k.page()).map(|p| p.z),
+            read_from: Terrain::pyramid().residency().drawn_from(k.tile()).map(|p| p.z),
             beside_from: {
                 let mut from = [None; 8];
-                for ([qx, qy], p) in k.pages_beside(APRON) {
-                    from[beside_index(qx, qy)] = Terrain::pyramid().paging().drawn_from(p).map(|p| p.z);
+                for ([qx, qy], p) in k.tiles_beside(APRON) {
+                    from[beside_index(qx, qy)] = Terrain::pyramid().residency().drawn_from(p).map(|p| p.z);
                 }
                 from
             },
@@ -449,7 +449,7 @@ impl Env for Pieces<'_> {
     }
 
     fn buildable(&self, c: Chunk) -> bool {
-        Terrain::pyramid().paging().drawn_from(c.page()).is_some()
+        Terrain::pyramid().residency().drawn_from(c.tile()).is_some()
     }
 
     fn order(&self, c: Chunk) -> Order {
@@ -562,7 +562,7 @@ impl Scheduler {
     }
 
     /// The finest drawn chunk holding `p`, as zooms: its cells', its tier's,
-    /// and those of the page it is read from.
+    /// and those of the tile it is read from.
     pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
         let s = (TOP_Z..=LEAF_Z)
             .rev()
@@ -669,7 +669,7 @@ impl Scheduler {
         s.fresh = true;
     }
 
-    /// A page that goes is not a change: a build finds no page and waits, and
+    /// A tile that goes is not a change: a build finds no tile and waits, and
     /// what is drawn stays drawn.
     pub fn sources_step(&mut self, world: &mut World) {
         let edits = render_edits();
@@ -777,7 +777,7 @@ impl Scheduler {
             free: self.free(),
         };
         let plan = sc.frontier.plan(&now, &Pieces { d, table: self });
-        let seen = (self.drawn_revision, domain::revision(), Terrain::pyramid().paging().revision());
+        let seen = (self.drawn_revision, domain::revision(), Terrain::pyramid().residency().revision());
         self.coverage.step(&mut self.draw, settings_store().gizmos, seen, d.pieces(), &sc.drawn);
         self.moves = (plan.refused, plan.waiting + plan.held);
         self.refined = self.refined.wrapping_add(plan.refined);

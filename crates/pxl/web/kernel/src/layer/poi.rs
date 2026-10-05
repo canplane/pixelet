@@ -1,13 +1,13 @@
 // pxl-kernel/layer/poi.rs
 
-//! Places as a layer of the pyramid: a page counts the places in each of
+//! Places as a layer of the pyramid: a tile counts the places in each of
 //! its cells, drawn as badges (placement.rs).
 
 pub mod badge;
 pub mod placement;
 
 use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
-use pxl_spec::bake::poi_page::{self, PoiPage};
+use pxl_spec::bake::poi_tile::{self, PoiTile};
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::io::demand::{Category, Phases};
@@ -19,25 +19,25 @@ use pxl_spec::space::adapter::epsg3857::cell_zoom_of;
 use pxl_spec::space::zoom::units;
 use xpute_runtime::global::Global;
 
-static POI: Global<Pyramid<PoiPage>> = Global::new();
+static POI: Global<Pyramid<PoiTile>> = Global::new();
 
-impl Layer for PoiPage {
+impl Layer for PoiTile {
     const CATEGORY: Category = Category::poi;
     fn reach() -> f64 {
         MAJOR_UNITS_PER_PX / units_per_px_at(1.0)
     }
 
-    fn pyramid() -> &'static mut Pyramid<PoiPage> {
+    fn pyramid() -> &'static mut Pyramid<PoiTile> {
         POI.get(Pyramid::default)
     }
 
     /// Small, so held on the heap; the record is only a count slot.
-    fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PoiPage, Failure> {
-        Ok(poi_page::decode(pkt)?)
+    fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PoiTile, Failure> {
+        Ok(poi_tile::decode(pkt)?)
     }
 
-    fn empty() -> Option<PoiPage> {
-        Some(PoiPage::default())
+    fn empty() -> Option<PoiTile> {
+        Some(PoiTile::default())
     }
 }
 
@@ -78,8 +78,8 @@ pub fn rank_of(kind: u8) -> u16 {
 /// Nothing is fetched while places are hidden.
 pub fn poi_step() {
     if enabled() {
-        PoiPage::pyramid().step(None);
+        PoiTile::pyramid().step(None);
     } else {
-        PoiPage::pyramid().idle();
+        PoiTile::pyramid().idle();
     }
 }

@@ -7,10 +7,10 @@ use std::cmp::Ordering;
 
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::ancestor_of;
-use pxl_spec::space::lod::{fault_radius, Tau};
+use pxl_spec::space::lod::{demand_reach, Tau};
 use pxl_spec::space::observation::{band, Bounds, Contents, DemandEstimator, Frustum, Observation, Requirement};
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_zoom, page_at, Page, GROUND, LEAF_Z};
+use pxl_spec::space::pyramid::{chunk_zoom, tile_at, Tile, GROUND, LEAF_Z};
 use pxl_spec::space::v3::Aabb;
 
 use crate::kernel::kernel;
@@ -20,8 +20,8 @@ use crate::layer::object::store::objects_revision;
 use crate::world::access::Access;
 use crate::world::frame::view::view;
 use crate::world::observer::Footprint;
-use crate::world::paging::floor;
 use crate::world::pyramid::Layer as _;
+use crate::world::residency::floor;
 use pxl_spec::space::zoom::{units, Zoom};
 
 pub fn eye() -> Option<[f64; 3]> {
@@ -42,16 +42,16 @@ pub fn observation() -> Option<Observation> {
     Some(Observation {
         eye,
         frustum: Some(frustum_of_view()),
-        far: reach_at(eye[2]).min(fault_radius(top)),
+        far: reach_at(eye[2]).min(demand_reach(top)),
         top,
         planet: globe().radius_u(),
         ground: eye[2] - height,
     })
 }
 
-/// What the kernel knows of the world: terrain index bounds (from the page
+/// What the kernel knows of the world: terrain index bounds (from the tile
 /// or the nearest resident one over it) and the objects' 3D bounds. Unknown
-/// where no terrain page over part of the box is held. The error is a cell
+/// where no terrain tile over part of the box is held. The error is a cell
 /// across and the rise over a cell up; a folded-away object counts whole.
 pub struct Known;
 
@@ -102,10 +102,10 @@ struct Node {
     slope: f64,
 }
 
-/// None where no terrain page over the node is resident.
+/// None where no terrain tile over the node is resident.
 fn read(z: Zoom, node: (Zoom, [i64; 2])) -> Option<Node> {
-    let page = page_at(z, ancestor_of(node.1, u32::from(node.0 - z)));
-    let relief = Access::now().relief(page, node).value()?;
+    let tile = tile_at(z, ancestor_of(node.1, u32::from(node.0 - z)));
+    let relief = Access::now().relief(tile, node).value()?;
     Some(Node {
         ground: relief.extent,
         slope: relief.slope,
@@ -198,9 +198,9 @@ impl DemandEstimator for ByFootprints<'_> {
     }
 }
 
-/// Moves whenever a terrain page comes or goes or an object is written.
+/// Moves whenever a terrain tile comes or goes or an object is written.
 pub fn heights_revision() -> (u32, u32) {
-    (Terrain::pyramid().paging().revision(), objects_revision())
+    (Terrain::pyramid().residency().revision(), objects_revision())
 }
 
 /// Seen before unseen, then nearer first. Every layer's work is taken in
@@ -226,7 +226,7 @@ impl Order {
         Order::of(o, &bounds.contents(z, region).within(region).unwrap_or(region))
     }
 
-    pub fn of_page(o: &Observation, p: Page) -> Order {
+    pub fn of_tile(o: &Observation, p: Tile) -> Order {
         Order::of_region(o, &Known, p.z, p.region())
     }
 }

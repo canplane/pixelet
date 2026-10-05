@@ -197,7 +197,7 @@ pub struct MountSample {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct PageSample {
+pub struct TileSample {
     pub total: f64,
     pub by_zoom: [f64; ZOOMS],
     pub poi: f64,
@@ -260,7 +260,7 @@ pub struct FrameSample {
     pub device: DeviceSample,
     pub lod: LodSample,
     pub mounts: MountSample,
-    pub pages: PageSample,
+    pub tiles: TileSample,
     pub heap: HeapSample,
     pub rings: RingSample,
     pub work: WorkSample,
@@ -370,7 +370,7 @@ words!(FrameSample, FRAME::WORDS,
     lod.offscreen_pending => FRAME::lod_offscreen_pending,
     lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms,
     mounts.added => FRAME::mounts_added, mounts.removed => FRAME::mounts_removed, mounts.layouts => FRAME::mounts_layouts,
-    pages.total => FRAME::pages_total, pages.by_zoom => FRAME::zoom_pages, pages.poi => FRAME::pages_poi,
+    tiles.total => FRAME::tiles_total, tiles.by_zoom => FRAME::zoom_tiles, tiles.poi => FRAME::tiles_poi,
     heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.run_mb => FRAME::heap_run_mb,
     heap.slot_mb => FRAME::heap_slot_mb, heap.range_mb => FRAME::heap_range_mb,
     heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,

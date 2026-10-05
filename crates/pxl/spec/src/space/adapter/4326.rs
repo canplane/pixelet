@@ -81,8 +81,8 @@ pub fn dist(a: &G4326, b: &G4326) -> f64 {
 
 pub type BBox4326 = [G4326; 2];
 
-pub fn get_page_bbox(page_idx: IVec) -> BBox4326 {
-    let [min_m, max_m] = epsg3857::get_page_bbox(page_idx);
+pub fn get_tile_bbox(tile_idx: IVec) -> BBox4326 {
+    let [min_m, max_m] = epsg3857::get_tile_bbox(tile_idx);
 
     let min = from_mercator(&min_m);
     let mut max = from_mercator(&max_m);

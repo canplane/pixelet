@@ -239,8 +239,8 @@ fn side(out: &mut [f64]) {
     );
 
     let [step, star] = crate::world::quality::reading();
-    let paging = Terrain::pyramid().paging();
-    let [admitted, evicted] = paging.churn();
+    let residency = Terrain::pyramid().residency();
+    let [admitted, evicted] = residency.churn();
     let [refined, retiered, changes_peak] = kernel().sched.pace();
     put(
         out,
@@ -248,7 +248,7 @@ fn side(out: &mut [f64]) {
         &QualityBlock {
             step: step as f64,
             star: star as f64,
-            frames_held: paging.frames_used() as f64,
+            frames_held: residency.frames_used() as f64,
             admitted: admitted as f64,
             evicted: evicted as f64,
             refined: refined as f64,

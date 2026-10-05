@@ -395,7 +395,7 @@ export interface MapState {
   is_off_center: boolean;
   /** The map center in degrees: what the search measures distance from. */
   center: LonLat | null;
-  /** The source has nothing at all under the map center: the page over it at the source's top was absent. */
+  /** The source has nothing at all under the map center: the tile over it at the source's top was absent. */
   outside: boolean;
 }
 

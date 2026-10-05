@@ -6,7 +6,7 @@
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::cell::cube::Kind;
 use pxl_spec::cell::cube_types::Ground;
-use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
+use pxl_spec::space::pyramid::{GROUND, TILE_CELLS};
 
 /// A kind stands where the cell's look is one of `types`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,7 +59,7 @@ const ALIGN_NEIGHBOR_RADIUS: i64 = 3;
 /// wins, else 0 (a tie or isolated cell has no real answer). `flip` adds PI,
 /// as two-way traffic faces both ways.
 pub fn transport_aligned_rotation(cells: &[GroundCell], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
-    let span = 0..PAGE_CELLS as i64;
+    let span = 0..TILE_CELLS as i64;
     let (x, y) = (cell_x as i64, cell_y as i64);
     let way = |cell: GroundCell| Ground::of(cell).is_some_and(|g| g.kind() == Kind::Transport);
     let at = |x: i64, y: i64| span.contains(&x) && span.contains(&y) && way(cells[GROUND.cell_index(x as u32, y as u32) as usize]);

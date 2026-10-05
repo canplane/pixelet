@@ -1,6 +1,6 @@
 // pxl-geo-bake/deck.rs
 
-//! Decks and bores: what a page's bridges and tunnels are, read from the
+//! Decks and bores: what a tile's bridges and tunnels are, read from the
 //! source, and the lines the bake stores for them, solved as Arnis solves
 //! them (`deck/arnis.rs`).
 
@@ -17,9 +17,9 @@ use pxl_spec::space::adapter::epsg3857::G3857;
 use crate::terrain::repository::TerrainRepository;
 use source::Store;
 
-pub use arnis::solve_page;
+pub use arnis::solve_tile;
 
-/// What the solve leaves a page: its lines, and the ranges of ways they draw,
+/// What the solve leaves a tile: its lines, and the ranges of ways they draw,
 /// which the ground leaves unpainted. One solve makes both, so the road
 /// leaves the ground's paint exactly where its line begins.
 #[derive(Default)]
@@ -46,7 +46,7 @@ pub struct Drawn {
     pub range: [f64; 2],
 }
 
-/// What a solve reads through: the DB, and each page's rows.
+/// What a solve reads through: the DB, and each tile's rows.
 pub struct Reader<'a, S: Store> {
     pub client: &'a mut Client,
     pub repo: &'a TerrainRepository,

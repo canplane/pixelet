@@ -1,16 +1,16 @@
-// pxl-kernel/world/paging/floor.rs
+// pxl-kernel/world/residency/floor.rs
 
 //! The floor: every observation has an answer at some zoom, because a
-//! fallback's pages are held hard over every observed piece of ground. It is
+//! fallback's tiles are held hard over every observed piece of ground. It is
 //! asked for with every observation, not only when one finds nothing, or
 //! every turn toward new ground would leave a hole for a round trip.
 //!
 //! Its zoom is the source's declared top (`declare`), never guessed from
 //! what fails. Until declared, nothing is observed.
 
-use pxl_spec::space::lod::{pages_within, FAULT_PAGES};
+use pxl_spec::space::lod::{tiles_within, REACH_TILES};
 use pxl_spec::space::observation::Observation;
-use pxl_spec::space::pyramid::{Page, TOP_Z};
+use pxl_spec::space::pyramid::{Tile, TOP_Z};
 
 use pxl_spec::space::zoom::Zoom;
 use xpute_runtime::global::Global;
@@ -27,26 +27,26 @@ pub fn top() -> Option<Zoom> {
 }
 
 pub trait Fallback {
-    const PAGES: u32;
+    const TILES: u32;
 
-    fn floor(o: &Observation, each: impl FnMut(Page));
+    fn floor(o: &Observation, each: impl FnMut(Tile));
 }
 
-/// The top's pages with ground within the far edge of the eye itself, which
+/// The top's tiles with ground within the far edge of the eye itself, which
 /// hold every observed piece of ground. An eye higher than the edge holds none:
 /// a pixel there covers more than the top's cell, and the view has gone over to
 /// the Earth's picture.
 pub struct TopRing;
 
 impl Fallback for TopRing {
-    /// The far edge is at most the top's fault radius, and a sphere's cut by
-    /// the ground is no wider, so these are at most the pages a fault can name there.
-    const PAGES: u32 = FAULT_PAGES;
+    /// The far edge is at most the top's reach, and a sphere's cut by
+    /// the ground is no wider, so these are at most the tiles a miss can name there.
+    const TILES: u32 = REACH_TILES;
 
-    fn floor(o: &Observation, each: impl FnMut(Page)) {
+    fn floor(o: &Observation, each: impl FnMut(Tile)) {
         let over = (o.eye[2] - o.ground).max(0.0);
         if over < o.far {
-            pages_within(o.top, [o.eye[0], o.eye[1]], (o.far * o.far - over * over).sqrt()).for_each(each);
+            tiles_within(o.top, [o.eye[0], o.eye[1]], (o.far * o.far - over * over).sqrt()).for_each(each);
         }
     }
 }

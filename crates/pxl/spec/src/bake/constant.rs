@@ -16,22 +16,22 @@ pub const U_PER_CELL: f64 = units(CELL);
 // resample and the client's bicubic, and stored as i16 cells.
 /// Inner elevation samples across one leaf tile: a tile is about twice its
 /// side in units in meters wide and the source is about 30 m, rounded to 32 m.
-pub const PAGE_ELE_SPAN: u32 = 1 << (shamt(LEAF_Z) + 1 - 5);
+pub const TILE_ELE_SPAN: u32 = 1 << (shamt(LEAF_Z) + 1 - 5);
 
 /// Two samples of padding give the bicubic a 4×4 kernel at every edge texel,
-/// and let the ground height 32 cells past the page be read without the
-/// neighboring page resident.
+/// and let the ground height 32 cells past the tile be read without the
+/// neighboring tile resident.
 pub const ELE_PAD: u32 = 2;
-pub const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
+pub const ELE_PADDED_SPAN: u32 = TILE_ELE_SPAN + 2 * ELE_PAD;
 
 /// Sample (x, y) of a padded elevation grid, rows from the south.
 pub const fn ele_index(x: u32, y: u32) -> usize {
     (y * ELE_PADDED_SPAN + x) as usize
 }
 
-/// Cells on a page's side in its index lane (bake/format.rs `Index`): one per
-/// elevation sample spacing, at 4 KiB a page.
-pub const EXTENT_SPAN: u32 = PAGE_ELE_SPAN;
+/// Cells on a tile's side in its index lane (bake/format.rs `Index`): one per
+/// elevation sample spacing, at 4 KiB a tile.
+pub const EXTENT_SPAN: u32 = TILE_ELE_SPAN;
 
 pub const EXTENT_CELL: Zoom = LEAF_Z + EXTENT_SPAN.trailing_zeros() as Zoom;
 

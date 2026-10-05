@@ -1,6 +1,6 @@
 // pxl-kernel/world/chunk/source.rs
 
-//! What a chunk is made of past its page: which columns' objects and which
+//! What a chunk is made of past its tile: which columns' objects and which
 //! bands it draws, and their revisions. A chunk is a cube, so an object
 //! written is in one chunk per zoom, not every chunk over its column.
 

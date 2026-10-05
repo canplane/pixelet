@@ -14,7 +14,7 @@ use crate::cell::cube::cube_types::{sentinel, Ground};
 use crate::cell::cube::Kind;
 use crate::space::adapter::epsg3857::u_per_m;
 use crate::space::pvf3::ivec::gather;
-use crate::space::pyramid::{Page, GROUND, LEAF_Z, PAGE_CELLS, TOP_Z};
+use crate::space::pyramid::{Tile, GROUND, LEAF_Z, TILE_CELLS, TOP_Z};
 use crate::space::zoom::Zoom;
 
 /// Changing it reshuffles everything scattered.
@@ -109,7 +109,7 @@ pub const PIER_STEP_M: f64 = 32.0;
 pub const PIER_ACROSS: f64 = 0.7; // of the deck's width: OSM2World's `BridgeModule`
 pub const PIER_ALONG: f64 = PIER_ACROSS / 2.0; // OSM2World's
 
-/// A page's cells in the world, so a station is the world's and not a page's.
+/// A tile's cells in the world, so a station is the world's and not a tile's.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Frame {
     pub corner: [f64; 2], // south-west, in u
@@ -117,17 +117,17 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn of(page: Page) -> Frame {
-        let (x0, y0, side) = page.rect();
+    pub fn of(tile: Tile) -> Frame {
+        let (x0, y0, side) = tile.rect();
         Frame {
             corner: [x0, y0],
-            cell: side / f64::from(PAGE_CELLS),
+            cell: side / f64::from(TILE_CELLS),
         }
     }
 }
 
 /// Whether `at` is in the pier at the station nearest `near` on `[a, a + d)`,
-/// in the page's cells; half-open, so a joint's station is one segment's.
+/// in the tile's cells; half-open, so a joint's station is one segment's.
 pub fn pier_covers(frame: Frame, width: f64, a: [f64; 2], d: [f64; 2], near: [f64; 2], at: [f64; 2]) -> bool {
     let k = if d[0].abs() >= d[1].abs() { 0 } else { 1 };
     if d[k] == 0.0 {

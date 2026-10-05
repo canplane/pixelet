@@ -97,7 +97,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 p.top_z >= u32::from(pxl_spec::space::pyramid::TOP_Z) && p.top_z <= u32::from(pxl_spec::space::pyramid::LEAF_Z),
                 Errno::EINVAL,
             )?;
-            crate::world::paging::floor::declare(p.top_z as Zoom);
+            crate::world::residency::floor::declare(p.top_z as Zoom);
             Ok(Some(0))
         }
         Command::INPUT_RECT => {

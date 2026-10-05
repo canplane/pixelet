@@ -1,6 +1,6 @@
 // pxl-render/mesh/paint/terrain/adapter.rs
 
-//! A terrain page's chunk as the render pipeline reads it: per cell one
+//! A terrain tile's chunk as the render pipeline reads it: per cell one
 //! material, its look's, and one top, painted as a column
 //! from a floor shared by the chunk. Decks stand off the column as runs of
 //! their own; a bore or a cutting takes the air over its floor out of the
@@ -18,7 +18,7 @@ use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::{ancestor_of, offset_in};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, TILE_CELLS};
 
 use crate::mesh::paint::palette::shader_meta::rgb255;
 use crate::mesh::paint::palette::tex_array::LAYER_IDX;
@@ -77,15 +77,15 @@ impl Materials {
 /// The decks over the columns `s` is read for, the apron's too: a column the
 /// apron reads without its deck stands at another height than the chunk beside
 /// draws it, and the faces either side are shaded for a step that is not there.
-/// `s` is the page at `quadrant` beside the chunk's own and is read for the
-/// columns `reads` says; `corner` is the apron's first column in the own page's cells.
-fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &PageSource, corner: [i64; 2], quadrant: [i64; 2], reads: impl Fn([i64; 2]) -> bool) -> Result<(), Refused> {
+/// `s` is the tile at `quadrant` beside the chunk's own and is read for the
+/// columns `reads` says; `corner` is the apron's first column in the own tile's cells.
+fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &TileSource, corner: [i64; 2], quadrant: [i64; 2], reads: impl Fn([i64; 2]) -> bool) -> Result<(), Refused> {
     let n = f64::from(s.n);
-    let origin = [0, 1].map(|k| (s.origin[k] + corner[k] - quadrant[k] * PAGE_CELLS as i64) as f64 / n);
+    let origin = [0, 1].map(|k| (s.origin[k] + corner[k] - quadrant[k] * TILE_CELLS as i64) as f64 / n);
     let side = COL_SPAN as i64;
     let mut grown = Ok(());
-    s.page.decks.over_grid(Some(s.frame), origin, 1.0 / n, [side, side], |cx, cy, d, o| {
-        if grown.is_ok() && reads(ancestor_of([corner[0] + cx, corner[1] + cy], GROUND.page_cell_shamt())) {
+    s.tile.decks.over_grid(Some(s.frame), origin, 1.0 / n, [side, side], |cx, cy, d, o| {
+        if grown.is_ok() && reads(ancestor_of([corner[0] + cx, corner[1] + cy], GROUND.tile_cell_shamt())) {
             grown = try_push(over, ((cy * side + cx) as usize, d, o));
         }
     });
@@ -96,28 +96,28 @@ fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &PageSource, corner: [
 const PIER: GroundCell = ground::building;
 
 #[derive(Clone, Copy)]
-pub struct PageView<'a> {
+pub struct TileView<'a> {
     pub cells: &'a [GroundCell],
     pub ele: &'a [i16],
     pub decks: &'a Decks,
 }
 
-/// The page drawn in place of this one (its own, or a coarser one whose cell
+/// The tile drawn in place of this one (its own, or a coarser one whose cell
 /// stands for `n` × `n` of its cells until its own comes).
 #[derive(Clone, Copy)]
-pub struct PageSource<'a> {
-    pub page: PageView<'a>,
-    /// Where the page lies, for its piers' stations.
+pub struct TileSource<'a> {
+    pub tile: TileView<'a>,
+    /// Where the tile lies, for its piers' stations.
     pub frame: Frame,
     pub origin: [i64; 2],
     pub n: u32,
 }
 
 pub struct Around<'a> {
-    pub own: PageSource<'a>,
+    pub own: TileSource<'a>,
     /// None where the apron does not reach or nothing is drawn; those cells are
     /// read from `own`, whose elevation is padded past its edge.
-    pub beside: [Option<PageSource<'a>>; 8],
+    pub beside: [Option<TileSource<'a>>; 8],
 }
 
 pub const fn beside_index(qx: i64, qy: i64) -> usize {
@@ -125,7 +125,7 @@ pub const fn beside_index(qx: i64, qy: i64) -> usize {
     (if k > 4 { k - 1 } else { k }) as usize
 }
 
-/// Apron cells are read from what their own page is drawn from, as the chunk
+/// Apron cells are read from what their own tile is drawn from, as the chunk
 /// beside draws it, so the face mask sees what is on screen; they are never painted or emitted.
 pub struct ChunkSample {
     /// Packed 0xCC_RRGGBB.
@@ -179,39 +179,39 @@ impl Default for ChunkSample {
 
 impl ChunkSample {
     /// Each cell takes the material of the source cell it lies in and the source
-    /// surface's height at its own center, so a coarser page invents nothing.
+    /// surface's height at its own center, so a coarser tile invents nothing.
     pub fn read(&mut self, around: &Around, first: [i64; 2]) -> Result<(), Refused> {
         let tables = &*MATERIALS;
         let mut min_ele = i32::MAX;
-        let last = PAGE_CELLS as i32 - 1;
+        let last = TILE_CELLS as i32 - 1;
         for py in 0..COL_SPAN {
             for px in 0..COL_SPAN {
                 let i = (py * COL_SPAN + px) as usize;
                 let own = APRON..COL_SPAN - APRON;
                 let inner = own.contains(&px) && own.contains(&py);
                 let (x, y) = (first[0] + px as i64 - APRON as i64, first[1] + py as i64 - APRON as i64);
-                let [qx, qy] = ancestor_of([x, y], GROUND.page_cell_shamt());
+                let [qx, qy] = ancestor_of([x, y], GROUND.tile_cell_shamt());
                 let (source, [x, y]) = match (qx, qy) {
                     (0, 0) => (&around.own, [x, y]),
                     _ => match &around.beside[beside_index(qx, qy)] {
-                        Some(s) => (s, offset_in([x, y], GROUND.page_cell_shamt())),
+                        Some(s) => (s, offset_in([x, y], GROUND.tile_cell_shamt())),
                         None => (&around.own, [x, y]),
                     },
                 };
-                let (page, n) = (&source.page, source.n);
+                let (tile, n) = (&source.tile, source.n);
                 let (x, y) = (source.origin[0] + x, source.origin[1] + y);
                 let (tx, ty) = (x.div_euclid(n as i64) as i32, y.div_euclid(n as i64) as i32);
-                // Only the elevation is padded past the page. An apron cell off it keeps its
+                // Only the elevation is padded past the tile. An apron cell off it keeps its
                 // height, all the face mask reads, and the base look nothing draws.
-                let on_page = (0..=last).contains(&tx) && (0..=last).contains(&ty);
-                let cell = if on_page { page.cells[GROUND.cell_index(tx as u32, ty as u32) as usize] } else { ground::BASE };
+                let on_tile = (0..=last).contains(&tx) && (0..=last).contains(&ty);
+                let cell = if on_tile { tile.cells[GROUND.cell_index(tx as u32, ty as u32) as usize] } else { ground::BASE };
                 self.look[i] = cell;
                 (self.material[i], self.layer_idx[i]) = tables.drawn(cell);
 
-                // An apron cell off the page has no look and takes the raw height.
-                let lanes = on_page.then_some(GroundLanes { cells: page.cells });
+                // An apron cell off the tile has no look and takes the raw height.
+                let lanes = on_tile.then_some(GroundLanes { cells: tile.cells });
                 let center = |v: i64| (v as f64 + 0.5) / n as f64;
-                let ele = ground_ele_at(page.ele, lanes, center(x), center(y)) as i32;
+                let ele = ground_ele_at(tile.ele, lanes, center(x), center(y)) as i32;
                 self.ele[i] = ele as i16;
                 // The floor is the chunk's own: a neighbor's valley must not drop it.
                 if inner && cell != sentinel::void {
@@ -229,13 +229,13 @@ impl ChunkSample {
         Ok(())
     }
 
-    /// Each column's decks from the page its height is read from (`read`).
+    /// Each column's decks from the tile its height is read from (`read`).
     fn read_decks(&mut self, around: &Around, first: [i64; 2]) -> Result<(), Refused> {
         let mut over = core::mem::take(&mut self.over);
         over.clear();
         let cell_per_m = u_per_m(around.own.frame.corner[1]) / U_PER_CELL;
         let corner = first.map(|v| v - APRON as i64);
-        // A column with no page beside is read from the chunk's own, as its height is.
+        // A column with no tile beside is read from the chunk's own, as its height is.
         let beside = |[qx, qy]: [i64; 2]| if (qx, qy) == (0, 0) { None } else { around.beside[beside_index(qx, qy)].as_ref() };
         let mut built = collect_decks(&mut over, &around.own, corner, [0, 0], |q| beside(q).is_none());
         for qy in -1..=1 {

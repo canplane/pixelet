@@ -1,11 +1,11 @@
 // pxl-spec/space/lod.rs
 
-//! The cell ground is drawn at from its distance, and the pages a zoom's
-//! faults can name about a point. Both depend only on the lattice, so the
+//! The cell ground is drawn at from its distance, and the tiles a zoom's
+//! misses can name about a point. Both depend only on the lattice, so the
 //! resident bound is proved before anything of the world or screen is known.
 
 use super::pvf3::REACH;
-use super::pyramid::{page_at, page_rows, Page, GROUND, LEAF_Z, TOP_Z};
+use super::pyramid::{tile_at, tile_rows, Tile, GROUND, LEAF_Z, TOP_Z};
 use super::v3::Aabb;
 use super::zoom::{units, Zoom, UNIT_Z};
 
@@ -44,7 +44,7 @@ pub fn cell_at(r: f64) -> Zoom {
 }
 
 /// The criterion's one scale factor, at least 1: every zoom's split
-/// distance is `split_distance` / τ. The fault bound is sized at 1, and a
+/// distance is `split_distance` / τ. The reach is sized at 1, and a
 /// coarser τ only brings bands nearer, so none breaks it.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub struct Tau(f64);
@@ -52,7 +52,7 @@ pub struct Tau(f64);
 impl Tau {
     pub const FINEST: Tau = Tau(1.0);
 
-    /// At least 1: a finer quality than the criterion breaks the fault bound.
+    /// At least 1: a finer quality than the criterion breaks the reach.
     pub fn of(scale: f64) -> Tau {
         xpute_core::ensure!(scale >= 1.0, EINVAL);
         Tau(scale)
@@ -70,35 +70,35 @@ impl Tau {
         cell_at(r * self.0)
     }
 
-    /// The page zoom the ground is drawn from at `r`: its cells', held to the pyramid.
+    /// The tile zoom the ground is drawn from at `r`: its cells', held to the pyramid.
     pub fn z_at(self, r: f64) -> Zoom {
         GROUND.z_of(self.cell_at(r)).clamp(TOP_Z as i32, LEAF_Z as i32) as Zoom
     }
 
-    pub const fn fault_radius(self, z: Zoom) -> f64 {
-        fault_radius(z) / self.0
+    pub const fn demand_reach(self, z: Zoom) -> f64 {
+        demand_reach(z) / self.0
     }
 }
 
-/// How far from an observer's foot a fault at `z` can lie: the split
+/// How far from an observer's foot a demand at `z` can lie: the split
 /// distance of the ground's cell a zoom coarser. Bounds the run along the ground too.
-pub const fn fault_radius(z: Zoom) -> f64 {
+pub const fn demand_reach(z: Zoom) -> f64 {
     split_distance(GROUND.cell_zoom(z - 1))
 }
 
-/// The most pages a zoom's faults span along an axis: ⌊d / page⌋ + 2, the same at every zoom.
-pub const FAULT_ACROSS: u32 = (2.0 * fault_radius(LEAF_Z) / units(LEAF_Z)) as u32 + 2;
+/// The most tiles a zoom's demand span along an axis: ⌊d / tile⌋ + 2, the same at every zoom.
+pub const REACH_ACROSS: u32 = (2.0 * demand_reach(LEAF_Z) / units(LEAF_Z)) as u32 + 2;
 
-/// The most pages a zoom's faults name about one observer.
-pub const FAULT_PAGES: u32 = FAULT_ACROSS * FAULT_ACROSS;
+/// The most tiles a zoom's demand name about one observer.
+pub const REACH_TILES: u32 = REACH_ACROSS * REACH_ACROSS;
 
-/// Every page at `z` with ground within `radius` of `at`.
-pub fn pages_within(z: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Page> {
-    let ys = page_rows(z);
-    squares_within(z, at, radius).filter(move |&[_, y]| ys.contains(&y)).map(move |xy| page_at(z, xy))
+/// Every tile at `z` with ground within `radius` of `at`.
+pub fn tiles_within(z: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Tile> {
+    let ys = tile_rows(z);
+    squares_within(z, at, radius).filter(move |&[_, y]| ys.contains(&y)).map(move |xy| tile_at(z, xy))
 }
 
-/// `pages_within` before X wraps.
+/// `tiles_within` before X wraps.
 pub fn squares_within(z: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = [i64; 2]> {
     xpute_core::ensure!(z >= TOP_Z, EINVAL);
     let span = units(z);

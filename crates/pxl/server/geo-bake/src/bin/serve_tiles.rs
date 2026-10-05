@@ -1,7 +1,7 @@
 // pxl-geo-bake/bin/serve_tiles.rs
 
 //! Local demand bakes. --cache holds the terrain/poi/geocode directories;
-//! a page stays cached across restarts until its kind is invalidated. The
+//! a tile stays cached across restarts until its kind is invalidated. The
 //! Earth's picture is baked offline by pxl-tool, so it is served from that
 //! bake (`--out`), under the names the bucket holds, whichever way the rest is.
 
@@ -16,24 +16,24 @@ use pxl_geo_bake::demand::{
     job::{self, Limits},
     Failure, Kind, Server,
 };
-use pxl_geo_bake::pyramid::PageSet;
+use pxl_geo_bake::pyramid::TileSet;
 use pxl_geo_bake::util::CONTENT_ENCODING;
 use pxl_server::admin_auth::admin_auth;
 use pxl_spec::bake::published::{PUBLISHED_TOP_Z, PUBLISHED_VERSION};
-use pxl_spec::bake::quadkey::page_of_name;
+use pxl_spec::bake::quadkey::tile_of_name;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
 use pxl_spec::space::zoom::Zoom;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-enum Pages {
+enum Tiles {
     Demand(Server),
     Baked(PathBuf),
 }
 
 struct App {
-    pages: Pages,
+    tiles: Tiles,
     top_z: Zoom,
     asset_dir: PathBuf,
     out: PathBuf,
@@ -42,7 +42,7 @@ struct App {
 const EARTH: &str = "earth";
 
 async fn earth(app: &App, version: &str, name: &str) -> Response {
-    if page_of_name(name).is_none() {
+    if tile_of_name(name).is_none() {
         return StatusCode::NOT_FOUND.into_response();
     }
     match tokio::fs::read(app.out.join(EARTH).join(version).join(name)).await {
@@ -68,9 +68,9 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
         return earth(&app, PUBLISHED_VERSION.earth, &name).await;
     }
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
-    let demand = match &app.pages {
-        Pages::Demand(demand) => demand,
-        Pages::Baked(dir) => return baked(dir, kind, published_version(kind), &name).await,
+    let demand = match &app.tiles {
+        Tiles::Demand(demand) => demand,
+        Tiles::Baked(dir) => return baked(dir, kind, published_version(kind), &name).await,
     };
     match demand.get(kind, &name).await {
         Ok(Some(bytes)) => packed(bytes),
@@ -105,7 +105,7 @@ async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name))
     if kind == EARTH {
         return earth(&app, &version, &name).await;
     }
-    let (Pages::Baked(dir), Some(kind)) = (&app.pages, Kind::parse(&kind)) else {
+    let (Tiles::Baked(dir), Some(kind)) = (&app.tiles, Kind::parse(&kind)) else {
         return StatusCode::NOT_FOUND.into_response();
     };
     baked(dir, kind, &version, &name).await
@@ -113,10 +113,10 @@ async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name))
 
 async fn baked(dir: &std::path::Path, kind: Kind, version: &str, name: &str) -> Response {
     let root = dir.join(kind.name()).join(version);
-    // A pyramid's pages are on disk as `z<zoom>/<page index>` until the publish renames them.
+    // A pyramid's tiles are on disk as `z<zoom>/<tile index>` until the publish renames them.
     let path = match kind {
-        Kind::Terrain | Kind::Poi => match page_of_name(name) {
-            Some(p) => PageSet::new(root).path(p),
+        Kind::Terrain | Kind::Poi => match tile_of_name(name) {
+            Some(p) => TileSet::new(root).path(p),
             None => return StatusCode::NOT_FOUND.into_response(),
         },
         Kind::Geocode if name != "." && name != ".." => root.join(name),
@@ -138,7 +138,7 @@ async fn source(State(app): State<Arc<App>>) -> Response {
 
 async fn invalidate(State(app): State<Arc<App>>, Path(kind): Path<String>, body: String) -> Response {
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
-    let Pages::Demand(demand) = &app.pages else {
+    let Tiles::Demand(demand) = &app.tiles else {
         return (StatusCode::CONFLICT, "a finished bake is served as it is: nothing to invalidate").into_response();
     };
     if !body.trim().is_empty() {
@@ -208,11 +208,11 @@ fn run() -> Result<(), String> {
         }
     }
 
-    let (pages, top_z) = match baked {
-        Some(dir) => (Pages::Baked(dir), PUBLISHED_TOP_Z),
-        None => (Pages::Demand(Server::open(workers, cache, top_z, limits)?), top_z),
+    let (tiles, top_z) = match baked {
+        Some(dir) => (Tiles::Baked(dir), PUBLISHED_TOP_Z),
+        None => (Tiles::Demand(Server::open(workers, cache, top_z, limits)?), top_z),
     };
-    let app = Arc::new(App { pages, top_z, asset_dir, out });
+    let app = Arc::new(App { tiles, top_z, asset_dir, out });
 
     // Without ADMIN_TOKEN, as in local dev, the internal route is open.
     let mut internal = Router::new().route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate));

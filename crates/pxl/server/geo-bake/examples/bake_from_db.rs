@@ -1,9 +1,9 @@
 // pxl-geo-bake/examples/bake_from_db.rs
 
-//! Bakes single pages straight from the geo DB, without the walk's threads,
-//! resume or manifest, for inspecting one page.
+//! Bakes single tiles straight from the geo DB, without the walk's threads,
+//! resume or manifest, for inspecting one tile.
 //!
-//!   cargo run -p pxl-geo-bake --example bake_from_db -- <dir> <page>...
+//!   cargo run -p pxl-geo-bake --example bake_from_db -- <dir> <tile>...
 
 use std::fs;
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use pxl_spec::bake::format::encode_terrain;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let (dir, pages) = args.split_first().expect("usage: <dir> <page>...");
+    let (dir, tiles) = args.split_first().expect("usage: <dir> <tile>...");
 
     let coverage = Coverage::of_source().expect("coverage");
     let (_, mut client) = Overture::reading(&leaf::READS).expect("geo DB");
@@ -26,21 +26,21 @@ fn main() {
     let memo = std::env::temp_dir().join("pxl-source");
     let mut flat = 0;
 
-    for page in pages {
-        let idx = page.parse().expect("page_idx");
-        assert!(coverage.contains(idx), "{page} is not a page of the coverage");
+    for tile in tiles {
+        let idx = tile.parse().expect("tile_idx");
+        assert!(coverage.contains(idx), "{tile} is not a tile of the coverage");
         let reader = &mut deck::Reader {
             client: &mut client,
             repo: &repo,
             store: &mut Disk(&memo),
         };
         let (terrain, off_raster) = bake_leaf(reader, idx).expect("bake");
-        let tile = encode_terrain(&terrain).expect("encode");
-        fs::write(format!("{dir}/{page}.db.tile"), &tile).expect("write");
+        let bytes = encode_terrain(&terrain).expect("encode");
+        fs::write(format!("{dir}/{tile}.db.tile"), &bytes).expect("write");
         flat += usize::from(off_raster);
-        println!("{page}\t{}", tile.len());
+        println!("{tile}\t{}", bytes.len());
     }
     if flat > 0 {
-        eprintln!("[bake] no elevation on {flat} page(s)");
+        eprintln!("[bake] no elevation on {flat} tile(s)");
     }
 }

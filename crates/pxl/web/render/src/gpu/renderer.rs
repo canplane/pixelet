@@ -97,23 +97,23 @@ pub struct FrameInput<'a> {
     pub sheet: fn() -> Option<u32>,
     pub moon: fn() -> Option<u32>,
     pub earth: fn() -> Option<u32>,
-    pub earth_pages: EarthPages<'a>,
+    pub earth_tiles: EarthTiles<'a>,
     pub atlas: &'a mut BillboardAtlas,
     pub text: TextOf,
     /// A phone gets a smaller shadow map.
     pub handheld: bool,
 }
 
-/// The Earth layer's pages as the GPU reads them: the floor's window, its
-/// south-west page first, and per page its layer plus one; `upload` hands each
-/// page that has come to the writer while the writer takes it.
-pub struct EarthPages<'a> {
+/// The Earth layer's tiles as the GPU reads them: the floor's window, its
+/// south-west tile first, and per tile its layer plus one; `upload` hands each
+/// tile that has come to the writer while the writer takes it.
+pub struct EarthTiles<'a> {
     pub window: [i32; 2],
     pub layers: &'a [u32],
     pub upload: &'a mut Upload,
 }
 
-/// Hands each waiting page's layer and texels to the writer while it takes them.
+/// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
 pub struct FrameOutput {
@@ -918,8 +918,8 @@ impl Renderer {
         self.layers.step(g, &self.mips, input.sheet);
         self.moon.step(g, &self.mips, input.moon);
         self.atmosphere.earth_step(g, &self.mips, input.earth);
-        let pages = input.earth_pages;
-        self.atmosphere.set_earth_pages(g, pages.window, pages.layers, pages.upload);
+        let tiles = input.earth_tiles;
+        self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload);
         self.badges.sync_sheet(g, &self.mips, input.atlas, input.text);
         let (records, uniforms) = take_lists(Some(g), input.lists);
 

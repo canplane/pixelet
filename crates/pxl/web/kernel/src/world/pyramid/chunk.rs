@@ -2,20 +2,20 @@
 
 //! A chunk: a cube of 64 cells of one zoom, the grain a view is drawn at.
 //! Never fetched or held; only its address exists, and an empty one is never
-//! made. Its page and place in the page derive from its column, so they
+//! made. Its tile and place in the tile derive from its column, so they
 //! cannot disagree with where it is.
 
 use pxl_spec::space::hierarchy::{ancestor_of, child_of, offset_in, parent_of};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_zoom, page_at, page_rows, wrap_cell, Page, CHUNK_CELLS, LEAF_Z, PAGE_CELLS, TOP_Z};
+use pxl_spec::space::pyramid::{chunk_zoom, tile_at, tile_rows, wrap_cell, Tile, CHUNK_CELLS, LEAF_Z, TILE_CELLS, TOP_Z};
 use pxl_spec::space::v3::Aabb;
 use pxl_spec::space::zoom::{base_of, index_of, units, Zoom};
 
 pub const CHILDREN: usize = 8;
 
-/// A page is this many steps over a chunk.
-const PAGE_STEPS: u32 = (chunk_zoom(LEAF_Z) - LEAF_Z) as u32;
+/// A tile is this many steps over a chunk.
+const TILE_STEPS: u32 = (chunk_zoom(LEAF_Z) - LEAF_Z) as u32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Chunk {
@@ -59,31 +59,31 @@ impl Chunk {
         }
     }
 
-    pub fn page(self) -> Page {
-        page_at(self.z, ancestor_of(self.column().1, PAGE_STEPS))
+    pub fn tile(self) -> Tile {
+        tile_at(self.z, ancestor_of(self.column().1, TILE_STEPS))
     }
 
-    pub fn in_page(self) -> (u32, u32) {
-        let [x, y] = offset_in(self.column().1, PAGE_STEPS);
+    pub fn in_tile(self) -> (u32, u32) {
+        let [x, y] = offset_in(self.column().1, TILE_STEPS);
         (x as u32 * CHUNK_CELLS, y as u32 * CHUNK_CELLS)
     }
 
-    /// Neighbouring pages an apron of `apron` cells reaches into, with their
-    /// offsets from the chunk's page; none for a chunk inside it.
-    pub fn pages_beside(self, apron: u32) -> impl Iterator<Item = ([i64; 2], Page)> {
-        let (x0, y0) = self.in_page();
+    /// Neighbouring tiles an apron of `apron` cells reaches into, with their
+    /// offsets from the chunk's tile; none for a chunk inside it.
+    pub fn tiles_beside(self, apron: u32) -> impl Iterator<Item = ([i64; 2], Tile)> {
+        let (x0, y0) = self.in_tile();
         let steps = move |v: u32| {
             [0, -1, 1]
                 .into_iter()
-                .filter(move |&q| q == 0 || (q < 0 && v < apron) || (q > 0 && v + CHUNK_CELLS + apron > PAGE_CELLS))
+                .filter(move |&q| q == 0 || (q < 0 && v < apron) || (q > 0 && v + CHUNK_CELLS + apron > TILE_CELLS))
         };
-        let page = self.page();
-        let [px, py] = [ivec::X(page.page), ivec::Y(page.page)];
-        let (z, rows) = (self.z, page_rows(self.z));
+        let tile = self.tile();
+        let [px, py] = [ivec::X(tile.tile), ivec::Y(tile.tile)];
+        let (z, rows) = (self.z, tile_rows(self.z));
         steps(y0)
             .flat_map(move |qy| steps(x0).map(move |qx| [qx, qy]))
             .filter(move |&[qx, qy]| [qx, qy] != [0, 0] && rows.contains(&(py + qy)))
-            .map(move |[qx, qy]| ([qx, qy], page_at(z, [px + qx, py + qy])))
+            .map(move |[qx, qy]| ([qx, qy], tile_at(z, [px + qx, py + qy])))
     }
 
     /// The corner at no height, as the 2D stores key it; where it stands is `rect`'s.

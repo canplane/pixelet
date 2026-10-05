@@ -1,6 +1,6 @@
 // pxl-spec/bake/deck.rs
 
-//! A page's ways off the ground: polylines in the page's cells with their road
+//! A tile's ways off the ground: polylines in the tile's cells with their road
 //! surface in leaf cells at each point, solved offline over the whole network.
 //! What they look like — slab, piers, bore, embankment, cutting — the client
 //! makes from the surface and these numbers.
@@ -13,20 +13,20 @@ use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 use super::{malformed, way};
 use crate::procedural::{pier_covers, Frame};
 use crate::space::hierarchy::child_of;
-use crate::space::pyramid::{GROUND, PAGE_CELLS};
+use crate::space::pyramid::{GROUND, TILE_CELLS};
 use crate::space::zoom::Zoom;
 use xpute_core::math::scalar::round;
 
-/// Points are in eighths of the page's cell, which an `i16` holds far past the page's edge.
+/// Points are in eighths of the tile's cell, which an `i16` holds far past the tile's edge.
 pub const POINT_SCALE: f64 = 8.0;
 
-/// The farthest past half its width the client draws a line, in its page's
-/// cells; the bake sizes a line's page and extent by it.
+/// The farthest past half its width the client draws a line, in its tile's
+/// cells; the bake sizes a line's tile and extent by it.
 pub const LINE_PAST: f64 = 1.0;
 
-/// The widest a way is drawn, in its page's cells: what a deck's width byte
+/// The widest a way is drawn, in its tile's cells: what a deck's width byte
 /// holds. The ground draws a way no wider, so it is one width on and off a
-/// bridge, and how far past a page anything drawn on it can come from is bounded.
+/// bridge, and how far past a tile anything drawn on it can come from is bounded.
 pub const WIDEST: f64 = u8::MAX as f64 / POINT_SCALE;
 
 /// A deck's slab under its surface, in ground metres: Arnis's `DECK_STRUCTURE_DEPTH`.
@@ -91,13 +91,13 @@ pub const MAX_BOXES: usize = boxes_for(MAX_POINTS);
 /// Holds no point.
 const EMPTY: [i16; 4] = [i16::MAX, i16::MAX, i16::MIN, i16::MIN];
 
-/// A page's lines, structure-of-arrays: a lane a line, then a lane a point.
+/// A tile's lines, structure-of-arrays: a lane a line, then a lane a point.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Decks {
     pub starts: Cow<'static, [u32]>,      // line d is points starts[d]..starts[d + 1]
-    pub points: Cow<'static, [[i16; 2]]>, // centreline, 1/POINT_SCALE page cell: the source's
-    pub tops: Cow<'static, [i16]>,        // road surface, in leaf cells: solved over many pages
-    pub width: Cow<'static, [u8]>,        // 1/POINT_SCALE page cell: the source's
+    pub points: Cow<'static, [[i16; 2]]>, // centreline, 1/POINT_SCALE tile cell: the source's
+    pub tops: Cow<'static, [i16]>,        // road surface, in leaf cells: solved over many tiles
+    pub width: Cow<'static, [u8]>,        // 1/POINT_SCALE tile cell: the source's
     pub kind: Cow<'static, [u8]>,         // transport type: the source's class, the slab's material
     pub form: Cow<'static, [u8]>,         // `Form`: the source's flags
     pub clear: Cow<'static, [u8]>,        // a bore's clear space over its surface, in leaf cells: solved
@@ -148,7 +148,7 @@ pub enum Occupies {
 }
 
 impl Over {
-    /// `cell_per_m`: leaf cells a ground metre on the column's page.
+    /// `cell_per_m`: leaf cells a ground metre on the column's tile.
     pub fn occupies(&self, ground: i32, cell_per_m: f64) -> Occupies {
         // all the surface sweeps across the column, so a slab or a bore steps down to the
         // next column's without a gap however steep it runs
@@ -198,7 +198,7 @@ impl Decks {
     }
 
     /// Every deck over each column of a grid: column (i, j) the square of side
-    /// `step` about `origin + (i + ½, j + ½) · step` in the page's cells. A
+    /// `step` about `origin + (i + ½, j + ½) · step` in the tile's cells. A
     /// column at a joint is reported for both segments; the caller joins them.
     pub fn over_grid(&self, frame: Option<Frame>, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Over)) {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - 0.5;
@@ -288,7 +288,7 @@ impl Deck<'_> {
 
     /// What segment `s` is over the column of side `side` about `at`, if the
     /// deck covers `at`: the surface it runs through across the column, and,
-    /// given where the page lies, whether `at` is inside the section of a pier
+    /// given where the tile lies, whether `at` is inside the section of a pier
     /// at a station of this segment.
     fn over_segment(&self, frame: Option<Frame>, s: usize, at: [f64; 2], side: f64) -> Option<Over> {
         let (a, b) = (self.point(s), self.point(s + 1));
@@ -338,7 +338,7 @@ pub fn footprint(width: f64) -> f64 {
 /// Decks one zoom coarser, at `z`: half a cell wide or more, simplified to
 /// half a cell, widest first within a record.
 pub fn fold_decks(children: [&Decks; 4], z: Zoom) -> Decks {
-    let n = f64::from(PAGE_CELLS);
+    let n = f64::from(TILE_CELLS);
     // The parent's half cell of height, in leaf cells.
     let height_tolerance = f64::from(GROUND.finest_in(z)) / 2.0;
     let mut lines = Vec::new();
@@ -484,7 +484,7 @@ pub struct Lanes<'a> {
     clear: &'a [u8],
 }
 
-/// Refused unless the lanes are one page's decks, consistently sized and within a record's room.
+/// Refused unless the lanes are one tile's decks, consistently sized and within a record's room.
 pub fn read_branch(d: BranchCursor<'_>) -> Result<Lanes<'_>, MarshalError> {
     let starts = d.at(0)?.get_array::<u32>()?;
     let points = match d.at(1)?.get_array::<i16>()?.as_chunks::<2>() {

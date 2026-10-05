@@ -20,7 +20,7 @@ use crate::layer::geocode::fetcher::geocode_fetcher_step;
 use crate::layer::marker::frame_gizmo::debug_gizmos_step;
 use crate::layer::marker::hover_cursor::hover_cursor_step;
 use crate::layer::marker::location_puck::location_puck_step;
-use crate::layer::terrain::page::terrain_step;
+use crate::layer::terrain::tile::terrain_step;
 use crate::sched::profiler::spec::EffectName;
 use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickState};
 use crate::shell::setting::store::settings_store;
@@ -75,7 +75,7 @@ fn goal_tick(ctx: &mut TickContext) {
     }
 }
 
-/// Each pyramid layer's pages, from the published goal.
+/// Each pyramid layer's tiles, from the published goal.
 fn demand_tick(_: &mut TickContext) {
     terrain_step();
     crate::layer::poi::poi_step();

@@ -28,7 +28,7 @@ pub const fn cell_zoom_of(web_zoom: i32) -> Zoom {
 
 const U_PER_DB: f64 = ROUND / (TAU * EARTH_RADIUS_M); // EPSG:3857 spans 2πR
 
-/// sec φ = cosh(y / R), at the page's base so a page shares one value.
+/// sec φ = cosh(y / R), at the tile's base so a tile shares one value.
 pub fn scale_at(y_u: f64) -> f64 {
     let base = (y_u / units(LEAF_Z)).floor() * units(LEAF_Z);
     libm::cosh(base * TAU / ROUND)
@@ -59,8 +59,8 @@ pub fn unproject(i: IVec, f: FVec) -> G3857 {
 pub type BBox3857 = [G3857; 2];
 
 /// The maximum is built in u: the exclusive +2^23u edge is not an IVec.
-pub fn get_page_bbox(page_idx: IVec) -> BBox3857 {
-    let min = projection::unproject(from_idx(LEAF_Z, page_idx), 0);
+pub fn get_tile_bbox(tile_idx: IVec) -> BBox3857 {
+    let min = projection::unproject(from_idx(LEAF_Z, tile_idx), 0);
     let span = units(LEAF_Z);
     [[to_db(min[0]), to_db(min[1]), 0.0], [to_db(min[0] + span), to_db(min[1] + span), 0.0]]
 }

@@ -7,7 +7,7 @@ fn zoom_at(r: f64) -> i32 {
     GROUND.z_of(cell_at(r))
 }
 
-/// Feet on a page's corners, edges and inside, either side of the origin.
+/// Feet on a tile's corners, edges and inside, either side of the origin.
 fn feet(z: Zoom) -> Vec<[f64; 2]> {
     let span = units(z);
     let fractions = [0.0, 1e-9, 0.25, 0.5, 0.75, 1.0 - 1e-9];
@@ -22,38 +22,38 @@ fn feet(z: Zoom) -> Vec<[f64; 2]> {
     out
 }
 
-fn faults(z: Zoom, foot: [f64; 2]) -> Vec<Page> {
-    pages_within(z, foot, fault_radius(z)).collect()
+fn demands(z: Zoom, foot: [f64; 2]) -> Vec<Tile> {
+    tiles_within(z, foot, demand_reach(z)).collect()
 }
 
 #[test]
-fn a_zoom_faults_on_at_most_three_by_three_pages_wherever_the_foot_stands() {
+fn a_zoom_faults_on_at_most_three_by_three_tiles_wherever_the_foot_stands() {
     for z in TOP_Z..=LEAF_Z {
         for foot in feet(z) {
-            let n = faults(z, foot).len() as u32;
-            assert!(n <= FAULT_PAGES && n <= 9, "z{z} at {foot:?}: {n} pages");
+            let n = demands(z, foot).len() as u32;
+            assert!(n <= REACH_TILES && n <= 9, "z{z} at {foot:?}: {n} tiles");
         }
     }
 }
 
 #[test]
-fn the_parents_of_a_zooms_pages_lie_in_the_next_coarser_ones() {
+fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
     for z in TOP_Z + 1..=LEAF_Z {
         for foot in feet(z) {
-            let above = faults(z - 1, foot);
-            for p in faults(z, foot) {
+            let above = demands(z - 1, foot);
+            for p in demands(z, foot) {
                 assert!(above.contains(&p.parent()), "z{z} at {foot:?}: {p:?}'s parent outside");
             }
         }
     }
 }
 
-/// Wherever an observation hits, the page it asks for is one of that zoom's fault pages.
+/// Wherever an observation hits, the tile it asks for is within that zoom's reach.
 #[test]
-fn a_hit_asks_for_a_page_inside_the_fault_bound() {
+fn a_hit_asks_for_a_tile_inside_the_fault_bound() {
     for z in TOP_Z..=LEAF_Z {
         for foot in feet(z) {
-            let pages = faults(z, foot);
+            let tiles = demands(z, foot);
             for height in [0.0, 3.0, 1000.0] {
                 for k in 0..64 {
                     let angle = k as f64 * 0.37;
@@ -64,7 +64,7 @@ fn a_hit_asks_for_a_page_inside_the_fault_bound() {
                             continue;
                         }
                         let [x, y] = [at[0] / units(z), at[1] / units(z)].map(|c| c.floor() as i64);
-                        assert!(pages.contains(&page_at(z, [x, y])), "z{z}: a hit {run} along the ground from {foot:?}");
+                        assert!(tiles.contains(&tile_at(z, [x, y])), "z{z}: a hit {run} along the ground from {foot:?}");
                     }
                 }
             }
@@ -72,11 +72,11 @@ fn a_hit_asks_for_a_page_inside_the_fault_bound() {
     }
 }
 
-/// The fault radius is exactly where a zoom stops being asked for.
+/// The reach is exactly where a zoom stops being asked for.
 #[test]
 fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {
     for z in TOP_Z..=LEAF_Z {
-        let r = fault_radius(z);
+        let r = demand_reach(z);
         assert_eq!(zoom_at(r * (1.0 - 1e-12)), z as i32, "z{z} is asked for up to its radius");
         assert_eq!(zoom_at(r), z as i32 - 1, "and not at it");
     }

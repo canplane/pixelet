@@ -4,10 +4,10 @@
 //! Generation, July 2004 (21600 × 10800, 2 km, the sea a flat blue), as
 //! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
 //! eight tiles). Each is averaged in linear light over what a texel covers.
-//!  - The Earth layer's pages (pxl-spec bake/earth_page.rs) at its top zoom, a
-//!    ground cell a texel, to `./out/earth/<version>/<quadkey>`. A page that is one
+//!  - The Earth layer's tiles (pxl-spec bake/earth_tile.rs) at its top zoom, a
+//!    ground cell a texel, to `./out/earth/<version>/<quadkey>`. A tile that is one
 //!    color says nothing the global picture does not, and has no object.
-//!  - The global picture every page falls back to, 2048 × 1024, to
+//!  - The global picture every tile falls back to, 2048 × 1024, to
 //!    `asset/sky/earth/07.webp`.
 //!
 //! Credit: NASA's Earth Observatory (Reto Stöckli; Miguel Román and the Black
@@ -21,12 +21,12 @@ use std::process::ExitCode;
 use image::ImageFormat;
 
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
-use pxl_spec::bake::earth_page::{self, EARTH_TEXELS, EARTH_Z};
+use pxl_spec::bake::earth_tile::{self, EARTH_TEXELS, EARTH_Z};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
-use pxl_spec::bake::quadkey::page_name;
+use pxl_spec::bake::quadkey::tile_name;
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::pvf3::pvf3;
-use pxl_spec::space::pyramid::{around, page_at, GROUND};
+use pxl_spec::space::pyramid::{around, tile_at, GROUND};
 
 const DAY: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74393/world.topo.200407.3x21600x10800.jpg";
 const NIGHT: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144897/BlackMarble_2016_";
@@ -164,13 +164,13 @@ fn lng_lat(x: f64, y: f64) -> [f64; 2] {
     [lng, lat]
 }
 
-fn page_texels(px: i64, py: i64, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
-    let page = page_at(EARTH_Z, [px, py]);
-    let mut rgba = vec![0u8; earth_page::EARTH_BYTES];
+fn tile_texels(px: i64, py: i64, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
+    let tile = tile_at(EARTH_Z, [px, py]);
+    let mut rgba = vec![0u8; earth_tile::EARTH_BYTES];
     for ty in 0..EARTH_TEXELS {
         for tx in 0..EARTH_TEXELS {
             let index = GROUND.cell_index(tx, ty);
-            let cell = GROUND.cell_at(page, index);
+            let cell = GROUND.cell_at(tile, index);
             let (base, side) = (cell.base(), cell.side());
             let (x, y) = (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)));
             let ([lng0, lat0], [lng1, lat1]) = (lng_lat(x, y), lng_lat(x + side, y + side));
@@ -202,9 +202,9 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
             });
         }
     });
-    // Lossless: a page of one color is left out because the global picture reads
+    // Lossless: a tile of one color is left out because the global picture reads
     // the same there, which holds only if the picture keeps every byte; lossy, the
-    // open sea came back a step off the pages' and their edges showed.
+    // open sea came back a step off the tiles' and their edges showed.
     let mut config = webp::WebPConfig::new().map_err(|()| "a WebP config")?;
     config.lossless = 1;
     // libwebp otherwise rewrites the color under a zero alpha: the unlit Earth.
@@ -212,7 +212,7 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
     let encoded = webp::Encoder::from_rgba(&bytes, GLOBAL.0, GLOBAL.1).encode_advanced(&config).map_err(|e| format!("{e:?}"))?;
     let back = webp::Decoder::new(&encoded).decode().ok_or("the global picture does not decode")?;
     if *back != bytes[..] {
-        return Err("the global picture does not keep its bytes, which a left-out page reads".into());
+        return Err("the global picture does not keep its bytes, which a left-out tile reads".into());
     }
     write_atomic(out, &encoded).map_err(|e| e.to_string())?;
     println!("[earth] global -> {} ({} KiB)", out.display(), encoded.len() / 1024);
@@ -270,20 +270,20 @@ fn run() -> Result<(), String> {
     };
     global(&day_plate, &night_plate, Path::new("asset/sky/earth/07.webp"))?;
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-    // Every page of the zoom: the Mercator square, one world across and as high.
+    // Every tile of the zoom: the Mercator square, one world across and as high.
     let half = around(EARTH_Z) / 2;
-    let pages: Vec<[i64; 2]> = (-half..half).flat_map(|y| (-half..half).map(move |x| [x, y])).collect();
+    let tiles: Vec<[i64; 2]> = (-half..half).flat_map(|y| (-half..half).map(move |x| [x, y])).collect();
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
     let written = std::sync::atomic::AtomicU32::new(0);
     let failed = std::sync::Mutex::new(None);
     std::thread::scope(|scope| {
         for t in 0..threads {
-            let (pages, day, night, out, written, failed) = (&pages, &day_plate, &night_plate, &out, &written, &failed);
+            let (tiles, day, night, out, written, failed) = (&tiles, &day_plate, &night_plate, &out, &written, &failed);
             scope.spawn(move || {
-                for &[px, py] in pages.iter().skip(t).step_by(threads) {
-                    let Some(rgba) = page_texels(px, py, day, night) else { continue };
-                    let name = page_name(page_at(EARTH_Z, [px, py])).to_string();
-                    let stored = earth_page::encode(&rgba)
+                for &[px, py] in tiles.iter().skip(t).step_by(threads) {
+                    let Some(rgba) = tile_texels(px, py, day, night) else { continue };
+                    let name = tile_name(tile_at(EARTH_Z, [px, py])).to_string();
+                    let stored = earth_tile::encode(&rgba)
                         .map_err(|e| format!("{e:?}"))
                         .and_then(|pkt| pack(&pkt, Level::Stored).map_err(|e| e.to_string()));
                     match stored.and_then(|b| write_atomic(&out.join(&name), &b).map_err(|e| e.to_string())) {
@@ -298,7 +298,7 @@ fn run() -> Result<(), String> {
         return Err(e);
     }
     let objects = written.into_inner();
-    println!("[earth] {objects} pages -> {}", out.display());
+    println!("[earth] {objects} tiles -> {}", out.display());
     write_manifest(&out, git_sha().as_deref(), serde_json::json!({ "objects": objects, "z": EARTH_Z }))
 }
 

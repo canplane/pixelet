@@ -4,7 +4,7 @@
 //! grouped by the policy it tunes. None is a correctness bound: set to its
 //! least, the view still converges, only coarser or later.
 
-use pxl_spec::space::pyramid::PAGE_CHUNKS;
+use pxl_spec::space::pyramid::TILE_CHUNKS;
 
 // ---- product quality ----
 
@@ -77,8 +77,8 @@ pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
 
 // ---- per-frame work caps ----
 
-/// A page's chunks, so a page of flat ground starts building in the frame it arrives.
-pub const STARTS_PER_FRAME: u32 = PAGE_CHUNKS * PAGE_CHUNKS;
+/// A tile's chunks, so a tile of flat ground starts building in the frame it arrives.
+pub const STARTS_PER_FRAME: u32 = TILE_CHUNKS * TILE_CHUNKS;
 
 pub const COMMITS_PER_FRAME: u32 = 8;
 
@@ -87,7 +87,7 @@ pub const INTAKE: u32 = u32::MAX;
 
 // ---- latency hiding ----
 
-/// Most speculative pages a layer asks for at once.
+/// Most speculative tiles a layer asks for at once.
 pub const HINT_ALLOWANCE: u32 = 128;
 
 // ---- I/O robustness ----

@@ -5,7 +5,7 @@ use super::*;
 use crate::cell::cube::cube_types::ground;
 use crate::space::pyramid::LEAF_Z;
 
-const SPAN: usize = PAGE_CELLS as usize;
+const SPAN: usize = TILE_CELLS as usize;
 const PADDED: usize = ELE_PADDED_SPAN as usize;
 
 #[test]
@@ -19,7 +19,7 @@ fn an_area_keeps_what_fills_half_its_four_and_ties_alternate_corners() {
     assert_eq!(majority([7, 7, 1, 1], CELL - 2), 1);
 }
 
-/// A page whose cell is `f` of it.
+/// A tile whose cell is `f` of it.
 fn plane(f: impl Fn(usize, usize) -> u8) -> Ground {
     Ground {
         cells: (0..SPAN * SPAN).map(|i| f(i % SPAN, i / SPAN)).collect::<Vec<_>>().into(),
@@ -31,7 +31,7 @@ fn fold(children: [&Ground; 4], z: Zoom) -> Vec<u8> {
 }
 
 #[test]
-fn a_uniform_page_folds_to_itself() {
+fn a_uniform_tile_folds_to_itself() {
     let p = plane(|_, _| ground::subway);
     assert!(fold([&p, &p, &p, &p], LEAF_Z - 1).iter().all(|&v| v == ground::subway));
 }
@@ -78,7 +78,7 @@ fn each_child_lands_in_its_own_quarter() {
 
 /// A padded grid whose sample at (i, j) is `f` of its world sample index.
 fn grid(qx: i64, qy: i64, f: impl Fn(i64, i64) -> i64) -> Vec<i16> {
-    let (inner, pad) = (PAGE_ELE_SPAN as i64, ELE_PAD as i64);
+    let (inner, pad) = (TILE_ELE_SPAN as i64, ELE_PAD as i64);
     (0..PADDED * PADDED)
         .map(|s| {
             let (ix, iy) = ((s % PADDED) as i64 - pad, (s / PADDED) as i64 - pad);
@@ -91,7 +91,7 @@ fn fold_grids(f: impl Fn(i64, i64) -> i64 + Copy) -> Vec<i16> {
     fold_grids_held(f, |_| true)
 }
 
-/// The fold with only the pages `held` says are held.
+/// The fold with only the tiles `held` says are held.
 fn fold_grids_held(f: impl Fn(i64, i64) -> i64 + Copy, held: impl Fn(usize) -> bool) -> Vec<i16> {
     let grids: Vec<Vec<i16>> = (0..16).map(|k| grid(k % 4 - 1, k / 4 - 1, f)).collect();
     let refs: [Option<&[i16]>; 16] = std::array::from_fn(|k| held(k).then(|| grids[k].as_slice()));
@@ -136,7 +136,7 @@ fn elevation_keeps_the_center_sample_convention() {
 #[test]
 fn elevation_reads_the_skirt_from_the_neighbors() {
     // The outermost padding lies four child samples past the block, in the neighbors.
-    let out = fold_grids(|mx, my| 100 * mx.div_euclid(PAGE_ELE_SPAN as i64) + my.div_euclid(PAGE_ELE_SPAN as i64));
+    let out = fold_grids(|mx, my| 100 * mx.div_euclid(TILE_ELE_SPAN as i64) + my.div_euclid(TILE_ELE_SPAN as i64));
     assert_eq!(out[0], -101);
     assert_eq!(out[PADDED - 1], 200 - 1);
     assert_eq!(out[(PADDED - 1) * PADDED], -100 + 2);
@@ -165,17 +165,17 @@ fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
     assert_eq!(majority(halves, CELL + 1), halves[0], "a side finer than the cell alternates the same way");
 }
 
-/// The open ocean: flat water at sea level, no page.
-fn zero_page() -> Terrain {
+/// The open ocean: flat water at sea level, no tile.
+fn zero_tile() -> Terrain {
     let cells = vec![ground::water; SPAN * SPAN];
     let mut t = Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default());
     t.index.occupancy = Occupancy::ZERO;
     t
 }
 
-/// Four zero pages fold to the zero page, index included.
+/// Four zero tiles fold to the zero tile, index included.
 #[test]
-fn the_zero_page_folds_to_itself() {
-    let zero = zero_page();
-    assert_eq!(Terrain::fold_page(Page::new(LEAF_Z - 1, 0), |_| Some(&zero)).as_ref(), Some(&zero));
+fn the_zero_tile_folds_to_itself() {
+    let zero = zero_tile();
+    assert_eq!(Terrain::fold_tile(Tile::new(LEAF_Z - 1, 0), |_| Some(&zero)).as_ref(), Some(&zero));
 }

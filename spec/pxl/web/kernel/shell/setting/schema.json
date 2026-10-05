@@ -130,7 +130,7 @@
       "sources_chunks": true
     },
     "poi": {
-      "$doc": ["The places' badges over the map, from the published POI pages."],
+      "$doc": ["The places' badges over the map, from the published POI tiles."],
       "kind": "toggle",
       "default": false,
       "section": "map",
@@ -233,7 +233,7 @@
     },
     "gizmos": {
       "$doc": [
-        "Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the pages and the origin's cell (layer/marker/coverage_gizmo.rs)."
+        "Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (layer/marker/coverage_gizmo.rs)."
       ],
       "kind": "toggle",
       "default": false,

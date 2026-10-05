@@ -16,7 +16,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LEAF_Z;
 use pxl_spec::space::zoom::{count, units, Zoom};
 
-use crate::elevation::page_reads;
+use crate::elevation::tile_reads;
 use crate::terrain::repository::DRAWN_REACH_U;
 
 const METADATA: &str = include_str!("../../../../../infra/geo/elevation/metadata.json");
@@ -44,7 +44,7 @@ pub struct Coverage {
 
 static SOURCE: LazyLock<Result<Coverage, String>> = LazyLock::new(Coverage::derive);
 
-fn project_page(lng: f64, lat: f64) -> IVec {
+fn project_tile(lng: f64, lat: f64) -> IVec {
     idx(LEAF_Z, epsg4326::project(&[lng, lat, 0.0]).i)
 }
 
@@ -56,9 +56,9 @@ impl Coverage {
     /// The leaves whose padded elevation grid lies in the raster, each axis on its own.
     fn derive() -> Result<Coverage, String> {
         let [sw, ne] = source_bbox()?;
-        let (p0, p1) = (project_page(sw[0], sw[1]), project_page(ne[0], ne[1]));
+        let (p0, p1) = (project_tile(sw[0], sw[1]), project_tile(ne[0], ne[1]));
         let padded = |px: i64, py: i64| {
-            let [x0, y0, x1, y1] = page_reads(epsg3857::get_page_bbox(ivec::gather(px, py, 0)));
+            let [x0, y0, x1, y1] = tile_reads(epsg3857::get_tile_bbox(ivec::gather(px, py, 0)));
             let a = epsg4326::from_mercator(&[x0, y0, 0.0]);
             let b = epsg4326::from_mercator(&[x1, y1, 0.0]);
             [a[0], a[1], b[0], b[1]]
@@ -77,29 +77,29 @@ impl Coverage {
         });
         match (x, y) {
             (Some(x), Some(y)) => Ok(Coverage { x, y }),
-            _ => Err("infra/geo/elevation/metadata.json: bbox_4326 covers no whole page".into()),
+            _ => Err("infra/geo/elevation/metadata.json: bbox_4326 covers no whole tile".into()),
         }
     }
 
-    pub fn contains(&self, page: IVec) -> bool {
-        (self.x.0..=self.x.1).contains(&ivec::X(page)) && (self.y.0..=self.y.1).contains(&ivec::Y(page))
+    pub fn contains(&self, tile: IVec) -> bool {
+        (self.x.0..=self.x.1).contains(&ivec::X(tile)) && (self.y.0..=self.y.1).contains(&ivec::Y(tile))
     }
 
-    /// Whether the page at `z` and `page` covers any leaf held.
-    pub fn meets(&self, z: Zoom, page: IVec) -> bool {
+    /// Whether the tile at `z` and `tile` covers any leaf held.
+    pub fn meets(&self, z: Zoom, tile: IVec) -> bool {
         let steps = u32::from(LEAF_Z - z);
         let ([x0, y0], [x1, y1]) = (ancestor_of([self.x.0, self.y.0], steps), ancestor_of([self.x.1, self.y.1], steps));
-        (x0..=x1).contains(&ivec::X(page)) && (y0..=y1).contains(&ivec::Y(page))
+        (x0..=x1).contains(&ivec::X(tile)) && (y0..=y1).contains(&ivec::Y(tile))
     }
 
-    /// Whether every leaf under the page at `z` and `page` is held.
-    pub fn holds(&self, z: Zoom, page: IVec) -> bool {
-        let [x0, y0] = first_descendant_of([ivec::X(page), ivec::Y(page)], u32::from(LEAF_Z - z));
+    /// Whether every leaf under the tile at `z` and `tile` is held.
+    pub fn holds(&self, z: Zoom, tile: IVec) -> bool {
+        let [x0, y0] = first_descendant_of([ivec::X(tile), ivec::Y(tile)], u32::from(LEAF_Z - z));
         let n = count(LEAF_Z, z) as i64;
         self.x.0 <= x0 && x0 + n - 1 <= self.x.1 && self.y.0 <= y0 && y0 + n - 1 <= self.y.1
     }
 
-    pub fn pages(&self) -> Vec<IVec> {
+    pub fn tiles(&self) -> Vec<IVec> {
         let mut out = Vec::new();
         for x in self.x.0..=self.x.1 {
             for y in self.y.0..=self.y.1 {
@@ -109,27 +109,27 @@ impl Coverage {
         out
     }
 
-    /// The published pages' union in EPSG:3857, `[minx, miny, maxx, maxy]`.
+    /// The published tiles' union in EPSG:3857, `[minx, miny, maxx, maxy]`.
     pub fn rect(&self) -> [f64; 4] {
-        let [a0, a1] = epsg3857::get_page_bbox(ivec::gather(self.x.0, self.y.0, 0));
-        let [b0, b1] = epsg3857::get_page_bbox(ivec::gather(self.x.1, self.y.1, 0));
+        let [a0, a1] = epsg3857::get_tile_bbox(ivec::gather(self.x.0, self.y.0, 0));
+        let [b0, b1] = epsg3857::get_tile_bbox(ivec::gather(self.x.1, self.y.1, 0));
         [a0[0].min(b0[0]), a0[1].min(b0[1]), a1[0].max(b1[0]), a1[1].max(b1[1])]
     }
 
-    /// Pages past the published ones that hold the farthest an Overture read
-    /// goes: a page's `DRAWN_REACH_U`, or `NEAREST_REACH_M` where k is largest.
-    pub fn margin_pages(&self) -> i64 {
+    /// Tiles past the published ones that hold the farthest an Overture read
+    /// goes: a tile's `DRAWN_REACH_U`, or `NEAREST_REACH_M` where k is largest.
+    pub fn margin_tiles(&self) -> i64 {
         let [_, y0, _, y1] = self.rect();
         let label = NEAREST_REACH_M * u_per_m(from_db(y0.abs().max(y1.abs())));
         (DRAWN_REACH_U.max(label) / units(LEAF_Z)).ceil() as i64
     }
 
-    /// The published pages grown by `margin_pages`, in degrees: page edges, a
-    /// margin from any row a page reads.
+    /// The published tiles grown by `margin_tiles`, in degrees: tile edges, a
+    /// margin from any row a tile reads.
     pub fn ingest_bbox(&self) -> [f64; 4] {
-        let m = self.margin_pages();
-        let [a, _] = epsg3857::get_page_bbox(ivec::gather(self.x.0 - m, self.y.0 - m, 0));
-        let [_, b] = epsg3857::get_page_bbox(ivec::gather(self.x.1 + m, self.y.1 + m, 0));
+        let m = self.margin_tiles();
+        let [a, _] = epsg3857::get_tile_bbox(ivec::gather(self.x.0 - m, self.y.0 - m, 0));
+        let [_, b] = epsg3857::get_tile_bbox(ivec::gather(self.x.1 + m, self.y.1 + m, 0));
         let sw = epsg4326::from_mercator(&[a[0].min(b[0]), a[1].min(b[1]), 0.0]);
         let ne = epsg4326::from_mercator(&[a[0].max(b[0]), a[1].max(b[1]), 0.0]);
         [sw[0], sw[1], ne[0], ne[1]]

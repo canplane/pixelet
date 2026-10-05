@@ -1,14 +1,14 @@
 // pxl-geo-bake/deck/arnis.rs
 
-//! Bridges and tunnels for one page, heights as Arnis (OSM to Minecraft,
+//! Bridges and tunnels for one tile, heights as Arnis (OSM to Minecraft,
 //! Apache-2.0) solves them in its element processing for bridges, highways
 //! and railways, without the blocks it places: a road bridge's deck is the
 //! least concave line over what it must clear, a rail viaduct one level with
 //! ramps, a road tunnel as deep as its cover asks and reached by its approach
 //! roads sinking into the portal, a rail tunnel at a fixed depth under the
 //! terrain. Arnis's numbers are metres (a block a metre upright on the Earth,
-//! as its celestial bodies say) taken into the page's cells, half to even.
-//! What is read is the page and as much of its 1-ring as the structures
+//! as its celestial bodies say) taken into the tile's cells, half to even.
+//! What is read is the tile and as much of its 1-ring as the structures
 //! touching it reach, and no further.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -16,11 +16,11 @@ use std::time::Instant;
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::deck::{footprint as line_reach, Form};
-use pxl_spec::space::adapter::epsg3857::{from_db, get_page_bbox, to_db, u_per_m};
+use pxl_spec::space::adapter::epsg3857::{from_db, get_tile_bbox, to_db, u_per_m};
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::math::scalar::round;
 
-use crate::deck::elevation::{page_of, sample_cells};
+use crate::deck::elevation::{sample_cells, tile_of};
 use crate::deck::piece::{pieces_of, pieces_over, End, Piece};
 use crate::deck::source::{ring, Store};
 use crate::deck::way::{Polyline, Way};
@@ -77,7 +77,7 @@ pub struct Report {
     pub rail_tunnels: usize,
     pub ramps: usize,
     pub approaches: usize,
-    pub pages_read: usize,
+    pub tiles_read: usize,
     pub times: Times,
 }
 
@@ -91,7 +91,7 @@ pub struct Times {
 /// A piece by identity: its way and where on it it starts.
 type Id = (String, u64);
 
-/// The page's scale: Arnis's metres in its cells.
+/// The tile's scale: Arnis's metres in its cells.
 #[derive(Clone, Copy)]
 struct Units {
     cell_per_m: f64,
@@ -103,7 +103,7 @@ impl Units {
     }
 }
 
-/// What the search has read: the ring's pages it reached, their ground, every
+/// What the search has read: the ring's tiles it reached, their ground, every
 /// way on them, their water, and their structures' pieces.
 struct Source {
     ring: BTreeSet<IVec>,
@@ -170,23 +170,23 @@ fn graded(way: &Way, points: Vec<[f64; 3]>, units: Units) -> (Line, Drawn) {
     )
 }
 
-pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<(Solved, Report), String> {
+pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Report), String> {
     let mut report = Report::default();
-    let pages = ring(page);
+    let tiles = ring(tile);
     let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
-    for &p in &pages {
-        for c in get_page_bbox(p) {
+    for &p in &tiles {
+        for c in get_tile_bbox(p) {
             for k in 0..2 {
                 (lo[k], hi[k]) = (lo[k].min(c[k]), hi[k].max(c[k]));
             }
         }
     }
-    let [pmin, pmax] = get_page_bbox(page);
+    let [pmin, pmax] = get_tile_bbox(tile);
     let units = Units {
         cell_per_m: u_per_m(from_db(pmin[1])) / U_PER_CELL,
     };
     let mut src = Source {
-        ring: pages.into_iter().collect(),
+        ring: tiles.into_iter().collect(),
         loaded: BTreeSet::new(),
         ground: HashMap::new(),
         ways: BTreeMap::new(),
@@ -197,14 +197,14 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<(Solved, Rep
         way_ends: HashMap::new(),
         read: 0.0,
     };
-    src.load(r, page)?;
+    src.load(r, tile)?;
 
-    // ---- the structures the page holds and every one they reach: shared ends, decks
+    // ---- the structures the tile holds and every one they reach: shared ends, decks
     // beside or across them; each read as far as the ring ----
     let own = [[pmin[0], pmin[1]], [pmax[0], pmax[1]]];
     let reach = to_db(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * U_PER_CELL);
     let mut scope: BTreeSet<Id> = src.pieces.iter().filter(|(_, s)| s.piece.touches(own)).map(|(id, _)| id.clone()).collect();
-    // to a fixed point: a page read late can hold what one looked at early stands beside
+    // to a fixed point: a tile read late can hold what one looked at early stands beside
     loop {
         let before = (scope.len(), src.loaded.len());
         for id in scope.clone() {
@@ -255,7 +255,7 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<(Solved, Rep
     }
     report.times.solve = t.elapsed().as_secs_f64();
     report.times.read = src.read;
-    report.pages_read = src.loaded.len();
+    report.tiles_read = src.loaded.len();
     let mut out = Solved::default();
     for (line, drawn) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
         out.lines.push(line);
@@ -283,14 +283,14 @@ fn is_subway(s: &Segment) -> bool {
 }
 
 impl Source {
-    /// Reads a page of the ring once; a page past it is never read.
+    /// Reads a tile of the ring once; a tile past it is never read.
     fn load(&mut self, r: &mut Reader<impl Store>, p: IVec) -> Result<(), String> {
         if !self.ring.contains(&p) || self.loaded.contains(&p) {
             return Ok(());
         }
         let t = Instant::now();
         self.loaded.insert(p);
-        let rows = r.store.page(r.client, r.repo, p)?;
+        let rows = r.store.tile(r.client, r.repo, p)?;
         self.ground.insert(p, rows.surface());
         let step = to_db(U_PER_CELL);
         for s in rows.ways() {
@@ -335,7 +335,7 @@ impl Source {
         Ok(())
     }
 
-    /// A piece's cells inside the ring, the pages its footprint reaches read first.
+    /// A piece's cells inside the ring, the tiles its footprint reaches read first.
     fn sample(&mut self, r: &mut Reader<impl Store>, id: &Id, units: Units) -> Result<(), String> {
         let s = &self.pieces[id];
         if s.samples.is_some() {
@@ -347,16 +347,16 @@ impl Source {
         let reach = to_db((line_reach(s.piece.width_m * units.cell_per_m) + 16.0) * U_PER_CELL);
         let at: Vec<(usize, [f64; 2])> = (0..=s.n)
             .map(|k| (k, line.at((k as f64 * step).min(length))))
-            .filter(|(_, p)| self.ring.contains(&page_of(*p)))
+            .filter(|(_, p)| self.ring.contains(&tile_of(*p)))
             .collect();
         let mut wanted: BTreeSet<IVec> = BTreeSet::new();
         for (_, p) in &at {
             for d in [[0.0, 0.0], [reach, 0.0], [-reach, 0.0], [0.0, reach], [0.0, -reach]] {
-                wanted.insert(page_of([p[0] + d[0], p[1] + d[1]]));
+                wanted.insert(tile_of([p[0] + d[0], p[1] + d[1]]));
             }
         }
         for e in [s.piece.points[0], s.piece.points[s.piece.points.len() - 1]] {
-            wanted.insert(page_of([e[0], e[1]]));
+            wanted.insert(tile_of([e[0], e[1]]));
         }
         for p in wanted {
             self.load(r, p)?;
@@ -1252,7 +1252,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
                 .map(|(p, &t)| {
                     let around: Vec<[f64; 2]> = (-wall..=wall)
                         .flat_map(|dx| (-wall..=wall).map(move |dz| [p[0] + to_db(f64::from(dx) * U_PER_CELL), p[1] + to_db(f64::from(dz) * U_PER_CELL)]))
-                        .filter(|q| src.loaded.contains(&page_of(*q)))
+                        .filter(|q| src.loaded.contains(&tile_of(*q)))
                         .collect();
                     sample_cells(&src.ground, &around).map_or(t, |v| v.into_iter().fold(t, i32::min))
                 })

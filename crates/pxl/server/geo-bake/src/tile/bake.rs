@@ -1,19 +1,19 @@
-// pxl-geo-bake/page/bake.rs
+// pxl-geo-bake/tile/bake.rs
 
 use std::path::{Path, PathBuf};
 
-use pxl_spec::bake::quadkey::PAGE_KEY_DEPTH;
+use pxl_spec::bake::quadkey::TILE_KEY_DEPTH;
 
 use crate::coverage::{Coverage, Overture};
-use crate::page::walk::{self, Args, Page, Target};
-use crate::terrain::leaf::land_pages;
+use crate::terrain::leaf::land_tiles;
+use crate::tile::walk::{self, Args, Target, Tile};
 use crate::util::{fmt_bytes, git_sha, measure_output, refuse_mixed, write_manifest};
 
 pub struct Bake<'a> {
     pub kind: &'a str,
     pub out: PathBuf,
     pub every: u64,
-    /// Zooms coarser than a page one object covers; zero is one object a page.
+    /// Zooms coarser than a tile one object covers; zero is one object a tile.
     pub group_shamt: u32,
     pub content_type: &'a str,
     pub format: Option<&'a str>,
@@ -25,7 +25,7 @@ pub fn bake<T>(
     b: &Bake,
     prelude: impl FnOnce(&Path) -> Result<(), String>,
     connect: impl Fn() -> Result<T, String> + Sync,
-    one: impl Fn(&mut T, &Target) -> Result<Page, String> + Sync,
+    one: impl Fn(&mut T, &Target) -> Result<Tile, String> + Sync,
 ) -> Result<(), String> {
     let built = git_sha();
     let args = Args::parse(b.out.clone())?;
@@ -45,15 +45,15 @@ pub fn bake<T>(
     }
     prelude(&args.out)?;
 
-    let land = land_pages(&args.land_cache, &Coverage::of_source()?, Some(&b.source.release))?;
-    println!("[bake/{}] {} land pages from {}", b.kind, land.len(), args.land_cache.display());
+    let land = land_tiles(&args.land_cache, &Coverage::of_source()?, Some(&b.source.release))?;
+    println!("[bake/{}] {} land tiles from {}", b.kind, land.len(), args.land_cache.display());
     let mut targets = walk::targets_of(&land, b.group_shamt);
     if let Some(n) = args.limit {
         targets.truncate(n);
     }
 
-    let t = &walk::walk(&args, b.kind, PAGE_KEY_DEPTH - b.group_shamt, b.every, &targets, connect, one)?;
-    println!("[bake/{}] {} items across {} non-empty pages, {}", b.kind, t.items, t.baked, fmt_bytes(t.bytes as f64));
+    let t = &walk::walk(&args, b.kind, TILE_KEY_DEPTH - b.group_shamt, b.every, &targets, connect, one)?;
+    println!("[bake/{}] {} items across {} non-empty tiles, {}", b.kind, t.items, t.baked, fmt_bytes(t.bytes as f64));
 
     let (objects, bytes) = measure_output(&args.out).map_err(|e| e.to_string())?;
     let mut fields = serde_json::json!({

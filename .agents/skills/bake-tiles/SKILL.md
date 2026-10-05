@@ -243,7 +243,7 @@ the set back in to see the bake.
 ## POI
 
 POI is a second layer of terrain's pyramid: the same pages, zooms and names,
-holding, per cell (`pxl-spec bake/poi_page.rs`, one XTP tree), a count of
+holding, per cell (`pxl-spec bake/poi_tile.rs`, one XTP tree), a count of
 places and, of each kind, the place of least id with the leaf cell it
 stands in — its names, held to 32 code points, the source's own id and its
 kind by name, from a pool of places held once a page. A kind is the place's

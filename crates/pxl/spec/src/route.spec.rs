@@ -31,7 +31,7 @@ pub const GEO_ROOT: &str = "/geo";
 /// shape rather than assembling one on the day it is written.
 pub const API_ROOT: &str = "/api";
 
-/// Baked pages — terrain, POI and reverse geocode — by kind, version and
+/// Baked tiles — terrain, POI and reverse geocode — by kind, version and
 /// quadkey. Its own root for the reason the asset root is: the bake puts
 /// them in the bucket and the edge serves them, so neither server answers
 /// them, and the edge tells them from the geo server's routes by the root
@@ -45,7 +45,7 @@ pub const TILE_ROOT: &str = "/tile";
 /// application's it would be claiming to be state.
 pub const ASSET_ROOT: &str = "/asset";
 
-/// Forward search, the one geo query with no finite page to bake it against.
+/// Forward search, the one geo query with no finite tile to bake it against.
 pub const SEARCH_URL: &str = "/geo/search";
 
 /// Ops routes, behind the shared admin token. One per root rather than one

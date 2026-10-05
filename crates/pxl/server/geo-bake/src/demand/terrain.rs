@@ -3,13 +3,13 @@
 use super::job;
 use crate::coverage::Coverage;
 use crate::terrain::absent::Absence;
-use pxl_spec::space::pyramid::Page;
+use pxl_spec::space::pyramid::Tile;
 
-/// Each page's rows the deck solve read and each structure it solved, kept
-/// for the pages around while the server runs.
+/// Each tile's rows the deck solve read and each structure it solved, kept
+/// for the tiles around while the server runs.
 pub(super) const SOURCE: &str = ".source";
 
-pub(super) fn execute(p: Page, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
+pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
     use crate::terrain::{leaf, repository::TerrainRepository};
     use pxl_spec::bake::format::Terrain;
     super::pyramid::execute::<Terrain>(
@@ -18,7 +18,7 @@ pub(super) fn execute(p: Page, cache: &std::path::Path, out: &std::path::Path, s
         out,
         || {
             let (_, mut client) = job::connect(&leaf::READS, seconds)?;
-            if !leaf::has_ground(&mut client, &[p.page]).map_err(|e| e.to_string())?[0] {
+            if !leaf::has_ground(&mut client, &[p.tile]).map_err(|e| e.to_string())?[0] {
                 return Ok(None);
             }
             let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client).map_err(|e| e.to_string())?);
@@ -29,7 +29,7 @@ pub(super) fn execute(p: Page, cache: &std::path::Path, out: &std::path::Path, s
                 repo: &repo,
                 store: &mut crate::deck::source::Disk(&memo),
             };
-            Ok(Some(leaf::bake_leaf(reader, p.page)?.0))
+            Ok(Some(leaf::bake_leaf(reader, p.tile)?.0))
         },
         &Absence::new(Coverage::of_source()?),
     )

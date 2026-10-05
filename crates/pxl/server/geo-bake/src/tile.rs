@@ -1,4 +1,4 @@
-// pxl-geo-bake/page.rs
+// pxl-geo-bake/tile.rs
 
 pub mod bake;
 pub mod rekey;

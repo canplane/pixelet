@@ -119,7 +119,7 @@ A web map's zoom is the 3857 adapter's alone (`zoom_of`), for comparing with one
   width, is a second owner; `check:rules` refuses it outside `space/`.
 - **A layer is a payload and a one-zoom fold, and nothing else.** Which
   pages are wanted is the observation's demand (`world/pyramid.rs`
-  `observe`), which are held residency's (`world/paging.rs`), when they are
+  `observe`), which are held residency's (`world/residency.rs`), when they are
   fetched the scheduler's (`io/sched.rs`), and a page is folded only by the
   bake's `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not
   data — terrain folds by majority and average, POI by sum.

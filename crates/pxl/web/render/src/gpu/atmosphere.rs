@@ -5,8 +5,8 @@
 //! redrawn only when the light's height or the camera's altitude moves (the
 //! table is kept relative to the light's azimuth); and every frame the exposure.
 
-use pxl_spec::bake::earth_page::{EARTH_TEXELS, EARTH_Z};
-use pxl_spec::space::lod::{fault_radius, FAULT_ACROSS, FAULT_PAGES};
+use pxl_spec::bake::earth_tile::{EARTH_TEXELS, EARTH_Z};
+use pxl_spec::space::lod::{demand_reach, REACH_ACROSS, REACH_TILES};
 use pxl_spec::space::pyramid::around;
 use pxl_spec::space::v3::V3;
 
@@ -59,16 +59,16 @@ pub(crate) const CLOUD_GONE: usize = 47;
 pub(crate) const CITY_LIGHT: usize = 48;
 pub(crate) const EARTH_REACH: usize = 51;
 pub(crate) const EARTH_WINDOW: usize = 52;
-pub(crate) const EARTH_PAGES: usize = 56;
+pub(crate) const EARTH_TILES: usize = 56;
 
 /// Bindings 8 through 19, ten entries of five words.
 pub const AIR_WORDS: usize = 50;
 
-/// A layer for each page the Earth layer's floor holds at once: its residency's frames.
-pub const EARTH_LAYERS: u32 = FAULT_PAGES;
-/// A page's layer plus one in four bits, eight to a word.
-pub(crate) const PAGE_BITS: u32 = 4;
-const _: () = assert!(EARTH_LAYERS < 1 << PAGE_BITS && FAULT_PAGES <= 32 / PAGE_BITS * 4, "the window's layers fit their word");
+/// A layer for each tile the Earth layer's floor holds at once: its residency's frames.
+pub const EARTH_LAYERS: u32 = REACH_TILES;
+/// A tile's layer plus one in four bits, eight to a word.
+pub(crate) const TILE_BITS: u32 = 4;
+const _: () = assert!(EARTH_LAYERS < 1 << TILE_BITS && REACH_TILES <= 32 / TILE_BITS * 4, "the window's layers fit their word");
 
 /// The size bake_earth writes the Earth's global picture at.
 const EARTH_SIZE: (u32, u32) = (2048, 1024);
@@ -102,7 +102,7 @@ pub struct Atmosphere {
     sun_mu: f32,
     moon_mu: f32,
     earth: ImageMap,
-    earth_pages: (u32, u32),
+    earth_tiles: (u32, u32),
 }
 
 impl Atmosphere {
@@ -141,8 +141,8 @@ impl Atmosphere {
             words[at] = v as f32;
         }
         words[SUN_DIR + 2] = 1.0;
-        words[EARTH_REACH] = fault_radius(EARTH_Z) as f32;
-        words[EARTH_WINDOW + 2] = f32::from_bits(FAULT_ACROSS);
+        words[EARTH_REACH] = demand_reach(EARTH_Z) as f32;
+        words[EARTH_WINDOW + 2] = f32::from_bits(REACH_ACROSS);
         words[EARTH_WINDOW + 3] = f32::from_bits(around(EARTH_Z) as u32);
 
         let sampler = object();
@@ -178,7 +178,7 @@ impl Atmosphere {
             sun_mu: 1.0,
             moon_mu: 1.0,
             earth: ImageMap::new(g, EARTH_SIZE.0, EARTH_SIZE.1),
-            earth_pages: {
+            earth_tiles: {
                 let (texture, view) = (object(), object());
                 g.texture(
                     texture,
@@ -235,17 +235,17 @@ impl Atmosphere {
         e[20..25].copy_from_slice(&[13, resource::VIEW, self.views[EXPOSURE_TEXEL], 0, 0]);
         e[25..30].copy_from_slice(&[15, resource::VIEW, self.views[MOON_VIEW], 0, 0]);
         e[30..35].copy_from_slice(&[16, resource::VIEW, self.earth.view, 0, 0]);
-        e[35..40].copy_from_slice(&[17, resource::VIEW, self.earth_pages.1, 0, 0]);
+        e[35..40].copy_from_slice(&[17, resource::VIEW, self.earth_tiles.1, 0, 0]);
         e[40..45].copy_from_slice(&[18, resource::VIEW, self.views[IRRADIANCE], 0, 0]);
         e[45..50].copy_from_slice(&[12, resource::VIEW, self.views[MULTISCATTER], 0, 0]);
         e
     }
 
-    /// The Earth layer's pages: what has come goes into its layer as the
-    /// stream has room, and the window says which layer each page reads.
+    /// The Earth layer's tiles: what has come goes into its layer as the
+    /// stream has room, and the window says which layer each tile reads.
     /// Written by `lay_out`, which the renderer calls after this.
-    pub fn set_earth_pages(&mut self, g: &Gpu, window: [i32; 2], layers: &[u32], upload: &mut Upload) {
-        let texture = self.earth_pages.0;
+    pub fn set_earth_tiles(&mut self, g: &Gpu, window: [i32; 2], layers: &[u32], upload: &mut Upload) {
+        let texture = self.earth_tiles.0;
         upload(&mut |layer, texels| {
             if !room(texels.len() as u32) {
                 return false;
@@ -256,12 +256,12 @@ impl Atmosphere {
         let w = &mut self.words;
         w[EARTH_WINDOW] = f32::from_bits(window[0] as u32);
         w[EARTH_WINDOW + 1] = f32::from_bits(window[1] as u32);
-        let per_word = (32 / PAGE_BITS) as usize;
+        let per_word = (32 / TILE_BITS) as usize;
         let mut packed = [0u32; 4];
         for (k, &layer) in layers.iter().enumerate() {
-            packed[k / per_word] |= layer << (PAGE_BITS * (k % per_word) as u32);
+            packed[k / per_word] |= layer << (TILE_BITS * (k % per_word) as u32);
         }
-        for (w, p) in w[EARTH_PAGES..EARTH_PAGES + 4].iter_mut().zip(packed) {
+        for (w, p) in w[EARTH_TILES..EARTH_TILES + 4].iter_mut().zip(packed) {
             *w = f32::from_bits(p);
         }
     }

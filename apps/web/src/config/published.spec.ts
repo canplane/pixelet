@@ -8,9 +8,9 @@
  * the day it was baked with that day's count, 1 for the first. What it was
  * baked from and by is its manifest's to say, not its name's.
  *
- * A published folder is immutable, so a cache never holds a page another
+ * A published folder is immutable, so a cache never holds a tile another
  * replaced and going back is naming the folder before. Every bake is a new
- * name, each kind its own; only a change to how the client reads a page
+ * name, each kind its own; only a change to how the client reads a tile
  * bumps the format. Setting a name here is the whole change.
  */
 export const PUBLISHED_VERSION = {
@@ -35,7 +35,7 @@ export interface TileSource {
  * What the published bake declares of itself to the client: `top_z`, the
  * coarsest zoom of the pyramid it supplies whole, terrain and POI alike. The
  * client's floor is held there, all around the eye, and the far edge is where
- * that zoom ends (pxl-kernel world/paging/floor.rs). The dev tile server
+ * that zoom ends (pxl-kernel world/residency/floor.rs). The dev tile server
  * answers the same object at the tile root's `source`, with its `--top-z`
  * (pxl-geo-bake bin/serve_tiles.rs); neither is guessed from what fails.
  */

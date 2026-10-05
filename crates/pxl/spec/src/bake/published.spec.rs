@@ -7,9 +7,9 @@
 /// the day it was baked with that day's count, 1 for the first. What it was
 /// baked from and by is its manifest's to say, not its name's.
 ///
-/// A published folder is immutable, so a cache never holds a page another
+/// A published folder is immutable, so a cache never holds a tile another
 /// replaced and going back is naming the folder before. Every bake is a new
-/// name, each kind its own; only a change to how the client reads a page
+/// name, each kind its own; only a change to how the client reads a tile
 /// bumps the format. Setting a name here is the whole change.
 pub struct PublishedVersion {
     pub terrain: &'static str,
@@ -26,7 +26,7 @@ pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {
 };
 
 /// The format each bake writes now, which a bake's folder is named by with
-/// its day. Bumped only by a change to how the client reads a page.
+/// its day. Bumped only by a change to how the client reads a tile.
 pub struct Format {
     pub terrain: u32,
     pub poi: u32,
@@ -83,7 +83,7 @@ impl PublishedVersion {
 /// What the published bake declares of itself to the client: `top_z`, the
 /// coarsest zoom of the pyramid it supplies whole, terrain and POI alike. The
 /// client's floor is held there, all around the eye, and the far edge is where
-/// that zoom ends (pxl-kernel world/paging/floor.rs). The dev tile server
+/// that zoom ends (pxl-kernel world/residency/floor.rs). The dev tile server
 /// answers the same object at the tile root's `source`, with its `--top-z`
 /// (pxl-geo-bake bin/serve_tiles.rs); neither is guessed from what fails.
 pub const PUBLISHED_TOP_Z: crate::space::zoom::Zoom = 5;

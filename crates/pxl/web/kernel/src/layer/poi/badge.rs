@@ -2,8 +2,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use pxl_spec::bake::poi_page::{kind_color, kind_icon, Place, PoiPage};
-use pxl_spec::space::pyramid::Page;
+use pxl_spec::bake::poi_tile::{kind_color, kind_icon, Place, PoiTile};
+use pxl_spec::space::pyramid::Tile;
 
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::text::text_width;
@@ -19,28 +19,28 @@ use xpute_core::status::errno::Errno;
 pub const HEIGHT: f64 = 37.0;
 pub const ANCHOR: f64 = 34.0;
 
-/// A count, or the one place a cell holds by its index in its page's pool.
+/// A count, or the one place a cell holds by its index in its tile's pool.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Label {
     /// Count, and whether it is a floor.
     Count(u32, bool),
     Place {
-        page: Page,
+        tile: Tile,
         place: u32,
     },
 }
 
 impl Label {
-    /// Nameless once that page has gone.
-    fn place(page: Page, place: u32) -> Place<'static> {
-        PoiPage::pyramid().paging().get(page).map_or(Place::default(), |p| p.places.get(place))
+    /// Nameless once that tile has gone.
+    fn place(tile: Tile, place: u32) -> Place<'static> {
+        PoiTile::pyramid().residency().get(tile).map_or(Place::default(), |p| p.places.get(place))
     }
 
     pub fn text(self) -> String {
         match self {
             Label::Count(n, partial) => format!("{n}{}", if partial { "+" } else { "" }),
-            Label::Place { page, place } => {
-                let full = Label::place(page, place).name;
+            Label::Place { tile, place } => {
+                let full = Label::place(tile, place).name;
                 let mut shown: String = full.chars().take(SHOWN_CHARS).collect();
                 if full.chars().count() > SHOWN_CHARS {
                     shown.push('…');
@@ -105,8 +105,8 @@ pub fn slot(label: Label) -> i32 {
                     label: label.text(),
                     logical_w: b.width,
                 },
-                Label::Place { page, place } => {
-                    let kind = Label::place(page, place).kind;
+                Label::Place { tile, place } => {
+                    let kind = Label::place(tile, place).kind;
                     DrawSpec::Place {
                         name: label.text(),
                         icon: kind_icon(kind),

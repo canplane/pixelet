@@ -1,7 +1,7 @@
 // pxl-kernel/layer/poi/placement.rs
 
 //! Where the POI counts are drawn: one badge per POI-lattice cell under each
-//! drawn chunk, read from the page that settles that ground,
+//! drawn chunk, read from the tile that settles that ground,
 //! standing at a leaf cell's center on the surface a ray down meets first.
 
 use crate::control::camera::controller::units_per_px_at;
@@ -20,7 +20,7 @@ use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
 use xpute_runtime::global::Global;
 
-use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
+use pxl_spec::bake::poi_tile::{PoiTile, POI_LATTICE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{nearest, projection, REACH};
 use pxl_spec::space::pyramid::{Cell, GROUND, LEAF_Z};
@@ -39,7 +39,7 @@ struct Placement {
     /// Kept so a settled turn asks the heap for nothing. Each with the scale
     /// it shows at and where in its POI cell that scale is read.
     found: Vec<(Cell, Label, Cell, f64, Shown, [f64; 3])>,
-    /// The drawn chunks, the pages and the heights `found` was read from: an
+    /// The drawn chunks, the tiles and the heights `found` was read from: an
     /// eye move that changes none of them casts no ray.
     found_for: Option<(u32, u32, (u32, u32))>,
     mounted: Vec<(Chunk, bool, bool)>,
@@ -90,12 +90,12 @@ pub fn step(ctx: &mut TickContext) {
         badge::retain(&HashSet::new());
         return;
     }
-    let pages = PoiPage::pyramid();
+    let tiles = PoiTile::pyramid();
     if crate::world::pyramid::domain::current().is_none() {
         return;
     }
     let sched = &crate::kernel::kernel().sched;
-    let key = Some((sched.drawn_revision(), pages.paging().revision(), crate::world::observation::heights_revision()));
+    let key = Some((sched.drawn_revision(), tiles.residency().revision(), crate::world::observation::heights_revision()));
     let stale = p.found_for != key;
     p.found_for = key;
     let mut found = core::mem::take(&mut p.found);
@@ -105,13 +105,13 @@ pub fn step(ctx: &mut TickContext) {
     }
     let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
-        let Some(src) = pages.paging().source(chunk.page()) else { continue };
-        let Some(poi) = pages.paging().get(src) else { continue };
+        let Some(src) = tiles.residency().source(chunk.tile()) else { continue };
+        let Some(poi) = tiles.residency().get(src) else { continue };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.
         let (side, cell) = (chunk.column().0, POI_LATTICE.cell_zoom(src.z));
         let m = if cell >= side { count(cell, side) } else { 0 };
-        let [x0, y0] = POI_LATTICE.cell_of(src.z, &Pvf3 { i: chunk.corner(), f: 0 }).in_page();
+        let [x0, y0] = POI_LATTICE.cell_of(src.z, &Pvf3 { i: chunk.corner(), f: 0 }).in_tile();
         let (h0, h1) = chunk.z_range();
         for ty in y0..y0 + m.max(1) {
             let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + m.max(1), ty));
@@ -121,7 +121,7 @@ pub fn step(ctx: &mut TickContext) {
                 // Near, a place or a count; farther, only a prominent enough place.
                 // A count stands at its cell's middle.
                 let all = match (c.count, poi.shown(c).next()) {
-                    (1, Some((place, _, at))) => (Label::Place { page: src, place }, cell.inner_at(GROUND, LEAF_Z, at)),
+                    (1, Some((place, _, at))) => (Label::Place { tile: src, place }, cell.inner_at(GROUND, LEAF_Z, at)),
                     _ => (Label::Count(c.count, c.partial), GROUND.cell_of(LEAF_Z, &cell.mid())),
                 };
                 let major = poi
@@ -129,7 +129,7 @@ pub fn step(ctx: &mut TickContext) {
                     .map(|(i, p, at)| (i, rank_of(p.kind), at))
                     .filter(|s| s.1 <= POI_MAJOR_RANK)
                     .min_by_key(|s| s.1)
-                    .map(|(place, _, at)| (Label::Place { page: src, place }, cell.inner_at(GROUND, LEAF_Z, at)));
+                    .map(|(place, _, at)| (Label::Place { tile: src, place }, cell.inner_at(GROUND, LEAF_Z, at)));
                 let mid = cell.mid();
                 let mid = projection::unproject(mid.i, mid.f);
                 let mid = [nearest(mid[0], chunk.rect().0), mid[1]];

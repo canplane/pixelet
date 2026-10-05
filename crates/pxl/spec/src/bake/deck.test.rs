@@ -166,7 +166,7 @@ fn the_boxes_answer_what_every_segment_does() {
     let frame = Some(Frame { corner: [0.0, 0.0], cell: 2.0 });
     for round in 0..4 {
         let mut b = Builder::default();
-        // Lines that wander past the page's edge, long single segments across it,
+        // Lines that wander past the tile's edge, long single segments across it,
         // and every width up to the widest.
         for line in 0..60 {
             let n = 2 + (rng() * 30.0) as usize;
@@ -183,7 +183,7 @@ fn the_boxes_answer_what_every_segment_does() {
         }
         let d = b.finish();
         for k in 0..2000 {
-            // A tenth on the edges of the page and of the eighth points a leaf spans.
+            // A tenth on the edges of the tile and of the eighth points a leaf spans.
             let at = if k % 10 == 0 {
                 [f64::from(k % 513), (rng() * 64.0).round() * 8.0]
             } else {

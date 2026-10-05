@@ -1,7 +1,7 @@
 // pxl-kernel/layer/decor/cell.rs
 
 //! Decor as a payload of the chunks the terrain materializes: each mounted
-//! chunk holds the decor standing inside it, built over its zoom's page and
+//! chunk holds the decor standing inside it, built over its zoom's tile and
 //! the object store, and drawn while the chunk is. A block is immutable once
 //! built; how each instance is drawn (`present`) is decided per frame and
 //! rebuilds nothing.
@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
-use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource};
+use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, TileSource};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, LEAF_Z};
@@ -58,10 +58,10 @@ impl Block {
     }
 }
 
-/// What a population depends on beyond its page and the seed.
+/// What a population depends on beyond its tile and the seed.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Sources {
-    /// The zoom of the page it is built from, coarser until its own comes.
+    /// The zoom of the tile it is built from, coarser until its own comes.
     read_from: Zoom,
     revision: u32,
     shown: bool,
@@ -121,7 +121,7 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
         DecorHide::Scattered([x, y, _]) => chunk.z() == LEAF_Z && inside(x, y),
     });
     Some(Sources {
-        read_from: Terrain::pyramid().paging().drawn_from(chunk.page())?.z,
+        read_from: Terrain::pyramid().residency().drawn_from(chunk.tile())?.z,
         revision,
         shown: settings_store().decor,
         hide,
@@ -129,10 +129,10 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
 }
 
 fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
-    let pages = Terrain::pyramid();
-    // The page the terrain draws the chunk from, read over the chunk of its zoom.
-    let src = pages.paging().drawn_from(chunk.page())?;
-    let page = pages.paging().get(src)?;
+    let tiles = Terrain::pyramid();
+    // The tile the terrain draws the chunk from, read over the chunk of its zoom.
+    let src = tiles.residency().drawn_from(chunk.tile())?;
+    let tile = tiles.residency().get(src)?;
     let mut over = chunk;
     while over.z() > src.z {
         over = over.parent()?;
@@ -141,12 +141,12 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
     let (cx0, cy0, _) = chunk.rect();
     let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
-    let (tx0, ty0) = over.in_page();
-    let view = Builder::page_view(page);
+    let (tx0, ty0) = over.in_tile();
+    let view = Builder::tile_view(tile);
     if sources.shown {
         let around = Around {
-            own: PageSource {
-                page: view,
+            own: TileSource {
+                tile: view,
                 frame: Frame::of(src),
                 origin: [0, 0],
                 n: 1,
@@ -173,7 +173,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         false => c.folded.clear(),
     }
     let ground = Ground {
-        page: &view,
+        tile: &view,
         sample: &c.sample,
         z,
         x0,

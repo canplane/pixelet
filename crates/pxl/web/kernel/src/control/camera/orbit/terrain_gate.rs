@@ -42,7 +42,7 @@ pub fn pose(view: ViewTriple) -> Option<ViewPose> {
     })
 }
 
-/// None where no page is resident. Asked from the eye's own cell, so a cave's
+/// None where no tile is resident. Asked from the eye's own cell, so a cave's
 /// floor counts where the eye is in the cave.
 fn required_rise(at: &ViewPose) -> Option<f64> {
     let (_, eye) = eye(at);

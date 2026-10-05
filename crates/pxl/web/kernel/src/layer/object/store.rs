@@ -292,8 +292,8 @@ pub fn object_col_revision(col_idx: IVec) -> u32 {
 
 // ---- Persistence ----
 //
-// Per page: [page_idx u64, x f32[], y f32[], z f32[], size f32[], value u32[]],
-// positions page-local. A placed decor's facing is derived from its position,
+// Per tile: [tile_idx u64, x f32[], y f32[], z f32[], size f32[], value u32[]],
+// positions tile-local. A placed decor's facing is derived from its position,
 // so it is not stored. The layout's version is in the storage key; a blob of
 // another layout is never read. Positions round-trip exactly in f32.
 pub fn object_cols() -> Vec<IVec> {
@@ -302,7 +302,7 @@ pub fn object_cols() -> Vec<IVec> {
 }
 
 #[derive(Default)]
-struct PageRows {
+struct TileRows {
     x: Vec<f32>,
     y: Vec<f32>,
     z: Vec<f32>,
@@ -310,21 +310,21 @@ struct PageRows {
     value: Vec<u32>,
 }
 
-fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
-    let page_idx = TO_XY(idx(LEAF_Z, from_idx(BAND, col_idx)));
-    let page_base = from_idx(LEAF_Z, page_idx);
-    let slot = match by_page.iter().position(|(p, _)| *p == page_idx) {
+fn collect_col(by_tile: &mut Vec<(IVec, TileRows)>, col_idx: IVec) {
+    let tile_idx = TO_XY(idx(LEAF_Z, from_idx(BAND, col_idx)));
+    let tile_base = from_idx(LEAF_Z, tile_idx);
+    let slot = match by_tile.iter().position(|(p, _)| *p == tile_idx) {
         Some(slot) => slot,
         None => {
-            by_page.push((page_idx, PageRows::default()));
-            by_page.len() - 1
+            by_tile.push((tile_idx, TileRows::default()));
+            by_tile.len() - 1
         }
     };
-    let rows = &mut by_page[slot].1;
+    let rows = &mut by_tile[slot].1;
     each_col_entry(col_idx, &mut |entry| {
         let corner = entry.corner();
         let local = Pvf3 {
-            i: ivec::sub(corner.i, page_base),
+            i: ivec::sub(corner.i, tile_base),
             f: corner.f,
         };
         rows.x.push(pvf3::to_real(pvf3::X(&local)) as f32);
@@ -335,16 +335,16 @@ fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
     });
 }
 
-fn encode_pages(by_page: &[(IVec, PageRows)]) -> Result<String, MarshalError> {
+fn encode_tiles(by_tile: &[(IVec, TileRows)]) -> Result<String, MarshalError> {
     let mut tree = TreeView::new();
     tree.branch(Some(&mut |b| {
-        for (page_idx, rows) in by_page {
+        for (tile_idx, rows) in by_tile {
             if rows.value.is_empty() {
                 continue;
             }
             let value = &rows.value;
             b.branch(Some(&mut |p| {
-                p.u64(Some(*page_idx))
+                p.u64(Some(*tile_idx))
                     .f32_array(Some(&rows.x))
                     .f32_array(Some(&rows.y))
                     .f32_array(Some(&rows.z))
@@ -370,13 +370,13 @@ fn decode_objects(blob: &str) -> Result<(), MarshalError> {
     let mut writes = Vec::new();
     let result = (|| {
         for k in 0..root.len {
-            let page = root.at_branch(k)?;
-            let page_base = from_idx(LEAF_Z, page.at(0)?.get_u64()?);
-            let (x, y, z) = (page.at(1)?.get_array::<f32>()?, page.at(2)?.get_array::<f32>()?, page.at(3)?.get_array::<f32>()?);
-            let (size, value) = (page.at(4)?.get_array::<f32>()?, page.at(5)?.get_array::<u32>()?);
-            let base = ivec::to_v3(page_base);
+            let tile = root.at_branch(k)?;
+            let tile_base = from_idx(LEAF_Z, tile.at(0)?.get_u64()?);
+            let (x, y, z) = (tile.at(1)?.get_array::<f32>()?, tile.at(2)?.get_array::<f32>()?, tile.at(3)?.get_array::<f32>()?);
+            let (size, value) = (tile.at(4)?.get_array::<f32>()?, tile.at(5)?.get_array::<u32>()?);
+            let base = ivec::to_v3(tile_base);
             for r in 0..value.len() {
-                // Stored against its page's corner, so an f32 resolves it.
+                // Stored against its tile's corner, so an f32 resolves it.
                 let corner = world_to_canonical(&[base[0] + x[r] as f64, base[1] + y[r] as f64, base[2] + z[r] as f64]);
                 writes.push(write_of(&corner, size[r] as f64, value[r]));
             }
@@ -427,7 +427,7 @@ fn loaded() {
 }
 
 /// A save encodes the whole store, so it is put off to merge a burst of
-/// writes; what is pending is flushed when the page hides.
+/// writes; what is pending is flushed when the tile hides.
 const SAVE_DELAY_MS: f64 = 300.0;
 
 fn save() {
@@ -453,7 +453,7 @@ pub fn flush_save_if_due() {
 }
 
 /// Walks the columns on the turn quota. A walk the store moved under is
-/// dropped and redone; the save counts as done only once written, so a page
+/// dropped and redone; the save counts as done only once written, so a tile
 /// hiding mid-walk still flushes it.
 pub async fn save_task() {
     loop {
@@ -462,7 +462,7 @@ pub async fn save_task() {
             continue;
         }
         let revision = objects_revision();
-        let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
+        let mut by_tile: Vec<(IVec, TileRows)> = Vec::new();
         let mut whole = true;
         for col_idx in object_cols() {
             yield_if_spent(world_edge).await;
@@ -470,7 +470,7 @@ pub async fn save_task() {
                 whole = false;
                 break;
             }
-            collect_col(&mut by_page, col_idx);
+            collect_col(&mut by_tile, col_idx);
         }
         yield_if_spent(world_edge).await;
         if !whole || objects_revision() != revision {
@@ -480,7 +480,7 @@ pub async fn save_task() {
         if store_state().save_due_ms.take().is_none() {
             continue;
         }
-        if let Ok(blob) = encode_pages(&by_page) {
+        if let Ok(blob) = encode_tiles(&by_tile) {
             keep(blob);
         }
     }
@@ -490,11 +490,11 @@ pub fn flush_save() {
     if store_state().save_due_ms.take().is_none() {
         return;
     }
-    let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
+    let mut by_tile: Vec<(IVec, TileRows)> = Vec::new();
     for col_idx in object_cols() {
-        collect_col(&mut by_page, col_idx);
+        collect_col(&mut by_tile, col_idx);
     }
-    if let Ok(blob) = encode_pages(&by_page) {
+    if let Ok(blob) = encode_tiles(&by_tile) {
         keep(blob);
     }
 }
@@ -694,7 +694,7 @@ fn named_top(x: i64) -> (i64, i64) {
 }
 
 /// The coarsest cube the index keeps: as tall as `REACH` and as wide as the
-/// coarsest page, so any query box meets at most eight of them.
+/// coarsest tile, so any query box meets at most eight of them.
 const INDEX_TOP: Zoom = {
     let tall = REACH.max[2] - REACH.min[2];
     let wide = units(TOP_Z);

@@ -2,7 +2,7 @@
 
 //! The coverage gizmo (the `gizmos` setting), as translucent debug lines: the
 //! drawn pieces, the goal's pieces nothing drawn covers and the drawn pieces'
-//! pages, each colored as its `Mark` says.
+//! tiles, each colored as its `Mark` says.
 //! Every line is cut at each edge's ends on it, and each stretch drawn once in
 //! the highest mark over it, straight between its ends on the ground:
 //! overlaid, the lines read as none of them, and laid along the ground they
@@ -13,15 +13,15 @@ use std::collections::{HashMap, HashSet};
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pyramid::{Page, LEAF_Z};
+use pxl_spec::space::pyramid::{Tile, LEAF_Z};
 use pxl_spec::space::v3::V3;
 
 use crate::layer::marker::debug_lines::DebugLines;
 use crate::world::access::Access;
 use crate::world::frame::view::view;
-use crate::world::paging::floor;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer as _;
+use crate::world::residency::floor;
 use pxl_spec::space::zoom::{units, Zoom};
 
 /// What an edge marks, lowest first: a stretch takes the highest over it.
@@ -29,22 +29,22 @@ use pxl_spec::space::zoom::{units, Zoom};
 enum Mark {
     /// White, solid: a drawn piece.
     Drawn,
-    /// Cyan, solid: a drawn piece read from the floor's page alone.
+    /// Cyan, solid: a drawn piece read from the floor's tile alone.
     DrawnFromFloor,
-    /// Yellow, dashed: a goal piece with a page on its line, its mesh not yet built.
+    /// Yellow, dashed: a goal piece with a tile on its line, its mesh not yet built.
     Unbuilt,
-    /// Magenta, dashed: a goal piece only the floor's page can build.
+    /// Magenta, dashed: a goal piece only the floor's tile can build.
     FloorOnly,
-    /// Red, dashed: a goal piece with no page on its line.
-    NoPage,
-    /// Orange: a drawn piece's page.
-    Page,
+    /// Red, dashed: a goal piece with no tile on its line.
+    NoTile,
+    /// Orange: a drawn piece's tile.
+    Tile,
 }
 
 const MARKS: usize = Mark::ALL.len();
 
 impl Mark {
-    const ALL: [Mark; 6] = [Mark::Drawn, Mark::DrawnFromFloor, Mark::Unbuilt, Mark::FloorOnly, Mark::NoPage, Mark::Page];
+    const ALL: [Mark; 6] = [Mark::Drawn, Mark::DrawnFromFloor, Mark::Unbuilt, Mark::FloorOnly, Mark::NoTile, Mark::Tile];
 
     fn rgba(self) -> [f32; 4] {
         match self {
@@ -52,20 +52,20 @@ impl Mark {
             Mark::DrawnFromFloor => [0.0, 1.0, 1.0, 0.6],
             Mark::Unbuilt => [1.0, 1.0, 0.0, 0.6],
             Mark::FloorOnly => [1.0, 0.0, 1.0, 0.6],
-            Mark::NoPage => [1.0, 0.0, 0.0, 0.6],
-            Mark::Page => [1.0, 0.3, 0.0, 0.9],
+            Mark::NoTile => [1.0, 0.0, 0.0, 0.6],
+            Mark::Tile => [1.0, 0.3, 0.0, 0.9],
         }
     }
 
     fn dashed(self) -> bool {
-        matches!(self, Mark::Unbuilt | Mark::FloorOnly | Mark::NoPage)
+        matches!(self, Mark::Unbuilt | Mark::FloorOnly | Mark::NoTile)
     }
 }
 
 /// Dashes along a dashed stretch, every other one drawn.
 const DASHES: u32 = 16;
 
-/// What the lines were drawn for: the drawn set's, the goal's and the pages'
+/// What the lines were drawn for: the drawn set's, the goal's and the tiles'
 /// revisions, and the origin.
 type Seen = (u32, u32, u32, [u64; 3]);
 
@@ -95,10 +95,10 @@ impl CoverageGizmo {
             return;
         }
         self.seen = Some(seen);
-        let paging = Terrain::pyramid().paging();
+        let residency = Terrain::pyramid().residency();
         let top = floor::top().unwrap_or(LEAF_Z);
-        let lined: HashSet<Page> = Terrain::pyramid().demand().iter().map(|&p| line_top(p, top)).collect();
-        let floor_only = |p: Page| p.z <= top && !lined.contains(&p);
+        let lined: HashSet<Tile> = Terrain::pyramid().demand().iter().map(|&p| line_top(p, top)).collect();
+        let floor_only = |p: Tile| p.z <= top && !lined.contains(&p);
         let over: HashSet<Chunk> = drawn.iter().flat_map(|d| d.ancestors()).collect();
         let mut lines = Lines::default();
         for &g in goal {
@@ -106,23 +106,23 @@ impl CoverageGizmo {
             if covered {
                 continue;
             }
-            let mark = match paging.drawn_from(g.page()) {
-                None => Mark::NoPage,
+            let mark = match residency.drawn_from(g.tile()) {
+                None => Mark::NoTile,
                 Some(src) if floor_only(src) => Mark::FloorOnly,
                 Some(_) => Mark::Unbuilt,
             };
             lines.square(g.rect(), mark);
         }
-        let mut pages: Vec<Page> = Vec::with_capacity(drawn.len());
+        let mut tiles: Vec<Tile> = Vec::with_capacity(drawn.len());
         for &d in drawn {
-            let from_floor = paging.source(d.page()).is_none() && paging.drawn_from(d.page()).is_some_and(floor_only);
+            let from_floor = residency.source(d.tile()).is_none() && residency.drawn_from(d.tile()).is_some_and(floor_only);
             lines.square(d.rect(), if from_floor { Mark::DrawnFromFloor } else { Mark::Drawn });
-            pages.push(d.page());
+            tiles.push(d.tile());
         }
-        pages.sort_unstable();
-        pages.dedup();
-        for p in pages {
-            lines.square(p.rect(), Mark::Page);
+        tiles.sort_unstable();
+        tiles.dedup();
+        for p in tiles {
+            lines.square(p.rect(), Mark::Tile);
         }
         self.lane.clear();
         lines.lay(&mut self.lane, about, &Access::now());
@@ -134,7 +134,7 @@ impl CoverageGizmo {
     }
 }
 
-fn line_top(mut p: Page, top: Zoom) -> Page {
+fn line_top(mut p: Tile, top: Zoom) -> Tile {
     while p.z > top {
         p = p.parent();
     }

@@ -2,9 +2,9 @@
 
 //! Demands the dictionary, once a session, and the group the map center is
 //! in. A key with any answer is not asked again. Both sit behind every
-//! terrain page: a label must not take a credit from the ground.
+//! terrain tile: a label must not take a credit from the ground.
 
-use pxl_spec::bake::place_page::GROUP_SHAMT;
+use pxl_spec::bake::place_tile::GROUP_SHAMT;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 
 use crate::io::demand::{Ask, Category};

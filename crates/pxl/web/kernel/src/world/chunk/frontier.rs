@@ -9,7 +9,7 @@
 //! a coarsening (pieces replaced by their goal parent), or a fill (the
 //! coarsest piece that can be built over a goal piece with nothing drawn on
 //! its line, refined from there as any drawn piece is). Until then the coarser
-//! piece stays drawn, so a full arena or a missing page is latency, never a
+//! piece stays drawn, so a full arena or a missing tile is latency, never a
 //! hole.
 //!
 //! The arena is never overrun: a move starts only when all its slots are
@@ -52,8 +52,8 @@ fn wanted_zoom(near: f64, tau: Tau) -> Zoom {
 /// objects. The outermost (cover) pieces always take the coarsest cell zoom, one
 /// slot each.
 ///
-/// A chunk read from a coarser page still uses its own cell zoom: drawing it at
-/// that page's cells made blocks over the sea after a jump (2026-09-26).
+/// A chunk read from a coarser tile still uses its own cell zoom: drawing it at
+/// that tile's cells made blocks over the sea after a jump (2026-09-26).
 fn drawn_zoom(cell_zoom: Zoom, z: Zoom, outermost: bool, objects: bool) -> Zoom {
     if outermost {
         return chunk_zoom(z);

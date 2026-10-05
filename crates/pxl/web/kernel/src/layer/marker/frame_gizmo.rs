@@ -116,7 +116,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>) {
         }
         return;
     };
-    let key = (center, Terrain::pyramid().paging().revision(), azimuth());
+    let key = (center, Terrain::pyramid().residency().revision(), azimuth());
     if *drawn == Some(key) {
         return;
     }

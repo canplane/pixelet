@@ -7,7 +7,7 @@
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
-use pxl_render::gpu::renderer::{render_frame, EarthPages, FrameInput};
+use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 
 use crate::sched::profiler::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN, MB};
@@ -107,7 +107,7 @@ pub fn stage_render() {
         sheet: || load_image(Load::Sheet),
         moon: || load_image(Load::Asset(Asset::sky_moon_png)),
         earth: || load_image(Load::Asset(EARTH)),
-        earth_pages: EarthPages {
+        earth_tiles: EarthTiles {
             window,
             layers: &layers,
             upload: &mut earth_upload,

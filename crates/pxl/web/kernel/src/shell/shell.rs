@@ -3,7 +3,7 @@
 //! What the page's UI reads of the kernel (a Snapshot packet, handed over
 //! only when changed) and the commands it applies to the stores.
 
-use pxl_spec::bake::place_page::leaf_slot;
+use pxl_spec::bake::place_tile::leaf_slot;
 use pxl_spec::cell::object::{decor_num_id, placeable_cube_num_id};
 use pxl_spec::space::adapter::epsg4326;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -32,15 +32,15 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::indexer::idx;
 use pxl_spec::space::pyramid::LEAF_Z;
 
-/// The center page's place, broad to narrow. Every language is sent, so
+/// The center tile's place, broad to narrow. Every language is sent, so
 /// switching language re-reads rather than refetches.
-fn place_parts(page: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
-    let parts = page
+fn place_parts(tile: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
+    let parts = tile
         .zip(center_group())
         .zip(geocode_store::dict())
-        .and_then(|((page, group), dict)| {
+        .and_then(|((tile, group), dict)| {
             let group = geocode_store::group_of(group)?;
-            group.view.place_of(leaf_slot(ivec::X(page), ivec::Y(page)), &dict.view)
+            group.view.place_of(leaf_slot(ivec::X(tile), ivec::Y(tile)), &dict.view)
         })
         .into_iter()
         .flatten();
@@ -66,7 +66,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let settings = settings_store();
     let companion = companion_load_store();
     let at = crate::control::camera::controller::map_center();
-    let page = at.map(|c| idx(LEAF_Z, c.i));
+    let tile = at.map(|c| idx(LEAF_Z, c.i));
     let center = at.map(|c| {
         let g = epsg4326::unproject(c.i, c.f);
         LonLat { lon: g[0], lat: g[1] }
@@ -81,7 +81,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     }
     let snapshot = Snapshot {
         map: MapState {
-            // Loaded once ground is drawn, or every page the view needs has answered,
+            // Loaded once ground is drawn, or every tile the view needs has answered,
             // which over a source's void leaves nothing to draw.
             status: match crate::world::observation::eye() {
                 None => MapStatus::Idle,
@@ -90,7 +90,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             },
             is_off_center: map_navigation().is_off_center,
             center,
-            outside: at.is_some_and(|c| crate::layer::terrain::page::void_under(&c)),
+            outside: at.is_some_and(|c| crate::layer::terrain::tile::void_under(&c)),
         },
         location: LocationState {
             status: location.pose.status(),
@@ -117,7 +117,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         zooming: crate::control::camera::controller::zooming(),
         settings: &values,
         m_per_px: m_per_px(),
-        place: &|each| place_parts(page, each),
+        place: &|each| place_parts(tile, each),
         previews: &previews[..preview_cnt],
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);

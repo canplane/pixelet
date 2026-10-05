@@ -49,7 +49,7 @@ export const LIMITS = {
   ZOOMS: 24 as number,
 } as const;
 
-/** One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z. */
+/** One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z. */
 export const FRAME = {
   t: 0 as number,
   dt_ms: 1 as number,
@@ -84,9 +84,9 @@ export const FRAME = {
   mounts_added: 82 as number,
   mounts_removed: 83 as number,
   mounts_layouts: 84 as number,
-  pages_total: 85 as number,
-  zoom_pages: 86 as number,
-  pages_poi: 110 as number,
+  tiles_total: 85 as number,
+  zoom_tiles: 86 as number,
+  tiles_poi: 110 as number,
   heap_used_mb: 111 as number,
   heap_live_mb: 112 as number,
   heap_run_mb: 113 as number,
@@ -136,7 +136,7 @@ export const FRAME_GROUPS = {
   cap: ["cap_commit_left", "cap_mount_left", "cap_mount_full", "cap_record_refused"],
   work: ["work_scans", "work_bakes", "work_fine_peak", "work_coarse_peak"],
   q: ["q_terrain", "q_poi"],
-  pages: ["pages_total", "zoom_pages", "pages_poi"],
+  tiles: ["tiles_total", "zoom_tiles", "tiles_poi"],
   cover: ["cover_rule", "cover_drawn", "cover_gaps"],
   view: ["view_rays", "view_visits"],
   device: ["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"],
@@ -340,7 +340,7 @@ export const SUMMARY = {
     requests: 1 as number,
     WORDS: 2 as number,
   },
-  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from. */
+  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from. */
   view: {
     AT: 630 as number,
     dist: 0 as number,

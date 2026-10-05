@@ -141,14 +141,14 @@ fn the_cover_is_the_sources_top() {
     let top = 13;
     let o = Observation {
         top,
-        far: fault_radius(top),
-        ..eye(EYE, Some([1.0, 0.1, -0.2]), fault_radius(top), GROUND)
+        far: demand_reach(top),
+        ..eye(EYE, Some([1.0, 0.1, -0.2]), demand_reach(top), GROUND)
     };
     let mut d = domain(o, &World::flat(GROUND));
     assert!(d.roots().iter().all(|c| c.z() == top), "a root not of the source's top");
     for (tau, pieces, splits) in cuts(&mut d) {
         assert!(pieces.iter().chain(&splits).all(|c| c.z() >= top), "{tau:?}: a piece or split over the source's top");
-        for p in around(EYE, fault_radius(top) * 0.5, GROUND) {
+        for p in around(EYE, demand_reach(top) * 0.5, GROUND) {
             assert_eq!(pieces_at(&pieces, p).len(), 1, "{tau:?}: {p:?} in a gap or under two pieces");
         }
     }

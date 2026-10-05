@@ -1,20 +1,20 @@
-// pxl-spec/bake/poi_page.rs
+// pxl-spec/bake/poi_tile.rs
 
-//! The POI layer's page: per occupied `POI_LATTICE` cell, how many places
+//! The POI layer's tile: per occupied `POI_LATTICE` cell, how many places
 //! stand in it and, of each kind, the named place of least id with the leaf
 //! cell it stands in. Least id is stable across zooms and says nothing
 //! of prominence; which to show is the reader's choice. Folding sums counts
 //! and keeps the least id per kind, so a count agrees with the leaves at any
-//! zoom. A page holds what any source can give — a place's own id, its kind
-//! by name, its names — so Overture, Naver or Google fill the same page; it
-//! is one XTP tree, as every other baked page is.
+//! zoom. A tile holds what any source can give — a place's own id, its kind
+//! by name, its names — so Overture, Naver or Google fill the same tile; it
+//! is one XTP tree, as every other baked tile is.
 
 use std::collections::HashMap;
 
 use crate::bake::constant::CELL;
 use crate::bake::poi_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
 use crate::space::pvf3::pvf3::Pvf3;
-use crate::space::pyramid::{Folds, Lattice, Page, GROUND, LEAF_Z, TOP_Z};
+use crate::space::pyramid::{Folds, Lattice, Tile, GROUND, LEAF_Z, TOP_Z};
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
@@ -28,9 +28,9 @@ use crate::space::zoom::Zoom;
 /// does not.
 pub const POI_LATTICE: Lattice = Lattice::new(CELL - 6);
 
-const CELLS: u32 = POI_LATTICE.page_cells() * POI_LATTICE.page_cells();
+const CELLS: u32 = POI_LATTICE.tile_cells() * POI_LATTICE.tile_cells();
 
-/// The longest name a page holds, in code points; a longer one is cut to end
+/// The longest name a tile holds, in code points; a longer one is cut to end
 /// in an ellipsis. At 32, 99% of the places Overture names in Korea are whole
 /// (their names' 99th percentile, measured 2026-09-25). What a badge shows of
 /// it is the client's.
@@ -47,7 +47,7 @@ const _: () = assert!(
 
 /// An occupied cell. `partial` marks a count that is a floor: a source that
 /// answers a few at a time gave only the first of a crowd. Its places are a
-/// run of the page's `shown`, one of each kind, by kind.
+/// run of the tile's `shown`, one of each kind, by kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PoiCell {
     pub cell: u32,
@@ -143,7 +143,7 @@ impl std::hash::Hash for Langs<'_> {
     }
 }
 
-/// A page's places, each once, in a few buffers a page.
+/// A tile's places, each once, in a few buffers a tile.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Places {
     names: Strings,
@@ -219,7 +219,7 @@ pub fn kind_color(kind: u8) -> u32 {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct PoiPage {
+pub struct PoiTile {
     /// Ascending by cell index.
     pub cells: Vec<PoiCell>,
     /// A cell's places in one run, by kind.
@@ -227,10 +227,10 @@ pub struct PoiPage {
     pub places: Places,
 }
 
-impl PoiPage {
-    /// A page at `z` from places all in that page, names cut to
+impl PoiTile {
+    /// A tile at `z` from places all in that tile, names cut to
     /// `NAME_CHARS`; `complete` is false where the source gave only some.
-    pub fn of_places<'a>(z: Zoom, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>, complete: bool) -> PoiPage {
+    pub fn of_places<'a>(z: Zoom, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>, complete: bool) -> PoiTile {
         let cut: Vec<_> = places
             .into_iter()
             .map(|(point, place)| {
@@ -246,16 +246,16 @@ impl PoiPage {
     }
 }
 
-impl Folds for PoiPage {
+impl Folds for PoiTile {
     /// A child is settled where every cell over it holds at most one place
     /// and its count is not a floor: only a crowd comes apart a zoom finer.
-    fn settles(&self, p: Page, child: Page) -> bool {
+    fn settles(&self, p: Tile, child: Tile) -> bool {
         self.cells
             .iter()
-            .all(|c| (c.count < 2 && !c.partial) || POI_LATTICE.cell_of(child.z, &POI_LATTICE.cell_at(p, c.cell).base()).page() != child)
+            .all(|c| (c.count < 2 && !c.partial) || POI_LATTICE.cell_of(child.z, &POI_LATTICE.cell_at(p, c.cell).base()).tile() != child)
     }
 
-    fn fold_page<'a>(p: Page, held: impl Fn(Page) -> Option<&'a Self>) -> Option<Self> {
+    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
         let mut cells = Vec::new();
         let mut children = Vec::with_capacity(4);
         for k in p.children() {
@@ -288,7 +288,7 @@ fn cut_name(name: &str) -> std::borrow::Cow<'_, str> {
 
 /// Cells ascending, each once: counts summed, partial if any part is, and per
 /// kind the named place of least id.
-fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(cells: impl Iterator<Item = (u32, u32, bool, P)>) -> PoiPage {
+fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(cells: impl Iterator<Item = (u32, u32, bool, P)>) -> PoiTile {
     let mut counts: Vec<(u32, u32, bool)> = Vec::new();
     let mut places: Vec<(u32, [u32; 2], Place<'a>)> = Vec::new();
     for (cell, count, partial, of) in cells {
@@ -299,41 +299,41 @@ fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(cells: impl Iterator<
     places.sort_unstable_by(|a, b| (a.0, a.2.kind, a.2.id, a.2.name, a.1).cmp(&(b.0, b.2.kind, b.2.id, b.2.name, b.1)));
     places.dedup_by(|b, a| (a.0, a.2.kind) == (b.0, b.2.kind));
     let mut pool = Pool::default();
-    let mut page = PoiPage::default();
+    let mut tile = PoiTile::default();
     let mut from = 0;
     for group in counts.chunk_by(|a, b| a.0 == b.0) {
         let cell = group[0].0;
-        let first = page.shown.len() as u32;
+        let first = tile.shown.len() as u32;
         while from < places.len() && places[from].0 == cell {
             let (_, at, place) = places[from];
-            page.shown.push(Shown { place: pool.add(place), at });
+            tile.shown.push(Shown { place: pool.add(place), at });
             from += 1;
         }
-        page.cells.push(PoiCell {
+        tile.cells.push(PoiCell {
             cell,
             count: group.iter().map(|c| c.1).sum(),
             partial: group.iter().any(|c| c.2),
             first,
-            len: page.shown.len() as u32 - first,
+            len: tile.shown.len() as u32 - first,
         });
     }
-    page.places = pool.places;
-    page
+    tile.places = pool.places;
+    tile
 }
 
 /// One branch: per cell its index, count, whether the count is a floor and
 /// where its run of shown starts; per shown its place and position (two
 /// half-words); per place its kind by name ("" for none), the source's id and
 /// its names (`named`).
-pub fn encode(page: &PoiPage) -> Result<Vec<u8>, MarshalError> {
-    validate(page)?;
-    let cells: Vec<u32> = page.cells.iter().map(|c| c.cell).collect();
-    let counts: Vec<u32> = page.cells.iter().map(|c| c.count).collect();
-    let partial: Vec<u8> = page.cells.iter().map(|c| c.partial as u8).collect();
-    let starts: Vec<u32> = page.cells.iter().map(|c| c.first).chain([page.shown.len() as u32]).collect();
-    let shown: Vec<u32> = page.shown.iter().map(|s| s.place).collect();
-    let at: Vec<u16> = page.shown.iter().flat_map(|s| s.at.map(|l| l as u16)).collect();
-    let places = &page.places;
+pub fn encode(tile: &PoiTile) -> Result<Vec<u8>, MarshalError> {
+    validate(tile)?;
+    let cells: Vec<u32> = tile.cells.iter().map(|c| c.cell).collect();
+    let counts: Vec<u32> = tile.cells.iter().map(|c| c.count).collect();
+    let partial: Vec<u8> = tile.cells.iter().map(|c| c.partial as u8).collect();
+    let starts: Vec<u32> = tile.cells.iter().map(|c| c.first).chain([tile.shown.len() as u32]).collect();
+    let shown: Vec<u32> = tile.shown.iter().map(|s| s.place).collect();
+    let at: Vec<u16> = tile.shown.iter().flat_map(|s| s.at.map(|l| l as u16)).collect();
+    let places = &tile.places;
     let kinds: Vec<&str> = places.kinds.iter().map(|&k| k.checked_sub(1).map_or("", |k| KIND_CATEGORIES[k as usize])).collect();
     let ids: Vec<&str> = (0..places.len()).map(|i| places.ids.get(i)).collect();
     let names = NameLanes::of((0..places.len()).map(|i| (places.names.get(i), places.get(i).langs.iter())));
@@ -346,9 +346,9 @@ pub fn encode(page: &PoiPage) -> Result<Vec<u8>, MarshalError> {
     encoder().encode(&t, TreeEncoderOptions::default())
 }
 
-/// A kind this reader's table does not name reads as none, so a page from a
+/// A kind this reader's table does not name reads as none, so a tile from a
 /// newer table still opens.
-pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
+pub fn decode(bytes: &[u8]) -> Result<PoiTile, MarshalError> {
     let root = TreeReader::new(bytes)?.read_branch()?;
     let (cells, counts, partial, starts) = (
         root.at(0)?.get_array::<u32>()?,
@@ -371,7 +371,7 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
         }
         pooled.push(name, names.languages(i), kind_of(kinds.get(i).ok_or_else(malformed)?), ids.get(i).ok_or_else(malformed)?);
     }
-    let page = PoiPage {
+    let tile = PoiTile {
         cells: (0..n)
             .map(|i| PoiCell {
                 cell: cells[i],
@@ -384,42 +384,42 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
         shown: shown.iter().zip(at.as_chunks::<2>().0).map(|(&place, &[x, y])| Shown { place, at: [x as u32, y as u32] }).collect(),
         places: pooled,
     };
-    let cells_fit = page.cells.iter().all(|c| c.cell < CELLS && c.count > 0) && page.cells.windows(2).all(|w| w[0].cell < w[1].cell);
-    if !cells_fit || page.shown.iter().any(|s| s.place >= page.places.len()) {
+    let cells_fit = tile.cells.iter().all(|c| c.cell < CELLS && c.count > 0) && tile.cells.windows(2).all(|w| w[0].cell < w[1].cell);
+    if !cells_fit || tile.shown.iter().any(|s| s.place >= tile.places.len()) {
         return Err(malformed());
     }
-    Ok(page)
+    Ok(tile)
 }
 
-/// What a bake writes: cells ascending and in the page; runs contiguous;
+/// What a bake writes: cells ascending and in the tile; runs contiguous;
 /// shown places one per kind, ascending; positions a half-word a lane; kinds
 /// in the badge table; names whole within `NAME_CHARS`.
-fn validate(page: &PoiPage) -> Result<(), MarshalError> {
-    if page.cells.iter().any(|c| c.cell >= CELLS || c.count == 0) || page.cells.windows(2).any(|w| w[0].cell >= w[1].cell) {
+fn validate(tile: &PoiTile) -> Result<(), MarshalError> {
+    if tile.cells.iter().any(|c| c.cell >= CELLS || c.count == 0) || tile.cells.windows(2).any(|w| w[0].cell >= w[1].cell) {
         return Err(malformed());
     }
     let mut next = 0;
-    for c in &page.cells {
-        if c.first != next || (c.first + c.len) as usize > page.shown.len() {
+    for c in &tile.cells {
+        if c.first != next || (c.first + c.len) as usize > tile.shown.len() {
             return Err(malformed());
         }
         next = c.first + c.len;
-        let run = &page.shown[c.first as usize..next as usize];
-        if run.iter().any(|s| s.place >= page.places.len() || s.at.iter().any(|&l| l > 0xffff)) {
+        let run = &tile.shown[c.first as usize..next as usize];
+        if run.iter().any(|s| s.place >= tile.places.len() || s.at.iter().any(|&l| l > 0xffff)) {
             return Err(malformed());
         }
-        if run.windows(2).any(|w| page.places.get(w[0].place).kind >= page.places.get(w[1].place).kind) {
+        if run.windows(2).any(|w| tile.places.get(w[0].place).kind >= tile.places.get(w[1].place).kind) {
             return Err(malformed());
         }
     }
-    let places = &page.places;
+    let places = &tile.places;
     let bad_place = |i: u32| places.kinds[i as usize] as usize > KIND_CATEGORIES.len() || places.names.get(i).is_empty() || places.names.get(i).chars().nth(NAME_CHARS).is_some();
-    if next as usize != page.shown.len() || (0..places.len()).any(bad_place) {
+    if next as usize != tile.shown.len() || (0..places.len()).any(bad_place) {
         return Err(malformed());
     }
     Ok(())
 }
 
 #[cfg(test)]
-#[path = "poi_page.test.rs"]
+#[path = "poi_tile.test.rs"]
 mod test;

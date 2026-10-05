@@ -1,6 +1,6 @@
 // pxl-spec/bake/format.rs
 
-//! A baked terrain page and its wire: `[ele, cells, extent, occupancy, decks]`.
+//! A baked terrain tile and its wire: `[ele, cells, extent, occupancy, decks]`.
 
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
@@ -12,18 +12,18 @@ use super::deck::{self, Decks};
 use super::ground::SHIFT_RANGE;
 use super::malformed;
 use super::surface::extent_of;
-use crate::space::pyramid::{EXTENT, PAGE_CELLS};
+use crate::space::pyramid::{EXTENT, TILE_CELLS};
 
-/// A page's lane lengths; a page is these and no other size.
-pub const GROUND_LANE: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
+/// A tile's lane lengths; a tile is these and no other size.
+pub const GROUND_LANE: usize = (TILE_CELLS * TILE_CELLS) as usize;
 pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
-pub const EXTENT_LANE: usize = (EXTENT.page_cells() * EXTENT.page_cells()) as usize;
-pub const BLOCK_LANE: usize = EXTENT.page_blocks() as usize;
+pub const EXTENT_LANE: usize = (EXTENT.tile_cells() * EXTENT.tile_cells()) as usize;
+pub const COARSE_LANE: usize = EXTENT.coarse_cells() as usize;
 
 /// A ground cell: one look of the Carto palette, a byte (`cell/cube_type.json`).
 pub type GroundCell = u8;
 
-/// A page's ground: one look a cell, the same shape from the bake through the
+/// A tile's ground: one look a cell, the same shape from the bake through the
 /// wire to the client.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ground {
@@ -40,26 +40,26 @@ impl Ground {
     }
 }
 
-/// Which of a page and its four children are real pages rather than the zero
-/// (ocean) page: children in the low four bits in `slot_of`'s order, the page
+/// Which of a tile and its four children are real tiles rather than the zero
+/// (ocean) tile: children in the low four bits in `slot_of`'s order, the tile
 /// itself above them. A client never asks for a child its parent marks absent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Occupancy(u8);
 
 impl Occupancy {
-    const PAGE: u8 = 1 << 4;
+    const TILE: u8 = 1 << 4;
 
     pub const ZERO: Occupancy = Occupancy(0);
 
-    pub const LEAF: Occupancy = Occupancy(Occupancy::PAGE);
+    pub const LEAF: Occupancy = Occupancy(Occupancy::TILE);
 
     pub fn of_children(children: [Occupancy; 4]) -> Occupancy {
-        let bits = (0..4).filter(|&q| children[q].is_page()).fold(0, |bits, q| bits | 1 << q);
-        Occupancy(if bits == 0 { 0 } else { Occupancy::PAGE | bits })
+        let bits = (0..4).filter(|&q| children[q].is_tile()).fold(0, |bits, q| bits | 1 << q);
+        Occupancy(if bits == 0 { 0 } else { Occupancy::TILE | bits })
     }
 
-    pub fn is_page(self) -> bool {
-        self.0 & Occupancy::PAGE != 0
+    pub fn is_tile(self) -> bool {
+        self.0 & Occupancy::TILE != 0
     }
 
     pub fn has_child(self, slot: usize) -> bool {
@@ -70,33 +70,33 @@ impl Occupancy {
         self.0
     }
 
-    /// None for a byte no page can have: a bit past the five, or a child without its parent.
+    /// None for a byte no tile can have: a bit past the five, or a child without its parent.
     pub fn of_bits(bits: u8) -> Option<Occupancy> {
-        (bits == 0 || (bits & Occupancy::PAGE != 0 && bits < Occupancy::PAGE << 1)).then_some(Occupancy(bits))
+        (bits == 0 || (bits & Occupancy::TILE != 0 && bits < Occupancy::TILE << 1)).then_some(Occupancy(bits))
     }
 }
 
-/// What a ray and a fetch need before the pages under one are held. At every
-/// zoom, the leaf too, so a page has one contract.
+/// What a ray and a fetch need before the tiles under one are held. At every
+/// zoom, the leaf too, so a tile has one contract.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Index {
     extent: Cow<'static, [[i16; 2]]>, // lo, hi for each `EXTENT` cell, over this zoom and all finer: a ray above hi misses them
-    blocks: Cow<'static, [Block]>,    // `extent` joined over 2^j squares: rebuilt from it, never on the wire
-    pub occupancy: Occupancy,         // which children are pages: none is asked for that is not
+    coarse: Cow<'static, [Extent]>,   // `extent` joined over each coarser cell: rebuilt from it, never on the wire
+    pub occupancy: Occupancy,         // which children are tiles: none is asked for that is not
 }
 
-/// An aligned block's lowest and highest extent and widest single-cell span;
-/// a block is exactly its four quarters' join.
+/// A cell's lowest and highest extent and widest single-cell span, of the
+/// index lane's cells or a coarser one's, which is exactly its four quarters' join.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(C)]
-pub struct Block {
+pub struct Extent {
     pub lo: i16,
     pub hi: i16,
     pub span: u16,
 }
 
-/// A partial version's list, beside its pages: the full version it overlays
-/// and the pages it writes or removes over it, by quadkey. A version without
+/// A partial version's list, beside its tiles: the full version it overlays
+/// and the tiles it writes or removes over it, by quadkey. A version without
 /// one is full.
 pub const SNAPSHOT_KEY: &str = "_snapshot";
 
@@ -112,19 +112,19 @@ pub fn drawn([lo, hi]: [i16; 2]) -> [i16; 2] {
     [lo.saturating_add(DRAWN_PAST[0]), hi.saturating_add(DRAWN_PAST[1])]
 }
 
-impl Block {
-    /// One cell as a block: its bound widened by `drawn`, its span as the lane holds it.
-    pub fn of(cell: [i16; 2]) -> Block {
+impl Extent {
+    /// One index cell's: its bound widened by `drawn`, its span as the lane holds it.
+    pub fn of(cell: [i16; 2]) -> Extent {
         let [lo, hi] = drawn(cell);
-        Block {
+        Extent {
             lo,
             hi,
             span: (i32::from(cell[1]) - i32::from(cell[0])).max(0) as u16,
         }
     }
 
-    fn join(self, o: Block) -> Block {
-        Block {
+    fn join(self, o: Extent) -> Extent {
+        Extent {
             lo: self.lo.min(o.lo),
             hi: self.hi.max(o.hi),
             span: self.span.max(o.span),
@@ -134,11 +134,11 @@ impl Block {
 
 impl Index {
     pub fn new(extent: Vec<[i16; 2]>, occupancy: Occupancy) -> Index {
-        let mut blocks = vec![Block::default(); BLOCK_LANE];
-        blocks_of(&extent, &mut blocks);
+        let mut coarse = vec![Extent::default(); COARSE_LANE];
+        coarse_of(&extent, &mut coarse);
         Index {
             extent: extent.into(),
-            blocks: blocks.into(),
+            coarse: coarse.into(),
             occupancy,
         }
     }
@@ -147,43 +147,43 @@ impl Index {
         &self.extent
     }
 
-    /// The block of `across` × `across` cells at (x, y); `across` a power of two and (x, y) a multiple of it.
-    pub fn over(&self, [x, y]: [u32; 2], across: u32) -> Block {
+    /// The cell of `across` × `across` index cells at (x, y); `across` a power of two and (x, y) a multiple of it.
+    pub fn over(&self, [x, y]: [u32; 2], across: u32) -> Extent {
         match across.trailing_zeros() {
-            0 => Block::of(self.extent[EXTENT.cell_index(x, y) as usize]),
-            j => self.blocks[EXTENT.block_index(j, x, y) as usize],
+            0 => Extent::of(self.extent[EXTENT.cell_index(x, y) as usize]),
+            j => self.coarse[EXTENT.coarse_index(j, x, y) as usize],
         }
     }
 }
 
-/// Each block size from the one under it.
-fn blocks_of(lane: &[[i16; 2]], blocks: &mut [Block]) {
-    xpute_core::ensure!(lane.len() == EXTENT_LANE && blocks.len() == BLOCK_LANE, ENOTRECOVERABLE);
-    let n = EXTENT.page_cells();
+/// Each coarser cell from the four under it.
+fn coarse_of(lane: &[[i16; 2]], coarse: &mut [Extent]) {
+    xpute_core::ensure!(lane.len() == EXTENT_LANE && coarse.len() == COARSE_LANE, ENOTRECOVERABLE);
+    let n = EXTENT.tile_cells();
     for j in 1..=n.trailing_zeros() {
         let side = 1u32 << j;
         for by in (0..n).step_by(side as usize) {
             for bx in (0..n).step_by(side as usize) {
                 let half = side / 2;
                 let quarter = |dx: u32, dy: u32| match j {
-                    1 => Block::of(lane[EXTENT.cell_index(bx + dx, by + dy) as usize]),
-                    _ => blocks[EXTENT.block_index(j - 1, bx + dx, by + dy) as usize],
+                    1 => Extent::of(lane[EXTENT.cell_index(bx + dx, by + dy) as usize]),
+                    _ => coarse[EXTENT.coarse_index(j - 1, bx + dx, by + dy) as usize],
                 };
                 let b = quarter(0, 0).join(quarter(half, 0)).join(quarter(0, half)).join(quarter(half, half));
-                blocks[EXTENT.block_index(j, bx, by) as usize] = b;
+                coarse[EXTENT.coarse_index(j, bx, by) as usize] = b;
             }
         }
     }
 }
 
-/// A page: one lane a fact the client cannot make. What it draws by rule —
+/// A tile: one lane a fact the client cannot make. What it draws by rule —
 /// a slab, a bore, a pier — is not here.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Terrain {
     pub ground: Ground,           // a class a cell: the source rasterized
     pub decks: Decks,             // ways off the ground: source lines, tops solved offline
     pub ele: Cow<'static, [i16]>, // padded height samples, in leaf cells: from the raster
-    pub index: Index,             // bounds over the page and all under it: no one page holds them
+    pub index: Index,             // bounds over the tile and all under it: no one tile holds them
 }
 
 // Made on first use: a constant array of zeros would ship in the module's data.
@@ -218,24 +218,24 @@ impl Terrain {
 }
 
 // Cells go out packed, as the client holds them, so decoding is a length check and a copy.
-pub fn encode_terrain(page: &Terrain) -> Result<Vec<u8>, MarshalError> {
+pub fn encode_terrain(tile: &Terrain) -> Result<Vec<u8>, MarshalError> {
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
-        b.i16_array(Some(&page.ele))
-            .u8_array(Some(&page.ground.cells))
-            .i16_array(Some(page.index.extent.as_flattened()))
-            .u8(Some(page.index.occupancy.bits()));
-        deck::write_branch(&page.decks, b);
+        b.i16_array(Some(&tile.ele))
+            .u8_array(Some(&tile.ground.cells))
+            .i16_array(Some(tile.index.extent.as_flattened()))
+            .u8(Some(tile.index.occupancy.bits()));
+        deck::write_branch(&tile.decks, b);
     }));
     encoder().encode(&t, TreeEncoderOptions::default())
 }
 
-/// The record's lanes in `.fixed.terrain` a page is decoded into.
-pub struct PageRoom {
+/// The record's lanes in `.fixed.terrain` a tile is decoded into.
+pub struct TileRoom {
     pub cells: &'static mut [GroundCell],
     pub ele: &'static mut [i16],
     pub extent: &'static mut [[i16; 2]],
-    pub blocks: &'static mut [Block],
+    pub coarse: &'static mut [Extent],
     pub decks: deck::Room,
 }
 
@@ -247,8 +247,8 @@ struct Lanes<'a> {
     decks: deck::Lanes<'a>,
 }
 
-/// Refused unless every lane is a page's length.
-fn read_page(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
+/// Refused unless every lane is a tile's length.
+fn read_tile(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
     let root = TreeReader::new(pkt)?.read_branch()?;
     let ele = root.at(0)?.get_array::<i16>()?;
     let cells = root.at(1)?.get_array::<GroundCell>()?;
@@ -261,22 +261,22 @@ fn read_page(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
     Ok(Lanes { ele, cells, extent, occupancy, decks })
 }
 
-/// Decode straight into the page's resident room; the index's blocks are
-/// built there before the page is returned.
-pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<Terrain, MarshalError> {
-    let Lanes { ele, cells, extent, occupancy, decks } = read_page(pkt)?;
+/// Decode straight into the tile's resident room; the index's coarse are
+/// built there before the tile is returned.
+pub fn decode_terrain_into(pkt: &[u8], room: TileRoom) -> Result<Terrain, MarshalError> {
+    let Lanes { ele, cells, extent, occupancy, decks } = read_tile(pkt)?;
     if room.ele.len() != ELE_LANE || room.cells.len() != GROUND_LANE || room.extent.len() != EXTENT_LANE {
         return Err(malformed());
     }
     room.ele.copy_from_slice(ele);
     room.cells.copy_from_slice(cells);
     room.extent.copy_from_slice(extent);
-    blocks_of(room.extent, room.blocks);
-    let PageRoom {
+    coarse_of(room.extent, room.coarse);
+    let TileRoom {
         cells,
         ele,
         extent,
-        blocks,
+        coarse,
         decks: deck_room,
     } = room;
     Ok(Terrain {
@@ -285,15 +285,15 @@ pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<Terrain, Marsha
         ele: (&*ele).into(),
         index: Index {
             extent: (&*extent).into(),
-            blocks: (&*blocks).into(),
+            coarse: (&*coarse).into(),
             occupancy,
         },
     })
 }
 
-// Copied out, for a page that outlives its packet.
+// Copied out, for a tile that outlives its packet.
 pub fn decode_terrain(pkt: &[u8]) -> Result<Terrain, MarshalError> {
-    let Lanes { ele, cells, extent, occupancy, decks } = read_page(pkt)?;
+    let Lanes { ele, cells, extent, occupancy, decks } = read_tile(pkt)?;
     Ok(Terrain {
         ele: ele.to_vec().into(),
         ground: Ground { cells: cells.to_vec().into() },

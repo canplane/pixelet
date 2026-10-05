@@ -1,7 +1,7 @@
 // pxl-kernel/world/pyramid/domain.rs
 
 //! The frontier's goal: the view's ground cut into pyramid chunks, the same
-//! for every layer. Paging never reads it.
+//! for every layer. Residency never reads it.
 //!
 //! One walk gives every quality step's cut: a chunk is a piece over an
 //! interval of steps. It runs a slice a turn on the observation it began
@@ -17,10 +17,10 @@
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::lod::{cubes_meeting, fault_radius, Tau};
+use pxl_spec::space::lod::{cubes_meeting, demand_reach, Tau};
 use pxl_spec::space::observation::{Bounds, Contents, Observation, Requirement};
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_zoom, Page, LEAF_Z};
+use pxl_spec::space::pyramid::{chunk_zoom, Tile, LEAF_Z};
 use pxl_spec::space::v3::Aabb;
 
 use crate::world::access::Access;
@@ -38,7 +38,7 @@ use pxl_spec::space::zoom::{units, Zoom};
 /// interval of `d` meets at most ⌊d / side⌋ + 2 chunks, and the reach is
 /// 2 · `SPLIT` / `CHUNK_CELLS` chunks each way at every zoom.
 pub const fn cover_pieces(top: Zoom, planet: f64) -> u32 {
-    let (far, side) = (fault_radius(top), units(chunk_zoom(top)));
+    let (far, side) = (demand_reach(top), units(chunk_zoom(top)));
     let reach = [2.0 * far, 2.0 * far, 2.0 * far + far * far / (2.0 * planet)];
     let (mut n, mut k) = (1, 0);
     while k < 3 {
@@ -390,7 +390,7 @@ struct Made {
     spare: Option<Domain>,
     key: Option<(Observation, (u32, u32), Tau, u32)>,
     sight: Sight,
-    resident: HashSet<Page>,
+    resident: HashSet<Tile>,
     revision: u32,
     /// rays cast and nodes visited since `take_work`
     work: [u32; 2],
@@ -410,11 +410,11 @@ pub fn start(ladder: &[Tau], extra: u32) {
     if made.key == Some(key) && made.published.is_some() {
         return;
     }
-    // a new target or moved objects recast every tile; moved pages the ones over them
+    // a new target or moved objects recast every tile; moved tiles the ones over them
     let everything = made.key.is_none_or(|(_, (_, objects), tau, _)| tau != key.2 || objects != key.1 .1);
     made.key = Some(key);
-    let resident: HashSet<Page> = Terrain::pyramid().paging().held().map(|(p, _)| p).collect();
-    let near = |p: &Page| {
+    let resident: HashSet<Tile> = Terrain::pyramid().residency().held().map(|(p, _)| p).collect();
+    let near = |p: &Tile| {
         let r = pxl_spec::space::pvf3::nearest_box(&p.region(), o.eye[0]);
         (r.min[0], r.min[1], r.max[0] - r.min[0])
     };
@@ -469,8 +469,8 @@ impl Domain {
     }
 
     /// Measured from where in `c` anything stands: a bound, not the drawn
-    /// surface, which on a coarse page averages a peak away and would leave
-    /// the chunk empty until the finer page came. A bound errs nearer.
+    /// surface, which on a coarse tile averages a peak away and would leave
+    /// the chunk empty until the finer tile came. A bound errs nearer.
     pub fn order_of(&self, c: Chunk) -> Order {
         if let Some(s) = self.seen.get(&c) {
             return s.order;

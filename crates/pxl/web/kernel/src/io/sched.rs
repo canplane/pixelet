@@ -19,9 +19,9 @@ use crate::io::load::LOADS;
 use crate::io::policy::Policy;
 use crate::layer::earth::Earth;
 use crate::sched::profiler::record::{profiler_record, Failure, Outcome, TaskRecord};
-use crate::world::paging::Paging;
+use crate::world::residency::Residency;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::poi_page::PoiPage;
+use pxl_spec::bake::poi_tile::PoiTile;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::clock::now;
@@ -45,13 +45,13 @@ pub trait Serve {
     fn retry_after(&self, outcome: Outcome) -> Option<f64>;
 }
 
-/// A layer's pages: at most its frames, since it asks only for what it can
+/// A layer's tiles: at most its frames, since it asks only for what it can
 /// hold. An asset: as a model and as an image. Streams of one: one.
 const fn bound(category: Category) -> usize {
     match category {
-        Category::terrain => Paging::<Terrain>::FRAMES as usize,
-        Category::poi => Paging::<PoiPage>::FRAMES as usize,
-        Category::earth => Paging::<Earth>::FRAMES as usize,
+        Category::terrain => Residency::<Terrain>::FRAMES as usize,
+        Category::poi => Residency::<PoiTile>::FRAMES as usize,
+        Category::earth => Residency::<Earth>::FRAMES as usize,
         Category::asset => 2 * LOADS,
         Category::geocode | Category::geocode_dict => 1,
     }
