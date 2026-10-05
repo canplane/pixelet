@@ -26,31 +26,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   (`pxl-geo-spec overture/properties.rs`), where Carto's `amenity-points.mss`
   gives each tag an icon and a color.
 
-## P2
-
-- **A bore's approach that stops short of a bridge.** At Uidong (37.2977,
-  127.0580) a Grade line leaving a tunnel ends 4 cells under the ground where
-  a deck starts at +5, a 9-cell step: the stretch's `across` lookup
-  (`geo-bake deck/approach.rs` `branches`) seems not to find the deck's end,
-  so neither reaches the ground nor meets the other.
-- **A bore's swept air against its cover.** The paint clears from the lowest
-  to the highest surface a column sweeps (`pxl-spec bake/deck.rs`
-  `occupies`); the solve's ceiling (`geo-bake deck.rs` `clear_m`) does not
-  know the sweep, so on a steep step the air eats into the 3 m cover.
-- **Clearance by the road's own grade.** `clear_cells` holds a clearance
-  across the road at `MAX_GRADE`'s secant for every way; the segment's own
-  grade would give each what it needs.
-- **Subway bores.** Every tunnel flag is a bore now, so a subway's lines are
-  drawn underground and stretch each chunk's bounds down; whether that cost
-  stays is not decided.
-- **The view washed out from the globe.** Zoomed out over Korea near
-  sunset, the frame settled very bright a few seconds after it was dark;
-  the eye's exposure, not the sun, which stood where it should.
-- **The ground dark under a low sun.** `ADAPTATION` 0.5 (`pxl-render
-  look/atmosphere.rs`) opens the eye for half the light a sinking sun takes
-  away, so at 3° the ground shows about two stops under noon while a clear
-  day outside reads bright; a hyperparameter to settle.
-
 ## Parked, with the reason on file
 
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
