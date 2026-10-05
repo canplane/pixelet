@@ -7,8 +7,8 @@
 //!  - The Earth layer's pages (pxl-spec bake/earth_page.rs) at its top zoom, a
 //!    z6 pixel a texel, to `./out/earth/<version>/<quadkey>`. A page that is one
 //!    color says nothing the global picture does not, and has no object.
-//!  - The global picture every page falls back to, 2048 × 1024, to
-//!    `asset/sky/earth/07.webp`.
+//!  - The global picture every page falls back to, the Mercator square at
+//!    2048 × 2048, to `asset/sky/earth/07.webp`.
 //!
 //! Credit: NASA's Earth Observatory (Reto Stöckli; Miguel Román and the Black
 //! Marble team).
@@ -32,7 +32,7 @@ const DAY: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/7439
 const NIGHT: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144897/BlackMarble_2016_";
 /// NASA's tiling: a column a quarter of the world from 180° W, row 1 the north.
 const NIGHT_TILES: [[&str; 4]; 2] = [["A1", "B1", "C1", "D1"], ["A2", "B2", "C2", "D2"]];
-const GLOBAL: (u32, u32) = (2048, 1024);
+const GLOBAL: (u32, u32) = (2048, 2048);
 
 /// Blue Marble's bytes are reflectance through a cubic spline, not sRGB
 /// (Stöckli et al. 2005, table 1): 0, 25, 75 and 100% are 0, 179, 240 and 255.
@@ -190,11 +190,14 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
     std::thread::scope(|scope| {
         for (t, rows) in bytes.chunks_mut(w * 4 * h.div_ceil(threads)).enumerate() {
             scope.spawn(move || {
+                let (side_x, side_y) = (epsg3857::U_TOTAL_X / w as f64, epsg3857::U_TOTAL_X / h as f64);
                 for (r, row) in rows.chunks_mut(w * 4).enumerate() {
                     let j = t * h.div_ceil(threads) + r;
-                    let lat = [90.0 - (j + 1) as f64 * 180.0 / h as f64, 90.0 - j as f64 * 180.0 / h as f64];
+                    let y = epsg3857::U_TOTAL_X / 2.0 - (j + 1) as f64 * side_y;
                     for (i, texel) in row.chunks_mut(4).enumerate() {
-                        let lng = [i as f64 * 360.0 / w as f64 - 180.0, (i + 1) as f64 * 360.0 / w as f64 - 180.0];
+                        let x = i as f64 * side_x - epsg3857::U_TOTAL_X / 2.0;
+                        let ([lng0, lat0], [lng1, lat1]) = (lng_lat(x, y), lng_lat(x + side_x, y + side_y));
+                        let (lng, lat) = ([lng0, lng1], [lat0, lat1]);
                         let [r, g, b] = day.mean(lng, lat).map(to_srgb);
                         texel.copy_from_slice(&[r, g, b, lights_byte(night.mean(lng, lat)[0])]);
                     }
