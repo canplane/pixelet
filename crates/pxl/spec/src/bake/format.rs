@@ -237,6 +237,11 @@ impl Terrain {
         }
     }
 
+    /// The source's nothing, which draws nothing.
+    pub fn is_void(&self) -> bool {
+        !self.index.occupancy.is_page()
+    }
+
     /// A z16 page, its index taken from its own surface and decks.
     pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> Terrain {
         let extent = extent_of(&ele, &decks);

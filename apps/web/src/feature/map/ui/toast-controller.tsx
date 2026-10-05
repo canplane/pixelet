@@ -13,6 +13,7 @@ const enum Report {
   Location = 0,
   World = 1,
   Orientation = 2,
+  Outside = 3,
 }
 
 const READY_MS = 3000;
@@ -45,6 +46,16 @@ export function ToastController() {
       toastDismiss(Report.Orientation);
     }
   }, [orientationError]);
+
+  const outside = useKernel((s) => s.map.outside);
+
+  useEffect(() => {
+    if (outside) {
+      toastShow(Report.Outside, { message: tRef.current("toast.outside"), tone: ToastTone.Error });
+    } else {
+      toastDismiss(Report.Outside);
+    }
+  }, [outside]);
 
   // An empty screen always says it is loading; the ready word is the first world's alone.
   const mapStatus = useKernel((s) => s.map.status);

@@ -194,7 +194,8 @@
     "location_checking": "현재 위치를 확인하고 있습니다.",
     "world_ready": "공간을 불러왔습니다.",
     "map_loading": "공간을 불러오고 있습니다.",
-    "companion_loading": "동행을 준비하고 있습니다."
+    "companion_loading": "동행을 준비하고 있습니다.",
+    "outside": "서비스 지역이 아닙니다."
   },
   "map": {
     "dock": {

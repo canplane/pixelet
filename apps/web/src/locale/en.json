@@ -263,7 +263,8 @@
     "location_checking": "Checking your location…",
     "world_ready": "Area loaded.",
     "map_loading": "Loading area…",
-    "companion_loading": "Preparing your companion…"
+    "companion_loading": "Preparing your companion…",
+    "outside": "Outside the service area."
   },
   "map": {
     "dock": {

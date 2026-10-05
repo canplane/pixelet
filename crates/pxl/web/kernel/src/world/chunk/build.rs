@@ -654,7 +654,7 @@ impl Builder {
             cells: &page.ground.cells,
             ele: &page.ele,
             decks: &page.decks,
-            void: !page.index.occupancy.is_page(),
+            void: page.is_void(),
         }
     }
 
