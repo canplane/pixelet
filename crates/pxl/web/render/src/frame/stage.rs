@@ -5,7 +5,7 @@
 
 use xpute_runtime::global::Global;
 
-pub const STAGE_WORDS: usize = 80;
+pub const STAGE_WORDS: usize = STAGE_AT::RESOLUTION + 1;
 
 /// Where each value sits in the lane.
 #[allow(non_snake_case)]
