@@ -38,7 +38,7 @@ use crate::layer::decor::build::{scatters_at, Draw};
 use crate::world::access::Access;
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
 use crate::world::chunk::source::{band_written, chunk_sources_changed};
-use crate::world::frame::coord::local_world_to_canonical;
+use crate::world::frame::coord::world_to_canonical;
 use xpute_core::status::bug::OrBug;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
@@ -374,9 +374,10 @@ fn decode_objects(blob: &str) -> Result<(), MarshalError> {
             let page_base = FROM_L3_IDX(page.at(0)?.get_u64()?);
             let (x, y, z) = (page.at(1)?.get_array::<f32>()?, page.at(2)?.get_array::<f32>()?, page.at(3)?.get_array::<f32>()?);
             let (size, value) = (page.at(4)?.get_array::<f32>()?, page.at(5)?.get_array::<u32>()?);
+            let base = ivec::to_v3(page_base);
             for r in 0..value.len() {
-                let local = [x[r] as f64, y[r] as f64, z[r] as f64];
-                let corner = local_world_to_canonical(&local, page_base);
+                // Stored against its page's corner, so an f32 resolves it.
+                let corner = world_to_canonical(&[base[0] + x[r] as f64, base[1] + y[r] as f64, base[2] + z[r] as f64]);
                 writes.push(write_of(&corner, size[r] as f64, value[r]));
             }
         }

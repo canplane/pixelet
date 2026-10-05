@@ -4,7 +4,6 @@
 //! Depth is reversed f32 throughout (depth.wgsl).
 
 use pxl_spec::space::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
-use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::v3::{norm3, sub3, V3};
 use xpute_core::math::scalar::round;
 use xpute_runtime::abi::handle::handle_slot;
@@ -812,17 +811,16 @@ impl Renderer {
         put_mat(u, VIEW_PROJ, &m);
         // Everything is drawn in the eye's frame; positions are taken against the eye
         // in f64 before they are narrowed.
-        let eye_local = [s[STAGE_AT::EYE_LOCAL], s[STAGE_AT::EYE_LOCAL + 1], s[STAGE_AT::EYE_LOCAL + 2]];
+        let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
         let eye = [0.0; 3];
-        let origin = ivec::gather(ivec::from_real(s[STAGE_AT::ORIGIN]), ivec::from_real(s[STAGE_AT::ORIGIN + 1]), 0);
         // The globe places by offset from its anchor and height alone, so placing in
-        // the eye's frame matches the root frame less the eye.
-        let center: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_local[k]);
+        // the eye's frame matches the world less the eye.
+        let center: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_world[k]);
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let up = norm3(&sub3(&eye, &planet_center));
         self.clouds.lay_out(g, &m, &eye, env);
-        self.atmosphere.set_clouds(&clouds::field(origin, [eye_local[0], eye_local[1]], env));
+        self.atmosphere.set_clouds(&clouds::field([eye_world[0], eye_world[1]], env));
         self.stars.lay_out(g, &m, env, width);
         put_ray(&mut self.sky, 0, &m, &eye);
         self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
@@ -861,7 +859,7 @@ impl Renderer {
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_TEXEL] = self.shadow.texel as f32;
         if self.shadows {
-            self.shadow.aim(g, &env[0..3], center, eye_local.map(|v| -v), globe);
+            self.shadow.aim(g, &env[0..3], center, eye_world.map(|v| -v), globe);
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
         }
 

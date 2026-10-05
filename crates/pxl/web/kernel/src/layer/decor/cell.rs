@@ -265,7 +265,7 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     let sprites = &mut c.sprites;
     for (&chunk, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
         let (x0, y0, side) = chunk.rect();
-        let translation = DrawList::translation([x0, y0, 0.0], frame_eye);
+        let translation = DrawList::translation([crate::world::frame::coord::unwrap_x(x0, frame_eye[0]), y0, 0.0], frame_eye);
         let [zlo, zhi] = block.heights.map(f64::from);
         let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
         let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());

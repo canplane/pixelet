@@ -6,12 +6,12 @@
 
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::{add3, V3};
+use pxl_spec::space::v3::V3;
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::control::camera::controller::look_domain;
-use crate::control::camera::controller::{camera, eye_local, map_center, set_eye_local};
+use crate::control::camera::controller::{camera, eye_world, map_center, set_eye_world};
 use crate::control::camera::store::camera_store;
 use crate::control::navigation::support::target;
 use crate::world::access::{Access, Detail, Ray};
@@ -20,9 +20,8 @@ use xpute_runtime::global::Global;
 
 /// The first resident thing it meets, else the sea, else `fallback` along it.
 pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
-    let frame = view().chart();
     let ray = Ray {
-        origin: add3(&eye, &frame),
+        origin: eye,
         direction: forward,
         reach: view().far,
     };
@@ -35,7 +34,7 @@ pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
     std::array::from_fn(|k| eye[k] + forward[k] * t)
 }
 
-/// Canonical, so a rebase leaves it where it is. None until first put.
+/// Canonical, so it holds still as the eye goes round the world. None until first put.
 static TO: Global<Option<Pvf3>> = Global::new();
 
 fn to() -> &'static mut Option<Pvf3> {
@@ -54,18 +53,18 @@ pub(crate) fn target_center() -> Option<Pvf3> {
 pub(crate) fn put(at: Pvf3, snap: bool) {
     *to() = Some(at);
     if snap {
-        set_eye_local(&target(to(), eye_local().unwrap_or_default(), view().origin));
+        set_eye_world(&target(to(), eye_world().unwrap_or_default()));
     }
 }
 
 /// Whether still moving.
 pub(crate) fn turn(delta: f64) -> bool {
     let mut moving = false;
-    if let Some(eye) = eye_local() {
-        let to = target(to(), eye, view().origin);
+    if let Some(eye) = eye_world() {
+        let to = target(to(), eye);
         let (next, m) = approach_vec(eye, to, POS_DAMP, delta, EYE_EPS);
         if next != eye {
-            set_eye_local(&next);
+            set_eye_world(&next);
         }
         moving |= m;
     }

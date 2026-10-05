@@ -5,15 +5,13 @@
 //! placement or an erase.
 
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pyramid::LEAF_Z;
-use pxl_spec::space::v3::{add3, V3};
+use pxl_spec::space::v3::V3;
 
 use crate::layer::object::store::{get_placed_object, Entry};
 use crate::world::access::{Access, Detail, Hit, Ray, Struck};
-use crate::world::frame::coord::local_world_to_canonical;
-use crate::world::frame::view::view;
+use crate::world::frame::coord::world_to_canonical;
 use pxl_spec::space::v3::Aabb;
 
 /// A product number: what can be edited is a sphere about the observer.
@@ -39,7 +37,7 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// cell the hit point falls in. `precise_box` overrides the hit's box (a
 /// decor met in front of it).
 #[allow(clippy::needless_range_loop)]
-pub fn world_adjacent_corner(hit: &Hit, new_size: f64, map_origin: IVec, precise_box: Option<&Aabb>) -> Pvf3 {
+pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb>) -> Pvf3 {
     let Aabb { min: box_min, max: box_max } = precise_box.copied().unwrap_or(hit.cube);
     let mut out: V3 = [0.0; 3];
 
@@ -54,13 +52,13 @@ pub fn world_adjacent_corner(hit: &Hit, new_size: f64, map_origin: IVec, precise
         };
     }
 
-    local_world_to_canonical(&out, map_origin)
+    world_to_canonical(&out)
 }
 
 /// The `size` voxel `hit` struck, for the eraser's terrain dig: as
 /// world_adjacent_corner but staying inside the struck box on the normal axis.
 #[allow(clippy::needless_range_loop)]
-pub fn world_struck_corner(hit: &Hit, size: f64, map_origin: IVec) -> Pvf3 {
+pub fn world_struck_corner(hit: &Hit, size: f64) -> Pvf3 {
     let mut out: V3 = [0.0; 3];
     for axis in 0..3 {
         let n = hit.normal[axis];
@@ -72,7 +70,7 @@ pub fn world_struck_corner(hit: &Hit, size: f64, map_origin: IVec) -> Pvf3 {
             grid_floor(hit.point[axis], size)
         };
     }
-    local_world_to_canonical(&out, map_origin)
+    world_to_canonical(&out)
 }
 
 /// Decor is never resolved here; it paints no voxel and has its own hit test.
@@ -90,13 +88,12 @@ pub struct PickResult {
 
 /// In the root frame, from the eye.
 pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
-    let frame = view().chart();
     let ray = Ray {
-        origin: add3(&origin, &frame),
+        origin,
         direction,
         reach: PICK_REACH_U,
     };
-    let hit = Access::now().first_hit(&ray, Detail::Zoom(LEAF_Z)).value().flatten()?.moved(frame.map(|v| -v));
+    let hit = Access::now().first_hit(&ray, Detail::Zoom(LEAF_Z)).value().flatten()?;
     Some(PickResult { hit })
 }
 

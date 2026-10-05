@@ -2,7 +2,7 @@
 
 Everything in this world has one address: a single 64-bit word. Every
 coarser grouping of the world — the batch a renderer draws, the page a
-request fetches, the square a floating origin sits in — is that same word
+request fetches — is that same word
 with its low bits cleared. Grouping is a mask, never a division, and a tier
 is a shift and nothing else.
 
@@ -44,13 +44,13 @@ lane rather than between two doubles.
 `indexer.rs` names five tiers. Each is a cumulative bit distance from the
 base unit, so a tier's extent is a power of two and its boundary is a mask.
 
-| tier          | shift | extent | inside the one above | what this program puts there |
-| ------------- | ----- | ------ | -------------------- | ---------------------------- |
-| **L1** block  | 0     | 1u     | —                    | the canonical unit           |
-| **L2** chunk  | 6     | 64u    | 8×8 in L3            | a render and LOD batch       |
-| **L3** page   | 9     | 512u   | 8×8 in L4            | a request and paging unit    |
-| **L4** anchor | 12    | 4096u  | 16×16 in L5          | a floating origin's square   |
-| **L5** shard  | 16    | 65536u | —                    | nothing yet                  |
+| tier          | shift | extent | inside the one above | what this program puts there  |
+| ------------- | ----- | ------ | -------------------- | ----------------------------- |
+| **L1** block  | 0     | 1u     | —                    | the canonical unit            |
+| **L2** chunk  | 6     | 64u    | 8×8 in L3            | a render and LOD batch        |
+| **L3** page   | 9     | 512u   | 8×8 in L4            | a request and paging unit     |
+| **L4** anchor | 12    | 4096u  | 16×16 in L5          | nothing since the origin went |
+| **L5** shard  | 16    | 65536u | —                    | nothing yet                   |
 
 The tiers are scale and nothing else — the rightmost column is this
 program's arrangement, not the ladder's meaning. L0, which the module's own

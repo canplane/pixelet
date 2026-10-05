@@ -17,19 +17,19 @@ use crate::control::camera::config::camera_cfg;
 use crate::control::camera::config::camera_cfg::input::DOLLY_GAIN;
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MIN_DIST};
-use crate::control::camera::controller::{camera, center_local, look_dir, look_domain, map_center, set_eye_local};
+use crate::control::camera::controller::{camera, center_world, look_dir, look_domain, map_center, set_eye_world};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::control::navigation::support::target;
 use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
-use crate::world::frame::view::{view, view_compose};
+use crate::world::frame::view::view_compose;
 use crate::world::observation::heights_revision;
 use terrain_gate::{allowed_view, climb_polar, ViewTriple};
 use xpute_runtime::global::Global;
 
 pub struct OrbitState {
     pub dist: f64,
-    /// Canonical, so a rebase leaves it where it is. None until first put.
+    /// None until first put.
     to: Option<Pvf3>,
     pinch_from: Anchor,
 }
@@ -168,20 +168,20 @@ pub(crate) fn put(at: Pvf3, snap: bool) {
     orbit().to = Some(at);
     if snap {
         let (o, cam) = (orbit(), camera());
-        let local = target(&mut o.to, center_local().unwrap_or_default(), view().origin);
+        let center = target(&mut o.to, center_world().unwrap_or_default());
         let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
-        set_eye_local(&add3(&local, &e));
+        set_eye_world(&add3(&center, &e));
     }
 }
 
 /// Whether still moving; None where the camera stands nowhere.
 pub(crate) fn turn(delta: f64) -> Option<bool> {
-    let drawn_center = center_local()?;
+    let drawn_center = center_world()?;
     let vs = camera_store().intent;
     let (o, cam) = (orbit(), camera());
     let was = (drawn_center, o.dist, cam.polar, cam.azimuth);
 
-    let to = target(&mut o.to, drawn_center, view().origin);
+    let to = target(&mut o.to, drawn_center);
     let (center, mut moving) = approach_vec(drawn_center, to, POS_DAMP, delta, CENTER_EPS);
 
     let (dist, m) = approach_scalar(o.dist, vs.dist, CAM_DAMP, delta, DIST_EPS);
@@ -208,7 +208,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     // Written only where something moved, so nothing is written back at rest.
     if (center, o.dist, cam.polar, cam.azimuth) != was {
         let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
-        set_eye_local(&add3(&center, &e));
+        set_eye_world(&add3(&center, &e));
     }
     view_compose();
     Some(moving)

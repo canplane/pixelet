@@ -17,7 +17,7 @@ use crate::control::navigation::support::{is_unknown, pan_to, unknown_z};
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::{local_world_to_canonical, local_world_to_canonical_nearest};
+use crate::world::frame::coord::{world_to_canonical, world_to_canonical_nearest};
 use crate::world::frame::view::{view, view_compose, ObserverPose};
 use xpute_core::math::scalar::wrap;
 use xpute_runtime::global::Global;
@@ -55,9 +55,9 @@ pub fn units_per_px_at(dist: f64) -> f64 {
     2.0 * dist * libm::tan(FOV * core::f64::consts::PI / 360.0) / view().height
 }
 
-/// The eye is kept in doubles in the view's root frame and moves with the
-/// origin (`rebase`): a canonical point's 1/256 rounding held in it would
-/// walk the map center as the orbit re-derives the eye each frame.
+/// The eye is kept in the world's doubles: a canonical point's 1/256 rounding
+/// held in it would walk the map center as the orbit re-derives the eye each
+/// frame.
 pub struct Camera {
     pub eye: Option<V3>,
     /// Heading about Z, and the angle down from vertical.
@@ -76,11 +76,11 @@ pub fn camera() -> &'static mut Camera {
     })
 }
 
-pub fn eye_local() -> Option<V3> {
+pub fn eye_world() -> Option<V3> {
     camera().eye
 }
 
-pub fn set_eye_local(at: &V3) {
+pub fn set_eye_world(at: &V3) {
     camera().eye = Some(*at);
 }
 
@@ -102,19 +102,19 @@ pub fn polar() -> f64 {
     camera().polar
 }
 
-pub fn center_local() -> Option<V3> {
+pub fn center_world() -> Option<V3> {
     camera().eye?;
     if active() == Active::Tracked {
         return Some(view().pose.eye);
     }
-    let (e, c) = (eye_local()?, camera());
+    let (e, c) = (eye_world()?, camera());
     let (d, r) = (look_dir(c.polar, c.azimuth), dist());
     Some(std::array::from_fn(|k| e[k] + d[k] * r))
 }
 
 pub fn map_center() -> Option<Pvf3> {
-    let at = center_local()?;
-    let c = local_world_to_canonical(&at, view().origin);
+    let at = center_world()?;
+    let c = world_to_canonical(&at);
     Some(c)
 }
 
@@ -213,19 +213,10 @@ pub fn pose() -> ObserverPose {
         (None, _) => {
             let cam = camera();
             ObserverPose {
-                eye: eye_local().unwrap_or_default(),
+                eye: eye_world().unwrap_or_default(),
                 rotation: look_rotation(cam.polar, cam.azimuth),
             }
         }
-    }
-}
-
-pub fn rebase(by: V3) {
-    if let Some(e) = &mut camera().eye {
-        *e = sub3(e, &by);
-    }
-    if let Some(t) = &mut controllers().tracked {
-        t.world_at = sub3(&t.world_at, &by);
     }
 }
 
@@ -324,8 +315,8 @@ fn take_mode(want: CameraMode) -> bool {
     // Taken back to the nearest canonical point, or a few round trips walk the
     // character away. A height not yet known stays unknown.
     let unknown = target_center().is_some_and(|t| is_unknown(&t));
-    let center = center_local().map(|local| {
-        let c = local_world_to_canonical_nearest(&local, view().origin);
+    let center = center_world().map(|local| {
+        let c = world_to_canonical_nearest(&local);
         if unknown {
             unknown_z(&c)
         } else {

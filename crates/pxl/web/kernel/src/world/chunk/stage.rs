@@ -19,7 +19,7 @@ use crate::sched::profiler::record::{
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::table::{builds, Census, Frame};
-use crate::world::frame::view::{globe_anchor_local, view, view_resize};
+use crate::world::frame::view::{sea_under_eye, view, view_resize};
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_page::PoiPage;
@@ -118,20 +118,16 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     view_resize(ctx.state.width, ctx.state.height);
     let v = view();
 
-    let origin = v.chart();
-
-    let anchor = globe_anchor_local();
+    let anchor = sea_under_eye();
     let e = v.pose.eye;
     let frame = Frame {
         anchor,
-        origin,
-        eye: v.eye_at(),
+        eye: e,
         frustum: v.frustum.about(anchor),
         camera: sub3(&e, &anchor),
         delta_s: ctx.delta,
         remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,
-        center_z: origin[2] + anchor[2],
         globe: Some(globe()),
     };
 

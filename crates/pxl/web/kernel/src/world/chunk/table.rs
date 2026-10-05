@@ -62,9 +62,8 @@ enum Role {
 
 #[derive(Clone, Copy, Default)]
 pub struct Frame {
-    /// The globe's anchor in the root frame; chunks are measured about it.
+    /// The sea under the eye, in the world's doubles; chunks are measured about it.
     pub anchor: V3,
-    pub origin: V3,
     /// Draw translations are taken relative to the eye.
     pub eye: V3,
     /// About the anchor.
@@ -74,13 +73,14 @@ pub struct Frame {
     /// What is left of the turn's quota, not the quota itself.
     pub remaining_ms: f64,
     pub hard_slack_ms: f64,
-    pub center_z: f64,
     pub globe: Option<Globe>,
 }
 
 impl Frame {
+    /// A point about the anchor, its X on the anchor's lap.
     pub fn world_of(&self, at: V3) -> V3 {
-        [0, 1, 2].map(|k| at[k] - self.origin[k] - self.anchor[k])
+        let x = crate::world::frame::coord::unwrap_x(at[0], self.anchor[0]);
+        [x - self.anchor[0], at[1] - self.anchor[1], at[2] - self.anchor[2]]
     }
 }
 
@@ -919,7 +919,7 @@ impl Scheduler {
                 continue;
             }
             let (x0, y0) = s.base();
-            let translation = DrawList::translation([x0, y0, 0.0], frame.eye);
+            let translation = DrawList::translation([crate::world::frame::coord::unwrap_x(x0, frame.eye[0]), y0, 0.0], frame.eye);
             let Some(t) = s.tier(scale, generation) else { continue };
             // Slots are recycled between chunks, so a chunk must draw only from a slot
             // it holds; otherwise it can draw another chunk's ground.
@@ -1071,7 +1071,7 @@ impl Scheduler {
 }
 
 fn same_view(a: &Frame, b: &Frame) -> bool {
-    a.anchor == b.anchor && a.origin == b.origin && a.frustum == b.frustum && a.camera == b.camera
+    a.anchor == b.anchor && a.frustum == b.frustum && a.camera == b.camera
 }
 
 #[derive(Clone, Copy)]

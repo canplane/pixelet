@@ -14,7 +14,7 @@ use crate::layer::poi::{enabled, rank_of, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
 use crate::param::POI_MAJOR_RANK;
 use crate::sched::tick::TickContext;
 use crate::world::access::{Access, Detail, Ray};
-use crate::world::frame::view::{ndc_to_px, view};
+use crate::world::frame::view::ndc_to_px;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
@@ -89,8 +89,6 @@ pub fn step(ctx: &mut TickContext) {
         badge::retain(&HashSet::new());
         return;
     }
-    let origin = view().origin;
-    let base = view().chart();
     let pages = PoiPage::pyramid();
     if crate::world::pyramid::domain::current().is_none() {
         return;
@@ -161,7 +159,7 @@ pub fn step(ctx: &mut TickContext) {
         }
         let Some(width) = badge::width(label) else { continue };
         let center = stands.center(top);
-        let local = crate::world::frame::coord::canonical_to_local(&center, origin);
+        let local = crate::world::frame::coord::to_world(&center);
         p.batch.push(local[0], local[1], local[2], width, badge::ANCHOR, labeled.len() as f64);
         labeled.push((label, center));
     }
@@ -186,9 +184,11 @@ pub fn step(ctx: &mut TickContext) {
     p.hits.extend(p.drawn.iter().rev().map(|&i| (p.batch.screen[i as usize], labeled[i as usize].0, labeled[i as usize].1)));
     let mut instances = core::mem::take(&mut p.instances);
     instances.clear();
+    // f32 instances, so about the sea under the eye rather than the world's origin.
+    let about = crate::world::frame::view::sea_under_eye();
     for &i in &p.drawn {
         let i = i as usize;
-        let at = [p.batch.local_x[i], p.batch.local_y[i], p.batch.local_z[i]];
+        let at = [p.batch.local_x[i] - about[0], p.batch.local_y[i] - about[1], p.batch.local_z[i] - about[2]];
         instances.extend_from_slice(&billboard_instance(
             at,
             [p.batch.w_px[i] as f64, badge::HEIGHT],
@@ -198,7 +198,7 @@ pub fn step(ctx: &mut TickContext) {
     }
     if p.set.is_some() || !instances.is_empty() {
         let set = *p.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Poi));
-        place_billboard_set(set, base);
+        place_billboard_set(set, about);
         write_billboard_set(set, &instances);
         ctx.invalidate();
     }

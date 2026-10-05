@@ -16,7 +16,8 @@ pub mod STAGE_AT {
     pub const PROJ: usize = 16;
     /// Eye-relative, so the matrix holds no eye translation for a point's to cancel against (16).
     pub const EYE_VIEW_PROJ: usize = 32;
-    pub const EYE_LOCAL: usize = 48;
+    /// The eye and the sea under it, in the world's doubles (3 each).
+    pub const EYE: usize = 48;
     pub const GLOBE_ANCHOR: usize = 51;
     /// The viewport in CSS pixels (2).
     pub const VIEWPORT: usize = 54;
@@ -31,10 +32,8 @@ pub mod STAGE_AT {
     pub const SHADOWS: usize = 64;
     pub const AO_STRENGTH: usize = 65;
     pub const SCREEN_AO: usize = 66;
-    /// East and north, in units (2); the clouds are anchored to it.
-    pub const ORIGIN: usize = 67;
     /// Device pixels per CSS pixel the world is drawn at this frame.
-    pub const RESOLUTION: usize = 69;
+    pub const RESOLUTION: usize = 67;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

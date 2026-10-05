@@ -6,7 +6,7 @@
 
 use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::indexer::L2_IDX;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::ivec::{self};
 use pxl_spec::space::pyramid::LEAF_Z;
 use pxl_spec::space::v3::{cross3, dot3, sub3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
@@ -35,15 +35,14 @@ pub struct Scattered {
     pub scale: f64,
 }
 
-/// The ray is in the root frame, relative to `map_origin`. A decor wins only
+/// The ray is in the world's doubles. A decor wins only
 /// strictly nearer than `max_dist`, the world's hit, as a depth test decides.
-pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64) -> Option<DecorStruck> {
+pub fn raycast_decor(origin: V3, direction: V3, max_dist: f64) -> Option<DecorStruck> {
     let (_, sched) = kernel().world()?;
-    let frame = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin))];
-    let hit = hit_decor(sched, frame, origin, direction, max_dist)?;
+    let hit = hit_decor(sched, origin, direction, max_dist)?;
     if hit.band == NO_ENTRY {
         return Some(DecorStruck::Scattered(Scattered {
-            cell: hit.at.map(|v| (v / CELL.side()).floor() as i64),
+            cell: CELL.index_of(&crate::world::frame::coord::world_to_canonical(&hit.at)),
             group: hit.group,
             at: hit.at,
             rotation: hit.rotation,
@@ -91,7 +90,7 @@ fn decor_reach(sched: &Scheduler) -> f64 {
 }
 
 /// Hidden instances are tested too: the hidden one is what the eraser is over.
-fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
+fn hit_decor(sched: &Scheduler, o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
     let reach = decor_reach(sched);
@@ -101,8 +100,7 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
             continue;
         }
         let side = cell.rect().2;
-        let tx = base_x - origin[0];
-        let ty = base_y - origin[1];
+        let (tx, ty) = (crate::world::frame::coord::unwrap_x(base_x, o[0]), base_y);
         if !ray_meets_square(&o, &d, tx - reach, ty - reach, tx + side + reach, ty + side + reach, limit) {
             continue;
         }

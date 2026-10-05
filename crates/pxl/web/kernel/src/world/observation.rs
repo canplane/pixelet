@@ -27,12 +27,11 @@ use crate::world::pyramid::Layer as _;
 
 pub fn eye() -> Option<[f64; 3]> {
     crate::control::camera::controller::camera().eye?;
-    Some(view().eye_at())
+    Some(view().pose.eye)
 }
 
 pub fn frustum_of_view() -> Frustum {
-    let v = view();
-    v.frustum.about(v.chart().map(|c| -c))
+    view().frustum
 }
 
 /// Out to where the air ends the ground or the source's top ends, whichever

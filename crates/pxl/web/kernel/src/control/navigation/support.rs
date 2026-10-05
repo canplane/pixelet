@@ -8,15 +8,13 @@
 
 use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::pvf3::core::{FRAC_W, IVEC_Z_W};
-use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pyramid::LEAF_Z;
 use pxl_spec::space::v3::V3;
 
 use crate::shell::setting::store::settings_store;
 use crate::world::access::{Access, Answer, Detail, Ray};
-use crate::world::frame::coord::{canonical_to_local, local_world_to_canonical};
-use crate::world::frame::view::view;
+use crate::world::frame::coord::{to_world, world_to_canonical};
 
 /// The Z lane's floor, under any ground.
 const UNKNOWN_Z: i64 = -(1 << (IVEC_Z_W - 1)) << FRAC_W;
@@ -67,12 +65,12 @@ fn standing(at: &Pvf3) -> Answer<Option<Pvf3>> {
     Access::now().surface_support(at).map(|top| top.map(|top| stand_over(at, top)))
 }
 
-/// Where `at` is drawn in the frame at `origin`; at `held`'s height where nothing is known.
-pub fn resolve(at: &Pvf3, held: V3, origin: IVec) -> V3 {
+/// Where `at` is drawn; at `held`'s height where nothing is known.
+pub fn resolve(at: &Pvf3, held: V3) -> V3 {
     match standing(at) {
-        Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => canonical_to_local(&p, origin),
+        Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => to_world(&p),
         Answer::Exact(None) | Answer::Coarser(None, _) | Answer::Nothing(_) => {
-            let l = canonical_to_local(at, origin);
+            let l = to_world(at);
             [l[0], l[1], held[2]]
         }
     }
@@ -84,22 +82,21 @@ pub fn exact(at: &Pvf3) -> Option<Pvf3> {
 }
 
 /// `resolve` for a camera's target, writing the leaves' Z into it once known.
-pub fn target(to: &mut Option<Pvf3>, held: V3, origin: IVec) -> V3 {
+pub fn target(to: &mut Option<Pvf3>, held: V3) -> V3 {
     let Some(at) = *to else { return held };
     if let Some(p) = exact(&at) {
         *to = Some(p);
     }
-    resolve(&to.unwrap_or(at), held, origin)
+    resolve(&to.unwrap_or(at), held)
 }
 
 /// By `passage`, then down to the floor.
 pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) -> Pvf3 {
     let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
     let (s, c) = libm::sincos(azimuth);
-    let origin = view().origin;
-    let l = canonical_to_local(from, origin);
+    let l = to_world(from);
     let way = [lx * c + ly * s, -lx * s + ly * c];
-    let to = local_world_to_canonical(&[l[0] + way[0], l[1] + way[1], l[2]], origin);
+    let to = world_to_canonical(&[l[0] + way[0], l[1] + way[1], l[2]]);
     if is_unknown(from) {
         return unknown_z(&to);
     }

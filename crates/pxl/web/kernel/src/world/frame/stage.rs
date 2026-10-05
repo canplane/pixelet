@@ -12,7 +12,6 @@ use pxl_render::gpu::surface::SURFACES;
 
 use crate::sched::profiler::record::MB;
 use pxl_spec::asset::ingested::Asset;
-use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pyramid::{GROUND, LEAF_Z};
 use xpute_core::math::scalar::round;
 
@@ -36,7 +35,7 @@ use crate::world::frame::resolution::resolution_observe;
 /// season, as Google Earth and Cesium keep one mosaic.
 const EARTH: Asset = Asset::sky_earth_07_webp;
 
-use crate::world::frame::view::{globe_anchor_local, view};
+use crate::world::frame::view::{sea_under_eye, view};
 
 const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");
 
@@ -49,10 +48,8 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&camera);
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
     s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
-    s[STAGE_AT::EYE_LOCAL..STAGE_AT::EYE_LOCAL + 3].copy_from_slice(&v.pose.eye);
-    s[STAGE_AT::GLOBE_ANCHOR..STAGE_AT::GLOBE_ANCHOR + 3].copy_from_slice(&globe_anchor_local());
-    s[STAGE_AT::ORIGIN] = ivec::to_real(ivec::X(v.origin));
-    s[STAGE_AT::ORIGIN + 1] = ivec::to_real(ivec::Y(v.origin));
+    s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.pose.eye);
+    s[STAGE_AT::GLOBE_ANCHOR..STAGE_AT::GLOBE_ANCHOR + 3].copy_from_slice(&sea_under_eye());
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
     s[STAGE_AT::FOV] = v.fov;

@@ -10,7 +10,7 @@ use pxl_spec::space::v3::{add3, dot3, sub3};
 
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::environment::state::globe;
-use crate::world::frame::view::{globe_anchor_local, ndc_to_px, view};
+use crate::world::frame::view::{ndc_to_px, sea_under_eye, view};
 
 /// A fraction of the distance, since the badge holds a constant screen size.
 /// Generous: one badge too many costs a sprite.
@@ -20,7 +20,7 @@ const ANCHOR_REACH: f64 = 0.08;
 pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>) {
     let v = view();
     let eye = v.pose.eye;
-    let anchor = globe_anchor_local();
+    let anchor = sea_under_eye();
 
     let mut n = 0usize;
     let globe = globe();
@@ -53,7 +53,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>)
     for k in 0..n {
         let i = batch.order[k] as usize;
 
-        mat4_transform_point(&mut ndc, &v.local_view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
+        mat4_transform_point(&mut ndc, &v.world_view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
         let [sx, sy] = ndc_to_px([ndc[0], ndc[1]]);
 
         let w = batch.w_px[i] as f64;

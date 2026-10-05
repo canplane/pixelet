@@ -8,7 +8,7 @@
 //! cell carries and how it folds (`Folds`).
 
 use super::hierarchy::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of, Scale};
-use super::indexer::{L1, L2, L3, L3_IDX, L4};
+use super::indexer::{L2, L3, L3_IDX};
 use super::pvf3::core::FRAC_W;
 use super::pvf3::core::IVEC_X_W;
 use super::pvf3::ivec::{self, IVec};
@@ -261,11 +261,6 @@ pub const fn chunk_scale(z: u32) -> Scale {
 
 pub const fn chunk_span_of(z: u32) -> f64 {
     chunk_scale(z).side()
-}
-
-/// An anchor's side in units at `z`: the floating origin's cell.
-pub const fn anchor_span_of(z: u32) -> i64 {
-    L1.count_in(at_zoom(L4, z)) as i64
 }
 
 /// The 4×4 pages a zoom finer around a page's children, each at

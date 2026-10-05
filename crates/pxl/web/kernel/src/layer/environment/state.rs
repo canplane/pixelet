@@ -154,7 +154,7 @@ impl EnvironmentDraw {
             moon: self.moon,
             stars: self.stars,
             time: self.time,
-            altitude_km: (frame.center_z + over) * km_per_u,
+            altitude_km: over * km_per_u,
             ground_km: eye_ground() * km_per_u,
             km_per_u,
             latitude: lat.to_radians(),

@@ -1,7 +1,6 @@
 // pxl-kernel/layer/object/geometry.rs
 
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::Aabb;
 
@@ -14,9 +13,9 @@ pub fn anchor_center(anchor: &Pvf3) -> Pvf3 {
     pvf3::gather(pvf3::X(anchor) + half, pvf3::Y(anchor) + half, pvf3::Z(anchor) + half)
 }
 
-/// Relative to `map_origin`, the space the pick works in.
-pub fn object_aabb(obj: &Entry, map_origin: IVec) -> Aabb {
-    let min = crate::world::frame::coord::canonical_to_local(&obj.corner(), map_origin);
+/// In the world's doubles, the space the pick works in.
+pub fn object_aabb(obj: &Entry) -> Aabb {
+    let min = crate::world::frame::coord::to_world(&obj.corner());
     let max = min.map(|v| v + obj.size());
     Aabb { min, max }
 }

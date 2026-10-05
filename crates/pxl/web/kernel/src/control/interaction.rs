@@ -8,7 +8,6 @@ pub mod pick;
 use pxl_spec::bake::constant::{CELL, U_PER_CELL};
 use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
@@ -21,7 +20,7 @@ use crate::layer::object::geometry::{anchor_center, object_aabb};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, Entry, EntryAt};
 use crate::world::access::Hit;
-use crate::world::frame::view::{view, view_ray_local};
+use crate::world::frame::view::view_ray;
 use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -96,8 +95,8 @@ enum Struck {
 }
 
 /// The decor mesh hit wins only if closer than `hit.t`.
-fn resolve_struck(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<Struck> {
-    match raycast_decor(origin, direction, map_origin, hit.t) {
+fn resolve_struck(hit: &Hit, origin: V3, direction: V3) -> Option<Struck> {
+    match raycast_decor(origin, direction, hit.t) {
         Some(DecorStruck::Placed(at)) => {
             if let Some(o) = get_placed_object(at) {
                 return Some(Struck::Object(o));
@@ -110,8 +109,8 @@ fn resolve_struck(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Opt
 }
 
 /// A scattered instance is not an entry, so a placement lands as on the ground.
-fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) -> Option<Entry> {
-    match resolve_struck(hit, origin, direction, map_origin) {
+fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3) -> Option<Entry> {
+    match resolve_struck(hit, origin, direction) {
         Some(Struck::Object(o)) => Some(o),
         _ => resolve_hit_object(hit),
     }
@@ -121,10 +120,9 @@ fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3, map_origin: IVec) ->
 pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     let mut origin = [0.0; 3];
     let mut direction = [0.0; 3];
-    view_ray_local(ndc_x, ndc_y, &mut origin, &mut direction);
+    view_ray(ndc_x, ndc_y, &mut origin, &mut direction);
 
     let ui = interaction().holding;
-    let map_origin = view().origin;
     let Some(pick) = ray_pick(origin, direction) else {
         return clear_hover();
     };
@@ -137,12 +135,12 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         hover.approach = None;
         let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { object_size_of(ui.object_tier) };
         // A decor met in front of the pick is what the new cube goes flush against.
-        let precise_box = resolve_hit_target(&hit, origin, direction, map_origin).map(|o| object_aabb(&o, map_origin));
-        hover.coord = Some(world_adjacent_corner(&hit, placement_size, map_origin, precise_box.as_ref()));
+        let precise_box = resolve_hit_target(&hit, origin, direction).map(|o| object_aabb(&o));
+        hover.coord = Some(world_adjacent_corner(&hit, placement_size, precise_box.as_ref()));
         return;
     }
 
-    let struck = resolve_struck(&hit, origin, direction, map_origin);
+    let struck = resolve_struck(&hit, origin, direction);
     hover.object_at = match &struck {
         Some(Struck::Object(o)) => Some(o.at()),
         _ => None,
@@ -153,15 +151,15 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     };
     // A scattered decor is passed through.
     hover.approach = Some(match &struck {
-        Some(Struck::Object(o)) => world_adjacent_corner(&hit, U_PER_CELL, map_origin, Some(&object_aabb(o, map_origin))),
+        Some(Struck::Object(o)) => world_adjacent_corner(&hit, U_PER_CELL, Some(&object_aabb(o))),
         Some(Struck::Scattered(s)) => CELL.base_of(s.cell),
-        None => world_adjacent_corner(&hit, U_PER_CELL, map_origin, None),
+        None => world_adjacent_corner(&hit, U_PER_CELL, None),
     });
     hover.coord = Some(match struck {
         Some(Struck::Object(o)) => o.corner(),
         Some(Struck::Scattered(s)) => CELL.base_of(s.cell),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
-        None => world_struck_corner(&hit, U_PER_CELL, map_origin),
+        None => world_struck_corner(&hit, U_PER_CELL),
     });
 }
 

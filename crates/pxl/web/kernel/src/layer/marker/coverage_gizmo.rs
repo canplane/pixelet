@@ -1,8 +1,8 @@
 // pxl-kernel/layer/marker/coverage_gizmo.rs
 
 //! The coverage gizmo (the `gizmos` setting), as translucent debug lines: the
-//! drawn pieces, the goal's pieces nothing drawn covers, the drawn pieces'
-//! pages and the floating origin's cell, each colored as its `Mark` says.
+//! drawn pieces, the goal's pieces nothing drawn covers and the drawn pieces'
+//! pages, each colored as its `Mark` says.
 //! Every line is cut at each edge's ends on it, and each stretch drawn once in
 //! the highest mark over it, straight between its ends on the ground:
 //! overlaid, the lines read as none of them, and laid along the ground they
@@ -12,9 +12,8 @@ use std::collections::{HashMap, HashSet};
 
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pyramid::{anchor_span_of, Page, LEAF_Z};
+use pxl_spec::space::pyramid::{span_of, Page, LEAF_Z};
 use pxl_spec::space::v3::V3;
 
 use crate::layer::marker::debug_lines::DebugLines;
@@ -39,14 +38,12 @@ enum Mark {
     NoPage,
     /// Orange: a drawn piece's page.
     Page,
-    /// Blue: the floating origin's cell.
-    Anchor,
 }
 
 const MARKS: usize = Mark::ALL.len();
 
 impl Mark {
-    const ALL: [Mark; 7] = [Mark::Drawn, Mark::DrawnFromFloor, Mark::Unbuilt, Mark::FloorOnly, Mark::NoPage, Mark::Page, Mark::Anchor];
+    const ALL: [Mark; 6] = [Mark::Drawn, Mark::DrawnFromFloor, Mark::Unbuilt, Mark::FloorOnly, Mark::NoPage, Mark::Page];
 
     fn rgba(self) -> [f32; 4] {
         match self {
@@ -56,7 +53,6 @@ impl Mark {
             Mark::FloorOnly => [1.0, 0.0, 1.0, 0.6],
             Mark::NoPage => [1.0, 0.0, 0.0, 0.6],
             Mark::Page => [1.0, 0.3, 0.0, 0.9],
-            Mark::Anchor => [0.2, 0.4, 1.0, 0.8],
         }
     }
 
@@ -70,7 +66,7 @@ const DASHES: u32 = 16;
 
 /// What the lines were drawn for: the drawn set's, the goal's and the pages'
 /// revisions, and the origin.
-type Seen = (u32, u32, u32, IVec);
+type Seen = (u32, u32, u32, [u64; 3]);
 
 #[derive(Default)]
 pub struct CoverageGizmo {
@@ -89,7 +85,11 @@ impl CoverageGizmo {
             return;
         }
         let v = view();
-        let seen = (revisions.0, revisions.1, revisions.2, v.origin);
+        // Its lines are f32 about a leaf's corner under the eye, near enough to resolve.
+        let span = span_of(LEAF_Z);
+        let about = v.pose.eye.map(|c| (c / span).floor() * span);
+        let about = [about[0], about[1], 0.0];
+        let seen = (revisions.0, revisions.1, revisions.2, about.map(f64::to_bits));
         if self.seen == Some(seen) {
             return;
         }
@@ -99,7 +99,6 @@ impl CoverageGizmo {
         let lined: HashSet<Page> = Terrain::pyramid().demand().iter().map(|&p| line_top(p, top)).collect();
         let floor_only = |p: Page| p.z <= top && !lined.contains(&p);
         let over: HashSet<Chunk> = drawn.iter().flat_map(|d| d.ancestors()).collect();
-        let origin = v.chart();
         let mut lines = Lines::default();
         for &g in goal {
             let covered = drawn.binary_search(&g).is_ok() || over.contains(&g) || g.ancestors().any(|a| drawn.binary_search(&a).is_ok());
@@ -124,11 +123,9 @@ impl CoverageGizmo {
         for p in pages {
             lines.square(p.rect(), Mark::Page);
         }
-        let side = ivec::to_real(anchor_span_of(v.anchor_z()));
-        lines.square((origin[0], origin[1], side), Mark::Anchor);
         self.lane.clear();
-        lines.lay(&mut self.lane, origin, &Access::now());
-        self.lines.set(draw, origin, &self.lane);
+        lines.lay(&mut self.lane, about, &Access::now());
+        self.lines.set(draw, about, &self.lane);
     }
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
@@ -166,7 +163,7 @@ impl Lines {
     fn lay(&self, lane: &mut Vec<f32>, origin: V3, access: &Access) {
         let ground = |x: f64, y: f64| -> [f64; 3] {
             let z = access.surface_support(&projection::project(x, y, 0.0)).value().flatten().unwrap_or(0.0);
-            [x - origin[0], y - origin[1], z - origin[2]]
+            [crate::world::frame::coord::unwrap_x(x, origin[0]) - origin[0], y - origin[1], z - origin[2]]
         };
         let mut ends: Vec<(f64, bool, Mark)> = Vec::new();
         for (&(axis, at), edges) in &self.0 {
