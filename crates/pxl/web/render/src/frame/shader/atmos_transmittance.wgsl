@@ -1,4 +1,4 @@
-// Transmittance table, drawn once per device.
+// Transmittance table, drawn once per device, as optical depth to the top.
 
 const TRANSMITTANCE_STEPS: i32 = 40;
 
@@ -15,5 +15,5 @@ fn fs(v: TableOut) -> @location(0) vec4f {
     let h = sqrt(t * t + 2.0 * r * mu * t + r * r) - atmos_bottom_radius();
     depth += medium_at(h).extinction * dt;
   }
-  return vec4f(exp(-depth), 1.0);
+  return vec4f(depth, 1.0);
 }

@@ -187,8 +187,6 @@ const TRANSMITTANCE_SIZE: vec2f = vec2f(256.0, 64.0);
 const MULTISCATTER_SIZE: vec2f = vec2f(32.0, 32.0);
 const SKY_VIEW_SIZE: vec2f = vec2f(192.0, 108.0);
 const IRRADIANCE_SIZE: vec2f = vec2f(64.0, 16.0);
-// Hillaire's aerial perspective: across, up, and slices side by side along each ray.
-const AERIAL_SIZE: vec3f = vec3f(32.0, 32.0, 32.0);
 
 // Bruneton's: rows where transmittance changes.
 fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
@@ -234,8 +232,9 @@ fn horizon_dip(r: f32) -> f32 {
   return acos(clamp(v_horizon / r, -1.0, 1.0));
 }
 
-// Hillaire's: zenith squared toward the horizon, azimuth toward the sun.
-fn sky_view_uv(r: f32, mu: f32, light_cos: f32) -> vec2f {
+// Hillaire's directions, from 0 to 1: across, the azimuth from the light's,
+// squared toward it; up, the zenith, squared toward the horizon from either side.
+fn view_unit(r: f32, mu: f32, light_cos: f32) -> vec2f {
   let beta = horizon_dip(r);
   let zenith_horizon = PI - beta;
   let view_zenith = acos(clamp(mu, -1.0, 1.0));
@@ -247,6 +246,35 @@ fn sky_view_uv(r: f32, mu: f32, light_cos: f32) -> vec2f {
     let c = clamp((view_zenith - zenith_horizon) / beta, 0.0, 1.0);
     y = sqrt(c) * 0.5 + 0.5;
   }
-  let x = sqrt(clamp(-light_cos * 0.5 + 0.5, 0.0, 1.0));
-  return vec2f(coord_of(x, SKY_VIEW_SIZE.x), coord_of(y, SKY_VIEW_SIZE.y));
+  return vec2f(sqrt(clamp(-light_cos * 0.5 + 0.5, 0.0, 1.0)), y);
+}
+
+fn view_mu(r: f32, y: f32) -> f32 {
+  let beta = horizon_dip(r);
+  let zenith_horizon = PI - beta;
+  if (y < 0.5) {
+    let c = 1.0 - 2.0 * y;
+    return cos(zenith_horizon * (1.0 - c * c));
+  }
+  let c = 2.0 * y - 1.0;
+  return cos(zenith_horizon + beta * c * c);
+}
+
+// The direction at `unit`, up +z and the light's azimuth +x.
+fn view_dir(r: f32, unit: vec2f) -> vec3f {
+  let mu = view_mu(r, unit.y);
+  let light_cos = 1.0 - 2.0 * unit.x * unit.x;
+  let s = sqrt(max(1.0 - mu * mu, 0.0));
+  return vec3f(s * light_cos, s * sqrt(max(1.0 - light_cos * light_cos, 0.0)), mu);
+}
+
+// A light at cosine `mu_s` over the horizon, as `view_dir` measures it.
+fn view_light(mu_s: f32) -> vec3f {
+  let m = clamp(mu_s, -1.0, 1.0);
+  return vec3f(sqrt(max(1.0 - m * m, 0.0)), 0.0, m);
+}
+
+fn sky_view_uv(r: f32, mu: f32, light_cos: f32) -> vec2f {
+  let u = view_unit(r, mu, light_cos);
+  return vec2f(coord_of(u.x, SKY_VIEW_SIZE.x), coord_of(u.y, SKY_VIEW_SIZE.y));
 }

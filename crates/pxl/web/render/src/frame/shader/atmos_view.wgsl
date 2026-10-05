@@ -3,7 +3,6 @@
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
 @group(0) @binding(16) var earth_map: texture_2d_array<f32>;
 @group(0) @binding(17) var earth_pages: texture_2d_array<f32>;
-@group(0) @binding(19) var aerial_lut: texture_2d<f32>;
 
 
 /* where a point stands */
@@ -90,16 +89,6 @@ fn moon_view(dir: vec3f) -> vec3f {
   return table_view(moon_view_lut, dir, atmos_moon_dir());
 }
 
-// Bruneton: a ratio of two lookups to the top, reversed for a ray that meets the ground.
-fn transmittance_along(r: f32, mu: f32, d: f32, ground: bool) -> vec3f {
-  let rd = clamp(sqrt(d * d + 2.0 * r * mu * d + r * r), atmos_bottom_radius(), atmos_top_radius());
-  let mud = clamp((r * mu + d) / rd, -1.0, 1.0);
-  if (ground) {
-    return min(transmittance_to_top(rd, -mud) / max(transmittance_to_top(r, -mu), vec3f(1e-6)), vec3f(1.0));
-  }
-  return min(transmittance_to_top(r, mu) / max(transmittance_to_top(rd, mud), vec3f(1e-6)), vec3f(1.0));
-}
-
 struct Air {
   light: vec3f,
   end: vec3f,
@@ -122,7 +111,9 @@ fn air_along(dir: vec3f) -> Air {
   air.normal = frame_up();
   if (air.ground) {
     let d = to_land(r, mu);
-    air.end = transmittance_along(r, mu, d, true);
+    let veil = air_segment(dir, d);
+    air.end = veil.through;
+    air.light = veil.scattered * exposure();
     air.normal = normalize(frame_up() * r + dir * d);
     air.octaves = log2(d / atmos_km_per_u() / atmos_earth_reach());
   } else {
@@ -196,43 +187,23 @@ fn beyond(air: Air) -> vec3f {
 
 /* the air before a point */
 
-struct Veil {
-  through: vec3f,
-  scattered: vec3f,
-};
+// Within 2% of a fine march from orbit to the ground, and a tenth of that near it.
+const AIR_KNOTS: i32 = 8;
 
-// What the air leaves of a point and lays over it.
+// The point `d` km along `dir`, unexposed.
+fn air_segment(dir: vec3f, d: f32) -> Veil {
+  let v = gather(camera_r(), frame_up(), dir, d, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), AIR_KNOTS);
+  return Veil(v.through, v.scattered * atmos_white());
+}
+
 fn air_to(world_pos: vec3f) -> Veil {
-  var v: Veil;
   let to = world_pos - frame_camera_pos();
   let du = length(to);
   if (du < 1e-4) {
-    v.through = vec3f(1.0);
-    v.scattered = vec3f(0.0);
-    return v;
+    return Veil(vec3f(1.0), vec3f(0.0));
   }
-  let r = camera_r();
-  let mu = dot(to / du, frame_up());
-  let d = du * atmos_km_per_u();
-  v.through = transmittance_along(r, mu, d, meets_ground(r, mu));
-  v.scattered = aerial_at(world_pos, r, mu, d) * exposure();
-  return v;
-}
-
-// Between the two slices about the point's distance; nearer than the first, a share of it.
-fn aerial_at(world_pos: vec3f, r: f32, mu: f32, d: f32) -> vec3f {
-  let clip = frame_view_proj() * vec4f(world_pos, 1.0);
-  let ndc = clamp(clip.xy / max(clip.w, 1e-6), vec2f(-1.0), vec2f(1.0));
-  let x = coord_of(ndc.x * 0.5 + 0.5, AERIAL_SIZE.x);
-  let y = coord_of(ndc.y * 0.5 + 0.5, AERIAL_SIZE.y);
-  let s = sqrt(clamp(d / max(air_path(r, mu), 1e-6), 0.0, 1.0)) * AERIAL_SIZE.z - 1.0;
-  let k = clamp(floor(s), 0.0, AERIAL_SIZE.z - 1.0);
-  let near = textureSampleLevel(aerial_lut, atmos_sampler, vec2f((k + x) / AERIAL_SIZE.z, y), 0.0).rgb;
-  if (s < 0.0) {
-    return near * (s + 1.0);
-  }
-  let far = textureSampleLevel(aerial_lut, atmos_sampler, vec2f((min(k + 1.0, AERIAL_SIZE.z - 1.0) + x) / AERIAL_SIZE.z, y), 0.0).rgb;
-  return mix(near, far, s - k);
+  let v = air_segment(to / du, du * atmos_km_per_u());
+  return Veil(v.through, v.scattered * exposure());
 }
 
 fn aerial(color: vec3f, world_pos: vec3f) -> vec3f {

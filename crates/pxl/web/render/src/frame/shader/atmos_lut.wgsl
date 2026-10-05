@@ -1,5 +1,11 @@
-fn transmittance_to_top(r: f32, mu: f32) -> vec3f {
+// The table holds optical depth: differences of it stay exact where a ratio of
+// two near-zero transmittances drew a black line along the horizon.
+fn depth_to_top(r: f32, mu: f32) -> vec3f {
   return textureSampleLevel(transmittance_lut, atmos_sampler, transmittance_uv(r, mu), 0.0).rgb;
+}
+
+fn transmittance_to_top(r: f32, mu: f32) -> vec3f {
+  return exp(-depth_to_top(r, mu));
 }
 
 // The disc sets across its own width, so the air's light does not switch off in one frame.
@@ -7,4 +13,34 @@ fn sun_transmittance(r: f32, mu_s: f32) -> vec3f {
   let horizon = -sqrt(max(1.0 - (atmos_bottom_radius() / r) * (atmos_bottom_radius() / r), 0.0));
   let above = clamp((mu_s - horizon) / (2.0 * atmos_sun_angular_radius()) + 0.5, 0.0, 1.0);
   return transmittance_to_top(r, max(mu_s, horizon + 1e-4)) * above;
+}
+
+// Optical depth from a ray's lowest point (`ray_low`) to `t` km along it, from
+// radius `r` at cosine `mu`, negative before that point. Every lookup faces up
+// and out of it, so a ray past the ground's horizon needs no case of its own.
+fn ray_low(r: f32, mu: f32) -> vec3f {
+  return depth_to_top(max(r * sqrt(max(1.0 - mu * mu, 0.0)), atmos_bottom_radius()), 0.0);
+}
+
+fn depth_along(r: f32, mu: f32, low: vec3f, t: f32) -> vec3f {
+  let at = short_of_ground(r, mu, t);
+  let out = r * mu + at;
+  let rt = max(sqrt(max(r * r + 2.0 * r * mu * at + at * at, 0.0)), atmos_bottom_radius());
+  return sign(out) * (low - depth_to_top(rt, min(abs(out) / rt, 1.0)));
+}
+
+// No air past the ground: a ray stops where it meets it.
+fn short_of_ground(r: f32, mu: f32, t: f32) -> f32 {
+  return select(t, min(t, to_ground(r, mu)), meets_ground(r, mu));
+}
+
+// The height `t` km along the ray, `rt` from the center there: the difference
+// of two radii lost a short step near the ground.
+fn height_along(r: f32, mu: f32, t: f32, rt: f32) -> f32 {
+  return max(r - atmos_bottom_radius() + t * (2.0 * r * mu + t) / (rt + r), 0.0);
+}
+
+// (1 - exp(-x)) / x, without the cancellation where x is small.
+fn extinction_weight(x: vec3f) -> vec3f {
+  return select((vec3f(1.0) - exp(-x)) / max(x, vec3f(1e-8)), vec3f(1.0) - x * 0.5 + x * x / 6.0, x < vec3f(0.001));
 }
