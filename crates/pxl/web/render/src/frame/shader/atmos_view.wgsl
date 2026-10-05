@@ -22,7 +22,7 @@ fn light_at(r: f32, up: vec3f) -> Light {
   var l: Light;
   l.sun = frame_sun_color() * sun_transmittance(r, dot(up, frame_sun_dir())) * e;
   l.other = frame_other_color() * sun_transmittance(r, dot(up, frame_other_dir())) * e;
-  let sky = sky_irradiance(r, dot(up, atmos_sun_dir())) + sky_irradiance(r, dot(up, atmos_moon_dir())) * atmos_moon_light();
+  let sky = sky_ground(r, dot(up, atmos_sun_dir())).rgb + sky_ground(r, dot(up, atmos_moon_dir())).rgb * atmos_moon_light();
   l.fill = (sky * atmos_white() + atmos_night_sky()) * e;
   return l;
 }

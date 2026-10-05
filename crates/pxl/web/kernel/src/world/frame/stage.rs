@@ -16,7 +16,6 @@ use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pyramid::GROUND_Z;
 use xpute_core::math::scalar::round;
 
-use crate::control::camera::controller::{dist, units_per_px_at};
 use crate::host::handheld;
 use crate::io::load::{load_image, Load};
 use crate::kernel::kernel;
@@ -32,7 +31,7 @@ use crate::text::text_raster;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::stage::set_host_frame_stat;
 use crate::world::frame::resolution::resolution_observe;
-use crate::world::paging::floor;
+use crate::world::observation::observation;
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
 /// season, as Google Earth and Cesium keep one mosaic.
@@ -40,13 +39,13 @@ const EARTH: Asset = Asset::sky_earth_07_webp;
 
 use crate::world::frame::view::{globe_anchor_local, view};
 
-/// How far the view has gone over to the Earth's picture: none while the map
-/// center's pixel is finer than the top's cell a zoom finer, all once it is as
-/// coarse as the top's cell, the data's coarsest.
+/// How far the view has gone over to the Earth's picture: over the octave
+/// the eye rises through to the observation's far edge, past which the floor
+/// holds nothing.
 pub(crate) fn earth_share() -> f64 {
-    let Some(top) = floor::top() else { return 0.0 };
-    let zoom = f64::from(GROUND_Z) - libm::log2(units_per_px_at(dist()));
-    (f64::from(top) + 1.0 - zoom).clamp(0.0, 1.0)
+    let Some(o) = observation() else { return 0.0 };
+    let over = (o.eye[2] - o.ground).max(0.0);
+    (libm::log2(over / o.far) + 1.0).clamp(0.0, 1.0)
 }
 
 const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");

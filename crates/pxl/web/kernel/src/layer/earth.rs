@@ -6,8 +6,9 @@
 //! kept nowhere here; the global picture answers wherever no page is held.
 
 use pxl_spec::bake::earth_page::{self, EARTH_Z};
-use pxl_spec::space::lod::{fault_radius, squares_within, FAULT_ACROSS, FAULT_PAGES};
-use pxl_spec::space::pyramid::{page_at, Folds, Page};
+use pxl_spec::space::lod::{FAULT_ACROSS, FAULT_PAGES};
+use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pyramid::{pages_around, Folds, Page};
 use xpute_runtime::global::Global;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
@@ -97,25 +98,28 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
     }
 }
 
-/// The floor's window of pages at the top, its south-west page first, and per
-/// page row by row its layer plus one, zero where the global picture answers:
-/// residency as the GPU reads it, kept nowhere.
+/// The floor's pages at the top as a window, its south-west page first, and
+/// per page row by row its layer plus one, zero where the global picture
+/// answers: residency as the GPU reads it, kept nowhere.
 pub fn earth_window() -> ([i32; 2], [u32; FAULT_PAGES as usize]) {
     let mut layers = [0; FAULT_PAGES as usize];
     let pyramid = Earth::pyramid();
-    let Some(o) = pyramid.observation() else { return ([0; 2], layers) };
-    let squares = || squares_within(EARTH_Z, [o.eye[0], o.eye[1]], fault_radius(EARTH_Z));
-    let x0 = squares().map(|[x, _]| x).min().unwrap_or(0);
-    let y0 = squares().map(|[_, y]| y).min().unwrap_or(0);
-    for [x, y] in squares() {
-        let (dx, dy) = ((x - x0) as u32, (y - y0) as u32);
-        let Some(record) = pyramid.paging().frame(page_at(EARTH_Z, [x, y])) else { continue };
-        if dx < FAULT_ACROSS && dy < FAULT_ACROSS && uploads()[record as usize].is_none() {
+    let at = |p: Page| [ivec::X(p.page), ivec::Y(p.page)];
+    let Some([first, _]) = pyramid.floor().next().map(at) else { return ([0; 2], layers) };
+    // X wraps: the window's west page is the one fewest pages east of the first.
+    let around = pages_around(EARTH_Z);
+    let east = |x: i64| (x - first + around / 2).rem_euclid(around) - around / 2;
+    let x0 = first + pyramid.floor().map(|p| east(at(p)[0])).min().unwrap_or(0);
+    let y0 = pyramid.floor().map(|p| at(p)[1]).min().unwrap_or(0);
+    for p in pyramid.floor() {
+        let Some(record) = pyramid.paging().frame(p) else { continue };
+        if uploads()[record as usize].is_none() {
+            let [x, y] = at(p);
+            let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
             layers[(dy * FAULT_ACROSS + dx) as usize] = record;
         }
     }
-    let p = page_at(EARTH_Z, [x0, y0]);
-    ([pxl_spec::space::pvf3::ivec::X(p.page) as i32, pxl_spec::space::pvf3::ivec::Y(p.page) as i32], layers)
+    ([x0 as i32, y0 as i32], layers)
 }
 
 /// The frames the GPU keeps a layer for.
