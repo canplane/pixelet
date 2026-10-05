@@ -92,7 +92,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         return clear(p);
     };
 
-    let pos = projection::unproject(device.i, device.f);
+    let pos = crate::world::frame::coord::to_world(&device);
     // The fix names a place and not how high.
     if let Some(z) = Access::now().surface_support(&device).value().flatten() {
         p.last_known_center_z = Some(z);

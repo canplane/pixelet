@@ -9,7 +9,6 @@ use pxl_render::mesh::chunk_mesher::{mesh_words, write_lone_box, Heights, FINE_B
 use pxl_render::mesh::volume::NO_LAYER;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_of, placeable_cube_rgb, PlaceableCube};
-use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pyramid::LEAF_Z;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
@@ -182,7 +181,7 @@ pub fn hover_cursor_step() {
     let ghost = match (scattered_ghost, hovered, blocked) {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {
-            let [x, y, z] = projection::unproject(h.i, h.f);
+            let [x, y, z] = crate::world::frame::coord::to_world(&h);
             match (decor_kind, decor_pick) {
                 (Some(kind), Some((variant, rotation, scale))) if is_decor_ghost => Ghost::Decor {
                     at: [x + preview_size / 2.0, y + preview_size / 2.0, z],

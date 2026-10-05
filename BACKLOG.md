@@ -31,14 +31,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   (`pxl-geo-spec overture/properties.rs`), where Carto's `amenity-points.mss`
   gives each tag an icon and a color.
 
-## P3
-
-- **The TS-era local arithmetic, to be checked.** Before the kernel was
-  Rust, a point was made local by integer arithmetic in PVF3 and only then
-  made a float; today the GPU's points are the eye subtracted in doubles
-  (`pxl-render frame/draw.rs` `translation`). Whether anything that path
-  guarded is lost has not been checked against the old code.
-
 ## Parked, with the reason on file
 
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
