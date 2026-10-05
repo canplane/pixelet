@@ -1502,6 +1502,13 @@
           "doc": [
             "The map center in degrees: what the search measures distance from."
           ]
+        },
+        {
+          "name": "outside",
+          "type": "bool",
+          "doc": [
+            "The source has nothing at all under the map center: the page over it at the source's top was absent."
+          ]
         }
       ]
     },

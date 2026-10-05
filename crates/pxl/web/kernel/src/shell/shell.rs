@@ -90,6 +90,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             },
             is_off_center: map_navigation().is_off_center,
             center,
+            outside: at.is_some_and(|c| crate::layer::terrain::page::void_under(&c)),
         },
         location: LocationState {
             status: location.pose.status(),

@@ -761,11 +761,13 @@ pub struct MapState {
     pub is_off_center: bool,
     /// The map center in degrees: what the search measures distance from.
     pub center: Option<LonLat>,
+    /// The source has nothing at all under the map center: the page over it at the source's top was absent.
+    pub outside: bool,
 }
 
 impl MapState {
     /// The children it is written as.
-    pub const FIELDS: u32 = 3;
+    pub const FIELDS: u32 = 4;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
@@ -774,6 +776,7 @@ impl MapState {
             Some(r) => w.branch(LonLat::FIELDS, |w| r.write(w)),
             None => w.no_branch(),
         };
+        w.bool(Some(self.outside));
     }
 }
 

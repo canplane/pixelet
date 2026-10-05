@@ -396,10 +396,12 @@ export interface MapState {
   is_off_center: boolean;
   /** The map center in degrees: what the search measures distance from. */
   center: LonLat | null;
+  /** The source has nothing at all under the map center: the page over it at the source's top was absent. */
+  outside: boolean;
 }
 
 export function read_map_state(b: BranchCursor): MapState {
-  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat) };
+  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat), outside: b.at(3).get<boolean>() };
 }
 
 export interface LonLat {
