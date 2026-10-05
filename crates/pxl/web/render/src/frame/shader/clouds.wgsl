@@ -181,9 +181,10 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
 
   // The lights where the ray meets the layer, as any point's are; inside it
   // light comes from every side, the sky's over it and the ground's under it.
-  let at = light_of(frame_camera_pos() + dir * (max(t0, 0.0) / atmos_km_per_u()));
+  let entry = frame_camera_pos() + dir * (max(t0, 0.0) / atmos_km_per_u());
+  let at = light_of(entry);
   let light = lit_by(frame_sun_dir(), dir, at.sun) + lit_by(frame_other_dir(), dir, at.other);
-  let around = 0.5 * (at.fill + ground_bounce(at)) / PI;
+  let around = 0.5 * (at.fill + ground_bounce(up_at(entry), at)) / PI;
 
   // The cumulus, marched. A column holds the flat layer's optical depth, risen as
   // high as it is dense, so a full cloud fills the slab and a thin one stays near the base.

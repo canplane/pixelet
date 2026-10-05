@@ -692,9 +692,8 @@ fn fold_cell(children: &[u16], scale: Scale) -> u16 {
 
 const TOP_CELL: Scale = GROUND.side_at(TOP_Z);
 
-/// A top cube's X as the index keys it, and how many rounds of the world the
-/// asker's frame stands from it: a query or a ray across the antimeridian is
-/// moved to the stored copy, and what it meets moved back.
+/// A top cube's X as keyed, and the rounds of the world the asker stands from
+/// it: a query is moved to the stored copy, and what it meets moved back.
 fn named_top(x: i64) -> (i64, i64) {
     let named = wrap_index(INDEX_TOP, x);
     (named, (x - named) / around(INDEX_TOP))

@@ -225,9 +225,8 @@ static VOID_ELE: std::sync::LazyLock<Vec<i16>> = std::sync::LazyLock::new(|| vec
 static VOID_CELLS: std::sync::LazyLock<Vec<GroundCell>> = std::sync::LazyLock::new(|| vec![0; GROUND_LANE]);
 
 impl Terrain {
-    /// Where the source has nothing at all: void cells at sea level, so
-    /// nothing is drawn while the ground is still known and stays asked for,
-    /// and no child, so none is asked for under it.
+    /// Where the source has nothing: sea level, so the ground stays known and
+    /// nothing is drawn, and no child to ask for.
     pub fn void() -> Terrain {
         Terrain {
             ground: Ground { cells: Cow::Borrowed(&VOID_CELLS[..]) },

@@ -145,8 +145,7 @@ impl<L: Layer> Pyramid<L> {
         self.admit(p, |record| L::receive(record, pkt, phases))
     }
 
-    /// The bucket has no object for `p`: the page over it says its ground,
-    /// and at the source's top, where none is over it, `Layer::empty`.
+    /// No object for `p`: the page over it says its ground; at the source's top, `Layer::empty`.
     pub fn absent(&mut self, p: Page) {
         let top = L::TOP.or(floor::top()).unwrap_or(TOP_Z);
         match L::empty() {

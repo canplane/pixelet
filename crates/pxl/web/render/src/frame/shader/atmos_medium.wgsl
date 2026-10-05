@@ -24,15 +24,13 @@ struct Atmosphere {
   shown_fall: f32,
   moon_dir: vec3f,
   moon_light: f32,
-  // The same for every pixel, so the CPU computes it once.
+  // The same for every pixel.
   sun_seen: vec3f,
-  // The map center's longitude, radians; its latitude is the frame's globe's.
+  // Radians; the latitude is the frame's globe's.
   center_lon: f32,
-  // A moonless sky's irradiance on an up-facing face. It lights the ground and
-  // is not drawn: at the gain that lets the ground read, the sky drew pale blue.
+  // Lights the ground, never drawn: drawn, the sky went pale blue.
   night_sky: vec3f,
-  // The Earth's face is drawn at the elevation under the eye: a sea-level
-  // surface would leave the terrain floating, its chunk walls showing at the edge.
+  // The Earth's face under the eye: at sea level the terrain floated on it.
   land_altitude_km: f32,
   cloud_base: vec2u,
   cloud_frac: vec2f,
@@ -40,24 +38,21 @@ struct Atmosphere {
   cloud_count: u32,
   cloud_altitude_km: f32,
   cloud_gone_km: f32,
-  // A lit city's radiance where the Earth's picture holds all of it.
+  // A lit city's radiance where the picture holds all of it.
   city_light: vec3f,
-  // How far from the eye the Earth layer's pages are held, in units.
+  // In units.
   earth_reach: f32,
-  // The Earth layer's pages at the top about the eye: the south-west one, how
-  // many stand across the window and around the world; then per page, row by
-  // row, its layer plus one in four bits, zero where the global picture answers.
+  // The south-west page, pages across the window and around the world; then a
+  // page's layer plus one in four bits, row by row, zero for the global picture.
   earth_window: vec4i,
   earth_pages: vec4u,
 };
 
-// The struct's size in vec4 words, which the shader test holds to the host's.
+// The test holds both to the host's (gpu/atmosphere.rs).
 const ATMOS_VEC4S: u32 = 15u;
-// The bits a page's layer takes in `earth_pages` (gpu/atmosphere.rs PAGE_BITS).
 const EARTH_PAGE_BITS: u32 = 4u;
 
-// Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process.
+// Field by field, never as a struct: a struct lost Safari's WebGPU its GPU process.
 @group(0) @binding(8) var<uniform> atmos_words: array<vec4f, ATMOS_VEC4S>;
 
 fn atmos_rayleigh_scattering() -> vec3f { return atmos_words[0].xyz; }
@@ -97,7 +92,10 @@ fn atmos_earth_reach() -> f32 { return atmos_words[12].w; }
 fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[13]); }
 fn atmos_earth_pages() -> vec4u { return bitcast<vec4u>(atmos_words[14]); }
 
-// Can be above the atmosphere: the view from space.
+
+/* the medium */
+
+// Above the atmosphere from space.
 fn camera_r() -> f32 {
   return atmos_bottom_radius() + max(atmos_camera_altitude(), 0.001);
 }
@@ -125,13 +123,15 @@ fn rayleigh_phase(c: f32) -> f32 {
   return 3.0 * INV_4PI / 4.0 * (1.0 + c * c);
 }
 
-// Cornette-Shanks: Henyey-Greenstein with Rayleigh's symmetry, which keeps a
-// hazy sky bright opposite the sun.
+// Cornette-Shanks: keeps a hazy sky bright opposite the sun.
 fn mie_phase(c: f32) -> f32 {
   let g = atmos_mie_g();
   let k = 3.0 * INV_4PI / 2.0 * (1.0 - g * g) / (2.0 + g * g);
   return k * (1.0 + c * c) / pow(max(1.0 + g * g - 2.0 * g * c, 1e-4), 1.5);
 }
+
+
+/* rays */
 
 fn meets_sphere(r: f32, mu: f32, radius: f32) -> bool {
   return mu < 0.0 && r * r * (mu * mu - 1.0) + radius * radius >= 0.0;
@@ -153,13 +153,12 @@ fn to_ground(r: f32, mu: f32) -> f32 {
   return to_sphere(r, mu, atmos_bottom_radius());
 }
 
-// How far a ray runs through the air before the ground or the top ends it.
+// Through the air until the ground or the top.
 fn air_path(r: f32, mu: f32) -> f32 {
   return select(to_top(r, mu), to_ground(r, mu), meets_ground(r, mu));
 }
 
-// Raised to the ground under the map center for drawing only; the tables keep
-// the radius they were baked at.
+// For drawing only; the tables keep the radius they were baked at.
 fn land_radius() -> f32 {
   return atmos_bottom_radius() + atmos_land_altitude_km();
 }
@@ -172,7 +171,10 @@ fn to_land(r: f32, mu: f32) -> f32 {
   return to_sphere(r, mu, land_radius());
 }
 
-// Range ends land on the first and last texel centers, so nothing reads past them.
+
+/* tables */
+
+// Range ends on the first and last texel centers, so nothing reads past them.
 fn unit_of(u: f32, size: f32) -> f32 {
   return (u - 0.5 / size) / (1.0 - 1.0 / size);
 }
@@ -185,11 +187,10 @@ const TRANSMITTANCE_SIZE: vec2f = vec2f(256.0, 64.0);
 const MULTISCATTER_SIZE: vec2f = vec2f(32.0, 32.0);
 const SKY_VIEW_SIZE: vec2f = vec2f(192.0, 108.0);
 const IRRADIANCE_SIZE: vec2f = vec2f(64.0, 16.0);
-// Hillaire's aerial perspective, 32 across, 32 up, 32 slices along each ray,
-// the slices side by side in one picture.
+// Hillaire's aerial perspective: across, up, and slices side by side along each ray.
 const AERIAL_SIZE: vec3f = vec3f(32.0, 32.0, 32.0);
 
-// Bruneton's parameterization, which spends rows where transmittance changes.
+// Bruneton's: rows where transmittance changes.
 fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
   let bottom = atmos_bottom_radius();
   let top = atmos_top_radius();
@@ -233,8 +234,7 @@ fn horizon_dip(r: f32) -> f32 {
   return acos(clamp(v_horizon / r, -1.0, 1.0));
 }
 
-// Hillaire's sky-view table: zenith squared toward the horizon, azimuth
-// squared toward the sun, where the sky changes fastest.
+// Hillaire's: zenith squared toward the horizon, azimuth toward the sun.
 fn sky_view_uv(r: f32, mu: f32, light_cos: f32) -> vec2f {
   let beta = horizon_dip(r);
   let zenith_horizon = PI - beta;

@@ -83,7 +83,6 @@ pub(crate) const SKY_VIEW: usize = 2;
 const EXPOSURE_TEXEL: usize = 3;
 pub(crate) const IRRADIANCE: usize = 4;
 pub(crate) const AERIAL: usize = 5;
-/// Drawn by the sky view's pass.
 const MOON_VIEW: usize = 6;
 
 /// About a thousandth of a radian near the horizon, where the colors move fastest.
@@ -169,42 +168,13 @@ impl Atmosphere {
         ]
         .map(|id| pipelines.build(g, id, format::RGBA16F));
 
-        let air = buffer_entry(8, uniform);
-        let transmittance = [9, resource::VIEW, views[TRANSMITTANCE], 0, 0];
-        let linear = [11, resource::SAMPLER, sampler, 0, 0];
-        let multiscatter = [12, resource::VIEW, views[MULTISCATTER], 0, 0];
-        let mut groups = [0; 7];
-        let mut e = [0u32; 30];
-        e[..5].copy_from_slice(&air);
-        e[5..10].copy_from_slice(&transmittance);
-        e[10..15].copy_from_slice(&linear);
-        e[15..20].copy_from_slice(&multiscatter);
-        for (k, n) in [(TRANSMITTANCE, 5), (MULTISCATTER, 15), (IRRADIANCE, 20)] {
-            groups[k] = object();
-            g.bind_group(groups[k], passes[k].layouts[0], &e[..n]);
-        }
-        for (k, which) in [(SKY_VIEW, 0.0f32), (MOON_VIEW, 1.0)] {
-            let light = object();
-            g.buffer(light, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            g.write_buffer(light, 0, bytes(&[which, 0.0, 0.0, 0.0]));
-            e[20..25].copy_from_slice(&buffer_entry(14, light));
-            // The up the views are measured from is the frame's.
-            e[25..30].copy_from_slice(&buffer_entry(0, frame_buffer));
-            groups[k] = object();
-            g.bind_group(groups[k], passes[SKY_VIEW].layouts[0], &e);
-        }
-        // The aerial perspective marches the screen's rays: the sky's words hold them.
-        e[20..25].copy_from_slice(&buffer_entry(0, frame_buffer));
-        e[25..30].copy_from_slice(&buffer_entry(1, sky_buffer));
-        groups[AERIAL] = object();
-        g.bind_group(groups[AERIAL], passes[AERIAL].layouts[0], &e);
         let mut atmosphere = Atmosphere {
             uniform,
             words,
             sampler,
             views,
             passes,
-            groups,
+            groups: [0; 7],
             baked: false,
             drawn_for: None,
             moon_drawn_for: None,
@@ -226,12 +196,38 @@ impl Atmosphere {
                 (texture, view)
             },
         };
-        // The exposure pass reads the air but what it writes.
-        let mut e = vec![];
-        e.extend(buffer_entry(0, frame_buffer));
-        e.extend(atmosphere.entries().as_chunks::<5>().0.iter().filter(|c| c[0] != 13).flatten());
-        atmosphere.groups[EXPOSURE_TEXEL] = object();
-        g.bind_group(atmosphere.groups[EXPOSURE_TEXEL], atmosphere.passes[EXPOSURE_TEXEL].layouts[0], &e);
+        // Every table's group is the air's entries it reads and its own.
+        let air = atmosphere.entries();
+        let of = |bindings: &[u32], own: &[[u32; 5]]| -> Vec<u32> {
+            let shared = air.as_chunks::<5>().0.iter().filter(|c| bindings.contains(&c[0]));
+            shared.chain(own).flatten().copied().collect()
+        };
+        let medium = [8, 9, 11];
+        let multiscatter = [12, resource::VIEW, views[MULTISCATTER], 0, 0];
+        let frame = buffer_entry(0, frame_buffer);
+        let light = |which: f32| {
+            let light = object();
+            g.buffer(light, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            g.write_buffer(light, 0, bytes(&[which, 0.0, 0.0, 0.0]));
+            buffer_entry(14, light)
+        };
+        // The exposure reads the air but what it writes.
+        let unexposed: Vec<u32> = air.as_chunks::<5>().0.iter().map(|c| c[0]).filter(|&b| b != 13).collect();
+        let reads: [(usize, Vec<u32>); 7] = [
+            (TRANSMITTANCE, of(&[8], &[])),
+            (MULTISCATTER, of(&medium, &[])),
+            (IRRADIANCE, of(&medium, &[multiscatter])),
+            // The views are measured from the frame's up.
+            (SKY_VIEW, of(&medium, &[multiscatter, light(0.0), frame])),
+            (MOON_VIEW, of(&medium, &[multiscatter, light(1.0), frame])),
+            // The screen's rays are the sky's words.
+            (AERIAL, of(&medium, &[multiscatter, frame, buffer_entry(1, sky_buffer)])),
+            (EXPOSURE_TEXEL, of(&unexposed, &[frame])),
+        ];
+        for (k, entries) in reads {
+            atmosphere.groups[k] = object();
+            g.bind_group(atmosphere.groups[k], atmosphere.passes[pass_of(k)].layouts[0], &entries);
+        }
         atmosphere
     }
 
@@ -340,12 +336,17 @@ impl Atmosphere {
     fn table(&self, g: &Gpu, encoder: u32, k: usize, stamp: &mut Stamp) {
         let pass = object();
         g.pass(pass, encoder, &pass_desc(self.views[k], load::CLEAR, 0, load::CLEAR, 0.0, stamp.pass()));
-        g.set_pipeline(pass, self.passes[if k == MOON_VIEW { SKY_VIEW } else { k }].pipeline);
+        g.set_pipeline(pass, self.passes[pass_of(k)].pipeline);
         g.set_bind_group(pass, 0, self.groups[k], &[]);
         g.draw(pass, 3, 1, 0, 0);
         g.end(pass);
         release(pass);
     }
+}
+
+/// The moonlit sky is drawn by the sky view's pass.
+fn pass_of(table: usize) -> usize {
+    if table == MOON_VIEW { SKY_VIEW } else { table }
 }
 
 fn moved(drawn: Option<(f32, f32)>, now: (f32, f32)) -> bool {

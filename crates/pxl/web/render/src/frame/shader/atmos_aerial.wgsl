@@ -1,8 +1,6 @@
-// Hillaire's aerial perspective: the light the air between the eye and each
-// distance along each ray through the screen gathers, unexposed, drawn every
-// frame. A slice is a share of its ray's whole path through the air, squared
-// toward the eye, so the last is what the sky-view table holds and the terrain
-// meets the Earth past it in one air. The march is the sky's.
+// Hillaire's aerial perspective, every frame: the light the air gathers along
+// each screen ray to each slice, unexposed. A slice is a share of its ray's
+// path, squared toward the eye, so the last is the sky-view table's.
 
 // Unreal's two steps a slice (r.SkyAtmosphere.AerialPerspectiveLUT.SampleCountMaxPerSlice).
 const AERIAL_STEPS_PER_SLICE: i32 = 2;
@@ -13,7 +11,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let at = vec2f(v.clip.x - slice * AERIAL_SIZE.x, v.clip.y) / AERIAL_SIZE.xy;
   let ndc = vec2f(unit_of(at.x, AERIAL_SIZE.x), unit_of(at.y, AERIAL_SIZE.y)) * 2.0 - 1.0;
   let ray = normalize(sky_ray() * vec3f(ndc, 1.0));
-  // Into the frame whose up is +z, which the march is written in.
+  // Into the march's frame, up +z.
   let up = frame_up();
   let east = normalize(select(cross(up, vec3f(0.0, 1.0, 0.0)), cross(up, vec3f(1.0, 0.0, 0.0)), abs(up.y) > 0.9));
   let north = cross(up, east);

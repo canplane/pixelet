@@ -51,8 +51,7 @@ impl Chunk {
         self.z
     }
 
-    /// As PVF3 names it: the copy the lane holds, which `of` makes. A chunk
-    /// the view counts on round the world is the same chunk under this name.
+    /// The lane's copy, as `of` makes it: one name for every round of the world.
     pub fn named(self) -> Chunk {
         Chunk {
             z: self.z,
@@ -87,8 +86,7 @@ impl Chunk {
             .map(move |[qx, qy]| ([qx, qy], page_at(z, [px + qx, py + qy])))
     }
 
-    /// The column's corner at no height, as PVF3 names it: what the 2D stores
-    /// key it by. Where it stands is `rect`'s.
+    /// The corner at no height, as the 2D stores key it; where it stands is `rect`'s.
     pub fn corner(self) -> IVec {
         let [x, y, _] = self.at;
         chunk_scale(self.z).base_of([x, y, 0]).i
