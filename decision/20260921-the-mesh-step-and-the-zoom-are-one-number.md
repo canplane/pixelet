@@ -503,7 +503,7 @@ of the unit system rather than a participant in it.
 ## The bake
 
 Bake z16 from PostGIS once, as today, and fold upward — z15 from z16, z14 from
-z15 — to the projection ceiling. No query runs above the leaves.
+z15 — to z6. No query runs above the leaves.
 
 Building incrementally is what makes the fold rule free. The bake and the
 client compose the same one-zoom function the same number of times, so any
@@ -628,13 +628,9 @@ document is about what the record is named and how it composes.
 
 ## What this does not do
 
-- It does not switch projection. Web Mercator on a plane is honest to about
-  z6, which is where the page spans 8.93° of latitude and the
-  page-constant vertical scale is 12% off. That is also where Mapbox's globe
-  hands over to Mercator, arrived at from the other direction. Going past it
-  is a vertex transform over the same tiles — Mapbox reprojects the same Web
-  Mercator tiles on the client and drapes raster ones over a mesh — not a
-  different data model. The grid here does not block it.
+- It does not switch projection. The globe is a vertex transform over the
+  same tiles — Mapbox reprojects the same Web Mercator tiles on the client
+  and drapes raster ones over a mesh — not a different data model.
 - It does not change what a record holds, only which record exists.
 - It does not touch POI, which shares L3 and so re-bakes with the page size,
   but whose own generalization is its `rank` lane and a separate question.

@@ -95,14 +95,22 @@ fn air_along(dir: vec3f) -> Air {
 }
 
 // The Earth's face where a ray meets the ground past the terrain, `n` the
-// ground's up there: its reflectance, and in alpha its lights' square root.
-// The point is taken back to the flat map by the globe's own inverse, so it is
-// looked up and measured where the kernel holds its pages.
+// ground's up there in the map center's east, north and up: its reflectance,
+// and in alpha its lights' square root. The global picture is the sphere's,
+// read at the point's latitude and longitude; the pages are the flat map's,
+// read at the point the globe's own inverse gives, where the kernel holds them.
 fn earth_face(n: vec3f) -> vec4f {
-  let flat = off_globe_of(planet_center() + n * frame_planet().z, frame_planet(), frame_globe());
-  let mercator = vec2f(atmos_center_lon(), log(frame_globe().x)) + flat / frame_globe().w;
-  let uv = vec2f(fract(mercator.x / TAU + 0.5), 0.5 - mercator.y / TAU);
+  let sin_lat = frame_globe().y;
+  let cos_lat = frame_globe().z;
+  let center_lon = atmos_center_lon();
+  let east = vec3f(-sin(center_lon), cos(center_lon), 0.0);
+  let north = vec3f(-sin_lat * cos(center_lon), -sin_lat * sin(center_lon), cos_lat);
+  let up = vec3f(cos_lat * cos(center_lon), cos_lat * sin(center_lon), sin_lat);
+  let p = east * n.x + north * n.y + up * n.z;
+  let uv = vec2f(fract(atan2(p.y, p.x) / TAU + 0.5), 0.5 - asin(clamp(p.z, -1.0, 1.0)) / PI);
   let global = textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0);
+  let flat = off_globe_of(planet_center() + n * frame_planet().z, frame_planet(), frame_globe());
+  let mercator = vec2f(center_lon, log(frame_globe().x)) + flat / frame_globe().w;
   // The Earth layer's page there, a z6 pixel a texel, where the window holds
   // one, taking over from the global picture, a z3 one, over the octave in
   // which a pixel goes from covering a z5 cell, at the pages' reach, to a z6

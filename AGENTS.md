@@ -107,7 +107,8 @@ Which technology draws each `@platform/` piece is
 ## One spatial model
 
 Everything placed on the map sits in one hierarchy, the **pyramid**, from
-z16 — terrain's atom, a 1u cell — to z6, each zoom's cells twice as wide as
+z16 — terrain's atom, a 1u cell — to z6, where it stops for now and not by
+any limit (a coarser zoom extends it), each zoom's cells twice as wide as
 the next finer's; a page is 512 cells a side at every zoom and named by its
 place in that zoom's page grid. A zoom names only a cell's scale (256-pixel
 tiles): terrain's cell is z16, objects' go to z19. A page's size, its key or

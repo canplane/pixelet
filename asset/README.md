@@ -68,6 +68,6 @@ deno task bake:earth
 
 It fetches Blue Marble Next Generation's July of 2004 and the Black Marble's
 lights of 2016 (NASA's Earth Observatory) and makes both forms of the Earth's
-picture from them: `sky/earth/07.webp`, the global one, the Mercator square at 2048 × 2048, and the
+picture from them: `sky/earth/07.webp`, the global one at 2048 × 1024, and the
 Earth layer's pages under `out/earth/<version>/`, which publish as a bake does.
 Run the ingest afterward.
