@@ -75,7 +75,7 @@ fn the_cover_stands_all_around_and_ground_with_no_answer_is_no_piece() {
     }
     // Nothing is seen behind the eye, so the cover stands there at the top.
     let behind = pieces_at(d.pieces(), [EYE[0] - 20_000.0, EYE[1], GROUND]);
-    assert_eq!(behind[0].z(), TOP_Z, "ground behind the eye refined");
+    assert_eq!(behind[0].tile_zoom(), TOP_Z, "ground behind the eye refined");
 }
 
 /// From 2u over flat ground: refined across the screen as the criterion
@@ -92,7 +92,7 @@ fn grazing_ground_refines_across_the_screen_and_not_along_its_depth() {
                 let p = [EYE[0] + r * libm::cos(b), EYE[1] + r * libm::sin(b), GROUND - 0.5];
                 let over = pieces_at(&pieces, p);
                 assert_eq!(over.len(), 1, "{tau:?}: {p:?} under {over:?}");
-                let z = over[0].z() as i32;
+                let z = over[0].tile_zoom() as i32;
                 let wanted = tau.z_at(r) as i32;
                 assert!(z >= wanted, "{tau:?}: ground {r} away at {bearing}° left at z{z} where its cell crosses a cell finer than z{wanted}");
                 assert!(z - 1 <= wanted, "{tau:?}: ground {r} away refined to z{z}, past what its error across asks (z{wanted})");
@@ -117,7 +117,10 @@ fn a_far_pole_inside_a_cell_is_not_refined_and_not_a_hole() {
     assert_eq!(pieces_at(thin.pieces(), top).len(), 1, "the pole is a hole or under two pieces");
 
     let tall = fixture::domain(o, &[tau], &pole(60.0));
-    let (z_flat, z_tall) = (pieces_at(flat.pieces(), top)[0].z(), pieces_at(tall.pieces(), [at[0] + 0.25, at[1] + 0.25, GROUND + 30.0])[0].z());
+    let (z_flat, z_tall) = (
+        pieces_at(flat.pieces(), top)[0].tile_zoom(),
+        pieces_at(tall.pieces(), [at[0] + 0.25, at[1] + 0.25, GROUND + 30.0])[0].tile_zoom(),
+    );
     assert!(z_tall > z_flat, "a pole crossing cells up the screen not refined: z{z_tall} against z{z_flat}");
 }
 
@@ -128,7 +131,7 @@ fn hidden_ground_keeps_its_depth() {
     let world = World::flat(GROUND).with([x0, -50_000.0, GROUND], [x1, 50_000.0, GROUND + 1_000.0]);
     let mut d = domain(eye(EYE, Some([1.0, 0.0, 0.0]), FAR, GROUND), &world);
     let cuts = cuts(&mut d);
-    assert!(cuts[0].2.iter().any(|c| c.z() == LEAF_Z - 1), "the ground before the wall is not refined");
+    assert!(cuts[0].2.iter().any(|c| c.tile_zoom() == LEAF_Z - 1), "the ground before the wall is not refined");
     for (tau, _, splits) in cuts {
         for c in splits {
             assert!(c.rect().0 < x1, "{tau:?}: {c:?} is wholly behind the wall and split");
@@ -145,15 +148,15 @@ fn the_cover_is_the_sources_top() {
         ..eye(EYE, Some([1.0, 0.1, -0.2]), demand_reach(top), GROUND)
     };
     let mut d = domain(o, &World::flat(GROUND));
-    assert!(d.roots().iter().all(|c| c.z() == top), "a root not of the source's top");
+    assert!(d.roots().iter().all(|c| c.tile_zoom() == top), "a root not of the source's top");
     for (tau, pieces, splits) in cuts(&mut d) {
-        assert!(pieces.iter().chain(&splits).all(|c| c.z() >= top), "{tau:?}: a piece or split over the source's top");
+        assert!(pieces.iter().chain(&splits).all(|c| c.tile_zoom() >= top), "{tau:?}: a piece or split over the source's top");
         for p in around(EYE, demand_reach(top) * 0.5, GROUND) {
             assert_eq!(pieces_at(&pieces, p).len(), 1, "{tau:?}: {p:?} in a gap or under two pieces");
         }
     }
     let c = d.pieces()[0];
-    assert!(d.wanted_over(c).z() >= top, "the view said to draw over the source's top");
+    assert!(d.wanted_over(c).tile_zoom() >= top, "the view said to draw over the source's top");
 }
 
 #[test]

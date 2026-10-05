@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, name: &str, top: Zoom) -> Result<Option<String>, Failure> {
     let p = tile_of_name(name).ok_or(Failure::BadName)?;
-    if p.z < top {
+    if p.zoom < top {
         return Err(Failure::Unavailable);
     }
     bake_missing(data, runner, kind, p).await?;
@@ -25,7 +25,7 @@ pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind,
 }
 
 fn key(p: Tile) -> String {
-    format!("z{}/{}", p.z, p.tile)
+    format!("z{}/{}", p.zoom, p.tile)
 }
 
 fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile) -> Pin<Box<dyn Future<Output = Result<(), Failure>> + Send>> {
@@ -36,7 +36,7 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile) ->
                 if !d.source.holds(p) {
                     return d.cache.publish(&key(p), None).map_err(Failure::from);
                 }
-                if p.z < LEAF_Z {
+                if p.zoom < LEAF_Z {
                     for below in d.source.sources(p) {
                         tokio::time::timeout_at(deadline, bake_missing(d.clone(), runner.clone(), kind, below))
                             .await
@@ -55,7 +55,7 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile) ->
 }
 
 pub(super) fn execute<L: Layer>(p: Tile, cache: &Path, out: &Path, leaf: impl FnOnce() -> Result<Option<L>, String>, absent: &impl Absent<L>) -> Result<(), String> {
-    let tile = if p.z == LEAF_Z { leaf()? } else { fold_stored(&TileSet::new(cache), p, absent)? };
+    let tile = if p.zoom == LEAF_Z { leaf()? } else { fold_stored(&TileSet::new(cache), p, absent)? };
     let packet = tile.map(|tile| pack(&tile.encode()?, Level::Live).map_err(|e| e.to_string())).transpose()?;
     job::write_packet(out, packet.as_deref())
 }

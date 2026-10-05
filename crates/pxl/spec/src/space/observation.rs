@@ -87,7 +87,7 @@ impl Observation {
 /// What stands in `region` known at `z`; the leaves' for anything finer.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Requirement {
-    pub z: Zoom,
+    pub zoom: Zoom,
     pub region: Aabb,
 }
 
@@ -139,15 +139,15 @@ pub struct Tiled;
 impl Storage for Tiled {
     /// Every tile under the region; edges are inclusive south and west only.
     fn tiles(&self, r: &Requirement, each: &mut dyn FnMut(Tile)) {
-        let span = units(r.z);
+        let span = units(r.zoom);
         let rows = |k: usize| {
             let first = (r.region.min[k] / span).floor() as i64;
             first..=((r.region.max[k] / span).ceil() as i64 - 1).max(first)
         };
-        let ys = tile_rows(r.z);
+        let ys = tile_rows(r.zoom);
         for y in rows(1).filter(|y| ys.contains(y)) {
             for x in rows(0) {
-                each(tile_at(r.z, [x, y]));
+                each(tile_at(r.zoom, [x, y]));
             }
         }
     }
@@ -187,7 +187,7 @@ impl DemandEstimator for ByBounds {
                 let Some(held) = bounds.contents(z, region).within(region) else { continue };
                 let m = o.measure(&held);
                 if m.seen && m.near < to && m.near <= o.far && m.far >= from {
-                    each(Requirement { z, region });
+                    each(Requirement { zoom: z, region });
                 }
             }
         }

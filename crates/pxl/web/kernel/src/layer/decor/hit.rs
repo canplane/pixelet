@@ -97,7 +97,7 @@ fn hit_decor(sched: &Scheduler, o: V3, d: [f64; 3], max_dist: f64) -> Option<Dec
     let reach = decor_reach(sched);
     for (cell, base_x, base_y, words) in crate::layer::decor::cell::shown() {
         // Only leaf cells name their placed entries; edits are made close by.
-        if cell.z() != LEAF_Z {
+        if cell.tile_zoom() != LEAF_Z {
             continue;
         }
         let side = cell.rect().2;

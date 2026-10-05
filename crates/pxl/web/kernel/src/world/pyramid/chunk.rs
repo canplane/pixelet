@@ -19,48 +19,50 @@ const TILE_STEPS: u32 = (chunk_zoom(LEAF_Z) - LEAF_Z) as u32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Chunk {
-    /// The zoom of its cells.
-    z: Zoom,
+    tile_zoom: Zoom,
     at: [i64; 3],
 }
 
 impl Chunk {
     pub fn of(z: Zoom, at: &Pvf3) -> Chunk {
-        Chunk { z, at: index_of(chunk_zoom(z), at) }
+        Chunk {
+            tile_zoom: z,
+            at: index_of(chunk_zoom(z), at),
+        }
     }
 
     pub fn at(z: Zoom, at: [i64; 3]) -> Chunk {
-        Chunk { z, at }
+        Chunk { tile_zoom: z, at }
     }
 
     /// As the bounds of a range in chunk order.
     pub fn column_of(z: Zoom, at: &Pvf3) -> std::ops::RangeInclusive<Chunk> {
         let [x, y, _] = index_of(chunk_zoom(z), at);
-        Chunk { z, at: [x, y, i64::MIN] }..=Chunk { z, at: [x, y, i64::MAX] }
+        Chunk { tile_zoom: z, at: [x, y, i64::MIN] }..=Chunk { tile_zoom: z, at: [x, y, i64::MAX] }
     }
 
     pub fn beside(self, dx: i64, dy: i64, dh: i64) -> Chunk {
         let [x, y, h] = self.at;
         Chunk {
-            z: self.z,
+            tile_zoom: self.tile_zoom,
             at: [x + dx, y + dy, h + dh],
         }
     }
 
-    pub fn z(self) -> Zoom {
-        self.z
+    pub fn tile_zoom(self) -> Zoom {
+        self.tile_zoom
     }
 
     /// The lane's copy, as `of` makes it: one name for every round of the world.
     pub fn named(self) -> Chunk {
         Chunk {
-            z: self.z,
-            at: wrap_cell(chunk_zoom(self.z), self.at),
+            tile_zoom: self.tile_zoom,
+            at: wrap_cell(chunk_zoom(self.tile_zoom), self.at),
         }
     }
 
     pub fn tile(self) -> Tile {
-        tile_at(self.z, ancestor_of(self.column().1, TILE_STEPS))
+        tile_at(self.tile_zoom, ancestor_of(self.column().1, TILE_STEPS))
     }
 
     pub fn in_tile(self) -> (u32, u32) {
@@ -79,7 +81,7 @@ impl Chunk {
         };
         let tile = self.tile();
         let [px, py] = [ivec::X(tile.tile), ivec::Y(tile.tile)];
-        let (z, rows) = (self.z, tile_rows(self.z));
+        let (z, rows) = (self.tile_zoom, tile_rows(self.tile_zoom));
         steps(y0)
             .flat_map(move |qy| steps(x0).map(move |qx| [qx, qy]))
             .filter(move |&[qx, qy]| [qx, qy] != [0, 0] && rows.contains(&(py + qy)))
@@ -89,25 +91,25 @@ impl Chunk {
     /// The corner at no height, as the 2D stores key it; where it stands is `rect`'s.
     pub fn corner(self) -> IVec {
         let [x, y, _] = self.at;
-        base_of(chunk_zoom(self.z), [x, y, 0]).i
+        base_of(chunk_zoom(self.tile_zoom), [x, y, 0]).i
     }
 
     /// From the index, which runs on round the world as the view's frame does.
     pub fn rect(self) -> (f64, f64, f64) {
-        let span = units(chunk_zoom(self.z));
+        let span = units(chunk_zoom(self.tile_zoom));
         (self.at[0] as f64 * span, self.at[1] as f64 * span, span)
     }
 
     /// From the index, not the corner point: a point's height is 16 bits
     /// (±32,768 units) and a z5 chunk is 65,536 tall.
     pub fn z_range(self) -> (f64, f64) {
-        let span = units(chunk_zoom(self.z));
+        let span = units(chunk_zoom(self.tile_zoom));
         let z0 = self.at[2] as f64 * span;
         (z0, z0 + span)
     }
 
     pub fn region(self) -> Aabb {
-        let span = units(chunk_zoom(self.z));
+        let span = units(chunk_zoom(self.tile_zoom));
         let (x0, y0, _) = self.rect();
         let z0 = self.z_range().0;
         Aabb {
@@ -117,17 +119,17 @@ impl Chunk {
     }
 
     pub fn node(self) -> (Zoom, [i64; 3]) {
-        (chunk_zoom(self.z), self.at)
+        (chunk_zoom(self.tile_zoom), self.at)
     }
 
     pub fn column(self) -> (Zoom, [i64; 2]) {
         let [x, y, _] = self.at;
-        (chunk_zoom(self.z), [x, y])
+        (chunk_zoom(self.tile_zoom), [x, y])
     }
 
     pub fn parent(self) -> Option<Chunk> {
-        (self.z > TOP_Z).then(|| Chunk {
-            z: self.z - 1,
+        (self.tile_zoom > TOP_Z).then(|| Chunk {
+            tile_zoom: self.tile_zoom - 1,
             at: parent_of(self.at),
         })
     }
@@ -139,7 +141,7 @@ impl Chunk {
     /// In `slot_of`'s order.
     pub fn children(self) -> [Chunk; CHILDREN] {
         std::array::from_fn(|slot| Chunk {
-            z: self.z + 1,
+            tile_zoom: self.tile_zoom + 1,
             at: child_of(self.at, slot),
         })
     }

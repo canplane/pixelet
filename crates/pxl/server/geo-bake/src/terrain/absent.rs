@@ -62,11 +62,11 @@ impl Absence {
 
 impl Absent<Terrain> for Absence {
     fn at(&self, p: Tile) -> Cow<'_, Terrain> {
-        if self.coverage.holds(p.z, p.tile) {
+        if self.coverage.holds(p.zoom, p.tile) {
             Cow::Borrowed(&self.sea)
-        } else if !self.coverage.meets(p.z, p.tile) {
+        } else if !self.coverage.meets(p.zoom, p.tile) {
             Cow::Borrowed(&self.void)
-        } else if GROUND.cell_zoom(p.z) >= LEAF_Z {
+        } else if GROUND.cell_zoom(p.zoom) >= LEAF_Z {
             Cow::Owned(self.by_cell(p))
         } else {
             let children = p.children().map(|c| self.at(c));

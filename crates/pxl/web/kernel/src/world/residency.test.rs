@@ -47,12 +47,12 @@ fn floor_of(o: &Observation) -> Vec<Tile> {
 
 /// Settles none of its children, so the tree runs to the leaves everywhere.
 fn crowded(p: Tile) -> PoiTile {
-    if p.z == LEAF_Z {
+    if p.zoom == LEAF_Z {
         return PoiTile::default();
     }
     let at = |k: Tile| POI_LATTICE.cell_base(k, 0, 0);
     PoiTile::of_places(
-        p.z,
+        p.zoom,
         p.children().into_iter().flat_map(|k| {
             [
                 (

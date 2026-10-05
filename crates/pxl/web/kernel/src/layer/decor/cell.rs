@@ -118,10 +118,10 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
             let o = from_idx(BAND, at.col_idx);
             inside(ivec::X(o), ivec::Y(o))
         }
-        DecorHide::Scattered([x, y, _]) => chunk.z() == LEAF_Z && inside(x, y),
+        DecorHide::Scattered([x, y, _]) => chunk.tile_zoom() == LEAF_Z && inside(x, y),
     });
     Some(Sources {
-        read_from: Terrain::pyramid().residency().drawn_from(chunk.tile())?.z,
+        read_from: Terrain::pyramid().residency().drawn_from(chunk.tile())?.zoom,
         revision,
         shown: settings_store().decor,
         hide,
@@ -134,10 +134,10 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
     let src = tiles.residency().drawn_from(chunk.tile())?;
     let tile = tiles.residency().get(src)?;
     let mut over = chunk;
-    while over.z() > src.z {
+    while over.tile_zoom() > src.zoom {
         over = over.parent()?;
     }
-    let z = over.z();
+    let z = over.tile_zoom();
     let (cx0, cy0, _) = chunk.rect();
     let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
@@ -163,7 +163,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
             col_idx,
             ox: ivec::X(o) as f64 - cx0,
             oy: ivec::Y(o) as f64 - cy0,
-            hittable: chunk.z() == LEAF_Z,
+            hittable: chunk.tile_zoom() == LEAF_Z,
         }
     }));
     let target = GROUND.cell_zoom(z);

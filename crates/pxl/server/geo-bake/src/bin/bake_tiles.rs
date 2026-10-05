@@ -70,7 +70,7 @@ struct Args {
 
 impl Args {
     fn in_region(&self, tile: IVec) -> bool {
-        self.regions.iter().any(|r| Tile::over(r.z, tile) == *r)
+        self.regions.iter().any(|r| Tile::over(r.zoom, tile) == *r)
     }
 }
 

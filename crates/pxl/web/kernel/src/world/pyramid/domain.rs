@@ -244,7 +244,7 @@ impl Domain {
             // A cover piece is drawn one cell per chunk (`drawn_scale`) and measured
             // as drawn: half that cell across, and the box's full height.
             (Contents::Holds { bound, .. }, _) if self.outermost(c) => {
-                let half = units(chunk_zoom(c.z())) / 2.0;
+                let half = units(chunk_zoom(c.tile_zoom())) / 2.0;
                 (bound, [half, half, bound.extent()[2]])
             }
             (Contents::Holds { bound, error }, _) => (bound, error),
@@ -264,7 +264,7 @@ impl Domain {
         let nearest = bound.nearest(self.o.eye);
         let error_angle = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
         let order = Order::of(&self.o, &bound);
-        let mut from_step = if c.z() < LEAF_Z && touching.1 > 0 {
+        let mut from_step = if c.tile_zoom() < LEAF_Z && touching.1 > 0 {
             self.ladder.iter().take_while(|&&tau| error_angle > cell_angle(tau)).count() as u8
         } else {
             0
@@ -285,7 +285,7 @@ impl Domain {
             }
             if any {
                 // Past the rule's reach the derivation, and the quality policy's count, are broken.
-                xpute_core::ensure!(order.near < split_reach(c.z(), self.ladder[splits_to as usize - 1]), ENOTRECOVERABLE, c.z());
+                xpute_core::ensure!(order.near < split_reach(c.tile_zoom(), self.ladder[splits_to as usize - 1]), ENOTRECOVERABLE, c.tile_zoom());
             } else {
                 from_step = 0;
             }
@@ -465,7 +465,7 @@ pub fn revision() -> u32 {
 
 impl Domain {
     fn contents(&self, c: Chunk) -> Contents {
-        self.known.contents(c.z(), c.region())
+        self.known.contents(c.tile_zoom(), c.region())
     }
 
     /// Measured from where in `c` anything stands: a bound, not the drawn
@@ -483,7 +483,7 @@ impl Domain {
     }
 
     pub fn outermost(&self, c: Chunk) -> bool {
-        c.z() <= self.o.top
+        c.tile_zoom() <= self.o.top
     }
 
     pub fn pieces(&self) -> &[Chunk] {
@@ -533,7 +533,7 @@ impl Domain {
 
     /// The chunk over `c`'s ground at the zoom the view draws it, never past the top.
     pub fn wanted_over(&self, c: Chunk) -> Chunk {
-        std::iter::once(c).chain(c.ancestors()).filter(|k| k.z() >= self.o.top && !self.splits(*k)).last().unwrap_or(c)
+        std::iter::once(c).chain(c.ancestors()).filter(|k| k.tile_zoom() >= self.o.top && !self.splits(*k)).last().unwrap_or(c)
     }
 }
 

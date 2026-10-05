@@ -235,7 +235,7 @@ fn main() {
     let mut p = leaf;
     loop {
         tiles.fetch(p);
-        if p.z == pxl_spec::space::pyramid::TOP_Z {
+        if p.zoom == pxl_spec::space::pyramid::TOP_Z {
             break;
         }
         p = p.parent();

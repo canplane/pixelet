@@ -64,7 +64,7 @@ fn link(flags: &Named) -> Result<(), String> {
             for key in listed["written"].as_array().ok_or("a snapshot lists what it writes")? {
                 let key = key.as_str().ok_or("a snapshot's tile is a quadkey")?;
                 let p = tile_of_name(key).ok_or_else(|| format!("{key}: not a tile"))?;
-                found.push(format!("z{}/{}", p.z, p.tile));
+                found.push(format!("z{}/{}", p.zoom, p.tile));
             }
             std::fs::hard_link(&snapshot, to.join(SNAPSHOT_KEY)).map_err(|e| format!("{}: {e}", snapshot.display()))?;
         }

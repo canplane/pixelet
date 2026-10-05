@@ -109,9 +109,9 @@ pub fn step(ctx: &mut TickContext) {
         let Some(poi) = tiles.residency().get(src) else { continue };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.
-        let (side, cell) = (chunk.column().0, POI_LATTICE.cell_zoom(src.z));
+        let (side, cell) = (chunk.column().0, POI_LATTICE.cell_zoom(src.zoom));
         let m = if cell >= side { count(cell, side) } else { 0 };
-        let [x0, y0] = POI_LATTICE.cell_of(src.z, &Pvf3 { i: chunk.corner(), f: 0 }).in_tile();
+        let [x0, y0] = POI_LATTICE.cell_of(src.zoom, &Pvf3 { i: chunk.corner(), f: 0 }).in_tile();
         let (h0, h1) = chunk.z_range();
         for ty in y0..y0 + m.max(1) {
             let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + m.max(1), ty));
@@ -134,16 +134,16 @@ pub fn step(ctx: &mut TickContext) {
                 let mid = projection::unproject(mid.i, mid.f);
                 let mid = [nearest(mid[0], chunk.rect().0), mid[1]];
                 for (shown, (label, ground)) in [(Shown::All, all)].into_iter().chain(major.map(|m| (Shown::Major, m))) {
-                    if m == 0 && Chunk::of(chunk.z(), &ground.mid()).column() != chunk.named().column() {
+                    if m == 0 && Chunk::of(chunk.tile_zoom(), &ground.mid()).column() != chunk.named().column() {
                         continue;
                     }
                     // Counted only by the chunk the top of what stands there is in, so a
                     // column's several chunks do not repeat it.
-                    let Some(top) = top_at(&ground.mid(), chunk.z()) else { continue };
+                    let Some(top) = top_at(&ground.mid(), chunk.tile_zoom()) else { continue };
                     if top - 1.0 < h0 || top - 1.0 >= h1 {
                         continue;
                     }
-                    found.push((POI_LATTICE.cell_of(chunk.z(), &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
+                    found.push((POI_LATTICE.cell_of(chunk.tile_zoom(), &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
                 }
             }
         }

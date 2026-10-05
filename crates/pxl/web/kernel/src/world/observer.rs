@@ -261,7 +261,10 @@ impl Observer for EdgeRays<'_> {
             &mut |direction| {
                 let ray = Ray { origin: eye, direction, reach: far };
                 let answer = self.0.first_hit(&ray, Detail::Distance(self.1));
-                let lack = answer.lack().map(|l| Requirement { z: l.tile.z, region: l.tile.region() });
+                let lack = answer.lack().map(|l| Requirement {
+                    zoom: l.tile.zoom,
+                    region: l.tile.region(),
+                });
                 let hit = answer.value().flatten().map(|hit| (std::array::from_fn(|k| hit.point[k] - hit.normal[k] * INSIDE), hit.t));
                 (hit, lack)
             },

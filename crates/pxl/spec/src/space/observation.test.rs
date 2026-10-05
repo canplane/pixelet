@@ -214,7 +214,7 @@ fn a_zoom_names_no_more_than_the_fault_bound_and_less_known_names_more() {
                 assert!(known.is_subset(&unknown), "look {k}, {tau:?}: bounds named a tile nothing known did not");
                 for named in [known, unknown] {
                     for z in TOP_Z..=LEAF_Z {
-                        let n = named.iter().filter(|p| p.z == z).count() as u32;
+                        let n = named.iter().filter(|p| p.zoom == z).count() as u32;
                         assert!(n <= REACH_TILES, "look {k}, {tau:?}, z{z}: {n} tiles");
                     }
                 }
@@ -234,14 +234,14 @@ fn tiled_storage_maps_a_square_to_its_tile_and_ground_to_every_tile_under_it() {
                 min: [x0, y0, -7.0],
                 max: [x0 + span, y0 + span, 900.0],
             };
-            Tiled.tiles(&Requirement { z, region: square }, &mut |p| tiles.push(p));
+            Tiled.tiles(&Requirement { zoom: z, region: square }, &mut |p| tiles.push(p));
             assert_eq!(tiles, vec![tile_at(z, [x, y])]);
             tiles.clear();
             let wider = Aabb {
                 min: [x0 + 0.5 * span, y0, 0.0],
                 max: [x0 + 2.0 * span, y0 + 1.5 * span, 0.0],
             };
-            Tiled.tiles(&Requirement { z, region: wider }, &mut |p| tiles.push(p));
+            Tiled.tiles(&Requirement { zoom: z, region: wider }, &mut |p| tiles.push(p));
             assert_eq!(tiles.len(), 4, "z{z}: {tiles:?}");
         }
     }

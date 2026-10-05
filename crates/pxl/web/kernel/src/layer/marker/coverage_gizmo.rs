@@ -98,7 +98,7 @@ impl CoverageGizmo {
         let residency = Terrain::pyramid().residency();
         let top = floor::top().unwrap_or(LEAF_Z);
         let lined: HashSet<Tile> = Terrain::pyramid().demand().iter().map(|&p| line_top(p, top)).collect();
-        let floor_only = |p: Tile| p.z <= top && !lined.contains(&p);
+        let floor_only = |p: Tile| p.zoom <= top && !lined.contains(&p);
         let over: HashSet<Chunk> = drawn.iter().flat_map(|d| d.ancestors()).collect();
         let mut lines = Lines::default();
         for &g in goal {
@@ -135,7 +135,7 @@ impl CoverageGizmo {
 }
 
 fn line_top(mut p: Tile, top: Zoom) -> Tile {
-    while p.z > top {
+    while p.zoom > top {
         p = p.parent();
     }
     p

@@ -11,7 +11,7 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
     };
     for z in [LEAF_Z, LEAF_Z - 3, LEAF_Z - 7] {
         let cell = GROUND.cell_of(z, &point);
-        assert_eq!(cell.z(), z);
+        assert_eq!(cell.tile_zoom(), z);
         assert_eq!(GROUND.cell_of(z, &cell.base()), cell, "a cell is found from its own corner");
         assert_eq!(cell.up(2), GROUND.cell_of(z - 2, &point), "the cell over it");
         let side = cell.side();
@@ -78,7 +78,7 @@ fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {
         let (a, b) = (coarse.cell_of(z, &point), GROUND.cell_of(z - 2, &point));
         assert_eq!(a.side(), b.side());
         assert_eq!(a.base(), b.base());
-        assert_eq!(a.tile().z, b.tile().z + 2);
+        assert_eq!(a.tile().zoom, b.tile().zoom + 2);
         assert_eq!(coarse.tile_cells() * 4, GROUND.tile_cells());
     }
 }

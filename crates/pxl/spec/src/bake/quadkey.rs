@@ -74,7 +74,7 @@ fn depth_at(z: Zoom) -> u32 {
 }
 
 pub fn tile_name(p: Tile) -> Quadkey {
-    quadkey_of(depth_at(p.z), p.tile)
+    quadkey_of(depth_at(p.zoom), p.tile)
 }
 
 /// `tile_name`'s inverse; `None` for a zoom the pyramid does not hold.

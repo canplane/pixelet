@@ -186,7 +186,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let host = c.host.clone();
     let mut tiles = TileSample::default();
     for (p, _) in Terrain::pyramid().residency().held() {
-        tiles.by_zoom[p.z as usize] += 1.0;
+        tiles.by_zoom[p.zoom as usize] += 1.0;
     }
     tiles.total = tiles.by_zoom.iter().sum();
     tiles.poi = PoiTile::pyramid().residency().held().count() as f64;

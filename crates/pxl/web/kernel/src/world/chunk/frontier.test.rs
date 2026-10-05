@@ -74,7 +74,7 @@ struct Flat;
 
 impl Env for Flat {
     fn slots(&self, c: Chunk) -> (Pool, u32) {
-        if c.z() == LEAF_Z {
+        if c.tile_zoom() == LEAF_Z {
             (Pool::Fine, 1)
         } else {
             (Pool::Coarse, 1)
@@ -175,7 +175,7 @@ struct Heavy(u32);
 impl Env for Heavy {
     fn slots(&self, c: Chunk) -> (Pool, u32) {
         let (pool, k) = Flat.slots(c);
-        (pool, if c.z() == LEAF_Z { self.0 } else { k })
+        (pool, if c.tile_zoom() == LEAF_Z { self.0 } else { k })
     }
 
     fn buildable(&self, c: Chunk) -> bool {
@@ -210,7 +210,7 @@ fn a_piece_filling_several_slots_starts_only_with_all_of_them_free() {
         };
         Frontier::default().plan(&now, &Heavy(3)).start.len() as u32
     };
-    let occupied = children.iter().filter(|c| c.z() == LEAF_Z).count() as u32;
+    let occupied = children.iter().filter(|c| c.tile_zoom() == LEAF_Z).count() as u32;
     assert!(occupied > 0);
     let all = 3 * occupied + RESERVE[Pool::Fine as usize];
     assert_eq!(with(all - 1), 0, "started with fewer slots free than its pieces fill");
@@ -254,7 +254,7 @@ struct Widest;
 impl Env for Widest {
     fn slots(&self, c: Chunk) -> (Pool, u32) {
         let (pool, k) = Flat.slots(c);
-        (pool, if c.z() < LEAF_Z { COARSE_TIER_SLOTS } else { k })
+        (pool, if c.tile_zoom() < LEAF_Z { COARSE_TIER_SLOTS } else { k })
     }
 
     fn buildable(&self, c: Chunk) -> bool {

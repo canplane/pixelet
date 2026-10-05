@@ -131,8 +131,8 @@ impl Source {
         Some(Source {
             tile,
             frame: Frame::of(src),
-            origin: corner.in_tile_above(p.z - src.z),
-            n: count(GROUND.cell_zoom(p.z), GROUND.cell_zoom(src.z)),
+            origin: corner.in_tile_above(p.zoom - src.zoom),
+            n: count(GROUND.cell_zoom(p.zoom), GROUND.cell_zoom(src.zoom)),
         })
     }
 
@@ -175,8 +175,8 @@ struct Chunk {
 }
 
 impl Chunk {
-    fn z(&self) -> Zoom {
-        self.at.z()
+    fn tile_zoom(&self) -> Zoom {
+        self.at.tile_zoom()
     }
 
     fn base(&self) -> IVec {
@@ -560,7 +560,7 @@ impl Builder {
             self.abort_scan_of(world, id);
             return Progress::Blocked;
         };
-        if c.z() < LEAF_Z {
+        if c.tile_zoom() < LEAF_Z {
             return self.column_runs(world, id, read);
         }
         let holding = matches!(&self.scan_job, Some(j) if j.id == id);
@@ -758,7 +758,7 @@ impl Builder {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
-        let (z, base) = (c.z(), c.base());
+        let (z, base) = (c.tile_zoom(), c.base());
         if self.sample.read(&read.around(), read.first).is_err() {
             self.refuse(world, id);
             return Progress::Blocked;
@@ -845,7 +845,11 @@ impl Builder {
             // Runs span the whole column; this chunk bakes only its own heights.
             let (z0, z1) = c.at.z_range();
             let clip = Some((z0 as i32, z1 as i32));
-            if self.bake.begin(&set, mesh_step(cell_zoom, c.z()), GROUND.finest_in(c.z()), settings_store().textures, clip).is_err() {
+            if self
+                .bake
+                .begin(&set, mesh_step(cell_zoom, c.tile_zoom()), GROUND.finest_in(c.tile_zoom()), settings_store().textures, clip)
+                .is_err()
+            {
                 self.refuse(world, id);
                 return Progress::Blocked;
             }
@@ -868,8 +872,8 @@ impl Builder {
                 // All slots are held at once or the bake is thrown away: a mesh is never
                 // cut, never baked coarser, and never waits while holding the one bake.
                 let job = self.bake_job.as_ref().unwrap();
-                let step = mesh_step(job.cell_zoom, c.z());
-                let (words_a_box, room_a_slot) = (box_words(step), capacity(c.z(), step));
+                let step = mesh_step(job.cell_zoom, c.tile_zoom());
+                let (words_a_box, room_a_slot) = (box_words(step), capacity(c.tile_zoom(), step));
                 let boxes = words / words_a_box;
                 let asked = BuildEvent::Reserve {
                     id,
@@ -900,7 +904,7 @@ impl Builder {
                 if gpu().is_some() && device_ready() && !room(bytes) {
                     return Progress::Blocked;
                 }
-                let step = mesh_step(job.cell_zoom, c.z());
+                let step = mesh_step(job.cell_zoom, c.tile_zoom());
                 let words_a_box = box_words(step);
                 let n = bytes / 4 / words_a_box;
                 emit(BuildEvent::Part {

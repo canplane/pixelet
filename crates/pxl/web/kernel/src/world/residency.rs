@@ -142,7 +142,7 @@ impl<L: Layer> Default for Residency<L> {
 }
 
 fn line(p: Tile) -> impl Iterator<Item = Tile> {
-    std::iter::successors(Some(p), |q| (q.z > TOP_Z).then(|| q.parent()))
+    std::iter::successors(Some(p), |q| (q.zoom > TOP_Z).then(|| q.parent()))
 }
 
 impl<L: Layer> Residency<L> {
@@ -154,7 +154,7 @@ impl<L: Layer> Residency<L> {
     fn entry_mut(&mut self, p: Tile) -> &mut Entry<L> {
         let full = self.tiles.len() >= Self::ENTRIES as usize;
         self.tiles.entry(p).or_insert_with(|| {
-            xpute_core::ensure!(!full, ENOTRECOVERABLE, p.z);
+            xpute_core::ensure!(!full, ENOTRECOVERABLE, p.zoom);
             Entry::NONE
         })
     }
@@ -198,7 +198,7 @@ impl<L: Layer> Residency<L> {
         if self.entry(q).is_some_and(|e| e.answered) {
             return true;
         }
-        if q.z <= TOP_Z {
+        if q.zoom <= TOP_Z {
             return false;
         }
         let over = q.parent();
@@ -312,7 +312,7 @@ impl<L: Layer> Residency<L> {
         // Sorted, so the policy sees the same list for the same state.
         candidates.sort_unstable_by_key(|c| c.tile);
         let Some(at) = victim.victim(&candidates) else {
-            xpute_core::ensure!(speculative, ENOTRECOVERABLE, p.z);
+            xpute_core::ensure!(speculative, ENOTRECOVERABLE, p.zoom);
             self.refused += 1;
             return None;
         };
@@ -372,7 +372,7 @@ impl<L: Layer> Residency<L> {
     }
 
     fn put(&mut self, p: Tile, body: L, frame: Option<u32>) {
-        let settles = if p.z < LEAF_Z { p.children().map(|c| body.settles(p, c)) } else { [false; 4] };
+        let settles = if p.zoom < LEAF_Z { p.children().map(|c| body.settles(p, c)) } else { [false; 4] };
         self.entry_mut(p).held = Some(Held { body, frame, settles });
         self.revision = self.revision.wrapping_add(1);
         L::changed(p, true);

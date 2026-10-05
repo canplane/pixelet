@@ -70,11 +70,11 @@ fn drawn_zoom(cell_zoom: Zoom, z: Zoom, outermost: bool, objects: bool) -> Zoom 
 /// The quality alone moves the cell zoom; a mesh too big for one slot fills more
 /// slots and is never drawn coarser for it.
 pub fn zoom_of(c: Chunk, outermost: bool, near: f64, tau: Tau, objects: bool) -> Zoom {
-    drawn_zoom(wanted_zoom(near, tau), c.z(), outermost, objects)
+    drawn_zoom(wanted_zoom(near, tau), c.tile_zoom(), outermost, objects)
 }
 
 pub fn pool_of(c: Chunk, cell_zoom: Zoom) -> Pool {
-    Pool::of(c.z(), mesh_step(cell_zoom, c.z()))
+    Pool::of(c.tile_zoom(), mesh_step(cell_zoom, c.tile_zoom()))
 }
 
 /// Slots per pool, counted before allocation. A leaf piece also takes a coarse
@@ -97,7 +97,7 @@ impl<F: Fn(Chunk, Zoom) -> u32> Price for Need<F> {
     }
 
     fn split(&self, c: Chunk) -> Slots {
-        if c.z() == LEAF_Z - 1 {
+        if c.tile_zoom() == LEAF_Z - 1 {
             [0, 1, 0]
         } else {
             [0; POOLS]

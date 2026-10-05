@@ -154,18 +154,18 @@ struct Sources {
 impl Sources {
     fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
-        let (z, base) = (k.z(), k.corner());
+        let (z, base) = (k.tile_zoom(), k.corner());
         let drawn = |at: &EntryAt| tiers_draw(z, base, at.col_idx) && draws_band(k, at.band_idx);
         Sources {
             textured: settings.textures,
             objects_revision: objects_revision_of(k),
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
-            read_from: Terrain::pyramid().residency().drawn_from(k.tile()).map(|p| p.z),
+            read_from: Terrain::pyramid().residency().drawn_from(k.tile()).map(|p| p.zoom),
             beside_from: {
                 let mut from = [None; 8];
                 for ([qx, qy], p) in k.tiles_beside(APRON) {
-                    from[beside_index(qx, qy)] = Terrain::pyramid().residency().drawn_from(p).map(|p| p.z);
+                    from[beside_index(qx, qy)] = Terrain::pyramid().residency().drawn_from(p).map(|p| p.zoom);
                 }
                 from
             },
@@ -174,8 +174,8 @@ impl Sources {
 }
 
 impl Slot {
-    fn z(&self) -> Zoom {
-        self.chunk.z()
+    fn tile_zoom(&self) -> Zoom {
+        self.chunk.tile_zoom()
     }
 
     fn base(&self) -> (f64, f64) {
@@ -188,7 +188,7 @@ impl Slot {
     /// then never built, leaving holes with nothing left to fetch.
     fn unmeasured(&mut self) {
         let region = self.chunk.region();
-        let b = Known.contents(self.chunk.z(), region).within(region).unwrap_or(region);
+        let b = Known.contents(self.chunk.tile_zoom(), region).within(region).unwrap_or(region);
         let c = b.center();
         self.bc = [c[0] - region.min[0], c[1] - region.min[1], c[2]];
         self.radius = b.radius();
@@ -567,7 +567,7 @@ impl Scheduler {
         let s = (TOP_Z..=LEAF_Z)
             .rev()
             .find_map(|z| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk.named() == Chunk::of(z, p)))?;
-        Some((s.z() as i32, s.layout.map(|(cell_zoom, _)| GROUND.z_of(cell_zoom)), s.sources.read_from.map(|z| z as i32)))
+        Some((s.tile_zoom() as i32, s.layout.map(|(cell_zoom, _)| GROUND.z_of(cell_zoom)), s.sources.read_from.map(|z| z as i32)))
     }
 
     /// Whether the last frame drew any ground on screen.
@@ -586,7 +586,7 @@ impl Scheduler {
     fn add(&mut self, world: &mut World, k: Chunk) {
         // The frontier starts no move without room, so running out of mounts is a bug.
         let id = self.mounts.pop().or_bug(Errno::ENOSPC);
-        let z = k.z();
+        let z = k.tile_zoom();
         let edits = render_edits();
         let sources = Sources::of(k, edits);
         self.builder.add(id, k);
@@ -928,7 +928,7 @@ impl Scheduler {
             }
             // Mesh heights are steps from the tier's floor, so the floor goes in the translation.
             let at = [translation[0], translation[1], translation[2] + t.heights.floor as f32];
-            let (unit, z_step) = ((mesh_step(cell_zoom, s.z()) * GROUND.finest_in(s.z())) as f32, t.heights.step as f32);
+            let (unit, z_step) = ((mesh_step(cell_zoom, s.tile_zoom()) * GROUND.finest_in(s.tile_zoom())) as f32, t.heights.step as f32);
             let (mut left, mut slot) = (t.box_cnt, Some(t.slot.index));
             while let (Some(at_slot), true) = (slot, left > 0) {
                 let m = slot_at(at_slot);
@@ -986,7 +986,7 @@ impl Scheduler {
         self.slots[i].fresh = false;
         let Some(d) = domain::current() else { return };
         let s = &self.slots[i];
-        let (z, chunk) = (s.z(), s.chunk);
+        let (z, chunk) = (s.tile_zoom(), s.chunk);
         let objects = z == LEAF_Z && world.store.entries(idx(BAND, chunk.corner())).is_some();
         let current = self.generation(i);
         let desired = zoom_of(chunk, d.outermost(chunk), d.order_of(chunk).near, d.tau(), objects);
@@ -1243,7 +1243,7 @@ fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent
     if cell_zoom != s.target() {
         return false;
     }
-    let z = s.z();
+    let z = s.tile_zoom();
     let pool = pool_of(s.chunk, cell_zoom);
     let k = boxes.div_ceil(capacity(z, mesh_step(cell_zoom, z))).max(1);
     let over = s.tiers.iter().find(|t| t.cell_zoom == cell_zoom).map(|t| t.slot.index);
@@ -1319,7 +1319,7 @@ fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
         return;
     };
     let Some(i) = place[id as usize].get() else { return };
-    let z = slots[i].z();
+    let z = slots[i].tile_zoom();
     let step = mesh_step(cell_zoom, z);
     let head = slot_at(l.first);
     let n = first / head.capacity;

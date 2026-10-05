@@ -252,7 +252,7 @@ impl Folds for PoiTile {
     fn settles(&self, p: Tile, child: Tile) -> bool {
         self.cells
             .iter()
-            .all(|c| (c.count < 2 && !c.partial) || POI_LATTICE.cell_of(child.z, &POI_LATTICE.cell_at(p, c.cell).base()).tile() != child)
+            .all(|c| (c.count < 2 && !c.partial) || POI_LATTICE.cell_of(child.zoom, &POI_LATTICE.cell_at(p, c.cell).base()).tile() != child)
     }
 
     fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {

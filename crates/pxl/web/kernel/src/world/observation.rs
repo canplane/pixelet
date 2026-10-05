@@ -161,12 +161,12 @@ impl DemandEstimator for ByFootprints<'_> {
             let (from, to) = band(o, self.tau, z)?;
             let held = bounds.contents(z, region).within(region)?;
             let m = o.measure(&held);
-            (m.seen && m.near < to && m.near <= o.far && m.far >= from).then_some(Requirement { z, region })
+            (m.seen && m.near < to && m.near <= o.far && m.far >= from).then_some(Requirement { zoom: z, region })
         };
         for lack in self.lacks {
             let r = lack.region;
             let region = column(r.min[0], r.min[1], r.max[0], r.max[1]);
-            if let Some(r) = (o.top..=lack.z).rev().find_map(|z| required(z, region)) {
+            if let Some(r) = (o.top..=lack.zoom).rev().find_map(|z| required(z, region)) {
                 each(r);
             }
         }
@@ -227,7 +227,7 @@ impl Order {
     }
 
     pub fn of_tile(o: &Observation, p: Tile) -> Order {
-        Order::of_region(o, &Known, p.z, p.region())
+        Order::of_region(o, &Known, p.zoom, p.region())
     }
 }
 

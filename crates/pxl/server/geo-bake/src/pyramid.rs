@@ -46,12 +46,12 @@ impl TileSet {
     }
 
     pub fn path(&self, p: Tile) -> PathBuf {
-        self.zoom_dir(p.z).join(p.tile.to_string())
+        self.zoom_dir(p.zoom).join(p.tile.to_string())
     }
 
     pub fn write(&self, p: Tile, packed: &[u8]) -> Result<(), String> {
         let path = self.path(p);
-        fs::create_dir_all(self.zoom_dir(p.z)).map_err(|e| e.to_string())?;
+        fs::create_dir_all(self.zoom_dir(p.zoom)).map_err(|e| e.to_string())?;
         write_atomic(&path, packed).map_err(|e| format!("{}: {e}", path.display()))
     }
 

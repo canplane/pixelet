@@ -59,12 +59,12 @@ fn hold(pyramid: &mut Pyramid<PoiTile>, tiles: impl IntoIterator<Item = (Tile, P
 }
 
 fn crowded(p: Tile) -> PoiTile {
-    if p.z == LEAF_Z {
+    if p.zoom == LEAF_Z {
         return PoiTile::default();
     }
     let at = |k: Tile| POI_LATTICE.cell_base(k, 0, 0);
     PoiTile::of_places(
-        p.z,
+        p.zoom,
         p.children().into_iter().flat_map(|k| {
             [
                 (
@@ -96,7 +96,7 @@ fn the_demand_is_the_estimators_and_every_fault_in_it_is_asked_for() {
     let _serial = crate::serial();
     let o = the_observation();
     let mut pyramid = Pyramid::<PoiTile>::default();
-    hold(&mut pyramid, named(&o).into_iter().filter(|p| p.z <= 13 || ivec::X(p.tile) % 2 == 0).map(|p| (p, crowded(p))));
+    hold(&mut pyramid, named(&o).into_iter().filter(|p| p.zoom <= 13 || ivec::X(p.tile) % 2 == 0).map(|p| (p, crowded(p))));
     pyramid.observe(Some(&o), None, core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     assert_eq!(pyramid.demand(), named(&o).as_slice(), "the demand is the estimator's");
     let asked: HashSet<u64> = pyramid.wants().iter().map(|(s, _)| *s).collect();
@@ -121,13 +121,13 @@ fn ground_a_tile_settles_is_never_asked_for() {
     let _serial = crate::serial();
     let o = the_observation();
     let mut pyramid = Pyramid::<PoiTile>::default();
-    let mut top: Vec<Tile> = named(&o).into_iter().map(|p| (TOP_Z..p.z).fold(p, |q, _| q.parent())).collect();
+    let mut top: Vec<Tile> = named(&o).into_iter().map(|p| (TOP_Z..p.zoom).fold(p, |q, _| q.parent())).collect();
     top.sort_unstable();
     top.dedup();
     hold(&mut pyramid, top.into_iter().map(|p| (p, PoiTile::default())));
     pyramid.observe(Some(&o), None, core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     for &p in pyramid.demand() {
-        assert!(pyramid.residency().source(p).is_some_and(|s| s.z == TOP_Z), "{p:?} is said by the tile at the top");
+        assert!(pyramid.residency().source(p).is_some_and(|s| s.zoom == TOP_Z), "{p:?} is said by the tile at the top");
     }
     assert!(pyramid.wants().is_empty(), "{} tiles asked for", pyramid.wants().len());
 }
@@ -182,7 +182,7 @@ fn the_line_over_every_demanded_tile_is_asked_for() {
     pyramid.observe(Some(&o), None, core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     let asked: HashSet<Tile> = pyramid.asks.keys().copied().collect();
     for &p in pyramid.demand() {
-        for q in std::iter::successors(Some(p), |q| (q.z > TOP_Z).then(|| q.parent())).skip(1) {
+        for q in std::iter::successors(Some(p), |q| (q.zoom > TOP_Z).then(|| q.parent())).skip(1) {
             assert!(asked.contains(&q), "{q:?} over {p:?} is asked for");
         }
     }

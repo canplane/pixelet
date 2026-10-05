@@ -377,7 +377,7 @@ impl<'a> Access<'a> {
         let tile = GROUND.cell_of(LEAF_Z, at).tile();
         match self.terrain.source(tile) {
             Some(_) => Some(LEAF_Z),
-            None => self.drawn_from(tile).map(|(src, _)| src.z),
+            None => self.drawn_from(tile).map(|(src, _)| src.zoom),
         }
     }
 
@@ -400,8 +400,8 @@ impl<'a> Access<'a> {
         let Some((src, body)) = self.drawn_from(tile) else {
             return Answer::Nothing(lack(tile));
         };
-        let index = EXTENT.cell_zoom(src.z);
-        let first = EXTENT.cell_of(src.z, &base_of(side, [at[0], at[1], 0]));
+        let index = EXTENT.cell_zoom(src.zoom);
+        let first = EXTENT.cell_of(src.zoom, &base_of(side, [at[0], at[1], 0]));
         let across = if side < index { count(index, side) } else { 1 };
         let b = body.index.over(first.in_tile(), across);
         self.answer(
@@ -503,7 +503,7 @@ impl<'a> Access<'a> {
             Some((src, body)) => {
                 // The drawn-from tile's index cell, or the asked tile if smaller: one bound
                 // and one tile across it.
-                let e = EXTENT.cell_of(src.z, &at);
+                let e = EXTENT.cell_of(src.zoom, &at);
                 let [lo, hi] = drawn(body.index.extent()[e.index() as usize]);
                 let exact = self.terrain.source(tile).is_some();
                 (e.zoom().max(z), Some(((lo as f64 * U_PER_CELL, hi as f64 * U_PER_CELL), exact)))
@@ -562,7 +562,7 @@ impl<'a> Access<'a> {
     fn lines_over(&self, cell: Cell, ground_height: f64) -> Lines {
         let mut lines = Lines::default();
         let Some((src, body)) = self.drawn_from(cell.tile()) else { return lines };
-        let (at, side) = (sample_in(cell, src), 1.0 / count(GROUND.cell_zoom(cell.z()), GROUND.cell_zoom(src.z)) as f64);
+        let (at, side) = (sample_in(cell, src), 1.0 / count(GROUND.cell_zoom(cell.tile_zoom()), GROUND.cell_zoom(src.zoom)) as f64);
         let ground = round(ground_height / U_PER_CELL) as i32;
         let units = |[lo, hi]: [i32; 2]| [f64::from(lo) * U_PER_CELL, f64::from(hi) * U_PER_CELL];
         let tile = Frame::of(src);
@@ -820,8 +820,8 @@ fn corner(cell_zoom: Zoom, p: &V3) -> [f64; 2] {
 
 /// Where `cell`'s center falls in the tile `src` it is drawn from, in that tile's cells.
 fn sample_in(cell: Cell, src: Tile) -> [f64; 2] {
-    let n = count(GROUND.cell_zoom(cell.z()), GROUND.cell_zoom(src.z)) as f64;
-    cell.in_tile_above(cell.z() - src.z).map(|o| (o as f64 + 0.5) / n)
+    let n = count(GROUND.cell_zoom(cell.tile_zoom()), GROUND.cell_zoom(src.zoom)) as f64;
+    cell.in_tile_above(cell.tile_zoom() - src.zoom).map(|o| (o as f64 + 0.5) / n)
 }
 
 #[cfg(test)]

@@ -107,7 +107,7 @@ impl Folds for Terrain {
     }
 
     fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
-        fold_terrain(neighborhood(p).map(held), p.z)
+        fold_terrain(neighborhood(p).map(held), p.zoom)
     }
 }
 

@@ -95,7 +95,7 @@ impl Lattice {
 
     pub fn cell_base(self, tile: Tile, tx: u32, ty: u32) -> Pvf3 {
         let [x0, y0] = first_descendant_of([ivec::X(tile.tile), ivec::Y(tile.tile)], self.tile_cell_shamt());
-        base_of(self.cell_zoom(tile.z), [x0 + i64::from(tx), y0 + i64::from(ty), 0])
+        base_of(self.cell_zoom(tile.zoom), [x0 + i64::from(tx), y0 + i64::from(ty), 0])
     }
 
     // A tile's four children form one square of 2n × 2n cells a zoom finer, slot q at (q & 1, q >> 1).
@@ -169,15 +169,15 @@ pub const TILE_CHUNKS: u32 = TILE_CELLS / CHUNK_CELLS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Tile {
-    /// Its zoom, which is its size's.
-    pub z: Zoom,
+    /// Its size's.
+    pub zoom: Zoom,
     /// Z is zero.
     pub tile: IVec,
 }
 
 impl Tile {
     pub fn new(z: Zoom, tile: IVec) -> Tile {
-        Tile { z, tile: TO_XY(tile) }
+        Tile { zoom: z, tile: TO_XY(tile) }
     }
 
     /// The tile at `z` a leaf lies under.
@@ -192,29 +192,29 @@ impl Tile {
 
     pub fn parent(self) -> Tile {
         let [x, y] = parent_of(self.at());
-        Tile::new(self.z - 1, ivec::gather(x, y, 0))
+        Tile::new(self.zoom - 1, ivec::gather(x, y, 0))
     }
 
     /// In `slot_of`'s order.
     pub fn children(self) -> [Tile; 4] {
         std::array::from_fn(|slot| {
             let [x, y] = child_of(self.at(), slot);
-            Tile::new(self.z + 1, ivec::gather(x, y, 0))
+            Tile::new(self.zoom + 1, ivec::gather(x, y, 0))
         })
     }
 
     pub fn node(self) -> (Zoom, [i64; 2]) {
-        (self.z, self.at())
+        (self.zoom, self.at())
     }
 
     /// Its first leaf.
     pub fn first_leaf(self) -> IVec {
-        let [x, y] = first_descendant_of(self.at(), u32::from(LEAF_Z - self.z));
+        let [x, y] = first_descendant_of(self.at(), u32::from(LEAF_Z - self.zoom));
         ivec::gather(x, y, 0)
     }
 
     pub fn span(self) -> f64 {
-        units(self.z)
+        units(self.zoom)
     }
 
     /// South-west corner and side, in units.
@@ -235,7 +235,7 @@ impl Tile {
 
     /// A demand's subject: the key with the zoom in the Z lane.
     pub fn subject(self) -> u64 {
-        ivec::gather(ivec::X(self.tile), ivec::Y(self.tile), self.z as i64)
+        ivec::gather(ivec::X(self.tile), ivec::Y(self.tile), self.zoom as i64)
     }
 
     pub fn of_subject(subject: u64) -> Tile {
@@ -254,7 +254,7 @@ pub fn neighborhood(p: Tile) -> [Tile; 16] {
     let [x, y] = child_of(p.at(), 0);
     std::array::from_fn(|k| {
         let (qx, qy) = ((k % 4) as i64 - 1, (k / 4) as i64 - 1);
-        tile_at(p.z + 1, [x + qx, y + qy])
+        tile_at(p.zoom + 1, [x + qx, y + qy])
     })
 }
 
@@ -316,14 +316,13 @@ impl Cell {
         self.index
     }
 
-    /// Its tile's zoom.
-    pub fn z(self) -> Zoom {
-        self.tile.z
+    pub fn tile_zoom(self) -> Zoom {
+        self.tile.zoom
     }
 
     /// Its own.
     pub fn zoom(self) -> Zoom {
-        self.lattice.cell_zoom(self.tile.z)
+        self.lattice.cell_zoom(self.tile.zoom)
     }
 
     pub fn in_tile(self) -> [u32; 2] {
@@ -347,7 +346,7 @@ impl Cell {
 
     /// The cell `steps` zooms coarser it lies in.
     pub fn up(self, steps: Zoom) -> Cell {
-        self.lattice.cell_of(self.tile.z - steps, &self.base())
+        self.lattice.cell_of(self.tile.zoom - steps, &self.base())
     }
 
     /// Where `inner`, no coarser and inside this cell, lies in it, in `inner`'s sides.

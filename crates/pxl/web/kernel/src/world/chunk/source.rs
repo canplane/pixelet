@@ -42,7 +42,7 @@ pub fn tiers_draw(z: Zoom, base: IVec, col: IVec) -> bool {
 
 /// A band is a leaf chunk's height, so it lies in one chunk per zoom.
 pub fn draws_band(k: PyramidChunk, band: BandZ) -> bool {
-    ancestor_of([i64::from(band)], u32::from(LEAF_Z - k.z()))[0] == k.node().1[2]
+    ancestor_of([i64::from(band)], u32::from(LEAF_Z - k.tile_zoom()))[0] == k.node().1[2]
 }
 
 /// One word: the coordinate, with the zoom beside the height. A band is 64
@@ -50,7 +50,7 @@ pub fn draws_band(k: PyramidChunk, band: BandZ) -> bool {
 /// from the top, the 4 above.
 fn chunk_key(k: PyramidChunk) -> i64 {
     let [x, y, h] = k.named().node().1;
-    ivec::gather(x, y, ((k.z() - TOP_Z) as i64) << 11 | (h & 0x7ff)) as i64
+    ivec::gather(x, y, ((k.tile_zoom() - TOP_Z) as i64) << 11 | (h & 0x7ff)) as i64
 }
 
 const _: () = assert!(((LEAF_Z - TOP_Z) as i64 + 1) << 11 <= 1 << 15, "a chunk's zoom and height past the lane they share");

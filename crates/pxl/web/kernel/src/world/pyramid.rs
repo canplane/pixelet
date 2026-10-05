@@ -150,7 +150,7 @@ impl<L: Layer> Pyramid<L> {
     pub fn absent(&mut self, p: Tile) {
         let top = L::TOP.or(floor::top()).unwrap_or(TOP_Z);
         match L::empty() {
-            Some(empty) if p.z <= top => self.residency.set(p, empty),
+            Some(empty) if p.zoom <= top => self.residency.set(p, empty),
             _ => self.residency.answer_above(p),
         }
     }
@@ -183,7 +183,7 @@ impl<L: Layer> Pyramid<L> {
         let ask = |asks: &mut HashMap<Tile, Ask>, p: Tile, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
-        let order = |o: &Observation, p: Tile| Order::of_region(o, bounds, p.z, p.region());
+        let order = |o: &Observation, p: Tile| Order::of_region(o, bounds, p.zoom, p.region());
         if let Some(o) = o {
             if L::DEMANDS {
                 estimator.requirements(o, bounds, &mut |r| L::tiles(&r, &mut |p| demand.push(p)));
@@ -194,7 +194,7 @@ impl<L: Layer> Pyramid<L> {
                 let at = self.residency.source(p).unwrap_or(p);
                 ask(&mut asks, at, Ask { why: Why::Demand, order: order(o, p) });
                 // A line already asked is asked to the top.
-                for q in std::iter::successors(Some(at), |q| (q.z > o.top).then(|| q.parent())).skip(1) {
+                for q in std::iter::successors(Some(at), |q| (q.zoom > o.top).then(|| q.parent())).skip(1) {
                     if asks.get(&q).is_some_and(|a| a.why <= Why::Ancestor) {
                         break;
                     }
@@ -212,7 +212,7 @@ impl<L: Layer> Pyramid<L> {
             // a miss's line has ground within its reach, so it stays in each zoom's ring.
             let mut read = [0u32; LEAF_Z as usize + 1];
             for p in asks.keys() {
-                read[p.z as usize] += 1;
+                read[p.zoom as usize] += 1;
             }
             xpute_core::ensure!(read.iter().all(|&n| n <= ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
             let mut floor = 0u32;
@@ -319,7 +319,7 @@ impl<L: Layer> Pyramid<L> {
         let o = seen_from.map(|o| Observation { far: o.far.min(L::reach()), ..o });
         let seen = (o, floor_now, destination, self.residency.revision(), heights_revision(), tau, domain::revision());
         if self.last != Some(seen) {
-            let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.z > top).then(|| q.parent())));
+            let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent())));
             self.observe(
                 o.as_ref(),
                 live.as_ref(),

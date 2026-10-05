@@ -69,7 +69,7 @@ enum Source {
 impl Source {
     fn holds(&self, p: Tile) -> bool {
         match self {
-            Source::Pyramid { coverage, .. } => coverage.meets(p.z, p.tile),
+            Source::Pyramid { coverage, .. } => coverage.meets(p.zoom, p.tile),
             Source::Geocode => true,
         }
     }
