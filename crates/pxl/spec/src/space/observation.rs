@@ -118,13 +118,13 @@ impl Contents {
 /// What is known of the world. Never less than the truth, and at a coarser
 /// zoom never less than at a finer one under it.
 pub trait Bounds {
-    fn contents(&self, z: Zoom, region: Aabb) -> Contents;
+    fn contents(&self, zoom: Zoom, region: Aabb) -> Contents;
 }
 
 pub struct Unknown;
 
 impl Bounds for Unknown {
-    fn contents(&self, _z: Zoom, _region: Aabb) -> Contents {
+    fn contents(&self, _zoom: Zoom, _region: Aabb) -> Contents {
         Contents::Unknown
     }
 }
@@ -167,27 +167,27 @@ pub struct ByBounds {
 
 /// The distances `z` is required over: its split distance (0 for the leaves) to the
 /// next coarser zoom's, or to the far edge for the top. None past the far edge.
-pub fn band(o: &Observation, tau: Tau, z: Zoom) -> Option<(f64, f64)> {
-    let from = if z == LEAF_Z { 0.0 } else { tau.split_distance(GROUND.cell_zoom(z)) };
-    let to = if z == o.top { demand_reach(z) } else { tau.demand_reach(z) };
+pub fn band(o: &Observation, tau: Tau, zoom: Zoom) -> Option<(f64, f64)> {
+    let from = if zoom == LEAF_Z { 0.0 } else { tau.split_distance(GROUND.cell_zoom(zoom)) };
+    let to = if zoom == o.top { demand_reach(zoom) } else { tau.demand_reach(zoom) };
     (from <= o.far).then_some((from, to))
 }
 
 impl DemandEstimator for ByBounds {
     fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement)) {
         xpute_core::ensure!(o.top >= TOP_Z && o.far <= demand_reach(o.top), EINVAL);
-        for z in (o.top..=LEAF_Z).rev() {
-            let Some((from, to)) = band(o, self.tau, z) else { break };
-            let span = units(z);
+        for zoom in (o.top..=LEAF_Z).rev() {
+            let Some((from, to)) = band(o, self.tau, zoom) else { break };
+            let span = units(zoom);
             for at in cubes_meeting(span, o.reach(to.min(o.far))) {
                 let region = Aabb {
                     min: at.map(|c| c as f64 * span),
                     max: at.map(|c| (c + 1) as f64 * span),
                 };
-                let Some(held) = bounds.contents(z, region).within(region) else { continue };
+                let Some(held) = bounds.contents(zoom, region).within(region) else { continue };
                 let m = o.measure(&held);
                 if m.seen && m.near < to && m.near <= o.far && m.far >= from {
-                    each(Requirement { zoom: z, region });
+                    each(Requirement { zoom, region });
                 }
             }
         }

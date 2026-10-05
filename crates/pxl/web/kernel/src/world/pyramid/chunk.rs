@@ -24,21 +24,27 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    pub fn of(z: Zoom, at: &Pvf3) -> Chunk {
+    pub fn of(zoom: Zoom, at: &Pvf3) -> Chunk {
         Chunk {
-            tile_zoom: z,
-            at: index_of(chunk_zoom(z), at),
+            tile_zoom: zoom,
+            at: index_of(chunk_zoom(zoom), at),
         }
     }
 
-    pub fn at(z: Zoom, at: [i64; 3]) -> Chunk {
-        Chunk { tile_zoom: z, at }
+    pub fn at(zoom: Zoom, at: [i64; 3]) -> Chunk {
+        Chunk { tile_zoom: zoom, at }
     }
 
     /// As the bounds of a range in chunk order.
-    pub fn column_of(z: Zoom, at: &Pvf3) -> std::ops::RangeInclusive<Chunk> {
-        let [x, y, _] = index_of(chunk_zoom(z), at);
-        Chunk { tile_zoom: z, at: [x, y, i64::MIN] }..=Chunk { tile_zoom: z, at: [x, y, i64::MAX] }
+    pub fn column_of(zoom: Zoom, at: &Pvf3) -> std::ops::RangeInclusive<Chunk> {
+        let [x, y, _] = index_of(chunk_zoom(zoom), at);
+        Chunk {
+            tile_zoom: zoom,
+            at: [x, y, i64::MIN],
+        }..=Chunk {
+            tile_zoom: zoom,
+            at: [x, y, i64::MAX],
+        }
     }
 
     pub fn beside(self, dx: i64, dy: i64, dh: i64) -> Chunk {
@@ -81,11 +87,11 @@ impl Chunk {
         };
         let tile = self.tile();
         let [px, py] = [ivec::X(tile.tile), ivec::Y(tile.tile)];
-        let (z, rows) = (self.tile_zoom, tile_rows(self.tile_zoom));
+        let (zoom, rows) = (self.tile_zoom, tile_rows(self.tile_zoom));
         steps(y0)
             .flat_map(move |qy| steps(x0).map(move |qx| [qx, qy]))
             .filter(move |&[qx, qy]| [qx, qy] != [0, 0] && rows.contains(&(py + qy)))
-            .map(move |[qx, qy]| ([qx, qy], tile_at(z, [px + qx, py + qy])))
+            .map(move |[qx, qy]| ([qx, qy], tile_at(zoom, [px + qx, py + qy])))
     }
 
     /// The corner at no height, as the 2D stores key it; where it stands is `rect`'s.

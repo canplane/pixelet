@@ -8,8 +8,8 @@ fn zoom_at(r: f64) -> i32 {
 }
 
 /// Feet on a tile's corners, edges and inside, either side of the origin.
-fn feet(z: Zoom) -> Vec<[f64; 2]> {
-    let span = units(z);
+fn feet(zoom: Zoom) -> Vec<[f64; 2]> {
+    let span = units(zoom);
     let fractions = [0.0, 1e-9, 0.25, 0.5, 0.75, 1.0 - 1e-9];
     let mut out = Vec::new();
     for [px, py] in [[0.0, 0.0], [-3.0, 5.0], [17.0, -11.0]] {
@@ -22,27 +22,27 @@ fn feet(z: Zoom) -> Vec<[f64; 2]> {
     out
 }
 
-fn demands(z: Zoom, foot: [f64; 2]) -> Vec<Tile> {
-    tiles_within(z, foot, demand_reach(z)).collect()
+fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Tile> {
+    tiles_within(zoom, foot, demand_reach(zoom)).collect()
 }
 
 #[test]
 fn a_zoom_faults_on_at_most_three_by_three_tiles_wherever_the_foot_stands() {
-    for z in TOP_Z..=LEAF_Z {
-        for foot in feet(z) {
-            let n = demands(z, foot).len() as u32;
-            assert!(n <= REACH_TILES && n <= 9, "z{z} at {foot:?}: {n} tiles");
+    for zoom in TOP_Z..=LEAF_Z {
+        for foot in feet(zoom) {
+            let n = demands(zoom, foot).len() as u32;
+            assert!(n <= REACH_TILES && n <= 9, "z{zoom} at {foot:?}: {n} tiles");
         }
     }
 }
 
 #[test]
 fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
-    for z in TOP_Z + 1..=LEAF_Z {
-        for foot in feet(z) {
-            let above = demands(z - 1, foot);
-            for p in demands(z, foot) {
-                assert!(above.contains(&p.parent()), "z{z} at {foot:?}: {p:?}'s parent outside");
+    for zoom in TOP_Z + 1..=LEAF_Z {
+        for foot in feet(zoom) {
+            let above = demands(zoom - 1, foot);
+            for p in demands(zoom, foot) {
+                assert!(above.contains(&p.parent()), "z{zoom} at {foot:?}: {p:?}'s parent outside");
             }
         }
     }
@@ -51,20 +51,20 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
 /// Wherever an observation hits, the tile it asks for is within that zoom's reach.
 #[test]
 fn a_hit_asks_for_a_tile_inside_the_fault_bound() {
-    for z in TOP_Z..=LEAF_Z {
-        for foot in feet(z) {
-            let tiles = demands(z, foot);
+    for zoom in TOP_Z..=LEAF_Z {
+        for foot in feet(zoom) {
+            let tiles = demands(zoom, foot);
             for height in [0.0, 3.0, 1000.0] {
                 for k in 0..64 {
                     let angle = k as f64 * 0.37;
                     for run in [0.5, 7.0, 100.0, 383.9, 900.0, 5_000.0, 40_000.0, 300_000.0] {
                         let at = [foot[0] + run * libm::cos(angle), foot[1] + run * libm::sin(angle)];
                         let asked = zoom_at(libm::hypot(run, height)).min(LEAF_Z as i32);
-                        if asked != z as i32 {
+                        if asked != zoom as i32 {
                             continue;
                         }
-                        let [x, y] = [at[0] / units(z), at[1] / units(z)].map(|c| c.floor() as i64);
-                        assert!(tiles.contains(&tile_at(z, [x, y])), "z{z}: a hit {run} along the ground from {foot:?}");
+                        let [x, y] = [at[0] / units(zoom), at[1] / units(zoom)].map(|c| c.floor() as i64);
+                        assert!(tiles.contains(&tile_at(zoom, [x, y])), "z{zoom}: a hit {run} along the ground from {foot:?}");
                     }
                 }
             }
@@ -75,10 +75,10 @@ fn a_hit_asks_for_a_tile_inside_the_fault_bound() {
 /// The reach is exactly where a zoom stops being asked for.
 #[test]
 fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {
-    for z in TOP_Z..=LEAF_Z {
-        let r = demand_reach(z);
-        assert_eq!(zoom_at(r * (1.0 - 1e-12)), z as i32, "z{z} is asked for up to its radius");
-        assert_eq!(zoom_at(r), z as i32 - 1, "and not at it");
+    for zoom in TOP_Z..=LEAF_Z {
+        let r = demand_reach(zoom);
+        assert_eq!(zoom_at(r * (1.0 - 1e-12)), zoom as i32, "z{zoom} is asked for up to its radius");
+        assert_eq!(zoom_at(r), zoom as i32 - 1, "and not at it");
     }
 }
 

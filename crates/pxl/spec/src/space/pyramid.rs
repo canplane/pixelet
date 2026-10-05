@@ -45,8 +45,8 @@ impl Lattice {
     }
 
     /// Its cells' zoom on a tile at `z`.
-    pub const fn cell_zoom(self, z: Zoom) -> Zoom {
-        z + self.tile_cell_shamt() as Zoom
+    pub const fn cell_zoom(self, zoom: Zoom) -> Zoom {
+        zoom + self.tile_cell_shamt() as Zoom
     }
 
     /// The tile zoom whose cells are at `cell_zoom`, past the pyramid's either end alike.
@@ -60,8 +60,8 @@ impl Lattice {
     }
 
     /// How many of its finest cells stand across one at `z`.
-    pub const fn finest_in(self, z: Zoom) -> u32 {
-        count(self.cell, self.cell_zoom(z))
+    pub const fn finest_in(self, zoom: Zoom) -> u32 {
+        count(self.cell, self.cell_zoom(zoom))
     }
 
     pub const fn tile_cells(self) -> u32 {
@@ -77,9 +77,9 @@ impl Lattice {
     }
 
     /// The cell at `z` a point stands in; a point, since a cell may be finer than a unit.
-    pub fn cell_of(self, z: Zoom, at: &Pvf3) -> Cell {
-        let tile = Tile::over(z, idx(LEAF_Z, at.i));
-        let [x, y, _] = index_of(self.cell_zoom(z), at);
+    pub fn cell_of(self, zoom: Zoom, at: &Pvf3) -> Cell {
+        let tile = Tile::over(zoom, idx(LEAF_Z, at.i));
+        let [x, y, _] = index_of(self.cell_zoom(zoom), at);
         let [x0, y0] = first_descendant_of([ivec::X(tile.tile), ivec::Y(tile.tile)], self.tile_cell_shamt());
         Cell {
             lattice: self,
@@ -176,14 +176,14 @@ pub struct Tile {
 }
 
 impl Tile {
-    pub fn new(z: Zoom, tile: IVec) -> Tile {
-        Tile { zoom: z, tile: TO_XY(tile) }
+    pub fn new(zoom: Zoom, tile: IVec) -> Tile {
+        Tile { zoom, tile: TO_XY(tile) }
     }
 
     /// The tile at `z` a leaf lies under.
-    pub fn over(z: Zoom, leaf: IVec) -> Tile {
-        let [x, y] = ancestor_of([ivec::X(leaf), ivec::Y(leaf)], u32::from(LEAF_Z - z));
-        Tile::new(z, ivec::gather(x, y, 0))
+    pub fn over(zoom: Zoom, leaf: IVec) -> Tile {
+        let [x, y] = ancestor_of([ivec::X(leaf), ivec::Y(leaf)], u32::from(LEAF_Z - zoom));
+        Tile::new(zoom, ivec::gather(x, y, 0))
     }
 
     fn at(self) -> [i64; 2] {
@@ -219,9 +219,9 @@ impl Tile {
 
     /// South-west corner and side, in units.
     pub fn rect(self) -> (f64, f64, f64) {
-        let (z, [x, y]) = self.node();
-        let base = base_of(z, [x, y, 0]);
-        (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), units(z))
+        let (zoom, [x, y]) = self.node();
+        let base = base_of(zoom, [x, y, 0]);
+        (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), units(zoom))
     }
 
     /// The tile as a box of the world: its square, every height.
@@ -244,8 +244,8 @@ impl Tile {
 }
 
 /// A ground chunk's zoom on a tile at `z`.
-pub const fn chunk_zoom(z: Zoom) -> Zoom {
-    GROUND.cell_zoom(z) - CHUNK_STEPS
+pub const fn chunk_zoom(zoom: Zoom) -> Zoom {
+    GROUND.cell_zoom(zoom) - CHUNK_STEPS
 }
 
 /// The 4×4 tiles a zoom finer around a tile's children, each at
@@ -265,30 +265,30 @@ pub const fn neighbor_index(qx: i64, qy: i64) -> usize {
 }
 
 /// How many cells at `z` stand around the world, and as many from its south edge to its north.
-pub const fn around(z: Zoom) -> i64 {
-    1i64 << z
+pub const fn around(zoom: Zoom) -> i64 {
+    1i64 << zoom
 }
 
 /// The rows of tiles at `z`, south to north; past them is no tile.
-pub fn tile_rows(z: Zoom) -> std::ops::Range<i64> {
-    let n = around(z);
+pub fn tile_rows(zoom: Zoom) -> std::ops::Range<i64> {
+    let n = around(zoom);
     -n / 2..n / 2
 }
 
 /// An X index of `z`'s cells as the lane holds it; every key goes through it.
-pub fn wrap_index(z: Zoom, x: i64) -> i64 {
-    let across = around(z);
+pub fn wrap_index(zoom: Zoom, x: i64) -> i64 {
+    let across = around(zoom);
     (x + across / 2).rem_euclid(across) - across / 2
 }
 
 /// A cell at `z` named as `wrap_index` names its X.
-pub fn wrap_cell(z: Zoom, [x, y, h]: [i64; 3]) -> [i64; 3] {
-    [wrap_index(z, x), y, h]
+pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i64; 3]) -> [i64; 3] {
+    [wrap_index(zoom, x), y, h]
 }
 
 /// The tile at `z` at (x, y), X wrapped around the world.
-pub fn tile_at(z: Zoom, [x, y]: [i64; 2]) -> Tile {
-    Tile::new(z, ivec::gather(wrap_index(z, x), y, 0))
+pub fn tile_at(zoom: Zoom, [x, y]: [i64; 2]) -> Tile {
+    Tile::new(zoom, ivec::gather(wrap_index(zoom, x), y, 0))
 }
 
 /// Where a tile's own children sit in its neighborhood, in `slot_of`'s order.
@@ -367,11 +367,11 @@ impl Cell {
     }
 
     /// `offset_of`'s inverse.
-    pub fn inner_at(self, lattice: Lattice, z: Zoom, offset: [u32; 2]) -> Cell {
+    pub fn inner_at(self, lattice: Lattice, zoom: Zoom, offset: [u32; 2]) -> Cell {
         let base = self.base();
-        let shift = FRAC_W as i32 + shamt(lattice.cell_zoom(z));
+        let shift = FRAC_W as i32 + shamt(lattice.cell_zoom(zoom));
         let at = pvf3::gather(pvf3::X(&base) + ((offset[0] as i64) << shift), pvf3::Y(&base) + ((offset[1] as i64) << shift), 0);
-        lattice.cell_of(z, &at)
+        lattice.cell_of(zoom, &at)
     }
 
     /// The point every layer stands a thing at: the XY center, half a side above

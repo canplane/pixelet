@@ -26,8 +26,8 @@ fn plane(f: impl Fn(usize, usize) -> u8) -> Ground {
     }
 }
 
-fn fold(children: [&Ground; 4], z: Zoom) -> Vec<u8> {
-    fold_ground(children, z).cells.to_vec()
+fn fold(children: [&Ground; 4], zoom: Zoom) -> Vec<u8> {
+    fold_ground(children, zoom).cells.to_vec()
 }
 
 #[test]

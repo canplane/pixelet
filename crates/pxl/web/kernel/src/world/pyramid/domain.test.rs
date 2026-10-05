@@ -92,10 +92,13 @@ fn grazing_ground_refines_across_the_screen_and_not_along_its_depth() {
                 let p = [EYE[0] + r * libm::cos(b), EYE[1] + r * libm::sin(b), GROUND - 0.5];
                 let over = pieces_at(&pieces, p);
                 assert_eq!(over.len(), 1, "{tau:?}: {p:?} under {over:?}");
-                let z = over[0].tile_zoom() as i32;
+                let zoom = over[0].tile_zoom() as i32;
                 let wanted = tau.z_at(r) as i32;
-                assert!(z >= wanted, "{tau:?}: ground {r} away at {bearing}° left at z{z} where its cell crosses a cell finer than z{wanted}");
-                assert!(z - 1 <= wanted, "{tau:?}: ground {r} away refined to z{z}, past what its error across asks (z{wanted})");
+                assert!(
+                    zoom >= wanted,
+                    "{tau:?}: ground {r} away at {bearing}° left at z{zoom} where its cell crosses a cell finer than z{wanted}"
+                );
+                assert!(zoom - 1 <= wanted, "{tau:?}: ground {r} away refined to z{zoom}, past what its error across asks (z{wanted})");
             }
         }
     }

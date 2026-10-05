@@ -230,11 +230,11 @@ pub struct PoiTile {
 impl PoiTile {
     /// A tile at `z` from places all in that tile, names cut to
     /// `NAME_CHARS`; `complete` is false where the source gave only some.
-    pub fn of_places<'a>(z: Zoom, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>, complete: bool) -> PoiTile {
+    pub fn of_places<'a>(zoom: Zoom, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>, complete: bool) -> PoiTile {
         let cut: Vec<_> = places
             .into_iter()
             .map(|(point, place)| {
-                let cell = POI_LATTICE.cell_of(z, &point);
+                let cell = POI_LATTICE.cell_of(zoom, &point);
                 (cell.index(), cell.offset_of(GROUND.cell_of(LEAF_Z, &point)), cut_name(place.name), place)
             })
             .collect();

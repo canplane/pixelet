@@ -67,7 +67,7 @@ fn shown_at(units_per_px: f64) -> Option<Shown> {
 }
 
 /// None where nothing over it is known.
-fn top_at(at: &Pvf3, z: Zoom) -> Option<f64> {
+fn top_at(at: &Pvf3, zoom: Zoom) -> Option<f64> {
     let xy = projection::unproject(at.i, at.f);
     let (high, low) = (REACH.max[2], REACH.min[2]);
     let ray = Ray {
@@ -75,7 +75,7 @@ fn top_at(at: &Pvf3, z: Zoom) -> Option<f64> {
         direction: [0.0, 0.0, -1.0],
         reach: high - low,
     };
-    let hit = Access::now().first_hit(&ray, Detail::Zoom(z)).value().flatten()?;
+    let hit = Access::now().first_hit(&ray, Detail::Zoom(zoom)).value().flatten()?;
     Some(high - hit.t)
 }
 

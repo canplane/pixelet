@@ -58,10 +58,10 @@ pub enum Pool {
 }
 
 impl Pool {
-    pub const fn of(z: Zoom, step: u32) -> Pool {
+    pub const fn of(zoom: Zoom, step: u32) -> Pool {
         if step == CHUNK_CELLS {
             Pool::Cover
-        } else if z == LEAF_Z && step == 1 {
+        } else if zoom == LEAF_Z && step == 1 {
             Pool::Fine
         } else {
             Pool::Coarse
@@ -109,8 +109,8 @@ impl Pool {
 
 pub const ARENA: [u32; POOLS] = [Pool::Fine.slots(), Pool::Coarse.slots(), Pool::Cover.slots()];
 
-pub const fn capacity(z: Zoom, step: u32) -> u32 {
-    Pool::of(z, step).boxes()
+pub const fn capacity(zoom: Zoom, step: u32) -> u32 {
+    Pool::of(zoom, step).boxes()
 }
 
 pub const GROUPS: u32 = COARSE_GROUPS + 2;

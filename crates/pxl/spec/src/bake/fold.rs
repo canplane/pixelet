@@ -35,11 +35,11 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
 }
 
 /// A cell is one look, so the majority is the look's.
-pub fn fold_ground(children: [&Ground; 4], z: Zoom) -> Ground {
+pub fn fold_ground(children: [&Ground; 4], zoom: Zoom) -> Ground {
     let out = (0..TILE_CELLS * TILE_CELLS)
         .map(|index| {
             let (q, block) = GROUND.child_cells(index);
-            majority(block.map(|i| children[q].cells[i as usize]), GROUND.cell_zoom(z))
+            majority(block.map(|i| children[q].cells[i as usize]), GROUND.cell_zoom(zoom))
         })
         .collect::<Vec<_>>();
     Ground { cells: out.into() }
@@ -114,13 +114,13 @@ impl Folds for Terrain {
 /// A parent from the 4×4 tiles around its children; None if any of its own
 /// four is missing. A missing ring tile only degrades the padding, so a zoom
 /// out folds from what the client already holds.
-fn fold_terrain(around: [Option<&Terrain>; 16], z: Zoom) -> Option<Terrain> {
+fn fold_terrain(around: [Option<&Terrain>; 16], zoom: Zoom) -> Option<Terrain> {
     let child = |q: usize| around[CHILDREN[q]];
     let children = [child(0)?, child(1)?, child(2)?, child(3)?];
-    let ground = fold_ground(children.map(|t| &t.ground), z);
+    let ground = fold_ground(children.map(|t| &t.ground), zoom);
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
-    let decks = fold_decks(children.map(|t| &t.decks), z);
+    let decks = fold_decks(children.map(|t| &t.decks), zoom);
     let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &decks));
     Some(Terrain {
         ground,

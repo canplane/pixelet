@@ -12,11 +12,11 @@ fn absence() -> (Absence, Tile) {
 #[test]
 fn an_absent_tile_is_the_fold_of_the_absent_tiles_under_it() {
     let (absence, leaf) = absence();
-    for z in (LEAF_Z - 10..LEAF_Z).rev() {
-        let p = Tile::over(z, leaf.first_leaf());
+    for zoom in (LEAF_Z - 10..LEAF_Z).rev() {
+        let p = Tile::over(zoom, leaf.first_leaf());
         let children = p.children().map(|c| absence.at(c));
         let folded = Terrain::fold_tile(p, |q| p.children().iter().position(|&c| c == q).map(|i| children[i].as_ref())).unwrap();
-        assert_eq!(absence.at(p).ground, folded.ground, "z{z}");
+        assert_eq!(absence.at(p).ground, folded.ground, "z{zoom}");
     }
 }
 

@@ -9,7 +9,7 @@
 //!
 //! Every chunk at the top within reach that holds anything is a piece (the
 //! cover), all around the eye, so ground turned to shows the cover and never
-//! a hole. A chunk splits only where some tile footprint touches it and its
+//! a hole. A chunk splits only where some patch's footprint touches it and its
 //! projected error crosses a cell (`Lens::error` against `cell_angle`). A
 //! chunk splits only within `split_reach`, which bounds the goal whatever the
 //! screen. A coarser quality splits a subset of what a finer one does.
@@ -52,8 +52,8 @@ pub const fn cover_pieces(top: Zoom, planet: f64) -> u32 {
 
 /// How near a chunk at `z` must come for its error to cross a cell:
 /// the error is at most its diagonal over its distance less the diagonal.
-fn split_reach(z: Zoom, tau: Tau) -> f64 {
-    3f64.sqrt() * units(chunk_zoom(z)) * (1.0 + 1.0 / cell_angle(tau))
+fn split_reach(zoom: Zoom, tau: Tau) -> f64 {
+    3f64.sqrt() * units(chunk_zoom(zoom)) * (1.0 + 1.0 / cell_angle(tau))
 }
 
 pub struct Cut {
@@ -410,7 +410,7 @@ pub fn start(ladder: &[Tau], extra: u32) {
     if made.key == Some(key) && made.published.is_some() {
         return;
     }
-    // a new target or moved objects recast every tile; moved tiles the ones over them
+    // a new target or moved objects recast every patch; moved ones the patches over them
     let everything = made.key.is_none_or(|(_, (_, objects), tau, _)| tau != key.2 || objects != key.1 .1);
     made.key = Some(key);
     let resident: HashSet<Tile> = Terrain::pyramid().residency().held().map(|(p, _)| p).collect();

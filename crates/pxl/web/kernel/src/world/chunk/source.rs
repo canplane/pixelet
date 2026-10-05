@@ -32,11 +32,11 @@ pub fn chunk_sources_step() {
 
 /// A leaf chunk draws its own column; a coarser one draws every column under
 /// it and its apron, folded.
-pub fn tiers_draw(z: Zoom, base: IVec, col: IVec) -> bool {
-    if z == LEAF_Z {
+pub fn tiers_draw(zoom: Zoom, base: IVec, col: IVec) -> bool {
+    if zoom == LEAF_Z {
         col == idx(BAND, base)
     } else {
-        folds_into(z, base, col)
+        folds_into(zoom, base, col)
     }
 }
 
@@ -63,13 +63,13 @@ pub fn objects_revision_of(k: PyramidChunk) -> u32 {
 /// each zoom, and coarser than a leaf's its neighbours through the fold's apron.
 pub fn band_written(col: IVec, band: BandZ) {
     let corner = Pvf3 { i: from_idx(BAND, col), f: 0 };
-    for z in TOP_Z..=LEAF_Z {
-        let column = PyramidChunk::of(z, &corner);
-        let home = column.beside(0, 0, ancestor_of([i64::from(band)], u32::from(LEAF_Z - z))[0] - column.node().1[2]);
-        let near: &[(i64, i64)] = if z == LEAF_Z { &[(0, 0)] } else { &NEAR };
+    for zoom in TOP_Z..=LEAF_Z {
+        let column = PyramidChunk::of(zoom, &corner);
+        let home = column.beside(0, 0, ancestor_of([i64::from(band)], u32::from(LEAF_Z - zoom))[0] - column.node().1[2]);
+        let near: &[(i64, i64)] = if zoom == LEAF_Z { &[(0, 0)] } else { &NEAR };
         for &(dx, dy) in near {
             let k = home.beside(dx, dy, 0);
-            if tiers_draw(z, k.corner(), col) {
+            if tiers_draw(zoom, k.corner(), col) {
                 bump_world(TIERS_CHUNK, chunk_key(k) as u64);
             }
         }
@@ -79,8 +79,8 @@ pub fn band_written(col: IVec, band: BandZ) {
 const NEAR: [(i64, i64); 9] = [(-1, -1), (0, -1), (1, -1), (-1, 0), (0, 0), (1, 0), (-1, 1), (0, 1), (1, 1)];
 
 /// Its own cells and the one-cell apron a fold reads.
-fn folds_into(z: Zoom, base: IVec, col: IVec) -> bool {
-    let (cell, o, last) = (GROUND.cell_zoom(z), from_idx(BAND, col), i64::from(count(CELL, chunk_zoom(LEAF_Z))) - 1);
+fn folds_into(zoom: Zoom, base: IVec, col: IVec) -> bool {
+    let (cell, o, last) = (GROUND.cell_zoom(zoom), from_idx(BAND, col), i64::from(count(CELL, chunk_zoom(LEAF_Z))) - 1);
     let across = |b: i64, o: i64| index(cell, o) <= index(cell, b) + CHUNK_CELLS as i64 && index(cell, o + last) >= index(cell, b) - 1;
     // The column's copy nearest the chunk, so a fold across the antimeridian is met.
     let ox = pxl_spec::space::pvf3::nearest(ivec::X(o) as f64, ivec::X(base) as f64) as i64;

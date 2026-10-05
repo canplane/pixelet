@@ -337,10 +337,10 @@ pub fn footprint(width: f64) -> f64 {
 
 /// Decks one zoom coarser, at `z`: half a cell wide or more, simplified to
 /// half a cell, widest first within a record.
-pub fn fold_decks(children: [&Decks; 4], z: Zoom) -> Decks {
+pub fn fold_decks(children: [&Decks; 4], zoom: Zoom) -> Decks {
     let n = f64::from(TILE_CELLS);
     // The parent's half cell of height, in leaf cells.
-    let height_tolerance = f64::from(GROUND.finest_in(z)) / 2.0;
+    let height_tolerance = f64::from(GROUND.finest_in(zoom)) / 2.0;
     let mut lines = Vec::new();
     for (q, child) in children.iter().enumerate() {
         let [qx, qy] = child_of([0, 0], q).map(|v| v as f64 * n);

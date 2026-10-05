@@ -31,10 +31,10 @@ fn objects_draw_the_grounds_cube_and_go_finer_only_under_the_leaves() {
 /// 16 × 16 leaf chunks.
 const ROOT: Zoom = 4;
 
-fn at(z: Zoom, x: i64, y: i64) -> Chunk {
+fn at(zoom: Zoom, x: i64, y: i64) -> Chunk {
     let side = units(chunk_zoom(LEAF_Z)) as i64;
     Chunk::of(
-        z,
+        zoom,
         &Pvf3 {
             i: ivec::gather(x * side, y * side, 0),
             f: 0,
@@ -43,11 +43,11 @@ fn at(z: Zoom, x: i64, y: i64) -> Chunk {
 }
 
 /// Every chunk at `z` over the root's ground.
-fn chunks_at(z: Zoom) -> Vec<Chunk> {
-    let steps = LEAF_Z - z;
+fn chunks_at(zoom: Zoom) -> Vec<Chunk> {
+    let steps = LEAF_Z - zoom;
     let n = 1i64 << (ROOT - steps);
     let step = 1i64 << steps;
-    let mut out: Vec<Chunk> = (0..n).flat_map(|y| (0..n).map(move |x| at(z, x * step, y * step))).collect();
+    let mut out: Vec<Chunk> = (0..n).flat_map(|y| (0..n).map(move |x| at(zoom, x * step, y * step))).collect();
     out.sort_unstable();
     out
 }

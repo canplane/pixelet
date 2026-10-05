@@ -137,7 +137,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
     while over.tile_zoom() > src.zoom {
         over = over.parent()?;
     }
-    let z = over.tile_zoom();
+    let zoom = over.tile_zoom();
     let (cx0, cy0, _) = chunk.rect();
     let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
@@ -166,25 +166,25 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
             hittable: chunk.tile_zoom() == LEAF_Z,
         }
     }));
-    let target = GROUND.cell_zoom(z);
+    let target = GROUND.cell_zoom(zoom);
     let (cx, cy, span) = (index(target, x0), index(target, y0), CHUNK_CELLS as i64);
-    match z < LEAF_Z && sources.shown {
+    match zoom < LEAF_Z && sources.shown {
         true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
         false => c.folded.clear(),
     }
     let ground = Ground {
         tile: &view,
         sample: &c.sample,
-        z,
+        zoom,
         x0,
         y0,
         tx0,
         ty0,
-        col_idx: (z == LEAF_Z).then(|| idx(BAND, ivec::gather(x0, y0, 0))),
-        folded: (z < LEAF_Z).then_some(&c.folded),
+        col_idx: (zoom == LEAF_Z).then(|| idx(BAND, ivec::gather(x0, y0, 0))),
+        folded: (zoom < LEAF_Z).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
-    let step = GROUND.finest_in(z);
+    let step = GROUND.finest_in(zoom);
     let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown, chunk.region())?;
     let index = built.bytes();
     let heights = built.heights();

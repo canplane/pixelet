@@ -80,14 +80,14 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
         ..Place::default()
     };
     let mut below = (leaf(), PoiTile::of_places(LEAF_Z, [(at, tower)], true));
-    for z in (TOP_Z..LEAF_Z).rev() {
-        let p = Tile::over(z, below.0.tile);
+    for zoom in (TOP_Z..LEAF_Z).rev() {
+        let p = Tile::over(zoom, below.0.tile);
         let up = PoiTile::fold_tile(p, |k| Some(if k == below.0 { &below.1 } else { &empty })).unwrap();
         assert_eq!(up.cells.len(), 1);
         let c = up.cells[0];
         let (_, place, at) = up.shown(&c).next().unwrap();
         assert_eq!(place, tower);
-        assert_eq!(POI_LATTICE.cell_at(p, c.cell).inner_at(GROUND, LEAF_Z, at), ground, "z{z}");
+        assert_eq!(POI_LATTICE.cell_at(p, c.cell).inner_at(GROUND, LEAF_Z, at), ground, "z{zoom}");
         below = (p, up);
     }
 }

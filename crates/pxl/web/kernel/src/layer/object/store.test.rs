@@ -129,7 +129,7 @@ impl Rng {
 
 /// Whole cells in band 0 of one column, and what the store keeps folded at
 /// `z`, with the column's corner in that zoom's cells.
-fn folded(cells: &[(u32, u32, u32, u32)], z: Zoom) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
+fn folded(cells: &[(u32, u32, u32, u32)], zoom: Zoom) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
     let mut store = Store::default();
     let col_idx = ivec::gather(1, -1, 0);
     let step = count(OBJECT_FINEST, CELL);
@@ -140,7 +140,7 @@ fn folded(cells: &[(u32, u32, u32, u32)], z: Zoom) -> (HashMap<[i64; 3], u32>, [
         cell_zoom: CELL,
         state,
     }));
-    let target = GROUND.cell_zoom(z);
+    let target = GROUND.cell_zoom(zoom);
     let per = count(target, BAND) as i64;
     let corner = [per, -per];
     let mut out = HashMap::new();

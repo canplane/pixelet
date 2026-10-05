@@ -92,7 +92,7 @@ pub struct DecorBuild<'s> {
 pub struct Ground<'a> {
     pub tile: &'a TileView<'a>,
     pub sample: &'a ChunkSample,
-    pub z: Zoom,
+    pub zoom: Zoom,
     pub x0: i64,
     pub y0: i64,
     pub tx0: u32,
@@ -260,13 +260,13 @@ impl<'s> DecorBuild<'s> {
     /// sees, not on leaf cells it cannot.
     fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
         let (cells, lines) = (ground.tile.cells, ground.tile.decks);
-        let (own, atom) = (GROUND.cell_zoom(ground.z), GROUND.cell_zoom(LEAF_Z));
+        let (own, atom) = (GROUND.cell_zoom(ground.zoom), GROUND.cell_zoom(LEAF_Z));
         let (lx0, ly0) = (index(own, ground.x0), index(own, ground.y0));
         let per = i64::from(count(atom, own));
         let min = [index(atom, ground.x0), index(atom, ground.y0)];
         let span = i64::from(CHUNK_CELLS) * per;
         let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
-        scatter(kind.seed.tag, kind.seed.density, ground.z, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
+        scatter(kind.seed.tag, kind.seed.density, ground.zoom, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
         for i in 0..scratch.candidates.len() {
             let candidate = scratch.candidates[i];
             let (dx, dy) = ((candidate.cell[0] - min[0]).div_euclid(per) as u32, (candidate.cell[1] - min[1]).div_euclid(per) as u32);
@@ -288,7 +288,7 @@ impl<'s> DecorBuild<'s> {
                 continue;
             }
             let [x, y, z] = [at[0] - chunk.min[0], at[1] - chunk.min[1], at[2]];
-            let hidden = ground.z == LEAF_Z && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
+            let hidden = ground.zoom == LEAF_Z && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
             scratch.push(
                 first + variant as usize,
                 Instance {

@@ -154,8 +154,8 @@ struct Sources {
 impl Sources {
     fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
-        let (z, base) = (k.tile_zoom(), k.corner());
-        let drawn = |at: &EntryAt| tiers_draw(z, base, at.col_idx) && draws_band(k, at.band_idx);
+        let (zoom, base) = (k.tile_zoom(), k.corner());
+        let drawn = |at: &EntryAt| tiers_draw(zoom, base, at.col_idx) && draws_band(k, at.band_idx);
         Sources {
             textured: settings.textures,
             objects_revision: objects_revision_of(k),
@@ -586,7 +586,7 @@ impl Scheduler {
     fn add(&mut self, world: &mut World, k: Chunk) {
         // The frontier starts no move without room, so running out of mounts is a bug.
         let id = self.mounts.pop().or_bug(Errno::ENOSPC);
-        let z = k.tile_zoom();
+        let zoom = k.tile_zoom();
         let edits = render_edits();
         let sources = Sources::of(k, edits);
         self.builder.add(id, k);
@@ -605,7 +605,7 @@ impl Scheduler {
             retier: false,
             tiers: Held::EMPTY,
             layout: None,
-            desired: chunk_zoom(z),
+            desired: chunk_zoom(zoom),
             sources,
         };
         slot.unmeasured();
@@ -986,8 +986,8 @@ impl Scheduler {
         self.slots[i].fresh = false;
         let Some(d) = domain::current() else { return };
         let s = &self.slots[i];
-        let (z, chunk) = (s.tile_zoom(), s.chunk);
-        let objects = z == LEAF_Z && world.store.entries(idx(BAND, chunk.corner())).is_some();
+        let (zoom, chunk) = (s.tile_zoom(), s.chunk);
+        let objects = zoom == LEAF_Z && world.store.entries(idx(BAND, chunk.corner())).is_some();
         let current = self.generation(i);
         let desired = zoom_of(chunk, d.outermost(chunk), d.order_of(chunk).near, d.tau(), objects);
         if self.slots[i].role == Role::Building && self.slots[i].layout.is_some_and(|(p, _)| p != desired) {
@@ -1243,9 +1243,9 @@ fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent
     if cell_zoom != s.target() {
         return false;
     }
-    let z = s.tile_zoom();
+    let zoom = s.tile_zoom();
     let pool = pool_of(s.chunk, cell_zoom);
-    let k = boxes.div_ceil(capacity(z, mesh_step(cell_zoom, z))).max(1);
+    let k = boxes.div_ceil(capacity(zoom, mesh_step(cell_zoom, zoom))).max(1);
     let over = s.tiers.iter().find(|t| t.cell_zoom == cell_zoom).map(|t| t.slot.index);
     let taken = match over {
         Some(first) => Some((first, (0..).take_while(|&n| chained(meshes, first, n).is_some()).count() as u32)),
@@ -1319,8 +1319,8 @@ fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
         return;
     };
     let Some(i) = place[id as usize].get() else { return };
-    let z = slots[i].tile_zoom();
-    let step = mesh_step(cell_zoom, z);
+    let zoom = slots[i].tile_zoom();
+    let step = mesh_step(cell_zoom, zoom);
     let head = slot_at(l.first);
     let n = first / head.capacity;
     let Some(slot) = chained(meshes, l.first, n).map(slot_at) else { return };
@@ -1331,7 +1331,7 @@ fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) {
     // SAFETY: the block's boxes in `.fixed.bake`, just written by the bake, in
     // the slot group's format.
     let words = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(at as usize), (box_cnt * box_words) as usize) };
-    let unit = (step * GROUND.finest_in(z)) as f64;
+    let unit = (step * GROUND.finest_in(zoom)) as f64;
     let mut bounds = meshes.landing.as_ref().and_then(|l| l.bounds);
     for r in words.chunks_exact(box_words as usize) {
         let (min, size) = box_bounds(r, unit, heights);

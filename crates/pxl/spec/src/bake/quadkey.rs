@@ -69,8 +69,8 @@ pub fn index_of(key: &str) -> Option<(u32, IVec)> {
 }
 
 /// The bits of the tile grid at `z`, a name's length.
-fn depth_at(z: Zoom) -> u32 {
-    around(z).trailing_zeros()
+fn depth_at(zoom: Zoom) -> u32 {
+    around(zoom).trailing_zeros()
 }
 
 pub fn tile_name(p: Tile) -> Quadkey {

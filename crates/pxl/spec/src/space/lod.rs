@@ -75,15 +75,15 @@ impl Tau {
         GROUND.z_of(self.cell_at(r)).clamp(TOP_Z as i32, LEAF_Z as i32) as Zoom
     }
 
-    pub const fn demand_reach(self, z: Zoom) -> f64 {
-        demand_reach(z) / self.0
+    pub const fn demand_reach(self, zoom: Zoom) -> f64 {
+        demand_reach(zoom) / self.0
     }
 }
 
 /// How far from an observer's foot a demand at `z` can lie: the split
 /// distance of the ground's cell a zoom coarser. Bounds the run along the ground too.
-pub const fn demand_reach(z: Zoom) -> f64 {
-    split_distance(GROUND.cell_zoom(z - 1))
+pub const fn demand_reach(zoom: Zoom) -> f64 {
+    split_distance(GROUND.cell_zoom(zoom - 1))
 }
 
 /// The most tiles a zoom's demand span along an axis: ⌊d / tile⌋ + 2, the same at every zoom.
@@ -93,15 +93,15 @@ pub const REACH_ACROSS: u32 = (2.0 * demand_reach(LEAF_Z) / units(LEAF_Z)) as u3
 pub const REACH_TILES: u32 = REACH_ACROSS * REACH_ACROSS;
 
 /// Every tile at `z` with ground within `radius` of `at`.
-pub fn tiles_within(z: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Tile> {
-    let ys = tile_rows(z);
-    squares_within(z, at, radius).filter(move |&[_, y]| ys.contains(&y)).map(move |xy| tile_at(z, xy))
+pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Tile> {
+    let ys = tile_rows(zoom);
+    squares_within(zoom, at, radius).filter(move |&[_, y]| ys.contains(&y)).map(move |xy| tile_at(zoom, xy))
 }
 
 /// `tiles_within` before X wraps.
-pub fn squares_within(z: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = [i64; 2]> {
-    xpute_core::ensure!(z >= TOP_Z, EINVAL);
-    let span = units(z);
+pub fn squares_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = [i64; 2]> {
+    xpute_core::ensure!(zoom >= TOP_Z, EINVAL);
+    let span = units(zoom);
     let rows = |c: f64| ((c - radius) / span).floor() as i64..=((c + radius) / span).floor() as i64;
     let (xs, ys) = (rows(at[0]), rows(at[1]));
     let gap = move |c: f64, i: i64| (i as f64 * span - c).max(c - (i + 1) as f64 * span).max(0.0);

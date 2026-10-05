@@ -15,12 +15,12 @@ pub const CENTER_CELL_LOGICAL_PX: f64 = 6.0;
 
 // ---- what refinement observes ----
 
-/// The estimator's tile side, in radians (about 10°, 77 rays on a 16:9
+/// The estimator's patch side, in radians (about 10°, 77 rays on a 16:9
 /// screen at 50°). An eighth cast 135 rays for goals within 1% of these
 /// over rolling ground (measured 2026-09-28).
-pub const OBSERVED_TILE: f64 = 1.0 / 6.0;
+pub const OBSERVED_PATCH: f64 = 1.0 / 6.0;
 
-/// How far a tile's last answer may drift, as a share of a tile, before it
+/// How far a patch's last answer may drift, as a share of a patch, before it
 /// is cast again.
 pub const REUSE_SHIFT: f64 = 0.25;
 

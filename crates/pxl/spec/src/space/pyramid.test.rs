@@ -9,11 +9,11 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
         i: ivec::gather(-1234, 5678, 0),
         ..Default::default()
     };
-    for z in [LEAF_Z, LEAF_Z - 3, LEAF_Z - 7] {
-        let cell = GROUND.cell_of(z, &point);
-        assert_eq!(cell.tile_zoom(), z);
-        assert_eq!(GROUND.cell_of(z, &cell.base()), cell, "a cell is found from its own corner");
-        assert_eq!(cell.up(2), GROUND.cell_of(z - 2, &point), "the cell over it");
+    for zoom in [LEAF_Z, LEAF_Z - 3, LEAF_Z - 7] {
+        let cell = GROUND.cell_of(zoom, &point);
+        assert_eq!(cell.tile_zoom(), zoom);
+        assert_eq!(GROUND.cell_of(zoom, &cell.base()), cell, "a cell is found from its own corner");
+        assert_eq!(cell.up(2), GROUND.cell_of(zoom - 2, &point), "the cell over it");
         let side = cell.side();
         let c = cell.center(10.0);
         let at = projection::unproject(c.i, c.f);
@@ -34,8 +34,8 @@ fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
             ..Default::default()
         };
         let fine = GROUND.cell_of(LEAF_Z, &point);
-        for z in [LEAF_Z, 12, TOP_Z] {
-            let outer = coarse.cell_of(z, &point);
+        for zoom in [LEAF_Z, 12, TOP_Z] {
+            let outer = coarse.cell_of(zoom, &point);
             let offset = outer.offset_of(fine);
             assert!(offset.iter().all(|&o| (o as f64) < outer.side() / fine.side()), "an offset inside the outer cell");
             assert_eq!(outer.inner_at(GROUND, LEAF_Z, offset), fine);
@@ -51,16 +51,16 @@ fn a_cells_place_in_a_tile_above_lies_in_the_tile_cell_over_it() {
             i: ivec::gather(x, y, 0),
             ..Default::default()
         };
-        for z in [LEAF_Z, 13] {
-            let cell = GROUND.cell_of(z, &point);
+        for zoom in [LEAF_Z, 13] {
+            let cell = GROUND.cell_of(zoom, &point);
             let [tx, ty] = cell.in_tile();
             assert_eq!(cell.in_tile_above(0), [tx as i64, ty as i64]);
-            for steps in [1, 4, z - TOP_Z] {
+            for steps in [1, 4, zoom - TOP_Z] {
                 let up = cell.up(steps);
                 let n = crate::space::zoom::count(cell.zoom(), up.zoom()) as i64;
                 let [ax, ay] = up.in_tile();
                 let [x, y] = cell.in_tile_above(steps);
-                assert_eq!([x.div_euclid(n), y.div_euclid(n)], [ax as i64, ay as i64], "z{z}, {steps} up");
+                assert_eq!([x.div_euclid(n), y.div_euclid(n)], [ax as i64, ay as i64], "z{zoom}, {steps} up");
             }
         }
     }
@@ -74,8 +74,8 @@ fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {
         i: ivec::gather(-1234, 5678, 0),
         ..Default::default()
     };
-    for z in [LEAF_Z, 13] {
-        let (a, b) = (coarse.cell_of(z, &point), GROUND.cell_of(z - 2, &point));
+    for zoom in [LEAF_Z, 13] {
+        let (a, b) = (coarse.cell_of(zoom, &point), GROUND.cell_of(zoom - 2, &point));
         assert_eq!(a.side(), b.side());
         assert_eq!(a.base(), b.base());
         assert_eq!(a.tile().zoom, b.tile().zoom + 2);
@@ -113,9 +113,9 @@ fn a_point_goes_round_in_x_and_stops_at_the_edge_in_y() {
     assert_eq!(projection::project(half + 3.0, REACH.max[1] + 100.0, 0.0), projection::project(-half + 3.0, REACH.max[1], 0.0));
     assert_eq!(nearest(-half + 3.0, half - 1.0), half + 3.0);
     assert_eq!(nearest(half - 1.0, -half + 3.0), -half - 1.0);
-    for z in [TOP_Z, LEAF_Z] {
-        let n = around(z);
-        assert_eq!(tile_at(z, [n / 2, 0]), tile_at(z, [-n / 2, 0]));
-        assert!(!tile_rows(z).contains(&(n / 2)));
+    for zoom in [TOP_Z, LEAF_Z] {
+        let n = around(zoom);
+        assert_eq!(tile_at(zoom, [n / 2, 0]), tile_at(zoom, [-n / 2, 0]));
+        assert!(!tile_rows(zoom).contains(&(n / 2)));
     }
 }

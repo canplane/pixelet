@@ -35,9 +35,9 @@ pub struct Candidate {
 /// A Poisson process, never a grid: a block at zoom m bears a Poisson count
 /// of candidates born there, each at a uniform leaf cell, and a candidate born
 /// at m stands at every zoom from m finer. A cell at any zoom then holds `density`.
-fn each_candidate(tag: u64, density: f64, z: Zoom, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
+fn each_candidate(tag: u64, density: f64, zoom: Zoom, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
     let kind = derive_seed_u64(MASTER_SEED, tag);
-    for born in (TOP_Z..=z).rev() {
+    for born in (TOP_Z..=zoom).rev() {
         let side = BLOCK * i64::from(GROUND.finest_in(born));
         let share = if born == TOP_Z { 1.0 } else { 1.0 - KEPT };
         let mean = density * (BLOCK * BLOCK) as f64 * share;
@@ -76,10 +76,10 @@ fn poisson(mean: f64, u: f64) -> u64 {
 
 /// What stands at `z` in `region` (leaf cells, `[min, max)`), one a cell:
 /// of two on one cell the coarser stays, so a zoom keeps what it had.
-pub fn scatter(tag: u64, density: f64, z: Zoom, region: [[i64; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
+pub fn scatter(tag: u64, density: f64, zoom: Zoom, region: [[i64; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
     out.clear();
     let mut grown = Ok(());
-    each_candidate(tag, density, z, region, |c| {
+    each_candidate(tag, density, zoom, region, |c| {
         if grown.is_ok() {
             grown = out.try_reserve(1).map(|()| out.push(c));
         }

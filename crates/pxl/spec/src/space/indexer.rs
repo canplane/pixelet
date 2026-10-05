@@ -9,13 +9,13 @@ use super::pvf3::ivec::{self, IVec};
 use super::zoom::{shamt, Zoom};
 
 /// A floor on each lane.
-pub fn idx(z: Zoom, addr: IVec) -> IVec {
-    ivec::sh(addr, -shamt(z))
+pub fn idx(zoom: Zoom, addr: IVec) -> IVec {
+    ivec::sh(addr, -shamt(zoom))
 }
 
 /// `idx`'s inverse, to the cell's base.
-pub fn from_idx(z: Zoom, idx: IVec) -> IVec {
-    ivec::sh(idx, shamt(z))
+pub fn from_idx(zoom: Zoom, idx: IVec) -> IVec {
+    ivec::sh(idx, shamt(zoom))
 }
 
 #[cfg(test)]

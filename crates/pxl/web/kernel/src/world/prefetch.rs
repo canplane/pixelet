@@ -28,15 +28,15 @@ pub struct Reach {
 impl Prefetch for Reach {
     fn speculate(&self, o: &Observation, tau: Tau, each: &mut dyn FnMut(Tile)) {
         let h = o.eye[2] - o.ground;
-        for z in (TOP_Z..=LEAF_Z).rev() {
+        for zoom in (TOP_Z..=LEAF_Z).rev() {
             // The disc a zoom's end leaves on the ground past the eye's height; none
             // where the eye is higher.
-            let end = tau.demand_reach(z);
+            let end = tau.demand_reach(zoom);
             if end <= h {
                 continue;
             }
             let ring = (end * end - h * h).sqrt();
-            tiles_within(z, [o.eye[0], o.eye[1]], (ring * self.slack + self.margin).min(o.far)).for_each(&mut *each);
+            tiles_within(zoom, [o.eye[0], o.eye[1]], (ring * self.slack + self.margin).min(o.far)).for_each(&mut *each);
         }
     }
 }

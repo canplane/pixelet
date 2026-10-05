@@ -41,8 +41,8 @@ impl TileSet {
         TileSet { root: root.into() }
     }
 
-    pub fn zoom_dir(&self, z: Zoom) -> PathBuf {
-        self.root.join(format!("z{z}"))
+    pub fn zoom_dir(&self, zoom: Zoom) -> PathBuf {
+        self.root.join(format!("z{zoom}"))
     }
 
     pub fn path(&self, p: Tile) -> PathBuf {
@@ -78,8 +78,8 @@ impl TileSet {
         unpack(&stored).map(Some).map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    pub fn tiles(&self, z: Zoom) -> Result<Vec<Tile>, String> {
-        let dir = self.zoom_dir(z);
+    pub fn tiles(&self, zoom: Zoom) -> Result<Vec<Tile>, String> {
+        let dir = self.zoom_dir(zoom);
         if !dir.exists() {
             return Ok(Vec::new());
         }
@@ -87,7 +87,7 @@ impl TileSet {
         for entry in fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))? {
             let name = entry.map_err(|e| e.to_string())?.file_name();
             if let Some(tile) = name.to_str().and_then(|n| n.parse::<IVec>().ok()) {
-                out.push(Tile::new(z, tile));
+                out.push(Tile::new(zoom, tile));
             }
         }
         out.sort_unstable();
@@ -124,15 +124,15 @@ pub fn fold_stored<L: Layer>(set: &TileSet, parent: Tile, absent: &impl Absent<L
 /// Folds every zoom up to `TOP_Z` or the first empty one.
 pub fn build<L: Layer>(set: &TileSet, absent: &impl Absent<L>, workers: usize) -> Result<Zoom, String> {
     let mut top = LEAF_Z;
-    for z in (TOP_Z..LEAF_Z).rev() {
-        let children = set.tiles(z + 1)?;
+    for zoom in (TOP_Z..LEAF_Z).rev() {
+        let children = set.tiles(zoom + 1)?;
         if children.is_empty() {
             break;
         }
         let at = std::time::Instant::now();
-        let n = fold_zoom(set, z, &children, absent, workers)?;
-        println!("[bake/pyramid] z{z}: {n} tiles in {:.1}s", at.elapsed().as_secs_f64());
-        top = z;
+        let n = fold_zoom(set, zoom, &children, absent, workers)?;
+        println!("[bake/pyramid] z{zoom}: {n} tiles in {:.1}s", at.elapsed().as_secs_f64());
+        top = zoom;
     }
     for stale in (0..top).rev().map(|z| set.zoom_dir(z)).take_while(|d| d.exists()) {
         fs::remove_dir_all(&stale).map_err(|e| format!("{}: {e}", stale.display()))?;
@@ -146,11 +146,11 @@ pub fn build<L: Layer>(set: &TileSet, absent: &impl Absent<L>, workers: usize) -
 /// update re-packs alike.
 pub fn refold<L: Layer>(set: &TileSet, mut changed: HashSet<Tile>, absent: &impl Absent<L>) -> Result<usize, String> {
     let mut written = 0;
-    for z in (TOP_Z..LEAF_Z).rev() {
+    for zoom in (TOP_Z..LEAF_Z).rev() {
         if changed.is_empty() {
             break;
         }
-        let mut candidates: BTreeSet<Tile> = set.tiles(z)?.into_iter().collect();
+        let mut candidates: BTreeSet<Tile> = set.tiles(zoom)?.into_iter().collect();
         candidates.extend(changed.iter().map(|c| c.parent()));
         let mut next = HashSet::new();
         for p in candidates {
@@ -178,9 +178,9 @@ pub fn refold<L: Layer>(set: &TileSet, mut changed: HashSet<Tile>, absent: &impl
 /// whole set before any is removed. Returns how many.
 pub fn prune<L: Layer>(set: &TileSet, top: Zoom) -> Result<usize, String> {
     let mut gone = Vec::new();
-    for z in top + 1..=LEAF_Z {
+    for zoom in top + 1..=LEAF_Z {
         let mut parents: HashMap<Tile, Option<L>> = HashMap::new();
-        for p in set.tiles(z)? {
+        for p in set.tiles(zoom)? {
             let parent = p.parent();
             if let std::collections::hash_map::Entry::Vacant(e) = parents.entry(parent) {
                 e.insert(set.read::<L>(parent)?);
@@ -201,9 +201,9 @@ pub fn prune<L: Layer>(set: &TileSet, top: Zoom) -> Result<usize, String> {
 pub fn write_manifest(set: &TileSet, top: Zoom, built: Option<&str>, layer: serde_json::Value) -> Result<(), String> {
     let (mut objects, mut bytes) = measure_output(&set.root).map_err(|e| e.to_string())?;
     let mut zooms = Vec::new();
-    for z in (top..=LEAF_Z).rev() {
-        let (n, b) = measure_output(&set.zoom_dir(z)).map_err(|e| e.to_string())?;
-        zooms.push(serde_json::json!({ "z": z, "objects": n, "bytes": b }));
+    for zoom in (top..=LEAF_Z).rev() {
+        let (n, b) = measure_output(&set.zoom_dir(zoom)).map_err(|e| e.to_string())?;
+        zooms.push(serde_json::json!({ "z": zoom, "objects": n, "bytes": b }));
         objects += n;
         bytes += b;
     }
@@ -216,8 +216,8 @@ pub fn write_manifest(set: &TileSet, top: Zoom, built: Option<&str>, layer: serd
 
 /// A parent reads the 4×4 children around it, so each worker keeps only the
 /// four child rows its current parent row reads.
-fn fold_zoom<L: Layer>(set: &TileSet, z: Zoom, children: &[Tile], absent: &impl Absent<L>, workers: usize) -> Result<usize, String> {
-    let here = set.zoom_dir(z);
+fn fold_zoom<L: Layer>(set: &TileSet, zoom: Zoom, children: &[Tile], absent: &impl Absent<L>, workers: usize) -> Result<usize, String> {
+    let here = set.zoom_dir(zoom);
     if here.exists() {
         fs::remove_dir_all(&here).map_err(|e| format!("{}: {e}", here.display()))?;
     }

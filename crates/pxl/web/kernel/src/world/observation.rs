@@ -56,15 +56,15 @@ pub fn observation() -> Option<Observation> {
 pub struct Known;
 
 impl Bounds for Known {
-    fn contents(&self, z: Zoom, region: Aabb) -> Contents {
+    fn contents(&self, zoom: Zoom, region: Aabb) -> Contents {
         let (h0, h1) = (region.min[2], region.max[2]);
         let cut = |(lo, hi): (f64, f64)| (lo <= h1 && hi >= h0).then(|| (lo.max(h0), hi.min(h1)));
-        let cell = units(GROUND.cell_zoom(z));
+        let cell = units(GROUND.cell_zoom(zoom));
         let mut known = true;
         let mut bound: Option<Aabb> = None;
         let mut rise = 0.0f64;
-        under(z, region, &mut |node, square| {
-            let Some(n) = read(z, node) else {
+        under(zoom, region, &mut |node, square| {
+            let Some(n) = read(zoom, node) else {
                 known = false;
                 return;
             };
@@ -103,8 +103,8 @@ struct Node {
 }
 
 /// None where no terrain tile over the node is resident.
-fn read(z: Zoom, node: (Zoom, [i64; 2])) -> Option<Node> {
-    let tile = tile_at(z, ancestor_of(node.1, u32::from(node.0 - z)));
+fn read(zoom: Zoom, node: (Zoom, [i64; 2])) -> Option<Node> {
+    let tile = tile_at(zoom, ancestor_of(node.1, u32::from(node.0 - zoom)));
     let relief = Access::now().relief(tile, node).value()?;
     Some(Node {
         ground: relief.extent,
@@ -114,8 +114,8 @@ fn read(z: Zoom, node: (Zoom, [i64; 2])) -> Option<Node> {
 
 /// Each flat-lattice node at `z` under `region`: the region itself where
 /// it is exactly one node, else its columns.
-fn under(z: Zoom, region: Aabb, each: &mut dyn FnMut((Zoom, [i64; 2]), Aabb)) {
-    let column = chunk_zoom(z);
+fn under(zoom: Zoom, region: Aabb, each: &mut dyn FnMut((Zoom, [i64; 2]), Aabb)) {
+    let column = chunk_zoom(zoom);
     let side = region.max[0] - region.min[0];
     let node = (0..=chunk_zoom(LEAF_Z) - LEAF_Z)
         .map(|k| column - k)
@@ -140,7 +140,7 @@ fn under(z: Zoom, region: Aabb, each: &mut dyn FnMut((Zoom, [i64; 2]), Aabb)) {
     }
 }
 
-/// The estimator from what the tiles saw: the ground their footprints touch
+/// The estimator from what the screen's patches saw: the ground their footprints touch
 /// at each zoom whose band holds it, plus what their rays lacked. Ground no
 /// ray reaches is left to the floor. A lack is recast when it arrives, so
 /// requirements grow toward what exact records would give and never rest
@@ -157,11 +157,11 @@ impl DemandEstimator for ByFootprints<'_> {
             min: [x0, y0, REACH.min[2]],
             max: [x1, y1, REACH.max[2]],
         };
-        let required = |z: Zoom, region: Aabb| {
-            let (from, to) = band(o, self.tau, z)?;
-            let held = bounds.contents(z, region).within(region)?;
+        let required = |zoom: Zoom, region: Aabb| {
+            let (from, to) = band(o, self.tau, zoom)?;
+            let held = bounds.contents(zoom, region).within(region)?;
             let m = o.measure(&held);
-            (m.seen && m.near < to && m.near <= o.far && m.far >= from).then_some(Requirement { zoom: z, region })
+            (m.seen && m.near < to && m.near <= o.far && m.far >= from).then_some(Requirement { zoom, region })
         };
         for lack in self.lacks {
             let r = lack.region;
@@ -172,22 +172,22 @@ impl DemandEstimator for ByFootprints<'_> {
         }
         for f in self.footprints {
             let b = f.aabb();
-            for z in (o.top..=LEAF_Z).rev() {
-                let Some((_, to)) = band(o, self.tau, z) else { break };
+            for zoom in (o.top..=LEAF_Z).rev() {
+                let Some((_, to)) = band(o, self.tau, zoom) else { break };
                 let reach = to.min(o.far);
                 let lo = [b.min[0].max(o.eye[0] - reach), b.min[1].max(o.eye[1] - reach)];
                 let hi = [b.max[0].min(o.eye[0] + reach), b.max[1].min(o.eye[1] + reach)];
                 if lo[0] > hi[0] || lo[1] > hi[1] {
                     continue;
                 }
-                let span = units(z);
+                let span = units(zoom);
                 let rows = |k: usize| (lo[k] / span).floor() as i64..=(hi[k] / span).floor() as i64;
                 for y in rows(1) {
                     for x in rows(0) {
                         let (x0, y0) = (x as f64 * span, y as f64 * span);
                         let square = column(x0, y0, x0 + span, y0 + span);
                         if f.touches(&square) {
-                            if let Some(r) = required(z, square) {
+                            if let Some(r) = required(zoom, square) {
                                 each(r);
                             }
                         }
@@ -222,8 +222,8 @@ impl Order {
     }
 
     /// All of `region` where nothing is known.
-    pub fn of_region<B: Bounds + ?Sized>(o: &Observation, bounds: &B, z: Zoom, region: Aabb) -> Order {
-        Order::of(o, &bounds.contents(z, region).within(region).unwrap_or(region))
+    pub fn of_region<B: Bounds + ?Sized>(o: &Observation, bounds: &B, zoom: Zoom, region: Aabb) -> Order {
+        Order::of(o, &bounds.contents(zoom, region).within(region).unwrap_or(region))
     }
 
     pub fn of_tile(o: &Observation, p: Tile) -> Order {

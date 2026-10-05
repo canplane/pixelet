@@ -39,7 +39,7 @@ fn named(o: &Observation) -> Vec<Tile> {
 struct Flat;
 
 impl Bounds for Flat {
-    fn contents(&self, _z: Zoom, region: Aabb) -> Contents {
+    fn contents(&self, _zoom: Zoom, region: Aabb) -> Contents {
         let ground = Aabb {
             min: [region.min[0], region.min[1], 0.0],
             max: [region.max[0], region.max[1], 0.0],

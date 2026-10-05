@@ -35,8 +35,8 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
 /// How many of a zoom's cells a cell zoom spans along an axis (the mesher's step).
-pub fn mesh_step(cell_zoom: Zoom, z: Zoom) -> u32 {
-    let own = GROUND.cell_zoom(z);
+pub fn mesh_step(cell_zoom: Zoom, zoom: Zoom) -> u32 {
+    let own = GROUND.cell_zoom(zoom);
     count(own, cell_zoom.min(own))
 }
 
@@ -758,12 +758,12 @@ impl Builder {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
-        let (z, base) = (c.tile_zoom(), c.base());
+        let (zoom, base) = (c.tile_zoom(), c.base());
         if self.sample.read(&read.around(), read.first).is_err() {
             self.refuse(world, id);
             return Progress::Blocked;
         }
-        let target = GROUND.cell_zoom(z);
+        let target = GROUND.cell_zoom(zoom);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         // One cell of apron, which a fold reads (`folds_into`).
         let (cx, cy, span) = (index(target, x0), index(target, y0), CHUNK_CELLS as i64);
@@ -782,7 +782,7 @@ impl Builder {
             world.painter,
             &self.folded,
             (index(target, x0), index(target, y0)),
-            GROUND.finest_in(z),
+            GROUND.finest_in(zoom),
             &mut self.stands,
         );
         if written.is_err() {

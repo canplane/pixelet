@@ -19,13 +19,13 @@ pub const UNIT_Z: Zoom = IVEC_X_W as Zoom;
 pub const FINEST_Z: Zoom = UNIT_Z + FRAC_W as Zoom;
 
 /// log2 of `z`'s side in units: negative where finer than a unit.
-pub const fn shamt(z: Zoom) -> i32 {
-    UNIT_Z as i32 - z as i32
+pub const fn shamt(zoom: Zoom) -> i32 {
+    UNIT_Z as i32 - zoom as i32
 }
 
 /// `z`'s side in units.
-pub const fn units(z: Zoom) -> f64 {
-    let s = shamt(z);
+pub const fn units(zoom: Zoom) -> f64 {
+    let s = shamt(zoom);
     if s >= 0 {
         (1u64 << s) as f64
     } else {
@@ -36,7 +36,7 @@ pub const fn units(z: Zoom) -> f64 {
 /// How many `inner` cells stand across one `outer`, which is no finer.
 pub const fn count(inner: Zoom, outer: Zoom) -> u32 {
     if inner < outer {
-        panic!()
+        panic!("an outer zoom finer than the inner")
     }
     1 << (inner - outer)
 }
@@ -47,8 +47,8 @@ pub fn of_side(units: f64) -> Zoom {
 }
 
 /// A floor on the signed lane.
-pub const fn index(z: Zoom, units: i64) -> i64 {
-    let s = shamt(z);
+pub const fn index(zoom: Zoom, units: i64) -> i64 {
+    let s = shamt(zoom);
     if s >= 0 {
         units >> s
     } else {
@@ -57,19 +57,19 @@ pub const fn index(z: Zoom, units: i64) -> i64 {
 }
 
 /// A floor on each signed lane.
-pub fn index_of(z: Zoom, at: &Pvf3) -> [i64; 3] {
-    let shift = FRAC_W as i32 + shamt(z);
+pub fn index_of(zoom: Zoom, at: &Pvf3) -> [i64; 3] {
+    let shift = FRAC_W as i32 + shamt(zoom);
     [pvf3::X(at) >> shift, pvf3::Y(at) >> shift, pvf3::Z(at) >> shift]
 }
 
 /// `index_of`'s inverse.
-pub fn base_of(z: Zoom, index: [i64; 3]) -> Pvf3 {
-    let shift = FRAC_W as i32 + shamt(z);
+pub fn base_of(zoom: Zoom, index: [i64; 3]) -> Pvf3 {
+    let shift = FRAC_W as i32 + shamt(zoom);
     pvf3::gather(index[0] << shift, index[1] << shift, index[2] << shift)
 }
 
-pub fn cube(z: Zoom, index: [i64; 3]) -> Aabb {
-    let side = units(z);
+pub fn cube(zoom: Zoom, index: [i64; 3]) -> Aabb {
+    let side = units(zoom);
     let min = index.map(|c| c as f64 * side);
     Aabb { min, max: min.map(|v| v + side) }
 }

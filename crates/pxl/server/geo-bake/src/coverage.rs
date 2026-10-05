@@ -86,16 +86,16 @@ impl Coverage {
     }
 
     /// Whether the tile at `z` and `tile` covers any leaf held.
-    pub fn meets(&self, z: Zoom, tile: IVec) -> bool {
-        let steps = u32::from(LEAF_Z - z);
+    pub fn meets(&self, zoom: Zoom, tile: IVec) -> bool {
+        let steps = u32::from(LEAF_Z - zoom);
         let ([x0, y0], [x1, y1]) = (ancestor_of([self.x.0, self.y.0], steps), ancestor_of([self.x.1, self.y.1], steps));
         (x0..=x1).contains(&ivec::X(tile)) && (y0..=y1).contains(&ivec::Y(tile))
     }
 
     /// Whether every leaf under the tile at `z` and `tile` is held.
-    pub fn holds(&self, z: Zoom, tile: IVec) -> bool {
-        let [x0, y0] = first_descendant_of([ivec::X(tile), ivec::Y(tile)], u32::from(LEAF_Z - z));
-        let n = count(LEAF_Z, z) as i64;
+    pub fn holds(&self, zoom: Zoom, tile: IVec) -> bool {
+        let [x0, y0] = first_descendant_of([ivec::X(tile), ivec::Y(tile)], u32::from(LEAF_Z - zoom));
+        let n = count(LEAF_Z, zoom) as i64;
         self.x.0 <= x0 && x0 + n - 1 <= self.x.1 && self.y.0 <= y0 && y0 + n - 1 <= self.y.1
     }
 

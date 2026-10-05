@@ -54,12 +54,12 @@ fn wanted_zoom(near: f64, tau: Tau) -> Zoom {
 ///
 /// A chunk read from a coarser tile still uses its own cell zoom: drawing it at
 /// that tile's cells made blocks over the sea after a jump (2026-09-26).
-fn drawn_zoom(cell_zoom: Zoom, z: Zoom, outermost: bool, objects: bool) -> Zoom {
+fn drawn_zoom(cell_zoom: Zoom, zoom: Zoom, outermost: bool, objects: bool) -> Zoom {
     if outermost {
-        return chunk_zoom(z);
+        return chunk_zoom(zoom);
     }
-    let own = GROUND.cell_zoom(z);
-    let finest = match (z == LEAF_Z, objects) {
+    let own = GROUND.cell_zoom(zoom);
+    let finest = match (zoom == LEAF_Z, objects) {
         (true, true) => OBJECT_FINEST,
         (true, false) => own,
         (false, _) => own - 1,

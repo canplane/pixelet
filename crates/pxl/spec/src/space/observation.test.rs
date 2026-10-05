@@ -24,7 +24,7 @@ struct World {
 }
 
 impl Bounds for World {
-    fn contents(&self, _z: Zoom, region: Aabb) -> Contents {
+    fn contents(&self, _zoom: Zoom, region: Aabb) -> Contents {
         let (lo, hi) = (region.min, region.max);
         let over = |t: &&Tower| t.x[0] <= hi[0] && t.x[1] >= lo[0] && t.y[0] <= hi[1] && t.y[1] >= lo[1];
         let top = self.towers.iter().filter(over).map(|t| t.h).fold(0.0, f64::max);
@@ -148,9 +148,9 @@ fn exact(world: &World, look: Look, far: f64, tau: Tau) -> HashSet<Tile> {
             continue;
         }
         let at = [look.eye[0] + r * v[0], look.eye[1] + r * v[1]];
-        let z = tau.z_at(r);
-        let span = units(z);
-        out.insert(tile_at(z, at.map(|c| (c / span).floor() as i64)));
+        let zoom = tau.z_at(r);
+        let span = units(zoom);
+        out.insert(tile_at(zoom, at.map(|c| (c / span).floor() as i64)));
     }
     out
 }
@@ -213,9 +213,9 @@ fn a_zoom_names_no_more_than_the_fault_bound_and_less_known_names_more() {
                 let (known, unknown) = (demand(&o, &world, tau), demand(&o, &Unknown, tau));
                 assert!(known.is_subset(&unknown), "look {k}, {tau:?}: bounds named a tile nothing known did not");
                 for named in [known, unknown] {
-                    for z in TOP_Z..=LEAF_Z {
-                        let n = named.iter().filter(|p| p.zoom == z).count() as u32;
-                        assert!(n <= REACH_TILES, "look {k}, {tau:?}, z{z}: {n} tiles");
+                    for zoom in TOP_Z..=LEAF_Z {
+                        let n = named.iter().filter(|p| p.zoom == zoom).count() as u32;
+                        assert!(n <= REACH_TILES, "look {k}, {tau:?}, z{zoom}: {n} tiles");
                     }
                 }
             }
@@ -225,8 +225,8 @@ fn a_zoom_names_no_more_than_the_fault_bound_and_less_known_names_more() {
 
 #[test]
 fn tiled_storage_maps_a_square_to_its_tile_and_ground_to_every_tile_under_it() {
-    for z in [LEAF_Z, 13, TOP_Z] {
-        let span = units(z);
+    for zoom in [LEAF_Z, 13, TOP_Z] {
+        let span = units(zoom);
         for [x, y] in [[0i64, 0], [-3, 5], [17, -11]] {
             let mut tiles = Vec::new();
             let (x0, y0) = (x as f64 * span, y as f64 * span);
@@ -234,15 +234,15 @@ fn tiled_storage_maps_a_square_to_its_tile_and_ground_to_every_tile_under_it() {
                 min: [x0, y0, -7.0],
                 max: [x0 + span, y0 + span, 900.0],
             };
-            Tiled.tiles(&Requirement { zoom: z, region: square }, &mut |p| tiles.push(p));
-            assert_eq!(tiles, vec![tile_at(z, [x, y])]);
+            Tiled.tiles(&Requirement { zoom, region: square }, &mut |p| tiles.push(p));
+            assert_eq!(tiles, vec![tile_at(zoom, [x, y])]);
             tiles.clear();
             let wider = Aabb {
                 min: [x0 + 0.5 * span, y0, 0.0],
                 max: [x0 + 2.0 * span, y0 + 1.5 * span, 0.0],
             };
-            Tiled.tiles(&Requirement { zoom: z, region: wider }, &mut |p| tiles.push(p));
-            assert_eq!(tiles.len(), 4, "z{z}: {tiles:?}");
+            Tiled.tiles(&Requirement { zoom, region: wider }, &mut |p| tiles.push(p));
+            assert_eq!(tiles.len(), 4, "z{zoom}: {tiles:?}");
         }
     }
 }

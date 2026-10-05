@@ -268,8 +268,8 @@ fn link_tree(from: &Path, to: &Path) -> Result<(), String> {
 /// a tile linked from it is the same file, and any other one is checked by content.
 fn snapshot_over(full: &TileSet, tiles: &TileSet) -> Result<(Vec<String>, Vec<String>), String> {
     let (mut written, mut removed) = (Vec::new(), Vec::new());
-    for z in TOP_Z..=LEAF_Z {
-        let here: HashSet<Tile> = tiles.tiles(z)?.into_iter().collect();
+    for zoom in TOP_Z..=LEAF_Z {
+        let here: HashSet<Tile> = tiles.tiles(zoom)?.into_iter().collect();
         for &p in &here {
             let (a, b) = (full.path(p), tiles.path(p));
             let same = match (fs::metadata(&a), fs::metadata(&b)) {
@@ -280,7 +280,7 @@ fn snapshot_over(full: &TileSet, tiles: &TileSet) -> Result<(Vec<String>, Vec<St
                 written.push(tile_name(p).to_string());
             }
         }
-        removed.extend(full.tiles(z)?.into_iter().filter(|p| !here.contains(p)).map(|p| tile_name(p).to_string()));
+        removed.extend(full.tiles(zoom)?.into_iter().filter(|p| !here.contains(p)).map(|p| tile_name(p).to_string()));
     }
     Ok((written, removed))
 }
