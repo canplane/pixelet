@@ -9,9 +9,9 @@ use core::fmt;
 use crate::space::indexer::L3;
 use crate::space::pvf3::core::IVEC_X_W;
 use crate::space::pvf3::ivec::{self, IVec};
-use crate::space::pyramid::{pages_around, Page, GROUND_Z, TOP_Z};
+use crate::space::pyramid::{pages_around, Page, LEAF_Z, TOP_Z};
 
-/// A z16 page's name length: the bits of its page grid, which is one world
+/// A leaf's name length: the bits of its page grid, which is one world
 /// of pages. It follows the page's size, never the zoom.
 pub const PAGE_KEY_DEPTH: u32 = IVEC_X_W - L3.shamt() as u32;
 
@@ -81,7 +81,7 @@ pub fn page_name(p: Page) -> Quadkey {
 /// `page_name`'s inverse; `None` for a zoom the pyramid does not hold.
 pub fn page_of_name(name: &str) -> Option<Page> {
     let (depth, page) = index_of(name)?;
-    (TOP_Z..=GROUND_Z).find(|&z| depth_at(z) == depth).map(|z| Page::new(z, page))
+    (TOP_Z..=LEAF_Z).find(|&z| depth_at(z) == depth).map(|z| Page::new(z, page))
 }
 
 #[cfg(test)]

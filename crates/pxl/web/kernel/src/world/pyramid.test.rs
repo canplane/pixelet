@@ -58,7 +58,7 @@ fn hold(pyramid: &mut Pyramid<PoiPage>, pages: impl IntoIterator<Item = (Page, P
 }
 
 fn crowded(p: Page) -> PoiPage {
-    if p.z == GROUND_Z {
+    if p.z == LEAF_Z {
         return PoiPage::default();
     }
     let at = |k: Page| POI_LATTICE.cell_base(k, 0, 0);

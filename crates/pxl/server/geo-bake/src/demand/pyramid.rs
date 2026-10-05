@@ -8,7 +8,7 @@ use super::{Dataset, Failure, Kind};
 use crate::pyramid::{fold_stored, Absent, Layer, PageSet};
 use crate::util::{pack, Level};
 use pxl_spec::bake::quadkey::page_of_name;
-use pxl_spec::space::pyramid::{Page, GROUND_Z};
+use pxl_spec::space::pyramid::{Page, LEAF_Z};
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
@@ -35,7 +35,7 @@ fn fault(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Page) -> Pin<Bo
                 if !d.source.holds(p) {
                     return d.cache.publish(&key(p), None).map_err(Failure::from);
                 }
-                if p.z < GROUND_Z {
+                if p.z < LEAF_Z {
                     for below in d.source.sources(p) {
                         tokio::time::timeout_at(deadline, fault(d.clone(), runner.clone(), kind, below))
                             .await
@@ -54,7 +54,7 @@ fn fault(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Page) -> Pin<Bo
 }
 
 pub(super) fn execute<L: Layer>(p: Page, cache: &Path, out: &Path, leaf: impl FnOnce() -> Result<Option<L>, String>, absent: &impl Absent<L>) -> Result<(), String> {
-    let page = if p.z == GROUND_Z { leaf()? } else { fold_stored(&PageSet::new(cache), p, absent)? };
+    let page = if p.z == LEAF_Z { leaf()? } else { fold_stored(&PageSet::new(cache), p, absent)? };
     let packet = page.map(|page| pack(&page.encode()?, Level::Live).map_err(|e| e.to_string())).transpose()?;
     job::write_packet(out, packet.as_deref())
 }

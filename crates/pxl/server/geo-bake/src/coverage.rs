@@ -13,7 +13,7 @@ use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::hierarchy::{ancestor_of, first_descendant_of};
 use pxl_spec::space::indexer::{L3_IDX, L3_RANGE};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{page_scale, GROUND_Z};
+use pxl_spec::space::pyramid::{page_scale, LEAF_Z};
 
 use crate::elevation::page_reads;
 use crate::terrain::repository::DRAWN_REACH_U;
@@ -52,7 +52,7 @@ impl Coverage {
         SOURCE.clone()
     }
 
-    /// The z16 pages whose padded elevation grid lies in the raster, each axis on its own.
+    /// The leaves whose padded elevation grid lies in the raster, each axis on its own.
     fn derive() -> Result<Coverage, String> {
         let [sw, ne] = source_bbox()?;
         let (p0, p1) = (project_page(sw[0], sw[1]), project_page(ne[0], ne[1]));
@@ -84,17 +84,17 @@ impl Coverage {
         (self.x.0..=self.x.1).contains(&ivec::X(page)) && (self.y.0..=self.y.1).contains(&ivec::Y(page))
     }
 
-    /// Whether the page at `z` and `page` covers any z16 page held.
+    /// Whether the page at `z` and `page` covers any leaf held.
     pub fn meets(&self, z: u32, page: IVec) -> bool {
-        let steps = GROUND_Z - z;
+        let steps = LEAF_Z - z;
         let ([x0, y0], [x1, y1]) = (ancestor_of([self.x.0, self.y.0], steps), ancestor_of([self.x.1, self.y.1], steps));
         (x0..=x1).contains(&ivec::X(page)) && (y0..=y1).contains(&ivec::Y(page))
     }
 
-    /// Whether every z16 page under the page at `z` and `page` is held.
+    /// Whether every leaf under the page at `z` and `page` is held.
     pub fn holds(&self, z: u32, page: IVec) -> bool {
-        let [x0, y0] = first_descendant_of([ivec::X(page), ivec::Y(page)], GROUND_Z - z);
-        let n = page_scale(GROUND_Z).count_in(page_scale(z)) as i64;
+        let [x0, y0] = first_descendant_of([ivec::X(page), ivec::Y(page)], LEAF_Z - z);
+        let n = page_scale(LEAF_Z).count_in(page_scale(z)) as i64;
         self.x.0 <= x0 && x0 + n - 1 <= self.x.1 && self.y.0 <= y0 && y0 + n - 1 <= self.y.1
     }
 

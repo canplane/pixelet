@@ -18,9 +18,8 @@
 //! unless the arena refused a move last step.
 
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::space::adapter::epsg3857::{side_at_zoom, zoom_of};
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pyramid::{chunk_scale, GROUND, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{chunk_scale, GROUND, LEAF_Z, TOP_Z};
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
 use crate::world::chunk::build::mesh_step;
@@ -41,16 +40,14 @@ pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS, 0];
 /// for each refinement in flight holding the piece it replaces.
 pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1], 0];
 
-/// The scale the rule wants at `near`: a zoom coarser than the LOD's, since
-/// terrain draws a zoom's cells averaged 2 × 2. Past z16 it goes on to the
-/// objects' finest tier.
+/// The scale the rule wants at `near`: a cell twice the LOD's, since terrain
+/// draws its cells averaged 2 × 2, on past a leaf's down to the objects' finest.
 fn wanted_scale(near: f64, tau: Tau) -> Scale {
-    let z = tau.z_at(near).min(zoom_of(OBJECT_FINEST) + 1) - 1;
-    side_at_zoom(z).min(chunk_scale(TOP_Z))
+    tau.cell_at(near).up(1).max(OBJECT_FINEST).min(chunk_scale(TOP_Z))
 }
 
 /// A wanted scale as a chunk at `z` draws it: clamped to its own cells
-/// averaged 2 × 2, and finer than its cells only at z16 where it holds
+/// averaged 2 × 2, and finer than its cells only on the leaves where it holds
 /// objects. The outermost (cover) pieces always take the coarsest scale, one
 /// slot each.
 ///
@@ -61,7 +58,7 @@ fn drawn_scale(scale: Scale, z: u32, outermost: bool, objects: bool) -> Scale {
         return chunk_scale(z);
     }
     let own = GROUND.side_at(z);
-    let finest = match (z == GROUND_Z, objects) {
+    let finest = match (z == LEAF_Z, objects) {
         (true, true) => OBJECT_FINEST,
         (true, false) => own,
         (false, _) => own.up(1),
@@ -79,7 +76,7 @@ pub fn pool_of(c: Chunk, scale: Scale) -> Pool {
     Pool::of(c.z(), mesh_step(scale, c.z()))
 }
 
-/// Slots per pool, counted before allocation. A z16 piece also takes a coarse
+/// Slots per pool, counted before allocation. A leaf piece also takes a coarse
 /// slot, for the ancestor it refines through.
 pub struct Need<F> {
     pub slots: F,
@@ -99,7 +96,7 @@ impl<F: Fn(Chunk, Scale) -> u32> Price for Need<F> {
     }
 
     fn split(&self, c: Chunk) -> Slots {
-        if c.z() == GROUND_Z - 1 {
+        if c.z() == LEAF_Z - 1 {
             [0, 1, 0]
         } else {
             [0; POOLS]

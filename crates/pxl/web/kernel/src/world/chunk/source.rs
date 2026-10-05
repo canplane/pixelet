@@ -9,7 +9,7 @@ use pxl_spec::space::hierarchy::ancestor_of;
 use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, LEAF_Z, TOP_Z};
 
 use crate::kernel::with_world;
 use crate::world::change::{bump_world, world_changes, TIERS_CHUNK};
@@ -29,19 +29,19 @@ pub fn chunk_sources_step() {
     }
 }
 
-/// A z16 chunk draws its own column; a coarser one draws every column under
+/// A leaf chunk draws its own column; a coarser one draws every column under
 /// it and its apron, folded.
 pub fn tiers_draw(z: u32, base: IVec, col: IVec) -> bool {
-    if z == GROUND_Z {
+    if z == LEAF_Z {
         col == L2_IDX(base)
     } else {
         folds_into(z, base, col)
     }
 }
 
-/// A band is a z16 chunk's height, so it lies in one chunk per zoom.
+/// A band is a leaf chunk's height, so it lies in one chunk per zoom.
 pub fn draws_band(k: PyramidChunk, band: BandZ) -> bool {
-    ancestor_of([i64::from(band)], GROUND_Z - k.z())[0] == k.node().1[2]
+    ancestor_of([i64::from(band)], LEAF_Z - k.z())[0] == k.node().1[2]
 }
 
 /// One word: the coordinate, with the zoom beside the height. A band is 64
@@ -52,20 +52,20 @@ fn chunk_key(k: PyramidChunk) -> i64 {
     ivec::gather(x, y, ((k.z() - TOP_Z) as i64) << 11 | (h & 0x7ff)) as i64
 }
 
-const _: () = assert!(((GROUND_Z - TOP_Z) as i64 + 1) << 11 <= 1 << 15, "a chunk's zoom and height past the lane they share");
+const _: () = assert!(((LEAF_Z - TOP_Z) as i64 + 1) << 11 <= 1 << 15, "a chunk's zoom and height past the lane they share");
 
 pub fn objects_revision_of(k: PyramidChunk) -> u32 {
     world_changes().revision_of(TIERS_CHUNK, chunk_key(k))
 }
 
 /// Moves exactly the chunks whose tiers draw the band: the one holding it at
-/// each zoom, and coarser than z16 its neighbours through the fold's apron.
+/// each zoom, and coarser than a leaf's its neighbours through the fold's apron.
 pub fn band_written(col: IVec, band: BandZ) {
     let corner = Pvf3 { i: FROM_L2_IDX(col), f: 0 };
-    for z in TOP_Z..=GROUND_Z {
+    for z in TOP_Z..=LEAF_Z {
         let column = PyramidChunk::of(z, &corner);
-        let home = column.beside(0, 0, ancestor_of([i64::from(band)], GROUND_Z - z)[0] - column.node().1[2]);
-        let near: &[(i64, i64)] = if z == GROUND_Z { &[(0, 0)] } else { &NEAR };
+        let home = column.beside(0, 0, ancestor_of([i64::from(band)], LEAF_Z - z)[0] - column.node().1[2]);
+        let near: &[(i64, i64)] = if z == LEAF_Z { &[(0, 0)] } else { &NEAR };
         for &(dx, dy) in near {
             let k = home.beside(dx, dy, 0);
             if tiers_draw(z, k.corner(), col) {

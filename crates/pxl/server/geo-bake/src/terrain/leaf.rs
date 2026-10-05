@@ -1,6 +1,6 @@
 // pxl-geo-bake/terrain/leaf.rs
 
-//! Which z16 leaves exist and their bytes. A leaf exists where the elevation
+//! Which leaves exist and their bytes. A leaf exists where the elevation
 //! source covers it and land touches it; the offline bake and the dev server
 //! ask the same question, so both produce the same objects.
 

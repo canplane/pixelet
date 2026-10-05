@@ -1,7 +1,7 @@
 // pxl-render/mesh/paint/column.rs
 
-//! The runs of a chunk coarser than z16, a cell a column across with heights
-//! in z16 cells. A column is a whole run from the floor to the ground: a
+//! The runs of a chunk coarser than a leaf's, a cell a column across with heights
+//! in leaf cells. A column is a whole run from the floor to the ground: a
 //! part-filled coarse cell would have to be drawn as something inside the cell,
 //! and in flat places the whole zoom turned to cubes standing apart.
 
@@ -12,11 +12,11 @@ use crate::mesh::paint::object::adapter::Painter;
 use crate::mesh::paint::terrain::adapter::ChunkSample;
 use crate::mesh::voxel_scan::{ScanContext, APRON, COL_SPAN};
 
-/// Bottom to top exclusive, in z16 cells: a folded object, air, or a deck's span.
+/// Bottom to top exclusive, in leaf cells: a folded object, air, or a deck's span.
 pub type Stands = (i32, i32, Option<(u32, u8)>);
 
-/// Every column of the padded grid, apron included. `step` is z16 cells a
-/// cell spans; heights are z16 cells.
+/// Every column of the padded grid, apron included. `step` is leaf cells a
+/// cell spans; heights are leaf cells.
 pub fn write_column_runs(
     direct: &mut ScanContext,
     sample: &ChunkSample,

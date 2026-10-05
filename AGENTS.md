@@ -90,13 +90,14 @@ a SwiftUI switch there missed quick taps. Which technology draws each
 
 ## One spatial model
 
-Everything placed on the map sits in one hierarchy, the **pyramid**, from
-z16 — terrain's atom, a 1u cell — to z6, where it stops for now and not by
-any limit, each zoom's cells twice as wide as the next finer's; a page is 512
-cells a side at every zoom, named by its place in that zoom's page grid. A
-zoom names only a cell's scale (256-pixel tiles): terrain's cell is z16,
-objects' go to z19. A page's size, key or grid never defines a zoom, and a
-zoom never gives a page's or a chunk's extent: that is its count of cells.
+Everything placed on the map sits in one hierarchy, the **pyramid**, of
+pages from the leaves at z15 — an L3 page, terrain's 1u cells 512 a side —
+to z5, where it stops for now and not by any limit. **A zoom names the page
+grid alone**: 2^z pages around the world, each zoom's pages twice as wide as
+the next finer's. A layer's cell is its page's side over the layer's own
+count of cells, the same at every zoom (`Lattice`), so a cell is named by
+its size, a `Scale`, never by a zoom; objects' cells go finer than a leaf's.
+A web map's zoom is the 3857 adapter's alone (`zoom_of`), for comparing with one.
 
 - **The view keeps only what an observer can tell apart.** The world is
   stored in each layer's shape; what the view holds and does is bounded by
@@ -138,11 +139,12 @@ zoom never gives a page's or a chunk's extent: that is its count of cells.
   height read off the raster, `ground_ele_at`) is an optimization where it
   behaves exactly as the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`Cell::center`), at the height of the
-  surface drawn there: one thing's at the z16 cell it stands in, many at
+  surface drawn there: one thing's at the leaf cell it stands in, many at
   their cell's middle (`pxl-kernel layer/poi/placement.rs`).
-- **One rule chooses the zoom; a layer chooses its detail.** The zoom is the
-  distance's (`pxl-spec space/lod.rs` `Tau::z_at`, one factor τ), finer than
-  z16 too near the eye, refined only where the screen sees an error cross a
+- **One rule chooses the cell; a layer chooses its detail.** The cell is the
+  distance's (`pxl-spec space/lod.rs` `Tau::cell_at`, one factor τ), finer
+  than a leaf's too near the eye, and terrain's zoom the one whose cell it
+  is (`Tau::z_at`), refined only where the screen sees an error cross a
   cell. The detail a layer draws at it is its own — terrain 2 × 2 averaged,
   places a lattice sixty-four ground cells wide, objects their own cells —
   never a second rule; past a layer's data it draws its finest.

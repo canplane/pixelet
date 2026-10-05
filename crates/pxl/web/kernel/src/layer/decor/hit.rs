@@ -1,13 +1,13 @@
 // pxl-kernel/layer/decor/hit.rs
 
 //! Which decor the pointer's ray strikes, against the drawn triangles of the
-//! z16 chunks' decor: decor paints no voxel, so the access's ray passes through
+//! leaf chunks' decor: decor paints no voxel, so the access's ray passes through
 //! it. A placed instance resolves to its entry; a scattered one to its cell.
 
 use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::GROUND_Z;
+use pxl_spec::space::pyramid::LEAF_Z;
 use pxl_spec::space::v3::{cross3, dot3, sub3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
@@ -96,8 +96,8 @@ fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: 
     let mut limit = max_dist;
     let reach = decor_reach(sched);
     for (cell, base_x, base_y, words) in crate::layer::decor::cell::shown() {
-        // Only z16 cells name their placed entries; edits are made close by.
-        if cell.z() != GROUND_Z {
+        // Only leaf cells name their placed entries; edits are made close by.
+        if cell.z() != LEAF_Z {
             continue;
         }
         let side = cell.rect().2;

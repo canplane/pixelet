@@ -38,7 +38,7 @@ use pxl_spec::bake::quadkey::page_name;
 use pxl_spec::space::adapter::epsg4326;
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::GROUND_Z;
+use pxl_spec::space::pyramid::LEAF_Z;
 use pxl_spec::space::pyramid::{Page, GROUND};
 
 /// The phone the experiment is set on: an iPhone 13 mini's screen in
@@ -231,7 +231,7 @@ fn main() {
         tried: HashSet::new(),
     };
     // The eye's own column first, so it can stand on the ground.
-    let leaf = GROUND.cell_of(GROUND_Z, &point(x, y)).page();
+    let leaf = GROUND.cell_of(LEAF_Z, &point(x, y)).page();
     let mut p = leaf;
     loop {
         pages.fetch(p);
@@ -240,7 +240,7 @@ fn main() {
         }
         p = p.parent();
     }
-    let ground = Access::new(&pages.paging, &store).at(&point(x, y), GROUND_Z).value().and_then(|g| g.top()).unwrap_or(0.0);
+    let ground = Access::new(&pages.paging, &store).at(&point(x, y), LEAF_Z).value().and_then(|g| g.top()).unwrap_or(0.0);
     println!("at {lon}, {lat}: ground {ground:.1} u, pages from {}", pages.server);
 
     for view in VIEWS {

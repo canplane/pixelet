@@ -145,30 +145,30 @@ fn red() -> u32 {
 }
 
 #[test]
-fn a_cell_folds_to_itself_at_z16() {
-    let (out, [x, y]) = folded(&[(3, 4, 5, red())], GROUND_Z);
+fn a_cell_folds_to_itself_on_a_leaf() {
+    let (out, [x, y]) = folded(&[(3, 4, 5, red())], LEAF_Z);
     assert_eq!(out.get(&[x + 3, y + 4, 5]), Some(&red()));
     assert_eq!(out.len(), 1);
 }
 
 #[test]
 fn a_lone_cube_goes_at_the_first_fold_and_a_slab_of_half_stays() {
-    assert!(folded(&[(0, 0, 0, red())], 15).0.is_empty());
-    let (out, [x, y]) = folded(&[(0, 0, 0, red()), (1, 0, 0, red()), (0, 1, 0, red()), (1, 1, 0, red())], 15);
+    assert!(folded(&[(0, 0, 0, red())], LEAF_Z - 1).0.is_empty());
+    let (out, [x, y]) = folded(&[(0, 0, 0, red()), (1, 0, 0, red()), (0, 1, 0, red()), (1, 1, 0, red())], LEAF_Z - 1);
     assert_eq!(out.get(&[x, y, 0]), Some(&red()));
 }
 
 #[test]
 fn a_solid_block_keeps_folding_while_it_fills_its_parent() {
     let cube: Vec<_> = (0..64).map(|k| (k % 4, k / 4 % 4, k / 16, red())).collect();
-    let (out, [x, y]) = folded(&cube, 14);
+    let (out, [x, y]) = folded(&cube, LEAF_Z - 2);
     assert_eq!(out.get(&[x, y, 0]), Some(&red()));
     assert_eq!(out.len(), 1);
 }
 
 #[test]
 fn air_is_a_value_and_folds_like_one() {
-    let (out, [x, y]) = folded(&[(0, 0, 0, AIR), (1, 0, 0, AIR), (0, 1, 0, AIR), (1, 1, 0, AIR), (0, 0, 1, AIR)], 15);
+    let (out, [x, y]) = folded(&[(0, 0, 0, AIR), (1, 0, 0, AIR), (0, 1, 0, AIR), (1, 1, 0, AIR), (0, 0, 1, AIR)], LEAF_Z - 1);
     assert_eq!(out.get(&[x, y, 0]), Some(&AIR));
 }
 

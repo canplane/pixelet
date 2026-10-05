@@ -57,7 +57,7 @@ Nothing about the world is stored server-side today; placed objects live in
 POI by the same, objects by the L2 column with Z dropped and a band Z beside
 it, decoration by nothing at all. One shape covers them — `(kind, z, key)`
 — and the zoom half of it is settled in
-[the mesh step and the zoom](../20260921-the-mesh-step-and-the-zoom-are-one-number.md).
+[the mesh step and the zoom](./20260921-the-mesh-step-and-the-zoom-are-one-number.md).
 `DemandKey` is `(category, subject)` and wants the zoom; the world change log
 is already `(topic, key)` and wants it too.
 

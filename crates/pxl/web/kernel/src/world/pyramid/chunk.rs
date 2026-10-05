@@ -99,7 +99,7 @@ impl Chunk {
     }
 
     /// From the index, not the corner point: a point's height is 16 bits
-    /// (±32,768 units) and a z6 chunk is 65,536 tall.
+    /// (±32,768 units) and a z5 chunk is 65,536 tall.
     pub fn z_range(self) -> (f64, f64) {
         let span = chunk_span_of(self.z);
         let z0 = self.at[2] as f64 * span;

@@ -20,7 +20,7 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::lod::{cubes_meeting, fault_radius, Tau};
 use pxl_spec::space::observation::{Bounds, Contents, Observation};
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_span_of, Page, GROUND_Z};
+use pxl_spec::space::pyramid::{chunk_span_of, Page, LEAF_Z};
 use pxl_spec::space::v3::Aabb;
 
 use crate::world::access::Access;
@@ -264,7 +264,7 @@ impl Domain {
         let nearest = bound.nearest(self.o.eye);
         let error_angle = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
         let order = Order::of(&self.o, &bound);
-        let mut from_step = if c.z() < GROUND_Z && touching.1 > 0 {
+        let mut from_step = if c.z() < LEAF_Z && touching.1 > 0 {
             self.ladder.iter().take_while(|&&tau| error_angle > cell_angle(tau)).count() as u8
         } else {
             0

@@ -4,7 +4,7 @@
 //! room, not an address and never the only copy: any tier takes any free
 //! slot of its pool and every mesh can be rebuilt from the records.
 //!
-//! Three pools: the z16 leaves' own tier (six-word boxes, a group of its
+//! Three pools: the leaves' own tier (six-word boxes, a group of its
 //! own, since a group is one format), the coarse tiers (four-word boxes,
 //! shared groups), and the cover (one slot per possible root). A tier with
 //! more boxes than a slot fills several, chained. A mesh is never cut to a
@@ -13,7 +13,7 @@
 
 use pxl_render::look::globe::MERCATOR_RADIUS_U;
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, LEAF_Z, TOP_Z};
 
 use crate::param::{ARENA_COARSE_GROUPS, ARENA_GROUP_SLOTS};
 use crate::world::pyramid::domain::cover_pieces;
@@ -39,7 +39,7 @@ pub const COVER_BOXES: u32 = 2;
 /// most, so a root the cover lacks always finds one free.
 pub const COVER_SLOTS: u32 = {
     let (mut most, mut top) = (0, TOP_Z);
-    while top <= GROUND_Z {
+    while top <= LEAF_Z {
         let n = cover_pieces(top, MERCATOR_RADIUS_U);
         if n > most {
             most = n;
@@ -60,7 +60,7 @@ impl Pool {
     pub const fn of(z: u32, step: u32) -> Pool {
         if step == CHUNK_CELLS {
             Pool::Cover
-        } else if z == GROUND_Z && step == 1 {
+        } else if z == LEAF_Z && step == 1 {
             Pool::Fine
         } else {
             Pool::Coarse

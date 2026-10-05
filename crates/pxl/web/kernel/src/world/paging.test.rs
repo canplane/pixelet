@@ -45,9 +45,9 @@ fn floor_of(o: &Observation) -> Vec<Page> {
     out
 }
 
-/// Settles none of its children, so the tree runs to z16 everywhere.
+/// Settles none of its children, so the tree runs to the leaves everywhere.
 fn crowded(p: Page) -> PoiPage {
-    if p.z == GROUND_Z {
+    if p.z == LEAF_Z {
         return PoiPage::default();
     }
     let at = |k: Page| POI_LATTICE.cell_base(k, 0, 0);

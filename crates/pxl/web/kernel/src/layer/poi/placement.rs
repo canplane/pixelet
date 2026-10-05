@@ -2,7 +2,7 @@
 
 //! Where the POI counts are drawn: one badge per POI-lattice cell under each
 //! drawn chunk, read from the page that settles that ground,
-//! standing at a z16 cell's center on the surface a ray down meets first.
+//! standing at a leaf cell's center on the surface a ray down meets first.
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::layer::billboard::batch::BillboardBatch;
@@ -23,7 +23,7 @@ use xpute_runtime::global::Global;
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{nearest, projection, REACH};
-use pxl_spec::space::pyramid::{Cell, GROUND, GROUND_Z};
+use pxl_spec::space::pyramid::{Cell, GROUND, LEAF_Z};
 use pxl_spec::space::v3::len3;
 use std::collections::HashSet;
 
@@ -122,15 +122,15 @@ pub fn step(ctx: &mut TickContext) {
                 // Near, a place or a count; farther, only a prominent enough place.
                 // A count stands at its cell's middle.
                 let all = match (c.count, poi.shown(c).next()) {
-                    (1, Some((place, _, at))) => (Label::Place { page: src, place }, cell.inner_at(GROUND, GROUND_Z, at)),
-                    _ => (Label::Count(c.count, c.partial), GROUND.cell_of(GROUND_Z, &cell.mid())),
+                    (1, Some((place, _, at))) => (Label::Place { page: src, place }, cell.inner_at(GROUND, LEAF_Z, at)),
+                    _ => (Label::Count(c.count, c.partial), GROUND.cell_of(LEAF_Z, &cell.mid())),
                 };
                 let major = poi
                     .shown(c)
                     .map(|(i, p, at)| (i, rank_of(p.kind), at))
                     .filter(|s| s.1 <= POI_MAJOR_RANK)
                     .min_by_key(|s| s.1)
-                    .map(|(place, _, at)| (Label::Place { page: src, place }, cell.inner_at(GROUND, GROUND_Z, at)));
+                    .map(|(place, _, at)| (Label::Place { page: src, place }, cell.inner_at(GROUND, LEAF_Z, at)));
                 let mid = cell.mid();
                 let mid = projection::unproject(mid.i, mid.f);
                 let mid = [nearest(mid[0], chunk.rect().0), mid[1]];

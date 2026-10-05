@@ -96,8 +96,8 @@ Meaning enters at an **adapter**, and only there:
 
 The X lane is exactly one EPSG:3857 world. So the lattice is that world cut
 2^24 ways, and a cell, the ground's atom, is a z16 pixel of the standard's
-256-pixel tiles exactly — not by design of the ladder but because the lane
-width and the world are the same thing.
+256-pixel tiles and an L3 page its z15 tile, exactly — not by design of the
+ladder but because the lane width and the world are the same thing.
 
 | tier          | extent | planar meters |
 | ------------- | ------ | ------------- |
@@ -108,22 +108,23 @@ width and the world are the same thing.
 | **L5** shard  | 65536u | 156,543.0     |
 
 That identity holds by two constants agreeing — the X lane is one world, a
-cell is one unit — and any cell's zoom follows from its size alone
-([`adapter/3857.rs`](./adapter/3857.rs) `zoom_of`). A page is no part of it: a page only bundles cells into a
-file, and its name's length follows its size, never a zoom.
+cell is one unit — and a web map's zoom is the adapter's to name
+([`adapter/3857.rs`](./adapter/3857.rs) `zoom_of`), for comparing with one;
+nothing in the pyramid counts in it.
 
-**A zoom names a cell's resolution, never an extent.** A z16 cell is the
-standard's z16 pixel; a z16 chunk is 64 × 64 z16 cells and a z16 page
-512 × 512, each its own count of cells. So a page at z is not the standard's
-z tile: it is two of them a side, a z6 page as wide as a z5 tile.
+**A zoom names a page grid, never a cell.** At z there are 2^z pages around
+the world, so a page at z is the standard's z tile. A layer's cell is its
+page's side over the layer's own count of cells, the same at every zoom, so
+a cell is named by its size, a `Scale`, never by a zoom; objects' cells go
+finer than a leaf's, and no zoom names them.
 
 ## The pyramid is not a tier
 
-A terrain page is fetched at several resolutions, z16 to z6, and those
-zooms are **not** tiers of this ladder.
+A terrain page is fetched at several zooms, z15 to z5, and those zooms are
+**not** tiers of this ladder.
 
 ```
-z16            z15
+z15            z14
 ┌────┬────┐    ┌─────────┐
 │    │    │    │         │    the same 512-cell record,
 ├────┼────┤    │         │    a cell of 2u instead of 1u,
@@ -131,17 +132,18 @@ z16            z15
 └────┴────┘    └─────────┘
 ```
 
-A page at z holds the same record a z16 one does — 512 cells a side — over
-2^(16 − z) z16 pages a side, so its cells are 2^(16 − z) units. Its key is a
-z16 key shifted down 16 − z, and a key alone does not say by how much, so a
-page is named by its zoom and a key together (`Page`, `pxl-spec
-space/pyramid.rs`). `L3_IDX` always answers the leaf question: which
-512u square.
+A page at z holds the same record a leaf does — 512 cells a side — over
+2^(15 − z) leaves a side, so its cells are 2^(15 − z) units. Its key is a
+leaf's key shifted down 15 − z, and a key alone does not say by how much, so
+a page is named by its zoom and a key together (`Page`, `pxl-spec
+space/pyramid.rs`). `L3_IDX` always answers the leaf question: which 512u
+square.
 
-The two ladders meet at one number. A page's cells are its zoom's, and the
-kernel's mesher measures its own step against the same scale, so the
-mesher's step, the zoom a page is held at and a web map's zoom are one
-quantity (`decision/20260921-the-mesh-step-and-the-zoom-are-one-number.md`).
+The two ladders meet at one scale. The distance chooses a cell
+(`lod.rs` `cell_at`), terrain's zoom is the one whose cell that is
+(`Lattice::z_of`), and the kernel's mesher measures its own step against the
+same scale
+([a zoom names a page grid](../../../../../decision/20261006-a-zoom-names-a-page-grid.md)).
 
 ## The trees share their geometry and nothing else
 

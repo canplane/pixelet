@@ -182,7 +182,7 @@ fn blocks_of(lane: &[[i16; 2]], blocks: &mut [Block]) {
 pub struct Terrain {
     pub ground: Ground,           // a class a cell: the source rasterized
     pub decks: Decks,             // ways off the ground: source lines, tops solved offline
-    pub ele: Cow<'static, [i16]>, // padded height samples, in z16 cells: from the raster
+    pub ele: Cow<'static, [i16]>, // padded height samples, in leaf cells: from the raster
     pub index: Index,             // bounds over the page and all under it: no one page holds them
 }
 
@@ -205,12 +205,7 @@ impl Terrain {
         }
     }
 
-    /// The source's nothing, which draws nothing.
-    pub fn is_void(&self) -> bool {
-        !self.index.occupancy.is_page()
-    }
-
-    /// A z16 page, its index taken from its own surface and decks.
+    /// A leaf, its index taken from its own surface and decks.
     pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> Terrain {
         let extent = extent_of(&ele, &decks);
         Terrain {

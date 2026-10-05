@@ -9,7 +9,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{Folds, Page, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{Folds, Page, LEAF_Z, TOP_Z};
 
 use crate::util::{measure_output, pack, unpack, write_atomic, Level};
 
@@ -122,8 +122,8 @@ pub fn fold_stored<L: Layer>(set: &PageSet, parent: Page, absent: &impl Absent<L
 
 /// Folds every zoom up to `TOP_Z` or the first empty one.
 pub fn build<L: Layer>(set: &PageSet, absent: &impl Absent<L>, workers: usize) -> Result<u32, String> {
-    let mut top = GROUND_Z;
-    for z in (TOP_Z..GROUND_Z).rev() {
+    let mut top = LEAF_Z;
+    for z in (TOP_Z..LEAF_Z).rev() {
         let children = set.pages(z + 1)?;
         if children.is_empty() {
             break;
@@ -145,7 +145,7 @@ pub fn build<L: Layer>(set: &PageSet, absent: &impl Absent<L>, workers: usize) -
 /// update re-packs alike.
 pub fn refold<L: Layer>(set: &PageSet, mut changed: HashSet<Page>, absent: &impl Absent<L>) -> Result<usize, String> {
     let mut written = 0;
-    for z in (TOP_Z..GROUND_Z).rev() {
+    for z in (TOP_Z..LEAF_Z).rev() {
         if changed.is_empty() {
             break;
         }
@@ -177,7 +177,7 @@ pub fn refold<L: Layer>(set: &PageSet, mut changed: HashSet<Page>, absent: &impl
 /// whole set before any is removed. Returns how many.
 pub fn prune<L: Layer>(set: &PageSet, top: u32) -> Result<usize, String> {
     let mut gone = Vec::new();
-    for z in top + 1..=GROUND_Z {
+    for z in top + 1..=LEAF_Z {
         let mut parents: HashMap<Page, Option<L>> = HashMap::new();
         for p in set.pages(z)? {
             let parent = p.parent();
@@ -200,7 +200,7 @@ pub fn prune<L: Layer>(set: &PageSet, top: u32) -> Result<usize, String> {
 pub fn write_manifest(set: &PageSet, top: u32, built: Option<&str>, layer: serde_json::Value) -> Result<(), String> {
     let (mut objects, mut bytes) = measure_output(&set.root).map_err(|e| e.to_string())?;
     let mut zooms = Vec::new();
-    for z in (top..=GROUND_Z).rev() {
+    for z in (top..=LEAF_Z).rev() {
         let (n, b) = measure_output(&set.zoom_dir(z)).map_err(|e| e.to_string())?;
         zooms.push(serde_json::json!({ "z": z, "objects": n, "bytes": b }));
         objects += n;

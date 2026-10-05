@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use pxl_spec::space::hierarchy::Scale;
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_span_of, GROUND_Z};
+use pxl_spec::space::pyramid::{chunk_span_of, LEAF_Z};
 use pxl_spec::space::v3::V3;
 
 use super::*;
@@ -14,27 +14,27 @@ use crate::allocations;
 use crate::world::fixture::{self, eye, World};
 use crate::world::pyramid::domain::Domain;
 
-/// Objects go finer than the ground's scale only under z16's reach.
+/// Objects go finer than the ground's scale only within the leaves' reach.
 #[test]
-fn objects_draw_the_grounds_cube_and_go_finer_only_under_z16() {
-    let z16 = GROUND.side_at(GROUND_Z);
+fn objects_draw_the_grounds_cube_and_go_finer_only_under_the_leaves() {
+    let leaf = GROUND.side_at(LEAF_Z);
     for shamt in -6..=8 {
         let scale = Scale::of(shamt);
-        let (ground, objects) = (drawn_scale(scale, GROUND_Z, false, false), drawn_scale(scale, GROUND_Z, false, true));
-        if scale >= z16 {
+        let (ground, objects) = (drawn_scale(scale, LEAF_Z, false, false), drawn_scale(scale, LEAF_Z, false, true));
+        if scale >= leaf {
             assert_eq!(objects, ground, "{scale:?}");
         } else {
-            assert_eq!(ground, z16, "{scale:?}");
+            assert_eq!(ground, leaf, "{scale:?}");
             assert_eq!(objects, scale.max(OBJECT_FINEST), "{scale:?}");
         }
     }
 }
 
-/// 16 × 16 z16 chunks.
+/// 16 × 16 leaf chunks.
 const ROOT: u32 = 4;
 
 fn at(z: u32, x: i64, y: i64) -> Chunk {
-    let side = chunk_span_of(GROUND_Z) as i64;
+    let side = chunk_span_of(LEAF_Z) as i64;
     Chunk::of(
         z,
         &Pvf3 {
@@ -46,7 +46,7 @@ fn at(z: u32, x: i64, y: i64) -> Chunk {
 
 /// Every chunk at `z` over the root's ground.
 fn chunks_at(z: u32) -> Vec<Chunk> {
-    let steps = GROUND_Z - z;
+    let steps = LEAF_Z - z;
     let n = 1i64 << (ROOT - steps);
     let step = 1i64 << steps;
     let mut out: Vec<Chunk> = (0..n).flat_map(|y| (0..n).map(move |x| at(z, x * step, y * step))).collect();
@@ -54,12 +54,12 @@ fn chunks_at(z: u32) -> Vec<Chunk> {
     out
 }
 
-/// The ground at `fine` inside the square `[0, w)` of z16 chunks and at
+/// The ground at `fine` inside the square `[0, w)` of leaf chunks and at
 /// `coarse` outside it; all `coarse` where `w` is zero.
 fn goal(fine: u32, coarse: u32, w: i64) -> Vec<Chunk> {
     let inside = |c: &Chunk| {
         let (x, y, side) = c.rect();
-        let unit = chunk_span_of(GROUND_Z);
+        let unit = chunk_span_of(LEAF_Z);
         x + side <= w as f64 * unit && y + side <= w as f64 * unit
     };
     let mut out: Vec<Chunk> = chunks_at(fine).into_iter().filter(|c| inside(c)).collect();
@@ -70,13 +70,13 @@ fn goal(fine: u32, coarse: u32, w: i64) -> Vec<Chunk> {
     out
 }
 
-/// z16 chunks in the fine pool, every other in the coarse, one slot each,
+/// leaf chunks in the fine pool, every other in the coarse, one slot each,
 /// all resident, nearer the corner first.
 struct Flat;
 
 impl Env for Flat {
     fn slots(&self, c: Chunk) -> (Pool, u32) {
-        if c.z() == GROUND_Z {
+        if c.z() == LEAF_Z {
             (Pool::Fine, 1)
         } else {
             (Pool::Coarse, 1)
@@ -177,7 +177,7 @@ struct Heavy(u32);
 impl Env for Heavy {
     fn slots(&self, c: Chunk) -> (Pool, u32) {
         let (pool, k) = Flat.slots(c);
-        (pool, if c.z() == GROUND_Z { self.0 } else { k })
+        (pool, if c.z() == LEAF_Z { self.0 } else { k })
     }
 
     fn buildable(&self, c: Chunk) -> bool {
@@ -189,11 +189,11 @@ impl Env for Heavy {
     }
 }
 
-/// A refinement into eight z16 chunks of three slots each waits for all
+/// A refinement into eight leaf chunks of three slots each waits for all
 /// twenty-four plus the reserve.
 #[test]
 fn a_piece_filling_several_slots_starts_only_with_all_of_them_free() {
-    let parent = at(15, 0, 0);
+    let parent = at(LEAF_Z - 1, 0, 0);
     let children: Vec<Chunk> = {
         let mut c = parent.children().to_vec();
         c.sort_unstable();
@@ -212,7 +212,7 @@ fn a_piece_filling_several_slots_starts_only_with_all_of_them_free() {
         };
         Frontier::default().plan(&now, &Heavy(3)).start.len() as u32
     };
-    let occupied = children.iter().filter(|c| c.z() == GROUND_Z).count() as u32;
+    let occupied = children.iter().filter(|c| c.z() == LEAF_Z).count() as u32;
     assert!(occupied > 0);
     let all = 3 * occupied + RESERVE[Pool::Fine as usize];
     assert_eq!(with(all - 1), 0, "started with fewer slots free than its pieces fill");
@@ -232,7 +232,7 @@ fn a_coarsening_waits_its_hold_unless_the_arena_is_short() {
             free,
         }
     }
-    let parent = at(15, 0, 0);
+    let parent = at(LEAF_Z - 1, 0, 0);
     let mut children = parent.children().to_vec();
     children.sort_unstable();
     let (hold, roomy, goal) = (crate::param::COARSEN_HOLD_MS, [100; POOLS], [parent]);
@@ -247,7 +247,7 @@ fn a_coarsening_waits_its_hold_unless_the_arena_is_short() {
     assert!(f.plan(&now(hold, &goal, &children, roomy), &Flat).start.is_empty(), "a coarsening asked for again kept its first time");
 
     let mut f = Frontier::default();
-    f.plan(&now(0.0, &[parent, at(15, 4, 4)], &children, [0; POOLS]), &Flat);
+    f.plan(&now(0.0, &[parent, at(LEAF_Z - 1, 4, 4)], &children, [0; POOLS]), &Flat);
     assert_eq!(f.plan(&now(1.0, &goal, &children, roomy), &Flat).start, vec![parent], "held a coarsening while the arena was short");
 }
 
@@ -256,7 +256,7 @@ struct Widest;
 impl Env for Widest {
     fn slots(&self, c: Chunk) -> (Pool, u32) {
         let (pool, k) = Flat.slots(c);
-        (pool, if c.z() < GROUND_Z { COARSE_TIER_SLOTS } else { k })
+        (pool, if c.z() < LEAF_Z { COARSE_TIER_SLOTS } else { k })
     }
 
     fn buildable(&self, c: Chunk) -> bool {
@@ -272,7 +272,7 @@ impl Env for Widest {
 /// coarse tier still starts; a refinement or a fill does not.
 #[test]
 fn a_coarsening_is_always_started_with_only_the_reserve_free() {
-    let parent = at(15, 0, 0);
+    let parent = at(LEAF_Z - 1, 0, 0);
     let mut children = parent.children().to_vec();
     children.sort_unstable();
     let now = Now {
@@ -292,7 +292,7 @@ fn a_coarsening_is_always_started_with_only_the_reserve_free() {
     };
     assert_eq!(frontier.plan(&later, &Widest).start, vec![parent], "a coarsening not started with the reserve free");
     let fill = Now {
-        goal: &[at(15, 4, 4)],
+        goal: &[at(LEAF_Z - 1, 4, 4)],
         drawn: &[],
         ..now
     };
@@ -302,7 +302,15 @@ fn a_coarsening_is_always_started_with_only_the_reserve_free() {
 #[test]
 fn planning_a_frontier_it_has_held_allocates_nothing() {
     let mut t = Table::new([300, 200, 0]);
-    let goals = [goal(13, 13, 0), goal(16, 14, 16), goal(15, 13, 8), goal(16, 16, 16), goal(14, 13, 8), goal(16, 15, 8)];
+    let l = LEAF_Z;
+    let goals = [
+        goal(l - 3, l - 3, 0),
+        goal(l, l - 2, 16),
+        goal(l - 1, l - 3, 8),
+        goal(l, l, 16),
+        goal(l - 2, l - 3, 8),
+        goal(l, l - 1, 8),
+    ];
     let pass = |t: &mut Table| {
         t.allocated = 0;
         for g in &goals {

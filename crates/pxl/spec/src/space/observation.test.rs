@@ -148,7 +148,7 @@ fn exact(world: &World, look: Look, far: f64, tau: Tau) -> HashSet<Page> {
             continue;
         }
         let at = [look.eye[0] + r * v[0], look.eye[1] + r * v[1]];
-        let z = tau.z_at(r).clamp(TOP_Z as i32, GROUND_Z as i32) as u32;
+        let z = tau.z_at(r);
         let span = span_of(z);
         out.insert(page_at(z, at.map(|c| (c / span).floor() as i64)));
     }
@@ -213,7 +213,7 @@ fn a_zoom_names_no_more_than_the_fault_bound_and_less_known_names_more() {
                 let (known, unknown) = (demand(&o, &world, tau), demand(&o, &Unknown, tau));
                 assert!(known.is_subset(&unknown), "look {k}, {tau:?}: bounds named a page nothing known did not");
                 for named in [known, unknown] {
-                    for z in TOP_Z..=GROUND_Z {
+                    for z in TOP_Z..=LEAF_Z {
                         let n = named.iter().filter(|p| p.z == z).count() as u32;
                         assert!(n <= FAULT_PAGES, "look {k}, {tau:?}, z{z}: {n} pages");
                     }
@@ -225,7 +225,7 @@ fn a_zoom_names_no_more_than_the_fault_bound_and_less_known_names_more() {
 
 #[test]
 fn paged_storage_maps_a_square_to_its_page_and_ground_to_every_page_under_it() {
-    for z in [GROUND_Z, 13, TOP_Z] {
+    for z in [LEAF_Z, 13, TOP_Z] {
         let span = span_of(z);
         for [x, y] in [[0i64, 0], [-3, 5], [17, -11]] {
             let mut pages = Vec::new();

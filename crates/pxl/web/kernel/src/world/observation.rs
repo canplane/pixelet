@@ -12,7 +12,7 @@ use pxl_spec::space::lod::fault_radius;
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::{band, Bounds, Contents, DemandEstimator, Frustum, Observation, Requirement};
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_scale, page_at, page_scale, span_of, Page, GROUND, GROUND_Z};
+use pxl_spec::space::pyramid::{chunk_scale, page_at, page_scale, span_of, Page, GROUND, LEAF_Z};
 use pxl_spec::space::v3::Aabb;
 
 use crate::kernel::kernel;
@@ -172,7 +172,7 @@ impl DemandEstimator for ByFootprints<'_> {
         }
         for f in self.footprints {
             let b = f.aabb();
-            for z in (o.top..=GROUND_Z).rev() {
+            for z in (o.top..=LEAF_Z).rev() {
                 let Some((_, to)) = band(o, self.tau, z) else { break };
                 let reach = to.min(o.far);
                 let lo = [b.min[0].max(o.eye[0] - reach), b.min[1].max(o.eye[1] - reach)];

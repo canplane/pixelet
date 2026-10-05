@@ -1,7 +1,7 @@
 // pxl-spec/bake/deck.rs
 
 //! A page's ways off the ground: polylines in the page's cells with their road
-//! surface in z16 cells at each point, solved offline over the whole network.
+//! surface in leaf cells at each point, solved offline over the whole network.
 //! What they look like — slab, piers, bore, embankment, cutting — the client
 //! makes from the surface and these numbers.
 
@@ -95,11 +95,11 @@ const EMPTY: [i16; 4] = [i16::MAX, i16::MAX, i16::MIN, i16::MIN];
 pub struct Decks {
     pub starts: Cow<'static, [u32]>,      // line d is points starts[d]..starts[d + 1]
     pub points: Cow<'static, [[i16; 2]]>, // centreline, 1/POINT_SCALE page cell: the source's
-    pub tops: Cow<'static, [i16]>,        // road surface, in z16 cells: solved over many pages
+    pub tops: Cow<'static, [i16]>,        // road surface, in leaf cells: solved over many pages
     pub width: Cow<'static, [u8]>,        // 1/POINT_SCALE page cell: the source's
     pub kind: Cow<'static, [u8]>,         // transport type: the source's class, the slab's material
     pub form: Cow<'static, [u8]>,         // `Form`: the source's flags
-    pub clear: Cow<'static, [u8]>,        // a bore's clear space over its surface, in z16 cells: solved
+    pub clear: Cow<'static, [u8]>,        // a bore's clear space over its surface, in leaf cells: solved
     /// Derived: a tree of boxes over the points in order, each the segments it
     /// covers widened by their reach, in points; what `over_point` walks.
     pub boxes: Cow<'static, [[i16; 4]]>,
@@ -122,7 +122,7 @@ pub struct Deck<'a> {
 }
 
 /// A line over one column: the lowest and highest its road surface runs
-/// across the column, in z16 cells, and whether its pier's section covers it.
+/// across the column, in leaf cells, and whether its pier's section covers it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Over {
     pub low: f64,
@@ -133,7 +133,7 @@ pub struct Over {
     pub clear: u8,
 }
 
-/// What a line occupies of one column, in z16 cells, each `[lo, hi)`; the
+/// What a line occupies of one column, in leaf cells, each `[lo, hi)`; the
 /// paint and the query both use it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Occupies {
@@ -147,7 +147,7 @@ pub enum Occupies {
 }
 
 impl Over {
-    /// `cell_per_m`: z16 cells a ground metre on the column's page.
+    /// `cell_per_m`: leaf cells a ground metre on the column's page.
     pub fn occupies(&self, ground: i32, cell_per_m: f64) -> Occupies {
         // all the surface sweeps across the column, so a slab or a bore steps down to the
         // next column's without a gap however steep it runs
@@ -160,7 +160,9 @@ impl Over {
                     pier: (self.pier && lo > ground).then_some([ground, lo]),
                 }
             }
-            Form::Bore => Occupies::Through { air: [low, top + i32::from(self.clear)] },
+            Form::Bore => Occupies::Through {
+                air: [low, top + i32::from(self.clear)],
+            },
             // a way on the ground moves the ground with it: filled up to it, cut down to it
             Form::Grade if top > ground => Occupies::Above { slab: [ground, top], pier: None },
             Form::Grade if top < ground => Occupies::Through { air: [low, ground] },
@@ -336,7 +338,7 @@ pub fn footprint(width: f64) -> f64 {
 /// half a cell, widest first within a record.
 pub fn fold_decks(children: [&Decks; 4], z: u32) -> Decks {
     let n = f64::from(PAGE_CELLS);
-    // The parent's half cell of height, in z16 cells.
+    // The parent's half cell of height, in leaf cells.
     let height_tolerance = f64::from(GROUND.finest_in(z)) / 2.0;
     let mut lines = Vec::new();
     for (q, child) in children.iter().enumerate() {

@@ -1,6 +1,6 @@
 // pxl-geo-bake/terrain/absent.rs
 
-//! What a terrain page the set holds no object for is. A z16 page inside the
+//! What a terrain page the set holds no object for is. A leaf inside the
 //! coverage is left unbaked only when nothing is drawn in it, so it is open
 //! sea; one past the coverage has no surface, void. A coarser page is the fold
 //! of the four under it, as every stored page is.
@@ -10,7 +10,7 @@ use std::borrow::Cow;
 use pxl_spec::bake::format::{Ground, Occupancy, Terrain, ELE_LANE};
 use pxl_spec::cell::cube::cube_types::{ground, sentinel};
 use pxl_spec::space::indexer::L3_IDX;
-use pxl_spec::space::pyramid::{page_scale, Folds, Page, GROUND, GROUND_Z, PAGE_CELLS};
+use pxl_spec::space::pyramid::{page_scale, Folds, Page, GROUND, LEAF_Z, PAGE_CELLS};
 
 use crate::coverage::Coverage;
 use crate::pyramid::Absent;
@@ -42,8 +42,8 @@ impl Absence {
         }
     }
 
-    /// Each cell by whether the z16 page it lies in is covered: exact where a
-    /// cell lies in one z16 page, where the four children's majority is that page's too.
+    /// Each cell by whether the leaf it lies in is covered: exact where a
+    /// cell lies in one leaf, where the four children's majority is that page's too.
     fn by_cell(&self, p: Page) -> Terrain {
         let cells = (0..PAGE_CELLS * PAGE_CELLS).map(|i| {
             if self.coverage.contains(L3_IDX(GROUND.cell_at(p, i).base().i)) {
@@ -66,7 +66,7 @@ impl Absent<Terrain> for Absence {
             Cow::Borrowed(&self.sea)
         } else if !self.coverage.meets(p.z, p.page) {
             Cow::Borrowed(&self.void)
-        } else if GROUND.side_at(p.z).above(page_scale(GROUND_Z)) <= 0 {
+        } else if GROUND.side_at(p.z).above(page_scale(LEAF_Z)) <= 0 {
             Cow::Owned(self.by_cell(p))
         } else {
             let children = p.children().map(|c| self.at(c));

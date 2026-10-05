@@ -16,22 +16,21 @@ pub mod floor;
 use std::collections::HashMap;
 
 use pxl_spec::space::lod::FAULT_PAGES;
-use pxl_spec::space::pyramid::{Page, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{Page, LEAF_Z, TOP_Z};
 
 use crate::io::demand::{Ask, Why};
 use crate::world::pyramid::Layer;
 use floor::{Fallback, Floor};
 
-
-/// The zooms the pyramid holds, z16 to its top.
-pub const PYRAMID_ZOOMS: u32 = GROUND_Z - TOP_Z + 1;
+/// The zooms the pyramid holds, z15 to its top.
+pub const PYRAMID_ZOOMS: u32 = LEAF_Z - TOP_Z + 1;
 
 /// Only the eye. Another point observer would add its own faults.
 const OBSERVERS: u32 = 1;
 
 pub const ZOOM_DEMAND_PAGES: u32 = FAULT_PAGES;
 
-/// A destination's line from its z16 page to the top.
+/// A destination's line from its leaf to the top.
 pub const DESTINATION_PAGES: u32 = PYRAMID_ZOOMS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -373,7 +372,7 @@ impl<L: Layer> Paging<L> {
     }
 
     fn put(&mut self, p: Page, body: L, frame: Option<u32>) {
-        let settles = if p.z < GROUND_Z { p.children().map(|c| body.settles(p, c)) } else { [false; 4] };
+        let settles = if p.z < LEAF_Z { p.children().map(|c| body.settles(p, c)) } else { [false; 4] };
         self.entry_mut(p).held = Some(Held { body, frame, settles });
         self.revision = self.revision.wrapping_add(1);
         L::changed(p, true);

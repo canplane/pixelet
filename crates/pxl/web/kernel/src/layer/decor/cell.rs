@@ -13,7 +13,7 @@ use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource}
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, GROUND_Z};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, LEAF_Z};
 use pxl_spec::space::v3::{len3, sub3, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
@@ -117,7 +117,7 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
             let o = FROM_L2_IDX(at.col_idx);
             inside(ivec::X(o), ivec::Y(o))
         }
-        DecorHide::Scattered([x, y, _]) => chunk.z() == GROUND_Z && inside(x, y),
+        DecorHide::Scattered([x, y, _]) => chunk.z() == LEAF_Z && inside(x, y),
     });
     Some(Sources {
         read_from: Terrain::pyramid().paging().drawn_from(chunk.page())?.z,
@@ -162,12 +162,12 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
             col_idx,
             ox: ivec::X(o) as f64 - cx0,
             oy: ivec::Y(o) as f64 - cy0,
-            hittable: chunk.z() == GROUND_Z,
+            hittable: chunk.z() == LEAF_Z,
         }
     }));
     let target = GROUND.side_at(z);
     let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-    match z < GROUND_Z && sources.shown {
+    match z < LEAF_Z && sources.shown {
         true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
         false => c.folded.clear(),
     }
@@ -179,8 +179,8 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         y0,
         tx0,
         ty0,
-        col_idx: (z == GROUND_Z).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
-        folded: (z < GROUND_Z).then_some(&c.folded),
+        col_idx: (z == LEAF_Z).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
+        folded: (z < LEAF_Z).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
     let step = GROUND.finest_in(z);

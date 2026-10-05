@@ -9,7 +9,7 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
         i: ivec::gather(-1234, 5678, 0),
         ..Default::default()
     };
-    for z in [16, 13, 9] {
+    for z in [LEAF_Z, LEAF_Z - 3, LEAF_Z - 7] {
         let cell = GROUND.cell_of(z, &point);
         assert_eq!(cell.z(), z);
         assert_eq!(GROUND.cell_of(z, &cell.base()), cell, "a cell is found from its own corner");
@@ -27,18 +27,18 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
 /// A cell found by its offset in a coarser one is the cell the offset came from, across lattices and zooms.
 #[test]
 fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
-    let coarse = Lattice::new(GROUND.side_at(GROUND_Z).up(2));
+    let coarse = Lattice::new(GROUND.side_at(LEAF_Z).up(2));
     for (x, y) in [(-1234, 5678), (0, 0), (97, -3)] {
         let point = Pvf3 {
             i: ivec::gather(x, y, 0),
             ..Default::default()
         };
-        let fine = GROUND.cell_of(GROUND_Z, &point);
-        for z in [GROUND_Z, 12, TOP_Z] {
+        let fine = GROUND.cell_of(LEAF_Z, &point);
+        for z in [LEAF_Z, 12, TOP_Z] {
             let outer = coarse.cell_of(z, &point);
             let offset = outer.offset_of(fine);
             assert!(offset.iter().all(|&o| (o as f64) < outer.side() / fine.side()), "an offset inside the outer cell");
-            assert_eq!(outer.inner_at(GROUND, GROUND_Z, offset), fine);
+            assert_eq!(outer.inner_at(GROUND, LEAF_Z, offset), fine);
         }
     }
 }
@@ -51,7 +51,7 @@ fn a_cells_place_in_a_page_above_lies_in_the_page_cell_over_it() {
             i: ivec::gather(x, y, 0),
             ..Default::default()
         };
-        for z in [GROUND_Z, 13] {
+        for z in [LEAF_Z, 13] {
             let cell = GROUND.cell_of(z, &point);
             let [tx, ty] = cell.in_page();
             assert_eq!(cell.in_page_above(0), [tx as i64, ty as i64]);
@@ -69,12 +69,12 @@ fn a_cells_place_in_a_page_above_lies_in_the_page_cell_over_it() {
 /// Two lattices with equal cell sizes cut the same ground.
 #[test]
 fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {
-    let coarse = Lattice::new(GROUND.side_at(GROUND_Z).up(2));
+    let coarse = Lattice::new(GROUND.side_at(LEAF_Z).up(2));
     let point = Pvf3 {
         i: ivec::gather(-1234, 5678, 0),
         ..Default::default()
     };
-    for z in [GROUND_Z, 13] {
+    for z in [LEAF_Z, 13] {
         let (a, b) = (coarse.cell_of(z, &point), GROUND.cell_of(z - 2, &point));
         assert_eq!(a.side(), b.side());
         assert_eq!(a.base(), b.base());
@@ -89,7 +89,7 @@ fn a_parent_cell_and_its_child_block_are_one_relation() {
     let p = Page::new(13, ivec::gather(-5, 7, 0));
     let around = neighborhood(p);
     assert!((0..4).all(|q| around[CHILDREN[q]] == p.children()[q]));
-    for lattice in [GROUND, Lattice::new(GROUND.side_at(GROUND_Z).up(4))] {
+    for lattice in [GROUND, Lattice::new(GROUND.side_at(LEAF_Z).up(4))] {
         let n = lattice.page_cells();
         for q in 0..4 {
             for (tx, ty) in [(0, 0), (1, 0), (n - 1, n - 1), (n / 2, 3), (7, n - 2)] {
@@ -113,7 +113,7 @@ fn a_point_goes_round_in_x_and_stops_at_the_edge_in_y() {
     assert_eq!(projection::project(half + 3.0, REACH.max[1] + 100.0, 0.0), projection::project(-half + 3.0, REACH.max[1], 0.0));
     assert_eq!(nearest(-half + 3.0, half - 1.0), half + 3.0);
     assert_eq!(nearest(half - 1.0, -half + 3.0), -half - 1.0);
-    for z in [TOP_Z, GROUND_Z] {
+    for z in [TOP_Z, LEAF_Z] {
         let n = pages_around(z);
         assert_eq!(page_at(z, [n / 2, 0]), page_at(z, [-n / 2, 0]));
         assert!(!page_rows(z).contains(&(n / 2)));

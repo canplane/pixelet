@@ -15,7 +15,7 @@ use pxl_geo_bake::pyramid::{build, prune, write_manifest, Layer, PageSet};
 use pxl_geo_bake::util::{git_sha, next_version, pack, refuse_mixed, Level};
 use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::bake::published::FORMAT;
-use pxl_spec::space::pyramid::{Page, GROUND_Z};
+use pxl_spec::space::pyramid::{Page, LEAF_Z};
 
 fn run() -> Result<(), String> {
     let built = git_sha();
@@ -38,9 +38,9 @@ fn run() -> Result<(), String> {
     }
     let pages = leaves(&mut client, &Coverage::of_source()?, None)?;
     for (page, poi) in &pages {
-        set.write(Page::new(GROUND_Z, *page), &pack(&poi.encode()?, Level::Stored).map_err(|e| e.to_string())?)?;
+        set.write(Page::new(LEAF_Z, *page), &pack(&poi.encode()?, Level::Stored).map_err(|e| e.to_string())?)?;
     }
-    println!("[bake/poi] z16: {} pages", pages.len());
+    println!("[bake/poi] z{LEAF_Z}: {} pages", pages.len());
     let top = build(&set, &PoiPage::default(), concurrency)?;
     println!("[bake/poi] {} pages their parent settles let go", prune::<PoiPage>(&set, top)?);
     write_manifest(&set, top, built.as_deref(), serde_json::json!({ "release": source.release, "source": source.manifest() }))?;

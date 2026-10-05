@@ -1,12 +1,12 @@
 // pxl-spec/space/pyramid.rs
 
-//! The pyramid: the space hierarchy repeated over coarser blocks, from z16,
-//! the ground's cell, up to z6. A page at z holds that zoom's cells, and each
-//! zoom up a cell and a page are twice as wide. Cell placement, page
-//! membership, folding order and cell centers are decided here only; a layer
-//! owns what a cell carries and how it folds (`Folds`).
+//! The pyramid: pages of a page grid, from the leaves at z15 up to z5. A zoom
+//! names the grid alone, 2^z pages around the world, and each zoom up a page
+//! is twice as wide; a layer's cell is its page's side over the layer's own
+//! count of cells, the same at every zoom. Cell placement, page membership,
+//! folding order and cell centers are decided here only; a layer owns what a
+//! cell carries and how it folds (`Folds`).
 
-use super::adapter::epsg3857::{side_at_zoom, zoom_of};
 use super::hierarchy::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of, Scale};
 use super::indexer::{L1, L2, L3, L3_IDX, L4};
 use super::pvf3::core::FRAC_W;
@@ -19,21 +19,20 @@ use super::v3::Aabb;
 use super::xy::TO_XY;
 use crate::bake::constant::{CELL, DECK_CELL, EXTENT_CELL};
 
-/// The ground's cell, the pyramid's finest.
-pub const GROUND_Z: u32 = zoom_of(CELL) as u32;
+/// The leaves' zoom: an L3 page, as many of them around as the X lane holds.
+pub const LEAF_Z: u32 = IVEC_X_W - L3.shamt() as u32;
 
 /// The coarsest folded zoom: where the pyramid stops for now, not a limit. A
 /// coarser one extends it.
-pub const TOP_Z: u32 = 6;
+pub const TOP_Z: u32 = 5;
 
-/// `scale` as the ground's cell grows from z16 to `z`. Pages and chunks are
-/// fixed in units at z16 (L3, L2), and a lattice's cell is a scale against the
-/// ground's.
+/// `scale`, fixed in units on a leaf (L3, L2, a layer's cell), as its page grows to `z`.
 const fn at_zoom(scale: Scale, z: u32) -> Scale {
-    scale.up(side_at_zoom(z as i32).shamt() - CELL.shamt())
+    scale.up(LEAF_Z as i32 - z as i32)
 }
 
-/// A layer's lattice: its cell's side where the ground's is z16's.
+/// A layer's lattice: its cell is its page's side over its own count of
+/// cells, the same at every zoom; held as the cell on a leaf.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Lattice {
     cell: Scale,
@@ -50,6 +49,11 @@ impl Lattice {
     /// Its cell where the ground's is `z`'s.
     pub const fn side_at(self, z: u32) -> Scale {
         at_zoom(self.cell, z)
+    }
+
+    /// The zoom whose cell is `s`, past the pyramid's either end alike.
+    pub const fn z_of(self, s: Scale) -> i32 {
+        LEAF_Z as i32 - s.above(self.cell)
     }
 
     /// `page_cells` as a shift.
@@ -178,9 +182,9 @@ impl Page {
         Page { z, page: TO_XY(page) }
     }
 
-    /// The page at `z` a z16 page lies under.
+    /// The page at `z` a leaf lies under.
     pub fn over(z: u32, leaf: IVec) -> Page {
-        let [x, y] = ancestor_of([ivec::X(leaf), ivec::Y(leaf)], GROUND_Z - z);
+        let [x, y] = ancestor_of([ivec::X(leaf), ivec::Y(leaf)], LEAF_Z - z);
         Page::new(z, ivec::gather(x, y, 0))
     }
 
@@ -205,9 +209,9 @@ impl Page {
         (page_scale(self.z), self.at())
     }
 
-    /// Its first z16 page.
+    /// Its first leaf.
     pub fn first_leaf(self) -> IVec {
-        let [x, y] = first_descendant_of(self.at(), GROUND_Z - self.z);
+        let [x, y] = first_descendant_of(self.at(), LEAF_Z - self.z);
         ivec::gather(x, y, 0)
     }
 

@@ -10,7 +10,7 @@ use pxl_render::mesh::volume::NO_LAYER;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_of, placeable_cube_rgb, PlaceableCube};
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pyramid::GROUND_Z;
+use pxl_spec::space::pyramid::LEAF_Z;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
@@ -119,7 +119,7 @@ pub fn hover_cursor_step() {
 
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let cell = Access::now().at(h, GROUND_Z).value().map_or(0, |g| g.cell);
+            let cell = Access::now().at(h, LEAF_Z).value().map_or(0, |g| g.cell);
             placeable_cube_of(u32::from(cell))
         }
         _ => None,

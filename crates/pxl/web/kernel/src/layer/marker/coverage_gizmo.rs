@@ -14,7 +14,7 @@ use pxl_render::frame::draw::DrawList;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pyramid::{anchor_span_of, Page, GROUND_Z};
+use pxl_spec::space::pyramid::{anchor_span_of, Page, LEAF_Z};
 use pxl_spec::space::v3::V3;
 
 use crate::layer::marker::debug_lines::DebugLines;
@@ -95,7 +95,7 @@ impl CoverageGizmo {
         }
         self.seen = Some(seen);
         let paging = Terrain::pyramid().paging();
-        let top = floor::top().unwrap_or(GROUND_Z);
+        let top = floor::top().unwrap_or(LEAF_Z);
         let lined: HashSet<Page> = Terrain::pyramid().demand().iter().map(|&p| line_top(p, top)).collect();
         let floor_only = |p: Page| p.z <= top && !lined.contains(&p);
         let over: HashSet<Chunk> = drawn.iter().flat_map(|d| d.ancestors()).collect();

@@ -3,19 +3,20 @@
 use super::*;
 
 use crate::cell::cube::cube_types::ground;
+use crate::space::pyramid::LEAF_Z;
 
 const SPAN: usize = PAGE_CELLS as usize;
 const PADDED: usize = ELE_PADDED_SPAN as usize;
 
 #[test]
 fn an_area_keeps_what_fills_half_its_four_and_ties_alternate_corners() {
-    assert_eq!(majority([7, 7, 7, 1], 16), 7);
-    assert_eq!(majority([7, 7, 1, 2], 16), 7);
-    assert_eq!(majority([1, 7, 2, 7], 15), 7);
-    // No majority: the tie child, first at an odd zoom and last at an even one.
-    assert_eq!(majority([7, 1, 2, 3], 15), 7);
-    assert_eq!(majority([7, 1, 2, 3], 14), 3);
-    assert_eq!(majority([7, 7, 1, 1], 14), 1);
+    assert_eq!(majority([7, 7, 7, 1], CELL), 7);
+    assert_eq!(majority([7, 7, 1, 2], CELL), 7);
+    assert_eq!(majority([1, 7, 2, 7], CELL.up(1)), 7);
+    // No majority: the tie child, first under an odd step from the cell and last under an even one.
+    assert_eq!(majority([7, 1, 2, 3], CELL.up(1)), 7);
+    assert_eq!(majority([7, 1, 2, 3], CELL.up(2)), 3);
+    assert_eq!(majority([7, 7, 1, 1], CELL.up(2)), 1);
 }
 
 /// A page whose cell is `f` of it.
@@ -32,36 +33,36 @@ fn fold(children: [&Ground; 4], z: u32) -> Vec<u8> {
 #[test]
 fn a_uniform_page_folds_to_itself() {
     let p = plane(|_, _| ground::subway);
-    assert!(fold([&p, &p, &p, &p], 15).iter().all(|&v| v == ground::subway));
+    assert!(fold([&p, &p, &p, &p], LEAF_Z - 1).iter().all(|&v| v == ground::subway));
 }
 
 #[test]
 fn an_area_one_cell_wide_is_a_tie_and_a_dot_goes() {
-    // A one-cell strip ties 2:2 in every parent, so z15's south-west tie
-    // child keeps it only where x is even.
+    // A one-cell strip ties 2:2 in every parent, so a leaf's parent's
+    // south-west tie child keeps it only where x is even.
     let lot = plane(|x, _| if x == 10 { ground::parking } else { 0 });
     let empty = plane(|_, _| 0);
-    assert_eq!(fold([&lot, &empty, &empty, &empty], 15)[5], ground::parking);
+    assert_eq!(fold([&lot, &empty, &empty, &empty], LEAF_Z - 1)[5], ground::parking);
     let odd = plane(|x, _| if x == 11 { ground::parking } else { 0 });
-    assert_eq!(fold([&odd, &empty, &empty, &empty], 15)[5], 0);
+    assert_eq!(fold([&odd, &empty, &empty, &empty], LEAF_Z - 1)[5], 0);
     let dot = plane(|x, y| if (x, y) == (10, 10) { ground::parking } else { 0 });
-    assert!(fold([&dot, &empty, &empty, &empty], 15).iter().all(|&v| v == 0));
+    assert!(fold([&dot, &empty, &empty, &empty], LEAF_Z - 1).iter().all(|&v| v == 0));
 }
 
 #[test]
 fn a_feature_two_cells_wide_survives_a_fold() {
     let road = plane(|x, _| if x == 10 || x == 11 { 3 } else { 0 });
     let empty = plane(|_, _| 0);
-    let out = fold([&road, &empty, &empty, &empty], 15);
+    let out = fold([&road, &empty, &empty, &empty], LEAF_Z - 1);
     assert!((0..SPAN / 2).all(|py| out[py * SPAN + 5] == 3));
 }
 
 #[test]
 fn ties_alternate_their_corner_by_zoom() {
-    // Every block ties 2:2 across the diagonal: (0, 0) wins on odd zooms, (1, 1) on even.
+    // Every block ties 2:2 across the diagonal: (0, 0) wins a step up from the leaves, (1, 1) the next.
     let columns = plane(|x, _| if x % 2 == 0 { ground::parking } else { ground::aeroway });
-    assert!(fold([&columns, &columns, &columns, &columns], 15).iter().all(|&v| v == ground::parking));
-    assert!(fold([&columns, &columns, &columns, &columns], 14).iter().all(|&v| v == ground::aeroway));
+    assert!(fold([&columns, &columns, &columns, &columns], LEAF_Z - 1).iter().all(|&v| v == ground::parking));
+    assert!(fold([&columns, &columns, &columns, &columns], LEAF_Z - 2).iter().all(|&v| v == ground::aeroway));
 }
 
 #[test]
@@ -155,13 +156,13 @@ fn elevation_rounds_its_halves_to_even() {
 #[test]
 fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
     let (a, b, empty) = (5, 9, 0);
-    assert_eq!(majority([a, empty, empty, empty, empty, empty, empty, empty], 15), empty);
-    assert_eq!(majority([a, a, a, a, empty, empty, empty, empty], 15), a);
-    assert_eq!(majority([empty, a, a, a, a, a, empty, empty], 14), a);
+    assert_eq!(majority([a, empty, empty, empty, empty, empty, empty, empty], CELL.up(1)), empty);
+    assert_eq!(majority([a, a, a, a, empty, empty, empty, empty], CELL.up(1)), a);
+    assert_eq!(majority([empty, a, a, a, a, a, empty, empty], CELL.up(2)), a);
     let halves = [a, b, a, b, b, a, b, a];
-    assert_eq!(majority(halves, 15), halves[0]);
-    assert_eq!(majority(halves, 14), halves[7]);
-    assert_eq!(majority(halves, 17), halves[0], "a zoom finer than the cell alternates the same way");
+    assert_eq!(majority(halves, CELL.up(1)), halves[0]);
+    assert_eq!(majority(halves, CELL.up(2)), halves[7]);
+    assert_eq!(majority(halves, CELL.down(1)), halves[0], "a side finer than the cell alternates the same way");
 }
 
 /// The open ocean: flat water at sea level, no page.
@@ -176,5 +177,5 @@ fn zero_page() -> Terrain {
 #[test]
 fn the_zero_page_folds_to_itself() {
     let zero = zero_page();
-    assert_eq!(Terrain::fold_page(Page::new(15, 0), |_| Some(&zero)).as_ref(), Some(&zero));
+    assert_eq!(Terrain::fold_page(Page::new(LEAF_Z - 1, 0), |_| Some(&zero)).as_ref(), Some(&zero));
 }

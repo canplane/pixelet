@@ -18,8 +18,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{pose, rebase};
 use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
 use crate::world::frame::coord::origin_for;
-use pxl_spec::space::lod;
-use pxl_spec::space::pyramid::{GROUND_Z, TOP_Z};
+use pxl_spec::space::lod::Tau;
 use xpute_runtime::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
@@ -88,7 +87,7 @@ impl View {
 
     /// The zoom the origin's cell is sized for (`origin_for`).
     pub fn anchor_z(&self) -> u32 {
-        lod::z_at(height_at(self.eye_at())).clamp(TOP_Z as i32, GROUND_Z as i32) as u32
+        Tau::FINEST.z_at(height_at(self.eye_at()))
     }
 
     /// Eye-relative matrices, as the GPU's points are (`DrawList::translation`):

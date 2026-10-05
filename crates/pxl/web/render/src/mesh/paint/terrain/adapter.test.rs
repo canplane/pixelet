@@ -1,7 +1,7 @@
 // pxl-render/mesh/paint/terrain/adapter.test.rs
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::space::pyramid::{Page, GROUND_Z};
+use pxl_spec::space::pyramid::{Page, LEAF_Z};
 
 use super::*;
 
@@ -12,7 +12,7 @@ fn a_chunk_with_no_surface_has_no_ground_and_no_floor() {
     let cells = vec![sentinel::void; (PAGE_CELLS * PAGE_CELLS) as usize];
     let ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     let decks = Decks::default();
-    let page = Page::new(GROUND_Z, 0);
+    let page = Page::new(LEAF_Z, 0);
     let own = PageSource {
         page: PageView {
             cells: &cells,

@@ -15,14 +15,13 @@ use pxl_spec::bake::constant::{
 use pxl_spec::bake::fold::majority;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::hierarchy::{ancestor_of, at_walk_order, child_of, first_descendant_of, offset_in, parent_of, walk_order, Scale};
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
 use pxl_spec::space::pvf3::{REACH, ROUND};
-use pxl_spec::space::pyramid::{around, span_of, wrap_cell, wrap_index, GROUND, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{around, span_of, wrap_cell, wrap_index, GROUND, LEAF_Z, TOP_Z};
 use pxl_spec::space::sparse_tree::mem;
 use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree};
 use pxl_spec::space::v3::{Aabb, V3};
@@ -532,7 +531,7 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
     }
     let PlaceableCube::Ground(look) = cube else { return false };
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
-    let Some(ground) = Access::now().at(at, GROUND_Z).exact() else { return false };
+    let Some(ground) = Access::now().at(at, LEAF_Z).exact() else { return false };
     if ground.cell != look as u8 {
         return false;
     }
@@ -681,7 +680,7 @@ pub struct Store {
 /// a wall keeps whole cells.
 fn fold_cell(children: &[u16], scale: Scale) -> u16 {
     let v: [u16; 8] = core::array::from_fn(|k| if object_value_is_voxel(u32::from(children[k])) { children[k] } else { VOID as u16 });
-    majority(v, zoom_of(scale))
+    majority(v, scale)
 }
 
 const TOP_CELL: Scale = GROUND.side_at(TOP_Z);
@@ -815,7 +814,9 @@ impl Store {
                     let (named, round) = named_top(x);
                     let (dx, cells) = (round as f64 * ROUND, |s: Scale| round * around(s));
                     let q = query.moved([-dx, 0.0, 0.0]);
-                    go(self, &q, finest, INDEX_TOP, [named, y, z], &mut |s, [cx, cy, cz], bound| enter(s, [cx + cells(s), cy, cz], &bound.moved([dx, 0.0, 0.0])));
+                    go(self, &q, finest, INDEX_TOP, [named, y, z], &mut |s, [cx, cy, cz], bound| {
+                        enter(s, [cx + cells(s), cy, cz], &bound.moved([dx, 0.0, 0.0]))
+                    });
                 }
             }
         }
@@ -901,7 +902,7 @@ impl Store {
     }
 
     /// Applies every write and rebuilds each changed column's entries once.
-    /// Returns the bands changed, a band being a z16 chunk's height.
+    /// Returns the bands changed, a band being a leaf chunk's height.
     pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> BTreeSet<(IVec, BandZ)> {
         let mut changed = BTreeSet::new();
         for w in writes {

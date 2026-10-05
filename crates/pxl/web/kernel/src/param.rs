@@ -56,8 +56,8 @@ pub const COARSEN_HOLD_MS: f64 = QUALITY_WAIT_MS;
 
 // ---- device budget: memory ----
 
-/// Slots in one arena group, and so z16 chunks drawn at their own cells at
-/// once: about the flat-ground disc within where z16 ends. A view needing
+/// Slots in one arena group, and so leaf chunks drawn at their own cells at
+/// once: about the flat-ground disc within where the leaves end. A view needing
 /// more is drawn coarser.
 pub const ARENA_GROUP_SLOTS: u32 = 330;
 

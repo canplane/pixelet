@@ -13,7 +13,7 @@ use pxl_render::gpu::surface::SURFACES;
 use crate::sched::profiler::record::MB;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::GROUND_Z;
+use pxl_spec::space::pyramid::{GROUND, LEAF_Z};
 use xpute_core::math::scalar::round;
 
 use crate::host::handheld;
@@ -61,7 +61,7 @@ pub fn stage_write(resolution: f64) {
     // Largest drawn cell per unit of distance, for the badge occlusion test:
     // past a split distance cells are drawn 2 × 2, so twice the zoom's cell
     // over the distance.
-    s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(GROUND_Z as i32);
+    s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(GROUND.side_at(LEAF_Z));
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { edge_cfg::STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { ao_cfg::STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };

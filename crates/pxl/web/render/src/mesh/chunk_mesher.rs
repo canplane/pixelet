@@ -83,7 +83,7 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 /// in u16 mesh steps, sRGB color, four layer taps, face mask.
 ///
 /// The coarse format drops the taps (only leaf cells are textured) and holds
-/// corner and width in a byte an axis: a chunk k zooms coarser than z16 is
+/// corner and width in a byte an axis: a chunk k zooms coarser than a leaf's is
 /// never drawn nearer than 192·2^k, so its cell is one to two `target_cell_px` (pxl-spec space/lod.rs) and an eighth of it
 /// is at most 1.5 px; its mesh is at most 32 cells across, so cell index and
 /// eighth fit a byte exactly. 24 and 16 bytes a box, against 84 a vertex once.
@@ -228,7 +228,7 @@ struct FineBake {
     /// Read past an edge, never walked or emitted from.
     apron: u32,
     /// A coarse tier's columns are `lod_step` wide, those of a chunk k zooms
-    /// coarser than z16 2^k; a run's cell is a unit tall at every zoom.
+    /// coarser than a leaf's 2^k; a run's cell is a unit tall at every zoom.
     xy_scale: u32,
     phase: u8,
     row: u32,
@@ -300,7 +300,7 @@ impl BakeContext {
         }
     }
 
-    /// `scale` is 1 for a z16 chunk, 2^k for one k zooms coarser. `clip` cuts a whole-column
+    /// `scale` is 1 for a leaf chunk, 2^k for one k zooms coarser. `clip` cuts a whole-column
     /// set to the chunk's heights, and every step reads the cut set. One bake at a time.
     pub fn begin(&mut self, set: &RunSet, lod_step: u32, scale: u32, textured: bool, clip: Option<(i32, i32)>) -> Result<(), Refused> {
         xpute_core::ensure!(self.open.is_none(), ENOTRECOVERABLE);
@@ -797,7 +797,7 @@ impl BakeContext {
             }
             // Kept in its children's worth, rounded down, a heuristic: a trace too
             // small to fill one child draws no box, where it floated up to a
-            // kilometer over a z6 cell's ground.
+            // kilometer over a z5 cell's ground.
             let kept = (fill * CHILDREN).floor() / CHILDREN;
             if kept == 0.0 && !acc.ground {
                 continue;

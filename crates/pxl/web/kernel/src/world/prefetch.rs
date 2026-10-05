@@ -5,7 +5,7 @@
 
 use pxl_spec::space::lod::{pages_within, Tau};
 use pxl_spec::space::observation::Observation;
-use pxl_spec::space::pyramid::{Page, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{Page, LEAF_Z, TOP_Z};
 
 pub trait Prefetch {
     /// Never a page finer than what is drawn there at `tau`.
@@ -28,7 +28,7 @@ pub struct Reach {
 impl Prefetch for Reach {
     fn speculate(&self, o: &Observation, tau: Tau, each: &mut dyn FnMut(Page)) {
         let h = o.eye[2] - o.ground;
-        for z in (TOP_Z..=GROUND_Z).rev() {
+        for z in (TOP_Z..=LEAF_Z).rev() {
             // The disc a zoom's end leaves on the ground past the eye's height; none
             // where the eye is higher.
             let end = tau.fault_radius(z);

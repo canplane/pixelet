@@ -8,7 +8,7 @@
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{decode_terrain_into, Block, GroundCell, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{Page, GROUND_Z};
+use pxl_spec::space::pyramid::{Page, LEAF_Z};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::mem::base::ptr_at;
@@ -93,7 +93,7 @@ unsafe fn room_of(record: u32) -> PageRoom {
 /// The source has nothing under `at`: the ground cell there, as the finest
 /// page held over it gives it, is void.
 pub fn void_under(at: &Pvf3) -> bool {
-    Access::now().at(at, GROUND_Z).value().is_some_and(|g| g.top().is_none())
+    Access::now().at(at, LEAF_Z).value().is_some_and(|g| g.top().is_none())
 }
 
 pub fn terrain_step() {

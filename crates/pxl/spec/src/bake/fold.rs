@@ -10,17 +10,18 @@
 use crate::space::pyramid::PAGE_CELLS;
 use xpute_core::math::scalar::round;
 
-use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
+use super::constant::{ele_index, CELL, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::deck::fold_decks;
 use super::format::{Ground, Index, Occupancy, Terrain};
 use super::surface::extent_of;
+use crate::space::hierarchy::Scale;
 use crate::space::pyramid::{neighbor_index, neighborhood, Folds, Page, CHILDREN, EXTENT, GROUND};
 
 /// The value filling more than half of a 2×2 (or 2×2×2) block, `v[dx + 2·dy +
 /// 4·dz]`; otherwise the tie child's. The tie corner alternates with the
-/// parent's zoom `z`, since a fixed corner drifts the map half a coarse cell a zoom.
-pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], z: i32) -> T {
-    let tie = v[if z.rem_euclid(2) == 1 { 0 } else { N - 1 }];
+/// parent cell's side, since a fixed corner drifts the map half a coarse cell a step.
+pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Scale) -> T {
+    let tie = v[if parent.above(CELL).rem_euclid(2) == 1 { 0 } else { N - 1 }];
     let count = |x: T| v.iter().filter(|&&y| y == x).count();
     let mut half = None;
     for &x in &v {
@@ -39,7 +40,7 @@ pub fn fold_ground(children: [&Ground; 4], z: u32) -> Ground {
     let out = (0..PAGE_CELLS * PAGE_CELLS)
         .map(|index| {
             let (q, block) = GROUND.child_block(index);
-            majority(block.map(|i| children[q].cells[i as usize]), z as i32)
+            majority(block.map(|i| children[q].cells[i as usize]), GROUND.side_at(z))
         })
         .collect::<Vec<_>>();
     Ground { cells: out.into() }

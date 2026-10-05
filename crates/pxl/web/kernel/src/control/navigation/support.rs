@@ -2,15 +2,15 @@
 
 //! The map center standing on the ground, and where every camera's pan
 //! puts it. The center's Z is half a cell over the floor the character
-//! stands on, as a cell's center stands over its ground. Only z16 gives
+//! stands on, as a cell's center stands over its ground. Only a leaf gives
 //! that floor; a center put over coarser ground keeps its Z unknown and
-//! stands on the finest ground known there until z16 is.
+//! stands on the finest ground known there until the leaves' is.
 
 use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::pvf3::core::{FRAC_W, IVEC_Z_W};
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::GROUND_Z;
+use pxl_spec::space::pyramid::LEAF_Z;
 use pxl_spec::space::v3::V3;
 
 use crate::shell::setting::store::settings_store;
@@ -78,12 +78,12 @@ pub fn resolve(at: &Pvf3, held: V3, origin: IVec) -> V3 {
     }
 }
 
-/// An unknown Z once z16 gives it.
+/// An unknown Z once a leaf gives it.
 pub fn exact(at: &Pvf3) -> Option<Pvf3> {
     standing(at).exact().flatten()
 }
 
-/// `resolve` for a camera's target, writing z16's Z into it once known.
+/// `resolve` for a camera's target, writing the leaves' Z into it once known.
 pub fn target(to: &mut Option<Pvf3>, held: V3, origin: IVec) -> V3 {
     let Some(at) = *to else { return held };
     if let Some(p) = exact(&at) {
@@ -154,7 +154,7 @@ pub fn passage(from: &Pvf3, way: [f64; 2], start: i64) -> Passage {
             direction: [dir[0], dir[1], 0.0],
             reach: length - t,
         };
-        match access.first_hit(&ray, Detail::Zoom(GROUND_Z)) {
+        match access.first_hit(&ray, Detail::Zoom(LEAF_Z)) {
             Answer::Exact(None) => return Passage::Open(cz),
             Answer::Exact(Some(hit)) => {
                 let p = ray.at(hit.t + side / 2.0);

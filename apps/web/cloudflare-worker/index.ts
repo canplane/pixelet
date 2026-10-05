@@ -71,7 +71,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * in how long a name they have and which shared object they keep beside it:
  *
  * - `terrain/<version>/<quadkey>`, 5 to 15 digits, a page at every zoom of
- *   the pyramid from z16 up to `TOP_Z`. A page with nothing drawn in it is
+ *   the pyramid from z15 up to `TOP_Z`. A page with nothing drawn in it is
  *   no object.
  * - `poi/<version>/<quadkey>`, 5 to 15 digits, a page at every zoom of the
  *   pyramid as terrain's are: how many places stand in each of its cells. A

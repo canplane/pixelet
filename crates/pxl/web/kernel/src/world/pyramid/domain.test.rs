@@ -4,7 +4,7 @@ use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::Observation;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::V3;
 
 use super::*;
@@ -26,7 +26,7 @@ fn point(p: V3) -> Pvf3 {
 
 fn pieces_at(pieces: &[Chunk], p: V3) -> Vec<Chunk> {
     let at = point(p);
-    (TOP_Z..=GROUND_Z).rev().map(|z| Chunk::of(z, &at)).filter(|c| pieces.binary_search(c).is_ok()).collect()
+    (TOP_Z..=LEAF_Z).rev().map(|z| Chunk::of(z, &at)).filter(|c| pieces.binary_search(c).is_ok()).collect()
 }
 
 fn around(eye: V3, radius: f64, z: f64) -> Vec<V3> {
@@ -93,7 +93,7 @@ fn grazing_ground_refines_across_the_screen_and_not_along_its_depth() {
                 let over = pieces_at(&pieces, p);
                 assert_eq!(over.len(), 1, "{tau:?}: {p:?} under {over:?}");
                 let z = over[0].z() as i32;
-                let wanted = tau.z_at(r).clamp(TOP_Z as i32, GROUND_Z as i32);
+                let wanted = tau.z_at(r) as i32;
                 assert!(z >= wanted, "{tau:?}: ground {r} away at {bearing}° left at z{z} where its cell crosses a cell finer than z{wanted}");
                 assert!(z - 1 <= wanted, "{tau:?}: ground {r} away refined to z{z}, past what its error across asks (z{wanted})");
             }
@@ -128,7 +128,7 @@ fn hidden_ground_keeps_its_depth() {
     let world = World::flat(GROUND).with([x0, -50_000.0, GROUND], [x1, 50_000.0, GROUND + 1_000.0]);
     let mut d = domain(eye(EYE, Some([1.0, 0.0, 0.0]), FAR, GROUND), &world);
     let cuts = cuts(&mut d);
-    assert!(cuts[0].2.iter().any(|c| c.z() == GROUND_Z - 1), "the ground before the wall is not refined");
+    assert!(cuts[0].2.iter().any(|c| c.z() == LEAF_Z - 1), "the ground before the wall is not refined");
     for (tau, _, splits) in cuts {
         for c in splits {
             assert!(c.rect().0 < x1, "{tau:?}: {c:?} is wholly behind the wall and split");

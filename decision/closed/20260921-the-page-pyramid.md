@@ -207,7 +207,7 @@ client at all.
 ## Where this stands
 
 **Superseded in part, 2026-09-21,** by
-[20260921-the-mesh-step-and-the-zoom-are-one-number.md](../20260921-the-mesh-step-and-the-zoom-are-one-number.md):
+[20260921-the-mesh-step-and-the-zoom-are-one-number.md](./20260921-the-mesh-step-and-the-zoom-are-one-number.md):
 the page is 512 cells rather than 1,024, which puts a z16 cell on Web Mercator's
 z16 pixel; and the fold this note says
 already exists in `chunk_mesher.rs` folds surface color and coverage, not the

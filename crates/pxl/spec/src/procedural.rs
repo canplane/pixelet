@@ -14,25 +14,25 @@ use crate::cell::cube::cube_types::{sentinel, Ground};
 use crate::cell::cube::Kind;
 use crate::space::adapter::epsg3857::u_per_m;
 use crate::space::pvf3::ivec::gather;
-use crate::space::pyramid::{Page, GROUND, GROUND_Z, PAGE_CELLS, TOP_Z};
+use crate::space::pyramid::{Page, GROUND, LEAF_Z, PAGE_CELLS, TOP_Z};
 
 /// Changing it reshuffles everything scattered.
 pub const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
 
-// ---- scatter: a Poisson process on the z16 cell lattice ----
+// ---- scatter: a Poisson process on the leaf cell lattice ----
 
 const BLOCK: i64 = 16; // a block's side, in its birth zoom's cells
 const KEPT: f64 = 0.25; // a zoom keeps one in four of the next finer's
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Candidate {
-    pub cell: [i64; 2], // the z16 cell it stands at, at every zoom
+    pub cell: [i64; 2], // the leaf cell it stands at, at every zoom
     pub born: u32,      // the coarsest zoom it stands at
     pub seed: u64,      // its own draws: variant, heading, size
 }
 
 /// A Poisson process, never a grid: a block at zoom m bears a Poisson count
-/// of candidates born there, each at a uniform z16 cell, and a candidate born
+/// of candidates born there, each at a uniform leaf cell, and a candidate born
 /// at m stands at every zoom from m finer. A cell at any zoom then holds `density`.
 fn each_candidate(tag: u64, density: f64, z: u32, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
     let kind = derive_seed_u64(MASTER_SEED, tag);
@@ -73,7 +73,7 @@ fn poisson(mean: f64, u: f64) -> u64 {
     k
 }
 
-/// What stands at `z` in `region` (z16 cells, `[min, max)`), one a cell:
+/// What stands at `z` in `region` (leaf cells, `[min, max)`), one a cell:
 /// of two on one cell the coarser stays, so a zoom keeps what it had.
 pub fn scatter(tag: u64, density: f64, z: u32, region: [[i64; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
     out.clear();
@@ -89,10 +89,10 @@ pub fn scatter(tag: u64, density: f64, z: u32, region: [[i64; 2]; 2], out: &mut 
     Ok(())
 }
 
-/// What stands in one z16 cell at z16, as `scatter` keeps it.
+/// What stands in one leaf cell on the leaves, as `scatter` keeps it.
 pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2]) -> Option<Candidate> {
     let mut best: Option<Candidate> = None;
-    each_candidate(tag, density, GROUND_Z, [cell, [cell[0] + 1, cell[1] + 1]], |c| {
+    each_candidate(tag, density, LEAF_Z, [cell, [cell[0] + 1, cell[1] + 1]], |c| {
         if best.is_none_or(|b| (c.born, c.seed) < (b.born, b.seed)) {
             best = Some(c);
         }
@@ -102,7 +102,7 @@ pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2]) -> Option<Candidate> {
 
 // ---- piers ----
 
-/// Within Arnis's 19 m and OSM2World's 50 m; one lattice a z6 row.
+/// Within Arnis's 19 m and OSM2World's 50 m; one lattice a z5 row.
 pub const PIER_STEP_M: f64 = 32.0;
 
 pub const PIER_ACROSS: f64 = 0.7; // of the deck's width: OSM2World's `BridgeModule`

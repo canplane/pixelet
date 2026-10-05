@@ -39,4 +39,4 @@ export interface TileSource {
  * answers the same object at the tile root's `source`, with its `--top-z`
  * (pxl-geo-bake bin/serve_tiles.rs); neither is guessed from what fails.
  */
-export const PUBLISHED_SOURCE: TileSource = { top_z: 6 };
+export const PUBLISHED_SOURCE: TileSource = { top_z: 5 };

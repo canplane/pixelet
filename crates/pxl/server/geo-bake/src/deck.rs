@@ -7,8 +7,8 @@
 pub mod arnis;
 pub mod elevation;
 pub mod piece;
-pub mod way;
 pub mod source;
+pub mod way;
 
 use postgres::Client;
 use pxl_spec::bake::deck::Form;
@@ -28,14 +28,14 @@ pub struct Solved {
     pub drawn: Vec<Drawn>,
 }
 
-/// A solved line: XY in DB coordinates, height and width in z16 cells.
+/// A solved line: XY in DB coordinates, height and width in leaf cells.
 pub struct Line {
     pub subtype: String,
     pub class: Option<String>,
     pub width_cells: f64,
     pub form: Form,
     pub points: Vec<G3857>,
-    /// A bore's clear space over its surface, in z16 cells; none for another form.
+    /// A bore's clear space over its surface, in leaf cells; none for another form.
     pub clear: u8,
 }
 

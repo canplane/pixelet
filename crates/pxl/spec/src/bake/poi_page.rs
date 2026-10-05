@@ -1,8 +1,8 @@
 // pxl-spec/bake/poi_page.rs
 
 //! The POI layer's page: per occupied `POI_LATTICE` cell, how many places
-//! stand in it and, of each kind, the named place of least id with the z16
-//! ground cell it stands in. Least id is stable across zooms and says nothing
+//! stand in it and, of each kind, the named place of least id with the leaf
+//! cell it stands in. Least id is stable across zooms and says nothing
 //! of prominence; which to show is the reader's choice. Folding sums counts
 //! and keeps the least id per kind, so a count agrees with the leaves at any
 //! zoom. A page holds what any source can give — a place's own id, its kind
@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use crate::bake::constant::CELL;
 use crate::bake::poi_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
 use crate::space::pvf3::pvf3::Pvf3;
-use crate::space::pyramid::{Folds, Lattice, Page, GROUND, GROUND_Z, TOP_Z};
+use crate::space::pyramid::{Folds, Lattice, Page, GROUND, LEAF_Z, TOP_Z};
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
@@ -38,10 +38,10 @@ pub const NAME_CHARS: usize = 32;
 /// A cell holds a place of each kind, and a kind is a byte.
 const KINDS_MAX: usize = 256;
 
-// A position is an offset in z16 cells inside a POI cell, a half-word a lane.
+// A position is an offset in leaf cells inside a POI cell, a half-word a lane.
 const _: () = assert!(
-    POI_LATTICE.side_at(TOP_Z).above(GROUND.side_at(GROUND_Z)) <= 16,
-    "a POI cell's z16 ground cells no longer fit a half-word a lane"
+    POI_LATTICE.side_at(TOP_Z).above(GROUND.side_at(LEAF_Z)) <= 16,
+    "a POI cell's leaf cells no longer fit a half-word a lane"
 );
 
 /// An occupied cell. `partial` marks a count that is a floor: a source that
@@ -56,7 +56,7 @@ pub struct PoiCell {
     pub len: u32,
 }
 
-/// A shown place: its pool index and the z16 ground cell it stands in, as an
+/// A shown place: its pool index and the leaf cell it stands in, as an
 /// offset in its POI cell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Shown {
@@ -234,7 +234,7 @@ impl PoiPage {
             .into_iter()
             .map(|(point, place)| {
                 let cell = POI_LATTICE.cell_of(z, &point);
-                (cell.index(), cell.offset_of(GROUND.cell_of(GROUND_Z, &point)), cut_name(place.name), place)
+                (cell.index(), cell.offset_of(GROUND.cell_of(LEAF_Z, &point)), cut_name(place.name), place)
             })
             .collect();
         gathered(cut.iter().map(|(cell, at, name, place)| (*cell, 1, !complete, [(*at, Place { name, ..*place })].into_iter())))
@@ -264,7 +264,7 @@ impl Folds for PoiPage {
             cells.extend(child.cells.iter().map(move |c| {
                 let parent = POI_LATTICE.parent_cell(q, c.cell);
                 let places = child.shown(c).map(move |(_, place, at)| {
-                    let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, GROUND_Z, at);
+                    let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, LEAF_Z, at);
                     (POI_LATTICE.cell_at(p, parent).offset_of(ground), place)
                 });
                 (parent, c.count, c.partial, places)

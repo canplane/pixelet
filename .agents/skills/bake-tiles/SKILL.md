@@ -149,10 +149,10 @@ full base, earlier partial's included.
 What it produces, beside `leaf/` under `--build` with a `leaf.json` of what
 built it:
 
-- `z16/`, one packed object per page anything is drawn in — land, or a way,
+- `z15/`, one packed object per page anything is drawn in — land, or a way,
   building, deck or bore — the leaves
-- `z15/`, `z14/`, … each zoom folded from the one below it until a zoom is a
-  single page or `z6`, refolded whole on every run (they are a function of the leaves,
+- `z14/`, `z13/`, … each zoom folded from the one below it until a zoom is a
+  single page or `z5`, refolded whole on every run (they are a function of the leaves,
   so a resumed run never leaves a stale pyramid over them)
 - `manifest.json` and `land_pages.json` in the directory above the version's
 
@@ -244,7 +244,7 @@ the set back in to see the bake.
 
 POI is a second layer of terrain's pyramid: the same pages, zooms and names,
 holding, per cell (`pxl-spec bake/poi_page.rs`, one XTP tree), a count of
-places and, of each kind, the place of least id with the z16 ground cell it
+places and, of each kind, the place of least id with the leaf cell it
 stands in — its names, held to 32 code points, the source's own id and its
 kind by name, from a pool of places held once a page. A kind is the place's
 category as the search list names it (`pxl-geo-spec overture/properties.rs`),
@@ -260,7 +260,7 @@ deno task bake:poi --out ./out/poi/<version> --concurrency 8
 
 It is not resumable: a run clears the version directory and bakes it whole,
 which takes the one pass over the table the leaves need. Verify that the
-manifest's `zooms` reach z6 and that a leaf decodes (`poi_page::decode`).
+manifest's `zooms` reach z5 and that a leaf decodes (`poi_page::decode`).
 The client shows it only outside production, behind `poi` in the
 development settings, until a nationwide version is published.
 
@@ -315,7 +315,7 @@ stays private until success. A deadline or admission refusal is retryable,
 never an empty page. These are execution/time budgets,
 not a cap on process memory or total cached disk bytes.
 
-`--top-z` (default 13) bounds the pyramid layers, terrain and POI alike: a
+`--top-z` (default 12) bounds the pyramid layers, terrain and POI alike: a
 page coarser than it is answered 503, since each one folds the whole zoom
 under it on first request. Geocode groups have a fixed bake footprint.
 The common job limits apply to all of them and survive cache invalidation.

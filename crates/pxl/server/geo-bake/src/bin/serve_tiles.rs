@@ -186,7 +186,7 @@ fn run() -> Result<(), String> {
     let mut asset_dir = PathBuf::from("./out/asset");
     let mut workers: usize = 4;
     let mut cache = PathBuf::from("./out/dev");
-    let mut top_z: u32 = 13;
+    let mut top_z: u32 = 12;
     let mut baked: Option<PathBuf> = None;
     let mut out = PathBuf::from("./out");
 

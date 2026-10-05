@@ -8,7 +8,7 @@
 
 use super::lod::{cubes_meeting, fault_radius, Tau};
 use super::pvf3::nearest_box;
-use super::pyramid::{page_at, page_rows, span_of, Page, GROUND_Z, TOP_Z};
+use super::pyramid::{page_at, page_rows, span_of, Page, GROUND, LEAF_Z, TOP_Z};
 use super::v3::{dot3, Aabb, V3};
 
 /// Six planes, normals in, `n · x + d ≥ 0` inside, in world units.
@@ -83,7 +83,7 @@ impl Observation {
     }
 }
 
-/// What stands in `region` known at `z`; z16 for anything finer.
+/// What stands in `region` known at `z`; the leaves' for anything finer.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Requirement {
     pub z: u32,
@@ -164,10 +164,10 @@ pub struct ByBounds {
     pub tau: Tau,
 }
 
-/// The distances `z` is required over: its split distance (0 for z16) to the
+/// The distances `z` is required over: its split distance (0 for the leaves) to the
 /// next coarser zoom's, or to the far edge for the top. None past the far edge.
 pub fn band(o: &Observation, tau: Tau, z: u32) -> Option<(f64, f64)> {
-    let from = if z == GROUND_Z { 0.0 } else { tau.split_distance(z as i32) };
+    let from = if z == LEAF_Z { 0.0 } else { tau.split_distance(GROUND.side_at(z)) };
     let to = if z == o.top { fault_radius(z) } else { tau.fault_radius(z) };
     (from <= o.far).then_some((from, to))
 }
@@ -175,7 +175,7 @@ pub fn band(o: &Observation, tau: Tau, z: u32) -> Option<(f64, f64)> {
 impl DemandEstimator for ByBounds {
     fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement)) {
         xpute_core::ensure!(o.top >= TOP_Z && o.far <= fault_radius(o.top), EINVAL);
-        for z in (o.top..=GROUND_Z).rev() {
+        for z in (o.top..=LEAF_Z).rev() {
             let Some((from, to)) = band(o, self.tau, z) else { break };
             let span = span_of(z);
             for at in cubes_meeting(span, o.reach(to.min(o.far))) {

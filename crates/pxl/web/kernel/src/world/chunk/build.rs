@@ -4,7 +4,7 @@
 //! decision about a chunk is the table's (table.rs); this acts on what it asks.
 
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::pyramid::{Page, CHUNK_CELLS, GROUND, GROUND_Z};
+use pxl_spec::space::pyramid::{Page, CHUNK_CELLS, GROUND, LEAF_Z};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
@@ -313,7 +313,7 @@ pub struct Builder {
     claimed: Claims,
     folded: HashMap<[i64; 3], u32>,
     stands: Vec<(u32, Stands)>,
-    /// A z16 chunk's objects folded to its scale, for scales coarser than an object's finest tier.
+    /// A leaf chunk's objects folded to its scale, for scales coarser than an object's finest tier.
     fold_band: Vec<BandZ>,
     fold_pos: Vec<u32>,
     fold_state: Vec<u32>,
@@ -566,7 +566,7 @@ impl Builder {
             self.abort_scan_of(world, id);
             return Progress::Blocked;
         };
-        if c.z() < GROUND_Z {
+        if c.z() < LEAF_Z {
             return self.column_runs(world, id, read);
         }
         let holding = matches!(&self.scan_job, Some(j) if j.id == id);

@@ -20,7 +20,6 @@ use crate::mem::fixed::{lane, range, Range};
 use crate::sched::profiler::log::PENDING;
 use crate::sched::profiler::spec::{FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, TASK, WORST};
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::space::adapter::epsg3857::zoom_of;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 use xpute_runtime::sched::tick::PHASES;
@@ -419,7 +418,10 @@ const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "
 #[cfg(test)]
 #[path = "record.test.rs"]
 mod test;
-const _: () = assert!(zoom_of(OBJECT_FINEST) < ZOOMS as i32, "a zoom slot for every cell drawn, the finest object tier to the pyramid's top");
+const _: () = assert!(
+    pxl_spec::space::pyramid::GROUND.z_of(OBJECT_FINEST) < ZOOMS as i32,
+    "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
+);
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
 /// display or a heavy minute fills a lane early, which drops its oldest and

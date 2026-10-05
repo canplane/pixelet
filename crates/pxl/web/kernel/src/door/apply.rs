@@ -92,7 +92,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::WORLD_SOURCE => {
             let p = abi::WorldSource::read(packet(pkt)?)?;
-            refuse_unless(p.top_z >= pxl_spec::space::pyramid::TOP_Z && p.top_z <= pxl_spec::space::pyramid::GROUND_Z, Errno::EINVAL)?;
+            refuse_unless(p.top_z >= pxl_spec::space::pyramid::TOP_Z && p.top_z <= pxl_spec::space::pyramid::LEAF_Z, Errno::EINVAL)?;
             crate::world::paging::floor::declare(p.top_z);
             Ok(Some(0))
         }

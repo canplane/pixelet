@@ -1,12 +1,12 @@
 // pxl-spec/space/lod.rs
 
-//! The zoom ground is drawn at from its distance, and the pages a zoom's
+//! The cell ground is drawn at from its distance, and the pages a zoom's
 //! faults can name about a point. Both depend only on the lattice, so the
 //! resident bound is proved before anything of the world or screen is known.
 
-use super::adapter::epsg3857::side_at_zoom;
+use super::hierarchy::Scale;
 use super::pvf3::REACH;
-use super::pyramid::{page_at, page_rows, span_of, Page, GROUND_Z, TOP_Z};
+use super::pyramid::{page_at, page_rows, span_of, Page, GROUND, LEAF_Z, TOP_Z};
 use super::v3::Aabb;
 
 /// The criterion as a distance per cell side: a zoom is drawn from `SPLIT`
@@ -30,16 +30,16 @@ pub fn target_cell_px() -> f64 {
     px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / SPLIT
 }
 
-/// Where ground starts being drawn at `z` at `Tau::FINEST`, going out; any zoom.
-pub const fn split_distance(z: i32) -> f64 {
-    SPLIT * side_at_zoom(z).side()
+/// Where ground starts being drawn with cells of `s` at `Tau::FINEST`, going out.
+pub const fn split_distance(s: Scale) -> f64 {
+    SPLIT * s.side()
 }
 
-/// The zoom whose cell a pixel covers at `r` from the eye. Distance only:
-/// with the surface angle in, the skyline would be drawn coarsest. Past z16
-/// near the eye.
-pub fn z_at(r: f64) -> i32 {
-    libm::log2(split_distance(0) / r).ceil() as i32
+/// The cell a pixel covers at `r` from the eye: the widest whose split
+/// distance is within `r`. Distance only: with the surface angle in, the
+/// skyline would be drawn coarsest. Finer than the ground's near the eye.
+pub fn cell_at(r: f64) -> Scale {
+    Scale::of(libm::floor(libm::log2(r / SPLIT)) as i32)
 }
 
 /// The criterion's one scale factor, at least 1: every zoom's split
@@ -61,27 +61,32 @@ impl Tau {
         self.0
     }
 
-    pub const fn split_distance(self, z: i32) -> f64 {
-        split_distance(z) / self.0
+    pub const fn split_distance(self, s: Scale) -> f64 {
+        split_distance(s) / self.0
     }
 
-    pub fn z_at(self, r: f64) -> i32 {
-        z_at(r * self.0)
+    pub fn cell_at(self, r: f64) -> Scale {
+        cell_at(r * self.0)
+    }
+
+    /// The zoom the ground is drawn from at `r`: its cell's, held to the pyramid.
+    pub fn z_at(self, r: f64) -> u32 {
+        GROUND.z_of(self.cell_at(r)).clamp(TOP_Z as i32, LEAF_Z as i32) as u32
     }
 
     pub const fn fault_radius(self, z: u32) -> f64 {
-        self.split_distance(z as i32 - 1)
+        fault_radius(z) / self.0
     }
 }
 
-/// How far from an observer's foot a fault at `z` can lie: the next coarser
-/// zoom's split distance. Bounds the run along the ground too.
+/// How far from an observer's foot a fault at `z` can lie: the split
+/// distance of the ground's cell a zoom coarser. Bounds the run along the ground too.
 pub const fn fault_radius(z: u32) -> f64 {
-    split_distance(z as i32 - 1)
+    split_distance(GROUND.side_at(z - 1))
 }
 
 /// The most pages a zoom's faults span along an axis: ⌊d / page⌋ + 2, the same at every zoom.
-pub const FAULT_ACROSS: u32 = (2.0 * fault_radius(GROUND_Z) / span_of(GROUND_Z)) as u32 + 2;
+pub const FAULT_ACROSS: u32 = (2.0 * fault_radius(LEAF_Z) / span_of(LEAF_Z)) as u32 + 2;
 
 /// The most pages a zoom's faults name about one observer.
 pub const FAULT_PAGES: u32 = FAULT_ACROSS * FAULT_ACROSS;

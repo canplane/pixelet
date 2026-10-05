@@ -92,7 +92,7 @@
     "REASONS": 4,
     "STEP_SLOTS": 32,
     "ZOOMS": 24,
-    "$ZOOMS": "A lane a zoom slot, by the zoom itself: slot z holds a cell of zoom z (pxl-spec adapter/3857.rs zoom_of)."
+    "$ZOOMS": "A lane a zoom slot, by the zoom itself: slot z holds a cell of zoom z's pages, past the leaves for the objects' finer cells (pxl-spec space/pyramid.rs `Lattice::z_of`)."
   },
   "FRAME": {
     "$type": "u32",

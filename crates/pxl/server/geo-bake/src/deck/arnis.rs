@@ -22,8 +22,8 @@ use xpute_core::math::scalar::round;
 
 use crate::deck::elevation::{page_of, sample_cells};
 use crate::deck::piece::{pieces_of, pieces_over, End, Piece};
-use crate::deck::way::{Polyline, Way};
 use crate::deck::source::{ring, Store};
+use crate::deck::way::{Polyline, Way};
 use crate::deck::{Drawn, Line, Reader, Solved};
 use crate::segment::Segment;
 use crate::terrain::bake::Surface;
@@ -213,7 +213,13 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<(Solved, Rep
             scope.extend(s.ends.iter().flat_map(|e| src.by_end.get(e).into_iter().flatten().cloned()).collect::<Vec<_>>());
             if s.form == Form::Deck {
                 let b = grown(bbox_of(s), reach);
-                scope.extend(src.pieces.iter().filter(|(_, o)| o.piece.form == Form::Deck && o.piece.touches(b)).map(|(id, _)| id.clone()).collect::<Vec<_>>());
+                scope.extend(
+                    src.pieces
+                        .iter()
+                        .filter(|(_, o)| o.piece.form == Form::Deck && o.piece.touches(b))
+                        .map(|(id, _)| id.clone())
+                        .collect::<Vec<_>>(),
+                );
             }
         }
         if (scope.len(), src.loaded.len()) == before {
@@ -224,7 +230,7 @@ pub fn solve_page(r: &mut Reader<impl Store>, page: IVec) -> Result<(Solved, Rep
     let runs = runs_of(&src, &scope, lo, units);
     let obstacles = Obstacles::of(&src, lo, units);
     let mut lines: Vec<(Line, Drawn)> = Vec::new();
-    
+
     // ---- road bridges, lower first; rail bridges over them; then the tunnels ----
     let solved = bridges(&src, &runs, &obstacles, units, &mut lines, &mut report);
     for (q, ys) in &solved.ys {
@@ -339,7 +345,10 @@ impl Source {
         let line = Polyline::of(s.piece.points.iter().map(|p| [p[0], p[1]]));
         let length = line.length();
         let reach = to_db((line_reach(s.piece.width_m * units.cell_per_m) + 16.0) * U_PER_CELL);
-        let at: Vec<(usize, [f64; 2])> = (0..=s.n).map(|k| (k, line.at((k as f64 * step).min(length)))).filter(|(_, p)| self.ring.contains(&page_of(*p))).collect();
+        let at: Vec<(usize, [f64; 2])> = (0..=s.n)
+            .map(|k| (k, line.at((k as f64 * step).min(length))))
+            .filter(|(_, p)| self.ring.contains(&page_of(*p)))
+            .collect();
         let mut wanted: BTreeSet<IVec> = BTreeSet::new();
         for (_, p) in &at {
             for d in [[0.0, 0.0], [reach, 0.0], [-reach, 0.0], [0.0, reach], [0.0, -reach]] {
@@ -508,7 +517,11 @@ fn crosses(heading: [f64; 2], o: &Obstacle) -> bool {
 fn dist_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     let d = [b[0] - a[0], b[1] - a[1]];
     let len2 = d[0] * d[0] + d[1] * d[1];
-    let t = if len2 > 0.0 { (((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    let t = if len2 > 0.0 {
+        (((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / len2).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
     libm::hypot(p[0] - a[0] - t * d[0], p[1] - a[1] - t * d[1])
 }
 
@@ -778,8 +791,15 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
             }
         }
         let axis_len = best.sqrt();
-        let dir = if axis_len > 0.0 { [(axis.1[0] - axis.0[0]) / axis_len, (axis.1[1] - axis.0[1]) / axis_len] } else { [0.0, 0.0] };
-        let us: Vec<Vec<f64>> = g.iter().map(|&q| runs[q].cell.iter().map(|c| (c[0] - axis.0[0]) * dir[0] + (c[1] - axis.0[1]) * dir[1]).collect()).collect();
+        let dir = if axis_len > 0.0 {
+            [(axis.1[0] - axis.0[0]) / axis_len, (axis.1[1] - axis.0[1]) / axis_len]
+        } else {
+            [0.0, 0.0]
+        };
+        let us: Vec<Vec<f64>> = g
+            .iter()
+            .map(|&q| runs[q].cell.iter().map(|c| (c[0] - axis.0[0]) * dir[0] + (c[1] - axis.0[1]) * dir[1]).collect())
+            .collect();
         let follows_axis = axis_len >= 1.0 && us.iter().all(|u| is_monotonic(u, f64::from(units.c(PROFILE_MONOTONIC_TOLERANCE_M))));
 
         // what the deck must meet or clear, as (axis position, height)
@@ -860,7 +880,10 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
             reqs.push((u, f64::from(raised_top)));
         }
         let hull = if follows_axis { upper_hull(reqs) } else { Vec::new() };
-        let mut ys: Vec<Vec<i32>> = us.iter().map(|row| row.iter().map(|&u| if follows_axis { round(hull_at(&hull, u)) as i32 } else { level_deck }).collect()).collect();
+        let mut ys: Vec<Vec<i32>> = us
+            .iter()
+            .map(|row| row.iter().map(|&u| if follows_axis { round(hull_at(&hull, u)) as i32 } else { level_deck }).collect())
+            .collect();
 
         // an end above the ground ramps down to it inside the member
         for (m, &q) in g.iter().enumerate() {
@@ -907,7 +930,15 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
             let way = &src.ways[&gers];
             let cells = cells_along(&line);
             let denom = (cells.len() - 1).max(1) as f64;
-            lines.push(graded(way, cells.iter().enumerate().map(|(k, p)| [p[0], p[1], round(f64::from(deck_y) + f64::from(ground - deck_y) * k as f64 / denom)]).collect(), units));
+            lines.push(graded(
+                way,
+                cells
+                    .iter()
+                    .enumerate()
+                    .map(|(k, p)| [p[0], p[1], round(f64::from(deck_y) + f64::from(ground - deck_y) * k as f64 / denom)])
+                    .collect(),
+                units,
+            ));
             report.ramps += 1;
         }
 
@@ -934,11 +965,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
             out.push((q, std::mem::take(&mut ys[m])));
         }
     }
-    Bridges {
-        ys: out,
-        decks,
-        ramp_ways: claimed,
-    }
+    Bridges { ys: out, decks, ramp_ways: claimed }
 }
 
 // ---- rail bridges: on a road deck, or one level a viaduct with ramps at its free ends ----
@@ -1054,12 +1081,22 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units
             if !internal[1] {
                 needed = needed.max((deck - ge).max(0) as usize);
             }
-            let ramp = ((total as f64 * RAIL_BRIDGE_RAMP_FRACTION) as usize).clamp(units.c(RAIL_BRIDGE_RAMP_M[0]) as usize, units.c(RAIL_BRIDGE_RAMP_M[1]) as usize).max(needed + 1);
+            let ramp = ((total as f64 * RAIL_BRIDGE_RAMP_FRACTION) as usize)
+                .clamp(units.c(RAIL_BRIDGE_RAMP_M[0]) as usize, units.c(RAIL_BRIDGE_RAMP_M[1]) as usize)
+                .max(needed + 1);
             let denom = ramp.saturating_sub(1).max(1) as f64;
             let ys = (0..total)
                 .map(|k| {
-                    let s = if internal[0] { deck } else { round(f64::from(gs) + f64::from(deck - gs) * (k as f64 / denom).min(1.0)) as i32 };
-                    let e = if internal[1] { deck } else { round(f64::from(ge) + f64::from(deck - ge) * ((last - k) as f64 / denom).min(1.0)) as i32 };
+                    let s = if internal[0] {
+                        deck
+                    } else {
+                        round(f64::from(gs) + f64::from(deck - gs) * (k as f64 / denom).min(1.0)) as i32
+                    };
+                    let e = if internal[1] {
+                        deck
+                    } else {
+                        round(f64::from(ge) + f64::from(deck - ge) * ((last - k) as f64 / denom).min(1.0)) as i32
+                    };
                     s.min(e).max(r.terrain[k])
                 })
                 .collect();
@@ -1160,7 +1197,9 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
                 branches.push(chain);
             }
             // every branch takes the same descent, or one ends in a cliff
-            let Some(avail) = branches.iter().filter_map(|b| b.last().map(|(g, _, d0)| d0 + ways_len(g) - 1)).min() else { continue };
+            let Some(avail) = branches.iter().filter_map(|b| b.last().map(|(g, _, d0)| d0 + ways_len(g) - 1)).min() else {
+                continue;
+            };
             let drop = want.min(avail);
             if drop <= 0 {
                 continue;
@@ -1207,18 +1246,17 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
         let last = n - 1;
         let wall = r.half + 1;
         // the lowest ground over the bore's footprint decides its roof
-        let cover: Vec<i32> = r
-            .at
-            .iter()
-            .zip(&r.terrain)
-            .map(|(p, &t)| {
-                let around: Vec<[f64; 2]> = (-wall..=wall)
-                    .flat_map(|dx| (-wall..=wall).map(move |dz| [p[0] + to_db(f64::from(dx) * U_PER_CELL), p[1] + to_db(f64::from(dz) * U_PER_CELL)]))
-                    .filter(|q| src.loaded.contains(&page_of(*q)))
-                    .collect();
-                sample_cells(&src.ground, &around).map_or(t, |v| v.into_iter().fold(t, i32::min))
-            })
-            .collect();
+        let cover: Vec<i32> =
+            r.at.iter()
+                .zip(&r.terrain)
+                .map(|(p, &t)| {
+                    let around: Vec<[f64; 2]> = (-wall..=wall)
+                        .flat_map(|dx| (-wall..=wall).map(move |dz| [p[0] + to_db(f64::from(dx) * U_PER_CELL), p[1] + to_db(f64::from(dz) * U_PER_CELL)]))
+                        .filter(|q| src.loaded.contains(&page_of(*q)))
+                        .collect();
+                    sample_cells(&src.ground, &around).map_or(t, |v| v.into_iter().fold(t, i32::min))
+                })
+                .collect();
         let (gs, ge) = (r.terrain[0], r.terrain[last]);
         let (internal_s, internal_e) = (internal(q, 0), internal(q, 1));
         let drop_cover = units.c(TUNNEL_COVER_DROP_M) + layer_extra(r);

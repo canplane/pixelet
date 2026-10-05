@@ -25,7 +25,7 @@ use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{page_scale, Cell, Page, EXTENT, GROUND, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{page_scale, Cell, Page, EXTENT, GROUND, LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::{add3, Aabb, V3};
 use pxl_spec::space::xy::TO_XY;
 
@@ -53,8 +53,8 @@ impl Detail {
         match self {
             Detail::Zoom(z) => (z, f64::INFINITY),
             Detail::Distance(tau) => {
-                let z = tau.z_at(t).clamp(TOP_Z as i32, GROUND_Z as i32) as u32;
-                let until = if z == TOP_Z { f64::INFINITY } else { tau.split_distance(z as i32 - 1) };
+                let z = tau.z_at(t);
+                let until = if z == TOP_Z { f64::INFINITY } else { tau.split_distance(GROUND.side_at(z - 1)) };
                 (z, until)
             }
         }
@@ -137,7 +137,7 @@ struct Lines {
     air: Option<[f64; 2]>,
 }
 
-/// A z16 column as composed for both rays and footing, so ground, bores and
+/// A leaf column as composed for both rays and footing, so ground, bores and
 /// decks are combined in one place.
 struct Composed {
     cell: [i64; 2],
@@ -164,7 +164,7 @@ impl Ray {
 pub enum Struck {
     Ground,
     Object(EntryAt),
-    /// Objects folded into a cell above z16; no single object is met.
+    /// Objects folded into a cell above the leaves; no single object is met.
     Objects,
 }
 
@@ -230,7 +230,7 @@ fn filled_cell(filled: impl Fn([i64; 3]) -> bool) -> bool {
                 let [x, y, z] = child_of(parent, slot).map(|c| c as usize);
                 v[(z * m + y) * m + x]
             });
-            v[k] = majority(eight, scale.above(CELL));
+            v[k] = majority(eight, scale);
         }
         m = h;
     }
@@ -340,14 +340,14 @@ impl<'a> Access<'a> {
     fn composed(&self, cell: [i64; 2]) -> Answer<Composed> {
         let [ix, iy] = cell;
         let base = CELL.base_of([ix, iy, 0]);
-        let ground = self.ground(GROUND.cell_of(GROUND_Z, &base));
+        let ground = self.ground(GROUND.cell_of(LEAF_Z, &base));
         let [kx, ky, _] = L2.index_of(&base);
         let col_idx = L2_IDX(TO_XY(base.i));
         let local = [ix - kx * cells_across(), iy - ky * cells_across()];
         ground.map(|g| Composed {
             cell,
             top: g.top(),
-            lines: self.lines_over(GROUND.cell_of(GROUND_Z, &base), g.height),
+            lines: self.lines_over(GROUND.cell_of(LEAF_Z, &base), g.height),
             col_idx,
             local,
         })
@@ -374,9 +374,9 @@ impl<'a> Access<'a> {
     /// The zoom the ground under `at` is known at; a step there is bounded by
     /// that zoom's cell.
     pub fn known_z(&self, at: &Pvf3) -> Option<u32> {
-        let page = GROUND.cell_of(GROUND_Z, at).page();
+        let page = GROUND.cell_of(LEAF_Z, at).page();
         match self.terrain.source(page) {
-            Some(_) => Some(GROUND_Z),
+            Some(_) => Some(LEAF_Z),
             None => self.drawn_from(page).map(|(src, _)| src.z),
         }
     }
@@ -543,7 +543,7 @@ impl<'a> Access<'a> {
         while from < t1 && inside(cell) {
             self.visit();
             let to = next_x.min(next_y).min(t1);
-            let hit = if z == GROUND_Z { self.column(ray, cell, from, to) } else { self.folded(ray, cell, from, to, z) };
+            let hit = if z == LEAF_Z { self.column(ray, cell, from, to) } else { self.folded(ray, cell, from, to, z) };
             if hit.is_some() {
                 return hit;
             }
@@ -609,7 +609,7 @@ impl<'a> Access<'a> {
         self.with_decks(ray, &c.lines.boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
     }
 
-    /// Ground hit in a z16 column: a cell under the top not taken by a voxel
+    /// Ground hit in a leaf column: a cell under the top not taken by a voxel
     /// entry and not in bore air. Steps by cell only once under the top.
     fn ground_column(&self, ray: &Ray, c: &Composed, t0: f64, t1: f64) -> Option<Hit> {
         let ([ix, iy], top) = (c.cell, c.top?);
@@ -679,15 +679,15 @@ impl<'a> Access<'a> {
         Some(hit(ray, t, normal, Aabb { min, max: min.map(|v| v + side) }, Struck::Ground))
     }
 
-    /// First object the ray meets, nearest first (`Store::along_ray`). At z16
-    /// voxel entries are hit at their own boxes; above z16 the folded cell is
+    /// First object the ray meets, nearest first (`Store::along_ray`). On the leaves
+    /// voxel entries are hit at their own boxes; above the leaves the folded cell is
     /// hit whole, matching what that zoom draws.
     fn objects(&self, ray: &Ray, (t0, t1): (f64, f64), z: u32) -> Option<Hit> {
         let scale = GROUND.side_at(z);
         let side = scale.side();
         let mut met = None;
         self.objects.along_ray(ray.origin, ray.direction, (t0, t1), scale, &mut |[x, y, h]| {
-            met = if z == GROUND_Z {
+            met = if z == LEAF_Z {
                 let steps = L2.above(CELL) as u32;
                 let [cx, cy] = ancestor_of([x, y], steps);
                 let col_idx = crate::layer::object::store::column_at([cx, cy]);

@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use pxl_spec::space::lod::{fault_radius, Tau};
 use pxl_spec::space::observation::{Bounds, DemandEstimator, Observation, Paged, Requirement, Storage as _};
-use pxl_spec::space::pyramid::{Folds, Page, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{Folds, Page, LEAF_Z, TOP_Z};
 
 use crate::io::demand::{Ask, Category, Phases, Why};
 use crate::io::sched::declare;
@@ -209,7 +209,7 @@ impl<L: Layer> Pyramid<L> {
             }
             // More demanded than the structure's bound means the capacity is broken too:
             // a fault's line has ground within its fault radius, so it stays in each zoom's ring.
-            let mut read = [0u32; GROUND_Z as usize + 1];
+            let mut read = [0u32; LEAF_Z as usize + 1];
             for p in asks.keys() {
                 read[p.z as usize] += 1;
             }

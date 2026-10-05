@@ -13,11 +13,10 @@ use pxl_render::mesh::paint::terrain::adapter::beside_index;
 use pxl_render::mesh::voxel_scan::APRON;
 
 use crate::sched::profiler::record::ZOOMS;
-use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::observation::Bounds as _;
 use pxl_spec::space::observation::Frustum;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_scale, GROUND, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{chunk_scale, GROUND, LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::section::span_of;
@@ -566,10 +565,10 @@ impl Scheduler {
     /// The finest drawn chunk holding `p`, as zooms: its cells', its tier's,
     /// and those of the page it is read from.
     pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
-        let s = (TOP_Z..=GROUND_Z)
+        let s = (TOP_Z..=LEAF_Z)
             .rev()
             .find_map(|z| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk.named() == Chunk::of(z, p)))?;
-        Some((s.z() as i32, s.layout.map(|(scale, _)| zoom_of(scale)), s.sources.read_from.map(|z| z as i32)))
+        Some((s.z() as i32, s.layout.map(|(scale, _)| GROUND.z_of(scale)), s.sources.read_from.map(|z| z as i32)))
     }
 
     /// Whether the last frame drew any ground on screen.
@@ -939,7 +938,7 @@ impl Scheduler {
                 left -= n;
                 slot = self.meshes.next[at_slot].get();
             }
-            self.zoom_boxes[zoom_of(t.scale) as usize] += t.box_cnt;
+            self.zoom_boxes[GROUND.z_of(t.scale) as usize] += t.box_cnt;
         }
     }
 
@@ -989,7 +988,7 @@ impl Scheduler {
         let Some(d) = domain::current() else { return };
         let s = &self.slots[i];
         let (z, chunk) = (s.z(), s.chunk);
-        let objects = z == GROUND_Z && world.store.entries(L2_IDX(chunk.corner())).is_some();
+        let objects = z == LEAF_Z && world.store.entries(L2_IDX(chunk.corner())).is_some();
         let current = self.generation(i);
         let desired = scale_of(chunk, d.outermost(chunk), d.order_of(chunk).near, d.tau(), objects);
         if self.slots[i].role == Role::Building && self.slots[i].layout.is_some_and(|(p, _)| p != desired) {
@@ -1300,7 +1299,7 @@ fn refuse(slots: &mut [Slot], i: usize, meshes: &mut Meshes, generation: u32, sc
     slots[i].fresh = true;
     meshes.needs = meshes.needs.wrapping_add(1);
     meshes.waits += 1;
-    meshes.wait_zooms |= 1 << zoom_of(scale);
+    meshes.wait_zooms |= 1 << GROUND.z_of(scale);
     false
 }
 
