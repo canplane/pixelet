@@ -29,31 +29,46 @@ fn air_knot(a: f32, b: f32, low: f32, u: f32) -> f32 {
   return low + x * abs(x);
 }
 
-// From radius `r`, whose up is `up`, `d` km along `dir`; the moon's light
-// weighs `moon_light` of the sun's.
-fn gather(r: f32, up: vec3f, dir: vec3f, d: f32, sun: vec3f, moon: vec3f, moon_light: f32, knots: i32) -> Veil {
+// From radius `r`, whose up is `up`, to each of `d` km along `dir`, nearest
+// first, in one gather to the farthest: a nearer point is read off the stretch
+// it falls in as the stretch is gathered. The moon's light weighs `moon_light`
+// of the sun's.
+fn gather(r: f32, up: vec3f, dir: vec3f, d: vec3f, sun: vec3f, moon: vec3f, moon_light: f32, knots: i32) -> array<Veil, 3> {
   let mu = dot(up, dir);
   let low = ray_low(r, mu);
-  let eye = depth_along(r, mu, low, 0.0);
   let top = atmos_top_radius();
-  let end = short_of_ground(r, mu, d);
+  let end = short_of_ground(r, mu, d.z);
   let a = min(max(-r * mu - sqrt(max(r * r * (mu * mu - 1.0) + top * top, 0.0)), 0.0), end);
   let lowest = clamp(-r * mu, a, end);
   let sun_phase = vec2f(rayleigh_phase(dot(dir, sun)), mie_phase(dot(dir, sun)));
   let moon_phase = vec2f(rayleigh_phase(dot(dir, moon)), mie_phase(dot(dir, moon)));
   var da = depth_along(r, mu, low, a);
+  // No air lies between the eye and where the ray enters it.
+  let eye = da;
   var ja = per_depth(r, up, dir, a, sun, sun_phase, moon, moon_phase, moon_light);
   var light = vec3f(0.0);
+  var out: array<Veil, 3>;
+  var read = 0;
   for (var i = 1; i <= knots; i++) {
     let tb = air_knot(a, end, lowest, f32(i) / f32(knots));
     let db = depth_along(r, mu, low, tb);
     let jb = per_depth(r, up, dir, tb, sun, sun_phase, moon, moon_phase, moon_light);
     let y = db - da;
+    // The farthest is the gather's end, read once it is done.
+    while (read < 2 && d[read] < end && d[read] <= tb) {
+      let x = clamp(depth_along(r, mu, low, d[read]) - da, vec3f(0.0), y);
+      let rise = select(vec3f(0.0), x / y, y > vec3f(0.0));
+      out[read] = Veil(exp(eye - da - x), light + exp(eye - da) * (ja * x * extinction_weight(x) + (jb - ja) * rise * (extinction_weight(x) - exp(-x))));
+      read++;
+    }
     light += exp(eye - da) * (ja * y * extinction_weight(y) + (jb - ja) * (extinction_weight(y) - exp(-y)));
     da = db;
     ja = jb;
   }
-  return Veil(exp(eye - da), light);
+  for (; read < 3; read++) {
+    out[read] = Veil(exp(eye - da), light);
+  }
+  return out;
 }
 
 // What the air `t` km along the ray sends toward the eye per unit of its depth.
@@ -70,5 +85,5 @@ fn per_depth(r: f32, up: vec3f, dir: vec3f, t: f32, sun: vec3f, sun_phase: vec2f
 
 // Up +z, to the ground or the top.
 fn sky_radiance(r: f32, dir: vec3f, toward: vec3f, knots: i32) -> vec3f {
-  return gather(r, vec3f(0.0, 0.0, 1.0), dir, air_path(r, dir.z), toward, toward, 0.0, knots).scattered;
+  return gather(r, vec3f(0.0, 0.0, 1.0), dir, vec3f(air_path(r, dir.z)), toward, toward, 0.0, knots)[2].scattered;
 }

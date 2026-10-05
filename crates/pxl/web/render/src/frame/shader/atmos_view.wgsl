@@ -190,10 +190,17 @@ fn beyond(air: Air) -> vec3f {
 // Within 2% of a fine march from orbit to the ground, and a tenth of that near it.
 const AIR_KNOTS: i32 = 8;
 
-// The point `d` km along `dir`, unexposed.
+// The points `d` km along `dir`, nearest first, unexposed.
+fn air_segments(dir: vec3f, d: vec3f) -> array<Veil, 3> {
+  var v = gather(camera_r(), frame_up(), dir, d, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), AIR_KNOTS);
+  for (var i = 0; i < 3; i++) {
+    v[i].scattered *= atmos_white();
+  }
+  return v;
+}
+
 fn air_segment(dir: vec3f, d: f32) -> Veil {
-  let v = gather(camera_r(), frame_up(), dir, d, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), AIR_KNOTS);
-  return Veil(v.through, v.scattered * atmos_white());
+  return air_segments(dir, vec3f(d))[2];
 }
 
 fn air_to(world_pos: vec3f) -> Veil {
@@ -204,11 +211,6 @@ fn air_to(world_pos: vec3f) -> Veil {
   }
   let v = air_segment(to / du, du * atmos_km_per_u());
   return Veil(v.through, v.scattered * exposure());
-}
-
-fn aerial(color: vec3f, world_pos: vec3f) -> vec3f {
-  let v = air_to(world_pos);
-  return color * v.through + v.scattered;
 }
 
 // Per vertex: every term varies slowly across a face.
