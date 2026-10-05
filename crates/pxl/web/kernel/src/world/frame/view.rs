@@ -34,8 +34,7 @@ pub struct View {
     pub pose: ObserverPose,
     /// The floating origin, stored as PVF3 names it.
     pub origin: IVec,
-    /// Rounds of the world the origin has gone since the start, so the frame
-    /// the view measures in runs on across the antimeridian.
+    /// Rounds the origin has gone: the view's frame runs on across the antimeridian.
     lap: i64,
 
     pub width: f64,
@@ -114,9 +113,8 @@ pub fn globe_anchor_local() -> V3 {
     [v.pose.eye[0], v.pose.eye[1], -ivec::to_real(ivec::Z(v.origin))]
 }
 
-/// None before the camera stands somewhere. From the doubles, not PVF3: an
-/// eye past the north or south edge has its own latitude, which the lattice
-/// would hold at the edge.
+/// None before the camera stands somewhere. From the doubles: past the north or
+/// south edge the lattice would hold the eye at it.
 pub fn globe_anchor() -> Option<G4326> {
     crate::control::camera::controller::camera().eye?;
     let [x, y, _] = add3(&view().chart(), &globe_anchor_local());
@@ -139,8 +137,7 @@ pub fn view_resize(width: f64, height: f64) {
 pub fn view_compose() {
     let v = view();
     v.pose = pose();
-    // An eye past the lattice's top or its north and south edges is written
-    // against the edge cell, the eye itself being doubles.
+    // Past the lattice's edges, against the edge cell.
     let e = v.eye_at();
     let at = projection::project(e[0], e[1], e[2]);
     let want = origin_for(at.i, v.anchor_z());
