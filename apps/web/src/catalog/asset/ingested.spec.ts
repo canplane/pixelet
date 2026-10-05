@@ -152,7 +152,7 @@ export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
   "decor/kenney_watercraft_pack/boat-sail-a.glb": { key: "asset/decor/kenney_watercraft_pack/boat-sail-a-35c8e2adae1d.glb", bytes: 35276, extent: [1.78, 3.77, 4.74] },
   "decor/kenney_watercraft_pack/boat-speed-a.glb": { key: "asset/decor/kenney_watercraft_pack/boat-speed-a-d6d5605408e8.glb", bytes: 16520, extent: [1.78, 3.37, 1.5] },
   "decor/kenney_watercraft_pack/colormap.png": { key: "asset/decor/kenney_watercraft_pack/colormap-311138350e74.png", bytes: 8814 },
-  "sky/earth/07.webp": { key: "asset/sky/earth/07-81a1f75494b6.webp", bytes: 353374 },
+  "sky/earth/07.webp": { key: "asset/sky/earth/07-3479dac8834f.webp", bytes: 2841464 },
   "sky/moon.png": { key: "asset/sky/moon-e6977d49922c.png", bytes: 165698 },
 };
 
