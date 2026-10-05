@@ -1,508 +1,397 @@
 # Agent Instructions
 
-Instructions for AI coding agents working in the pixelet repository. Tool-agnostic
-on purpose — Claude Code, Copilot, and Cursor all read this file (directly or
-through a symlink), so nothing here should assume a particular assistant. It is
-read in every session, so it holds what an agent would get wrong without it;
-what is local lives beside the code it is about.
+For any AI coding agent in this repository, whichever reads it. It holds what
+an agent would get wrong without it; what is local lives beside the code it is
+about. What the author has corrected an agent on is
+[.agents/corrections.md](./.agents/corrections.md): read it with this file;
+its latest entry wins over anything here.
 
 What the system is: [README.md](./README.md) and
 [ARCHITECTURE.md](./ARCHITECTURE.md) for the application,
 [README.xpute.md](./README.xpute.md) and
 [ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) for the system under it.
-**The two `.xpute` documents must never name pixelet**: they are the xpute
-repository's, and the export drops the infix and ships them unchanged. How all
-four are written and reviewed:
-[.agents/skills/write-documents](./.agents/skills/write-documents/SKILL.md) —
-read it before reworking one, not after. Why past decisions went the way they
-did: [decision/](./decision/). What is queued:
-[BACKLOG.md](./BACKLOG.md). Procedures — a bake, a publish — are
-the skills in [.agents/skills/](./.agents/skills/).
+**The two `.xpute` documents never name pixelet**: the export drops the infix
+and ships them to the xpute repository unchanged. How the four are written:
+[.agents/skills/write-documents](./.agents/skills/write-documents/SKILL.md).
+Why past decisions went as they did: [decision/](./decision/). What is
+queued: [BACKLOG.md](./BACKLOG.md). Procedures — a bake, a publish — are the
+skills in [.agents/skills/](./.agents/skills/).
 
 ---
 
 ## Environment
 
-**This is a Deno workspace, not an npm project**, driven through `deno task`
-from the root; README.md lists the tasks. The one `package.json` is the device
-app's (`apps/native`), because Expo and Metro find their packages the way npm
-lays them out.
+**A Deno workspace, not an npm project**, driven by `deno task` from the
+root; README.md lists the tasks. The one `package.json` is the device app's
+(`apps/native`), where Expo and Metro find packages as npm lays them out.
 
-**`deno task check` is the gate before a deploy, not after every edit.**
-Nothing is compiled, linted or tested while a change is being made; what
-the change touched is verified once, when it is done (`deno task
-check:diff` checks only what changed, when asked for), and the whole gate
-runs before a push to `deploy`, which is how publishing happens
-([infra/README.md](./infra/README.md) §5), or when asked. main is not built
-by CI.
+**`deno task check` is the gate before a push to `deploy`**, which is how
+publishing happens ([infra/README.md](./infra/README.md) §5), or when asked;
+`check:diff` checks only what changed. A kernel change reaches the running
+dev server through `deno task build:wasm`. main is not built by CI.
 
-The geo database (`pixelet-db-geo`) holds a multi-gigabyte PostGIS dataset.
-**Never `down -v` it casually** — the volume is the data. Ingestion and
-operations are [infra/README.md](./infra/README.md); follow it rather than
-improvising SQL.
+**Never `down -v` the geo database** (`pixelet-db-geo`): the volume is a
+multi-gigabyte PostGIS dataset. Ingestion and operations are
+[infra/README.md](./infra/README.md), not improvised SQL.
 
 ## Boundaries
 
-The tree is grouped by where a thing runs (`crates/xpute`, `crates/pxl/{spec,web,server}`,
-`packages/xpute`, `apps/web`, `apps/native`); README.md has the map. Three lines are easy to
-erode by accident:
+The tree is grouped by where a thing runs (`crates/xpute`,
+`crates/pxl/{spec,web,server}`, `packages/xpute`, `apps/web`, `apps/native`);
+README.md has the map. Three lines erode by accident:
 
 - **xpute holds no domain.** No coordinates, terrain, tiles or Overture in
-  `xpute-core` or `@xpute/core`; those belong to `pxl-spec`. The view
+  `xpute-core` or `@xpute/core`; those are `pxl-spec`'s. The view
   (`pxl-render`) knows the model and nothing of the kernel (`pxl-kernel`).
-- **`core` is taken as it is; `runtime` asks you to run its way.** The kit
-  works in any program; the runtime means a turn on a doorbell, a quota from
-  the frame, I/O asked of the host. `runtime` depends on `core`, never the
-  reverse.
-  `core` is symmetric across every language xpute is written in, and the
-  golden records under `spec/xpute/golden/` hold them to each other.
-  `runtime`'s host and guest are two ends of one arrangement, so a module
-  missing on one of those sides is not a gap to fill — only the format must
-  agree; its guests in different languages are one end, and symmetric as
-  `core` is, each in its own language's shape. Say it without a count: a
-  line that numbers the languages, the hosts or the guests is stale the day
-  one more arrives.
+- **`core` is taken as it is; `runtime` asks you to run its way** — a turn on
+  a doorbell, a quota from the frame, I/O asked of the host. `runtime`
+  depends on `core`, never the reverse. `core` is symmetric across every
+  language xpute is written in, held to it by the golden records under
+  `spec/xpute/golden/`. `runtime`'s host and guest are two ends of one
+  arrangement: a module missing on one side is no gap, only the format must
+  agree, and its guests in different languages are symmetric as `core` is,
+  each in its own language's shape. Never number the languages, hosts or
+  guests: the count is stale the day one more arrives.
 - **`pxl-spec` is the one model and has no TypeScript twin.** The shell reads
-  a page through the kernel, never by decoding one. What the shell holds — the
-  cell catalog, the asset tables, the ABI enums — is generated into
-  `apps/web/src/` from `spec/`, beside the Rust generated from the same JSON.
+  a page through the kernel, never by decoding one; what it holds — the cell
+  catalog, the asset tables, the ABI enums — is generated into
+  `apps/web/src/` from `spec/`, beside the Rust from the same JSON.
 
-**What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the
-servers and the bakes compile the model, so they are crates; an ingest that
-puts a provider's data into Postgres shares nothing, so it is a script;
-`apps/web` is the TypeScript around the kernel, and stays TypeScript. It is
-two things to the kernel, which is the process: its host, which holds the
+**What shares `pxl-spec` is Rust, and what does not is free.** The kernel,
+the servers and the bakes compile the model, so they are crates; an ingest
+into Postgres shares nothing, so it is a script. `apps/web` is the
+TypeScript around the kernel, two things to it: its host, which holds the
 memory, the turns, the devices and the I/O (most of `src/kernel/`), and its
-shell, the UI, whose end of that channel is `shell.ts`, `snapshot.ts` and
-`render/surface.ts`. The two are not one thing, and a command is between the kernel and
-one of them (`cmd.json`). The device app runs the same TypeScript, and adds
-only what a device does behind `@platform/`.
+shell, the UI, whose end of the channel is `shell.ts`, `snapshot.ts` and
+`render/surface.ts`. A command is between the kernel and one of them
+(`cmd.json`). The device app runs the same TypeScript and adds only what a
+device does, behind `@platform/`.
 
 **The kernel tells facts; the shell decides how they are shown.** The
-snapshot carries facts the shell needs whose authoritative owner is the
-kernel — the world's state, the camera's and the devices', a physical
-quantity like the meters a pixel spans. A length rounded for a scale bar,
-how deep a place is named, when a toast speaks, which modal is open, are the
-shell's, derived where they are read; a constant both sides need is
-generated from `spec/`, never sent at runtime. A field kept for one
-presentation (a page number sent so a toast would not repeat) is the
-boundary in the wrong place.
+snapshot carries what the kernel owns — the world's state, the camera's and
+the devices', a physical quantity like the meters a pixel spans. A length
+rounded for a scale bar, how deep a place is named, when a toast speaks,
+which modal is open are the shell's, derived where read; a constant both
+sides need is generated from `spec/`. A field sent for one presentation is
+the boundary in the wrong place.
 
 **A tool that makes a file is Rust; one that talks to a service is
 TypeScript.** What writes or reads a format the Rust side owns, or processes
 a binary — the asset ingest, the stars, the Moon, the brand, the code
-generated from `spec/` — is a binary of `pxl-tool` (`crates/pxl/tool`)
-wherever it fetches its input from, and links no crate it writes into. The
-shell's own build is
-`apps/web/script/`; the tree's checks, the export and what reaches a
-deployment or a bucket are `script/`. A script under `infra/` makes a
-database's state, not a file, and runs as infra's README says.
+generated from `spec/` — is a binary of `pxl-tool` (`crates/pxl/tool`) and
+links no crate it writes into. The shell's build is `apps/web/script/`; the
+tree's checks, the export and what reaches a deployment or a bucket are
+`script/`; a script under `infra/` makes a database's state.
 
-**On an iPhone, a control a touch lands on is UIKit's.** SwiftUI
-(`@expo/ui`) draws the sheet and nothing inside React Native's views that
-takes a touch: a SwiftUI switch there missed quick taps that UIKit's took.
-Which technology draws each `@platform/` piece is
-[apps/native/src/platform/README.md](./apps/native/src/platform/README.md).
+**On an iPhone, a control a touch lands on is UIKit's.** SwiftUI (`@expo/ui`)
+draws the sheet and nothing inside React Native's views that takes a touch:
+a SwiftUI switch there missed quick taps. Which technology draws each
+`@platform/` piece: [apps/native/src/platform/README.md](./apps/native/src/platform/README.md).
 
 ## One spatial model
 
 Everything placed on the map sits in one hierarchy, the **pyramid**, from
 z16 — terrain's atom, a 1u cell — to z6, where it stops for now and not by
-any limit (a coarser zoom extends it), each zoom's cells twice as wide as
-the next finer's; a page is 512 cells a side at every zoom and named by its
-place in that zoom's page grid. A zoom names only a cell's scale (256-pixel
-tiles): terrain's cell is z16, objects' go to z19. A page's size, its key or
-its grid never defines a zoom, and a zoom never gives a page's or a chunk's
-extent: that is its count of cells. The rules below keep it one thing. They come
-from finding it several.
+any limit, each zoom's cells twice as wide as the next finer's; a page is 512
+cells a side at every zoom, named by its place in that zoom's page grid. A
+zoom names only a cell's scale (256-pixel tiles): terrain's cell is z16,
+objects' go to z19. A page's size, key or grid never defines a zoom, and a
+zoom never gives a page's or a chunk's extent: that is its count of cells.
 
 - **The view keeps only what an observer can tell apart.** The world is
-  stored in each layer's own shape; what the view holds and does is bounded
-  by the screen, not by the world under it. What the eye sees is quantized
-  into cells, each an angle about the eye in its own frame — a screen only
-  calibrates how many logical pixels one spans at the optical axis — and
-  inside a cell nothing is promised: a piece refines only where it
-  contributes to a cell and its error, projected, crosses a cell's edge on
-  either axis. Storage, query, demand, residency, prefetch,
-  materialization and scheduling are separate concerns, each with its own
-  bound and contract — ARCHITECTURE.md's "The view" is the one statement
-  of them; read it before changing any of them.
+  stored in each layer's shape; what the view holds and does is bounded by
+  the screen. The eye's view is quantized into cells, each an angle about the
+  eye — a screen only calibrates how many pixels one spans — and inside a
+  cell nothing is promised: a piece refines only where its projected error
+  crosses a cell's edge on either axis. Storage, query, demand, residency,
+  prefetch, materialization and scheduling are separate concerns, each with
+  its own bound; ARCHITECTURE.md's "The view" states them — read it before
+  changing one.
 - **The lattice has one owner.** A size is a `Scale` against the unit,
   stepped from two roots — the tiers (`pxl-spec space/indexer.rs`) and the
-  raster's cell (`bake/constant.rs` `CELL`), which is a resolution and
-  derives from neither — and parent and children in any number of axes are
-  `space/hierarchy.rs`'s. Zoom and span, a cell's base and center, its
-  place in its page — which is the index into every lane the page has —
-  the 4 × 4 neighborhood a fold reads, and a page's name are
-  `space/pyramid.rs`'s; a lattice turns a zoom into its cell's size. A layer that shifts by a tier or a
-  scale's exponent itself, or numbers a page's cells by its width, is a
-  second owner, and `check:rules` refuses it outside `space/`.
-- **A layer is a payload and a one-zoom fold, and nothing else.** No key,
-  hierarchy, bounds, window, schedule or residency of its own: which pages
-  are wanted is the observation's demand (`world/pyramid.rs` `observe`),
-  which are held is residency's (`world/paging.rs`), when they are fetched
-  is the request scheduler's (`io/sched.rs`), and a page is folded only by the bake's
-  `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not data —
-  terrain folds by majority and average, POI by sum.
-- **The view is 3D; storage is not.** A chunk is a cube, addressed by its
-  zoom and x, y and z (`world/pyramid/chunk.rs`), and a cube that holds
-  nothing is no chunk. Terrain and POI are pages of the pyramid, a 2D
-  heightfield and a 2D count; placed objects are resident in their store, by
-  column and band. What a box of the world holds is asked of `Bounds`
-  (`pxl-spec space/observation.rs`), which the demand and the view's domain
-  both ask and `Known` (`world/observation.rs`) answers from those stores
-  behind it; a point or a ray is asked of the query (`world/access.rs`).
-  Nothing outside a layer reads its records by the layer's own shape, and a
-  chunk's build (`Chunk::column`) is the layer's own. A placed object
-  lives in the chunk its band is in — built, made again and drawn with it,
-  the ground's lifecycle there — and shares the lattice and the fold rule
+  raster's cell (`bake/constant.rs` `CELL`), a resolution of neither's
+  making — and parent and children in any number of axes are
+  `space/hierarchy.rs`'s. Zoom and span, a cell's base, center and place in
+  its page (the index into every lane the page has), the 4 × 4 neighborhood
+  a fold reads, and a page's name are `space/pyramid.rs`'s. A layer that
+  shifts by a tier or a scale's exponent, or numbers a page's cells by its
+  width, is a second owner; `check:rules` refuses it outside `space/`.
+- **A layer is a payload and a one-zoom fold, and nothing else.** Which
+  pages are wanted is the observation's demand (`world/pyramid.rs`
+  `observe`), which are held residency's (`world/paging.rs`), when they are
+  fetched the scheduler's (`io/sched.rs`), and a page is folded only by the
+  bake's `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not
+  data — terrain folds by majority and average, POI by sum.
+- **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
+  and x, y, z (`world/pyramid/chunk.rs`); a cube that holds nothing is no
+  chunk. Terrain and POI are pages, a 2D heightfield and a 2D count; placed
+  objects are resident in their store by column and band. What a box holds
+  is asked of `Bounds` (`pxl-spec space/observation.rs`), which `Known`
+  (`world/observation.rs`) answers; a point or a ray is asked of the query
+  (`world/access.rs`). Nothing outside a layer reads its records in the
+  layer's shape, and a chunk's build (`Chunk::column`) is the layer's own. A placed object lives in the chunk its band is in — built,
+  remade and drawn with it — and shares the lattice and the fold rule
   (`majority`, `pxl-spec bake/fold.rs`).
-- **2.5D is how ground is stored, not how anything behaves.** A page's
-  heightfield is a compression; what the view selects, orders, budgets,
-  occludes and draws is 3D — what the screen's cells observe, measured on
-  both of the screen's axes, height no different from the rest — for
-  terrain, places and objects alike. A 2.5D shortcut (a height read off the raster,
-  `ground_ele_at`) is an optimization where it is known to behave exactly as
-  the 3D rule would, never a model of its own.
+- **2.5D is how ground is stored, not how anything behaves.** What the view
+  selects, orders, budgets, occludes and draws is 3D, height no different
+  from the rest, for terrain, places and objects alike. A 2.5D shortcut (a
+  height read off the raster, `ground_ele_at`) is an optimization where it
+  behaves exactly as the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`Cell::center`), at the height of the
-  surface drawn there, never at a center derived from its data's bounds. A
-  mark for one thing stands at the z16 cell that thing stands in, and a mark
-  for many at its cell's middle (`pxl-kernel layer/poi/placement.rs`).
-- **One rule chooses the zoom; a layer chooses its detail.** The shared
-  rule chooses a zoom for a piece of ground by its distance from the eye
-  (`pxl-spec space/lod.rs` `Tau::z_at`, one factor τ on the split
-  distance), finer than z16 too — z17 to z19 near the eye — and refines it
-  only where the screen observes it and its error crosses a cell. How much detail a layer
-  draws at that zoom is the layer's own — terrain its cells averaged
-  2 × 2, places a lattice sixty-four times the ground's cell, objects their own
-  cells — a tuning inside the perspective and never a second rule. Where
-  the rule asks for a zoom finer than a layer's data, the layer draws its
-  finest: terrain z16, objects their sub-cell tiers down to z19.
-- **A number is derived or said aloud.** A capacity or a count that bounds
-  what something else already bounds is a second limit derived from nothing
-  (a badge count once capped what screen collision already did). A product
-  number is raised in the conversation, not buried in a constant: a knob is
-  named once in `pxl-kernel param.rs`, grouped by the policy it tunes, with
-  its reason, and read by what uses it.
+  surface drawn there: one thing's at the z16 cell it stands in, many at
+  their cell's middle (`pxl-kernel layer/poi/placement.rs`).
+- **One rule chooses the zoom; a layer chooses its detail.** The zoom is the
+  distance's (`pxl-spec space/lod.rs` `Tau::z_at`, one factor τ), finer than
+  z16 too near the eye, refined only where the screen sees an error cross a
+  cell. The detail a layer draws at it is its own — terrain 2 × 2 averaged,
+  places a lattice sixty-four ground cells wide, objects their own cells —
+  never a second rule; past a layer's data it draws its finest.
 - **Dev is guarded like terrain.** The tile server answers no page coarser
-  than `--top-z`, and that is the whole guard for every pyramid layer; no
-  feature carries a dev exception of its own. A source declares the
-  coarsest zoom it supplies whole — the published version in its
-  metadata, the tile server at `/tile/source` — and the floor is that
-  zoom, not the pyramid's top.
-- **Before calling it done, audit the symmetry of the whole tree**: terrain,
-  POI and objects side by side, for anything one does its own way. An
-  asymmetry is removed or explained.
+  than `--top-z`, the whole guard for every layer. A source declares the
+  coarsest zoom it supplies whole — the published version in its metadata,
+  the tile server at `/tile/source` — and the floor is that zoom.
+- **Terrain, POI and objects are audited side by side** before a change is
+  done: anything one does its own way is removed or explained.
 
 ## What the bake paints
 
-**How the bake turns the source into a page follows precedent, not
-invention.** A way's width, the order ways paint in, what a sidewalk or a
-crossing or a slip road is, what is left off the surface, how high a deck
-stands: each rule is taken from the renderers and converters that have
-already met the data, and from the source's own schema, and cites where it
-came from beside the code that applies it — OpenStreetMap Carto
-(`openstreetmap-carto-flex.lua`), OpenMapTiles/MapTiler's schema, Arnis,
-osm2streets and osm2lanes (A/B Street), Overture's documented properties.
-Read how they treat the case before writing the rule. A number none of them
-gives is said aloud with its reason. Look at what the data actually holds —
-a sample, not the whole coverage — before trusting a field: Overture's
-`road` column turned out empty, and much of `width_rules` is an import's
-width classes. What can be made when a chunk is drawn — a deck's slab, a
-tunnel's mouth — is the client's, and the bake carries only what the client
-cannot work out (decision/20261001-ways-off-the-ground.md).
+**The bake follows precedent, not invention.** A way's width, the order ways
+paint in, what a sidewalk, a crossing or a slip road is, what is left off the
+surface, how high a deck stands: each rule comes from the renderers and
+converters that met the data first and from the source's schema, cited
+beside the code — OpenStreetMap Carto (`openstreetmap-carto-flex.lua`),
+OpenMapTiles/MapTiler's schema, Arnis, osm2streets and osm2lanes, Overture's
+documented properties. A number none of them gives is said aloud with its
+reason. Sample what the data holds before trusting a field: Overture's `road`
+column was empty, and much of `width_rules` is an import's width classes.
+What a chunk can make when drawn — a deck's slab, a tunnel's mouth — is the
+client's; the bake carries only what the client cannot work out
+([decision/20261001-ways-off-the-ground.md](./decision/20261001-ways-off-the-ground.md)).
 
 ## Scope
 
 The MVP is a concept demo — real-world location (Pokémon GO), block building
-(Minecraft), lightweight social presence (Cyworld) — meant to show the concept
-works, not to carry traffic. **Out of scope, deferred not rejected:** P2P
-networking, traffic/scale optimization (AOI filtering, decay, sync protocols),
-reporting/moderation. Don't propose them as missing pieces. The engine and the
-product surface are at different stages, so check the code before
-characterizing any part of the surface.
+(Minecraft), light social presence (Cyworld) — to show the concept works,
+not to carry traffic. **Deferred, not rejected, and not to be proposed as
+missing:** P2P networking, traffic and scale (AOI filtering, decay, sync
+protocols), reporting and moderation. The engine and the product surface are
+at different stages: check the code before characterizing the surface.
 
-**The client is a Rust kernel drawing through WebGPU**: in WASM on a page
+**The client is a Rust kernel drawing through WebGPU**: WASM on a page
 ([decision/20260912-why-the-destination-is-wasm.md](./decision/20260912-why-the-destination-is-wasm.md)),
-and on a device linked into a React Native app and drawing through wgpu. The
-kernel decides and lists what to draw; the renderer executes and decides
-nothing. **Don't propose a WebGL path or pre-WebGPU support** — closed.
+wgpu linked into a React Native app on a device. The kernel decides and lists
+what to draw; the renderer executes. **No WebGL path or pre-WebGPU support** —
+closed.
 
-**Nothing configures a spending cap, and the bucket's reads cannot bill.**
-The guarantee is a composition: the bucket is private, so every read goes
-through the Worker, and Workers is on the free plan, which fails closed at
-100k requests/day. Three acts break it — a paid Workers plan, the `r2.dev`
-public URL, a custom domain on the **bucket** (the Worker is what `plei.me`
-is). Don't propose any without saying what it costs
+**Nothing configures a spending cap, and the bucket's reads cannot bill**:
+the bucket is private, so every read goes through the Worker, on the free
+plan, which fails closed at 100k requests/day. A paid Workers plan, the
+`r2.dev` public URL or a custom domain on the **bucket** (the Worker is what
+`plei.me` is) breaks it; none is proposed without its cost
 ([decision/20260816-deployment-hosting.md](./decision/20260816-deployment-hosting.md)).
-Writes are outside it: an upload is a Class A operation an object, and a
-publish is a pyramid's worth of them, so `deno task usage` comes before one.
-
-A decision left alone on purpose says so where it lives — a comment beside
-the code — so read the code's own comments before "fixing" something that
-looks unfinished.
+Writes are outside it: a publish is a pyramid's worth of Class A operations,
+so `deno task usage` comes before one.
 
 ## Code conventions
 
-**The bar is [.agents/reference/calab-loader/](./.agents/reference/calab-loader/).**
-Code and its comments are held to it, and a change is judged by it. A
-layout is one block derived top-down from a few roots; each fact is said once, and a derived name exists
+**The bar is [.agents/reference/calab-loader/](./.agents/reference/calab-loader/),
+structural before stylistic.** A layout is one block derived top-down from a
+few roots; each fact has one owner and is said once; a derived name exists
 only where more than one place reads it; a procedure is straight steps under
-short section comments; a comment is a few words at the line it explains. A
-change that leaves two names for one fact, one conversion in two places, or a
-comment longer than what it explains is not finished.
+short section comments. A change that leaves two names for one fact, one
+conversion in two places, or two computations of one quantity meeting at a
+seam is not finished.
 
-**Every source file opens with a comment naming its own logical path** — the
-import-map path (`// @pxl/web/feature/map/ui/view.tsx`), or for Rust the
-package as Cargo.toml spells it and the path under `src/`
-(`// pxl-spec/space/indexer.rs`), or for C++, which has no package, the
-path itself (`// cpp/xpute/runtime/ipc/ring.cpp`); an executable script opens
-on its interpreter. `check:rules` holds every file to it.
+**Every source file opens with a comment naming its logical path** — the
+import-map path (`// @pxl/web/feature/map/ui/view.tsx`), for Rust the package
+as Cargo.toml spells it and the path under `src/` (`// pxl-spec/space/indexer.rs`),
+for C++ the path itself (`// cpp/xpute/runtime/ipc/ring.cpp`); an executable
+script opens on its interpreter. `check:rules` holds every file to it.
 
-**A name's case follows the side it is on.** `PascalCase` for types,
-`SCREAMING_SNAKE_CASE` for module constants. Functions and locals are
-`snake_case` in Rust, in `packages/xpute` and in `apps/web/src/kernel/`,
-which share the kernel's vocabulary, and `camelCase` in the rest of
-`apps/` and in `script/`, which is TypeScript and nothing else. An
-acronym is a word (`nextChatLineId`, `assetUrl`), as Rust cases it. A name
-that crosses — a packet's field, a catalog entry, a profiler record — keeps the
-kernel's `snake_case` on both sides. React hooks, stores and components keep
-their ecosystem's casing; ported code keeps its original conventions
-(`alloc/buddy_tree.rs`). A name Rust would case differently carries an `allow`
-and a reason, and a shape that needs none — a `const`, a `LazyLock`, a type
-with associated constants — comes first.
+**A name's case follows its side.** `PascalCase` for types,
+`SCREAMING_SNAKE_CASE` for module constants; functions and locals
+`snake_case` in Rust, `packages/xpute` and `apps/web/src/kernel/`, which
+share the kernel's vocabulary, and `camelCase` in the rest of `apps/` and in
+`script/`. An acronym is a word (`assetUrl`). A name that crosses — a
+packet's field, a catalog entry, a profiler record — keeps the kernel's
+`snake_case` on both sides. React hooks, stores and components keep their
+ecosystem's casing; ported code keeps its own (`alloc/buddy_tree.rs`). A name
+Rust would case differently carries an `allow` and a reason, after a shape
+that needs none — a `const`, a `LazyLock`, associated constants.
 
-**A file's name is its language's**: `snake_case` in Rust, C++ and `packages/`,
-`kebab-case` in `apps/` and `script/`, `kebab-case` for a file of no language.
-What is generated from `spec/` carries the `.spec.` infix on both sides
+**A file's name is its language's**: `snake_case` in Rust, C++ and
+`packages/`, `kebab-case` in `apps/`, `script/` and for a file of no
+language. Generated from `spec/` carries `.spec.` on both sides
 (`cube_type.spec.rs`, `cube_type.spec.ts`) and is regenerated, never edited;
-a test carries `.test.` the same way, and a Rust module reaches either through
-`#[path]`. **Directories are singular**, named for the concept they hold,
-except where an ecosystem fixes the name (`node_modules/`, `apps/`,
-`crates/`), and a file inside one does not repeat it (`toast/store.ts`).
+a test carries `.test.`; a Rust module reaches either through `#[path]`.
+**Directories are singular**, named for the concept they hold, except where an
+ecosystem fixes the name (`node_modules/`, `apps/`, `crates/`), and a file
+inside one does not repeat it (`toast/store.ts`).
 
-**A C++ guest is written the way the Rust one is.** C++20, with exceptions
-and RTTI off and none of the library's runtime surface — `iostream`, locale,
-filesystem. What C++ says that plain code would not — RAII, a template, a
-`constexpr`, `std::array`, `std::span`, `std::optional` — is used where it
-says it, and plain code stays plain, in a `.cpp` as C would write it. Memory
-is the guest's own, as the Rust kernel's is: its one allocator over the heap
-section, `.fixed` for what has a bound (`pxl-kernel mem/fixed.rs`), and a
-settled turn asking the heap for nothing. So a standard container that
-allocates does it through the guest's heap and never the system's
-`operator new`, which would take memory the guest was not given.
+**A C++ guest is written the way the Rust one is.** C++20, exceptions and
+RTTI off, none of the library's runtime surface (`iostream`, locale,
+filesystem). RAII, templates, `constexpr`, `std::array`, `std::span`,
+`std::optional` are used where they say something; plain code stays as C
+would write it. Memory is the guest's own: its one allocator over the heap
+section, `.fixed` for what has a bound (`pxl-kernel mem/fixed.rs`), a settled
+turn asking the heap for nothing — so a standard container allocates through
+the guest's heap, never the system's `operator new`.
 
-**A shape is an `interface`; what an interface cannot say is a `type`.**
-**A number says its width where it has one**: `u32` for a count, length,
-index or address; `f64` for a millisecond or coordinate; `u64` for a key;
-`i32` for what can be −errno; a typed array that may sit in a
-`SharedArrayBuffer` keeps `Uint32Array`, one that cannot is `U32Array`.
+**A shape is an `interface`; what an interface cannot say is a `type`.** **A
+number says its width**: `u32` for a count, length, index or address; `f64`
+for a millisecond or coordinate; `u64` for a key; `i32` for what can be
+−errno; a typed array that may sit in a `SharedArrayBuffer` keeps
+`Uint32Array`, one that cannot is `U32Array`.
 
 **A double is the same bits on every platform.** Rounding is xpute's `round`
 (half to even, as WGSL); a transcendental is the pinned `libm`'s, never the
 platform's, which `crates/pxl/clippy.toml` refuses.
 
-**`pxl` is for code, `pixelet` is for infrastructure.** Import paths and
-storage keys abbreviate (`@xpute/core`, `pxl:lang`); provisioned resources
-spell it out (`pixelet-db-geo`, `pixelet-tiles`).
+**`pxl` is for code, `pixelet` for infrastructure.** Import paths and storage
+keys abbreviate (`@xpute/core`, `pxl:lang`); provisioned resources spell it
+out (`pixelet-db-geo`, `pixelet-tiles`).
 
-**Comments are few and short.** A comment says what a reader would get
-wrong without it, and nothing else: the reproducible failure a branch
-prevents, where a number comes from, a non-obvious algorithm or invariant. One
-or two sentences, in English. Never restate what the code shows, never narrate
-a design, its alternatives or its history ("X → Y because…", "previously…"),
-and never write a reference list; that belongs in `decision/`, if anywhere.
-Trivial or visual code gets none.
+**Comments are few and short**: a few words at the line they explain, saying
+what a reader would get wrong without them — the failure a branch prevents,
+where a number comes from, a non-obvious algorithm or invariant, a decision
+left alone on purpose. Never restate the code, narrate a design, its
+alternatives or its history, or list references; that is `decision/`'s.
+Trivial code gets none.
 
-**Comments are working notes, not a contract.** Never cite an in-repo comment
-as evidence; verify against the code, its behavior or git history. When the
-author contradicts a comment — even one written this session — defer. Keep
-comments accurate; don't treat them as authority. A source path a comment or a
-document names must exist, and `check:rules` says where one does not; a
-decision record in `decision/` names the files of its day and is exempt.
+**Comments are working notes, not a contract.** Read them before "fixing"
+what looks unfinished, but never cite one as evidence: verify against the
+code, its behavior or git history, and when the author contradicts one,
+defer. A path a comment or document names must exist (`check:rules`);
+`decision/` names the files of its day and is exempt.
 
 ## Architecture first
 
-This tree is being built, not maintained. Making it structurally simple and
-correct is the objective; keeping what is here is not one. The current
-structure, the current tests and the current line count have no preservation
-value of their own. Pick the structurally correct shape, matching real prior
-art where one exists (Minecraft's chunk model for grid content, Cesium's
-`skipLevelOfDetail` for a tile tree whose nodes arrive out of order).
+The tree is being built, not maintained: making it structurally simple and
+correct is the objective, and the current structure, tests and line count
+have no value of their own. Take the structurally correct shape, matching
+real prior art where it exists (Minecraft's chunks for grid content,
+Cesium's `skipLevelOfDetail` for a tile tree whose nodes arrive out of order).
 
-- **An existing mechanism is not a constraint.** An abstraction, a boundary,
-  a queue, a cache, a slot layout, a format, an API or a test does not earn
-  deference by existing. When a problem turns up inside one, ask first why
-  the mechanism is there at all, and whether deleting or replacing it makes
-  the problem impossible — before optimizing it, extending it, guarding it
-  or repairing it. Compatibility with an internal detail is worth nothing;
-  only a contract something outside this tree depends on is. Nor is diff
-  size a goal: a rewrite that leaves a smaller state space beats a patch
-  that does not, and machinery a change makes unnecessary goes with its
-  shims in the same change (2026-09-03, the terrain/decor pipeline desync).
-- **One fact, one owner; the rest derived.** Before keeping a value, ask
-  whether it follows from another; if it does, compute it where it is read.
-  Before adding a constant, a limit, a reserve or a policy, ask the same of
-  it: a bound derived down from the roots that fix it beats a tuned number,
-  and where none can be derived, what makes the quantity unbounded is fixed
-  first — a write per change folded into one per turn — not the number.
-  Before a module reads a concept, ask whether it should know it or only
-  the contract above it: a controller's words (a pivot, a radius, a zoom)
-  stay in the controller, and what is generic reads the geometric fact
-  (the eye, the look, the map center). Code that keeps one value in step
-  with another — sets B when A changes, resets it on a mode change, moves
-  it on a rebase, snaps it on a jump — is a second copy of a truth: remove
-  the copy, do not tune the sync. Nor is a derived value written back into
-  what it was derived from on every turn; where an outside event changes
-  the source, the event writes it once (the camera, 2026-10-01). Where data
-  is copied, packed or reconciled across a boundary, ask whether both
-  representations are needed; where something is cleaned up, whether a
-  lifetime makes the cleanup unnecessary; where a capacity is short,
-  whether unrelated states compete for one bounded resource — a queue held
-  what was wanted and what was on the wire in one array (2026-09-23).
-- **Remove a state rather than handle it.** In order: make the bad state
-  unrepresentable; remove the boundary that creates it; fold two
+- **An existing mechanism is not a constraint.** An abstraction, boundary,
+  queue, cache, slot layout, format, API or test earns no deference by
+  existing. When a problem turns up inside one, ask whether deleting or
+  replacing it makes the problem impossible before optimizing, extending,
+  guarding or repairing it. Only a contract something outside the tree
+  depends on is kept for compatibility; machinery a change makes unnecessary
+  goes in the same change, with its shims.
+- **One fact, one owner; the rest derived.** A value that follows from
+  another is computed where it is read. A constant, limit, reserve or policy
+  is derived from the roots that fix it; where none can be, what makes the
+  quantity unbounded is fixed first (a write per change folded into one per
+  turn), not the number. A count bounding what something else bounds is a
+  second limit; a product number is said aloud and named once, in
+  `pxl-kernel param.rs` under the policy it tunes, with its reason. A module
+  reads the contract above a concept, not the concept: a controller's words
+  (a pivot, a radius, a zoom) stay in the controller, and what is generic
+  reads the geometric fact (the eye, the look, the map center). Code keeping
+  one value in step with another is a second copy of a truth — remove it, do
+  not tune the sync — and a derived value is never written back into its
+  source each turn; an outside event writes the source once. Where data is
+  copied or reconciled across a boundary, ask whether both representations
+  are needed; where something is cleaned up, whether a lifetime makes it
+  unnecessary; where a capacity is short, whether unrelated states compete
+  for it.
+- **Remove a state rather than handle it**, in this order: make the bad
+  state unrepresentable; remove the boundary that creates it; fold two
   representations into one; move ownership or lifetime so the conflict
-  cannot arise; then scheduling and policy; and last, capacity, a retry, a
-  cleanup pass, a periodic sweep, a flag, a guard, a local patch. Some of
-  those last are sometimes needed, but none of them is an architecture. Do
-  not start at the end because the diff is smaller.
-- **Correctness comes from invariants, not from cleanup.** State them before
-  a substantial fix, in the form they will have to hold in: obsolete work
-  cannot keep current demand from being represented; residency cannot exceed
-  its byte budget; a missing ancestor cannot make a resident descendant
-  unreachable; the camera decides the authoritative demand at once; the
-  ground has one runtime representation. Prefer a structure the property
-  follows from. Do not claim correctness from a periodic sweep, an eventual
-  drain, generous capacity, a retry, a timing assumption, "this cannot
-  normally happen", or a green test run.
-- **Tests carry semantics, not architecture.** They are evidence of intended
-  behavior, not a requirement to design around: one that encodes an
-  implementation detail is changed or deleted with the detail. Write them
-  for what is externally meaningful — the shared algebraic laws (a fold's
-  fixed point, the lattice), the wire and storage contracts — and for the
-  invariants; no API exists for a test alone, and no adapter outlives the
-  change that needed it. The order is
-  invariant, architecture, implementation, verification, then the tests
-  worth keeping — never a regression test first and a minimal patch until it
-  goes green.
+  cannot arise; then scheduling and policy; last, a capacity, retry,
+  cleanup pass, sweep, flag, guard or local patch, none of which is an
+  architecture.
+- **Correctness comes from invariants.** State them before a substantial
+  fix, in the form they must hold in — obsolete work cannot keep current
+  demand from being represented; residency cannot exceed its byte budget; a
+  missing ancestor cannot make a resident descendant unreachable; the
+  camera decides the demand at once; the ground has one runtime
+  representation — and prefer a structure they follow from. A sweep, an
+  eventual drain, generous capacity, a retry, a timing assumption, "this
+  cannot normally happen" or a green test run proves nothing.
+- **Tests carry semantics, not architecture.** They test what is externally
+  meaningful — the algebraic laws (a fold's fixed point, the lattice), the
+  wire and storage contracts, the invariants — and one that encodes an
+  implementation detail goes with the detail. No API exists for a test
+  alone. The order is invariant, architecture, implementation,
+  verification, then the tests worth keeping.
 - **Remove work before adding machinery to speed it up.** Before a cache,
-  an ordering, an index or any retained state, look for the work that can
-  simply go. Every candidate is one of three things:
-  - **A free reduction:** behavior-equivalent, with no new state kept and
-    no other resource spent. Allocation on a settled turn, a traversal or
-    a computation repeated, a copy, a bind or an upload that changes
-    nothing, work done for a consumer that is off. It is done, and needs
-    no measurement.
-  - **A trade:** it saves one resource by spending another — CPU, GPU,
-    memory, latency, state, determinism — or it changes what is seen,
-    however slightly (an order at equal depth, an update's timing, a
-    criterion made more exact). Its cost and gain are said before it is
-    done, and it is measured where the balance does not follow from the
-    structure.
-  - **Structural debt:** dead state, a fact kept twice, an abstraction or
-    an owner left from an older architecture, a wrapper, a sync that
-    derivation makes unnecessary. It is removed.
-
-  Less work beats faster work, less state beats cached state, and a
-  derivation beats a synchronization. "Optimize it once it measures" is no
-  reason to keep avoidable work: profiling ranks the trades, it is not a
-  license for waste (2026-10-01, the audit after decor left the chunks).
-  The costs are server spend and end-user device load; implementation size,
-  turns spent and lines written are not among them.
-- **What a piece of memory being full means decides how it is sized.**
-  Three kinds, and each says which it is:
-  - **Must-fit state** — the resident terrain, the mesh slots' tables, the
-    block registry: sized from a bound the structure proves, or one an
-    owner keeps by admission where it makes what fills it. Past it is a
-    bug, so the size is never a measurement or a knob.
-  - **A bounded flow** — a stream to the host, a ring, the profiler's
-    window: a capacity said as a product number, where full is ordinary
-    and is met by its owner's policy — the producer waits, the oldest is
-    dropped, or what does not fit is cut off and said to be. Full is never
-    a bug. A reserve kept in one for what cannot wait is derived from what
-    that is, and the check for room reads the flow's own record size.
-  - **A workspace that grows with what stands in the world** — the heap's,
-    asked for room before it grows; a refusal is backpressure: the work
-    waits and what is drawn stays drawn.
-
-  One item larger than any room is none of these: an input past its limit
-  is refused at the boundary it came through, and a record the program
-  made itself past its bound is a bug.
-
-  Memory pressure slows progress or quality; it never opens a hole in what
-  is shown, drops what someone placed or ends the module (2026-10-01, the
-  `.fixed` audit, where a run set too small drew no chunk and a decor
-  workspace too small left placed decor out).
-- **Split the assumptions before editing.** For any bug or slowness worth a
-  change, name the symptom, the mechanism producing it, the assumptions that
-  make that mechanism necessary, which of those are the product's and which
-  are only the current code's, and whether dropping one of them kills the
-  whole class. A mesh slot was a chunk's coordinate, so a zoom's chunks were
-  addressable only inside that zoom's own ring — which silently decided what
-  could be drawn at all, and none of it was a requirement (2026-09-23). Do
-  not edit before that split is made.
-- **Put a consequential choice in the conversation first.** Where two designs
-  imply different representations, ownership, memory or scheduling, stop and
-  give both: the invariant, the resulting state space, what machinery goes,
-  what machinery arrives, runtime cost, memory cost, migration cost. Never
-  quietly take the one that preserves the most code. In the conversation, as
-  everything here is: plan documents, approval gates and agent fan-outs are
-  overhead, skipped unless asked.
-- **Review against the new invariant before saying it is done.** What is left
-  that exists only for the old architecture? What shim can go now? What
-  duplicate representation remains? What still needs cleaning up that could
-  instead be impossible? What correctness still rests on capacity or timing?
-  Did I optimize around an assumption I should have removed? Did I keep
-  something only because a test leaned on it? Designing this subsystem today,
-  against the invariant it now has, would I write what I just wrote? If the
-  last answer is no, it is not finished.
+  ordering, index or retained state, find the work that can go. A **free
+  reduction** — behavior-equivalent, nothing kept, nothing else spent:
+  allocation on a settled turn, a repeated traversal, a copy, a bind or an
+  upload that changes nothing, work for a consumer that is off — is done
+  without measurement. A **trade** — one resource for another, or anything
+  that changes what is seen — has its cost and gain said before it is done,
+  and is measured where the structure does not settle it. **Structural
+  debt** — dead state, a fact kept twice, an owner left from an older
+  architecture, a wrapper, a sync — is removed. Less work beats faster work,
+  less state beats cached state, a derivation beats a synchronization;
+  profiling ranks trades and licenses no waste. The costs are server spend
+  and device load, never implementation size or turns.
+- **What memory being full means decides how it is sized.** **Must-fit
+  state** (the resident terrain, the mesh slots' tables, the block
+  registry) is sized from a bound the structure proves or an owner keeps by
+  admission; past it is a bug, never a knob. **A bounded flow** (a stream to
+  the host, a ring, the profiler's window) has a capacity said as a product
+  number; full is ordinary, met by its owner's policy — the producer waits,
+  the oldest drops, the excess is cut and said to be — and a reserve in it is
+  derived from what cannot wait. **A workspace that grows with the world**
+  (the heap's) asks for room first; a refusal is backpressure, the work
+  waits and what is drawn stays drawn. One item larger than any room is
+  refused at the boundary it came through, or is a bug if the program made
+  it. Memory pressure slows progress or quality; it never opens a hole in
+  what is shown, drops what someone placed, or ends the module.
+- **Split the assumptions before editing.** For a bug or slowness worth a
+  change: the symptom, the mechanism producing it, the assumptions that make
+  the mechanism necessary, which are the product's and which only the
+  code's, and whether dropping one kills the whole class.
+- **A choice between designs goes to the conversation first**: where two
+  imply different representations, ownership, memory or scheduling, give
+  both — the invariant, the state space, the machinery that goes and
+  arrives, runtime, memory and migration cost. Plan documents, approval
+  gates and agent fan-outs are overhead, skipped unless asked.
+- **Done is reviewed against the new invariant**, over every path that
+  produces the symptom: what exists only for the old architecture, what shim
+  can go, what representation is still duplicated, what cleanup could be
+  made impossible, what correctness still rests on capacity or timing, what
+  was kept only because a test leaned on it. If, designing it today, you
+  would not write what you wrote, it is not done.
 
 **When these conflict**, the order is: semantic correctness and stated
 invariants; a smaller state space; simpler representation and ownership; a
-whole failure class gone; runtime responsiveness; bounded resource
-behavior; performance; contracts genuinely outside this tree; effort; diff
-size.
+whole failure class gone; runtime responsiveness; bounded resource behavior;
+performance; contracts outside the tree; effort; diff size.
 
 ## Working agreements
 
-- **Investigate and report before changing anything.** Answer the question;
-  don't silently fix what you found. Wait for a go-ahead before editing.
-- **Never commit unless asked**, and let work accumulate: a commit per round
-  trip is finer than anyone reads. **Then one commit per thing worth reverting
-  or reading on its own** — several fixes in one layer together, an infra
-  repair and an unrelated tool apart.
-- **A branch that is kept is named for why it is kept.** `original/<date>-<name>`
-  is the history a squash replaced, pushed before the squash and never moved,
-  as git keeps a rewritten branch's under `refs/original/`;
-  `checkpoint/<date>-<name>` is a point on main worth coming back to;
-  `archive/<date>-<name>` is a line of work set aside rather than merged.
-- **A commit's subject is `type(scope): a sentence`.** Conventional Commits'
-  prefix — `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`,
-  `build`, `ci` — then a lowercase sentence saying what the change is and
-  why, as a comment here would, not a label of what was touched. Scope is the
-  directory as the tree names it (`xpute`, `spec`, `render`, `kernel`, `wasm`,
-  `web`, `geo`, `geo-bake`, `api`, `infra`, `asset`); a change across several
-  has none. Commits before 2026-09-20 are not rewritten.
-- **Verify against a running system where one exists.** A conclusion from
-  reading alone is a hypothesis; say so. If a predicted fix does not work,
-  revert it.
-- **"Revert" means leave no trace** — no comment on what was tried, no
+- **Commit only when asked, one commit per thing worth reverting or reading
+  on its own** — several fixes in one layer together, an infra repair and an
+  unrelated tool apart; never one per round trip.
+- **A kept branch is named for why it is kept.** `original/<date>-<name>` is
+  the history a squash replaced, pushed before it and never moved, as git
+  keeps a rewritten branch's under `refs/original/`;
+  `checkpoint/<date>-<name>` is a point on main worth returning to;
+  `archive/<date>-<name>` is work set aside rather than merged.
+- **A commit's subject is `type(scope): a sentence`**: a Conventional
+  Commits prefix (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`,
+  `perf`, `build`, `ci`), then a lowercase sentence saying what the change is
+  and why, not what was touched. The scope is the directory as the tree names
+  it (`xpute`, `spec`, `render`, `kernel`, `wasm`, `web`, `geo`, `geo-bake`,
+  `api`, `infra`, `asset`); a change across several has none. Commits before
+  2026-09-20 are not rewritten.
+- **"Revert" leaves no trace** — no comment on what was tried, no
   `// removed:` marker.
-- **Keep mechanisms orthogonal.** Gestures, animation and styling stay
-  independently verifiable; never fuse them into one library mechanism.
-- **Agents working at once run optimistically.** Several agents share the
-  checkout and edit, commit and push without asking one another first: a
-  conflict that might happen costs nothing and is not a reason to wait,
-  lock, protect another's edits or split a commit. Only an actual git
-  conflict, or edits that cannot both stand, is paid for: the agents resolve
-  it one at a time in an order agreed once, each taking the latest, fixing,
-  committing and pushing before the next, and then all go on in parallel.
-  A broken intermediate state is allowed; correctness is held at the
-  checkpoints where the work is integrated — optimistic execution, conflict
-  detection, deterministic serialization, resume.
-  An agent commits its own paths and only those (`git commit -- <paths>`):
-  the index is shared, and a plain commit takes whatever another left
-  staged. A build that fails on the working tree is not yet anyone's
-  commit; say whose uncommitted file it is before calling main broken.
+- **Mechanisms stay orthogonal.** Gestures, animation and styling are
+  verified independently, never fused into one library mechanism.
+- **Agents working at once run optimistically.** They share the checkout and
+  edit, commit and push without asking one another; a conflict that might
+  happen is no reason to wait, lock or protect another's edits. Only an
+  actual git conflict, or edits that cannot both stand, is resolved — one
+  agent at a time in an order agreed once, each taking the latest, fixing,
+  committing and pushing before the next. A broken intermediate state is
+  allowed; correctness is held where work is integrated. An agent commits
+  its own paths only (`git commit -- <paths>`): the index is shared. A build
+  that fails on the working tree is no one's commit yet; say whose file it
+  is before calling main broken.
 - Code, comments and documentation stay in English.
