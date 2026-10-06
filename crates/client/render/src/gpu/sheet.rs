@@ -33,7 +33,6 @@ struct Line {
     align: Align,
 }
 
-
 /// Device pixels a sheet draws per logical pixel: past two, texels cost more
 /// than the eye resolves at arm's length. The world is drawn no finer
 /// (pxl-kernel param/view.rs `RESOLUTION_MAX`), so a label is never shown

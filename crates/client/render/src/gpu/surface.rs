@@ -7,11 +7,8 @@ use xpute_core::math::scalar::round;
 use xpute_guest::abi::handle::{handle_slot, HandleTable};
 use xpute_guest::global::Global;
 
-
 /// Slot 0 is never a surface.
 pub const SURFACES: usize = 9;
-
-
 
 /// A box animating in passes through a size a frame, each of which would
 /// otherwise be a new depth and color target.
@@ -24,8 +21,7 @@ pub struct Surface {
     pub px_w: u32,
     pub px_h: u32,
     pub dpr: f64,
-    /// The device pixels per CSS pixel the kernel has it drawn at, where no
-    /// turn's ratio is given.
+    /// The device pixels per CSS pixel the kernel has it drawn at.
     pub ratio: f64,
     pub configured: bool,
     pub width: u32,
@@ -37,10 +33,10 @@ pub struct Surface {
 }
 
 impl Surface {
-    pub fn buffer_px(&self, ratio: Option<f64>) -> (u32, u32) {
+    pub fn buffer_px(&self) -> (u32, u32) {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);
         let dpr = if self.dpr > 0.0 { self.dpr } else { 1.0 };
-        let k = ratio.unwrap_or(self.ratio) / dpr;
+        let k = self.ratio / dpr;
         (round(w * k).max(1.0) as u32, round(h * k).max(1.0) as u32)
     }
 }

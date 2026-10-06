@@ -6,9 +6,10 @@
 //! failed probe doubles the wait before the next. Still frames are not judged.
 
 use crate::param;
-use pxl_render::gpu::api_spec::surface_role;
 use crate::sched::tick::TickState;
 use crate::shell::setting::store::{settings_store, ResolutionMode};
+use pxl_render::gpu::api_spec::surface_role;
+use pxl_render::gpu::surface::surfaces;
 use xpute_guest::global::Global;
 
 struct Resolution {
@@ -43,7 +44,8 @@ pub fn resolution_observe(gpu_ms: f64) {
     resolution().gpu_ms = (gpu_ms > 0.0).then_some(gpu_ms);
 }
 
-pub fn resolution_step(state: &TickState) -> f64 {
+/// The world's surfaces take a changed ratio.
+pub fn resolution_step(state: &TickState) {
     let top = state.dpr.clamp(param::RESOLUTION_MIN, param::RESOLUTION_MAX);
     let r = resolution();
     match settings_store().resolution {
@@ -62,7 +64,9 @@ pub fn resolution_step(state: &TickState) -> f64 {
             r.moving = state.interactive;
         }
     }
-    r.ratio
+    for s in surfaces().filter(|s| s.role == surface_role::WORLD && s.ratio != r.ratio) {
+        s.ratio = r.ratio;
+    }
 }
 
 fn judge(r: &mut Resolution, top: f64, gap_ms: f64, budget_ms: f64) {
@@ -98,12 +102,13 @@ fn change(r: &mut Resolution, ratio: f64) {
     r.room_ms = 0.0;
 }
 
-/// The ratio a surface is drawn at where no turn gives one: the device's,
-/// within the drawn range, and a case's within its thumbnail.
+/// The ratio a surface is drawn at once resized: the world's as stepped,
+/// the device's before its first step; a case's within its thumbnail.
 pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
-    let ratio = dpr.clamp(param::RESOLUTION_MIN, param::RESOLUTION_MAX);
+    let device = dpr.clamp(param::RESOLUTION_MIN, param::RESOLUTION_MAX);
     match role {
-        surface_role::CASE => ratio.min(param::CASE_LONG_SIDE_MAX * dpr / f64::from(px[0].max(px[1]).max(1))),
-        _ => ratio,
+        surface_role::CASE => device.min(param::CASE_LONG_SIDE_MAX * dpr / f64::from(px[0].max(px[1]).max(1))),
+        _ if resolution().ratio > 0.0 => resolution().ratio,
+        _ => device,
     }
 }

@@ -37,7 +37,7 @@ use crate::world::view::frame::pose::{sea_under_eye, view};
 
 const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");
 
-pub fn stage_write(resolution: f64) {
+pub fn stage_write() {
     let v = view();
     let settings = settings_store();
     let s = stage_lane_mut();
@@ -63,7 +63,6 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { crate::param::RIM_INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
-    s[STAGE_AT::RESOLUTION] = resolution;
 }
 
 pub fn stage_render() {

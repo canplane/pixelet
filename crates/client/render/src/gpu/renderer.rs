@@ -1131,8 +1131,7 @@ impl Renderer {
 /// A new size is applied once it has held SETTLE_TURNS turns; until then the
 /// page scales the old buffer.
 fn targets(g: &Gpu, s: &mut Surface) {
-    let ratio = (s.role == surface_role::WORLD).then(|| stage_lane()[STAGE_AT::RESOLUTION]).filter(|r| *r > 0.0);
-    let (width, height) = s.buffer_px(ratio);
+    let (width, height) = s.buffer_px();
     if !s.configured {
         g.configure(s.handle);
         s.configured = true;
