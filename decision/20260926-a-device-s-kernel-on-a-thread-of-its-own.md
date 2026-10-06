@@ -82,4 +82,3 @@ a stale one is configured (pxl-render `gpu/api/device.rs` `ConfigureAt`):
 - Android, which has no such rule, configures it where it was found stale.
 
 The cost is a frame not drawn while a surface waits for the main thread.
-

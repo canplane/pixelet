@@ -120,13 +120,13 @@ above it wants its own, smaller radius in its own pages — the axis at z is
 `terrain/config.json`, the way `KEEP_DIST` is the one number today. A
 plausible setting, once a chunk can mount from any zoom (step 3 below):
 
-| z     | pages a record spans | records | held    | reaches         |
-| ----- | -------------------- | ------- | ------- | --------------- |
-| z16   | 1                    | 3×3 = 9 | 36 MiB  | 1 page, ~2 km   |
-| z15   | 2×2                  | 3×3 = 9 | 36 MiB  | 2 pages, ~4 km  |
-| z14   | 4×4                  | 3×3 = 9 | 36 MiB  | 4 pages, ~8 km  |
-| z13   | 8×8                  | 3×3 = 9 | 36 MiB  | 8 pages, ~16 km |
-|       |                      | **36**  | **144** |                 |
+| z   | pages a record spans | records | held    | reaches         |
+| --- | -------------------- | ------- | ------- | --------------- |
+| z16 | 1                    | 3×3 = 9 | 36 MiB  | 1 page, ~2 km   |
+| z15 | 2×2                  | 3×3 = 9 | 36 MiB  | 2 pages, ~4 km  |
+| z14 | 4×4                  | 3×3 = 9 | 36 MiB  | 4 pages, ~8 km  |
+| z13 | 8×8                  | 3×3 = 9 | 36 MiB  | 8 pages, ~16 km |
+|     |                      | **36**  | **144** |                 |
 
 Against 49 records, 196 MiB and 3 pages today: less memory, nearly three
 times the reach, and the far three quarters of it at a resolution the eye

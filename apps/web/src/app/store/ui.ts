@@ -3,7 +3,6 @@
 import { create } from "zustand";
 
 import type { i32, u16, u32 } from "@xpute/core/abi/word.ts";
-import type { HoldingState } from "@/kernel/abi/cmd.spec.ts";
 import { cube_types } from "@/catalog/cell/cube_type.spec.ts";
 import { decorKinds, type PlaceableCube, placeableCubes } from "@/catalog/cell/mod.ts";
 import { ActiveTool, Command, encode_chat_send } from "@/kernel/abi/cmd.spec.ts";
