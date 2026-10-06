@@ -11,9 +11,9 @@ use pxl_spec::bake::ground::cell_shift;
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::adapter::epsg3857::from_db;
-use pxl_spec::space::indexer::idx;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{GROUND, LEAF_Z, TILE_CELLS};
+use pxl_spec::space::zoom::idx;
 
 use crate::terrain::bake::Surface;
 

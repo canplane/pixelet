@@ -8,8 +8,8 @@
 //! never a difference of cosines, so a unit keeps its unit.
 
 use pxl_spec::space::adapter::epsg4326;
-use pxl_spec::space::pvf3::ROUND;
 use pxl_spec::space::v3::V3;
+use pxl_spec::space::zoom::ROUND;
 
 pub const MERCATOR_RADIUS_KM: f64 = epsg4326::EARTH_RADIUS_M / 1000.0;
 pub const MERCATOR_RADIUS_U: f64 = ROUND / core::f64::consts::TAU;

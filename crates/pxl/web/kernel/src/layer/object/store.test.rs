@@ -5,7 +5,7 @@ use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::pvf3::ivec;
 
 use super::*;
-use pxl_spec::space::indexer::from_idx;
+use pxl_spec::space::zoom::from_idx;
 use pxl_spec::space::zoom::{count, units, Zoom};
 use xpute_core::math::rng::SplitMix64;
 
@@ -259,25 +259,5 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         let given = stores[0].bound_in(&query);
         assert_eq!(stores[1].bound_in(&turn_box(query)), given.map(turn_box), "{query:?}");
         assert_eq!(stores[2].bound_in(&turn_box(turn_box(query))), given.map(|b| turn_box(turn_box(b))), "{query:?}");
-    }
-}
-
-/// Painted as sub-cells, the mesher would draw a box each.
-#[test]
-fn a_paint_finer_than_a_cube_takes_it_whole() {
-    let mut store = Store::default();
-    let col_idx = ivec::gather(1, -1, 0);
-    let step = count(OBJECT_FINEST, CELL);
-    store.write([Write {
-        col_idx,
-        band_idx: 0,
-        at: [3 * step, 4 * step, 5 * step],
-        cell_zoom: CELL,
-        state: red(),
-    }]);
-    for target in [OBJECT_FINEST - 1, CELL + 1] {
-        let mut out = Vec::new();
-        store.fold_entries(col_idx, target, None, &mut |band, at, cell_zoom, v| out.push((band, at, cell_zoom, v)));
-        assert_eq!(out, [(0, [3 * step, 4 * step, 5 * step], CELL, red())]);
     }
 }

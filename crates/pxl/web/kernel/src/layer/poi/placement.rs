@@ -18,11 +18,12 @@ use crate::world::frame::view::ndc_to_px;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
+use pxl_spec::space::zoom::nearest;
 use xpute_runtime::global::Global;
 
 use pxl_spec::bake::poi_tile::{PoiTile, POI_LATTICE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pvf3::{nearest, projection, REACH};
+use pxl_spec::space::pvf3::{projection, REACH};
 use pxl_spec::space::pyramid::{Cell, GROUND, LEAF_Z};
 use pxl_spec::space::v3::len3;
 use pxl_spec::space::zoom::{count, Zoom};

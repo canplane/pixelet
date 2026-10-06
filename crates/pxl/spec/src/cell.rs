@@ -6,13 +6,23 @@
 
 #[path = "cell/color.spec.rs"]
 pub mod color;
-pub mod cube;
 #[path = "cell/cube_type.spec.rs"]
 pub mod cube_type;
 #[path = "cell/decor.spec.rs"]
 pub mod decor;
 pub mod object;
-pub mod r#type;
 
-pub use cube::{cube_types, Kind};
+pub use cube_type::{cube_types, Kind};
 pub use decor::{decor_types, DecorId};
+
+/// A catalog color, packed `0xRRGGBB` by the generator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Swatch {
+    pub rgb: u32,
+}
+
+impl Swatch {
+    pub const fn new(rgb: u32) -> Swatch {
+        Swatch { rgb }
+    }
+}

@@ -169,3 +169,10 @@ pub fn dist1(v: IVec, w: IVec) -> i64 {
 pub fn dist_sq(v: IVec, w: IVec) -> i64 {
     norm_sq(sub(v, w))
 }
+
+/// Drops Z: tiles are keyed by X/Y only, so a leaf index of the map center must pass
+/// through this before it is compared with a tile key. A nonzero Z there
+/// dominates a Chebyshev distance and rejects everything.
+pub fn TO_XY(i: IVec) -> IVec {
+    gather(X(i), Y(i), 0)
+}

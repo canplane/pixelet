@@ -12,7 +12,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use crate::kernel::with_world;
 use crate::world::change::{bump_world, world_changes, TIERS_CHUNK};
 use crate::world::pyramid::chunk::{Chunk as PyramidChunk, FINEST_CHUNK, TOP_CHUNK};
-use pxl_spec::space::indexer::from_idx;
+use pxl_spec::space::zoom::from_idx;
 use pxl_spec::space::zoom::units;
 use xpute_runtime::global::Global;
 
@@ -29,14 +29,15 @@ pub fn chunk_sources_step() {
     }
 }
 
-/// A chunk draws the objects of every column its cells or the one-cell apron
-/// its fold reads (`Store::fold_at`) lie over.
+/// A chunk draws the objects of every column its runs or their one-cell apron
+/// (`Store::fold_at`) lie over.
 pub fn tiers_draw(k: PyramidChunk, col: IVec) -> bool {
     let (x0, y0, side) = k.rect();
-    let cell = units(k.drawn_zoom());
+    // A cell of apron, at most the chunk's own: what the runs' fold reads.
+    let cell = units(k.cell_zoom());
     let o = from_idx(BAND, col);
     // The column's copy nearest the chunk, so a fold across the antimeridian is met.
-    let ox = pxl_spec::space::pvf3::nearest(ivec::X(o) as f64, x0);
+    let ox = pxl_spec::space::zoom::nearest(ivec::X(o) as f64, x0);
     let oy = ivec::Y(o) as f64;
     let across = |b: f64, o: f64| o < b + side + cell && o + BAND_UNITS > b - cell;
     across(x0, ox) && across(y0, oy)

@@ -15,13 +15,14 @@ pub use crate::abi::cmd::ActiveTool;
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
 use crate::layer::decor::hit::{raycast_decor, DecorStruck, Scattered};
+use crate::layer::object::collision::{anchor_center, object_aabb};
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
-use crate::layer::object::geometry::{anchor_center, object_aabb};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, Entry, EntryAt};
 use crate::world::access::Hit;
 use crate::world::frame::view::view_ray;
-use pxl_spec::space::zoom::base_of;
+use pxl_spec::space::pyramid::GROUND;
+use pxl_spec::space::zoom::{base_of, of_side};
 use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -129,6 +130,10 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     };
     let hit = pick.hit;
     let hover = &mut interaction().hover;
+    // A folded cell is a summary, not what is held: nothing in it is struck.
+    if folded_at(&hit) {
+        return clear_hover();
+    }
 
     if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor) {
         hover.object_at = None;
@@ -162,6 +167,18 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         // On the cell's grid, not the tier's: that is the size a carve is written at.
         None => world_struck_corner(&hit, U_PER_CELL),
     });
+}
+
+/// Whether what `hit` struck is drawn folded: the finest drawn chunk there
+/// has cells coarser than the box struck.
+fn folded_at(hit: &Hit) -> bool {
+    let [x, y, z] = hit.cube.center();
+    let at = crate::world::frame::coord::world_to_canonical(&[x, y, z]);
+    let held = GROUND.z_of(of_side(hit.cube.extent()[0]));
+    crate::kernel::with_world(|_, sched| sched.drawn_at(&at))
+        .flatten()
+        .and_then(|(_, cells, _)| cells)
+        .is_some_and(|cells| cells < held)
 }
 
 /// A tap at `ndc_x`, `ndc_y` with the tool held.

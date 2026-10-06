@@ -1,8 +1,11 @@
 // pxl-spec/space/pvf3.rs
 
-//! PVF3: an exact lattice point as packed words, a signed cell index
-//! (`ivec`, 24/24/16 bits) and an unsigned fraction (`fvec`, 1/256 of a cell).
-//! The lane widths are the stored format's.
+//! PVF3, the Packed 3-Vector with Fixed-point arithmetic: an exact lattice
+//! point as packed words, a signed cell index (`ivec`, 24/24/16 bits) and an
+//! unsigned fraction (`fvec`, 1/256 of a cell), the same bits on every
+//! machine. It is a format and its arithmetic, not a world: the lane widths
+//! are the stored format's, and what a lane means — X going round, Y the
+//! Mercator square's — is the world's (`space/zoom.rs`).
 
 pub mod core;
 pub mod fvec;
@@ -17,11 +20,8 @@ pub use ivec::IVec;
 pub use pvec::{Fvec, Ivec, PVec, PVecTraits};
 pub use pvf3::Pvf3;
 
-use self::core::{IVEC_X_W, IVEC_Y_W, IVEC_Z_W};
+use self::core::{IVEC_Y_W, IVEC_Z_W};
 use super::v3::Aabb;
-
-/// One round of the world: the X lane's whole span, in units.
-pub const ROUND: f64 = (1u64 << IVEC_X_W) as f64;
 
 /// Every point a position can name, in units. X is unbounded: the lane is one world round.
 pub const REACH: Aabb = {
@@ -31,18 +31,3 @@ pub const REACH: Aabb = {
         max: [f64::INFINITY, y, z],
     }
 };
-
-/// The copy of `x` nearest `about`: where a stored X stands for an eye at `about`.
-pub fn nearest(x: f64, about: f64) -> f64 {
-    // Whole laps added to `x`, so a point already on the lap comes back unchanged.
-    x - ROUND * libm::floor((x - about) / ROUND + 0.5)
-}
-
-/// `b` moved round the world to the copy nearest `about`.
-pub fn nearest_box(b: &Aabb, about: f64) -> Aabb {
-    let x = (b.min[0] + b.max[0]) / 2.0;
-    if !x.is_finite() {
-        return *b;
-    }
-    b.moved([nearest(x, about) - x, 0.0, 0.0])
-}

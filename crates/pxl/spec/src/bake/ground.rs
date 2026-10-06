@@ -3,7 +3,7 @@
 //! How high a ground cell stands. A cell is its look; a void one is where the
 //! terrain gives no surface, past the source's coverage.
 
-use crate::cell::cube::cube_types::Ground;
+use crate::cell::cube_types::Ground;
 
 use super::format::GroundCell;
 

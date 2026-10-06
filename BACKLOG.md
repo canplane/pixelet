@@ -20,6 +20,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
+- **The object store is one hierarchy in two structures.** From the band up
+  to `INDEX_TOP` a hash index keeps each cube's bound, finest zoom and fold
+  (`layer/object/store.rs`); under it each band is a sparse tree, whose
+  layout takes any root (`space/sparse_tree/mem.rs` `SparseTreeLayout`). A
+  tree keeping those per node, rooted at the top, would leave no band and no
+  second index; an entry's packed position is the format's own question.
+  The render and storage hierarchies are to be reduced to one each.
 - **POI and reverse geocode are off.** The client leaves their roots
   unbound (`apps/web/src/kernel/boot.ts` `OFF`) while the terrain moves to
   Carto, Arnis and the zooms, one problem at a time; their tiles'

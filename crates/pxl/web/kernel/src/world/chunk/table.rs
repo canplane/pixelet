@@ -16,7 +16,7 @@ use crate::sched::profiler::record::{MB, ZOOMS};
 use pxl_spec::space::observation::Bounds as _;
 use pxl_spec::space::observation::Frustum;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_zoom, GROUND};
+use pxl_spec::space::pyramid::GROUND;
 use pxl_spec::space::v3::{dot3, len3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::section::span_of;
@@ -34,7 +34,7 @@ use crate::layer::object::store::EntryAt;
 use crate::mem::fixed::{lane, range, Range};
 use crate::param;
 use crate::shell::setting::store::settings_store;
-use crate::world::chunk::build::{BuildEvent, Builder, World};
+use crate::world::chunk::build::{draws_as_held, BuildEvent, Builder, World};
 use crate::world::chunk::frontier::{pool_of, zoom_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
@@ -48,6 +48,7 @@ use crate::world::observation::{Known, Order};
 use crate::world::pyramid::chunk::{Chunk, FINEST_CHUNK, TOP_CHUNK};
 use crate::world::pyramid::domain::{self, Domain};
 use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::constant::unpack_pos;
 use pxl_spec::bake::format::Terrain;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,7 +77,7 @@ pub struct Frame {
 impl Frame {
     /// A point about the anchor, its X on the anchor's lap.
     pub fn world_of(&self, at: V3) -> V3 {
-        let x = pxl_spec::space::pvf3::nearest(at[0], self.anchor[0]);
+        let x = pxl_spec::space::zoom::nearest(at[0], self.anchor[0]);
         [x - self.anchor[0], at[1] - self.anchor[1], at[2] - self.anchor[2]]
     }
 }
@@ -152,7 +153,7 @@ struct Sources {
 impl Sources {
     fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
-        let drawn = |at: &EntryAt| tiers_draw(k, at.col_idx) && draws_band(k, at.band_idx);
+        let drawn = |at: &EntryAt| tiers_draw(k, at.col_idx) && draws_band(k, at.band_idx) && draws_as_held(k, unpack_pos(at.pos).3);
         Sources {
             textured: settings.textures,
             objects_revision: objects_revision_of(k),
@@ -554,13 +555,14 @@ impl Scheduler {
         out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn, s.in_frustum)));
     }
 
-    /// The finest drawn chunk holding `p`, as zooms: its own, its tier's
-    /// cells', and the tile's it is read from.
+    /// The finest drawn chunk holding `p`, as tile zooms: its own tile's, its
+    /// cells', and the one it is read from.
     pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
         let s = (TOP_CHUNK..=FINEST_CHUNK)
             .rev()
             .find_map(|z| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk.named() == Chunk::holding(z, p)))?;
-        Some((s.chunk.zoom() as i32, s.layout.map(|(cell_zoom, _)| cell_zoom as i32), s.sources.read_from.map(|z| z as i32)))
+        // In tile zooms, as the gauge reads them: the chunk's tile, its cells', and what was read.
+        Some((s.chunk.tile_zoom() as i32, s.layout.map(|(cell_zoom, _)| GROUND.z_of(cell_zoom)), s.sources.read_from.map(|z| z as i32)))
     }
 
     /// Whether the last frame drew any ground on screen.
@@ -579,7 +581,6 @@ impl Scheduler {
     fn add(&mut self, k: Chunk) {
         // The frontier starts no move without room, so running out of mounts is a bug.
         let id = self.mounts.pop().or_bug(Errno::ENOSPC);
-        let zoom = k.tile_zoom();
         let edits = render_edits();
         let sources = Sources::of(k, edits);
         self.builder.add(id, k);
@@ -598,7 +599,7 @@ impl Scheduler {
             retier: false,
             tiers: Held::EMPTY,
             layout: None,
-            desired: chunk_zoom(zoom),
+            desired: k.cell_zoom(),
             sources,
         };
         slot.unmeasured();
@@ -911,7 +912,7 @@ impl Scheduler {
                 continue;
             }
             let (x0, y0) = s.base();
-            let translation = DrawList::translation([pxl_spec::space::pvf3::nearest(x0, frame.eye[0]), y0, 0.0], frame.eye);
+            let translation = DrawList::translation([pxl_spec::space::zoom::nearest(x0, frame.eye[0]), y0, 0.0], frame.eye);
             let Some(t) = s.tier(cell_zoom, generation) else { continue };
             // Slots are recycled between chunks, so a chunk must draw only from a slot
             // it holds; otherwise it can draw another chunk's ground.

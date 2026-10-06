@@ -14,7 +14,7 @@
 // case them the way Rust would is to rename the protocol.
 
 use super::cube_type::cube_types;
-use super::r#type::Swatch;
+use super::Swatch;
 
 /// `sentinel`'s color for a value.
 pub const fn sentinel(t: u8) -> Option<Swatch> {
@@ -82,6 +82,7 @@ pub const fn ground(t: u8) -> Option<Swatch> {
         cube_types::ground::light_rail => Some(Swatch::new(0x666666)),
         cube_types::ground::subway => Some(Swatch::new(0x999999)),
         cube_types::ground::monorail => Some(Swatch::new(0x777777)),
+        cube_types::ground::rail_construction => Some(Swatch::new(0x808080)),
         cube_types::ground::rail => Some(Swatch::new(0x707070)),
         cube_types::ground::aeroway => Some(Swatch::new(0xbbbbcc)),
         // A sentinel a baked cell can hold.

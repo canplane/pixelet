@@ -7,7 +7,6 @@ use pxl_render::asset::atlas::BillboardAtlas;
 use pxl_spec::space::v3::V3;
 
 use crate::kernel::kernel;
-pub use crate::layer::billboard::order::BillboardOrder;
 use xpute_runtime::global::Global;
 
 static SHEET: Global<BillboardAtlas> = Global::new();
@@ -38,3 +37,15 @@ pub fn remove_billboard_set(set: u32) {
     let sched = &mut k.sched;
     sched.billboards.remove(&mut sched.draw, set);
 }
+
+/// Draw order among billboard sets, only for ties on the same pixels at the
+/// same depth: the transient bubble wins over the badge.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum BillboardOrder {
+    Poi = 0,
+    Chat = 1,
+}
+
+/// One set per order, each owner letting its set go before making another.
+pub const SETS_MAX: usize = 2;

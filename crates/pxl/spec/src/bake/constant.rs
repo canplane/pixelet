@@ -3,7 +3,7 @@
 use crate::space::hierarchy::{ancestor_of, first_descendant_of};
 use crate::space::pvf3::core::IVEC_Z_W;
 use crate::space::pvf3::ivec::IVec;
-use crate::space::pyramid::{CHUNK_STEPS, LEAF_Z};
+use crate::space::pyramid::LEAF_Z;
 use crate::space::sparse_tree::mem::SparseTreeLayout;
 use crate::space::zoom::{count, shamt, units, Zoom, UNIT_Z};
 
@@ -47,8 +47,9 @@ pub use super::object::OBJECT_TIERS;
 
 pub const OBJECT_FINEST: Zoom = CELL + OBJECT_TIERS as Zoom - 1;
 
-/// A band: a column's chunk on a leaf stood up as a cube, so one octree each.
-pub const BAND: Zoom = CELL - CHUNK_STEPS;
+/// A band: the object store's column cut into cubes 64 cells a side, one
+/// octree each. A storage format, apart from how a view is chunked.
+pub const BAND: Zoom = CELL - 6;
 
 /// A band's octree, from the finest tier to the band. A uniform block folds up
 /// to the root, so a leaf may stand for a whole band.

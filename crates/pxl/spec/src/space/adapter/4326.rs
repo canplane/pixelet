@@ -5,7 +5,8 @@
 // Uppercase as the notation these macro-like helpers are written in.
 #![allow(non_snake_case)]
 
-use crate::space::pvf3::{FVec, IVec, Pvf3, REACH, ROUND};
+use crate::space::pvf3::{FVec, IVec, Pvf3, REACH};
+use crate::space::zoom::ROUND;
 
 use super::epsg3857::{self, G3857};
 

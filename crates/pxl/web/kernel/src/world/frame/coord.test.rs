@@ -3,7 +3,7 @@
 use super::*;
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::pvf3;
-use pxl_spec::space::pvf3::ROUND;
+use pxl_spec::space::zoom::ROUND;
 use xpute_core::math::rng::SplitMix64;
 
 /// Taken back by its cell, a point the floats leave a hair under itself

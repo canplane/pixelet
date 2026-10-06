@@ -60,7 +60,10 @@ A size answers the same questions at every zoom (`zoom.rs`): its side in
 units (`units`), how many of a finer zoom's cells stand across it (`count`),
 which cell a point lies in and where that cell begins (`index_of`,
 `base_of`), and its box (`cube`). An address goes to its cell's index and
-back the same way, a shift of each lane (`indexer.rs` `idx`, `from_idx`).
+back the same way, a shift of each lane (`idx`, `from_idx`). The world is
+zoom 0's cell, once around in X (`ROUND`, `around`, `wrap_index`), and a
+stored X stands where it is nearest the eye (`nearest`); all of it is `zoom.rs`'s,
+not PVF3's, which is only the format.
 
 A zoom's side can reach a lane's width, and then that lane collapses: Z is
 16 bits wide, so from z8 coarser a cell is horizontal, and nothing had to
@@ -68,9 +71,8 @@ say so.
 
 ## A unit has no size
 
-`pvf3/projection.rs` states the rule: _"The scalar space is normalized: 1.0
-is one lattice unit, and whatever a unit is in meters is the caller's scaling
-outside this module."_ Nothing under `pvf3/` or in `indexer.rs` carries a
+`pvf3/projection.rs` states the rule: doubles go in and out with 1.0 as one
+lattice unit, and whatever a unit is in meters is the caller's scaling. Nothing under `pvf3/` carries a
 distance.
 
 Meaning enters at an **adapter**, and only there:
@@ -181,16 +183,13 @@ prunes nothing.
 
 ## What else is here
 
-|                                  |                                                                                                        |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| [`pvf3/`](./pvf3/)               | the packed words: `ivec`, `fvec`, their pair, and doubles in and out                                   |
-| [`adapter/`](./adapter/)         | where a unit gets a meaning                                                                            |
-| `zoom.rs`                        | `Zoom`, the one form a size takes                                                                      |
-| `hierarchy.rs`                   | parent and child in any number of axes                                                                 |
-| `indexer.rs`                     | an address to its cell's index at a zoom, and back                                                     |
-| `lod.rs`                         | the cell zoom a distance is drawn at, and the tiles of a zoom an observation can miss                  |
-| [`lattice/`](./lattice/)         | structures over the lattice: one address hash, points bucketed in 3D, rectangles indexed on the screen |
-| [`sparse_tree/`](./sparse_tree/) | an octree in two flat lanes, storing what differs from the default                                     |
-| `xy.rs`                          | `TO_XY`, which drops Z to give the key every 2D map surface is keyed by                                |
-| `v3.rs`                          | three doubles, for the arithmetic that has left the lattice                                            |
-| `mat4.rs`                        | sixteen doubles, column-major: the transforms that arithmetic is carried through                       |
+|                                  |                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------- |
+| [`pvf3/`](./pvf3/)               | the packed words: `ivec`, `fvec`, their pair, and doubles in and out                  |
+| [`adapter/`](./adapter/)         | where a unit gets a meaning                                                           |
+| `zoom.rs`                        | `Zoom`, the one form a size takes; an address's cell index; the world round           |
+| `hierarchy.rs`                   | parent and child in any number of axes                                                |
+| `lod.rs`                         | the cell zoom a distance is drawn at, and the tiles of a zoom an observation can miss |
+| [`sparse_tree/`](./sparse_tree/) | an octree in two flat lanes, storing what differs from the default                    |
+| `v3.rs`                          | three doubles, for the arithmetic that has left the lattice                           |
+| `mat4.rs`                        | sixteen doubles, column-major: the transforms that arithmetic is carried through      |

@@ -9,10 +9,12 @@ use super::pyramid::{tile_at, tile_rows, Tile, GROUND, LEAF_Z, TOP_Z};
 use super::v3::Aabb;
 use super::zoom::{units, Zoom, UNIT_Z};
 
-/// The criterion as a distance per cell side: a zoom is drawn from `SPLIT`
-/// of its cells away out to twice that. 192 hands the finest tier off at
-/// 192u at 1080 px and 50°.
-pub const SPLIT: f64 = 192.0;
+/// The camera grid, the one knob of resolution: a cell is an angle of
+/// 1/`SPLIT` radians about the eye, so it is drawn from `SPLIT` of its sides
+/// away out to twice that. Pixels are a screen's, derived from it
+/// (`target_cell_px`). One cell of the grid is one thing drawn; what lies
+/// inside it is its layer's to fold.
+pub const SPLIT: f64 = 96.0;
 
 /// The view `SPLIT` is stated at: 1080 px high and 50° across it.
 pub const REFERENCE_VIEWPORT_H: f64 = 1080.0;
@@ -25,7 +27,7 @@ pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
 }
 
 /// The pixels a cell spans at its zoom's split distance, at the reference
-/// view: about six.
+/// view: about twelve.
 pub fn target_cell_px() -> f64 {
     px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / SPLIT
 }
@@ -35,7 +37,7 @@ pub const fn split_distance(cell_zoom: Zoom) -> f64 {
     SPLIT * units(cell_zoom)
 }
 
-/// The cell zoom a pixel covers at `r` from the eye: the widest cell whose
+/// The camera grid's cell zoom at `r` from the eye: the widest cell whose
 /// split distance is within `r`. Distance only: with the surface angle in,
 /// the skyline would be drawn coarsest. Finer than the ground's near the
 /// eye, held to what a zoom can name.
@@ -70,10 +72,9 @@ impl Tau {
         cell_at(r * self.0)
     }
 
-    /// The tile zoom a chunk at `r` reads: the one whose cells are the rule's,
-    /// which it draws a step coarser, each drawn cell the mean of four; held to the pyramid.
+    /// The ground tile whose records fold into the grid's cell at `r`; held to the pyramid.
     pub fn z_at(self, r: f64) -> Zoom {
-        GROUND.z_of(self.cell_at(r)).clamp(TOP_Z as i32, LEAF_Z as i32) as Zoom
+        GROUND.grid_z(self.cell_at(r)).clamp(TOP_Z as i32, LEAF_Z as i32) as Zoom
     }
 
     pub const fn demand_reach(self, zoom: Zoom) -> f64 {
@@ -81,10 +82,10 @@ impl Tau {
     }
 }
 
-/// How far from an observer's foot a demand at `z` can lie: the split
-/// distance of the ground's cell a zoom coarser. Bounds the run along the ground too.
+/// How far from an observer's foot a demand at `z` can lie: where the grid's
+/// cell a zoom coarser begins. Bounds the run along the ground too.
 pub const fn demand_reach(zoom: Zoom) -> f64 {
-    split_distance(GROUND.cell_zoom(zoom - 1))
+    split_distance(GROUND.grid_cell(zoom - 1))
 }
 
 /// The most tiles a zoom's demand span along an axis: ⌊d / tile⌋ + 2, the same at every zoom.

@@ -5,12 +5,12 @@
 
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::{Bounds, Contents, Frustum, Observation};
-use pxl_spec::space::pyramid::{GROUND, TOP_Z};
+use pxl_spec::space::pyramid::TOP_Z;
 use pxl_spec::space::v3::{add3, Aabb, V3};
 
 use crate::world::observer::{Footprint, Grid, Met, Observer, OnPatch, Sight};
 use crate::world::pyramid::domain::{Domain, Price};
-use pxl_spec::space::zoom::{units, Zoom};
+use pxl_spec::space::zoom::Zoom;
 
 #[derive(Clone)]
 pub struct World {
@@ -38,10 +38,8 @@ impl World {
 }
 
 impl Bounds for World {
-    /// The ground's lowest is its top cell's floor, as the index lane bounds
-    /// it. Flat, it rises a cell's step over an index cell; a box is off by all
-    /// of itself.
-    fn contents(&self, zoom: Zoom, region: Aabb) -> Contents {
+    /// The ground's lowest is its top cell's floor, as the index lane bounds it.
+    fn contents(&self, _zoom: Zoom, region: Aabb) -> Contents {
         if !self.answered {
             return Contents::Unknown;
         }
@@ -53,22 +51,13 @@ impl Bounds for World {
             }
             .meet(region)
         };
-        let cell = units(GROUND.cell_zoom(zoom));
-        let (mut bound, mut rise): (Option<Aabb>, f64) = (None, 0.0);
-        if let Some(g) = column(self.ground - 1.0 - self.slack, self.ground + self.slack) {
-            bound = Some(g);
-            rise = (1.0 + 2.0 * self.slack) / 16.0 * cell;
-        }
+        let mut bound: Option<Aabb> = column(self.ground - 1.0 - self.slack, self.ground + self.slack);
         for (b0, b1) in self.boxes.iter().filter(|(b0, b1)| b0[0] < hi[0] && b1[0] > lo[0] && b0[1] < hi[1] && b1[1] > lo[1]) {
             if let Some(b) = column(b0[2] - self.slack, b1[2] + self.slack) {
                 bound = Some(bound.map_or(b, |a| a.join(b)));
-                rise = rise.max(b.max[2] - b.min[2]);
             }
         }
-        bound.map_or(Contents::Empty, |bound| Contents::Holds {
-            bound,
-            rise: rise.clamp(0.0, region.extent()[2]),
-        })
+        bound.map_or(Contents::Empty, |bound| Contents::Holds { bound })
     }
 }
 

@@ -17,7 +17,7 @@
 
 use pxl_render::look::globe::MERCATOR_RADIUS_U;
 use pxl_spec::bake::published::PUBLISHED_TOP_Z;
-use pxl_spec::space::lod::{Tau, SPLIT};
+use pxl_spec::space::lod::{target_cell_px, Tau, SPLIT};
 
 use crate::kernel::kernel;
 use crate::param;
@@ -40,13 +40,14 @@ const _: () = assert!(
     "the headroom does not fit the arena: a view could be left with no move it can make"
 );
 
-/// The quality at which `CENTER_CELL_LOGICAL_PX` logical pixels at the
-/// optical axis span one cell, never finer than `SPLIT`. The screen plane
+/// The quality at which a cell spans as many logical pixels at the optical
+/// axis as the camera grid's at the reference view (`target_cell_px`), never
+/// finer than `SPLIT`. The screen plane
 /// stands `height / (2 · tan(fov / 2))` pixels from the eye, so `n` of them
 /// span `2 · atan(n / 2 / that)`.
 pub fn target() -> Tau {
     let v = view();
-    let half = param::CENTER_CELL_LOGICAL_PX * libm::tan(v.fov.to_radians() / 2.0) / v.height;
+    let half = target_cell_px() * libm::tan(v.fov.to_radians() / 2.0) / v.height;
     Tau::of((2.0 * libm::atan(half) * SPLIT).max(1.0))
 }
 

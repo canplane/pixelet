@@ -8,9 +8,9 @@
 use std::borrow::Cow;
 
 use pxl_spec::bake::format::{Ground, Occupancy, Terrain, ELE_LANE};
-use pxl_spec::cell::cube::cube_types::{ground, sentinel};
-use pxl_spec::space::indexer::idx;
+use pxl_spec::cell::cube_types::{ground, sentinel};
 use pxl_spec::space::pyramid::{Folds, Tile, GROUND, LEAF_Z, TILE_CELLS};
+use pxl_spec::space::zoom::idx;
 
 use crate::coverage::Coverage;
 use crate::pyramid::Absent;

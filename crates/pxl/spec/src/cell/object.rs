@@ -10,7 +10,7 @@
 use std::sync::LazyLock;
 
 use crate::cell::color;
-use crate::cell::cube::cube_types::{object, Block, Ground};
+use crate::cell::cube_types::{object, Block, Ground};
 use crate::cell::decor::{decor_types, DecorId};
 
 /// Explicit air: retains the leaf and erases lower layers.

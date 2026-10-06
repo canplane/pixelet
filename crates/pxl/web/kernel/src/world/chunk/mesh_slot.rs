@@ -14,23 +14,27 @@
 use pxl_render::look::globe::MERCATOR_RADIUS_U;
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::pyramid::{CHUNK_DRAWN, LEAF_Z, TOP_Z};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, LEAF_Z, TOP_Z};
 
-use crate::param::{ARENA_COARSE_GROUPS, ARENA_GROUP_SLOTS};
+use crate::param::{ARENA_COARSE_GROUPS, COARSE_POOL_BYTES, FINE_POOL_BYTES};
 use crate::world::pyramid::domain::cover_pieces;
 use pxl_spec::space::zoom::Zoom;
 
-const SLOTS: u32 = ARENA_GROUP_SLOTS;
 const COARSE_GROUPS: u32 = ARENA_COARSE_GROUPS;
 
 /// One box per column: ground is a heightfield, so a column is one run per chunk.
-pub const FINE_BOXES: u32 = CHUNK_DRAWN * CHUNK_DRAWN;
-pub const COARSE_BOXES: u32 = crate::param::COARSE_BOXES;
+pub const FINE_BOXES: u32 = CHUNK_CELLS * CHUNK_CELLS;
+/// A coarse chunk's cells at the boxes each draws.
+pub const COARSE_BOXES: u32 = ((CHUNK_CELLS * CHUNK_CELLS) as f64 * crate::param::COARSE_BOXES_PER_CELL) as u32;
 
-/// Most slots a coarse-pool tier can fill: a chunk bakes to at most 2·32³
-/// boxes (each drawn cell plus the floor under it). A bound from the
+/// Slots each pool's bytes hold.
+const FINE_SLOTS: u32 = FINE_POOL_BYTES / (FINE_BOXES * FINE_BOX_WORDS * 4);
+const GROUP_SLOTS: u32 = COARSE_POOL_BYTES / COARSE_GROUPS / (COARSE_BOXES * COARSE_BOX_WORDS * 4);
+
+/// Most slots a coarse-pool tier can fill: a chunk bakes to at most two boxes
+/// a cell (each cell plus the floor under it). A bound from the
 /// representation, which `RESERVE` keeps free for one coarsening.
-pub const COARSE_TIER_SLOTS: u32 = (2 * CHUNK_DRAWN.pow(3)).div_ceil(COARSE_BOXES);
+pub const COARSE_TIER_SLOTS: u32 = (2 * CHUNK_CELLS.pow(3)).div_ceil(COARSE_BOXES);
 
 pub const POOLS: usize = 3;
 
@@ -73,8 +77,8 @@ impl Pool {
 
     pub const fn slots(self) -> u32 {
         match self {
-            Pool::Fine => SLOTS,
-            Pool::Coarse => COARSE_GROUPS * SLOTS,
+            Pool::Fine => FINE_SLOTS,
+            Pool::Coarse => COARSE_GROUPS * GROUP_SLOTS,
             Pool::Cover => COVER_SLOTS,
         }
     }
@@ -151,7 +155,7 @@ pub const fn group_box_words(group: u32) -> u32 {
 
 pub const fn group_boxes(group: u32) -> u32 {
     let pool = pool_of_group(group);
-    let slots = if group < COARSE_GROUPS { SLOTS } else { pool.slots() };
+    let slots = if group < COARSE_GROUPS { GROUP_SLOTS } else { pool.slots() };
     slots * pool.boxes()
 }
 
@@ -175,7 +179,7 @@ pub fn slot_at(index: usize) -> MeshSlot {
     let pool = Pool::at(index);
     let n = (index - pool.first()) as u32;
     let (group, residue) = match pool {
-        Pool::Coarse => (n / SLOTS, n % SLOTS),
+        Pool::Coarse => (n / GROUP_SLOTS, n % GROUP_SLOTS),
         Pool::Fine => (FINE_GROUP, n),
         Pool::Cover => (COVER_GROUP, n),
     };

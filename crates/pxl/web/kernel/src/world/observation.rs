@@ -10,7 +10,7 @@ use pxl_spec::space::hierarchy::ancestor_of;
 use pxl_spec::space::lod::{demand_reach, Tau};
 use pxl_spec::space::observation::{band, Bounds, Contents, DemandEstimator, Frustum, Observation, Requirement};
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_zoom, tile_at, Tile, GROUND, LEAF_Z};
+use pxl_spec::space::pyramid::{chunk_zoom, tile_at, Tile, LEAF_Z};
 use pxl_spec::space::v3::Aabb;
 
 use crate::kernel::kernel;
@@ -22,7 +22,7 @@ use crate::world::frame::view::view;
 use crate::world::observer::Footprint;
 use crate::world::pyramid::Layer as _;
 use crate::world::residency::floor;
-use pxl_spec::bake::constant::{CELL, OBJECT_FINEST};
+use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::zoom::{units, Zoom};
 
 pub fn eye() -> Option<[f64; 3]> {
@@ -52,18 +52,15 @@ pub fn observation() -> Option<Observation> {
 
 /// What the kernel knows of the world: terrain index bounds (from the tile
 /// or the nearest resident one over it) and the objects' 3D bounds. Unknown
-/// where no terrain tile over part of the box is held. The error is a cell
-/// across and the rise over a cell up; a folded-away object counts whole.
+/// where no terrain tile over part of the box is held; a folded-away object counts whole.
 pub struct Known;
 
 impl Bounds for Known {
     fn contents(&self, zoom: Zoom, region: Aabb) -> Contents {
         let (h0, h1) = (region.min[2], region.max[2]);
         let cut = |(lo, hi): (f64, f64)| (lo <= h1 && hi >= h0).then(|| (lo.max(h0), hi.min(h1)));
-        let cell = units(GROUND.cell_zoom(zoom));
         let mut known = true;
         let mut bound: Option<Aabb> = None;
-        let mut rise = 0.0f64;
         under(zoom, region, &mut |node, square| {
             let Some(n) = read(zoom, node) else {
                 known = false;
@@ -75,46 +72,33 @@ impl Bounds for Known {
                     min: [square.min[0], square.min[1], lo],
                     max: [square.max[0], square.max[1], hi],
                 });
-                rise = rise.max(n.slope * cell);
             }
             if let Some(objects) = kernel().objects.bound_in(&square) {
                 hold(objects);
-                rise = rise.max(objects.max[2] - objects.min[2]);
             }
         });
         match (known, bound) {
             (false, _) => Contents::Unknown,
             (true, None) => Contents::Empty,
-            (true, Some(bound)) => Contents::Holds {
-                bound,
-                rise: rise.clamp(0.0, region.extent()[2]),
-            },
+            (true, Some(bound)) => Contents::Holds { bound },
         }
     }
 
     fn finest(&self, region: Aabb) -> Zoom {
-        if kernel().objects.bound_in(&region).is_some() {
-            OBJECT_FINEST
-        } else {
-            CELL
-        }
+        kernel().objects.finest_in(&region).map_or(CELL, |z| z.max(CELL))
     }
 }
 
 #[derive(Clone, Copy)]
 struct Node {
     ground: (f64, f64),
-    slope: f64,
 }
 
 /// None where no terrain tile over the node is resident.
 fn read(zoom: Zoom, node: (Zoom, [i64; 2])) -> Option<Node> {
     let tile = tile_at(zoom, ancestor_of(node.1, u32::from(node.0 - zoom)));
     let relief = Access::now().relief(tile, node).value()?;
-    Some(Node {
-        ground: relief.extent,
-        slope: relief.slope,
-    })
+    Some(Node { ground: relief.extent })
 }
 
 /// Each flat-lattice node at `z` under `region`: the region itself where

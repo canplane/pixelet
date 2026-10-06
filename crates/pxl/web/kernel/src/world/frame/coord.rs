@@ -4,10 +4,10 @@
 //! exactly, so positions are kept as the world's, X running on past a lap of
 //! it so that it is continuous about the eye.
 
-use pxl_spec::space::pvf3::nearest;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
+use pxl_spec::space::zoom::nearest;
 use xpute_core::math::scalar::round;
 
 use crate::world::frame::view::view;

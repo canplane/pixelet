@@ -8,11 +8,6 @@ use pxl_spec::space::pyramid::TILE_CHUNKS;
 
 // ---- product quality ----
 
-/// Logical pixels one observation cell spans at the optical axis. Six is
-/// the reference view `SPLIT` was stated at (1080 tall at 50°); a screen
-/// asking finer is held at `SPLIT`.
-pub const CENTER_CELL_LOGICAL_PX: f64 = 6.0;
-
 // ---- what refinement observes ----
 
 /// The estimator's patch side, in radians (about 10°, 77 rays on a 16:9
@@ -56,24 +51,32 @@ pub const COARSEN_HOLD_MS: f64 = QUALITY_WAIT_MS;
 
 // ---- device budget: memory ----
 
-/// Slots in one arena group, and so leaf chunks drawn at their own cells at
-/// once: about the flat-ground disc within where the leaves end. A view needing
-/// more is drawn coarser.
-pub const ARENA_GROUP_SLOTS: u32 = 330;
+/// Bytes of meshes drawn at a leaf's cells or finer: about the flat-ground
+/// disc within where the leaves end. A view needing more is drawn coarser.
+pub const FINE_POOL_BYTES: u32 = 31 << 20;
 
-/// Groups shared by the coarse tiers. The goal over rolling ground is some
-/// 350 to 760 pieces (measured 2026-09-28), plus refinements under way.
+/// Bytes of the coarser meshes. The goal over rolling ground is some 350 to
+/// 760 pieces (measured 2026-09-28), plus refinements under way.
+pub const COARSE_POOL_BYTES: u32 = 115 << 20;
+
+/// Groups the coarser meshes are bound in, each one storage binding.
 pub const ARENA_COARSE_GROUPS: u32 = 5;
 
-/// Boxes a coarse slot holds. A larger mesh fills more slots, never a
-/// coarser cube; the coarsest fills one (asserted in mesh_slot.rs).
-pub const COARSE_BOXES: u32 = 4551;
+/// Boxes a coarse chunk draws a cell, as a slot is sized for: the ground's,
+/// the floor and skirt under it, what objects add. A larger mesh fills more
+/// slots, never a coarser cube.
+pub const COARSE_BOXES_PER_CELL: f64 = 4.44;
 
 // ---- decor's tiers ----
 
-/// Smallest size, in tier cells on screen, a decor kind is still drawn at as
-/// sprites. Set by eye: below half a cell an instance is pixel noise.
-pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
+/// A decor kind is drawn as a model while it covers at least this many pixels
+/// at the reference view: by eye, where Google's maps stop drawing buildings
+/// in 3D.
+pub const DECOR_MODEL_PX: f64 = 12.0;
+
+/// Under this many pixels a decor kind's sprite is not drawn: set by eye,
+/// below it an instance is pixel noise.
+pub const DECOR_SPRITE_PX: f64 = 3.0;
 
 // ---- per-frame work caps ----
 

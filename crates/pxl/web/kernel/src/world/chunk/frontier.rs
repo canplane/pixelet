@@ -22,7 +22,7 @@ use pxl_spec::space::lod::Tau;
 use crate::param::REFINEMENTS_IN_FLIGHT;
 use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};
 use crate::world::observation::Order;
-use crate::world::pyramid::chunk::{Chunk, LEAF_CHUNK};
+use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::domain::Price;
 use crate::world::quality::fits;
 use pxl_spec::space::zoom::Zoom;
@@ -44,7 +44,7 @@ pub fn zoom_of(c: Chunk, outermost: bool) -> Zoom {
     if outermost {
         c.zoom()
     } else {
-        c.drawn_zoom()
+        c.cell_zoom()
     }
 }
 
@@ -52,8 +52,15 @@ pub fn pool_of(c: Chunk, cell_zoom: Zoom) -> Pool {
     Pool::of(c.zoom(), cell_zoom)
 }
 
-/// Slots per pool, counted before allocation. A leaf piece also takes a coarse
-/// slot, for the ancestor it refines through.
+/// A coarse chunk whose children are fine: the last coarse one on its line.
+/// One child stands for all: a pool is its zoom's alone.
+fn into_fine(c: Chunk) -> bool {
+    pool_of(c, c.cell_zoom()) == Pool::Coarse && pool_of(c.children()[0], c.children()[0].cell_zoom()) == Pool::Fine
+}
+
+/// Slots per pool, counted before allocation. A coarse chunk split into fine
+/// ones keeps a coarse slot, the one it is drawn in while they are built, so a
+/// finer quality never asks for less of a pool.
 pub struct Need<F> {
     pub slots: F,
     /// stop counting a step past the arena
@@ -67,16 +74,12 @@ impl<F: Fn(Chunk, Zoom) -> u32> Price for Need<F> {
         match pool_of(c, cell_zoom) {
             Pool::Coarse => [0, k, 0],
             Pool::Cover => [0, 0, k],
-            Pool::Fine => [k, 1, 0],
+            Pool::Fine => [k, 0, 0],
         }
     }
 
     fn split(&self, c: Chunk) -> Slots {
-        if c.zoom() == LEAF_CHUNK - 1 {
-            [0, 1, 0]
-        } else {
-            [0; POOLS]
-        }
+        [0, u32::from(into_fine(c)), 0]
     }
 
     fn over(&self, n: &Slots) -> bool {

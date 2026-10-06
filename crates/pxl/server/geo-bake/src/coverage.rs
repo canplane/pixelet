@@ -11,9 +11,9 @@ use pxl_geo_spec::table::CATALOG;
 use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::hierarchy::{ancestor_of, first_descendant_of};
-use pxl_spec::space::indexer::idx;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LEAF_Z;
+use pxl_spec::space::zoom::idx;
 use pxl_spec::space::zoom::{count, units, Zoom};
 
 use crate::elevation::tile_reads;

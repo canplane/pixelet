@@ -12,9 +12,9 @@ use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, TileSource};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::{nearest, nearest_box};
-use pxl_spec::space::pyramid::{CHUNK_DRAWN, GROUND, LEAF_Z};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, LEAF_Z, TILE_CELLS};
 use pxl_spec::space::v3::{len3, sub3, V3};
+use pxl_spec::space::zoom::{from_idx, idx, nearest, nearest_box};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 use xpute_runtime::sched::frame_budget::FrameBudget;
@@ -25,17 +25,17 @@ use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::DECOR_SIZE;
-use crate::layer::object::store::{object_col_revision, Store};
+use crate::layer::object::store::{object_col_revision, At, Store};
 use crate::shell::setting::store::settings_store;
-use crate::world::chunk::build::Builder;
+use crate::world::chunk::build::{draws_as_held, Builder};
 use crate::world::chunk::mesh_slot::OCCUPANCY;
 use crate::world::chunk::table::Scheduler;
 use crate::world::observation::{eye, observation};
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
-use pxl_spec::bake::constant::BAND;
+use pxl_render::mesh::run::APRON;
+use pxl_spec::bake::constant::{unpack_pos, BAND, CELL};
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::indexer::{from_idx, idx};
 use pxl_spec::space::zoom::{index, Zoom};
 use xpute_runtime::global::Global;
 
@@ -113,12 +113,22 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
     let revision = cols.iter().fold(0u32, |r, &c| r.wrapping_mul(31).wrapping_add(object_col_revision(c)));
     let (x0, y0, side) = chunk.rect();
     let inside = |x: i64, y: i64| (x0..x0 + side).contains(&(x as f64)) && (y0..y0 + side).contains(&(y as f64));
-    let hide = hide.filter(|h| match *h {
-        DecorHide::Placed(at) => {
-            let o = from_idx(BAND, at.col_idx);
-            inside(ivec::X(o), ivec::Y(o))
+    // Only where the chunk draws it as it is held: a fold is no one's to hide.
+    let own = draws_as_held(chunk, CELL);
+    let hide = hide.filter(|h| {
+        own && match *h {
+            DecorHide::Placed(e) => {
+                let (x, y, z, _) = unpack_pos(e.pos);
+                let o = At {
+                    col_idx: e.col_idx,
+                    band: e.band_idx,
+                    step: [x, y, z],
+                }
+                .corner();
+                inside(ivec::X(o.i), ivec::Y(o.i))
+            }
+            DecorHide::Scattered([x, y, _]) => inside(x, y),
         }
-        DecorHide::Scattered([x, y, _]) => chunk.tile_zoom() == LEAF_Z && inside(x, y),
     });
     Some(Sources {
         read_from: Terrain::pyramid().residency().drawn_from(chunk.tile())?.zoom,
@@ -130,16 +140,16 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
 
 fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
     let tiles = Terrain::pyramid();
-    // The tile the terrain draws the chunk from, read over the chunk whose cells
-    // are that tile's; past the leaves, the leaf chunk the chunk lies in.
+    // The tile the terrain draws the chunk from, read over the chunk whose
+    // side is that many of its cells; past the leaves, the chunk over it as wide.
     let src = tiles.residency().drawn_from(chunk.tile())?;
     let tile = tiles.residency().get(src)?;
+    let side_of = |k: Chunk| TILE_CELLS >> (k.zoom() - k.tile_zoom());
     let mut over = chunk;
-    while over.finer() > 0 || over.tile_zoom() > src.zoom {
+    while side_of(over) < CHUNK_CELLS || over.tile_zoom() > src.zoom {
         over = over.parent()?;
     }
-    let zoom = over.tile_zoom();
-    let retina = (-over.finer()) as u32;
+    let (zoom, side) = (over.tile_zoom(), side_of(over));
     let (cx0, cy0, _) = chunk.rect();
     let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
@@ -151,15 +161,14 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
                 tile: view,
                 frame: Frame::of(src),
                 origin: [0, 0],
-                shift: over.finer(),
+                n: 1,
             },
             beside: [None; 8],
-            tile_shamt: GROUND.tile_cell_shamt() - retina,
-            zoom: over.drawn_zoom(),
-            textured: settings_store().textures,
         };
-        c.sample.read(&around, [tx0 as i64, ty0 as i64]).ok()?;
+        c.sample.read(&around, [tx0 as i64, ty0 as i64], side + 2 * APRON).ok()?;
     }
+    // Interaction reads what is drawn as it is held, never a fold of it.
+    let own = draws_as_held(chunk, CELL);
     c.placed.clear();
     c.placed.try_reserve(c.cols.len()).ok()?;
     c.placed.extend(c.cols.iter().map(|&col_idx| {
@@ -168,11 +177,11 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
             col_idx,
             ox: ivec::X(o) as f64 - cx0,
             oy: ivec::Y(o) as f64 - cy0,
-            hittable: chunk.tile_zoom() == LEAF_Z,
+            hittable: own,
         }
     }));
     let target = GROUND.cell_zoom(zoom);
-    let (cx, cy, span) = (index(target, x0), index(target, y0), i64::from(CHUNK_DRAWN << retina));
+    let (cx, cy, span) = (index(target, x0), index(target, y0), i64::from(side));
     match zoom < LEAF_Z && sources.shown {
         true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
         false => c.folded.clear(),
@@ -183,15 +192,24 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         zoom,
         x0,
         y0,
-        tx0: tx0 << retina,
-        ty0: ty0 << retina,
-        retina,
+        tx0,
+        ty0,
+        side,
         col_idx: (zoom == LEAF_Z).then(|| idx(BAND, ivec::gather(x0, y0, 0))),
         folded: (zoom < LEAF_Z).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
-    let step = GROUND.finest_in(zoom);
-    let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown, chunk.region())?;
+    let built = DecorBuild::build(
+        scratch,
+        kinds,
+        Some(&ground),
+        &c.placed,
+        sources.hide.filter(|_| own),
+        store,
+        chunk.cell_zoom(),
+        sources.shown,
+        chunk.region(),
+    )?;
     let index = built.bytes();
     let heights = built.heights();
     let instances = built.instances() as u32;

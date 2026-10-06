@@ -21,18 +21,18 @@ use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::{ancestor_of, child_of, first_descendant_of, offset_in};
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pvf3::ivec::TO_XY;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{projection, REACH};
 use pxl_spec::space::pyramid::{Cell, Tile, EXTENT, GROUND, LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::{add3, Aabb, V3};
-use pxl_spec::space::xy::TO_XY;
 
 use crate::io::demand::Category;
 use crate::kernel::kernel;
 use crate::layer::object::store::{Entry, EntryAt, Store};
 use crate::world::pyramid::{Layer as _, Pyramid};
 use crate::world::residency::Residency;
-use pxl_spec::space::indexer::idx;
+use pxl_spec::space::zoom::idx;
 use pxl_spec::space::zoom::{base_of, count, cube, index_of, units, Zoom};
 use xpute_core::math::scalar::round;
 
@@ -54,7 +54,7 @@ impl Detail {
             Detail::Zoom(z) => (z, f64::INFINITY),
             Detail::Distance(tau) => {
                 let zoom = tau.z_at(t);
-                let until = if zoom == TOP_Z { f64::INFINITY } else { tau.split_distance(GROUND.cell_zoom(zoom - 1)) };
+                let until = if zoom == TOP_Z { f64::INFINITY } else { tau.demand_reach(zoom) };
                 (zoom, until)
             }
         }
@@ -111,9 +111,6 @@ pub struct Relief {
     /// Lowest and highest ground, in units; read from a coarser tile this is
     /// wider, never narrower.
     pub extent: (f64, f64),
-    /// Steepest rise over run: the largest span of an index cell over its side,
-    /// which bounds the interpolated surface between samples.
-    pub slope: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -408,7 +405,6 @@ impl<'a> Access<'a> {
             tile,
             Relief {
                 extent: (f64::from(b.lo) * U_PER_CELL, f64::from(b.hi) * U_PER_CELL),
-                slope: f64::from(b.span) * U_PER_CELL / units(index),
             },
         )
     }

@@ -5,16 +5,15 @@
 //! its cells into a run set of its own. The mesh is written through caller
 //! blocks of any size (`Step::NeedMesh`, `Step::Full`).
 
-use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
 use crate::look::color::{linear, srgb};
-use crate::mesh::paint::palette::shader_meta::layer_mean;
+use crate::mesh::paint::palette::layer_mean;
 use crate::mesh::run::{OwnedRunSet, RunSet, COL_SPAN};
 use crate::mesh::word::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, MaterialClasses, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::{grow, Refused};
-use pxl_spec::space::pyramid::CHUNK_DRAWN;
+use pxl_spec::space::pyramid::CHUNK_CELLS;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -77,7 +76,7 @@ const DIPS_BELOW: u32 = 4;
 const ABUTS_SIDE: u32 = 8;
 const ALL_RELATIONS: u32 = HIDES_SIDE | ABUTS_SIDE | RISES_ABOVE | DIPS_BELOW;
 
-const BAKE_ROWS_PER_STEP: u32 = 8;
+pub const BAKE_ROWS_PER_STEP: u32 = 8;
 const BAKE_BOXES_PER_STEP: usize = 512;
 
 /// The fine format: corner and width in u16 steps of its cell, floor and height
@@ -85,8 +84,8 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 ///
 /// The coarse format drops the taps (only cells a leaf's or finer are
 /// textured) and holds corner and width in a byte an axis, in eighth cells:
-/// a box is whole cells but for a cover piece's summary, and a chunk draws
-/// 32 cells across. 24 and 16 bytes a box, against 84 a vertex once.
+/// a box is whole cells but for a summarized cell, and a chunk draws
+/// `CHUNK_CELLS` cells across. 24 and 16 bytes a box, against 84 a vertex once.
 pub const FINE_BOX_WORDS: u32 = 6;
 pub const COARSE_BOX_WORDS: u32 = 4;
 
@@ -98,13 +97,14 @@ pub const fn box_words(fine: bool) -> u32 {
     }
 }
 
-/// A chunk is 64 cells, 16,384 steps, the whole u16; the sub-cell fraction's
-/// 1/255 is coarser, so nothing is lost. Heights are held against each mesh's
-/// own floor and step instead, since a run's z is the world's.
+/// A cell is 256 steps, so a set's widest row fits a u16; the sub-cell
+/// fraction's 1/255 is coarser, so nothing is lost. Heights are held against
+/// each mesh's own floor and step instead, since a run's z is the world's.
 const XY_STEPS: f64 = 256.0;
+const _: () = assert!(COL_SPAN as f64 * XY_STEPS <= 65536.0, "a fine box's corner and width live in a u16 each");
 const COARSE_XY_STEPS: f64 = 8.0;
-/// A chunk's drawn cells.
-const COARSE_RES_MAX: u32 = CHUNK_DRAWN;
+/// A chunk's cells.
+const COARSE_RES_MAX: u32 = CHUNK_CELLS;
 const _: () = assert!(COARSE_RES_MAX * (COARSE_XY_STEPS as u32) <= 256, "a coarse box's corner and width live in a byte each");
 const Z_STEPS: f64 = 65535.0;
 
@@ -240,6 +240,8 @@ struct CoarseBake {
     lod_step: u32,
     scale: u32,
     res: u32,
+    /// A run's cell's height, in units.
+    z_unit: f64,
     phase: u8,
     row: u32,
     fine: Option<FineBake>,
@@ -332,7 +334,7 @@ impl BakeContext {
         self.mesh_words = 0;
         self.box_cnt = 0;
         self.heights = heights;
-        self.box_words = box_words(fine && lod_step == 1);
+        self.box_words = box_words(fine);
         self.open = Some(if lod_step == 1 {
             Open::Fine(self.begin_fine(span, apron, unit, z_unit))
         } else {
@@ -343,6 +345,7 @@ impl BakeContext {
                 lod_step,
                 scale,
                 res: inner / lod_step,
+                z_unit,
                 phase: 0,
                 row: 0,
                 fine: None,
@@ -719,8 +722,8 @@ impl BakeContext {
                 return false;
             }
             self.coarse.start.push(self.coarse.z0.len() as u32);
-            self.heights = Heights::of(&self.coarse.view(), U_PER_CELL);
-            b.fine = Some(self.begin_fine(res, 0, (lod_step * scale) as f64 * U_PER_CELL, U_PER_CELL));
+            self.heights = Heights::of(&self.coarse.view(), b.z_unit);
+            b.fine = Some(self.begin_fine(res, 0, (lod_step * scale) as f64 * b.z_unit, b.z_unit));
             b.phase = 2;
             return false;
         }

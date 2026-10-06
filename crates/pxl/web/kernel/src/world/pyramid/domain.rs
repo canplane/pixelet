@@ -14,12 +14,13 @@
 //! chunk splits only within `split_reach`, which bounds the goal whatever the
 //! screen. A coarser quality splits a subset of what a finer one does.
 
+use pxl_spec::space::zoom::nearest_box;
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::lod::{cubes_meeting, demand_reach, Tau};
 use pxl_spec::space::observation::{Bounds, Contents, Observation, Requirement};
-use pxl_spec::space::pvf3::{nearest_box, REACH};
+use pxl_spec::space::pvf3::REACH;
 use pxl_spec::space::pyramid::{chunk_zoom, Tile};
 use pxl_spec::space::v3::Aabb;
 
@@ -241,17 +242,10 @@ impl Domain {
             return;
         }
         let (bound, error) = match (self.contents(c), parent) {
-            // A cover piece is drawn one cell per chunk and measured as drawn: half
-            // that cell across, and the box's full height.
-            (Contents::Holds { bound, .. }, _) if self.outermost(c) => {
-                let half = units(c.zoom()) / 2.0;
-                (bound, [half, half, bound.extent()[2]])
-            }
-            // Across, the cell the rule measures the chunk in.
-            (Contents::Holds { bound, rise }, _) => {
-                let cell = units(c.cell_zoom());
-                (bound, [cell, cell, rise])
-            }
+            // A cover piece is drawn one cell per chunk and measured as drawn.
+            (Contents::Holds { bound }, _) if self.outermost(c) => (bound, [units(c.zoom()) / 2.0; 3]),
+            // The chunk's cell, alike on every axis.
+            (Contents::Holds { bound }, _) => (bound, [units(c.cell_zoom()); 3]),
             // evicted between slices: the parent's bound holds
             (_, Some((bound, error))) => (bound.meet(c.region()).unwrap_or(c.region()), error),
             _ => (c.region(), [0.0; 3]),
@@ -269,7 +263,7 @@ impl Domain {
         let error_angle = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
         let order = Order::of(&self.o, &bound);
         // Drawn as finely as anything under it is held, there is nothing to refine.
-        let finer_held = c.drawn_zoom() < self.known.finest(bound);
+        let finer_held = c.cell_zoom() < self.known.finest(bound);
         let mut from_step = if finer_held && touching.1 > 0 {
             self.ladder.iter().take_while(|&&tau| error_angle > cell_angle(tau)).count() as u8
         } else {

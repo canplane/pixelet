@@ -7,11 +7,11 @@
 use pxl_render::gpu::api::word_bytes;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, TileView};
 use pxl_render::mesh::run::apron_col;
-use pxl_spec::bake::constant::{unpack_pos, CELL, U_PER_CELL};
+use pxl_spec::bake::constant::{unpack_pos, CELL};
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{CHUNK_DRAWN, GROUND, LEAF_Z};
+use pxl_spec::space::pyramid::{GROUND, LEAF_Z};
 use pxl_spec::space::v3::Aabb;
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
@@ -30,21 +30,20 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::zoom::{count, index, index_of, units, Zoom};
 use xpute_core::math::scalar::round;
 
-/// A kind is drawn as a model while it covers at least two of a tier's cells
-/// on screen (twelve pixels at the reference viewport, by eye, where Google's
-/// maps stop drawing buildings in 3D), then as a sprite down to
-/// `IMPOSTOR_GONE_CELLS`. No fade: the edge is per instance, so it staggers.
+/// A kind is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
+/// down to `DECOR_SPRITE_PX`. No fade: the edge is per instance, so it staggers.
 pub fn decor_gone_px() -> f64 {
-    target_cell_px() * 2.0
+    crate::param::DECOR_MODEL_PX
 }
 
-/// Under this a kind's sprite is not drawn.
 pub fn decor_sprite_px() -> f64 {
-    target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS
+    crate::param::DECOR_SPRITE_PX
 }
 
-fn decor_shown(extent_u: f64, lod_step: u32) -> bool {
-    (extent_u / U_PER_CELL) * target_cell_px() / lod_step as f64 >= decor_sprite_px()
+/// Whether a kind `extent_u` wide is a sprite's worth anywhere a chunk of
+/// `cell_zoom` is drawn: its cell is `target_cell_px` where it begins.
+fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
+    extent_u / units(cell_zoom) * target_cell_px() >= decor_sprite_px()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -95,11 +94,10 @@ pub struct Ground<'a> {
     pub zoom: Zoom,
     pub x0: i64,
     pub y0: i64,
-    /// The chunk's first tile cell in the tile.
+    /// The first tile cell read, in the tile, and how many a side.
     pub tx0: u32,
     pub ty0: u32,
-    /// log2 of the tile cells a drawn cell holds a side: 1 short of the leaves.
-    pub retina: u32,
+    pub side: u32,
     /// On the leaves, the column whose placed objects keep a candidate off their cell.
     /// Above the leaves the objects are read folded instead.
     pub col_idx: Option<IVec>,
@@ -188,7 +186,7 @@ impl<'s> DecorBuild<'s> {
         placed: &[Placed],
         hide: Option<DecorHide>,
         store: &Store,
-        step: u32,
+        cell_zoom: Zoom,
         decor: bool,
         chunk: Aabb,
     ) -> Option<DecorBuild<'s>> {
@@ -203,7 +201,7 @@ impl<'s> DecorBuild<'s> {
                 break;
             }
             scratch.group_count += kind.variant_count() as usize;
-            if !decor_shown(kind.extent(), step) {
+            if !decor_shown(kind.extent(), cell_zoom) {
                 continue;
             }
             for column in placed {
@@ -236,16 +234,19 @@ impl<'s> DecorBuild<'s> {
             // Turned and varied by position, as the placing ghost predicted.
             let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count());
             let [lx, ly, lz] = at.local();
-            if !(chunk.min[2]..chunk.max[2]).contains(&lz) {
+            let h = size / 2.0;
+            // Only in the chunk it stands in: a chunk narrower than a column is given the column's.
+            let (x, y) = (column.ox + lx + h, column.oy + ly + h);
+            let side = chunk.max[0] - chunk.min[0];
+            if !((0.0..side).contains(&x) && (0.0..side).contains(&y) && (chunk.min[2]..chunk.max[2]).contains(&lz)) {
                 continue;
             }
             let hidden = hide == Some(e.at(k));
-            let h = size / 2.0;
             scratch.push(
                 first + variant as usize,
                 Instance {
-                    x: (column.ox + lx + h) as f32,
-                    y: (column.oy + ly + h) as f32,
+                    x: x as f32,
+                    y: y as f32,
                     z: lz as f32,
                     rotation: rotation as f32,
                     scale: 1.0,
@@ -267,7 +268,7 @@ impl<'s> DecorBuild<'s> {
         let (lx0, ly0) = (index(own, ground.x0), index(own, ground.y0));
         let per = i64::from(count(atom, own));
         let min = [index(atom, ground.x0), index(atom, ground.y0)];
-        let span = i64::from(CHUNK_DRAWN << ground.retina) * per;
+        let span = i64::from(ground.side) * per;
         let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
         scatter(kind.seed.tag, kind.seed.density, ground.zoom, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
         for i in 0..scratch.candidates.len() {
@@ -276,8 +277,7 @@ impl<'s> DecorBuild<'s> {
             let Some(Draw { gx, gy, variant, rotation, scale }) = draw(kind, candidate, cells, lines, [ground.tx0 + dx, ground.ty0 + dy]) else {
                 continue;
             };
-            // On the drawn surface, which is the mean of the cells it holds.
-            let ele = ground.sample.ele[apron_col(dx >> ground.retina, dy >> ground.retina) as usize] as i32;
+            let ele = ground.sample.ele[apron_col(ground.sample.span, dx, dy) as usize] as i32;
             let at = [(gx as f64 + 0.5) * units(atom), (gy as f64 + 0.5) * units(atom), f64::from(ele)];
             // In the chunk holding the cell it stands on.
             if !((0..2).all(|k| (chunk.min[k]..chunk.max[k]).contains(&at[k])) && chunk.min[2] < at[2] && at[2] <= chunk.max[2]) {
@@ -297,7 +297,7 @@ impl<'s> DecorBuild<'s> {
                 continue;
             }
             let [x, y, z] = [at[0] - chunk.min[0], at[1] - chunk.min[1], at[2]];
-            let hidden = ground.zoom == LEAF_Z && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
+            let hidden = hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
             scratch.push(
                 first + variant as usize,
                 Instance {

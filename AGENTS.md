@@ -95,8 +95,9 @@ tiles from the leaves at z15 to z5, where it stops for now and not by any
 limit. **Every size is a zoom**: the X lane is one world of 2^24 units, so a
 thing the world over 2^z wide is at zoom z, and a bigger zoom is finer
 (`pxl-spec space/zoom.rs`). A cell, a chunk and a tile are each named by it:
-terrain's cell is z24, a unit, and objects' finest z27; a chunk is 64
-ground cells, six zooms coarser than they; a tile holds a layer's own count
+terrain's cell is z24, a unit, and objects' finest z27; a chunk is
+`CHUNK_STEPS` zooms coarser than the camera grid's cells it draws (32 a
+side, `space/pyramid.rs`); a tile holds a layer's own count
 of cells a side, the same at every zoom (`Lattice`), so terrain's z24 cells
 make z15 tiles.
 Where several zooms meet, a name says whose it is (`cell_zoom`). A web map's
@@ -143,16 +144,17 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
 - **A mark stands at a cell's center** (`Cell::center`), at the height of the
   surface drawn there: one thing's at the leaf cell it stands in, many at
   their cell's middle (`pxl-kernel layer/poi/placement.rs`).
-- **One rule chooses the chunk; a layer chooses its detail.** The cell is
-  the distance's (`pxl-spec space/lod.rs` `Tau::cell_at`, one factor τ), a
-  chunk is drawn in cells a step coarser (`space/pyramid.rs`
-  `DRAWN_STEPS`), and terrain reads the tile of the rule's cell
-  (`Tau::z_at`); a chunk refines only where the screen sees an error cross
-  a cell and something under it is held finer. The detail a layer draws at
-  it is its own — terrain each drawn cell its four's majority look, mean
-  height and mean shown color, places a lattice sixty-four ground cells wide, objects their cells folded
-  by majority — never a second rule; past a layer's data it draws its
-  finest.
+- **The camera grid is the resolution; a layer folds what is in a cell.**
+  The grid's cell is the distance's (`pxl-spec space/lod.rs` `Tau::cell_at`,
+  `SPLIT` its one knob, one factor τ), and one cell of it is one thing
+  drawn. A chunk is that grid's cells, so it refines only where the screen
+  sees an error cross a cell, alike on every axis, and something under it
+  is held finer. What lies inside a cell is its layer's to fold into one,
+  never a second rule outside it: a cube's records one zoom finer
+  (`space/pyramid.rs` `Lattice::fold`, the ground's `GROUND`) fold to their surfaces' mean color and their
+  fill's volume, places to a lattice sixty-four ground cells wide; past a
+  layer's data it draws its finest. What is folded is a summary, so nothing
+  in a folded cell is struck, hidden or cut by a preview.
 - **Dev is guarded like terrain.** The tile server answers no tile more than
   `--folds` zooms over the leaves, the whole guard for every layer. A source declares the
   coarsest zoom it supplies whole — the published version in its metadata,
@@ -211,7 +213,7 @@ seam is not finished.
 
 **Every source file opens with a comment naming its logical path** — the
 import-map path (`// @pxl/web/feature/map/ui/view.tsx`), for Rust the package
-as Cargo.toml spells it and the path under `src/` (`// pxl-spec/space/indexer.rs`),
+as Cargo.toml spells it and the path under `src/` (`// pxl-spec/space/zoom.rs`),
 for C++ the path itself (`// cpp/xpute/runtime/ipc/ring.cpp`); an executable
 script opens on its interpreter. `check:rules` holds every file to it.
 

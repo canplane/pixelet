@@ -109,7 +109,7 @@ pub fn color_outputs() -> Result<Vec<Output>, String> {
     rs.extend(head);
     rs.push(String::new());
     rs.extend(casing_note());
-    rs.extend(["", "use super::cube_type::cube_types;", "use super::r#type::Swatch;"].map(String::from));
+    rs.extend(["", "use super::cube_type::cube_types;", "use super::Swatch;"].map(String::from));
     let groups = [("sentinel", "sentinel", "u8"), ("ground", "ground", "u8"), ("object", "object", "u16")];
     for (group, module, width) in groups {
         let list = entries(

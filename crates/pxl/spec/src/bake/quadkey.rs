@@ -4,10 +4,11 @@
 //! quadkey, coarsest digit first. A coarser tile's name prefixes a finer one's
 //! over the same ground, and every well-formed name is a tile.
 
+use crate::space::zoom::around;
 use core::fmt;
 
 use crate::space::pvf3::ivec::{self, IVec};
-use crate::space::pyramid::{around, Tile, LEAF_Z, TOP_Z};
+use crate::space::pyramid::{Tile, LEAF_Z, TOP_Z};
 use crate::space::zoom::Zoom;
 
 /// A leaf's name length: the bits of its tile grid, which is one world of

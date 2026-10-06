@@ -15,6 +15,7 @@
 //!
 //!   deno task bake:earth
 
+use pxl_spec::space::zoom::around;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -26,7 +27,7 @@ use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::quadkey::tile_name;
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::pvf3::pvf3;
-use pxl_spec::space::pyramid::{around, tile_at, GROUND};
+use pxl_spec::space::pyramid::{tile_at, GROUND};
 
 const DAY: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74393/world.topo.200407.3x21600x10800.jpg";
 const NIGHT: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144897/BlackMarble_2016_";

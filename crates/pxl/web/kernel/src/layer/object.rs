@@ -4,6 +4,5 @@
 //! index, since a placement must ask what is already there.
 
 pub mod collision;
-pub mod geometry;
 pub mod size;
 pub mod store;

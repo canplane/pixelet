@@ -212,14 +212,14 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
 #[test]
 fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let _g = serial();
-    let n = pxl_spec::space::pyramid::around(LEAF_Z);
+    let n = pxl_spec::space::zoom::around(LEAF_Z);
     let flat = || {
         let cells = vec![ground::land; SPAN * SPAN];
         Terrain::leaf(vec![5; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
     };
     let tile = |x: i64| pxl_spec::space::pyramid::tile_at(LEAF_Z, [x, 0]);
     let residency = resident(&[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())]);
-    let seam = pxl_spec::space::pvf3::ROUND / 2.0;
+    let seam = pxl_spec::space::zoom::ROUND / 2.0;
     let top = Access::new(&residency, &Store::default()).at(&point(-seam + 20.5, 100.5), LEAF_Z).value().unwrap().top().unwrap();
 
     let mut store = Store::default();

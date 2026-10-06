@@ -1,7 +1,7 @@
 // pxl-spec/cell/object.test.rs
 
 use super::*;
-use crate::cell::cube::cube_types::{object, sentinel};
+use crate::cell::cube_types::{object, sentinel};
 
 #[test]
 fn every_placeable_cube_round_trips_through_its_leaf_value_and_has_a_color() {

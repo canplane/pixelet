@@ -89,7 +89,7 @@ impl CoverageGizmo {
         let v = view();
         // Its lines are f32 about the corner under the eye of a tile about as wide as
         // the eye is high: what is near resolves, and a move rebuilds them once a height.
-        let height = observation().map_or(0.0, |o| (o.eye[2] - o.ground).max(1.0));
+        let height = observation().map_or(0.0, |o| o.eye[2] - o.ground).max(1.0);
         let zoom = within(height).clamp(i32::from(TOP_Z), i32::from(LEAF_Z)) as Zoom;
         let span = units(zoom);
         let about = v.pose.eye.map(|c| (c / span).floor() * span);
@@ -168,7 +168,7 @@ impl Lines {
     fn lay(&self, lane: &mut Vec<f32>, origin: V3, access: &Access) {
         let ground = |x: f64, y: f64| -> [f64; 3] {
             let z = access.surface_support(&projection::project(x, y, 0.0)).value().flatten().unwrap_or(0.0);
-            [pxl_spec::space::pvf3::nearest(x, origin[0]) - origin[0], y - origin[1], z - origin[2]]
+            [pxl_spec::space::zoom::nearest(x, origin[0]) - origin[0], y - origin[1], z - origin[2]]
         };
         let mut ends: Vec<(f64, bool, Mark)> = Vec::new();
         for (&(axis, at), edges) in &self.0 {

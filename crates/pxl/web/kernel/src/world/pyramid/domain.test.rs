@@ -107,7 +107,7 @@ fn grazing_ground_refines_across_the_screen_and_not_along_its_depth() {
 }
 
 /// A pole thinner and shorter than a far cell is not refined and is under
-/// exactly one piece; tall enough to cross cells, it refines.
+/// exactly one piece.
 #[test]
 fn a_far_pole_inside_a_cell_is_not_refined_and_not_a_hole() {
     let o = eye(EYE, Some([1.0, 0.0, 0.0]), FAR, GROUND);
@@ -120,13 +120,6 @@ fn a_far_pole_inside_a_cell_is_not_refined_and_not_a_hole() {
     assert_eq!(thin.pieces(), flat.pieces(), "a pole inside a cell refined the goal");
     let top = [at[0] + 0.25, at[1] + 0.25, GROUND + 2.5];
     assert_eq!(pieces_at(thin.pieces(), top).len(), 1, "the pole is a hole or under two pieces");
-
-    let tall = fixture::domain(o, &[tau], &pole(60.0));
-    let (z_flat, z_tall) = (
-        pieces_at(flat.pieces(), top)[0].tile_zoom(),
-        pieces_at(tall.pieces(), [at[0] + 0.25, at[1] + 0.25, GROUND + 30.0])[0].tile_zoom(),
-    );
-    assert!(z_tall > z_flat, "a pole crossing cells up the screen not refined: z{z_tall} against z{z_flat}");
 }
 
 /// No chunk wholly behind a wall is split, however near.

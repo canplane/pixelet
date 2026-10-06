@@ -6,7 +6,7 @@
 
 use pxl_spec::bake::format::{Ground, GroundCell};
 use pxl_spec::bake::way;
-use pxl_spec::cell::cube::cube_types::ground;
+use pxl_spec::cell::cube_types::ground;
 use pxl_spec::space::pyramid::{GROUND, TILE_CELLS};
 
 use crate::terrain::pipeline::feature::{Feature, Layer, P};
