@@ -10,10 +10,10 @@ use crate::layer::billboard::field::billboard_instance;
 use crate::layer::billboard::selection::select_visible_billboards;
 use crate::layer::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::poi::badge::{self, Label};
-use crate::layer::poi::{enabled, rank_of, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
+use crate::layer::poi::{enabled, rank_of, Places, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
 use crate::param::POI_MAJOR_RANK;
 use crate::sched::tick::TickContext;
-use crate::world::access::{Access, Detail, Ray};
+use crate::world::access::{Access, Answer, Detail, Query, Ray};
 use crate::world::frame::view::ndc_to_px;
 use crate::world::observation::ground_known;
 use crate::world::pyramid::chunk::Chunk;
@@ -132,8 +132,9 @@ pub fn step(ctx: &mut TickContext) {
     let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
         let read_zoom = POI_LATTICE.read_zoom(chunk.cell_zoom());
-        let Some(src) = tiles.residency().source(POI_LATTICE.read_tile(chunk.column(), chunk.cell_zoom())) else { continue };
-        let Some(poi) = tiles.residency().get(src) else { continue };
+        let Answer::Exact(Places { tile: poi, from: src }) = tiles.residency().read(chunk.node(), chunk.cell_zoom()) else {
+            continue;
+        };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.
         let (side, cell) = (chunk.column().0, POI_LATTICE.cell_zoom(src.zoom));
