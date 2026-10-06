@@ -29,7 +29,6 @@
 
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::time::Instant;
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::deck::{footprint as line_reach, Form, STACKED_DECK_HEADROOM_M};
@@ -84,26 +83,6 @@ const RAIL_INTERIOR_HEIGHT_M: f64 = 4.0;
 /// A block, as a length: what Arnis adds or takes by one.
 const BLOCK_M: f64 = 1.0;
 
-/// What the solve did, and how long each part took.
-#[derive(Default)]
-pub struct Report {
-    pub bridges: usize,
-    pub rail_bridges: usize,
-    pub tunnels: usize,
-    pub rail_tunnels: usize,
-    pub ramps: usize,
-    pub approaches: usize,
-    pub tiles_read: usize,
-    pub times: Times,
-}
-
-/// Seconds spent reading and solving.
-#[derive(Default, Clone, Copy)]
-pub struct Times {
-    pub read: f64,
-    pub solve: f64,
-}
-
 /// The tile's scale: Arnis's metres, in u and then in the grid's cells.
 #[derive(Clone, Copy)]
 struct Units {
@@ -129,7 +108,6 @@ struct Source {
     by_end: HashMap<End, Vec<PartId>>,
     /// Every way by its two ends.
     way_ends: HashMap<End, Vec<PartId>>,
-    read: f64,
 }
 
 /// A piece, and once wanted its samples a cell apart along its way inside the ring.
@@ -183,8 +161,7 @@ fn graded(way: &Way, points: Vec<[f64; 3]>) -> (Line, Drawn) {
     )
 }
 
-pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Report), String> {
-    let mut report = Report::default();
+pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<Solved, String> {
     let tiles = ring(tile);
     let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
     for &p in &tiles {
@@ -208,7 +185,6 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
         pieces: BTreeMap::new(),
         by_end: HashMap::new(),
         way_ends: HashMap::new(),
-        read: 0.0,
     };
     src.load(r, tile)?;
 
@@ -239,21 +215,20 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
             break;
         }
     }
-    let t = Instant::now();
     let runs = runs_of(&src, &scope, lo);
     let obstacles = Obstacles::of(&src, lo, units);
     let mut lines: Vec<(Line, Drawn)> = Vec::new();
 
     // ---- road bridges, lower first; rail bridges over them; then the tunnels ----
-    let solved = bridges(&src, &runs, &obstacles, units, &mut lines, &mut report);
+    let solved = bridges(&src, &runs, &obstacles, units, &mut lines);
     for (q, ys) in &solved.ys {
         lines.push(part_of(&runs[*q], ys, [0, ys.len() - 1], 0));
     }
-    for (q, ys) in rail_bridges(&runs, &obstacles, &solved.decks, units, &mut report) {
+    for (q, ys) in rail_bridges(&runs, &obstacles, &solved.decks, units) {
         lines.push(part_of(&runs[q], &ys, [0, ys.len() - 1], 0));
     }
     let ceiling = (units.c(TUNNEL_CEIL_OFFSET_M) - units.c(BLOCK_M)).clamp(0, 255) as u8;
-    for (q, ys, covered) in road_tunnels(&src, &runs, &solved.ramp_ways, units, &mut lines, &mut report) {
+    for (q, ys, covered) in road_tunnels(&src, &runs, &solved.ramp_ways, units, &mut lines) {
         // a stretch under cover keeps its ceiling; one open to the sky is cut to the surface
         for (stretch, open) in split_by(&covered) {
             lines.push(part_of(&runs[q], &ys, stretch, if open { u8::MAX } else { ceiling }));
@@ -264,17 +239,13 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
         let depth = units.c(RAIL_TUNNEL_DEPTH_M + RAIL_INTERIOR_HEIGHT_M + BLOCK_M);
         let ys: Vec<i32> = runs[q].terrain.iter().map(|t| t - depth).collect();
         lines.push(part_of(&runs[q], &ys, [0, ys.len() - 1], units.c(RAIL_INTERIOR_HEIGHT_M).clamp(0, 255) as u8));
-        report.rail_tunnels += 1;
     }
-    report.times.solve = t.elapsed().as_secs_f64();
-    report.times.read = src.read;
-    report.tiles_read = src.loaded.len();
     let mut out = Solved::default();
     for (line, drawn) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
         out.lines.push(line);
         out.drawn.push(drawn);
     }
-    Ok((out, report))
+    Ok(out)
 }
 
 fn bbox_of(p: &Piece) -> [[f64; 2]; 2] {
@@ -297,7 +268,6 @@ impl Source {
         if !self.ring.contains(&p) || self.loaded.contains(&p) {
             return Ok(());
         }
-        let t = Instant::now();
         self.loaded.insert(p);
         let rows = r.store.tile(r.client, r.repo, p)?;
         self.ground.insert(p, rows.surface());
@@ -330,7 +300,6 @@ impl Source {
                 self.water.push((class.clone(), subtype.clone(), g.points.iter().map(|p| [p[0], p[1]]).collect()));
             }
         }
-        self.read += t.elapsed().as_secs_f64();
         Ok(())
     }
 
@@ -360,10 +329,8 @@ impl Source {
         for p in wanted {
             self.load(r, p)?;
         }
-        let t = Instant::now();
         let ts = sample_cells(&self.ground, &at.iter().map(|a| a.1).collect::<Vec<_>>())?;
         self.pieces.get_mut(id).expect("a piece read").samples = Some(at.into_iter().zip(ts).map(|((k, p), t)| (k, (p, t))).collect());
-        self.read += t.elapsed().as_secs_f64();
         Ok(())
     }
 }
@@ -690,7 +657,7 @@ fn ramp_len(total: f64, units: Units) -> f64 {
     (total * DECK_RAMP_FRACTION).clamp(f64::from(units.c(DECK_RAMP_M[0])), f64::from(units.c(DECK_RAMP_M[1])))
 }
 
-fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, lines: &mut Vec<(Line, Drawn)>, report: &mut Report) -> Bridges {
+fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, lines: &mut Vec<(Line, Drawn)>) -> Bridges {
     let road: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Deck && !runs[q].rail()).collect();
     let mut uf = Uf((0..road.len()).collect());
     // shared ends at one layer, then decks side by side
@@ -734,7 +701,6 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
     let mut claimed: HashSet<PartId> = HashSet::new();
     let mut out = Vec::new();
     for g in &groups {
-        report.bridges += 1;
         let mut node_members: HashMap<&End, usize> = HashMap::new();
         let mut group_nodes: HashSet<&End> = HashSet::new();
         for &q in g {
@@ -940,7 +906,6 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                     .map(|(k, p)| [p[0], p[1], round(f64::from(deck_y) + f64::from(ground - deck_y) * k as f64 / denom)])
                     .collect(),
             ));
-            report.ramps += 1;
         }
 
         // what the structures after it meet and clear
@@ -971,7 +936,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
 
 // ---- rail bridges: on a road deck, or one level a viaduct with ramps at its free ends ----
 
-fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units, report: &mut Report) -> Vec<(usize, Vec<i32>)> {
+fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units) -> Vec<(usize, Vec<i32>)> {
     let rail: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Deck && runs[q].rail()).collect();
     let mut out = Vec::new();
     let mut ends_count: HashMap<&End, usize> = HashMap::new();
@@ -1042,7 +1007,6 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units
         }
     }
     for g in groups.into_values() {
-        report.rail_bridges += 1;
         let (mut tmax, mut tmin, mut floor, mut layer) = (i32::MIN, i32::MAX, i32::MIN, 0);
         for &q in &g {
             let r = &runs[q];
@@ -1119,7 +1083,7 @@ struct Claim {
     run: i32,
 }
 
-fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<PartId>, units: Units, lines: &mut Vec<(Line, Drawn)>, report: &mut Report) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
+fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<PartId>, units: Units, lines: &mut Vec<(Line, Drawn)>) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
     let tunnels: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Bore && !runs[q].rail()).collect();
     // a node two tunnels share, or an end the ring cut, stays at depth
     let mut owner: HashMap<&End, PartId> = HashMap::new();
@@ -1240,14 +1204,12 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<PartId>, units: 
             })
             .collect();
         lines.push(graded(w, points));
-        report.approaches += 1;
     }
 
     // ---- each bore (Arnis `generate_highway_tunnel_shell`); the world has no bedrock to stop it ----
     let roof = units.c(TUNNEL_ROOF_COVER_M);
     let mut out = Vec::new();
     for &q in &tunnels {
-        report.tunnels += 1;
         let r = &runs[q];
         let n = r.cell.len();
         let last = n - 1;
