@@ -9,15 +9,29 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
+use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::tile::{Folds, Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::util::{measure_output, pack, unpack, write_atomic, Level};
 
-pub trait Layer: Folds + Clone + PartialEq + Send + Sync + 'static {
+/// A layer's tile as the pyramid holds it. One fold makes each zoom's tiles
+/// from the next finer one's; a parent reads its four children unless
+/// `sources` says otherwise.
+pub trait Layer: Clone + PartialEq + Send + Sync + 'static {
     fn encode(&self) -> Result<Vec<u8>, String>;
     fn decode(raw: &[u8]) -> Result<Self, String>;
+
+    fn sources(p: Tile) -> Vec<Tile> {
+        p.children().to_vec()
+    }
+
+    /// `p` from its sources; None where a required one is not held.
+    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self>;
+
+    /// Which of its children are tiles, as the tile says.
+    fn occupancy(&self) -> Occupancy;
 }
 
 /// What a tile the set holds no object for is. The pyramid is correct only
@@ -175,7 +189,7 @@ pub fn refold<L: Layer>(set: &TileSet, mut changed: HashSet<Tile>, absent: &impl
     Ok(written)
 }
 
-/// Drops every tile its parent settles (`Folds::settles`), judged over the
+/// Drops every tile its parent marks as no tile (`Layer::occupancy`), judged over the
 /// whole set before any is removed. Returns how many.
 pub fn prune<L: Layer>(set: &TileSet, top: Zoom) -> Result<usize, String> {
     let mut gone = Vec::new();
@@ -186,7 +200,7 @@ pub fn prune<L: Layer>(set: &TileSet, top: Zoom) -> Result<usize, String> {
             if let std::collections::hash_map::Entry::Vacant(e) = parents.entry(parent) {
                 e.insert(set.read::<L>(parent)?);
             }
-            if parents[&parent].as_ref().is_some_and(|q| q.settles(parent, p)) {
+            if parents[&parent].as_ref().is_some_and(|q| !q.occupancy().has_child(p.slot())) {
                 gone.push(set.path(p));
             }
         }

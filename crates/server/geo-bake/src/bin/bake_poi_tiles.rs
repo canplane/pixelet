@@ -42,7 +42,7 @@ fn run() -> Result<(), String> {
     }
     println!("[bake/poi] z{LEAF_ZOOM}: {} tiles", tiles.len());
     let top = build(&set, &PoiTile::default(), concurrency)?;
-    println!("[bake/poi] {} tiles their parent settles let go", prune::<PoiTile>(&set, top)?);
+    println!("[bake/poi] {} tiles their parent marks as none let go", prune::<PoiTile>(&set, top)?);
     write_manifest(&set, top, built.as_deref(), serde_json::json!({ "release": source.release, "source": source.manifest() }))?;
     println!("[bake/poi] complete to z{top}: {}", out.display());
     Ok(())

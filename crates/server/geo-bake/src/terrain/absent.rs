@@ -11,10 +11,10 @@ use pxl_spec::bake::format::{Ground, Occupancy, Terrain, ELE_LANE};
 use pxl_spec::cell::cube_types::{ground, sentinel};
 use pxl_spec::space::coord::zoom::idx;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::tile::{Folds, Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::coverage::Coverage;
-use crate::pyramid::Absent;
+use crate::pyramid::{Absent, Layer};
 
 pub struct Absence {
     coverage: Coverage,

@@ -129,12 +129,12 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
   and x, y, z (`world/pyramid/chunk.rs`); a cube that holds nothing is no
   chunk. Terrain and POI are tiles, a 2D heightfield and a 2D count; placed
-  objects are resident in their store, one octree. What a box holds
+  objects are resident in their store, a sparse tree a z8 column. What a box holds
   is asked of `Bounds` (`pxl-spec space/layer/demand.rs`), which `Known`
   (`world/observation.rs`) answers; a point or a ray is asked of the query
   (`world/access.rs`). Nothing outside a layer reads its records in the
   layer's shape, and which of a layer's tiles holds a chunk's cells is the
-  layer's lattice's (`pxl-spec space/layer/lattice.rs` `read_tile`). A placed object lives in the chunks its cube is in — built,
+  layer's lattice's (`pxl-spec space/layer/read.rs` `read_tile`). A placed object lives in the chunks its cube is in — built,
   remade and drawn with it — and shares the lattice and the fold rule
   (`majority`, `pxl-spec bake/fold.rs`).
 - **2.5D is how ground is stored, not how anything behaves.** What the view

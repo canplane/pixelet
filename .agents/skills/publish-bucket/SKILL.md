@@ -168,7 +168,7 @@ aws s3 sync ./out/poi/<version>.bucket s3://pixelet-tiles/poi/<version> \
   --cache-control "public, max-age=31536000, immutable"
 ````
 
-A tile its parent settles is no object — the tree stops where no cell over a
+A tile its parent's occupancy marks none is no object — the tree stops where no cell over a
 tile holds two places — and the client reads its ground from the tile over it,
 so a missing tile is never an error to repair. The client shows POI only outside production until
 the layer is switched on there.

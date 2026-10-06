@@ -25,9 +25,9 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   Carto, Arnis and the zooms, one problem at a time; their tiles'
   names did not change (decision/20261006-a-zoom-names-a-page-grid.md), so
   turning them back on is checking them against the new terrain. Their
-  demand now follows `POI_LATTICE`, not the ground's; `settles` is to move
-  from a predicate the client reruns to the children's occupancy the bake
-  writes, as terrain's is, and `Folds` with it to the bake.
+  demand now follows `POI_LATTICE`, not the ground's, and which children
+  are tiles is the occupancy the bake writes, as terrain's is; the POI set
+  is to be baked again in that format.
 - **POI and reverse geocode follow Carto.** The ground is Carto's looks
   (decision/20261005-the-ground-is-a-carto-palette.md); a place's icon and
   its kind's label are still Overture's taxonomy as the search list names it

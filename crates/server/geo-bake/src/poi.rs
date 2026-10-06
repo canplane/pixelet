@@ -5,11 +5,12 @@ use std::collections::BTreeMap;
 use crate::coverage::Coverage;
 use postgres::Client;
 use pxl_geo_spec::overture::properties::{category_named, CATEGORY_SQL};
-use pxl_spec::bake::poi_tile::{self, kind_of, Place, PoiTile, POI_LATTICE};
+use pxl_spec::bake::format::Occupancy;
+use pxl_spec::bake::poi_tile::{self, fold_poi, kind_of, Place, PoiTile, POI_LATTICE};
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 impl crate::pyramid::Layer for PoiTile {
     fn encode(&self) -> Result<Vec<u8>, String> {
@@ -18,6 +19,15 @@ impl crate::pyramid::Layer for PoiTile {
 
     fn decode(raw: &[u8]) -> Result<Self, String> {
         poi_tile::decode(raw).map_err(|e| e.to_string())
+    }
+
+    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
+        let [a, b, c, d] = p.children().map(held);
+        Some(fold_poi(p, [a?, b?, c?, d?]))
+    }
+
+    fn occupancy(&self) -> Occupancy {
+        self.occupancy
     }
 }
 

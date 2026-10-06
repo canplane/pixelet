@@ -126,7 +126,7 @@ A fix that reaches one area need not bake every tile again. `--region`
 bakes the land tiles under a quadkey prefix again, by the code as it is now,
 and assembles a new version from `--base`: the base's tiles linked whole, the
 region's leaves in place of the ones that differ, and folded again only the
-tiles above whose `Folds::sources` read a tile that changed, a zoom at a time,
+tiles above whose `Layer::sources` read a tile that changed, a zoom at a time,
 until a zoom changes nothing. Minutes, where a full bake is hours:
 
 ```bash
@@ -249,7 +249,7 @@ kind by name, from a pool of places held once a tile. A kind is the place's
 category as the search list names it (`pxl-geo-spec overture/properties.rs`),
 one of `spec/spec/bake/poi_badge.json`'s. The leaves are counted from `overture_places`, the zooms above are
 folded by adding, with the same fold driver terrain uses
-(`geo-bake/src/pyramid.rs`), and then every tile its parent settles is let go
+(`geo-bake/src/pyramid.rs`), and then every tile its parent's occupancy marks none is let go
 (`prune`): where no cell over a tile holds two places, the tile over it says
 all of its ground, so the tree stops there.
 

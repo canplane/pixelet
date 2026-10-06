@@ -3,7 +3,7 @@
 use super::*;
 
 use crate::cell::cube_types::ground;
-use crate::space::layer::tile::LEAF_ZOOM;
+use crate::space::layer::tile::{neighborhood, Tile, LEAF_ZOOM};
 
 const SPAN: usize = TILE_CELLS as usize;
 const PADDED: usize = ELE_PADDED_SPAN as usize;
@@ -177,5 +177,5 @@ fn zero_tile() -> Terrain {
 #[test]
 fn the_zero_tile_folds_to_itself() {
     let zero = zero_tile();
-    assert_eq!(Terrain::fold_tile(Tile::new(LEAF_ZOOM - 1, 0), |_| Some(&zero)).as_ref(), Some(&zero));
+    assert_eq!(fold_terrain(neighborhood(Tile::new(LEAF_ZOOM - 1, 0)).map(|_| Some(&zero)), LEAF_ZOOM - 1).as_ref(), Some(&zero));
 }

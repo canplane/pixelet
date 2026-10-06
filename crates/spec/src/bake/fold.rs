@@ -8,7 +8,7 @@
 //! from the children's extents and widened by the parent's own surface.
 
 use crate::space::layer::lattice::{EXTENT, GROUND, TILE_CELLS};
-use crate::space::layer::tile::{neighbor_index, neighborhood, Folds, Tile, CHILDREN};
+use crate::space::layer::tile::{neighbor_index, CHILDREN};
 use xpute_core::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
@@ -95,27 +95,10 @@ pub fn fold_index(children: [&Index; 4], own: Vec<[i16; 2]>) -> Index {
     Index::new(extent, Occupancy::of_children(children.map(|c| c.occupancy)))
 }
 
-/// Terrain also reads the ring around the four children, for its elevation padding.
-impl Folds for Terrain {
-    fn sources(p: Tile) -> Vec<Tile> {
-        neighborhood(p).to_vec()
-    }
-
-    /// A child the tile marks as no tile is its own ground already: open
-    /// water, or nothing at all under a void tile.
-    fn settles(&self, p: Tile, child: Tile) -> bool {
-        p.children().iter().position(|&c| c == child).is_some_and(|slot| !self.index.occupancy.has_child(slot))
-    }
-
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
-        fold_terrain(neighborhood(p).map(held), p.zoom)
-    }
-}
-
 /// A parent from the 4×4 tiles around its children; None if any of its own
 /// four is missing. A missing ring tile only degrades the padding, so a zoom
 /// out folds from what the client already holds.
-fn fold_terrain(around: [Option<&Terrain>; 16], zoom: Zoom) -> Option<Terrain> {
+pub fn fold_terrain(around: [Option<&Terrain>; 16], zoom: Zoom) -> Option<Terrain> {
     let child = |q: usize| around[CHILDREN[q]];
     let children = [child(0)?, child(1)?, child(2)?, child(3)?];
     let ground = fold_ground(children.map(|t| &t.ground), zoom);

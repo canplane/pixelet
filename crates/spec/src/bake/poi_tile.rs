@@ -11,10 +11,11 @@
 
 use std::collections::HashMap;
 
+use crate::bake::format::Occupancy;
 use crate::bake::poi_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
 use crate::space::coord::pvf3::pvf3::Pvf3;
 use crate::space::layer::lattice::{Lattice, GROUND};
-use crate::space::layer::tile::{Folds, Tile, LEAF_ZOOM};
+use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
@@ -225,6 +226,10 @@ pub struct PoiTile {
     /// A cell's places in one run, by kind.
     pub shown: Vec<Shown>,
     pub places: Places,
+    /// The children that are tiles: those under a crowd. A child where every
+    /// cell over it holds at most one place, its count no floor, is said
+    /// whole here, since only a crowd comes apart a zoom finer.
+    pub occupancy: Occupancy,
 }
 
 impl PoiTile {
@@ -238,7 +243,10 @@ impl PoiTile {
                 (cell.index(), cell.offset_of(GROUND.cell_of(LEAF_ZOOM, &point)), cut_name(place.name), place)
             })
             .collect();
-        gathered(cut.iter().map(|(cell, at, name, place)| (*cell, 1, !complete, [(*at, Place { name, ..*place })].into_iter())))
+        gathered(
+            zoom == LEAF_ZOOM,
+            cut.iter().map(|(cell, at, name, place)| (*cell, 1, !complete, [(*at, Place { name, ..*place })].into_iter())),
+        )
     }
 
     pub fn shown(&self, c: &PoiCell) -> impl Iterator<Item = (u32, Place<'_>, [u32; 2])> + '_ {
@@ -246,33 +254,20 @@ impl PoiTile {
     }
 }
 
-impl Folds for PoiTile {
-    /// A child is settled where every cell over it holds at most one place
-    /// and its count is not a floor: only a crowd comes apart a zoom finer.
-    fn settles(&self, p: Tile, child: Tile) -> bool {
-        self.cells
-            .iter()
-            .all(|c| (c.count < 2 && !c.partial) || POI_LATTICE.cell_of(child.zoom, &POI_LATTICE.cell_at(p, c.cell).base()).tile() != child)
+/// `p` from its four children, in `Tile::children`'s order.
+pub fn fold_poi(p: Tile, children: [&PoiTile; 4]) -> PoiTile {
+    let mut cells = Vec::new();
+    for (q, (k, child)) in p.children().into_iter().zip(children).enumerate() {
+        cells.extend(child.cells.iter().map(move |c| {
+            let parent = POI_LATTICE.parent_cell(q, c.cell);
+            let places = child.shown(c).map(move |(_, place, at)| {
+                let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, LEAF_ZOOM, at);
+                (POI_LATTICE.cell_at(p, parent).offset_of(ground), place)
+            });
+            (parent, c.count, c.partial, places)
+        }));
     }
-
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
-        let mut cells = Vec::new();
-        let mut children = Vec::with_capacity(4);
-        for k in p.children() {
-            children.push((k, held(k)?));
-        }
-        for (q, &(k, child)) in children.iter().enumerate() {
-            cells.extend(child.cells.iter().map(move |c| {
-                let parent = POI_LATTICE.parent_cell(q, c.cell);
-                let places = child.shown(c).map(move |(_, place, at)| {
-                    let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, LEAF_ZOOM, at);
-                    (POI_LATTICE.cell_at(p, parent).offset_of(ground), place)
-                });
-                (parent, c.count, c.partial, places)
-            }));
-        }
-        Some(gathered(cells.into_iter()))
-    }
+    gathered(false, cells.into_iter())
 }
 
 /// `name` cut to `NAME_CHARS` code points, ending in an ellipsis.
@@ -287,8 +282,8 @@ fn cut_name(name: &str) -> std::borrow::Cow<'_, str> {
 }
 
 /// Cells ascending, each once: counts summed, partial if any part is, and per
-/// kind the named place of least id.
-fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(cells: impl Iterator<Item = (u32, u32, bool, P)>) -> PoiTile {
+/// kind the named place of least id; a leaf has no children to mark.
+fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(leaf: bool, cells: impl Iterator<Item = (u32, u32, bool, P)>) -> PoiTile {
     let mut counts: Vec<(u32, u32, bool)> = Vec::new();
     let mut places: Vec<(u32, [u32; 2], Place<'a>)> = Vec::new();
     for (cell, count, partial, of) in cells {
@@ -318,11 +313,16 @@ fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(cells: impl Iterator<
         });
     }
     tile.places = pool.places;
+    let mut crowded = [false; 4];
+    for c in tile.cells.iter().filter(|c| !leaf && (c.count > 1 || c.partial)) {
+        crowded[POI_LATTICE.child_cells(c.cell).0] = true;
+    }
+    tile.occupancy = Occupancy::of_slots(crowded);
     tile
 }
 
 /// One branch: per cell its index, count, whether the count is a floor and
-/// where its run of shown starts; per shown its place and position (two
+/// where its run of shown starts; the occupancy; per shown its place and position (two
 /// half-words); per place its kind by name ("" for none), the source's id and
 /// its names (`named`).
 pub fn encode(tile: &PoiTile) -> Result<Vec<u8>, MarshalError> {
@@ -339,7 +339,11 @@ pub fn encode(tile: &PoiTile) -> Result<Vec<u8>, MarshalError> {
     let names = NameLanes::of((0..places.len()).map(|i| (places.names.get(i), places.get(i).langs.iter())));
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
-        b.u32_array(Some(&cells)).u32_array(Some(&counts)).u8_array(Some(&partial)).u32_array(Some(&starts));
+        b.u32_array(Some(&cells))
+            .u32_array(Some(&counts))
+            .u8_array(Some(&partial))
+            .u32_array(Some(&starts))
+            .u8(Some(tile.occupancy.bits()));
         b.u32_array(Some(&shown)).u16_array(Some(&at)).strs(Some(&kinds)).strs(Some(&ids));
         names.write(b);
     }));
@@ -356,13 +360,14 @@ pub fn decode(bytes: &[u8]) -> Result<PoiTile, MarshalError> {
         root.at(2)?.get_array::<u8>()?,
         root.at(3)?.get_array::<u32>()?,
     );
-    let (shown, at, kinds, ids) = (root.at(4)?.get_array::<u32>()?, root.at(5)?.get_array::<u16>()?, root.at(6)?.get_strs()?, root.at(7)?.get_strs()?);
+    let occupancy = u8::try_from(root.at(4)?.get_number()? as i64).ok().and_then(Occupancy::of_bits).ok_or_else(malformed)?;
+    let (shown, at, kinds, ids) = (root.at(5)?.get_array::<u32>()?, root.at(6)?.get_array::<u16>()?, root.at(7)?.get_strs()?, root.at(8)?.get_strs()?);
     let (n, places) = (cells.len(), kinds.len() as usize);
     let runs_fit = starts.len() == n + 1 && starts[0] == 0 && starts.windows(2).all(|w| w[0] <= w[1]) && starts[n] as usize == shown.len();
     if n > CELLS as usize || counts.len() != n || partial.len() != n || !runs_fit || at.len() != 2 * shown.len() || shown.len() > n * KINDS_MAX || ids.len() as usize != places {
         return Err(malformed());
     }
-    let names = NamesView::read(&root, 8, places)?;
+    let names = NamesView::read(&root, 9, places)?;
     let mut pooled = Places::default();
     for i in 0..places as u32 {
         let name = names.name(i).ok_or_else(malformed)?;
@@ -383,6 +388,7 @@ pub fn decode(bytes: &[u8]) -> Result<PoiTile, MarshalError> {
             .collect(),
         shown: shown.iter().zip(at.as_chunks::<2>().0).map(|(&place, &[x, y])| Shown { place, at: [x as u32, y as u32] }).collect(),
         places: pooled,
+        occupancy,
     };
     let cells_fit = tile.cells.iter().all(|c| c.cell < CELLS && c.count > 0) && tile.cells.windows(2).all(|w| w[0].cell < w[1].cell);
     if !cells_fit || tile.shown.iter().any(|s| s.place >= tile.places.len()) {

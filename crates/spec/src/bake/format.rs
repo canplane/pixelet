@@ -40,10 +40,11 @@ impl Ground {
     }
 }
 
-/// Which of a tile and its four children are real tiles rather than the zero
-/// (ocean) tile: children in the low four bits in `slot_of`'s order, the tile
-/// itself above them. A client never asks for a child its parent marks absent.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Which of a tile and its four children are tiles of their own, the rest
+/// said whole by the tile (terrain's zero tile, POI's uncrowded ground):
+/// children in the low four bits in `slot_of`'s order, the tile itself above
+/// them. A client never asks for a child its parent marks absent.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Occupancy(u8);
 
 impl Occupancy {
@@ -54,7 +55,12 @@ impl Occupancy {
     pub const LEAF: Occupancy = Occupancy(Occupancy::TILE);
 
     pub fn of_children(children: [Occupancy; 4]) -> Occupancy {
-        let bits = (0..4).filter(|&q| children[q].is_tile()).fold(0, |bits, q| bits | 1 << q);
+        Occupancy::of_slots(children.map(Occupancy::is_tile))
+    }
+
+    /// A tile whose children in `slot_of`'s order are tiles where `slots` says.
+    pub fn of_slots(slots: [bool; 4]) -> Occupancy {
+        let bits = (0..4).filter(|&q| slots[q]).fold(0, |bits, q| bits | 1 << q);
         Occupancy(if bits == 0 { 0 } else { Occupancy::TILE | bits })
     }
 

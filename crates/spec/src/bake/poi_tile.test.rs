@@ -83,7 +83,7 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     let mut below = (leaf(), PoiTile::of_places(LEAF_ZOOM, [(at, tower)], true));
     for zoom in (GROUND.top()..LEAF_ZOOM).rev() {
         let p = Tile::over(zoom, below.0.tile);
-        let up = PoiTile::fold_tile(p, |k| Some(if k == below.0 { &below.1 } else { &empty })).unwrap();
+        let up = fold_poi(p, p.children().map(|k| if k == below.0 { &below.1 } else { &empty }));
         assert_eq!(up.cells.len(), 1);
         let c = up.cells[0];
         let (_, place, at) = up.shown(&c).next().unwrap();
@@ -104,10 +104,10 @@ fn a_tile_settles_every_child_but_one_under_a_crowd() {
         (lone, PoiTile::of_places(LEAF_ZOOM, [(at(lone, 0), called("C", "3"))], true)),
     ];
     let none = PoiTile::default();
-    let tile = PoiTile::fold_tile(p, |k| Some(leaves.iter().find(|(q, _)| *q == k).map_or(&none, |(_, tile)| tile))).unwrap();
-    assert!(!tile.settles(p, crowd));
-    assert!(tile.settles(p, lone));
-    assert!(tile.settles(p, empty));
+    let tile = fold_poi(p, p.children().map(|k| leaves.iter().find(|(q, _)| *q == k).map_or(&none, |(_, tile)| tile)));
+    assert!(tile.occupancy.has_child(crowd.slot()));
+    assert!(!tile.occupancy.has_child(lone.slot()));
+    assert!(!tile.occupancy.has_child(empty.slot()));
 }
 
 /// Folded from the leaves, a crowd matches a tile built at that zoom.
@@ -130,7 +130,7 @@ fn a_crowd_holds_one_place_of_each_kind() {
     assert_eq!(cells(&leaf_tile), [(2, vec![("Cafe", [2, 0])]), (1, vec![("Gangnam", [5, 0])])]);
     let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
     let empty = PoiTile::default();
-    let folded = PoiTile::fold_tile(p, |k| Some(if k == leaf() { &leaf_tile } else { &empty })).unwrap();
+    let folded = fold_poi(p, p.children().map(|k| if k == leaf() { &leaf_tile } else { &empty }));
     assert_eq!(folded, PoiTile::of_places(LEAF_ZOOM - 1, places, true));
     let mut held: Vec<_> = folded.shown(&folded.cells[0]).map(|(_, p, at)| (p.kind, p.id, at)).collect();
     held.sort_unstable();
@@ -222,8 +222,8 @@ fn a_floor_stays_a_floor_as_it_folds() {
     let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
     let empty = PoiTile::default();
     for (leaf_tile, partial) in [(&some, true), (&all, false)] {
-        let up = PoiTile::fold_tile(p, |k| Some(if k == leaf() { leaf_tile } else { &empty })).unwrap();
+        let up = fold_poi(p, p.children().map(|k| if k == leaf() { leaf_tile } else { &empty }));
         assert_eq!(up.cells[0].partial, partial);
-        assert_eq!(up.settles(p, leaf()), !partial);
+        assert_eq!(up.occupancy.has_child(leaf().slot()), partial);
     }
 }

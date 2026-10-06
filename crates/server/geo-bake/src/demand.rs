@@ -9,7 +9,9 @@ mod terrain;
 use cache::Cache;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
-use pxl_spec::space::layer::tile::{Folds, Tile};
+use pxl_spec::space::layer::tile::Tile;
+
+use crate::pyramid::Layer;
 use std::path::PathBuf;
 
 use crate::coverage::Coverage;

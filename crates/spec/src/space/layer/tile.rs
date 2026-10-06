@@ -3,7 +3,7 @@
 //! The pyramid: tiles of a tile grid, from the leaves up to the top, a
 //! tile's zoom its size's, so 2^z of them stand around the world. Cell
 //! placement, tile membership, folding order and cell centers are decided
-//! here only; a layer owns what a cell carries and how it folds (`Folds`).
+//! here only; a layer owns what a cell carries and how it folds.
 
 use super::lattice::Lattice;
 use crate::space::coord::pvf3::core::FRAC_W;
@@ -13,7 +13,7 @@ use crate::space::coord::pvf3::pvf3::{self, Pvf3};
 use crate::space::coord::v3::Aabb;
 use crate::space::coord::world::{self, around, wrap_index, REACH};
 use crate::space::coord::zoom::{base_of, count, shamt, units, Zoom};
-use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, parent_of};
+use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of};
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
 /// world 2^15 round.
@@ -45,6 +45,11 @@ impl Tile {
     pub fn parent(self) -> Tile {
         let [x, y] = parent_of(self.at());
         Tile::new(self.zoom - 1, ivec::gather(x, y, 0))
+    }
+
+    /// Its place among its parent's `children`.
+    pub fn slot(self) -> usize {
+        slot_of(self.at())
     }
 
     /// In `slot_of`'s order.
@@ -211,26 +216,6 @@ impl Cell {
         let flat = self.mid();
         let at = pack::unpack(flat.i, flat.f);
         world::point(at[0], at[1], ground + self.side() / 2.0)
-    }
-}
-
-/// A layer's tile as the pyramid holds it. One fold makes each zoom's tiles
-/// from the next finer one's, run by the bake. A parent reads its four
-/// children unless `sources` says otherwise.
-pub trait Folds: Sized {
-    fn sources(p: Tile) -> Vec<Tile> {
-        p.children().to_vec()
-    }
-
-    /// `p` from its sources; None where a required one is not held.
-    fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self>
-    where
-        Self: 'a;
-
-    /// Whether `p` already says all of `child`'s ground, so the tree stops
-    /// there and the child is never a tile of its own.
-    fn settles(&self, _p: Tile, _child: Tile) -> bool {
-        false
     }
 }
 

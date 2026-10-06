@@ -154,17 +154,16 @@ eight equal leaves are joined into their parent.
 
 The two ways of stopping are one rule. A node stops growing where it
 already says all of the ground under it, and a coarser cell of equal ones is the
-case where any summary loses nothing. The pyramid asks it of the layer's fold
-(`Folds::settles`, in `layer/tile.rs`): a tile of places settles a child when
-no cell over it holds two places, so the tree of places is only as deep as
-a crowd needs, and a layer whose fold is lossy, like terrain's vote, never
-settles one.
+case where any summary loses nothing. The pyramid's tile says it in its
+occupancy (`bake/format.rs` `Occupancy`), which children are tiles, written by
+the bake's fold: a tile of places marks a child none when no cell over it
+holds two places, so the tree of places is only as deep as a crowd needs,
+and terrain marks only a child that is the zero tile, its vote being lossy.
 
-They stay two because one is resident by tile and the other is not. Objects keep their
-coarse zooms stored all the same, refolded along a write's path rather than
-folded again when a chunk is built. Were objects ever resident by tile,
-their branches would be a layer of the pyramid, and their octree's collapse
-its `settles`.
+They stay two because one is resident by tile and the other is not. Objects
+keep no coarse zoom: a chunk folds a node's leaves when it is built. Were
+objects ever resident by tile, their branches would be a layer of the
+pyramid, and a block of equal leaves joined its occupancy.
 
 A reader that crosses two trees walks each its own way and puts the answers
 together (pxl-kernel world/access.rs `first_hit`). A ray reads the ground
