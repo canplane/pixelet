@@ -64,7 +64,7 @@ impl Query for Residency<PoiTile> {
     type Record<'a> = Places<'a>;
 
     /// A place fills nothing: it stands on the surface drawn there.
-    fn bounds(&self, _node: Node<3>, _cell: Zoom) -> Answer<Option<Bound>> {
+    fn bounds<const D: usize>(&self, _node: Node<D>, _cell: Zoom) -> Answer<Option<Bound>> {
         Answer::Exact(None)
     }
 

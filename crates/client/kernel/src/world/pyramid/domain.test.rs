@@ -61,7 +61,18 @@ fn remaking_a_moving_view_allocates_nothing_once_it_has_held_the_most() {
     };
     let mut sight = crate::world::observer::Sight::default();
     sight.observe(&path(0), &world, true, &[]);
-    let mut d = Domain::priced(path(0), pxl_spec::space::layer::lattice::GROUND.top(), &ladder, 0, Box::new(world.clone()), sight.footprints(), &Free);
+    let mut d = Domain::priced(
+        path(0),
+        pxl_spec::space::layer::lattice::GROUND.top(),
+        &ladder,
+        0,
+        {
+            let w = world.clone();
+            Box::new(move |n, c| w.bounds(n, c))
+        },
+        sight.footprints(),
+        &Free,
+    );
     let walk = |d: &mut Domain, sight: &mut crate::world::observer::Sight| {
         for k in 0..24 {
             let o = path(k);

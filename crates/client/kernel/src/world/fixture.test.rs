@@ -1,14 +1,17 @@
 // pxl-kernel/world/fixture.test.rs
 //
 // A world known exactly for the goal's tests: flat ground with solid boxes,
-// as bounds (`Bounds`) and as what tiles touch (`Observer`).
+// as the query bounds it and as what tiles touch (`Observer`).
 
 use pxl_spec::space::camera::eye::{Frustum, Observation};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::v3::{add3, Aabb, V3};
-use pxl_spec::space::layer::demand::{Bounds, Contents};
+use pxl_spec::space::coord::zoom::cube;
+use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
+use crate::world::access::{Answer, Bound};
 use crate::world::observer::{Footprint, Grid, Met, Observer, OnPatch, Sight};
 use crate::world::pyramid::domain::{Domain, Price};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -38,16 +41,14 @@ impl World {
     }
 }
 
-impl Bounds for World {
-    fn finest(&self, _region: Aabb) -> Zoom {
-        GROUND.cell()
-    }
-
-    /// The ground's lowest is its top cell's floor, as the index lane bounds it.
-    fn contents(&self, _cell: Zoom, region: Aabb) -> Contents {
+impl World {
+    /// As the query bounds a node: the ground's lowest is its top cell's
+    /// floor, as the index lane bounds it.
+    pub fn bounds(&self, (zoom, at): Node<3>, _cell: Zoom) -> Answer<Option<Bound>> {
         if !self.answered {
-            return Contents::Unknown;
+            return Answer::Nothing(Tile::new(LEAF_ZOOM, 0));
         }
+        let region = cube(zoom, at);
         let (lo, hi) = (region.min, region.max);
         let column = |z0: f64, z1: f64| {
             Aabb {
@@ -62,7 +63,7 @@ impl Bounds for World {
                 bound = Some(bound.map_or(b, |a| a.join(b)));
             }
         }
-        bound.map_or(Contents::Empty, |bound| Contents::Holds { bound })
+        Answer::Exact(bound.map(|aabb| Bound { aabb, finest: GROUND.cell() }))
     }
 }
 
@@ -122,7 +123,18 @@ pub fn domain(o: Observation, ladder: &[Tau], world: &World) -> Domain {
 }
 
 pub fn domain_priced(o: Observation, ladder: &[Tau], world: &World, price: &dyn Price) -> Domain {
-    Domain::priced(o, GROUND.top(), ladder, 0, Box::new(world.clone()), &footprints(&o, world), price)
+    Domain::priced(
+        o,
+        GROUND.top(),
+        ladder,
+        0,
+        {
+            let w = world.clone();
+            Box::new(move |n, c| w.bounds(n, c))
+        },
+        &footprints(&o, world),
+        price,
+    )
 }
 
 fn unit(v: V3) -> V3 {

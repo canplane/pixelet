@@ -17,14 +17,14 @@ use std::collections::HashMap;
 use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::layer::demand::{tiles, Bounds, Requirement};
+use pxl_spec::space::layer::demand::{tiles, Requirement};
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::io::demand::{Ask, Category, Phases, Why};
 use crate::io::failure::Failure;
 use crate::io::sched::declare;
-use crate::world::observation::{ground_known, observation, ByFootprints, Known, Order};
+use crate::world::observation::{ground_known, observation, ByFootprints, Order};
 use crate::world::observer::Footprint;
 use crate::world::quality;
 use crate::world::residency::floor::{self, Fallback, Floor};
@@ -184,7 +184,6 @@ impl<L: Layer> Pyramid<L> {
         // the floor's eye, if not `o`'s
         floor_at: Option<&Observation>,
         destination: impl Iterator<Item = Tile>,
-        bounds: &impl Bounds,
         estimator: &ByFootprints,
         top: Zoom,
     ) {
@@ -195,10 +194,10 @@ impl<L: Layer> Pyramid<L> {
         let ask = |asks: &mut HashMap<Tile, Ask>, p: Tile, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
-        let order = |o: &Observation, p: Tile| Order::of_region(o, bounds, L::LATTICE.grid_zoom(p.zoom), p.region());
+        let order = |o: &Observation, p: Tile| Order::of_tile(o, L::LATTICE, p);
         if let Some(o) = o {
             if L::DEMANDS {
-                estimator.requirements(o, bounds, &mut |r| tiles(&r, &mut |p| demand.push(p)));
+                estimator.requirements(o, &mut |r| tiles(&r, &mut |p| demand.push(p)));
             }
             demand.sort_unstable();
             demand.dedup();
@@ -332,7 +331,6 @@ impl<L: Layer> Pyramid<L> {
                 o.as_ref(),
                 live.as_ref(),
                 line,
-                &Known,
                 &ByFootprints {
                     tau,
                     lattice: L::LATTICE,

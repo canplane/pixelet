@@ -10,8 +10,8 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::v3::Aabb;
 use pxl_spec::space::layer::tile::Tile;
 
-use crate::world::access::Access;
-use crate::world::observation::{ground_known, observation, Known};
+use crate::world::access::{Access, Query};
+use crate::world::observation::{ground_known, observation};
 use crate::world::observer::{EdgeRays, Sight};
 use crate::world::residency::floor;
 use xpute_runtime::global::Global;
@@ -77,7 +77,7 @@ pub fn start(ladder: &[Tau], priced: &[(Chunk, u32)]) {
     core::mem::swap(&mut made.terrain, &mut made.now);
     made.priced.clear();
     made.priced.extend_from_slice(priced);
-    let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Box::new(Known)));
+    let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Box::new(|node, cell| Access::now().bounds(node, cell))));
     job.begin(o, top, ladder, made.sight.footprints(), made.sight.lacks());
     made.job = Some(job);
 }

@@ -9,10 +9,12 @@ use std::collections::HashMap;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::cubes_meeting;
-use pxl_spec::space::layer::demand::{Bounds, Contents, Requirement};
+use pxl_spec::space::layer::demand::Requirement;
 use pxl_spec::space::layer::lattice::GROUND;
 
+use crate::world::access::{Answer, Bound};
 use crate::world::chunk::mesh_slot::POOLS;
 use crate::world::observation::Order;
 use crate::world::observer::{cell_angle, Footprint, Lens};
@@ -67,7 +69,8 @@ pub struct Domain {
     lens: Option<Lens>,
     footprints: Vec<Footprint>,
     lacks: Vec<Requirement>,
-    known: Box<dyn Bounds>,
+    /// The world's bound of a node at a cell zoom, as the query answers it.
+    bounds: Box<dyn Fn(Node<3>, Zoom) -> Answer<Option<Bound>>>,
     /// What the walk starts from, kept to be reused.
     start: Vec<Chunk>,
     unanswered: u32,
@@ -85,21 +88,29 @@ pub struct Domain {
 
 impl Domain {
     #[cfg(test)]
-    pub fn priced<'a>(o: Observation, top: Zoom, ladder: &[Tau], at: usize, known: Box<dyn Bounds>, footprints: impl IntoIterator<Item = &'a Footprint>, price: &dyn Price) -> Domain {
-        let mut d = Domain::empty(o, known);
+    pub fn priced<'a>(
+        o: Observation,
+        top: Zoom,
+        ladder: &[Tau],
+        at: usize,
+        bounds: Box<dyn Fn(Node<3>, Zoom) -> Answer<Option<Bound>>>,
+        footprints: impl IntoIterator<Item = &'a Footprint>,
+        price: &dyn Price,
+    ) -> Domain {
+        let mut d = Domain::empty(o, bounds);
         d.begin(o, top, ladder, footprints, core::iter::empty());
         d.run(price, &|| false, &mut 0);
         d.put(at);
         d
     }
 
-    pub(super) fn empty(o: Observation, known: Box<dyn Bounds>) -> Domain {
+    pub(super) fn empty(o: Observation, bounds: Box<dyn Fn(Node<3>, Zoom) -> Answer<Option<Bound>>>) -> Domain {
         Domain {
             o,
             lens: None,
             footprints: Vec::new(),
             lacks: Vec::new(),
-            known,
+            bounds,
             start: Vec::new(),
             unanswered: 0,
             seen: HashMap::new(),
@@ -173,13 +184,13 @@ impl Domain {
         if Order::of(&self.o, &c.region()).near >= self.o.far() {
             return false;
         }
-        match self.contents(c) {
-            Contents::Unknown => {
+        match self.bound(c) {
+            Answer::Nothing(_) => {
                 self.unanswered += 1;
                 false
             }
-            Contents::Empty => false,
-            Contents::Holds { bound, .. } => Order::of(&self.o, &bound).near < self.o.far(),
+            Answer::Exact(None) | Answer::Coarser(None, _) => false,
+            Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) => Order::of(&self.o, &b.aabb).near < self.o.far(),
         }
     }
 
@@ -206,9 +217,10 @@ impl Domain {
         if self.seen.contains_key(&c) {
             return;
         }
-        let (bound, error) = match (self.contents(c), parent) {
+        let held = self.bound(c).value().flatten();
+        let (bound, error) = match (held, parent) {
             // The chunk's cell, alike on every axis.
-            (Contents::Holds { bound }, _) => (bound, [units(c.cell_zoom()); 3]),
+            (Some(b), _) => (b.aabb, [units(c.cell_zoom()); 3]),
             // evicted between slices: the parent's bound holds
             (_, Some((bound, error))) => (bound.meet(c.region()).unwrap_or(c.region()), error),
             _ => (c.region(), [0.0; 3]),
@@ -226,7 +238,7 @@ impl Domain {
         let error_angle = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
         let order = Order::of(&self.o, &bound);
         // Drawn as finely as anything under it is held, there is nothing to refine.
-        let finer_held = c.cell_zoom() < self.known.finest(bound);
+        let finer_held = held.is_some_and(|b| c.cell_zoom() < b.finest);
         let mut from_step = if finer_held && touching.1 > 0 {
             self.ladder.iter().take_while(|&&tau| error_angle > cell_angle(tau)).count() as u8
         } else {
@@ -236,7 +248,7 @@ impl Domain {
         if splits_to as usize > self.tracked {
             let mut any = false;
             for child in c.children() {
-                if self.contents(child) != Contents::Empty {
+                if !matches!(self.bound(child), Answer::Exact(None) | Answer::Coarser(None, _)) {
                     any = true;
                     self.open.push(Open {
                         c: child,
@@ -336,8 +348,8 @@ impl Domain {
 }
 
 impl Domain {
-    fn contents(&self, c: Chunk) -> Contents {
-        self.known.contents(c.cell_zoom(), c.region())
+    fn bound(&self, c: Chunk) -> Answer<Option<Bound>> {
+        (self.bounds)(c.node(), c.cell_zoom())
     }
 
     /// Measured from where in `c` anything stands: a bound, not the drawn
@@ -347,10 +359,7 @@ impl Domain {
         if let Some(s) = self.seen.get(&c) {
             return s.order;
         }
-        let bound = match self.contents(c) {
-            Contents::Holds { bound, .. } => bound,
-            _ => c.region(),
-        };
+        let bound = self.bound(c).value().flatten().map_or(c.region(), |b| b.aabb);
         Order::of(&self.o, &bound)
     }
 

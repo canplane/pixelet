@@ -14,7 +14,7 @@ pub use census::{Census, ChunkCounts, ChunkHeld};
 pub use mesh::Meshes;
 pub use mount::MOUNTS_BYTES;
 
-use crate::world::access::Query;
+use crate::world::access::{Access, Query};
 use crate::world::chunk::build::{ground_of, leaf_of};
 use mesh::*;
 use mount::*;
@@ -28,7 +28,6 @@ use crate::sched::profiler::frame::ZOOMS;
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::{dot3, len3, Aabb, V3};
-use pxl_spec::space::layer::demand::Bounds as _;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
@@ -49,7 +48,7 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::global::Global;
 
-use crate::world::observation::{Known, Order};
+use crate::world::observation::Order;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::domain::{self, Domain};
 use crate::world::pyramid::Layer as _;
@@ -163,7 +162,7 @@ impl Slot {
     /// then never built, leaving holes with nothing left to fetch.
     fn unmeasured(&mut self) {
         let region = self.chunk.region();
-        let b = Known.contents(self.chunk.cell_zoom(), region).within(region).unwrap_or(region);
+        let b = Access::now().bounds(self.chunk.node(), self.chunk.cell_zoom()).value().flatten().map_or(region, |b| b.aabb);
         let c = b.center();
         self.bc = [c[0] - region.min[0], c[1] - region.min[1], c[2]];
         self.radius = b.radius();

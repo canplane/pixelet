@@ -4,9 +4,8 @@
 //! zoom over a region (`Requirement`), named as the tiles under it (`tiles`).
 //! What estimates them names a superset of the exact demand from what is
 //! known; never less, since a requirement left out is ground that never
-//! refines. What is known of a box is asked
-//! in the grid's cells (`Bounds`); a layer says which of its zooms folds
-//! into them by its lattice.
+//! refines. What is known of a node is the kernel's query
+//! (`pxl-kernel world/access/query.rs`), asked in the grid's cells.
 
 use super::lattice::{Lattice, GROUND};
 use super::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
@@ -21,52 +20,6 @@ use crate::space::coord::zoom::{units, Zoom};
 pub struct Requirement {
     pub zoom: Zoom,
     pub region: Aabb,
-}
-
-/// What a box holds at a zoom, as far as is known.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Contents {
-    Unknown,
-    Empty,
-    /// Everything is inside `bound`. Conservative, not tight; how far what is
-    /// drawn may lie off it is the cell the reader draws, alike on every axis.
-    Holds {
-        bound: Aabb,
-    },
-}
-
-impl Contents {
-    /// Where in `region` anything can stand.
-    pub fn within(self, region: Aabb) -> Option<Aabb> {
-        match self {
-            Contents::Unknown => Some(region),
-            Contents::Empty => None,
-            Contents::Holds { bound, .. } => Some(bound),
-        }
-    }
-}
-
-/// What is known of the world, read for the grid's cells at `cell`. Never
-/// less than the truth, and at a coarser cell never less than at a finer one
-/// under it.
-pub trait Bounds {
-    fn contents(&self, cell: Zoom, region: Aabb) -> Contents;
-
-    /// The finest cell zoom anything in `region` is held at.
-    fn finest(&self, region: Aabb) -> Zoom;
-}
-
-pub struct Unknown;
-
-impl Bounds for Unknown {
-    fn contents(&self, _cell: Zoom, _region: Aabb) -> Contents {
-        Contents::Unknown
-    }
-
-    /// The ground's cell, held everywhere.
-    fn finest(&self, _region: Aabb) -> Zoom {
-        GROUND.cell()
-    }
 }
 
 /// Every tile under a requirement's region; edges are inclusive south and west only.

@@ -22,7 +22,7 @@ use pxl_spec::space::coord::world::{around, nearest, REACH, ROUND};
 use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
-use pxl_spec::space::hierarchy::tree::{child_of, first_descendant_of, Node};
+use pxl_spec::space::hierarchy::tree::{child_of, first_descendant_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_core::status::bug::OrBug;
@@ -649,7 +649,7 @@ impl Query for Store {
     /// All resident, so every answer is exact. Read at `cell`: a node held
     /// finer than its cells is one cube and `finest` one past `cell`, so the
     /// cost is the asker's resolution — one find for a node read whole.
-    fn bounds(&self, (zoom, at): Node<3>, cell: Zoom) -> Answer<Option<Bound>> {
+    fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let mut out: Option<Bound> = None;
         let mut hold = |aabb: Aabb, finest: Zoom| {
             out = Some(out.map_or(Bound { aabb, finest }, |o| Bound {
@@ -657,16 +657,17 @@ impl Query for Store {
                 finest: o.finest.max(finest),
             }))
         };
-        let whole = cube(zoom, at);
-        // Over a column's root no one tree holds the node: its columns' leaves.
-        if zoom < SHARD_ZOOM {
+        let whole = region(node);
+        // One tree holds a cube under a column's root; else its columns' leaves.
+        let Some(at) = (D == 3 && node.0 >= SHARD_ZOOM).then(|| [node.1[0], node.1[1], node.1[2]]) else {
             self.entries_in(&whole, &mut |e| {
                 if let Some(b) = e.cube().meet(whole) {
                     hold(b, e.zoom.min(cell + 1));
                 }
             });
             return Answer::Exact(out);
-        }
+        };
+        let zoom = node.0;
         match self.find(zoom, at) {
             None => {}
             Some(Found { slot: Slot::Leaf(EMPTY), .. }) => {}
