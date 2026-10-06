@@ -15,6 +15,15 @@ pub const REUSE_SHIFT: f64 = 0.25;
 
 // ---- the drawn resolution ----
 
+/// Device pixels per CSS pixel the world is drawn at: one at least, and no
+/// finer than labels' sheets are drawn, so a label is never shown smaller
+/// than drawn.
+pub const RESOLUTION_MIN: f64 = 1.0;
+pub const RESOLUTION_MAX: f64 = pxl_render::gpu::sheet::SHEET_SCALE;
+
+/// The picker shows a case at thumbnail size: its buffer's long side, in pixels.
+pub const CASE_LONG_SIDE_MAX: f64 = 256.0;
+
 pub const RESOLUTION_STEP: f64 = 0.25;
 
 /// Over budget this long before a step down, so one slow frame is not taken for load.

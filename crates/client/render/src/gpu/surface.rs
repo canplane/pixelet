@@ -7,18 +7,11 @@ use xpute_core::math::scalar::round;
 use xpute_guest::abi::handle::{handle_slot, HandleTable};
 use xpute_guest::global::Global;
 
-use crate::gpu::api_spec::surface_role;
 
 /// Slot 0 is never a surface.
 pub const SURFACES: usize = 9;
 
-/// Past two, texels cost more than the eye resolves at arm's length. Badge
-/// sheets are drawn at DPR_MAX, so a label is never shown smaller than drawn.
-pub const DPR_MIN: f64 = 1.0;
-pub const DPR_MAX: f64 = 2.0;
 
-/// The picker shows a case at thumbnail size.
-const CASE_LONG_SIDE_MAX: f64 = 256.0;
 
 /// A box animating in passes through a size a frame, each of which would
 /// otherwise be a new depth and color target.
@@ -31,6 +24,9 @@ pub struct Surface {
     pub px_w: u32,
     pub px_h: u32,
     pub dpr: f64,
+    /// The device pixels per CSS pixel the kernel has it drawn at, where no
+    /// turn's ratio is given.
+    pub ratio: f64,
     pub configured: bool,
     pub width: u32,
     pub height: u32,
@@ -44,10 +40,7 @@ impl Surface {
     pub fn buffer_px(&self, ratio: Option<f64>) -> (u32, u32) {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);
         let dpr = if self.dpr > 0.0 { self.dpr } else { 1.0 };
-        let mut k = ratio.unwrap_or(dpr).clamp(DPR_MIN, DPR_MAX) / dpr;
-        if self.role == surface_role::CASE {
-            k = k.min(CASE_LONG_SIDE_MAX / w.max(h));
-        }
+        let k = ratio.unwrap_or(self.ratio) / dpr;
         (round(w * k).max(1.0) as u32, round(h * k).max(1.0) as u32)
     }
 }
@@ -74,17 +67,19 @@ pub fn surface_open(role: u32) -> u32 {
         handle,
         role,
         dpr: 1.0,
+        ratio: 1.0,
         ..Surface::default()
     };
     handle
 }
 
 /// Whether the handle was live.
-pub fn surface_resize(handle: u32, px_w: u32, px_h: u32, dpr: f64) -> bool {
+pub fn surface_resize(handle: u32, px_w: u32, px_h: u32, dpr: f64, ratio: f64) -> bool {
     let Some(s) = surface(handle) else { return false };
     s.px_w = px_w;
     s.px_h = px_h;
     s.dpr = dpr;
+    s.ratio = ratio;
     true
 }
 
@@ -116,6 +111,7 @@ pub fn surfaces_lost() {
             px_w: s.px_w,
             px_h: s.px_h,
             dpr: s.dpr,
+            ratio: s.ratio,
             ..Surface::default()
         };
     }

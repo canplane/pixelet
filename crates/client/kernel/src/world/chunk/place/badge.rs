@@ -10,7 +10,7 @@ use crate::io::text::text_width;
 use crate::scene::billboard::sheet::billboard_sheet;
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
-use pxl_render::gpu::surface::DPR_MAX;
+use pxl_render::gpu::sheet::SHEET_SCALE;
 use xpute_guest::global::Global;
 
 use crate::layer::{Answer, Layer, Query};
@@ -104,8 +104,8 @@ pub fn slot(label: Label) -> i32 {
     let b = badges().get_mut(&label).or_bug(Errno::ENOTRECOVERABLE);
     if b.slot == NO_SLOT {
         b.slot = billboard_sheet().add(
-            b.width * DPR_MAX,
-            HEIGHT * DPR_MAX,
+            b.width * SHEET_SCALE,
+            HEIGHT * SHEET_SCALE,
             match label {
                 Label::Count(..) => DrawSpec::Cluster {
                     label: label.text(),

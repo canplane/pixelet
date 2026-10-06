@@ -5,7 +5,7 @@
 
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::BUBBLE_FONT;
-use pxl_render::gpu::surface::DPR_MAX;
+use pxl_render::gpu::sheet::SHEET_SCALE;
 
 use crate::io::text::text_lines;
 use crate::scene::billboard::field::billboard_instance;
@@ -104,8 +104,8 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
                 return;
             };
             let slot = billboard_sheet().add(
-                layout.box_w * DPR_MAX,
-                layout.logical_h * DPR_MAX,
+                layout.box_w * SHEET_SCALE,
+                layout.logical_h * SHEET_SCALE,
                 DrawSpec::Bubble {
                     lines: layout.lines.clone(),
                     box_w: layout.box_w,

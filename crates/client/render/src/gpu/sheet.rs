@@ -9,7 +9,6 @@ use crate::frame::shader::record::PIPELINE_SHEET;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, room, texture_usage, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::surface::DPR_MAX;
 use crate::gpu::text::{Font, Raster, TextOf};
 use xpute_core::math::scalar::round;
 
@@ -34,6 +33,13 @@ struct Line {
     align: Align,
 }
 
+
+/// Device pixels a sheet draws per logical pixel: past two, texels cost more
+/// than the eye resolves at arm's length. The world is drawn no finer
+/// (pxl-kernel param/view.rs `RESOLUTION_MAX`), so a label is never shown
+/// smaller than drawn.
+pub const SHEET_SCALE: f64 = 2.0;
+
 #[derive(Default)]
 pub struct Sketch {
     shapes: Vec<[f32; SHAPE_FLOATS]>,
@@ -41,7 +47,7 @@ pub struct Sketch {
 }
 
 fn px(v: f32) -> f32 {
-    PAD as f32 + v * DPR_MAX as f32
+    PAD as f32 + v * SHEET_SCALE as f32
 }
 
 /// The texture is sRGB, and what a shader writes into it is linear.
@@ -70,7 +76,7 @@ fn shape(kind: u32, rect: [f32; 4], color: u32, p: [f32; 4], q: [f32; 2]) -> [f3
 impl Sketch {
     pub fn round_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, color: u32) {
         let rect = [px(x), px(y), px(x + w), px(y + h)];
-        self.shapes.push(shape(FILL, rect, color, [r * DPR_MAX as f32, 0.0, 0.0, 0.0], [0.0; 2]));
+        self.shapes.push(shape(FILL, rect, color, [r * SHEET_SCALE as f32, 0.0, 0.0, 0.0], [0.0; 2]));
     }
 
     pub fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, color: u32) {
@@ -83,7 +89,7 @@ impl Sketch {
 
     pub fn ring(&mut self, cx: f32, cy: f32, r: f32, width: f32, color: u32) {
         let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
-        let scale = DPR_MAX as f32;
+        let scale = SHEET_SCALE as f32;
         self.shapes.push(shape(STROKE, rect, color, [r * scale, width * scale, 0.0, 0.0], [0.0; 2]));
     }
 

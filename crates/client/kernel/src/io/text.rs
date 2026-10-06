@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use pxl_render::gpu::surface::DPR_MAX;
+use pxl_render::gpu::sheet::SHEET_SCALE;
 use pxl_render::gpu::text::{raster_box, Font, Raster};
 use xpute_guest::mem::base::off_of_slice;
 
@@ -128,7 +128,7 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
     }
     let advance = text_width(font, text_in)? as f32;
     let (size, origin) = raster_box(font, advance);
-    let scale = DPR_MAX as f32;
+    let scale = SHEET_SCALE as f32;
     let mut pixels = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
     let args = [
         font.weight,
