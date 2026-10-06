@@ -19,8 +19,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   "the steps, measured").
   A fifth, from the 0405 checkpoint (0405 entropy): the ground as instanced
   columns placed on the GPU from a folded tile's heights, no CPU mesh, with
-  the run mesher kept for decks, bores and objects — about 850 lines did
-  0405's ground where the chunk mesher, tables and slots are some 5,500.
+  the run mesher kept for decks, bores and objects. Counted at 53733c1ca,
+  tests out: 0405's render/terrain and modules/world/terrain about 850
+  lines, world/chunk and the render mesh's chunk_mesher, run and terrain
+  adapter about 5,500.
 
 ## P1
 
