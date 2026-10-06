@@ -2,11 +2,11 @@
 
 use super::*;
 
-/// A Bundang tile, (11569, 3671), whose grid place is (27953, 20055), rows
-/// counted from the south; written out because the orientation is what can
-/// be silently wrong.
+/// A Bundang tile, (11569, 3671): rows count from the south and a first
+/// digit is the signs, written out because the orientation is what can be
+/// silently wrong.
 const BUNDANG: IVec = 12720250262323200;
-const BUNDANG_QUADKEY: &str = "310332102130223";
+const BUNDANG_QUADKEY: &str = "010332102130223";
 
 #[test]
 fn the_known_tile_is_the_tile_it_stands_on() {

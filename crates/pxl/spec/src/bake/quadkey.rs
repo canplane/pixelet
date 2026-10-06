@@ -33,11 +33,19 @@ impl fmt::Display for Quadkey {
     }
 }
 
+/// The name of the node at `zoom` holding the point `at`, in units; zoom 0's
+/// is empty, the prefix of every name.
+pub fn node_name(zoom: Zoom, at: [i64; 2]) -> Quadkey {
+    Quadkey {
+        depth: u32::from(zoom),
+        key: morton::key(zoom, at),
+    }
+}
+
 /// The name of the tile at zoom `depth` and index `idx`, X wrapped at the seam.
 pub fn quadkey_of(depth: u32, idx: IVec) -> Quadkey {
     let zoom = depth as Zoom;
-    let at = first_descendant_of([wrap_index(zoom, ivec::X(idx)), ivec::Y(idx)], shamt(zoom) as u32);
-    Quadkey { depth, key: morton::key(zoom, at) }
+    node_name(zoom, first_descendant_of([wrap_index(zoom, ivec::X(idx)), ivec::Y(idx)], shamt(zoom) as u32))
 }
 
 /// The depth and tile index a name addresses, Z zero; `None` if it is not a name.

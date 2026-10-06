@@ -1,10 +1,11 @@
 // pxl-spec/space/morton.rs
 
-//! A node's one key: the lanes in offset binary, by their half width added
-//! once, interleaved a zoom at a time from the coarsest in `slot_of`'s order.
-//! An axis takes part from the zoom its lane reaches: X and Y from z1, Z, 16
-//! bits under X's 24, from z9, so a 3D key is the 2D one to z8. A coarser key
-//! is a prefix of a finer one over the same ground, in any number of axes.
+//! A node's one key: the lanes in two's complement, as the signed indices are,
+//! interleaved a zoom at a time from the coarsest in `slot_of`'s order, so 0
+//! is 0 and an axis's first digit is its sign. An axis takes part from the
+//! zoom its lane reaches: X and Y from z1, Z, 16 bits under X's 24, from z9,
+//! so a 3D key is the 2D one to z8. A coarser key is a prefix of a finer one
+//! over the same ground, in any number of axes.
 
 use super::pvf3::core::{IVEC_X_W, IVEC_Y_W, IVEC_Z_W};
 use super::zoom::{Zoom, UNIT_Z};
@@ -32,11 +33,11 @@ pub const fn bits<const D: usize>(zoom: Zoom) -> u32 {
 
 /// The key of the node at `zoom` holding the point `at`, in units on each lane.
 pub fn key<const D: usize>(zoom: Zoom, at: [i64; D]) -> u64 {
-    let lane: [u64; D] = std::array::from_fn(|i| (at[i] + (1 << (LANES[i] - 1))) as u64);
+    let lane: [u64; D] = std::array::from_fn(|i| at[i] as u64 & ((1 << LANES[i]) - 1));
     (1..=zoom).fold(0, |key, z| (0..D).rev().filter(|&i| takes_part(i, z)).fold(key, |key, i| (key << 1) | ((lane[i] >> (UNIT_Z - z)) & 1)))
 }
 
-/// The point in units at the node's corner nearest the lanes' least: `key`'s inverse.
+/// The point in units whose digits are the key's and below `zoom` zero: `key`'s inverse.
 pub fn base<const D: usize>(zoom: Zoom, key: u64) -> [i64; D] {
     let mut lane = [0u64; D];
     let mut left = bits::<D>(zoom);
@@ -46,7 +47,16 @@ pub fn base<const D: usize>(zoom: Zoom, key: u64) -> [i64; D] {
             *v |= ((key >> left) & 1) << (UNIT_Z - z);
         }
     }
-    std::array::from_fn(|i| lane[i] as i64 - (1 << (LANES[i] - 1)))
+    std::array::from_fn(|i| ((lane[i] << (64 - LANES[i])) as i64) >> (64 - LANES[i]))
+}
+
+/// The finest zoom, `cap` at most, whose one node holds a box from `lo` to
+/// `hi` on each lane, both held; zoom 0 for a box that wraps.
+pub fn enclosing<const D: usize>(cap: Zoom, lo: [i64; D], hi: [i64; D]) -> Zoom {
+    if (0..D).any(|i| hi[i] < lo[i]) {
+        return 0;
+    }
+    (0..=cap).rev().find(|&z| key(z, lo) == key(z, hi)).unwrap_or(0)
 }
 
 const _: () = assert!(IVEC_X_W == UNIT_Z as u32 && IVEC_Y_W == IVEC_X_W, "X and Y digit from z1");

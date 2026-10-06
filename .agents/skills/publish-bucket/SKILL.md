@@ -30,7 +30,7 @@ rows counted from the south (pxl-spec bake/quadkey.rs). The length is the zoom, 
 the three bakes differ only in how long a name they have — terrain and POI 5
 to 15 digits for the pyramid they share, geocode 11 because a group covers 16
 tiles a side. They land in one space, so
-`terrain/<v>/31033210`, `poi/<v>/31033210` and `geocode/<v>/31033210` are the
+`terrain/<v>/01033210`, `poi/<v>/01033210` and `geocode/<v>/01033210` are the
 same ground, and **one prefix is one region across all three at every zoom**.
 That is what a later split of the bucket would be: a prefix match, not a
 second re-keying.

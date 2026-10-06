@@ -48,9 +48,10 @@ fn a_key_reads_back_as_its_node_s_corner() {
         for zoom in 0..=UNIT_Z {
             let corner: [i64; 3] = base(zoom, key(zoom, p));
             assert_eq!(key(zoom, corner), key(zoom, p));
-            let floor = |v: i64, w: u32| ((v + (1 << (w - 1))) >> (UNIT_Z - zoom).min(w as Zoom)) << (UNIT_Z - zoom).min(w as Zoom);
-            assert_eq!(corner[0] + (1 << 23), floor(p[0], 24), "{p:?} z{zoom}");
-            assert_eq!(corner[2] + (1 << 15), floor(p[2], 16), "{p:?} z{zoom}");
+            let s = u32::from(UNIT_Z - zoom);
+            let floor = |v: i64, w: u32| if s >= w { 0 } else { (v >> s) << s };
+            assert_eq!(corner[0], floor(p[0], 24), "{p:?} z{zoom}");
+            assert_eq!(corner[2], floor(p[2], 16), "a lane with no digit yet is 0: {p:?} z{zoom}");
         }
     }
 }
@@ -60,7 +61,7 @@ fn a_key_reads_back_as_its_node_s_corner() {
 fn a_digit_is_the_child_s_slot() {
     for p in POINTS {
         for zoom in 1..=UNIT_Z {
-            let at = |z: Zoom| ancestor_of(xy(p).map(|v| v + (1 << 23)), shamt(z) as u32);
+            let at = |z: Zoom| ancestor_of(xy(p), shamt(z) as u32);
             assert_eq!(key(zoom, xy(p)) & 3, slot_of(at(zoom)) as u64, "{p:?} z{zoom}");
             assert_eq!(first_descendant_of(at(zoom - 1), 1), at(zoom).map(|v| v & !1));
         }
@@ -68,7 +69,7 @@ fn a_digit_is_the_child_s_slot() {
 }
 
 #[test]
-fn the_unit_s_3d_key_fills_the_word() {
-    assert_eq!(key(UNIT_Z, [(1 << 23) - 1, (1 << 23) - 1, (1 << 15) - 1]), u64::MAX);
-    assert_eq!(key(UNIT_Z, [-(1 << 23), -(1 << 23), -(1 << 15)]), 0);
+fn the_origin_is_zero_and_minus_one_fills_the_word() {
+    assert_eq!(key(UNIT_Z, [-1, -1, -1]), u64::MAX);
+    assert_eq!(key(UNIT_Z, [0, 0, 0]), 0, "0 is 0");
 }
