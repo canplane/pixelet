@@ -153,8 +153,8 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   places a lattice sixty-four ground cells wide, objects their cells folded
   by majority — never a second rule; past a layer's data it draws its
   finest.
-- **Dev is guarded like terrain.** The tile server answers no tile coarser
-  than `--top-z`, the whole guard for every layer. A source declares the
+- **Dev is guarded like terrain.** The tile server answers no tile more than
+  `--folds` zooms over the leaves, the whole guard for every layer. A source declares the
   coarsest zoom it supplies whole — the published version in its metadata,
   the tile server at `/tile/source` — and the floor is that zoom.
 - **Terrain, POI and objects are audited side by side** before a change is

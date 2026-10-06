@@ -20,7 +20,7 @@ pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind,
     if p.zoom < top {
         return Err(Failure::Unavailable);
     }
-    bake_missing(data, runner, kind, p).await?;
+    bake_missing(data, runner, kind, p, true).await?;
     Ok(Some(key(p)))
 }
 
@@ -28,17 +28,17 @@ fn key(p: Tile) -> String {
     format!("z{}/{}", p.zoom, p.tile)
 }
 
-fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile) -> Pin<Box<dyn Future<Output = Result<(), Failure>> + Send>> {
+fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, asked: bool) -> Pin<Box<dyn Future<Output = Result<(), Failure>> + Send>> {
     Box::pin(async move {
         let d = data.clone();
         data.cache
-            .once(key(p), move |deadline| async move {
+            .once(key(p), asked, move |lease| async move {
                 if !d.source.holds(p) {
                     return d.cache.publish(&key(p), None).map_err(Failure::from);
                 }
                 if p.zoom < LEAF_Z {
                     for below in d.source.sources(p) {
-                        tokio::time::timeout_at(deadline, bake_missing(d.clone(), runner.clone(), kind, below))
+                        tokio::time::timeout_at(lease.deadline, bake_missing(d.clone(), runner.clone(), kind, below, false))
                             .await
                             .map_err(|_| Failure::Limited("demand dependency deadline"))??;
                     }
@@ -48,7 +48,7 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile) ->
                     subject: p.subject(),
                     cache: d.cache.root.clone(),
                 };
-                runner.run(job, d.clone(), deadline, Publication::Packet(key(p))).await
+                runner.run(job, d.clone(), lease, Publication::Packet(key(p))).await
             })
             .await
     })

@@ -84,8 +84,9 @@ impl PublishedVersion {
 /// coarsest zoom of the pyramid it supplies whole, terrain and POI alike. The
 /// client's floor is held there, all around the eye, and the far edge is where
 /// that zoom ends (pxl-kernel world/residency/floor.rs). The dev tile server
-/// answers the same object at the tile root's `source`, with its `--top-z`
-/// (pxl-geo-bake bin/serve_tiles.rs); neither is guessed from what fails.
+/// answers the same object at the tile root's `source`, its `--folds` zooms
+/// over the leaves (pxl-geo-bake bin/serve_tiles.rs); neither is guessed from
+/// what fails.
 pub const PUBLISHED_TOP_Z: crate::space::zoom::Zoom = 5;
 
 const _: () = assert!(PUBLISHED_TOP_Z >= crate::space::pyramid::TOP_Z, "a published zoom past the pyramid's top");
