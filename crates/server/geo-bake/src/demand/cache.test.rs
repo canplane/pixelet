@@ -45,12 +45,12 @@ async fn concurrent_requests_publish_once_and_preserve_empty_and_failed_results(
 }
 
 #[tokio::test]
-async fn disconnected_request_does_not_cancel_publication_and_a_purged_generation_cannot_write_into_the_next() {
-    let old = cache();
+async fn disconnected_request_does_not_cancel_publication() {
+    let c = cache();
     let entered = Arc::new(Notify::new());
     let release = Arc::new(Notify::new());
     let task = {
-        let c = old.clone();
+        let c = c.clone();
         let entered = entered.clone();
         let release = release.clone();
         tokio::spawn(async move {
@@ -58,25 +58,20 @@ async fn disconnected_request_does_not_cancel_publication_and_a_purged_generatio
             c.once("tile".into(), true, move |_deadline| async move {
                 entered.notify_one();
                 release.notified().await;
-                producer.publish("tile", Some(b"old")).map_err(Failure::from)
+                producer.publish("tile", Some(b"tile")).map_err(Failure::from)
             })
             .await
         })
     };
     entered.notified().await;
     task.abort();
-    old.purge().unwrap();
-    let new = Cache::new(old.root.clone(), old.admission.clone(), old.deadline).unwrap();
-    new.publish("tile", Some(b"new")).unwrap();
     release.notify_one();
-    old.once("tile".into(), true, |_deadline| async { panic!("must join existing job") }).await.unwrap();
-    assert_eq!(crate::util::unpack(&new.read("tile").await.unwrap().unwrap()).unwrap(), b"new");
-    new.purge().unwrap();
-    assert!(!new.root.exists());
+    c.once("tile".into(), true, |_deadline| async { panic!("must join existing job") }).await.unwrap();
+    assert_eq!(crate::util::unpack(&c.read("tile").await.unwrap().unwrap()).unwrap(), b"tile");
 }
 
 #[tokio::test]
-async fn kinds_and_generations_share_admission_but_hits_and_joiners_need_no_new_slot() {
+async fn kinds_share_admission_but_hits_and_joiners_need_no_new_slot() {
     let a = cache();
     let b = Cache::new(a.root.with_extension("other"), a.admission.clone(), a.deadline).unwrap();
     let producer = a.clone();

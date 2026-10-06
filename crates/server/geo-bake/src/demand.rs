@@ -16,7 +16,7 @@ use std::path::PathBuf;
 
 use crate::coverage::Coverage;
 use pxl_spec::space::coord::zoom::Zoom;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub mod job;
 use job::{Limits, Runner};
@@ -106,32 +106,36 @@ impl Dataset {
 pub struct Server {
     _owner: std::fs::File,
     runner: Arc<Runner>,
-    base: PathBuf,
-    current: Mutex<[Arc<Dataset>; 3]>,
+    datasets: [Arc<Dataset>; 3],
     top_z: Zoom,
 }
 impl Server {
+    /// The cache is the source's: the bake's binary and the DB's catalogs
+    /// name its directory, so what another source baked is never read.
     pub fn open(workers: usize, base: PathBuf, top_z: Zoom, limits: Limits) -> Result<Self, String> {
         let owner = claim(&base)?;
+        let source = base.join(source_id()?);
+        for entry in std::fs::read_dir(&base).map_err(|e| e.to_string())?.flatten() {
+            if entry.path() != source && entry.file_name() != LOCK {
+                std::fs::remove_dir_all(entry.path()).or_else(|_| std::fs::remove_file(entry.path())).map_err(|e| e.to_string())?;
+            }
+        }
         let runner = Arc::new(Runner::new(workers, limits)?);
-        let current = [Kind::Terrain, Kind::Poi, Kind::Geocode]
-            .into_iter()
-            .map(|k| {
-                prune(&base.join(k.name()))?;
-                Dataset::open(&base, k, &runner).map(Arc::new)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let datasets = [Kind::Terrain, Kind::Poi, Kind::Geocode].map(|k| {
+            prune(&source.join(k.name()))?;
+            Dataset::open(&source, k, &runner).map(Arc::new)
+        });
+        let [t, p, g] = datasets;
         Ok(Self {
             _owner: owner,
             runner,
-            base,
-            current: Mutex::new(current.try_into().ok().unwrap()),
+            datasets: [t?, p?, g?],
             top_z,
         })
     }
 
     pub async fn get(&self, kind: Kind, name: &str) -> Result<Option<Vec<u8>>, Failure> {
-        let data = self.current.lock().expect("datasets")[kind as usize].clone();
+        let data = self.datasets[kind as usize].clone();
         let runner = self.runner.clone();
         let path = match kind {
             Kind::Terrain | Kind::Poi => pyramid::resolve(data.clone(), runner, kind, name, self.top_z).await?,
@@ -140,37 +144,47 @@ impl Server {
         let Some(path) = path else { return Ok(None) };
         data.cache.read(&path).await.map_err(Failure::Bake)
     }
-
-    pub fn invalidate(&self, kind: Kind) -> Result<(), String> {
-        let mut current = self.current.lock().expect("datasets");
-        current[kind as usize].cache.purge()?;
-        current[kind as usize] = Arc::new(Dataset::open(&self.base, kind, &self.runner)?);
-        Ok(())
-    }
 }
 
-/// Clears what a killed server left that is not a tile: staging and a
-/// half-done purge.
+/// What a tile baked here is a function of, as a name: the running binary,
+/// which bakes it, and the catalog of every table it reads.
+fn source_id() -> Result<String, String> {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::hash::DefaultHasher::new();
+    std::fs::read(std::env::current_exe().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?.hash(&mut h);
+    let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
+    let mut client = postgres::Client::connect(&url, postgres::NoTls).map_err(|e| e.to_string())?;
+    for sql in SOURCE_SQL {
+        for row in client.query(sql, &[]).map_err(|e| format!("{sql}: {e}"))? {
+            (0..row.len()).map(|i| row.get::<_, Option<String>>(i)).collect::<Vec<_>>().hash(&mut h);
+        }
+    }
+    Ok(format!("{:016x}", h.finish()))
+}
+
+/// The catalogs of what a bake reads; the coastline keeps none, so its rows are counted.
+const SOURCE_SQL: [&str; 3] = [
+    "SELECT file_name, node, data_date, imported_at::text, total_count::text FROM overture_catalog ORDER BY file_name, node",
+    "SELECT shard, data_date::text, file_name, status, imported_at::text, total_count::text FROM elevation_catalog ORDER BY shard",
+    "SELECT count(*)::text FROM osm_land_polygons",
+];
+
+const LOCK: &str = ".lock";
+
+/// Clears what a killed server left that is not a tile: its jobs' staging.
 fn prune(root: &std::path::Path) -> Result<(), String> {
     for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {
         if entry.file_name().to_string_lossy().starts_with(".work-") {
             std::fs::remove_dir_all(entry.path()).map_err(|e| e.to_string())?;
         }
     }
-    match std::fs::remove_dir_all(root.join(terrain::SOURCE)) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
-        _ => {}
-    }
-    match std::fs::remove_dir_all(cache::purged(root)) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
-        _ => Ok(()),
-    }
+    Ok(())
 }
 
 /// The lock keeps a second server from pruning under a running one.
 fn claim(base: &std::path::Path) -> Result<std::fs::File, String> {
     std::fs::create_dir_all(base).map_err(|e| e.to_string())?;
-    let owner = std::fs::File::options().create(true).truncate(false).write(true).open(base.join(".lock")).map_err(|e| e.to_string())?;
+    let owner = std::fs::File::options().create(true).truncate(false).write(true).open(base.join(LOCK)).map_err(|e| e.to_string())?;
     owner.try_lock().map_err(|_| format!("{}: another server owns this cache", base.display()))?;
     Ok(owner)
 }

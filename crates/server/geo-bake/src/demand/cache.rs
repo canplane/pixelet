@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::{Notify, Semaphore};
 
 #[derive(Default)]
@@ -28,9 +28,6 @@ pub struct Cache {
     flights: Arc<Mutex<HashMap<String, Arc<Flight>>>>,
     admission: Arc<Semaphore>,
     deadline: std::time::Duration,
-    /// False once purged. Writes hold it shared and the purge alone, so no write
-    /// lands between a purge and the next generation.
-    live: RwLock<bool>,
 }
 
 impl Cache {
@@ -41,12 +38,11 @@ impl Cache {
             flights: Arc::new(Mutex::new(HashMap::new())),
             admission,
             deadline,
-            live: RwLock::new(true),
         })
     }
 
     /// The job, not the HTTP connection, owns its lifetime. Failures stay failed
-    /// within the generation; resource refusals leave nothing. Do not time out this
+    /// while the server runs; resource refusals leave nothing. Do not time out this
     /// future: it would release the key before the work stopped. `asked` is
     /// whether a client waits on it, rather than only a fold over it.
     pub async fn once<F>(&self, key: String, asked: bool, make: impl FnOnce(Lease) -> F + Send + 'static) -> Result<(), Failure>
@@ -104,39 +100,13 @@ impl Cache {
 
     pub fn publish(&self, name: &str, raw: Option<&[u8]>) -> Result<(), String> {
         let packed = raw.map(|r| pack(r, Level::Live).map_err(|e| e.to_string())).transpose()?;
-        self.commit(|| {
-            let path = self.root.join(name);
-            std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-            match packed.as_deref() {
-                Some(bytes) => write_atomic(&path, bytes),
-                None => write_atomic(&path.with_extension("empty"), b""),
-            }
-            .map_err(|e| e.to_string())
-        })
-    }
-
-    pub fn commit(&self, write: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
-        let live = self.live.read().expect("live");
-        if *live {
-            write()
-        } else {
-            Ok(())
+        let path = self.root.join(name);
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+        match packed.as_deref() {
+            Some(bytes) => write_atomic(&path, bytes),
+            None => write_atomic(&path.with_extension("empty"), b""),
         }
-    }
-
-    pub fn purge(&self) -> Result<(), String> {
-        let mut live = self.live.write().expect("live");
-        *live = false;
-        let aside = purged(&self.root);
-        match std::fs::rename(&self.root, &aside) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
-            _ => {}
-        }
-        drop(live);
-        match std::fs::remove_dir_all(&aside) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
-            _ => Ok(()),
-        }
+        .map_err(|e| e.to_string())
     }
 
     pub async fn read(&self, name: &str) -> Result<Option<Vec<u8>>, String> {
@@ -147,12 +117,6 @@ impl Cache {
             Err(e) => Err(format!("{}: {e}", path.display())),
         }
     }
-}
-
-pub fn purged(root: &std::path::Path) -> PathBuf {
-    let mut name = root.file_name().unwrap_or_default().to_owned();
-    name.push(".purged");
-    root.with_file_name(name)
 }
 
 #[cfg(test)]

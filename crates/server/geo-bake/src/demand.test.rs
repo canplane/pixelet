@@ -8,8 +8,7 @@ fn a_restart_keeps_the_tiles_and_clears_what_was_cut_short() {
     let root = base.join("poi");
     let tile = root.join("0").join("010332102301230");
     let work = root.join(".work-0");
-    let purge = cache::purged(&root);
-    for d in [&tile, &work, &purge] {
+    for d in [&tile, &work] {
         std::fs::create_dir_all(d).unwrap();
     }
     let owner = claim(&base).unwrap();
@@ -17,7 +16,6 @@ fn a_restart_keeps_the_tiles_and_clears_what_was_cut_short() {
     prune(&root).unwrap();
     assert!(tile.exists(), "a baked tile is kept");
     assert!(!work.exists(), "a killed job's staging is removed");
-    assert!(!purge.exists(), "a killed purge is finished");
     drop(owner);
     std::fs::remove_dir_all(base).unwrap();
 }

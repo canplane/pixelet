@@ -113,7 +113,7 @@ impl Drop for Staging {
 }
 impl Staging {
     fn publish(&self, data: &Dataset, publication: Publication) -> Result<(), String> {
-        data.cache.commit(|| match publication {
+        match publication {
             Publication::Packet(name) => {
                 let mut target = data.cache.root.join(name);
                 let source = if self.0.join("empty").is_file() {
@@ -130,7 +130,7 @@ impl Staging {
                 std::fs::create_dir_all(target.parent().unwrap()).map_err(|e| e.to_string())?;
                 std::fs::rename(self.0.join(source), target).map_err(|e| e.to_string())
             }
-        })
+        }
     }
 }
 

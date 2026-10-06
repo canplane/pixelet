@@ -1,7 +1,8 @@
 // pxl-geo-bake/bin/serve_tiles.rs
 
-//! Local demand bakes. --cache holds the terrain/poi/geocode directories;
-//! a tile stays cached across restarts until its kind is invalidated. The
+//! Local demand bakes. --cache holds them under the source they were baked
+//! from, the bake's binary and the geo DB's catalogs, so a tile stays cached
+//! across restarts until either changes, and a change starts an empty one. The
 //! Earth's picture is baked offline by pxl-tool, so it is served from that
 //! bake (`--out`), under the names the bucket holds, whichever way the rest is.
 
@@ -9,7 +10,7 @@ use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum::Router;
 use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::demand::{
@@ -17,9 +18,8 @@ use pxl_geo_bake::demand::{
     Failure, Kind, Server,
 };
 use pxl_geo_bake::util::CONTENT_ENCODING;
-use pxl_server::admin_auth::admin_auth;
 use pxl_spec::bake::published::{PUBLISHED_TOP_ZOOM, PUBLISHED_VERSION};
-use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
+use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -130,20 +130,6 @@ async fn source(State(app): State<Arc<App>>) -> Response {
         .into_response()
 }
 
-async fn invalidate(State(app): State<Arc<App>>, Path(kind): Path<String>, body: String) -> Response {
-    let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
-    let Tiles::Demand(demand) = &app.tiles else {
-        return (StatusCode::CONFLICT, "a finished bake is served as it is: nothing to invalidate").into_response();
-    };
-    if !body.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, "invalidate the whole dataset: send no body").into_response();
-    }
-    match demand.invalidate(kind) {
-        Ok(()) => (StatusCode::OK, "invalidated all").into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
-    }
-}
-
 const ASSET_TYPES: [(&str, &str); 3] = [("glb", "model/gltf-binary"), ("png", "image/png"), ("webp", "image/webp")];
 
 async fn asset(State(app): State<Arc<App>>, Path(name): Path<String>) -> Response {
@@ -212,17 +198,11 @@ fn run() -> Result<(), String> {
     };
     let app = Arc::new(App { tiles, top_z, asset_dir, out });
 
-    // Without ADMIN_TOKEN, as in local dev, the internal route is open.
-    let mut internal = Router::new().route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate));
-    if let Some(token) = std::env::var("ADMIN_TOKEN").ok().filter(|t| !t.is_empty()) {
-        internal = internal.route_layer(axum::middleware::from_fn_with_state(token, admin_auth));
-    }
     let router = Router::new()
         .route(&format!("{TILE_ROOT}/source"), get(source))
         .route(&format!("{TILE_ROOT}/{{kind}}/{{name}}"), get(tile))
         .route(&format!("{TILE_ROOT}/{{kind}}/{{version}}/{{name}}"), get(tile_versioned))
         .route(&format!("{ASSET_ROOT}/{{*name}}"), get(asset))
-        .merge(internal)
         .with_state(app.clone());
 
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?;

@@ -214,27 +214,10 @@ that, worked back from how far each thing draws:
 
 ### Looking at a bake before it is published
 
-The dev tile server serves a tile from its cache when the tile's file is
-there and bakes it only when it is not, and its cache is laid out as a
-baked set is: `<cache>/terrain/<name>`, zstd as the
-bake writes them (`demand.rs`, `--cache`, `./cache/tile` by default). So a
-finished bake is looked at in the app, with nothing uploaded, by putting it
-where the cache is:
-
-```bash
-# with the dev tile server stopped
-mv cache/tile/terrain cache/tile/terrain.on-demand   # or remove it
-cp -al out/terrain/<version> cache/tile/terrain
-deno task dev:local
-```
-
-`cp -al` links the files rather than copying them, so it takes no space,
-and the cache's purge (`POST …/world/terrain/cache/invalidate`) unlinks the
-links and leaves the bake under `out/terrain/<version>` as it was. A tile
-the bake has no object for — open water past the coverage, a zoom coarser
-than the pyramid's top — is still baked on demand into the cache beside the
-linked ones. After a purge the server bakes everything on demand again; link
-the set back in to see the bake.
+A finished bake is on disk as the bucket holds it, so it is looked at in
+the app with nothing uploaded by serving `out/` as it is: `deno task
+dev:baked` runs the tile server with `--baked ./out`, which answers each
+kind from its published version's directory (`serve_tiles.rs` `baked`).
 
 ## POI
 
@@ -294,13 +277,13 @@ Only a change to **how the client reads a tile** — its format in
 
 The local tile server shares one demand path across terrain, POI and geocode
 (`geo-bake/src/demand/`). `--cache` is the parent directory, default `cache/tile`;
-each kind owns a private generation beneath it. Concurrent requests join the
+each kind owns a directory under the source it bakes from. Concurrent requests join the
 same job, packets are written atomically, and responses carry zstd encoding.
 All three kinds share the server's `--workers` execution slots (default 4)
 and `--queue` additional admitted-job slots (default 64). Dependencies count
 against admission too; terrain resolves them sequentially, without a task
 fan-out. A new job over the limit gets 503; a cached result or an existing
-job needs no new slot. `--job-seconds` (default 30) bounds each generation
+job needs no new slot. `--job-seconds` (default 30) bounds each
 job, including its dependency and execution-slot waits. One absolute deadline
 is assigned on admission; starting the bake does not reset it. The job remains
 joinable and keeps its admission slot until process termination and reaping
@@ -315,18 +298,9 @@ not a cap on process memory or total cached disk bytes.
 alike, in zooms over the leaves: a tile coarser is answered 503, since each
 one folds the whole zoom under it on first request, and a tile a client
 asks for takes a worker before one a fold alone needs. Geocode groups have a fixed bake footprint.
-The common job limits apply to all of them and survive cache invalidation.
-A tile is cached while its file is in `cache/tile/<kind>/`, and a restart keeps
-it. After re-ingest or a bake change, invalidate the affected kind as a whole
-— a restart alone serves the old tiles:
-
-```bash
-curl -X POST localhost:3001/geo/internal/world/terrain/cache/invalidate -H "x-admin-token: $ADMIN_TOKEN"
-# Likewise .../world/poi/... and .../world/geocode/...; send no body.
-# The header is checked only when ADMIN_TOKEN is set.
-```
-
-Invalidation swaps the generation. Old requests can finish against their old
-directory but cannot publish into the new one; the old directory is removed
-when its last job finishes. Geocode's dictionary and groups share a generation;
-a pyramid layer's tiles share one.
+The common job limits apply to all of them.
+A tile is cached under the source it was baked from,
+`cache/tile/<source>/<kind>/`, where `<source>` names the running binary and
+the geo DB's catalogs (`demand.rs` `source_id`). A restart keeps the cache
+while both are the same; after a re-ingest or a bake change, a restart starts
+an empty one and removes the old.
