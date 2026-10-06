@@ -318,7 +318,7 @@ fn pairs(flat: &[i16]) -> Result<&[[i16; 2]], MarshalError> {
 /// A whole number a byte holds, never a cast of one that is not.
 pub fn occupancy_of(number: f64) -> Result<Occupancy, MarshalError> {
     let whole = number.fract() == 0.0 && (0.0..=255.0).contains(&number);
-    whole.then(|| number as u8).and_then(Occupancy::of_bits).ok_or_else(malformed)
+    whole.then_some(number as u8).and_then(Occupancy::of_bits).ok_or_else(malformed)
 }
 
 #[cfg(test)]

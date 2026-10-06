@@ -91,6 +91,33 @@ pub fn mat4_rotation_z(out: &mut Mat4, angle: f64) -> &mut Mat4 {
     out
 }
 
+/// The rotation a quaternion (x, y, z, w) turns by, normalized first.
+pub fn mat4_rotation_quat(out: &mut Mat4, [x, y, z, w]: [f64; 4]) -> &mut Mat4 {
+    let n = libm::sqrt(x * x + y * y + z * z + w * w);
+    let (x, y, z, w) = (x / n, y / n, z / n, w / n);
+    mat4_identity(out);
+    out[0] = 1.0 - 2.0 * (y * y + z * z);
+    out[1] = 2.0 * (x * y + z * w);
+    out[2] = 2.0 * (x * z - y * w);
+    out[4] = 2.0 * (x * y - z * w);
+    out[5] = 1.0 - 2.0 * (x * x + z * z);
+    out[6] = 2.0 * (y * z + x * w);
+    out[8] = 2.0 * (x * z + y * w);
+    out[9] = 2.0 * (y * z - x * w);
+    out[10] = 1.0 - 2.0 * (x * x + y * y);
+    out
+}
+
+/// A rotation's inverse, exactly: its transpose.
+pub fn mat4_transpose<'a>(out: &'a mut Mat4, m: &Mat4) -> &'a mut Mat4 {
+    for c in 0..4 {
+        for r in 0..4 {
+            out[c * 4 + r] = m[r * 4 + c];
+        }
+    }
+    out
+}
+
 /// GL's perspective: clip z in [-1, 1], `fov` the vertical angle in radians.
 pub fn mat4_perspective(out: &mut Mat4, fov: f64, aspect: f64, near: f64, far: f64) -> &mut Mat4 {
     let f = 1.0 / libm::tan(fov / 2.0);

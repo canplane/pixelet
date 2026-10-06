@@ -5,7 +5,7 @@
 //! itself; the map center is that point, derived and never kept. A tracker
 //! overrides either while it holds the pose, since a tracked turn can roll.
 
-use pxl_spec::space::coord::mat4::{mat4, mat4_mul, mat4_rotation_z, Mat4};
+use pxl_spec::space::coord::mat4::{mat4, mat4_mul, mat4_rotation_quat, mat4_rotation_z, mat4_transform_point, mat4_transpose, Mat4};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::{add3, sub3, V3};
 
@@ -202,12 +202,12 @@ pub fn pose() -> ObserverPose {
     let c = controllers();
     match (&c.tracked, c.base) {
         (Some(t), _) => {
-            let mut camera_to_world = mat4();
-            mul3(&mut camera_to_world, &t.world_turn, &t.turn);
-            let moved = apply3(&t.world_turn, t.at);
+            let (mut camera_to_world, mut rotation, mut moved) = (mat4(), mat4(), [0.0; 3]);
+            mat4_mul(&mut camera_to_world, &t.world_turn, &t.turn);
+            mat4_transform_point(&mut moved, &t.world_turn, t.at[0], t.at[1], t.at[2]);
             ObserverPose {
                 eye: add3(&t.world_at, &moved),
-                rotation: transpose3(&camera_to_world),
+                rotation: *mat4_transpose(&mut rotation, &camera_to_world),
             }
         }
         (None, _) => {
@@ -344,14 +344,15 @@ fn take_mode(want: CameraMode) -> bool {
 /// `q` (x, y, z, w) turns the camera's axes to the tracker's. The first of a
 /// run places the tracker's space so the camera stays where it is.
 pub fn tracked_pose(at: V3, q: [f64; 4]) {
-    let turn = quaternion(q);
+    let mut turn = mat4();
+    mat4_rotation_quat(&mut turn, q);
     let c = controllers();
     if c.tracked.is_none() {
         let now = view().pose;
-        let camera_to_world = transpose3(&now.rotation);
-        let mut world_turn = mat4();
-        mul3(&mut world_turn, &camera_to_world, &transpose3(&turn));
-        let moved = apply3(&world_turn, at);
+        let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) = (mat4(), mat4(), mat4(), [0.0; 3]);
+        mat4_transpose(&mut camera_to_world, &now.rotation);
+        mat4_mul(&mut world_turn, &camera_to_world, mat4_transpose(&mut turn_back, &turn));
+        mat4_transform_point(&mut moved, &world_turn, at[0], at[1], at[2]);
         c.tracked = Some(Tracked {
             world_turn,
             world_at: sub3(&now.eye, &moved),
@@ -370,47 +371,6 @@ pub fn tracked_end() {
         view_compose();
         request_world_tick();
     }
-}
-
-/// As the rotation block of a column-major matrix.
-fn quaternion([x, y, z, w]: [f64; 4]) -> Mat4 {
-    let n = (x * x + y * y + z * z + w * w).sqrt();
-    let (x, y, z, w) = (x / n, y / n, z / n, w / n);
-    let mut m = mat4();
-    m[0] = 1.0 - 2.0 * (y * y + z * z);
-    m[1] = 2.0 * (x * y + z * w);
-    m[2] = 2.0 * (x * z - y * w);
-    m[4] = 2.0 * (x * y - z * w);
-    m[5] = 1.0 - 2.0 * (x * x + z * z);
-    m[6] = 2.0 * (y * z + x * w);
-    m[8] = 2.0 * (x * z + y * w);
-    m[9] = 2.0 * (y * z - x * w);
-    m[10] = 1.0 - 2.0 * (x * x + y * y);
-    m
-}
-
-fn mul3(out: &mut Mat4, a: &Mat4, b: &Mat4) {
-    let mut m = mat4();
-    for c in 0..3 {
-        for r in 0..3 {
-            m[c * 4 + r] = (0..3).map(|k| a[k * 4 + r] * b[c * 4 + k]).sum();
-        }
-    }
-    *out = m;
-}
-
-fn transpose3(m: &Mat4) -> Mat4 {
-    let mut t = mat4();
-    for c in 0..3 {
-        for r in 0..3 {
-            t[c * 4 + r] = m[r * 4 + c];
-        }
-    }
-    t
-}
-
-fn apply3(m: &Mat4, v: V3) -> V3 {
-    std::array::from_fn(|r| (0..3).map(|k| m[k * 4 + r] * v[k]).sum())
 }
 
 #[cfg(test)]
