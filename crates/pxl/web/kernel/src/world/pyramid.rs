@@ -14,9 +14,9 @@ pub mod domain;
 
 use std::collections::HashMap;
 
-use pxl_spec::space::lod::{demand_reach, Tau};
+use pxl_spec::space::lod::{reach_of, reach_tiles, Tau};
 use pxl_spec::space::observation::{Bounds, DemandEstimator, Observation, Requirement, Storage as _, Tiled};
-use pxl_spec::space::pyramid::{Folds, Tile, LEAF_Z, TOP_Z};
+use pxl_spec::space::pyramid::{Folds, Tile, DRAWN_STEPS, LEAF_Z, TOP_Z};
 
 use crate::io::demand::{Ask, Category, Phases, Why};
 use crate::io::sched::declare;
@@ -41,6 +41,10 @@ pub trait Layer: Folds + Clone + 'static {
     /// then that zoom's whole reach about the eye: it is drawn past where
     /// the ground stops.
     const TOP: Option<Zoom> = None;
+
+    /// Zooms its tiles' cells are drawn coarser than the LOD rule's cell,
+    /// which sets how far a tile is wanted (`reach_of`).
+    const DRAWN: Zoom = DRAWN_STEPS;
 
     /// How far from the eye the layer draws anything; past it nothing of it
     /// is asked for.
@@ -221,7 +225,7 @@ impl<L: Layer> Pyramid<L> {
                 floor += 1;
                 ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
             });
-            xpute_core::ensure!(floor <= Floor::TILES, ENOTRECOVERABLE, floor);
+            xpute_core::ensure!(floor <= reach_tiles(L::DRAWN), ENOTRECOVERABLE, floor);
         }
         // The whole line, not only the finest tile: which one says the ground is
         // known only once those above are, and asking one at a time would cost a
@@ -293,7 +297,11 @@ impl<L: Layer> Pyramid<L> {
         // demand follows the published goal
         let published = domain::current();
         let own = |o: Observation| match L::TOP {
-            Some(top) => Observation { top, far: demand_reach(top), ..o },
+            Some(top) => Observation {
+                top,
+                far: reach_of(top, L::DRAWN),
+                ..o
+            },
             None => o,
         };
         let live = observation().map(own);

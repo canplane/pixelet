@@ -15,12 +15,11 @@ pub mod floor;
 
 use std::collections::HashMap;
 
-use pxl_spec::space::lod::REACH_TILES;
+use pxl_spec::space::lod::{reach_tiles, REACH_TILES};
 use pxl_spec::space::pyramid::{Tile, LEAF_Z, TOP_Z};
 
 use crate::io::demand::{Ask, Why};
 use crate::world::pyramid::Layer;
-use floor::{Fallback, Floor};
 
 /// The zooms the pyramid holds, z15 to its top.
 pub const PYRAMID_ZOOMS: u32 = (LEAF_Z - TOP_Z + 1) as u32;
@@ -102,13 +101,13 @@ impl<L: Layer> Residency<L> {
 
     /// Held hard apart from the view: the floor and a destination's line. A new
     /// consumer that cannot take a coarser answer would declare its tiles here.
-    const PINNED_TILES: u32 = Floor::TILES + if L::DEMANDS { DESTINATION_TILES } else { 0 };
+    const PINNED_TILES: u32 = reach_tiles(L::DRAWN) + if L::DEMANDS { DESTINATION_TILES } else { 0 };
 
     /// What is held hard at most.
     const HARD_TILES: u32 = Self::PINNED_TILES + Self::ANCESTOR_TILES;
 
     /// A frame for a tile nothing holds hard to land in. The floor alone holds
-    /// every tile it asks for hard, and asks for at most `Floor::TILES`, so a
+    /// every tile it asks for hard, and asks for at most `reach_tiles`, so a
     /// tile it asks for finds a frame free or held only as cache.
     const WORKSPACE: u32 = L::DEMANDS as u32;
 

@@ -5,8 +5,8 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
-use pxl_spec::bake::earth_tile::{self, EARTH_Z};
-use pxl_spec::space::lod::{REACH_ACROSS, REACH_TILES};
+use pxl_spec::bake::earth_tile::{self, EARTH_DRAWN, EARTH_Z};
+use pxl_spec::space::lod::{reach_across, reach_tiles};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pyramid::{around, wrap_index, Folds, Tile};
 use xpute_runtime::global::Global;
@@ -36,6 +36,7 @@ impl Layer for Earth {
     const CATEGORY: Category = Category::earth;
     const DEMANDS: bool = false;
     const TOP: Option<Zoom> = Some(EARTH_Z);
+    const DRAWN: Zoom = EARTH_DRAWN;
 
     fn pyramid() -> &'static mut Pyramid<Earth> {
         EARTH.get(Pyramid::default)
@@ -102,8 +103,8 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
 /// The floor's tiles at the top as a window, its south-west tile first, and
 /// per tile row by row its layer plus one, zero where the global picture
 /// answers: residency as the GPU reads it, kept nowhere.
-pub fn earth_window() -> ([i32; 2], [u32; REACH_TILES as usize]) {
-    let mut layers = [0; REACH_TILES as usize];
+pub fn earth_window() -> ([i32; 2], [u32; reach_tiles(EARTH_DRAWN) as usize]) {
+    let mut layers = [0; reach_tiles(EARTH_DRAWN) as usize];
     let pyramid = Earth::pyramid();
     let at = |p: Tile| [ivec::X(p.tile), ivec::Y(p.tile)];
     let Some([first, _]) = pyramid.floor().next().map(at) else { return ([0; 2], layers) };
@@ -117,7 +118,7 @@ pub fn earth_window() -> ([i32; 2], [u32; REACH_TILES as usize]) {
         if uploads()[record as usize].is_none() {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
-            layers[(dy * REACH_ACROSS + dx) as usize] = record + 1;
+            layers[(dy * reach_across(EARTH_DRAWN) + dx) as usize] = record + 1;
         }
     }
     ([x0 as i32, y0 as i32], layers)

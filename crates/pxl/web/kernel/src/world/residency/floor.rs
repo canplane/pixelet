@@ -8,7 +8,7 @@
 //! Its zoom is the source's declared top (`declare`), never guessed from
 //! what fails. Until declared, nothing is observed.
 
-use pxl_spec::space::lod::{tiles_within, REACH_TILES};
+use pxl_spec::space::lod::{reach_tiles, tiles_within};
 use pxl_spec::space::observation::Observation;
 use pxl_spec::space::pyramid::{Tile, TOP_Z};
 
@@ -39,9 +39,11 @@ pub trait Fallback {
 pub struct TopRing;
 
 impl Fallback for TopRing {
-    /// The far edge is at most the top's reach, and a sphere's cut by
-    /// the ground is no wider, so these are at most the tiles a miss can name there.
-    const TILES: u32 = REACH_TILES;
+    /// The far edge is at most the top's reach, and a sphere's cut by the
+    /// ground is no wider, so these are at most the tiles a miss can name
+    /// there; the most of any layer's, one drawing its cells as they are
+    /// reaching farthest.
+    const TILES: u32 = reach_tiles(0);
 
     fn floor(o: &Observation, each: impl FnMut(Tile)) {
         let over = (o.eye[2] - o.ground).max(0.0);

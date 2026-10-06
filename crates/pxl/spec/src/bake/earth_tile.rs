@@ -15,6 +15,9 @@ use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, T
 
 pub const EARTH_Z: Zoom = TOP_Z;
 
+/// Zooms its cells are drawn coarser than the LOD rule's: none, a texel a cell.
+pub const EARTH_DRAWN: Zoom = 0;
+
 /// A tile's cells on a side, each a texel.
 pub const EARTH_TEXELS: u32 = GROUND.tile_cells();
 

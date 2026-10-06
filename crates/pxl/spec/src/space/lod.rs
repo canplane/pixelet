@@ -81,23 +81,38 @@ impl Tau {
     }
 }
 
-/// The cell the rule measures a tile at `zoom` by: a tile's cells are drawn
-/// as they are, and a drawn cell is coarser than the rule's (`DRAWN_STEPS`).
-pub const fn observed_cell(zoom: Zoom) -> Zoom {
-    GROUND.cell_zoom(zoom) + DRAWN_STEPS
+/// The cell the rule measures a tile at `zoom` by, for a layer drawing its
+/// tile's cells `drawn` zooms coarser than the rule's: the ground a step
+/// (`DRAWN_STEPS`), a picture drawn a texel a cell none.
+pub const fn observed_cell(zoom: Zoom, drawn: Zoom) -> Zoom {
+    GROUND.cell_zoom(zoom) + drawn
 }
 
-/// How far from an observer's foot a demand at `z` can lie: the split
-/// distance of the observed cell a zoom coarser. Bounds the run along the ground too.
+/// How far from an observer's foot a demand at `z` can lie, for a layer
+/// drawing `drawn` zooms coarser: the split distance of the observed cell a
+/// zoom coarser. Bounds the run along the ground too.
+pub const fn reach_of(zoom: Zoom, drawn: Zoom) -> f64 {
+    split_distance(observed_cell(zoom - 1, drawn))
+}
+
+/// The ground's.
 pub const fn demand_reach(zoom: Zoom) -> f64 {
-    split_distance(observed_cell(zoom - 1))
+    reach_of(zoom, DRAWN_STEPS)
 }
 
 /// The most tiles a zoom's demand span along an axis: ⌊d / tile⌋ + 2, the same at every zoom.
-pub const REACH_ACROSS: u32 = (2.0 * demand_reach(LEAF_Z) / units(LEAF_Z)) as u32 + 2;
+pub const fn reach_across(drawn: Zoom) -> u32 {
+    (2.0 * reach_of(LEAF_Z, drawn) / units(LEAF_Z)) as u32 + 2
+}
 
 /// The most tiles a zoom's demand name about one observer.
-pub const REACH_TILES: u32 = REACH_ACROSS * REACH_ACROSS;
+pub const fn reach_tiles(drawn: Zoom) -> u32 {
+    reach_across(drawn) * reach_across(drawn)
+}
+
+/// The ground's.
+pub const REACH_ACROSS: u32 = reach_across(DRAWN_STEPS);
+pub const REACH_TILES: u32 = reach_tiles(DRAWN_STEPS);
 
 /// Every tile at `z` with ground within `radius` of `at`.
 pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Tile> {

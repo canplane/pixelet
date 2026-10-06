@@ -19,6 +19,7 @@ use crate::world::prefetch::{Prefetch, Reach};
 use crate::world::pyramid::Pyramid;
 use pxl_spec::space::lod::{demand_reach, Tau};
 use pxl_spec::space::observation::{ByBounds, Observation, Unknown};
+use crate::world::residency::floor::{Fallback, Floor};
 
 const HEIGHT: f64 = 1000.0;
 
