@@ -66,10 +66,6 @@ pub trait Layer: Clone + 'static {
     }
 
     fn changed(_p: Tile, _present: bool) {}
-
-    fn tiles(r: &Requirement, each: &mut dyn FnMut(Tile)) {
-        tiles(r, each);
-    }
 }
 
 /// Everything the asks depend on, as read; two turns agreeing on all of it
@@ -202,7 +198,7 @@ impl<L: Layer> Pyramid<L> {
         let order = |o: &Observation, p: Tile| Order::of_region(o, bounds, L::LATTICE.grid_zoom(p.zoom), p.region());
         if let Some(o) = o {
             if L::DEMANDS {
-                estimator.requirements(o, bounds, &mut |r| L::tiles(&r, &mut |p| demand.push(p)));
+                estimator.requirements(o, bounds, &mut |r| tiles(&r, &mut |p| demand.push(p)));
             }
             demand.sort_unstable();
             demand.dedup();

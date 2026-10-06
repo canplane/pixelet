@@ -104,7 +104,7 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
 }
 
 #[test]
-fn tiled_storage_maps_a_square_to_its_tile_and_ground_to_every_tile_under_it() {
+fn a_requirement_names_its_square_s_tile_and_every_tile_under_wider_ground() {
     for zoom in [LEAF_ZOOM, 13, GROUND.top()] {
         let span = units(zoom);
         for [x, y] in [[0i64, 0], [-3, 5], [17, -11]] {
