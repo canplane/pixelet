@@ -22,6 +22,9 @@ function tint(hex: string, a: number, over = "#ffffff"): string {
   return `#${[16, 8, 0].map((s) => mix((n >> s) & 255, (g >> s) & 255)).join("")}`;
 }
 
+/** iOS's secondary label: the label's color at this opacity, in either mode. */
+export const SECONDARY = 0.6;
+
 /** iOS's system hues, in light mode. */
 export const SYSTEM = {
   red: "#FF3B30",
