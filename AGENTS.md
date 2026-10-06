@@ -92,10 +92,10 @@ Everything placed on the map sits in one hierarchy, the **pyramid**, of
 tiles from the leaves at z15 to z5, where it stops for now and not by any
 limit. **Every size is a zoom**: the X lane is one world of 2^24 units, so a
 thing the world over 2^z wide is at zoom z, and a bigger zoom is finer
-(`pxl-spec space/zoom.rs`). A cell, a chunk and a tile are each named by it:
+(`pxl-spec space/coord/zoom.rs`). A cell, a chunk and a tile are each named by it:
 terrain's cell is z24, a unit, and objects' finest z27; a chunk is
 `CHUNK_STEPS` zooms coarser than the camera grid's cells it draws (32 a
-side, `space/pyramid.rs`); a tile holds a layer's own count
+side, `space/camera/grid.rs`); a tile holds a layer's own count
 of cells a side, the same at every zoom (`Lattice`), so terrain's z24 cells
 make z15 tiles.
 Where several zooms meet, a name says whose it is (`cell_zoom`). A web map's
@@ -111,11 +111,12 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   its own bound; ARCHITECTURE.md's "The view" states them — read it before
   changing one.
 - **The lattice has one owner.** A size is a zoom stepped from two roots —
-  the raster's cell (`pxl-spec bake/constant.rs` `CELL`) and the leaf tile's
-  count of them (`space/pyramid.rs` `LEAF_Z`) — and parent and children in
-  any number of axes are `space/hierarchy.rs`'s. A cell's base, center and
+  the leaf tile (`space/layer/tile.rs` `LEAF_ZOOM`, z15) and each layer's
+  lattice knob, its cells a tile (`space/layer/lattice.rs`; the ground's 512,
+  `GROUND`) — and parent and children in
+  any number of axes are `space/hierarchy/tree.rs`'s. A cell's base, center and
   place in its tile (the index into every lane the tile has), the 4 × 4
-  neighborhood a fold reads, and a tile's name are `space/pyramid.rs`'s. A
+  neighborhood a fold reads, and a tile's name are `space/layer/`'s. A
   layer that shifts by a zoom's exponent (`shamt`), or numbers a tile's cells
   by its width, is a second owner; `check:rules` refuses it outside `space/`.
 - **A layer is a payload and a one-zoom fold, and nothing else.** Which
@@ -128,11 +129,11 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   and x, y, z (`world/pyramid/chunk.rs`); a cube that holds nothing is no
   chunk. Terrain and POI are tiles, a 2D heightfield and a 2D count; placed
   objects are resident in their store, one octree. What a box holds
-  is asked of `Bounds` (`pxl-spec space/observation.rs`), which `Known`
+  is asked of `Bounds` (`pxl-spec space/layer/demand.rs`), which `Known`
   (`world/observation.rs`) answers; a point or a ray is asked of the query
   (`world/access.rs`). Nothing outside a layer reads its records in the
   layer's shape, and which of a layer's tiles holds a chunk's cells is the
-  layer's lattice's (`world/pyramid/read.rs`). A placed object lives in the chunks its cube is in — built,
+  layer's lattice's (`pxl-spec space/layer/lattice.rs` `read_tile`). A placed object lives in the chunks its cube is in — built,
   remade and drawn with it — and shares the lattice and the fold rule
   (`majority`, `pxl-spec bake/fold.rs`).
 - **2.5D is how ground is stored, not how anything behaves.** What the view
@@ -144,13 +145,13 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   surface drawn there: one thing's at the leaf cell it stands in, many at
   their cell's middle (`pxl-kernel layer/poi/placement.rs`).
 - **The camera grid is the resolution; a layer folds what is in a cell.**
-  The grid's cell is the distance's (`pxl-spec space/lod.rs` `Tau::cell_at`,
+  The grid's cell is the distance's (`pxl-spec space/camera/grid.rs` `Tau::cell_at`,
   `SPLIT` its one knob, one factor τ), and one cell of it is one thing
   drawn. A chunk is that grid's cells, so it refines only where the screen
   sees an error cross a cell, alike on every axis, and something under it
   is held finer. What lies inside a cell is its layer's to fold into one,
   never a second rule outside it: a cube's records one zoom finer
-  (`space/pyramid.rs` `Lattice::fold`, the ground's `GROUND`) fold to their surfaces' mean color and their
+  (`space/layer/lattice.rs` `Lattice::fold`, the ground's `GROUND`) fold to their surfaces' mean color and their
   fill's volume, places to a lattice sixty-four ground cells wide; past a
   layer's data it draws its finest. What is folded is a summary, so nothing
   in a folded cell is struck, hidden or cut by a preview.
@@ -212,7 +213,7 @@ seam is not finished.
 
 **Every source file opens with a comment naming its logical path** — the
 import-map path (`// @pxl/web/feature/map/ui/view.tsx`), for Rust the package
-as Cargo.toml spells it and the path under `src/` (`// pxl-spec/space/zoom.rs`),
+as Cargo.toml spells it and the path under `src/` (`// pxl-spec/space/coord/zoom.rs`),
 for C++ the path itself (`// cpp/xpute/runtime/ipc/ring.cpp`); an executable
 script opens on its interpreter. `check:rules` holds every file to it.
 

@@ -6,7 +6,7 @@ use super::*;
 fn a_restart_keeps_the_tiles_and_clears_what_was_cut_short() {
     let base = std::env::temp_dir().join(format!("pxl-demand-claim-{}", std::process::id()));
     let root = base.join("poi");
-    let tile = root.join("0").join("132110320123012");
+    let tile = root.join("0").join("010332102301230");
     let work = root.join(".work-0");
     let purge = cache::purged(&root);
     for d in [&tile, &work, &purge] {

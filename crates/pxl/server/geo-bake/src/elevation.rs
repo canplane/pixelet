@@ -5,13 +5,15 @@
 //! `ST_Resample(…, 'Bilinear')` (GDAL's warper) value for value; the steps
 //! below name the GDAL/PostGIS function each copies.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 
+use crate::coverage::Coverage;
+use crate::terrain::CELL_U;
 use postgres::Client;
-use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN, U_PER_CELL};
-use pxl_spec::space::adapter::epsg3857::BBox3857;
-use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
+use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+use pxl_spec::space::coord::adapter::epsg3857::BBox3857;
+use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, u_per_m};
 use xpute_core::math::scalar::round;
 
 const HELD: usize = 512;
@@ -67,12 +69,28 @@ struct Held {
 }
 
 impl Raster {
-    pub fn open(client: &mut Client) -> Result<Raster, postgres::Error> {
-        let rows = client.query(
-            "SELECT rid, ST_UpperLeftX(rast) AS x0, ST_UpperLeftY(rast) AS y0, ST_ScaleX(rast) AS sx, ST_ScaleY(rast) AS sy,
+    /// Refused unless the raster holds exactly the coverage's shards, each whole.
+    pub fn open(client: &mut Client) -> Result<Raster, String> {
+        let want: BTreeSet<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
+        let have: BTreeSet<String> = client
+            .query("SELECT shard FROM elevation_catalog WHERE status = 'COMPLETED'", &[])
+            .map_err(|e| e.to_string())?
+            .iter()
+            .map(|r| r.get(0))
+            .collect();
+        if have != want {
+            let (missing, extra) = (want.difference(&have).count(), have.difference(&want).count());
+            return Err(format!(
+                "elevation lacks {missing} of the coverage's shards and holds {extra} past them: run ./infra/geo/elevation/script/setup-elevation.sh"
+            ));
+        }
+        let rows = client
+            .query(
+                "SELECT rid, ST_UpperLeftX(rast) AS x0, ST_UpperLeftY(rast) AS y0, ST_ScaleX(rast) AS sx, ST_ScaleY(rast) AS sy,
                     ST_Width(rast) AS w, ST_Height(rast) AS h FROM elevation_raster",
-            &[],
-        )?;
+                &[],
+            )
+            .map_err(|e| e.to_string())?;
         let (sx, sy) = rows.first().map_or((1.0, -1.0), |r| (r.get::<_, f64>("sx"), r.get::<_, f64>("sy")));
         let origin = rows.first().map_or([0.0, 0.0], |r| [r.get::<_, f64>("x0"), r.get::<_, f64>("y0")]);
         let side = rows.iter().map(|r| i64::from(r.get::<_, i32>("w")).max(i64::from(r.get::<_, i32>("h")))).max().unwrap_or(1);
@@ -195,7 +213,7 @@ impl Raster {
             y: y_axis,
         };
 
-        let cell_per_m = u_per_m(from_db(min[1])) / U_PER_CELL;
+        let cell_per_m = u_per_m(u_from_mer(min[1])) / CELL_U;
         let mut grid = vec![0i16; span * span];
         // The tile's grid from the warp's: an offset either way, since the
         // raster can start inside the padded tile at the coverage's edge.

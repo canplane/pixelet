@@ -69,87 +69,85 @@ export const cube_types = {
     industrial: 22,
     /** power plant and substation: Carto @power, darken(@industrial, 5%) */
     power: 23,
-    /** construction and brownfield: Carto @construction */
-    construction: 24,
     /** landfill: Carto's landuse_landfill, a value with no name */
-    landfill: 25,
+    landfill: 24,
     /** quarry: Carto @quarry */
-    quarry: 26,
+    quarry: 25,
     /** school, college, university, hospital, clinic: Carto @societal_amenities */
-    societal_amenities: 27,
+    societal_amenities: 26,
     /** a religious site: Carto @place_of_worship */
-    place_of_worship: 28,
+    place_of_worship: 27,
     /** aerodrome, bus station, ferry terminal: Carto @transportation-area */
-    transportation_area: 29,
+    transportation_area: 28,
     /** parking: Carto @parking */
-    parking: 30,
+    parking: 29,
     /** apron: Carto @apron */
-    apron: 31,
+    apron: 30,
 
     // ---- water ----
 
     /** glacier: Carto @glacier, drawn with the water areas */
-    glacier: 32,
+    glacier: 31,
     /** sea, lake, river, canal, any water: Carto @water-color */
-    water: 33,
+    water: 32,
 
     // ---- water features ----
 
     /** dam: Carto @dam */
-    dam: 34,
+    dam: 33,
     /** breakwater, groyne, weir: Carto @breakwater-color, @weir-line */
-    breakwater: 35,
+    breakwater: 34,
 
     // ---- buildings ----
 
     /** a building: Carto @building-fill */
-    building: 36,
+    building: 35,
     /** a place of worship, a terminal, a station: Carto @building-major-fill at z16 and finer, as a cell is z16 */
-    building_major: 37,
+    building_major: 36,
 
     // ---- roads, by Carto's z ----
 
     /** footway, steps, path: Carto @footway-fill, @steps-fill */
-    footway: 38,
+    footway: 37,
     /** cycleway: Carto @cycleway-fill */
-    cycleway: 39,
+    cycleway: 38,
     /** bridleway: Carto @bridleway-fill */
-    bridleway: 40,
+    bridleway: 39,
     /** track, an agricultural or forest way: Carto @track-fill */
-    track: 41,
+    track: 40,
     /** pedestrian street: Carto @pedestrian-fill */
-    pedestrian: 42,
+    pedestrian: 41,
     /** living street: Carto @living-street-fill */
-    living_street: 43,
+    living_street: 42,
     /** tertiary, residential, unclassified and service, told apart by width: Carto @tertiary-fill, @residential-fill, @service-fill */
-    residential_road: 44,
+    residential_road: 43,
     /** a road of no known class: Carto @road-fill */
-    road: 45,
+    road: 44,
     /** secondary: Carto @secondary-fill */
-    secondary: 46,
+    secondary: 45,
     /** primary: Carto @primary-fill */
-    primary: 47,
+    primary: 46,
     /** trunk: Carto @trunk-fill */
-    trunk: 48,
+    trunk: 47,
     /** motorway: Carto @motorway-fill */
-    motorway: 49,
+    motorway: 48,
     /** platform: Carto @platform-fill */
-    platform: 50,
+    platform: 49,
     /** tram: Carto's railway_tram, a value with no name */
-    tram: 51,
+    tram: 50,
     /** light rail, narrow gauge, funicular: Carto's railway_light_rail, a value with no name */
-    light_rail: 52,
+    light_rail: 51,
     /** subway: Carto's railway_subway, a value with no name */
-    subway: 53,
+    subway: 52,
     /** monorail: Carto's railway_monorail, a value with no name */
-    monorail: 54,
+    monorail: 53,
     /** rail: Carto's railway_rail, a value with no name */
-    rail: 55,
+    rail: 54,
 
     // ---- aeroways ----
 
     /** runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill */
-    aeroway: 56,
+    aeroway: 55,
   },
   // What only an object can be: past a byte, so no ground cell holds it. An
   // object's value is a u16 whose byte range is the ground's palette.
@@ -209,12 +207,12 @@ export const ground_kind: Readonly<Record<number, Kind>> = {
   29: "land",
   30: "land",
   31: "land",
-  32: "land",
-  33: "water",
+  32: "water",
+  33: "structure",
   34: "structure",
   35: "structure",
   36: "structure",
-  37: "structure",
+  37: "transport",
   38: "transport",
   39: "transport",
   40: "transport",
@@ -233,7 +231,6 @@ export const ground_kind: Readonly<Record<number, Kind>> = {
   53: "transport",
   54: "transport",
   55: "transport",
-  56: "transport",
 };
 
 /** What a cell nothing painted shows. */

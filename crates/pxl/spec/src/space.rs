@@ -9,6 +9,7 @@ pub mod earth;
 pub mod hierarchy;
 pub mod lod;
 pub mod mat4;
+pub mod morton;
 pub mod observation;
 pub mod pvf3;
 pub mod pyramid;

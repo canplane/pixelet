@@ -3,7 +3,6 @@
 //! A way as read, and the line it runs along.
 
 use crate::segment::Segment;
-use crate::wkb::wkb_to_geometries;
 
 type P = [f64; 2];
 
@@ -45,9 +44,8 @@ pub struct Way {
 
 impl Way {
     pub fn of(row: Segment) -> Option<Way> {
-        let g = wkb_to_geometries(&row.geom_wkb).into_iter().next()?;
-        (g.points.len() >= 2).then(|| Way {
-            line: Polyline::of(g.points.iter().map(|p| [p[0], p[1]])),
+        (row.points.len() >= 2).then(|| Way {
+            line: Polyline::of(row.points.iter().map(|p| [p[0], p[1]])),
             row,
         })
     }

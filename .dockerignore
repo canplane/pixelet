@@ -9,7 +9,8 @@ out
 dist
 **/dist
 **/.vite
-**/.venv
 .env
 .env.*
 !.env.example
+cache
+infra/geo/**/warped

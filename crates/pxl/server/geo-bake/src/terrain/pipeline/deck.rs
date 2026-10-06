@@ -4,10 +4,10 @@
 //! the deck footprint (pxl-spec bake/deck.rs `footprint`), so tiles sharing a
 //! deck agree point for point.
 
-use pxl_spec::bake::constant::U_PER_CELL;
+use crate::terrain::CELL_U;
 use pxl_spec::bake::deck::{self, Builder, Decks, POINT_SCALE};
-use pxl_spec::space::adapter::epsg3857::{from_db, G3857};
-use pxl_spec::space::pyramid::TILE_CELLS;
+use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, G3857};
+use pxl_spec::space::layer::lattice::TILE_CELLS;
 use xpute_core::math::scalar::round;
 
 use crate::deck::Line;
@@ -19,16 +19,17 @@ pub fn bake_decks(lines: &[Line], tile_min: G3857) -> Option<Decks> {
     let mut decks = Builder::default();
     for row in lines {
         let kind = segment_type(&row.subtype, row.class.as_deref());
-        let width_code = round(row.width_cells * POINT_SCALE).clamp(1.0, f64::from(u8::MAX)) as u8;
+        let width = row.width_u / CELL_U;
+        let width_code = round(width * POINT_SCALE).clamp(1.0, f64::from(u8::MAX)) as u8;
         let local: Vec<([f64; 2], i16)> = row
             .points
             .iter()
             .map(|p| {
-                let at = [from_db(p[0] - tile_min[0]) / U_PER_CELL, from_db(p[1] - tile_min[1]) / U_PER_CELL];
+                let at = [u_from_mer(p[0] - tile_min[0]) / CELL_U, u_from_mer(p[1] - tile_min[1]) / CELL_U];
                 (at, round(p[2]) as i16)
             })
             .collect();
-        for [a, b] in runs_within(&local, deck::footprint(row.width_cells)) {
+        for [a, b] in runs_within(&local, deck::footprint(width)) {
             decks.push(local[a..=b].iter().copied(), width_code, kind, row.form, row.clear);
         }
     }

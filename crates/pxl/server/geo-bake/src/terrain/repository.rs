@@ -4,19 +4,19 @@ use std::sync::Arc;
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::adapter::epsg3857::{to_db, BBox3857};
+use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, BBox3857};
 
 use crate::elevation::Raster;
 use crate::segment::Segment;
 use crate::terrain::pipeline::overture::policy::{INFRASTRUCTURE, WIDEST_LINE};
+use crate::terrain::pipeline::overture::width::carto_u;
 
 // Buildings and roads are not clipped: a naive bbox clip broke ring closure.
 // Water and coast are clipped, since their rows reach hundreds of thousands of points.
 const OVERTURE_BUILDINGS_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, class, subtype, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb
+SELECT DISTINCT ON (gers_id) gers_id, class, subtype, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb
 FROM overture_buildings, env
 WHERE geom && env.e";
 
@@ -24,7 +24,7 @@ const OVERTURE_TRANSPORTATION_SQL: &str = concat!(
     "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT ",
+SELECT DISTINCT ON (t.gers_id) ",
     crate::segment_columns!(),
     "
 FROM overture_transportation t, env
@@ -32,12 +32,12 @@ WHERE t.geom && env.e"
 );
 
 /// How far past a tile what is drawn on it can come from: half the widest line.
-pub const DRAWN_REACH_U: f64 = WIDEST_LINE / 2.0 * U_PER_CELL;
+pub const DRAWN_REACH_U: f64 = carto_u(WIDEST_LINE) / 2.0;
 
 /// A tile's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
 /// is baked is still the tile's own cells.
 pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
-    let r = to_db(DRAWN_REACH_U);
+    let r = mer_from_u(DRAWN_REACH_U);
     [[min[0] - r, min[1] - r, min[2]], [max[0] + r, max[1] + r, max[2]]]
 }
 
@@ -45,32 +45,31 @@ pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
 const OVERTURE_BASE_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT 'land_use' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land_use, env WHERE geom && env.e
+SELECT DISTINCT ON (gers_id) 'land_use' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land_use, env WHERE geom && env.e
 UNION ALL
 -- Some water rows are country-scale (up to 444,626 points); clip to the tile envelope first. ST_IsEmpty guards && 's bbox-only false positives.
 SELECT 'water' AS source, gers_id, subtype, class, way_area, ST_AsBinary(clipped) AS geom_wkb FROM (
-  SELECT gers_id, subtype, class, ST_Area(geom) AS way_area, ST_Intersection(geom, env.e) AS clipped
+  SELECT DISTINCT ON (gers_id) gers_id, subtype, class, ST_Area(geom) AS way_area, ST_Intersection(geom, env.e) AS clipped
   FROM overture_base_water, env
   WHERE geom && env.e
 ) w WHERE NOT ST_IsEmpty(clipped)
 UNION ALL
-SELECT 'land' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land, env WHERE geom && env.e
+SELECT DISTINCT ON (gers_id) 'land' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land, env WHERE geom && env.e
 UNION ALL
-SELECT 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class = ANY($5)";
+SELECT DISTINCT ON (gers_id) 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class = ANY($5)";
 
-/// Overture's ocean polygons inverted into a land polygon for the tile: empty
-/// means pure ocean, the whole envelope means all land, both dropped.
-const OVERTURE_COAST_SQL: &str = "WITH env AS (
+/// The tile's land from OSM's land polygons (`infra/geo/coastline`), taken
+/// whole: empty means pure ocean, the whole envelope means all land, both dropped.
+const COAST_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 ),
-ocean_union AS (
-  -- Clipped first: ocean rows run up to 163,456 points, and ST_Difference below would otherwise chew through all of them.
-  SELECT ST_Union(ST_Intersection(geom, env.e)) AS g FROM overture_base_water, env
-  WHERE subtype = 'ocean' AND geom && env.e
+land_union AS (
+  SELECT ST_Union(ST_Intersection(geom, env.e)) AS g FROM osm_land_polygons, env
+  WHERE geom && env.e
 ),
 land AS (
-  SELECT COALESCE(ST_Difference(env.e, ocean_union.g), env.e) AS g, env.e AS e
-  FROM env LEFT JOIN ocean_union ON true
+  SELECT COALESCE(land_union.g, ST_SetSRID('POLYGON EMPTY'::geometry, 3857)) AS g, env.e AS e
+  FROM env LEFT JOIN land_union ON true
 )
 SELECT
   ST_AsBinary(g) AS geom_wkb,
@@ -80,7 +79,7 @@ WHERE NOT ST_IsEmpty(g)";
 
 /// Every statement a tile's bake runs, in the order `prepare` takes them, so
 /// the catalog check (`coverage.rs` `Overture`) sees each table they read.
-pub const READS: [&str; 4] = [OVERTURE_BUILDINGS_SQL, OVERTURE_TRANSPORTATION_SQL, OVERTURE_BASE_SQL, OVERTURE_COAST_SQL];
+pub const READS: [&str; 4] = [OVERTURE_BUILDINGS_SQL, OVERTURE_TRANSPORTATION_SQL, OVERTURE_BASE_SQL, COAST_SQL];
 
 pub struct BuildingRow {
     pub gers_id: String,
@@ -157,7 +156,7 @@ impl TerrainRepository {
                     geom_wkb: wkb(row),
                 })
                 .collect(),
-            segment_rows: client.query(&self.segments, &bbox)?.iter().map(Segment::of).collect(),
+            segment_rows: client.query(&self.segments, &bbox)?.iter().flat_map(Segment::of).collect(),
             base_rows: client
                 .query(&self.base, &[bbox[0], bbox[1], bbox[2], bbox[3], &self.infrastructure])?
                 .iter()

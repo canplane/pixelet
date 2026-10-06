@@ -7,20 +7,21 @@
 //! average, which preserves a column's volume. The index lane is carried up
 //! from the children's extents and widened by the parent's own surface.
 
-use crate::space::pyramid::{neighbor_index, neighborhood, Folds, Tile, CHILDREN, EXTENT, GROUND, TILE_CELLS};
+use crate::space::layer::lattice::{EXTENT, GROUND, TILE_CELLS};
+use crate::space::layer::tile::{neighbor_index, neighborhood, Folds, Tile, CHILDREN};
 use xpute_core::math::scalar::round;
 
-use super::constant::{ele_index, CELL, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use super::deck::fold_decks;
 use super::format::{Ground, Index, Occupancy, Terrain};
 use super::surface::extent_of;
-use crate::space::zoom::Zoom;
+use crate::space::coord::zoom::Zoom;
 
 /// The value filling more than half of a 2×2 (or 2×2×2) block, `v[dx + 2·dy +
 /// 4·dz]`; otherwise the tie child's. The tie corner alternates with the
 /// parent cell's zoom, since a fixed corner drifts the map half a coarse cell a step.
 pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
-    let tie = v[if (parent ^ CELL) & 1 == 1 { 0 } else { N - 1 }];
+    let tie = v[if parent & 1 == 1 { 0 } else { N - 1 }];
     let count = |x: T| v.iter().filter(|&&y| y == x).count();
     let mut half = None;
     for &x in &v {

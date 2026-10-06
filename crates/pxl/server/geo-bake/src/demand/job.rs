@@ -195,8 +195,8 @@ async fn supervise(mut command: Command, deadline: tokio::time::Instant) -> Resu
 
 /// Each job opens the DB for what it reads, so a re-ingest while the server
 /// runs is checked by the next job.
-pub fn connect(reads: &[&[&str]], seconds: u64) -> Result<(crate::coverage::Overture, Client), String> {
-    let (source, mut client) = crate::coverage::Overture::reading(reads)?;
+pub fn connect(reads: &[&[&str]], need: &std::collections::BTreeSet<crate::coverage::Node>, seconds: u64) -> Result<(crate::coverage::Overture, Client), String> {
+    let (source, mut client) = crate::coverage::Overture::reading(reads, need)?;
     client.batch_execute(&format!("SET statement_timeout = {}", seconds.saturating_mul(1000))).map_err(|e| e.to_string())?;
     Ok((source, client))
 }
@@ -204,7 +204,7 @@ pub fn connect(reads: &[&[&str]], seconds: u64) -> Result<(crate::coverage::Over
 pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {
     match job {
         Job::Tile { kind, subject, cache } => {
-            let p = pxl_spec::space::pyramid::Tile::of_subject(subject);
+            let p = pxl_spec::space::layer::tile::Tile::of_subject(subject);
             match kind {
                 super::Kind::Terrain => super::terrain::execute(p, &cache, out, seconds),
                 super::Kind::Poi => super::poi::execute(p, &cache, out, seconds),

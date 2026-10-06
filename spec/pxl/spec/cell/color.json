@@ -29,7 +29,6 @@
     "commercial": { "hex": "#f2dad9" },
     "industrial": { "hex": "#ebdbe8" },
     "power": { "hex": "#e2cbde" },
-    "construction": { "hex": "#c7c7b4" },
     "landfill": { "hex": "#b6b592" },
     "quarry": { "hex": "#c5c3c3" },
     "societal_amenities": { "hex": "#ffffe5" },

@@ -11,22 +11,22 @@
 
 use std::collections::HashMap;
 
-use crate::bake::constant::CELL;
 use crate::bake::poi_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
-use crate::space::pvf3::pvf3::Pvf3;
-use crate::space::pyramid::{Folds, Lattice, Tile, GROUND, LEAF_Z, TOP_Z};
+use crate::space::coord::pvf3::pvf3::Pvf3;
+use crate::space::layer::lattice::{Lattice, GROUND};
+use crate::space::layer::tile::{Folds, Tile, LEAF_ZOOM};
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
-use crate::space::zoom::Zoom;
+use crate::space::coord::zoom::Zoom;
 
 /// Places are counted in cells 2^6 ground cells wide, so no two cells'
 /// badges overlap: a zoom draws its ground cell at three pixels or more,
 /// and the widest badge is under 192 pixels, which s = 6 covers and s = 5
 /// does not.
-pub const POI_LATTICE: Lattice = Lattice::new(CELL - 6);
+pub const POI_LATTICE: Lattice = Lattice::new(GROUND.cell() - 6);
 
 const CELLS: u32 = POI_LATTICE.tile_cells() * POI_LATTICE.tile_cells();
 
@@ -41,7 +41,7 @@ const KINDS_MAX: usize = 256;
 
 // A position is an offset in leaf cells inside a POI cell, a half-word a lane.
 const _: () = assert!(
-    GROUND.cell_zoom(LEAF_Z) - POI_LATTICE.cell_zoom(TOP_Z) <= 16,
+    GROUND.cell_zoom(LEAF_ZOOM) - POI_LATTICE.cell_zoom(GROUND.top()) <= 16,
     "a POI cell's leaf cells no longer fit a half-word a lane"
 );
 
@@ -235,7 +235,7 @@ impl PoiTile {
             .into_iter()
             .map(|(point, place)| {
                 let cell = POI_LATTICE.cell_of(zoom, &point);
-                (cell.index(), cell.offset_of(GROUND.cell_of(LEAF_Z, &point)), cut_name(place.name), place)
+                (cell.index(), cell.offset_of(GROUND.cell_of(LEAF_ZOOM, &point)), cut_name(place.name), place)
             })
             .collect();
         gathered(cut.iter().map(|(cell, at, name, place)| (*cell, 1, !complete, [(*at, Place { name, ..*place })].into_iter())))
@@ -265,7 +265,7 @@ impl Folds for PoiTile {
             cells.extend(child.cells.iter().map(move |c| {
                 let parent = POI_LATTICE.parent_cell(q, c.cell);
                 let places = child.shown(c).map(move |(_, place, at)| {
-                    let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, LEAF_Z, at);
+                    let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, LEAF_ZOOM, at);
                     (POI_LATTICE.cell_at(p, parent).offset_of(ground), place)
                 });
                 (parent, c.count, c.partial, places)

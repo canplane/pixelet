@@ -1,7 +1,6 @@
 // pxl-render/mesh/chunk_mesher.test.rs
 
 use super::*;
-use pxl_spec::bake::constant::U_PER_CELL;
 
 struct Run {
     z0: i32,
@@ -138,13 +137,13 @@ fn east_faces(set: &OwnedRunSet, lod_step: u32) -> Vec<(f64, f64)> {
         }
     }
     let mesh = bake.finish();
-    let unit = lod_step as f64 * U_PER_CELL;
+    let unit = lod_step as f64;
     let mut out: Vec<(f64, f64)> = buf[..(mesh.box_cnt * words) as usize]
         .chunks(words as usize)
         .filter(|m| (if words == COARSE_BOX_WORDS { m[0] } else { m[5] }) & FACE_PX != 0)
         .map(|m| {
             let (min, size) = box_bounds(m, unit, mesh.heights);
-            (min[2] / U_PER_CELL, (min[2] + size[2]) / U_PER_CELL)
+            (min[2], min[2] + size[2])
         })
         .collect();
     out.sort_by(|a, b| a.0.total_cmp(&b.0));

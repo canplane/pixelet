@@ -1,7 +1,7 @@
 # Filling db-geo
 
-`db-geo` is the spatial database: twelve tables from two sources, one PostGIS
-instance. Everything the client sees of the world — terrain, POI, reverse
+`db-geo` is the spatial database: seventeen tables from three sources, one
+PostGIS instance. Everything the client sees of the world — terrain, POI, reverse
 geocode — is baked from these tables offline and published to a bucket; only
 forward search reads them at request time.
 
@@ -9,65 +9,82 @@ This directory holds what fills them. Nothing here is deployed, and nothing
 here runs on a schedule. These are run by hand, a few times a year, against a
 database that is expensive to rebuild.
 
-> **Every ingest drops its tables before it writes.** This is the first thing
-> to know about running one. `--bbox` bounds what is fetched from the source,
-> not what is removed: a run with a small box leaves a small table, not a
-> partially updated one. There is no incremental mode and no merge — Overture
-> cuts a new dated release rather than streaming edits, so each run replaces
-> what it owns. Running an ingest to check that it starts is enough to empty
-> the table it owns.
+> **The database is filled a shard at a time, and a shard is whole or absent.**
+> A shard is a z8 tile (`SHARD_ZOOM`), named by its Morton key, its edges in
+> EPSG:3857 meters rounded half to even. A shard holds every feature whose
+> bbox, its vertices' extremes in meters, meets the shard grown by `EPS_M`; a
+> feature over an edge is a row in each shard, so a reader keeps one row a
+> `gers_id`. The coast is no shard's: OSM's land polygons are taken whole,
+> worldwide (`coastline/`). What a shard holds depends on the shard alone, so shards ingested one by one
+> are the shards ingested together. Each ingest replaces a shard's rows before
+> it writes them, and writes the shard's catalog row last; a run stopped
+> partway resumes at the first shard without one.
 
 ```
 infra/geo/
-├── overture/                     five themes, one provider, one catalog
-│   ├── init/                       one schema file per theme, plus the catalog's
-│   └── script/                     ingest_<theme>.rs, and the module they share
-└── elevation/                    one raster, out of one global GeoTIFF
+├── overture/                     fifteen types in six themes, one provider, one catalog
+│   └── script/ingest.rs            the one ingest, schema included
+├── coastline/                    OSM's land polygons, taken whole
+│   ├── metadata.json               the source URL and the table
+│   └── script/setup-coastline.sh
+└── elevation/                    one global GeoTIFF, a raster a shard
     ├── init/01_elevation_schema.sql
-    ├── metadata.json               the regions, their bboxes and the source URL
-    └── script/setup-elevation.sh
+    ├── metadata.json               the published shards and the source URL
+    ├── script/setup-elevation.sh
+    └── warped/                     a shard's GeoTIFF, gitignored
 ```
+
+**Which shards.** `metadata.json` names the shards the bakes publish, and
+the ingests take exactly those (`pxl-geo-bake coverage.rs`). A bake refuses
+to run unless every table it reads holds exactly them, all of one release,
+and the elevation exactly them.
 
 ## 1. The tables
 
-| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Fills them                            |
-| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :------------------------------------ |
-| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `overture/script/ingest.rs`           |
-| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `overture/script/ingest.rs`           |
-| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `elevation/script/setup-elevation.sh` |
+| Source                                                                           | Tables                                                                                                                                                         | Catalog             | Fills them                            |
+| :------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :------------------------------------ |
+| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure`         | `overture_catalog`  | `overture/script/ingest.rs`           |
+| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                            | `overture_catalog`  | `overture/script/ingest.rs`           |
+| **Overture — the other types**<br>taken whole, read by nothing yet               | `overture_addresses`, `overture_building_parts`, `overture_connectors`, `overture_division_boundaries`, `overture_base_land_cover`, `overture_base_bathymetry` | `overture_catalog`  | `overture/script/ingest.rs`           |
+| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                             | `elevation_catalog` | `elevation/script/setup-elevation.sh` |
+| **OSM land polygons**<br>coastline                                               | `osm_land_polygons`                                                                                                                                            | none                | `coastline/script/setup-coastline.sh` |
 
-Coastline is not a table of its own. `OVERTURE_COAST_SQL`
-(`crates/pxl/server/geo-bake/src/terrain/repository.rs`) carves it at bake time out of
-`overture_base_water`'s `ocean` subtype, and `HAS_GROUND_SQL`
+`COAST_SQL` (`crates/pxl/server/geo-bake/src/terrain/repository.rs`) carves
+the coast at bake time out of `osm_land_polygons`, and `HAS_GROUND_SQL`
 (`crates/pxl/server/geo-bake/src/terrain/leaf.rs`) calls a page open water
 when no `overture_base_land` row or building touches its bbox and no way
 (not a ferry) comes within `DRAWN_REACH_U` of it.
 
-Both catalogs keep one row per table: which bbox it was pulled with and which
-release it is from. `read_source_catalogs()` (`bake_tiles.rs`) copies them into
-every baked version's `manifest.json`, which is how a published set says what
-data it was made from.
+Each catalog keeps one row per shard: `overture_catalog` a row per table and
+shard, `elevation_catalog` a row per shard, each with its release.
+`read_source_catalogs()` (`bake_tiles.rs`) copies them into every baked
+version's `manifest.json`, which is how a published set says what data it was
+made from.
 
 ### Overture Maps
 
-A public S3 release — no key, no portal step. The ingests reach it through the
-official `overturemaps` Python CLI, installed on first use into
-`./out/overture/.venv` (gitignored). They ask for `-f geojsonseq` and read the
-extract a line at a time: South Korea's full Places theme is 700,000+ features,
-and as one pretty-printed document it runs to about 900 MB.
-
-There is no default bbox: it is derived from the elevation's `bbox_4326`
-(§4).
+A public S3 release — no key, no portal step. The ingest reaches it through
+Overture's official `overturemaps` CLI, installed on first use into
+`cache/overture/.venv`: it downloads a type's GeoParquet over every shard at once, a little wider
+since its bbox test is strict, to `overture/raw/<type>.parquet`, kept until
+the release changes; the ingest then puts each feature in its shard.
 
 ### GEDTM30 v1.2 (OpenGeoHub / OpenLandMap)
 
-One global Cloud-Optimized GeoTIFF, cropped to each region's `bbox_4326`
-straight out of the remote file over HTTP range requests. There is no raw-file
-staging step and no portal page to click through.
+One global Cloud-Optimized GeoTIFF, each shard warped straight out of the
+remote file over HTTP range requests onto one grid: the shard's own edges and
+the stride the bake samples elevation at (z20, `TILE_ELE_SPAN` to a leaf), so
+the shards meet without a seam and a bake's sample is a pixel. There is no
+raw-file staging step and no portal page to click through.
 
 It is a bare-earth DTM: ground elevation carries no building or canopy height.
-Real elevation exists only inside `metadata.json`'s `bbox_4326`; outside that
-box there is nothing, not zero.
+
+### OSM land polygons (osmdata.openstreetmap.de)
+
+The coast as OSM's land, split into small polygons and already in EPSG:3857,
+one zip for the world (about 1 GB), ODbL. A coast is never taken in part, so
+the table holds the world's, whatever shards are ingested. The zip is kept in
+`coastline/raw/` and fetched again only when osmdata publishes a newer one.
 
 ## 2. Prerequisites (macOS)
 
@@ -75,12 +92,12 @@ box there is nothing, not zero.
 brew install gdal postgis jq gettext
 brew link --force gettext          # puts envsubst on PATH
 
-rustup toolchain install nightly   # the Overture ingests are single-file cargo scripts
+rustup toolchain install nightly   # the Overture ingest is a single-file cargo script
 ```
 
-`gdal` for `gdalwarp` and `raster2pgsql`, `postgis` for the ingestion
-utilities, `jq` and `envsubst` for the elevation script, `python3` for the
-Overture CLI's venv. Docker runs the database and the GDAL image.
+`gdal` for `gdalwarp` and `ogr2ogr`, `postgis` for `raster2pgsql`, `jq` and
+`envsubst` for the elevation and coastline scripts, `python3` for the Overture
+CLI's venv. Docker runs the database and the GDAL image.
 
 ## 3. Bring up db-geo
 
@@ -98,29 +115,22 @@ That starts a database that is already built. Emptying it first takes a
 
 > The data volume is the only copy of the ingested data on this machine. The
 > sources are not in the repository — the warped rasters land under the
-> gitignored `out/elevation/`. Re-ingesting reproduces an equivalent dataset
+> gitignored `elevation/warped/`. Re-ingesting reproduces an equivalent dataset
 > from each source's current state, not a byte-for-byte copy.
 
 ## 4. Run the ingests
 
-One script takes every Overture type, and every feature of each in the
-bbox, into a table a type; the elevation is its own:
+One script takes every Overture type into a table a type, a shard at a time;
+the elevation is its own, a shard at a time too, and the coastline its own,
+whole. None takes a flag: the shards are the coverage's.
 
 ```sh
 ./infra/geo/elevation/script/setup-elevation.sh
 
-./infra/geo/overture/script/ingest.rs --bbox "$(cargo run -q --manifest-path crates/Cargo.toml --bin ingest_bbox)"
-```
+./infra/geo/coastline/script/setup-coastline.sh
 
-The bbox is the bake's to say, and `ingest_bbox` prints it: the pages whose
-elevation grid reads only `metadata.json`'s `bbox_4326` are what is
-published (`crates/pxl/server/geo-bake/src/coverage.rs`), and the bbox is
-their rectangle grown by whole pages on each side, the fewest that hold the
-farthest an Overture read goes past a page (`Coverage::margin_pages`), in
-lon/lat. Pass it as printed: a bake refuses to run
-unless every `overture_*` table its statements read has a catalog row with
-exactly that bbox, all of one release, and the error prints the `--bbox` to
-ingest with.
+./infra/geo/overture/script/ingest.rs
+```
 
 Buildings is the long one: 7.2 million rows for Korea.
 
@@ -129,12 +139,9 @@ geometry. Nothing is dropped on the way in: what a reader uses of a table is
 chosen in its own query, and a column it filters on is generated from
 `properties` by Postgres.
 
-The flags are `--bbox`, required, and `--out` for the
-directory the extract is kept in. An extract is every column of every feature
-in the box, and an ingest whose extract is already the latest release over the
-same bbox reads it instead of downloading it again — so a change to what a
-table keeps of a theme is a re-run, not a re-download. Keep the extracts;
-deleting one is what forces a fresh pull.
+A shard whose catalog row already names the latest release is skipped;
+deleting a shard's catalog row is what makes it read again. A table keyed
+otherwise than by shard and id is refused, with the word to drop it.
 
 Production keeps its own copy of the three tables search reads, and a
 re-ingest reaches it only when they are copied over: one that changes a
@@ -160,41 +167,38 @@ UNION ALL SELECT 'overture_base_land_cover', count(*) FROM overture_base_land_co
 UNION ALL SELECT 'overture_base_bathymetry', count(*) FROM overture_base_bathymetry
 UNION ALL SELECT 'overture_addresses', count(*) FROM overture_addresses;
 
-SELECT r_table_name, srid, scale_x, scale_y FROM raster_columns
-WHERE r_table_name = 'elevation_raster';
+SELECT count(*), min(ST_ScaleX(rast)), max(ST_ScaleX(rast)) FROM elevation_raster;
 ```
 
 The catalog is the other half of the check, and the faster one: every table
-should carry a row, with the same bbox and the same release.
+should carry a row for each of the coverage's shards, all of one release.
 
 ```sql
-SELECT file_name, region_code, data_date, total_count, imported_at::date
-FROM overture_catalog ORDER BY file_name;
+SELECT file_name, count(*) AS shards, min(data_date), max(data_date), sum(total_count)
+FROM overture_catalog GROUP BY file_name ORDER BY file_name;
 ```
 
-A table with rows but no catalog entry means an ingest stopped between its last
-insert and its last statement. A table whose `data_date` differs from its
-neighbors' was filled from a different Overture release, and a bake over the
-set would mix them.
+A shard with rows but no catalog row means an ingest stopped inside it. A
+`data_date` that differs from the rest was filled from a different Overture
+release, and a bake over the set would mix them; a bake refuses both.
 
 After a large ingest, `VACUUM ANALYZE` — or `VACUUM FULL ANALYZE` where
-downtime is acceptable — reclaims what drop-and-recreate leaves behind.
+downtime is acceptable — reclaims what replacing a shard's rows leaves behind.
 
 ## 6. How the elevation pipeline works
 
 Bash, `envsubst` and GDAL, driven by `metadata.json`:
 
-1. **Schema.** Drops `elevation_raster` and `elevation_catalog`, then runs
-   `init/01_elevation_schema.sql`. The raster table itself is created by
-   `raster2pgsql`, which is why the schema file documents it rather than owning
-   it.
-2. **Crop and reproject.** `gdalwarp` inside the GDAL image reads the remote
-   COG through `/vsicurl/`, crops to `bbox_4326` (`-te`, in the source CRS), and
-   writes EPSG:3857 with DEFLATE into `out/elevation/region/<CODE>/warped/`.
-3. **Ingest.** `raster2pgsql -t 256x256` piped into `psql`, one row per region
-   file, the raster chunked into 256×256 tiles inside the table.
-4. **Finalize.** `ANALYZE`, then `elevation_catalog.status = COMPLETED` with the
-   row count.
+1. **Schema.** `init/01_elevation_schema.sql`, which creates the raster and
+   catalog tables if they are missing.
+2. **The shards.** `elevation_shards` (pxl-geo-bake) prints each published
+   shard: its name, its EPSG:3857 edges and the bake's stride.
+3. **Crop and reproject.** `gdalwarp` inside the GDAL image reads the remote
+   COG through `/vsicurl/` and writes the shard's edges at that stride, in
+   EPSG:3857 with DEFLATE, to `warped/<shard>.tif`.
+4. **Ingest.** `raster2pgsql -a -F -t 256x256` piped into `psql`: the shard's
+   raster in 256×256 tiles, each carrying its file's name, then its catalog
+   row.
 
 ## 7. Backup
 

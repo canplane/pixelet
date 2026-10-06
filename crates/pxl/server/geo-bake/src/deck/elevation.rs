@@ -6,14 +6,15 @@
 
 use std::collections::HashMap;
 
-use pxl_spec::bake::constant::U_PER_CELL;
+use crate::terrain::CELL_U;
 use pxl_spec::bake::ground::cell_shift;
 use pxl_spec::bake::surface::bicubic;
-use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::adapter::epsg3857::from_db;
-use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{GROUND, LEAF_Z, TILE_CELLS};
-use pxl_spec::space::zoom::idx;
+use pxl_spec::space::coord::adapter::epsg3857;
+use pxl_spec::space::coord::adapter::epsg3857::u_from_mer;
+use pxl_spec::space::coord::pvf3::ivec::IVec;
+use pxl_spec::space::coord::zoom::idx;
+use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::terrain::bake::Surface;
 
@@ -25,8 +26,8 @@ pub fn sample_cells(surfaces: &HashMap<IVec, Surface>, points: &[[f64; 2]]) -> R
         .map(|&[x, y]| {
             let tile = tile_of([x, y]);
             let surface = surfaces.get(&tile).ok_or_else(|| format!("tile {tile} is not held"))?;
-            let [min, _] = epsg3857::get_tile_bbox(tile);
-            let (tx, ty) = (from_db(x - min[0]) / U_PER_CELL, from_db(y - min[1]) / U_PER_CELL);
+            let [min, _] = epsg3857::get_tile_bbox(LEAF_ZOOM, tile);
+            let (tx, ty) = (u_from_mer(x - min[0]) / CELL_U, u_from_mer(y - min[1]) / CELL_U);
             let on_tile = (0.0..f64::from(TILE_CELLS)).contains(&tx) && (0.0..f64::from(TILE_CELLS)).contains(&ty);
             let shift = if on_tile {
                 cell_shift(surface.ground.cells[GROUND.cell_index(tx as u32, ty as u32) as usize])
@@ -40,5 +41,5 @@ pub fn sample_cells(surfaces: &HashMap<IVec, Surface>, points: &[[f64; 2]]) -> R
 
 pub fn tile_of([x, y]: [f64; 2]) -> IVec {
     let at = epsg3857::project(x, y, 0.0);
-    idx(LEAF_Z, at.i)
+    idx(LEAF_ZOOM, at.i)
 }

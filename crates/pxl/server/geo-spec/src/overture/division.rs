@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use pxl_spec::place::{PlacePart, PlaceRank};
-use pxl_spec::space::adapter::epsg3857::{from_db, to_db, u_per_m};
+use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, u_from_mer, u_per_m};
 
 /// The three sub-city subtypes share a rung because Overture does not
 /// guarantee they nest.
@@ -32,11 +32,11 @@ const FINE_SUBTYPE_PRIORITY: [&str; 4] = ["locality", "neighborhood", "microhood
 macro_rules! division_names {
     ($t:literal) => {
         concat!(
-            "(SELECT jsonb_object_agg(e->>0, e->>1) FROM jsonb_array_elements(CASE jsonb_typeof(",
+            "(SELECT jsonb_object_agg(key, value) FROM jsonb_each(CASE jsonb_typeof(",
             $t,
-            ".properties->'names'->'common') WHEN 'array' THEN ",
+            ".properties->'names'->'common') WHEN 'object' THEN ",
             $t,
-            ".properties->'names'->'common' END) e WHERE jsonb_typeof(e->0) = 'string' AND jsonb_typeof(e->1) = 'string' AND e->>0 IN ('en', 'ko') AND e->>1 <> '')"
+            ".properties->'names'->'common' END) WHERE jsonb_typeof(value) = 'string' AND key IN ('en', 'ko') AND value #>> '{}' <> '')"
         )
     };
 }
@@ -62,13 +62,13 @@ pub const NEAREST_REACH_M: f64 = 2048.0;
 
 /// [`NEAREST_REACH_M`] at the DB's `y`, in the DB's coordinates.
 pub fn reach_at(y: f64) -> f64 {
-    to_db(NEAREST_REACH_M * u_per_m(from_db(y)))
+    mer_from_u(NEAREST_REACH_M * u_per_m(u_from_mer(y)))
 }
 
 /// Every division containing each of a batch of points: `$1`/`$2` are
 /// EPSG:3857 metres, `idx` counts the points from 1.
 pub const CONTAINING_SQL: &str = concat!(
-    "SELECT p.idx, d.gers_id, d.subtype, d.name, ",
+    "SELECT DISTINCT ON (p.idx, d.gers_id) p.idx, d.gers_id, d.subtype, d.name, ",
     division_names!("d"),
     " AS names_common
 FROM unnest($1::float8[], $2::float8[]) WITH ORDINALITY AS p(x, y, idx)

@@ -27,27 +27,26 @@
 //! What is read is the tile and as much of its 1-ring as the structures
 //! touching it reach, and no further.
 
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::time::Instant;
 
-use pxl_spec::bake::constant::U_PER_CELL;
+use crate::terrain::CELL_U;
 use pxl_spec::bake::deck::{footprint as line_reach, Form, STACKED_DECK_HEADROOM_M};
 use pxl_spec::bake::way::half_cells;
-use pxl_spec::space::adapter::epsg3857::{from_db, get_tile_bbox, to_db, u_per_m};
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer, u_per_m};
+use pxl_spec::space::coord::pvf3::ivec::IVec;
 use xpute_core::math::scalar::round;
 
 use crate::deck::elevation::{sample_cells, tile_of};
-use crate::deck::piece::{pieces_of, pieces_over, End, Piece};
+use crate::deck::piece::{piece_of, Piece};
 use crate::deck::source::{ring, Store};
 use crate::deck::way::{Polyline, Way};
-use crate::deck::{barred, structural, DECK_FLAGS, GRADE_BARRED};
 use crate::deck::{Drawn, Line, Reader, Solved};
-use crate::segment::Segment;
+use crate::segment::{End, PartId, Segment};
 use crate::terrain::bake::Surface;
-use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, value_at, without};
 use crate::terrain::pipeline::overture::policy::waterway_width;
-use crate::terrain::pipeline::overture::width::{width_cells, WayShape};
+use crate::terrain::pipeline::overture::width::width_u;
 use crate::wkb::wkb_to_geometries;
 
 // ---- Arnis's numbers, in metres or as ratios, under its names ----
@@ -105,18 +104,15 @@ pub struct Times {
     pub solve: f64,
 }
 
-/// A piece by identity: its way and where on it it starts.
-type Id = (String, u64);
-
-/// The tile's scale: Arnis's metres in its cells.
+/// The tile's scale: Arnis's metres, in u and then in the grid's cells.
 #[derive(Clone, Copy)]
 struct Units {
-    cell_per_m: f64,
+    u_per_m: f64,
 }
 
 impl Units {
     fn c(self, m: f64) -> i32 {
-        round(m * self.cell_per_m) as i32
+        round(m * self.u_per_m / CELL_U) as i32
     }
 }
 
@@ -126,13 +122,13 @@ struct Source {
     ring: BTreeSet<IVec>,
     loaded: BTreeSet<IVec>,
     ground: HashMap<IVec, Surface>,
-    ways: BTreeMap<String, Way>,
+    ways: BTreeMap<PartId, Way>,
     water: Vec<(Option<String>, String, Vec<[f64; 2]>)>,
     water_seen: HashSet<Vec<u8>>,
-    pieces: BTreeMap<Id, Sampled>,
-    by_end: HashMap<End, Vec<Id>>,
-    /// Every way by its first and last vertex.
-    way_ends: HashMap<End, Vec<String>>,
+    pieces: BTreeMap<PartId, Sampled>,
+    by_end: HashMap<End, Vec<PartId>>,
+    /// Every way by its two ends.
+    way_ends: HashMap<End, Vec<PartId>>,
     read: f64,
 }
 
@@ -158,13 +154,13 @@ struct Run {
     /// Every node it passes, ends included.
     nodes: Vec<End>,
     half: i32,
-    width_cells: f64,
+    width_u: f64,
 }
 
 impl Run {
     /// A railway's, not a road's: Arnis solves the two apart.
     fn rail(&self) -> bool {
-        self.piece.subtype == "rail"
+        self.piece.way.subtype == "rail"
     }
 }
 
@@ -175,14 +171,14 @@ fn graded(way: &Way, points: Vec<[f64; 3]>) -> (Line, Drawn) {
         Line {
             subtype: way.row.subtype.clone(),
             class: way.row.class.clone(),
-            width_cells: way_width(&way.row),
+            width_u: way_width(&way.row),
             form: Form::Grade,
             points,
             clear: 0,
         },
         Drawn {
             gers_id: way.row.gers_id.clone(),
-            range: [0.0, 1.0],
+            range: way.row.span,
         },
     )
 }
@@ -192,15 +188,15 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
     let tiles = ring(tile);
     let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
     for &p in &tiles {
-        for c in get_tile_bbox(p) {
+        for c in get_tile_bbox(LEAF_ZOOM, p) {
             for k in 0..2 {
                 (lo[k], hi[k]) = (lo[k].min(c[k]), hi[k].max(c[k]));
             }
         }
     }
-    let [pmin, pmax] = get_tile_bbox(tile);
+    let [pmin, pmax] = get_tile_bbox(LEAF_ZOOM, tile);
     let units = Units {
-        cell_per_m: u_per_m(from_db(pmin[1])) / U_PER_CELL,
+        u_per_m: u_per_m(u_from_mer(pmin[1])),
     };
     let mut src = Source {
         ring: tiles.into_iter().collect(),
@@ -219,15 +215,15 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
     // ---- the structures the tile holds and every one they reach: shared ends, decks
     // beside or across them; each read as far as the ring ----
     let own = [[pmin[0], pmin[1]], [pmax[0], pmax[1]]];
-    let reach = to_db(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * U_PER_CELL);
-    let mut scope: BTreeSet<Id> = src.pieces.iter().filter(|(_, s)| s.piece.touches(own)).map(|(id, _)| id.clone()).collect();
+    let reach = mer_from_u(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
+    let mut scope: BTreeSet<PartId> = src.pieces.iter().filter(|(_, s)| s.piece.touches(own)).map(|(id, _)| id.clone()).collect();
     // to a fixed point: a tile read late can hold what one looked at early stands beside
     loop {
         let before = (scope.len(), src.loaded.len());
         for id in scope.clone() {
             src.sample(r, &id)?;
             let s = &src.pieces[&id].piece;
-            scope.extend(s.ends.iter().flat_map(|e| src.by_end.get(e).into_iter().flatten().cloned()).collect::<Vec<_>>());
+            scope.extend(s.way.ends.iter().flat_map(|e| src.by_end.get(e).into_iter().flatten().cloned()).collect::<Vec<_>>());
             if s.form == Form::Deck {
                 let b = grown(bbox_of(s), reach);
                 scope.extend(
@@ -283,7 +279,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
 
 fn bbox_of(p: &Piece) -> [[f64; 2]; 2] {
     let mut b = [[f64::INFINITY; 2], [f64::NEG_INFINITY; 2]];
-    for q in &p.points {
+    for q in &p.way.points {
         for k in 0..2 {
             (b[0][k], b[1][k]) = (b[0][k].min(q[k]), b[1][k].max(q[k]));
         }
@@ -293,10 +289,6 @@ fn bbox_of(p: &Piece) -> [[f64; 2]; 2] {
 
 fn grown(b: [[f64; 2]; 2], by: f64) -> [[f64; 2]; 2] {
     [[b[0][0] - by, b[0][1] - by], [b[1][0] + by, b[1][1] + by]]
-}
-
-fn is_subway(s: &Segment) -> bool {
-    s.subtype == "rail" && s.class.as_deref() == Some("subway")
 }
 
 impl Source {
@@ -309,36 +301,25 @@ impl Source {
         self.loaded.insert(p);
         let rows = r.store.tile(r.client, r.repo, p)?;
         self.ground.insert(p, rows.surface());
-        let step = to_db(U_PER_CELL);
+        let step = mer_from_u(CELL_U);
         for s in rows.ways() {
-            if self.ways.contains_key(&s.gers_id) || s.subtype == "water" {
+            let key = s.id();
+            if self.ways.contains_key(&key) || s.subtype == "water" {
                 continue;
             }
-            let mut pieces = Vec::new();
-            if structural(s) || is_subway(s) {
-                pieces.extend(pieces_of(s, Form::Deck));
-                // a subway runs underground wherever it is no bridge (Arnis `wants_rail_tunnel`)
-                if is_subway(s) {
-                    let cell = cell_of(length_of(&s.geom_wkb));
-                    let off = [DECK_FLAGS, barred(Form::Bore, &s.subtype)].concat();
-                    pieces.extend(pieces_over(s, Form::Bore, &without(&[[0.0, 1.0]], &flag_ranges(s.flags.as_deref(), &off, cell))));
-                } else {
-                    pieces.extend(pieces_of(s, Form::Bore));
-                }
-            }
-            for piece in pieces {
+            if let Some(piece) = piece_of(s) {
                 let id = piece.id();
-                for e in &piece.ends {
+                for e in &piece.way.ends {
                     self.by_end.entry(e.clone()).or_default().push(id.clone());
                 }
-                let n = libm::ceil(piece.length / step).max(1.0) as usize;
+                let n = libm::ceil(piece.way.length() / step).max(1.0) as usize;
                 self.pieces.insert(id, Sampled { piece, n, samples: None });
             }
             if let Some(way) = Way::of(s.clone()) {
-                for p in [way.line.points[0], way.line.points[way.line.points.len() - 1]] {
-                    self.way_ends.entry(End::at(p)).or_default().push(s.gers_id.clone());
+                for e in &s.ends {
+                    self.way_ends.entry(e.clone()).or_default().push(key.clone());
                 }
-                self.ways.insert(s.gers_id.clone(), way);
+                self.ways.insert(key, way);
             }
         }
         for (subtype, class, wkb) in rows.water() {
@@ -354,15 +335,15 @@ impl Source {
     }
 
     /// A piece's cells inside the ring, the tiles its footprint reaches read first.
-    fn sample(&mut self, r: &mut Reader<impl Store>, id: &Id) -> Result<(), String> {
+    fn sample(&mut self, r: &mut Reader<impl Store>, id: &PartId) -> Result<(), String> {
         let s = &self.pieces[id];
         if s.samples.is_some() {
             return Ok(());
         }
-        let step = to_db(U_PER_CELL);
-        let line = Polyline::of(s.piece.points.iter().map(|p| [p[0], p[1]]));
-        let length = line.length();
-        let reach = to_db((line_reach(s.piece.width_cells) + 16.0) * U_PER_CELL);
+        let step = mer_from_u(CELL_U);
+        let line = Polyline::of(s.piece.way.points.iter().map(|p| [p[0], p[1]]));
+        let length = s.piece.way.length();
+        let reach = mer_from_u((line_reach(s.piece.width() / CELL_U) + 16.0) * CELL_U);
         let at: Vec<(usize, [f64; 2])> = (0..=s.n)
             .map(|k| (k, line.at((k as f64 * step).min(length))))
             .filter(|(_, p)| self.ring.contains(&tile_of(*p)))
@@ -373,7 +354,7 @@ impl Source {
                 wanted.insert(tile_of([p[0] + d[0], p[1] + d[1]]));
             }
         }
-        for e in [s.piece.points[0], s.piece.points[s.piece.points.len() - 1]] {
+        for e in [s.piece.way.points[0], s.piece.way.points[s.piece.way.points.len() - 1]] {
             wanted.insert(tile_of([e[0], e[1]]));
         }
         for p in wanted {
@@ -388,7 +369,7 @@ impl Source {
 }
 
 /// Each piece in scope as its stretches inside the ring.
-fn runs_of(src: &Source, scope: &BTreeSet<Id>, origin: [f64; 2]) -> Vec<Run> {
+fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run> {
     let mut out = Vec::new();
     for id in scope {
         let s = &src.pieces[id];
@@ -408,21 +389,24 @@ fn runs_of(src: &Source, scope: &BTreeSet<Id>, origin: [f64; 2]) -> Vec<Run> {
             let at: Vec<[f64; 2]> = (k0..=k1).map(|k| samples[&k].0).collect();
             let terrain: Vec<i32> = (k0..=k1).map(|k| samples[&k].1).collect();
             let clipped = [k0 != 0, k1 != s.n];
-            let cut = |k: usize| End::Cut(format!("{}@ring", s.piece.gers_id), (k as f64).to_bits());
-            let ends = [if clipped[0] { cut(k0) } else { s.piece.ends[0].clone() }, if clipped[1] { cut(k1) } else { s.piece.ends[1].clone() }];
-            let mut nodes: Vec<End> = s.piece.points.iter().map(|p| End::at([p[0], p[1]])).collect();
+            let cut = |k: usize| End::Ring(id.clone(), k as u64);
+            let ends = [
+                if clipped[0] { cut(k0) } else { s.piece.way.ends[0].clone() },
+                if clipped[1] { cut(k1) } else { s.piece.way.ends[1].clone() },
+            ];
+            let mut nodes: Vec<End> = s.piece.way.points.iter().map(|p| End::at([p[0], p[1]])).collect();
             nodes.extend(ends.iter().cloned());
             out.push(Run {
                 piece: s.piece.clone(),
                 k0,
-                cell: at.iter().map(|p| [from_db(p[0] - origin[0]) / U_PER_CELL, from_db(p[1] - origin[1]) / U_PER_CELL]).collect(),
+                cell: at.iter().map(|p| [u_from_mer(p[0] - origin[0]) / CELL_U, u_from_mer(p[1] - origin[1]) / CELL_U]).collect(),
                 at,
                 terrain,
                 ends,
                 clipped,
                 nodes,
-                half: half_cells(s.piece.width_cells),
-                width_cells: s.piece.width_cells,
+                half: half_cells(s.piece.width() / CELL_U),
+                width_u: s.piece.width(),
             });
         }
     }
@@ -440,12 +424,12 @@ fn is_pedestrian(class: &str) -> bool {
 
 /// Arnis's `effective_layer`: the layer, never below 0; a bridge untagged is 1.
 fn effective_layer(r: &Run) -> i64 {
-    r.piece.layer.map(|l| l.max(0)).unwrap_or(i64::from(r.piece.form == Form::Deck))
+    r.piece.way.tags.level.map(|l| l.max(0)).unwrap_or(i64::from(r.piece.form == Form::Deck))
 }
 
-/// A way's width at its middle, in cells.
+/// A way's width, in u.
 fn way_width(row: &Segment) -> f64 {
-    width_cells(&row.subtype, row.class.as_deref(), WayShape::at(row.columns(), 0.5))
+    width_u(&row.subtype, row.class.as_deref(), row.tags.role)
 }
 
 // ---- what a deck must clear: ways at grade and waterways, bucketed ----
@@ -466,14 +450,14 @@ struct Obstacles {
 
 impl Obstacles {
     fn of(src: &Source, origin: [f64; 2], units: Units) -> Obstacles {
-        let cell = |p: [f64; 2]| [from_db(p[0] - origin[0]) / U_PER_CELL, from_db(p[1] - origin[1]) / U_PER_CELL];
+        let cell = |p: [f64; 2]| [u_from_mer(p[0] - origin[0]) / CELL_U, u_from_mer(p[1] - origin[1]) / CELL_U];
         let mut out = Obstacles {
             list: Vec::new(),
             buckets: HashMap::new(),
             bucket: f64::from(units.c(OBSTACLE_GRID_M).max(1)),
         };
-        let add = |out: &mut Obstacles, points: &[[f64; 2]], half: i32, headroom: i32| {
-            let nodes: Vec<End> = points.iter().map(|&p| End::at(p)).collect();
+        let add = |out: &mut Obstacles, points: &[[f64; 2]], ends: &[End], half: i32, headroom: i32| {
+            let nodes: Vec<End> = points.iter().map(|&p| End::at(p)).chain(ends.iter().cloned()).collect();
             let cells: Vec<[f64; 2]> = points.iter().map(|&p| cell(p)).collect();
             for pair in cells.windows(2) {
                 let i = out.list.len();
@@ -495,21 +479,20 @@ impl Obstacles {
         };
         for way in src.ways.values() {
             let row = &way.row;
-            // a way raised, flagged anywhere, indoors, unbuilt or abandoned is no grade a
-            // deck clears (Arnis `grade_obstacle`, `is_at_grade_track`); one sunk below 0 is
-            if structural(row) || value_at(row.levels.as_deref(), 0.5).is_some_and(|l| l > 0.0) || row.has(GRADE_BARRED) {
+            // a bridge, a tunnel or a way indoors is no grade a deck clears (Arnis `grade_obstacle`)
+            if row.tags.bridge || row.tags.tunnel || row.tags.indoor {
                 continue;
             }
             match row.subtype.as_str() {
                 "road" => {
                     let class = row.class.as_deref().unwrap_or("");
                     let headroom = if is_non_vehicular(class) || class == "track" { PATH_HEADROOM_M } else { ROAD_HEADROOM_M };
-                    let half = half_cells(way_width(row));
-                    add(&mut out, &way.line.points, half, units.c(headroom));
+                    let half = half_cells(way_width(row) / CELL_U);
+                    add(&mut out, &way.line.points, &row.ends, half, units.c(headroom));
                 }
-                "rail" if !is_subway(row) => {
+                "rail" if !row.is_subway() => {
                     let headroom = if row.class.as_deref() == Some("tram") { ROAD_HEADROOM_M } else { RAIL_HEADROOM_M };
-                    add(&mut out, &way.line.points, half_cells(way_width(row)), units.c(headroom));
+                    add(&mut out, &way.line.points, &row.ends, half_cells(way_width(row) / CELL_U), units.c(headroom));
                 }
                 _ => {}
             }
@@ -522,7 +505,7 @@ impl Obstacles {
                 _ => continue,
             };
             // as wide as the ground draws it, where Arnis clears its centerline
-            add(&mut out, points, half_cells(waterway_width(class).unwrap_or(0.0)), units.c(headroom));
+            add(&mut out, points, &[], half_cells(waterway_width(class).unwrap_or(0.0) / CELL_U), units.c(headroom));
         }
         out
     }
@@ -560,7 +543,7 @@ struct Bridges {
     ys: Vec<(usize, Vec<i32>)>,
     decks: Decks,
     /// The ways a bridge's ramp took, kept from a tunnel's approach.
-    ramp_ways: HashSet<String>,
+    ramp_ways: HashSet<PartId>,
 }
 
 fn cell_key(c: [f64; 2]) -> (i64, i64) {
@@ -683,13 +666,13 @@ fn is_monotonic(us: &[f64], tolerance: f64) -> bool {
     true
 }
 
-/// A way's line from the node it has there, onward.
-fn way_from(way: &Way, node: &End) -> Option<Vec<[f64; 2]>> {
+/// A way's line from the end it has there, onward, and its far end.
+fn way_from<'a>(way: &'a Way, node: &End) -> Option<(Vec<[f64; 2]>, &'a End)> {
     let pts = &way.line.points;
-    if &End::at(pts[0]) == node {
-        Some(pts.clone())
-    } else if &End::at(pts[pts.len() - 1]) == node {
-        Some(pts.iter().rev().copied().collect())
+    if &way.row.ends[0] == node {
+        Some((pts.clone(), &way.row.ends[1]))
+    } else if &way.row.ends[1] == node {
+        Some((pts.iter().rev().copied().collect(), &way.row.ends[0]))
     } else {
         None
     }
@@ -698,7 +681,7 @@ fn way_from(way: &Way, node: &End) -> Option<Vec<[f64; 2]>> {
 /// Points a cell apart along a line, from its start.
 fn cells_along(points: &[[f64; 2]]) -> Vec<[f64; 2]> {
     let line = Polyline::of(points.iter().copied());
-    let step = to_db(U_PER_CELL);
+    let step = mer_from_u(CELL_U);
     let n = libm::ceil(line.length() / step).max(1.0) as usize;
     (0..=n).map(|k| line.at((k as f64 * step).min(line.length()))).collect()
 }
@@ -711,17 +694,10 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
     let road: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Deck && !runs[q].rail()).collect();
     let mut uf = Uf((0..road.len()).collect());
     // shared ends at one layer, then decks side by side
-    let mut by_node: BTreeMap<(&String, u64, u8), Vec<usize>> = BTreeMap::new();
-    let node_key = |n: &End| -> (String, u64, u8) {
-        match n {
-            End::Vertex(x, y) => (x.to_string(), *y, 0),
-            End::Cut(g, at) => (g.clone(), *at, 1),
-        }
-    };
-    let keys: Vec<[(String, u64, u8); 2]> = road.iter().map(|&q| [node_key(&runs[q].ends[0]), node_key(&runs[q].ends[1])]).collect();
-    for (i, k) in keys.iter().enumerate() {
-        for e in k {
-            by_node.entry((&e.0, e.1, e.2)).or_default().push(i);
+    let mut by_node: BTreeMap<&End, Vec<usize>> = BTreeMap::new();
+    for (i, &q) in road.iter().enumerate() {
+        for e in &runs[q].ends {
+            by_node.entry(e).or_default().push(i);
         }
     }
     for members in by_node.values() {
@@ -755,7 +731,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
     }
     let mut decks: Decks = HashMap::new();
     let mut joints: HashMap<End, i32> = HashMap::new();
-    let mut claimed: HashSet<String> = HashSet::new();
+    let mut claimed: HashSet<PartId> = HashSet::new();
     let mut out = Vec::new();
     for g in &groups {
         report.bridges += 1;
@@ -770,34 +746,34 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         }
         let is_boundary = |n: &End| node_members.get(n).copied().unwrap_or(0) <= 1;
         let joins_other = |n: &End| bridge_nodes.get(n).is_some_and(|qs| qs.iter().any(|q| !g.contains(q)));
-        let max_layer = g.iter().filter_map(|&q| runs[q].piece.layer).map(|l| l.max(0)).max().unwrap_or(0);
+        let max_layer = g.iter().filter_map(|&q| runs[q].piece.way.tags.level).map(|l| l.max(0)).max().unwrap_or(0);
         let terrain_max = g.iter().flat_map(|&q| runs[q].terrain.iter().copied()).max().unwrap_or(0);
         let terrain_min = g.iter().flat_map(|&q| runs[q].terrain.iter().copied()).min().unwrap_or(terrain_max);
         let total_length: usize = g.iter().map(|&q| runs[q].cell.len() - 1).sum();
 
         // ramps: a way at a free end, raised and no bridge, carries the deck down
         let mut ramp_ends: HashSet<&End> = HashSet::new();
-        let mut pending: Vec<(String, Vec<[f64; 2]>, End, i32)> = Vec::new();
+        let mut pending: Vec<(PartId, Vec<[f64; 2]>, End, i32)> = Vec::new();
         for &q in g {
             for e in &runs[q].ends {
                 if !is_boundary(e) {
                     continue;
                 }
-                for gers in src.way_ends.get(e).into_iter().flatten() {
-                    let way = &src.ways[gers];
-                    let raised = value_at(way.row.levels.as_deref(), 0.5).is_some_and(|l| l >= 1.0);
+                for part in src.way_ends.get(e).into_iter().flatten() {
+                    let way = &src.ways[part];
                     // a road's alone, never indoors (Arnis `is_ramp_candidate`)
-                    if way.row.subtype != "road" || structural(&way.row) || way.row.has(&["is_indoor"]) || !raised || claimed.contains(gers) {
+                    let t = way.row.tags;
+                    if way.row.subtype != "road" || t.bridge || t.tunnel || t.indoor || !t.raised || claimed.contains(part) {
                         continue;
                     }
-                    let Some(line) = way_from(way, e) else { continue };
+                    let Some((line, far_end)) = way_from(way, e) else { continue };
                     let far = line[line.len() - 1];
-                    if group_nodes.contains(&End::at(far)) {
+                    if group_nodes.contains(far_end) {
                         continue;
                     }
                     let Ok(ground) = sample_cells(&src.ground, &[far]) else { continue };
-                    pending.push((gers.clone(), line, e.clone(), ground[0]));
-                    claimed.insert(gers.clone());
+                    pending.push((part.clone(), line, e.clone(), ground[0]));
+                    claimed.insert(part.clone());
                     ramp_ends.insert(e);
                 }
             }
@@ -939,7 +915,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         }
 
         // a ramp runs from the deck's end down to the ground at its far end
-        for (gers, line, e, ground) in pending {
+        for (part, line, e, ground) in pending {
             let deck_y = g
                 .iter()
                 .enumerate()
@@ -953,7 +929,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                     }
                 })
                 .unwrap_or(level_deck);
-            let way = &src.ways[&gers];
+            let way = &src.ways[&part];
             let cells = cells_along(&line);
             let denom = (cells.len() - 1).max(1) as f64;
             lines.push(graded(
@@ -1143,10 +1119,10 @@ struct Claim {
     run: i32,
 }
 
-fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: Units, lines: &mut Vec<(Line, Drawn)>, report: &mut Report) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
+fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<PartId>, units: Units, lines: &mut Vec<(Line, Drawn)>, report: &mut Report) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
     let tunnels: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Bore && !runs[q].rail()).collect();
     // a node two tunnels share, or an end the ring cut, stays at depth
-    let mut owner: HashMap<&End, Id> = HashMap::new();
+    let mut owner: HashMap<&End, PartId> = HashMap::new();
     let mut shared: HashSet<&End> = HashSet::new();
     for &q in &tunnels {
         for n in &runs[q].nodes {
@@ -1163,29 +1139,33 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
         }
     }
     let internal = |q: usize, e: usize| runs[q].clipped[e] || shared.contains(&runs[q].ends[e]);
-    let layer_extra = |r: &Run| (-(r.piece.layer.unwrap_or(0) + 1)).clamp(0, TUNNEL_MAX_LAYERS_BELOW) as i32 * units.c(TUNNEL_LAYER_DROP_M);
+    let layer_extra = |r: &Run| (-(r.piece.way.tags.level.unwrap_or(0) + 1)).clamp(0, TUNNEL_MAX_LAYERS_BELOW) as i32 * units.c(TUNNEL_LAYER_DROP_M);
 
     // ---- the approaches: ways at grade from a portal, as far as the drop needs and the road goes on;
     // a portal on a bridge's middle has none, so it stays at the terrain under the deck, as in Arnis ----
     let portal_nodes: HashSet<&End> = tunnels.iter().flat_map(|&q| (0..2).filter(move |&e| !internal(q, e)).map(move |e| &runs[q].ends[e])).collect();
-    let surface = |gers: &str| src.ways.get(gers).filter(|w| !structural(&w.row) && w.row.subtype == "road" && !ramp_ways.contains(gers));
-    let ways_len = |gers: &str| cells_along(&src.ways[gers].line.points).len() as i32;
-    let mut claims: BTreeMap<String, Vec<Claim>> = BTreeMap::new();
+    let surface = |part: &PartId| {
+        src.ways
+            .get(part)
+            .filter(|w| !w.row.tags.bridge && !w.row.tags.tunnel && w.row.subtype == "road" && !ramp_ways.contains(part))
+    };
+    let ways_len = |part: &PartId| cells_along(&src.ways[part].line.points).len() as i32;
+    let mut claims: BTreeMap<PartId, Vec<Claim>> = BTreeMap::new();
     let mut drops: HashMap<End, i32> = HashMap::new();
     for &q in &tunnels {
         let r = &runs[q];
         let want = units.c(TUNNEL_COVER_DROP_M) + layer_extra(r);
-        let walking = is_pedestrian(r.piece.class.as_deref().unwrap_or(""));
+        let walking = is_pedestrian(r.piece.way.class.as_deref().unwrap_or(""));
         for e in 0..2 {
             let node = &r.ends[e];
             if internal(q, e) || drops.contains_key(node) || want <= 0 {
                 continue;
             }
             let budget = want * TUNNEL_RAMP_RUN;
-            let mut taken: HashSet<String> = HashSet::new();
-            let mut branches: Vec<Vec<(String, bool, i32)>> = Vec::new();
-            let eligible = |at: &End, taken: &HashSet<String>, claims: &BTreeMap<String, Vec<Claim>>| -> Vec<String> {
-                let mut out: Vec<String> = src
+            let mut taken: HashSet<PartId> = HashSet::new();
+            let mut branches: Vec<Vec<(PartId, bool, i32)>> = Vec::new();
+            let eligible = |at: &End, taken: &HashSet<PartId>, claims: &BTreeMap<PartId, Vec<Claim>>| -> Vec<PartId> {
+                let mut out: Vec<PartId> = src
                     .way_ends
                     .get(at)
                     .into_iter()
@@ -1203,14 +1183,14 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
                     continue;
                 }
                 let mut chain = Vec::new();
-                let (mut gers, mut at, mut dist) = (first, node.clone(), 0);
+                let (mut part, mut at, mut dist) = (first, node.clone(), 0);
                 loop {
-                    let w = &src.ways[&gers];
-                    let at_start = End::at(w.line.points[0]) == at;
-                    chain.push((gers.clone(), at_start, dist));
-                    taken.insert(gers.clone());
-                    dist += ways_len(&gers) - 1;
-                    at = End::at(if at_start { w.line.points[w.line.points.len() - 1] } else { w.line.points[0] });
+                    let w = &src.ways[&part];
+                    let at_start = w.row.ends[0] == at;
+                    chain.push((part.clone(), at_start, dist));
+                    taken.insert(part.clone());
+                    dist += ways_len(&part) - 1;
+                    at = w.row.ends[usize::from(at_start)].clone();
                     if dist >= budget || chain.len() >= TUNNEL_APPROACH_WAYS || portal_nodes.contains(&at) {
                         break;
                     }
@@ -1219,7 +1199,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
                     if next.len() != 1 {
                         break;
                     }
-                    gers = next[0].clone();
+                    part = next[0].clone();
                 }
                 branches.push(chain);
             }
@@ -1232,9 +1212,9 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
                 continue;
             }
             let run = (avail / drop).clamp(1, TUNNEL_RAMP_RUN);
-            for (gers, at_start, d0) in branches.into_iter().flatten() {
-                let last = ways_len(&gers) - 1;
-                let c = claims.entry(gers).or_default();
+            for (part, at_start, d0) in branches.into_iter().flatten() {
+                let last = ways_len(&part) - 1;
+                let c = claims.entry(part).or_default();
                 if c.len() < 2 {
                     c.push(Claim {
                         anchor: if at_start { -d0 } else { last + d0 },
@@ -1246,8 +1226,8 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
             drops.insert(node.clone(), drop);
         }
     }
-    for (gers, cs) in &claims {
-        let w = &src.ways[gers];
+    for (part, cs) in &claims {
+        let w = &src.ways[part];
         let cells = cells_along(&w.line.points);
         let Ok(terrain) = sample_cells(&src.ground, &cells) else { continue };
         let points = cells
@@ -1278,7 +1258,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
                 .zip(&r.terrain)
                 .map(|(p, &t)| {
                     let around: Vec<[f64; 2]> = (-wall..=wall)
-                        .flat_map(|dx| (-wall..=wall).map(move |dz| [p[0] + to_db(f64::from(dx) * U_PER_CELL), p[1] + to_db(f64::from(dz) * U_PER_CELL)]))
+                        .flat_map(|dx| (-wall..=wall).map(move |dz| [p[0] + mer_from_u(f64::from(dx) * CELL_U), p[1] + mer_from_u(f64::from(dz) * CELL_U)]))
                         .filter(|q| src.loaded.contains(&tile_of(*q)))
                         .collect();
                     sample_cells(&src.ground, &around).map_or(t, |v| v.into_iter().fold(t, i32::min))
@@ -1368,8 +1348,8 @@ fn split_by(covered: &[bool]) -> Vec<([usize; 2], bool)> {
 /// Cells `a..=b` of a run as a line at heights `ys`: the piece's vertices and
 /// where the slope bends, no more.
 fn part_of(r: &Run, ys: &[i32], [a, b]: [usize; 2], clear: u8) -> (Line, Drawn) {
-    let step = to_db(U_PER_CELL);
-    let along = |k: usize| ((r.k0 + k) as f64 * step).min(r.piece.length);
+    let step = mer_from_u(CELL_U);
+    let along = |k: usize| ((r.k0 + k) as f64 * step).min(r.piece.way.length());
     let mut keep: Vec<(f64, [f64; 2], f64)> = Vec::new();
     let mut anchor = a;
     for k in a..=b {
@@ -1383,7 +1363,7 @@ fn part_of(r: &Run, ys: &[i32], [a, b]: [usize; 2], clear: u8) -> (Line, Drawn) 
         }
     }
     let mut distance = 0.0;
-    for seg in r.piece.points.windows(2) {
+    for seg in r.piece.way.points.windows(2) {
         distance += libm::hypot(seg[1][0] - seg[0][0], seg[1][1] - seg[0][1]);
         if distance > along(a) && distance < along(b) {
             let i = ((distance / step).floor() as usize).saturating_sub(r.k0).clamp(a, b - 1);
@@ -1393,18 +1373,18 @@ fn part_of(r: &Run, ys: &[i32], [a, b]: [usize; 2], clear: u8) -> (Line, Drawn) 
     }
     keep.sort_by(|x, y| x.0.total_cmp(&y.0));
     keep.dedup_by(|x, y| x.0 == y.0);
-    let fraction = |d: f64| (r.piece.start + d) / r.piece.way_length;
+    let fraction = |d: f64| r.piece.way.span[0] + d / r.piece.way.segment_length;
     (
         Line {
-            subtype: r.piece.subtype.clone(),
-            class: r.piece.class.clone(),
-            width_cells: r.width_cells,
+            subtype: r.piece.way.subtype.clone(),
+            class: r.piece.way.class.clone(),
+            width_u: r.width_u,
             form: r.piece.form,
             points: keep.iter().map(|(_, p, z)| [p[0], p[1], *z]).collect(),
             clear,
         },
         Drawn {
-            gers_id: r.piece.gers_id.clone(),
+            gers_id: r.piece.way.gers_id.clone(),
             range: [fraction(along(a)), fraction(along(b))],
         },
     )

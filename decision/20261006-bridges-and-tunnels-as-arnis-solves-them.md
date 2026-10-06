@@ -39,10 +39,8 @@ surfaces was drafted and aborted the day before
   cells, of one-cell columns at the middle, the edges or both; none where
   the deck is 2 m or less over the ground, on a way at grade or over a deck
   5 m or more below.
-- **What is built** is what Arnis builds: no bridge indoors, no road tunnel
-  indoors or unbuilt, no rail bridge or tunnel on a line abandoned or
-  unbuilt; a way at grade that is indoors, unbuilt or abandoned is nothing a
-  deck clears, and one below layer 0 is.
+- **What is built** is what Arnis builds: no bridge indoors or along a
+  tunnel, no road tunnel indoors; a way indoors is nothing a deck clears.
 
 What lies across a way, a structure's or what it clears, is the ground's:
 a deck, a bore, a pier's bent and a way or a waterway under a bridge are as
@@ -65,10 +63,17 @@ Arnis groups bridges by `bridge:name`, chooses deck modules and styles
 bridge name, the styles are blocks, and the world has no bedrock, so none
 of these is ported.
 
-What Overture says in Arnis's tags is this bake's reading: `layer` is
-`level_rules`; a ramp candidate is a way with no bridge or tunnel flag and
-a level of 1 or more, a road and not indoors; a waterway to clear is a line of Overture's water
-classed or subtyped river, canal or stream.
+What Overture says in Arnis's tags is this bake's reading. An Overture
+segment carries its flags, its level and its subclass over ranges of
+itself, where an OSM way holds its tags whole, so each segment is read as
+the ways its ranges cut it into (`pxl-geo-bake segment.rs`): a bridge
+range is a way of its own, a cut is an end its two parts share, and every
+rule here is Arnis's per way. `layer` is `level_rules`; a ramp candidate is
+a way that is no bridge or tunnel, a road, not indoors, at a level of 1 or
+more; a waterway to clear is a line of Overture's water classed or
+subtyped river, canal or stream. A way not in use, abandoned, disused or
+under construction, is none, though Arnis builds some of them: the world
+draws nothing that is not in use.
 
 ## What it leaves
 

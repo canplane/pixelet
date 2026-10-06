@@ -2,9 +2,9 @@
 
 //! What the ground paints: a shape in the tile's cells and the cell it paints.
 
-use pxl_spec::bake::constant::U_PER_CELL;
+use crate::terrain::CELL_U;
 use pxl_spec::bake::format::GroundCell;
-use pxl_spec::space::adapter::epsg3857::{from_db, G3857};
+use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, G3857};
 use xpute_core::math::scalar::round;
 
 use crate::wkb::WkbGeometry;
@@ -63,7 +63,7 @@ pub struct Feature {
     pub points: Vec<P>,
     pub holes: Vec<Vec<P>>,
     pub closed: bool,
-    /// A line's width in the tile's cells.
+    /// A line's width in u.
     pub width: f64,
     /// Ends a flag or a line cuts: square, not rounded.
     pub cut: [bool; 2],
@@ -73,7 +73,7 @@ pub struct Feature {
 
 /// In the tile's cells from its corner.
 pub fn local(p: G3857, tile_min: G3857) -> P {
-    [from_db(p[0] - tile_min[0]) / U_PER_CELL, from_db(p[1] - tile_min[1]) / U_PER_CELL]
+    [u_from_mer(p[0] - tile_min[0]) / CELL_U, u_from_mer(p[1] - tile_min[1]) / CELL_U]
 }
 
 /// A polygon, or a ring whose ends meet within a tenth of the DB's unit, is an area.
@@ -83,6 +83,19 @@ pub fn closes(g: &WkbGeometry) -> bool {
 }
 
 impl Feature {
+    /// A line of no width yet, from its points; None where it has none.
+    pub fn line(points: &[G3857], tile_min: G3857, cell: GroundCell, rank: Rank) -> Option<Feature> {
+        (!points.is_empty()).then(|| Feature {
+            points: points.iter().map(|&p| local(p, tile_min)).collect(),
+            holes: Vec::new(),
+            closed: false,
+            width: 0.0,
+            cut: [false; 2],
+            cell,
+            rank,
+        })
+    }
+
     /// An area, or a line of no width, from a geometry; None where it has no points.
     pub fn of(g: &WkbGeometry, tile_min: G3857, cell: GroundCell, rank: Rank) -> Option<Feature> {
         (!g.points.is_empty()).then(|| Feature {

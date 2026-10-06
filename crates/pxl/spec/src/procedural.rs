@@ -13,10 +13,11 @@ use crate::bake::format::GroundCell;
 use crate::bake::way::half_cells;
 use crate::cell::cube_types::{sentinel, Ground};
 use crate::cell::Kind;
-use crate::space::adapter::epsg3857::u_per_m;
-use crate::space::pvf3::ivec::gather;
-use crate::space::pyramid::{Tile, GROUND, LEAF_Z, TILE_CELLS, TOP_Z};
-use crate::space::zoom::Zoom;
+use crate::space::coord::adapter::epsg3857::u_per_m;
+use crate::space::coord::pvf3::ivec::gather;
+use crate::space::coord::zoom::Zoom;
+use crate::space::layer::lattice::{GROUND, TILE_CELLS};
+use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
 /// Changing it reshuffles everything scattered.
 pub const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
@@ -38,9 +39,9 @@ pub struct Candidate {
 /// at m stands at every zoom from m finer. A cell at any zoom then holds `density`.
 fn each_candidate(tag: u64, density: f64, zoom: Zoom, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
     let kind = derive_seed_u64(MASTER_SEED, tag);
-    for born in (TOP_Z..=zoom).rev() {
+    for born in (GROUND.top()..=zoom).rev() {
         let side = BLOCK * i64::from(GROUND.finest_in(born));
-        let share = if born == TOP_Z { 1.0 } else { 1.0 - KEPT };
+        let share = if born == GROUND.top() { 1.0 } else { 1.0 - KEPT };
         let mean = density * (BLOCK * BLOCK) as f64 * share;
         let blocks = |k: usize| min[k].div_euclid(side)..=(max[k] - 1).div_euclid(side);
         for by in blocks(1) {
@@ -94,7 +95,7 @@ pub fn scatter(tag: u64, density: f64, zoom: Zoom, region: [[i64; 2]; 2], out: &
 /// What stands in one leaf cell on the leaves, as `scatter` keeps it.
 pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2]) -> Option<Candidate> {
     let mut best: Option<Candidate> = None;
-    each_candidate(tag, density, LEAF_Z, [cell, [cell[0] + 1, cell[1] + 1]], |c| {
+    each_candidate(tag, density, LEAF_ZOOM, [cell, [cell[0] + 1, cell[1] + 1]], |c| {
         if best.is_none_or(|b| (c.born, c.seed) < (b.born, b.seed)) {
             best = Some(c);
         }
@@ -176,18 +177,18 @@ pub fn pier_covers(frame: Frame, width: f64, a: [f64; 2], d: [f64; 2], near: [f6
 /// grade or over a deck `LOWER_DECK_GAP_M` or more under its own (Arnis
 /// `place_pillar`, `support_blocked`), none where the terrain gives no surface
 /// to stand on; water stops none.
-pub fn pier_stands(pier: [i32; 2], cell: GroundCell, column: impl IntoIterator<Item = Over>, ground: i32, cell_per_m: f64) -> Option<[i32; 2]> {
+pub fn pier_stands(pier: [i32; 2], cell: GroundCell, column: impl IntoIterator<Item = Over>, ground: i32, u_per_m: f64) -> Option<[i32; 2]> {
     if cell == sentinel::void || Ground::of(cell).is_some_and(|g| g.kind() == Kind::Transport) {
         return None;
     }
-    let surface = pier[1] + slab_depth(cell_per_m);
-    if f64::from(surface - pier[0]) <= PIER_MIN_RISE_M * cell_per_m {
+    let surface = pier[1] + slab_depth(u_per_m);
+    if f64::from(surface - pier[0]) <= PIER_MIN_RISE_M * u_per_m {
         return None;
     }
-    let gap = round(LOWER_DECK_GAP_M * cell_per_m) as i32;
+    let gap = round(LOWER_DECK_GAP_M * u_per_m) as i32;
     let lower = column
         .into_iter()
-        .any(|o| matches!(o.occupies(ground, cell_per_m), Occupies::Above { slab, .. } if slab[1] <= surface - gap));
+        .any(|o| matches!(o.occupies(ground, u_per_m), Occupies::Above { slab, .. } if slab[1] <= surface - gap));
     (!lower).then_some(pier)
 }
 

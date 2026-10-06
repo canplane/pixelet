@@ -1,0 +1,9 @@
+{
+  "provider": {
+    "name": "OpenStreetMap land polygons, split, EPSG:3857 (osmdata.openstreetmap.de)",
+    "url": "https://osmdata.openstreetmap.de/download/land-polygons-split-3857.zip",
+    "page": "https://osmdata.openstreetmap.de/data/land-polygons.html",
+    "license": "ODbL 1.0, © OpenStreetMap contributors"
+  },
+  "table": "osm_land_polygons"
+}

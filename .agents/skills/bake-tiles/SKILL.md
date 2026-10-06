@@ -71,9 +71,9 @@ POI needs `overture_places`; geocode needs `overture_divisions` and
 job, not a bake job — [infra/geo/README.md](../../../infra/geo/README.md).
 Every bake reaches the DB only through `geo-bake coverage.rs` `Overture`,
 which takes the `overture_*` tables from the statements the bake runs and
-refuses unless each has an `overture_catalog` row of one release over
-exactly the bbox `cargo run -q --manifest-path crates/Cargo.toml --bin
-ingest_bbox` prints; the error names the `--bbox` to ingest with.
+refuses unless each holds exactly the coverage's shards in `overture_catalog`,
+all of one release; the elevation must hold exactly them.
+The error names the ingest to run.
 Never `down -v` to "reset" the database; the volume is several gigabytes of
 ingested data.
 
@@ -130,7 +130,7 @@ tiles above whose `Folds::sources` read a tile that changed, a zoom at a time,
 until a zoom changes nothing. Minutes, where a full bake is hours:
 
 ```bash
-deno task bake:tiles --region 132110320312 --base ./out/terrain/<version>
+deno task bake:tiles --region 010332102130 --base ./out/terrain/<version>
 ```
 
 Every tile it writes is what a full bake of the same code writes; the tiles
@@ -177,11 +177,10 @@ that, worked back from how far each thing draws:
   The tile keeps only its own cells, and its lines' runs within their
   footprint (pxl-spec bake/deck.rs `footprint`).
 - **Elevation** is sampled `ELE_PAD` samples past the tile, what a bicubic
-  window at the tile's edge reads. Past the raster a sample is no data, so
-  the published coverage is cropped to tiles whose padded grid lies inside
-  the raster (coverage.rs `Coverage::of_source`, from
-  `infra/geo/elevation/metadata.json`); the source must reach
-  that far past the area to be published, never end at it.
+  window at the tile's edge reads. The published shards
+  (`infra/geo/elevation/metadata.json`) are warped each to its own edges, so
+  a padded grid at a shard's edge reads its neighbor's raster, and at the
+  coverage's outer edge finds none.
 
 ### Verifying
 
@@ -221,14 +220,14 @@ that, worked back from how far each thing draws:
 The dev tile server serves a tile from its cache when the tile's file is
 there and bakes it only when it is not, and its cache is laid out as a
 baked set is: `<cache>/terrain/z<zoom>/<tile_idx>`, zstd as the
-bake writes them (`demand.rs`, `--cache`, `./out/dev` by default). So a
+bake writes them (`demand.rs`, `--cache`, `./cache/tile` by default). So a
 finished bake is looked at in the app, with nothing uploaded, by putting it
 where the cache is:
 
 ```bash
 # with the dev tile server stopped
-mv out/dev/terrain out/dev/terrain.on-demand   # or remove it
-cp -al out/terrain/<version> out/dev/terrain
+mv cache/tile/terrain cache/tile/terrain.on-demand   # or remove it
+cp -al out/terrain/<version> cache/tile/terrain
 deno task dev:local
 ```
 
@@ -297,7 +296,7 @@ Only a change to **how the client reads a tile** — its format in
 `pxl-spec bake/` — bumps the kind's `FORMAT`.
 
 The local tile server shares one demand path across terrain, POI and geocode
-(`geo-bake/src/demand/`). `--cache` is the parent directory, default `out/dev`;
+(`geo-bake/src/demand/`). `--cache` is the parent directory, default `cache/tile`;
 each kind owns a private generation beneath it. Concurrent requests join the
 same job, packets are written atomically, and responses carry zstd encoding.
 All three kinds share the server's `--workers` execution slots (default 4)
@@ -320,7 +319,7 @@ alike, in zooms over the leaves: a tile coarser is answered 503, since each
 one folds the whole zoom under it on first request, and a tile a client
 asks for takes a worker before one a fold alone needs. Geocode groups have a fixed bake footprint.
 The common job limits apply to all of them and survive cache invalidation.
-A tile is cached while its file is in `out/dev/<kind>/`, and a restart keeps
+A tile is cached while its file is in `cache/tile/<kind>/`, and a restart keeps
 it. After re-ingest or a bake change, invalidate the affected kind as a whole
 — a restart alone serves the old tiles:
 

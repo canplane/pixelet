@@ -7,25 +7,25 @@
 //! tile's south edge, in the ground lattice's cell order. One XTP tree, as every
 //! other baked tile is; a tile with no object is answered by the global picture.
 
-use crate::bake::constant::CELL;
 use crate::bake::malformed;
-use crate::space::lod::split_distance;
-use crate::space::pyramid::{Lattice, GROUND, TOP_Z};
-use crate::space::zoom::{units, Zoom};
+use crate::space::camera::grid::split_distance;
+use crate::space::coord::zoom::{units, Zoom};
+use crate::space::layer::lattice::{Lattice, GROUND};
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
-pub const EARTH_Z: Zoom = TOP_Z;
+/// The Earth's one zoom: its lattice's top.
+pub const EARTH_ZOOM: Zoom = EARTH.top();
 
 /// The picture's texels, a ground cell each; the camera grid's cell holds two
 /// of them a side where its tile is drawn, so the tile follows the grid in proportion.
-pub const EARTH: Lattice = Lattice::new(CELL).folding(1);
+pub const EARTH: Lattice = Lattice::new(GROUND.cell()).folding(1);
 
 /// How far from the eye the tiles are drawn, before the global picture.
-pub const EARTH_REACH: f64 = split_distance(EARTH.grid_cell(EARTH_Z - 1));
+pub const EARTH_REACH: f64 = split_distance(EARTH.grid_cell(EARTH_ZOOM - 1));
 
 /// The tiles about the eye within the reach, a side and in all.
-pub const EARTH_ACROSS: u32 = (2.0 * EARTH_REACH / units(EARTH_Z)) as u32 + 2;
+pub const EARTH_ACROSS: u32 = (2.0 * EARTH_REACH / units(EARTH_ZOOM)) as u32 + 2;
 pub const EARTH_HELD: u32 = EARTH_ACROSS * EARTH_ACROSS;
 
 /// A tile's cells on a side, each a texel.

@@ -24,13 +24,13 @@ how it gets there and how you know it arrived.
 | `_meta/land_tiles.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |
 | `_meta/build-counter`   | the official build count    | fixed name             | mutable; taken and written by CI's gate, never by hand        |
 
-A tile is named by its **quadkey**: the Web Mercator tile key at the zoom the
-tile is held at, one base-4 digit a zoom, coarsest first (pxl-spec
-bake/quadkey.rs). The length is the zoom, so nothing writes a zoom down, and
+A tile is named by its **quadkey**: its 2D Morton key at the zoom the tile is
+held at (pxl-spec space/morton.rs), one base-4 digit a zoom, coarsest first,
+rows counted from the south (pxl-spec bake/quadkey.rs). The length is the zoom, so nothing writes a zoom down, and
 the three bakes differ only in how long a name they have — terrain and POI 5
 to 15 digits for the pyramid they share, geocode 11 because a group covers 16
 tiles a side. They land in one space, so
-`terrain/<v>/13211032`, `poi/<v>/13211032` and `geocode/<v>/13211032` are the
+`terrain/<v>/01033210`, `poi/<v>/01033210` and `geocode/<v>/01033210` are the
 same ground, and **one prefix is one region across all three at every zoom**.
 That is what a later split of the bucket would be: a prefix match, not a
 second re-keying.

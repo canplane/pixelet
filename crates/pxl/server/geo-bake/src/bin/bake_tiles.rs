@@ -35,11 +35,11 @@ use postgres::Client;
 use pxl_spec::bake::format::{encode_terrain, SNAPSHOT_KEY};
 use pxl_spec::bake::published::{FORMAT, PUBLISHED_VERSION};
 use pxl_spec::bake::quadkey::{tile_name, tile_of_name};
-use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{Tile, LEAF_Z, TOP_Z};
+use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
 
 use pxl_geo_bake::cli::Flags;
-use pxl_geo_bake::coverage::{self, Coverage, Overture};
+use pxl_geo_bake::coverage::{Coverage, Overture};
 use pxl_geo_bake::deck;
 use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::pyramid::{build, refold, write_manifest, TileSet};
@@ -117,13 +117,13 @@ fn parse_args() -> Result<Args, String> {
 
 /// What the geo DB held when a version was baked; the version name says nothing of it.
 fn read_source_catalogs(client: &mut Client, source: &Overture) -> serde_json::Value {
-    let sql = "SELECT region_code, data_date::text AS data_date, file_name, status FROM elevation_catalog ORDER BY file_name";
+    let sql = "SELECT shard, data_date::text AS data_date, file_name, status FROM elevation_catalog ORDER BY shard";
     let elevation: Vec<serde_json::Value> = match client.query(sql, &[]) {
         Ok(rows) => rows
             .iter()
             .map(|r| {
                 serde_json::json!({
-                    "region_code": r.get::<_, String>("region_code"),
+                    "shard": r.get::<_, String>("shard"),
                     "data_date": r.get::<_, Option<String>>("data_date"),
                     "file_name": r.get::<_, String>("file_name"),
                     "status": r.get::<_, String>("status"),
@@ -268,7 +268,7 @@ fn link_tree(from: &Path, to: &Path) -> Result<(), String> {
 /// a tile linked from it is the same file, and any other one is checked by content.
 fn snapshot_over(full: &TileSet, tiles: &TileSet) -> Result<(Vec<String>, Vec<String>), String> {
     let (mut written, mut removed) = (Vec::new(), Vec::new());
-    for zoom in TOP_Z..=LEAF_Z {
+    for zoom in TOP_ZOOM..=LEAF_ZOOM {
         let here: HashSet<Tile> = tiles.tiles(zoom)?.into_iter().collect();
         for &p in &here {
             let (a, b) = (full.path(p), tiles.path(p));
@@ -300,14 +300,14 @@ fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_js
 
     let region_land: HashSet<IVec> = land.iter().copied().filter(|&p| args.in_region(p)).collect();
     let mut changed = HashSet::new();
-    for at in base.tiles(LEAF_Z)? {
+    for at in base.tiles(LEAF_ZOOM)? {
         if args.in_region(at.tile) && !region_land.contains(&at.tile) {
             tiles.remove(at)?;
             changed.insert(at);
         }
     }
     for &tile in &region_land {
-        let at = Tile::new(LEAF_Z, tile);
+        let at = Tile::new(LEAF_ZOOM, tile);
         let fresh = leaves.content(at)?.ok_or_else(|| format!("{}: run --stage leaf with the region", leaves.path(at).display()))?;
         if base.content(at)?.as_deref() == Some(fresh.as_slice()) {
             continue;
@@ -339,7 +339,7 @@ fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_js
     write_json(&snapshot, &serde_json::json!({ "base": full_name, "written": written, "removed": removed }))?;
     println!("[bake/region] over {}: {} written, {} removed", full.root.display(), written.len(), removed.len());
 
-    let top = (TOP_Z..LEAF_Z).rev().take_while(|&z| tiles.zoom_dir(z).exists()).last().unwrap_or(LEAF_Z);
+    let top = (TOP_ZOOM..LEAF_ZOOM).rev().take_while(|&z| tiles.zoom_dir(z).exists()).last().unwrap_or(LEAF_ZOOM);
     let base_name = base.root.file_name().map(|n| n.to_string_lossy().to_string());
     // The kind's one manifest describes the last bake, which is the base only if it says so.
     let mut fields = read_json(&base.root.join("../manifest.json"));
@@ -367,7 +367,7 @@ fn run() -> Result<(), String> {
     let coverage = Coverage::of_source()?;
     let land_cache = args.out.as_deref().and_then(Path::parent).unwrap_or(Path::new("./out/terrain")).join("land_tiles.json");
     let (source, mut checked) = match args.stages.iter().any(|&s| s != Stage::Assemble) {
-        true => Overture::reading(&leaf::READS).map(|(s, c)| (Some(s), Some(c)))?,
+        true => Overture::reading(&leaf::READS, &coverage.shards().collect()).map(|(s, c)| (Some(s), Some(c)))?,
         false => (None, None),
     };
 
@@ -377,16 +377,9 @@ fn run() -> Result<(), String> {
             Some(client) => client,
             None => source.connect()?,
         };
-        let raster = Arc::new(Raster::open(&mut client).map_err(|e| e.to_string())?);
+        let raster = Arc::new(Raster::open(&mut client)?);
         let candidates = coverage.tiles();
-        println!(
-            "[bake] tile grid x[{}..{}] y[{}..{}] = {} candidate tiles",
-            coverage.x.0,
-            coverage.x.1,
-            coverage.y.0,
-            coverage.y.1,
-            candidates.len()
-        );
+        println!("[bake] {} shards = {} candidate tiles", coverage.shards().count(), candidates.len());
 
         let cached = if args.reclassify {
             Err("--reclassify".to_string())
@@ -413,9 +406,9 @@ fn run() -> Result<(), String> {
         };
         // A region's tiles are baked again whatever is on disk, by the code that changed.
         let fresh = args.force || !args.regions.is_empty();
-        fs::create_dir_all(leaves.zoom_dir(LEAF_Z)).map_err(|e| e.to_string())?;
+        fs::create_dir_all(leaves.zoom_dir(LEAF_ZOOM)).map_err(|e| e.to_string())?;
         if !fresh {
-            refuse_mixed(&leaves.zoom_dir(LEAF_Z))?;
+            refuse_mixed(&leaves.zoom_dir(LEAF_ZOOM))?;
         }
         // Each worker walks its own band of rows, zigzag, so a tile's eight
         // around it were mostly read for the tile before.
@@ -436,7 +429,7 @@ fn run() -> Result<(), String> {
                     let mut held = deck::source::Walk::default();
                     for &tile in walk {
                         held.keep_around(tile);
-                        let at = Tile::new(LEAF_Z, tile);
+                        let at = Tile::new(LEAF_ZOOM, tile);
                         let mut flat = false;
                         let baked = (|| -> Result<Option<u64>, String> {
                             if !fresh && leaves.path(at).exists() {
@@ -510,7 +503,7 @@ fn run() -> Result<(), String> {
         if tiles.root.exists() {
             fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
         }
-        fs::create_dir_all(tiles.zoom_dir(LEAF_Z)).map_err(|e| e.to_string())?;
+        fs::create_dir_all(tiles.zoom_dir(LEAF_ZOOM)).map_err(|e| e.to_string())?;
 
         let t = over_tiles(
             "assemble",
@@ -518,7 +511,7 @@ fn run() -> Result<(), String> {
             args.concurrency,
             || Ok(()),
             |_, tile| {
-                let (from, to) = (leaves.path(Tile::new(LEAF_Z, tile)), tiles.path(Tile::new(LEAF_Z, tile)));
+                let (from, to) = (leaves.path(Tile::new(LEAF_ZOOM, tile)), tiles.path(Tile::new(LEAF_ZOOM, tile)));
                 fs::hard_link(&from, &to).map_err(|e| format!("{}: {e}: run --stage leaf", from.display()))?;
                 Ok(Some(fs::metadata(&to).map_err(|e| e.to_string())?.len()))
             },
@@ -527,14 +520,13 @@ fn run() -> Result<(), String> {
             return Err(format!("{} tiles failed to assemble", t.failed));
         }
 
-        let top = build(&tiles, &Absence::new(coverage), args.concurrency)?;
+        let top = build(&tiles, &Absence::new(coverage.clone()), args.concurrency)?;
         write_manifest(
             &tiles,
             top,
             built.as_deref(),
             serde_json::json!({
-                "bbox_4326": coverage::source_bbox()?,
-                "ingest_bbox": coverage.ingest_bbox(),
+                "shards": coverage.shards().map(|s| s.name()).collect::<Vec<_>>(),
                 "candidate_pages": coverage.tiles().len(),
                 "land_tiles": land.len(),
                 "release": release,
