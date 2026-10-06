@@ -63,21 +63,19 @@ impl Drawn {
 }
 
 pub fn objects_drawn(store: &Store, k: PyramidChunk) -> Option<Drawn> {
-    let (runs, held) = runs_of(store, k);
+    let runs = runs_of(store, k);
     let mut cells = Vec::new();
-    if held {
-        let (from, to) = folded_cells(k, runs);
-        let mut folded = HashMap::new();
-        store.fold_at(runs, from, to, None, &mut folded).ok()?;
-        cells.try_reserve_exact(folded.len()).ok()?;
-        // X and Y within the grid fit a byte each (`folded_cells`); Z is the lane's.
-        cells.extend(
-            folded
-                .into_iter()
-                .map(|([x, y, z], v)| (x - from[0]) as u64 | ((y - from[1]) as u64) << 8 | u64::from(z as i32 as u32) << 16 | u64::from(v as u16) << 48),
-        );
-        cells.sort_unstable();
-    }
+    let (from, to) = folded_cells(k, runs);
+    let mut folded = HashMap::new();
+    store.fold_at(runs, from, to, None, &mut folded).ok()?;
+    cells.try_reserve_exact(folded.len()).ok()?;
+    // X and Y within the grid fit a byte each (`folded_cells`); Z is the lane's.
+    cells.extend(
+        folded
+            .into_iter()
+            .map(|([x, y, z], v)| (x - from[0]) as u64 | ((y - from[1]) as u64) << 8 | u64::from(z as i32 as u32) << 16 | u64::from(v as u16) << 48),
+    );
+    cells.sort_unstable();
     Some(Drawn { runs, cells })
 }
 
