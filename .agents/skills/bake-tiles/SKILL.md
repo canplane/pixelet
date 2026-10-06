@@ -31,12 +31,9 @@ day's count of bakes of the kind, from 1 — `v7.2026-10-04.1`
 is the manifest's: the Overture release its tables were ingested from and the
 commit it was built at. The last path segment of `--out` overrides it.
 
-The bucket names a tile by its **quadkey** and nothing else (publish-bucket).
-Geocode writes that name straight out, so for it the filename _is_ the object
-key. Terrain and POI, the two pyramids, do not: they write
-`z<zoom>/<tile index>`, because the fold clears a zoom's directory to redo it
-and drops the zooms a run did not reach. Their names are translated at
-publish, by hard links, which is the one step geocode skips.
+A tile is named by its 2D Morton key written a digit a zoom, and every bake
+writes that name straight out, flat in its version: the filename _is_ the
+object key, and a name's length is its zoom (publish-bucket).
 
 Terrain goes first for geocode: it does not classify land itself, it
 read the `land_tiles.json` terrain leaves next to its output directory
@@ -112,7 +109,7 @@ deno task bake:tiles --out ./out/terrain/<version> --force
 | `--limit <n>`       | stop after n tiles (smoke test)                                    |
 | `--force`           | bake leaves already on disk again, and solve every structure again |
 | `--reclassify`      | ignore the cached land/ocean scan and redo it                      |
-| `--region <qk>`     | bake again only the land tiles under a quadkey, repeatable         |
+| `--region <name>`   | bake again only the land tiles under a tile, repeatable            |
 | `--base <dir>`      | the version a region is baked over (default the published one)     |
 
 It runs long enough to want a log file rather than a terminal:
@@ -123,7 +120,7 @@ grep '^\[bake\] ' /tmp/bake.log | tail -2
 ```
 
 A fix that reaches one area need not bake every tile again. `--region`
-bakes the land tiles under a quadkey prefix again, by the code as it is now,
+bakes the land tiles under a tile's name again, by the code as it is now,
 and assembles a new version from `--base`: the base's tiles linked whole, the
 region's leaves in place of the ones that differ, and folded again only the
 tiles above whose `Layer::sources` read a tile that changed, a zoom at a time,
@@ -203,12 +200,12 @@ that, worked back from how far each thing draws:
    not the objects. With `deno task dev:tiles` up — not `dev`, which proxies
    every route to the live deployment:
 
-   The dev server answers the bucket's addresses, so it takes the quadkey
+   The dev server answers the bucket's addresses, so it takes the tile's name
    while the file on disk is still under its zoom — one tile, two names:
 
    ```bash
-   curl -s localhost:3001/tile/terrain/<quadkey> | zstd -dcq | shasum
-   zstd -dcq ./out/terrain/<version>/z<zoom>/<tile_idx> | shasum   # gunzip -c before zstd
+   curl -s localhost:3001/tile/terrain/<name> | zstd -dcq | shasum
+   zstd -dcq ./out/terrain/<version>/<name> | shasum   # gunzip -c before zstd
    ```
 
    A coarse tile makes the dev server bake the missing tiles under it first, so the
@@ -219,7 +216,7 @@ that, worked back from how far each thing draws:
 
 The dev tile server serves a tile from its cache when the tile's file is
 there and bakes it only when it is not, and its cache is laid out as a
-baked set is: `<cache>/terrain/z<zoom>/<tile_idx>`, zstd as the
+baked set is: `<cache>/terrain/<name>`, zstd as the
 bake writes them (`demand.rs`, `--cache`, `./cache/tile` by default). So a
 finished bake is looked at in the app, with nothing uploaded, by putting it
 where the cache is:

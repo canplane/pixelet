@@ -32,7 +32,7 @@ export const GEO_ROOT = "/geo";
 export const API_ROOT = "/api";
 
 /** Baked tiles — terrain, POI and reverse geocode — by kind, version and
- * quadkey. Its own root for the reason the asset root is: the bake puts
+ * name. Its own root for the reason the asset root is: the bake puts
  * them in the bucket and the edge serves them, so neither server answers
  * them, and the edge tells them from the geo server's routes by the root
  * alone. */

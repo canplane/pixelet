@@ -5,7 +5,7 @@
 //! placement, tile membership, folding order and cell centers are decided
 //! here only; a layer owns what a cell carries and how it folds.
 
-use super::lattice::Lattice;
+use super::lattice::{Lattice, GROUND};
 use crate::space::coord::pvf3::core::FRAC_W;
 use crate::space::coord::pvf3::ivec::{self, IVec, TO_XY};
 use crate::space::coord::pvf3::pack;
@@ -13,6 +13,7 @@ use crate::space::coord::pvf3::pvf3::{self, Pvf3};
 use crate::space::coord::v3::Aabb;
 use crate::space::coord::world::{self, around, wrap_index, REACH};
 use crate::space::coord::zoom::{base_of, count, shamt, units, Zoom};
+use crate::space::hierarchy::morton::{self, key_of, node_of};
 use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of};
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
@@ -45,6 +46,28 @@ impl Tile {
     pub fn parent(self) -> Tile {
         let [x, y] = parent_of(self.at());
         Tile::new(self.zoom - 1, ivec::gather(x, y, 0))
+    }
+
+    /// Its 2D key, X wrapped at the seam; its name is the key written
+    /// (`morton::write_name`).
+    pub fn key(self) -> u128 {
+        let [x, y] = self.at();
+        key_of::<2>(self.zoom, [wrap_index(self.zoom, x), y])
+    }
+
+    /// `key`'s inverse; `None` for a zoom the pyramid does not hold.
+    pub fn of_key(key: u128) -> Option<Tile> {
+        let (zoom, at) = node_of::<2>(key);
+        (GROUND.top()..=LEAF_ZOOM).contains(&zoom).then(|| tile_at(zoom, at))
+    }
+
+    /// What a baked tile is stored as, on disk and in the bucket alike.
+    pub fn name(self) -> String {
+        morton::name::<2>(self.key())
+    }
+
+    pub fn of_name(name: &str) -> Option<Tile> {
+        Tile::of_key(morton::key_of_name::<2>(name)?)
     }
 
     /// Its place among its parent's `children`.

@@ -2,7 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
-use pxl_spec::bake::quadkey::TILE_KEY_DEPTH;
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::coverage::{Coverage, Overture};
 use crate::terrain::leaf::land_tiles;
@@ -52,7 +53,7 @@ pub fn bake<T>(
         targets.truncate(n);
     }
 
-    let t = &walk::walk(&args, b.kind, TILE_KEY_DEPTH - b.group_shamt, b.every, &targets, connect, one)?;
+    let t = &walk::walk(&args, b.kind, LEAF_ZOOM - b.group_shamt as Zoom, b.every, &targets, connect, one)?;
     println!("[bake/{}] {} items across {} non-empty tiles, {}", b.kind, t.items, t.baked, fmt_bytes(t.bytes as f64));
 
     let (objects, bytes) = measure_output(&args.out).map_err(|e| e.to_string())?;

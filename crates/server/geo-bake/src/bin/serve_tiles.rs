@@ -16,15 +16,13 @@ use pxl_geo_bake::demand::{
     job::{self, Limits},
     Failure, Kind, Server,
 };
-use pxl_geo_bake::pyramid::TileSet;
 use pxl_geo_bake::util::CONTENT_ENCODING;
 use pxl_server::admin_auth::admin_auth;
 use pxl_spec::bake::published::{PUBLISHED_TOP_ZOOM, PUBLISHED_VERSION};
-use pxl_spec::bake::quadkey::tile_of_name;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -44,7 +42,7 @@ struct App {
 const EARTH: &str = "earth";
 
 async fn earth(app: &App, version: &str, name: &str) -> Response {
-    if tile_of_name(name).is_none() {
+    if Tile::of_name(name).is_none() {
         return StatusCode::NOT_FOUND.into_response();
     }
     match tokio::fs::read(app.out.join(EARTH).join(version).join(name)).await {
@@ -114,17 +112,11 @@ async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name))
 }
 
 async fn baked(dir: &std::path::Path, kind: Kind, version: &str, name: &str) -> Response {
-    let root = dir.join(kind.name()).join(version);
-    // A pyramid's tiles are on disk as `z<zoom>/<tile index>` until the publish renames them.
-    let path = match kind {
-        Kind::Terrain | Kind::Poi => match tile_of_name(name) {
-            Some(p) => TileSet::new(root).path(p),
-            None => return StatusCode::NOT_FOUND.into_response(),
-        },
-        Kind::Geocode if name != "." && name != ".." => root.join(name),
-        Kind::Geocode => return StatusCode::NOT_FOUND.into_response(),
-    };
-    match tokio::fs::read(path).await {
+    // On disk as in the bucket: a version's objects flat under their names.
+    if name.is_empty() || name.starts_with('.') || name.contains('/') {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match tokio::fs::read(dir.join(kind.name()).join(version).join(name)).await {
         Ok(bytes) => packed(bytes),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }

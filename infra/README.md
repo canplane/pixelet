@@ -168,7 +168,7 @@ place that builds a URL or reads one:
 | :-------- | :--------------------------------------------------- | :------------- |
 | `/geo/`   | the world's data                                     | pxl-geo        |
 | `/api/`   | the application                                      | pxl-api        |
-| `/tile/`  | baked tiles, by kind, version and quadkey            | R2             |
+| `/tile/`  | baked tiles, by kind, version and name               | R2             |
 | `/asset/` | models and textures, by path with a hash in the stem | R2             |
 
 The Worker claims all four (`wrangler.jsonc`'s `run_worker_first`) and splits

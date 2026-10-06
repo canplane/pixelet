@@ -15,17 +15,17 @@ use xpute_runtime::mem::heap::{alloc, free, Block};
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 use crate::io::demand::{Category, Phases, TaskPhaseName};
+use crate::io::failure::{Failure, Outcome};
 use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle, Credit};
 use crate::layer::earth::{self, Earth};
 use crate::layer::geocode::store as geocode_store;
-use crate::io::failure::{Failure, Outcome};
 use crate::world::change::world_edge;
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::place_tile::{group_name, DICT_OBJECT};
+use pxl_spec::bake::place_tile::{group_key, DICT_OBJECT};
 use pxl_spec::bake::poi_tile::PoiTile;
-use pxl_spec::bake::quadkey::tile_name;
+use pxl_spec::space::hierarchy::morton::write_name;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
@@ -36,9 +36,8 @@ impl fmt::Display for DemandName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let key = self;
         match key.0 {
-            Category::terrain => write!(f, "{}", tile_name(Tile::of_subject(key.1))),
-            Category::poi | Category::earth => write!(f, "{}", tile_name(Tile::of_subject(key.1))),
-            Category::geocode => write!(f, "{}", group_name(key.1)),
+            Category::terrain | Category::poi | Category::earth => write_name::<2>(f, Tile::of_subject(key.1).key()),
+            Category::geocode => write_name::<2>(f, group_key(key.1)),
             Category::geocode_dict => f.write_str(DICT_OBJECT),
             // Assets are opened below the assets' root (io/load.rs), never here.
             Category::asset => Ok(()),

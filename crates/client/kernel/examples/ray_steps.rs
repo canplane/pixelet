@@ -34,13 +34,12 @@ use pxl_kernel::layer::object::store::Store;
 use pxl_kernel::world::access::{Access, Answer, Detail, Ray};
 use pxl_kernel::world::residency::{Candidate, Residency, Victim};
 use pxl_spec::bake::format::{decode_terrain, Terrain};
-use pxl_spec::bake::quadkey::tile_name;
-use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// The phone the experiment is set on: an iPhone 13 mini's screen in
 /// points, drawn at the two ratios it names.
@@ -107,7 +106,7 @@ impl Tiles {
         if !self.tried.insert(p) {
             return false;
         }
-        let url = format!("{}/tile/terrain/{}", self.server, tile_name(p));
+        let url = format!("{}/tile/terrain/{}", self.server, p.name());
         let Ok(out) = Command::new("sh").arg("-c").arg(format!("curl -sf '{url}' | zstd -dq")).output() else {
             return false;
         };

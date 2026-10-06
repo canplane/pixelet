@@ -5,7 +5,7 @@
 //! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
 //! eight tiles). Each is averaged in linear light over what a texel covers.
 //!  - The Earth layer's tiles (pxl-spec bake/earth_tile.rs) at its top zoom, a
-//!    ground cell a texel, to `./out/earth/<version>/<quadkey>`. A tile that is one
+//!    ground cell a texel, to `./out/earth/<version>/<name>`. A tile that is one
 //!    color says nothing the global picture does not, and has no object.
 //!  - The global picture every tile falls back to, 2048 × 1024, to
 //!    `asset/sky/earth/07.webp`.
@@ -24,7 +24,6 @@ use image::ImageFormat;
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
 use pxl_spec::bake::earth_tile::{self, EARTH_TEXELS, EARTH_ZOOM};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
-use pxl_spec::bake::quadkey::tile_name;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::pvf3::pvf3;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -284,7 +283,7 @@ fn run() -> Result<(), String> {
             scope.spawn(move || {
                 for &[px, py] in tiles.iter().skip(t).step_by(threads) {
                     let Some(rgba) = tile_texels(px, py, day, night) else { continue };
-                    let name = tile_name(tile_at(EARTH_ZOOM, [px, py])).to_string();
+                    let name = tile_at(EARTH_ZOOM, [px, py]).name();
                     let stored = earth_tile::encode(&rgba)
                         .map_err(|e| format!("{e:?}"))
                         .and_then(|pkt| pack(&pkt, Level::Stored).map_err(|e| e.to_string()));

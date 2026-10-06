@@ -13,7 +13,7 @@
 //!   --limit <n>          stop after n land tiles (smoke test)
 //!   --force              bake leaves that already exist on disk again, and solve every structure again
 //!   --reclassify         classify again though land_tiles.json is current
-//!   --region <quadkey>   bake again only the land tiles under it, repeatable; assemble then
+//!   --region <name>      bake again only the land tiles under that tile, repeatable; assemble then
 //!                        links --base whole and folds again only what those tiles reach
 //!   --base <dir>         the version a region bake starts from (default the published one)
 //!
@@ -35,7 +35,6 @@ use std::time::Instant;
 use postgres::Client;
 use pxl_spec::bake::format::{encode_terrain, SNAPSHOT_KEY};
 use pxl_spec::bake::published::{FORMAT, PUBLISHED_VERSION};
-use pxl_spec::bake::quadkey::{tile_name, tile_of_name};
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
@@ -104,7 +103,7 @@ fn parse_args() -> Result<Args, String> {
             "--reclassify" => args.reclassify = true,
             "--region" => {
                 let key = flags.value()?;
-                args.regions.push(tile_of_name(&key).ok_or(format!("--region {key}: not a tile's quadkey"))?);
+                args.regions.push(Tile::of_name(&key).ok_or(format!("--region {key}: not a tile's name"))?);
             }
             "--base" => args.base = Some(PathBuf::from(flags.value()?)),
             other => return Err(format!("unknown flag: {other}")),
@@ -250,22 +249,17 @@ fn read_json(path: &Path) -> serde_json::Value {
     fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(serde_json::Value::Null)
 }
 
-/// Every file under `from` hard-linked under `to`, directories made.
-fn link_tree(from: &Path, to: &Path) -> Result<(), String> {
+/// Every file in `from` hard-linked into `to`.
+fn link_all(from: &Path, to: &Path) -> Result<(), String> {
     fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
     for entry in fs::read_dir(from).map_err(|e| format!("{}: {e}", from.display()))? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let (src, dst) = (entry.path(), to.join(entry.file_name()));
-        if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
-            link_tree(&src, &dst)?;
-        } else {
-            fs::hard_link(&src, &dst).map_err(|e| format!("{}: {e}", src.display()))?;
-        }
+        let src = entry.map_err(|e| e.to_string())?.path();
+        fs::hard_link(&src, to.join(src.file_name().unwrap_or_default())).map_err(|e| format!("{}: {e}", src.display()))?;
     }
     Ok(())
 }
 
-/// What `tiles` writes and removes over the full version `full`, by quadkey:
+/// What `tiles` writes and removes over the full version `full`, by name:
 /// a tile linked from it is the same file, and any other one is checked by content.
 fn snapshot_over(full: &TileSet, tiles: &TileSet) -> Result<(Vec<String>, Vec<String>), String> {
     let (mut written, mut removed) = (Vec::new(), Vec::new());
@@ -278,10 +272,10 @@ fn snapshot_over(full: &TileSet, tiles: &TileSet) -> Result<(Vec<String>, Vec<St
                 _ => false,
             };
             if !same {
-                written.push(tile_name(p).to_string());
+                written.push(p.name());
             }
         }
-        removed.extend(full.tiles(zoom)?.into_iter().filter(|p| !here.contains(p)).map(|p| tile_name(p).to_string()));
+        removed.extend(full.tiles(zoom)?.into_iter().filter(|p| !here.contains(p)).map(Tile::name));
     }
     Ok((written, removed))
 }
@@ -297,7 +291,7 @@ fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_js
     if tiles.root.exists() {
         fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
     }
-    link_tree(&base.root, &tiles.root)?;
+    link_all(&base.root, &tiles.root)?;
 
     let region_land: HashSet<IVec> = land.iter().copied().filter(|&p| args.in_region(p)).collect();
     let mut changed = HashSet::new();
@@ -340,7 +334,7 @@ fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_js
     write_json(&snapshot, &serde_json::json!({ "base": full_name, "written": written, "removed": removed }))?;
     println!("[bake/region] over {}: {} written, {} removed", full.root.display(), written.len(), removed.len());
 
-    let top = (GROUND.top()..LEAF_ZOOM).rev().take_while(|&z| tiles.zoom_dir(z).exists()).last().unwrap_or(LEAF_ZOOM);
+    let top = tiles.all()?.into_iter().map(|p| p.zoom).min().unwrap_or(LEAF_ZOOM);
     let base_name = base.root.file_name().map(|n| n.to_string_lossy().to_string());
     // The kind's one manifest describes the last bake, which is the base only if it says so.
     let mut fields = read_json(&base.root.join("../manifest.json"));
@@ -355,7 +349,7 @@ fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_js
         f.insert("base".into(), serde_json::json!({ "version": base_name, "release": base_release }));
         f.insert(
             "regions".into(),
-            serde_json::json!({ "quadkeys": leaf["regions"], "release": leaf["release"], "leaf_git_sha": leaf["git_sha"] }),
+            serde_json::json!({ "tiles": leaf["regions"], "release": leaf["release"], "leaf_git_sha": leaf["git_sha"] }),
         );
     }
     write_manifest(&tiles, top, built, fields)
@@ -407,9 +401,9 @@ fn run() -> Result<(), String> {
         };
         // A region's tiles are baked again whatever is on disk, by the code that changed.
         let fresh = args.force || !args.regions.is_empty();
-        fs::create_dir_all(leaves.zoom_dir(LEAF_ZOOM)).map_err(|e| e.to_string())?;
+        fs::create_dir_all(&leaves.root).map_err(|e| e.to_string())?;
         if !fresh {
-            refuse_mixed(&leaves.zoom_dir(LEAF_ZOOM))?;
+            refuse_mixed(&leaves.root)?;
         }
         // Each worker walks its own band of rows, zigzag, so a tile's eight
         // around it were mostly read for the tile before.
@@ -485,7 +479,7 @@ fn run() -> Result<(), String> {
                 "git_sha": built,
                 "land_tiles": land.len(),
                 "release": source.release,
-                "regions": args.regions.iter().map(|&r| tile_name(r).to_string()).collect::<Vec<_>>(),
+                "regions": args.regions.iter().map(|r| r.name()).collect::<Vec<_>>(),
                 "source": read_source_catalogs(&mut client, source),
             }),
         )?;
@@ -504,7 +498,7 @@ fn run() -> Result<(), String> {
         if tiles.root.exists() {
             fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
         }
-        fs::create_dir_all(tiles.zoom_dir(LEAF_ZOOM)).map_err(|e| e.to_string())?;
+        fs::create_dir_all(&tiles.root).map_err(|e| e.to_string())?;
 
         let t = over_tiles(
             "assemble",

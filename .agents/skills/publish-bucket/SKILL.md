@@ -17,16 +17,16 @@ how it gets there and how you know it arrived.
 
 | Prefix                  | Object                      | Named by               | Policy                                                        |
 | ----------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
-| `terrain/<version>/`    | packed XTP tile             | quadkey, 5–15          | immutable; a re-bake is a new version                         |
-| `poi/<version>/`        | XTP count tile              | quadkey, 5–15          | immutable; a re-bake is a new version                         |
-| `geocode/<version>/`    | XTP group tile, `_dict`     | quadkey, 11            | immutable; a re-bake is a new version                         |
+| `terrain/<version>/`    | packed XTP tile             | name, 5–15             | immutable; a re-bake is a new version                         |
+| `poi/<version>/`        | XTP count tile              | name, 5–15             | immutable; a re-bake is a new version                         |
+| `geocode/<version>/`    | XTP group tile, `_dict`     | name, 11               | immutable; a re-bake is a new version                         |
 | `asset/`                | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
 | `_meta/land_tiles.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |
 | `_meta/build-counter`   | the official build count    | fixed name             | mutable; taken and written by CI's gate, never by hand        |
 
-A tile is named by its **quadkey**: its 2D Morton key at the zoom the tile is
-held at (pxl-spec space/hierarchy/morton.rs), one base-4 digit a zoom, coarsest first,
-rows counted from the south (pxl-spec bake/quadkey.rs). The length is the zoom, so nothing writes a zoom down, and
+A tile is named by its 2D Morton key at the zoom the tile is held at, one
+base-4 digit a zoom, coarsest first, rows counted from the south (pxl-spec
+space/hierarchy/morton.rs `write_name`), on disk as in the bucket. The length is the zoom, so nothing writes a zoom down, and
 the three bakes differ only in how long a name they have — terrain and POI 5
 to 15 digits for the pyramid they share, geocode 11 because a group covers 16
 tiles a side. They land in one space, so
@@ -80,7 +80,7 @@ the Worker's fail-closed plan, and not its writes. A new terrain version is
 every tile of the pyramid — the sum of `objects` over the bake manifest's
 `zooms`, 227,310 for v6 — and a POI version likewise, so four terrain
 publishes in a month, or one rename done twice, is past it. September 2026
-went to 1.67M on bakes re-published and the quadkey rename run twice.
+went to 1.67M on bakes re-published and the old tile rename run twice.
 
 So before an upload, and after one:
 
@@ -96,21 +96,11 @@ partial version names it as its base.
 
 ### Terrain
 
-Terrain and POI are the bakes whose disk layout is not the bucket's. They keep
-`z<zoom>/<tile index>` because the pyramid's fold (`geo-bake/src/pyramid.rs`) clears a zoom's directory so
-that a parent cannot outlive a child it no longer has, and clears the zooms
-past the top so that a zoom a run did not fold is not part of the set — both
-invariants a flat tree would have to restate as a rule about name lengths. So
-the names are translated on the way out, by hard links, which costs no bytes:
+A version is on disk as the bucket holds it, its tiles flat under their
+names, so it goes up as it is:
 
 ```bash
-version=$(jq -r .PUBLISHED_VERSION.terrain spec/spec/bake/published.json)
-cargo run --release --manifest-path crates/Cargo.toml --bin rekey_tiles -- link \
-  --bake terrain --from "./out/terrain/$version" --to "./out/terrain/$version.bucket"
-```
-
-```bash
-aws s3 sync ./out/terrain/<version>.bucket s3://pixelet-tiles/terrain/<version> \
+aws s3 sync ./out/terrain/<version> s3://pixelet-tiles/terrain/<version> \
   --profile r2 --endpoint-url $R2 \
   --content-type application/octet-stream \
   --content-encoding "$(jq -r .content_encoding out/terrain/manifest.json)" \
@@ -120,17 +110,18 @@ aws s3 cp ./out/terrain/land_tiles.json s3://pixelet-tiles/_meta/land_tiles.json
   --profile r2 --endpoint-url $R2 --content-type application/json
 ```
 
-A version a region bake made is partial: `rekey_tiles link` finds its
-`_snapshot` and links only the tiles it lists as written, and the list. Its
-base must already be in the bucket; the Worker reads the list and answers
-every other tile from the base
+A version a region bake made is partial: it holds its base linked whole,
+and its `_snapshot` lists the tiles it writes over that base. Only those
+go up, and the list. Its base must already be in the bucket; the Worker
+reads the list and answers every other tile from the base
 ([20261004-a-snapshot-of-a-subtree.md](../../../decision/20261004-a-snapshot-of-a-subtree.md)).
 The list goes up last, after the tiles it names, as plain JSON:
 
 ````bash
-aws s3 sync ./out/terrain/<version>.bucket s3://pixelet-tiles/terrain/<version> \
-  --exclude _snapshot  # … and the flags above
-aws s3 cp ./out/terrain/<version>.bucket/_snapshot s3://pixelet-tiles/terrain/<version>/_snapshot \
+v=./out/terrain/<version>
+aws s3 sync "$v" s3://pixelet-tiles/terrain/<version> --exclude '*' \
+  $(jq -r '.written[] | "--include=" + .' "$v/_snapshot")  # … and the flags above
+aws s3 cp "$v/_snapshot" s3://pixelet-tiles/terrain/<version>/_snapshot \
   --profile r2 --endpoint-url $R2 --content-type application/json
 ``` **A full version a published
 partial names as its base is never deleted**: every tile the partial does not
@@ -154,14 +145,10 @@ so one version holds one encoding.
 
 ### POI
 
-The same two steps as terrain, from `poi/` and with no `land_tiles.json`:
+As terrain, from `poi/` and with no `land_tiles.json`:
 
 ```bash
-version=$(jq -r .PUBLISHED_VERSION.poi spec/spec/bake/published.json)
-cargo run --release --manifest-path crates/Cargo.toml --bin rekey_tiles -- link \
-  --bake poi --from "./out/poi/$version" --to "./out/poi/$version.bucket"
-
-aws s3 sync ./out/poi/<version>.bucket s3://pixelet-tiles/poi/<version> \
+aws s3 sync ./out/poi/<version> s3://pixelet-tiles/poi/<version> \
   --profile r2 --endpoint-url $R2 \
   --content-type application/octet-stream \
   --content-encoding "$(jq -r .content_encoding out/poi/manifest.json)" \
@@ -222,7 +209,7 @@ aws s3 ls s3://pixelet-tiles/terrain/<version>/ --profile r2 --endpoint-url $R2 
 
 # metadata must have survived: expect the manifest's ContentEncoding on a tile,
 # ContentType model/gltf-binary and no ContentEncoding on a glb
-aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<quadkey> --profile r2 --endpoint-url $R2
+aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<name> --profile r2 --endpoint-url $R2
 aws s3api head-object --bucket pixelet-tiles --key asset/<sha256> --profile r2 --endpoint-url $R2
 ```
 
@@ -247,7 +234,7 @@ one-loop smoke test over every path the app takes.
 perfectly correct while the serving path is not:
 
 ```bash
-U=https://plei.me/tile/terrain/<version>/<quadkey>
+U=https://plei.me/tile/terrain/<version>/<name>
 curl -s -H "Accept-Encoding: gzip, zstd" -D - -o /dev/null "$U"   # expect the manifest's content-encoding
 curl -s -H "Accept-Encoding: gzip, zstd" "$U" | zstd -dcq | head -c 2 | xxd -p   # zstd: expect 5854 (XT)
 curl -s --compressed "$U" | head -c 2 | xxd -p                  # gzip: expect 5854 (XT), never 1f8b
@@ -285,7 +272,7 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache
 # or by URL, up to 30 per call
 curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
   -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
-  --data '{"files":["https://plei.me/tile/poi/<version>/<quadkey>"]}'
+  --data '{"files":["https://plei.me/tile/poi/<version>/<name>"]}'
 ```
 
 The token needs the `Zone → Cache Purge` permission; the zone ID is on the

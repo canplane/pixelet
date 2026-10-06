@@ -14,9 +14,10 @@ use xpute_core::wire::xtp::{encoder, BranchViewImpl, NodeView, TreeEncoderOption
 use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
 
-use crate::bake::quadkey::{quadkey_of, Quadkey, TILE_KEY_DEPTH};
 use crate::place::PlaceRank;
-use crate::space::coord::pvf3::ivec::IVec;
+use crate::space::coord::pvf3::ivec::{self, IVec};
+use crate::space::coord::zoom::Zoom;
+use crate::space::layer::tile::{tile_at, LEAF_ZOOM};
 use xpute_core::status::bug::OrBug;
 
 pub const DICT_OBJECT: &str = "_dict";
@@ -24,10 +25,11 @@ pub const DICT_OBJECT: &str = "_dict";
 /// 16 tiles on a side.
 pub const GROUP_SHAMT: u32 = 4;
 
-pub const GROUP_KEY_DEPTH: u32 = TILE_KEY_DEPTH - GROUP_SHAMT;
+/// A group is the tile at this zoom, and named as one.
+pub const GROUP_ZOOM: Zoom = LEAF_ZOOM - GROUP_SHAMT as Zoom;
 
-pub fn group_name(group_idx: IVec) -> Quadkey {
-    quadkey_of(GROUP_KEY_DEPTH, group_idx)
+pub fn group_key(group_idx: IVec) -> u128 {
+    tile_at(GROUP_ZOOM, [ivec::X(group_idx), ivec::Y(group_idx)]).key()
 }
 pub const GROUP_TILES: usize = 1 << (2 * GROUP_SHAMT);
 

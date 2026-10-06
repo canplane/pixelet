@@ -4,7 +4,8 @@
 //! group, resumable. A missing object reads as empty, so there is no shared
 //! fallback.
 
-use pxl_spec::bake::quadkey::quadkey_of;
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::tile::tile_at;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -89,7 +90,7 @@ pub struct Tally {
 pub fn walk<T>(
     args: &Args,
     tag: &str,
-    depth: u32,
+    zoom: Zoom,
     every: u64,
     targets: &[Target],
     connect: impl Fn() -> Result<T, String> + Sync,
@@ -111,7 +112,7 @@ pub fn walk<T>(
                     let i = next.fetch_add(1, Ordering::Relaxed);
                     let Some(target) = targets.get(i) else { break };
                     let tile_idx = target.idx;
-                    let name = quadkey_of(depth, tile_idx).to_string();
+                    let name = tile_at(zoom, [ivec::X(tile_idx), ivec::Y(tile_idx)]).name();
                     let path = args.out.join(&name);
                     let marker = args.out.join(format!("{name}{EMPTY_SUFFIX}"));
 

@@ -7,7 +7,6 @@ use super::job::{self, Job, Publication, Runner};
 use super::{Dataset, Failure, Kind};
 use crate::pyramid::{fold_stored, Absent, Layer, TileSet};
 use crate::util::{pack, Level};
-use pxl_spec::bake::quadkey::tile_of_name;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use std::future::Future;
@@ -16,25 +15,21 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, name: &str, top: Zoom) -> Result<Option<String>, Failure> {
-    let p = tile_of_name(name).ok_or(Failure::BadName)?;
+    let p = Tile::of_name(name).ok_or(Failure::BadName)?;
     if p.zoom < top {
         return Err(Failure::Unavailable);
     }
     bake_missing(data, runner, kind, p, true).await?;
-    Ok(Some(key(p)))
-}
-
-fn key(p: Tile) -> String {
-    format!("z{}/{}", p.zoom, p.tile)
+    Ok(Some(p.name()))
 }
 
 fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, asked: bool) -> Pin<Box<dyn Future<Output = Result<(), Failure>> + Send>> {
     Box::pin(async move {
         let d = data.clone();
         data.cache
-            .once(key(p), asked, move |lease| async move {
+            .once(p.name(), asked, move |lease| async move {
                 if !d.source.holds(p) {
-                    return d.cache.publish(&key(p), None).map_err(Failure::from);
+                    return d.cache.publish(&p.name(), None).map_err(Failure::from);
                 }
                 if p.zoom < LEAF_ZOOM {
                     for below in d.source.sources(p) {
@@ -48,7 +43,7 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, as
                     subject: p.subject(),
                     cache: d.cache.root.clone(),
                 };
-                runner.run(job, d.clone(), lease, Publication::Packet(key(p))).await
+                runner.run(job, d.clone(), lease, Publication::Packet(p.name())).await
             })
             .await
     })

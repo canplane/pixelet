@@ -13,7 +13,7 @@ import { INGESTED } from "../apps/web/src/catalog/asset/ingested.spec.ts";
 
 import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route.spec.ts";
 
-/** A land page in Bundang, the one infra/README's procedure names: the zoom-15 quadkey. */
+/** A land page in Bundang, the one infra/README's procedure names: the zoom-15 tile's name. */
 const PAGE = "010332102130223";
 
 /** PAGE's geocode group, four zooms coarser: its first eleven digits. Written

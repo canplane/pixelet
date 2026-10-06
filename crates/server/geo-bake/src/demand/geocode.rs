@@ -6,9 +6,9 @@ use crate::geocode::provider::overture::{GeocodeProvider, READS};
 use crate::geocode::PlaceDict;
 use crate::util::{pack, Level};
 use pxl_spec::bake::place_tile::{encode_place_group, Named, GROUP_TILES};
-use pxl_spec::bake::place_tile::{DICT_OBJECT, GROUP_KEY_DEPTH, GROUP_SHAMT};
-use pxl_spec::bake::quadkey::index_of;
+use pxl_spec::bake::place_tile::{DICT_OBJECT, GROUP_SHAMT, GROUP_ZOOM};
 use pxl_spec::space::coord::pvf3::ivec;
+use pxl_spec::space::hierarchy::morton::{key_of_name, node_of};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -16,7 +16,10 @@ pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, name: &str)
     let group = if name == DICT_OBJECT {
         None
     } else {
-        Some(index_of(name).filter(|(depth, _)| *depth == GROUP_KEY_DEPTH).ok_or(Failure::BadName)?.1)
+        match key_of_name::<2>(name).map(node_of::<2>) {
+            Some((GROUP_ZOOM, [x, y])) => Some(ivec::gather(x, y, 0)),
+            _ => return Err(Failure::BadName),
+        }
     };
     let d = data.clone();
     let r = runner.clone();

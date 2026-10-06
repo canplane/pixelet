@@ -9,9 +9,9 @@ use std::sync::LazyLock;
 
 use postgres::{Client, NoTls};
 use pxl_geo_spec::table::CATALOG;
-use pxl_spec::bake::quadkey::{index_of, node_name};
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::coord::zoom::{count, shamt, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
@@ -34,7 +34,7 @@ impl Node {
     }
 
     pub fn name(self) -> String {
-        node_name(self.zoom, self.base()).to_string()
+        morton::name::<2>(key_of(self.zoom, self.at))
     }
 
     /// `[minx, miny, maxx, maxy]` in units, the maximum exclusive.
@@ -71,8 +71,8 @@ impl Coverage {
             .iter()
             .map(|n| {
                 let name = n.as_str().unwrap_or_default();
-                match index_of(name) {
-                    Some((depth, at)) if depth == u32::from(SHARD_ZOOM) => Ok([ivec::X(at), ivec::Y(at)]),
+                match key_of_name::<2>(name).map(node_of::<2>) {
+                    Some((SHARD_ZOOM, at)) => Ok(at),
                     _ => Err(bad(format!("{n} is not a shard's name"))),
                 }
             })

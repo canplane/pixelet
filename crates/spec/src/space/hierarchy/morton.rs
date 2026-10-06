@@ -10,6 +10,7 @@
 
 use crate::space::coord::pvf3::core::{IVEC_X_W, IVEC_Y_W, IVEC_Z_W};
 use crate::space::coord::zoom::{Zoom, UNIT_ZOOM};
+use core::fmt;
 
 const LANES: [u32; 3] = [IVEC_X_W, IVEC_Y_W, IVEC_Z_W];
 
@@ -52,6 +53,43 @@ pub fn node_of<const D: usize>(key: u128) -> (Zoom, [i64; D]) {
         }
     }
     (zoom, std::array::from_fn(|i| signed(at[i], digits(i, zoom))))
+}
+
+/// A key written a character a zoom, coarsest first: the digits that zoom
+/// adds as one octal digit, so a coarser node's name prefixes a finer one's
+/// and the length is the zoom. Written, not built, so a read allocates nothing.
+pub fn write_name<const D: usize>(out: &mut impl fmt::Write, key: u128) -> fmt::Result {
+    let n = 126 - key.trailing_zeros();
+    let (mut zoom, mut read) = (0, 0);
+    while read < n {
+        zoom += 1;
+        let w = bits::<D>(zoom) - bits::<D>(zoom - 1);
+        let d = (key >> (127 - read - w)) & ((1 << w) - 1);
+        out.write_char(char::from(b'0' + d as u8))?;
+        read += w;
+    }
+    Ok(())
+}
+
+pub fn name<const D: usize>(key: u128) -> String {
+    let mut out = String::new();
+    write_name::<D>(&mut out, key).expect("a String takes any write");
+    out
+}
+
+/// `write_name`'s inverse; `None` for what no key writes.
+pub fn key_of_name<const D: usize>(name: &str) -> Option<u128> {
+    let (mut digits, mut n) = (0u128, 0u32);
+    for (z, c) in name.bytes().enumerate() {
+        let zoom = Zoom::try_from(z + 1).ok()?;
+        let w = bits::<D>(zoom) - bits::<D>(zoom - 1);
+        let d = c.checked_sub(b'0').filter(|&d| u32::from(d) < 1 << w)?;
+        if n + w > 125 {
+            return None;
+        }
+        (digits, n) = ((digits << w) | u128::from(d), n + w);
+    }
+    Some((digits << (127 - n)) | (1 << (126 - n)))
 }
 
 /// `v`'s low `width` bits as a two's complement number.

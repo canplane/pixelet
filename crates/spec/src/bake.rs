@@ -20,7 +20,6 @@ pub mod poi_badge;
 pub mod poi_tile;
 #[path = "bake/published.spec.rs"]
 pub mod published;
-pub mod quadkey;
 pub mod surface;
 pub mod way;
 

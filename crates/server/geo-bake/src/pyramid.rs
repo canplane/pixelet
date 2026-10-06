@@ -10,11 +10,11 @@ use std::fs;
 use std::path::PathBuf;
 
 use pxl_spec::bake::format::Occupancy;
-use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
+use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::util::{measure_output, pack, unpack, write_atomic, Level};
+use crate::util::{pack, unpack, write_atomic, Level};
 
 /// A layer's tile as the pyramid holds it. One fold makes each zoom's tiles
 /// from the next finer one's; a parent reads its four children unless
@@ -56,17 +56,14 @@ impl TileSet {
         TileSet { root: root.into() }
     }
 
-    pub fn zoom_dir(&self, zoom: Zoom) -> PathBuf {
-        self.root.join(format!("z{zoom}"))
-    }
-
+    /// Flat under its name, as the bucket holds it.
     pub fn path(&self, p: Tile) -> PathBuf {
-        self.zoom_dir(p.zoom).join(p.tile.to_string())
+        self.root.join(p.name())
     }
 
     pub fn write(&self, p: Tile, packed: &[u8]) -> Result<(), String> {
         let path = self.path(p);
-        fs::create_dir_all(self.zoom_dir(p.zoom)).map_err(|e| e.to_string())?;
+        fs::create_dir_all(&self.root).map_err(|e| e.to_string())?;
         write_atomic(&path, packed).map_err(|e| format!("{}: {e}", path.display()))
     }
 
@@ -93,20 +90,28 @@ impl TileSet {
         unpack(&stored).map(Some).map_err(|e| format!("{}: {e}", path.display()))
     }
 
+    /// The tiles at `zoom`: a name's length is its zoom.
     pub fn tiles(&self, zoom: Zoom) -> Result<Vec<Tile>, String> {
-        let dir = self.zoom_dir(zoom);
-        if !dir.exists() {
+        let mut out: Vec<Tile> = self.all()?.into_iter().filter(|p| p.zoom == zoom).collect();
+        out.sort_unstable();
+        Ok(out)
+    }
+
+    pub fn all(&self) -> Result<Vec<Tile>, String> {
+        if !self.root.exists() {
             return Ok(Vec::new());
         }
         let mut out = Vec::new();
-        for entry in fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))? {
+        for entry in fs::read_dir(&self.root).map_err(|e| format!("{}: {e}", self.root.display()))? {
             let name = entry.map_err(|e| e.to_string())?.file_name();
-            if let Some(tile) = name.to_str().and_then(|n| n.parse::<IVec>().ok()) {
-                out.push(Tile::new(zoom, tile));
-            }
+            out.extend(name.to_str().and_then(Tile::of_name));
         }
-        out.sort_unstable();
         Ok(out)
+    }
+
+    /// Every tile at `zoom` gone, so no parent outlives a child it no longer has.
+    pub fn clear(&self, zoom: Zoom) -> Result<(), String> {
+        self.tiles(zoom)?.into_iter().try_for_each(|p| self.remove(p))
     }
 }
 
@@ -149,8 +154,8 @@ pub fn build<L: Layer>(set: &TileSet, absent: &impl Absent<L>, workers: usize) -
         println!("[bake/pyramid] z{zoom}: {n} tiles in {:.1}s", at.elapsed().as_secs_f64());
         top = zoom;
     }
-    for stale in (0..top).rev().map(|z| set.zoom_dir(z)).take_while(|d| d.exists()) {
-        fs::remove_dir_all(&stale).map_err(|e| format!("{}: {e}", stale.display()))?;
+    for p in set.all()?.into_iter().filter(|p| p.zoom < top) {
+        set.remove(p)?;
     }
     Ok(top)
 }
@@ -214,10 +219,14 @@ pub fn prune<L: Layer>(set: &TileSet, top: Zoom) -> Result<usize, String> {
 /// Measured from disk, not the run: a resumed run that skipped everything
 /// would describe an empty set.
 pub fn write_manifest(set: &TileSet, top: Zoom, built: Option<&str>, layer: serde_json::Value) -> Result<(), String> {
-    let (mut objects, mut bytes) = measure_output(&set.root).map_err(|e| e.to_string())?;
+    let (mut objects, mut bytes) = (0, 0);
     let mut zooms = Vec::new();
     for zoom in (top..=LEAF_ZOOM).rev() {
-        let (n, b) = measure_output(&set.zoom_dir(zoom)).map_err(|e| e.to_string())?;
+        let (mut n, mut b) = (0u64, 0u64);
+        for p in set.tiles(zoom)? {
+            n += 1;
+            b += fs::metadata(set.path(p)).map_err(|e| e.to_string())?.len();
+        }
         zooms.push(serde_json::json!({ "z": zoom, "objects": n, "bytes": b }));
         objects += n;
         bytes += b;
@@ -232,11 +241,7 @@ pub fn write_manifest(set: &TileSet, top: Zoom, built: Option<&str>, layer: serd
 /// A parent reads the 4×4 children around it, so each worker keeps only the
 /// four child rows its current parent row reads.
 fn fold_zoom<L: Layer>(set: &TileSet, zoom: Zoom, children: &[Tile], absent: &impl Absent<L>, workers: usize) -> Result<usize, String> {
-    let here = set.zoom_dir(zoom);
-    if here.exists() {
-        fs::remove_dir_all(&here).map_err(|e| format!("{}: {e}", here.display()))?;
-    }
-    fs::create_dir_all(&here).map_err(|e| e.to_string())?;
+    set.clear(zoom)?;
     let targets = parents(children);
     let mut rows: Vec<Vec<Tile>> = Vec::new();
     for p in &targets {
