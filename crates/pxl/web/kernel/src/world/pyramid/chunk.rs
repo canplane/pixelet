@@ -3,10 +3,11 @@
 //! A chunk: a cube of 64 cells of one zoom, the grain a view is drawn at,
 //! addressed by its own zoom, and drawn in cells a step coarser
 //! (`DRAWN_STEPS`). Never fetched or held; only its address exists, and an
-//! empty one is never made. It reads the tile whose cells are the ones it
-//! draws, or past the leaves the leaf over it, whose cells it divides; its
-//! tile and place in the tile derive from its column, so they cannot
-//! disagree with where it is.
+//! empty one is never made. It reads the tile whose cells are its own, each
+//! drawn cell the mean of the four under it, so a drawn cell's color is its
+//! children's as a retina's pixel is; past the leaves it reads the leaf over
+//! it, whose cells it divides. Its tile and place in the tile derive from its
+//! column, so they cannot disagree with where it is.
 
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::hierarchy::{ancestor_of, child_of, offset_in, parent_of};
@@ -71,19 +72,23 @@ impl Chunk {
         self.cell_zoom() - DRAWN_STEPS
     }
 
-    /// The tile it reads: the one whose cells it draws, or the leaf over it.
+    /// The tile it reads: the one whose cells are its own, or the leaf over it.
     pub fn tile_zoom(self) -> Zoom {
         (self.zoom - (LEAF_CHUNK - LEAF_Z)).min(LEAF_Z)
     }
 
-    /// Zooms its drawn cells are finer than its tile's: none but past the leaves.
-    pub fn finer(self) -> u32 {
-        u32::from(self.drawn_zoom() - GROUND.cell_zoom(self.tile_zoom()))
+    /// Zooms its drawn cells are finer than its tile's: −1 short of the
+    /// leaves, where four tile cells make one drawn, more past them.
+    pub fn finer(self) -> i32 {
+        i32::from(self.drawn_zoom()) - i32::from(GROUND.cell_zoom(self.tile_zoom()))
     }
 
     /// Its tile's side in its drawn cells.
     fn tile_span(self) -> u32 {
-        TILE_CELLS << self.finer()
+        match self.finer() {
+            k if k >= 0 => TILE_CELLS << k,
+            k => TILE_CELLS >> -k,
+        }
     }
 
     /// The lane's copy, as `holding` makes it: one name for every round of the world.

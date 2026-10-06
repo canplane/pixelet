@@ -139,6 +139,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         over = over.parent()?;
     }
     let zoom = over.tile_zoom();
+    let retina = (-over.finer()) as u32;
     let (cx0, cy0, _) = chunk.rect();
     let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
@@ -150,9 +151,12 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
                 tile: view,
                 frame: Frame::of(src),
                 origin: [0, 0],
-                n: 1,
+                shift: over.finer(),
             },
             beside: [None; 8],
+            tile_shamt: GROUND.tile_cell_shamt() - retina,
+            zoom: over.drawn_zoom(),
+            textured: settings_store().textures,
         };
         c.sample.read(&around, [tx0 as i64, ty0 as i64]).ok()?;
     }
@@ -168,7 +172,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         }
     }));
     let target = GROUND.cell_zoom(zoom);
-    let (cx, cy, span) = (index(target, x0), index(target, y0), CHUNK_DRAWN as i64);
+    let (cx, cy, span) = (index(target, x0), index(target, y0), i64::from(CHUNK_DRAWN << retina));
     match zoom < LEAF_Z && sources.shown {
         true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
         false => c.folded.clear(),
@@ -179,8 +183,9 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         zoom,
         x0,
         y0,
-        tx0,
-        ty0,
+        tx0: tx0 << retina,
+        ty0: ty0 << retina,
+        retina,
         col_idx: (zoom == LEAF_Z).then(|| idx(BAND, ivec::gather(x0, y0, 0))),
         folded: (zoom < LEAF_Z).then_some(&c.folded),
     };

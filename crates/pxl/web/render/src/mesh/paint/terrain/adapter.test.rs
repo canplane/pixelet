@@ -1,7 +1,7 @@
 // pxl-render/mesh/paint/terrain/adapter.test.rs
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::space::pyramid::{Tile, LEAF_Z};
+use pxl_spec::space::pyramid::{Tile, LEAF_Z, TILE_CELLS};
 
 use super::*;
 use crate::mesh::run::apron_col;
@@ -22,10 +22,17 @@ fn a_chunk_with_no_surface_has_no_ground_and_no_floor() {
         },
         frame: Frame::of(tile),
         origin: [0, 0],
-        n: 1,
+        shift: -1,
     };
     let mut sample = ChunkSample::default();
-    sample.read(&Around { own, beside: [None; 8] }, [0, 0]).unwrap();
+    let around = Around {
+        own,
+        beside: [None; 8],
+        tile_shamt: GROUND.tile_cell_shamt() - 1,
+        zoom: GROUND.cell_zoom(LEAF_Z) - 1,
+        textured: true,
+    };
+    sample.read(&around, [0, 0]).unwrap();
     assert_eq!(sample.floor, i32::MIN);
     let i = apron_col(0, 0) as usize;
     assert!(!sample.has_ground(i));

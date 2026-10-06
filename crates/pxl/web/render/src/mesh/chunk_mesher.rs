@@ -9,7 +9,7 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
-use crate::look::color::linear;
+use crate::look::color::{linear, srgb};
 use crate::mesh::paint::palette::shader_meta::layer_mean;
 use crate::mesh::run::{OwnedRunSet, RunSet, COL_SPAN};
 use crate::mesh::word::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, MaterialClasses, NO_LAYER, SUB_CELL_NONE};
@@ -220,7 +220,7 @@ impl ZBucketAccum {
         } else {
             ([self.vr, self.vg, self.vb], self.coverage.max(f64::MIN_POSITIVE))
         };
-        srgb_of([sum[0] / weight, sum[1] / weight, sum[2] / weight])
+        [sum[0] / weight, sum[1] / weight, sum[2] / weight].map(srgb)
     }
 }
 
@@ -1182,18 +1182,6 @@ fn covered_height(set: &RunSet, col: u32, lo: i32, hi: i32) -> i32 {
         covered += (set.z1[i].min(hi) - set.z0[i].max(lo) + 1).max(0);
     }
     covered
-}
-
-fn srgb_of(rgb: [f64; 3]) -> [u8; 3] {
-    core::array::from_fn(|k| {
-        let c = rgb[k].clamp(0.0, 1.0);
-        let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * libm::pow(c, 1.0 / 2.4) - 0.055 };
-        to_u8(s * 255.0) as u8
-    })
-}
-
-fn to_u8(v: f64) -> u32 {
-    round(v).clamp(0.0, 255.0) as u32
 }
 
 fn pack_inset(linear: f64) -> (u8, u8) {

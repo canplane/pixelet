@@ -166,7 +166,7 @@ pub const TILE_CELLS: u32 = GROUND.tile_cells();
 pub const CHUNK_CELLS: u32 = 1 << CHUNK_STEPS;
 
 /// Chunks a tile's side holds at its own zoom.
-pub const TILE_CHUNKS: u32 = TILE_CELLS / CHUNK_DRAWN;
+pub const TILE_CHUNKS: u32 = TILE_CELLS / CHUNK_CELLS;
 
 /// A chunk's drawn cells a side.
 pub const CHUNK_DRAWN: u32 = CHUNK_CELLS >> DRAWN_STEPS;
@@ -247,9 +247,9 @@ impl Tile {
     }
 }
 
-/// The zoom of the chunk drawing a tile at `zoom`'s cells.
+/// The zoom of the chunk whose cells, the ones the rule measures, are a tile at `zoom`'s.
 pub const fn chunk_zoom(zoom: Zoom) -> Zoom {
-    GROUND.cell_zoom(zoom) + DRAWN_STEPS - CHUNK_STEPS
+    GROUND.cell_zoom(zoom) - CHUNK_STEPS
 }
 
 /// The 4×4 tiles a zoom finer around a tile's children, each at

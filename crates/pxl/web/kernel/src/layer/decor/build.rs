@@ -95,8 +95,11 @@ pub struct Ground<'a> {
     pub zoom: Zoom,
     pub x0: i64,
     pub y0: i64,
+    /// The chunk's first tile cell in the tile.
     pub tx0: u32,
     pub ty0: u32,
+    /// log2 of the tile cells a drawn cell holds a side: 1 short of the leaves.
+    pub retina: u32,
     /// On the leaves, the column whose placed objects keep a candidate off their cell.
     /// Above the leaves the objects are read folded instead.
     pub col_idx: Option<IVec>,
@@ -264,7 +267,7 @@ impl<'s> DecorBuild<'s> {
         let (lx0, ly0) = (index(own, ground.x0), index(own, ground.y0));
         let per = i64::from(count(atom, own));
         let min = [index(atom, ground.x0), index(atom, ground.y0)];
-        let span = i64::from(CHUNK_DRAWN) * per;
+        let span = i64::from(CHUNK_DRAWN << ground.retina) * per;
         let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
         scatter(kind.seed.tag, kind.seed.density, ground.zoom, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
         for i in 0..scratch.candidates.len() {
@@ -273,7 +276,8 @@ impl<'s> DecorBuild<'s> {
             let Some(Draw { gx, gy, variant, rotation, scale }) = draw(kind, candidate, cells, lines, [ground.tx0 + dx, ground.ty0 + dy]) else {
                 continue;
             };
-            let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;
+            // On the drawn surface, which is the mean of the cells it holds.
+            let ele = ground.sample.ele[apron_col(dx >> ground.retina, dy >> ground.retina) as usize] as i32;
             let at = [(gx as f64 + 0.5) * units(atom), (gy as f64 + 0.5) * units(atom), f64::from(ele)];
             // In the chunk holding the cell it stands on.
             if !((0..2).all(|k| (chunk.min[k]..chunk.max[k]).contains(&at[k])) && chunk.min[2] < at[2] && at[2] <= chunk.max[2]) {
