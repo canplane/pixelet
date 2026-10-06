@@ -37,7 +37,7 @@ Production's `.env` uses its own generated values, never local dev's.
 
 ## 2. Filling db-geo
 
-Twelve tables from Overture and GEDTM30, and the ingests that write them,
+Sixteen tables from Overture and GEDTM30, and the ingests that write them,
 are [infra/geo/README.md](./geo/README.md) — the sources, what each pipeline
 drops before it writes, how to run one and how to check it afterward.
 

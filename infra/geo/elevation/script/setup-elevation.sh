@@ -8,10 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ELEV_ROOT="$(dirname "$SCRIPT_DIR")"
 
 REPO_ROOT="$(cd "$ELEV_ROOT/../../.." && pwd)"
-# The warped rasters: gigabytes, under the repository's one gitignored
-# working directory (out/, which the Docker build context also ignores),
-# never under the source tree this script lives in.
-DATA_ROOT="$REPO_ROOT/out/elevation"
+# The warped rasters: gigabytes, gitignored and outside the Docker build context.
+DATA_ROOT="$REPO_ROOT/infra/geo/source/elevation"
 
 # Load .env
 DOTENV_PATH="$REPO_ROOT/.env"

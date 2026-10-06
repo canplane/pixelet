@@ -220,6 +220,8 @@ Two formats were made here: **PVF3**, pixelet's packed fixed-point coordinate, a
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat.
 
+Three gitignored trees hold what is made or fetched, each for one reader: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds; `cache/` is what `dev:local` bakes on demand and `decode_tile` writes, deleted at no cost; `infra/geo/source/` is the elevation rasters the ingest reads into db-geo.
+
 | Crate           | Directories                                                                                               |
 | --------------- | --------------------------------------------------------------------------------------------------------- |
 | `xpute-core`    | `abi` `alloc` `codec` `collection` `math` `status` `wire`, plus `golden`                                  |

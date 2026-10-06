@@ -270,7 +270,7 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     for line in &s.faults {
         eprintln!("[decode_tile] {line}");
     }
-    let dir = out.unwrap_or_else(|| Path::new("out/decoded").join(&name));
+    let dir = out.unwrap_or_else(|| Path::new("cache/decoded").join(&name));
     let write = |file: String, bytes: Vec<u8>| std::fs::write(dir.join(&file), bytes).map_err(|e| format!("{file}: {e}"));
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     write("heights.png".into(), heights_png(&tile, &s))?;

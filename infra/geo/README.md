@@ -1,6 +1,6 @@
 # Filling db-geo
 
-`db-geo` is the spatial database: twelve tables from two sources, one PostGIS
+`db-geo` is the spatial database: sixteen tables from two sources, one PostGIS
 instance. Everything the client sees of the world — terrain, POI, reverse
 geocode — is baked from these tables offline and published to a bucket; only
 forward search reads them at request time.
@@ -19,9 +19,8 @@ database that is expensive to rebuild.
 
 ```
 infra/geo/
-├── overture/                     five themes, one provider, one catalog
-│   ├── init/                       one schema file per theme, plus the catalog's
-│   └── script/                     ingest_<theme>.rs, and the module they share
+├── overture/                     fifteen types in six themes, one provider, one catalog
+│   └── script/ingest.rs            the one ingest, schema included
 └── elevation/                    one raster, out of one global GeoTIFF
     ├── init/01_elevation_schema.sql
     ├── metadata.json               the regions, their bboxes and the source URL
@@ -30,11 +29,12 @@ infra/geo/
 
 ## 1. The tables
 
-| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Fills them                            |
-| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :------------------------------------ |
-| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `overture/script/ingest.rs`           |
-| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `overture/script/ingest.rs`           |
-| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `elevation/script/setup-elevation.sh` |
+| Source                                                                           | Tables                                                                                                                                                         | Catalog             | Fills them                            |
+| :------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :------------------------------------ |
+| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure`         | `overture_catalog`  | `overture/script/ingest.rs`           |
+| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                            | `overture_catalog`  | `overture/script/ingest.rs`           |
+| **Overture — the other types**<br>taken whole, read by nothing yet               | `overture_addresses`, `overture_building_parts`, `overture_connectors`, `overture_division_boundaries`, `overture_base_land_cover`, `overture_base_bathymetry` | `overture_catalog`  | `overture/script/ingest.rs`           |
+| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                             | `elevation_catalog` | `elevation/script/setup-elevation.sh` |
 
 Coastline is not a table of its own. `OVERTURE_COAST_SQL`
 (`crates/pxl/server/geo-bake/src/terrain/repository.rs`) carves it at bake time out of
@@ -50,11 +50,9 @@ data it was made from.
 
 ### Overture Maps
 
-A public S3 release — no key, no portal step. The ingests reach it through the
-official `overturemaps` Python CLI, installed on first use into
-`./out/overture/.venv` (gitignored). They ask for `-f geojsonseq` and read the
-extract a line at a time: South Korea's full Places theme is 700,000+ features,
-and as one pretty-printed document it runs to about 900 MB.
+A public S3 release — no key, no portal step. The ingest reads the release's
+GeoParquet where it is published, only the row groups whose bbox statistics
+meet the bbox, straight into the tables; nothing is kept on disk.
 
 There is no default bbox: it is derived from the elevation's `bbox_4326`
 (§4).
@@ -75,12 +73,12 @@ box there is nothing, not zero.
 brew install gdal postgis jq gettext
 brew link --force gettext          # puts envsubst on PATH
 
-rustup toolchain install nightly   # the Overture ingests are single-file cargo scripts
+rustup toolchain install nightly   # the Overture ingest is a single-file cargo script
 ```
 
 `gdal` for `gdalwarp` and `raster2pgsql`, `postgis` for the ingestion
-utilities, `jq` and `envsubst` for the elevation script, `python3` for the
-Overture CLI's venv. Docker runs the database and the GDAL image.
+utilities, `jq` and `envsubst` for the elevation script. Docker runs the
+database and the GDAL image.
 
 ## 3. Bring up db-geo
 
@@ -98,7 +96,7 @@ That starts a database that is already built. Emptying it first takes a
 
 > The data volume is the only copy of the ingested data on this machine. The
 > sources are not in the repository — the warped rasters land under the
-> gitignored `out/elevation/`. Re-ingesting reproduces an equivalent dataset
+> gitignored `source/elevation/`. Re-ingesting reproduces an equivalent dataset
 > from each source's current state, not a byte-for-byte copy.
 
 ## 4. Run the ingests
@@ -129,12 +127,10 @@ geometry. Nothing is dropped on the way in: what a reader uses of a table is
 chosen in its own query, and a column it filters on is generated from
 `properties` by Postgres.
 
-The flags are `--bbox`, required, and `--out` for the
-directory the extract is kept in. An extract is every column of every feature
-in the box, and an ingest whose extract is already the latest release over the
-same bbox reads it instead of downloading it again — so a change to what a
-table keeps of a theme is a re-run, not a re-download. Keep the extracts;
-deleting one is what forces a fresh pull.
+`--bbox` is the one flag. A table whose catalog row already names the latest
+release over the same bbox is skipped, so a run stopped partway resumes at the
+table it stopped in; deleting a table's catalog row is what makes it read
+again.
 
 Production keeps its own copy of the three tables search reads, and a
 re-ingest reaches it only when they are copied over: one that changes a
@@ -190,7 +186,7 @@ Bash, `envsubst` and GDAL, driven by `metadata.json`:
    it.
 2. **Crop and reproject.** `gdalwarp` inside the GDAL image reads the remote
    COG through `/vsicurl/`, crops to `bbox_4326` (`-te`, in the source CRS), and
-   writes EPSG:3857 with DEFLATE into `out/elevation/region/<CODE>/warped/`.
+   writes EPSG:3857 with DEFLATE into `source/elevation/region/<CODE>/warped/`.
 3. **Ingest.** `raster2pgsql -t 256x256` piped into `psql`, one row per region
    file, the raster chunked into 256×256 tiles inside the table.
 4. **Finalize.** `ANALYZE`, then `elevation_catalog.status = COMPLETED` with the

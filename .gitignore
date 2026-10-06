@@ -196,8 +196,11 @@ apps/web/.build_number
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk
 
-# Overture ingestion scratch (venv + downloaded extracts)
-out/overture/
+# The elevation rasters infra/geo ingests into the database.
+infra/geo/source/
+
+# dev:local's demand bakes and decode_tile's checks.
+cache/
 
 # A bake set kept beside the current one while the new one is made: `out` is
 # already ignored, and this is the same thing with a number on it.

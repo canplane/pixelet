@@ -32,11 +32,11 @@ const FINE_SUBTYPE_PRIORITY: [&str; 4] = ["locality", "neighborhood", "microhood
 macro_rules! division_names {
     ($t:literal) => {
         concat!(
-            "(SELECT jsonb_object_agg(e->>0, e->>1) FROM jsonb_array_elements(CASE jsonb_typeof(",
+            "(SELECT jsonb_object_agg(key, value) FROM jsonb_each(CASE jsonb_typeof(",
             $t,
-            ".properties->'names'->'common') WHEN 'array' THEN ",
+            ".properties->'names'->'common') WHEN 'object' THEN ",
             $t,
-            ".properties->'names'->'common' END) e WHERE jsonb_typeof(e->0) = 'string' AND jsonb_typeof(e->1) = 'string' AND e->>0 IN ('en', 'ko') AND e->>1 <> '')"
+            ".properties->'names'->'common' END) WHERE jsonb_typeof(value) = 'string' AND key IN ('en', 'ko') AND value #>> '{}' <> '')"
         )
     };
 }
