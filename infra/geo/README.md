@@ -66,7 +66,7 @@ made from.
 A public S3 release — no key, no portal step. The ingest reaches it through
 Overture's official `overturemaps` CLI, installed on first use into
 `cache/overture/.venv`: it downloads a type's GeoParquet over every shard at once, a little wider
-since its bbox test is strict, to `cache/overture/<type>.parquet`, kept until
+since its bbox test is strict, to `overture/raw/<type>.parquet`, kept until
 the release changes; the ingest then puts each feature in its shard.
 
 ### GEDTM30 v1.2 (OpenGeoHub / OpenLandMap)
@@ -84,7 +84,7 @@ It is a bare-earth DTM: ground elevation carries no building or canopy height.
 The coast as OSM's land, split into small polygons and already in EPSG:3857,
 one zip for the world (about 1 GB), ODbL. A coast is never taken in part, so
 the table holds the world's, whatever shards are ingested. The zip is kept in
-`cache/coastline/` and fetched again only when osmdata publishes a newer one.
+`coastline/raw/` and fetched again only when osmdata publishes a newer one.
 
 ## 2. Prerequisites (macOS)
 

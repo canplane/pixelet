@@ -19,7 +19,7 @@ serde_json = "1"
 //! (`pxl-geo-bake coverage.rs`); what it holds depends on it alone, so shards
 //! ingested one by one are the shards ingested together. The official
 //! `overturemaps` CLI downloads a type's GeoParquet over every shard, kept
-//! under `cache/` until the release changes; the type's shards are then
+//! in `raw/` until the release changes; the type's shards are then
 //! written in one transaction, their catalog rows with them. A column a reader filters on is generated from
 //! `properties`.
 //!
@@ -101,9 +101,10 @@ const TYPES: &[Type] = &[
     Type { overture: "water", table: "overture_base_water", columns: &[SUBTYPE, CLASS], indexes: &["class"] },
 ];
 
-/// The official CLI and what it downloads: regenerable, so under `cache/`.
+/// The official CLI, a tool regenerable under `cache/`, and what it downloads,
+/// the source, kept beside this script.
 const VENV: &str = "./cache/overture/.venv";
-const EXTRACTS: &str = "./cache/overture";
+const EXTRACTS: &str = "./infra/geo/overture/raw";
 
 const BATCH: usize = 300;
 
