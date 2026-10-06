@@ -11,10 +11,11 @@ database that is expensive to rebuild.
 
 > **The database is filled a shard at a time, and a shard is whole or absent.**
 > A shard is a z8 tile (`SHARD_ZOOM`), named by its Morton key, its edges in
-> EPSG:3857 meters rounded half to even. A feature is a row in the one shard
-> holding its bbox's lower corner, the bbox its vertices' extremes in meters,
-> rounded the same way; a shard is half open, so a corner on an edge is the
-> next shard's.
+> EPSG:3857 meters rounded half to even. A shard holds every feature whose
+> bbox, its vertices' extremes in meters, meets the shard grown by `EPS_M`; a
+> feature over an edge is a row in each shard, so a reader keeps one row a
+> `gers_id`. The ocean is no shard's: Overture's `ocean` water is taken whole,
+> worldwide, in the root node (`pxl-geo-bake coverage.rs`, `WHOLE`).
 > What a shard holds depends on the shard alone, so shards ingested one by one
 > are the shards ingested together. Each ingest replaces a shard's rows before
 > it writes them, and writes the shard's catalog row last; a run stopped

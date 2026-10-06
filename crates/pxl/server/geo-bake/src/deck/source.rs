@@ -8,8 +8,8 @@ use std::path::Path;
 
 use postgres::types::ToSql;
 use pxl_spec::bake::format::GroundCell;
-use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::coord::adapter::epsg3857;
+use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 
 use crate::segment::Segment;
 use crate::terrain::bake::Surface;
@@ -21,7 +21,7 @@ use crate::util::{pack, unpack, write_atomic, Level};
 pub const READS: [&str; 2] = ["FROM overture_transportation", "FROM overture_base_water"];
 
 const SEGMENTS_SQL: &str = concat!(
-    "SELECT ",
+    "SELECT DISTINCT ON (t.gers_id) ",
     crate::segment_columns!(),
     " FROM overture_transportation t WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)"
 );
@@ -62,7 +62,7 @@ fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: IVec) -> Resul
     let ways = read(client, SEGMENTS_SQL)?;
     let water = read(
         client,
-        "SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_water WHERE subtype <> 'ocean' AND geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)",
+        "SELECT DISTINCT ON (gers_id) subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_water WHERE subtype <> 'ocean' AND geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)",
     )?;
     // the paint of its ways is no matter to the ground's height, so none is drawn
     let (surface, _) = fetch_surface(repo, client, tile, &[])?;

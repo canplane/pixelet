@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::space::coord::adapter::epsg3857::{to_db, BBox3857};
+use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, BBox3857};
 
 use crate::elevation::Raster;
 use crate::segment::Segment;
@@ -16,7 +16,7 @@ use crate::terrain::pipeline::overture::width::carto_u;
 const OVERTURE_BUILDINGS_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, class, subtype, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb
+SELECT DISTINCT ON (gers_id) gers_id, class, subtype, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb
 FROM overture_buildings, env
 WHERE geom && env.e";
 
@@ -24,7 +24,7 @@ const OVERTURE_TRANSPORTATION_SQL: &str = concat!(
     "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT ",
+SELECT DISTINCT ON (t.gers_id) ",
     crate::segment_columns!(),
     "
 FROM overture_transportation t, env
@@ -37,7 +37,7 @@ pub const DRAWN_REACH_U: f64 = carto_u(WIDEST_LINE) / 2.0;
 /// A tile's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
 /// is baked is still the tile's own cells.
 pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
-    let r = to_db(DRAWN_REACH_U);
+    let r = mer_from_u(DRAWN_REACH_U);
     [[min[0] - r, min[1] - r, min[2]], [max[0] + r, max[1] + r, max[2]]]
 }
 
@@ -45,18 +45,18 @@ pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
 const OVERTURE_BASE_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT 'land_use' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land_use, env WHERE geom && env.e
+SELECT DISTINCT ON (gers_id) 'land_use' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land_use, env WHERE geom && env.e
 UNION ALL
 -- Some water rows are country-scale (up to 444,626 points); clip to the tile envelope first. ST_IsEmpty guards && 's bbox-only false positives.
 SELECT 'water' AS source, gers_id, subtype, class, way_area, ST_AsBinary(clipped) AS geom_wkb FROM (
-  SELECT gers_id, subtype, class, ST_Area(geom) AS way_area, ST_Intersection(geom, env.e) AS clipped
+  SELECT DISTINCT ON (gers_id) gers_id, subtype, class, ST_Area(geom) AS way_area, ST_Intersection(geom, env.e) AS clipped
   FROM overture_base_water, env
   WHERE geom && env.e
 ) w WHERE NOT ST_IsEmpty(clipped)
 UNION ALL
-SELECT 'land' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land, env WHERE geom && env.e
+SELECT DISTINCT ON (gers_id) 'land' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land, env WHERE geom && env.e
 UNION ALL
-SELECT 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class = ANY($5)";
+SELECT DISTINCT ON (gers_id) 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class = ANY($5)";
 
 /// Overture's ocean polygons inverted into a land polygon for the tile: empty
 /// means pure ocean, the whole envelope means all land, both dropped.

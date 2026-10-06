@@ -6,10 +6,10 @@ use crate::coverage::Coverage;
 use postgres::Client;
 use pxl_geo_spec::overture::properties::{category_named, CATEGORY_SQL};
 use pxl_spec::bake::poi_tile::{self, kind_of, Place, PoiTile, POI_LATTICE};
-use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::LEAF_Z;
+use pxl_spec::space::coord::adapter::epsg3857;
+use pxl_spec::space::coord::pvf3::ivec::IVec;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 impl crate::pyramid::Layer for PoiTile {
     fn encode(&self) -> Result<Vec<u8>, String> {
@@ -21,7 +21,7 @@ impl crate::pyramid::Layer for PoiTile {
     }
 }
 
-const PLACES_SQL: &str = "SELECT ST_X(geom), ST_Y(geom), name, {category}, gers_id FROM overture_places";
+const PLACES_SQL: &str = "SELECT DISTINCT ON (gers_id) ST_X(geom), ST_Y(geom), name, {category}, gers_id FROM overture_places";
 
 /// Every statement the POI bake runs, for the catalog check.
 pub const READS: [&str; 2] = [PLACES_SQL, CATEGORY_SQL];
@@ -41,7 +41,7 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
     let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8, String)>> = BTreeMap::new();
     for row in rows {
         let at = epsg3857::project(row.get(0), row.get(1), 0.0);
-        let leaf = POI_LATTICE.cell_of(LEAF_Z, &at).tile();
+        let leaf = POI_LATTICE.cell_of(LEAF_ZOOM, &at).tile();
         if within.is_some_and(|w| leaf.tile != w) || !coverage.contains(leaf.tile) {
             continue;
         }
@@ -54,7 +54,7 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
             (
                 tile,
                 PoiTile::of_places(
-                    LEAF_Z,
+                    LEAF_ZOOM,
                     p.iter().map(|(at, name, kind, id)| {
                         (
                             *at,

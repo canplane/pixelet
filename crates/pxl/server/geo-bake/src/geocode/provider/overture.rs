@@ -6,14 +6,14 @@
 use postgres::{Client, Row, Statement};
 use pxl_geo_spec::overture::division::{self, rank_of, Division, CONTAINING_SQL, NEAREST_POINT_SQL};
 use pxl_spec::bake::place_tile::{leaf_slot, Named, PlaceGroup, APPROX, GROUP_TILES, LOCAL, NO_LABEL};
-use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::coord::adapter::epsg3857;
+use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 
 use crate::geocode::{PartSource, PlaceDict};
 
 /// A stable order: a resumed bake must number places the same way.
 const ALL_DIVISIONS_SQL: &str = concat!(
-    "SELECT gers_id, subtype, name, ",
+    "SELECT DISTINCT ON (gers_id) gers_id, subtype, name, ",
     pxl_geo_spec::division_names!("overture_divisions"),
     " AS names_common
 FROM overture_divisions

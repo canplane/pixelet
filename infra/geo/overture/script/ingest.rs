@@ -35,7 +35,7 @@ use arrow::datatypes::{DataType, Float64Type, Int64Type, UInt64Type};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use postgres::types::ToSql;
 use postgres::{Client, NoTls, Transaction};
-use pxl_geo_bake::coverage::{Coverage, Node};
+use pxl_geo_bake::coverage::{Coverage, Node, ROOT, WHOLE};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::world::REACH;
 use serde_json::{Map, Number, Value};
@@ -58,7 +58,6 @@ const TYPES: &[Type] = &[
     Type { overture: "bathymetry", table: "overture_base_bathymetry", columns: &[SUBTYPE, CLASS], indexes: &[] },
     Type {
         overture: "building",
-       
         table: "overture_buildings",
         columns: &[
             SUBTYPE,
@@ -74,14 +73,12 @@ const TYPES: &[Type] = &[
     Type { overture: "division_boundary", table: "overture_division_boundaries", columns: &[], indexes: &[] },
     Type {
         overture: "place",
-       
         table: "overture_places",
         columns: &[("name", "TEXT NOT NULL GENERATED ALWAYS AS (COALESCE(properties->'names'->>'primary', '')) STORED")],
         indexes: &["USING GIN (properties)", "USING GIN (name gin_trgm_ops)"],
     },
     Type {
         overture: "segment",
-       
         table: "overture_transportation",
         columns: &[
             SUBTYPE,
@@ -104,17 +101,17 @@ const TYPES: &[Type] = &[
     Type { overture: "water", table: "overture_base_water", columns: &[SUBTYPE, CLASS], indexes: &["class"] },
 ];
 
-
-
 /// The official CLI and what it downloads: regenerable, so under `cache/`.
 const VENV: &str = "./cache/overture/.venv";
 const EXTRACTS: &str = "./cache/overture";
 
 const BATCH: usize = 300;
 
-/// The CLI's bbox test is strict, so the shards are asked for this much wider
-/// and each feature cut to its shard here.
+/// The CLI's bbox test is strict, so the shards are asked for this much wider.
 const SLACK_DEG: f64 = 1e-4;
+
+/// A shard's edges are taken this far out, in meters, so a feature on one is in both.
+const EPS_M: f64 = 1.0;
 
 /// id, properties, geometry, shard.
 type Row = (String, String, Vec<u8>, String);
@@ -150,15 +147,16 @@ fn run() -> Result<(), String> {
             .iter()
             .map(|r| r.get(0))
             .collect();
-        let to_do: Vec<&Shard> = shards.iter().filter(|s| !done.contains(&s.name)).collect();
+        let whole = ty.overture == WHOLE.overture;
+        let to_do: Vec<String> = shards.iter().map(|s| s.name.clone()).chain(whole.then(|| ROOT.to_string())).filter(|n| !done.contains(n)).collect();
         if to_do.is_empty() {
             println!("[ingest/{}] every shard already release {release}", ty.table);
             continue;
         }
         let started = std::time::Instant::now();
-        let extract = download(&cli, ty, &shards, &release)?;
+        let extract = download(&cli, ty, &shards, whole, &release)?;
         let mut tx = client.transaction().map_err(|e| e.to_string())?;
-        let rows = ingest(&mut tx, ty, &shards, &to_do, &extract, &release)?;
+        let rows = ingest(&mut tx, ty, &shards, whole, &to_do, &extract, &release)?;
         tx.commit().map_err(|e| e.to_string())?;
         client.batch_execute(&format!("ANALYZE {}", ty.table)).map_err(|e| e.to_string())?;
         println!("[ingest/{}] {rows} rows in {} shards in {:.0}s", ty.table, to_do.len(), started.elapsed().as_secs_f64());
@@ -184,27 +182,27 @@ fn keyed_by_shard(client: &mut Client, table: &str, id: &str) -> Result<(), Stri
     Ok(())
 }
 
-/// One type's extract over every shard, downloaded unless it is already this
-/// release: one call a type, since a feature's shard is the feature's alone.
-fn download(cli: &Path, ty: &Type, shards: &[Shard], release: &str) -> Result<PathBuf, String> {
+/// One type's extract over every shard, or the world's for a type taken whole,
+/// downloaded unless it is already this release: one call a type.
+fn download(cli: &Path, ty: &Type, shards: &[Shard], whole: bool, release: &str) -> Result<PathBuf, String> {
     std::fs::create_dir_all(EXTRACTS).map_err(|e| e.to_string())?;
     let extract = Path::new(EXTRACTS).join(format!("{}.parquet", ty.overture));
     let [w, s, e, n] = shards.iter().fold([f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY], |b, sh| {
         [b[0].min(sh.deg[0]), b[1].min(sh.deg[1]), b[2].max(sh.deg[2]), b[3].max(sh.deg[3])]
     });
-    let bbox = format!("{},{},{},{}", w - SLACK_DEG, s - SLACK_DEG, e + SLACK_DEG, n + SLACK_DEG);
-    if !is_current(&extract, ty.overture, &bbox, release) {
-        let args = ["download", &format!("--bbox={bbox}"), "-f", "geoparquet", &format!("--type={}", ty.overture), &format!("--release={release}"), "-o", &extract.to_string_lossy()];
-        run_cmd(cli, &args)?;
+    let bbox = if whole { None } else { Some(format!("{},{},{},{}", w - SLACK_DEG, s - SLACK_DEG, e + SLACK_DEG, n + SLACK_DEG)) };
+    if !is_current(&extract, ty.overture, bbox.as_deref(), release) {
+        let mut args = vec!["download".to_string(), "-f".into(), "geoparquet".into(), format!("--type={}", ty.overture), format!("--release={release}"), "-o".into(), extract.to_string_lossy().into()];
+        args.extend(bbox.map(|b| format!("--bbox={b}")));
+        run_cmd(cli, &args.iter().map(String::as_str).collect::<Vec<_>>())?;
     }
     Ok(extract)
 }
 
-/// The shards `to_do` of one type, replacing what they held, their catalog
+/// The nodes `names` of one type, replacing what they held, their catalog
 /// rows with them. A feature with no id or geometry fails the run rather than
 /// being dropped.
-fn ingest(tx: &mut Transaction, ty: &Type, shards: &[Shard], to_do: &[&Shard], extract: &Path, release: &str) -> Result<i64, String> {
-    let names: Vec<String> = to_do.iter().map(|s| s.name.clone()).collect();
+fn ingest(tx: &mut Transaction, ty: &Type, shards: &[Shard], whole: bool, names: &[String], extract: &Path, release: &str) -> Result<i64, String> {
     tx.execute("DELETE FROM overture_catalog WHERE file_name = $1 AND node = ANY($2)", &[&ty.table, &names]).map_err(|e| e.to_string())?;
     tx.execute(&format!("DELETE FROM {} WHERE node = ANY($1)", ty.table), &[&names]).map_err(|e| e.to_string())?;
     let file = std::fs::File::open(extract).map_err(|e| format!("{}: {e}", extract.display()))?;
@@ -212,7 +210,7 @@ fn ingest(tx: &mut Transaction, ty: &Type, shards: &[Shard], to_do: &[&Shard], e
     let mut counts: HashMap<String, i64> = HashMap::new();
     let mut batch: Vec<Row> = Vec::with_capacity(BATCH);
     for group in reader {
-        for row in rows(&group.map_err(|e| e.to_string())?, shards)? {
+        for row in rows(&group.map_err(|e| e.to_string())?, shards, whole)? {
             if !names.contains(&row.3) {
                 continue;
             }
@@ -224,14 +222,13 @@ fn ingest(tx: &mut Transaction, ty: &Type, shards: &[Shard], to_do: &[&Shard], e
         }
     }
     flush(tx, ty.table, &mut batch)?;
-    for name in &names {
+    for name in names {
         let count = counts.get(name).copied().unwrap_or(0);
         tx.execute("INSERT INTO overture_catalog (file_name, node, data_date, total_count) VALUES ($1, $2, $3, $4)", &[&ty.table, name, &release, &count])
             .map_err(|e| e.to_string())?;
     }
     Ok(counts.values().sum())
 }
-
 
 /// A shard as a feature is tested against: its edges in EPSG:3857 meters, each
 /// rounded half to even, `[left, bottom, right, top]`, the right and top
@@ -252,11 +249,10 @@ impl Shard {
     }
 
     /// Whether a feature whose vertices span `[lo_x, lo_y, hi_x, hi_y]` in
-    /// meters is the shard's: its lower corner lies in it, half open, so every
-    /// feature is one shard's.
-    fn holds(&self, [lo_x, lo_y, _, _]: [f64; 4]) -> bool {
+    /// meters lies in the shard grown by `EPS_M`.
+    fn meets(&self, [lo_x, lo_y, hi_x, hi_y]: [f64; 4]) -> bool {
         let [left, bottom, right, top] = self.m;
-        (left..right).contains(&lo_x) && (bottom..top).contains(&lo_y)
+        lo_x <= right + EPS_M && hi_x >= left - EPS_M && lo_y <= top + EPS_M && hi_y >= bottom - EPS_M
     }
 }
 
@@ -325,11 +321,16 @@ fn vertices(b: &[u8], at: &mut usize, each: &mut dyn FnMut(f64, f64)) -> Result<
     }
 }
 
-
 /// Each feature with the shard of `shards` holding it; one none holds is past them. The properties are every column but the
 /// id, the geometry and the bbox, a null one left out; the geometry is the
 /// release's WKB, its doubles as written.
-fn rows(group: &RecordBatch, shards: &[Shard]) -> Result<Vec<Row>, String> {
+fn rows(group: &RecordBatch, shards: &[Shard], whole: bool) -> Result<Vec<Row>, String> {
+    let subtype = match (whole, group.column_by_name("subtype")) {
+        (true, Some(c)) => Some(cast(c, &DataType::Utf8).map_err(|e| e.to_string())?),
+        (true, None) => return Err(format!("{}: no subtype column", WHOLE.overture)),
+        (false, _) => None,
+    };
+    let subtype = subtype.as_ref().map(|c| c.as_string::<i32>());
     let id = cast(group.column_by_name("id").ok_or("no id column")?, &DataType::Utf8).map_err(|e| e.to_string())?;
     let id = id.as_string::<i32>();
     let geometry = cast(group.column_by_name("geometry").ok_or("no geometry column")?, &DataType::LargeBinary).map_err(|e| e.to_string())?;
@@ -341,17 +342,25 @@ fn rows(group: &RecordBatch, shards: &[Shard]) -> Result<Vec<Row>, String> {
         if id.is_null(i) || geometry.is_null(i) {
             return Err(format!("{}: a feature with no id or geometry", if id.is_null(i) { "?" } else { id.value(i) }));
         }
-        let span = span_m(geometry.value(i)).map_err(|e| format!("{}: {e}", id.value(i)))?;
-        let Some(shard) = shards.iter().find(|s| s.holds(span)) else {
-            continue;
+        let nodes: Vec<&str> = if subtype.is_some_and(|s| !s.is_null(i) && s.value(i) == WHOLE.subtype) {
+            vec![ROOT]
+        } else {
+            let span = span_m(geometry.value(i)).map_err(|e| format!("{}: {e}", id.value(i)))?;
+            shards.iter().filter(|s| s.meets(span)).map(|s| s.name.as_str()).collect()
         };
+        if nodes.is_empty() {
+            continue;
+        }
         let mut object = Map::new();
         for (field, column) in &properties {
             if !column.is_null(i) {
                 object.insert(field.name().clone(), json(column.as_ref(), i)?);
             }
         }
-        out.push((id.value(i).to_string(), Value::Object(object).to_string(), geometry.value(i).to_vec(), shard.name.clone()));
+        let properties = Value::Object(object).to_string();
+        for node in nodes {
+            out.push((id.value(i).to_string(), properties.clone(), geometry.value(i).to_vec(), node.to_string()));
+        }
     }
     Ok(out)
 }
@@ -458,7 +467,6 @@ fn schema(ty: &Type) -> String {
     sql
 }
 
-
 fn run_cmd(cmd: &Path, args: &[&str]) -> Result<(), String> {
     let status = Command::new(cmd).args(args).status().map_err(|e| format!("{}: {e}", cmd.display()))?;
     if !status.success() {
@@ -492,7 +500,7 @@ fn release(cli: &Path) -> Result<String, String> {
 }
 /// By the state the CLI writes when a download finishes; a stopped download
 /// leaves the old state beside a truncated file, so it counts only if newer.
-fn is_current(extract: &Path, overture_type: &str, bbox: &str, release: &str) -> bool {
+fn is_current(extract: &Path, overture_type: &str, bbox: Option<&str>, release: &str) -> bool {
     let state_path = PathBuf::from(format!("{}.state", extract.display()));
     let (Ok(extract_meta), Ok(state_meta)) = (std::fs::metadata(extract), std::fs::metadata(&state_path)) else {
         return false;
@@ -503,9 +511,9 @@ fn is_current(extract: &Path, overture_type: &str, bbox: &str, release: &str) ->
     let Some(state) = std::fs::read_to_string(&state_path).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else {
         return false;
     };
-    let want: Vec<f64> = bbox.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+    let want: Vec<f64> = bbox.map_or(Vec::new(), |b| b.split(',').filter_map(|v| v.trim().parse().ok()).collect());
     let have: Vec<f64> = ["xmin", "ymin", "xmax", "ymax"].iter().filter_map(|k| state["bbox"][k].as_f64()).collect();
-    state["last_release"] == release && state["type"] == overture_type && want.len() == 4 && want == have
+    state["last_release"] == release && state["type"] == overture_type && want == have
 }
 
 /// `DB_GEO_URL` from the environment, or `.env` with its `${...}` expanded.

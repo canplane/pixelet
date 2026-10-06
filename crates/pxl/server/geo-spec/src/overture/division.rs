@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use pxl_spec::place::{PlacePart, PlaceRank};
-use pxl_spec::space::adapter::epsg3857::{from_db, to_db, u_per_m};
+use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, u_from_mer, u_per_m};
 
 /// The three sub-city subtypes share a rung because Overture does not
 /// guarantee they nest.
@@ -62,13 +62,13 @@ pub const NEAREST_REACH_M: f64 = 2048.0;
 
 /// [`NEAREST_REACH_M`] at the DB's `y`, in the DB's coordinates.
 pub fn reach_at(y: f64) -> f64 {
-    to_db(NEAREST_REACH_M * u_per_m(from_db(y)))
+    mer_from_u(NEAREST_REACH_M * u_per_m(u_from_mer(y)))
 }
 
 /// Every division containing each of a batch of points: `$1`/`$2` are
 /// EPSG:3857 metres, `idx` counts the points from 1.
 pub const CONTAINING_SQL: &str = concat!(
-    "SELECT p.idx, d.gers_id, d.subtype, d.name, ",
+    "SELECT DISTINCT ON (p.idx, d.gers_id) p.idx, d.gers_id, d.subtype, d.name, ",
     division_names!("d"),
     " AS names_common
 FROM unnest($1::float8[], $2::float8[]) WITH ORDINALITY AS p(x, y, idx)

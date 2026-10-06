@@ -22,8 +22,7 @@ macro_rules! places_matching {
         "SELECT gers_id, name, properties,
   ST_X(geom) AS x3857, ST_Y(geom) AS y3857,
   ST_X(ST_Transform(geom, 4326)) AS lon, ST_Y(ST_Transform(geom, 4326)) AS lat
-FROM overture_places
-WHERE name <> '' AND name ILIKE '%' || $1 || '%'
+FROM (SELECT DISTINCT ON (gers_id) * FROM overture_places WHERE name <> '' AND name ILIKE '%' || $1 || '%') overture_places
 "
     };
 }
@@ -45,7 +44,7 @@ LIMIT $2"
 const DIVISION_SEARCH_SQL: &str = concat!(
     "
 (
-  SELECT gers_id, name, subtype, ",
+  SELECT DISTINCT ON (gers_id) gers_id, name, subtype, ",
     pxl_geo_spec::division_names!("overture_divisions"),
     " AS names_common, 0 AS is_point, similarity(name, $1) AS sim,
     ST_X(ST_Centroid(geom)) AS x3857, ST_Y(ST_Centroid(geom)) AS y3857,
@@ -58,7 +57,7 @@ const DIVISION_SEARCH_SQL: &str = concat!(
 )
 UNION ALL
 (
-  SELECT gers_id, name, subtype, ",
+  SELECT DISTINCT ON (gers_id) gers_id, name, subtype, ",
     pxl_geo_spec::division_names!("overture_division_points"),
     " AS names_common, 1 AS is_point, similarity(name, $1) AS sim,
     ST_X(geom) AS x3857, ST_Y(geom) AS y3857,
