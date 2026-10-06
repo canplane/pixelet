@@ -20,7 +20,7 @@ import { SYSTEM_CLEAR } from "@platform/text-field.ts";
 import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
+import { CATEGORY_BADGE, DEFAULT_BADGE } from "./poi_badge.spec.ts";
 import { assembleLabel, localName, primaryLanguage } from "@/feature/map/geocode/label.ts";
 import { useCenterCoordinates, usePlaceLabel } from "@/feature/map/geocode/center.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
@@ -259,3 +259,18 @@ const styles = StyleSheet.create({
   badge: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   badgeIcon: { fontSize: textStyle.footnote.fontSize },
 });
+
+/**
+ * Category -> badge for a search result, DEFAULT_BADGE for anything unlisted.
+ * Emoji, not glyphs: a thin stroked icon at this size read far worse
+ * (tried and reverted 2026-09-08).
+ */
+
+interface PoiBadge {
+  icon: string;
+  color: string;
+}
+
+function resolvePoiBadge(category: string): PoiBadge {
+  return (CATEGORY_BADGE as Record<string, PoiBadge>)[category] ?? DEFAULT_BADGE;
+}
