@@ -661,38 +661,18 @@ fn rs(spec: &Spec, t: &Target) -> Result<String, String> {
             "",
             "// A list a record carries is a function handing out its items, whose",
             "// type is long to spell and is spelled once, here, for each. A table",
-            "// with no signal or no enum read off the wire leaves a writer or",
-            "// `unknown` unused.",
+            "// with no signal or no enum read off the wire leaves a writer or a",
+            "// number's check unused.",
             "#![allow(non_camel_case_types, clippy::type_complexity, unused_imports, dead_code)]",
             "",
             "use core::fmt::Display;",
             "",
-            "use xpute_core::status::errno::Errno;",
             "use xpute_core::status::error::MarshalError;",
             "use xpute_core::wire::xtp::{PacketWriter, TreeReader};",
-            "",
-            "/// A number an enum does not give out, where the enum has no member it reads as.",
-            "#[track_caller]",
-            "fn unknown() -> MarshalError {",
-            "    MarshalError::new(Errno::EINVAL)",
-            "}",
-            "",
-            "/// A number the shell sends is checked here, so nothing past the door",
-            "/// meets a NaN, an infinity or an integer cast into range.",
-            "#[track_caller]",
-            "fn finite(n: f64) -> Result<f64, MarshalError> {",
-            "    if n.is_finite() { Ok(n) } else { Err(unknown()) }",
-            "}",
-            "",
-            "/// A whole number the type holds, never one cast into it.",
-            "#[track_caller]",
-            "fn integer<T: TryFrom<i64>>(n: f64) -> Result<T, MarshalError> {",
-            "    let whole = finite(n)? == n.trunc() && n.abs() <= (1u64 << f64::MANTISSA_DIGITS) as f64;",
-            "    if whole { T::try_from(n as i64).map_err(|_| unknown()) } else { Err(unknown()) }",
-            "}",
         ]
         .map(String::from),
     );
+    out.push(format!("use {}::{{finite, integer, unknown}};", t.number));
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();
         out.push(String::new());
@@ -845,6 +825,8 @@ struct Target {
     ts_logical: &'static str,
     rs_dir: &'static str,
     rs_logical: &'static str,
+    /// Where the number checks a packet's reader calls are.
+    number: &'static str,
     cpp: Option<(&'static str, &'static str)>,
 }
 
@@ -855,6 +837,7 @@ const TARGETS: [Target; 2] = [
         ts_logical: "@xpute/runtime/abi/cmd.spec.ts",
         rs_dir: "xpute/crates/runtime/src/abi",
         rs_logical: "xpute-runtime/abi",
+        number: "crate::abi::number",
         cpp: Some(("xpute/cpp/runtime/abi/cmd.spec.hpp", "xpute::abi")),
     },
     Target {
@@ -863,6 +846,7 @@ const TARGETS: [Target; 2] = [
         ts_logical: "@pxl/web/kernel/abi/cmd.spec.ts",
         rs_dir: "crates/client/kernel/src/abi",
         rs_logical: "pxl-kernel/abi",
+        number: "xpute_runtime::abi::number",
         cpp: None,
     },
 ];

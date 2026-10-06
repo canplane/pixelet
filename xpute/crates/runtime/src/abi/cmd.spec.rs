@@ -13,43 +13,15 @@
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
-// with no signal or no enum read off the wire leaves a writer or
-// `unknown` unused.
+// with no signal or no enum read off the wire leaves a writer or a
+// number's check unused.
 #![allow(non_camel_case_types, clippy::type_complexity, unused_imports, dead_code)]
 
 use core::fmt::Display;
 
-use xpute_core::status::errno::Errno;
+use crate::abi::number::{finite, integer, unknown};
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{PacketWriter, TreeReader};
-
-/// A number an enum does not give out, where the enum has no member it reads as.
-#[track_caller]
-fn unknown() -> MarshalError {
-    MarshalError::new(Errno::EINVAL)
-}
-
-/// A number the shell sends is checked here, so nothing past the door
-/// meets a NaN, an infinity or an integer cast into range.
-#[track_caller]
-fn finite(n: f64) -> Result<f64, MarshalError> {
-    if n.is_finite() {
-        Ok(n)
-    } else {
-        Err(unknown())
-    }
-}
-
-/// A whole number the type holds, never one cast into it.
-#[track_caller]
-fn integer<T: TryFrom<i64>>(n: f64) -> Result<T, MarshalError> {
-    let whole = finite(n)? == n.trunc() && n.abs() <= (1u64 << f64::MANTISSA_DIGITS) as f64;
-    if whole {
-        T::try_from(n as i64).map_err(|_| unknown())
-    } else {
-        Err(unknown())
-    }
-}
 
 /// What a command is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
