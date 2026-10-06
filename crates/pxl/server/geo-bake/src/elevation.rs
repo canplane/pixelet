@@ -9,10 +9,11 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 
 use crate::coverage::Coverage;
+use crate::terrain::CELL_U;
 use postgres::Client;
-use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN, U_PER_CELL};
+use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use pxl_spec::space::coord::adapter::epsg3857::BBox3857;
-use pxl_spec::space::coord::adapter::epsg3857::{from_db, u_per_m};
+use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, u_per_m};
 use xpute_core::math::scalar::round;
 
 const HELD: usize = 512;
@@ -212,7 +213,7 @@ impl Raster {
             y: y_axis,
         };
 
-        let cell_per_m = u_per_m(from_db(min[1])) / U_PER_CELL;
+        let cell_per_m = u_per_m(u_from_mer(min[1])) / CELL_U;
         let mut grid = vec![0i16; span * span];
         // The tile's grid from the warp's: an offset either way, since the
         // raster can start inside the padded tile at the coverage's edge.

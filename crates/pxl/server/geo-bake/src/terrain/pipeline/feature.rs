@@ -2,9 +2,9 @@
 
 //! What the ground paints: a shape in the tile's cells and the cell it paints.
 
-use pxl_spec::bake::constant::U_PER_CELL;
+use crate::terrain::CELL_U;
 use pxl_spec::bake::format::GroundCell;
-use pxl_spec::space::coord::adapter::epsg3857::{from_db, G3857};
+use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, G3857};
 use xpute_core::math::scalar::round;
 
 use crate::wkb::WkbGeometry;
@@ -73,7 +73,7 @@ pub struct Feature {
 
 /// In the tile's cells from its corner.
 pub fn local(p: G3857, tile_min: G3857) -> P {
-    [from_db(p[0] - tile_min[0]) / U_PER_CELL, from_db(p[1] - tile_min[1]) / U_PER_CELL]
+    [u_from_mer(p[0] - tile_min[0]) / CELL_U, u_from_mer(p[1] - tile_min[1]) / CELL_U]
 }
 
 /// A polygon, or a ring whose ends meet within a tenth of the DB's unit, is an area.

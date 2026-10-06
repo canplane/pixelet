@@ -3,8 +3,8 @@
 //! Overture's linear referencing: a rule holds over a `between` range of a
 //! segment, or the whole of it.
 
-use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::adapter::epsg3857::{to_db, G3857};
+use crate::terrain::CELL_U;
+use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, G3857};
 use serde_json::Value;
 
 pub type Range = [f64; 2];
@@ -21,7 +21,7 @@ fn range_of(rule: &Value) -> Option<Range> {
 /// What a ground cell spans of a way `length` long in DB coordinates: a gap
 /// in a flag shorter than that shows on no cell, so the ranges either side are one.
 pub fn cell_of(length: f64) -> f64 {
-    to_db(U_PER_CELL) / length.max(f64::EPSILON)
+    mer_from_u(CELL_U) / length.max(f64::EPSILON)
 }
 
 /// A column's rules, parsed once: each the range it holds over, and itself.

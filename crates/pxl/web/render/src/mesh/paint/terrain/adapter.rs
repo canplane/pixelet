@@ -6,7 +6,6 @@
 //! their own; a bore or a cutting takes the air over its floor out of the
 //! column.
 
-use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::deck::{Decks, Occupies, Over};
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::cell::color;
@@ -14,9 +13,9 @@ use pxl_spec::cell::cube_types::{ground, sentinel, Ground};
 use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::cell::Kind;
 use pxl_spec::procedural::{pier_stands, Frame};
-use pxl_spec::space::adapter::epsg3857::u_per_m;
-use pxl_spec::space::hierarchy::{ancestor_of, offset_in};
-use pxl_spec::space::pyramid::{GROUND, TILE_CELLS};
+use pxl_spec::space::coord::adapter::epsg3857::u_per_m;
+use pxl_spec::space::hierarchy::tree::{ancestor_of, offset_in};
+use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 
 use crate::mesh::paint::palette::rgb255;
 use crate::mesh::paint::palette::LAYER_IDX;
@@ -250,7 +249,7 @@ impl ChunkSample {
     fn read_decks(&mut self, around: &Around, first: [i64; 2]) -> Result<(), Refused> {
         let mut over = core::mem::take(&mut self.over);
         over.clear();
-        let cell_per_m = u_per_m(around.own.frame.corner[1]) / U_PER_CELL;
+        let per_m = u_per_m(around.own.frame.corner[1]);
         let corner = first.map(|v| v - APRON as i64);
         // A column with no tile beside is read from the chunk's own, as its height is.
         let beside = |[qx, qy]: [i64; 2]| if (qx, qy) == (0, 0) { None } else { around.beside[beside_index(qx, qy)].as_ref() };
@@ -263,12 +262,12 @@ impl ChunkSample {
                 }
             }
         }
-        let built = built.and_then(|()| self.spans_of(&mut over, cell_per_m));
+        let built = built.and_then(|()| self.spans_of(&mut over, per_m));
         self.over = over;
         built
     }
 
-    fn spans_of(&mut self, over: &mut Vec<(usize, usize, Over)>, cell_per_m: f64) -> Result<(), Refused> {
+    fn spans_of(&mut self, over: &mut Vec<(usize, usize, Over)>, per_m: f64) -> Result<(), Refused> {
         let tables = &*MATERIALS;
         // A line over a column is all its segments sweep there; a station is one segment's,
         // so the pier is either's.
@@ -293,7 +292,7 @@ impl ChunkSample {
                 i += 1;
                 let Some((slab, slab_layer)) = tables.of(o.kind) else { continue };
                 let ground = self.ele[col];
-                let (slab_at, pier_at) = match o.occupies(ground, cell_per_m) {
+                let (slab_at, pier_at) = match o.occupies(ground, per_m) {
                     Occupies::Grade => {
                         (self.material[col], self.layer_idx[col]) = (slab, slab_layer);
                         continue;
@@ -321,7 +320,7 @@ impl ChunkSample {
                     },
                 )?;
                 let column = over[col_from..].iter().take_while(|c| c.0 == col).map(|c| c.2);
-                if let (Some([lo, hi]), Some((pier, pier_layer))) = (pier_at.and_then(|p| pier_stands(p, self.look[col], column, ground, cell_per_m)), tables.of(PIER)) {
+                if let (Some([lo, hi]), Some((pier, pier_layer))) = (pier_at.and_then(|p| pier_stands(p, self.look[col], column, ground, per_m)), tables.of(PIER)) {
                     try_push(
                         &mut self.spans,
                         Span {

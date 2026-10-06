@@ -27,13 +27,14 @@
 //! What is read is the tile and as much of its 1-ring as the structures
 //! touching it reach, and no further.
 
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::time::Instant;
 
-use pxl_spec::bake::constant::U_PER_CELL;
+use crate::terrain::CELL_U;
 use pxl_spec::bake::deck::{footprint as line_reach, Form, STACKED_DECK_HEADROOM_M};
 use pxl_spec::bake::way::half_cells;
-use pxl_spec::space::coord::adapter::epsg3857::{from_db, get_tile_bbox, to_db, u_per_m};
+use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer, u_per_m};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use xpute_core::math::scalar::round;
 
@@ -111,7 +112,7 @@ struct Units {
 
 impl Units {
     fn c(self, m: f64) -> i32 {
-        round(m * self.u_per_m / U_PER_CELL) as i32
+        round(m * self.u_per_m / CELL_U) as i32
     }
 }
 
@@ -187,15 +188,15 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
     let tiles = ring(tile);
     let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
     for &p in &tiles {
-        for c in get_tile_bbox(p) {
+        for c in get_tile_bbox(LEAF_ZOOM, p) {
             for k in 0..2 {
                 (lo[k], hi[k]) = (lo[k].min(c[k]), hi[k].max(c[k]));
             }
         }
     }
-    let [pmin, pmax] = get_tile_bbox(tile);
+    let [pmin, pmax] = get_tile_bbox(LEAF_ZOOM, tile);
     let units = Units {
-        u_per_m: u_per_m(from_db(pmin[1])),
+        u_per_m: u_per_m(u_from_mer(pmin[1])),
     };
     let mut src = Source {
         ring: tiles.into_iter().collect(),
@@ -214,7 +215,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
     // ---- the structures the tile holds and every one they reach: shared ends, decks
     // beside or across them; each read as far as the ring ----
     let own = [[pmin[0], pmin[1]], [pmax[0], pmax[1]]];
-    let reach = to_db(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * U_PER_CELL);
+    let reach = mer_from_u(f64::from(units.c(DUAL_CARRIAGEWAY_MAX_DISTANCE_M) + 16) * CELL_U);
     let mut scope: BTreeSet<PartId> = src.pieces.iter().filter(|(_, s)| s.piece.touches(own)).map(|(id, _)| id.clone()).collect();
     // to a fixed point: a tile read late can hold what one looked at early stands beside
     loop {
@@ -300,7 +301,7 @@ impl Source {
         self.loaded.insert(p);
         let rows = r.store.tile(r.client, r.repo, p)?;
         self.ground.insert(p, rows.surface());
-        let step = to_db(U_PER_CELL);
+        let step = mer_from_u(CELL_U);
         for s in rows.ways() {
             let key = s.id();
             if self.ways.contains_key(&key) || s.subtype == "water" {
@@ -339,10 +340,10 @@ impl Source {
         if s.samples.is_some() {
             return Ok(());
         }
-        let step = to_db(U_PER_CELL);
+        let step = mer_from_u(CELL_U);
         let line = Polyline::of(s.piece.way.points.iter().map(|p| [p[0], p[1]]));
         let length = s.piece.way.length();
-        let reach = to_db((line_reach(s.piece.width() / U_PER_CELL) + 16.0) * U_PER_CELL);
+        let reach = mer_from_u((line_reach(s.piece.width() / CELL_U) + 16.0) * CELL_U);
         let at: Vec<(usize, [f64; 2])> = (0..=s.n)
             .map(|k| (k, line.at((k as f64 * step).min(length))))
             .filter(|(_, p)| self.ring.contains(&tile_of(*p)))
@@ -398,13 +399,13 @@ fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run>
             out.push(Run {
                 piece: s.piece.clone(),
                 k0,
-                cell: at.iter().map(|p| [from_db(p[0] - origin[0]) / U_PER_CELL, from_db(p[1] - origin[1]) / U_PER_CELL]).collect(),
+                cell: at.iter().map(|p| [u_from_mer(p[0] - origin[0]) / CELL_U, u_from_mer(p[1] - origin[1]) / CELL_U]).collect(),
                 at,
                 terrain,
                 ends,
                 clipped,
                 nodes,
-                half: half_cells(s.piece.width() / U_PER_CELL),
+                half: half_cells(s.piece.width() / CELL_U),
                 width_u: s.piece.width(),
             });
         }
@@ -449,7 +450,7 @@ struct Obstacles {
 
 impl Obstacles {
     fn of(src: &Source, origin: [f64; 2], units: Units) -> Obstacles {
-        let cell = |p: [f64; 2]| [from_db(p[0] - origin[0]) / U_PER_CELL, from_db(p[1] - origin[1]) / U_PER_CELL];
+        let cell = |p: [f64; 2]| [u_from_mer(p[0] - origin[0]) / CELL_U, u_from_mer(p[1] - origin[1]) / CELL_U];
         let mut out = Obstacles {
             list: Vec::new(),
             buckets: HashMap::new(),
@@ -486,12 +487,12 @@ impl Obstacles {
                 "road" => {
                     let class = row.class.as_deref().unwrap_or("");
                     let headroom = if is_non_vehicular(class) || class == "track" { PATH_HEADROOM_M } else { ROAD_HEADROOM_M };
-                    let half = half_cells(way_width(row) / U_PER_CELL);
+                    let half = half_cells(way_width(row) / CELL_U);
                     add(&mut out, &way.line.points, &row.ends, half, units.c(headroom));
                 }
                 "rail" if !row.is_subway() => {
                     let headroom = if row.class.as_deref() == Some("tram") { ROAD_HEADROOM_M } else { RAIL_HEADROOM_M };
-                    add(&mut out, &way.line.points, &row.ends, half_cells(way_width(row) / U_PER_CELL), units.c(headroom));
+                    add(&mut out, &way.line.points, &row.ends, half_cells(way_width(row) / CELL_U), units.c(headroom));
                 }
                 _ => {}
             }
@@ -504,7 +505,7 @@ impl Obstacles {
                 _ => continue,
             };
             // as wide as the ground draws it, where Arnis clears its centerline
-            add(&mut out, points, &[], half_cells(waterway_width(class).unwrap_or(0.0) / U_PER_CELL), units.c(headroom));
+            add(&mut out, points, &[], half_cells(waterway_width(class).unwrap_or(0.0) / CELL_U), units.c(headroom));
         }
         out
     }
@@ -680,7 +681,7 @@ fn way_from<'a>(way: &'a Way, node: &End) -> Option<(Vec<[f64; 2]>, &'a End)> {
 /// Points a cell apart along a line, from its start.
 fn cells_along(points: &[[f64; 2]]) -> Vec<[f64; 2]> {
     let line = Polyline::of(points.iter().copied());
-    let step = to_db(U_PER_CELL);
+    let step = mer_from_u(CELL_U);
     let n = libm::ceil(line.length() / step).max(1.0) as usize;
     (0..=n).map(|k| line.at((k as f64 * step).min(line.length()))).collect()
 }
@@ -1257,7 +1258,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<PartId>, units: 
                 .zip(&r.terrain)
                 .map(|(p, &t)| {
                     let around: Vec<[f64; 2]> = (-wall..=wall)
-                        .flat_map(|dx| (-wall..=wall).map(move |dz| [p[0] + to_db(f64::from(dx) * U_PER_CELL), p[1] + to_db(f64::from(dz) * U_PER_CELL)]))
+                        .flat_map(|dx| (-wall..=wall).map(move |dz| [p[0] + mer_from_u(f64::from(dx) * CELL_U), p[1] + mer_from_u(f64::from(dz) * CELL_U)]))
                         .filter(|q| src.loaded.contains(&tile_of(*q)))
                         .collect();
                     sample_cells(&src.ground, &around).map_or(t, |v| v.into_iter().fold(t, i32::min))
@@ -1347,7 +1348,7 @@ fn split_by(covered: &[bool]) -> Vec<([usize; 2], bool)> {
 /// Cells `a..=b` of a run as a line at heights `ys`: the piece's vertices and
 /// where the slope bends, no more.
 fn part_of(r: &Run, ys: &[i32], [a, b]: [usize; 2], clear: u8) -> (Line, Drawn) {
-    let step = to_db(U_PER_CELL);
+    let step = mer_from_u(CELL_U);
     let along = |k: usize| ((r.k0 + k) as f64 * step).min(r.piece.way.length());
     let mut keep: Vec<(f64, [f64; 2], f64)> = Vec::new();
     let mut anchor = a;

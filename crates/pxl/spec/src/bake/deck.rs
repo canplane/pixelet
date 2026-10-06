@@ -12,9 +12,9 @@ use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
 use super::{malformed, way};
 use crate::procedural::{pier_covers, Frame};
-use crate::space::hierarchy::child_of;
-use crate::space::pyramid::{GROUND, TILE_CELLS};
-use crate::space::zoom::Zoom;
+use crate::space::coord::zoom::Zoom;
+use crate::space::hierarchy::tree::child_of;
+use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use xpute_core::math::scalar::round;
 
 /// Points are in eighths of the tile's cell, which an `i16` holds far past the tile's edge.
@@ -36,9 +36,9 @@ pub const DECK_THICKNESS_M: f64 = 2.0;
 /// `STACKED_DECK_HEADROOM`.
 pub const STACKED_DECK_HEADROOM_M: f64 = 6.0;
 
-/// A deck's slab in cells, at least one.
-pub fn slab_depth(cell_per_m: f64) -> i32 {
-    (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1)
+/// A deck's slab in the Z lane's units, at least one.
+pub fn slab_depth(u_per_m: f64) -> i32 {
+    (round(DECK_THICKNESS_M * u_per_m) as i32).max(1)
 }
 
 /// What a line is, from the source's flags alone; the byte is the wire's.
@@ -157,14 +157,14 @@ pub enum Occupies {
 }
 
 impl Over {
-    /// `cell_per_m`: leaf cells a ground metre on the column's tile.
-    pub fn occupies(&self, ground: i32, cell_per_m: f64) -> Occupies {
+    /// `u_per_m`: the Z lane's units a ground metre on the column's tile.
+    pub fn occupies(&self, ground: i32, u_per_m: f64) -> Occupies {
         // all the surface sweeps across the column, so a slab or a bore steps down to the
         // next column's without a gap however steep it runs
         let (low, top) = (round(self.low) as i32, round(self.top) as i32);
         match self.form {
             Form::Deck => {
-                let lo = low - slab_depth(cell_per_m);
+                let lo = low - slab_depth(u_per_m);
                 Occupies::Above {
                     slab: [lo, top],
                     pier: (self.pier && lo > ground).then_some([ground, lo]),

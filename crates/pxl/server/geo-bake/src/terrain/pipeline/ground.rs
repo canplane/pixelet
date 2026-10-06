@@ -4,8 +4,8 @@
 //! Bounds are `i64` so a negative one skips a loop rather than wrapping in
 //! `u32`.
 
+use crate::terrain::CELL_U;
 use pxl_spec::bake::format::{Ground, GroundCell};
-use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::way;
 use pxl_spec::cell::cube_types::ground;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -58,7 +58,7 @@ pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
         if f.closed {
             render_polygon(&f.points, f.cell, &mut cells, &f.holes, mask);
         } else {
-            render_linear_feat(&f.points, f.cell, &mut cells, f.width / U_PER_CELL, f.cut, mask);
+            render_linear_feat(&f.points, f.cell, &mut cells, f.width / CELL_U, f.cut, mask);
         }
     }
 
