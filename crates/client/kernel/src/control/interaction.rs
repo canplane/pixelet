@@ -3,6 +3,8 @@
 //! What the pointer picks and edits, apart from what it does to the camera:
 //! the tool it holds, what is under it, and what a tap does with that.
 
+pub mod collision;
+pub mod edit;
 pub mod pick;
 
 use pxl_spec::cell::object::PlaceableCube;
@@ -12,12 +14,13 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::layer::lattice::GROUND;
 
 pub use crate::abi::cmd::ActiveTool;
+use crate::control::interaction::collision::{anchor_center, object_aabb};
+use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
+use crate::control::interaction::edit::{get_placed_object, place, place_air, place_decor, remove};
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
-use crate::layer::object::collision::{anchor_center, object_aabb};
-use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
-use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, Entry, EntryAt};
+use crate::layer::object::store::{Entry, EntryAt};
 use crate::world::chunk::decor::hit::{raycast_decor, DecorStruck, Scattered};
 use crate::world::query::Hit;
 use crate::world::view::frame::pose::view_ray;

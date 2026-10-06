@@ -12,9 +12,9 @@ use fnv::FnvBuildHasher;
 use std::collections::TryReserveError;
 
 pub use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
+use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::fold::majority;
-use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, PlaceableCube};
+use pxl_spec::cell::object::{decor_id_from_num, object_value_is_decor, object_value_is_voxel, placeable_cube_of, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
@@ -24,17 +24,13 @@ use pxl_spec::space::hierarchy::morton::{child_cube, key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
 use pxl_spec::space::hierarchy::tree::{first_descendant_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
 use crate::kernel;
-use crate::layer::object::repository;
 use crate::layer::{Answer, Bound, Query};
 use crate::world::change::request_world_tick;
-use crate::world::chunk::decor::build::{scatters_at, Draw};
 use crate::world::chunk::source::chunk_sources_changed;
-use crate::world::query::Access;
 use crate::world::view::observation::objects_written;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -83,11 +79,7 @@ impl Entry {
     }
 }
 
-fn read_state(coord: &Pvf3) -> u32 {
-    u32::from(kernel().objects.folded_value(OBJECT_FINEST, index_of(OBJECT_FINEST, coord)))
-}
-
-pub(super) fn apply(writes: impl IntoIterator<Item = Write>) {
+pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) {
     let regions = kernel().objects.write(writes);
     if !regions.is_empty() {
         written(&regions);
@@ -100,105 +92,6 @@ pub(super) fn written(regions: &[Aabb]) {
     chunk_sources_changed();
     objects_written(regions);
     request_world_tick();
-}
-
-/// Whether any leaf, air included, is written in the cell `at` lies in.
-pub fn holds_entry(at: &Pvf3) -> bool {
-    kernel().objects.holds(OBJECT_COARSEST, index_of(OBJECT_COARSEST, at))
-}
-
-/// What stands in the cell `at` lies in, air left out.
-pub fn objects_at(at: &Pvf3) -> Vec<Entry> {
-    let mut out = Vec::new();
-    kernel().objects.each_in(OBJECT_COARSEST, index_of(OBJECT_COARSEST, at), &mut |entry| {
-        if !object_value_is_air(entry.state) {
-            out.push(*entry);
-        }
-    });
-    out
-}
-
-pub fn get_placed_object(at: EntryAt) -> Option<Entry> {
-    let state = u32::from(kernel().objects.placed(at.zoom(), at.at())?);
-    (!object_value_is_air(state)).then_some(Entry { zoom: at.zoom(), at: at.at(), state })
-}
-
-/// The never-written AIR entry the eraser's preview injects into the drawn
-/// build where it hovers bare terrain: the cube of `size` holding `at`.
-pub fn carve_entry(at: &Pvf3, size: f64) -> EntryAt {
-    let zoom = of_side(size);
-    EntryAt::new(zoom, index_of(zoom, at))
-}
-
-// ---- Mutations ----
-
-/// A write of VOID collapses its path back, so a redundant record never sits in a save.
-fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
-    submit(write_of(coord, size, val));
-}
-
-/// A write is made here at once and sent to be kept.
-fn submit(write: Write) {
-    apply([write]);
-    repository::send(&write);
-}
-
-fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
-    // Size is a power of two by construction; the nearest zoom only guards
-    // against float noise.
-    let zoom = of_side(size);
-    Write {
-        key: key(zoom, index_of(zoom, coord)),
-        id: val,
-    }
-}
-
-/// Whether a whole-cell pick of a look only undoes a carve: the terrain must
-/// show that look there, and the cell must already hold an AIR leaf (the look
-/// is per column, so without this every cube stacked on matching ground was
-/// dropped).
-fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
-    if size < units(GROUND.cell()) {
-        return false;
-    }
-    let PlaceableCube::Ground(look) = cube else { return false };
-    // Only the resident finest leaf can say; elsewhere the cube is written as asked.
-    let Some(ground) = Access::now().at(at, LEAF_ZOOM).exact() else { return false };
-    if ground.cell != look as u8 {
-        return false;
-    }
-    object_value_is_air(read_state(at))
-}
-
-/// A redundant re-paint of a carve writes VOID, as remove() does.
-pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube) {
-    let val = if place_value_is_redundant(at, size, cube) { VOID } else { placeable_cube_num_id(cube) };
-    write_object_value(at, size, val);
-}
-
-/// Placing the decor a scatter stands in a cell an erase emptied writes
-/// VOID, so the scattered instance returns as it was.
-pub fn place_decor(at: &Pvf3, size: f64, decor_id: DecorId) {
-    let value = if restores_scattered(at, size, decor_id).is_some() { VOID } else { decor_num_id(decor_id) };
-    write_object_value(at, size, value);
-}
-
-/// The scattered instance `place_decor` would bring back, for its preview.
-pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Draw> {
-    (size >= units(GROUND.cell()) && object_value_is_air(read_state(at))).then(|| scatters_at(decor_num_id(decor_id), at))?
-}
-
-/// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
-/// baked terrain, which has no leaf of its own to delete.
-pub fn place_air(at: &Pvf3, size: f64) {
-    write_object_value(at, size, cube_types::object::air as u32);
-}
-
-pub fn remove(at: EntryAt) {
-    submit(Write {
-        key: key(at.zoom(), at.at()),
-        id: VOID,
-    });
 }
 
 pub const VOID: u32 = cube_types::sentinel::void as u32;
@@ -230,6 +123,18 @@ fn fold_cell(children: [u16; 8], zoom: Zoom) -> u16 {
 pub struct Write {
     pub key: u128,
     pub id: u32,
+}
+
+impl Write {
+    /// `id` at the cube of `size` holding `coord`. Size is a power of two by
+    /// construction; the nearest zoom only guards against float noise.
+    pub fn at(coord: &Pvf3, size: f64, id: u32) -> Write {
+        let zoom = of_side(size);
+        Write {
+            key: key(zoom, index_of(zoom, coord)),
+            id,
+        }
+    }
 }
 
 /// The placed objects: one tree of leaves a column, nothing kept of what a
@@ -460,7 +365,7 @@ impl Store {
     }
 
     /// The value placed at exactly this node, if one is.
-    fn placed(&self, zoom: Zoom, at: [i64; 3]) -> Option<u16> {
+    pub(crate) fn placed(&self, zoom: Zoom, at: [i64; 3]) -> Option<u16> {
         let f = self.find(zoom, at)?;
         match f.slot {
             Slot::Leaf(v) if f.zoom == zoom && v != EMPTY => Some(v),
@@ -532,9 +437,14 @@ impl Cells<'_> {
         self.store.node(self.node.0, self.node.1)
     }
 
-    /// Every leaf meeting the node's cube.
+    /// Every leaf in the node, or the one over it.
     pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
-        self.store.entries_in(&cube(self.node.0, self.node.1), visit);
+        self.store.each_in(self.node.0, self.node.1, visit);
+    }
+
+    /// The value placed at exactly the node, if one is.
+    pub fn placed(&self) -> Option<u16> {
+        self.store.placed(self.node.0, self.node.1)
     }
 }
 

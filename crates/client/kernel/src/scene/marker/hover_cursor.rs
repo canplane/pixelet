@@ -15,10 +15,11 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
+use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
+use crate::control::interaction::edit::{carve_entry, get_placed_object, restores_scattered};
 use crate::control::interaction::{holding, hover, ActiveTool};
-use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
-use crate::layer::object::store::{carve_entry, get_placed_object, restores_scattered, EntryAt, EntryKind};
+use crate::layer::object::store::{EntryAt, EntryKind};
 use crate::shell::setting::store::settings_store;
 use crate::with_world;
 use crate::world::change::request_world_tick;

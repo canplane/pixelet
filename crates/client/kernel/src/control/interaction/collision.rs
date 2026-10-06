@@ -1,11 +1,12 @@
-// pxl-kernel/layer/object/collision.rs
+// pxl-kernel/control/interaction/collision.rs
 
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::hierarchy::tree::share;
 use pxl_spec::space::layer::lattice::GROUND;
 
+use crate::control::interaction::edit::{holds_entry, objects_at};
 use crate::layer::object::size::DECOR_SIZE;
-use crate::layer::object::store::{holds_entry, objects_at, Entry, EntryKind};
+use crate::layer::object::store::{Entry, EntryKind};
 use crate::world::chunk::decor::build::scatters_at;
 use crate::world::chunk::decor::kind::KINDS;
 use pxl_spec::space::coord::aabb::Aabb;
