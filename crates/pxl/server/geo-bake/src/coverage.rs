@@ -182,23 +182,6 @@ pub struct Overture {
 
 const INGEST: &str = "run ./infra/geo/overture/script/ingest.rs";
 
-/// Overture rows taken whole, worldwide, in the root node rather than a shard:
-/// the ocean is every coast's.
-pub struct Whole {
-    pub table: &'static str,
-    pub overture: &'static str,
-    pub subtype: &'static str,
-}
-
-pub const WHOLE: Whole = Whole {
-    table: "overture_base_water",
-    overture: "water",
-    subtype: "ocean",
-};
-
-/// The root node's name, zoom 0's: empty, the prefix of every name.
-pub const ROOT: &str = "";
-
 impl Overture {
     /// For a bake whose statements are `reads` over the shards `need`.
     pub fn reading(reads: &[&[&str]], need: &BTreeSet<Node>) -> Result<(Overture, Client), String> {
@@ -214,9 +197,8 @@ impl Overture {
         let mut out = Vec::with_capacity(tables.len());
         for &table in &tables {
             let have: BTreeMap<&str, (&str, i64)> = rows.iter().filter(|r| r.get::<_, &str>(0) == table).map(|r| (r.get(1), (r.get(2), r.get(3)))).collect();
-            let whole = table == WHOLE.table;
-            let missing = want.iter().filter(|n| !have.contains_key(n.as_str())).count() + usize::from(whole && !have.contains_key(ROOT));
-            let extra = have.keys().filter(|n| !held.contains(**n) && !(whole && **n == ROOT)).count();
+            let missing = want.iter().filter(|n| !have.contains_key(n.as_str())).count();
+            let extra = have.keys().filter(|n| !held.contains(**n)).count();
             if missing + extra > 0 {
                 return Err(format!("{table} lacks {missing} of the shards needed and holds {extra} past the coverage's: {INGEST}"));
             }

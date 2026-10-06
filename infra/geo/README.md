@@ -1,7 +1,7 @@
 # Filling db-geo
 
-`db-geo` is the spatial database: sixteen tables from two sources, one PostGIS
-instance. Everything the client sees of the world — terrain, POI, reverse
+`db-geo` is the spatial database: seventeen tables from three sources, one
+PostGIS instance. Everything the client sees of the world — terrain, POI, reverse
 geocode — is baked from these tables offline and published to a bucket; only
 forward search reads them at request time.
 
@@ -14,9 +14,8 @@ database that is expensive to rebuild.
 > EPSG:3857 meters rounded half to even. A shard holds every feature whose
 > bbox, its vertices' extremes in meters, meets the shard grown by `EPS_M`; a
 > feature over an edge is a row in each shard, so a reader keeps one row a
-> `gers_id`. The ocean is no shard's: Overture's `ocean` water is taken whole,
-> worldwide, in the root node (`pxl-geo-bake coverage.rs`, `WHOLE`).
-> What a shard holds depends on the shard alone, so shards ingested one by one
+> `gers_id`. The coast is no shard's: OSM's land polygons are taken whole,
+> worldwide (`coastline/`). What a shard holds depends on the shard alone, so shards ingested one by one
 > are the shards ingested together. Each ingest replaces a shard's rows before
 > it writes them, and writes the shard's catalog row last; a run stopped
 > partway resumes at the first shard without one.
@@ -25,6 +24,9 @@ database that is expensive to rebuild.
 infra/geo/
 ├── overture/                     fifteen types in six themes, one provider, one catalog
 │   └── script/ingest.rs            the one ingest, schema included
+├── coastline/                    OSM's land polygons, taken whole
+│   ├── metadata.json               the source URL and the table
+│   └── script/setup-coastline.sh
 └── elevation/                    one global GeoTIFF, a raster a shard
     ├── init/01_elevation_schema.sql
     ├── metadata.json               the published shards and the source URL
@@ -45,10 +47,10 @@ and the elevation exactly them.
 | **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                            | `overture_catalog`  | `overture/script/ingest.rs`           |
 | **Overture — the other types**<br>taken whole, read by nothing yet               | `overture_addresses`, `overture_building_parts`, `overture_connectors`, `overture_division_boundaries`, `overture_base_land_cover`, `overture_base_bathymetry` | `overture_catalog`  | `overture/script/ingest.rs`           |
 | **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                             | `elevation_catalog` | `elevation/script/setup-elevation.sh` |
+| **OSM land polygons**<br>coastline                                               | `osm_land_polygons`                                                                                                                                            | none                | `coastline/script/setup-coastline.sh` |
 
-Coastline is not a table of its own. `OVERTURE_COAST_SQL`
-(`crates/pxl/server/geo-bake/src/terrain/repository.rs`) carves it at bake time out of
-`overture_base_water`'s `ocean` subtype, and `HAS_GROUND_SQL`
+`COAST_SQL` (`crates/pxl/server/geo-bake/src/terrain/repository.rs`) carves
+the coast at bake time out of `osm_land_polygons`, and `HAS_GROUND_SQL`
 (`crates/pxl/server/geo-bake/src/terrain/leaf.rs`) calls a page open water
 when no `overture_base_land` row or building touches its bbox and no way
 (not a ferry) comes within `DRAWN_REACH_U` of it.
@@ -77,6 +79,13 @@ raw-file staging step and no portal page to click through.
 
 It is a bare-earth DTM: ground elevation carries no building or canopy height.
 
+### OSM land polygons (osmdata.openstreetmap.de)
+
+The coast as OSM's land, split into small polygons and already in EPSG:3857,
+one zip for the world (about 1 GB), ODbL. A coast is never taken in part, so
+the table holds the world's, whatever shards are ingested. The zip is kept in
+`cache/coastline/` and fetched again only when osmdata publishes a newer one.
+
 ## 2. Prerequisites (macOS)
 
 ```sh
@@ -86,9 +95,9 @@ brew link --force gettext          # puts envsubst on PATH
 rustup toolchain install nightly   # the Overture ingest is a single-file cargo script
 ```
 
-`gdal` for `gdalwarp` and `raster2pgsql`, `postgis` for the ingestion
-utilities, `jq` and `envsubst` for the elevation script, `python3` for the
-Overture CLI's venv. Docker runs the database and the GDAL image.
+`gdal` for `gdalwarp` and `ogr2ogr`, `postgis` for `raster2pgsql`, `jq` and
+`envsubst` for the elevation and coastline scripts, `python3` for the Overture
+CLI's venv. Docker runs the database and the GDAL image.
 
 ## 3. Bring up db-geo
 
@@ -112,11 +121,13 @@ That starts a database that is already built. Emptying it first takes a
 ## 4. Run the ingests
 
 One script takes every Overture type into a table a type, a shard at a time;
-the elevation is its own, a shard at a time too. Neither takes a flag: the shards
-are the coverage's.
+the elevation is its own, a shard at a time too, and the coastline its own,
+whole. None takes a flag: the shards are the coverage's.
 
 ```sh
 ./infra/geo/elevation/script/setup-elevation.sh
+
+./infra/geo/coastline/script/setup-coastline.sh
 
 ./infra/geo/overture/script/ingest.rs
 ```

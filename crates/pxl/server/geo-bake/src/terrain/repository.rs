@@ -58,19 +58,18 @@ SELECT DISTINCT ON (gers_id) 'land' AS source, gers_id, subtype, class, ST_Area(
 UNION ALL
 SELECT DISTINCT ON (gers_id) 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class = ANY($5)";
 
-/// Overture's ocean polygons inverted into a land polygon for the tile: empty
-/// means pure ocean, the whole envelope means all land, both dropped.
-const OVERTURE_COAST_SQL: &str = "WITH env AS (
+/// The tile's land from OSM's land polygons (`infra/geo/coastline`), taken
+/// whole: empty means pure ocean, the whole envelope means all land, both dropped.
+const COAST_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 ),
-ocean_union AS (
-  -- Clipped first: ocean rows run up to 163,456 points, and ST_Difference below would otherwise chew through all of them.
-  SELECT ST_Union(ST_Intersection(geom, env.e)) AS g FROM overture_base_water, env
-  WHERE subtype = 'ocean' AND geom && env.e
+land_union AS (
+  SELECT ST_Union(ST_Intersection(geom, env.e)) AS g FROM osm_land_polygons, env
+  WHERE geom && env.e
 ),
 land AS (
-  SELECT COALESCE(ST_Difference(env.e, ocean_union.g), env.e) AS g, env.e AS e
-  FROM env LEFT JOIN ocean_union ON true
+  SELECT COALESCE(land_union.g, ST_SetSRID('POLYGON EMPTY'::geometry, 3857)) AS g, env.e AS e
+  FROM env LEFT JOIN land_union ON true
 )
 SELECT
   ST_AsBinary(g) AS geom_wkb,
@@ -80,7 +79,7 @@ WHERE NOT ST_IsEmpty(g)";
 
 /// Every statement a tile's bake runs, in the order `prepare` takes them, so
 /// the catalog check (`coverage.rs` `Overture`) sees each table they read.
-pub const READS: [&str; 4] = [OVERTURE_BUILDINGS_SQL, OVERTURE_TRANSPORTATION_SQL, OVERTURE_BASE_SQL, OVERTURE_COAST_SQL];
+pub const READS: [&str; 4] = [OVERTURE_BUILDINGS_SQL, OVERTURE_TRANSPORTATION_SQL, OVERTURE_BASE_SQL, COAST_SQL];
 
 pub struct BuildingRow {
     pub gers_id: String,
