@@ -14,13 +14,14 @@
 //!
 //! The arena is never overrun: a move starts only when all its slots are
 //! free, and refinements and fills leave `RESERVE` free so one coarsening is
-//! always possible. A coarsening waits `COARSEN_HOLD_MS` before it is made,
+//! always possible. Every move but a root's leaves the roots' room
+//! (`ROOT_SLOTS`) free of everything else, so a root is never refused. A coarsening waits `COARSEN_HOLD_MS` before it is made,
 //! unless the arena refused a move last step.
 
 use pxl_spec::space::lod::Tau;
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
-use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};
+use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS, ROOT_SLOTS};
 use crate::world::observation::Order;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::domain::Price;
@@ -31,31 +32,22 @@ pub type Slots = [u32; POOLS];
 
 /// Kept free past every non-coarsening move for one coarsening, which lands
 /// in the coarse pool and fills at most `COARSE_TIER_SLOTS`.
-pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS, 0];
+pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS];
 
 /// What the quality policy leaves beside the goal: the reserve, plus a slot
 /// for each refinement in flight holding the piece it replaces.
-pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1], 0];
+pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1] + ROOT_SLOTS];
 
-/// What a chunk draws: its cells, or, a cover piece, itself as one cell.
 /// The quality alone moves which chunks are drawn; a mesh too big for one
 /// slot fills more slots and is never drawn coarser for it.
-pub fn zoom_of(c: Chunk, outermost: bool) -> Zoom {
-    if outermost {
-        c.zoom()
-    } else {
-        c.cell_zoom()
-    }
-}
-
-pub fn pool_of(c: Chunk, cell_zoom: Zoom) -> Pool {
-    Pool::of(c.zoom(), cell_zoom)
+pub fn pool_of(c: Chunk) -> Pool {
+    Pool::of(c.cell_zoom())
 }
 
 /// A coarse chunk whose children are fine: the last coarse one on its line.
 /// One child stands for all: a pool is its zoom's alone.
 fn into_fine(c: Chunk) -> bool {
-    pool_of(c, c.cell_zoom()) == Pool::Coarse && pool_of(c.children()[0], c.children()[0].cell_zoom()) == Pool::Fine
+    pool_of(c) == Pool::Coarse && pool_of(c.children()[0]) == Pool::Fine
 }
 
 /// Slots per pool, counted before allocation. A coarse chunk split into fine
@@ -67,19 +59,17 @@ pub struct Need<F> {
     pub admit: bool,
 }
 
-impl<F: Fn(Chunk, Zoom) -> u32> Price for Need<F> {
-    fn piece(&self, c: Chunk, outermost: bool, _near: f64, _tau: Tau) -> Slots {
-        let cell_zoom = zoom_of(c, outermost);
-        let k = (self.slots)(c, cell_zoom);
-        match pool_of(c, cell_zoom) {
-            Pool::Coarse => [0, k, 0],
-            Pool::Cover => [0, 0, k],
-            Pool::Fine => [k, 0, 0],
+impl<F: Fn(Chunk) -> u32> Price for Need<F> {
+    fn piece(&self, c: Chunk, _near: f64, _tau: Tau) -> Slots {
+        let k = (self.slots)(c);
+        match pool_of(c) {
+            Pool::Coarse => [0, k],
+            Pool::Fine => [k, 0],
         }
     }
 
     fn split(&self, c: Chunk) -> Slots {
-        [0, u32::from(into_fine(c)), 0]
+        [0, u32::from(into_fine(c))]
     }
 
     fn over(&self, n: &Slots) -> bool {
@@ -98,8 +88,9 @@ pub struct Now<'a> {
     pub goal: &'a [Chunk],
     pub drawn: &'a [Chunk],
     pub building: &'a [(Chunk, bool)],
-    pub recubing: u32,
-    pub retier: &'a [(Chunk, (Pool, u32))],
+    /// The roots' zoom, and the coarse slots the chunks at it hold or are held for.
+    pub root: Zoom,
+    pub roots_hold: u32,
     /// Free slots after what started moves will take.
     pub free: Slots,
 }
@@ -109,7 +100,6 @@ pub struct Plan {
     pub start: Vec<Chunk>,
     pub cancel: Vec<Chunk>,
     pub drop: Vec<Chunk>,
-    pub retier: Vec<Chunk>,
     pub refused: u32,
     pub waiting: u32,
     /// Coarsenings waiting their hold; a turn is requested while any does, or
@@ -175,7 +165,6 @@ pub struct Frontier {
     ancestry: Vec<Chunk>,
     fills: Vec<Chunk>,
     open: Vec<u32>,
-    retier: Vec<(Chunk, (Pool, u32))>,
 }
 
 impl Frontier {
@@ -195,13 +184,11 @@ impl Frontier {
             ancestry,
             fills,
             open,
-            retier,
         } = self;
         let Plan {
             start,
             cancel,
             drop,
-            retier: retiered,
             refused,
             waiting,
             held: held_n,
@@ -209,7 +196,7 @@ impl Frontier {
             swaps,
             chunks,
         } = plan;
-        for v in [&mut *start, &mut *cancel, &mut *drop, &mut *retiered, &mut *chunks] {
+        for v in [&mut *start, &mut *cancel, &mut *drop, &mut *chunks] {
             v.clear();
         }
         swaps.clear();
@@ -221,7 +208,6 @@ impl Frontier {
         ancestry.clear();
         fills.clear();
         open.clear();
-        retier.clear();
 
         let in_goal = |c: &Chunk| now.goal.binary_search(c).is_ok();
         let drawn = |c: &Chunk| now.drawn.binary_search(c).is_ok();
@@ -328,7 +314,7 @@ impl Frontier {
                     .is_ok_and(|i| now.ms - asked[i].1 < crate::param::COARSEN_HOLD_MS)
         };
 
-        let mut in_flight = now.recubing;
+        let mut in_flight = 0;
         for (n, m) in moves.iter().enumerate() {
             if held(m) {
                 *held_n += 1;
@@ -356,6 +342,7 @@ impl Frontier {
         });
 
         let mut free = now.free;
+        let mut roots_room = ROOT_SLOTS.saturating_sub(now.roots_hold);
         let take = |free: &Slots, need: &Slots, reserve: Slots| (0..POOLS).all(|p| need[p] == 0 || free[p] >= need[p] + reserve[p]);
         let mut cramped = false;
         for &n in open.iter() {
@@ -372,7 +359,11 @@ impl Frontier {
                 let (pool, k) = env.slots(c);
                 need[pool as usize] += k;
             }
-            let reserve = if m.kind == Kind::Coarsen { [0; POOLS] } else { RESERVE };
+            let mut reserve = if m.kind == Kind::Coarsen { [0; POOLS] } else { RESERVE };
+            let roots = enter.iter().all(|c| c.zoom() == now.root);
+            if !roots {
+                reserve[Pool::Coarse as usize] += roots_room;
+            }
             let fits = take(&free, &need, reserve);
             cramped |= !fits;
             let room = missing().all(|c| env.buildable(c)) && fits && !(m.kind == Kind::Refine && fresh && in_flight >= REFINEMENTS_IN_FLIGHT);
@@ -383,28 +374,15 @@ impl Frontier {
             for p in 0..POOLS {
                 free[p] -= need[p];
             }
+            if roots {
+                roots_room = roots_room.saturating_sub(need[Pool::Coarse as usize]);
+            }
             if m.kind == Kind::Refine && fresh {
                 in_flight += 1;
             }
             start.extend(missing());
         }
 
-        retier.extend_from_slice(now.retier);
-        // The chunk only makes the order total, so ties do not follow table history.
-        retier.sort_unstable_by_key(|&(c, _)| (env.order(c), c));
-        for &(c, (pool, k)) in retier.iter() {
-            let mut need = [0; POOLS];
-            need[pool as usize] = k;
-            let fits = take(&free, &need, RESERVE);
-            cramped |= !fits;
-            if in_flight >= REFINEMENTS_IN_FLIGHT || !fits {
-                *refused += 1;
-                continue;
-            }
-            free[pool as usize] -= k;
-            in_flight += 1;
-            retiered.push(c);
-        }
         *short = cramped;
         plan
     }
