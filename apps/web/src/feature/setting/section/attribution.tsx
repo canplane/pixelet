@@ -9,7 +9,8 @@ import { Link, Prose, Section, settingText } from "@/feature/setting/row.tsx";
  * License notices, not run through t(): their wording is prescribed. OSM's
  * guidelines require naming ODbL; CC BY 4.0 asks for creator, title, license
  * link and a note of changes; the Copernicus "produced using" line is
- * verbatim and compulsory. JAXA's required wording is still unconfirmed.
+ * verbatim and compulsory; Apache-2.0 asks Arnis's notice, whose piers the
+ * client draws, be shown. JAXA's required wording is still unconfirmed.
  */
 export function AttributionSection() {
   const { t } = useTranslation();
@@ -26,6 +27,10 @@ export function AttributionSection() {
         </Text>
         <Text style={settingText.small}>
           produced using Copernicus WorldDEM © DLR e.V. 2010–2014 and © Airbus Defense and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved
+        </Text>
+        <Text style={settingText.small}>
+          Bridges and tunnels: modified from <Link href="https://github.com/louis-e/arnis">Arnis</Link>, © 2022–2026 Louis Erbkamm, licensed under the{" "}
+          <Link href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</Link>
         </Text>
       </Prose>
     </Section>

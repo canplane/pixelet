@@ -11,8 +11,8 @@ use xpute_core::math::scalar::round;
 use crate::bake::deck::{slab_depth, Occupies, Over, STACKED_DECK_HEADROOM_M};
 use crate::bake::format::GroundCell;
 use crate::bake::way::half_cells;
-use crate::cell::cube::cube_types::{sentinel, Ground};
-use crate::cell::cube::Kind;
+use crate::cell::cube_types::{sentinel, Ground};
+use crate::cell::Kind;
 use crate::space::adapter::epsg3857::u_per_m;
 use crate::space::pvf3::ivec::gather;
 use crate::space::pyramid::{Tile, GROUND, LEAF_Z, TILE_CELLS, TOP_Z};
@@ -104,9 +104,13 @@ pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2]) -> Option<Candidate> {
 
 // ---- piers ----
 
+// From louis-e/arnis `c96872e`, Copyright (c) 2022-2026 Louis Erbkamm, under
+// the Apache License, Version 2.0 (THIRD_PARTY_NOTICES.md); changed to stand
+// on a deck's line rather than place blocks.
+//
 // A bridge the source names no structure for is Arnis's beam bridge
-// (`bridge_styles.rs` `pier_interval`, `place_pier_bent`): a bent every 8 m,
-// 12 m once its half width passes two cells, of one-cell columns.
+// (`pier_interval`, `place_pier_bent`): a bent every 8 m, 12 m once its half
+// width passes two cells, of one-cell columns.
 pub(crate) const BEAM_PILLAR_INTERVAL_M: f64 = 8.0;
 const WIDE_BEAM_PIER_INTERVAL_M: f64 = 12.0;
 
