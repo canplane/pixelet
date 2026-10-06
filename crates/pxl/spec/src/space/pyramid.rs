@@ -62,7 +62,7 @@ impl Lattice {
 
     /// The tile whose cells fold into the grid's cell `cell`, past the pyramid's ends too.
     pub const fn grid_z(self, cell: Zoom) -> i32 {
-        self.z_of(cell + self.fold)
+        self.z_of(cell) + self.fold as i32
     }
 
     /// Its cells' zoom on a tile at `z`.
