@@ -10,6 +10,16 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
+- **Entropy left after the chunk rework** (decision/20261006-a-chunk-goes-past-the-leaves.md).
+  The chunk still knows the ground: which tile it reads (`world/pyramid/chunk.rs`
+  `tile_zoom`, `in_tile`, `tiles_beside`) and `chunk_zoom`/`LEAF_CHUNK` in
+  `space/pyramid.rs`. Demand (`space/observation.rs` `ByBounds`, `band`) is
+  the ground's but named as shared, where a layer could map the grid's cell
+  to its own tiles. A chunk keeps two forms, a cover piece's one cell and its
+  cells, with retiering between them (`world/chunk/table.rs`). Interaction
+  asks the profiler's `drawn_at` whether a cell is folded
+  (`control/interaction.rs` `folded_at`). The crates' unit tests were not run
+  after the last edits of b3c81babc.
 - **How the samples are drawn.** On the iPhone 13 mini, four shapes over the
   same tiles and views: today's boxes, the same as masked faces, a ray a
   pixel, and a bounded observation a cell — what the rule asks for, a cell

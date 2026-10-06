@@ -2,9 +2,7 @@
 
 For any AI coding agent in this repository, whichever reads it. It holds what
 an agent would get wrong without it; what is local lives beside the code it is
-about. What the author has corrected an agent on is
-[.agents/corrections.md](./.agents/corrections.md): read it with this file;
-its latest entry wins over anything here.
+about.
 
 What the system is: [README.md](./README.md) and
 [ARCHITECTURE.md](./ARCHITECTURE.md) for the application,

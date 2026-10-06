@@ -177,9 +177,7 @@ A reader that crosses two trees walks each its own way and puts the answers
 together (pxl-kernel world/access.rs `first_hit`). A ray reads the ground
 again from each point along it, since a tile over it may be missing and a
 descent would stall on the gap, and it walks the objects' bounds nearest
-first, since none is missing. The spatial hash (`lattice/spatial_hash.rs`)
-is no tree, on purpose: for many points moving in a small volume a tree
-prunes nothing.
+first, since none is missing.
 
 ## What else is here
 
