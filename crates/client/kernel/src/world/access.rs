@@ -12,13 +12,14 @@
 mod answer;
 mod column;
 mod ground;
+mod query;
 mod ray;
 mod support;
 
 pub use answer::{Answer, Ground, Relief};
 pub use ground::Access;
+pub use query::Query;
 pub use ray::{Detail, Hit, Ray, Struck};
-
 
 #[cfg(test)]
 #[path = "access.test.rs"]
