@@ -21,3 +21,12 @@ pub fn srgb(c: f64) -> u8 {
     let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * libm::pow(c, 1.0 / 2.4) - 0.055 };
     xpute_core::math::scalar::round(s * 255.0).clamp(0.0, 255.0) as u8
 }
+
+/// A marker's colors.
+pub mod marker {
+    /// Reserved for "you could grab this", never for a preview of a change.
+    pub const ACTION: u32 = 0x4fd1c5;
+    /// For removal where the thing cannot be drawn as itself. Dark, since users
+    /// read ACTION's cyan as "move".
+    pub const ERASE: u32 = 0x1d2026;
+}

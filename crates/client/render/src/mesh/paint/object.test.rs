@@ -1,4 +1,4 @@
-// pxl-render/mesh/paint/object/adapter.test.rs
+// pxl-render/mesh/paint/object.test.rs
 
 use super::*;
 use pxl_spec::cell::object::object_value_is_voxel;

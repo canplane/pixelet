@@ -4,7 +4,7 @@
 //! drawn by the chunk shader, or one decor instance drawn by decor's.
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
-use pxl_render::look::style::marker_colors;
+use pxl_render::look::color::marker;
 use pxl_render::mesh::chunk_mesher::{write_lone_box, Heights, FINE_BOX_WORDS};
 use pxl_render::mesh::word::NO_LAYER;
 use pxl_spec::space::coord::zoom::units;
@@ -167,7 +167,7 @@ pub fn hover_cursor_step() {
     };
 
     let swatch = cube.and_then(placeable_cube_rgb);
-    let fallback = if active_tool == ActiveTool::Eraser { marker_colors::ERASE } else { marker_colors::ACTION };
+    let fallback = if active_tool == ActiveTool::Eraser { marker::ERASE } else { marker::ACTION };
 
     // A carve no longer needs the coplanar bias: its voxel is gone from the mesh
     // while the cursor is on it.

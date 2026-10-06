@@ -1,6 +1,6 @@
 // pxl-kernel/kernel.rs
 
-use pxl_render::mesh::paint::object::adapter::Painter;
+use pxl_render::mesh::paint::object::Painter;
 
 use crate::layer::object::store::Store;
 use crate::world::chunk::table::Scheduler;
@@ -38,7 +38,7 @@ pub fn kernel() -> &'static mut Kernel {
 /// The objects and the painter, borrowed together for a turn's build.
 pub struct World<'a> {
     pub store: &'a crate::layer::object::store::Store,
-    pub painter: &'a mut pxl_render::mesh::paint::object::adapter::Painter,
+    pub painter: &'a mut pxl_render::mesh::paint::object::Painter,
 }
 
 impl Kernel {
