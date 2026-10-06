@@ -83,3 +83,9 @@ pub const POI_MAJOR_ZOOM: i32 = 12;
 
 /// OpenMapTiles' `poi_class_rank` for a railway station.
 pub const POI_MAJOR_RANK: u16 = 40;
+
+// ---- a bake's slices ----
+
+/// Rows a bake writes or meshes a step, so one chunk never takes a turn's
+/// budget whole; the mesher is handed it.
+pub const BAKE_ROWS_PER_STEP: u32 = 8;

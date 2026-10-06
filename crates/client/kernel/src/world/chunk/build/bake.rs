@@ -77,7 +77,11 @@ impl Builder {
             let clip = Some(((z0 / z) as i32, (z1 / z) as i32));
             // Textured where the cells drawn are a leaf's or finer, folded or not.
             let (unit, fine) = (units(runs.zoom), cell_zoom >= GROUND.cell());
-            if self.bake.begin(&set, count(runs.zoom, cell_zoom), unit, z, fine, settings_store().textures, clip).is_err() {
+            if self
+                .bake
+                .begin(&set, count(runs.zoom, cell_zoom), unit, z, fine, settings_store().textures, crate::param::BAKE_ROWS_PER_STEP, clip)
+                .is_err()
+            {
                 self.refuse(id);
                 return Progress::Blocked;
             }

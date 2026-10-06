@@ -74,7 +74,6 @@ const DIPS_BELOW: u32 = 4;
 const ABUTS_SIDE: u32 = 8;
 const ALL_RELATIONS: u32 = HIDES_SIDE | ABUTS_SIDE | RISES_ABOVE | DIPS_BELOW;
 
-pub const BAKE_ROWS_PER_STEP: u32 = 8;
 const BAKE_BOXES_PER_STEP: usize = 512;
 
 /// The fine format: corner and width in u16 steps of its cell, floor and height
@@ -256,6 +255,8 @@ pub struct BakeContext {
     /// A coarse box carries one color, the tile mean when the pack is drawn or the
     /// swatch when not, so it matches the leaves under it either way.
     textured: bool,
+    /// Rows a step bakes, the asker's to set.
+    rows: u32,
     mesh_words: u32,
     box_cnt: u32,
     open: Option<Open>,
@@ -277,6 +278,7 @@ impl Default for BakeContext {
             heights: Heights::default(),
             box_words: FINE_BOX_WORDS,
             textured: true,
+            rows: 1,
             mesh_words: 0,
             box_cnt: 0,
             open: None,
@@ -293,8 +295,9 @@ impl BakeContext {
     /// `fine` boxes carry texture taps. `clip` cuts a whole-column set to the
     /// chunk's heights, and every step reads the cut set. One bake at a time.
     #[allow(clippy::too_many_arguments)]
-    pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, clip: Option<(i32, i32)>) -> Result<(), Refused> {
+    pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, rows: u32, clip: Option<(i32, i32)>) -> Result<(), Refused> {
         xpute_core::ensure!(self.open.is_none(), ENOTRECOVERABLE);
+        self.rows = rows;
         self.refused = false;
         match clip {
             Some((z0, z1)) => {
@@ -464,7 +467,7 @@ impl BakeContext {
         };
 
         if b.phase == 0 {
-            let row_end = hi.min(b.row + BAKE_ROWS_PER_STEP);
+            let row_end = hi.min(b.row + self.rows);
             for cy in b.row..row_end {
                 for cx in lo..hi {
                     let col = cy * span + cx;
@@ -502,7 +505,7 @@ impl BakeContext {
         }
 
         if b.phase == 1 {
-            let row_end = hi.min(b.row + BAKE_ROWS_PER_STEP);
+            let row_end = hi.min(b.row + self.rows);
             for cy in b.row..row_end {
                 for cx in lo..hi {
                     let col = (cy * span + cx) as usize;
@@ -664,7 +667,7 @@ impl BakeContext {
                 self.coarse.span = res;
                 self.coarse.apron = 0;
             }
-            let row_end = res.min(b.row + coarse_rows_per_step(lod_step));
+            let row_end = res.min(b.row + (self.rows / lod_step).max(1));
             for by in b.row..row_end {
                 for bx in 0..res {
                     let start = self.buckets.len() as u32;
@@ -1172,7 +1175,3 @@ fn pack_inset(linear: f64) -> (u8, u8) {
 #[cfg(test)]
 #[path = "chunk_mesher.test.rs"]
 mod test;
-
-fn coarse_rows_per_step(lod_step: u32) -> u32 {
-    (BAKE_ROWS_PER_STEP / lod_step).max(1)
-}

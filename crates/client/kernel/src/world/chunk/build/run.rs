@@ -4,7 +4,7 @@
 
 use pxl_spec::space::layer::lattice::GROUND;
 
-use pxl_render::mesh::chunk_mesher::BAKE_ROWS_PER_STEP;
+use crate::param::BAKE_ROWS_PER_STEP;
 use pxl_render::mesh::paint::column::{stands_of, write_rows};
 use pxl_render::mesh::run::{RunSet, APRON};
 use xpute_runtime::mem::base::ptr_at;
