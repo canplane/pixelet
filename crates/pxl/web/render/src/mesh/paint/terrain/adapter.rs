@@ -74,7 +74,11 @@ impl Materials {
         let shown = |c: GroundCell| {
             let (m, l) = self.drawn(c);
             let rgb = unpack_material(m).1;
-            if textured { layer_mean(u32::from(l), rgb) } else { rgb }
+            if textured {
+                layer_mean(u32::from(l), rgb)
+            } else {
+                rgb
+            }
         };
         let rgb = mean_srgb(cells.iter().filter(|&&c| c != sentinel::void).map(|&c| shown(c))).unwrap_or_else(|| shown(of));
         (pack_material(unpack_material(self.drawn(of).0).0, rgb), NO_LAYER as u8)

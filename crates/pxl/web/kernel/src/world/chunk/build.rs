@@ -538,7 +538,9 @@ impl Builder {
         let sampled = if k <= 0 {
             self.sample.read(&read.around(), read.first)
         } else {
-            self.leaf_sample.read(&read.around(), read.first).and_then(|()| self.sample.refine(&self.leaf_sample, k as u32, c.in_leaf()))
+            self.leaf_sample
+                .read(&read.around(), read.first)
+                .and_then(|()| self.sample.refine(&self.leaf_sample, k as u32, c.in_leaf()))
         };
         if sampled.is_err() {
             self.refuse(id);
@@ -589,7 +591,9 @@ impl Builder {
         }
         let span = CHUNK_DRAWN as i64;
         let finer = target + 1;
-        world.store.fold_at(finer, [2 * cx - 2, 2 * cy - 2], [2 * (cx + span + 1), 2 * (cy + span + 1)], hide, &mut self.children)?;
+        world
+            .store
+            .fold_at(finer, [2 * cx - 2, 2 * cy - 2], [2 * (cx + span + 1), 2 * (cy + span + 1)], hide, &mut self.children)?;
         if let Some(carve) = carve {
             carve_into(&mut self.children, carve, finer);
         }

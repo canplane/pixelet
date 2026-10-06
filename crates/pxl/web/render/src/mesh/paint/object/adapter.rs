@@ -86,7 +86,11 @@ impl Painter {
         }
         let shown = children.filter_map(|c| self.material_of(c)).map(|(m, l)| {
             let rgb = unpack_material(m).1;
-            if textured { layer_mean(u32::from(l), rgb) } else { rgb }
+            if textured {
+                layer_mean(u32::from(l), rgb)
+            } else {
+                rgb
+            }
         });
         Some((pack_material(class, mean_srgb(shown)?), NO_LAYER as u8))
     }

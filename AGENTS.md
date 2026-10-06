@@ -146,11 +146,11 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
 - **One rule chooses the chunk; a layer chooses its detail.** The cell is
   the distance's (`pxl-spec space/lod.rs` `Tau::cell_at`, one factor τ), a
   chunk is drawn in cells a step coarser (`space/pyramid.rs`
-  `DRAWN_STEPS`), and terrain's zoom is the tile whose cells those are
+  `DRAWN_STEPS`), and terrain reads the tile of the rule's cell
   (`Tau::z_at`); a chunk refines only where the screen sees an error cross
   a cell and something under it is held finer. The detail a layer draws at
-  it is its own — terrain its tile's cells, the bake's fold of the finer,
-  places a lattice sixty-four ground cells wide, objects their cells folded
+  it is its own — terrain each drawn cell its four's majority look, mean
+  height and mean shown color, places a lattice sixty-four ground cells wide, objects their cells folded
   by majority — never a second rule; past a layer's data it draws its
   finest.
 - **Dev is guarded like terrain.** The tile server answers no tile more than

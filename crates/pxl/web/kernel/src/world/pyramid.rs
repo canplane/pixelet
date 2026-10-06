@@ -293,11 +293,7 @@ impl<L: Layer> Pyramid<L> {
         // demand follows the published goal
         let published = domain::current();
         let own = |o: Observation| match L::TOP {
-            Some(top) => Observation {
-                top,
-                far: demand_reach(top),
-                ..o
-            },
+            Some(top) => Observation { top, far: demand_reach(top), ..o },
             None => o,
         };
         let live = observation().map(own);
