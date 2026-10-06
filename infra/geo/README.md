@@ -10,7 +10,7 @@ here runs on a schedule. These are run by hand, a few times a year, against a
 database that is expensive to rebuild.
 
 > **The database is filled a shard at a time, and a shard is whole or absent.**
-> A shard is a z8 tile (`SHARD_Z`), named by its Morton key, its edges in
+> A shard is a z8 tile (`SHARD_ZOOM`), named by its Morton key, its edges in
 > EPSG:3857 meters rounded half to even. A feature is a row in each shard its
 > bbox meets, the bbox its vertices' extremes in meters, rounded the same way;
 > both are half open, so a bbox ending on an edge is the next shard's alone.
@@ -59,9 +59,12 @@ made from.
 
 ### Overture Maps
 
-A public S3 release — no key, no portal step. The ingest reads the release's
-GeoParquet where it is published, only the row groups whose bbox statistics
-can meet a shard, straight into the tables; nothing is kept on disk.
+A public S3 release — no key, no portal step. The ingest reaches it through
+Overture's official `overturemaps` CLI, installed on first use into
+`cache/overture/.venv`: it downloads a shard's GeoParquet, a little wider than
+the shard since its bbox test is strict, to `cache/overture/<type>/`, kept
+until the release changes; the ingest then keeps the rows that meet the
+shard.
 
 ### GEDTM30 v1.2 (OpenGeoHub / OpenLandMap)
 
@@ -83,8 +86,8 @@ rustup toolchain install nightly   # the Overture ingest is a single-file cargo 
 ```
 
 `gdal` for `gdalwarp` and `raster2pgsql`, `postgis` for the ingestion
-utilities, `jq` and `envsubst` for the elevation script. Docker runs the
-database and the GDAL image.
+utilities, `jq` and `envsubst` for the elevation script, `python3` for the
+Overture CLI's venv. Docker runs the database and the GDAL image.
 
 ## 3. Bring up db-geo
 
