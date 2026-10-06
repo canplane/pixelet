@@ -4,7 +4,7 @@
 //! estimates them names a superset of the exact demand from what is
 //! known; never less, since a requirement left out is ground that never
 //! refines. What is known of a node is the kernel's query
-//! (`pxl-kernel world/access/query.rs`), asked in the grid's cells.
+//! (`pxl-kernel layer/query.rs`), asked in the grid's cells.
 
 use super::lattice::{Lattice, GROUND};
 use super::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};

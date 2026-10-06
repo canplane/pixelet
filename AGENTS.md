@@ -122,17 +122,17 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   by its width, is a second owner; `check:rules` refuses it outside `space/`.
 - **A layer is a payload and a one-zoom fold, and nothing else.** Which
   tiles are wanted is the observation's demand (`world/pyramid.rs`
-  `observe`), which are held residency's (`world/residency.rs`), when they are
+  `observe`), which are held residency's (`layer/residency.rs`), when they are
   fetched the scheduler's (`io/sched.rs`), and a tile is folded only by the
   bake's `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not
   data — terrain folds by majority and average, POI by sum.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
-  and x, y, z (`world/pyramid/chunk.rs`); a cube that holds nothing is no
+  and x, y, z (`world/chunk.rs`); a cube that holds nothing is no
   chunk. Terrain and POI are tiles, a 2D heightfield and a 2D count; placed
   objects are resident in their store, a sparse tree a z8 column. What a box holds
   is asked of `Bounds` (`pxl-spec space/layer/demand.rs`), which `Known`
-  (`world/observation.rs`) answers; a point or a ray is asked of the query
-  (`world/access.rs`). Nothing outside a layer reads its records in the
+  (`world/view/observation.rs`) answers; a point or a ray is asked of the query
+  (`world/query.rs`). Nothing outside a layer reads its records in the
   layer's shape, and which of a layer's tiles holds a chunk's cells is the
   layer's lattice's (`pxl-spec space/layer/lattice.rs` `read_tile`). A placed object lives in the chunks its cube is in — built,
   remade and drawn with it — and shares the lattice and the fold rule
@@ -144,7 +144,7 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   behaves exactly as the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`Cell::center`), at the height of the
   surface drawn there: one thing's at the leaf cell it stands in, many at
-  their cell's middle (`pxl-kernel layer/poi/placement.rs`).
+  their cell's middle (`pxl-kernel world/chunk/place.rs`).
 - **The camera grid is the resolution; a layer folds what is in a cell.**
   The grid's cell is the distance's (`pxl-spec space/camera/grid.rs` `Tau::cell_at`,
   `SPLIT` its one knob, one factor τ), and one cell of it is one thing

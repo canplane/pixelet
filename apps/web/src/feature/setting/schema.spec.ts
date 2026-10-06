@@ -159,7 +159,7 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (layer/marker/coverage_gizmo.rs). */
+  /** Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs). */
   gizmos: {
     key: 13 as number,
     kind: "toggle",
@@ -273,7 +273,7 @@ export const SETTINGS_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (layer/marker/coverage_gizmo.rs). */
+  /** Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs). */
   gizmos: {
     key: 13 as number,
     kind: "toggle",
