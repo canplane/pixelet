@@ -8,7 +8,7 @@ use crate::util::{pack, Level};
 use pxl_spec::bake::place_tile::{encode_place_group, Named, GROUP_TILES};
 use pxl_spec::bake::place_tile::{DICT_OBJECT, GROUP_KEY_DEPTH, GROUP_SHAMT};
 use pxl_spec::bake::quadkey::index_of;
-use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::coord::pvf3::ivec;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -62,7 +62,8 @@ type Dictionary = Vec<(String, Named)>;
 pub(super) fn dictionary(out: &Path, seconds: u64) -> Result<(), String> {
     let out = out.join("dictionary");
     std::fs::create_dir(&out).map_err(|e| e.to_string())?;
-    let (_, mut client) = job::connect(&[&READS], seconds)?;
+    // The dictionary names every place, so it needs every shard.
+    let (_, mut client) = job::connect(&[&READS], &crate::coverage::Coverage::of_source()?.shards().collect(), seconds)?;
     let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
     let rows = provider.dictionary(&mut client).map_err(|e| e.to_string())?;
     std::fs::write(out.join("dictionary.json"), serde_json::to_vec(&rows).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
@@ -73,11 +74,11 @@ pub(super) fn dictionary(out: &Path, seconds: u64) -> Result<(), String> {
 pub(super) fn execute(group: u64, dictionary: &Path, out: &Path, seconds: u64) -> Result<(), String> {
     let rows: Dictionary = serde_json::from_slice(&std::fs::read(dictionary).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let dict = PlaceDict::of(rows);
-    let (_, mut client) = job::connect(&[&READS], seconds)?;
-    let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
     let base = ivec::sh(group, GROUP_SHAMT as i32);
     let side = 1i64 << GROUP_SHAMT;
     let coverage = crate::coverage::Coverage::of_source()?;
+    let (_, mut client) = job::connect(&[&READS], &coverage.around(base), seconds)?;
+    let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
     let leaves: Vec<_> = (0..GROUP_TILES as i64)
         .map(|k| ivec::add(base, ivec::gather(k % side, k / side, 0)))
         .filter(|&l| coverage.contains(l))

@@ -20,7 +20,7 @@ fn main() {
     let (dir, tiles) = args.split_first().expect("usage: <dir> <tile>...");
 
     let coverage = Coverage::of_source().expect("coverage");
-    let (_, mut client) = Overture::reading(&leaf::READS).expect("geo DB");
+    let (_, mut client) = Overture::reading(&leaf::READS, &Coverage::of_source().expect("coverage").shards().collect()).expect("geo DB");
     let raster = Arc::new(Raster::open(&mut client).expect("raster"));
     let repo = TerrainRepository::prepare(&mut client, raster).expect("prepare");
     let memo = std::env::temp_dir().join("pxl-source");
