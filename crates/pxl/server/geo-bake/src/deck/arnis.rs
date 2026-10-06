@@ -33,8 +33,8 @@ use std::time::Instant;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::deck::{footprint as line_reach, Form, STACKED_DECK_HEADROOM_M};
 use pxl_spec::bake::way::half_cells;
-use pxl_spec::space::adapter::epsg3857::{from_db, get_tile_bbox, to_db, u_per_m};
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::coord::adapter::epsg3857::{from_db, get_tile_bbox, to_db, u_per_m};
+use pxl_spec::space::coord::pvf3::ivec::IVec;
 use xpute_core::math::scalar::round;
 
 use crate::deck::elevation::{sample_cells, tile_of};
@@ -45,7 +45,7 @@ use crate::deck::{Drawn, Line, Reader, Solved};
 use crate::segment::{End, PartId, Segment};
 use crate::terrain::bake::Surface;
 use crate::terrain::pipeline::overture::policy::waterway_width;
-use crate::terrain::pipeline::overture::width::width_cells;
+use crate::terrain::pipeline::overture::width::width_u;
 use crate::wkb::wkb_to_geometries;
 
 // ---- Arnis's numbers, in metres or as ratios, under its names ----
@@ -103,15 +103,15 @@ pub struct Times {
     pub solve: f64,
 }
 
-/// The tile's scale: Arnis's metres in its cells.
+/// The tile's scale: Arnis's metres, in u and then in the grid's cells.
 #[derive(Clone, Copy)]
 struct Units {
-    cell_per_m: f64,
+    u_per_m: f64,
 }
 
 impl Units {
     fn c(self, m: f64) -> i32 {
-        round(m * self.cell_per_m) as i32
+        round(m * self.u_per_m / U_PER_CELL) as i32
     }
 }
 
@@ -153,7 +153,7 @@ struct Run {
     /// Every node it passes, ends included.
     nodes: Vec<End>,
     half: i32,
-    width_cells: f64,
+    width_u: f64,
 }
 
 impl Run {
@@ -170,7 +170,7 @@ fn graded(way: &Way, points: Vec<[f64; 3]>) -> (Line, Drawn) {
         Line {
             subtype: way.row.subtype.clone(),
             class: way.row.class.clone(),
-            width_cells: way_width(&way.row),
+            width_u: way_width(&way.row),
             form: Form::Grade,
             points,
             clear: 0,
@@ -195,7 +195,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
     }
     let [pmin, pmax] = get_tile_bbox(tile);
     let units = Units {
-        cell_per_m: u_per_m(from_db(pmin[1])) / U_PER_CELL,
+        u_per_m: u_per_m(from_db(pmin[1])),
     };
     let mut src = Source {
         ring: tiles.into_iter().collect(),
@@ -342,7 +342,7 @@ impl Source {
         let step = to_db(U_PER_CELL);
         let line = Polyline::of(s.piece.way.points.iter().map(|p| [p[0], p[1]]));
         let length = s.piece.way.length();
-        let reach = to_db((line_reach(s.piece.width()) + 16.0) * U_PER_CELL);
+        let reach = to_db((line_reach(s.piece.width() / U_PER_CELL) + 16.0) * U_PER_CELL);
         let at: Vec<(usize, [f64; 2])> = (0..=s.n)
             .map(|k| (k, line.at((k as f64 * step).min(length))))
             .filter(|(_, p)| self.ring.contains(&tile_of(*p)))
@@ -404,8 +404,8 @@ fn runs_of(src: &Source, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<Run>
                 ends,
                 clipped,
                 nodes,
-                half: half_cells(s.piece.width()),
-                width_cells: s.piece.width(),
+                half: half_cells(s.piece.width() / U_PER_CELL),
+                width_u: s.piece.width(),
             });
         }
     }
@@ -426,9 +426,9 @@ fn effective_layer(r: &Run) -> i64 {
     r.piece.way.tags.level.map(|l| l.max(0)).unwrap_or(i64::from(r.piece.form == Form::Deck))
 }
 
-/// A way's width, in cells.
+/// A way's width, in u.
 fn way_width(row: &Segment) -> f64 {
-    width_cells(&row.subtype, row.class.as_deref(), row.tags.role)
+    width_u(&row.subtype, row.class.as_deref(), row.tags.role)
 }
 
 // ---- what a deck must clear: ways at grade and waterways, bucketed ----
@@ -486,12 +486,12 @@ impl Obstacles {
                 "road" => {
                     let class = row.class.as_deref().unwrap_or("");
                     let headroom = if is_non_vehicular(class) || class == "track" { PATH_HEADROOM_M } else { ROAD_HEADROOM_M };
-                    let half = half_cells(way_width(row));
+                    let half = half_cells(way_width(row) / U_PER_CELL);
                     add(&mut out, &way.line.points, &row.ends, half, units.c(headroom));
                 }
                 "rail" if !row.is_subway() => {
                     let headroom = if row.class.as_deref() == Some("tram") { ROAD_HEADROOM_M } else { RAIL_HEADROOM_M };
-                    add(&mut out, &way.line.points, &row.ends, half_cells(way_width(row)), units.c(headroom));
+                    add(&mut out, &way.line.points, &row.ends, half_cells(way_width(row) / U_PER_CELL), units.c(headroom));
                 }
                 _ => {}
             }
@@ -504,7 +504,7 @@ impl Obstacles {
                 _ => continue,
             };
             // as wide as the ground draws it, where Arnis clears its centerline
-            add(&mut out, points, &[], half_cells(waterway_width(class).unwrap_or(0.0)), units.c(headroom));
+            add(&mut out, points, &[], half_cells(waterway_width(class).unwrap_or(0.0) / U_PER_CELL), units.c(headroom));
         }
         out
     }
@@ -1377,7 +1377,7 @@ fn part_of(r: &Run, ys: &[i32], [a, b]: [usize; 2], clear: u8) -> (Line, Drawn) 
         Line {
             subtype: r.piece.way.subtype.clone(),
             class: r.piece.way.class.clone(),
-            width_cells: r.width_cells,
+            width_u: r.width_u,
             form: r.piece.form,
             points: keep.iter().map(|(_, p, z)| [p[0], p[1], *z]).collect(),
             clear,

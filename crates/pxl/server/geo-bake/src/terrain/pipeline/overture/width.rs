@@ -1,16 +1,31 @@
 // pxl-geo-bake/terrain/pipeline/overture/width.rs
 
-//! A way's width in cells, the same on the ground and on a deck: Carto's at
-//! z16 (`roads.mss`, gravitystorm/openstreetmap-carto 1cc4b89), the zoom whose
-//! pixel is a cell (`web_zoom_of(CELL)`), its casing included. Carto reads no
-//! measured width, nor a way's lanes, and neither does the bake.
+//! A way's width, the same on the ground and on a deck: Carto's at z16
+//! (`roads.mss`, gravitystorm/openstreetmap-carto 1cc4b89) in its pixels, its
+//! casing included. Carto reads no measured width, nor a way's lanes, and
+//! neither does the bake.
+
+use pxl_spec::space::coord::adapter::epsg3857::cell_zoom_of;
+use pxl_spec::space::coord::zoom::units;
 
 use crate::terrain::pipeline::overture::role::Role;
+
+/// The web zoom Carto's widths are read at.
+const CARTO_ZOOM: i32 = 16;
+
+/// A Carto width, in its z16 pixels, in u: the one place one becomes a length.
+pub const fn carto_u(px: f64) -> f64 {
+    px * units(cell_zoom_of(CARTO_ZOOM))
+}
 
 /// `@footway-width-z16`: a sidewalk is a footway.
 const FOOTWAY: f64 = 1.3;
 
-pub fn width_cells(subtype: &str, class: Option<&str>, role: Role) -> f64 {
+pub fn width_u(subtype: &str, class: Option<&str>, role: Role) -> f64 {
+    carto_u(width_px(subtype, class, role))
+}
+
+fn width_px(subtype: &str, class: Option<&str>, role: Role) -> f64 {
     let c = class.unwrap_or("");
     if subtype == "rail" {
         // Each railway's line at z16 (`railway_*`).

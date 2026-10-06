@@ -4,7 +4,7 @@
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::format::GroundCell;
-use pxl_spec::space::adapter::epsg3857::{from_db, G3857};
+use pxl_spec::space::coord::adapter::epsg3857::{from_db, G3857};
 use xpute_core::math::scalar::round;
 
 use crate::wkb::WkbGeometry;
@@ -63,7 +63,7 @@ pub struct Feature {
     pub points: Vec<P>,
     pub holes: Vec<Vec<P>>,
     pub closed: bool,
-    /// A line's width in the tile's cells.
+    /// A line's width in u.
     pub width: f64,
     /// Ends a flag or a line cuts: square, not rounded.
     pub cut: [bool; 2],

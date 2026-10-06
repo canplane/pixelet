@@ -12,7 +12,7 @@ pub mod way;
 
 use postgres::Client;
 use pxl_spec::bake::deck::Form;
-use pxl_spec::space::adapter::epsg3857::G3857;
+use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
 use crate::terrain::repository::TerrainRepository;
 use source::Store;
@@ -28,11 +28,11 @@ pub struct Solved {
     pub drawn: Vec<Drawn>,
 }
 
-/// A solved line: XY in DB coordinates, height and width in leaf cells.
+/// A solved line: XY in DB coordinates, height in leaf cells, width in u.
 pub struct Line {
     pub subtype: String,
     pub class: Option<String>,
-    pub width_cells: f64,
+    pub width_u: f64,
     pub form: Form,
     pub points: Vec<G3857>,
     /// A bore's clear space over its surface, in leaf cells; none for another form.

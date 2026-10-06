@@ -5,7 +5,7 @@
 use pxl_spec::bake::deck::Form;
 
 use crate::segment::{PartId, Segment};
-use crate::terrain::pipeline::overture::width::width_cells;
+use crate::terrain::pipeline::overture::width::width_u;
 
 /// A part of a way that is a bridge or a tunnel, whole.
 #[derive(Clone)]
@@ -20,7 +20,7 @@ impl Piece {
     }
 
     pub fn width(&self) -> f64 {
-        width_cells(&self.way.subtype, self.way.class.as_deref(), self.way.tags.role)
+        width_u(&self.way.subtype, self.way.class.as_deref(), self.way.tags.role)
     }
 
     /// Whether any of it lies in `[lo, hi]`.

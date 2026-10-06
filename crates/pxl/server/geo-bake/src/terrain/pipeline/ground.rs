@@ -5,9 +5,10 @@
 //! `u32`.
 
 use pxl_spec::bake::format::{Ground, GroundCell};
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::way;
 use pxl_spec::cell::cube_types::ground;
-use pxl_spec::space::pyramid::{GROUND, TILE_CELLS};
+use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 
 use crate::terrain::pipeline::feature::{Feature, Layer, P};
 
@@ -57,7 +58,7 @@ pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
         if f.closed {
             render_polygon(&f.points, f.cell, &mut cells, &f.holes, mask);
         } else {
-            render_linear_feat(&f.points, f.cell, &mut cells, f.width, f.cut, mask);
+            render_linear_feat(&f.points, f.cell, &mut cells, f.width / U_PER_CELL, f.cut, mask);
         }
     }
 

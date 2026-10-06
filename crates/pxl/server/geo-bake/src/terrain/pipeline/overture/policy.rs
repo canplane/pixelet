@@ -9,14 +9,14 @@
 
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::cell::cube_types::ground as g;
-use pxl_spec::space::adapter::epsg3857::G3857;
+use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
 use crate::deck::Drawn;
 use crate::segment::Segment;
 use crate::terrain::pipeline::feature::{closes, Feature, Layer, Rank};
 use crate::terrain::pipeline::overture::between::{merged, uncovered, Line};
 use crate::terrain::pipeline::overture::role::Role;
-use crate::terrain::pipeline::overture::width::width_cells;
+use crate::terrain::pipeline::overture::width::{carto_u, width_u};
 use crate::terrain::repository::{BaseRow, BuildingRow};
 use crate::wkb::wkb_to_geometries;
 
@@ -145,9 +145,9 @@ fn land_paint(class: &str) -> Option<Paint> {
 /// until z17); a line of another class has no fill.
 const WATERWAYS: [(&str, f64); 5] = [("river", 8.0), ("canal", 4.2), ("stream", 3.0), ("ditch", 2.0), ("drain", 2.0)];
 
-/// A waterway line's width in cells, if Carto draws one of its class.
+/// A waterway line's width in u, if Carto draws one of its class.
 pub fn waterway_width(class: &str) -> Option<f64> {
-    WATERWAYS.iter().find(|(c, _)| *c == class).map(|(_, w)| *w)
+    WATERWAYS.iter().find(|(c, _)| *c == class).map(|(_, px)| carto_u(*px))
 }
 
 /// Water areas but what Carto draws as landcover in water's color or as a
@@ -212,21 +212,23 @@ fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
     Some((look, if look == g::aeroway && !closed { Layer::Aeroway } else { layer }, feature))
 }
 
-/// A runway's, the widest line Carto draws at z16.
+/// A runway's, the widest line Carto draws at z16, in its pixels.
 pub const WIDEST_LINE: f64 = 24.0;
 
-/// A Base line's width in cells: Carto's at z16, as a way's
+/// A Base line's width in u: Carto's at z16, as a way's
 /// (`overture/width.rs`), its casing included.
 fn line_width(source: &str, class: &str) -> f64 {
-    match (source, class) {
-        ("water", _) => waterway_width(class).unwrap_or(0.0),
-        (_, "runway") => WIDEST_LINE,
-        (_, "taxiway") => 8.0,
-        (_, "dam" | "breakwater") => 4.0,
-        (_, "pier" | "weir") => 2.0,
-        (_, "platform" | "cutline") => 6.0,
-        _ => 0.0,
+    if source == "water" {
+        return waterway_width(class).unwrap_or(0.0);
     }
+    carto_u(match class {
+        "runway" => WIDEST_LINE,
+        "taxiway" => 8.0,
+        "dam" | "breakwater" => 4.0,
+        "pier" | "weir" => 2.0,
+        "platform" | "cutline" => 6.0,
+        _ => 0.0,
+    })
 }
 
 /// Carto's `water-barriers` and `piers` stack their area layer under their
@@ -265,7 +267,7 @@ pub fn ways(row: &Segment, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
     let rank = Rank::new(Layer::Road, paint_order(&row.subtype, row.class.as_deref(), row.tags.role), "", &row.gers_id);
     let paint = |points: &[G3857], [a, b]: [f64; 2]| {
         let mut f = Feature::line(points, tile_min, look, rank.clone())?;
-        f.width = width_cells(&row.subtype, row.class.as_deref(), row.tags.role);
+        f.width = width_u(&row.subtype, row.class.as_deref(), row.tags.role);
         // square where the segment is cut, round at its own ends
         f.cut = [a > 0.0 || a0 > 0.0, b < 1.0 || b0 < 1.0];
         Some(f)

@@ -6,8 +6,8 @@
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::deck::{self, Builder, Decks, POINT_SCALE};
-use pxl_spec::space::adapter::epsg3857::{from_db, G3857};
-use pxl_spec::space::pyramid::TILE_CELLS;
+use pxl_spec::space::coord::adapter::epsg3857::{from_db, G3857};
+use pxl_spec::space::layer::lattice::TILE_CELLS;
 use xpute_core::math::scalar::round;
 
 use crate::deck::Line;
@@ -19,7 +19,8 @@ pub fn bake_decks(lines: &[Line], tile_min: G3857) -> Option<Decks> {
     let mut decks = Builder::default();
     for row in lines {
         let kind = segment_type(&row.subtype, row.class.as_deref());
-        let width_code = round(row.width_cells * POINT_SCALE).clamp(1.0, f64::from(u8::MAX)) as u8;
+        let width = row.width_u / U_PER_CELL;
+        let width_code = round(width * POINT_SCALE).clamp(1.0, f64::from(u8::MAX)) as u8;
         let local: Vec<([f64; 2], i16)> = row
             .points
             .iter()
@@ -28,7 +29,7 @@ pub fn bake_decks(lines: &[Line], tile_min: G3857) -> Option<Decks> {
                 (at, round(p[2]) as i16)
             })
             .collect();
-        for [a, b] in runs_within(&local, deck::footprint(row.width_cells)) {
+        for [a, b] in runs_within(&local, deck::footprint(width)) {
             decks.push(local[a..=b].iter().copied(), width_code, kind, row.form, row.clear);
         }
     }

@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::adapter::epsg3857::{to_db, BBox3857};
+use pxl_spec::space::coord::adapter::epsg3857::{to_db, BBox3857};
 
 use crate::elevation::Raster;
 use crate::segment::Segment;
 use crate::terrain::pipeline::overture::policy::{INFRASTRUCTURE, WIDEST_LINE};
+use crate::terrain::pipeline::overture::width::carto_u;
 
 // Buildings and roads are not clipped: a naive bbox clip broke ring closure.
 // Water and coast are clipped, since their rows reach hundreds of thousands of points.
@@ -32,7 +32,7 @@ WHERE t.geom && env.e"
 );
 
 /// How far past a tile what is drawn on it can come from: half the widest line.
-pub const DRAWN_REACH_U: f64 = WIDEST_LINE / 2.0 * U_PER_CELL;
+pub const DRAWN_REACH_U: f64 = carto_u(WIDEST_LINE) / 2.0;
 
 /// A tile's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
 /// is baked is still the tile's own cells.
