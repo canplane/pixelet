@@ -29,10 +29,10 @@ pub trait Query {
     where
         Self: 'a;
 
-    /// Where anything stands in the node: none where nothing does, else a box
-    /// holding what is stored there. What is not known is the answer's, not a
-    /// box's: no third state.
-    fn bounds(&self, node: Node) -> Answer<Option<Aabb>>;
+    /// Where anything stands in the node, as its cells at `cell` are read:
+    /// none where nothing does, else a box holding what is stored there. What
+    /// is not known is the answer's, not a box's: no third state.
+    fn bounds(&self, node: Node, cell: Zoom) -> Answer<Option<Aabb>>;
 
     /// The node's cells at `cell`, no coarser than the node.
     fn read(&self, node: Node, cell: Zoom) -> Answer<Self::Record<'_>>;
