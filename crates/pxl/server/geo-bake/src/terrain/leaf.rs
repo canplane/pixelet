@@ -9,8 +9,8 @@ use std::path::Path;
 use postgres::types::ToSql;
 use postgres::Client;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::adapter::epsg3857::{self, to_db};
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::coord::adapter::epsg3857::{self, to_db};
+use pxl_spec::space::coord::pvf3::ivec::IVec;
 
 use crate::coverage::Coverage;
 use crate::deck::{self, source::Store};
@@ -102,8 +102,7 @@ pub fn write_land_tiles(path: &Path, coverage: &Coverage, release: &str, land: &
 fn land_key(coverage: &Coverage, release: &str) -> serde_json::Value {
     serde_json::json!({
         "leaf_z": pxl_spec::space::pyramid::LEAF_Z,
-        "x": [coverage.x.0, coverage.x.1],
-        "y": [coverage.y.0, coverage.y.1],
+        "shards": coverage.shards().map(|s| s.name()).collect::<Vec<_>>(),
         "ground": format!("{GROUND:016x}"),
         "release": release,
     })

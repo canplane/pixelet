@@ -1,144 +1,134 @@
 // pxl-geo-bake/coverage.rs
 
-//! What the bakes publish (from `infra/geo/elevation/metadata.json`
-//! `bbox_4326`), what an ingest must take for it, and the one door to the DB.
+//! What the bakes publish — the shards `infra/geo/elevation/metadata.json`
+//! names, a tile at `SHARD_Z` each — which are what the ingests take, and the
+//! one door to the DB.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
 use postgres::{Client, NoTls};
-use pxl_geo_spec::overture::division::NEAREST_REACH_M;
 use pxl_geo_spec::table::CATALOG;
-use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
-use pxl_spec::space::adapter::{epsg3857, epsg4326};
+use pxl_spec::bake::quadkey::{index_of, node_name};
 use pxl_spec::space::hierarchy::{ancestor_of, first_descendant_of};
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LEAF_Z;
-use pxl_spec::space::zoom::idx;
-use pxl_spec::space::zoom::{count, units, Zoom};
-
-use crate::elevation::tile_reads;
-use crate::terrain::repository::DRAWN_REACH_U;
+use pxl_spec::space::coord::zoom::{count, shamt, units, Zoom, SHARD_Z};
 
 const METADATA: &str = include_str!("../../../../../infra/geo/elevation/metadata.json");
 
-/// The raster's `[west, south]`, `[east, north]`.
-pub fn source_bbox() -> Result<[[f64; 2]; 2], String> {
-    let bad = |why: String| format!("infra/geo/elevation/metadata.json: {why}");
-    let entries: serde_json::Value = serde_json::from_str(METADATA).map_err(|e| bad(e.to_string()))?;
-    let Some([entry]) = entries.as_array().map(Vec::as_slice) else {
-        return Err(bad("want an array of exactly one entry".into()));
-    };
-    let edge = |k: &str| entry["bbox_4326"][k].as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(format!("bbox_4326.{k} is not a number")));
-    let (west, south, east, north) = (edge("west")?, edge("south")?, edge("east")?, edge("north")?);
-    if !(west < east && south < north) {
-        return Err(bad("bbox_4326 is empty".into()));
-    }
-    Ok([[west, south], [east, north]])
+/// A shard, by its index at `SHARD_Z`.
+pub type Shard = [i64; 2];
+
+/// A node of the hierarchy at or above the shards: its zoom and index.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Node {
+    pub zoom: Zoom,
+    pub at: [i64; 2],
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+impl Node {
+    /// The node's corner nearest the lanes' least, in units.
+    pub fn base(self) -> [i64; 2] {
+        first_descendant_of(self.at, shamt(self.zoom) as u32)
+    }
+
+    pub fn name(self) -> String {
+        node_name(self.zoom, self.base()).to_string()
+    }
+
+    /// `[minx, miny, maxx, maxy]` in units, the maximum exclusive.
+    pub fn rect(self) -> [f64; 4] {
+        let ([x, y], side) = (self.base().map(|v| v as f64), units(self.zoom));
+        [x, y, x + side, y + side]
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Coverage {
-    pub x: (i64, i64),
-    pub y: (i64, i64),
+    shards: BTreeSet<Shard>,
 }
 
 static SOURCE: LazyLock<Result<Coverage, String>> = LazyLock::new(Coverage::derive);
 
-fn project_tile(lng: f64, lat: f64) -> IVec {
-    idx(LEAF_Z, epsg4326::project(&[lng, lat, 0.0]).i)
-}
-
 impl Coverage {
+    pub fn new(shards: impl IntoIterator<Item = Shard>) -> Coverage {
+        Coverage { shards: shards.into_iter().collect() }
+    }
+
     pub fn of_source() -> Result<Coverage, String> {
         SOURCE.clone()
     }
 
-    /// The leaves whose padded elevation grid lies in the raster, each axis on its own.
     fn derive() -> Result<Coverage, String> {
-        let [sw, ne] = source_bbox()?;
-        let (p0, p1) = (project_tile(sw[0], sw[1]), project_tile(ne[0], ne[1]));
-        let padded = |px: i64, py: i64| {
-            let [x0, y0, x1, y1] = tile_reads(epsg3857::get_tile_bbox(ivec::gather(px, py, 0)));
-            let a = epsg4326::from_mercator(&[x0, y0, 0.0]);
-            let b = epsg4326::from_mercator(&[x1, y1, 0.0]);
-            [a[0], a[1], b[0], b[1]]
+        let bad = |why: String| format!("infra/geo/elevation/metadata.json: {why}");
+        let entries: serde_json::Value = serde_json::from_str(METADATA).map_err(|e| bad(e.to_string()))?;
+        let Some([entry]) = entries.as_array().map(Vec::as_slice) else {
+            return Err(bad("want an array of exactly one entry".into()));
         };
-        let whole = |a: i64, b: i64, inside: &dyn Fn(i64) -> bool| {
-            let pass: Vec<i64> = (a.min(b)..=a.max(b)).filter(|&i| inside(i)).collect();
-            Some((*pass.first()?, *pass.last()?))
-        };
-        let x = whole(ivec::X(p0), ivec::X(p1), &|px| {
-            let b = padded(px, ivec::Y(p0));
-            sw[0] <= b[0] && b[2] <= ne[0]
-        });
-        let y = whole(ivec::Y(p0), ivec::Y(p1), &|py| {
-            let b = padded(ivec::X(p0), py);
-            sw[1] <= b[1] && b[3] <= ne[1]
-        });
-        match (x, y) {
-            (Some(x), Some(y)) => Ok(Coverage { x, y }),
-            _ => Err("infra/geo/elevation/metadata.json: bbox_4326 covers no whole tile".into()),
+        let names = entry["shards"].as_array().ok_or_else(|| bad("no shards".into()))?;
+        let shards = names
+            .iter()
+            .map(|n| {
+                let name = n.as_str().unwrap_or_default();
+                match index_of(name) {
+                    Some((depth, at)) if depth == u32::from(SHARD_Z) => Ok([ivec::X(at), ivec::Y(at)]),
+                    _ => Err(bad(format!("{n} is not a shard's name"))),
+                }
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        if shards.is_empty() {
+            return Err(bad("no shards".into()));
         }
+        Ok(Coverage { shards })
     }
 
-    pub fn contains(&self, tile: IVec) -> bool {
-        (self.x.0..=self.x.1).contains(&ivec::X(tile)) && (self.y.0..=self.y.1).contains(&ivec::Y(tile))
+    fn shard_of(zoom: Zoom, tile: IVec) -> Shard {
+        ancestor_of([ivec::X(tile), ivec::Y(tile)], u32::from(zoom - SHARD_Z))
     }
 
-    /// Whether the tile at `z` and `tile` covers any leaf held.
+    pub fn contains(&self, leaf: IVec) -> bool {
+        self.shards.contains(&Self::shard_of(LEAF_Z, leaf))
+    }
+
+    /// Whether the tile at `zoom` and `tile` covers any leaf held.
     pub fn meets(&self, zoom: Zoom, tile: IVec) -> bool {
-        let steps = u32::from(LEAF_Z - zoom);
-        let ([x0, y0], [x1, y1]) = (ancestor_of([self.x.0, self.y.0], steps), ancestor_of([self.x.1, self.y.1], steps));
-        (x0..=x1).contains(&ivec::X(tile)) && (y0..=y1).contains(&ivec::Y(tile))
+        if zoom >= SHARD_Z {
+            return self.shards.contains(&Self::shard_of(zoom, tile));
+        }
+        let at = [ivec::X(tile), ivec::Y(tile)];
+        self.shards.iter().any(|&s| ancestor_of(s, u32::from(SHARD_Z - zoom)) == at)
     }
 
-    /// Whether every leaf under the tile at `z` and `tile` is held.
+    /// Whether every leaf under the tile at `zoom` and `tile` is held.
     pub fn holds(&self, zoom: Zoom, tile: IVec) -> bool {
-        let [x0, y0] = first_descendant_of([ivec::X(tile), ivec::Y(tile)], u32::from(LEAF_Z - zoom));
-        let n = count(LEAF_Z, zoom) as i64;
-        self.x.0 <= x0 && x0 + n - 1 <= self.x.1 && self.y.0 <= y0 && y0 + n - 1 <= self.y.1
+        if zoom >= SHARD_Z {
+            return self.meets(zoom, tile);
+        }
+        let at = [ivec::X(tile), ivec::Y(tile)];
+        let under = self.shards.iter().filter(|&&s| ancestor_of(s, u32::from(SHARD_Z - zoom)) == at).count();
+        under == (count(SHARD_Z, zoom) as usize).pow(2)
     }
 
+    /// Every leaf held.
     pub fn tiles(&self) -> Vec<IVec> {
-        let mut out = Vec::new();
-        for x in self.x.0..=self.x.1 {
-            for y in self.y.0..=self.y.1 {
-                out.push(ivec::gather(x, y, 0));
+        let n = i64::from(count(LEAF_Z, SHARD_Z));
+        let mut out = Vec::with_capacity(self.shards.len() * (n * n) as usize);
+        for &s in &self.shards {
+            let [x0, y0] = first_descendant_of(s, u32::from(LEAF_Z - SHARD_Z));
+            for y in y0..y0 + n {
+                for x in x0..x0 + n {
+                    out.push(ivec::gather(x, y, 0));
+                }
             }
         }
         out
     }
 
-    /// The published tiles' union in EPSG:3857, `[minx, miny, maxx, maxy]`.
-    pub fn rect(&self) -> [f64; 4] {
-        let [a0, a1] = epsg3857::get_tile_bbox(ivec::gather(self.x.0, self.y.0, 0));
-        let [b0, b1] = epsg3857::get_tile_bbox(ivec::gather(self.x.1, self.y.1, 0));
-        [a0[0].min(b0[0]), a0[1].min(b0[1]), a1[0].max(b1[0]), a1[1].max(b1[1])]
+    pub fn shards(&self) -> impl Iterator<Item = Node> + '_ {
+        self.shards.iter().map(|&at| Node { zoom: SHARD_Z, at })
     }
 
-    /// Tiles past the published ones that hold the farthest an Overture read
-    /// goes: a tile's `DRAWN_REACH_U`, or `NEAREST_REACH_M` where k is largest.
-    pub fn margin_tiles(&self) -> i64 {
-        let [_, y0, _, y1] = self.rect();
-        let label = NEAREST_REACH_M * u_per_m(from_db(y0.abs().max(y1.abs())));
-        (DRAWN_REACH_U.max(label) / units(LEAF_Z)).ceil() as i64
-    }
-
-    /// The published tiles grown by `margin_tiles`, in degrees: tile edges, a
-    /// margin from any row a tile reads.
-    pub fn ingest_bbox(&self) -> [f64; 4] {
-        let m = self.margin_tiles();
-        let [a, _] = epsg3857::get_tile_bbox(ivec::gather(self.x.0 - m, self.y.0 - m, 0));
-        let [_, b] = epsg3857::get_tile_bbox(ivec::gather(self.x.1 + m, self.y.1 + m, 0));
-        let sw = epsg4326::from_mercator(&[a[0].min(b[0]), a[1].min(b[1]), 0.0]);
-        let ne = epsg4326::from_mercator(&[a[0].max(b[0]), a[1].max(b[1]), 0.0]);
-        [sw[0], sw[1], ne[0], ne[1]]
-    }
-}
-
-/// As `--bbox` takes it and `overture_catalog.region_code` records it.
-pub fn bbox_arg(b: [f64; 4]) -> String {
-    format!("{},{},{},{}", b[0], b[1], b[2], b[3])
 }
 
 /// The `overture_*` tables a set of statements names, outside string
@@ -170,9 +160,9 @@ pub fn tables_of<'a>(reads: &[&[&'a str]]) -> Vec<&'a str> {
     out
 }
 
-/// The geo DB, opened only when every table a bake reads is one release over
-/// exactly [`Coverage::ingest_bbox`]: exactly, since some reads are unbounded
-/// (the place dictionary, a deck's structure).
+/// The geo DB, opened only when every table a bake reads holds exactly the
+/// coverage's shards, all of one release: exactly, since some reads are
+/// unbounded (the place dictionary, a deck's structure).
 pub struct Overture {
     url: String,
     pub release: String,
@@ -180,35 +170,35 @@ pub struct Overture {
     tables: Vec<(String, i64)>,
 }
 
+const INGEST: &str = "run ./infra/geo/overture/script/ingest.rs";
+
 impl Overture {
     /// For a bake whose statements are `reads`.
     pub fn reading(reads: &[&[&str]]) -> Result<(Overture, Client), String> {
         let tables = tables_of(reads);
         let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
-        let q = Coverage::of_source()?.ingest_bbox();
-        let ingest = format!("ingest with --bbox {} (bin ingest_bbox)", bbox_arg(q));
+        let want: BTreeSet<String> = Coverage::of_source()?.shards().map(Node::name).collect();
         let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
         let rows = client
-            .query(
-                &format!("SELECT file_name, region_code, data_date::text, total_count FROM {CATALOG} WHERE file_name = ANY($1)"),
-                &[&tables],
-            )
-            .map_err(|e| format!("{CATALOG}: {e}: {ingest}"))?;
+            .query(&format!("SELECT file_name, node, data_date, total_count FROM {CATALOG} WHERE file_name = ANY($1)"), &[&tables])
+            .map_err(|e| format!("{CATALOG}: {e}: {INGEST}"))?;
         let mut release: Option<(String, String)> = None;
         let mut out = Vec::with_capacity(tables.len());
         for &table in &tables {
-            let row = rows.iter().find(|r| r.get::<_, &str>(0) == table).ok_or_else(|| format!("{table} has no catalog row: {ingest}"))?;
-            let (region, date): (&str, String) = (row.get(1), row.get(2));
-            let have: Option<Vec<f64>> = region.split(',').map(|v| v.trim().parse::<f64>().ok()).collect();
-            if have.as_deref() != Some(q.as_slice()) {
-                return Err(format!("{table} was ingested over {region}, not the coverage's bbox: {ingest}"));
+            let have: BTreeMap<&str, (&str, i64)> = rows.iter().filter(|r| r.get::<_, &str>(0) == table).map(|r| (r.get(1), (r.get(2), r.get(3)))).collect();
+            let missing = want.iter().filter(|n| !have.contains_key(n.as_str())).count();
+            let extra = have.keys().filter(|n| !want.contains(**n)).count();
+            if missing + extra > 0 {
+                return Err(format!("{table} lacks {missing} of the coverage's shards and holds {extra} past them: {INGEST}"));
             }
-            match &release {
-                None => release = Some((table.to_string(), date)),
-                Some((first, r)) if *r != date => return Err(format!("{table} is release {date} and {first} is {r}: one bake reads one release; {ingest}")),
-                Some(_) => {}
+            for (date, _) in have.values() {
+                match &release {
+                    None => release = Some((table.to_string(), date.to_string())),
+                    Some((first, r)) if r != date => return Err(format!("{table} holds release {date} and {first} {r}: one bake reads one release; {INGEST}")),
+                    Some(_) => {}
+                }
             }
-            out.push((table.to_string(), row.get::<_, i64>(3)));
+            out.push((table.to_string(), have.values().map(|(_, n)| n).sum()));
         }
         let (_, release) = release.ok_or("a bake that reads no Overture table")?;
         Ok((Overture { url, release, tables: out }, client))

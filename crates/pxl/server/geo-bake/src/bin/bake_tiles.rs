@@ -35,11 +35,11 @@ use postgres::Client;
 use pxl_spec::bake::format::{encode_terrain, SNAPSHOT_KEY};
 use pxl_spec::bake::published::{FORMAT, PUBLISHED_VERSION};
 use pxl_spec::bake::quadkey::{tile_name, tile_of_name};
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::{Tile, LEAF_Z, TOP_Z};
 
 use pxl_geo_bake::cli::Flags;
-use pxl_geo_bake::coverage::{self, Coverage, Overture};
+use pxl_geo_bake::coverage::{Coverage, Overture};
 use pxl_geo_bake::deck;
 use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::pyramid::{build, refold, write_manifest, TileSet};
@@ -117,13 +117,13 @@ fn parse_args() -> Result<Args, String> {
 
 /// What the geo DB held when a version was baked; the version name says nothing of it.
 fn read_source_catalogs(client: &mut Client, source: &Overture) -> serde_json::Value {
-    let sql = "SELECT region_code, data_date::text AS data_date, file_name, status FROM elevation_catalog ORDER BY file_name";
+    let sql = "SELECT shard, data_date::text AS data_date, file_name, status FROM elevation_catalog ORDER BY shard";
     let elevation: Vec<serde_json::Value> = match client.query(sql, &[]) {
         Ok(rows) => rows
             .iter()
             .map(|r| {
                 serde_json::json!({
-                    "region_code": r.get::<_, String>("region_code"),
+                    "shard": r.get::<_, String>("shard"),
                     "data_date": r.get::<_, Option<String>>("data_date"),
                     "file_name": r.get::<_, String>("file_name"),
                     "status": r.get::<_, String>("status"),
@@ -377,16 +377,9 @@ fn run() -> Result<(), String> {
             Some(client) => client,
             None => source.connect()?,
         };
-        let raster = Arc::new(Raster::open(&mut client).map_err(|e| e.to_string())?);
+        let raster = Arc::new(Raster::open(&mut client)?);
         let candidates = coverage.tiles();
-        println!(
-            "[bake] tile grid x[{}..{}] y[{}..{}] = {} candidate tiles",
-            coverage.x.0,
-            coverage.x.1,
-            coverage.y.0,
-            coverage.y.1,
-            candidates.len()
-        );
+        println!("[bake] {} shards = {} candidate tiles", coverage.shards().count(), candidates.len());
 
         let cached = if args.reclassify {
             Err("--reclassify".to_string())
@@ -527,14 +520,13 @@ fn run() -> Result<(), String> {
             return Err(format!("{} tiles failed to assemble", t.failed));
         }
 
-        let top = build(&tiles, &Absence::new(coverage), args.concurrency)?;
+        let top = build(&tiles, &Absence::new(coverage.clone()), args.concurrency)?;
         write_manifest(
             &tiles,
             top,
             built.as_deref(),
             serde_json::json!({
-                "bbox_4326": coverage::source_bbox()?,
-                "ingest_bbox": coverage.ingest_bbox(),
+                "shards": coverage.shards().map(|s| s.name()).collect::<Vec<_>>(),
                 "candidate_pages": coverage.tiles().len(),
                 "land_tiles": land.len(),
                 "release": release,

@@ -21,7 +21,7 @@ pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, s
             if !leaf::has_ground(&mut client, &[p.tile]).map_err(|e| e.to_string())?[0] {
                 return Ok(None);
             }
-            let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client).map_err(|e| e.to_string())?);
+            let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client)?);
             let repo = TerrainRepository::prepare(&mut client, raster).map_err(|e| e.to_string())?;
             let memo = cache.join(SOURCE);
             let reader = &mut crate::deck::Reader {

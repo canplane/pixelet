@@ -9,23 +9,31 @@ This directory holds what fills them. Nothing here is deployed, and nothing
 here runs on a schedule. These are run by hand, a few times a year, against a
 database that is expensive to rebuild.
 
-> **Every ingest drops its tables before it writes.** This is the first thing
-> to know about running one. `--bbox` bounds what is fetched from the source,
-> not what is removed: a run with a small box leaves a small table, not a
-> partially updated one. There is no incremental mode and no merge — Overture
-> cuts a new dated release rather than streaming edits, so each run replaces
-> what it owns. Running an ingest to check that it starts is enough to empty
-> the table it owns.
+> **The database is filled a shard at a time, and a shard is whole or absent.**
+> A shard is a z8 tile (`SHARD_Z`), named by its Morton key, its edges in
+> EPSG:3857 meters rounded half to even. A feature is a row in each shard its
+> bbox meets, the bbox its vertices' extremes in meters, rounded the same way;
+> both are half open, so a bbox ending on an edge is the next shard's alone.
+> What a shard holds depends on the shard alone, so shards ingested one by one
+> are the shards ingested together. Each ingest replaces a shard's rows before
+> it writes them, and writes the shard's catalog row last; a run stopped
+> partway resumes at the first shard without one.
 
 ```
 infra/geo/
 ├── overture/                     fifteen types in six themes, one provider, one catalog
 │   └── script/ingest.rs            the one ingest, schema included
-└── elevation/                    one raster, out of one global GeoTIFF
+└── elevation/                    one global GeoTIFF, a raster a shard
     ├── init/01_elevation_schema.sql
-    ├── metadata.json               the regions, their bboxes and the source URL
-    └── script/setup-elevation.sh
+    ├── metadata.json               the published shards and the source URL
+    ├── script/setup-elevation.sh
+    └── warped/                     a shard's GeoTIFF, gitignored
 ```
+
+**Which shards.** `metadata.json` names the shards the bakes publish, and
+the ingests take exactly those (`pxl-geo-bake coverage.rs`). A bake refuses
+to run unless every table it reads holds exactly them, all of one release,
+and the elevation exactly them.
 
 ## 1. The tables
 
@@ -43,29 +51,27 @@ Coastline is not a table of its own. `OVERTURE_COAST_SQL`
 when no `overture_base_land` row or building touches its bbox and no way
 (not a ferry) comes within `DRAWN_REACH_U` of it.
 
-Both catalogs keep one row per table: which bbox it was pulled with and which
-release it is from. `read_source_catalogs()` (`bake_tiles.rs`) copies them into
-every baked version's `manifest.json`, which is how a published set says what
-data it was made from.
+Each catalog keeps one row per shard: `overture_catalog` a row per table and
+shard, `elevation_catalog` a row per shard, each with its release.
+`read_source_catalogs()` (`bake_tiles.rs`) copies them into every baked
+version's `manifest.json`, which is how a published set says what data it was
+made from.
 
 ### Overture Maps
 
 A public S3 release — no key, no portal step. The ingest reads the release's
 GeoParquet where it is published, only the row groups whose bbox statistics
-meet the bbox, straight into the tables; nothing is kept on disk.
-
-There is no default bbox: it is derived from the elevation's `bbox_4326`
-(§4).
+can meet a shard, straight into the tables; nothing is kept on disk.
 
 ### GEDTM30 v1.2 (OpenGeoHub / OpenLandMap)
 
-One global Cloud-Optimized GeoTIFF, cropped to each region's `bbox_4326`
-straight out of the remote file over HTTP range requests. There is no raw-file
-staging step and no portal page to click through.
+One global Cloud-Optimized GeoTIFF, each shard warped straight out of the
+remote file over HTTP range requests onto one grid: the shard's own edges and
+the stride the bake samples elevation at (z20, `TILE_ELE_SPAN` to a leaf), so
+the shards meet without a seam and a bake's sample is a pixel. There is no
+raw-file staging step and no portal page to click through.
 
 It is a bare-earth DTM: ground elevation carries no building or canopy height.
-Real elevation exists only inside `metadata.json`'s `bbox_4326`; outside that
-box there is nothing, not zero.
 
 ## 2. Prerequisites (macOS)
 
@@ -96,29 +102,20 @@ That starts a database that is already built. Emptying it first takes a
 
 > The data volume is the only copy of the ingested data on this machine. The
 > sources are not in the repository — the warped rasters land under the
-> gitignored `source/elevation/`. Re-ingesting reproduces an equivalent dataset
+> gitignored `elevation/warped/`. Re-ingesting reproduces an equivalent dataset
 > from each source's current state, not a byte-for-byte copy.
 
 ## 4. Run the ingests
 
-One script takes every Overture type, and every feature of each in the
-bbox, into a table a type; the elevation is its own:
+One script takes every Overture type into a table a type, a shard at a time;
+the elevation is its own, a shard at a time too. Neither takes a flag: the shards
+are the coverage's.
 
 ```sh
 ./infra/geo/elevation/script/setup-elevation.sh
 
-./infra/geo/overture/script/ingest.rs --bbox "$(cargo run -q --manifest-path crates/Cargo.toml --bin ingest_bbox)"
+./infra/geo/overture/script/ingest.rs
 ```
-
-The bbox is the bake's to say, and `ingest_bbox` prints it: the pages whose
-elevation grid reads only `metadata.json`'s `bbox_4326` are what is
-published (`crates/pxl/server/geo-bake/src/coverage.rs`), and the bbox is
-their rectangle grown by whole pages on each side, the fewest that hold the
-farthest an Overture read goes past a page (`Coverage::margin_pages`), in
-lon/lat. Pass it as printed: a bake refuses to run
-unless every `overture_*` table its statements read has a catalog row with
-exactly that bbox, all of one release, and the error prints the `--bbox` to
-ingest with.
 
 Buildings is the long one: 7.2 million rows for Korea.
 
@@ -127,10 +124,9 @@ geometry. Nothing is dropped on the way in: what a reader uses of a table is
 chosen in its own query, and a column it filters on is generated from
 `properties` by Postgres.
 
-`--bbox` is the one flag. A table whose catalog row already names the latest
-release over the same bbox is skipped, so a run stopped partway resumes at the
-table it stopped in; deleting a table's catalog row is what makes it read
-again.
+A shard whose catalog row already names the latest release is skipped;
+deleting a shard's catalog row is what makes it read again. A table keyed
+otherwise than by shard and id is refused, with the word to drop it.
 
 Production keeps its own copy of the three tables search reads, and a
 re-ingest reaches it only when they are copied over: one that changes a
@@ -156,41 +152,38 @@ UNION ALL SELECT 'overture_base_land_cover', count(*) FROM overture_base_land_co
 UNION ALL SELECT 'overture_base_bathymetry', count(*) FROM overture_base_bathymetry
 UNION ALL SELECT 'overture_addresses', count(*) FROM overture_addresses;
 
-SELECT r_table_name, srid, scale_x, scale_y FROM raster_columns
-WHERE r_table_name = 'elevation_raster';
+SELECT count(*), min(ST_ScaleX(rast)), max(ST_ScaleX(rast)) FROM elevation_raster;
 ```
 
 The catalog is the other half of the check, and the faster one: every table
-should carry a row, with the same bbox and the same release.
+should carry a row for each of the coverage's shards, all of one release.
 
 ```sql
-SELECT file_name, region_code, data_date, total_count, imported_at::date
-FROM overture_catalog ORDER BY file_name;
+SELECT file_name, count(*) AS shards, min(data_date), max(data_date), sum(total_count)
+FROM overture_catalog GROUP BY file_name ORDER BY file_name;
 ```
 
-A table with rows but no catalog entry means an ingest stopped between its last
-insert and its last statement. A table whose `data_date` differs from its
-neighbors' was filled from a different Overture release, and a bake over the
-set would mix them.
+A shard with rows but no catalog row means an ingest stopped inside it. A
+`data_date` that differs from the rest was filled from a different Overture
+release, and a bake over the set would mix them; a bake refuses both.
 
 After a large ingest, `VACUUM ANALYZE` — or `VACUUM FULL ANALYZE` where
-downtime is acceptable — reclaims what drop-and-recreate leaves behind.
+downtime is acceptable — reclaims what replacing a shard's rows leaves behind.
 
 ## 6. How the elevation pipeline works
 
 Bash, `envsubst` and GDAL, driven by `metadata.json`:
 
-1. **Schema.** Drops `elevation_raster` and `elevation_catalog`, then runs
-   `init/01_elevation_schema.sql`. The raster table itself is created by
-   `raster2pgsql`, which is why the schema file documents it rather than owning
-   it.
-2. **Crop and reproject.** `gdalwarp` inside the GDAL image reads the remote
-   COG through `/vsicurl/`, crops to `bbox_4326` (`-te`, in the source CRS), and
-   writes EPSG:3857 with DEFLATE into `source/elevation/region/<CODE>/warped/`.
-3. **Ingest.** `raster2pgsql -t 256x256` piped into `psql`, one row per region
-   file, the raster chunked into 256×256 tiles inside the table.
-4. **Finalize.** `ANALYZE`, then `elevation_catalog.status = COMPLETED` with the
-   row count.
+1. **Schema.** `init/01_elevation_schema.sql`, which creates the raster and
+   catalog tables if they are missing.
+2. **The shards.** `elevation_shards` (pxl-geo-bake) prints each published
+   shard: its name, its EPSG:3857 edges and the bake's stride.
+3. **Crop and reproject.** `gdalwarp` inside the GDAL image reads the remote
+   COG through `/vsicurl/` and writes the shard's edges at that stride, in
+   EPSG:3857 with DEFLATE, to `warped/<shard>.tif`.
+4. **Ingest.** `raster2pgsql -a -F -t 256x256` piped into `psql`: the shard's
+   raster in 256×256 tiles, each carrying its file's name, then its catalog
+   row.
 
 ## 7. Backup
 

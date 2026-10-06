@@ -13,7 +13,7 @@
   "nodeModulesDir": "auto",
 
   // Vite's deps cache and the trees of generated or downloaded data are no workspace source.
-  "exclude": ["**/.vite/", "**/dist/", "**/node_modules/", "out/", "cache/", "infra/geo/source/"],
+  "exclude": ["**/.vite/", "**/dist/", "**/node_modules/", "out/", "cache/", "infra/geo/elevation/warped/"],
 
   "tasks": {
     // Every route is the published deployment's, so not for bake work: its tile prefix is frozen.

@@ -71,9 +71,9 @@ POI needs `overture_places`; geocode needs `overture_divisions` and
 job, not a bake job — [infra/geo/README.md](../../../infra/geo/README.md).
 Every bake reaches the DB only through `geo-bake coverage.rs` `Overture`,
 which takes the `overture_*` tables from the statements the bake runs and
-refuses unless each has an `overture_catalog` row of one release over
-exactly the bbox `cargo run -q --manifest-path crates/Cargo.toml --bin
-ingest_bbox` prints; the error names the `--bbox` to ingest with.
+refuses unless each holds exactly the coverage's shards in `overture_catalog`,
+all of one release; the elevation must hold exactly them.
+The error names the ingest to run.
 Never `down -v` to "reset" the database; the volume is several gigabytes of
 ingested data.
 
@@ -177,11 +177,10 @@ that, worked back from how far each thing draws:
   The tile keeps only its own cells, and its lines' runs within their
   footprint (pxl-spec bake/deck.rs `footprint`).
 - **Elevation** is sampled `ELE_PAD` samples past the tile, what a bicubic
-  window at the tile's edge reads. Past the raster a sample is no data, so
-  the published coverage is cropped to tiles whose padded grid lies inside
-  the raster (coverage.rs `Coverage::of_source`, from
-  `infra/geo/elevation/metadata.json`); the source must reach
-  that far past the area to be published, never end at it.
+  window at the tile's edge reads. The published shards
+  (`infra/geo/elevation/metadata.json`) are warped each to its own edges, so
+  a padded grid at a shard's edge reads its neighbor's raster, and at the
+  coverage's outer edge finds none.
 
 ### Verifying
 

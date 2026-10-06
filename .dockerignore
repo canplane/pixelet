@@ -13,4 +13,4 @@ dist
 .env.*
 !.env.example
 cache
-infra/geo/source
+infra/geo/**/warped

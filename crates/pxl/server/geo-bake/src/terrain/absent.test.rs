@@ -2,11 +2,11 @@
 
 use super::*;
 
-/// A coverage whose west edge falls inside every zoom's tile above the leaves, at
-/// an odd tile as the real one does.
+/// One shard, at an odd index, so its west edge falls inside every coarser
+/// zoom's tile.
 fn absence() -> (Absence, Tile) {
-    let leaf = pxl_spec::space::pvf3::ivec::gather(11287, 3200, 0);
-    (Absence::new(Coverage { x: (11287, 11400), y: (3100, 3300) }), Tile::over(LEAF_Z, leaf))
+    let leaf = pxl_spec::space::coord::pvf3::ivec::gather(11392, 3200, 0);
+    (Absence::new(Coverage::new([[89, 25]])), Tile::over(LEAF_Z, leaf))
 }
 
 #[test]
@@ -24,6 +24,6 @@ fn an_absent_tile_is_the_fold_of_the_absent_tiles_under_it() {
 fn inside_the_coverage_absence_is_sea_and_past_it_void() {
     let (absence, leaf) = absence();
     assert_eq!(absence.at(leaf).ground.cells[0], ground::water);
-    let west = Tile::new(LEAF_Z, pxl_spec::space::pvf3::ivec::gather(11286, 3200, 0));
+    let west = Tile::new(LEAF_Z, pxl_spec::space::coord::pvf3::ivec::gather(11391, 3200, 0));
     assert_eq!(absence.at(west).ground.cells[0], sentinel::void);
 }
