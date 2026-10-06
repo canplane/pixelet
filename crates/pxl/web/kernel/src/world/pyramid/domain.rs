@@ -9,7 +9,7 @@
 //!
 //! Every root within reach that holds anything is a piece, all around the
 //! eye, so ground turned to shows a root and never a hole: a root is a chunk
-//! whose cells are as wide as a chunk at the top's reach (`root_of`). A chunk splits only where some patch's footprint touches it and its
+//! whose cells are the coarsest the top's reach draws (`root_of`). A chunk splits only where some patch's footprint touches it and its
 //! projected error crosses a cell (`Lens::error` against `cell_angle`). A
 //! chunk splits only within `split_reach`, which bounds the goal whatever the
 //! screen. A coarser quality splits a subset of what a finer one does.
@@ -294,10 +294,6 @@ impl Domain {
             let at = k as u8;
             let add = if from_step <= at && at < to {
                 self.counted[k] += 1;
-                // A root's room is kept apart (`ROOT_SLOTS`).
-                if c.zoom() == self.root() {
-                    continue;
-                }
                 price.piece(c, order.near, self.ladder[k])
             } else if at < splits_to {
                 price.split(c)

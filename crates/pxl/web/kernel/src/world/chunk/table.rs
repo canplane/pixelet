@@ -712,23 +712,21 @@ impl Scheduler {
         out
     }
 
-    /// Free slots per pool after what mounted chunks will take, and the coarse
-    /// slots the chunks at `root` hold or will take.
-    fn free(&self, root: Zoom) -> (Slots, u32) {
-        let (mut free, mut roots) = (ARENA, 0);
+    /// Free slots per pool after what mounted chunks will take.
+    fn free(&self) -> Slots {
+        let mut free = ARENA;
         for (at, h) in self.meshes.holder.iter().enumerate() {
-            let Some(id) = h.get() else { continue };
-            let p = Pool::at(at) as usize;
-            free[p] = free[p].saturating_sub(1);
-            roots += u32::from(self.place[id].get().is_some_and(|i| self.slots[i].chunk.zoom() == root));
+            if !h.is_none() {
+                let p = Pool::at(at) as usize;
+                free[p] = free[p].saturating_sub(1);
+            }
         }
         for (i, s) in self.slots.iter().enumerate() {
             if let Some((p, k)) = s.reserves(self.generation(i)) {
                 free[p as usize] = free[p as usize].saturating_sub(k);
-                roots += if s.chunk.zoom() == root { k } else { 0 };
             }
         }
-        (free, roots)
+        free
     }
 
     fn materialize(&mut self, sc: &mut Scratch) {
@@ -743,15 +741,12 @@ impl Scheduler {
         }
         sc.drawn.sort_unstable();
         sc.building.sort_unstable_by_key(|&(c, _)| c);
-        let (free, roots_hold) = self.free(d.root());
         let now = Now {
             ms: xpute_runtime::clock::now(),
             goal: d.pieces(),
             drawn: &sc.drawn,
             building: &sc.building,
-            root: d.root(),
-            roots_hold,
-            free,
+            free: self.free(),
         };
         let plan = sc.frontier.plan(&now, &Pieces { d, table: self });
         let seen = (self.drawn_revision, domain::revision(), Terrain::pyramid().residency().revision());

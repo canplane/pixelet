@@ -14,19 +14,17 @@
 //!
 //! The arena is never overrun: a move starts only when all its slots are
 //! free, and refinements and fills leave `RESERVE` free so one coarsening is
-//! always possible. Every move but a root's leaves the roots' room
-//! (`ROOT_SLOTS`) free of everything else, so a root is never refused. A coarsening waits `COARSEN_HOLD_MS` before it is made,
+//! always possible. A coarsening waits `COARSEN_HOLD_MS` before it is made,
 //! unless the arena refused a move last step.
 
 use pxl_spec::space::lod::Tau;
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
-use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS, ROOT_SLOTS};
+use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};
 use crate::world::observation::Order;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::domain::Price;
 use crate::world::quality::fits;
-use pxl_spec::space::zoom::Zoom;
 
 pub type Slots = [u32; POOLS];
 
@@ -36,7 +34,7 @@ pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS];
 
 /// What the quality policy leaves beside the goal: the reserve, plus a slot
 /// for each refinement in flight holding the piece it replaces.
-pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1] + ROOT_SLOTS];
+pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1]];
 
 /// The quality alone moves which chunks are drawn; a mesh too big for one
 /// slot fills more slots and is never drawn coarser for it.
@@ -88,9 +86,6 @@ pub struct Now<'a> {
     pub goal: &'a [Chunk],
     pub drawn: &'a [Chunk],
     pub building: &'a [(Chunk, bool)],
-    /// The roots' zoom, and the coarse slots the chunks at it hold or are held for.
-    pub root: Zoom,
-    pub roots_hold: u32,
     /// Free slots after what started moves will take.
     pub free: Slots,
 }
@@ -342,7 +337,6 @@ impl Frontier {
         });
 
         let mut free = now.free;
-        let mut roots_room = ROOT_SLOTS.saturating_sub(now.roots_hold);
         let take = |free: &Slots, need: &Slots, reserve: Slots| (0..POOLS).all(|p| need[p] == 0 || free[p] >= need[p] + reserve[p]);
         let mut cramped = false;
         for &n in open.iter() {
@@ -359,11 +353,7 @@ impl Frontier {
                 let (pool, k) = env.slots(c);
                 need[pool as usize] += k;
             }
-            let mut reserve = if m.kind == Kind::Coarsen { [0; POOLS] } else { RESERVE };
-            let roots = enter.iter().all(|c| c.zoom() == now.root);
-            if !roots {
-                reserve[Pool::Coarse as usize] += roots_room;
-            }
+            let reserve = if m.kind == Kind::Coarsen { [0; POOLS] } else { RESERVE };
             let fits = take(&free, &need, reserve);
             cramped |= !fits;
             let room = missing().all(|c| env.buildable(c)) && fits && !(m.kind == Kind::Refine && fresh && in_flight >= REFINEMENTS_IN_FLIGHT);
@@ -373,9 +363,6 @@ impl Frontier {
             }
             for p in 0..POOLS {
                 free[p] -= need[p];
-            }
-            if roots {
-                roots_room = roots_room.saturating_sub(need[Pool::Coarse as usize]);
             }
             if m.kind == Kind::Refine && fresh {
                 in_flight += 1;

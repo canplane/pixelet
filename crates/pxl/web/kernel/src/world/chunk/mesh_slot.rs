@@ -6,18 +6,15 @@
 //!
 //! Two pools: chunks of a leaf's cells or finer (six-word textured boxes, a
 //! group of its own, since a group is one format) and coarser chunks
-//! (four-word boxes, shared groups), where the roots' room is kept
-//! (`ROOT_SLOTS`). A tier with more boxes than a slot fills several, chained. A mesh is never cut to a
+//! (four-word boxes, shared groups). A tier with more boxes than a slot fills several, chained. A mesh is never cut to a
 //! slot, which left steep ground missing (2026-09-26), nor baked coarser to
 //! fit, which was a second quality policy.
 
-use pxl_render::look::globe::MERCATOR_RADIUS_U;
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::pyramid::{CHUNK_CELLS, LEAF_Z, TOP_Z};
+use pxl_spec::space::pyramid::CHUNK_CELLS;
 
 use crate::param::{ARENA_COARSE_GROUPS, COARSE_POOL_BYTES, FINE_POOL_BYTES};
-use crate::world::pyramid::domain::root_pieces;
 use pxl_spec::space::zoom::Zoom;
 
 const COARSE_GROUPS: u32 = ARENA_COARSE_GROUPS;
@@ -37,23 +34,6 @@ const GROUP_SLOTS: u32 = COARSE_POOL_BYTES / COARSE_GROUPS / (COARSE_BOXES * COA
 pub const COARSE_TIER_SLOTS: u32 = (2 * CHUNK_CELLS.pow(3)).div_ceil(COARSE_BOXES);
 
 pub const POOLS: usize = 2;
-
-/// Kept in the coarse pool for the roots, which no other chunk takes: the
-/// most roots over any top, each a coarse chunk filling at most
-/// `COARSE_TIER_SLOTS`. So a root the view lacks always finds room.
-pub const ROOT_SLOTS: u32 = {
-    let (mut most, mut top) = (0, TOP_Z);
-    while top <= LEAF_Z {
-        let n = root_pieces(top, MERCATOR_RADIUS_U);
-        if n > most {
-            most = n;
-        }
-        top += 1;
-    }
-    most * COARSE_TIER_SLOTS
-};
-
-const _: () = assert!(ROOT_SLOTS + COARSE_TIER_SLOTS <= COARSE_GROUPS * GROUP_SLOTS, "the coarse pool short of the roots and a coarsening");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Pool {
