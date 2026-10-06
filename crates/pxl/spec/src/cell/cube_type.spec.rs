@@ -113,7 +113,7 @@ pub mod cube_types {
 
         /// dam: Carto @dam
         pub const dam: u8 = 34;
-        /// breakwater, groyne, weir, a minor road under construction, a disused railway: Carto @breakwater-color, @weir-line, @minor-construction, railway_disused
+        /// breakwater, groyne, weir: Carto @breakwater-color, @weir-line
         pub const breakwater: u8 = 35;
 
         // ---- buildings ----
@@ -159,15 +159,13 @@ pub mod cube_types {
         pub const subway: u8 = 53;
         /// monorail: Carto's railway_monorail, a value with no name
         pub const monorail: u8 = 54;
-        /// a railway under construction: Carto's railway_construction, grey
-        pub const rail_construction: u8 = 55;
         /// rail: Carto's railway_rail, a value with no name
-        pub const rail: u8 = 56;
+        pub const rail: u8 = 55;
 
         // ---- aeroways ----
 
         /// runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill
-        pub const aeroway: u8 = 57;
+        pub const aeroway: u8 = 56;
 
         pub const ENTRIES: &[(&str, u8)] = &[
             ("land", land),
@@ -224,7 +222,6 @@ pub mod cube_types {
             ("light_rail", light_rail),
             ("subway", subway),
             ("monorail", monorail),
-            ("rail_construction", rail_construction),
             ("rail", rail),
             ("aeroway", aeroway),
         ];
@@ -316,14 +313,13 @@ pub mod cube_types {
         light_rail = 52,
         subway = 53,
         monorail = 54,
-        rail_construction = 55,
-        rail = 56,
-        aeroway = 57,
+        rail = 55,
+        aeroway = 56,
     }
 
     impl Ground {
         /// Every look, in paint order.
-        pub const ALL: [Ground; 57] = [
+        pub const ALL: [Ground; 56] = [
             Ground::land,
             Ground::bare_ground,
             Ground::sand,
@@ -378,7 +374,6 @@ pub mod cube_types {
             Ground::light_rail,
             Ground::subway,
             Ground::monorail,
-            Ground::rail_construction,
             Ground::rail,
             Ground::aeroway,
         ];
@@ -440,9 +435,8 @@ pub mod cube_types {
                 52 => Some(Ground::light_rail),
                 53 => Some(Ground::subway),
                 54 => Some(Ground::monorail),
-                55 => Some(Ground::rail_construction),
-                56 => Some(Ground::rail),
-                57 => Some(Ground::aeroway),
+                55 => Some(Ground::rail),
+                56 => Some(Ground::aeroway),
                 _ => None,
             }
         }
@@ -503,7 +497,6 @@ pub mod cube_types {
                 Ground::light_rail => Kind::Transport,
                 Ground::subway => Kind::Transport,
                 Ground::monorail => Kind::Transport,
-                Ground::rail_construction => Kind::Transport,
                 Ground::rail => Kind::Transport,
                 Ground::aeroway => Kind::Transport,
             }

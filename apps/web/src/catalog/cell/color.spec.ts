@@ -238,10 +238,6 @@ export default {
       hex: "#777777",
       rgb: 7829367,
     },
-    rail_construction: {
-      hex: "#808080",
-      rgb: 8421504,
-    },
     rail: {
       hex: "#707070",
       rgb: 7368816,

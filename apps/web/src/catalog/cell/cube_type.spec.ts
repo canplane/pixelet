@@ -97,7 +97,7 @@ export const cube_types = {
 
     /** dam: Carto @dam */
     dam: 34,
-    /** breakwater, groyne, weir, a minor road under construction, a disused railway: Carto @breakwater-color, @weir-line, @minor-construction, railway_disused */
+    /** breakwater, groyne, weir: Carto @breakwater-color, @weir-line */
     breakwater: 35,
 
     // ---- buildings ----
@@ -143,15 +143,13 @@ export const cube_types = {
     subway: 53,
     /** monorail: Carto's railway_monorail, a value with no name */
     monorail: 54,
-    /** a railway under construction: Carto's railway_construction, grey */
-    rail_construction: 55,
     /** rail: Carto's railway_rail, a value with no name */
-    rail: 56,
+    rail: 55,
 
     // ---- aeroways ----
 
     /** runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill */
-    aeroway: 57,
+    aeroway: 56,
   },
   // What only an object can be: past a byte, so no ground cell holds it. An
   // object's value is a u16 whose byte range is the ground's palette.
@@ -236,7 +234,6 @@ export const ground_kind: Readonly<Record<number, Kind>> = {
   54: "transport",
   55: "transport",
   56: "transport",
-  57: "transport",
 };
 
 /** What a cell nothing painted shows. */

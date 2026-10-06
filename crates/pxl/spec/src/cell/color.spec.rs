@@ -82,7 +82,6 @@ pub const fn ground(t: u8) -> Option<Swatch> {
         cube_types::ground::light_rail => Some(Swatch::new(0x666666)),
         cube_types::ground::subway => Some(Swatch::new(0x999999)),
         cube_types::ground::monorail => Some(Swatch::new(0x777777)),
-        cube_types::ground::rail_construction => Some(Swatch::new(0x808080)),
         cube_types::ground::rail => Some(Swatch::new(0x707070)),
         cube_types::ground::aeroway => Some(Swatch::new(0xbbbbcc)),
         // A sentinel a baked cell can hold.
