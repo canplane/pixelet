@@ -7,9 +7,9 @@
 #[path = "cell/color.spec.rs"]
 pub mod color;
 #[path = "cell/cube_type.spec.rs"]
-pub mod cube_type;
+mod cube_type;
 #[path = "cell/decor.spec.rs"]
-pub mod decor;
+mod decor;
 pub mod object;
 
 pub use cube_type::{cube_types, Kind};

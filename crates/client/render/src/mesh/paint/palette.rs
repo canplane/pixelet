@@ -3,7 +3,8 @@
 //! Every color a cell can be, numbered once. Object colors follow the ground
 //! layers, so one number reaches both.
 
-use pxl_spec::asset::texture::{shipped_tile_mean, CubeFace};
+use pxl_spec::asset::ingested::CubeFace;
+use pxl_spec::asset::shipped_tile_mean;
 use pxl_spec::cell::cube_types::{Block, Ground};
 use pxl_spec::cell::object::placeable_cube_rgb;
 use pxl_spec::cell::object::{placeable_cubes, PlaceableCube};

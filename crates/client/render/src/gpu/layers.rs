@@ -6,7 +6,8 @@
 //! pack ships nothing for takes none and reads as the box's color.
 //! Without the mip chain the far ground crawls as the camera moves.
 
-use pxl_spec::asset::texture::{shipped_texture_tile, CubeFace, TileOrigin, SHIPPED_SHEET};
+use pxl_spec::asset::ingested::{CubeFace, SHEET};
+use pxl_spec::asset::{shipped_texture_tile, TileOrigin};
 
 use crate::frame::shader::record::PIPELINE_MIPS;
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, release, texture_usage, Gpu, Stamp};
@@ -14,7 +15,7 @@ use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, re
 use crate::gpu::pipeline::Pipelines;
 use crate::mesh::paint::palette::{palette, LAYERS};
 
-pub const LAYER_TEX_SZ: u32 = SHIPPED_SHEET.cell;
+pub const LAYER_TEX_SZ: u32 = SHEET.cell;
 
 pub fn mip_levels(width: u32, height: u32) -> u32 {
     32 - width.max(height).max(1).leading_zeros()
