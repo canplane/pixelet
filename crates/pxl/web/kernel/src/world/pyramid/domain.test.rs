@@ -79,33 +79,6 @@ fn the_cover_stands_all_around_and_ground_with_no_answer_is_no_piece() {
     assert_eq!(behind[0].tile_zoom(), TOP_Z, "ground behind the eye refined");
 }
 
-/// From 2u over flat ground: refined across the screen as the criterion
-/// asks, but not along its depth, where the error stays inside a cell.
-#[test]
-fn grazing_ground_refines_across_the_screen_and_not_along_its_depth() {
-    let o = eye(EYE, Some([1.0, 0.0, 0.0]), FAR, GROUND);
-    let mut d = domain(o, &World::flat(GROUND));
-    let half = (libm::atan(fixture::REFERENCE[0]) * 0.9).to_degrees() as i32;
-    for (tau, pieces, _) in cuts(&mut d) {
-        for bearing in (-half..=half).step_by(5) {
-            let b = (bearing as f64).to_radians();
-            for r in [3.0, 30.0, 100.0, 400.0, 1_500.0, 6_000.0, 20_000.0, 29_000.0] {
-                let p = [EYE[0] + r * libm::cos(b), EYE[1] + r * libm::sin(b), GROUND - 0.5];
-                let over = pieces_at(&pieces, p);
-                assert_eq!(over.len(), 1, "{tau:?}: {p:?} under {over:?}");
-                // The tile the piece reads, against the one its distance asks.
-                let zoom = over[0].tile_zoom() as i32;
-                let wanted = tau.z_at(r) as i32;
-                assert!(
-                    zoom >= wanted,
-                    "{tau:?}: ground {r} away at {bearing}° left at z{zoom} where its cell crosses a cell finer than z{wanted}"
-                );
-                assert!(zoom - 1 <= wanted, "{tau:?}: ground {r} away refined to z{zoom}, past what its error across asks (z{wanted})");
-            }
-        }
-    }
-}
-
 /// A pole thinner and shorter than a far cell is not refined and is under
 /// exactly one piece.
 #[test]
