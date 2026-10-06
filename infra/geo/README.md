@@ -65,7 +65,7 @@ made from.
 
 A public S3 release — no key, no portal step. The ingest reaches it through
 Overture's official `overturemaps` CLI, installed on first use into
-`cache/overture/.venv`: it downloads a type's GeoParquet over every shard at once, a little wider
+`infra/geo/overture/.venv`: it downloads a type's GeoParquet over every shard at once, a little wider
 since its bbox test is strict, to `overture/raw/<type>.parquet`, kept until
 the release changes; the ingest then puts each feature in its shard.
 

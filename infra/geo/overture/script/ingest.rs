@@ -103,7 +103,7 @@ const TYPES: &[Type] = &[
 
 /// The official CLI, a tool regenerable under `cache/`, and what it downloads,
 /// the source, kept beside this script.
-const VENV: &str = "./cache/overture/.venv";
+const VENV: &str = "./infra/geo/overture/.venv";
 const EXTRACTS: &str = "./infra/geo/overture/raw";
 
 const BATCH: usize = 300;
