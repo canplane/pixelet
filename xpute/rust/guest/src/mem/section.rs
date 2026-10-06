@@ -4,6 +4,14 @@
 //! sections at `ALIGN(n)` boundaries. The memory never grows, so a view over
 //! it stays valid for the module's life.
 
+/// What every range in a guest's memory begins on, and the smallest block
+/// its heap's buddy hands out. A borrowed analogy, not a hardware number: a
+/// guest is handed one fixed range, addresses it with 32-bit offsets and has
+/// no MMU, as a 32-bit machine was, and 4 KiB is what that settled on; the
+/// host's own page (16 KiB, 4 KiB, a WebAssembly page's 64 KiB) acts on
+/// nothing decided here.
+pub const PAGE_BYTES: u32 = 4096;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Section {
     pub offset: u32,

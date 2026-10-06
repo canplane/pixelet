@@ -1,7 +1,8 @@
 {
   "$doc": [
-    "The core memory: the page everything in it is counted in, where the front's",
-    "ranges begin, and how much a device is asked to reserve.",
+    "The core memory: where the front's ranges begin, and how much a device is",
+    "asked to reserve. The page they are counted in is the guest's (xpute-guest",
+    "mem/section.rs PAGE_BYTES).",
     "",
     "Every one of these is read by more than one language or by more than one",
     "stage of the build, which is why they are here rather than in any of them:",
@@ -11,24 +12,6 @@
     "  crates/client-bracket/wasm/build.rs               the linker flags for the module",
     "  apps/web/src/kernel/mem.ts                 the reservation the shell makes"
   ],
-
-  "PAGE_BYTES": {
-    "$value": 4096,
-    "$type": "u32",
-    "$doc": [
-      "What every range in the memory begins on, and the smallest block the heap's",
-      "buddy hands out (pxl-wasm's HEAP_MIN_LOG2 is derived from it). A ring slot's",
-      "payload is one of these too.",
-      "",
-      "A borrowed analogy rather than a hardware number: this kernel is handed one",
-      "fixed range, addresses it with 32-bit offsets and has no MMU, which is the",
-      "situation a 32-bit machine was in, and 4 KiB is what that situation settled",
-      "on. The host's own page size is deliberately ignored — 16 KiB on Apple",
-      "silicon, 4 KiB on x86-64, 64 KiB for a WebAssembly page — since none of the",
-      "three is visible here or acts on anything decided here",
-      "(decision/20260916-the-page-table-the-pool-did-not-need.md)."
-    ]
-  },
 
   "STACK_BYTES": {
     "$value": 1048576,

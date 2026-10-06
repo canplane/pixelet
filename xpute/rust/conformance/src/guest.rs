@@ -22,14 +22,14 @@ use xpute_guest::sched::quantum::NO_WAKE;
 
 use crate::spec;
 
-const PAGE: u32 = 4096;
+use xpute_guest::mem::section::PAGE_BYTES;
 
 const fn page_up(bytes: u32) -> u32 {
-    bytes.div_ceil(PAGE) * PAGE
+    bytes.div_ceil(PAGE_BYTES) * PAGE_BYTES
 }
 
 const DIRECTORY_AT: u32 = 0;
-const SUBMISSION_DESC_AT: u32 = PAGE;
+const SUBMISSION_DESC_AT: u32 = PAGE_BYTES;
 const COMPLETION_DESC_AT: u32 = SUBMISSION_DESC_AT + page_up(ring_bytes(spec::SUBMISSION_CAPACITY));
 const SUBMISSION_SLOT_AT: u32 = COMPLETION_DESC_AT + page_up(ring_bytes(spec::COMPLETION_CAPACITY));
 const COMPLETION_SLOT_AT: u32 = SUBMISSION_SLOT_AT + slots_bytes(spec::SUBMISSION_CAPACITY, spec::SLOT_BYTES);
@@ -42,7 +42,7 @@ const HEAP_AT: u32 = page_up(STATE_AT + core::mem::size_of::<Guest>() as u32);
 
 const _: () = assert!(HEAP_AT as usize + spec::HEAP_BYTES as usize <= spec::MEMORY_BYTES as usize, "the ranges run past the memory");
 const _: () = assert!((STATE_AT as usize).is_multiple_of(core::mem::align_of::<Guest>()), "the state lies on its own alignment");
-const _: () = assert!(directory_words(4) as u32 * 4 <= PAGE, "the directory outgrows its page");
+const _: () = assert!(directory_words(4) as u32 * 4 <= PAGE_BYTES, "the directory outgrows its page");
 
 pub type Now = extern "C" fn() -> f64;
 

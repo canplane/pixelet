@@ -7,7 +7,8 @@ use xpute_guest::ipc::door::{DoorLayout, RingLayout};
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes};
 
 use crate::mem::section::page_up;
-use crate::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, PAGE_BYTES, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};
+use crate::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};
+use xpute_guest::mem::section::PAGE_BYTES;
 
 /// A packet is at most a page; anything larger crosses by address. A page
 /// is also the buddy's smallest block.

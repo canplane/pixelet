@@ -22,7 +22,7 @@ pub trait Bounds {
 }
 
 /// A page, the buddy's leaf.
-const PAGE_LOG2: usize = 12;
+const PAGE_LOG2: usize = crate::mem::section::PAGE_BYTES.trailing_zeros() as usize;
 
 /// 2 GiB: the largest power of two a 32-bit address space holds. The tree
 /// starts as one leaf and grows only as requests need; `end` says what is real.
