@@ -31,128 +31,125 @@ export const cube_types = {
     sand: 3,
     /** beach and shoal: Carto @beach */
     beach: 4,
-    /** mud: Carto @mud, its 30% over @land-color, as a cell is opaque */
-    mud: 5,
     /** heath and bog: Carto @heath */
-    heath: 6,
+    heath: 5,
     /** scrub and mangrove: Carto @scrub */
-    scrub: 7,
+    scrub: 6,
     /** grass, meadow, garden, village green, marsh, wet meadow: Carto @grass */
-    grass: 8,
+    grass: 7,
     /** park: Carto @park */
-    park: 9,
+    park: 8,
     /** playground, recreation ground, stadium, sports centre: Carto @leisure, lighten(@park, 5%) */
-    leisure: 10,
+    leisure: 9,
     /** pitch and track: Carto @pitch */
-    pitch: 11,
+    pitch: 10,
     /** forest, wood, swamp: Carto @forest */
-    forest: 12,
+    forest: 11,
     /** orchard, vineyard, plant nursery: Carto @orchard */
-    orchard: 13,
+    orchard: 12,
     /** allotments: Carto @allotments */
-    allotments: 14,
+    allotments: 13,
     /** farmland and greenhouses: Carto @farmland */
-    farmland: 15,
+    farmland: 14,
     /** farmyard: Carto @farmyard */
-    farmyard: 16,
+    farmyard: 15,
     /** campsite and golf course: Carto @campsite */
-    campsite: 17,
+    campsite: 16,
     /** cemetery and grave yard: Carto @cemetery */
-    cemetery: 18,
+    cemetery: 17,
     /** residential: Carto @residential */
-    residential: 19,
+    residential: 18,
     /** garages: Carto @garages */
-    garages: 20,
+    garages: 19,
     /** retail: Carto @retail */
-    retail: 21,
+    retail: 20,
     /** commercial: Carto @commercial */
-    commercial: 22,
+    commercial: 21,
     /** industrial, railway, works: Carto @industrial */
-    industrial: 23,
+    industrial: 22,
     /** power plant and substation: Carto @power, darken(@industrial, 5%) */
-    power: 24,
+    power: 23,
     /** construction and brownfield: Carto @construction */
-    construction: 25,
+    construction: 24,
     /** landfill: Carto's landuse_landfill, a value with no name */
-    landfill: 26,
+    landfill: 25,
     /** quarry: Carto @quarry */
-    quarry: 27,
+    quarry: 26,
     /** school, college, university, hospital, clinic: Carto @societal_amenities */
-    societal_amenities: 28,
+    societal_amenities: 27,
     /** a religious site: Carto @place_of_worship */
-    place_of_worship: 29,
-    /** fire station and police: Carto's amenity_fire_station and amenity_police, one value with no name */
-    fire_station: 30,
-    /** prison: Carto's amenity_prison, a value with no name */
-    prison: 31,
+    place_of_worship: 28,
     /** aerodrome, bus station, ferry terminal: Carto @transportation-area */
-    transportation_area: 32,
-    /** rest area: Carto @rest_area */
-    rest_area: 33,
+    transportation_area: 29,
     /** parking: Carto @parking */
-    parking: 34,
+    parking: 30,
     /** apron: Carto @apron */
-    apron: 35,
+    apron: 31,
 
     // ---- water ----
 
     /** glacier: Carto @glacier, drawn with the water areas */
-    glacier: 36,
+    glacier: 32,
     /** sea, lake, river, canal, any water: Carto @water-color */
-    water: 37,
+    water: 33,
+
+    // ---- water features ----
+
+    /** dam: Carto @dam */
+    dam: 34,
+    /** breakwater, groyne, weir: Carto @breakwater-color, @weir-line */
+    breakwater: 35,
 
     // ---- buildings ----
 
     /** a building: Carto @building-fill */
-    building: 38,
+    building: 36,
     /** a place of worship, a terminal, a station: Carto @building-major-fill at z16 and finer, as a cell is z16 */
-    building_major: 39,
+    building_major: 37,
 
     // ---- roads, by Carto's z ----
 
     /** footway, steps, path: Carto @footway-fill, @steps-fill */
-    footway: 40,
+    footway: 38,
     /** cycleway: Carto @cycleway-fill */
-    cycleway: 41,
+    cycleway: 39,
     /** bridleway: Carto @bridleway-fill */
-    bridleway: 42,
+    bridleway: 40,
     /** track, an agricultural or forest way: Carto @track-fill */
-    track: 43,
-    /** bus guideway: Carto @bus-guideway-fill */
-    bus_guideway: 44,
-    /** service road, a driveway, a parking aisle, an alley: Carto @service-fill */
-    service: 45,
+    track: 41,
     /** pedestrian street: Carto @pedestrian-fill */
-    pedestrian: 46,
+    pedestrian: 42,
     /** living street: Carto @living-street-fill */
-    living_street: 47,
-    /** residential and unclassified: Carto @residential-fill */
-    residential_road: 48,
+    living_street: 43,
+    /** tertiary, residential, unclassified and service, told apart by width: Carto @tertiary-fill, @residential-fill, @service-fill */
+    residential_road: 44,
     /** a road of no known class: Carto @road-fill */
-    road: 49,
-    /** raceway: Carto @raceway-fill */
-    raceway: 50,
-    /** tertiary: Carto @tertiary-fill */
-    tertiary: 51,
+    road: 45,
     /** secondary: Carto @secondary-fill */
-    secondary: 52,
+    secondary: 46,
     /** primary: Carto @primary-fill */
-    primary: 53,
+    primary: 47,
     /** trunk: Carto @trunk-fill */
-    trunk: 54,
+    trunk: 48,
     /** motorway: Carto @motorway-fill */
-    motorway: 55,
+    motorway: 49,
     /** platform: Carto @platform-fill */
-    platform: 56,
-    /** subway, light rail, tram, monorail: Carto's railway_subway, a value with no name */
-    subway: 57,
+    platform: 50,
+    /** tram: Carto's railway_tram, a value with no name */
+    tram: 51,
+    /** light rail, narrow gauge, funicular: Carto's railway_light_rail, a value with no name */
+    light_rail: 52,
+    /** subway: Carto's railway_subway, a value with no name */
+    subway: 53,
+    /** monorail: Carto's railway_monorail, a value with no name */
+    monorail: 54,
     /** rail: Carto's railway_rail, a value with no name */
-    rail: 58,
+    rail: 55,
 
     // ---- aeroways ----
 
     /** runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill */
-    aeroway: 59,
+    aeroway: 56,
   },
   // What only an object can be: past a byte, so no ground cell holds it. An
   // object's value is a u16 whose byte range is the ground's palette.
@@ -213,13 +210,13 @@ export const ground_kind: Readonly<Record<number, Kind>> = {
   30: "land",
   31: "land",
   32: "land",
-  33: "land",
-  34: "land",
-  35: "land",
-  36: "land",
-  37: "water",
-  38: "structure",
-  39: "structure",
+  33: "water",
+  34: "structure",
+  35: "structure",
+  36: "structure",
+  37: "structure",
+  38: "transport",
+  39: "transport",
   40: "transport",
   41: "transport",
   42: "transport",
@@ -237,9 +234,6 @@ export const ground_kind: Readonly<Record<number, Kind>> = {
   54: "transport",
   55: "transport",
   56: "transport",
-  57: "transport",
-  58: "transport",
-  59: "transport",
 };
 
 /** What a cell nothing painted shows. */

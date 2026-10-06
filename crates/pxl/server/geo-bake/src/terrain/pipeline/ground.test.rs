@@ -84,7 +84,7 @@ fn a_tile_s_ground_does_not_depend_on_its_rows_order() {
         // Each gap holds a cell's center (y 68.5 and 71.5), so either fill shows.
         way(70.2, 2.0, ground::footway, Some(Joins::Road), "walk"),
         way(66.4, 4.0, ground::residential_road, None, "south"),
-        way(74.0, 4.0, ground::tertiary, None, "north"),
+        way(74.0, 4.0, ground::secondary, None, "north"),
     ];
     let bake = |features: &[Feature]| {
         let mut all = features.to_vec();

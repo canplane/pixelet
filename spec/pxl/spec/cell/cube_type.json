@@ -47,111 +47,105 @@
       },
       { "name": "sand", "value": 3, "kind": "land", "doc": ["sand: Carto @sand"] },
       { "name": "beach", "value": 4, "kind": "land", "doc": ["beach and shoal: Carto @beach"] },
-      {
-        "name": "mud",
-        "value": 5,
-        "kind": "land",
-        "doc": ["mud: Carto @mud, its 30% over @land-color, as a cell is opaque"]
-      },
-      { "name": "heath", "value": 6, "kind": "land", "doc": ["heath and bog: Carto @heath"] },
-      { "name": "scrub", "value": 7, "kind": "land", "doc": ["scrub and mangrove: Carto @scrub"] },
+      { "name": "heath", "value": 5, "kind": "land", "doc": ["heath and bog: Carto @heath"] },
+      { "name": "scrub", "value": 6, "kind": "land", "doc": ["scrub and mangrove: Carto @scrub"] },
       {
         "name": "grass",
-        "value": 8,
+        "value": 7,
         "kind": "land",
         "doc": [
           "grass, meadow, garden, village green, marsh, wet meadow: Carto @grass"
         ]
       },
-      { "name": "park", "value": 9, "kind": "land", "doc": ["park: Carto @park"] },
+      { "name": "park", "value": 8, "kind": "land", "doc": ["park: Carto @park"] },
       {
         "name": "leisure",
-        "value": 10,
+        "value": 9,
         "kind": "land",
         "doc": [
           "playground, recreation ground, stadium, sports centre: Carto @leisure, lighten(@park, 5%)"
         ]
       },
-      { "name": "pitch", "value": 11, "kind": "land", "doc": ["pitch and track: Carto @pitch"] },
+      { "name": "pitch", "value": 10, "kind": "land", "doc": ["pitch and track: Carto @pitch"] },
       {
         "name": "forest",
-        "value": 12,
+        "value": 11,
         "kind": "land",
         "doc": ["forest, wood, swamp: Carto @forest"]
       },
       {
         "name": "orchard",
-        "value": 13,
+        "value": 12,
         "kind": "land",
         "doc": ["orchard, vineyard, plant nursery: Carto @orchard"]
       },
       {
         "name": "allotments",
-        "value": 14,
+        "value": 13,
         "kind": "land",
         "doc": ["allotments: Carto @allotments"]
       },
       {
         "name": "farmland",
-        "value": 15,
+        "value": 14,
         "kind": "land",
         "doc": ["farmland and greenhouses: Carto @farmland"]
       },
-      { "name": "farmyard", "value": 16, "kind": "land", "doc": ["farmyard: Carto @farmyard"] },
+      { "name": "farmyard", "value": 15, "kind": "land", "doc": ["farmyard: Carto @farmyard"] },
       {
         "name": "campsite",
-        "value": 17,
+        "value": 16,
         "kind": "land",
         "doc": ["campsite and golf course: Carto @campsite"]
       },
       {
         "name": "cemetery",
-        "value": 18,
+        "value": 17,
         "kind": "land",
         "doc": ["cemetery and grave yard: Carto @cemetery"]
       },
       {
         "name": "residential",
-        "value": 19,
+        "value": 18,
         "kind": "land",
         "doc": ["residential: Carto @residential"]
       },
-      { "name": "garages", "value": 20, "kind": "land", "doc": ["garages: Carto @garages"] },
-      { "name": "retail", "value": 21, "kind": "land", "doc": ["retail: Carto @retail"] },
+      { "name": "garages", "value": 19, "kind": "land", "doc": ["garages: Carto @garages"] },
+      { "name": "retail", "value": 20, "kind": "land", "doc": ["retail: Carto @retail"] },
       {
         "name": "commercial",
-        "value": 22,
+        "value": 21,
         "kind": "land",
         "doc": ["commercial: Carto @commercial"]
       },
       {
         "name": "industrial",
-        "value": 23,
+        "value": 22,
         "kind": "land",
         "doc": ["industrial, railway, works: Carto @industrial"]
       },
       {
         "name": "power",
-        "value": 24,
+        "value": 23,
         "kind": "land",
         "doc": ["power plant and substation: Carto @power, darken(@industrial, 5%)"]
       },
       {
         "name": "construction",
-        "value": 25,
+        "value": 24,
         "kind": "land",
         "doc": ["construction and brownfield: Carto @construction"]
       },
       {
         "name": "landfill",
-        "value": 26,
+        "value": 25,
         "kind": "land",
         "doc": ["landfill: Carto's landuse_landfill, a value with no name"]
       },
-      { "name": "quarry", "value": 27, "kind": "land", "doc": ["quarry: Carto @quarry"] },
+      { "name": "quarry", "value": 26, "kind": "land", "doc": ["quarry: Carto @quarry"] },
       {
         "name": "societal_amenities",
-        "value": 28,
+        "value": 27,
         "kind": "land",
         "doc": [
           "school, college, university, hospital, clinic: Carto @societal_amenities"
@@ -159,53 +153,51 @@
       },
       {
         "name": "place_of_worship",
-        "value": 29,
+        "value": 28,
         "kind": "land",
         "doc": ["a religious site: Carto @place_of_worship"]
       },
       {
-        "name": "fire_station",
-        "value": 30,
-        "kind": "land",
-        "doc": [
-          "fire station and police: Carto's amenity_fire_station and amenity_police, one value with no name"
-        ]
-      },
-      {
-        "name": "prison",
-        "value": 31,
-        "kind": "land",
-        "doc": ["prison: Carto's amenity_prison, a value with no name"]
-      },
-      {
         "name": "transportation_area",
-        "value": 32,
+        "value": 29,
         "kind": "land",
         "doc": ["aerodrome, bus station, ferry terminal: Carto @transportation-area"]
       },
-      { "name": "rest_area", "value": 33, "kind": "land", "doc": ["rest area: Carto @rest_area"] },
-      { "name": "parking", "value": 34, "kind": "land", "doc": ["parking: Carto @parking"] },
-      { "name": "apron", "value": 35, "kind": "land", "doc": ["apron: Carto @apron"] },
+      { "name": "parking", "value": 30, "kind": "land", "doc": ["parking: Carto @parking"] },
+      { "name": "apron", "value": 31, "kind": "land", "doc": ["apron: Carto @apron"] },
       { "section": "water" },
-      { "name": "glacier", "value": 36, "kind": "land", "doc": ["glacier: Carto @glacier, drawn with the water areas"] },
+      { "name": "glacier", "value": 32, "kind": "land", "doc": ["glacier: Carto @glacier, drawn with the water areas"] },
       {
         "name": "water",
-        "value": 37,
+        "value": 33,
         "kind": "water",
         "shift": -1,
         "doc": ["sea, lake, river, canal, any water: Carto @water-color"]
       },
+      { "section": "water features" },
+      {
+        "name": "dam",
+        "value": 34,
+        "kind": "structure",
+        "doc": ["dam: Carto @dam"]
+      },
+      {
+        "name": "breakwater",
+        "value": 35,
+        "kind": "structure",
+        "doc": ["breakwater, groyne, weir: Carto @breakwater-color, @weir-line"]
+      },
       { "section": "buildings" },
       {
         "name": "building",
-        "value": 38,
+        "value": 36,
         "kind": "structure",
         "shift": -1,
         "doc": ["a building: Carto @building-fill"]
       },
       {
         "name": "building_major",
-        "value": 39,
+        "value": 37,
         "kind": "structure",
         "shift": -1,
         "doc": [
@@ -215,121 +207,111 @@
       { "section": "roads, by Carto's z" },
       {
         "name": "footway",
-        "value": 40,
+        "value": 38,
         "kind": "transport",
         "doc": ["footway, steps, path: Carto @footway-fill, @steps-fill"]
       },
       {
         "name": "cycleway",
-        "value": 41,
+        "value": 39,
         "kind": "transport",
         "doc": ["cycleway: Carto @cycleway-fill"]
       },
       {
         "name": "bridleway",
-        "value": 42,
+        "value": 40,
         "kind": "transport",
         "doc": ["bridleway: Carto @bridleway-fill"]
       },
       {
         "name": "track",
-        "value": 43,
+        "value": 41,
         "kind": "transport",
         "doc": ["track, an agricultural or forest way: Carto @track-fill"]
       },
       {
-        "name": "bus_guideway",
-        "value": 44,
-        "kind": "transport",
-        "doc": ["bus guideway: Carto @bus-guideway-fill"]
-      },
-      {
-        "name": "service",
-        "value": 45,
-        "kind": "transport",
-        "doc": [
-          "service road, a driveway, a parking aisle, an alley: Carto @service-fill"
-        ]
-      },
-      {
         "name": "pedestrian",
-        "value": 46,
+        "value": 42,
         "kind": "transport",
         "doc": ["pedestrian street: Carto @pedestrian-fill"]
       },
       {
         "name": "living_street",
-        "value": 47,
+        "value": 43,
         "kind": "transport",
         "doc": ["living street: Carto @living-street-fill"]
       },
       {
         "name": "residential_road",
-        "value": 48,
+        "value": 44,
         "kind": "transport",
-        "doc": ["residential and unclassified: Carto @residential-fill"]
+        "doc": ["tertiary, residential, unclassified and service, told apart by width: Carto @tertiary-fill, @residential-fill, @service-fill"]
       },
       {
         "name": "road",
-        "value": 49,
+        "value": 45,
         "kind": "transport",
         "doc": ["a road of no known class: Carto @road-fill"]
       },
       {
-        "name": "raceway",
-        "value": 50,
-        "kind": "transport",
-        "doc": ["raceway: Carto @raceway-fill"]
-      },
-      {
-        "name": "tertiary",
-        "value": 51,
-        "kind": "transport",
-        "doc": ["tertiary: Carto @tertiary-fill"]
-      },
-      {
         "name": "secondary",
-        "value": 52,
+        "value": 46,
         "kind": "transport",
         "doc": ["secondary: Carto @secondary-fill"]
       },
       {
         "name": "primary",
-        "value": 53,
+        "value": 47,
         "kind": "transport",
         "doc": ["primary: Carto @primary-fill"]
       },
-      { "name": "trunk", "value": 54, "kind": "transport", "doc": ["trunk: Carto @trunk-fill"] },
+      { "name": "trunk", "value": 48, "kind": "transport", "doc": ["trunk: Carto @trunk-fill"] },
       {
         "name": "motorway",
-        "value": 55,
+        "value": 49,
         "kind": "transport",
         "doc": ["motorway: Carto @motorway-fill"]
       },
       {
         "name": "platform",
-        "value": 56,
+        "value": 50,
         "kind": "transport",
         "doc": ["platform: Carto @platform-fill"]
       },
       {
-        "name": "subway",
-        "value": 57,
+        "name": "tram",
+        "value": 51,
         "kind": "transport",
-        "doc": [
-          "subway, light rail, tram, monorail: Carto's railway_subway, a value with no name"
-        ]
+        "doc": ["tram: Carto's railway_tram, a value with no name"]
+      },
+      {
+        "name": "light_rail",
+        "value": 52,
+        "kind": "transport",
+        "doc": ["light rail, narrow gauge, funicular: Carto's railway_light_rail, a value with no name"]
+      },
+      {
+        "name": "subway",
+        "value": 53,
+        "kind": "transport",
+        "doc": ["subway: Carto's railway_subway, a value with no name"]
+      },
+      {
+        "name": "monorail",
+        "value": 54,
+        "kind": "transport",
+        "doc": ["monorail: Carto's railway_monorail, a value with no name"]
       },
       {
         "name": "rail",
-        "value": 58,
+        "value": 55,
         "kind": "transport",
         "doc": ["rail: Carto's railway_rail, a value with no name"]
       },
       { "section": "aeroways" },
       {
         "name": "aeroway",
-        "value": 59,
+        "value": 56,
         "kind": "transport",
         "doc": [
           "runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill"

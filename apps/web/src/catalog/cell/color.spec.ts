@@ -38,10 +38,6 @@ export default {
       hex: "#fff1ba",
       rgb: 16773562,
     },
-    mud: {
-      hex: "#e6dcd1",
-      rgb: 15129809,
-    },
     heath: {
       hex: "#d6d99f",
       rgb: 14080415,
@@ -138,21 +134,9 @@ export default {
       hex: "#d0d0d0",
       rgb: 13684944,
     },
-    fire_station: {
-      hex: "#f3e3dd",
-      rgb: 15983581,
-    },
-    prison: {
-      hex: "#8e8e8e",
-      rgb: 9342606,
-    },
     transportation_area: {
       hex: "#e9e7e2",
       rgb: 15329250,
-    },
-    rest_area: {
-      hex: "#efc8c8",
-      rgb: 15714504,
     },
     parking: {
       hex: "#eeeeee",
@@ -169,6 +153,14 @@ export default {
     water: {
       hex: "#aad3df",
       rgb: 11195359,
+    },
+    dam: {
+      hex: "#adadad",
+      rgb: 11382189,
+    },
+    breakwater: {
+      hex: "#aaaaaa",
+      rgb: 11184810,
     },
     building: {
       hex: "#d9d0c9",
@@ -194,14 +186,6 @@ export default {
       hex: "#996600",
       rgb: 10053120,
     },
-    bus_guideway: {
-      hex: "#6699ff",
-      rgb: 6724095,
-    },
-    service: {
-      hex: "#ffffff",
-      rgb: 16777215,
-    },
     pedestrian: {
       hex: "#dddde8",
       rgb: 14540264,
@@ -217,14 +201,6 @@ export default {
     road: {
       hex: "#dddddd",
       rgb: 14540253,
-    },
-    raceway: {
-      hex: "#ffc0cb",
-      rgb: 16761035,
-    },
-    tertiary: {
-      hex: "#ffffff",
-      rgb: 16777215,
     },
     secondary: {
       hex: "#f7fabf",
@@ -246,9 +222,21 @@ export default {
       hex: "#bbbbbb",
       rgb: 12303291,
     },
+    tram: {
+      hex: "#6e6e6e",
+      rgb: 7237230,
+    },
+    light_rail: {
+      hex: "#666666",
+      rgb: 6710886,
+    },
     subway: {
       hex: "#999999",
       rgb: 10066329,
+    },
+    monorail: {
+      hex: "#777777",
+      rgb: 7829367,
     },
     rail: {
       hex: "#707070",

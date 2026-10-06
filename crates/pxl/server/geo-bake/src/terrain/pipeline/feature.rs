@@ -18,7 +18,15 @@ pub type P = [f64; 2];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Layer {
     Landcover,
+    /// `landcover-line`: a cutline.
+    LandcoverLine,
+    /// `water-lines`: a river, canal, stream, drain or ditch drawn as a line.
+    WaterLine,
     Water,
+    /// `water-barriers-poly` and `-line`: a dam, a weir.
+    WaterBarrier,
+    /// `piers-poly` and `-line`: a pier, a breakwater, a groyne.
+    Pier,
     /// `highway-area-fill`: pedestrian areas, platforms, an aeroway's areas.
     RoadArea,
     Road,
