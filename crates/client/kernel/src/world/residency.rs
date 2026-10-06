@@ -48,12 +48,10 @@ pub trait Victim {
     fn victim(&self, candidates: &[Candidate]) -> Option<usize>;
 }
 
-/// `settles`: which of its four children it says the ground of. No frame
-/// for an empty tile, whose body is its own.
+/// No frame for an empty tile, whose body is its own.
 struct Held<L> {
     body: L,
     frame: Option<u32>,
-    settles: [bool; 4],
 }
 
 struct Entry<L> {
@@ -208,7 +206,7 @@ impl<L: Layer> Residency<L> {
             return false;
         }
         let over = q.parent();
-        self.held_as(over).is_some_and(|h| over.children().iter().zip(h.settles).any(|(&c, s)| c == q && s))
+        self.held_as(over).is_some_and(|h| !h.body.occupancy().has_child(q.slot()))
     }
 
     pub fn settled(&self, p: Tile) -> bool {
@@ -358,8 +356,7 @@ impl<L: Layer> Residency<L> {
     }
 
     fn put(&mut self, p: Tile, body: L, frame: Option<u32>) {
-        let settles = if p.zoom < LEAF_ZOOM { p.children().map(|c| body.settles(p, c)) } else { [false; 4] };
-        self.entry_mut(p).held = Some(Held { body, frame, settles });
+        self.entry_mut(p).held = Some(Held { body, frame });
         L::changed(p, true);
     }
 

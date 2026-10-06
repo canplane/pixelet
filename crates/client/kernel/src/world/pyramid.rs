@@ -4,9 +4,10 @@
 //! tiles held (residency.rs) and what an observation asks for of them.
 //!
 //! Asks are the observation's demand, as the estimator names it, merged with
-//! the fallback's tiles and a destination's, the best reason per tile. Nothing drawn enters them except the shared quality, which is
-//! decided first. Where a tile settles a child's ground (`Folds::settles`),
-//! the child is never asked for.
+//! the fallback's tiles and a destination's, the best reason per tile.
+//! Nothing drawn enters them except the shared quality, which is decided
+//! first. Where a tile marks a child as no tile (`Layer::occupancy`), its
+//! ground is the tile's and the child is never asked for.
 
 pub mod chunk;
 pub mod domain;
@@ -17,7 +18,8 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::layer::demand::{Bounds, DemandEstimator, Requirement, Storage as _, Tiled};
 use pxl_spec::space::layer::lattice::Lattice;
-use pxl_spec::space::layer::tile::{Folds, Tile, LEAF_ZOOM};
+use pxl_spec::bake::format::Occupancy;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::io::demand::{Ask, Category, Phases, Why};
 use crate::io::sched::declare;
@@ -29,8 +31,11 @@ use crate::world::residency::floor::{self, Fallback, Floor};
 use crate::world::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
 use pxl_spec::space::coord::zoom::Zoom;
 
-pub trait Layer: Folds + Clone + 'static {
+pub trait Layer: Clone + 'static {
     const CATEGORY: Category;
+
+    /// Which of its children are tiles of their own, as the bake wrote it.
+    fn occupancy(&self) -> Occupancy;
 
     /// Its tiles' cells, which say what of the grid a tile at each zoom draws.
     const LATTICE: Lattice;

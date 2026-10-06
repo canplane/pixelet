@@ -22,6 +22,7 @@ use crate::mem::fixed::{at, Range};
 use crate::world::access::Access;
 use crate::world::pyramid::{Layer, Pyramid};
 use xpute_runtime::clock::now;
+use pxl_spec::bake::format::Occupancy;
 use xpute_runtime::global::Global;
 
 static TERRAIN: Global<Pyramid<Terrain>> = Global::new();
@@ -29,6 +30,10 @@ static TERRAIN: Global<Pyramid<Terrain>> = Global::new();
 impl Layer for Terrain {
     const CATEGORY: Category = Category::terrain;
     const LATTICE: Lattice = GROUND;
+
+    fn occupancy(&self) -> Occupancy {
+        self.index.occupancy
+    }
     // The leaves carry the terrain topic; the zooms above are read through the
     // chunks that draw them.
 

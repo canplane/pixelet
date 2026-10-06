@@ -18,6 +18,7 @@ use crate::shell::setting::store::settings_store;
 use crate::world::pyramid::{Layer, Pyramid};
 use pxl_spec::space::coord::adapter::epsg3857::cell_zoom_of;
 use pxl_spec::space::coord::zoom::units;
+use pxl_spec::bake::format::Occupancy;
 use xpute_runtime::global::Global;
 
 static POI: Global<Pyramid<PoiTile>> = Global::new();
@@ -25,6 +26,10 @@ static POI: Global<Pyramid<PoiTile>> = Global::new();
 impl Layer for PoiTile {
     const CATEGORY: Category = Category::poi;
     const LATTICE: Lattice = POI_LATTICE;
+
+    fn occupancy(&self) -> Occupancy {
+        self.occupancy
+    }
     fn reach() -> f64 {
         MAJOR_UNITS_PER_PX / units_per_px_at(1.0)
     }

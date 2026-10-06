@@ -3,13 +3,13 @@
 //! A layer's lattice: how many cells its tile holds a side, the same at
 //! every zoom, and which of the camera grid's cells they fold into.
 
-use super::tile::{tile_at, tile_rows, Cell, Tile, LEAF_ZOOM};
+use super::tile::{Cell, Tile, LEAF_ZOOM};
 use crate::bake::constant::{DECK_CELL, EXTENT_CELL};
-use crate::space::camera::grid::{split_distance, Tau, CHUNK_CELLS, CHUNK_STEPS};
+use crate::space::camera::grid::CHUNK_STEPS;
 use crate::space::coord::pvf3::ivec;
 use crate::space::coord::pvf3::Pvf3;
 use crate::space::coord::zoom::{base_of, count, idx, index_of, Zoom, FINEST_ZOOM, SHARD_ZOOM};
-use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, slot_of};
+use crate::space::hierarchy::tree::{child_of, first_descendant_of, parent_of, slot_of};
 
 /// A layer's lattice: its cell is its tile's side over its own count of
 /// cells, the same at every zoom; held as the cell's zoom on a leaf. The
@@ -46,49 +46,6 @@ impl Lattice {
         self.grid_z(SHARD_ZOOM + CHUNK_STEPS) as Zoom
     }
 
-    // What a layer reads for a chunk, named by its zoom and column: the tile
-    // whose cells fold into the chunk's (`CHUNK_STEPS` finer), or past the
-    // leaves its leaf, and where the chunk lies in it.
-
-    /// The zoom of the tile a chunk at `chunk_zoom` reads.
-    pub const fn read_zoom(self, chunk_zoom: Zoom) -> Zoom {
-        let z = self.grid_z(chunk_zoom + CHUNK_STEPS);
-        (if z < LEAF_ZOOM as i32 { z } else { LEAF_ZOOM as i32 }) as Zoom
-    }
-
-    /// A chunk's side in the cells of the tile it reads.
-    pub const fn read_side(self, chunk_zoom: Zoom) -> u32 {
-        self.tile_cells() >> (chunk_zoom - self.read_zoom(chunk_zoom))
-    }
-
-    pub fn read_tile(self, (zoom, column): (Zoom, [i64; 2])) -> Tile {
-        let z = self.read_zoom(zoom);
-        tile_at(z, ancestor_of(column, u32::from(zoom - z)))
-    }
-
-    /// The chunk's first cell's place in the tile it reads, in that tile's cells.
-    pub fn read_at(self, (zoom, column): (Zoom, [i64; 2])) -> (u32, u32) {
-        let [x, y] = offset_in(column, u32::from(zoom - self.read_zoom(zoom)));
-        let side = self.read_side(zoom);
-        (x as u32 * side, y as u32 * side)
-    }
-
-    /// Neighbouring tiles an apron of `apron` of the tile's cells reaches
-    /// into, with their offsets from the chunk's tile; none for a chunk inside it.
-    pub fn read_beside(self, chunk: (Zoom, [i64; 2]), apron: u32) -> impl Iterator<Item = ([i64; 2], Tile)> {
-        let (x0, y0) = self.read_at(chunk);
-        let (side, across) = (self.read_side(chunk.0), self.tile_cells());
-        let steps = move |v: u32| [0, -1, 1].into_iter().filter(move |&q| q == 0 || (q < 0 && v < apron) || (q > 0 && v + side + apron > across));
-        let tile = self.read_tile(chunk);
-        let [px, py] = [ivec::X(tile.tile), ivec::Y(tile.tile)];
-        let zoom = tile.zoom;
-        let rows = tile_rows(zoom);
-        steps(y0)
-            .flat_map(move |qy| steps(x0).map(move |qx| [qx, qy]))
-            .filter(move |&[qx, qy]| [qx, qy] != [0, 0] && rows.contains(&(py + qy)))
-            .map(move |[qx, qy]| ([qx, qy], tile_at(zoom, [px + qx, py + qy])))
-    }
-
     /// Its finest cell's zoom: its cells' on a leaf tile.
     pub const fn cell(self) -> Zoom {
         self.cell
@@ -102,17 +59,6 @@ impl Lattice {
     /// The tile whose cells fold into the grid's cell `cell`, past the pyramid's ends too.
     pub const fn grid_z(self, cell: Zoom) -> i32 {
         self.z_of(cell) + self.fold as i32
-    }
-
-    /// The tile whose records fold into the grid's cell at `r`; held to the pyramid.
-    pub fn z_at(self, tau: Tau, r: f64) -> Zoom {
-        self.grid_z(tau.cell_at(r)).clamp(self.top() as i32, LEAF_ZOOM as i32) as Zoom
-    }
-
-    /// How far from an observer's foot a demand at `zoom` can lie: where the
-    /// grid's cell a zoom coarser begins. Bounds the run along the ground too.
-    pub const fn demand_reach(self, zoom: Zoom) -> f64 {
-        split_distance(self.grid_cell(zoom - 1))
     }
 
     /// Its cells' zoom on a tile at `z`.
@@ -233,6 +179,3 @@ pub const EXTENT: Lattice = Lattice::new(EXTENT_CELL);
 pub const DECK: Lattice = Lattice::new(DECK_CELL);
 
 pub const TILE_CELLS: u32 = GROUND.tile_cells();
-
-/// Chunks a tile's side holds at the zoom whose cells fold it.
-pub const TILE_CHUNKS: u32 = TILE_CELLS / (CHUNK_CELLS << GROUND.fold());

@@ -10,7 +10,8 @@ use pxl_spec::space::coord::world::{around, wrap_index};
 
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::Lattice;
-use pxl_spec::space::layer::tile::{Folds, Tile};
+use pxl_spec::bake::format::Occupancy;
+use pxl_spec::space::layer::tile::Tile;
 use xpute_runtime::global::Global;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
@@ -25,19 +26,17 @@ use pxl_spec::space::coord::zoom::Zoom;
 #[derive(Clone)]
 pub struct Earth;
 
-impl Folds for Earth {
-    /// Only the top zoom is baked, so nothing is folded.
-    fn fold_tile<'a>(_p: Tile, _held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
-        None
-    }
-}
-
 static EARTH: Global<Pyramid<Earth>> = Global::new();
 
 impl Layer for Earth {
     const CATEGORY: Category = Category::earth;
     const LATTICE: Lattice = earth_tile::EARTH;
     const DEMANDS: bool = false;
+
+    /// Only the top zoom is baked: no child is a tile.
+    fn occupancy(&self) -> Occupancy {
+        Occupancy::ZERO
+    }
     const TOP: Option<Zoom> = Some(EARTH_ZOOM);
 
     fn reach() -> f64 {

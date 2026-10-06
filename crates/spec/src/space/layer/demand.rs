@@ -23,6 +23,19 @@ pub struct Requirement {
     pub region: Aabb,
 }
 
+impl Lattice {
+    /// The tile whose records fold into the grid's cell at `r`; held to the pyramid.
+    pub fn z_at(self, tau: Tau, r: f64) -> Zoom {
+        self.grid_z(tau.cell_at(r)).clamp(self.top() as i32, LEAF_ZOOM as i32) as Zoom
+    }
+
+    /// How far from an observer's foot a demand at `zoom` can lie: where the
+    /// grid's cell a zoom coarser begins. Bounds the run along the ground too.
+    pub const fn demand_reach(self, zoom: Zoom) -> f64 {
+        split_distance(self.grid_cell(zoom - 1))
+    }
+}
+
 /// What a box holds at a zoom, as far as is known.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Contents {

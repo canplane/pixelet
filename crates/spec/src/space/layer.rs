@@ -5,4 +5,5 @@
 
 pub mod demand;
 pub mod lattice;
+pub mod read;
 pub mod tile;
