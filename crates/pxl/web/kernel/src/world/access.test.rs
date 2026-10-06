@@ -8,14 +8,13 @@ use pxl_spec::bake::format::Ground;
 use pxl_spec::cell::cube_types::{self, ground, sentinel};
 use pxl_spec::cell::object::{placeable_cube_num_id, PlaceableCube};
 use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::{Folds, TILE_CELLS};
-use xpute_core::math::rng::SplitMix64;
+use pxl_spec::space::pyramid::TILE_CELLS;
 
 use super::*;
-use crate::layer::object::store::{At, Write};
+use crate::layer::object::store::Write;
 use crate::serial;
 use crate::world::residency::{Candidate, Victim};
-use pxl_spec::space::zoom::{units, Zoom};
+use pxl_spec::space::zoom::Zoom;
 
 const PADDED: usize = ELE_PADDED_SPAN as usize;
 const SPAN: usize = TILE_CELLS as usize;
@@ -29,47 +28,8 @@ impl Victim for Keep {
     }
 }
 
-struct Rng(SplitMix64);
-
-impl Rng {
-    fn below(&mut self, n: u64) -> i64 {
-        (u64::from(self.0.next_u32()) % n) as i64
-    }
-}
-
-/// Steps and spikes, which the interpolation overshoots most, over ground
-/// part water a step lower.
-fn rough_leaf(rng: &mut Rng) -> Terrain {
-    let ele = (0..PADDED * PADDED).map(|_| if rng.below(6) == 0 { rng.below(300) - 40 } else { rng.below(12) } as i16).collect();
-    let cells = (0..SPAN * SPAN)
-        .map(|_| {
-            if rng.below(4) == 0 {
-                ground::water
-            } else if rng.below(3) == 0 {
-                ground::land
-            } else {
-                ground::park
-            }
-        })
-        .collect::<Vec<_>>();
-    Terrain::leaf(ele, Ground { cells: cells.into() }, Default::default())
-}
-
-fn zero_tile() -> Terrain {
-    let cells = vec![ground::water; SPAN * SPAN];
-    Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
-}
-
 fn top() -> Tile {
     Tile::new(LEAF_Z - 1, ivec::gather(40, -20, 0))
-}
-
-fn tiles() -> (Vec<(Tile, Terrain)>, Terrain) {
-    let mut rng = Rng(SplitMix64::new(0x9e37_79b9_7f4a_7c15));
-    let leaves: Vec<(Tile, Terrain)> = top().children().iter().map(|&c| (c, rough_leaf(&mut rng))).collect();
-    let zero = zero_tile();
-    let parent = Terrain::fold_tile(top(), |p| Some(leaves.iter().find(|(q, _)| *q == p).map_or(&zero, |(_, t)| t))).unwrap();
-    (leaves, parent)
 }
 
 fn resident(held: &[(Tile, Terrain)]) -> Residency<Terrain> {
@@ -94,63 +54,13 @@ fn down(at: [f64; 2]) -> Ray {
 
 fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
     let at = projection::project(corner[0], corner[1], corner[2]);
-    let a = At::of_cube(&at, side);
     store.write([Write {
-        col_idx: a.col_idx,
-        band_idx: a.band,
-        at: a.step,
-        cell_zoom: side,
+        zoom: side,
+        at: index_of(side, &at),
         state,
     }]);
 }
 
-/// Above the leaves a cell the objects fold solid is met at its own box; a lone
-/// cube the fold takes away is passed to the ground.
-#[test]
-fn a_zooms_ray_meets_the_objects_in_the_cells_the_zoom_draws_from() {
-    let _g = serial();
-    let (leaves, parent) = tiles();
-    let residency = resident(&[(top(), parent), leaves[0].clone()]);
-    let (x0, y0, _) = leaves[0].0.rect();
-    let z = LEAF_Z - 1;
-    let cell = units(GROUND.cell_zoom(z));
-    let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
-    let (bx, by) = ((x0 / cell).floor() * cell + 4.0 * cell, (y0 / cell).floor() * cell + 4.0 * cell);
-    let bare = Access::new(&residency, &Store::default()).at(&point(bx, by), z).value().unwrap().top().unwrap();
-    let bz = ((bare / cell).floor() + 3.0) * cell;
-
-    // Five of the cell's eight: the bottom four and one over them.
-    let mut store = Store::default();
-    for [dx, dy, dz] in [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1]] {
-        write(&mut store, [bx + dx as f64, by + dy as f64, bz + dz as f64], CELL, red);
-    }
-    let (lx, ly) = (bx + 4.0 * cell, by);
-    write(&mut store, [lx, ly, bz], CELL, red);
-    let access = Access::new(&residency, &store);
-
-    // Over the corner no cube's top reaches, the zoom still meets the cell's top.
-    let at = [bx + 1.5, by + 1.5];
-    let fine = access.first_hit(&down(at), Detail::Zoom(LEAF_Z)).value().flatten().unwrap();
-    assert_eq!(fine.point[2], bz + 1.0, "{fine:?}");
-    let hit = access.first_hit(&down(at), Detail::Zoom(z)).value().flatten().unwrap();
-    assert!(matches!(hit.struck, Struck::Objects), "{hit:?}");
-    assert_eq!(
-        hit.cube,
-        Aabb {
-            min: [bx, by, bz],
-            max: [bx + cell, by + cell, bz + cell]
-        }
-    );
-    assert_eq!(hit.point[2], bz + cell);
-
-    let alone = [lx + 0.5, ly + 0.5];
-    let hit = access.first_hit(&down(alone), Detail::Zoom(z)).value().flatten().unwrap();
-    let ground = Access::new(&residency, &Store::default()).first_hit(&down(alone), Detail::Zoom(z)).value().flatten().unwrap();
-    assert_eq!((hit.struck, hit.point), (Struck::Ground, ground.point));
-}
-
-/// Past the coverage the terrain gives no surface: nothing stands and no ray
-/// stops there, and what is placed there stands as anywhere.
 #[test]
 fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
     let _g = serial();
@@ -212,14 +122,14 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
 #[test]
 fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let _g = serial();
-    let n = pxl_spec::space::pyramid::around(LEAF_Z);
+    let n = pxl_spec::space::zoom::around(LEAF_Z);
     let flat = || {
         let cells = vec![ground::land; SPAN * SPAN];
         Terrain::leaf(vec![5; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
     };
     let tile = |x: i64| pxl_spec::space::pyramid::tile_at(LEAF_Z, [x, 0]);
     let residency = resident(&[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())]);
-    let seam = pxl_spec::space::pvf3::ROUND / 2.0;
+    let seam = pxl_spec::space::zoom::ROUND / 2.0;
     let top = Access::new(&residency, &Store::default()).at(&point(-seam + 20.5, 100.5), LEAF_Z).value().unwrap().top().unwrap();
 
     let mut store = Store::default();

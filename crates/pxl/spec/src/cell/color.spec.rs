@@ -14,7 +14,7 @@
 // case them the way Rust would is to rename the protocol.
 
 use super::cube_type::cube_types;
-use super::r#type::Swatch;
+use super::Swatch;
 
 /// `sentinel`'s color for a value.
 pub const fn sentinel(t: u8) -> Option<Swatch> {

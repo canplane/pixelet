@@ -315,9 +315,10 @@ stays private until success. A deadline or admission refusal is retryable,
 never an empty tile. These are execution/time budgets,
 not a cap on process memory or total cached disk bytes.
 
-`--top-z` (default 12) bounds the pyramid layers, terrain and POI alike: a
-tile coarser than it is answered 503, since each one folds the whole zoom
-under it on first request. Geocode groups have a fixed bake footprint.
+`--folds` (default 2, so z13) bounds the pyramid layers, terrain and POI
+alike, in zooms over the leaves: a tile coarser is answered 503, since each
+one folds the whole zoom under it on first request, and a tile a client
+asks for takes a worker before one a fold alone needs. Geocode groups have a fixed bake footprint.
 The common job limits apply to all of them and survive cache invalidation.
 A tile is cached while its file is in `out/dev/<kind>/`, and a restart keeps
 it. After re-ingest or a bake change, invalidate the affected kind as a whole

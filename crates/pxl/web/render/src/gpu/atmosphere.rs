@@ -5,10 +5,10 @@
 //! redrawn only when the light's height or the camera's altitude moves (the
 //! table is kept relative to the light's azimuth); and every frame the exposure.
 
-use pxl_spec::bake::earth_tile::{EARTH_TEXELS, EARTH_Z};
-use pxl_spec::space::lod::{demand_reach, REACH_ACROSS, REACH_TILES};
-use pxl_spec::space::pyramid::around;
+use pxl_spec::bake::earth_tile::{self, EARTH_TEXELS, EARTH_Z};
+
 use pxl_spec::space::v3::V3;
+use pxl_spec::space::zoom::around;
 
 use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
@@ -65,7 +65,7 @@ pub(crate) const EARTH_TILES: usize = 56;
 pub const AIR_WORDS: usize = 50;
 
 /// A layer for each tile the Earth layer's floor holds at once: its residency's frames.
-pub const EARTH_LAYERS: u32 = REACH_TILES;
+pub const EARTH_LAYERS: u32 = earth_tile::EARTH_HELD;
 /// A tile's layer plus one in four bits, eight to a word.
 pub(crate) const TILE_BITS: u32 = 4;
 const _: () = assert!(EARTH_LAYERS < 1 << TILE_BITS && EARTH_LAYERS <= 32 / TILE_BITS * 4, "the window's layers fit their word");
@@ -141,8 +141,8 @@ impl Atmosphere {
             words[at] = v as f32;
         }
         words[SUN_DIR + 2] = 1.0;
-        words[EARTH_REACH] = demand_reach(EARTH_Z) as f32;
-        words[EARTH_WINDOW + 2] = f32::from_bits(REACH_ACROSS);
+        words[EARTH_REACH] = earth_tile::EARTH_REACH as f32;
+        words[EARTH_WINDOW + 2] = f32::from_bits(earth_tile::EARTH_ACROSS);
         words[EARTH_WINDOW + 3] = f32::from_bits(around(EARTH_Z) as u32);
 
         let sampler = object();

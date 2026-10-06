@@ -1,6 +1,7 @@
 // pxl-spec/space/pyramid.test.rs
 
 use super::*;
+use crate::space::zoom::{around, nearest, ROUND};
 
 /// A cell's center and the coarser cell's over it are one computation: the cell `up` zooms coarser.
 #[test]
@@ -108,7 +109,7 @@ fn a_parent_cell_and_its_child_cells_are_one_relation() {
 /// stored X stands for an eye at its nearest copy.
 #[test]
 fn a_point_goes_round_in_x_and_stops_at_the_edge_in_y() {
-    use crate::space::pvf3::{nearest, projection, REACH, ROUND};
+    use crate::space::pvf3::{projection, REACH};
     let half = ROUND / 2.0;
     assert_eq!(projection::project(half + 3.0, REACH.max[1] + 100.0, 0.0), projection::project(-half + 3.0, REACH.max[1], 0.0));
     assert_eq!(nearest(-half + 3.0, half - 1.0), half + 3.0);

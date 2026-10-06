@@ -5,10 +5,13 @@
 use pxl_spec::cell::cube_types;
 use pxl_spec::cell::object::{decor_ids, decor_num_id, placeable_cube_num_id, placeable_cubes};
 
-use crate::look::color::mean_srgb;
-use crate::mesh::paint::object::material::solid_material;
-use crate::mesh::paint::palette::shader_meta::layer_mean;
-use crate::mesh::word::{pack_material, unpack_material, NO_LAYER};
+use crate::mesh::paint::palette::rgb255;
+use crate::mesh::paint::palette::LAYER_IDX;
+use crate::mesh::word::NO_LAYER;
+use crate::mesh::word::{pack_material, MaterialClasses};
+use pxl_spec::cell::object::{placeable_cube_rgb, PlaceableCube};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 const AIR: u32 = cube_types::object::air as u32;
 
@@ -76,28 +79,17 @@ impl Painter {
         }
     }
 
-    /// What a drawn cell of `of` shows over the children it folds, where they
-    /// are not all `of`: the mean of what each solid one shows, the pack's mean
-    /// where it is drawn, in `of`'s class and no layer. None where they are.
-    pub fn mean_of(&self, of: u32, children: impl Iterator<Item = u32> + Clone, textured: bool) -> Option<(u32, u8)> {
-        let (class, _) = unpack_material(self.material_of(of)?.0);
-        if children.clone().all(|c| c == of) {
-            return None;
-        }
-        let shown = children.filter_map(|c| self.material_of(c)).map(|(m, l)| {
-            let rgb = unpack_material(m).1;
-            if textured {
-                layer_mean(u32::from(l), rgb)
-            } else {
-                rgb
-            }
-        });
-        Some((pack_material(class, mean_srgb(shown)?), NO_LAYER as u8))
-    }
-
     fn kind(&self, state: u32) -> Kind {
         self.kinds.get(state as usize).copied().unwrap_or(Kind::Untaught)
     }
+}
+
+/// Its material word and texture layer. A cube of a look takes its ground's
+/// color and layer, but the class stays OBJECT: a terrain class would stop the
+/// cube shielding what is beneath it from occlusion culling.
+pub fn solid_material(cube: PlaceableCube) -> (u32, u8) {
+    let rgb = rgb255(placeable_cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE));
+    (pack_material(MaterialClasses::OBJECT, rgb), LAYER_IDX(cube) as u8)
 }
 
 #[cfg(test)]

@@ -5,10 +5,11 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
-use pxl_spec::bake::earth_tile::{self, EARTH_Z};
-use pxl_spec::space::lod::{REACH_ACROSS, REACH_TILES};
+use pxl_spec::bake::earth_tile::{self, EARTH_ACROSS, EARTH_HELD, EARTH_REACH, EARTH_Z};
+use pxl_spec::space::zoom::{around, wrap_index};
+
 use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::{around, wrap_index, Folds, Tile};
+use pxl_spec::space::pyramid::{Folds, Lattice, Tile};
 use xpute_runtime::global::Global;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
@@ -34,8 +35,13 @@ static EARTH: Global<Pyramid<Earth>> = Global::new();
 
 impl Layer for Earth {
     const CATEGORY: Category = Category::earth;
+    const LATTICE: Lattice = earth_tile::EARTH;
     const DEMANDS: bool = false;
     const TOP: Option<Zoom> = Some(EARTH_Z);
+
+    fn reach() -> f64 {
+        EARTH_REACH
+    }
 
     fn pyramid() -> &'static mut Pyramid<Earth> {
         EARTH.get(Pyramid::default)
@@ -102,8 +108,8 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
 /// The floor's tiles at the top as a window, its south-west tile first, and
 /// per tile row by row its layer plus one, zero where the global picture
 /// answers: residency as the GPU reads it, kept nowhere.
-pub fn earth_window() -> ([i32; 2], [u32; REACH_TILES as usize]) {
-    let mut layers = [0; REACH_TILES as usize];
+pub fn earth_window() -> ([i32; 2], [u32; EARTH_HELD as usize]) {
+    let mut layers = [0; EARTH_HELD as usize];
     let pyramid = Earth::pyramid();
     let at = |p: Tile| [ivec::X(p.tile), ivec::Y(p.tile)];
     let Some([first, _]) = pyramid.floor().next().map(at) else { return ([0; 2], layers) };
@@ -117,7 +123,7 @@ pub fn earth_window() -> ([i32; 2], [u32; REACH_TILES as usize]) {
         if uploads()[record as usize].is_none() {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
-            layers[(dy * REACH_ACROSS + dx) as usize] = record + 1;
+            layers[(dy * EARTH_ACROSS + dx) as usize] = record + 1;
         }
     }
     ([x0 as i32, y0 as i32], layers)

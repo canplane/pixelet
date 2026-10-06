@@ -1,14 +1,14 @@
 // pxl-kernel/layer/decor/instance.rs
 
 //! A chunk's decor instances as lanes, and the block they are laid into. A
-//! placed instance carries its entry's band and packed position; `hidden` is
-//! a flag so the hit test keeps seeing what the presentation leaves out.
+//! placed instance carries its entry's zoom, the cube it stands at the bottom
+//! middle of; `hidden` is a flag so the hit test keeps seeing what the
+//! presentation leaves out.
 
 use std::collections::TryReserveError;
 
-// i32::MIN, not u32::MAX: the word holds a BandZ cast to u32, and band -1
-// casts to u32::MAX, which made decor placed below the origin unpickable.
-pub const NO_ENTRY: u32 = i32::MIN as u32;
+/// No zoom: a scattered instance, or one drawn where its entry is not held.
+pub const NO_ENTRY: u32 = u32::MAX;
 pub const HIDDEN_FLAG: u8 = 1;
 
 #[derive(Clone, Copy)]
@@ -19,8 +19,7 @@ pub(crate) struct Instance {
     pub(crate) rotation: f32,
     pub(crate) scale: f32,
     pub(crate) flags: u8,
-    pub(crate) band: u32,
-    pub(crate) pos: u32,
+    pub(crate) entry: u32,
 }
 
 pub use pxl_render::gpu::pass::decor::GROUPS as DECOR_GROUPS;
@@ -76,7 +75,7 @@ impl DecorScratch {
 
 /// A block: group count, each group's instance count, then each group's
 /// lanes: five f32 lanes (x, y, z, spin, scale), byte flags padded to a
-/// word, band, packed position.
+/// word, the entry's zoom.
 #[derive(Clone, Copy)]
 pub struct GroupLanes {
     pub first: usize,
@@ -85,7 +84,7 @@ pub struct GroupLanes {
 
 impl GroupLanes {
     pub const fn words(count: usize) -> usize {
-        7 * count + count.div_ceil(4)
+        6 * count + count.div_ceil(4)
     }
 
     /// Lanes: 0 x, 1 y, 2 z, 3 spin, 4 scale.
@@ -97,12 +96,8 @@ impl GroupLanes {
         self.first + 5 * self.count
     }
 
-    pub const fn band_at(self, i: usize) -> usize {
+    pub const fn entry_at(self, i: usize) -> usize {
         self.flags() + self.count.div_ceil(4) + i
-    }
-
-    pub const fn pos_at(self, i: usize) -> usize {
-        self.band_at(i) + self.count
     }
 }
 

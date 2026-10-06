@@ -15,38 +15,33 @@
 //! `Need`). Smoothing coarsens at a publish, and refines one step after
 //! `QUALITY_WAIT_MS` with `QUALITY_MARGIN` to spare.
 
-use pxl_render::look::globe::MERCATOR_RADIUS_U;
-use pxl_spec::bake::published::PUBLISHED_TOP_Z;
-use pxl_spec::space::lod::{Tau, SPLIT};
+use pxl_spec::space::lod::{target_cell_px, Tau, SPLIT};
 
 use crate::kernel::kernel;
 use crate::param;
 use crate::world::chunk::frontier::{Need, Slots, HEADROOM};
 use crate::world::chunk::mesh_slot::{Pool, ARENA, POOLS};
 use crate::world::frame::view::view;
-use crate::world::pyramid::domain::{self, cover_pieces};
+use crate::world::pyramid::domain;
 use xpute_runtime::global::Global;
 
 const _: () = assert!(param::QUALITY_WAIT_MS > 0.0, "a policy asked twice at one instant would step finer twice");
 const _: () = assert!(param::TAU_STEP > 1.0, "a step that is not coarser");
-// The cover's pool holds every piece it can have, and the headroom fits
-// the other pools, so the floor's answer is always drawn.
-const _: () = assert!(
-    cover_pieces(PUBLISHED_TOP_Z, MERCATOR_RADIUS_U) <= ARENA[Pool::Cover as usize],
-    "the published source's cover does not fit its pool: ground it answers could stay unresolved"
-);
+// The headroom, the roots' room among it, fits the arena, so the floor's
+// answer is always drawn.
 const _: () = assert!(
     HEADROOM[Pool::Fine as usize] <= ARENA[Pool::Fine as usize] && HEADROOM[Pool::Coarse as usize] <= ARENA[Pool::Coarse as usize],
     "the headroom does not fit the arena: a view could be left with no move it can make"
 );
 
-/// The quality at which `CENTER_CELL_LOGICAL_PX` logical pixels at the
-/// optical axis span one cell, never finer than `SPLIT`. The screen plane
+/// The quality at which a cell spans as many logical pixels at the optical
+/// axis as the camera grid's at the reference view (`target_cell_px`), never
+/// finer than `SPLIT`. The screen plane
 /// stands `height / (2 · tan(fov / 2))` pixels from the eye, so `n` of them
 /// span `2 · atan(n / 2 / that)`.
 pub fn target() -> Tau {
     let v = view();
-    let half = param::CENTER_CELL_LOGICAL_PX * libm::tan(v.fov.to_radians() / 2.0) / v.height;
+    let half = target_cell_px() * libm::tan(v.fov.to_radians() / 2.0) / v.height;
     Tau::of((2.0 * libm::atan(half) * SPLIT).max(1.0))
 }
 
@@ -82,9 +77,9 @@ pub fn around(at: usize, len: usize, mut fit: impl FnMut(usize, bool) -> bool) -
     (finer(&mut fit, false), finer(&mut fit, true))
 }
 
-/// None for the cover, whose pieces are the roots at every quality.
+/// Room the policy keeps past a step before it goes finer.
 fn margin() -> Slots {
-    core::array::from_fn(|p| if p == Pool::Cover as usize { 0 } else { (ARENA[p] as f64 * param::QUALITY_MARGIN) as u32 })
+    ARENA.map(|n| (n as f64 * param::QUALITY_MARGIN) as u32)
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -145,7 +140,7 @@ pub fn step(stop: &dyn Fn() -> bool) {
     let q = QUALITY.get(Quality::default);
     let sched = &kernel().sched;
     let price = Need {
-        slots: |c, cube| sched.slots_of(c, cube),
+        slots: |c| sched.slots_of(c),
         admit: true,
     };
     domain::advance(q.smooth.at(), &price, stop);

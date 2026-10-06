@@ -7,11 +7,11 @@
 use pxl_render::gpu::api::word_bytes;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, TileView};
 use pxl_render::mesh::run::apron_col;
-use pxl_spec::bake::constant::{unpack_pos, CELL, U_PER_CELL};
+use pxl_spec::bake::constant::CELL;
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{CHUNK_DRAWN, GROUND, LEAF_Z};
+use pxl_spec::space::pyramid::{GROUND, LEAF_Z};
 use pxl_spec::space::v3::Aabb;
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
@@ -20,7 +20,7 @@ use std::collections::{HashMap, TryReserveError};
 use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
-use crate::layer::object::store::{column_cell, At, EntryAt, Store, AIR};
+use crate::layer::object::store::{EntryAt, Store, AIR};
 use crate::world::access::Access;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::asset::ingested::Asset;
@@ -30,21 +30,20 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::zoom::{count, index, index_of, units, Zoom};
 use xpute_core::math::scalar::round;
 
-/// A kind is drawn as a model while it covers at least two of a tier's cells
-/// on screen (twelve pixels at the reference viewport, by eye, where Google's
-/// maps stop drawing buildings in 3D), then as a sprite down to
-/// `IMPOSTOR_GONE_CELLS`. No fade: the edge is per instance, so it staggers.
+/// A kind is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
+/// down to `DECOR_SPRITE_PX`. No fade: the edge is per instance, so it staggers.
 pub fn decor_gone_px() -> f64 {
-    target_cell_px() * 2.0
+    crate::param::DECOR_MODEL_PX
 }
 
-/// Under this a kind's sprite is not drawn.
 pub fn decor_sprite_px() -> f64 {
-    target_cell_px() * crate::param::IMPOSTOR_GONE_CELLS
+    crate::param::DECOR_SPRITE_PX
 }
 
-fn decor_shown(extent_u: f64, lod_step: u32) -> bool {
-    (extent_u / U_PER_CELL) * target_cell_px() / lod_step as f64 >= decor_sprite_px()
+/// Whether a kind `extent_u` wide is a sprite's worth anywhere a chunk of
+/// `cell_zoom` is drawn: its cell is `target_cell_px` where it begins.
+fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
+    extent_u / units(cell_zoom) * target_cell_px() >= decor_sprite_px()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -95,25 +94,13 @@ pub struct Ground<'a> {
     pub zoom: Zoom,
     pub x0: i64,
     pub y0: i64,
-    /// The chunk's first tile cell in the tile.
+    /// The first tile cell read, in the tile, and how many a side.
     pub tx0: u32,
     pub ty0: u32,
-    /// log2 of the tile cells a drawn cell holds a side: 1 short of the leaves.
-    pub retina: u32,
-    /// On the leaves, the column whose placed objects keep a candidate off their cell.
-    /// Above the leaves the objects are read folded instead.
-    pub col_idx: Option<IVec>,
+    pub side: u32,
+    /// What the objects fold to over cells coarser than a cell; none where
+    /// the cells are a cell's, and a leaf written in one keeps a candidate off it.
     pub folded: Option<&'a HashMap<[i64; 3], u32>>,
-}
-
-pub struct Placed {
-    pub col_idx: IVec,
-    /// The column's corner relative to the chunk drawing it, in units.
-    pub ox: f64,
-    pub oy: f64,
-    /// A coarser cell draws several columns' decor and names none of their
-    /// entries, so only a leaf cell's placed instances are hittable.
-    pub hittable: bool,
 }
 
 /// Hidden rather than left out, so the hit that put the eraser there still
@@ -185,10 +172,10 @@ impl<'s> DecorBuild<'s> {
         scratch: &'s mut DecorScratch,
         kinds: &[&Kind],
         ground: Option<&Ground>,
-        placed: &[Placed],
+        hittable: bool,
         hide: Option<DecorHide>,
         store: &Store,
-        step: u32,
+        cell_zoom: Zoom,
         decor: bool,
         chunk: Aabb,
     ) -> Option<DecorBuild<'s>> {
@@ -203,12 +190,10 @@ impl<'s> DecorBuild<'s> {
                 break;
             }
             scratch.group_count += kind.variant_count() as usize;
-            if !decor_shown(kind.extent(), step) {
+            if !decor_shown(kind.extent(), cell_zoom) {
                 continue;
             }
-            for column in placed {
-                Self::placed(scratch, kind, first, column, hide.and_then(DecorHide::placed), store, chunk).ok()?;
-            }
+            Self::placed(scratch, kind, first, hittable, hide.and_then(DecorHide::placed), store, chunk).ok()?;
             if let Some(ground) = ground.filter(|_| decor) {
                 Self::scatter(scratch, kind, first, ground, hide, store, chunk).ok()?;
             }
@@ -216,46 +201,34 @@ impl<'s> DecorBuild<'s> {
         Some(DecorBuild { scratch })
     }
 
-    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
-        let (Some(value), Some(e)) = (kind.decor_value(), store.entries(column.col_idx)) else {
-            return Ok(());
-        };
-        let (bands, poss, states) = (e.band, e.pos, e.state);
-        for k in 0..bands.len() {
-            if states[k] != value {
-                continue;
+    /// Only what stands in `chunk`: a placed decor stands at its cube's bottom middle.
+    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, hittable: bool, hide: Option<EntryAt>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
+        let Some(value) = kind.decor_value() else { return Ok(()) };
+        let mut refused = Ok(());
+        store.entries_in(&chunk, &mut |e| {
+            let c = e.cube();
+            let (x, y) = ((c.min[0] + c.max[0]) / 2.0, (c.min[1] + c.max[1]) / 2.0);
+            let stands = (chunk.min[0]..chunk.max[0]).contains(&x) && (chunk.min[1]..chunk.max[1]).contains(&y) && (chunk.min[2]..chunk.max[2]).contains(&c.min[2]);
+            if e.state != value || !stands || refused.is_err() {
+                return;
             }
-            let pos = poss[k];
-            let (x, y, z, cell_zoom) = unpack_pos(pos);
-            let size = units(cell_zoom);
-            let at = At {
-                col_idx: column.col_idx,
-                band: bands[k],
-                step: [x, y, z],
-            };
             // Turned and varied by position, as the placing ghost predicted.
-            let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count());
-            let [lx, ly, lz] = at.local();
-            if !(chunk.min[2]..chunk.max[2]).contains(&lz) {
-                continue;
-            }
-            let hidden = hide == Some(e.at(k));
-            let h = size / 2.0;
-            scratch.push(
+            let (variant, rotation) = user_decor_pick(e.corner().i, kind.variant_count());
+            let hidden = hide == Some(e.id());
+            refused = scratch.push(
                 first + variant as usize,
                 Instance {
-                    x: (column.ox + lx + h) as f32,
-                    y: (column.oy + ly + h) as f32,
-                    z: lz as f32,
+                    x: (x - chunk.min[0]) as f32,
+                    y: (y - chunk.min[1]) as f32,
+                    z: c.min[2] as f32,
                     rotation: rotation as f32,
                     scale: 1.0,
                     flags: if hidden { HIDDEN_FLAG } else { 0 },
-                    band: if column.hittable { bands[k] as u32 } else { NO_ENTRY },
-                    pos,
+                    entry: if hittable { u32::from(e.zoom) } else { NO_ENTRY },
                 },
-            )?;
-        }
-        Ok(())
+            );
+        });
+        refused
     }
 
     /// Whether a kind may stand on a cell, and its transport alignment, are read
@@ -267,8 +240,7 @@ impl<'s> DecorBuild<'s> {
         let (lx0, ly0) = (index(own, ground.x0), index(own, ground.y0));
         let per = i64::from(count(atom, own));
         let min = [index(atom, ground.x0), index(atom, ground.y0)];
-        let span = i64::from(CHUNK_DRAWN << ground.retina) * per;
-        let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
+        let span = i64::from(ground.side) * per;
         scatter(kind.seed.tag, kind.seed.density, ground.zoom, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
         for i in 0..scratch.candidates.len() {
             let candidate = scratch.candidates[i];
@@ -276,28 +248,23 @@ impl<'s> DecorBuild<'s> {
             let Some(Draw { gx, gy, variant, rotation, scale }) = draw(kind, candidate, cells, lines, [ground.tx0 + dx, ground.ty0 + dy]) else {
                 continue;
             };
-            // On the drawn surface, which is the mean of the cells it holds.
-            let ele = ground.sample.ele[apron_col(dx >> ground.retina, dy >> ground.retina) as usize] as i32;
+            let ele = ground.sample.ele[apron_col(ground.sample.span, dx, dy) as usize] as i32;
             let at = [(gx as f64 + 0.5) * units(atom), (gy as f64 + 0.5) * units(atom), f64::from(ele)];
             // In the chunk holding the cell it stands on.
             if !((0..2).all(|k| (chunk.min[k]..chunk.max[k]).contains(&at[k])) && chunk.min[2] < at[2] && at[2] <= chunk.max[2]) {
                 continue;
             }
             // A leaf in the cell overrides the scatter: a cube or air hides it, the leaf gone brings it back.
-            // The cell is the column's, which a chunk narrower than a column starts inside.
-            let held = |c: IVec| {
-                let [ox, oy, _] = column_cell(c);
-                store.cell(c, (gx - ox) as u32, (gy - oy) as u32, ele).is_some()
+            // Folded, only a fill does.
+            let hides = match ground.folded {
+                None => store.holds(CELL, [gx, gy, i64::from(ele)]),
+                Some(f) => f.get(&[lx0 + dx as i64, ly0 + dy as i64, index(own, ele as i64)]).is_some_and(|&s| s != AIR),
             };
-            if has_entries && ground.col_idx.is_some_and(held) {
-                continue;
-            }
-            let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, index(own, ele as i64)]).is_some_and(|&s| s != AIR);
-            if ground.folded.is_some_and(filled) {
+            if hides {
                 continue;
             }
             let [x, y, z] = [at[0] - chunk.min[0], at[1] - chunk.min[1], at[2]];
-            let hidden = ground.zoom == LEAF_Z && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
+            let hidden = hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
             scratch.push(
                 first + variant as usize,
                 Instance {
@@ -307,8 +274,7 @@ impl<'s> DecorBuild<'s> {
                     rotation: rotation as f32,
                     scale: scale as f32,
                     flags: if hidden { HIDDEN_FLAG } else { 0 },
-                    band: NO_ENTRY,
-                    pos: 0,
+                    entry: NO_ENTRY,
                 },
             )?;
         }
@@ -359,8 +325,7 @@ impl<'s> DecorBuild<'s> {
                 *words.add(lane.f32_at(l, r)) = v.to_bits();
             }
             *at.add(lane.flags() * 4 + r) = i.flags;
-            *words.add(lane.band_at(r)) = i.band;
-            *words.add(lane.pos_at(r)) = i.pos;
+            *words.add(lane.entry_at(r)) = i.entry;
             rank[g as usize] += 1;
         }
     }

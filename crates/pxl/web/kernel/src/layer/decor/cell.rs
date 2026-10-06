@@ -11,31 +11,32 @@ use std::collections::HashMap;
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, TileSource};
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::{nearest, nearest_box};
-use pxl_spec::space::pyramid::{CHUNK_DRAWN, GROUND, LEAF_Z};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 use pxl_spec::space::v3::{len3, sub3, V3};
+use pxl_spec::space::zoom::{cube, nearest, nearest_box};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 use xpute_runtime::sched::frame_budget::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
-use crate::layer::decor::build::{decor_gone_px, decor_sprite_px, variant_extent, DecorBuild, DecorHide, Ground, Placed};
+use crate::layer::decor::build::{decor_gone_px, decor_sprite_px, variant_extent, DecorBuild, DecorHide, Ground};
 use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::DECOR_SIZE;
-use crate::layer::object::store::{object_col_revision, Store};
+use crate::layer::object::store::Store;
 use crate::shell::setting::store::settings_store;
-use crate::world::chunk::build::Builder;
+use crate::world::chunk::build::{draws_as_held, Builder};
 use crate::world::chunk::mesh_slot::OCCUPANCY;
+use crate::world::chunk::source::objects_revision_of;
 use crate::world::chunk::table::Scheduler;
 use crate::world::observation::{eye, observation};
 use crate::world::pyramid::chunk::Chunk;
+use crate::world::pyramid::read::TileRead;
 use crate::world::pyramid::Layer;
-use pxl_spec::bake::constant::BAND;
+use pxl_render::mesh::run::APRON;
+use pxl_spec::bake::constant::CELL;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::indexer::{from_idx, idx};
 use pxl_spec::space::zoom::{index, Zoom};
 use xpute_runtime::global::Global;
 
@@ -74,8 +75,6 @@ struct Cells {
     blocks: HashMap<Chunk, Block>,
     scratch: Option<DecorScratch>,
     sample: ChunkSample,
-    cols: Vec<IVec>,
-    placed: Vec<Placed>,
     folded: HashMap<[i64; 3], u32>,
     /// Kept so a settled turn asks the heap for nothing.
     mounted: Vec<(Chunk, bool, bool)>,
@@ -106,23 +105,23 @@ fn may_show(chunk: Chunk, largest: f64) -> bool {
     d <= o.far && largest / units_per_px_at(d) >= decor_sprite_px()
 }
 
-/// None where the heap refused room to list the columns.
-fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<DecorHide>) -> Option<Sources> {
-    cols.clear();
-    store.cols_under(chunk.column(), cols).ok()?;
-    let revision = cols.iter().fold(0u32, |r, &c| r.wrapping_mul(31).wrapping_add(object_col_revision(c)));
+fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
     let (x0, y0, side) = chunk.rect();
-    let inside = |x: i64, y: i64| (x0..x0 + side).contains(&(x as f64)) && (y0..y0 + side).contains(&(y as f64));
-    let hide = hide.filter(|h| match *h {
-        DecorHide::Placed(at) => {
-            let o = from_idx(BAND, at.col_idx);
-            inside(ivec::X(o), ivec::Y(o))
+    let inside = |x: f64, y: f64| (x0..x0 + side).contains(&x) && (y0..y0 + side).contains(&y);
+    // Only where the chunk draws it as it is held: a fold is no one's to hide.
+    let own = draws_as_held(chunk, CELL);
+    let hide = hide.filter(|h| {
+        own && match *h {
+            DecorHide::Placed(e) => {
+                let o = nearest_box(&cube(e.zoom, e.at), x0 + side / 2.0);
+                inside((o.min[0] + o.max[0]) / 2.0, (o.min[1] + o.max[1]) / 2.0)
+            }
+            DecorHide::Scattered([x, y, _]) => inside(x as f64, y as f64),
         }
-        DecorHide::Scattered([x, y, _]) => chunk.tile_zoom() == LEAF_Z && inside(x, y),
     });
     Some(Sources {
-        read_from: Terrain::pyramid().residency().drawn_from(chunk.tile())?.zoom,
-        revision,
+        read_from: Terrain::pyramid().residency().drawn_from(TileRead::of(GROUND, chunk).tile())?.zoom,
+        revision: objects_revision_of(chunk),
         shown: settings_store().decor,
         hide,
     })
@@ -130,18 +129,16 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
 
 fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
     let tiles = Terrain::pyramid();
-    // The tile the terrain draws the chunk from, read over the chunk whose cells
-    // are that tile's; past the leaves, the leaf chunk the chunk lies in.
-    let src = tiles.residency().drawn_from(chunk.tile())?;
+    // The tile the terrain draws the chunk from, read over the chunk whose
+    // side is that many of its cells; past the leaves, the chunk over it as wide.
+    let src = tiles.residency().drawn_from(TileRead::of(GROUND, chunk).tile())?;
     let tile = tiles.residency().get(src)?;
-    let mut over = chunk;
-    while over.finer() > 0 || over.tile_zoom() > src.zoom {
+    let mut over = TileRead::of(GROUND, chunk);
+    while over.tile_cells() < CHUNK_CELLS || over.tile_zoom() > src.zoom {
         over = over.parent()?;
     }
-    let zoom = over.tile_zoom();
-    let retina = (-over.finer()) as u32;
-    let (cx0, cy0, _) = chunk.rect();
-    let (x0, y0, _) = over.rect();
+    let (zoom, side) = (over.tile_zoom(), over.tile_cells());
+    let (x0, y0, _) = over.chunk().rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
     let (tx0, ty0) = over.in_tile();
     let view = Builder::tile_view(tile);
@@ -151,29 +148,17 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
                 tile: view,
                 frame: Frame::of(src),
                 origin: [0, 0],
-                shift: over.finer(),
+                n: 1,
             },
             beside: [None; 8],
-            tile_shamt: GROUND.tile_cell_shamt() - retina,
-            zoom: over.drawn_zoom(),
-            textured: settings_store().textures,
         };
-        c.sample.read(&around, [tx0 as i64, ty0 as i64]).ok()?;
+        c.sample.read(&around, [tx0 as i64, ty0 as i64], side + 2 * APRON).ok()?;
     }
-    c.placed.clear();
-    c.placed.try_reserve(c.cols.len()).ok()?;
-    c.placed.extend(c.cols.iter().map(|&col_idx| {
-        let o = from_idx(BAND, col_idx);
-        Placed {
-            col_idx,
-            ox: ivec::X(o) as f64 - cx0,
-            oy: ivec::Y(o) as f64 - cy0,
-            hittable: chunk.tile_zoom() == LEAF_Z,
-        }
-    }));
+    // Interaction reads what is drawn as it is held, never a fold of it.
+    let own = draws_as_held(chunk, CELL);
     let target = GROUND.cell_zoom(zoom);
-    let (cx, cy, span) = (index(target, x0), index(target, y0), i64::from(CHUNK_DRAWN << retina));
-    match zoom < LEAF_Z && sources.shown {
+    let (cx, cy, span) = (index(target, x0), index(target, y0), i64::from(side));
+    match target < CELL && sources.shown {
         true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
         false => c.folded.clear(),
     }
@@ -183,15 +168,23 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         zoom,
         x0,
         y0,
-        tx0: tx0 << retina,
-        ty0: ty0 << retina,
-        retina,
-        col_idx: (zoom == LEAF_Z).then(|| idx(BAND, ivec::gather(x0, y0, 0))),
-        folded: (zoom < LEAF_Z).then_some(&c.folded),
+        tx0,
+        ty0,
+        side,
+        folded: (target < CELL).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
-    let step = GROUND.finest_in(zoom);
-    let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown, chunk.region())?;
+    let built = DecorBuild::build(
+        scratch,
+        kinds,
+        Some(&ground),
+        own,
+        sources.hide.filter(|_| own),
+        store,
+        chunk.cell_zoom(),
+        sources.shown,
+        chunk.region(),
+    )?;
     let index = built.bytes();
     let heights = built.heights();
     let instances = built.instances() as u32;
@@ -240,7 +233,7 @@ pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<
             if !may_show(chunk, largest) {
                 return false;
             }
-            let Some(sources) = sources_of(chunk, store, &mut c.cols, hide) else { return false };
+            let Some(sources) = sources_of(chunk, hide) else { return false };
             if c.blocks.get(&chunk).is_some_and(|b| b.sources == sources) {
                 return false;
             }

@@ -1,117 +1,33 @@
 // pxl-kernel/layer/object/store.test.rs
 
-use pxl_spec::bake::constant::{BAND_CELLS, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pyramid::GROUND;
 
 use super::*;
-use pxl_spec::space::indexer::from_idx;
-use pxl_spec::space::zoom::{count, units, Zoom};
 use xpute_core::math::rng::SplitMix64;
 
-// Far-apart corners per test: the store is kernel-global across the binary.
 fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
     Pvf3 { i: ivec::gather(x, y, z), f: 0 }
 }
 
-fn entries(store: &Store, col_idx: IVec) -> Vec<(i32, u32, u32)> {
-    let Some(e) = store.entries(col_idx) else { return Vec::new() };
-    (0..e.band.len()).map(|k| (e.band[k], e.pos[k], e.state[k])).collect()
-}
-
-fn write(store: &mut Store, col_idx: IVec, band_idx: BandZ, at: [u32; 3], cell_zoom: Zoom, state: u32) -> BTreeSet<(IVec, BandZ)> {
-    store.write([Write {
-        col_idx,
-        band_idx,
-        at,
-        cell_zoom,
-        state,
-    }])
-}
-
 #[test]
-fn a_write_is_read_back_and_its_entries_are_made_within_it() {
+fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
     let mut store = Store::default();
-    assert_eq!(write(&mut store, 7, 0, [8, 16, 24], CELL, 3), BTreeSet::from([(7, 0)]));
-    assert_eq!(store.read(7, 0, [8, 16, 24]), 3);
-    assert_eq!(store.read(7, 0, [15, 23, 31]), 3, "a cell leaf covers its eight steps");
-    assert_eq!(store.read(7, 0, [16, 16, 24]), VOID);
-    assert_eq!(entries(&store, 7), vec![(0, pack_pos(8, 16, 24, CELL), 3)]);
-    let cell = store.cell(7, 1, 2, 3).expect("the cell is found");
-    assert_eq!((cell.start, cell.count), (0, 1));
-    assert!(store.cell(7, 2, 2, 3).is_none());
-}
-
-#[test]
-fn a_void_write_prunes_the_band_and_the_chunk() {
-    let mut store = Store::default();
-    write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, AIR);
-    assert_eq!(store.cols().count(), 1);
-    assert!(store.cell(7, 0, 0, 2 * BAND_CELLS as i32).is_some(), "AIR is an entry");
-    assert_eq!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID), BTreeSet::from([(7, 2)]));
-    assert_eq!(store.cols().count(), 0);
-    assert_eq!(entries(&store, 7), vec![]);
-    assert!(store.cell(7, 0, 0, 2 * BAND_CELLS as i32).is_none());
-    assert!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID).is_empty(), "erasing nothing changes nothing");
-}
-
-#[test]
-fn a_merged_block_comes_back_as_its_cells_each_found_where_it_lies() {
-    let mut store = Store::default();
-    let writes = (0..64u32).map(|k| {
-        let [x, y, z] = at_walk_order::<3>(k as u64, 2);
-        Write {
-            col_idx: 1,
-            band_idx: -1,
-            at: [x * CELL_STEPS, y * CELL_STEPS, z * CELL_STEPS],
-            cell_zoom: CELL,
-            state: 5,
-        }
-    });
-    store.write(writes);
-    let found = entries(&store, 1);
-    assert_eq!(found.len(), 64);
-    assert!(found.iter().all(|&(b, p, s)| b == -1 && s == 5 && unpack_pos(p).3 == CELL));
-    for (k, &(_, p, _)) in found.iter().enumerate() {
-        let (x, y, z, _) = unpack_pos(p);
-        let cell = store
-            .cell(1, x / CELL_STEPS, y / CELL_STEPS, -(BAND_CELLS as i32) + (z / CELL_STEPS) as i32)
-            .expect("every cell is found");
-        assert_eq!((cell.start, cell.count), (k as u32, 1));
+    for at in [[8, 16, 24], [-3, 5, -7]] {
+        assert_eq!(store.write([Write { zoom: CELL, at, state: 3 }]), vec![EntryAt { zoom: CELL, at }]);
+        assert_eq!(
+            store.node(OBJECT_FINEST, first_descendant_of(at, u32::from(OBJECT_FINEST - CELL))).0.state,
+            3,
+            "a cell leaf covers its steps"
+        );
+        let mut met = Vec::new();
+        store.each_in(CELL, at, &mut |e| met.push(*e));
+        assert_eq!(met, vec![Entry { zoom: CELL, at, state: 3 }]);
+        store.write([Write { zoom: CELL, at, state: VOID }]);
+        assert!(store.tree.is_empty());
+        assert!(store.write([Write { zoom: CELL, at, state: VOID }]).is_empty(), "erasing nothing changes nothing");
     }
-}
-
-#[test]
-fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
-    let mut store = Store::default();
-    let finest = |x: u32, y: u32, z: u32| Write {
-        col_idx: 3,
-        band_idx: 0,
-        at: [x, y, z],
-        cell_zoom: OBJECT_FINEST,
-        state: 2,
-    };
-    store.write([
-        Write { band_idx: 1, ..finest(8, 0, 0) },
-        finest(9, 1, 0),
-        finest(8, 0, 0),
-        Write { cell_zoom: CELL, ..finest(0, 8, 0) },
-        finest(1, 0, 0),
-        finest(0, 0, 1),
-    ]);
-    let found = entries(&store, 3);
-    let order: Vec<(BandZ, u64)> = found
-        .iter()
-        .map(|&(b, p, _)| {
-            let (x, y, z, _) = unpack_pos(p);
-            (b, walk_order([x / CELL_STEPS, y / CELL_STEPS, z / CELL_STEPS], BAND_CELL_SHAMT))
-        })
-        .collect();
-    assert!(order.is_sorted(), "{order:?}");
-    assert_eq!(store.cell(3, 0, 0, 0).map(|c| c.count), Some(2));
-    assert_eq!(store.cell(3, 1, 0, 0).map(|c| c.count), Some(2));
-    assert_eq!(store.cell(3, 0, 1, 0).map(|c| c.count), Some(1));
-    assert_eq!(store.cell(3, 1, 0, BAND_CELLS as i32).map(|c| c.count), Some(1));
 }
 
 /// Deterministic edits on every run.
@@ -127,22 +43,19 @@ impl Rng {
     }
 }
 
-/// Whole cells in band 0 of one column, and what the store keeps folded at
-/// `z`, with the column's corner in that zoom's cells.
-fn folded(cells: &[(u32, u32, u32, u32)], zoom: Zoom) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
+/// Whole cells from a corner, and what the store keeps folded at `zoom`'s
+/// cells, with the corner in that zoom's cells.
+fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
     let mut store = Store::default();
-    let col_idx = ivec::gather(1, -1, 0);
-    let step = count(OBJECT_FINEST, CELL);
+    let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
-        col_idx,
-        band_idx: 0,
-        at: [x * step, y * step, z * step],
-        cell_zoom: CELL,
+        zoom: CELL,
+        at: [base[0] + x, base[1] + y, z],
         state,
     }));
     let target = GROUND.cell_zoom(zoom);
-    let per = count(target, BAND) as i64;
-    let corner = [per, -per];
+    let corner = base.map(|v| v >> (CELL - target));
+    let per = 64 >> (CELL - target);
     let mut out = HashMap::new();
     store.fold_at(target, corner, [corner[0] + per, corner[1] + per], None, &mut out).unwrap();
     (out, corner)
@@ -181,23 +94,16 @@ fn air_is_a_value_and_folds_like_one() {
 }
 
 fn entry_boxes(store: &Store) -> Vec<Aabb> {
+    let all = Aabb {
+        min: [-1e7, -1e7, REACH.min[2]],
+        max: [1e7, 1e7, REACH.max[2]],
+    };
     let mut out = Vec::new();
-    for &col_idx in store.columns.keys() {
-        let e = store.entries(col_idx).unwrap();
-        let corner = from_idx(BAND, col_idx);
-        for k in 0..e.band.len() {
-            let (x, y, z, own) = unpack_pos(e.pos[k]);
-            let min = [
-                ivec::X(corner) as f64 + x as f64 * STEP_UNITS,
-                ivec::Y(corner) as f64 + y as f64 * STEP_UNITS,
-                e.band[k] as f64 * BAND_UNITS + z as f64 * STEP_UNITS,
-            ];
-            out.push(Aabb {
-                min,
-                max: min.map(|v| v + units(own)),
-            });
+    store.entries_in(&all, &mut |e| {
+        if present(e.state) {
+            out.push(e.cube());
         }
-    }
+    });
     out
 }
 
@@ -259,25 +165,5 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         let given = stores[0].bound_in(&query);
         assert_eq!(stores[1].bound_in(&turn_box(query)), given.map(turn_box), "{query:?}");
         assert_eq!(stores[2].bound_in(&turn_box(turn_box(query))), given.map(|b| turn_box(turn_box(b))), "{query:?}");
-    }
-}
-
-/// Painted as sub-cells, the mesher would draw a box each.
-#[test]
-fn a_paint_finer_than_a_cube_takes_it_whole() {
-    let mut store = Store::default();
-    let col_idx = ivec::gather(1, -1, 0);
-    let step = count(OBJECT_FINEST, CELL);
-    store.write([Write {
-        col_idx,
-        band_idx: 0,
-        at: [3 * step, 4 * step, 5 * step],
-        cell_zoom: CELL,
-        state: red(),
-    }]);
-    for target in [OBJECT_FINEST - 1, CELL + 1] {
-        let mut out = Vec::new();
-        store.fold_entries(col_idx, target, None, &mut |band, at, cell_zoom, v| out.push((band, at, cell_zoom, v)));
-        assert_eq!(out, [(0, [3 * step, 4 * step, 5 * step], CELL, red())]);
     }
 }

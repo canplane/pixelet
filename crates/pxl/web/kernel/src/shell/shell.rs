@@ -20,8 +20,8 @@ use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::store::{device_location_store, device_orientation_store};
+use crate::layer::character::companion::companion_load_store;
 use crate::layer::character::preview::{preview_rows, CASES_MAX};
-use crate::layer::character::store::companion_load_store;
 use crate::layer::geocode::fetcher::center_group;
 use crate::layer::geocode::store as geocode_store;
 use crate::sched::turn::world_platform;
@@ -29,8 +29,8 @@ use crate::shell::setting::store::{settings_store, SettingKey};
 use crate::shell::ui::scale::m_per_px;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::indexer::idx;
 use pxl_spec::space::pyramid::LEAF_Z;
+use pxl_spec::space::zoom::idx;
 
 /// The center tile's place, broad to narrow. Every language is sent, so
 /// switching language re-reads rather than refetches.

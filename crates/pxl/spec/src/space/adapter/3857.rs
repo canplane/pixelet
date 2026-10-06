@@ -5,9 +5,9 @@
 
 use core::f64::consts::TAU;
 
-use crate::space::indexer::from_idx;
-use crate::space::pvf3::{projection, FVec, IVec, Pvf3, ROUND};
+use crate::space::pvf3::{projection, FVec, IVec, Pvf3};
 use crate::space::pyramid::LEAF_Z;
+use crate::space::zoom::{from_idx, ROUND};
 use crate::space::zoom::{units, Zoom};
 
 use super::epsg4326::EARTH_RADIUS_M;

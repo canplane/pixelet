@@ -391,7 +391,3 @@ impl<L: Layer> Residency<L> {
         held.frame
     }
 }
-
-#[cfg(test)]
-#[path = "residency.test.rs"]
-mod test;

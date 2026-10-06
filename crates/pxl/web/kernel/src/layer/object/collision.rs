@@ -8,17 +8,16 @@ use crate::layer::decor::build::scatters_at;
 use crate::layer::decor::kind::KINDS;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{holds_entry, objects_at, Entry, EntryKind};
+use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::space::v3::Aabb;
 use pxl_spec::space::zoom::{base_of, index_of, of_side};
 
-/// Every cube sits on its own size's lattice and is at most a cell, so two
-/// share space exactly when one's node lies under the other's.
+/// Every cube sits on its own size's lattice, so two share space exactly
+/// when one's node lies under the other's.
 pub fn find_overlapping_object(corner: &Pvf3, size: f64) -> Option<Entry> {
-    let cube_node = |corner: &Pvf3, size: f64| {
-        let side = of_side(size);
-        (side, index_of(side, corner))
-    };
-    let candidate = cube_node(corner, size);
-    objects_at(corner).into_iter().find(|o| share(candidate, cube_node(&o.corner(), o.size())))
+    let side = of_side(size);
+    let candidate = (side, index_of(side, corner));
+    objects_at(corner).into_iter().find(|o| share(candidate, (o.zoom, o.at)))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -38,4 +37,18 @@ fn decor_under(corner: &Pvf3) -> bool {
     let under = pvf3::add(corner, &base_of(CELL, [0, 0, -1]));
     let placed = objects_at(&under).iter().any(|o| matches!(o.kind(), EntryKind::Decor { .. }));
     placed || !holds_entry(&under) && KINDS.iter().filter_map(|k| k.decor_value()).any(|v| scatters_at(v, &under).is_some())
+}
+
+/// The center of the cell a hover anchor (a min corner) points at: where a
+/// tap recenters, which is where the ghost box is drawn.
+pub fn anchor_center(anchor: &Pvf3) -> Pvf3 {
+    let half = pvf3::from_real(U_PER_CELL / 2.0);
+    pvf3::gather(pvf3::X(anchor) + half, pvf3::Y(anchor) + half, pvf3::Z(anchor) + half)
+}
+
+/// In the world's doubles, the space the pick works in.
+pub fn object_aabb(obj: &Entry) -> Aabb {
+    let min = crate::world::frame::coord::to_world(&obj.corner());
+    let max = min.map(|v| v + obj.size());
+    Aabb { min, max }
 }

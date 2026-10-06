@@ -5,30 +5,24 @@
 //! from a floor shared by the chunk. Decks stand off the column as runs of
 //! their own; a bore or a cutting takes the air over its floor out of the
 //! column.
-//! The floor is rounded down to a whole band, since a volume allocates whole
-//! bands and a floor inside one would open another for a few voxels.
 
-use pxl_spec::bake::constant::{BAND_CELLS, U_PER_CELL};
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::deck::{Decks, Occupies, Over};
-use pxl_spec::bake::fold::majority;
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::cell::color;
-use pxl_spec::cell::cube::cube_types::{ground, sentinel, Ground};
-use pxl_spec::cell::cube::Kind;
+use pxl_spec::cell::cube_types::{ground, sentinel, Ground};
 use pxl_spec::cell::object::PlaceableCube;
+use pxl_spec::cell::Kind;
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::{ancestor_of, offset_in};
-use pxl_spec::space::pyramid::GROUND;
-use pxl_spec::space::zoom::Zoom;
-use xpute_core::math::scalar::round;
+use pxl_spec::space::pyramid::{GROUND, TILE_CELLS};
 
-use crate::look::color::mean_srgb;
-use crate::mesh::paint::palette::shader_meta::{layer_mean, rgb255};
-use crate::mesh::paint::palette::tex_array::LAYER_IDX;
+use crate::mesh::paint::palette::rgb255;
+use crate::mesh::paint::palette::LAYER_IDX;
 use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use crate::mesh::run::{APRON, COL_SPAN};
-use crate::mesh::word::{pack_material, unpack_material, MaterialClasses, NO_LAYER};
+use crate::mesh::word::{pack_material, MaterialClasses, NO_LAYER};
 use crate::mesh::{try_push, Refused};
 use std::sync::LazyLock;
 
@@ -64,26 +58,6 @@ impl Materials {
         self.of(cell).unwrap_or(self.unknown)
     }
 
-    /// What cells of several looks draw as together, one drawn cell over them:
-    /// one look keeps its material and layer; several, the mean of what each
-    /// shows, the pack's mean where it is drawn, in the class of `of`'s.
-    pub fn mean(&self, of: GroundCell, cells: &[GroundCell], textured: bool) -> (u32, u8) {
-        if cells.iter().all(|&c| c == of) {
-            return self.drawn(of);
-        }
-        let shown = |c: GroundCell| {
-            let (m, l) = self.drawn(c);
-            let rgb = unpack_material(m).1;
-            if textured {
-                layer_mean(u32::from(l), rgb)
-            } else {
-                rgb
-            }
-        };
-        let rgb = mean_srgb(cells.iter().filter(|&&c| c != sentinel::void).map(|&c| shown(c))).unwrap_or_else(|| shown(of));
-        (pack_material(unpack_material(self.drawn(of).0).0, rgb), NO_LAYER as u8)
-    }
-
     fn of_palette() -> Materials {
         let mut looks = [None; 256];
         for g in Ground::ALL {
@@ -102,15 +76,14 @@ impl Materials {
 /// apron reads without its deck stands at another height than the chunk beside
 /// draws it, and the faces either side are shaded for a step that is not there.
 /// `s` is the tile at `quadrant` beside the chunk's own and is read for the
-/// columns `reads` says; `corner` is the apron's first column in the own tile's
-/// drawn cells, a tile `1 << tile_shamt` of them across.
-fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &TileSource, corner: [i64; 2], quadrant: [i64; 2], tile_shamt: u32, reads: impl Fn([i64; 2]) -> bool) -> Result<(), Refused> {
-    let per = s.per_drawn();
-    let origin = [0, 1].map(|k| (s.origin[k] + corner[k] - (quadrant[k] << tile_shamt)) as f64 * per);
-    let side = COL_SPAN as i64;
+/// columns `reads` says; `corner` is the apron's first column in the own tile's cells.
+fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &TileSource, corner: [i64; 2], quadrant: [i64; 2], span: u32, reads: impl Fn([i64; 2]) -> bool) -> Result<(), Refused> {
+    let n = f64::from(s.n);
+    let origin = [0, 1].map(|k| (s.origin[k] + corner[k] - quadrant[k] * TILE_CELLS as i64) as f64 / n);
+    let side = i64::from(span);
     let mut grown = Ok(());
-    s.tile.decks.over_grid(Some(s.frame), origin, per, [side, side], |cx, cy, d, o| {
-        if grown.is_ok() && reads(ancestor_of([corner[0] + cx, corner[1] + cy], tile_shamt)) {
+    s.tile.decks.over_grid(Some(s.frame), origin, 1.0 / n, [side, side], |cx, cy, d, o| {
+        if grown.is_ok() && reads(ancestor_of([corner[0] + cx, corner[1] + cy], GROUND.tile_cell_shamt())) {
             grown = try_push(over, ((cy * side + cx) as usize, d, o));
         }
     });
@@ -127,24 +100,15 @@ pub struct TileView<'a> {
     pub decks: &'a Decks,
 }
 
-/// The tile drawn in place of this one: its own, or a coarser one until its own comes.
+/// The tile drawn in place of this one (its own, or a coarser one whose cell
+/// stands for `n` × `n` of its cells until its own comes).
 #[derive(Clone, Copy)]
 pub struct TileSource<'a> {
     pub tile: TileView<'a>,
     /// Where the tile lies, for its piers' stations.
     pub frame: Frame,
-    /// The chunk's tile's first cell in this one, in drawn cells.
     pub origin: [i64; 2],
-    /// log2 of its cell in drawn cells: a coarser tile's stands for several,
-    /// and at −1 four of the tile's make one drawn cell.
-    pub shift: i32,
-}
-
-impl TileSource<'_> {
-    /// Its cells a drawn cell spans, along an axis.
-    fn per_drawn(&self) -> f64 {
-        libm::exp2(-f64::from(self.shift))
-    }
+    pub n: u32,
 }
 
 pub struct Around<'a> {
@@ -152,12 +116,6 @@ pub struct Around<'a> {
     /// None where the apron does not reach or nothing is drawn; those cells are
     /// read from `own`, whose elevation is padded past its edge.
     pub beside: [Option<TileSource<'a>>; 8],
-    /// log2 of a tile's side in drawn cells.
-    pub tile_shamt: u32,
-    /// The drawn cells', whose parity breaks a tie among four looks as a fold's does.
-    pub zoom: Zoom,
-    /// Whether the pack is drawn: four looks' mean is of what each shows.
-    pub textured: bool,
 }
 
 pub const fn beside_index(qx: i64, qy: i64) -> usize {
@@ -174,6 +132,10 @@ pub struct ChunkSample {
     /// In cells; a column's top is one below it.
     pub ele: Vec<i32>,
     pub floor: i32,
+    /// Columns a row, its own and the apron's (`run.rs` `apron_col`).
+    pub span: u32,
+    /// Its cells a leaf cell's side: past the leaves, a way's slab stays a leaf cell thick.
+    scale: i32,
     /// Column `i`'s spans are `spans[span_at[i]..span_at[i + 1]]`, lowest first,
     /// none overlapping; the apron's have none.
     pub span_at: Vec<u32>,
@@ -208,6 +170,8 @@ impl Default for ChunkSample {
             layer_idx: vec![0; COL_SPAN2],
             ele: vec![0; COL_SPAN2],
             floor: 0,
+            span: COL_SPAN,
+            scale: 1,
             span_at: vec![0; COL_SPAN2 + 1],
             spans: Vec::new(),
             bore: vec![Bore::default(); COL_SPAN2],
@@ -218,79 +182,68 @@ impl Default for ChunkSample {
 }
 
 impl ChunkSample {
-    /// Each drawn cell takes the material of the source cell it lies in and the
-    /// source surface's height at its own center, so a coarser tile invents
-    /// nothing; over four of a finer tile's, their majority look, their mean
-    /// height and the mean of what they show, as a retina's pixel is its
-    /// sensors'.
-    pub fn read(&mut self, around: &Around, first: [i64; 2]) -> Result<(), Refused> {
-        let mut min_ele = i32::MAX;
-        let shamt = around.tile_shamt;
-        for py in 0..COL_SPAN {
-            for px in 0..COL_SPAN {
-                let i = (py * COL_SPAN + px) as usize;
-                let own = APRON..COL_SPAN - APRON;
-                let inner = own.contains(&px) && own.contains(&py);
+    /// Each cell takes the material of the source cell it lies in and the source
+    /// surface's height at its own center, so a coarser tile invents nothing.
+    /// `span` columns a row, the apron's among them.
+    pub fn read(&mut self, around: &Around, first: [i64; 2], span: u32) -> Result<(), Refused> {
+        let tables = &*MATERIALS;
+        (self.span, self.scale) = (span, 1);
+        let last = TILE_CELLS as i32 - 1;
+        for py in 0..span {
+            for px in 0..span {
+                let i = (py * span + px) as usize;
                 let (x, y) = (first[0] + px as i64 - APRON as i64, first[1] + py as i64 - APRON as i64);
-                let [qx, qy] = ancestor_of([x, y], shamt);
+                let [qx, qy] = ancestor_of([x, y], GROUND.tile_cell_shamt());
                 let (source, [x, y]) = match (qx, qy) {
                     (0, 0) => (&around.own, [x, y]),
                     _ => match &around.beside[beside_index(qx, qy)] {
-                        Some(s) => (s, offset_in([x, y], shamt)),
+                        Some(s) => (s, offset_in([x, y], GROUND.tile_cell_shamt())),
                         None => (&around.own, [x, y]),
                     },
                 };
-                let (look, ele) = Self::cell_of(source, [source.origin[0] + x, source.origin[1] + y], around);
-                self.look[i] = look.0;
-                (self.material[i], self.layer_idx[i]) = look.1;
+                let (tile, n) = (&source.tile, source.n);
+                let (x, y) = (source.origin[0] + x, source.origin[1] + y);
+                let (tx, ty) = (x.div_euclid(n as i64) as i32, y.div_euclid(n as i64) as i32);
+                // Only the elevation is padded past the tile. An apron cell off it keeps its
+                // height, all the face mask reads, and the base look nothing draws.
+                let on_tile = (0..=last).contains(&tx) && (0..=last).contains(&ty);
+                let cell = if on_tile { tile.cells[GROUND.cell_index(tx as u32, ty as u32) as usize] } else { ground::BASE };
+                self.look[i] = cell;
+                (self.material[i], self.layer_idx[i]) = tables.drawn(cell);
+
+                // An apron cell off the tile has no look and takes the raw height.
+                let lanes = on_tile.then_some(GroundLanes { cells: tile.cells });
+                let center = |v: i64| (v as f64 + 0.5) / n as f64;
+                let ele = ground_ele_at(tile.ele, lanes, center(x), center(y)) as i32;
                 self.ele[i] = ele;
-                // The floor is the chunk's own: a neighbor's valley must not drop it.
-                if inner && look.0 != sentinel::void {
-                    min_ele = min_ele.min(ele);
-                }
             }
         }
         self.read_decks(around, first)?;
-        let bored = self.bore.iter().filter(|b| b.air[0] < b.air[1]).map(|b| b.air[0] - 1).min().unwrap_or(i32::MAX);
-        // A chunk with no surface has no floor: nothing of it is drawn from one.
-        self.floor = match min_ele.min(bored) {
-            i32::MAX => i32::MIN,
-            lowest => (lowest - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32,
-        };
+        self.floor = self.floor_of();
         Ok(())
     }
 
-    /// The drawn cell at `[x, y]` drawn cells into `s`: its look, material and height.
-    fn cell_of(s: &TileSource, [x, y]: [i64; 2], around: &Around) -> ((GroundCell, (u32, u8)), i32) {
-        let tables = &*MATERIALS;
-        let tile = &s.tile;
-        let last = GROUND.tile_cells() as i64 - 1;
-        // Only the elevation is padded past the tile. A cell off it keeps its height,
-        // all the face mask reads, and the base look nothing draws.
-        let at = |tx: i64, ty: i64| {
-            let on_tile = (0..=last).contains(&tx) && (0..=last).contains(&ty);
-            let cell = if on_tile { tile.cells[GROUND.cell_index(tx as u32, ty as u32) as usize] } else { ground::BASE };
-            (cell, on_tile.then_some(GroundLanes { cells: tile.cells }))
-        };
-        if s.shift >= 0 {
-            let n = 1i64 << s.shift;
-            let (cell, lanes) = at(x.div_euclid(n), y.div_euclid(n));
-            let center = |v: i64| (v as f64 + 0.5) / n as f64;
-            return ((cell, tables.drawn(cell)), ground_ele_at(tile.ele, lanes, center(x), center(y)) as i32);
+    /// The chunk's own: a neighbor's valley must not drop it. A chunk with no
+    /// surface has no floor: nothing of it is drawn from one.
+    fn floor_of(&self) -> i32 {
+        let own = APRON..self.span - APRON;
+        let mut lowest = i32::MAX;
+        for py in own.clone() {
+            for px in own.clone() {
+                let i = (py * self.span + px) as usize;
+                if self.has_ground(i) {
+                    lowest = lowest.min(self.ele[i]);
+                }
+                let b = self.bore[i];
+                if b.air[0] < b.air[1] {
+                    lowest = lowest.min(b.air[0] - self.scale);
+                }
+            }
         }
-        xpute_core::ensure!(s.shift == -1, ENOTRECOVERABLE, s.shift);
-        let four: [(GroundCell, Option<GroundLanes>, [i64; 2]); 4] = core::array::from_fn(|q| {
-            let (tx, ty) = (2 * x + (q & 1) as i64, 2 * y + (q >> 1) as i64);
-            let (cell, lanes) = at(tx, ty);
-            (cell, lanes, [tx, ty])
-        });
-        let looks = four.map(|f| f.0);
-        let look = majority(looks, around.zoom);
-        // The mean of the heights that have a surface, or of all where none does.
-        let heights = four.map(|(_, lanes, [tx, ty])| ground_ele_at(tile.ele, lanes, tx as f64 + 0.5, ty as f64 + 0.5) as f64);
-        let any = looks.iter().any(|&c| c != sentinel::void);
-        let (sum, n) = (0..4).filter(|&q| !any || looks[q] != sentinel::void).fold((0.0, 0.0), |(s, n), q| (s + heights[q], n + 1.0));
-        ((look, tables.mean(look, &looks, around.textured)), round(sum / n) as i32)
+        match lowest {
+            i32::MAX => i32::MIN,
+            lowest => lowest - TERRAIN_Z_MARGIN * self.scale,
+        }
     }
 
     /// Each column's decks from the tile its height is read from (`read`).
@@ -301,12 +254,12 @@ impl ChunkSample {
         let corner = first.map(|v| v - APRON as i64);
         // A column with no tile beside is read from the chunk's own, as its height is.
         let beside = |[qx, qy]: [i64; 2]| if (qx, qy) == (0, 0) { None } else { around.beside[beside_index(qx, qy)].as_ref() };
-        let shamt = around.tile_shamt;
-        let mut built = collect_decks(&mut over, &around.own, corner, [0, 0], shamt, |q| beside(q).is_none());
+        let span = self.span;
+        let mut built = collect_decks(&mut over, &around.own, corner, [0, 0], span, |q| beside(q).is_none());
         for qy in -1..=1 {
             for qx in -1..=1 {
                 if let (Some(s), true) = (beside([qx, qy]), built.is_ok()) {
-                    built = collect_decks(&mut over, s, corner, [qx, qy], shamt, |q| q == [qx, qy]);
+                    built = collect_decks(&mut over, s, corner, [qx, qy], span, |q| q == [qx, qy]);
                 }
             }
         }
@@ -328,9 +281,9 @@ impl ChunkSample {
             same
         });
         self.spans.clear();
-        let mut col = 0;
+        let (mut col, columns) = (0, (self.span * self.span) as usize);
         let mut i = 0;
-        while col < COL_SPAN2 {
+        while col < columns {
             self.span_at[col] = self.spans.len() as u32;
             self.bore[col] = Bore::default();
             let from = self.spans.len();
@@ -396,22 +349,23 @@ impl ChunkSample {
             self.spans.truncate(k);
             col += 1;
         }
-        self.span_at[COL_SPAN2] = self.spans.len() as u32;
+        self.span_at[columns] = self.spans.len() as u32;
         Ok(())
     }
 
-    /// The sample of a chunk `k` zooms finer than the leaf chunk `leaf` was
-    /// read for, its first cell `at` its own cells into that chunk: each column
-    /// is the leaf column it lies in, heights in its own cells. Terrain is
-    /// drawn as finely as it is held, so nothing is invented.
-    pub fn refine(&mut self, leaf: &ChunkSample, k: u32, at: [u32; 2]) -> Result<(), Refused> {
+    /// The sample of a chunk `k` zooms finer than the one `leaf` was read for,
+    /// `span` columns a row, its first column `at` its own cells into that
+    /// chunk: each column is the leaf column it lies in, heights in its own
+    /// cells. Terrain is drawn as finely as it is held, so nothing is invented.
+    pub fn refine(&mut self, leaf: &ChunkSample, k: u32, at: [u32; 2], span: u32) -> Result<(), Refused> {
         let scale = 1i32 << k;
+        (self.span, self.scale) = (span, leaf.scale * scale);
         let in_leaf = |v: u32, p: u32| (i64::from(v) + i64::from(p) - i64::from(APRON)).div_euclid(i64::from(scale)) + i64::from(APRON);
         self.spans.clear();
-        for py in 0..COL_SPAN {
-            for px in 0..COL_SPAN {
-                let i = (py * COL_SPAN + px) as usize;
-                let j = (in_leaf(at[1], py) * i64::from(COL_SPAN) + in_leaf(at[0], px)) as usize;
+        for py in 0..span {
+            for px in 0..span {
+                let i = (py * span + px) as usize;
+                let j = (in_leaf(at[1], py) * i64::from(leaf.span) + in_leaf(at[0], px)) as usize;
                 self.material[i] = leaf.material[j];
                 self.layer_idx[i] = leaf.layer_idx[j];
                 self.look[i] = leaf.look[j];
@@ -431,8 +385,8 @@ impl ChunkSample {
                 }
             }
         }
-        self.span_at[COL_SPAN2] = self.spans.len() as u32;
-        self.floor = if leaf.floor == i32::MIN { i32::MIN } else { leaf.floor * scale };
+        self.span_at[(span * span) as usize] = self.spans.len() as u32;
+        self.floor = self.floor_of();
         Ok(())
     }
 
@@ -456,8 +410,8 @@ impl ChunkSample {
             return part(from, top, m, l);
         }
         let floor = b.air[0];
-        part(from, (floor - 1).min(top), m, l)?;
-        part(floor - 1, floor.min(top), b.material, b.layer)?;
+        part(from, (floor - self.scale).min(top), m, l)?;
+        part(floor - self.scale, floor.min(top), b.material, b.layer)?;
         part(b.air[1], top, m, l)
     }
 

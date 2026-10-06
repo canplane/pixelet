@@ -49,7 +49,6 @@ zoom is finer, one zoom finer is half as wide, and the unit itself is z24.
 | ---- | ---- | ------------------------------------------------ |
 | z27  | 1/8u | a placed object's finest cell                    |
 | z24  | 1u   | a ground cell, the canonical unit                |
-| z18  | 64u  | a chunk on the leaves, and an object band        |
 | z15  | 512u | a leaf tile, the finest the ground is fetched at |
 
 The zooms are size and nothing else — the rightmost column is this program's
@@ -60,7 +59,10 @@ A size answers the same questions at every zoom (`zoom.rs`): its side in
 units (`units`), how many of a finer zoom's cells stand across it (`count`),
 which cell a point lies in and where that cell begins (`index_of`,
 `base_of`), and its box (`cube`). An address goes to its cell's index and
-back the same way, a shift of each lane (`indexer.rs` `idx`, `from_idx`).
+back the same way, a shift of each lane (`idx`, `from_idx`). The world is
+zoom 0's cell, once around in X (`ROUND`, `around`, `wrap_index`), and a
+stored X stands where it is nearest the eye (`nearest`); all of it is `zoom.rs`'s,
+not PVF3's, which is only the format.
 
 A zoom's side can reach a lane's width, and then that lane collapses: Z is
 16 bits wide, so from z8 coarser a cell is horizontal, and nothing had to
@@ -68,9 +70,8 @@ say so.
 
 ## A unit has no size
 
-`pvf3/projection.rs` states the rule: _"The scalar space is normalized: 1.0
-is one lattice unit, and whatever a unit is in meters is the caller's scaling
-outside this module."_ Nothing under `pvf3/` or in `indexer.rs` carries a
+`pvf3/projection.rs` states the rule: doubles go in and out with 1.0 as one
+lattice unit, and whatever a unit is in meters is the caller's scaling. Nothing under `pvf3/` carries a
 distance.
 
 Meaning enters at an **adapter**, and only there:
@@ -137,24 +138,22 @@ written once. What a node holds, whether it is resident, how it is stored
 and how a reader walks it are each tree's own, and follow from what it
 represents:
 
-|                                                       | axes   | resident                             | a node holds                              | stored                                             | walked                                             |
-| ----------------------------------------------------- | ------ | ------------------------------------ | ----------------------------------------- | -------------------------------------------------- | -------------------------------------------------- |
-| the pyramid (`pyramid.rs`)                            | 2      | resident by tile: one can be missing | a layer's fold of all under it            | a record a tile                                    | from a point, up to the nearest resident tile      |
-| a tile's index (`bake/format.rs` `Index`)             | 2      | with its tile                        | the lowest and highest drawn under a cell | dense lanes in the tile, and coarser cells of them | a coarse cell passed whole where a ray is above it |
-| the sparse tree (`sparse_tree/`)                      | 2 or 3 | whole                                | the way down, and a fold if asked         | two flat lanes, only what differs from the default | down a key's path, or every leaf                   |
-| the objects' folds (pxl-kernel layer/object/store.rs) | 3      | whole                                | the majority of its eight                 | in a band's tree under a band, a map over it       | one read a cell                                    |
-| the objects' bounds (the same)                        | 3      | whole                                | the box of everything under it            | a map, from a band up to the widest box asked      | down by a box, or along a ray nearest first        |
+|                                                            | axes | resident                             | a node holds                                                       | stored                                             | walked                                                     |
+| ---------------------------------------------------------- | ---- | ------------------------------------ | ------------------------------------------------------------------ | -------------------------------------------------- | ---------------------------------------------------------- |
+| the pyramid (`pyramid.rs`)                                 | 2    | resident by tile: one can be missing | a layer's fold of all under it                                     | a record a tile                                    | from a point, up to the nearest resident tile              |
+| a tile's index (`bake/format.rs` `Index`)                  | 2    | with its tile                        | the lowest and highest drawn under a cell                          | dense lanes in the tile, and coarser cells of them | a coarse cell passed whole where a ray is above it         |
+| the objects (`sparse_tree.rs`, pxl-kernel object/store.rs) | 3    | whole                                | its value, or the majority of its eight, their box and finest zoom | two flat lanes, only what differs from the default | down a cube's path, by a box, or along a ray nearest first |
 
 The pyramid is a tree across zooms: every tile holds a summary of the
 ground under it — terrain's cells voted and averaged, places summed — so a
 far view draws a coarse zoom as it is, the way a mipmap is read. Placed
 objects need a tree of another kind: they are all resident, mostly empty
-space, and three-dimensional, so what matters is storing one zoom without
-its empty cells. That is the **sparse tree**, a tree inside one zoom whose
-inner nodes are the way down and, where the caller asks, a summary too: a
-folded write (`set_folded`, in `sparse_tree/mem.rs`) refolds every branch it
-passed through by the caller's fold, and a walk can stop at a depth and read
-a branch there by its fold (`walk_to`).
+space, and three-dimensional, so what matters is storing them without
+their empty cells. That is the **sparse tree**, one octree over the world
+whose branches are the way down and a summary of what is under them, the
+same at every zoom: a write sets the leaf at its cube's zoom and refolds
+only the path to it (`SparseTree::set`), collapsing a block of eight equal
+leaves into their parent.
 
 The two ways of stopping are one rule. A node stops growing where it
 already says all of the ground under it, and a coarser cell of equal ones is the
@@ -166,31 +165,25 @@ settles one.
 
 They stay two because one is resident by tile and the other is not. Objects keep their
 coarse zooms stored all the same, refolded along a write's path rather than
-folded again when a chunk is built: inside a band in its tree's branches, and
-past a band in the object store's own records a zoom. Were objects ever
-resident by tile, those records would be a layer of the pyramid, and their octree's
-collapse its `settles`.
+folded again when a chunk is built. Were objects ever resident by tile,
+their branches would be a layer of the pyramid, and their octree's collapse
+its `settles`.
 
 A reader that crosses two trees walks each its own way and puts the answers
 together (pxl-kernel world/access.rs `first_hit`). A ray reads the ground
 again from each point along it, since a tile over it may be missing and a
 descent would stall on the gap, and it walks the objects' bounds nearest
-first, since none is missing. The spatial hash (`lattice/spatial_hash.rs`)
-is no tree, on purpose: for many points moving in a small volume a tree
-prunes nothing.
+first, since none is missing.
 
 ## What else is here
 
-|                                  |                                                                                                        |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| [`pvf3/`](./pvf3/)               | the packed words: `ivec`, `fvec`, their pair, and doubles in and out                                   |
-| [`adapter/`](./adapter/)         | where a unit gets a meaning                                                                            |
-| `zoom.rs`                        | `Zoom`, the one form a size takes                                                                      |
-| `hierarchy.rs`                   | parent and child in any number of axes                                                                 |
-| `indexer.rs`                     | an address to its cell's index at a zoom, and back                                                     |
-| `lod.rs`                         | the cell zoom a distance is drawn at, and the tiles of a zoom an observation can miss                  |
-| [`lattice/`](./lattice/)         | structures over the lattice: one address hash, points bucketed in 3D, rectangles indexed on the screen |
-| [`sparse_tree/`](./sparse_tree/) | an octree in two flat lanes, storing what differs from the default                                     |
-| `xy.rs`                          | `TO_XY`, which drops Z to give the key every 2D map surface is keyed by                                |
-| `v3.rs`                          | three doubles, for the arithmetic that has left the lattice                                            |
-| `mat4.rs`                        | sixteen doubles, column-major: the transforms that arithmetic is carried through                       |
+|                          |                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| [`pvf3/`](./pvf3/)       | the packed words: `ivec`, `fvec`, their pair, and doubles in and out                  |
+| [`adapter/`](./adapter/) | where a unit gets a meaning                                                           |
+| `zoom.rs`                | `Zoom`, the one form a size takes; an address's cell index; the world round           |
+| `hierarchy.rs`           | parent and child in any number of axes                                                |
+| `lod.rs`                 | the cell zoom a distance is drawn at, and the tiles of a zoom an observation can miss |
+| `sparse_tree.rs`         | an octree in two flat lanes, storing what differs from the default                    |
+| `v3.rs`                  | three doubles, for the arithmetic that has left the lattice                           |
+| `mat4.rs`                | sixteen doubles, column-major: the transforms that arithmetic is carried through      |

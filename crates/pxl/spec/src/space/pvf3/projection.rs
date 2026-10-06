@@ -1,8 +1,10 @@
 // pxl-spec/space/pvf3/projection.rs
 
-//! Doubles in and out of PVF3, where 1.0 is one lattice unit. Each scalar is
-//! split by `floor`, so the lattice stays continuous through zero: -0.2 is
-//! cell -1 at 0.8.
+//! Doubles in and out of PVF3, where 1.0 is one lattice unit: a basis
+//! transpose from each axis's integer and fraction, `[[x_i, x_f], [y_i, y_f],
+//! [z_i, z_f]]`, to the lanes packed by kind, `{ i: [x_i, y_i, z_i], f: [x_f,
+//! y_f, z_f] }`. Each scalar is split by `floor`, so the lattice stays
+//! continuous through zero: -0.2 is cell -1 at 0.8.
 
 use super::core::ONE;
 use super::fvec;

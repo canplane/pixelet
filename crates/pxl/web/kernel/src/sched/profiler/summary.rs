@@ -241,7 +241,7 @@ fn side(out: &mut [f64]) {
     let [step, star] = crate::world::quality::reading();
     let residency = Terrain::pyramid().residency();
     let [admitted, evicted] = residency.churn();
-    let [refined, retiered, changes_peak] = kernel().sched.pace();
+    let [refined, changes_peak] = kernel().sched.pace();
     put(
         out,
         SUMMARY::quality::AT,
@@ -252,7 +252,6 @@ fn side(out: &mut [f64]) {
             admitted: admitted as f64,
             evicted: evicted as f64,
             refined: refined as f64,
-            retiered: retiered as f64,
             changes_peak: changes_peak as f64,
         },
     );

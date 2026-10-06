@@ -8,7 +8,7 @@
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{decode_terrain_into, Extent, GroundCell, Terrain, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{Tile, LEAF_Z};
+use pxl_spec::space::pyramid::{Lattice, Tile, GROUND, LEAF_Z};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::mem::base::ptr_at;
@@ -27,6 +27,7 @@ static TERRAIN: Global<Pyramid<Terrain>> = Global::new();
 
 impl Layer for Terrain {
     const CATEGORY: Category = Category::terrain;
+    const LATTICE: Lattice = GROUND;
     // The leaves carry the terrain topic; the zooms above are read through the
     // chunks that draw them.
 

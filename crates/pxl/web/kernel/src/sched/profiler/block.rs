@@ -216,7 +216,6 @@ pub struct QualityBlock {
     pub admitted: f64,
     pub evicted: f64,
     pub refined: f64,
-    pub retiered: f64,
     pub changes_peak: f64,
 }
 
@@ -261,7 +260,7 @@ words!(ViewBlock, SUMMARY::view::WORDS,
 words!(QualityBlock, SUMMARY::quality::WORDS,
     step => SUMMARY::quality::step, star => SUMMARY::quality::star, frames_held => SUMMARY::quality::frames_held,
     admitted => SUMMARY::quality::admitted, evicted => SUMMARY::quality::evicted,
-    refined => SUMMARY::quality::refined, retiered => SUMMARY::quality::retiered, changes_peak => SUMMARY::quality::changes_peak,
+    refined => SUMMARY::quality::refined, changes_peak => SUMMARY::quality::changes_peak,
 );
 
 #[repr(C)]

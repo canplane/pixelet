@@ -8,14 +8,13 @@
 //! cell carries and how it folds (`Folds`).
 
 use super::hierarchy::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of};
-use super::indexer::idx;
 use super::pvf3::core::FRAC_W;
+use super::pvf3::ivec::TO_XY;
 use super::pvf3::ivec::{self, IVec};
 use super::pvf3::pvf3::{self, Pvf3};
 use super::pvf3::{projection, REACH};
 use super::v3::Aabb;
-use super::xy::TO_XY;
-use super::zoom::{base_of, count, index_of, shamt, units, Zoom, FINEST_Z};
+use super::zoom::{around, base_of, count, idx, index_of, shamt, units, wrap_index, Zoom, FINEST_Z};
 use crate::bake::constant::{CELL, DECK_CELL, EXTENT_CELL};
 
 /// The leaves' zoom: a ground tile is 512 cells a side.
@@ -25,27 +24,45 @@ pub const LEAF_Z: Zoom = CELL - 9;
 /// coarser one extends it.
 pub const TOP_Z: Zoom = 5;
 
-/// A chunk is 64 cells a side: its zoom is its cells' less this.
-pub const CHUNK_STEPS: Zoom = 6;
-
-/// Zooms a drawn cell is coarser than the cell the LOD rule measures, as a
-/// mip level is drawn from twice the texels it is sampled at.
-pub const DRAWN_STEPS: Zoom = 1;
+/// A chunk, what is built and drawn as one, is 2^CHUNK_STEPS of the camera
+/// grid's cells a side: its zoom is its cells' less this.
+pub const CHUNK_STEPS: Zoom = 5;
 
 /// A layer's lattice: its cell is its tile's side over its own count of
-/// cells, the same at every zoom; held as the cell's zoom on a leaf.
+/// cells, the same at every zoom; held as the cell's zoom on a leaf. The
+/// camera grid's cell is drawn from its cells `fold` zooms finer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Lattice {
     cell: Zoom,
+    fold: Zoom,
 }
 
 impl Lattice {
-    /// Finer than a point resolves, or coarser than a leaf's chunk, holds no tile.
+    /// Finer than a point resolves, or no finer than the leaf tile, holds no tile.
     pub const fn new(cell: Zoom) -> Lattice {
-        if cell >= FINEST_Z || cell < CELL - CHUNK_STEPS {
+        if cell >= FINEST_Z || cell <= LEAF_Z {
             panic!()
         }
-        Lattice { cell }
+        Lattice { cell, fold: 0 }
+    }
+
+    /// Drawn in the camera grid's cells `fold` zooms coarser than its own.
+    pub const fn folding(self, fold: Zoom) -> Lattice {
+        Lattice { fold, ..self }
+    }
+
+    pub const fn fold(self) -> Zoom {
+        self.fold
+    }
+
+    /// The grid's cell a tile at `zoom` is drawn in.
+    pub const fn grid_cell(self, zoom: Zoom) -> Zoom {
+        self.cell_zoom(zoom) - self.fold
+    }
+
+    /// The tile whose cells fold into the grid's cell `cell`, past the pyramid's ends too.
+    pub const fn grid_z(self, cell: Zoom) -> i32 {
+        self.z_of(cell) + self.fold as i32
     }
 
     /// Its cells' zoom on a tile at `z`.
@@ -154,7 +171,9 @@ impl Lattice {
     }
 }
 
-pub const GROUND: Lattice = Lattice::new(CELL);
+/// A grid cell is drawn from the ground's records a zoom finer: their
+/// surfaces' mean and their fill (pxl-render mesh/chunk_mesher.rs).
+pub const GROUND: Lattice = Lattice::new(CELL).folding(1);
 
 /// The index lane's lattice (bake/format.rs `Index`).
 pub const EXTENT: Lattice = Lattice::new(EXTENT_CELL);
@@ -165,11 +184,8 @@ pub const TILE_CELLS: u32 = GROUND.tile_cells();
 
 pub const CHUNK_CELLS: u32 = 1 << CHUNK_STEPS;
 
-/// Chunks a tile's side holds at its own zoom.
-pub const TILE_CHUNKS: u32 = TILE_CELLS / CHUNK_CELLS;
-
-/// A chunk's drawn cells a side.
-pub const CHUNK_DRAWN: u32 = CHUNK_CELLS >> DRAWN_STEPS;
+/// Chunks a tile's side holds at the zoom whose cells fold it.
+pub const TILE_CHUNKS: u32 = TILE_CELLS / (CHUNK_CELLS << GROUND.fold());
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Tile {
@@ -247,11 +263,6 @@ impl Tile {
     }
 }
 
-/// The zoom of the chunk whose cells, the ones the rule measures, are a tile at `zoom`'s.
-pub const fn chunk_zoom(zoom: Zoom) -> Zoom {
-    GROUND.cell_zoom(zoom) - CHUNK_STEPS
-}
-
 /// The 4×4 tiles a zoom finer around a tile's children, each at
 /// `neighbor_index`; X wraps and a tile past Y's edge has no object.
 pub fn neighborhood(p: Tile) -> [Tile; 16] {
@@ -268,26 +279,10 @@ pub const fn neighbor_index(qx: i64, qy: i64) -> usize {
     ((qx + 1) + 4 * (qy + 1)) as usize
 }
 
-/// How many cells at `z` stand around the world, and as many from its south edge to its north.
-pub const fn around(zoom: Zoom) -> i64 {
-    1i64 << zoom
-}
-
 /// The rows of tiles at `z`, south to north; past them is no tile.
 pub fn tile_rows(zoom: Zoom) -> std::ops::Range<i64> {
     let n = around(zoom);
     -n / 2..n / 2
-}
-
-/// An X index of `z`'s cells as the lane holds it; every key goes through it.
-pub fn wrap_index(zoom: Zoom, x: i64) -> i64 {
-    let across = around(zoom);
-    (x + across / 2).rem_euclid(across) - across / 2
-}
-
-/// A cell at `z` named as `wrap_index` names its X.
-pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i64; 3]) -> [i64; 3] {
-    [wrap_index(zoom, x), y, h]
 }
 
 /// The tile at `z` at (x, y), X wrapped around the world.
@@ -388,7 +383,7 @@ impl Cell {
 }
 
 /// A layer's tile as the pyramid holds it. One fold makes each zoom's tiles
-/// from the next finer one's, run by the bake and by the client. A parent reads its four
+/// from the next finer one's, run by the bake. A parent reads its four
 /// children unless `sources` says otherwise.
 pub trait Folds: Sized {
     fn sources(p: Tile) -> Vec<Tile> {

@@ -6,7 +6,9 @@
 //!
 //! Operations reconstruct the scalars, compute, and repack through `gather`;
 //! each returns its result, as `ivec`'s and `fvec`'s do.
-//! Division and modulo truncate toward zero.
+//! Division and modulo truncate toward zero. A point and a displacement share
+//! the form, but only a displacement adds to a point: two points summed name
+//! no place.
 
 // Uppercase as the notation these macro-like helpers are written in.
 #![allow(non_snake_case)]

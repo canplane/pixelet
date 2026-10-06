@@ -8,8 +8,8 @@ use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::adapter::epsg4326::{self, G4326};
 use pxl_spec::space::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_mul, mat4_perspective, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4};
 use pxl_spec::space::observation::Frustum;
-use pxl_spec::space::pvf3::nearest;
 use pxl_spec::space::v3::V3;
+use pxl_spec::space::zoom::nearest;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::pose;

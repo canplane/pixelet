@@ -1,6 +1,6 @@
 // xpute-core/wire/xtp.rs
 
-//! XTP, a relocatable binary tree packet. Its format is stated in
+//! XTP, the Xpute Tree Packet: a relocatable binary tree packet. Its format is stated in
 //! `packages/xpute/core/src/wire/xtp/README.md`.
 
 pub mod cursor;

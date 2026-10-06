@@ -10,8 +10,8 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use crate::io::demand::{Ask, Category};
 use crate::io::sched::declare;
 use crate::layer::geocode::store;
-use pxl_spec::space::indexer::idx;
 use pxl_spec::space::pyramid::LEAF_Z;
+use pxl_spec::space::zoom::idx;
 
 const DICT_SUBJECT: u64 = 0;
 

@@ -1,12 +1,10 @@
 // pxl-kernel/layer/decor/hit.rs
 
 //! Which decor the pointer's ray strikes, against the drawn triangles of the
-//! leaf chunks' decor: decor paints no voxel, so the access's ray passes through
-//! it. A placed instance resolves to its entry; a scattered one to its cell.
+//! decor of chunks drawing it as held: decor paints no voxel, so the access's
+//! ray passes through it. A placed instance resolves to its entry; a scattered one to its cell.
 
-use pxl_spec::bake::constant::{BAND, CELL};
-use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::LEAF_Z;
+use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::v3::{cross3, dot3, sub3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
@@ -15,9 +13,9 @@ use crate::layer::decor::asset_store::kind_assets;
 use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
+use crate::world::chunk::build::draws_as_held;
 use crate::world::chunk::table::Scheduler;
-use pxl_spec::space::indexer::idx;
-use pxl_spec::space::zoom::index_of;
+use pxl_spec::space::zoom::{index_of, units, wrap_cell, Zoom};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DecorStruck {
@@ -41,7 +39,7 @@ pub struct Scattered {
 pub fn raycast_decor(origin: V3, direction: V3, max_dist: f64) -> Option<DecorStruck> {
     let (_, sched) = kernel().world()?;
     let hit = hit_decor(sched, origin, direction, max_dist)?;
-    if hit.band == NO_ENTRY {
+    if hit.entry == NO_ENTRY {
         return Some(DecorStruck::Scattered(Scattered {
             cell: index_of(CELL, &crate::world::frame::coord::world_to_canonical(&hit.at)),
             group: hit.group,
@@ -50,23 +48,17 @@ pub fn raycast_decor(origin: V3, direction: V3, max_dist: f64) -> Option<DecorSt
             scale: hit.scale,
         }));
     }
-    // The lane holds the band's i32 as a word.
-    Some(DecorStruck::Placed(EntryAt {
-        col_idx: {
-            let (x0, y0, _) = hit.cell.rect();
-            idx(BAND, ivec::gather(x0 as i64, y0 as i64, 0))
-        },
-        band_idx: hit.band as i32,
-        pos: hit.pos,
-    }))
+    // It stands at its cube's bottom middle.
+    let zoom = hit.entry as Zoom;
+    let side = units(zoom);
+    let at = [(hit.at[0] / side).floor() as i64, (hit.at[1] / side).floor() as i64, (hit.at[2] / side).floor() as i64];
+    Some(DecorStruck::Placed(EntryAt { zoom, at: wrap_cell(zoom, at) }))
 }
 
-/// `band` is NO_ENTRY for a scattered instance.
+/// `entry` is NO_ENTRY for a scattered instance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DecorHit {
-    pub cell: crate::world::pyramid::chunk::Chunk,
-    pub band: u32,
-    pub pos: u32,
+    pub entry: u32,
     pub at: [f64; 3],
     pub group: u32,
     pub rotation: f64,
@@ -96,12 +88,12 @@ fn hit_decor(sched: &Scheduler, o: V3, d: [f64; 3], max_dist: f64) -> Option<Dec
     let mut limit = max_dist;
     let reach = decor_reach(sched);
     for (cell, base_x, base_y, words) in crate::layer::decor::cell::shown() {
-        // Only leaf cells name their placed entries; edits are made close by.
-        if cell.tile_zoom() != LEAF_Z {
+        // A chunk drawing decor folded strikes none of it.
+        if !draws_as_held(cell, CELL) {
             continue;
         }
         let side = cell.rect().2;
-        let (tx, ty) = (pxl_spec::space::pvf3::nearest(base_x, o[0]), base_y);
+        let (tx, ty) = (pxl_spec::space::zoom::nearest(base_x, o[0]), base_y);
         if !ray_meets_square(&o, &d, tx - reach, ty - reach, tx + side + reach, ty + side + reach, limit) {
             continue;
         }
@@ -123,7 +115,7 @@ fn hit_decor(sched: &Scheduler, o: V3, d: [f64; 3], max_dist: f64) -> Option<Dec
                 )
             };
             for i in 0..lanes.count {
-                let band = words[lanes.band_at(i)];
+                let entry = words[lanes.entry_at(i)];
                 let c = [tx + lane(0, i), ty + lane(1, i), lane(2, i)];
                 let spin = lane(3, i);
                 let s = lane(4, i) * mesh.scale as f64;
@@ -148,9 +140,7 @@ fn hit_decor(sched: &Scheduler, o: V3, d: [f64; 3], max_dist: f64) -> Option<Dec
                         if t < limit {
                             limit = t;
                             best = Some(DecorHit {
-                                cell,
-                                band,
-                                pos: words[lanes.pos_at(i)],
+                                entry,
                                 at: [tx + lane(0, i), ty + lane(1, i), lane(2, i)],
                                 group: group as u32,
                                 rotation: spin,

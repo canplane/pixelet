@@ -1,28 +1,29 @@
 // pxl-kernel/layer/object/store.rs
 
-//! Placed objects: one record per band column, a sparse octree per 64³ band
-//! whose leaves are catalog values, with the column's entries derived as
-//! lanes in which a cell's entries are one contiguous run. Every mutation
-//! touches one column and every query is scoped to a cell, column or box.
+//! Placed objects: one octree over the world (`space/sparse_tree.rs`) whose
+//! leaves are catalog values at their own zoom. Every node, at every zoom,
+//! holds the same three things: a leaf its value, a branch the majority of
+//! its eight, the box of everything under it and the finest zoom held there.
+//! A write changes the path to its cube and nothing beside it; every query
+//! is the same descent at every zoom.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, TryReserveError};
+use std::collections::HashMap;
+use std::collections::TryReserveError;
 
 use base64::Engine;
-use pxl_spec::bake::constant::{
-    band_cell_z, band_of, in_cell, pack_pos, unpack_pos, BandZ, CellZ, BAND, BAND_CELL_SHAMT, BAND_UNITS, CELL, OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, STEP_UNITS, U_PER_CELL,
-};
+pub use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::bake::constant::{CELL, OBJECT_FINEST, U_PER_CELL};
 use pxl_spec::bake::fold::majority;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::hierarchy::{ancestor_of, at_walk_order, child_of, first_descendant_of, offset_in, parent_of, walk_order};
+use pxl_spec::space::hierarchy::{child_of, first_descendant_of, parent_of};
+use pxl_spec::space::pvf3::ivec::TO_XY;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pvf3::{Ivec, REACH, ROUND};
-use pxl_spec::space::pyramid::{around, wrap_cell, wrap_index, GROUND, LEAF_Z, TOP_Z};
-use pxl_spec::space::sparse_tree::mem;
-use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree};
+use pxl_spec::space::pvf3::REACH;
+use pxl_spec::space::pyramid::LEAF_Z;
+use pxl_spec::space::sparse_tree::{Node, SparseTree};
 use pxl_spec::space::v3::{Aabb, V3};
-use pxl_spec::space::xy::TO_XY;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
@@ -33,11 +34,10 @@ use crate::io::file::{self, Kept, Owner};
 use crate::kernel::kernel;
 use crate::layer::decor::build::{scatters_at, Draw};
 use crate::world::access::Access;
-use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
-use crate::world::chunk::source::{band_written, chunk_sources_changed};
+use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECTS};
+use crate::world::chunk::source::{chunk_sources_changed, written};
 use crate::world::frame::coord::world_to_canonical;
-use pxl_spec::space::indexer::{from_idx, idx};
-use pxl_spec::space::zoom::{base_of, count, cube, index_of, of_side, units, Zoom};
+use pxl_spec::space::zoom::{around, base_of, count, cube, from_idx, idx, index_of, nearest, of_side, units, wrap_cell, Zoom, ROUND};
 use xpute_core::status::bug::OrBug;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
@@ -48,119 +48,32 @@ pub enum EntryKind {
     Decor { decor_id: DecorId },
 }
 
-pub use pxl_spec::bake::constant::EntryAt;
-
-/// The band-zoom index of the cell's XY column, Z dropped: the renderer asks for a
-/// column with z = 0, so a key that kept Z left every object above 64u
-/// stored and hit-tested but never drawn.
-fn column_of(cell: [i64; 3]) -> IVec {
-    idx(BAND, TO_XY(base_of(CELL, cell).i))
-}
-
-/// A column's key from its index, which may run on round the world.
-pub fn column_at([x, y]: [i64; 2]) -> IVec {
-    ivec::gather(wrap_index(BAND, x), y, 0)
-}
-
-/// The cell at a column's corner, on z = 0.
-/// A column's corner cell.
-pub fn column_cell(col_idx: IVec) -> [i64; 3] {
-    index_of(CELL, &Pvf3 { i: from_idx(BAND, col_idx), f: 0 })
-}
-
-/// Where a corner is filed: column, band, and position in finest-tier steps.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct At {
-    pub col_idx: IVec,
-    pub band: BandZ,
-    pub step: [u32; 3],
-}
-
-impl At {
-    /// The corner lowered to the cube's own lattice, the only place a cube
-    /// of that side can be.
-    pub fn of_cube(at: &Pvf3, side: Zoom) -> At {
-        At::of(&base_of(side, index_of(side, at)))
-    }
-
-    pub fn of(at: &Pvf3) -> At {
-        let cell = index_of(CELL, at);
-        At {
-            col_idx: column_of(cell),
-            band: band_of(cell[2]).0,
-            step: index_of(OBJECT_FINEST, at).map(|v| v as u32 & POS_MASK),
-        }
-    }
-
-    pub fn cell(self) -> [i64; 3] {
-        let [x0, y0, _] = column_cell(self.col_idx);
-        let ([cx, cy, cz], _) = in_cell(self.step);
-        [x0 + i64::from(cx), y0 + i64::from(cy), band_cell_z(self.band) + i64::from(cz)]
-    }
-
-    pub fn corner(self) -> Pvf3 {
-        let [x0, y0, _] = column_cell(self.col_idx);
-        pvf3::add(&base_of(CELL, [x0, y0, band_cell_z(self.band)]), &base_of(OBJECT_FINEST, self.step.map(i64::from)))
-    }
-
-    /// Exact, since a step is a binary fraction of a unit.
-    pub fn local(self) -> [f64; 3] {
-        let [x, y, z] = self.step.map(|v| v as f64 * STEP_UNITS);
-        [x, y, self.band as f64 * BAND_UNITS + z]
-    }
-}
-
-fn read_state(coord: &Pvf3) -> u32 {
-    let at = At::of(coord);
-    kernel().objects.read(at.col_idx, at.band, at.step)
-}
-
-// A leaf larger than a cell is split into the cells it covers, since
-// collision and the pick assume an entry is at most a cell.
-/// An entry where it is filed and the value it holds.
+/// A leaf as an asker meets it: its cube, X in the asker's frame.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Entry {
-    at: EntryAt,
+    pub zoom: Zoom,
+    pub at: [i64; 3],
     pub state: u32,
 }
 
 impl Entry {
-    pub fn at_column(&mut self, col_idx: IVec) {
-        self.at.col_idx = col_idx;
-    }
-
-    pub fn load(&mut self, band_idx: BandZ, pos: u32, state: u32) {
-        (self.at.band_idx, self.at.pos, self.state) = (band_idx, pos, state);
-    }
-
-    fn filed(&self) -> At {
-        let (x, y, z, _) = unpack_pos(self.at.pos);
-        At {
-            col_idx: self.at.col_idx,
-            band: self.at.band_idx,
-            step: [x, y, z],
+    pub fn id(&self) -> EntryAt {
+        EntryAt {
+            zoom: self.zoom,
+            at: wrap_cell(self.zoom, self.at),
         }
     }
 
-    /// Corner relative to the column's base (z = 0).
-    pub fn local(&self) -> [f64; 3] {
-        self.filed().local()
-    }
-
     pub fn size(&self) -> f64 {
-        units(unpack_pos(self.at.pos).3)
-    }
-
-    pub fn cell(&self) -> [i64; 3] {
-        self.filed().cell()
+        units(self.zoom)
     }
 
     pub fn corner(&self) -> Pvf3 {
-        self.filed().corner()
+        base_of(self.zoom, self.at)
     }
 
-    pub fn at(&self) -> EntryAt {
-        self.at
+    pub fn cube(&self) -> Aabb {
+        cube(self.zoom, self.at)
     }
 
     /// Not for air, which is the eraser's marker.
@@ -178,71 +91,37 @@ impl Entry {
     }
 }
 
-fn cell_run(ix: i64, iy: i64, iz: i64) -> Option<CellRun> {
-    let col_idx = column_of([ix, iy, iz]);
-    let [cx0, cy0, _] = column_cell(col_idx);
-    kernel().objects.cell(col_idx, (ix - cx0) as u32, (iy - cy0) as u32, iz as i32)
+fn read_state(coord: &Pvf3) -> u32 {
+    u32::from(kernel().objects.tree.get(OBJECT_FINEST, wrap_cell(OBJECT_FINEST, index_of(OBJECT_FINEST, coord))).data.value)
 }
 
-/// Moves on every write to any column.
+/// Moves on every write.
 pub fn objects_revision() -> u32 {
-    world_changes().tick(OBJECT_COLUMN)
+    world_changes().tick(OBJECTS)
 }
 
 fn apply(writes: impl IntoIterator<Item = Write>) {
     changed(kernel().objects.write(writes));
 }
 
-/// What reads a band hears it changed.
-fn changed(bands: impl IntoIterator<Item = (IVec, BandZ)>) {
-    for (col_idx, band_idx) in bands {
+/// What reads a cube hears it changed.
+fn changed(cubes: impl IntoIterator<Item = EntryAt>) {
+    for at in cubes {
         chunk_sources_changed();
-        bump_world(OBJECT_COLUMN, col_idx);
-        band_written(col_idx, band_idx);
-    }
-}
-
-fn cursor_at(at: EntryAt) -> Entry {
-    let mut cursor = Entry::default();
-    cursor.at_column(at.col_idx);
-    cursor.load(at.band_idx, at.pos, 0);
-    cursor
-}
-
-/// Every entry a column stores, without the eraser's render-only edits.
-pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&Entry)) {
-    let Some(e) = kernel().objects.entries(col_idx) else { return };
-    let mut cursor = Entry::default();
-    cursor.at_column(col_idx);
-    for k in 0..e.band.len() {
-        cursor.load(e.band[k], e.pos[k], e.state[k]);
-        visit(&cursor);
-    }
-}
-
-fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&Entry)) {
-    let Some(run) = cell_run(ix, iy, iz) else { return };
-    let col_idx = column_of([ix, iy, iz]);
-    let Some(e) = kernel().objects.entries(col_idx) else { return };
-    let mut cursor = Entry::default();
-    cursor.at_column(col_idx);
-    for k in run.start as usize..(run.start + run.count) as usize {
-        cursor.load(e.band[k], e.pos[k], e.state[k]);
-        visit(&cursor);
+        bump_world(OBJECTS, 0);
+        written(at);
     }
 }
 
 /// Whether any leaf, air included, is written in the cell `at` lies in.
 pub fn holds_entry(at: &Pvf3) -> bool {
-    let [ix, iy, iz] = index_of(CELL, at);
-    cell_run(ix, iy, iz).is_some()
+    kernel().objects.holds(CELL, index_of(CELL, at))
 }
 
 /// What stands in the cell `at` lies in, air left out.
 pub fn objects_at(at: &Pvf3) -> Vec<Entry> {
-    let [ix, iy, iz] = index_of(CELL, at);
     let mut out = Vec::new();
-    each_cell_entry(ix, iy, iz, &mut |entry| {
+    kernel().objects.each_in(CELL, index_of(CELL, at), &mut |entry| {
         if !object_value_is_air(entry.state) {
             out.push(*entry);
         }
@@ -251,14 +130,9 @@ pub fn objects_at(at: &Pvf3) -> Vec<Entry> {
 }
 
 pub fn get_placed_object(at: EntryAt) -> Option<Entry> {
-    let [ix, iy, iz] = cursor_at(at).cell();
-    let mut found = None;
-    each_cell_entry(ix, iy, iz, &mut |entry| {
-        if found.is_none() && !object_value_is_air(entry.state) && entry.at() == at {
-            found = Some(*entry);
-        }
-    });
-    found
+    let n = kernel().objects.tree.get(at.zoom, at.at);
+    let state = u32::from(n.data.value);
+    (n.zoom == at.zoom && !n.branch() && state != VOID && !object_value_is_air(state)).then_some(Entry { zoom: at.zoom, at: at.at, state })
 }
 
 struct StoreState {
@@ -276,18 +150,11 @@ fn store_state() -> &'static mut StoreState {
 /// The never-written AIR entry the eraser's preview injects into the drawn
 /// build where it hovers bare terrain: the cube of `size` holding `at`.
 pub fn carve_entry(at: &Pvf3, size: f64) -> EntryAt {
-    let lowered = At::of_cube(at, of_side(size));
-    let [x, y, z] = lowered.step;
+    let zoom = of_side(size);
     EntryAt {
-        col_idx: lowered.col_idx,
-        band_idx: lowered.band,
-        pos: pack_pos(x, y, z, of_side(size)),
+        zoom,
+        at: wrap_cell(zoom, index_of(zoom, at)),
     }
-}
-
-/// Moves on every write to what the column stores, and on nothing else.
-pub fn object_col_revision(col_idx: IVec) -> u32 {
-    world_changes().revision_of(OBJECT_COLUMN, col_idx as i64)
 }
 
 // ---- Persistence ----
@@ -296,10 +163,6 @@ pub fn object_col_revision(col_idx: IVec) -> u32 {
 // positions tile-local. A placed decor's facing is derived from its position,
 // so it is not stored. The layout's version is in the storage key; a blob of
 // another layout is never read. Positions round-trip exactly in f32.
-pub fn object_cols() -> Vec<IVec> {
-    let objects = &kernel().objects;
-    objects.cols().collect()
-}
 
 #[derive(Default)]
 struct TileRows {
@@ -310,19 +173,20 @@ struct TileRows {
     value: Vec<u32>,
 }
 
-fn collect_col(by_tile: &mut Vec<(IVec, TileRows)>, col_idx: IVec) {
-    let tile_idx = TO_XY(idx(LEAF_Z, from_idx(BAND, col_idx)));
-    let tile_base = from_idx(LEAF_Z, tile_idx);
-    let slot = match by_tile.iter().position(|(p, _)| *p == tile_idx) {
-        Some(slot) => slot,
-        None => {
-            by_tile.push((tile_idx, TileRows::default()));
-            by_tile.len() - 1
-        }
-    };
-    let rows = &mut by_tile[slot].1;
-    each_col_entry(col_idx, &mut |entry| {
+/// Every leaf under a node, filed by the leaf tile its corner is in.
+fn collect(by_tile: &mut Vec<(IVec, TileRows)>, (zoom, at): (Zoom, [i64; 3])) {
+    kernel().objects.each_in(zoom, at, &mut |entry| {
         let corner = entry.corner();
+        let tile_idx = TO_XY(idx(LEAF_Z, corner.i));
+        let tile_base = from_idx(LEAF_Z, tile_idx);
+        let slot = match by_tile.iter().position(|(p, _)| *p == tile_idx) {
+            Some(slot) => slot,
+            None => {
+                by_tile.push((tile_idx, TileRows::default()));
+                by_tile.len() - 1
+            }
+        };
+        let rows = &mut by_tile[slot].1;
         let local = Pvf3 {
             i: ivec::sub(corner.i, tile_base),
             f: corner.f,
@@ -366,7 +230,6 @@ fn encode_tiles(by_tile: &[(IVec, TileRows)]) -> Result<String, MarshalError> {
 fn decode_objects(blob: &str) -> Result<(), MarshalError> {
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(blob).map_err(|_| MarshalError::new(Errno::EINVAL))?;
     let root = TreeReader::new(&bytes)?.read_branch()?;
-    // One batch, so each column's entries are rebuilt once.
     let mut writes = Vec::new();
     let result = (|| {
         for k in 0..root.len {
@@ -452,9 +315,9 @@ pub fn flush_save_if_due() {
     }
 }
 
-/// Walks the columns on the turn quota. A walk the store moved under is
-/// dropped and redone; the save counts as done only once written, so a tile
-/// hiding mid-walk still flushes it.
+/// Walks the store a leaf tile at a time on the turn quota. A walk the store
+/// moved under is dropped and redone; the save counts as done only once
+/// written, so a tile hiding mid-walk still flushes it.
 pub async fn save_task() {
     loop {
         notified(saves).await;
@@ -464,13 +327,13 @@ pub async fn save_task() {
         let revision = objects_revision();
         let mut by_tile: Vec<(IVec, TileRows)> = Vec::new();
         let mut whole = true;
-        for col_idx in object_cols() {
+        for node in kernel().objects.held_at(LEAF_Z) {
             yield_if_spent(world_edge).await;
             if objects_revision() != revision {
                 whole = false;
                 break;
             }
-            collect_col(&mut by_tile, col_idx);
+            collect(&mut by_tile, node);
         }
         yield_if_spent(world_edge).await;
         if !whole || objects_revision() != revision {
@@ -491,8 +354,8 @@ pub fn flush_save() {
         return;
     }
     let mut by_tile: Vec<(IVec, TileRows)> = Vec::new();
-    for col_idx in object_cols() {
-        collect_col(&mut by_tile, col_idx);
+    for node in kernel().objects.held_at(LEAF_Z) {
+        collect(&mut by_tile, node);
     }
     if let Ok(blob) = encode_tiles(&by_tile) {
         keep(blob);
@@ -501,23 +364,19 @@ pub fn flush_save() {
 
 // ---- Mutations ----
 
-/// A write of VOID drops the band, and the column, once every leaf reads
-/// VOID, so a redundant record never sits in a save.
+/// A write of VOID collapses its path back, so a redundant record never sits in a save.
 fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
     apply([write_of(coord, size, val)]);
     save();
 }
 
 fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
-    // Size is a power of two by construction; the nearest cell zoom only guards
+    // Size is a power of two by construction; the nearest zoom only guards
     // against float noise.
-    let cell_zoom = of_side(size);
-    let at = At::of_cube(coord, cell_zoom);
+    let zoom = of_side(size);
     Write {
-        col_idx: at.col_idx,
-        band_idx: at.band,
-        at: at.step,
-        cell_zoom,
+        zoom,
+        at: index_of(zoom, coord),
         state: val,
     }
 }
@@ -564,31 +423,12 @@ pub fn place_air(at: &Pvf3, size: f64) {
 }
 
 pub fn remove(at: EntryAt) {
-    let cursor = cursor_at(at);
-    write_object_value(&cursor.corner(), cursor.size(), VOID);
-}
-
-fn partition_point(n: usize, before: impl Fn(usize) -> bool) -> usize {
-    let (mut lo, mut hi) = (0, n);
-    while lo < hi {
-        let mid = lo + (hi - lo) / 2;
-        if before(mid) {
-            lo = mid + 1;
-        } else {
-            hi = mid;
-        }
-    }
-    lo
-}
-
-fn band_key(at: [u32; 3]) -> IVec {
-    ivec::gather(at[0] as i64, at[1] as i64, at[2] as i64)
-}
-
-fn band_is_empty(tree: &SparseTree<u16>) -> bool {
-    let mut empty = true;
-    sparse_tree::walk(tree, &mut |_, _, _, _, idx| empty &= idx == 0);
-    empty
+    apply([Write {
+        zoom: at.zoom,
+        at: at.at,
+        state: VOID,
+    }]);
+    save();
 }
 
 pub const VOID: u32 = cube_types::sentinel::void as u32;
@@ -596,141 +436,104 @@ pub const AIR: u32 = cube_types::object::air as u32;
 pub const UNKNOWN: u32 = cube_types::sentinel::unknown as u32;
 const _: () = assert!(VOID == 0);
 
-pub(crate) struct Column {
-    /// VOID, a zeroed leaf, is the absence.
-    bands: BTreeMap<BandZ, SparseTree<u16>>,
-    /// Sorted by (band, cell's walk order), so a cell's entries are one run.
-    pub(crate) e_band: Vec<BandZ>,
-    pub(crate) e_pos: Vec<u32>,
-    pub(crate) e_state: Vec<u32>,
-    /// Each band's entries' box, from the column's corner across and zero up.
-    bounds: BTreeMap<BandZ, Aabb>,
+/// Steps a node's box is kept in on each axis: a box is its node's, cut to
+/// whole steps outward.
+const BOX_STEPS: u32 = 256;
+
+/// What a node holds as far as the tree keeps it: a leaf its value alone, a
+/// branch the majority of its eight, the box everything under it fills in
+/// `BOX_STEPS` of its side, and the finest zoom anything there is held at.
+/// A leaf's box and finest are its own cube and zoom.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Held {
+    value: u16,
+    /// 0 where nothing is held.
+    finest: Zoom,
+    lo: [u8; 3],
+    hi: [u8; 3],
 }
 
-impl Column {
-    fn derive_entries(&mut self) {
-        self.e_band.clear();
-        self.e_pos.clear();
-        self.e_state.clear();
-        self.bounds.clear();
-        for (&bz, tree) in &self.bands {
-            let mut bound: Option<Aabb> = None;
-            sparse_tree::walk(tree, &mut |x, y, z, cell_zoom, value| {
-                let (x, y, z, val) = (x as u32, y as u32, z as u32, u32::from(value));
-                if val == VOID || val == UNKNOWN {
-                    return;
-                }
-                let min = [x as f64 * STEP_UNITS, y as f64 * STEP_UNITS, bz as f64 * BAND_UNITS + z as f64 * STEP_UNITS];
-                let b = Aabb {
-                    min,
-                    max: min.map(|v| v + units(cell_zoom)),
-                };
-                bound = Some(bound.map_or(b, |a| a.join(b)));
-                if cell_zoom >= CELL {
-                    self.e_band.push(bz);
-                    self.e_pos.push(pack_pos(x, y, z, cell_zoom));
-                    self.e_state.push(val);
-                    return;
-                }
-                // In walk order, so the lanes stay sorted.
-                let steps = u32::from(CELL - cell_zoom);
-                for k in 0..u64::from(count(CELL, cell_zoom)).pow(3) {
-                    let cell = at_walk_order::<3>(k, steps).map(i64::from);
-                    let [dx, dy, dz] = first_descendant_of(cell, u32::from(OBJECT_FINEST - CELL)).map(|v| v as u32);
-                    self.e_band.push(bz);
-                    self.e_pos.push(pack_pos(x + dx, y + dy, z + dz, CELL));
-                    self.e_state.push(val);
-                }
-            });
-            if let Some(b) = bound {
-                self.bounds.insert(bz, b);
-            }
-        }
+/// Not VOID, nor the sentinel nothing writes.
+fn present(value: u32) -> bool {
+    value != VOID && value != UNKNOWN
+}
+
+fn leaf(value: u32) -> Held {
+    Held {
+        value: u16::try_from(value).or_bug(Errno::EOVERFLOW),
+        ..Held::default()
     }
 }
 
-/// A run of a column's entries in one cell.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CellRun {
-    pub start: u32,
-    pub count: u32,
+/// A node's box in its own steps and its finest; none where it holds nothing.
+fn steps(n: &Node<Held>) -> Option<([u32; 3], [u32; 3], Zoom)> {
+    steps_of(n.zoom, &n.data, n.branch())
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Write {
-    pub col_idx: IVec,
-    pub band_idx: BandZ,
-    pub at: [u32; 3],
-    pub cell_zoom: Zoom,
-    pub state: u32,
-}
-
-#[derive(Default)]
-pub struct Store {
-    /// Only columns with a non-VOID leaf; an emptied band and column are dropped.
-    columns: BTreeMap<IVec, Column>,
-    /// For every cube from a band's up to `INDEX_TOP` holding any entry, the
-    /// box its entries fill; a cube's is the union of its children's.
-    bounds: HashMap<(Zoom, [i64; 3]), Aabb>,
-    /// What the objects fold to at every cell from a band's up to the top's; under a band, the band's tree keeps it (`set_folded`).
-    folds: HashMap<(Zoom, [i64; 3]), u16>,
+fn steps_of(zoom: Zoom, held: &Held, branch: bool) -> Option<([u32; 3], [u32; 3], Zoom)> {
+    match branch {
+        true => (held.finest != 0).then(|| (held.lo.map(u32::from), held.hi.map(u32::from), held.finest)),
+        false => present(u32::from(held.value)).then_some(([0; 3], [BOX_STEPS - 1; 3], zoom)),
+    }
 }
 
 /// Majority over the 2×2×2 children (pxl-spec bake/fold.rs), empty counted as a value
 /// and a non-voxel value as empty, so a lone cube goes at the first fold and
 /// a wall keeps whole cells.
-fn fold_cell(children: &[u16], cell_zoom: Zoom) -> u16 {
+fn fold_cell(children: &[u16], zoom: Zoom) -> u16 {
     let v: [u16; 8] = core::array::from_fn(|k| if object_value_is_voxel(u32::from(children[k])) { children[k] } else { VOID as u16 });
-    majority(v, cell_zoom)
+    majority(v, zoom)
 }
 
-const TOP_CELL: Zoom = GROUND.cell_zoom(TOP_Z);
-
-/// A top cube's X as keyed, and the rounds of the world the asker stands from
-/// it: a query is moved to the stored copy, and what it meets moved back.
-fn named_top(x: i64) -> (i64, i64) {
-    let named = wrap_index(INDEX_TOP, x);
-    (named, (x - named) / around(INDEX_TOP))
-}
-
-/// The coarsest cube the index keeps: as tall as `REACH` and as wide as the
-/// coarsest tile, so any query box meets at most eight of them.
-const INDEX_TOP: Zoom = {
-    let tall = REACH.max[2] - REACH.min[2];
-    let wide = units(TOP_Z);
-    let mut s = BAND;
-    while units(s) < tall || units(s) < wide {
-        s = s - 1;
+fn fold(kids: &[Held], branch: &[bool], zoom: Zoom) -> Held {
+    let mut out = Held {
+        value: fold_cell(&core::array::from_fn::<u16, 8, _>(|k| kids[k].value), zoom),
+        ..Held::default()
+    };
+    let half = BOX_STEPS / 2;
+    for k in 0..8 {
+        let Some((lo, hi, finest)) = steps_of(zoom + 1, &kids[k], branch[k]) else { continue };
+        let off = child_of([0; 3], k).map(|b| b as u32 * half);
+        let (lo, hi) = (
+            core::array::from_fn::<u8, 3, _>(|a| (off[a] + lo[a] / 2) as u8),
+            core::array::from_fn::<u8, 3, _>(|a| (off[a] + hi[a] / 2) as u8),
+        );
+        out.lo = if out.finest == 0 { lo } else { core::array::from_fn(|a| out.lo[a].min(lo[a])) };
+        out.hi = if out.finest == 0 { hi } else { core::array::from_fn(|a| out.hi[a].max(hi[a])) };
+        out.finest = out.finest.max(finest);
     }
-    s
-};
-
-/// Rebuilds the chain over one cube up to `top`; a cube reducing to nothing
-/// is removed.
-fn propagate_up<V: Copy>(map: &mut HashMap<(Zoom, [i64; 3]), V>, (mut cell_zoom, mut at): (Zoom, [i64; 3]), top: Zoom, first: Option<V>, reduce: impl Fn(Zoom, [Option<V>; 8]) -> Option<V>) {
-    let mut v = first;
-    loop {
-        match v {
-            Some(v) => map.insert((cell_zoom, at), v),
-            None => map.remove(&(cell_zoom, at)),
-        };
-        if cell_zoom <= top {
-            return;
-        }
-        (at, cell_zoom) = (parent_of(at), cell_zoom - 1);
-        v = reduce(cell_zoom, core::array::from_fn(|k| map.get(&(cell_zoom + 1, child_of(at, k))).copied()));
-    }
+    out
 }
 
-/// A band as a node of `BAND`'s lattice.
-fn band_node(col_idx: IVec, band_idx: BandZ) -> [i64; 3] {
-    [ivec::X(col_idx), ivec::Y(col_idx), i64::from(band_idx)]
+#[derive(Clone, Copy, Debug)]
+pub struct Write {
+    pub zoom: Zoom,
+    pub at: [i64; 3],
+    pub state: u32,
 }
 
-/// The cell of `cell_zoom` holding the leaf at `step` in the band at `band`.
-fn leaf_cell(band: [i64; 3], step: [i64; 3], cell_zoom: Zoom) -> [i64; 3] {
-    let (cells, per) = (count(cell_zoom, BAND) as i64, count(OBJECT_FINEST, cell_zoom) as i64);
-    core::array::from_fn(|k| band[k] * cells + step[k] / per)
+#[derive(Default)]
+pub struct Store {
+    tree: SparseTree<Held>,
+}
+
+/// A node's box in the frame nearest `about`, and the rounds it was moved.
+fn framed(n: &Node<Held>, about: f64) -> Option<(Aabb, [i64; 3], Zoom)> {
+    let (lo, hi, finest) = steps(n)?;
+    let whole = cube(n.zoom, n.at);
+    let step = units(n.zoom) / f64::from(BOX_STEPS);
+    let held = Aabb {
+        min: core::array::from_fn(|a| whole.min[a] + f64::from(lo[a]) * step),
+        max: core::array::from_fn(|a| whole.min[a] + f64::from(hi[a] + 1) * step),
+    };
+    let x = (whole.min[0] + whole.max[0]) / 2.0;
+    let rounds = if about.is_finite() { ((nearest(x, about) - x) / ROUND).round() as i64 } else { 0 };
+    let at = [n.at[0] + rounds * around(n.zoom), n.at[1], n.at[2]];
+    Some((held.moved([rounds as f64 * ROUND, 0.0, 0.0]), at, finest))
+}
+
+fn about(b: &Aabb) -> f64 {
+    (b.min[0] + b.max[0]) / 2.0
 }
 
 fn slab((o, d): (V3, V3), b: &Aabb, (t0, t1): (f64, f64)) -> Option<(f64, f64)> {
@@ -740,7 +543,7 @@ fn slab((o, d): (V3, V3), b: &Aabb, (t0, t1): (f64, f64)) -> Option<(f64, f64)> 
 }
 
 /// Amanatides–Woo traversal of `side` cells; returns whether `each` stopped it.
-fn cells_along((o, d): (V3, V3), (t0, t1): (f64, f64), side: f64, each: &mut dyn FnMut([i64; 3], (f64, f64)) -> bool) -> bool {
+fn cells_along((o, d): (V3, V3), (t0, t1): (f64, f64), side: f64, each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
     let start = [0, 1, 2].map(|k| o[k] + d[k] * t0);
     let mut cell = start.map(|v| (v / side).floor() as i64);
     let mut next = [0.0; 3];
@@ -753,34 +556,41 @@ fn cells_along((o, d): (V3, V3), (t0, t1): (f64, f64), side: f64, each: &mut dyn
             (next[k], delta[k]) = ((face - o[k]) / d[k], side / d[k].abs());
         }
     }
-    let mut from = t0;
     loop {
         let k = (0..3).min_by(|&a, &b| next[a].total_cmp(&next[b])).unwrap_or(0);
-        let to = next[k].min(t1);
-        if each(cell, (from, to)) {
+        if each(cell) {
             return true;
         }
         if next[k] >= t1 {
             return false;
         }
         cell[k] += if d[k] > 0.0 { 1 } else { -1 };
-        from = next[k];
         next[k] += delta[k];
     }
 }
 
+/// A node the ray crosses: where it enters, which of the eight, its cube in
+/// the ray's frame and the span it is crossed over.
+type Met = (f64, usize, [i64; 3], (f64, f64));
+
 impl Store {
-    pub fn cols(&self) -> impl Iterator<Item = IVec> + '_ {
-        self.columns.keys().copied()
+    /// Every node whose box meets `query`, in `query`'s frame, a branch
+    /// entered where `enter` says so.
+    fn descend(&self, query: &Aabb, enter: &mut impl FnMut(&Node<Held>, [i64; 3], &Aabb, Zoom) -> bool) {
+        let about = about(query);
+        self.tree.visit(&self.tree.roots(), &mut |n| {
+            let Some((held, at, finest)) = framed(n, about) else { return false };
+            held.meet(*query).is_some() && enter(n, at, &held, finest)
+        });
     }
 
     /// A box holding every entry inside `query`, never none where there is
-    /// some; a band's bound is cut to `query` and may include air.
+    /// some; a leaf's is cut to `query` and may include air.
     pub fn bound_in(&self, query: &Aabb) -> Option<Aabb> {
         let mut out: Option<Aabb> = None;
-        self.descend(query, BAND, &mut |cell_zoom, at, bound| {
-            let whole = query.contains(cube(cell_zoom, at)) || cell_zoom == BAND;
-            if let Some(b) = bound.meet(*query).filter(|_| whole) {
+        self.descend(query, &mut |n, at, held, _| {
+            let whole = !n.branch() || query.contains(cube(n.zoom, at));
+            if let Some(b) = held.meet(*query).filter(|_| whole) {
                 out = Some(out.map_or(b, |o| o.join(b)));
             }
             !whole
@@ -788,212 +598,154 @@ impl Store {
         out
     }
 
-    pub fn visit_in(&self, query: &Aabb, cell_zoom: Zoom, each: &mut dyn FnMut([i64; 3], &Aabb)) {
-        self.descend(query, cell_zoom, &mut |s, at, bound| {
-            if s == cell_zoom {
-                each(at, bound);
+    /// The finest zoom any entry inside `query` is held at: a node wholly
+    /// inside answers for all under it, never less than what is there.
+    pub fn finest_in(&self, query: &Aabb) -> Option<Zoom> {
+        let mut out: Option<Zoom> = None;
+        self.descend(query, &mut |n, at, _, finest| {
+            let whole = !n.branch() || query.contains(cube(n.zoom, at));
+            if whole {
+                out = Some(out.map_or(finest, |f| f.max(finest)));
             }
-            s != cell_zoom
+            !whole
+        });
+        out
+    }
+
+    /// Every leaf meeting the cube at `zoom`, X in the cube's frame.
+    pub fn each_in(&self, zoom: Zoom, at: [i64; 3], visit: &mut dyn FnMut(&Entry)) {
+        let about = about(&cube(zoom, at));
+        let from = self.tree.get(zoom, wrap_cell(zoom, at));
+        self.tree.visit(&[from], &mut |n| {
+            let Some((_, at, _)) = framed(n, about) else { return false };
+            if !n.branch() {
+                visit(&Entry {
+                    zoom: n.zoom,
+                    at,
+                    state: u32::from(n.data.value),
+                });
+            }
+            n.branch()
         });
     }
 
-    fn descend(&self, query: &Aabb, finest: Zoom, enter: &mut dyn FnMut(Zoom, [i64; 3], &Aabb) -> bool) {
-        fn go(store: &Store, query: &Aabb, finest: Zoom, cell_zoom: Zoom, at: [i64; 3], enter: &mut dyn FnMut(Zoom, [i64; 3], &Aabb) -> bool) {
-            let Some(bound) = store.bounds.get(&(cell_zoom, at)) else { return };
-            if bound.meet(*query).is_none() || !enter(cell_zoom, at, bound) || cell_zoom >= finest {
-                return;
+    /// Every entry whose cube meets `query`, X in `query`'s frame.
+    pub fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
+        self.descend(query, &mut |n, at, _, _| {
+            if !n.branch() {
+                visit(&Entry {
+                    zoom: n.zoom,
+                    at,
+                    state: u32::from(n.data.value),
+                });
             }
-            for k in 0..8 {
-                go(store, query, finest, cell_zoom + 1, child_of(at, k), enter);
-            }
-        }
-        let side = units(INDEX_TOP);
-        let range = |k: usize| (query.min[k].max(REACH.min[k]) / side).floor() as i64..=(query.max[k].min(REACH.max[k]) / side).floor() as i64;
-        for z in range(2) {
-            for y in range(1) {
-                for x in range(0) {
-                    let (named, round) = named_top(x);
-                    let (dx, cells) = (round as f64 * ROUND, |s: Zoom| round * around(s));
-                    let q = query.moved([-dx, 0.0, 0.0]);
-                    go(self, &q, finest, INDEX_TOP, [named, y, z], &mut |s, [cx, cy, cz], bound| {
-                        enter(s, [cx + cells(s), cy, cz], &bound.moved([dx, 0.0, 0.0]))
-                    });
-                }
-            }
-        }
+            n.branch()
+        });
     }
 
-    /// The columns under a node, sorted and deduplicated.
-    pub fn cols_under(&self, (side, at): (Zoom, [i64; 2]), out: &mut Vec<IVec>) -> Result<(), TryReserveError> {
-        let first = out.len();
-        let s = units(side);
-        let query = Aabb {
-            min: [at[0] as f64 * s, at[1] as f64 * s, REACH.min[2]],
-            max: [(at[0] + 1) as f64 * s, (at[1] + 1) as f64 * s, REACH.max[2]],
+    /// The nodes at `zoom` holding anything, or the leaves above them, as the tree names them.
+    pub fn held_at(&self, zoom: Zoom) -> Vec<(Zoom, [i64; 3])> {
+        let mut out = Vec::new();
+        self.tree.visit(&self.tree.roots(), &mut |n| {
+            if steps(n).is_none() {
+                return false;
+            }
+            if !n.branch() || n.zoom == zoom {
+                out.push((n.zoom, n.at));
+                return false;
+            }
+            true
+        });
+        out
+    }
+
+    /// Whether anything, air included, is held in the cube at `zoom`.
+    pub fn holds(&self, zoom: Zoom, at: [i64; 3]) -> bool {
+        steps(&self.tree.get(zoom, wrap_cell(zoom, at))).is_some()
+    }
+
+    /// The cell over the highest entry in the column of cell `[x, y]`.
+    pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
+        let side = units(CELL);
+        let column = Aabb {
+            min: [x as f64 * side, y as f64 * side, REACH.min[2]],
+            max: [(x + 1) as f64 * side, (y + 1) as f64 * side, REACH.max[2]],
         };
-        let mut refused = Ok(());
-        self.visit_in(&query, BAND, &mut |[x, y, _], _| {
-            if refused.is_ok() {
-                refused = try_push(out, column_at([x, y]));
-            }
-        });
-        refused?;
-        out[first..].sort_unstable();
-        let mut n = first;
-        for k in first..out.len() {
-            if k == first || out[k] != out[n - 1] {
-                out[n] = out[k];
-                n += 1;
-            }
-        }
-        out.truncate(n);
-        Ok(())
+        self.bound_in(&column).map(|b| (b.max[2] / side).ceil() as i64)
     }
 
     /// Every cell of `cell_zoom` that may hold objects along the ray, in ray
-    /// order, until `each` stops it. A cube is entered only where the ray
-    /// crosses its bound grown to whole cells of `cell_zoom`.
-    pub fn along_ray(&self, origin: V3, direction: V3, (t0, t1): (f64, f64), cell_zoom: Zoom, each: &mut dyn FnMut([i64; 3]) -> bool) {
-        cells_along((origin, direction), (t0, t1), units(INDEX_TOP), &mut |[x, y, z], span| {
-            let (named, round) = named_top(x);
-            let from = [origin[0] - round as f64 * ROUND, origin[1], origin[2]];
-            self.along_ray_from((from, direction), span, cell_zoom, INDEX_TOP, [named, y, z], &mut |[cx, cy, cz]| {
-                each([cx + round * around(cell_zoom), cy, cz])
-            })
-        });
+    /// order, until `each` stops it. A node is entered only where the ray
+    /// crosses its box grown to whole cells of `cell_zoom`.
+    pub fn along_ray(&self, origin: V3, direction: V3, span: (f64, f64), cell_zoom: Zoom, each: &mut dyn FnMut([i64; 3]) -> bool) {
+        let ray = (origin, direction);
+        let roots = self.tree.roots();
+        self.along(ray, span, cell_zoom, &roots, each);
     }
 
-    fn along_ray_from(&self, ray: (V3, V3), span: (f64, f64), cell_zoom: Zoom, node: Zoom, at: [i64; 3], each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
-        let Some(bound) = self.bounds.get(&(node, at)) else { return false };
-        let Some(span) = slab(ray, &bound.snapped_out(units(cell_zoom)), span) else { return false };
-        if node == cell_zoom {
-            return each(at);
-        }
-        if node == BAND && cell_zoom > BAND {
-            return cells_along(ray, span, units(cell_zoom), &mut |cell, _| each(cell));
-        }
-        let mut kids = [(0.0, [0i64; 3], (0.0, 0.0)); 8];
+    fn along(&self, ray: (V3, V3), span: (f64, f64), cell_zoom: Zoom, nodes: &[Node<Held>], each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
+        let side = units(cell_zoom);
+        let mut met: [Met; 8] = [(0.0, 0, [0; 3], (0.0, 0.0)); 8];
         let mut n = 0;
-        for k in 0..8 {
-            let child = child_of(at, k);
-            let Some(b) = self.bounds.get(&(node + 1, child)) else { continue };
-            if let Some(s) = slab(ray, &b.snapped_out(units(cell_zoom)), span) {
-                kids[n] = (s.0, child, s);
+        for (k, node) in nodes.iter().enumerate() {
+            let Some((held, at, _)) = framed(node, ray.0[0]) else { continue };
+            if let Some(s) = slab(ray, &held.snapped_out(side), span) {
+                met[n] = (s.0, k, at, s);
                 n += 1;
             }
         }
-        kids[..n].sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
-        kids[..n].iter().any(|&(_, child, s)| self.along_ray_from(ray, s, cell_zoom, node + 1, child, each))
-    }
-
-    fn index_up(&mut self, col_idx: IVec, band_idx: BandZ) {
-        let at = band_node(col_idx, band_idx);
-        let corner = from_idx(BAND, col_idx);
-        let (x0, y0) = (ivec::X(corner) as f64, ivec::Y(corner) as f64);
-        let bound = self.columns.get(&col_idx).and_then(|c| c.bounds.get(&band_idx)).map(|b| Aabb {
-            min: [b.min[0] + x0, b.min[1] + y0, b.min[2]],
-            max: [b.max[0] + x0, b.max[1] + y0, b.max[2]],
-        });
-        propagate_up(&mut self.bounds, (BAND, at), INDEX_TOP, bound, |_, children| children.into_iter().flatten().reduce(Aabb::join));
-    }
-
-    pub fn read(&self, col_idx: IVec, band_idx: BandZ, at: [u32; 3]) -> u32 {
-        let Some(tree) = self.columns.get(&col_idx).and_then(|c| c.bands.get(&band_idx)) else {
-            return VOID;
-        };
-        u32::from(mem::get::<Ivec, u16>(&tree.mem, &tree.layout, band_key(at), 0))
-    }
-
-    /// Applies every write and rebuilds each changed column's entries once.
-    /// Returns the bands changed, a band being a leaf chunk's height.
-    pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> BTreeSet<(IVec, BandZ)> {
-        let mut changed = BTreeSet::new();
-        for w in writes {
-            if self.put(w) {
-                changed.insert((w.col_idx, w.band_idx));
+        met[..n].sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+        met[..n].iter().any(|&(_, k, at, s)| {
+            let node = &nodes[k];
+            if node.zoom == cell_zoom {
+                return each(at);
             }
-        }
-        // Compacted after all writes, so a batch walks each changed band once.
-        for &(col_idx, band_idx) in &changed {
-            let Some(column) = self.columns.get_mut(&col_idx) else { continue };
-            let Some(tree) = column.bands.get_mut(&band_idx) else { continue };
-            sparse_tree::compact(tree);
-            if band_is_empty(tree) {
-                column.bands.remove(&band_idx);
-                if column.bands.is_empty() {
-                    self.columns.remove(&col_idx);
-                }
+            match self.tree.children(node) {
+                Some(kids) => self.along(ray, s, cell_zoom, &kids, each),
+                // A leaf coarser than the cell is every cell of it.
+                None => cells_along(ray, s, side, each),
             }
-        }
-        let columns: BTreeSet<IVec> = changed.iter().map(|&(col_idx, _)| col_idx).collect();
-        for &col_idx in &columns {
-            if let Some(column) = self.columns.get_mut(&col_idx) {
-                column.derive_entries();
-            }
-        }
-        for &(col_idx, band_idx) in &changed {
-            self.fold_up(col_idx, band_idx);
-            self.index_up(col_idx, band_idx);
-        }
-        changed
+        })
     }
 
-    /// What the objects fold to in the ground cells `from..to` of `target`,
-    /// at every height, with `hide` left out.
+    /// What the objects fold to in the cells `from..to` of `target`, at every
+    /// height, with `hide` left out.
     pub fn fold_at(&self, target: Zoom, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
         out.clear();
         let mut refused = Ok(());
         let inside = |x: i64, y: i64| (from[0]..to[0]).contains(&x) && (from[1]..to[1]).contains(&y);
-        if target <= BAND {
-            let side = units(target);
-            let query = Aabb {
-                min: [from[0] as f64 * side, from[1] as f64 * side, REACH.min[2]],
-                max: [to[0] as f64 * side, to[1] as f64 * side, REACH.max[2]],
-            };
-            self.visit_in(&query, target, &mut |at, _| {
-                if let Some(&v) = self.folds.get(&(target, wrap_cell(target, at))).filter(|_| inside(at[0], at[1])) {
-                    if refused.is_ok() {
-                        refused = try_insert(out, at, u32::from(v));
-                    }
-                }
-            });
-        } else {
-            let cells = count(target, BAND) as i64;
-            for cy in from[1].div_euclid(cells)..=(to[1] - 1).div_euclid(cells) {
-                for cx in from[0].div_euclid(cells)..=(to[0] - 1).div_euclid(cells) {
-                    let Some(column) = self.columns.get(&column_at([cx, cy])) else { continue };
-                    for (&band_idx, tree) in &column.bands {
-                        let band = [cx, cy, i64::from(band_idx)];
-                        mem::walk_to(
-                            &tree.mem,
-                            &tree.layout,
-                            target,
-                            &mut |x, y, z, s, v| {
-                                if !object_value_is_voxel(u32::from(v)) {
-                                    return;
-                                }
-                                let n = count(target, s) as i64;
-                                let at = leaf_cell(band, [x, y, z].map(i64::from), target);
-                                for dz in 0..n {
-                                    for dy in 0..n {
-                                        for dx in 0..n {
-                                            let cell = [at[0] + dx, at[1] + dy, at[2] + dz];
-                                            if inside(cell[0], cell[1]) && refused.is_ok() {
-                                                refused = try_insert(out, cell, u32::from(v));
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                            0,
-                        );
+        let side = units(target);
+        let query = Aabb {
+            min: [from[0] as f64 * side, from[1] as f64 * side, REACH.min[2]],
+            max: [to[0] as f64 * side, to[1] as f64 * side, REACH.max[2]],
+        };
+        self.descend(&query, &mut |n, at, _, _| {
+            if n.branch() && n.zoom < target {
+                return true;
+            }
+            let v = u32::from(n.data.value);
+            if !object_value_is_voxel(v) || refused.is_err() {
+                return false;
+            }
+            // A leaf coarser than the cell is each of its cells.
+            let cells = i64::from(count(target, n.zoom));
+            let [x0, y0, z0] = first_descendant_of(at, u32::from(target - n.zoom));
+            for dz in 0..cells {
+                for y in (y0..y0 + cells).filter(|&y| (from[1]..to[1]).contains(&y)) {
+                    for x in (x0..x0 + cells).filter(|&x| inside(x, y)) {
+                        if refused.is_ok() {
+                            refused = try_insert(out, [x, y, z0 + dz], v);
+                        }
                     }
                 }
             }
-        }
+            false
+        });
         refused?;
         if let Some((cell, v)) = hide.and_then(|h| self.hidden(h, target)) {
-            if inside(cell[0], cell[1]) {
+            let x = from[0] + (cell[0] - from[0]).rem_euclid(around(target));
+            if inside(x, cell[1]) {
+                let cell = [x, cell[1], cell[2]];
                 match v {
                     0 => {
                         out.remove(&cell);
@@ -1005,172 +757,63 @@ impl Store {
         Ok(())
     }
 
-    /// False says nothing is placed in that band cell; true only that something may be.
-    pub fn may_hold(&self, at: [i64; 3]) -> bool {
-        let [x, y, band] = ancestor_of(at, u32::from(CELL - BAND));
-        self.columns.get(&column_at([x, y])).is_some_and(|c| c.bands.contains_key(&(band as BandZ)))
-    }
-
-    /// The cell over the highest band in the column of cell `[x, y]`.
-    pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
-        let steps = u32::from(CELL - BAND);
-        let [cx, cy] = ancestor_of([x, y], steps);
-        let band = *self.columns.get(&column_at([cx, cy]))?.bands.keys().next_back()?;
-        Some(first_descendant_of([i64::from(band) + 1], steps)[0])
+    /// The leaf holding the cube at `zoom`, X in the asker's frame, or the
+    /// cube itself as its eight fold to, and whether it is that fold.
+    pub fn node(&self, zoom: Zoom, at: [i64; 3]) -> (Entry, bool) {
+        let n = self.tree.get(zoom, wrap_cell(zoom, at));
+        let entry = Entry {
+            zoom: n.zoom,
+            at: at.map(|c| c >> (zoom - n.zoom)),
+            state: u32::from(n.data.value),
+        };
+        (entry, n.branch())
     }
 
     /// VOID where nothing; a non-voxel value is returned as is.
-    pub fn folded_value(&self, cell_zoom: Zoom, at: [i64; 3]) -> u16 {
-        if cell_zoom <= BAND {
-            return self.folds.get(&(cell_zoom, wrap_cell(cell_zoom, at))).copied().unwrap_or(VOID as u16);
-        }
-        let steps = u32::from(cell_zoom - BAND);
-        let [x, y, band] = ancestor_of(at, steps);
-        let Some(tree) = self.columns.get(&column_at([x, y])).and_then(|c| c.bands.get(&(band as BandZ))) else {
-            return VOID as u16;
-        };
-        let key = band_key(first_descendant_of(offset_in(at, steps), u32::from(OBJECT_FINEST - cell_zoom)).map(|c| c as u32));
-        tree.mem.data[mem::resolve::<Ivec, u16>(&tree.mem, &tree.layout, key, cell_zoom, 0) as usize]
+    pub fn folded_value(&self, zoom: Zoom, at: [i64; 3]) -> u16 {
+        self.tree.get(zoom, wrap_cell(zoom, at)).data.value
     }
 
-    /// Column `col_idx`'s voxel entries at `target`: a leaf finer than
-    /// `target` folded to it, a coarser one kept whole. Painted cell by cell, a
-    /// 1u cube came out as sixty-four sub-cell boxes the mesher never merges.
-    pub fn fold_entries(&self, col_idx: IVec, target: Zoom, hide: Option<EntryAt>, visit: &mut dyn FnMut(BandZ, [u32; 3], Zoom, u32)) {
-        let Some(column) = self.columns.get(&col_idx) else { return };
-        let hidden = hide.filter(|h| h.col_idx == col_idx).and_then(|h| {
-            let own = unpack_pos(h.pos).3;
-            let (at, v) = self.hidden(h, target)?;
-            Some((h.band_idx, at, own.min(target), u32::from(v)))
-        });
-        for (&band_idx, tree) in &column.bands {
-            let band = band_node(col_idx, band_idx);
-            mem::walk_to(
-                &tree.mem,
-                &tree.layout,
-                target,
-                &mut |x, y, z, s, v| {
-                    let mut v = u32::from(v);
-                    if let Some((hidden_band, at, cell_zoom, w)) = hidden {
-                        if hidden_band == band_idx && cell_zoom == s && leaf_cell(band, [x, y, z].map(i64::from), s) == at {
-                            v = w;
-                        }
-                    }
-                    if object_value_is_voxel(v) {
-                        visit(band_idx, [x, y, z].map(|c| c as u32), s, v);
-                    }
-                },
-                0,
-            );
-        }
-    }
-
+    /// What the cell of `target` over `hide` folds to without it.
     fn hidden(&self, hide: EntryAt, target: Zoom) -> Option<([i64; 3], u16)> {
-        self.columns.get(&hide.col_idx)?.bands.get(&hide.band_idx)?;
-        let (x, y, z, own) = unpack_pos(hide.pos);
-        let mut at = leaf_cell(band_node(hide.col_idx, hide.band_idx), [x, y, z].map(i64::from), own);
-        let (mut cell_zoom, mut v) = (own, VOID as u16);
-        while cell_zoom > target {
-            let (parent, up) = (parent_of(at), cell_zoom - 1);
+        let n = self.tree.get(hide.zoom, hide.at);
+        (n.zoom == hide.zoom && !n.branch()).then_some(())?;
+        let (mut at, mut zoom, mut v) = (hide.at, hide.zoom, VOID as u16);
+        while zoom > target {
+            let parent = parent_of(at);
             let children: [u16; 8] = core::array::from_fn(|k| {
                 let c = child_of(parent, k);
                 if c == at {
                     v
                 } else {
-                    self.folded_value(cell_zoom, c)
+                    self.folded_value(zoom, c)
                 }
             });
-            (at, cell_zoom, v) = (parent, up, fold_cell(&children, up));
+            (at, zoom) = (parent, zoom - 1);
+            v = fold_cell(&children, zoom);
         }
         Some((at, v))
     }
 
-    fn fold_up(&mut self, col_idx: IVec, band_idx: BandZ) {
-        let at = band_node(col_idx, band_idx);
-        let band = self.columns.get(&col_idx).and_then(|c| c.bands.get(&band_idx));
-        let v = band.map(|t| fold_cell(&t.mem.data[..8], BAND)).filter(|&v| v != VOID as u16);
-        propagate_up(&mut self.folds, (BAND, at), TOP_CELL, v, |cell_zoom, children| {
-            let v = fold_cell(&children.map(|c| c.unwrap_or(VOID as u16)), cell_zoom);
-            (v != VOID as u16).then_some(v)
-        });
-    }
-
-    /// False where VOID was written where no band is.
-    fn put(&mut self, w: Write) -> bool {
-        let Write {
-            col_idx,
-            band_idx,
-            at,
-            cell_zoom,
-            state,
-        } = w;
-        xpute_core::ensure!((CELL..=OBJECT_FINEST).contains(&cell_zoom), ENOTRECOVERABLE);
-        let value = u16::try_from(state).or_bug(Errno::EOVERFLOW);
-        let has_band = self.columns.get(&col_idx).is_some_and(|c| c.bands.contains_key(&band_idx));
-        if !has_band && state == VOID {
-            return false;
+    /// Applies every write; returns the cubes that changed.
+    pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> Vec<EntryAt> {
+        let mut changed = Vec::new();
+        for Write { zoom, at, state } in writes {
+            xpute_core::ensure!((1..=OBJECT_FINEST).contains(&zoom), ENOTRECOVERABLE, zoom);
+            let at = wrap_cell(zoom, at);
+            if self.tree.set(zoom, at, leaf(state), &fold) {
+                changed.push(EntryAt { zoom, at });
+            }
         }
-        let column = self.columns.entry(col_idx).or_insert_with(|| Column {
-            bands: BTreeMap::new(),
-            e_band: Vec::new(),
-            e_pos: Vec::new(),
-            e_state: Vec::new(),
-            bounds: BTreeMap::new(),
-        });
-        let tree = column.bands.entry(band_idx).or_insert_with(|| sparse_tree::alloc::<u16>(OBJECT_LAYOUT, 64));
-        mem::set_folded::<Ivec, u16>(&mut tree.mem, &tree.layout, band_key(at), value, cell_zoom, 0, &fold_cell);
-        true
+        changed
     }
 
-    fn cell_order(band_idx: BandZ, cx: u32, cy: u32, cz: u32) -> (BandZ, u64) {
-        (band_idx, walk_order([cx, cy, cz], BAND_CELL_SHAMT))
-    }
-
-    pub fn entries(&self, col_idx: IVec) -> Option<Entries<'_>> {
-        let column = self.columns.get(&col_idx)?;
-        Some(Entries {
-            col_idx,
-            band: &column.e_band,
-            pos: &column.e_pos,
-            state: &column.e_state,
-        })
-    }
-
-    pub fn cell(&self, col_idx: IVec, cx: u32, cy: u32, cz: CellZ) -> Option<CellRun> {
-        let column = self.columns.get(&col_idx)?;
-        let (band_idx, z) = band_of(cz as i64);
-        let want = Self::cell_order(band_idx, cx, cy, z);
-        let order = |k: usize| {
-            let (x, y, z, _) = unpack_pos(column.e_pos[k]);
-            let ([x, y, z], _) = in_cell([x, y, z]);
-            Self::cell_order(column.e_band[k], x, y, z)
-        };
-        let n = column.e_band.len();
-        let start = partition_point(n, |k| order(k) < want);
-        let end = start + partition_point(n - start, |k| order(start + k) == want);
-        (end > start).then(|| CellRun {
-            start: start as u32,
-            count: (end - start) as u32,
-        })
-    }
-
-    /// Returns the bands held.
-    pub fn clear(&mut self) -> Vec<(IVec, BandZ)> {
-        let held = self.columns.iter().flat_map(|(&col, c)| c.bands.keys().map(move |&band| (col, band))).collect();
-        self.columns.clear();
-        self.bounds.clear();
-        self.folds.clear();
+    /// Returns the cubes held.
+    pub fn clear(&mut self) -> Vec<EntryAt> {
+        let held = self.held_at(OBJECT_FINEST).into_iter().map(|(zoom, at)| EntryAt { zoom, at }).collect();
+        self.tree = SparseTree::default();
         held
     }
-}
-
-/// Grows by doubling, asking the heap only when full.
-fn try_push<T>(out: &mut Vec<T>, v: T) -> Result<(), TryReserveError> {
-    if out.len() == out.capacity() {
-        out.try_reserve(out.len().max(16))?;
-    }
-    out.push(v);
-    Ok(())
 }
 
 fn try_insert(out: &mut HashMap<[i64; 3], u32>, k: [i64; 3], v: u32) -> Result<(), TryReserveError> {
@@ -1179,25 +822,6 @@ fn try_insert(out: &mut HashMap<[i64; 3], u32>, k: [i64; 3], v: u32) -> Result<(
     }
     out.insert(k, v);
     Ok(())
-}
-
-/// A column's entries, in band and walk order, a lane a field.
-#[derive(Clone, Copy)]
-pub struct Entries<'a> {
-    pub col_idx: IVec,
-    pub band: &'a [BandZ],
-    pub pos: &'a [u32],
-    pub state: &'a [u32],
-}
-
-impl Entries<'_> {
-    pub fn at(&self, k: usize) -> EntryAt {
-        EntryAt {
-            col_idx: self.col_idx,
-            band_idx: self.band[k],
-            pos: self.pos[k],
-        }
-    }
 }
 
 #[cfg(test)]

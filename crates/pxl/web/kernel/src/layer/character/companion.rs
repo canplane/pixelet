@@ -15,7 +15,6 @@ use crate::io::load::{load_image, Load};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::chat_bubble::chat_bubble_step;
 use crate::layer::character::path::{heading_to, SettleTracker, WalkPlan};
-use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::layer::model::asset::ModelHandle;
@@ -323,4 +322,18 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
 fn step_from([x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
     let at = world_to_canonical(&[x, y, over(stands)]);
     Access::now().support(&at, COMPANION_STEP_CELLS).value()
+}
+
+/// Whether the companion's models have loaded: a live, unpersisted signal
+/// for the map toast. A fresh figure always starts unloaded.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CompanionLoadStore {
+    pub person_ready: bool,
+    pub pet_ready: bool,
+}
+
+static STORE: Global<CompanionLoadStore> = Global::new();
+
+pub fn companion_load_store() -> &'static mut CompanionLoadStore {
+    STORE.get(CompanionLoadStore::default)
 }

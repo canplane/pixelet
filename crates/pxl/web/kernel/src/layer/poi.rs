@@ -7,7 +7,8 @@ pub mod badge;
 pub mod placement;
 
 use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
-use pxl_spec::bake::poi_tile::{self, PoiTile};
+use pxl_spec::bake::poi_tile::{self, PoiTile, POI_LATTICE};
+use pxl_spec::space::pyramid::Lattice;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::io::demand::{Category, Phases};
@@ -23,6 +24,7 @@ static POI: Global<Pyramid<PoiTile>> = Global::new();
 
 impl Layer for PoiTile {
     const CATEGORY: Category = Category::poi;
+    const LATTICE: Lattice = POI_LATTICE;
     fn reach() -> f64 {
         MAJOR_UNITS_PER_PX / units_per_px_at(1.0)
     }

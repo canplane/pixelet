@@ -29,7 +29,7 @@ use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::surface::extent_of;
 use pxl_spec::cell::color;
-use pxl_spec::cell::cube::cube_types::{ground, Ground};
+use pxl_spec::cell::cube_types::{ground, Ground};
 use pxl_spec::space::pyramid::TILE_CELLS;
 use xpute_core::math::scalar::round;
 use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};

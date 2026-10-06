@@ -12,7 +12,7 @@ use crate::frame::shader::record::PIPELINE_MIPS;
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, release, texture_usage, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::pipeline::Pipelines;
-use crate::mesh::paint::palette::tex_array::{palette, LAYERS};
+use crate::mesh::paint::palette::{palette, LAYERS};
 
 pub const LAYER_TEX_SZ: u32 = SHIPPED_SHEET.cell;
 

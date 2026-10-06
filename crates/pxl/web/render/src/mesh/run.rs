@@ -5,7 +5,8 @@
 
 use crate::mesh::word::{taps_of, unpack_material, SUB_CELL_NONE};
 use crate::mesh::{grow, try_push, Refused};
-use pxl_spec::space::pyramid::CHUNK_DRAWN;
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
+use pxl_spec::space::zoom::count;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -13,11 +14,14 @@ use xpute_core::status::errno::Errno;
 /// read every chunk seam as open air, losing occlusion, creases and culling
 /// there. Nothing is emitted from an apron column.
 pub const APRON: u32 = 1;
-pub const COL_SPAN: u32 = CHUNK_DRAWN + 2 * APRON;
+
+/// The widest set: a chunk's columns where they fold into its cells, and its apron.
+pub const COL_SPAN: u32 = CHUNK_CELLS * count(GROUND.fold(), 0) + 2 * APRON;
 const COLUMN_CNT: usize = (COL_SPAN * COL_SPAN) as usize;
 
-pub fn apron_col(cx: u32, cy: u32) -> u32 {
-    (cy + APRON) * COL_SPAN + cx + APRON
+/// Column `(cx, cy)` of the chunk's own in a set `span` wide.
+pub fn apron_col(span: u32, cx: u32, cy: u32) -> u32 {
+    (cy + APRON) * span + cx + APRON
 }
 
 #[derive(Clone, Copy)]
@@ -35,7 +39,7 @@ pub struct RunWriter {
     runs: Vec<Run>,
     starts: Vec<u32>,
     open: bool,
-    row: u32,
+    span: u32,
     packed: bool,
     next_col: Option<u32>,
 }
@@ -52,20 +56,22 @@ impl RunWriter {
             runs: Vec::with_capacity(1 << 13),
             starts: vec![0; COLUMN_CNT + 1],
             open: false,
-            row: 0,
+            span: 0,
             packed: false,
             next_col: None,
         }
     }
 
-    /// Columns in row-major order, each column's runs together. False when one is open.
-    pub fn begin(&mut self) -> bool {
+    /// Columns in row-major order, `span` a row, each column's runs together.
+    /// False when one is open.
+    pub fn begin(&mut self, span: u32) -> bool {
         if self.open {
             return false;
         }
+        xpute_core::ensure!(span <= COL_SPAN, EINVAL, span);
         self.runs.clear();
         self.open = true;
-        self.row = 0;
+        self.span = span;
         self.packed = false;
         self.next_col = Some(0);
         true
@@ -73,7 +79,7 @@ impl RunWriter {
 
     pub fn column(&mut self, col: u32) {
         let next = self.next_col.or_bug(Errno::ENOTRECOVERABLE);
-        xpute_core::ensure!(col < COLUMN_CNT as u32, ENOSPC);
+        xpute_core::ensure!(col < self.span * self.span, ENOSPC);
         for c in next..=col {
             self.starts[c as usize] = self.runs.len() as u32;
         }
@@ -87,22 +93,21 @@ impl RunWriter {
 
     pub fn close(&mut self) -> u32 {
         let next = self.next_col.take().or_bug(Errno::ENOTRECOVERABLE);
-        for c in next..=COLUMN_CNT as u32 {
+        for c in next..=self.span * self.span {
             self.starts[c as usize] = self.runs.len() as u32;
         }
-        self.row = COL_SPAN;
         self.set_bytes()
     }
 
     fn set_bytes(&self) -> u32 {
-        run_set_bytes(self.runs.len() as u32, COL_SPAN)
+        run_set_bytes(self.runs.len() as u32, self.span)
     }
 
     /// # Safety
     /// `ptr` must address at least the bytes asked for, 4-aligned, and be
     /// the caller's to write.
     pub unsafe fn provide_set(&mut self, ptr: *mut u8, bytes: u32) {
-        xpute_core::ensure!(self.open && self.row >= COL_SPAN && !self.packed, ENOTRECOVERABLE);
+        xpute_core::ensure!(self.open && self.next_col.is_none() && !self.packed, ENOTRECOVERABLE);
         let need = self.set_bytes();
         xpute_core::ensure!(bytes >= need, ENOTRECOVERABLE, bytes, need);
         let n = self.runs.len();
@@ -112,7 +117,8 @@ impl RunWriter {
             at = at.add(len * 4);
             core::slice::from_raw_parts_mut(p, len)
         };
-        words(COLUMN_CNT + 1).copy_from_slice(&self.starts);
+        let cols = (self.span * self.span) as usize;
+        words(cols + 1).copy_from_slice(&self.starts[..=cols]);
         let z0 = words(n);
         let z1 = words(n);
         let taps = words(n);

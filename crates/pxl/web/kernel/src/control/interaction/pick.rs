@@ -93,7 +93,8 @@ pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
         direction,
         reach: PICK_REACH_U,
     };
-    let hit = Access::now().first_hit(&ray, Detail::Zoom(LEAF_Z)).value().flatten()?;
+    // A coarser tile's answer is a summary, not what is held.
+    let hit = Access::now().first_hit(&ray, Detail::Zoom(LEAF_Z)).exact().flatten()?;
     Some(PickResult { hit })
 }
 

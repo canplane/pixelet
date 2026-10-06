@@ -20,9 +20,11 @@ use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::table::{builds, Census, Frame};
 use crate::world::frame::view::{sea_under_eye, view, view_resize};
+use crate::world::pyramid::read::TileRead;
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
+use pxl_spec::space::pyramid::GROUND;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 
@@ -241,7 +243,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
             // The goal's pieces a resident tile draws.
             let residency = Terrain::pyramid().residency();
-            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.drawn_from(c.tile()).is_some()).count());
+            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.drawn_from(TileRead::of(GROUND, **c).tile()).is_some()).count());
             CoverSample {
                 rule,
                 drawn: drawn as f64,

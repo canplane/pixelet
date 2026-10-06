@@ -1,7 +1,7 @@
 // pxl-spec/bake/deck.test.rs
 
 use super::*;
-use crate::cell::cube::cube_types::ground;
+use crate::cell::cube_types::ground;
 use crate::procedural::{pier_stands, Frame, BEAM_PILLAR_INTERVAL_M};
 use crate::space::adapter::epsg3857::u_per_m;
 
@@ -122,7 +122,7 @@ fn a_full_parent_keeps_its_widest_lines_within_both_bounds() {
 
 #[test]
 fn each_form_is_drawn_from_its_surface() {
-    use crate::cell::cube::cube_types::ground as t;
+    use crate::cell::cube_types::ground as t;
     let over = |form: Form, top: f64| Over {
         low: top,
         top,

@@ -1,6 +1,6 @@
 // cpp/xpute/core/wire/xtp/spec.hpp
 
-// XTP, a relocatable packet of one tree; the golden records hold every
+// XTP, the Xpute Tree Packet: a relocatable packet of one tree; the golden records hold every
 // language's encoding to the same bytes.
 //
 //   word0  [MAGIC 32 | reserved 32]

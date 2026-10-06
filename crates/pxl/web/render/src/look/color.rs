@@ -21,15 +21,3 @@ pub fn srgb(c: f64) -> u8 {
     let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * libm::pow(c, 1.0 / 2.4) - 0.055 };
     xpute_core::math::scalar::round(s * 255.0).clamp(0.0, 255.0) as u8
 }
-
-/// The mean of sRGB colors, taken in linear light.
-pub fn mean_srgb(colors: impl IntoIterator<Item = [u8; 3]>) -> Option<[u8; 3]> {
-    let (mut sum, mut n) = ([0.0; 3], 0.0);
-    for c in colors {
-        for k in 0..3 {
-            sum[k] += linear(c[k]);
-        }
-        n += 1.0;
-    }
-    (n > 0.0).then(|| sum.map(|v| srgb(v / n)))
-}

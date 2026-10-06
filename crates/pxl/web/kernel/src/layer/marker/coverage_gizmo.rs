@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pyramid::{Tile, LEAF_Z, TOP_Z};
+use pxl_spec::space::pyramid::{Tile, GROUND, LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::V3;
 
 use crate::layer::marker::debug_lines::DebugLines;
@@ -21,6 +21,7 @@ use crate::world::access::Access;
 use crate::world::frame::view::view;
 use crate::world::observation::observation;
 use crate::world::pyramid::chunk::Chunk;
+use crate::world::pyramid::read::TileRead;
 use crate::world::pyramid::Layer as _;
 use crate::world::residency::floor;
 use pxl_spec::space::zoom::{units, within, Zoom};
@@ -89,7 +90,7 @@ impl CoverageGizmo {
         let v = view();
         // Its lines are f32 about the corner under the eye of a tile about as wide as
         // the eye is high: what is near resolves, and a move rebuilds them once a height.
-        let height = observation().map_or(0.0, |o| (o.eye[2] - o.ground).max(1.0));
+        let height = observation().map_or(0.0, |o| o.eye[2] - o.ground).max(1.0);
         let zoom = within(height).clamp(i32::from(TOP_Z), i32::from(LEAF_Z)) as Zoom;
         let span = units(zoom);
         let about = v.pose.eye.map(|c| (c / span).floor() * span);
@@ -110,7 +111,7 @@ impl CoverageGizmo {
             if covered {
                 continue;
             }
-            let mark = match residency.drawn_from(g.tile()) {
+            let mark = match residency.drawn_from(TileRead::of(GROUND, g).tile()) {
                 None => Mark::NoTile,
                 Some(src) if floor_only(src) => Mark::FloorOnly,
                 Some(_) => Mark::Unbuilt,
@@ -119,9 +120,10 @@ impl CoverageGizmo {
         }
         let mut tiles: Vec<Tile> = Vec::with_capacity(drawn.len());
         for &d in drawn {
-            let from_floor = residency.source(d.tile()).is_none() && residency.drawn_from(d.tile()).is_some_and(floor_only);
+            let tile = TileRead::of(GROUND, d).tile();
+            let from_floor = residency.source(tile).is_none() && residency.drawn_from(tile).is_some_and(floor_only);
             lines.square(d.rect(), if from_floor { Mark::DrawnFromFloor } else { Mark::Drawn });
-            tiles.push(d.tile());
+            tiles.push(tile);
         }
         tiles.sort_unstable();
         tiles.dedup();
@@ -168,7 +170,7 @@ impl Lines {
     fn lay(&self, lane: &mut Vec<f32>, origin: V3, access: &Access) {
         let ground = |x: f64, y: f64| -> [f64; 3] {
             let z = access.surface_support(&projection::project(x, y, 0.0)).value().flatten().unwrap_or(0.0);
-            [pxl_spec::space::pvf3::nearest(x, origin[0]) - origin[0], y - origin[1], z - origin[2]]
+            [pxl_spec::space::zoom::nearest(x, origin[0]) - origin[0], y - origin[1], z - origin[2]]
         };
         let mut ends: Vec<(f64, bool, Mark)> = Vec::new();
         for (&(axis, at), edges) in &self.0 {

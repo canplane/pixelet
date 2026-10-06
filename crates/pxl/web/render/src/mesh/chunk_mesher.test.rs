@@ -1,6 +1,7 @@
 // pxl-render/mesh/chunk_mesher.test.rs
 
 use super::*;
+use pxl_spec::bake::constant::U_PER_CELL;
 
 struct Run {
     z0: i32,
