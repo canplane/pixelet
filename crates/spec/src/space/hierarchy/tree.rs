@@ -16,8 +16,8 @@ pub type Node<const D: usize> = (Zoom, [i64; D]);
 pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
     let side = units(zoom);
     let mut b = REACH;
-    for k in 0..D {
-        b.min[k] = at[k] as f64 * side;
+    for (k, &v) in at.iter().enumerate() {
+        b.min[k] = v as f64 * side;
         b.max[k] = b.min[k] + side;
     }
     b
