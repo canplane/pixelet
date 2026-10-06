@@ -110,8 +110,7 @@ pub struct Server {
     top_z: Zoom,
 }
 impl Server {
-    /// The cache is the source's: the bake's binary and the DB's catalogs
-    /// name its directory, so what another source baked is never read.
+    /// Another source's cache is removed, never read.
     pub fn open(workers: usize, base: PathBuf, top_z: Zoom, limits: Limits) -> Result<Self, String> {
         let owner = claim(&base)?;
         let source = base.join(source_id()?);
@@ -146,8 +145,7 @@ impl Server {
     }
 }
 
-/// What a tile baked here is a function of, as a name: the running binary,
-/// which bakes it, and the catalog of every table it reads.
+/// The binary and the catalogs a tile here is baked from.
 fn source_id() -> Result<String, String> {
     use std::hash::{Hash, Hasher};
     let mut h = std::hash::DefaultHasher::new();

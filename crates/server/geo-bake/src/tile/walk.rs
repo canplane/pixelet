@@ -94,10 +94,8 @@ pub enum Done {
     Skipped,
 }
 
-/// Every band's items, a band to a worker at a time, each worker with its own
-/// `W` opened once: a band keeps in one worker what its items share (the
-/// leaf stage's rows, whose neighbors' reads it keeps), an item alone
-/// balances. Progress every `every` items, the rate over items not skipped.
+/// A band to a worker at a time: a band shares its worker's `W` (a leaf row's
+/// neighbors), a lone item balances.
 pub fn over<T: Copy + Sync, W>(
     tag: &str,
     bands: &[Vec<T>],
@@ -163,8 +161,7 @@ pub fn over<T: Copy + Sync, W>(
     t
 }
 
-/// The geocode groups, one object each under its name; a group already
-/// written or marked empty is skipped unless `--force`.
+/// One object a geocode group; resumable unless `--force`.
 pub fn walk<T>(
     args: &Args,
     tag: &str,
