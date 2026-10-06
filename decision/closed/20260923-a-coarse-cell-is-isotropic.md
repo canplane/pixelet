@@ -5,7 +5,7 @@ for objects alike: its size is the share of it that is not air, taken on
 every axis, and its color is what faces the air, weighted by how much of it
 does. It undoes one decision of 09-22 and replaces one of 09-09, and is
 written apart from
-[the mesh step and the zoom](../20260921-the-mesh-step-and-the-zoom-are-one-number.md) so
+[the mesh step and the zoom](./20260921-the-mesh-step-and-the-zoom-are-one-number.md) so
 that the two can be read side by side before either is changed.
 
 ## What stands now
@@ -116,7 +116,7 @@ this rule and sized to it.
   that barely reach into their cell are ever caught. No threshold moves the
   3.4.
 
-- [The mesh step and the zoom](../20260921-the-mesh-step-and-the-zoom-are-one-number.md)'s
+- [The mesh step and the zoom](./20260921-the-mesh-step-and-the-zoom-are-one-number.md)'s
   paragraph on the elevation lane and its "one thing does not merge" in
   _Objects fold too_ describe the 09-22 height field, and are rewritten when
   this is built.

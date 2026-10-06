@@ -5,7 +5,6 @@
 //! model is registered again at one unit tall, since the cases compare
 //! silhouettes, not scale.
 
-
 use crate::io::load::{load_image, Load};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::variant::{character_variant, model_of, CharacterVariant, Group};
@@ -13,7 +12,6 @@ use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::layer::model::asset::ModelHandle;
 use crate::sched::tick::TickContext;
 use crate::world::change::request_world_tick;
-use crate::world::frame::view::view;
 use xpute_runtime::global::Global;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
@@ -77,9 +75,9 @@ pub fn preview_step(ctx: &mut TickContext) {
     if c.cases.is_empty() {
         return;
     }
-    // Under the map origin: the case reads the actor's place from an f32
-    // uniform, which cannot resolve a unit-tall model millions of units out.
-    let mut at = view().chart();
+    // Under the sea below the eye, out of sight and near it, where the f32 of
+    // its draw resolves a unit-tall model.
+    let mut at = crate::world::frame::view::sea_under_eye();
     at[2] -= CASE_DEPTH_U;
     for case in &mut c.cases {
         if case.model.is_none() {

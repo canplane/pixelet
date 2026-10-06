@@ -4,7 +4,7 @@
 
 use crate::mesh::paint::palette::shader_meta::rgb255;
 use crate::mesh::paint::palette::tex_array::LAYER_IDX;
-use crate::mesh::volume::{pack_material, MaterialClasses};
+use crate::mesh::word::{pack_material, MaterialClasses};
 use pxl_spec::cell::object::{placeable_cube_rgb, PlaceableCube};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;

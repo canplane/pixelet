@@ -8,7 +8,7 @@
 //!    2026-09-26): terrain, then the catalog assets decor draws with, then
 //!    places.
 //! 2. Within a layer, seen before unseen and nearer first, speculation last.
-//!    Ranking holes before coarse ground instead put the top page's 2 km
+//!    Ranking holes before coarse ground instead put the top tile's 2 km
 //!    cubes in front of the eye for seconds on a cold start (2026-09-26).
 //!
 //! Everything else ties, after the view. Rank orders what starts; nothing
@@ -41,7 +41,7 @@ impl Policy {
     }
 }
 
-fn page(layer: Category, ask: Ask) -> Rank {
+fn tile(layer: Category, ask: Ask) -> Rank {
     if ask.order == Order::LAST {
         return Rank { class: ASIDE, distance: 0.0 };
     }
@@ -56,7 +56,7 @@ fn page(layer: Category, ask: Ask) -> Rank {
 impl Serve for Policy {
     fn rank(&self, category: Category, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         match category {
-            Category::terrain | Category::poi | Category::earth => page(category, ask),
+            Category::terrain | Category::poi | Category::earth => tile(category, ask),
             Category::asset => Rank { class: ASSET, distance: 0.0 },
             // Neither blocks the other: the label renders on the turn both are there.
             Category::geocode | Category::geocode_dict => Rank { class: ASIDE, distance: 0.0 },

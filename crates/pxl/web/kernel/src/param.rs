@@ -4,7 +4,7 @@
 //! grouped by the policy it tunes. None is a correctness bound: set to its
 //! least, the view still converges, only coarser or later.
 
-use pxl_spec::space::pyramid::PAGE_CHUNKS;
+use pxl_spec::space::pyramid::TILE_CHUNKS;
 
 // ---- product quality ----
 
@@ -15,12 +15,12 @@ pub const CENTER_CELL_LOGICAL_PX: f64 = 6.0;
 
 // ---- what refinement observes ----
 
-/// The estimator's tile side, in radians (about 10°, 77 rays on a 16:9
+/// The estimator's patch side, in radians (about 10°, 77 rays on a 16:9
 /// screen at 50°). An eighth cast 135 rays for goals within 1% of these
 /// over rolling ground (measured 2026-09-28).
-pub const OBSERVED_TILE: f64 = 1.0 / 6.0;
+pub const OBSERVED_PATCH: f64 = 1.0 / 6.0;
 
-/// How far a tile's last answer may drift, as a share of a tile, before it
+/// How far a patch's last answer may drift, as a share of a patch, before it
 /// is cast again.
 pub const REUSE_SHIFT: f64 = 0.25;
 
@@ -56,8 +56,8 @@ pub const COARSEN_HOLD_MS: f64 = QUALITY_WAIT_MS;
 
 // ---- device budget: memory ----
 
-/// Slots in one arena group, and so z16 chunks drawn at their own cells at
-/// once: about the flat-ground disc within where z16 ends. A view needing
+/// Slots in one arena group, and so leaf chunks drawn at their own cells at
+/// once: about the flat-ground disc within where the leaves end. A view needing
 /// more is drawn coarser.
 pub const ARENA_GROUP_SLOTS: u32 = 330;
 
@@ -77,8 +77,8 @@ pub const IMPOSTOR_GONE_CELLS: f64 = 0.5;
 
 // ---- per-frame work caps ----
 
-/// A page's chunks, so a page of flat ground starts building in the frame it arrives.
-pub const STARTS_PER_FRAME: u32 = PAGE_CHUNKS * PAGE_CHUNKS;
+/// A tile's chunks, so a tile of flat ground starts building in the frame it arrives.
+pub const STARTS_PER_FRAME: u32 = TILE_CHUNKS * TILE_CHUNKS;
 
 pub const COMMITS_PER_FRAME: u32 = 8;
 
@@ -87,7 +87,7 @@ pub const INTAKE: u32 = u32::MAX;
 
 // ---- latency hiding ----
 
-/// Most speculative pages a layer asks for at once.
+/// Most speculative tiles a layer asks for at once.
 pub const HINT_ALLOWANCE: u32 = 128;
 
 // ---- I/O robustness ----

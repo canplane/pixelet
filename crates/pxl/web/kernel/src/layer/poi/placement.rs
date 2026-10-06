@@ -1,8 +1,8 @@
 // pxl-kernel/layer/poi/placement.rs
 
 //! Where the POI counts are drawn: one badge per POI-lattice cell under each
-//! drawn chunk, read from the page that settles that ground,
-//! standing at a z16 cell's center on the surface a ray down meets first.
+//! drawn chunk, read from the tile that settles that ground,
+//! standing at a leaf cell's center on the surface a ray down meets first.
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::layer::billboard::batch::BillboardBatch;
@@ -14,17 +14,18 @@ use crate::layer::poi::{enabled, rank_of, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
 use crate::param::POI_MAJOR_RANK;
 use crate::sched::tick::TickContext;
 use crate::world::access::{Access, Detail, Ray};
-use crate::world::frame::view::{ndc_to_px, view};
+use crate::world::frame::view::ndc_to_px;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
 use xpute_runtime::global::Global;
 
-use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
+use pxl_spec::bake::poi_tile::{PoiTile, POI_LATTICE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{nearest, projection, REACH};
-use pxl_spec::space::pyramid::{Cell, GROUND, GROUND_Z};
+use pxl_spec::space::pyramid::{Cell, GROUND, LEAF_Z};
 use pxl_spec::space::v3::len3;
+use pxl_spec::space::zoom::{count, Zoom};
 use std::collections::HashSet;
 
 #[derive(Default)]
@@ -38,7 +39,7 @@ struct Placement {
     /// Kept so a settled turn asks the heap for nothing. Each with the scale
     /// it shows at and where in its POI cell that scale is read.
     found: Vec<(Cell, Label, Cell, f64, Shown, [f64; 3])>,
-    /// The drawn chunks, the pages and the heights `found` was read from: an
+    /// The drawn chunks, the tiles and the heights `found` was read from: an
     /// eye move that changes none of them casts no ray.
     found_for: Option<(u32, u32, (u32, u32))>,
     mounted: Vec<(Chunk, bool, bool)>,
@@ -66,7 +67,7 @@ fn shown_at(units_per_px: f64) -> Option<Shown> {
 }
 
 /// None where nothing over it is known.
-fn top_at(at: &Pvf3, z: u32) -> Option<f64> {
+fn top_at(at: &Pvf3, zoom: Zoom) -> Option<f64> {
     let xy = projection::unproject(at.i, at.f);
     let (high, low) = (REACH.max[2], REACH.min[2]);
     let ray = Ray {
@@ -74,7 +75,7 @@ fn top_at(at: &Pvf3, z: u32) -> Option<f64> {
         direction: [0.0, 0.0, -1.0],
         reach: high - low,
     };
-    let hit = Access::now().first_hit(&ray, Detail::Zoom(z)).value().flatten()?;
+    let hit = Access::now().first_hit(&ray, Detail::Zoom(zoom)).value().flatten()?;
     Some(high - hit.t)
 }
 
@@ -89,14 +90,12 @@ pub fn step(ctx: &mut TickContext) {
         badge::retain(&HashSet::new());
         return;
     }
-    let origin = view().origin;
-    let base = view().chart();
-    let pages = PoiPage::pyramid();
+    let tiles = PoiTile::pyramid();
     if crate::world::pyramid::domain::current().is_none() {
         return;
     }
     let sched = &crate::kernel::kernel().sched;
-    let key = Some((sched.drawn_revision(), pages.paging().revision(), crate::world::observation::heights_revision()));
+    let key = Some((sched.drawn_revision(), tiles.residency().revision(), crate::world::observation::heights_revision()));
     let stale = p.found_for != key;
     p.found_for = key;
     let mut found = core::mem::take(&mut p.found);
@@ -106,13 +105,13 @@ pub fn step(ctx: &mut TickContext) {
     }
     let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
-        let Some(src) = pages.paging().source(chunk.page()) else { continue };
-        let Some(poi) = pages.paging().get(src) else { continue };
+        let Some(src) = tiles.residency().source(chunk.tile()) else { continue };
+        let Some(poi) = tiles.residency().get(src) else { continue };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.
-        let (side, cell) = (chunk.column().0, POI_LATTICE.side_at(src.z));
-        let m = if cell <= side { cell.count_in(side) } else { 0 };
-        let [x0, y0] = POI_LATTICE.cell_of(src.z, &Pvf3 { i: chunk.corner(), f: 0 }).in_page();
+        let (side, cell) = (chunk.column().0, POI_LATTICE.cell_zoom(src.zoom));
+        let m = if cell >= side { count(cell, side) } else { 0 };
+        let [x0, y0] = POI_LATTICE.cell_of(src.zoom, &Pvf3 { i: chunk.corner(), f: 0 }).in_tile();
         let (h0, h1) = chunk.z_range();
         for ty in y0..y0 + m.max(1) {
             let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + m.max(1), ty));
@@ -122,29 +121,29 @@ pub fn step(ctx: &mut TickContext) {
                 // Near, a place or a count; farther, only a prominent enough place.
                 // A count stands at its cell's middle.
                 let all = match (c.count, poi.shown(c).next()) {
-                    (1, Some((place, _, at))) => (Label::Place { page: src, place }, cell.inner_at(GROUND, GROUND_Z, at)),
-                    _ => (Label::Count(c.count, c.partial), GROUND.cell_of(GROUND_Z, &cell.mid())),
+                    (1, Some((place, _, at))) => (Label::Place { tile: src, place }, cell.inner_at(GROUND, LEAF_Z, at)),
+                    _ => (Label::Count(c.count, c.partial), GROUND.cell_of(LEAF_Z, &cell.mid())),
                 };
                 let major = poi
                     .shown(c)
                     .map(|(i, p, at)| (i, rank_of(p.kind), at))
                     .filter(|s| s.1 <= POI_MAJOR_RANK)
                     .min_by_key(|s| s.1)
-                    .map(|(place, _, at)| (Label::Place { page: src, place }, cell.inner_at(GROUND, GROUND_Z, at)));
+                    .map(|(place, _, at)| (Label::Place { tile: src, place }, cell.inner_at(GROUND, LEAF_Z, at)));
                 let mid = cell.mid();
                 let mid = projection::unproject(mid.i, mid.f);
                 let mid = [nearest(mid[0], chunk.rect().0), mid[1]];
                 for (shown, (label, ground)) in [(Shown::All, all)].into_iter().chain(major.map(|m| (Shown::Major, m))) {
-                    if m == 0 && Chunk::of(chunk.z(), &ground.mid()).column() != chunk.named().column() {
+                    if m == 0 && Chunk::holding(chunk.zoom(), &ground.mid()).column() != chunk.named().column() {
                         continue;
                     }
                     // Counted only by the chunk the top of what stands there is in, so a
                     // column's several chunks do not repeat it.
-                    let Some(top) = top_at(&ground.mid(), chunk.z()) else { continue };
+                    let Some(top) = top_at(&ground.mid(), chunk.tile_zoom()) else { continue };
                     if top - 1.0 < h0 || top - 1.0 >= h1 {
                         continue;
                     }
-                    found.push((POI_LATTICE.cell_of(chunk.z(), &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
+                    found.push((POI_LATTICE.cell_of(chunk.tile_zoom(), &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
                 }
             }
         }
@@ -161,7 +160,7 @@ pub fn step(ctx: &mut TickContext) {
         }
         let Some(width) = badge::width(label) else { continue };
         let center = stands.center(top);
-        let local = crate::world::frame::coord::canonical_to_local(&center, origin);
+        let local = crate::world::frame::coord::to_world(&center);
         p.batch.push(local[0], local[1], local[2], width, badge::ANCHOR, labeled.len() as f64);
         labeled.push((label, center));
     }
@@ -186,9 +185,11 @@ pub fn step(ctx: &mut TickContext) {
     p.hits.extend(p.drawn.iter().rev().map(|&i| (p.batch.screen[i as usize], labeled[i as usize].0, labeled[i as usize].1)));
     let mut instances = core::mem::take(&mut p.instances);
     instances.clear();
+    // f32 instances, so about the sea under the eye rather than the world's origin.
+    let about = crate::world::frame::view::sea_under_eye();
     for &i in &p.drawn {
         let i = i as usize;
-        let at = [p.batch.local_x[i], p.batch.local_y[i], p.batch.local_z[i]];
+        let at = [p.batch.local_x[i] - about[0], p.batch.local_y[i] - about[1], p.batch.local_z[i] - about[2]];
         instances.extend_from_slice(&billboard_instance(
             at,
             [p.batch.w_px[i] as f64, badge::HEIGHT],
@@ -198,7 +199,7 @@ pub fn step(ctx: &mut TickContext) {
     }
     if p.set.is_some() || !instances.is_empty() {
         let set = *p.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Poi));
-        place_billboard_set(set, base);
+        place_billboard_set(set, about);
         write_billboard_set(set, &instances);
         ctx.invalidate();
     }

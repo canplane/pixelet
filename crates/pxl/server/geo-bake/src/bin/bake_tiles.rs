@@ -1,24 +1,24 @@
 // pxl-geo-bake/bin/bake_tiles.rs
 
-//! The terrain bake, in two stages: `leaf` (each page as the dev server bakes
+//! The terrain bake, in two stages: `leaf` (each tile as the dev server bakes
 //! it on demand, terrain/leaf.rs `bake_leaf`; resumable) and `assemble` (the
 //! leaves and the zooms folded above them, no DB).
 //!
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_tiles -- [flags]
 //!
 //!   --stage <s>          leaf or assemble; repeatable (default: both)
-//!   --out <dir>          published pages (default ./out/terrain/v<format>.<UTC day>.<n>, the day's next)
+//!   --out <dir>          published tiles (default ./out/terrain/v<format>.<UTC day>.<n>, the day's next)
 //!   --build <dir>        the stages' artifacts (default ./out/build/terrain)
-//!   --concurrency <n>    parallel pages, one connection each (default 8)
-//!   --limit <n>          stop after n land pages (smoke test)
+//!   --concurrency <n>    parallel tiles, one connection each (default 8)
+//!   --limit <n>          stop after n land tiles (smoke test)
 //!   --force              bake leaves that already exist on disk again, and solve every structure again
-//!   --reclassify         classify again though land_pages.json is current
-//!   --region <quadkey>   bake again only the land pages under it, repeatable; assemble then
-//!                        links --base whole and folds again only what those pages reach
+//!   --reclassify         classify again though land_tiles.json is current
+//!   --region <quadkey>   bake again only the land tiles under it, repeatable; assemble then
+//!                        links --base whole and folds again only what those tiles reach
 //!   --base <dir>         the version a region bake starts from (default the published one)
 //!
-//! A region bake gives its pages what a full bake of the same code gives them;
-//! the pages outside keep the base's. So a region must hold everything the
+//! A region bake gives its tiles what a full bake of the same code gives them;
+//! the tiles outside keep the base's. So a region must hold everything the
 //! change it is baked for reaches: a structure it solves again that runs out of
 //! it meets the base's solve of it at the region's edge.
 
@@ -34,17 +34,17 @@ use std::time::Instant;
 use postgres::Client;
 use pxl_spec::bake::format::{encode_terrain, SNAPSHOT_KEY};
 use pxl_spec::bake::published::{FORMAT, PUBLISHED_VERSION};
-use pxl_spec::bake::quadkey::{page_name, page_of_name};
+use pxl_spec::bake::quadkey::{tile_name, tile_of_name};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{Page, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{Tile, LEAF_Z, TOP_Z};
 
 use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::{self, Coverage, Overture};
 use pxl_geo_bake::deck;
 use pxl_geo_bake::elevation::Raster;
-use pxl_geo_bake::pyramid::{build, refold, write_manifest, PageSet};
+use pxl_geo_bake::pyramid::{build, refold, write_manifest, TileSet};
 use pxl_geo_bake::terrain::absent::Absence;
-use pxl_geo_bake::terrain::leaf::{self, bake_leaf, has_ground, land_pages, write_land_pages};
+use pxl_geo_bake::terrain::leaf::{self, bake_leaf, has_ground, land_tiles, write_land_tiles};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, next_version, pack, refuse_mixed, Level};
 
@@ -64,13 +64,13 @@ struct Args {
     limit: Option<usize>,
     force: bool,
     reclassify: bool,
-    regions: Vec<Page>,
+    regions: Vec<Tile>,
     base: Option<PathBuf>,
 }
 
 impl Args {
-    fn in_region(&self, page: IVec) -> bool {
-        self.regions.iter().any(|r| Page::over(r.z, page) == *r)
+    fn in_region(&self, tile: IVec) -> bool {
+        self.regions.iter().any(|r| Tile::over(r.zoom, tile) == *r)
     }
 }
 
@@ -103,7 +103,7 @@ fn parse_args() -> Result<Args, String> {
             "--reclassify" => args.reclassify = true,
             "--region" => {
                 let key = flags.value()?;
-                args.regions.push(page_of_name(&key).ok_or(format!("--region {key}: not a page's quadkey"))?);
+                args.regions.push(tile_of_name(&key).ok_or(format!("--region {key}: not a tile's quadkey"))?);
             }
             "--base" => args.base = Some(PathBuf::from(flags.value()?)),
             other => return Err(format!("unknown flag: {other}")),
@@ -138,12 +138,12 @@ fn read_source_catalogs(client: &mut Client, source: &Overture) -> serde_json::V
     serde_json::json!({ "overture": source.manifest(), "elevation_catalog": elevation })
 }
 
-fn classify_land_pages(client: &mut Client, candidates: &[IVec]) -> Result<Vec<IVec>, postgres::Error> {
+fn classify_land_tiles(client: &mut Client, candidates: &[IVec]) -> Result<Vec<IVec>, postgres::Error> {
     let mut land: Vec<IVec> = Vec::new();
     for (at, batch) in candidates.chunks(CLASSIFY_BATCH).enumerate() {
-        for (&page, touches) in batch.iter().zip(has_ground(client, batch)?) {
+        for (&tile, touches) in batch.iter().zip(has_ground(client, batch)?) {
             if touches {
-                land.push(page);
+                land.push(tile);
             }
         }
         let done = (at * CLASSIFY_BATCH + batch.len()).min(candidates.len());
@@ -161,7 +161,7 @@ struct Totals {
     flat_ele: u64,
 }
 
-fn over_pages<W>(what: &str, pages: &[IVec], workers: usize, open: impl Fn() -> Result<W, String> + Sync, each: impl Fn(&mut W, IVec) -> Result<Option<u64>, String> + Sync) -> Totals {
+fn over_tiles<W>(what: &str, tiles: &[IVec], workers: usize, open: impl Fn() -> Result<W, String> + Sync, each: impl Fn(&mut W, IVec) -> Result<Option<u64>, String> + Sync) -> Totals {
     let next = AtomicUsize::new(0);
     let totals = Mutex::new(Totals::default());
     let started = Instant::now();
@@ -174,8 +174,8 @@ fn over_pages<W>(what: &str, pages: &[IVec], workers: usize, open: impl Fn() -> 
                 };
                 loop {
                     let i = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(&page) = pages.get(i) else { break };
-                    let result = each(&mut w, page);
+                    let Some(&tile) = tiles.get(i) else { break };
+                    let result = each(&mut w, tile);
                     let mut t = totals.lock().expect("totals");
                     match result {
                         Ok(Some(bytes)) => {
@@ -185,20 +185,20 @@ fn over_pages<W>(what: &str, pages: &[IVec], workers: usize, open: impl Fn() -> 
                         Ok(None) => t.skipped += 1,
                         Err(err) => {
                             t.failed += 1;
-                            eprintln!("[bake/{what}/{}] failed: {err}", ivec::repr(page));
+                            eprintln!("[bake/{what}/{}] failed: {err}", ivec::repr(tile));
                         }
                     }
                     let n = t.done + t.skipped + t.failed;
                     if n.is_multiple_of(1000) {
                         let rate = started.elapsed().as_secs_f64() * 1000.0 / t.done.max(1) as f64;
                         println!(
-                            "[bake/{what}] {n}/{} done={} skipped={} failed={} {} {rate:.0}ms/page eta={}",
-                            pages.len(),
+                            "[bake/{what}] {n}/{} done={} skipped={} failed={} {} {rate:.0}ms/tile eta={}",
+                            tiles.len(),
                             t.done,
                             t.skipped,
                             t.failed,
                             fmt_bytes(t.bytes as f64),
-                            fmt_dur(rate * (pages.len() as u64 - n) as f64)
+                            fmt_dur(rate * (tiles.len() as u64 - n) as f64)
                         );
                     }
                 }
@@ -228,7 +228,7 @@ fn connect(source: &Overture, raster: &Arc<Raster>) -> Result<Db, String> {
     Ok(Db { client, repo })
 }
 
-/// A band's pages row by row, each row the way the last one ended.
+/// A band's tiles row by row, each row the way the last one ended.
 fn zigzag(band: &[IVec]) -> Vec<IVec> {
     let mut out = Vec::with_capacity(band.len());
     for (k, row) in band.chunk_by(|a, b| ivec::Y(*a) == ivec::Y(*b)).enumerate() {
@@ -265,11 +265,11 @@ fn link_tree(from: &Path, to: &Path) -> Result<(), String> {
 }
 
 /// What `tiles` writes and removes over the full version `full`, by quadkey:
-/// a page linked from it is the same file, and any other one is checked by content.
-fn snapshot_over(full: &PageSet, tiles: &PageSet) -> Result<(Vec<String>, Vec<String>), String> {
+/// a tile linked from it is the same file, and any other one is checked by content.
+fn snapshot_over(full: &TileSet, tiles: &TileSet) -> Result<(Vec<String>, Vec<String>), String> {
     let (mut written, mut removed) = (Vec::new(), Vec::new());
-    for z in TOP_Z..=GROUND_Z {
-        let here: HashSet<Page> = tiles.pages(z)?.into_iter().collect();
+    for zoom in TOP_Z..=LEAF_Z {
+        let here: HashSet<Tile> = tiles.tiles(zoom)?.into_iter().collect();
         for &p in &here {
             let (a, b) = (full.path(p), tiles.path(p));
             let same = match (fs::metadata(&a), fs::metadata(&b)) {
@@ -277,22 +277,22 @@ fn snapshot_over(full: &PageSet, tiles: &PageSet) -> Result<(Vec<String>, Vec<St
                 _ => false,
             };
             if !same {
-                written.push(page_name(p).to_string());
+                written.push(tile_name(p).to_string());
             }
         }
-        removed.extend(full.pages(z)?.into_iter().filter(|p| !here.contains(p)).map(|p| page_name(p).to_string()));
+        removed.extend(full.tiles(zoom)?.into_iter().filter(|p| !here.contains(p)).map(|p| tile_name(p).to_string()));
     }
     Ok((written, removed))
 }
 
 /// A region over a base: the base linked whole, the region's leaves in its
 /// leaves' place where they differ, and what those reach folded again.
-fn assemble_region(args: &Args, leaves: &PageSet, land: &[IVec], leaf: &serde_json::Value, built: Option<&str>) -> Result<(), String> {
-    let base = PageSet::new(args.base.clone().unwrap_or_else(|| Path::new("./out/terrain").join(PUBLISHED_VERSION.terrain)));
+fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_json::Value, built: Option<&str>) -> Result<(), String> {
+    let base = TileSet::new(args.base.clone().unwrap_or_else(|| Path::new("./out/terrain").join(PUBLISHED_VERSION.terrain)));
     if !base.root.is_dir() {
         return Err(format!("{}: no base to bake a region over; name one with --base", base.root.display()));
     }
-    let tiles = PageSet::new(args.out.clone().unwrap_or_else(|| next_version("./out/terrain", FORMAT.terrain)));
+    let tiles = TileSet::new(args.out.clone().unwrap_or_else(|| next_version("./out/terrain", FORMAT.terrain)));
     if tiles.root.exists() {
         fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
     }
@@ -300,14 +300,14 @@ fn assemble_region(args: &Args, leaves: &PageSet, land: &[IVec], leaf: &serde_js
 
     let region_land: HashSet<IVec> = land.iter().copied().filter(|&p| args.in_region(p)).collect();
     let mut changed = HashSet::new();
-    for at in base.pages(GROUND_Z)? {
-        if args.in_region(at.page) && !region_land.contains(&at.page) {
+    for at in base.tiles(LEAF_Z)? {
+        if args.in_region(at.tile) && !region_land.contains(&at.tile) {
             tiles.remove(at)?;
             changed.insert(at);
         }
     }
-    for &page in &region_land {
-        let at = Page::new(GROUND_Z, page);
+    for &tile in &region_land {
+        let at = Tile::new(LEAF_Z, tile);
         let fresh = leaves.content(at)?.ok_or_else(|| format!("{}: run --stage leaf with the region", leaves.path(at).display()))?;
         if base.content(at)?.as_deref() == Some(fresh.as_slice()) {
             continue;
@@ -318,13 +318,13 @@ fn assemble_region(args: &Args, leaves: &PageSet, land: &[IVec], leaf: &serde_js
     }
     let leaves_changed = changed.len();
     let folded = refold(&tiles, changed, &Absence::new(Coverage::of_source()?))?;
-    println!("[bake/region] {leaves_changed} leaves changed, {folded} pages above folded again -> {}", tiles.root.display());
+    println!("[bake/region] {leaves_changed} leaves changed, {folded} tiles above folded again -> {}", tiles.root.display());
 
     // Uploaded, the version is its changes over one full version, never over
     // another partial one: a base that is partial lends its own full base, and
     // its changes come along as this version's.
     let base_snapshot = read_json(&base.root.join(SNAPSHOT_KEY));
-    let full = PageSet::new(match base_snapshot["base"].as_str() {
+    let full = TileSet::new(match base_snapshot["base"].as_str() {
         Some(b) => base.root.parent().unwrap_or(Path::new(".")).join(b),
         None => base.root.clone(),
     });
@@ -339,7 +339,7 @@ fn assemble_region(args: &Args, leaves: &PageSet, land: &[IVec], leaf: &serde_js
     write_json(&snapshot, &serde_json::json!({ "base": full_name, "written": written, "removed": removed }))?;
     println!("[bake/region] over {}: {} written, {} removed", full.root.display(), written.len(), removed.len());
 
-    let top = (TOP_Z..GROUND_Z).rev().take_while(|&z| tiles.zoom_dir(z).exists()).last().unwrap_or(GROUND_Z);
+    let top = (TOP_Z..LEAF_Z).rev().take_while(|&z| tiles.zoom_dir(z).exists()).last().unwrap_or(LEAF_Z);
     let base_name = base.root.file_name().map(|n| n.to_string_lossy().to_string());
     // The kind's one manifest describes the last bake, which is the base only if it says so.
     let mut fields = read_json(&base.root.join("../manifest.json"));
@@ -363,9 +363,9 @@ fn assemble_region(args: &Args, leaves: &PageSet, land: &[IVec], leaf: &serde_js
 fn run() -> Result<(), String> {
     let built = git_sha();
     let args = parse_args()?;
-    let leaves = PageSet::new(args.build.join("leaf"));
+    let leaves = TileSet::new(args.build.join("leaf"));
     let coverage = Coverage::of_source()?;
-    let land_cache = args.out.as_deref().and_then(Path::parent).unwrap_or(Path::new("./out/terrain")).join("land_pages.json");
+    let land_cache = args.out.as_deref().and_then(Path::parent).unwrap_or(Path::new("./out/terrain")).join("land_tiles.json");
     let (source, mut checked) = match args.stages.iter().any(|&s| s != Stage::Assemble) {
         true => Overture::reading(&leaf::READS).map(|(s, c)| (Some(s), Some(c)))?,
         false => (None, None),
@@ -378,9 +378,9 @@ fn run() -> Result<(), String> {
             None => source.connect()?,
         };
         let raster = Arc::new(Raster::open(&mut client).map_err(|e| e.to_string())?);
-        let candidates = coverage.pages();
+        let candidates = coverage.tiles();
         println!(
-            "[bake] page grid x[{}..{}] y[{}..{}] = {} candidate pages",
+            "[bake] tile grid x[{}..{}] y[{}..{}] = {} candidate tiles",
             coverage.x.0,
             coverage.x.1,
             coverage.y.0,
@@ -391,18 +391,18 @@ fn run() -> Result<(), String> {
         let cached = if args.reclassify {
             Err("--reclassify".to_string())
         } else {
-            land_pages(&land_cache, &coverage, Some(&source.release))
+            land_tiles(&land_cache, &coverage, Some(&source.release))
         };
         let land: Vec<IVec> = match cached {
             Ok(land) => {
-                println!("[bake/classify] reusing cached list: {} land pages ({})", land.len(), land_cache.display());
+                println!("[bake/classify] reusing cached list: {} land tiles ({})", land.len(), land_cache.display());
                 land
             }
             Err(why) => {
                 println!("[bake/classify] classifying: {why}");
-                let land = classify_land_pages(&mut client, &candidates).map_err(|e| e.to_string())?;
+                let land = classify_land_tiles(&mut client, &candidates).map_err(|e| e.to_string())?;
                 fs::create_dir_all(land_cache.parent().unwrap_or(Path::new("."))).map_err(|e| e.to_string())?;
-                write_land_pages(&land_cache, &coverage, &source.release, &land)?;
+                write_land_tiles(&land_cache, &coverage, &source.release, &land)?;
                 println!("[bake/classify] done: land={} ocean={} -> {}", land.len(), candidates.len() - land.len(), land_cache.display());
                 land
             }
@@ -411,14 +411,14 @@ fn run() -> Result<(), String> {
             true => land[..args.limit.map_or(land.len(), |n| n.min(land.len()))].to_vec(),
             false => land.iter().copied().filter(|&p| args.in_region(p)).collect(),
         };
-        // A region's pages are baked again whatever is on disk, by the code that changed.
+        // A region's tiles are baked again whatever is on disk, by the code that changed.
         let fresh = args.force || !args.regions.is_empty();
-        fs::create_dir_all(leaves.zoom_dir(GROUND_Z)).map_err(|e| e.to_string())?;
+        fs::create_dir_all(leaves.zoom_dir(LEAF_Z)).map_err(|e| e.to_string())?;
         if !fresh {
-            refuse_mixed(&leaves.zoom_dir(GROUND_Z))?;
+            refuse_mixed(&leaves.zoom_dir(LEAF_Z))?;
         }
-        // Each worker walks its own band of rows, zigzag, so a page's eight
-        // around it were mostly read for the page before.
+        // Each worker walks its own band of rows, zigzag, so a tile's eight
+        // around it were mostly read for the tile before.
         let mut rows: Vec<IVec> = targets.to_vec();
         rows.sort_unstable_by_key(|&p| (ivec::Y(p), ivec::X(p)));
         let band = rows.len().div_ceil(args.concurrency.max(1)).max(1);
@@ -434,9 +434,9 @@ fn run() -> Result<(), String> {
                         Err(err) => return eprintln!("[bake/leaf] worker failed to start: {err}"),
                     };
                     let mut held = deck::source::Walk::default();
-                    for &page in walk {
-                        held.keep_around(page);
-                        let at = Page::new(GROUND_Z, page);
+                    for &tile in walk {
+                        held.keep_around(tile);
+                        let at = Tile::new(LEAF_Z, tile);
                         let mut flat = false;
                         let baked = (|| -> Result<Option<u64>, String> {
                             if !fresh && leaves.path(at).exists() {
@@ -448,7 +448,7 @@ fn run() -> Result<(), String> {
                                     repo: &db.repo,
                                     store: &mut held,
                                 },
-                                page,
+                                tile,
                             )?;
                             flat = off_raster;
                             let packed = pack(&encode_terrain(&terrain).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
@@ -462,7 +462,7 @@ fn run() -> Result<(), String> {
                             Ok(None) => t.skipped += 1,
                             Err(err) => {
                                 t.failed += 1;
-                                eprintln!("[bake/leaf/{}] failed: {err}", ivec::repr(page));
+                                eprintln!("[bake/leaf/{}] failed: {err}", ivec::repr(tile));
                             }
                         }
                         let n = t.done + t.skipped + t.failed;
@@ -476,12 +476,12 @@ fn run() -> Result<(), String> {
         let t = totals.into_inner().expect("totals");
         println!("[bake/leaf] done: done={} skipped={} failed={} {}", t.done, t.skipped, t.failed, fmt_bytes(t.bytes as f64));
         if t.failed > 0 {
-            return Err(format!("{} pages failed", t.failed));
+            return Err(format!("{} tiles failed", t.failed));
         }
-        // A degraded page never shows up in `failed`, so report it here.
+        // A degraded tile never shows up in `failed`, so report it here.
         if t.flat_ele > 0 {
             eprintln!(
-                "[bake/leaf] WARNING: {} pages are out of the elevation raster's reach and were baked FLAT (zero-filled elevation).",
+                "[bake/leaf] WARNING: {} tiles are out of the elevation raster's reach and were baked FLAT (zero-filled elevation).",
                 t.flat_ele
             );
         }
@@ -489,15 +489,15 @@ fn run() -> Result<(), String> {
             &args.build.join("leaf.json"),
             &serde_json::json!({
                 "git_sha": built,
-                "land_pages": land.len(),
+                "land_tiles": land.len(),
                 "release": source.release,
-                "regions": args.regions.iter().map(|&r| page_name(r).to_string()).collect::<Vec<_>>(),
+                "regions": args.regions.iter().map(|&r| tile_name(r).to_string()).collect::<Vec<_>>(),
                 "source": read_source_catalogs(&mut client, source),
             }),
         )?;
     }
 
-    let land = land_pages(&land_cache, &coverage, source.as_ref().map(|s| s.release.as_str()))?;
+    let land = land_tiles(&land_cache, &coverage, source.as_ref().map(|s| s.release.as_str()))?;
     let targets = &land[..args.limit.map_or(land.len(), |n| n.min(land.len()))];
 
     if args.stages.contains(&Stage::Assemble) {
@@ -506,25 +506,25 @@ fn run() -> Result<(), String> {
         if !args.regions.is_empty() {
             return assemble_region(&args, &leaves, &land, &leaf, built.as_deref());
         }
-        let tiles = PageSet::new(args.out.clone().unwrap_or_else(|| next_version("./out/terrain", FORMAT.terrain)));
+        let tiles = TileSet::new(args.out.clone().unwrap_or_else(|| next_version("./out/terrain", FORMAT.terrain)));
         if tiles.root.exists() {
             fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
         }
-        fs::create_dir_all(tiles.zoom_dir(GROUND_Z)).map_err(|e| e.to_string())?;
+        fs::create_dir_all(tiles.zoom_dir(LEAF_Z)).map_err(|e| e.to_string())?;
 
-        let t = over_pages(
+        let t = over_tiles(
             "assemble",
             targets,
             args.concurrency,
             || Ok(()),
-            |_, page| {
-                let (from, to) = (leaves.path(Page::new(GROUND_Z, page)), tiles.path(Page::new(GROUND_Z, page)));
+            |_, tile| {
+                let (from, to) = (leaves.path(Tile::new(LEAF_Z, tile)), tiles.path(Tile::new(LEAF_Z, tile)));
                 fs::hard_link(&from, &to).map_err(|e| format!("{}: {e}: run --stage leaf", from.display()))?;
                 Ok(Some(fs::metadata(&to).map_err(|e| e.to_string())?.len()))
             },
         );
         if t.failed > 0 {
-            return Err(format!("{} pages failed to assemble", t.failed));
+            return Err(format!("{} tiles failed to assemble", t.failed));
         }
 
         let top = build(&tiles, &Absence::new(coverage.clone()), args.concurrency)?;
@@ -535,8 +535,8 @@ fn run() -> Result<(), String> {
             serde_json::json!({
                 "bbox_4326": coverage::source_bbox()?,
                 "ingest_bbox": coverage.ingest_bbox(),
-                "candidate_pages": coverage.pages().len(),
-                "land_pages": land.len(),
+                "candidate_pages": coverage.tiles().len(),
+                "land_tiles": land.len(),
                 "release": release,
                 "source": leaf["source"],
                 "built": { "leaf_git_sha": leaf["git_sha"] },

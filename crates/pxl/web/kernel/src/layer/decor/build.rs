@@ -5,13 +5,13 @@
 //! candidate out at build time.
 
 use pxl_render::gpu::api::word_bytes;
-use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
-use pxl_render::mesh::voxel_scan::apron_col;
-use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
+use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, TileView};
+use pxl_render::mesh::run::apron_col;
+use pxl_spec::bake::constant::{unpack_pos, CELL, U_PER_CELL};
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, GROUND_Z};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, LEAF_Z};
 use pxl_spec::space::v3::Aabb;
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
@@ -24,11 +24,10 @@ use crate::layer::object::store::{At, EntryAt, Store, AIR};
 use crate::world::access::Access;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::asset::ingested::Asset;
-use pxl_spec::bake::constant::CELL;
 use pxl_spec::bake::deck::Decks;
-use pxl_spec::bake::format::GroundCell;
-use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::format::{GroundCell, Terrain};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::zoom::{count, index, index_of, units, Zoom};
 use xpute_core::math::scalar::round;
 
 /// A kind is drawn as a model while it covers at least two of a tier's cells
@@ -91,15 +90,15 @@ pub struct DecorBuild<'s> {
 }
 
 pub struct Ground<'a> {
-    pub page: &'a PageView<'a>,
+    pub tile: &'a TileView<'a>,
     pub sample: &'a ChunkSample,
-    pub z: u32,
+    pub zoom: Zoom,
     pub x0: i64,
     pub y0: i64,
     pub tx0: u32,
     pub ty0: u32,
-    /// At z16, the column whose placed objects keep a candidate off their cell.
-    /// Above z16 the objects are read folded instead.
+    /// On the leaves, the column whose placed objects keep a candidate off their cell.
+    /// Above the leaves the objects are read folded instead.
     pub col_idx: Option<IVec>,
     pub folded: Option<&'a HashMap<[i64; 3], u32>>,
 }
@@ -110,7 +109,7 @@ pub struct Placed {
     pub ox: f64,
     pub oy: f64,
     /// A coarser cell draws several columns' decor and names none of their
-    /// entries, so only a z16 cell's placed instances are hittable.
+    /// entries, so only a leaf cell's placed instances are hittable.
     pub hittable: bool,
 }
 
@@ -139,10 +138,10 @@ pub struct Draw {
     pub scale: f64,
 }
 
-/// What `candidate` draws in the page's cell `page_at`: none off the kind's
+/// What `candidate` draws in the tile's cell `tile_at`: none off the kind's
 /// ground or under a line.
-pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Decks, page_at: [u32; 2]) -> Option<Draw> {
-    let [cell_x, cell_y] = page_at;
+pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Decks, tile_at: [u32; 2]) -> Option<Draw> {
+    let [cell_x, cell_y] = tile_at;
     if !kind.rules.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
         return None;
     }
@@ -162,16 +161,16 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
     Some(Draw { gx, gy, variant, rotation, scale })
 }
 
-/// What the z16 scatter stands of `value` in the cell `at` lies in, with
-/// nothing written there. None where the page is not resident.
+/// What the leaf scatter stands of `value` in the cell `at` lies in, with
+/// nothing written there. None where the tile is not resident.
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let kind = KINDS.iter().find(|k| k.decor_value() == Some(value))?;
-    let z16 = GROUND.cell_of(GROUND_Z, at);
-    let page = Terrain::pyramid().paging().get(z16.page())?;
-    let ground = Access::now().at(at, GROUND_Z).exact()?;
-    let [ix, iy, iz] = CELL.index_of(at);
+    let leaf = GROUND.cell_of(LEAF_Z, at);
+    let tile = Terrain::pyramid().residency().get(leaf.tile())?;
+    let ground = Access::now().at(at, LEAF_Z).exact()?;
+    let [ix, iy, iz] = index_of(CELL, at);
     let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;
-    (ground.top().map(|top| round(top / CELL.side()) as i64) == Some(iz)).then(|| draw(kind, candidate, &page.ground.cells, &page.decks, z16.in_page()))?
+    (ground.top().map(|top| round(top / units(CELL)) as i64) == Some(iz)).then(|| draw(kind, candidate, &tile.ground.cells, &tile.decks, leaf.in_tile()))?
 }
 
 impl<'s> DecorBuild<'s> {
@@ -224,8 +223,8 @@ impl<'s> DecorBuild<'s> {
                 continue;
             }
             let pos = poss[k];
-            let (x, y, z, scale) = unpack_pos(pos);
-            let size = scale.side();
+            let (x, y, z, cell_zoom) = unpack_pos(pos);
+            let size = units(cell_zoom);
             let at = At {
                 col_idx: column.col_idx,
                 band: bands[k],
@@ -257,17 +256,17 @@ impl<'s> DecorBuild<'s> {
     }
 
     /// Whether a kind may stand on a cell, and its transport alignment, are read
-    /// off the zoom's own cells: a tree coarser than z16 stands on the grass the view
-    /// sees, not on z16 cells it cannot.
+    /// off the zoom's own cells: a tree coarser than a leaf's stands on the grass the view
+    /// sees, not on leaf cells it cannot.
     fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
-        let (cells, lines) = (ground.page.cells, ground.page.decks);
-        let (own, atom) = (GROUND.side_at(ground.z), GROUND.side_at(GROUND_Z));
-        let (lx0, ly0) = (own.index(ground.x0), own.index(ground.y0));
-        let per = i64::from(atom.count_in(own));
-        let min = [atom.index(ground.x0), atom.index(ground.y0)];
+        let (cells, lines) = (ground.tile.cells, ground.tile.decks);
+        let (own, atom) = (GROUND.cell_zoom(ground.zoom), GROUND.cell_zoom(LEAF_Z));
+        let (lx0, ly0) = (index(own, ground.x0), index(own, ground.y0));
+        let per = i64::from(count(atom, own));
+        let min = [index(atom, ground.x0), index(atom, ground.y0)];
         let span = i64::from(CHUNK_CELLS) * per;
         let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
-        scatter(kind.seed.tag, kind.seed.density, ground.z, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
+        scatter(kind.seed.tag, kind.seed.density, ground.zoom, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
         for i in 0..scratch.candidates.len() {
             let candidate = scratch.candidates[i];
             let (dx, dy) = ((candidate.cell[0] - min[0]).div_euclid(per) as u32, (candidate.cell[1] - min[1]).div_euclid(per) as u32);
@@ -275,7 +274,7 @@ impl<'s> DecorBuild<'s> {
                 continue;
             };
             let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;
-            let at = [(gx as f64 + 0.5) * atom.side(), (gy as f64 + 0.5) * atom.side(), f64::from(ele)];
+            let at = [(gx as f64 + 0.5) * units(atom), (gy as f64 + 0.5) * units(atom), f64::from(ele)];
             // In the chunk holding the cell it stands on.
             if !((0..2).all(|k| (chunk.min[k]..chunk.max[k]).contains(&at[k])) && chunk.min[2] < at[2] && at[2] <= chunk.max[2]) {
                 continue;
@@ -284,12 +283,12 @@ impl<'s> DecorBuild<'s> {
             if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some()) {
                 continue;
             }
-            let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, own.index(ele as i64)]).is_some_and(|&s| s != AIR);
+            let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, index(own, ele as i64)]).is_some_and(|&s| s != AIR);
             if ground.folded.is_some_and(filled) {
                 continue;
             }
             let [x, y, z] = [at[0] - chunk.min[0], at[1] - chunk.min[1], at[2]];
-            let hidden = ground.z == GROUND_Z && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
+            let hidden = ground.zoom == LEAF_Z && hide == Some(DecorHide::Scattered([gx, gy, i64::from(ele)]));
             scratch.push(
                 first + variant as usize,
                 Instance {

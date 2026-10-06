@@ -76,16 +76,16 @@ fn epsg3857_project_pvf3_x_subtraction_takes_the_short_antimeridian_path() {
 }
 
 #[test]
-fn epsg3857_page_bbox_preserves_the_exclusive_positive_world_boundary() {
-    // The last page before X's positive edge at 2^23 units.
-    let last = (1i64 << 23) / crate::space::indexer::L3_RANGE as i64 - 1;
-    let page_idx = ivec::gather(last, last, 0);
-    let [_, max] = get_page_bbox(page_idx);
+fn epsg3857_tile_bbox_preserves_the_exclusive_positive_world_boundary() {
+    // The last tile before X's positive edge at 2^23 units.
+    let last = (1i64 << 23) / crate::space::zoom::units(crate::space::pyramid::LEAF_Z) as i64 - 1;
+    let tile_idx = ivec::gather(last, last, 0);
+    let [_, max] = get_tile_bbox(tile_idx);
 
     assert_almost(max[0], half_world(), 1e-8);
     assert_almost(max[1], half_world(), 1e-8);
 
-    let [_, max_geodetic] = epsg4326::get_page_bbox(page_idx);
+    let [_, max_geodetic] = epsg4326::get_tile_bbox(tile_idx);
     assert_almost(max_geodetic[0], 180.0, 1e-10);
 }
 

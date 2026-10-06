@@ -11,7 +11,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 ## P0
 
 - **How the samples are drawn.** On the iPhone 13 mini, four shapes over the
-  same pages and views: today's boxes, the same as masked faces, a ray a
+  same tiles and views: today's boxes, the same as masked faces, a ray a
   pixel, and a bounded observation a cell — what the rule asks for, a cell
   being an angular footprint and not a sample point. The steps a cast pays
   are measured already, and where on the screen they lie
@@ -20,6 +20,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
+- **POI and reverse geocode are off.** The client leaves their roots
+  unbound (`apps/web/src/kernel/boot.ts` `OFF`) while the terrain moves to
+  Carto, Arnis and the zooms, one problem at a time; their tiles'
+  names did not change (decision/20261006-a-zoom-names-a-page-grid.md), so
+  turning them back on is checking them against the new terrain.
 - **POI and reverse geocode follow Carto.** The ground is Carto's looks
   (decision/20261005-the-ground-is-a-carto-palette.md); a place's icon and
   its kind's label are still Overture's taxonomy as the search list names it

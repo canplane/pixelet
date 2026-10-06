@@ -1,16 +1,16 @@
-// pxl-spec/bake/poi_page.test.rs
+// pxl-spec/bake/poi_tile.test.rs
 
 use super::*;
 use crate::space::pvf3::ivec;
 
-fn leaf() -> Page {
-    Page::new(GROUND_Z, ivec::gather(3, -2, 0))
+fn leaf() -> Tile {
+    Tile::new(LEAF_Z, ivec::gather(3, -2, 0))
 }
 
-/// The corner of POI cell (tx, ty), then `dx`, `dy` z16 cells in.
+/// The corner of POI cell (tx, ty), then `dx`, `dy` leaf cells in.
 fn point(tx: u32, ty: u32, dx: u32, dy: u32) -> Pvf3 {
     let base = POI_LATTICE.cell_base(leaf(), tx, ty);
-    POI_LATTICE.cell_of(GROUND_Z, &base).inner_at(GROUND, GROUND_Z, [dx, dy]).mid()
+    POI_LATTICE.cell_of(LEAF_Z, &base).inner_at(GROUND, LEAF_Z, [dx, dy]).mid()
 }
 
 fn called<'a>(name: &'a str, id: &'a str) -> Place<'a> {
@@ -20,20 +20,20 @@ fn called<'a>(name: &'a str, id: &'a str) -> Place<'a> {
 /// A cell's count and its places as (name, where it stands).
 type Cell<'a> = (u32, Vec<(&'a str, [u32; 2])>);
 
-fn cells(page: &PoiPage) -> Vec<Cell<'_>> {
-    page.cells.iter().map(|c| (c.count, page.shown(c).map(|(_, p, at)| (p.name, at)).collect())).collect()
+fn cells(tile: &PoiTile) -> Vec<Cell<'_>> {
+    tile.cells.iter().map(|c| (c.count, tile.shown(c).map(|(_, p, at)| (p.name, at)).collect())).collect()
 }
 
 #[test]
-fn a_page_and_its_places_come_back_as_they_went() {
+fn a_tile_and_its_places_come_back_as_they_went() {
     let station = Place {
         name: "Seoul Station",
         kind: kind_of("subway"),
         id: "7",
         ..Place::default()
     };
-    let page = PoiPage::of_places(
-        GROUND_Z,
+    let tile = PoiTile::of_places(
+        LEAF_Z,
         [
             (point(1, 0, 1, 2), station),
             (point(2, 0, 0, 0), called("서울역", "3")),
@@ -52,11 +52,11 @@ fn a_page_and_its_places_come_back_as_they_went() {
         ],
         true,
     );
-    assert_eq!(decode(&encode(&page).unwrap()).unwrap(), page);
+    assert_eq!(decode(&encode(&tile).unwrap()).unwrap(), tile);
     // Held once across cells; least id per kind; nameless counted not held.
-    assert_eq!(page.places.len(), 3);
+    assert_eq!(tile.places.len(), 3);
     assert_eq!(
-        cells(&page),
+        cells(&tile),
         [
             (1, vec![("Seoul Station", [1, 2])]),
             (2, vec![("서울역", [0, 0])]),
@@ -67,49 +67,49 @@ fn a_page_and_its_places_come_back_as_they_went() {
     );
 }
 
-/// A lone place stays its cell's at every zoom, on the same z16 cell.
+/// A lone place stays its cell's at every zoom, on the same leaf cell.
 #[test]
 fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     let at = point(5, 4, 3, 1);
-    let ground = GROUND.cell_of(GROUND_Z, &at);
-    let empty = PoiPage::default();
+    let ground = GROUND.cell_of(LEAF_Z, &at);
+    let empty = PoiTile::default();
     let tower = Place {
         name: "Namsan Tower",
         kind: kind_of("attraction"),
         id: "11",
         ..Place::default()
     };
-    let mut below = (leaf(), PoiPage::of_places(GROUND_Z, [(at, tower)], true));
-    for z in (TOP_Z..GROUND_Z).rev() {
-        let p = Page::over(z, below.0.page);
-        let up = PoiPage::fold_page(p, |k| Some(if k == below.0 { &below.1 } else { &empty })).unwrap();
+    let mut below = (leaf(), PoiTile::of_places(LEAF_Z, [(at, tower)], true));
+    for zoom in (TOP_Z..LEAF_Z).rev() {
+        let p = Tile::over(zoom, below.0.tile);
+        let up = PoiTile::fold_tile(p, |k| Some(if k == below.0 { &below.1 } else { &empty })).unwrap();
         assert_eq!(up.cells.len(), 1);
         let c = up.cells[0];
         let (_, place, at) = up.shown(&c).next().unwrap();
         assert_eq!(place, tower);
-        assert_eq!(POI_LATTICE.cell_at(p, c.cell).inner_at(GROUND, GROUND_Z, at), ground, "z{z}");
+        assert_eq!(POI_LATTICE.cell_at(p, c.cell).inner_at(GROUND, LEAF_Z, at), ground, "z{zoom}");
         below = (p, up);
     }
 }
 
 /// Only a crowd comes apart a zoom finer.
 #[test]
-fn a_page_settles_every_child_but_one_under_a_crowd() {
-    let p = Page::over(GROUND_Z - 1, leaf().page);
+fn a_tile_settles_every_child_but_one_under_a_crowd() {
+    let p = Tile::over(LEAF_Z - 1, leaf().tile);
     let [crowd, lone, empty, _] = p.children();
-    let at = |k: Page, dx: u32| POI_LATTICE.cell_of(GROUND_Z, &POI_LATTICE.cell_base(k, 0, 0)).inner_at(GROUND, GROUND_Z, [dx, 0]).mid();
+    let at = |k: Tile, dx: u32| POI_LATTICE.cell_of(LEAF_Z, &POI_LATTICE.cell_base(k, 0, 0)).inner_at(GROUND, LEAF_Z, [dx, 0]).mid();
     let leaves = [
-        (crowd, PoiPage::of_places(GROUND_Z, [(at(crowd, 0), called("A", "1")), (at(crowd, 1), called("B", "2"))], true)),
-        (lone, PoiPage::of_places(GROUND_Z, [(at(lone, 0), called("C", "3"))], true)),
+        (crowd, PoiTile::of_places(LEAF_Z, [(at(crowd, 0), called("A", "1")), (at(crowd, 1), called("B", "2"))], true)),
+        (lone, PoiTile::of_places(LEAF_Z, [(at(lone, 0), called("C", "3"))], true)),
     ];
-    let none = PoiPage::default();
-    let page = PoiPage::fold_page(p, |k| Some(leaves.iter().find(|(q, _)| *q == k).map_or(&none, |(_, page)| page))).unwrap();
-    assert!(!page.settles(p, crowd));
-    assert!(page.settles(p, lone));
-    assert!(page.settles(p, empty));
+    let none = PoiTile::default();
+    let tile = PoiTile::fold_tile(p, |k| Some(leaves.iter().find(|(q, _)| *q == k).map_or(&none, |(_, tile)| tile))).unwrap();
+    assert!(!tile.settles(p, crowd));
+    assert!(tile.settles(p, lone));
+    assert!(tile.settles(p, empty));
 }
 
-/// Folded from the leaves, a crowd matches a page built at that zoom.
+/// Folded from the leaves, a crowd matches a tile built at that zoom.
 #[test]
 fn a_crowd_holds_one_place_of_each_kind() {
     let station = Place {
@@ -125,12 +125,12 @@ fn a_crowd_holds_one_place_of_each_kind() {
         ..Place::default()
     };
     let places = [(point(0, 0, 0, 0), cafe), (point(0, 0, 2, 0), Place { id: "10", ..cafe }), (point(1, 0, 5, 0), station)];
-    let leaf_page = PoiPage::of_places(GROUND_Z, places, true);
-    assert_eq!(cells(&leaf_page), [(2, vec![("Cafe", [2, 0])]), (1, vec![("Gangnam", [5, 0])])]);
-    let p = Page::over(GROUND_Z - 1, leaf().page);
-    let empty = PoiPage::default();
-    let folded = PoiPage::fold_page(p, |k| Some(if k == leaf() { &leaf_page } else { &empty })).unwrap();
-    assert_eq!(folded, PoiPage::of_places(GROUND_Z - 1, places, true));
+    let leaf_tile = PoiTile::of_places(LEAF_Z, places, true);
+    assert_eq!(cells(&leaf_tile), [(2, vec![("Cafe", [2, 0])]), (1, vec![("Gangnam", [5, 0])])]);
+    let p = Tile::over(LEAF_Z - 1, leaf().tile);
+    let empty = PoiTile::default();
+    let folded = PoiTile::fold_tile(p, |k| Some(if k == leaf() { &leaf_tile } else { &empty })).unwrap();
+    assert_eq!(folded, PoiTile::of_places(LEAF_Z - 1, places, true));
     let mut held: Vec<_> = folded.shown(&folded.cells[0]).map(|(_, p, at)| (p.kind, p.id, at)).collect();
     held.sort_unstable();
     assert_eq!(folded.cells[0].count, 3);
@@ -143,9 +143,9 @@ fn a_crowd_holds_one_place_of_each_kind() {
 
 /// What the wire cannot hold is refused.
 #[test]
-fn a_page_that_names_no_place_or_splits_a_character_is_refused() {
-    let page = PoiPage::of_places(
-        GROUND_Z,
+fn a_tile_that_names_no_place_or_splits_a_character_is_refused() {
+    let tile = PoiTile::of_places(
+        LEAF_Z,
         [
             (
                 point(3, 0, 0, 0),
@@ -168,10 +168,10 @@ fn a_page_that_names_no_place_or_splits_a_character_is_refused() {
         ],
         true,
     );
-    let mut past = page.clone();
+    let mut past = tile.clone();
     past.shown[0].place = 9;
     assert!(encode(&past).is_err());
-    let mut swapped = page.clone();
+    let mut swapped = tile.clone();
     swapped.shown.swap(0, 1);
     assert!(encode(&swapped).is_err());
     // A name past the bound, and a place run past its cell, are refused on read.
@@ -180,7 +180,7 @@ fn a_page_that_names_no_place_or_splits_a_character_is_refused() {
     assert!(decode(&lanes(&[1], &[1], &[0, 2], &[0], &[""], &["a"])).is_err());
 }
 
-/// A page as the wire lays it, written lane by lane past `encode`'s checks.
+/// A tile as the wire lays it, written lane by lane past `encode`'s checks.
 fn lanes(cells: &[u32], counts: &[u32], starts: &[u32], shown: &[u32], kinds: &[&str], names: &[&str]) -> Vec<u8> {
     let (partial, at) = (vec![0u8; cells.len()], vec![0u16; 2 * shown.len()]);
     let ids: Vec<&str> = names.iter().map(|_| "x").collect();
@@ -205,9 +205,9 @@ fn what_any_source_gives_comes_back() {
         kind: kind_of("subway"),
         id: "ChIJ3S-JXmauEmsRUcIaWtf4MzE",
     };
-    let page = PoiPage::of_places(GROUND_Z, [(point(1, 0, 0, 0), station)], true);
-    let back = decode(&encode(&page).unwrap()).unwrap();
-    assert_eq!(back, page);
+    let tile = PoiTile::of_places(LEAF_Z, [(point(1, 0, 0, 0), station)], true);
+    let back = decode(&encode(&tile).unwrap()).unwrap();
+    assert_eq!(back, tile);
     assert_eq!(back.places.get(0), station);
     assert_eq!(decode(&lanes(&[1], &[1], &[0, 1], &[0], &["a kind of tomorrow"], &["a"])).unwrap().places.get(0).kind, 0);
 }
@@ -215,13 +215,13 @@ fn what_any_source_gives_comes_back() {
 /// A partial count stays a floor at every zoom over it.
 #[test]
 fn a_floor_stays_a_floor_as_it_folds() {
-    let some = PoiPage::of_places(GROUND_Z, [(point(0, 0, 0, 0), called("A", "1"))], false);
-    let all = PoiPage::of_places(GROUND_Z, [(point(0, 0, 0, 0), called("A", "1"))], true);
+    let some = PoiTile::of_places(LEAF_Z, [(point(0, 0, 0, 0), called("A", "1"))], false);
+    let all = PoiTile::of_places(LEAF_Z, [(point(0, 0, 0, 0), called("A", "1"))], true);
     assert_eq!(decode(&encode(&some).unwrap()).unwrap(), some);
-    let p = Page::over(GROUND_Z - 1, leaf().page);
-    let empty = PoiPage::default();
-    for (leaf_page, partial) in [(&some, true), (&all, false)] {
-        let up = PoiPage::fold_page(p, |k| Some(if k == leaf() { leaf_page } else { &empty })).unwrap();
+    let p = Tile::over(LEAF_Z - 1, leaf().tile);
+    let empty = PoiTile::default();
+    for (leaf_tile, partial) in [(&some, true), (&all, false)] {
+        let up = PoiTile::fold_tile(p, |k| Some(if k == leaf() { leaf_tile } else { &empty })).unwrap();
         assert_eq!(up.cells[0].partial, partial);
         assert_eq!(up.settles(p, leaf()), !partial);
     }

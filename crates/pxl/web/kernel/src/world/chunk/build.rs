@@ -4,47 +4,46 @@
 //! decision about a chunk is the table's (table.rs); this acts on what it asks.
 
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::pyramid::{Page, CHUNK_CELLS, GROUND, GROUND_Z};
+use pxl_spec::space::pyramid::{Tile, CHUNK_DRAWN, GROUND};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::column::{write_column_runs, Stands};
-use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
-use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource, PageView};
-use pxl_render::mesh::volume::Volumes;
-use pxl_render::mesh::voxel_scan::{BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
-use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, CELL, OBJECT_FINEST};
-use pxl_spec::space::indexer::L2_IDX;
+use pxl_render::mesh::paint::object::adapter::Painter;
+use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, TileSource, TileView};
+use pxl_render::mesh::run::{RunSet, RunWriter, APRON, COL_SPAN};
+use pxl_spec::bake::constant::{unpack_pos, EntryAt, BAND, CELL};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use std::collections::{HashMap, TryReserveError};
+use std::collections::HashMap;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 
 use crate::layer::marker::hover_cursor::render_edits;
-use crate::layer::object::store::{object_col_revision, Store};
+use crate::layer::object::store::{At, Store, AIR};
 use crate::mem::fixed::{at, Range};
 use crate::shell::setting::store::settings_store;
-use pxl_spec::bake::constant::BAND_CELLS;
 
 use crate::world::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES, OCCUPANCY};
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::hierarchy::Scale;
+use pxl_spec::space::hierarchy::offset_in;
+use pxl_spec::space::indexer::idx;
+use pxl_spec::space::zoom::{count, index, index_of, units, Zoom};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-/// How many of a zoom's cells a scale spans along an axis (the mesher's step).
-pub fn mesh_step(scale: Scale, z: u32) -> u32 {
-    let own = GROUND.side_at(z);
-    own.count_in(scale.max(own))
+/// How many of a chunk's drawn cells a tier drawing `cell_zoom` spans along
+/// an axis (the mesher's step): one, or the whole chunk for a cover piece.
+pub fn mesh_step(cell_zoom: Zoom, c: PyramidChunk) -> u32 {
+    count(c.drawn_zoom(), cell_zoom)
 }
 
-/// Objects fold to the scale, clamped between their finest tier and a cell;
-/// past a cell the mesher averages them with the ground.
-pub fn object_fold(scale: Scale) -> Scale {
-    scale.clamp(OBJECT_FINEST, CELL)
+/// The world's units a run's cell is tall: a leaf cell's, or past the
+/// leaves the chunk's drawn cell.
+pub fn z_unit(c: PyramidChunk) -> f64 {
+    units(c.drawn_zoom().max(CELL))
 }
 
 // A chunk's runs live in a heap block exactly as large as its column needs,
@@ -65,17 +64,12 @@ pub const RUN_SETS: usize = 2;
 pub enum BuildEvent {
     /// All slots for a tier are asked for at once, before any is written. If
     /// refused, the bake is thrown away and the need recorded (`Slot::need`).
-    Reserve {
-        id: u32,
-        generation: u32,
-        scale: Scale,
-        boxes: u32,
-    },
+    Reserve { id: u32, generation: u32, cell_zoom: Zoom, boxes: u32 },
     /// One slot's worth of boxes (less for the last) at `at` in `.fixed.bake`.
     Part {
         id: u32,
         generation: u32,
-        scale: Scale,
+        cell_zoom: Zoom,
         at: u32,
         first: u32,
         box_cnt: u32,
@@ -84,16 +78,16 @@ pub enum BuildEvent {
     Tier {
         id: u32,
         generation: u32,
-        scale: Scale,
+        cell_zoom: Zoom,
         box_cnt: u32,
         heights: Heights,
     },
 }
 
-/// A column split across scale boundaries is several chunks; its runs are
-/// made once and each chunk bakes its cut of them.
+/// A column of chunks one above another shares its runs: they are made once
+/// and each chunk bakes its cut of them.
 struct RunHold {
-    column: (Scale, [i64; 2]),
+    column: (Zoom, [i64; 2]),
     users: Vec<u32>,
     runs: Option<Runs>,
 }
@@ -107,44 +101,41 @@ impl Drop for RunHold {
     }
 }
 
-/// `fold`: the scale objects were folded to, if any; only scales that fold to
-/// it may bake from these runs.
 #[derive(Clone, Copy)]
 struct Runs {
     block: (usize, u32),
     bytes: u32,
     count: u32,
-    fold: Option<Scale>,
 }
 
-/// Where a page's ground is read from: itself (`n` = 1) or the nearest
-/// resident page over it (`drawn_from`).
+/// Where a tile's ground is read from: itself (`n` = 1) or the nearest
+/// resident tile over it (`drawn_from`).
 #[derive(Clone, Copy)]
 struct Source {
-    page: &'static Terrain,
+    tile: &'static Terrain,
     frame: Frame,
     origin: [i64; 2],
     n: u32,
 }
 
 impl Source {
-    /// Found by key, so a page that is gone never yields another page's bytes.
-    fn of(p: Page) -> Option<Source> {
+    /// Found by key, so a tile that is gone never yields another tile's bytes.
+    fn of(p: Tile) -> Option<Source> {
         let pyramid = Terrain::pyramid();
-        let src = pyramid.paging().drawn_from(p)?;
-        let page = pyramid.paging().get(src)?;
+        let src = pyramid.residency().drawn_from(p)?;
+        let tile = pyramid.residency().get(src)?;
         let corner = GROUND.cell_at(p, GROUND.cell_index(0, 0));
         Some(Source {
-            page,
+            tile,
             frame: Frame::of(src),
-            origin: corner.in_page_above(p.z - src.z),
-            n: GROUND.side_at(p.z).count_in(GROUND.side_at(src.z)),
+            origin: corner.in_tile_above(p.zoom - src.zoom),
+            n: count(GROUND.cell_zoom(p.zoom), GROUND.cell_zoom(src.zoom)),
         })
     }
 
-    fn view(&self) -> PageSource<'static> {
-        PageSource {
-            page: Builder::page_view(self.page),
+    fn view(&self) -> TileSource<'static> {
+        TileSource {
+            tile: Builder::tile_view(self.tile),
             frame: self.frame,
             origin: self.origin,
             n: self.n,
@@ -152,7 +143,7 @@ impl Source {
     }
 }
 
-/// The apron reads each neighbour's page from what that neighbour is drawn
+/// The apron reads each neighbour's tile from what that neighbour is drawn
 /// from, so a shared edge is one surface.
 #[derive(Clone, Copy)]
 struct Read {
@@ -174,72 +165,60 @@ impl Read {
 struct Chunk {
     at: PyramidChunk,
     generation: u32,
-    want: [Option<Scale>; 2],
+    want: [Option<Zoom>; 2],
     /// Heap release count at the last refusal: until something is freed the same
     /// request would fail, so the chunk is skipped.
     refused: Option<u32>,
 }
 
 impl Chunk {
-    fn z(&self) -> u32 {
-        self.at.z()
-    }
-
     fn base(&self) -> IVec {
         self.at.corner()
     }
 
     fn col_idx(&self) -> IVec {
-        L2_IDX(self.base())
+        idx(BAND, self.base())
     }
 
+    /// The chunk's tile and the apron beside it; past the leaves, its leaf
+    /// chunk's, which its sample refines (`ChunkSample::refine`).
     fn read(&self) -> Option<Read> {
+        let leaf = self.leaf();
         let mut beside = [None; 8];
-        for ([qx, qy], p) in self.at.pages_beside(APRON) {
+        for ([qx, qy], p) in leaf.tiles_beside(APRON) {
             beside[beside_index(qx, qy)] = Source::of(p);
         }
-        let (x0, y0) = self.at.in_page();
+        let (x0, y0) = leaf.in_tile();
         Some(Read {
-            own: Source::of(self.at.page())?,
+            own: Source::of(leaf.tile())?,
             beside,
             first: [x0 as i64, y0 as i64],
         })
     }
 
-    fn wants(&self, scale: Scale) -> bool {
-        self.want.contains(&Some(scale))
+    /// Itself, or past the leaves the leaf chunk it lies in.
+    fn leaf(&self) -> PyramidChunk {
+        core::iter::once(self.at).chain(self.at.ancestors()).find(|k| k.finer() == 0).or_bug(Errno::ENOTRECOVERABLE)
     }
 
-    fn wanted(&self) -> impl Iterator<Item = Scale> + '_ {
+    /// Where its first drawn cell lies in its leaf chunk, in its drawn cells.
+    fn in_leaf(&self) -> [u32; 2] {
+        let k = self.at.finer();
+        offset_in(self.at.column().1, k).map(|v| v as u32 * CHUNK_DRAWN)
+    }
+
+    fn wants(&self, cell_zoom: Zoom) -> bool {
+        self.want.contains(&Some(cell_zoom))
+    }
+
+    fn wanted(&self) -> impl Iterator<Item = Zoom> + '_ {
         self.want.iter().copied().flatten()
     }
 }
 
-#[derive(Clone, Copy)]
-struct ScanJob {
-    id: u32,
-    volume: u32,
-    fold: Scale,
-    paint: Option<PaintJob>,
-}
-
-/// A step-wise object paint. A store write between steps moves the entries,
-/// so the paint restarts when the column revision changes.
-#[derive(Clone, Copy)]
-struct PaintJob {
-    next: usize,
-    folded: bool,
-    revision: u32,
-    hide: Option<EntryAt>,
-    carve: Option<EntryAt>,
-}
-
-/// A band's cells, also the most one entry sets, so a step sets at most twice this.
-const PAINT_VOXELS: usize = (BAND_CELLS * BAND_CELLS) as usize;
-
 struct BakeJob {
     id: u32,
-    scale: Scale,
+    cell_zoom: Zoom,
     generation: u32,
     mesh: Option<Block>,
     handed: u32,
@@ -249,12 +228,11 @@ struct BakeJob {
 enum Progress {
     Busy,
     Done,
-    /// Waiting on another chunk's slot, a refused heap block, or a page.
+    /// Waiting on another chunk's slot, a refused heap block, or a tile.
     Blocked,
 }
 
 pub struct World<'a> {
-    pub volumes: &'a mut Volumes,
     pub store: &'a Store,
     pub painter: &'a mut Painter,
 }
@@ -294,29 +272,22 @@ impl<T> core::ops::Index<&u32> for ByMount<T> {
 
 #[derive(Clone, Copy, Default)]
 pub struct BuildStat {
-    pub direct: u32,
-    pub scans: u32,
+    pub runs: u32,
     pub bakes: u32,
     pub starved: u32,
 }
 
 pub struct Builder {
     chunks: ByMount<Chunk>,
-    scan: ScanContext,
-    direct: ScanContext,
+    direct: RunWriter,
     bake: BakeContext,
-    scan_job: Option<ScanJob>,
     bake_job: Option<BakeJob>,
     sample: ChunkSample,
+    /// A leaf chunk's, which a chunk past the leaves refines.
+    leaf_sample: ChunkSample,
     run_holds: [Option<RunHold>; RUN_SETS],
-    bands: Vec<BandView<'static>>,
-    claimed: Claims,
     folded: HashMap<[i64; 3], u32>,
     stands: Vec<(u32, Stands)>,
-    /// A z16 chunk's objects folded to its scale, for scales coarser than an object's finest tier.
-    fold_band: Vec<BandZ>,
-    fold_pos: Vec<u32>,
-    fold_state: Vec<u32>,
     pub stat: BuildStat,
 }
 
@@ -330,20 +301,14 @@ impl Builder {
     pub fn new() -> Builder {
         Builder {
             chunks: ByMount::new(),
-            scan: ScanContext::new(),
-            direct: ScanContext::new(),
+            direct: RunWriter::new(),
             bake: BakeContext::new(),
-            scan_job: None,
             bake_job: None,
             sample: ChunkSample::default(),
+            leaf_sample: ChunkSample::default(),
             run_holds: [const { None }; RUN_SETS],
-            bands: Vec::new(),
-            claimed: Claims::new(),
             folded: HashMap::new(),
             stands: Vec::new(),
-            fold_band: Vec::new(),
-            fold_pos: Vec::new(),
-            fold_state: Vec::new(),
             stat: BuildStat::default(),
         }
     }
@@ -352,8 +317,8 @@ impl Builder {
         self.chunks.get(&id).map(|c| c.generation)
     }
 
-    pub fn holders(&self) -> [Option<u32>; 2] {
-        [self.scan_job.as_ref().map(|j| j.id), self.bake_job.as_ref().map(|j| j.id)]
+    pub fn holders(&self) -> [Option<u32>; 1] {
+        [self.bake_job.as_ref().map(|j| j.id)]
     }
 
     pub fn bake_context(&self) -> &BakeContext {
@@ -372,55 +337,45 @@ impl Builder {
         );
     }
 
-    pub fn remove(&mut self, world: &mut World, id: u32) {
-        self.abort_work_of(world, id);
+    pub fn remove(&mut self, id: u32) {
+        self.abort_work_of(id);
         self.leave_runs(id);
         self.chunks.remove(&id);
     }
 
-    pub fn source(&mut self, world: &mut World, id: u32) {
-        self.drop_work(world, id);
+    pub fn source(&mut self, id: u32) {
+        self.drop_work(id);
         if let Some(c) = self.chunks.get_mut(&id) {
             c.generation = c.generation.wrapping_add(1);
         }
     }
 
-    pub fn baking(&self) -> Option<(u32, Scale, u32)> {
-        self.bake_job.as_ref().map(|j| (j.id, j.scale, j.generation))
+    pub fn baking(&self) -> Option<(u32, Zoom, u32)> {
+        self.bake_job.as_ref().map(|j| (j.id, j.cell_zoom, j.generation))
     }
 
     /// A bake of a tier no longer wanted gives its slot back now.
-    pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Scale>; 2]) {
+    pub fn want(&mut self, id: u32, want: [Option<Zoom>; 2]) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
         c.want = want;
-        let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.scale));
+        let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.cell_zoom));
         if stale {
             self.abort_bake();
         }
         if want == [None, None] {
-            self.abort_scan_of(world, id);
             self.leave_runs(id);
         }
     }
 
     /// The column's runs are shared by every chunk over it, so all of them rebuild.
-    fn drop_work(&mut self, world: &mut World, id: u32) {
-        self.abort_work_of(world, id);
+    fn drop_work(&mut self, id: u32) {
+        self.abort_work_of(id);
         self.drop_runs(id);
     }
 
-    fn abort_work_of(&mut self, world: &mut World, id: u32) {
-        self.abort_scan_of(world, id);
+    fn abort_work_of(&mut self, id: u32) {
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake();
-        }
-    }
-
-    fn abort_scan_of(&mut self, world: &mut World, id: u32) {
-        if let Some(job) = self.scan_job.take_if(|j| j.id == id) {
-            self.scan.abort();
-            world.volumes.release(job.volume);
-            self.leave_runs(id);
         }
     }
 
@@ -473,9 +428,9 @@ impl Builder {
 
     /// Heap refused a block: give up every slot held, since each is another
     /// chunk's wait, and skip the chunk until a release.
-    fn refuse(&mut self, world: &mut World, id: u32) {
+    fn refuse(&mut self, id: u32) {
         self.stat.starved += 1;
-        self.abort_work_of(world, id);
+        self.abort_work_of(id);
         self.leave_runs(id);
         let releases = crate::host::heap_stat().releases;
         if let Some(c) = self.chunks.get_mut(&id) {
@@ -483,9 +438,9 @@ impl Builder {
         }
     }
 
-    fn unwant(&mut self, id: u32, scale: Scale) {
+    fn unwant(&mut self, id: u32, cell_zoom: Zoom) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
-        for w in c.want.iter_mut().filter(|w| **w == Some(scale)) {
+        for w in c.want.iter_mut().filter(|w| **w == Some(cell_zoom)) {
             *w = None;
         }
         if c.wanted().next().is_none() {
@@ -508,7 +463,7 @@ impl Builder {
         let starved = self.stat.starved;
         let mut stepped = false;
         let mut worked = false;
-        let mut first = [None; 2 + RUN_SETS];
+        let mut first = [None; 1 + RUN_SETS];
         let users = self.run_holds.iter().flatten().flat_map(|h| h.users.first().copied());
         for (n, id) in self.holders().into_iter().chain(users.map(Some)).enumerate() {
             if !first[..n].contains(&id) {
@@ -545,273 +500,86 @@ impl Builder {
         if c.refused.is_some_and(|r| r == crate::host::heap_stat().releases) {
             return Progress::Blocked;
         }
-        // Runs folded for another scale draw the wrong objects: remake them.
-        let next = c.wanted().next().or_bug(Errno::ENOTRECOVERABLE);
-        if self.runs_of(id).is_some_and(|r| r.fold.is_some_and(|f| f != object_fold(next))) && !matches!(&self.bake_job, Some(j) if j.id == id) {
-            self.drop_runs(id);
-        }
         if self.runs_of(id).is_none() {
             return self.advance_runs(world, id);
         }
         // Another chunk of the column made the runs; this one bakes its cut too.
         self.run_set_for(id);
-        self.advance_bake(world, id, emit)
+        self.advance_bake(id, emit)
     }
 
+    /// A chunk's runs, written directly from its tile's ground and the objects
+    /// folded to its cells (mesh/paint/column.rs).
     fn advance_runs(&mut self, world: &mut World, id: u32) -> Progress {
         let c = &self.chunks[&id];
-        // Page gone under a scan: give up the scan slot, as the page may not return
-        // before the chunk goes.
         let Some(read) = c.read() else {
-            self.abort_scan_of(world, id);
             return Progress::Blocked;
         };
-        if c.z() < GROUND_Z {
-            return self.column_runs(world, id, read);
-        }
-        let holding = matches!(&self.scan_job, Some(j) if j.id == id);
-        // A column with nothing placed is one terrain run per column, the same mesh
-        // the scan would give at every tier; scanning would make a zoom-in scan
-        // every mostly-empty chunk in view.
-        if !holding && !self.has_objects(world, c.col_idx()) {
-            return self.direct_runs(world, id, read);
-        }
-        if !holding {
-            let col_idx = c.col_idx();
-            if self.scan_job.is_some() || self.run_set_for(id).is_none() {
-                return Progress::Blocked;
-            }
-            let Some(volume) = self.paint_terrain(world, read) else {
-                self.refuse(world, id);
-                return Progress::Blocked;
-            };
-            self.claimed.clear();
-            let fold = object_fold(self.chunks[&id].wanted().next().or_bug(Errno::ENOTRECOVERABLE));
-            let folded = fold > OBJECT_FINEST;
-            if folded && self.fold_objects(world, col_idx, fold).is_err() {
-                world.volumes.release(volume);
-                self.refuse(world, id);
-                return Progress::Blocked;
-            }
-            let paint = PaintJob {
-                next: 0,
-                folded,
-                revision: object_col_revision(col_idx),
-                hide: render_edits().hide,
-                carve: render_edits().carve.filter(|c| c.col_idx == col_idx),
-            };
-            self.scan_job = Some(ScanJob { id, volume, fold, paint: Some(paint) });
-            return Progress::Busy;
-        }
-        let ScanJob { volume, paint, fold, .. } = *self.scan_job.as_ref().unwrap();
-        if let Some(paint) = paint {
-            return self.advance_paint(world, id, volume, paint);
-        }
-        // SAFETY: the scan job's volume, held until the scan finishes.
-        if !unsafe { world.volumes.band_views(volume, &mut self.bands) } {
-            self.refuse(world, id);
+        if self.run_set_for(id).is_none() {
             return Progress::Blocked;
         }
-        // The apron comes from the sample; the bands hold only the chunk's own cells.
-        match self.scan.step(&self.bands, &self.sample) {
-            ScanStep::Working => Progress::Busy,
-            ScanStep::Done => xpute_core::bug!(ENOTRECOVERABLE),
-            ScanStep::Refused => {
-                self.refuse(world, id);
-                Progress::Blocked
-            }
-            ScanStep::NeedSet(bytes) => {
-                let Some(block) = self.set_of(id, bytes) else {
-                    self.refuse(world, id);
-                    return Progress::Blocked;
-                };
-                // SAFETY: the block just taken for the chunk's runs, the bytes asked for.
-                unsafe { self.scan.provide_set(ptr_at::<u8>(block.0), bytes) };
-                let count = self.scan.finish();
-                let job = self.scan_job.take().unwrap();
-                world.volumes.release(job.volume);
-                self.stat.scans += 1;
-                self.keep_runs(
-                    id,
-                    Runs {
-                        block,
-                        bytes,
-                        count,
-                        fold: Some(fold),
-                    },
-                );
-                Progress::Busy
-            }
-        }
-    }
-
-    fn has_objects(&self, world: &World, col_idx: IVec) -> bool {
-        world.store.entries(col_idx).is_some() || render_edits().carve.is_some_and(|c| c.col_idx == col_idx)
-    }
-
-    pub fn page_view(page: &Terrain) -> PageView<'_> {
-        PageView {
-            cells: &page.ground.cells,
-            ele: &page.ele,
-            decks: &page.decks,
-        }
-    }
-
-    fn paint_terrain(&mut self, world: &mut World, read: Read) -> Option<u32> {
-        self.sample.read(&read.around(), read.first).ok()?;
-        let volume = world.volumes.open();
-        if !self.sample.paint(world.volumes, volume) {
-            world.volumes.release(volume);
-            return None;
-        }
-        Some(volume)
-    }
-
-    /// Fills the fold lanes with a column's entries at `scale` (`Store::fold_entries`),
-    /// leaving out the hidden entry. Errors where the heap refused room.
-    fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) -> Result<(), TryReserveError> {
-        let (band, pos, state) = (&mut self.fold_band, &mut self.fold_pos, &mut self.fold_state);
-        band.clear();
-        pos.clear();
-        state.clear();
-        let mut refused = Ok(());
-        world.store.fold_entries(col_idx, scale, render_edits().hide, &mut |b, [x, y, z], s, v| {
-            if refused.is_ok() {
-                refused = (|| {
-                    band.try_reserve(1)?;
-                    pos.try_reserve(1)?;
-                    state.try_reserve(1)?;
-                    band.push(b);
-                    pos.push(pack_pos(x, y, z, s));
-                    state.push(v);
-                    Ok(())
-                })();
-            }
-        });
-        refused
-    }
-
-    fn advance_paint(&mut self, world: &mut World, id: u32, volume: u32, mut paint: PaintJob) -> Progress {
-        let col_idx = self.chunks[&id].col_idx();
-        if object_col_revision(col_idx) != paint.revision {
-            self.abort_scan_of(world, id);
-            return Progress::Busy;
-        }
-        let mut any = false;
-        let (entries, hide) = if paint.folded {
-            let folded = Entries {
-                col_idx,
-                band: &self.fold_band,
-                pos: &self.fold_pos,
-                state: &self.fold_state,
-            };
-            (Some(folded), None)
+        let c = self.chunks[&id];
+        let k = c.at.finer();
+        let sampled = if k == 0 {
+            self.sample.read(&read.around(), read.first)
         } else {
-            (world.store.entries(col_idx), paint.hide)
+            self.leaf_sample.read(&read.around(), read.first).and_then(|()| self.sample.refine(&self.leaf_sample, k, c.in_leaf()))
         };
-        match world.painter.paint_entries(entries, world.volumes, volume, hide, paint.next, PAINT_VOXELS, &mut self.claimed, &mut any) {
-            Painted::Refused => {
-                self.refuse(world, id);
-                return Progress::Blocked;
-            }
-            Painted::More(next) => {
-                paint.next = next;
-                self.scan_job.as_mut().unwrap().paint = Some(paint);
-                return Progress::Busy;
-            }
-            Painted::Done => {}
-        }
-        if !world.painter.paint_carve(world.volumes, volume, paint.carve, &mut self.claimed, &mut any) {
-            self.refuse(world, id);
+        if sampled.is_err() {
+            self.refuse(id);
             return Progress::Blocked;
         }
-        // SAFETY: the sealed volume is held by the scan job until the scan finishes.
-        if !world.volumes.seal(volume) || !unsafe { world.volumes.band_views(volume, &mut self.bands) } {
-            self.refuse(world, id);
-            return Progress::Blocked;
-        }
-        xpute_core::ensure!(self.scan.begin(&self.bands), ENOTRECOVERABLE);
-        self.scan_job.as_mut().unwrap().paint = None;
-        Progress::Busy
-    }
-
-    fn direct_runs(&mut self, world: &mut World, id: u32, read: Read) -> Progress {
-        if self.run_set_for(id).is_none() {
-            return Progress::Blocked;
-        }
-        if self.sample.read(&read.around(), read.first).is_err() {
-            self.refuse(world, id);
-            return Progress::Blocked;
-        }
-        xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
-        // The chunk's columns and the apron's, in the writer's one order.
-        for i in 0..(COL_SPAN * COL_SPAN) as usize {
-            self.direct.direct_column(i as u32);
-            let direct = &mut self.direct;
-            if self.sample.column_runs(i, |lo, hi, material, layer| direct.direct_run(lo, hi, material, layer)).is_err() {
-                self.direct.abort();
-                self.refuse(world, id);
-                return Progress::Blocked;
-            }
-        }
-        self.close_direct(world, id)
-    }
-
-    /// A coarse chunk's runs, written directly from its page's ground and the
-    /// objects folded to its zoom (mesh/paint/column.rs).
-    fn column_runs(&mut self, world: &mut World, id: u32, read: Read) -> Progress {
-        if self.run_set_for(id).is_none() {
-            return Progress::Blocked;
-        }
-        let c = &self.chunks[&id];
-        let (z, base) = (c.z(), c.base());
-        if self.sample.read(&read.around(), read.first).is_err() {
-            self.refuse(world, id);
-            return Progress::Blocked;
-        }
-        let target = GROUND.side_at(z);
+        let (target, base) = (c.at.drawn_zoom(), c.base());
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
-        // One cell of apron, which a fold reads (`folds_into`).
-        let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-        if world
-            .store
-            .fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], render_edits().hide, &mut self.folded)
-            .is_err()
-        {
-            self.refuse(world, id);
+        // One cell of apron, which a fold reads (`tiers_draw`).
+        let (cx, cy, span) = (index(target, x0), index(target, y0), CHUNK_DRAWN as i64);
+        let edits = render_edits();
+        if world.store.fold_at(target, [cx - 1, cy - 1], [cx + span + 1, cy + span + 1], edits.hide, &mut self.folded).is_err() {
+            self.refuse(id);
             return Progress::Blocked;
         }
-        xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
+        if let Some(carve) = edits.carve.filter(|e| e.col_idx == c.col_idx()) {
+            carve_into(&mut self.folded, carve, target);
+        }
+        xpute_core::ensure!(self.direct.begin(), ENOTRECOVERABLE);
         let written = write_column_runs(
             &mut self.direct,
             &self.sample,
             world.painter,
             &self.folded,
-            (target.index(x0), target.index(y0)),
-            GROUND.finest_in(z),
+            (cx, cy),
+            (units(target) / z_unit(c.at)) as u32,
             &mut self.stands,
         );
         if written.is_err() {
             self.direct.abort();
-            self.refuse(world, id);
+            self.refuse(id);
             return Progress::Blocked;
         }
-        self.close_direct(world, id)
+        self.close(id)
     }
 
-    fn close_direct(&mut self, world: &mut World, id: u32) -> Progress {
-        let bytes = self.direct.close_direct();
+    fn close(&mut self, id: u32) -> Progress {
+        let bytes = self.direct.close();
         let Some(block) = self.set_of(id, bytes) else {
             self.direct.abort();
-            self.refuse(world, id);
+            self.refuse(id);
             return Progress::Blocked;
         };
         // SAFETY: as for a scan's set.
         unsafe { self.direct.provide_set(ptr_at::<u8>(block.0), bytes) };
         let count = self.direct.finish();
-        self.stat.direct += 1;
-        self.keep_runs(id, Runs { block, bytes, count, fold: None });
+        self.stat.runs += 1;
+        self.keep_runs(id, Runs { block, bytes, count });
         Progress::Busy
+    }
+
+    pub fn tile_view(tile: &Terrain) -> TileView<'_> {
+        TileView {
+            cells: &tile.ground.cells,
+            ele: &tile.ele,
+            decks: &tile.decks,
+        }
     }
 
     fn set_of(&mut self, id: u32, bytes: u32) -> Option<(usize, u32)> {
@@ -833,13 +601,13 @@ impl Builder {
     }
 
     fn run_set(runs: &Runs) -> RunSet<'static> {
-        let bytes = pxl_render::mesh::voxel_scan::run_set_bytes(runs.count, COL_SPAN) as usize;
+        let bytes = pxl_render::mesh::run::run_set_bytes(runs.count, COL_SPAN) as usize;
         xpute_core::ensure!(bytes as u32 <= runs.block.1, ENOTRECOVERABLE);
         // SAFETY: the chunk's own block, held until its runs are let go.
         unsafe { RunSet::carve(core::slice::from_raw_parts(ptr_at::<u8>(runs.block.0), bytes), runs.count, COL_SPAN, APRON) }
     }
 
-    fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
+    fn advance_bake(&mut self, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
         let holding = matches!(&self.bake_job, Some(j) if j.id == id);
         let c = &self.chunks[&id];
         let set = Self::run_set(&self.runs_of(id).or_bug(Errno::ENOTRECOVERABLE));
@@ -847,17 +615,19 @@ impl Builder {
             if self.bake_job.is_some() {
                 return Progress::Blocked;
             }
-            let scale = c.wanted().next().unwrap();
-            // Runs span the whole column; this chunk bakes only its own heights.
+            let cell_zoom = c.wanted().next().unwrap();
+            // Runs span the whole column; this chunk bakes only its own heights, in its runs' cells.
             let (z0, z1) = c.at.z_range();
-            let clip = Some((z0 as i32, z1 as i32));
-            if self.bake.begin(&set, mesh_step(scale, c.z()), GROUND.finest_in(c.z()), settings_store().textures, clip).is_err() {
-                self.refuse(world, id);
+            let z = z_unit(c.at);
+            let clip = Some(((z0 / z) as i32, (z1 / z) as i32));
+            let (unit, fine) = (units(c.at.drawn_zoom()), c.at.drawn_zoom() >= CELL);
+            if self.bake.begin(&set, mesh_step(cell_zoom, c.at), unit, z, fine, settings_store().textures, clip).is_err() {
+                self.refuse(id);
                 return Progress::Blocked;
             }
             self.bake_job = Some(BakeJob {
                 id,
-                scale,
+                cell_zoom,
                 generation: c.generation,
                 mesh: None,
                 handed: 0,
@@ -867,32 +637,32 @@ impl Builder {
             Step::Working => Progress::Busy,
             Step::Refused => {
                 self.bake_job = None;
-                self.refuse(world, id);
+                self.refuse(id);
                 Progress::Blocked
             }
             Step::NeedMesh(words) => {
                 // All slots are held at once or the bake is thrown away: a mesh is never
                 // cut, never baked coarser, and never waits while holding the one bake.
                 let job = self.bake_job.as_ref().unwrap();
-                let step = mesh_step(job.scale, c.z());
-                let (words_a_box, room_a_slot) = (box_words(step), capacity(c.z(), step));
+                let fine = mesh_step(job.cell_zoom, c.at) == 1 && c.at.drawn_zoom() >= CELL;
+                let (words_a_box, room_a_slot) = (box_words(fine), capacity(c.at.zoom(), job.cell_zoom));
                 let boxes = words / words_a_box;
                 let asked = BuildEvent::Reserve {
                     id,
                     generation: job.generation,
-                    scale: job.scale,
+                    cell_zoom: job.cell_zoom,
                     boxes,
                 };
                 if !emit(asked) {
                     let job = self.bake_job.take().unwrap();
                     self.bake.abort();
-                    self.unwant(id, job.scale);
+                    self.unwant(id, job.cell_zoom);
                     return Progress::Busy;
                 }
                 let block = boxes.min(room_a_slot) * words_a_box;
                 let Some(mesh_at) = at(Range::Bake, 0, block * 4) else {
                     self.abort_bake();
-                    self.refuse(world, id);
+                    self.refuse(id);
                     return Progress::Blocked;
                 };
                 // SAFETY: `.fixed.bake` is the open bake's alone until finished or aborted.
@@ -906,13 +676,13 @@ impl Builder {
                 if gpu().is_some() && device_ready() && !room(bytes) {
                     return Progress::Blocked;
                 }
-                let step = mesh_step(job.scale, c.z());
-                let words_a_box = box_words(step);
+                let fine = mesh_step(job.cell_zoom, c.at) == 1 && c.at.drawn_zoom() >= CELL;
+                let words_a_box = box_words(fine);
                 let n = bytes / 4 / words_a_box;
                 emit(BuildEvent::Part {
                     id,
                     generation: job.generation,
-                    scale: job.scale,
+                    cell_zoom: job.cell_zoom,
                     at: at as u32,
                     first: job.handed,
                     box_cnt: n,
@@ -943,22 +713,42 @@ impl Builder {
                     emit(BuildEvent::Part {
                         id,
                         generation: job.generation,
-                        scale: job.scale,
+                        cell_zoom: job.cell_zoom,
                         at: at as u32,
                         first: job.handed,
                         box_cnt: mesh.box_cnt - job.handed,
                         heights: mesh.heights,
                     });
                 }
-                self.unwant(id, job.scale);
+                self.unwant(id, job.cell_zoom);
                 emit(BuildEvent::Tier {
                     id,
                     generation: job.generation,
-                    scale: job.scale,
+                    cell_zoom: job.cell_zoom,
                     box_cnt: mesh.box_cnt,
                     heights: mesh.heights,
                 });
                 Progress::Busy
+            }
+        }
+    }
+}
+
+/// The eraser's preview: the cells at `zoom` its entry covers, cut to air.
+fn carve_into(cells: &mut HashMap<[i64; 3], u32>, carve: EntryAt, zoom: Zoom) {
+    let (x, y, z, own) = unpack_pos(carve.pos);
+    let corner = At {
+        col_idx: carve.col_idx,
+        band: carve.band_idx,
+        step: [x, y, z],
+    }
+    .corner();
+    let [ix, iy, iz] = index_of(zoom, &corner);
+    let n = if own < zoom { i64::from(count(zoom, own)) } else { 1 };
+    for dz in 0..n {
+        for dy in 0..n {
+            for dx in 0..n {
+                cells.insert([ix + dx, iy + dy, iz + dz], AIR);
             }
         }
     }

@@ -20,7 +20,6 @@ use crate::mem::fixed::{lane, range, Range};
 use crate::sched::profiler::log::PENDING;
 use crate::sched::profiler::spec::{FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, TASK, WORST};
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::space::adapter::epsg3857::zoom_of;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 use xpute_runtime::sched::tick::PHASES;
@@ -198,7 +197,7 @@ pub struct MountSample {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct PageSample {
+pub struct TileSample {
     pub total: f64,
     pub by_zoom: [f64; ZOOMS],
     pub poi: f64,
@@ -231,7 +230,7 @@ pub struct RingSample {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WorkSample {
-    pub scans: f64,
+    pub runs: f64,
     pub bakes: f64,
     /// Largest mesh handed over since the last frame, in boxes, per slot kind.
     pub fine_peak: f64,
@@ -261,7 +260,7 @@ pub struct FrameSample {
     pub device: DeviceSample,
     pub lod: LodSample,
     pub mounts: MountSample,
-    pub pages: PageSample,
+    pub tiles: TileSample,
     pub heap: HeapSample,
     pub rings: RingSample,
     pub work: WorkSample,
@@ -371,12 +370,12 @@ words!(FrameSample, FRAME::WORDS,
     lod.offscreen_pending => FRAME::lod_offscreen_pending,
     lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms,
     mounts.added => FRAME::mounts_added, mounts.removed => FRAME::mounts_removed, mounts.layouts => FRAME::mounts_layouts,
-    pages.total => FRAME::pages_total, pages.by_zoom => FRAME::zoom_pages, pages.poi => FRAME::pages_poi,
+    tiles.total => FRAME::tiles_total, tiles.by_zoom => FRAME::zoom_tiles, tiles.poi => FRAME::tiles_poi,
     heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.run_mb => FRAME::heap_run_mb,
     heap.slot_mb => FRAME::heap_slot_mb, heap.range_mb => FRAME::heap_range_mb,
     heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
     rings.cq_peak => FRAME::ring_cq_peak, rings.held_peak => FRAME::ring_held_peak,
-    work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, work.fine_peak => FRAME::work_fine_peak, work.coarse_peak => FRAME::work_coarse_peak, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
+    work.runs => FRAME::work_runs, work.bakes => FRAME::work_bakes, work.fine_peak => FRAME::work_fine_peak, work.coarse_peak => FRAME::work_coarse_peak, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
     stale.hidden => FRAME::stale_hidden, stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready,
     stale.slot_waits => FRAME::slot_waits, stale.wait_zooms => FRAME::slot_wait_zooms,
     stale.chained => FRAME::slot_chained,
@@ -419,7 +418,10 @@ const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "
 #[cfg(test)]
 #[path = "record.test.rs"]
 mod test;
-const _: () = assert!(zoom_of(OBJECT_FINEST) < ZOOMS as i32, "a zoom slot for every cell drawn, the finest object tier to the pyramid's top");
+const _: () = assert!(
+    pxl_spec::space::pyramid::GROUND.z_of(OBJECT_FINEST) < ZOOMS as i32,
+    "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
+);
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
 /// display or a heavy minute fills a lane early, which drops its oldest and

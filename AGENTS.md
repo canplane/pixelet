@@ -53,7 +53,7 @@ README.md has the map. Three lines erode by accident:
   each in its own language's shape. Never number the languages, hosts or
   guests: the count is stale the day one more arrives.
 - **`pxl-spec` is the one model and has no TypeScript twin.** The shell reads
-  a page through the kernel, never by decoding one; what it holds — the cell
+  a tile through the kernel, never by decoding one; what it holds — the cell
   catalog, the asset tables, the ABI enums — is generated into
   `apps/web/src/` from `spec/`, beside the Rust from the same JSON.
 
@@ -90,13 +90,17 @@ a SwiftUI switch there missed quick taps. Which technology draws each
 
 ## One spatial model
 
-Everything placed on the map sits in one hierarchy, the **pyramid**, from
-z16 — terrain's atom, a 1u cell — to z6, where it stops for now and not by
-any limit, each zoom's cells twice as wide as the next finer's; a page is 512
-cells a side at every zoom, named by its place in that zoom's page grid. A
-zoom names only a cell's scale (256-pixel tiles): terrain's cell is z16,
-objects' go to z19. A page's size, key or grid never defines a zoom, and a
-zoom never gives a page's or a chunk's extent: that is its count of cells.
+Everything placed on the map sits in one hierarchy, the **pyramid**, of
+tiles from the leaves at z15 to z5, where it stops for now and not by any
+limit. **Every size is a zoom**: the X lane is one world of 2^24 units, so a
+thing the world over 2^z wide is at zoom z, and a bigger zoom is finer
+(`pxl-spec space/zoom.rs`). A cell, a chunk and a tile are each named by it:
+terrain's cell is z24, a unit, and objects' finest z27; a chunk is 64
+ground cells, six zooms coarser than they; a tile holds a layer's own count
+of cells a side, the same at every zoom (`Lattice`), so terrain's z24 cells
+make z15 tiles.
+Where several zooms meet, a name says whose it is (`cell_zoom`). A web map's
+zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
 
 - **The view keeps only what an observer can tell apart.** The world is
   stored in each layer's shape; what the view holds and does is bounded by
@@ -107,24 +111,23 @@ zoom never gives a page's or a chunk's extent: that is its count of cells.
   prefetch, materialization and scheduling are separate concerns, each with
   its own bound; ARCHITECTURE.md's "The view" states them — read it before
   changing one.
-- **The lattice has one owner.** A size is a `Scale` against the unit,
-  stepped from two roots — the tiers (`pxl-spec space/indexer.rs`) and the
-  raster's cell (`bake/constant.rs` `CELL`), a resolution of neither's
-  making — and parent and children in any number of axes are
-  `space/hierarchy.rs`'s. Zoom and span, a cell's base, center and place in
-  its page (the index into every lane the page has), the 4 × 4 neighborhood
-  a fold reads, and a page's name are `space/pyramid.rs`'s. A layer that
-  shifts by a tier or a scale's exponent, or numbers a page's cells by its
-  width, is a second owner; `check:rules` refuses it outside `space/`.
+- **The lattice has one owner.** A size is a zoom stepped from two roots —
+  the raster's cell (`pxl-spec bake/constant.rs` `CELL`) and the leaf tile's
+  count of them (`space/pyramid.rs` `LEAF_Z`) — and parent and children in
+  any number of axes are `space/hierarchy.rs`'s. A cell's base, center and
+  place in its tile (the index into every lane the tile has), the 4 × 4
+  neighborhood a fold reads, and a tile's name are `space/pyramid.rs`'s. A
+  layer that shifts by a zoom's exponent (`shamt`), or numbers a tile's cells
+  by its width, is a second owner; `check:rules` refuses it outside `space/`.
 - **A layer is a payload and a one-zoom fold, and nothing else.** Which
-  pages are wanted is the observation's demand (`world/pyramid.rs`
-  `observe`), which are held residency's (`world/paging.rs`), when they are
-  fetched the scheduler's (`io/sched.rs`), and a page is folded only by the
+  tiles are wanted is the observation's demand (`world/pyramid.rs`
+  `observe`), which are held residency's (`world/residency.rs`), when they are
+  fetched the scheduler's (`io/sched.rs`), and a tile is folded only by the
   bake's `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not
   data — terrain folds by majority and average, POI by sum.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
   and x, y, z (`world/pyramid/chunk.rs`); a cube that holds nothing is no
-  chunk. Terrain and POI are pages, a 2D heightfield and a 2D count; placed
+  chunk. Terrain and POI are tiles, a 2D heightfield and a 2D count; placed
   objects are resident in their store by column and band. What a box holds
   is asked of `Bounds` (`pxl-spec space/observation.rs`), which `Known`
   (`world/observation.rs`) answers; a point or a ray is asked of the query
@@ -138,15 +141,19 @@ zoom never gives a page's or a chunk's extent: that is its count of cells.
   height read off the raster, `ground_ele_at`) is an optimization where it
   behaves exactly as the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`Cell::center`), at the height of the
-  surface drawn there: one thing's at the z16 cell it stands in, many at
+  surface drawn there: one thing's at the leaf cell it stands in, many at
   their cell's middle (`pxl-kernel layer/poi/placement.rs`).
-- **One rule chooses the zoom; a layer chooses its detail.** The zoom is the
-  distance's (`pxl-spec space/lod.rs` `Tau::z_at`, one factor τ), finer than
-  z16 too near the eye, refined only where the screen sees an error cross a
-  cell. The detail a layer draws at it is its own — terrain 2 × 2 averaged,
-  places a lattice sixty-four ground cells wide, objects their own cells —
-  never a second rule; past a layer's data it draws its finest.
-- **Dev is guarded like terrain.** The tile server answers no page coarser
+- **One rule chooses the chunk; a layer chooses its detail.** The cell is
+  the distance's (`pxl-spec space/lod.rs` `Tau::cell_at`, one factor τ), a
+  chunk is drawn in cells a step coarser (`space/pyramid.rs`
+  `DRAWN_STEPS`), and terrain's zoom is the tile whose cells those are
+  (`Tau::z_at`); a chunk refines only where the screen sees an error cross
+  a cell and something under it is held finer. The detail a layer draws at
+  it is its own — terrain its tile's cells, the bake's fold of the finer,
+  places a lattice sixty-four ground cells wide, objects their cells folded
+  by majority — never a second rule; past a layer's data it draws its
+  finest.
+- **Dev is guarded like terrain.** The tile server answers no tile coarser
   than `--top-z`, the whole guard for every layer. A source declares the
   coarsest zoom it supplies whole — the published version in its metadata,
   the tile server at `/tile/source` — and the floor is that zoom.

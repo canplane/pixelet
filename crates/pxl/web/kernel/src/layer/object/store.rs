@@ -1,6 +1,6 @@
 // pxl-kernel/layer/object/store.rs
 
-//! Placed objects: one record per L2 column, a sparse octree per 64³ band
+//! Placed objects: one record per band column, a sparse octree per 64³ band
 //! whose leaves are catalog values, with the column's entries derived as
 //! lanes in which a cell's entries are one contiguous run. Every mutation
 //! touches one column and every query is scoped to a cell, column or box.
@@ -8,21 +8,17 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, TryReserveError};
 
 use base64::Engine;
-use pxl_render::mesh::paint::object::adapter::Entries;
 use pxl_spec::bake::constant::{
     band_cell_z, band_of, in_cell, pack_pos, unpack_pos, BandZ, CellZ, BAND, BAND_CELL_SHAMT, BAND_UNITS, CELL, OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, STEP_UNITS, U_PER_CELL,
 };
 use pxl_spec::bake::fold::majority;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::adapter::epsg3857::zoom_of;
-use pxl_spec::space::hierarchy::{ancestor_of, at_walk_order, child_of, first_descendant_of, offset_in, parent_of, walk_order, Scale};
-use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
+use pxl_spec::space::hierarchy::{ancestor_of, at_walk_order, child_of, first_descendant_of, offset_in, parent_of, walk_order};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pvf3::Ivec;
-use pxl_spec::space::pvf3::{REACH, ROUND};
-use pxl_spec::space::pyramid::{around, span_of, wrap_cell, wrap_index, GROUND, GROUND_Z, TOP_Z};
+use pxl_spec::space::pvf3::{Ivec, REACH, ROUND};
+use pxl_spec::space::pyramid::{around, wrap_cell, wrap_index, GROUND, LEAF_Z, TOP_Z};
 use pxl_spec::space::sparse_tree::mem;
 use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree};
 use pxl_spec::space::v3::{Aabb, V3};
@@ -39,7 +35,9 @@ use crate::layer::decor::build::{scatters_at, Draw};
 use crate::world::access::Access;
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
 use crate::world::chunk::source::{band_written, chunk_sources_changed};
-use crate::world::frame::coord::local_world_to_canonical;
+use crate::world::frame::coord::world_to_canonical;
+use pxl_spec::space::indexer::{from_idx, idx};
+use pxl_spec::space::zoom::{base_of, count, cube, index_of, of_side, units, Zoom};
 use xpute_core::status::bug::OrBug;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
@@ -52,11 +50,11 @@ pub enum EntryKind {
 
 pub use pxl_spec::bake::constant::EntryAt;
 
-/// The L2 index of the cell's XY column, Z dropped: the renderer asks for a
+/// The band-zoom index of the cell's XY column, Z dropped: the renderer asks for a
 /// column with z = 0, so a key that kept Z left every object above 64u
 /// stored and hit-tested but never drawn.
 fn column_of(cell: [i64; 3]) -> IVec {
-    L2_IDX(TO_XY(CELL.base_of(cell).i))
+    idx(BAND, TO_XY(base_of(CELL, cell).i))
 }
 
 /// A column's key from its index, which may run on round the world.
@@ -66,7 +64,7 @@ pub fn column_at([x, y]: [i64; 2]) -> IVec {
 
 /// The cell at a column's corner, on z = 0.
 fn column_cell(col_idx: IVec) -> [i64; 3] {
-    CELL.index_of(&Pvf3 { i: FROM_L2_IDX(col_idx), f: 0 })
+    index_of(CELL, &Pvf3 { i: from_idx(BAND, col_idx), f: 0 })
 }
 
 /// Where a corner is filed: column, band, and position in finest-tier steps.
@@ -80,16 +78,16 @@ pub struct At {
 impl At {
     /// The corner lowered to the cube's own lattice, the only place a cube
     /// of that side can be.
-    pub fn of_cube(at: &Pvf3, side: Scale) -> At {
-        At::of(&side.base_of(side.index_of(at)))
+    pub fn of_cube(at: &Pvf3, side: Zoom) -> At {
+        At::of(&base_of(side, index_of(side, at)))
     }
 
     pub fn of(at: &Pvf3) -> At {
-        let cell = CELL.index_of(at);
+        let cell = index_of(CELL, at);
         At {
             col_idx: column_of(cell),
             band: band_of(cell[2]).0,
-            step: OBJECT_FINEST.index_of(at).map(|v| v as u32 & POS_MASK),
+            step: index_of(OBJECT_FINEST, at).map(|v| v as u32 & POS_MASK),
         }
     }
 
@@ -101,7 +99,7 @@ impl At {
 
     pub fn corner(self) -> Pvf3 {
         let [x0, y0, _] = column_cell(self.col_idx);
-        pvf3::add(&CELL.base_of([x0, y0, band_cell_z(self.band)]), &OBJECT_FINEST.base_of(self.step.map(i64::from)))
+        pvf3::add(&base_of(CELL, [x0, y0, band_cell_z(self.band)]), &base_of(OBJECT_FINEST, self.step.map(i64::from)))
     }
 
     /// Exact, since a step is a binary fraction of a unit.
@@ -149,7 +147,7 @@ impl Entry {
     }
 
     pub fn size(&self) -> f64 {
-        unpack_pos(self.at.pos).3.side()
+        units(unpack_pos(self.at.pos).3)
     }
 
     pub fn cell(&self) -> [i64; 3] {
@@ -235,13 +233,13 @@ fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&Entry)) {
 
 /// Whether any leaf, air included, is written in the cell `at` lies in.
 pub fn holds_entry(at: &Pvf3) -> bool {
-    let [ix, iy, iz] = CELL.index_of(at);
+    let [ix, iy, iz] = index_of(CELL, at);
     cell_run(ix, iy, iz).is_some()
 }
 
 /// What stands in the cell `at` lies in, air left out.
 pub fn objects_at(at: &Pvf3) -> Vec<Entry> {
-    let [ix, iy, iz] = CELL.index_of(at);
+    let [ix, iy, iz] = index_of(CELL, at);
     let mut out = Vec::new();
     each_cell_entry(ix, iy, iz, &mut |entry| {
         if !object_value_is_air(entry.state) {
@@ -277,12 +275,12 @@ fn store_state() -> &'static mut StoreState {
 /// The never-written AIR entry the eraser's preview injects into the drawn
 /// build where it hovers bare terrain: the cube of `size` holding `at`.
 pub fn carve_entry(at: &Pvf3, size: f64) -> EntryAt {
-    let lowered = At::of_cube(at, Scale::of_side(size));
+    let lowered = At::of_cube(at, of_side(size));
     let [x, y, z] = lowered.step;
     EntryAt {
         col_idx: lowered.col_idx,
         band_idx: lowered.band,
-        pos: pack_pos(x, y, z, Scale::of_side(size)),
+        pos: pack_pos(x, y, z, of_side(size)),
     }
 }
 
@@ -293,8 +291,8 @@ pub fn object_col_revision(col_idx: IVec) -> u32 {
 
 // ---- Persistence ----
 //
-// Per page: [page_idx u64, x f32[], y f32[], z f32[], size f32[], value u32[]],
-// positions page-local. A placed decor's facing is derived from its position,
+// Per tile: [tile_idx u64, x f32[], y f32[], z f32[], size f32[], value u32[]],
+// positions tile-local. A placed decor's facing is derived from its position,
 // so it is not stored. The layout's version is in the storage key; a blob of
 // another layout is never read. Positions round-trip exactly in f32.
 pub fn object_cols() -> Vec<IVec> {
@@ -303,7 +301,7 @@ pub fn object_cols() -> Vec<IVec> {
 }
 
 #[derive(Default)]
-struct PageRows {
+struct TileRows {
     x: Vec<f32>,
     y: Vec<f32>,
     z: Vec<f32>,
@@ -311,21 +309,21 @@ struct PageRows {
     value: Vec<u32>,
 }
 
-fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
-    let page_idx = TO_XY(L3_IDX(FROM_L2_IDX(col_idx)));
-    let page_base = FROM_L3_IDX(page_idx);
-    let slot = match by_page.iter().position(|(p, _)| *p == page_idx) {
+fn collect_col(by_tile: &mut Vec<(IVec, TileRows)>, col_idx: IVec) {
+    let tile_idx = TO_XY(idx(LEAF_Z, from_idx(BAND, col_idx)));
+    let tile_base = from_idx(LEAF_Z, tile_idx);
+    let slot = match by_tile.iter().position(|(p, _)| *p == tile_idx) {
         Some(slot) => slot,
         None => {
-            by_page.push((page_idx, PageRows::default()));
-            by_page.len() - 1
+            by_tile.push((tile_idx, TileRows::default()));
+            by_tile.len() - 1
         }
     };
-    let rows = &mut by_page[slot].1;
+    let rows = &mut by_tile[slot].1;
     each_col_entry(col_idx, &mut |entry| {
         let corner = entry.corner();
         let local = Pvf3 {
-            i: ivec::sub(corner.i, page_base),
+            i: ivec::sub(corner.i, tile_base),
             f: corner.f,
         };
         rows.x.push(pvf3::to_real(pvf3::X(&local)) as f32);
@@ -336,16 +334,16 @@ fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
     });
 }
 
-fn encode_pages(by_page: &[(IVec, PageRows)]) -> Result<String, MarshalError> {
+fn encode_tiles(by_tile: &[(IVec, TileRows)]) -> Result<String, MarshalError> {
     let mut tree = TreeView::new();
     tree.branch(Some(&mut |b| {
-        for (page_idx, rows) in by_page {
+        for (tile_idx, rows) in by_tile {
             if rows.value.is_empty() {
                 continue;
             }
             let value = &rows.value;
             b.branch(Some(&mut |p| {
-                p.u64(Some(*page_idx))
+                p.u64(Some(*tile_idx))
                     .f32_array(Some(&rows.x))
                     .f32_array(Some(&rows.y))
                     .f32_array(Some(&rows.z))
@@ -371,13 +369,14 @@ fn decode_objects(blob: &str) -> Result<(), MarshalError> {
     let mut writes = Vec::new();
     let result = (|| {
         for k in 0..root.len {
-            let page = root.at_branch(k)?;
-            let page_base = FROM_L3_IDX(page.at(0)?.get_u64()?);
-            let (x, y, z) = (page.at(1)?.get_array::<f32>()?, page.at(2)?.get_array::<f32>()?, page.at(3)?.get_array::<f32>()?);
-            let (size, value) = (page.at(4)?.get_array::<f32>()?, page.at(5)?.get_array::<u32>()?);
+            let tile = root.at_branch(k)?;
+            let tile_base = from_idx(LEAF_Z, tile.at(0)?.get_u64()?);
+            let (x, y, z) = (tile.at(1)?.get_array::<f32>()?, tile.at(2)?.get_array::<f32>()?, tile.at(3)?.get_array::<f32>()?);
+            let (size, value) = (tile.at(4)?.get_array::<f32>()?, tile.at(5)?.get_array::<u32>()?);
+            let base = ivec::to_v3(tile_base);
             for r in 0..value.len() {
-                let local = [x[r] as f64, y[r] as f64, z[r] as f64];
-                let corner = local_world_to_canonical(&local, page_base);
+                // Stored against its tile's corner, so an f32 resolves it.
+                let corner = world_to_canonical(&[base[0] + x[r] as f64, base[1] + y[r] as f64, base[2] + z[r] as f64]);
                 writes.push(write_of(&corner, size[r] as f64, value[r]));
             }
         }
@@ -427,7 +426,7 @@ fn loaded() {
 }
 
 /// A save encodes the whole store, so it is put off to merge a burst of
-/// writes; what is pending is flushed when the page hides.
+/// writes; what is pending is flushed when the tile hides.
 const SAVE_DELAY_MS: f64 = 300.0;
 
 fn save() {
@@ -453,7 +452,7 @@ pub fn flush_save_if_due() {
 }
 
 /// Walks the columns on the turn quota. A walk the store moved under is
-/// dropped and redone; the save counts as done only once written, so a page
+/// dropped and redone; the save counts as done only once written, so a tile
 /// hiding mid-walk still flushes it.
 pub async fn save_task() {
     loop {
@@ -462,7 +461,7 @@ pub async fn save_task() {
             continue;
         }
         let revision = objects_revision();
-        let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
+        let mut by_tile: Vec<(IVec, TileRows)> = Vec::new();
         let mut whole = true;
         for col_idx in object_cols() {
             yield_if_spent(world_edge).await;
@@ -470,7 +469,7 @@ pub async fn save_task() {
                 whole = false;
                 break;
             }
-            collect_col(&mut by_page, col_idx);
+            collect_col(&mut by_tile, col_idx);
         }
         yield_if_spent(world_edge).await;
         if !whole || objects_revision() != revision {
@@ -480,7 +479,7 @@ pub async fn save_task() {
         if store_state().save_due_ms.take().is_none() {
             continue;
         }
-        if let Ok(blob) = encode_pages(&by_page) {
+        if let Ok(blob) = encode_tiles(&by_tile) {
             keep(blob);
         }
     }
@@ -490,11 +489,11 @@ pub fn flush_save() {
     if store_state().save_due_ms.take().is_none() {
         return;
     }
-    let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
+    let mut by_tile: Vec<(IVec, TileRows)> = Vec::new();
     for col_idx in object_cols() {
-        collect_col(&mut by_page, col_idx);
+        collect_col(&mut by_tile, col_idx);
     }
-    if let Ok(blob) = encode_pages(&by_page) {
+    if let Ok(blob) = encode_tiles(&by_tile) {
         keep(blob);
     }
 }
@@ -509,15 +508,15 @@ fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
 }
 
 fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
-    // Size is a power of two by construction; the nearest scale only guards
+    // Size is a power of two by construction; the nearest cell zoom only guards
     // against float noise.
-    let scale = Scale::of_side(size);
-    let at = At::of_cube(coord, scale);
+    let cell_zoom = of_side(size);
+    let at = At::of_cube(coord, cell_zoom);
     Write {
         col_idx: at.col_idx,
         band_idx: at.band,
         at: at.step,
-        scale,
+        cell_zoom,
         state: val,
     }
 }
@@ -532,7 +531,7 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
     }
     let PlaceableCube::Ground(look) = cube else { return false };
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
-    let Some(ground) = Access::now().at(at, GROUND_Z).exact() else { return false };
+    let Some(ground) = Access::now().at(at, LEAF_Z).exact() else { return false };
     if ground.cell != look as u8 {
         return false;
     }
@@ -615,7 +614,7 @@ impl Column {
         self.bounds.clear();
         for (&bz, tree) in &self.bands {
             let mut bound: Option<Aabb> = None;
-            sparse_tree::walk(tree, &mut |x, y, z, scale, value| {
+            sparse_tree::walk(tree, &mut |x, y, z, cell_zoom, value| {
                 let (x, y, z, val) = (x as u32, y as u32, z as u32, u32::from(value));
                 if val == VOID || val == UNKNOWN {
                     return;
@@ -623,20 +622,20 @@ impl Column {
                 let min = [x as f64 * STEP_UNITS, y as f64 * STEP_UNITS, bz as f64 * BAND_UNITS + z as f64 * STEP_UNITS];
                 let b = Aabb {
                     min,
-                    max: min.map(|v| v + scale.side()),
+                    max: min.map(|v| v + units(cell_zoom)),
                 };
                 bound = Some(bound.map_or(b, |a| a.join(b)));
-                if scale <= CELL {
+                if cell_zoom >= CELL {
                     self.e_band.push(bz);
-                    self.e_pos.push(pack_pos(x, y, z, scale));
+                    self.e_pos.push(pack_pos(x, y, z, cell_zoom));
                     self.e_state.push(val);
                     return;
                 }
                 // In walk order, so the lanes stay sorted.
-                let steps = scale.above(CELL) as u32;
-                for k in 0..u64::from(CELL.count_in(scale)).pow(3) {
+                let steps = u32::from(CELL - cell_zoom);
+                for k in 0..u64::from(count(CELL, cell_zoom)).pow(3) {
                     let cell = at_walk_order::<3>(k, steps).map(i64::from);
-                    let [dx, dy, dz] = first_descendant_of(cell, CELL.above(OBJECT_FINEST) as u32).map(|v| v as u32);
+                    let [dx, dy, dz] = first_descendant_of(cell, u32::from(OBJECT_FINEST - CELL)).map(|v| v as u32);
                     self.e_band.push(bz);
                     self.e_pos.push(pack_pos(x + dx, y + dy, z + dz, CELL));
                     self.e_state.push(val);
@@ -661,7 +660,7 @@ pub struct Write {
     pub col_idx: IVec,
     pub band_idx: BandZ,
     pub at: [u32; 3],
-    pub scale: Scale,
+    pub cell_zoom: Zoom,
     pub state: u32,
 }
 
@@ -671,20 +670,20 @@ pub struct Store {
     columns: BTreeMap<IVec, Column>,
     /// For every cube from a band's up to `INDEX_TOP` holding any entry, the
     /// box its entries fill; a cube's is the union of its children's.
-    bounds: HashMap<(Scale, [i64; 3]), Aabb>,
+    bounds: HashMap<(Zoom, [i64; 3]), Aabb>,
     /// What the objects fold to at every cell from a band's up to the top's; under a band, the band's tree keeps it (`set_folded`).
-    folds: HashMap<(Scale, [i64; 3]), u16>,
+    folds: HashMap<(Zoom, [i64; 3]), u16>,
 }
 
 /// Majority over the 2×2×2 children (pxl-spec bake/fold.rs), empty counted as a value
 /// and a non-voxel value as empty, so a lone cube goes at the first fold and
 /// a wall keeps whole cells.
-fn fold_cell(children: &[u16], scale: Scale) -> u16 {
+fn fold_cell(children: &[u16], cell_zoom: Zoom) -> u16 {
     let v: [u16; 8] = core::array::from_fn(|k| if object_value_is_voxel(u32::from(children[k])) { children[k] } else { VOID as u16 });
-    majority(v, zoom_of(scale))
+    majority(v, cell_zoom)
 }
 
-const TOP_CELL: Scale = GROUND.side_at(TOP_Z);
+const TOP_CELL: Zoom = GROUND.cell_zoom(TOP_Z);
 
 /// A top cube's X as keyed, and the rounds of the world the asker stands from
 /// it: a query is moved to the stored copy, and what it meets moved back.
@@ -694,31 +693,31 @@ fn named_top(x: i64) -> (i64, i64) {
 }
 
 /// The coarsest cube the index keeps: as tall as `REACH` and as wide as the
-/// coarsest page, so any query box meets at most eight of them.
-const INDEX_TOP: Scale = {
+/// coarsest tile, so any query box meets at most eight of them.
+const INDEX_TOP: Zoom = {
     let tall = REACH.max[2] - REACH.min[2];
-    let wide = span_of(TOP_Z);
+    let wide = units(TOP_Z);
     let mut s = BAND;
-    while s.side() < tall || s.side() < wide {
-        s = s.up(1);
+    while units(s) < tall || units(s) < wide {
+        s = s - 1;
     }
     s
 };
 
 /// Rebuilds the chain over one cube up to `top`; a cube reducing to nothing
 /// is removed.
-fn propagate_up<V: Copy>(map: &mut HashMap<(Scale, [i64; 3]), V>, (mut scale, mut at): (Scale, [i64; 3]), top: Scale, first: Option<V>, reduce: impl Fn(Scale, [Option<V>; 8]) -> Option<V>) {
+fn propagate_up<V: Copy>(map: &mut HashMap<(Zoom, [i64; 3]), V>, (mut cell_zoom, mut at): (Zoom, [i64; 3]), top: Zoom, first: Option<V>, reduce: impl Fn(Zoom, [Option<V>; 8]) -> Option<V>) {
     let mut v = first;
     loop {
         match v {
-            Some(v) => map.insert((scale, at), v),
-            None => map.remove(&(scale, at)),
+            Some(v) => map.insert((cell_zoom, at), v),
+            None => map.remove(&(cell_zoom, at)),
         };
-        if scale >= top {
+        if cell_zoom <= top {
             return;
         }
-        (at, scale) = (parent_of(at), scale.up(1));
-        v = reduce(scale, core::array::from_fn(|k| map.get(&(scale.down(1), child_of(at, k))).copied()));
+        (at, cell_zoom) = (parent_of(at), cell_zoom - 1);
+        v = reduce(cell_zoom, core::array::from_fn(|k| map.get(&(cell_zoom + 1, child_of(at, k))).copied()));
     }
 }
 
@@ -727,9 +726,9 @@ fn band_node(col_idx: IVec, band_idx: BandZ) -> [i64; 3] {
     [ivec::X(col_idx), ivec::Y(col_idx), i64::from(band_idx)]
 }
 
-/// The cell of `scale` holding the leaf at `step` in the band at `band`.
-fn leaf_cell(band: [i64; 3], step: [i64; 3], scale: Scale) -> [i64; 3] {
-    let (cells, per) = (scale.count_in(BAND) as i64, OBJECT_FINEST.count_in(scale) as i64);
+/// The cell of `cell_zoom` holding the leaf at `step` in the band at `band`.
+fn leaf_cell(band: [i64; 3], step: [i64; 3], cell_zoom: Zoom) -> [i64; 3] {
+    let (cells, per) = (count(cell_zoom, BAND) as i64, count(OBJECT_FINEST, cell_zoom) as i64);
     core::array::from_fn(|k| band[k] * cells + step[k] / per)
 }
 
@@ -778,8 +777,8 @@ impl Store {
     /// some; a band's bound is cut to `query` and may include air.
     pub fn bound_in(&self, query: &Aabb) -> Option<Aabb> {
         let mut out: Option<Aabb> = None;
-        self.descend(query, BAND, &mut |scale, at, bound| {
-            let whole = query.contains(scale.cube(at)) || scale == BAND;
+        self.descend(query, BAND, &mut |cell_zoom, at, bound| {
+            let whole = query.contains(cube(cell_zoom, at)) || cell_zoom == BAND;
             if let Some(b) = bound.meet(*query).filter(|_| whole) {
                 out = Some(out.map_or(b, |o| o.join(b)));
             }
@@ -788,43 +787,45 @@ impl Store {
         out
     }
 
-    pub fn visit_in(&self, query: &Aabb, scale: Scale, each: &mut dyn FnMut([i64; 3], &Aabb)) {
-        self.descend(query, scale, &mut |s, at, bound| {
-            if s == scale {
+    pub fn visit_in(&self, query: &Aabb, cell_zoom: Zoom, each: &mut dyn FnMut([i64; 3], &Aabb)) {
+        self.descend(query, cell_zoom, &mut |s, at, bound| {
+            if s == cell_zoom {
                 each(at, bound);
             }
-            s != scale
+            s != cell_zoom
         });
     }
 
-    fn descend(&self, query: &Aabb, finest: Scale, enter: &mut dyn FnMut(Scale, [i64; 3], &Aabb) -> bool) {
-        fn go(store: &Store, query: &Aabb, finest: Scale, scale: Scale, at: [i64; 3], enter: &mut dyn FnMut(Scale, [i64; 3], &Aabb) -> bool) {
-            let Some(bound) = store.bounds.get(&(scale, at)) else { return };
-            if bound.meet(*query).is_none() || !enter(scale, at, bound) || scale <= finest {
+    fn descend(&self, query: &Aabb, finest: Zoom, enter: &mut dyn FnMut(Zoom, [i64; 3], &Aabb) -> bool) {
+        fn go(store: &Store, query: &Aabb, finest: Zoom, cell_zoom: Zoom, at: [i64; 3], enter: &mut dyn FnMut(Zoom, [i64; 3], &Aabb) -> bool) {
+            let Some(bound) = store.bounds.get(&(cell_zoom, at)) else { return };
+            if bound.meet(*query).is_none() || !enter(cell_zoom, at, bound) || cell_zoom >= finest {
                 return;
             }
             for k in 0..8 {
-                go(store, query, finest, scale.down(1), child_of(at, k), enter);
+                go(store, query, finest, cell_zoom + 1, child_of(at, k), enter);
             }
         }
-        let side = INDEX_TOP.side();
+        let side = units(INDEX_TOP);
         let range = |k: usize| (query.min[k].max(REACH.min[k]) / side).floor() as i64..=(query.max[k].min(REACH.max[k]) / side).floor() as i64;
         for z in range(2) {
             for y in range(1) {
                 for x in range(0) {
                     let (named, round) = named_top(x);
-                    let (dx, cells) = (round as f64 * ROUND, |s: Scale| round * around(s));
+                    let (dx, cells) = (round as f64 * ROUND, |s: Zoom| round * around(s));
                     let q = query.moved([-dx, 0.0, 0.0]);
-                    go(self, &q, finest, INDEX_TOP, [named, y, z], &mut |s, [cx, cy, cz], bound| enter(s, [cx + cells(s), cy, cz], &bound.moved([dx, 0.0, 0.0])));
+                    go(self, &q, finest, INDEX_TOP, [named, y, z], &mut |s, [cx, cy, cz], bound| {
+                        enter(s, [cx + cells(s), cy, cz], &bound.moved([dx, 0.0, 0.0]))
+                    });
                 }
             }
         }
     }
 
     /// The columns under a node, sorted and deduplicated.
-    pub fn cols_under(&self, (side, at): (Scale, [i64; 2]), out: &mut Vec<IVec>) -> Result<(), TryReserveError> {
+    pub fn cols_under(&self, (side, at): (Zoom, [i64; 2]), out: &mut Vec<IVec>) -> Result<(), TryReserveError> {
         let first = out.len();
-        let s = side.side();
+        let s = units(side);
         let query = Aabb {
             min: [at[0] as f64 * s, at[1] as f64 * s, REACH.min[2]],
             max: [(at[0] + 1) as f64 * s, (at[1] + 1) as f64 * s, REACH.max[2]],
@@ -848,43 +849,45 @@ impl Store {
         Ok(())
     }
 
-    /// Every cell of `scale` that may hold objects along the ray, in ray
+    /// Every cell of `cell_zoom` that may hold objects along the ray, in ray
     /// order, until `each` stops it. A cube is entered only where the ray
-    /// crosses its bound grown to whole cells of `scale`.
-    pub fn along_ray(&self, origin: V3, direction: V3, (t0, t1): (f64, f64), scale: Scale, each: &mut dyn FnMut([i64; 3]) -> bool) {
-        cells_along((origin, direction), (t0, t1), INDEX_TOP.side(), &mut |[x, y, z], span| {
+    /// crosses its bound grown to whole cells of `cell_zoom`.
+    pub fn along_ray(&self, origin: V3, direction: V3, (t0, t1): (f64, f64), cell_zoom: Zoom, each: &mut dyn FnMut([i64; 3]) -> bool) {
+        cells_along((origin, direction), (t0, t1), units(INDEX_TOP), &mut |[x, y, z], span| {
             let (named, round) = named_top(x);
             let from = [origin[0] - round as f64 * ROUND, origin[1], origin[2]];
-            self.along_ray_from((from, direction), span, scale, INDEX_TOP, [named, y, z], &mut |[cx, cy, cz]| each([cx + round * around(scale), cy, cz]))
+            self.along_ray_from((from, direction), span, cell_zoom, INDEX_TOP, [named, y, z], &mut |[cx, cy, cz]| {
+                each([cx + round * around(cell_zoom), cy, cz])
+            })
         });
     }
 
-    fn along_ray_from(&self, ray: (V3, V3), span: (f64, f64), scale: Scale, node: Scale, at: [i64; 3], each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
+    fn along_ray_from(&self, ray: (V3, V3), span: (f64, f64), cell_zoom: Zoom, node: Zoom, at: [i64; 3], each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
         let Some(bound) = self.bounds.get(&(node, at)) else { return false };
-        let Some(span) = slab(ray, &bound.snapped_out(scale.side()), span) else { return false };
-        if node == scale {
+        let Some(span) = slab(ray, &bound.snapped_out(units(cell_zoom)), span) else { return false };
+        if node == cell_zoom {
             return each(at);
         }
-        if node == BAND && scale < BAND {
-            return cells_along(ray, span, scale.side(), &mut |cell, _| each(cell));
+        if node == BAND && cell_zoom > BAND {
+            return cells_along(ray, span, units(cell_zoom), &mut |cell, _| each(cell));
         }
         let mut kids = [(0.0, [0i64; 3], (0.0, 0.0)); 8];
         let mut n = 0;
         for k in 0..8 {
             let child = child_of(at, k);
-            let Some(b) = self.bounds.get(&(node.down(1), child)) else { continue };
-            if let Some(s) = slab(ray, &b.snapped_out(scale.side()), span) {
+            let Some(b) = self.bounds.get(&(node + 1, child)) else { continue };
+            if let Some(s) = slab(ray, &b.snapped_out(units(cell_zoom)), span) {
                 kids[n] = (s.0, child, s);
                 n += 1;
             }
         }
         kids[..n].sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
-        kids[..n].iter().any(|&(_, child, s)| self.along_ray_from(ray, s, scale, node.down(1), child, each))
+        kids[..n].iter().any(|&(_, child, s)| self.along_ray_from(ray, s, cell_zoom, node + 1, child, each))
     }
 
     fn index_up(&mut self, col_idx: IVec, band_idx: BandZ) {
         let at = band_node(col_idx, band_idx);
-        let corner = FROM_L2_IDX(col_idx);
+        let corner = from_idx(BAND, col_idx);
         let (x0, y0) = (ivec::X(corner) as f64, ivec::Y(corner) as f64);
         let bound = self.columns.get(&col_idx).and_then(|c| c.bounds.get(&band_idx)).map(|b| Aabb {
             min: [b.min[0] + x0, b.min[1] + y0, b.min[2]],
@@ -901,7 +904,7 @@ impl Store {
     }
 
     /// Applies every write and rebuilds each changed column's entries once.
-    /// Returns the bands changed, a band being a z16 chunk's height.
+    /// Returns the bands changed, a band being a leaf chunk's height.
     pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> BTreeSet<(IVec, BandZ)> {
         let mut changed = BTreeSet::new();
         for w in writes {
@@ -936,12 +939,12 @@ impl Store {
 
     /// What the objects fold to in the ground cells `from..to` of `target`,
     /// at every height, with `hide` left out.
-    pub fn fold_at(&self, target: Scale, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
+    pub fn fold_at(&self, target: Zoom, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
         out.clear();
         let mut refused = Ok(());
         let inside = |x: i64, y: i64| (from[0]..to[0]).contains(&x) && (from[1]..to[1]).contains(&y);
-        if target >= BAND {
-            let side = target.side();
+        if target <= BAND {
+            let side = units(target);
             let query = Aabb {
                 min: [from[0] as f64 * side, from[1] as f64 * side, REACH.min[2]],
                 max: [to[0] as f64 * side, to[1] as f64 * side, REACH.max[2]],
@@ -954,7 +957,7 @@ impl Store {
                 }
             });
         } else {
-            let cells = target.count_in(BAND) as i64;
+            let cells = count(target, BAND) as i64;
             for cy in from[1].div_euclid(cells)..=(to[1] - 1).div_euclid(cells) {
                 for cx in from[0].div_euclid(cells)..=(to[0] - 1).div_euclid(cells) {
                     let Some(column) = self.columns.get(&column_at([cx, cy])) else { continue };
@@ -968,7 +971,7 @@ impl Store {
                                 if !object_value_is_voxel(u32::from(v)) {
                                     return;
                                 }
-                                let n = target.count_in(s) as i64;
+                                let n = count(target, s) as i64;
                                 let at = leaf_cell(band, [x, y, z].map(i64::from), target);
                                 for dz in 0..n {
                                     for dy in 0..n {
@@ -1003,41 +1006,41 @@ impl Store {
 
     /// False says nothing is placed in that band cell; true only that something may be.
     pub fn may_hold(&self, at: [i64; 3]) -> bool {
-        let [x, y, band] = ancestor_of(at, BAND.above(CELL) as u32);
+        let [x, y, band] = ancestor_of(at, u32::from(CELL - BAND));
         self.columns.get(&column_at([x, y])).is_some_and(|c| c.bands.contains_key(&(band as BandZ)))
     }
 
     /// The cell over the highest band in the column of cell `[x, y]`.
     pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
-        let steps = BAND.above(CELL) as u32;
+        let steps = u32::from(CELL - BAND);
         let [cx, cy] = ancestor_of([x, y], steps);
         let band = *self.columns.get(&column_at([cx, cy]))?.bands.keys().next_back()?;
         Some(first_descendant_of([i64::from(band) + 1], steps)[0])
     }
 
     /// VOID where nothing; a non-voxel value is returned as is.
-    pub fn folded_value(&self, scale: Scale, at: [i64; 3]) -> u16 {
-        if scale >= BAND {
-            return self.folds.get(&(scale, wrap_cell(scale, at))).copied().unwrap_or(VOID as u16);
+    pub fn folded_value(&self, cell_zoom: Zoom, at: [i64; 3]) -> u16 {
+        if cell_zoom <= BAND {
+            return self.folds.get(&(cell_zoom, wrap_cell(cell_zoom, at))).copied().unwrap_or(VOID as u16);
         }
-        let steps = BAND.above(scale) as u32;
+        let steps = u32::from(cell_zoom - BAND);
         let [x, y, band] = ancestor_of(at, steps);
         let Some(tree) = self.columns.get(&column_at([x, y])).and_then(|c| c.bands.get(&(band as BandZ))) else {
             return VOID as u16;
         };
-        let key = band_key(first_descendant_of(offset_in(at, steps), scale.above(OBJECT_FINEST) as u32).map(|c| c as u32));
-        tree.mem.data[mem::resolve::<Ivec, u16>(&tree.mem, &tree.layout, key, scale, 0) as usize]
+        let key = band_key(first_descendant_of(offset_in(at, steps), u32::from(OBJECT_FINEST - cell_zoom)).map(|c| c as u32));
+        tree.mem.data[mem::resolve::<Ivec, u16>(&tree.mem, &tree.layout, key, cell_zoom, 0) as usize]
     }
 
     /// Column `col_idx`'s voxel entries at `target`: a leaf finer than
     /// `target` folded to it, a coarser one kept whole. Painted cell by cell, a
     /// 1u cube came out as sixty-four sub-cell boxes the mesher never merges.
-    pub fn fold_entries(&self, col_idx: IVec, target: Scale, hide: Option<EntryAt>, visit: &mut dyn FnMut(BandZ, [u32; 3], Scale, u32)) {
+    pub fn fold_entries(&self, col_idx: IVec, target: Zoom, hide: Option<EntryAt>, visit: &mut dyn FnMut(BandZ, [u32; 3], Zoom, u32)) {
         let Some(column) = self.columns.get(&col_idx) else { return };
         let hidden = hide.filter(|h| h.col_idx == col_idx).and_then(|h| {
             let own = unpack_pos(h.pos).3;
             let (at, v) = self.hidden(h, target)?;
-            Some((h.band_idx, at, if own > target { own } else { target }, u32::from(v)))
+            Some((h.band_idx, at, own.min(target), u32::from(v)))
         });
         for (&band_idx, tree) in &column.bands {
             let band = band_node(col_idx, band_idx);
@@ -1047,8 +1050,8 @@ impl Store {
                 target,
                 &mut |x, y, z, s, v| {
                     let mut v = u32::from(v);
-                    if let Some((hidden_band, at, scale, w)) = hidden {
-                        if hidden_band == band_idx && scale == s && leaf_cell(band, [x, y, z].map(i64::from), s) == at {
+                    if let Some((hidden_band, at, cell_zoom, w)) = hidden {
+                        if hidden_band == band_idx && cell_zoom == s && leaf_cell(band, [x, y, z].map(i64::from), s) == at {
                             v = w;
                         }
                     }
@@ -1061,22 +1064,22 @@ impl Store {
         }
     }
 
-    fn hidden(&self, hide: EntryAt, target: Scale) -> Option<([i64; 3], u16)> {
+    fn hidden(&self, hide: EntryAt, target: Zoom) -> Option<([i64; 3], u16)> {
         self.columns.get(&hide.col_idx)?.bands.get(&hide.band_idx)?;
         let (x, y, z, own) = unpack_pos(hide.pos);
         let mut at = leaf_cell(band_node(hide.col_idx, hide.band_idx), [x, y, z].map(i64::from), own);
-        let (mut scale, mut v) = (own, VOID as u16);
-        while scale < target {
-            let (parent, up) = (parent_of(at), scale.up(1));
+        let (mut cell_zoom, mut v) = (own, VOID as u16);
+        while cell_zoom > target {
+            let (parent, up) = (parent_of(at), cell_zoom - 1);
             let children: [u16; 8] = core::array::from_fn(|k| {
                 let c = child_of(parent, k);
                 if c == at {
                     v
                 } else {
-                    self.folded_value(scale, c)
+                    self.folded_value(cell_zoom, c)
                 }
             });
-            (at, scale, v) = (parent, up, fold_cell(&children, up));
+            (at, cell_zoom, v) = (parent, up, fold_cell(&children, up));
         }
         Some((at, v))
     }
@@ -1085,16 +1088,22 @@ impl Store {
         let at = band_node(col_idx, band_idx);
         let band = self.columns.get(&col_idx).and_then(|c| c.bands.get(&band_idx));
         let v = band.map(|t| fold_cell(&t.mem.data[..8], BAND)).filter(|&v| v != VOID as u16);
-        propagate_up(&mut self.folds, (BAND, at), TOP_CELL, v, |scale, children| {
-            let v = fold_cell(&children.map(|c| c.unwrap_or(VOID as u16)), scale);
+        propagate_up(&mut self.folds, (BAND, at), TOP_CELL, v, |cell_zoom, children| {
+            let v = fold_cell(&children.map(|c| c.unwrap_or(VOID as u16)), cell_zoom);
             (v != VOID as u16).then_some(v)
         });
     }
 
     /// False where VOID was written where no band is.
     fn put(&mut self, w: Write) -> bool {
-        let Write { col_idx, band_idx, at, scale, state } = w;
-        xpute_core::ensure!((OBJECT_FINEST..=CELL).contains(&scale), ENOTRECOVERABLE);
+        let Write {
+            col_idx,
+            band_idx,
+            at,
+            cell_zoom,
+            state,
+        } = w;
+        xpute_core::ensure!((CELL..=OBJECT_FINEST).contains(&cell_zoom), ENOTRECOVERABLE);
         let value = u16::try_from(state).or_bug(Errno::EOVERFLOW);
         let has_band = self.columns.get(&col_idx).is_some_and(|c| c.bands.contains_key(&band_idx));
         if !has_band && state == VOID {
@@ -1108,7 +1117,7 @@ impl Store {
             bounds: BTreeMap::new(),
         });
         let tree = column.bands.entry(band_idx).or_insert_with(|| sparse_tree::alloc::<u16>(OBJECT_LAYOUT, 64));
-        mem::set_folded::<Ivec, u16>(&mut tree.mem, &tree.layout, band_key(at), value, scale, 0, &fold_cell);
+        mem::set_folded::<Ivec, u16>(&mut tree.mem, &tree.layout, band_key(at), value, cell_zoom, 0, &fold_cell);
         true
     }
 
@@ -1169,6 +1178,25 @@ fn try_insert(out: &mut HashMap<[i64; 3], u32>, k: [i64; 3], v: u32) -> Result<(
     }
     out.insert(k, v);
     Ok(())
+}
+
+/// A column's entries, in band and walk order, a lane a field.
+#[derive(Clone, Copy)]
+pub struct Entries<'a> {
+    pub col_idx: IVec,
+    pub band: &'a [BandZ],
+    pub pos: &'a [u32],
+    pub state: &'a [u32],
+}
+
+impl Entries<'_> {
+    pub fn at(&self, k: usize) -> EntryAt {
+        EntryAt {
+            col_idx: self.col_idx,
+            band_idx: self.band[k],
+            pos: self.pos[k],
+        }
+    }
 }
 
 #[cfg(test)]

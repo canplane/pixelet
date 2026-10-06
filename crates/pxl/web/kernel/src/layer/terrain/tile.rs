@@ -1,15 +1,14 @@
-// pxl-kernel/layer/terrain/page.rs
+// pxl-kernel/layer/terrain/tile.rs
 
-//! Terrain as a layer of the pyramid; a page's record is a room in
-//! `.fixed.terrain`, decoded into straight from the packet. A page the bake
-//! left as no object is drawn from the page over it, whose cells there are
+//! Terrain as a layer of the pyramid; a tile's record is a room in
+//! `.fixed.terrain`, decoded into straight from the packet. A tile the bake
+//! left as no object is drawn from the tile over it, whose cells there are
 //! open water; at the source's top, it is void.
 
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
-use pxl_spec::bake::format::{decode_terrain_into, Block, GroundCell, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
-use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::bake::format::{decode_terrain_into, Extent, GroundCell, Terrain, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{Page, GROUND_Z};
+use pxl_spec::space::pyramid::{Tile, LEAF_Z};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::mem::base::ptr_at;
@@ -17,8 +16,9 @@ use xpute_runtime::mem::base::ptr_at;
 use crate::sched::profiler::record::Failure;
 
 use crate::io::demand::{Category, Phases, TaskPhaseName};
-use crate::layer::terrain::fixed::{blocks_off, deck_off, ele_off, extent_off, ground_off, BLOCK_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
+use crate::layer::terrain::fixed::{coarse_off, deck_off, ele_off, extent_off, ground_off, COARSE_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::mem::fixed::{at, Range};
+use crate::world::access::Access;
 use crate::world::pyramid::{Layer, Pyramid};
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
@@ -38,44 +38,44 @@ impl Layer for Terrain {
         Some(Terrain::void())
     }
 
-    /// One pass from the packet: nothing page-sized stands between arrival and
+    /// One pass from the packet: nothing tile-sized stands between arrival and
     /// drawing.
     fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Terrain, Failure> {
         let t0 = now();
-        // SAFETY: the record is this page's, and nothing reads it until the page is set.
+        // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
         let terrain = decode_terrain_into(pkt, unsafe { room_of(record) })?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
         Ok(terrain)
     }
 
-    /// The ground under whatever this page is the finest resident one over
+    /// The ground under whatever this tile is the finest resident one over
     /// changes, so chunks compare their sources next turn.
-    fn changed(_p: Page, _present: bool) {
+    fn changed(_p: Tile, _present: bool) {
         crate::world::chunk::source::chunk_sources_changed();
     }
 }
 
 /// # Safety
-/// The record's lanes are the page's that is given them, and no other's,
-/// from now until another page takes the record.
-unsafe fn room_of(record: u32) -> PageRoom {
+/// The record's lanes are the tile's that is given them, and no other's,
+/// from now until another tile takes the record.
+unsafe fn room_of(record: u32) -> TileRoom {
     // Inside the range by the layout, so past its end is a bug.
     let lane = |off, bytes| at(Range::Terrain, off, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
-    let (cells, ele, extent, blocks) = (
+    let (cells, ele, extent, coarse) = (
         lane(ground_off(record), GROUND_LANE_BYTES),
         lane(ele_off(record), ELE_LANE_BYTES),
         lane(extent_off(record), EXTENT_LANE_BYTES),
-        lane(blocks_off(record), BLOCK_LANE_BYTES),
+        lane(coarse_off(record), COARSE_LANE_BYTES),
     );
     let deck_lane = |k: usize| lane(deck_off(record, k), DECK_LANE_BYTES[k]);
     // SAFETY: each lane is kernel memory at its own size, never freed, and the
-    // caller's contract makes it this page's alone.
+    // caller's contract makes it this tile's alone.
     unsafe {
-        PageRoom {
+        TileRoom {
             cells: core::slice::from_raw_parts_mut(ptr_at::<GroundCell>(cells), GROUND_LANE),
             ele: core::slice::from_raw_parts_mut(ptr_at::<i16>(ele), ELE_LANE),
             extent: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(extent), EXTENT_LANE),
-            blocks: core::slice::from_raw_parts_mut(ptr_at::<Block>(blocks), BLOCK_LANE),
+            coarse: core::slice::from_raw_parts_mut(ptr_at::<Extent>(coarse), COARSE_LANE),
             decks: deck::Room {
                 starts: core::slice::from_raw_parts_mut(ptr_at::<u32>(deck_lane(0)), MAX_DECKS + 1),
                 points: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(deck_lane(1)), MAX_POINTS),
@@ -90,13 +90,13 @@ unsafe fn room_of(record: u32) -> PageRoom {
     }
 }
 
-/// The source has nothing under `at`: the finest page held over it is void.
+/// The source has nothing under `at`: the ground cell there, as the finest
+/// tile held over it gives it, is void.
 pub fn void_under(at: &Pvf3) -> bool {
-    let paging = Terrain::pyramid().paging();
-    paging.drawn_from(Page::over(GROUND_Z, L3_IDX(at.i))).and_then(|q| paging.get(q)).is_some_and(Terrain::is_void)
+    Access::now().at(at, LEAF_Z).value().is_some_and(|g| g.top().is_none())
 }
 
 pub fn terrain_step() {
     let terrain = Terrain::pyramid();
-    terrain.step(crate::control::navigation::destination::page());
+    terrain.step(crate::control::navigation::destination::tile());
 }

@@ -42,15 +42,15 @@ struct Atmosphere {
   city_light: vec3f,
   // In units.
   earth_reach: f32,
-  // The south-west page, pages across the window and around the world; then a
-  // page's layer plus one in four bits, row by row, zero for the global picture.
+  // The south-west tile, tiles across the window and around the world; then a
+  // tile's layer plus one in four bits, row by row, zero for the global picture.
   earth_window: vec4i,
-  earth_pages: vec4u,
+  earth_tiles: vec4u,
 };
 
 // The test holds both to the host's (gpu/atmosphere.rs).
 const ATMOS_VEC4S: u32 = 15u;
-const EARTH_PAGE_BITS: u32 = 4u;
+const EARTH_TILE_BITS: u32 = 4u;
 
 // Field by field, never as a struct: a struct lost Safari's WebGPU its GPU process.
 @group(0) @binding(8) var<uniform> atmos_words: array<vec4f, ATMOS_VEC4S>;
@@ -90,7 +90,7 @@ fn atmos_cloud_gone_km() -> f32 { return atmos_words[11].w; }
 fn atmos_city_light() -> vec3f { return atmos_words[12].xyz; }
 fn atmos_earth_reach() -> f32 { return atmos_words[12].w; }
 fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[13]); }
-fn atmos_earth_pages() -> vec4u { return bitcast<vec4u>(atmos_words[14]); }
+fn atmos_earth_tiles() -> vec4u { return bitcast<vec4u>(atmos_words[14]); }
 
 
 /* the medium */

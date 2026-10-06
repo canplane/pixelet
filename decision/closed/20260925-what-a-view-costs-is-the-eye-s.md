@@ -2,7 +2,7 @@
 
 **2026-09-25** — a design conversation, not built yet. It replaces how the
 pyramid decides which zoom is drawn where
-([the mesh step and the zoom are one number](../20260921-the-mesh-step-and-the-zoom-are-one-number.md)
+([the mesh step and the zoom are one number](./20260921-the-mesh-step-and-the-zoom-are-one-number.md)
 set the window and the rings this takes apart).
 
 ## What was found

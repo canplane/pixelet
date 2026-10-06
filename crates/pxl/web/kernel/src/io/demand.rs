@@ -45,7 +45,7 @@ impl Phases {
 }
 
 /// A stream of demands; the profiler's CATEGORY_NAMES. An asset shares the
-/// pages' credits but is never withdrawn: it is wanted until it arrives.
+/// tiles' credits but is never withdrawn: it is wanted until it arrives.
 pub use crate::sched::profiler::spec::CategoryName as Category;
 
 impl Category {
@@ -61,7 +61,7 @@ impl Category {
     }
 }
 
-/// `subject` is a page's coordinate, or nothing for a stream of one.
+/// `subject` is a tile's coordinate, or nothing for a stream of one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DemandKey {
     pub category: Category,
@@ -74,16 +74,16 @@ impl DemandKey {
     }
 }
 
-/// Why a page is asked for, strongest first: the hold residency keeps it by.
+/// Why a tile is asked for, strongest first: the hold residency keeps it by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Why {
     Floor,
     /// On the line over a destination, which the camera waits for exactly.
     Destination,
-    /// On the line over a fault, so a coarser answer is held wherever the view
+    /// On the line over a miss, so a coarser answer is held wherever the view
     /// looks and leaving a zoom shows its parent at once (Cesium's `preloadAncestors`).
     Ancestor,
-    Fault,
+    Demand,
     Hint,
 }
 
@@ -95,9 +95,9 @@ pub struct Ask {
 
 impl Ask {
     /// A want with no place in the view, ordered by its category alone.
-    pub const PLAIN: Ask = Ask { why: Why::Fault, order: Order::LAST };
+    pub const PLAIN: Ask = Ask { why: Why::Demand, order: Order::LAST };
 
-    /// The stronger reason and the earlier place, taken separately: how a page
+    /// The stronger reason and the earlier place, taken separately: how a tile
     /// is held says nothing of when the view needs it.
     pub fn best(self, other: Ask) -> Ask {
         Ask {

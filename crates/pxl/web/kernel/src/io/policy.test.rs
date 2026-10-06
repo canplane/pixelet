@@ -17,20 +17,20 @@ fn before(a: (u8, f64), b: (u8, f64)) -> bool {
 
 #[test]
 fn the_ground_goes_before_what_stands_on_it() {
-    let page = at(Why::Fault, true, 0.0);
-    let terrain = key(Category::terrain, page);
+    let tile = at(Why::Demand, true, 0.0);
+    let terrain = key(Category::terrain, tile);
     let asset = key(Category::asset, Ask::PLAIN);
-    let places = key(Category::poi, page);
+    let places = key(Category::poi, tile);
     assert!(before(terrain, asset) && before(asset, places));
 }
 
 #[test]
 fn what_the_view_needs_is_asked_for_out_from_the_eye_and_speculation_after() {
     let t = |why, seen, near| key(Category::terrain, at(why, seen, near));
-    assert!(before(t(Why::Fault, true, 10.0), t(Why::Fault, true, 20.0)), "nearer first");
-    assert!(before(t(Why::Fault, true, 900.0), t(Why::Fault, false, 1.0)), "seen before unseen");
-    assert_eq!(t(Why::Floor, true, 10.0), t(Why::Fault, true, 10.0), "the fallback's pages at their own place");
-    assert!(before(t(Why::Fault, false, 1e9), t(Why::Hint, true, 0.0)), "speculation after everything needed");
+    assert!(before(t(Why::Demand, true, 10.0), t(Why::Demand, true, 20.0)), "nearer first");
+    assert!(before(t(Why::Demand, true, 900.0), t(Why::Demand, false, 1.0)), "seen before unseen");
+    assert_eq!(t(Why::Floor, true, 10.0), t(Why::Demand, true, 10.0), "the fallback's tiles at their own place");
+    assert!(before(t(Why::Demand, false, 1e9), t(Why::Hint, true, 0.0)), "speculation after everything needed");
 }
 
 #[test]

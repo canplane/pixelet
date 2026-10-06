@@ -1,7 +1,7 @@
 // pxl-kernel/io/load.rs
 
 //! Shared loading of models and images, so each asset is fetched and parsed
-//! at most once. An asset is a want in the request scheduler like a page, sharing
+//! at most once. An asset is a want in the request scheduler like a tile, sharing
 //! its credits, and stays wanted until it arrives.
 //!
 //! A read that did not arrive is retried; bytes that do not parse are final,
@@ -57,7 +57,7 @@ impl Load {
 }
 
 /// `Arrived` exists because the read's credit is released when the bytes
-/// land (parsing is not I/O and would starve page reads), but the asset is
+/// land (parsing is not I/O and would starve tile reads), but the asset is
 /// not usable yet. Without it, "not usable" read as "not asked for" and one
 /// model was re-read 38 times, once a turn, for as long as its parse took.
 enum Entry<T> {

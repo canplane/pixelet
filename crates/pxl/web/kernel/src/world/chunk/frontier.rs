@@ -9,7 +9,7 @@
 //! a coarsening (pieces replaced by their goal parent), or a fill (the
 //! coarsest piece that can be built over a goal piece with nothing drawn on
 //! its line, refined from there as any drawn piece is). Until then the coarser
-//! piece stays drawn, so a full arena or a missing page is latency, never a
+//! piece stays drawn, so a full arena or a missing tile is latency, never a
 //! hole.
 //!
 //! The arena is never overrun: a move starts only when all its slots are
@@ -17,19 +17,15 @@
 //! always possible. A coarsening waits `COARSEN_HOLD_MS` before it is made,
 //! unless the arena refused a move last step.
 
-use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::space::adapter::epsg3857::{side_at_zoom, zoom_of};
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pyramid::{chunk_scale, GROUND, GROUND_Z, TOP_Z};
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
-use crate::world::chunk::build::mesh_step;
 use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};
 use crate::world::observation::Order;
-use crate::world::pyramid::chunk::Chunk;
+use crate::world::pyramid::chunk::{Chunk, LEAF_CHUNK};
 use crate::world::pyramid::domain::Price;
 use crate::world::quality::fits;
-use pxl_spec::space::hierarchy::Scale;
+use pxl_spec::space::zoom::Zoom;
 
 pub type Slots = [u32; POOLS];
 
@@ -41,45 +37,22 @@ pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS, 0];
 /// for each refinement in flight holding the piece it replaces.
 pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1], 0];
 
-/// The scale the rule wants at `near`: a zoom coarser than the LOD's, since
-/// terrain draws a zoom's cells averaged 2 × 2. Past z16 it goes on to the
-/// objects' finest tier.
-fn wanted_scale(near: f64, tau: Tau) -> Scale {
-    let z = tau.z_at(near).min(zoom_of(OBJECT_FINEST) + 1) - 1;
-    side_at_zoom(z).min(chunk_scale(TOP_Z))
-}
-
-/// A wanted scale as a chunk at `z` draws it: clamped to its own cells
-/// averaged 2 × 2, and finer than its cells only at z16 where it holds
-/// objects. The outermost (cover) pieces always take the coarsest scale, one
-/// slot each.
-///
-/// A chunk read from a coarser page still uses its own scale: drawing it at
-/// that page's cells made blocks over the sea after a jump (2026-09-26).
-fn drawn_scale(scale: Scale, z: u32, outermost: bool, objects: bool) -> Scale {
+/// What a chunk draws: its cells, or, a cover piece, itself as one cell.
+/// The quality alone moves which chunks are drawn; a mesh too big for one
+/// slot fills more slots and is never drawn coarser for it.
+pub fn zoom_of(c: Chunk, outermost: bool) -> Zoom {
     if outermost {
-        return chunk_scale(z);
+        c.zoom()
+    } else {
+        c.drawn_zoom()
     }
-    let own = GROUND.side_at(z);
-    let finest = match (z == GROUND_Z, objects) {
-        (true, true) => OBJECT_FINEST,
-        (true, false) => own,
-        (false, _) => own.up(1),
-    };
-    scale.clamp(finest, own.up(1))
 }
 
-/// The quality alone moves the scale; a mesh too big for one slot fills more
-/// slots and is never drawn coarser for it.
-pub fn scale_of(c: Chunk, outermost: bool, near: f64, tau: Tau, objects: bool) -> Scale {
-    drawn_scale(wanted_scale(near, tau), c.z(), outermost, objects)
+pub fn pool_of(c: Chunk, cell_zoom: Zoom) -> Pool {
+    Pool::of(c.zoom(), cell_zoom)
 }
 
-pub fn pool_of(c: Chunk, scale: Scale) -> Pool {
-    Pool::of(c.z(), mesh_step(scale, c.z()))
-}
-
-/// Slots per pool, counted before allocation. A z16 piece also takes a coarse
+/// Slots per pool, counted before allocation. A leaf piece also takes a coarse
 /// slot, for the ancestor it refines through.
 pub struct Need<F> {
     pub slots: F,
@@ -87,11 +60,11 @@ pub struct Need<F> {
     pub admit: bool,
 }
 
-impl<F: Fn(Chunk, Scale) -> u32> Price for Need<F> {
-    fn piece(&self, c: Chunk, outermost: bool, near: f64, tau: Tau) -> Slots {
-        let scale = scale_of(c, outermost, near, tau, false);
-        let k = (self.slots)(c, scale);
-        match pool_of(c, scale) {
+impl<F: Fn(Chunk, Zoom) -> u32> Price for Need<F> {
+    fn piece(&self, c: Chunk, outermost: bool, _near: f64, _tau: Tau) -> Slots {
+        let cell_zoom = zoom_of(c, outermost);
+        let k = (self.slots)(c, cell_zoom);
+        match pool_of(c, cell_zoom) {
             Pool::Coarse => [0, k, 0],
             Pool::Cover => [0, 0, k],
             Pool::Fine => [k, 1, 0],
@@ -99,7 +72,7 @@ impl<F: Fn(Chunk, Scale) -> u32> Price for Need<F> {
     }
 
     fn split(&self, c: Chunk) -> Slots {
-        if c.z() == GROUND_Z - 1 {
+        if c.zoom() == LEAF_CHUNK - 1 {
             [0, 1, 0]
         } else {
             [0; POOLS]

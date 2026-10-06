@@ -1,12 +1,12 @@
 // pxl-kernel/world/observer.rs
 
 //! What the eye observes, for the domain: the observation's cell and what
-//! the screen's tiles touch.
+//! the screen's patches touch.
 //!
 //! The cell is an angle, `τ / SPLIT` radians a side, in the eye's own frame;
 //! inside it nothing is promised. Refinement only stops an error, projected,
-//! from crossing a cell (`Lens::error`). A piece contributes where a tile's
-//! footprint touches it. Tiles are the estimator's resolution, not cells, and
+//! from crossing a cell (`Lens::error`). A piece contributes where a patch's
+//! footprint touches it. Patches are the estimator's resolution, not cells, and
 //! do not depend on quality, so one cast serves every step. Footprints are
 //! reused across small moves (`Sight`) as an acceleration only.
 
@@ -80,7 +80,7 @@ impl Lens {
     }
 }
 
-/// The screen in tiles no wider than `OBSERVED_TILE`, at equal steps of
+/// The screen in patches no wider than `OBSERVED_PATCH`, at equal steps of
 /// angle about the optical axis.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Grid {
@@ -92,7 +92,7 @@ impl Grid {
     pub fn of(lens: Lens) -> Grid {
         Grid {
             lens,
-            across: lens.tan.map(|t| ((2.0 * libm::atan(t) / param::OBSERVED_TILE).ceil() as u32).max(1)),
+            across: lens.tan.map(|t| ((2.0 * libm::atan(t) / param::OBSERVED_PATCH).ceil() as u32).max(1)),
         }
     }
 
@@ -118,9 +118,9 @@ impl Grid {
         unit(std::array::from_fn(|k| l.forward[k] + tx * l.right[k] + ty * l.up[k])).unwrap_or(l.forward)
     }
 
-    /// Footprints of the tiles `recast` names; each shared corner is cast once.
+    /// Footprints of the patches `recast` names; each shared corner is cast once.
     /// `met` is reused across casts so casting stops allocating once warm.
-    pub fn footprints(&self, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, meet: &mut dyn FnMut(V3) -> Met, each: &mut OnTile) -> u32 {
+    pub fn footprints(&self, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, meet: &mut dyn FnMut(V3) -> Met, each: &mut OnPatch) -> u32 {
         let [nx, ny] = self.across;
         let eye = self.lens.eye;
         met.clear();
@@ -128,8 +128,8 @@ impl Grid {
         let mut rays = 0;
         for j in 0..ny {
             for i in 0..nx {
-                let tile = (j * nx + i) as usize;
-                if !recast(tile) {
+                let patch = (j * nx + i) as usize;
+                if !recast(patch) {
                     continue;
                 }
                 let mut seen = false;
@@ -148,7 +148,7 @@ impl Grid {
                         (std::array::from_fn(|k| eye[k] + direction[k] * far), far)
                     })
                 });
-                each(tile, seen.then(|| Footprint::of(eye, points)), lacks);
+                each(patch, seen.then(|| Footprint::of(eye, points)), lacks);
             }
         }
         rays
@@ -236,14 +236,14 @@ fn hull(mut points: [[f64; 2]; 4]) -> ([[f64; 2]; 4], usize) {
 
 pub trait Observer {
     /// Returns how many rays were cast.
-    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnTile) -> u32;
+    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnPatch) -> u32;
 }
 
-pub type OnTile<'a> = dyn FnMut(usize, Option<Footprint>, Lacks) + 'a;
+pub type OnPatch<'a> = dyn FnMut(usize, Option<Footprint>, Lacks) + 'a;
 
 pub type Lacks = [Option<Requirement>; 4];
 
-/// A lack is given as a requirement (zoom and ground), never as a page,
+/// A lack is given as a requirement (zoom and ground), never as a tile,
 /// which is the layer's to name.
 pub type Met = (Option<(V3, f64)>, Option<Requirement>);
 
@@ -252,7 +252,7 @@ pub type Met = (Option<(V3, f64)>, Option<Requirement>);
 pub struct EdgeRays<'a>(pub Access<'a>, pub Tau);
 
 impl Observer for EdgeRays<'_> {
-    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnTile) -> u32 {
+    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnPatch) -> u32 {
         let eye = grid.lens().eye;
         grid.footprints(
             far,
@@ -261,7 +261,10 @@ impl Observer for EdgeRays<'_> {
             &mut |direction| {
                 let ray = Ray { origin: eye, direction, reach: far };
                 let answer = self.0.first_hit(&ray, Detail::Distance(self.1));
-                let lack = answer.lack().map(|l| Requirement { z: l.page.z, region: l.page.region() });
+                let lack = answer.lack().map(|l| Requirement {
+                    zoom: l.tile.zoom,
+                    region: l.tile.region(),
+                });
                 let hit = answer.value().flatten().map(|hit| (std::array::from_fn(|k| hit.point[k] - hit.normal[k] * INSIDE), hit.t));
                 (hit, lack)
             },
@@ -273,7 +276,7 @@ impl Observer for EdgeRays<'_> {
 #[derive(Default)]
 pub struct Sight {
     cast: Option<(Lens, [u32; 2], f64)>,
-    tiles: Vec<Option<Footprint>>,
+    patches: Vec<Option<Footprint>>,
     lacks: Vec<Lacks>,
     eyes: Vec<V3>,
     recast: Vec<bool>,
@@ -281,20 +284,20 @@ pub struct Sight {
 }
 
 impl Sight {
-    /// Recasts every tile where the screen changed shape, the eye turned or the
-    /// far edge moved past `REUSE_SHIFT` of a tile, or `everything` is set; and
-    /// any tile the eye moved that much relative to, or whose rays cross `moved`
+    /// Recasts every patch where the screen changed shape, the eye turned or the
+    /// far edge moved past `REUSE_SHIFT` of a patch, or `everything` is set; and
+    /// any patch the eye moved that much relative to, or whose rays cross `moved`
     /// ground. Returns rays cast.
     pub fn observe(&mut self, o: &Observation, observer: &impl Observer, everything: bool, moved: &[(f64, f64, f64)]) -> u32 {
         let Some(lens) = Lens::of(o) else {
             self.cast = None;
-            self.tiles.clear();
+            self.patches.clear();
             self.lacks.clear();
             self.eyes.clear();
             return 0;
         };
         let grid = Grid::of(lens);
-        let shift = param::REUSE_SHIFT * param::OBSERVED_TILE;
+        let shift = param::REUSE_SHIFT * param::OBSERVED_PATCH;
         let whole = everything
             || self.cast.is_none_or(|(was, across, far)| {
                 let turned = [(was.forward, lens.forward), (was.right, lens.right), (was.up, lens.up)]
@@ -306,18 +309,18 @@ impl Sight {
             });
         if whole {
             let n = grid.count() as usize;
-            self.tiles.clear();
-            self.tiles.resize(n, None);
+            self.patches.clear();
+            self.patches.resize(n, None);
             self.lacks.clear();
             self.lacks.resize(n, [None; 4]);
             self.eyes.clear();
             self.eyes.resize(n, lens.eye);
         }
-        // A tile that met nothing is measured against the far edge.
+        // A patch that met nothing is measured against the far edge.
         let stale = |k: usize| {
             let moved_eye = len3(&sub3(&lens.eye, &self.eyes[k]));
             whole
-                || match &self.tiles[k] {
+                || match &self.patches[k] {
                     Some(f) => {
                         let (x0, y0, x1, y1) = f.reach;
                         moved_eye > shift * f.near || moved.iter().any(|&(x, y, side)| x < x1 && x + side > x0 && y < y1 && y + side > y0)
@@ -328,9 +331,9 @@ impl Sight {
         let mut recast = core::mem::take(&mut self.recast);
         recast.clear();
         recast.extend((0..grid.count() as usize).map(stale));
-        let (tiles, lacks, eyes) = (&mut self.tiles, &mut self.lacks, &mut self.eyes);
+        let (patches, lacks, eyes) = (&mut self.patches, &mut self.lacks, &mut self.eyes);
         let rays = observer.observe(&grid, o.far, &|k| recast[k], &mut self.met, &mut |k, f, lacked| {
-            tiles[k] = f;
+            patches[k] = f;
             lacks[k] = lacked;
             eyes[k] = lens.eye;
         });
@@ -344,7 +347,7 @@ impl Sight {
     }
 
     pub fn footprints(&self) -> impl Iterator<Item = &Footprint> {
-        self.tiles.iter().flatten()
+        self.patches.iter().flatten()
     }
 
     pub fn lacks(&self) -> impl Iterator<Item = &Requirement> {

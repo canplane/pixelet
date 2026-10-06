@@ -1,7 +1,6 @@
 // pxl-kernel/kernel.rs
 
 use pxl_render::mesh::paint::object::adapter::Painter;
-use pxl_render::mesh::volume::Volumes;
 
 use crate::layer::object::store::Store;
 use crate::world::change::Revisions;
@@ -9,7 +8,8 @@ use crate::world::chunk::table::Scheduler;
 use xpute_runtime::global::Global;
 
 pub struct Kernel {
-    pub volumes: Option<Volumes>,
+    /// The memory map is laid; nothing of the world is made before it.
+    pub laid_out: bool,
     pub objects: Store,
     pub painter: Painter,
     pub sched: Scheduler,
@@ -19,7 +19,7 @@ pub struct Kernel {
 impl Kernel {
     fn new() -> Kernel {
         Kernel {
-            volumes: None,
+            laid_out: false,
             objects: Store::default(),
             painter: Painter::new(),
             sched: Scheduler::new(),
@@ -36,15 +36,15 @@ pub fn kernel() -> &'static mut Kernel {
 
 impl Kernel {
     /// Split into fields so the world and the table borrow at once. None before
-    /// the volumes are opened.
+    /// the memory map is laid.
     pub fn world(&mut self) -> Option<(crate::world::chunk::build::World<'_>, &mut Scheduler)> {
-        let Kernel { volumes, objects, painter, sched, .. } = self;
-        let world = crate::world::chunk::build::World {
-            volumes: volumes.as_mut()?,
-            store: objects,
-            painter,
-        };
-        Some((world, sched))
+        let Kernel {
+            laid_out, objects, painter, sched, ..
+        } = self;
+        if !*laid_out {
+            return None;
+        }
+        Some((crate::world::chunk::build::World { store: objects, painter }, sched))
     }
 }
 

@@ -47,7 +47,7 @@ fn a_lens_is_the_screen_its_frustum_was_made_from() {
 
 /// The grid is the same at every quality: it is the estimator's, not the cell's.
 #[test]
-fn the_tiles_cover_the_screen_and_none_is_wider_than_a_tile() {
+fn the_patches_cover_the_screen_and_none_is_wider_than_a_patch() {
     let lens = Lens::of(&viewed([0.0, 0.0, 30.0], [100.0, 20.0, 0.0], 50.0, 16.0 / 9.0)).unwrap();
     let grid = Grid::of(lens);
     let [nx, ny] = grid.across();
@@ -60,7 +60,7 @@ fn the_tiles_cover_the_screen_and_none_is_wider_than_a_tile() {
         for i in 0..=nx {
             for next in [[i + 1, j], [i, j + 1]].into_iter().filter(|c| c[0] <= nx && c[1] <= ny) {
                 let apart = libm::acos(dot(grid.corner([i, j]), grid.corner(next)).clamp(-1.0, 1.0));
-                assert!(apart <= param::OBSERVED_TILE + 1e-9, "[{i}, {j}] is {apart} from {next:?}");
+                assert!(apart <= param::OBSERVED_PATCH + 1e-9, "[{i}, {j}] is {apart} from {next:?}");
             }
         }
     }

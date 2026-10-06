@@ -1,6 +1,6 @@
 // pxl-geo-bake/elevation.rs
 
-//! A page's elevation grid, the one definition of ground height for the bake,
+//! A tile's elevation grid, the one definition of ground height for the bake,
 //! the client and the deck solve. It reproduces PostGIS's
 //! `ST_Resample(…, 'Bilinear')` (GDAL's warper) value for value; the steps
 //! below name the GDAL/PostGIS function each copies.
@@ -9,25 +9,25 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use postgres::Client;
-use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, U_PER_CELL};
+use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN, U_PER_CELL};
 use pxl_spec::space::adapter::epsg3857::BBox3857;
 use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m};
 use xpute_core::math::scalar::round;
 
 const HELD: usize = 512;
 
-/// A page's padded grid, `ST_MakeEmptyRaster` at the stride: its top-left
-/// corner, `ELE_PAD` samples out from the page's, and the stride.
+/// A tile's padded grid, `ST_MakeEmptyRaster` at the stride: its top-left
+/// corner, `ELE_PAD` samples out from the tile's, and the stride.
 fn grid_of([min, max]: BBox3857) -> ([f64; 2], f64) {
-    let stride = (max[0] - min[0]) / f64::from(PAGE_ELE_SPAN);
+    let stride = (max[0] - min[0]) / f64::from(TILE_ELE_SPAN);
     let pad = f64::from(ELE_PAD) * stride;
     ([min[0] - pad, max[1] + pad], stride)
 }
 
-/// What a page's grid reads of the raster, `[minx, miny, maxx, maxy]` in
+/// What a tile's grid reads of the raster, `[minx, miny, maxx, maxy]` in
 /// EPSG:3857: its padded samples and the resample's reach past them.
-pub fn page_reads(page_bbox: BBox3857) -> [f64; 4] {
-    let ([ref_x, ref_y], stride) = grid_of(page_bbox);
+pub fn tile_reads(tile_bbox: BBox3857) -> [f64; 4] {
+    let ([ref_x, ref_y], stride) = grid_of(tile_bbox);
     let (side, reach) = (f64::from(ELE_PADDED_SPAN) * stride, stride * 2.0);
     [ref_x - reach, ref_y - side - reach, ref_x + side + reach, ref_y + reach]
 }
@@ -36,14 +36,14 @@ pub struct Raster {
     origin: [f64; 2],
     sx: f64,
     sy: f64,
-    tiles: Vec<TileAt>,
+    raster_tiles: Vec<RasterTileAt>,
     by_key: HashMap<(i64, i64), usize>,
     side: i64,
     held: Mutex<Held>,
 }
 
 #[derive(Clone, Copy)]
-struct TileAt {
+struct RasterTileAt {
     rid: i32,
     x0: f64,
     y0: f64,
@@ -53,12 +53,12 @@ struct TileAt {
     h: i64,
 }
 
-struct Tile {
+struct RasterTile {
     values: Vec<f32>,
 }
 
 /// Taken before its tile is read, so two workers asking for one tile read it once.
-type Slot = Mutex<Option<Arc<Tile>>>;
+type Slot = Mutex<Option<Arc<RasterTile>>>;
 
 #[derive(Default)]
 struct Held {
@@ -76,9 +76,9 @@ impl Raster {
         let (sx, sy) = rows.first().map_or((1.0, -1.0), |r| (r.get::<_, f64>("sx"), r.get::<_, f64>("sy")));
         let origin = rows.first().map_or([0.0, 0.0], |r| [r.get::<_, f64>("x0"), r.get::<_, f64>("y0")]);
         let side = rows.iter().map(|r| i64::from(r.get::<_, i32>("w")).max(i64::from(r.get::<_, i32>("h")))).max().unwrap_or(1);
-        let tiles: Vec<TileAt> = rows
+        let raster_tiles: Vec<RasterTileAt> = rows
             .iter()
-            .map(|r| TileAt {
+            .map(|r| RasterTileAt {
                 rid: r.get("rid"),
                 x0: r.get("x0"),
                 y0: r.get("y0"),
@@ -88,19 +88,19 @@ impl Raster {
                 h: i64::from(r.get::<_, i32>("h")),
             })
             .collect();
-        let by_key = tiles.iter().enumerate().map(|(i, t)| ((t.gx.div_euclid(side), t.gy.div_euclid(side)), i)).collect();
+        let by_key = raster_tiles.iter().enumerate().map(|(i, t)| ((t.gx.div_euclid(side), t.gy.div_euclid(side)), i)).collect();
         Ok(Raster {
             origin,
             sx,
             sy,
-            tiles,
+            raster_tiles,
             by_key,
             side,
             held: Mutex::new(Held::default()),
         })
     }
 
-    fn tile(&self, client: &mut Client, i: usize) -> Result<Arc<Tile>, postgres::Error> {
+    fn raster_tile(&self, client: &mut Client, i: usize) -> Result<Arc<RasterTile>, postgres::Error> {
         let slot = {
             let mut held = self.held.lock().expect("raster");
             held.tick += 1;
@@ -116,21 +116,21 @@ impl Raster {
             entry.1.clone()
         };
         let mut slot = slot.lock().expect("tile");
-        if let Some(tile) = &*slot {
-            return Ok(tile.clone());
+        if let Some(raster_tile) = &*slot {
+            return Ok(raster_tile.clone());
         }
-        let at = self.tiles[i];
+        let at = self.raster_tiles[i];
         let row = client.query_one("SELECT ST_AsBinary(rast) AS wkb FROM elevation_raster WHERE rid = $1", &[&at.rid])?;
-        let tile = Arc::new(Tile::of_wkb(row.get("wkb"), (at.w * at.h) as usize));
-        *slot = Some(tile.clone());
-        Ok(tile)
+        let raster_tile = Arc::new(RasterTile::of_wkb(row.get("wkb"), (at.w * at.h) as usize));
+        *slot = Some(raster_tile.clone());
+        Ok(raster_tile)
     }
 
-    pub fn page_grid(&self, client: &mut Client, page_bbox: BBox3857) -> Result<Option<Vec<i16>>, postgres::Error> {
-        let [min, _] = page_bbox;
+    pub fn tile_grid(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Option<Vec<i16>>, postgres::Error> {
+        let [min, _] = tile_bbox;
         let span = ELE_PADDED_SPAN as usize;
-        let ([ref_x, ref_y], stride) = grid_of(page_bbox);
-        let env = page_reads(page_bbox);
+        let ([ref_x, ref_y], stride) = grid_of(tile_bbox);
+        let env = tile_reads(tile_bbox);
 
         // `ST_Union(ST_Clip(tile, env))`.
         let gx = |x: f64| (x - self.origin[0]) / self.sx;
@@ -142,7 +142,7 @@ impl Raster {
         for ky in cy0.div_euclid(self.side)..=(cy1 - 1).div_euclid(self.side) {
             for kx in cx0.div_euclid(self.side)..=(cx1 - 1).div_euclid(self.side) {
                 let Some(&i) = self.by_key.get(&(kx, ky)) else { continue };
-                let t = self.tiles[i];
+                let t = self.raster_tiles[i];
                 let Some(c) = self.clip(t, env) else { continue };
                 hull = Some(hull.map_or(c, |h| [h[0].min(c[0]), h[1].min(c[1]), h[2].max(c[2]), h[3].max(c[3])]));
                 reached.push(i);
@@ -152,11 +152,11 @@ impl Raster {
         let (mw, mh) = ((mx1 - mx0) as usize, (my1 - my0) as usize);
         let mut mosaic = vec![None; mw * mh];
         for i in reached {
-            let t = self.tiles[i];
-            let tile = self.tile(client, i)?;
+            let t = self.raster_tiles[i];
+            let raster_tile = self.raster_tile(client, i)?;
             for y in t.gy.max(my0)..(t.gy + t.h).min(my1) {
                 for x in t.gx.max(mx0)..(t.gx + t.w).min(mx1) {
-                    mosaic[(y - my0) as usize * mw + (x - mx0) as usize] = tile.at(((y - t.gy) * t.w + (x - t.gx)) as usize);
+                    mosaic[(y - my0) as usize * mw + (x - mx0) as usize] = raster_tile.at(((y - t.gy) * t.w + (x - t.gx)) as usize);
                 }
             }
         }
@@ -197,8 +197,8 @@ impl Raster {
 
         let cell_per_m = u_per_m(from_db(min[1])) / U_PER_CELL;
         let mut grid = vec![0i16; span * span];
-        // The page's grid from the warp's: an offset either way, since the
-        // raster can start inside the padded page at the coverage's edge.
+        // The tile's grid from the warp's: an offset either way, since the
+        // raster can start inside the padded tile at the coverage's edge.
         let (col0, row0) = (-kx, -ky);
         let last = out_w - 1;
         for r in 0..span {
@@ -221,7 +221,7 @@ impl Raster {
 
 impl Raster {
     /// `ST_Clip`'s pixels of tile `t` (rt_raster.c `rt_raster_gdal_rasterize`).
-    fn clip(&self, t: TileAt, env: [f64; 4]) -> Option<[i64; 4]> {
+    fn clip(&self, t: RasterTileAt, env: [f64; 4]) -> Option<[i64; 4]> {
         let (sx, sy) = (self.sx, self.sy);
         let left = env[0].max(t.x0);
         let right = env[2].min(t.x0 + t.w as f64 * sx);
@@ -247,12 +247,12 @@ impl Raster {
     }
 }
 
-impl Tile {
-    fn of_wkb(b: &[u8], pixels: usize) -> Tile {
-        Tile::read(b, pixels).unwrap_or(Tile { values: vec![f32::NAN; pixels] })
+impl RasterTile {
+    fn of_wkb(b: &[u8], pixels: usize) -> RasterTile {
+        RasterTile::read(b, pixels).unwrap_or(RasterTile { values: vec![f32::NAN; pixels] })
     }
 
-    fn read(b: &[u8], pixels: usize) -> Option<Tile> {
+    fn read(b: &[u8], pixels: usize) -> Option<RasterTile> {
         let le = *b.first()? == 1;
         // endian 1, version 2, bands 2, scale, origin and skew as f64, srid 4,
         // width 2, height 2, then the band's pixel type and nodata.
@@ -271,7 +271,7 @@ impl Tile {
         let values = (0..pixels)
             .map(|i| f32_at(66 + 4 * i).map(|v| if Some(v) == nodata { f32::NAN } else { v }))
             .collect::<Option<Vec<f32>>>()?;
-        Some(Tile { values })
+        Some(RasterTile { values })
     }
 
     fn at(&self, i: usize) -> Option<f32> {

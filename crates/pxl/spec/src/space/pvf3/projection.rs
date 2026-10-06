@@ -4,11 +4,11 @@
 //! split by `floor`, so the lattice stays continuous through zero: -0.2 is
 //! cell -1 at 0.8.
 
+use super::core::ONE;
 use super::fvec;
 use super::fvec::FVec;
 use super::ivec;
 use super::ivec::IVec;
-use super::core::ONE;
 use super::pvf3::Pvf3;
 use super::REACH;
 use crate::space::v3::V3;

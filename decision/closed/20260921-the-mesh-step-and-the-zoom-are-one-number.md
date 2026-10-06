@@ -1,12 +1,14 @@
 # The mesh step and the zoom are one number
 
-> Current terms: AGENTS.md "One spatial model", `pxl-spec space/README.md`. A
-> zoom names only a cell's scale; a page's key depth (15 for a 512-cell page)
-> is no zoom.
+**Status: superseded** by
+[a zoom names a page grid](../20261006-a-zoom-names-a-page-grid.md) — a zoom
+no longer names a cell's scale: it names the page grid, a leaf is z15, and
+a cell is named by its size. The mesh step and the cell are still one
+scale; the zoom is no longer that scale's name.
 
 **2026-09-21** — a design conversation, built since; what the building
 changed is at the end, under "Where this stands". It starts from
-[the page pyramid](./closed/20260921-the-page-pyramid.md), written the same morning,
+[the page pyramid](./20260921-the-page-pyramid.md), written the same morning,
 and supersedes two of its claims: the page is half as wide, and the fold is
 not what that note said it was.
 
@@ -270,7 +272,7 @@ at every zoom, so it covers `(64 · 2^(16 − z))²` of ground, and the ladder
 picks `z` to keep a chunk's projected area roughly constant. The count on
 screen is therefore constant. With z16 alone a chunk was 64 units wide at every
 tier, so a wide view put a thousand of them on screen at ~3.1 ms a scan
-([20260912-coarse-tiers-need-a-larger-unit.md](./closed/20260912-coarse-tiers-need-a-larger-unit.md)),
+([20260912-coarse-tiers-need-a-larger-unit.md](./20260912-coarse-tiers-need-a-larger-unit.md)),
 and that cost read as constant only because `RENDER_DIST` capped `R`.
 
 Panning is the one that looks like it should get worse and does not. Moving
@@ -298,7 +300,7 @@ the minimum, 6.6 KB at the median and 62.4 KB at the maximum, gzipped, for
 bounded above by the densest leaf's, since the format and the decoded size are
 the same at every zoom. R2's free tier is 10 GB and the binding ceiling is
 the Workers plan's 100k requests a day
-([20260816-deployment-hosting.md](./20260816-deployment-hosting.md)), so the
+([20260816-deployment-hosting.md](../20260816-deployment-hosting.md)), so the
 storage is not the constraint; the request count is, and a smaller fine ring
 lowers it.
 
@@ -640,7 +642,7 @@ document is about what the record is named and how it composes.
 Findings from reading, not decisions:
 
 - `decision/README.md` indexed 71 of the 72 documents here; the one it left out
-  was [the page pyramid](./closed/20260921-the-page-pyramid.md), committed this
+  was [the page pyramid](./20260921-the-page-pyramid.md), committed this
   morning. It is indexed now, with this document and its sibling.
 - `spec/…/environment/config.json` says the held set is "the nearest 32
   (~129MB decoded), against the 49 pages (~197MB) that discarded the tab on an
@@ -713,7 +715,7 @@ Decided while building, on top of the above:
   the module's memory.
 
   The numbers moved twice after this was written, both under
-  [a coarse cell is isotropic](./closed/20260923-a-coarse-cell-is-isotropic.md).
+  [a coarse cell is isotropic](./20260923-a-coarse-cell-is-isotropic.md).
   There are six groups, not five: a group is a zoom of the window modulo
   five, and the leaves' own tier has one to itself, because a group is one
   storage binding and with both in one what either could hold was what the
@@ -760,7 +762,7 @@ Decided while building, on top of the above:
 - **Fog follows the camera.** The band, the clip planes and the sky grew with
   the camera's distance past 1,024 u of its pivot, `FOG_PER_DIST` = 1.5 of
   it. Superseded the same week by
-  [the ground runs to the horizon](./closed/20260923-the-ground-runs-to-the-horizon.md):
+  [the ground runs to the horizon](./20260923-the-ground-runs-to-the-horizon.md):
   the reach is no longer a number tuned against the distance but the nearer of
   the planet's own horizon and the distance the haze takes the ground, both
   read off the camera's height, and the band and the planes are read off

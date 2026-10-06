@@ -4,7 +4,6 @@
 //! Depth is reversed f32 throughout (depth.wgsl).
 
 use pxl_spec::space::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
-use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::v3::{norm3, sub3, V3};
 use xpute_core::math::scalar::round;
 use xpute_runtime::abi::handle::handle_slot;
@@ -98,23 +97,23 @@ pub struct FrameInput<'a> {
     pub sheet: fn() -> Option<u32>,
     pub moon: fn() -> Option<u32>,
     pub earth: fn() -> Option<u32>,
-    pub earth_pages: EarthPages<'a>,
+    pub earth_tiles: EarthTiles<'a>,
     pub atlas: &'a mut BillboardAtlas,
     pub text: TextOf,
     /// A phone gets a smaller shadow map.
     pub handheld: bool,
 }
 
-/// The Earth layer's pages as the GPU reads them: the floor's window, its
-/// south-west page first, and per page its layer plus one; `upload` hands each
-/// page that has come to the writer while the writer takes it.
-pub struct EarthPages<'a> {
+/// The Earth layer's tiles as the GPU reads them: the floor's window, its
+/// south-west tile first, and per tile its layer plus one; `upload` hands each
+/// tile that has come to the writer while the writer takes it.
+pub struct EarthTiles<'a> {
     pub window: [i32; 2],
     pub layers: &'a [u32],
     pub upload: &'a mut Upload,
 }
 
-/// Hands each waiting page's layer and texels to the writer while it takes them.
+/// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
 pub struct FrameOutput {
@@ -812,17 +811,16 @@ impl Renderer {
         put_mat(u, VIEW_PROJ, &m);
         // Everything is drawn in the eye's frame; positions are taken against the eye
         // in f64 before they are narrowed.
-        let eye_local = [s[STAGE_AT::EYE_LOCAL], s[STAGE_AT::EYE_LOCAL + 1], s[STAGE_AT::EYE_LOCAL + 2]];
+        let eye_world = [s[STAGE_AT::EYE], s[STAGE_AT::EYE + 1], s[STAGE_AT::EYE + 2]];
         let eye = [0.0; 3];
-        let origin = ivec::gather(ivec::from_real(s[STAGE_AT::ORIGIN]), ivec::from_real(s[STAGE_AT::ORIGIN + 1]), 0);
         // The globe places by offset from its anchor and height alone, so placing in
-        // the eye's frame matches the root frame less the eye.
-        let center: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_local[k]);
+        // the eye's frame matches the world less the eye.
+        let center: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_world[k]);
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let up = norm3(&sub3(&eye, &planet_center));
         self.clouds.lay_out(g, &m, &eye, env);
-        self.atmosphere.set_clouds(&clouds::field(origin, [eye_local[0], eye_local[1]], env));
+        self.atmosphere.set_clouds(&clouds::field([eye_world[0], eye_world[1]], env));
         self.stars.lay_out(g, &m, env, width);
         put_ray(&mut self.sky, 0, &m, &eye);
         self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
@@ -861,7 +859,7 @@ impl Renderer {
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_TEXEL] = self.shadow.texel as f32;
         if self.shadows {
-            self.shadow.aim(g, &env[0..3], center, eye_local.map(|v| -v), globe);
+            self.shadow.aim(g, &env[0..3], center, eye_world.map(|v| -v), globe);
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
         }
 
@@ -920,8 +918,8 @@ impl Renderer {
         self.layers.step(g, &self.mips, input.sheet);
         self.moon.step(g, &self.mips, input.moon);
         self.atmosphere.earth_step(g, &self.mips, input.earth);
-        let pages = input.earth_pages;
-        self.atmosphere.set_earth_pages(g, pages.window, pages.layers, pages.upload);
+        let tiles = input.earth_tiles;
+        self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload);
         self.badges.sync_sheet(g, &self.mips, input.atlas, input.text);
         let (records, uniforms) = take_lists(Some(g), input.lists);
 

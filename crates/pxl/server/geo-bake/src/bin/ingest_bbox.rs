@@ -15,10 +15,10 @@ fn run() -> Result<(), String> {
     let [x0, y0, x1, y1] = coverage.rect();
     eprintln!("[ingest_bbox] raster bbox_4326 {sw:?} {ne:?}");
     eprintln!(
-        "[ingest_bbox] pages x[{}..{}] y[{}..{}], EPSG:3857 [{x0}, {y0}, {x1}, {y1}]",
+        "[ingest_bbox] tiles x[{}..{}] y[{}..{}], EPSG:3857 [{x0}, {y0}, {x1}, {y1}]",
         coverage.x.0, coverage.x.1, coverage.y.0, coverage.y.1
     );
-    eprintln!("[ingest_bbox] {} page(s) past them on each side", coverage.margin_pages());
+    eprintln!("[ingest_bbox] {} tile(s) past them on each side", coverage.margin_tiles());
     println!("{}", bbox_arg(coverage.ingest_bbox()));
     Ok(())
 }

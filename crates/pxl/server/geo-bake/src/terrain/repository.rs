@@ -33,12 +33,12 @@ FROM overture_transportation t, env
 WHERE t.geom && env.e"
 );
 
-/// How far past a page what is drawn on it can come from: a way at its
+/// How far past a tile what is drawn on it can come from: a way at its
 /// widest, and a corridor's gap past another (pipeline/corridor.rs).
 pub const DRAWN_REACH_U: f64 = (WIDEST + GAP) * U_PER_CELL;
 
-/// A page's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
-/// is baked is still the page's own cells.
+/// A tile's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
+/// is baked is still the tile's own cells.
 pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
     let r = to_db(DRAWN_REACH_U);
     [[min[0] - r, min[1] - r, min[2]], [max[0] + r, max[1] + r, max[2]]]
@@ -50,7 +50,7 @@ const OVERTURE_BASE_SQL: &str = "WITH env AS (
 )
 SELECT 'land_use' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land_use, env WHERE geom && env.e
 UNION ALL
--- Some water rows are country-scale (up to 444,626 points); clip to the page envelope first. ST_IsEmpty guards && 's bbox-only false positives.
+-- Some water rows are country-scale (up to 444,626 points); clip to the tile envelope first. ST_IsEmpty guards && 's bbox-only false positives.
 SELECT 'water' AS source, gers_id, subtype, class, way_area, ST_AsBinary(clipped) AS geom_wkb FROM (
   SELECT gers_id, subtype, class, ST_Area(geom) AS way_area, ST_Intersection(geom, env.e) AS clipped
   FROM overture_base_water, env
@@ -61,7 +61,7 @@ SELECT 'land' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_
 UNION ALL
 SELECT 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class = ANY($5)";
 
-/// Overture's ocean polygons inverted into a land polygon for the page: empty
+/// Overture's ocean polygons inverted into a land polygon for the tile: empty
 /// means pure ocean, the whole envelope means all land, both dropped.
 const OVERTURE_COAST_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
@@ -77,17 +77,17 @@ land AS (
 )
 SELECT
   ST_AsBinary(g) AS geom_wkb,
-  ST_Covers(g, e) AS covers_page
+  ST_Covers(g, e) AS covers_tile
 FROM land
 WHERE NOT ST_IsEmpty(g)";
 
-/// Every statement a page's bake runs, in the order `prepare` takes them, so
+/// Every statement a tile's bake runs, in the order `prepare` takes them, so
 /// the catalog check (`coverage.rs` `Overture`) sees each table they read.
 pub const READS: [&str; 4] = [OVERTURE_BUILDINGS_SQL, OVERTURE_TRANSPORTATION_SQL, OVERTURE_BASE_SQL, OVERTURE_COAST_SQL];
 
 pub struct BuildingRow {
     pub gers_id: String,
-    /// The whole source's, before a page clips it or its parts are split.
+    /// The whole source's, before a tile clips it or its parts are split.
     pub way_area: f64,
     pub subtype: Option<String>,
     pub class: Option<String>,
@@ -98,7 +98,7 @@ pub struct BaseRow {
     /// Which table: "land_use", "water", "land" or "infrastructure".
     pub source: String,
     pub gers_id: String,
-    /// The whole source's, before a page clips it or its parts are split.
+    /// The whole source's, before a tile clips it or its parts are split.
     pub way_area: f64,
     pub subtype: Option<String>,
     pub class: Option<String>,
@@ -107,10 +107,10 @@ pub struct BaseRow {
 
 pub struct CoastRow {
     pub geom_wkb: Box<[u8]>,
-    pub covers_page: bool,
+    pub covers_tile: bool,
 }
 
-pub struct PageSource {
+pub struct TileSource {
     pub ele: Option<Vec<i16>>,
     pub building_rows: Vec<BuildingRow>,
     pub segment_rows: Vec<Segment>,
@@ -143,12 +143,12 @@ impl TerrainRepository {
         })
     }
 
-    pub fn fetch_page_source(&self, client: &mut Client, page_bbox: BBox3857) -> Result<PageSource, postgres::Error> {
-        let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(page_bbox);
+    pub fn fetch_tile_source(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<TileSource, postgres::Error> {
+        let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(tile_bbox);
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
         let wkb = |row: &postgres::Row| -> Box<[u8]> { row.get::<_, &[u8]>("geom_wkb").into() };
-        Ok(PageSource {
-            ele: self.raster.page_grid(client, page_bbox)?,
+        Ok(TileSource {
+            ele: self.raster.tile_grid(client, tile_bbox)?,
             building_rows: client
                 .query(&self.buildings, &bbox)?
                 .iter()
@@ -178,7 +178,7 @@ impl TerrainRepository {
                 .iter()
                 .map(|row| CoastRow {
                     geom_wkb: wkb(row),
-                    covers_page: row.get("covers_page"),
+                    covers_tile: row.get("covers_page"),
                 })
                 .collect(),
         })

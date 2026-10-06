@@ -5,7 +5,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::serial;
 use crate::shell::setting::store::OrbitObstacleMode;
 use crate::world::fixture::place;
-use crate::world::frame::coord::canonical_to_local;
+use crate::world::frame::coord::to_world;
 
 struct Rng(u64);
 
@@ -38,9 +38,9 @@ fn the_map_center_is_the_eye_pushed_the_radius_along_the_look() {
         let center = [rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 40.0];
         let (dist, polar, azimuth) = (camera_cfg::view::MIN_DIST + rng.unit() * 2_000.0, rng.unit() * core::f64::consts::PI, rng.unit() * 6.0 - 3.0);
         place(center, dist, polar, azimuth);
-        assert!(near(center_local().unwrap(), center, 1e-9), "{n}: third person");
+        assert!(near(center_world().unwrap(), center, 1e-9), "{n}: third person");
         controllers().base = CameraMode::free;
-        assert!(near(center_local().unwrap(), eye_local().unwrap(), 1e-12), "{n}: first person");
+        assert!(near(center_world().unwrap(), eye_world().unwrap(), 1e-12), "{n}: first person");
         controllers().base = CameraMode::orbit;
     }
 }
@@ -62,7 +62,7 @@ fn a_change_of_person_leaves_the_map_center() {
         let mut first: Option<V3> = None;
         for mode in [CameraMode::free, CameraMode::orbit, CameraMode::free, CameraMode::orbit] {
             assert!(take_mode(mode), "{n}: the change to {mode:?} taken");
-            let got = center_local().unwrap();
+            let got = center_world().unwrap();
             assert!(near(got, center, 2.0 / 256.0), "{n}: moved by the change to {mode:?}: {got:?} vs {center:?}");
             let first = *first.get_or_insert(got);
             assert!(near(got, first, 1e-6), "{n}: drifted by the change to {mode:?}: {got:?} vs {first:?}");
@@ -70,7 +70,7 @@ fn a_change_of_person_leaves_the_map_center() {
                 CameraMode::free => crate::control::camera::free::target_center(),
                 CameraMode::orbit => crate::control::camera::orbit::target_center(),
             };
-            let target = canonical_to_local(&target.unwrap(), view().origin);
+            let target = to_world(&target.unwrap());
             assert!(near(target, got, 1e-6), "{n}: a move under way carried into {mode:?}");
         }
     }

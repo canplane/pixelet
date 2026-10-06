@@ -20,7 +20,7 @@ use crate::layer::geocode::fetcher::geocode_fetcher_step;
 use crate::layer::marker::frame_gizmo::debug_gizmos_step;
 use crate::layer::marker::hover_cursor::hover_cursor_step;
 use crate::layer::marker::location_puck::location_puck_step;
-use crate::layer::terrain::page::terrain_step;
+use crate::layer::terrain::tile::terrain_step;
 use crate::sched::profiler::spec::EffectName;
 use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickState};
 use crate::shell::setting::store::settings_store;
@@ -28,7 +28,6 @@ use crate::text::text_rise;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
-use crate::world::frame::view::view;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 use xpute_runtime::sched::tick::{TickReport, COSMETIC, INTERACTION, REPORT, VISIBLE};
@@ -45,12 +44,9 @@ fn companion_props() -> Option<CompanionProps> {
         return None;
     }
     let map_center = crate::control::camera::controller::map_center()?;
-    let map_origin = view().origin;
-    let local = crate::world::frame::coord::canonical_to_local(&map_center, map_origin);
-    let o = view().chart();
+    let center = crate::world::frame::coord::to_world(&map_center);
     Some(CompanionProps {
-        map_origin,
-        center: [o[0] + local[0], o[1] + local[1]],
+        center: [center[0], center[1]],
         floor: crate::control::navigation::support::floor_of(&map_center),
     })
 }
@@ -62,7 +58,7 @@ fn companion_tick(ctx: &mut TickContext) {
 fn debug_gizmos_tick(_: &mut TickContext) {
     let map_center = crate::control::camera::controller::map_center();
     let show = settings_store().gizmos && map_center.is_some();
-    debug_gizmos_step(show, map_center, view().origin);
+    debug_gizmos_step(show, map_center);
 }
 
 /// The rays a new goal starts from.
@@ -79,7 +75,7 @@ fn goal_tick(ctx: &mut TickContext) {
     }
 }
 
-/// Each pyramid layer's pages, from the published goal.
+/// Each pyramid layer's tiles, from the published goal.
 fn demand_tick(_: &mut TickContext) {
     terrain_step();
     crate::layer::poi::poi_step();

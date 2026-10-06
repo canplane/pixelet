@@ -1,11 +1,11 @@
 // pxl-geo-bake/geocode/provider/overture.rs
 
-//! Overture Divisions at each page's center, by the rules `pxl-geo` answers
+//! Overture Divisions at each tile's center, by the rules `pxl-geo` answers
 //! a search with (`pxl-geo-spec overture/division.rs`).
 
 use postgres::{Client, Row, Statement};
 use pxl_geo_spec::overture::division::{self, rank_of, Division, CONTAINING_SQL, NEAREST_POINT_SQL};
-use pxl_spec::bake::place_page::{leaf_slot, Named, PlaceGroup, APPROX, GROUP_PAGES, LOCAL, NO_LABEL};
+use pxl_spec::bake::place_tile::{leaf_slot, Named, PlaceGroup, APPROX, GROUP_TILES, LOCAL, NO_LABEL};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 
@@ -61,13 +61,13 @@ impl GeocodeProvider {
             .collect())
     }
 
-    /// An area is a dictionary place; a point names a place near the page, an
+    /// An area is a dictionary place; a point names a place near the tile, an
     /// approximation, and points are too many for the dictionary.
     fn reverse(&self, client: &mut Client, leaves: &[IVec]) -> Result<Vec<Vec<PartSource>>, postgres::Error> {
         let (xs, ys): (Vec<f64>, Vec<f64>) = leaves
             .iter()
             .map(|&leaf| {
-                let bb = epsg3857::get_page_bbox(leaf);
+                let bb = epsg3857::get_tile_bbox(leaf);
                 ((bb[0][0] + bb[1][0]) / 2.0, (bb[0][1] + bb[1][1]) / 2.0)
             })
             .unzip();
@@ -96,7 +96,7 @@ impl GeocodeProvider {
     pub fn group(&self, client: &mut Client, dict: &PlaceDict, leaves: &[IVec]) -> Result<Option<PlaceGroup>, String> {
         let mut group = PlaceGroup {
             labels: Vec::new(),
-            pages: vec![NO_LABEL; GROUP_PAGES],
+            tiles: vec![NO_LABEL; GROUP_TILES],
             locals: Vec::new(),
         };
         let labels = self.reverse(client, leaves).map_err(|e| e.to_string())?;
@@ -121,7 +121,7 @@ impl GeocodeProvider {
                 group.labels.push(numbers);
                 group.labels.len() - 1
             });
-            group.pages[leaf_slot(ivec::X(leaf), ivec::Y(leaf))] = label as u16;
+            group.tiles[leaf_slot(ivec::X(leaf), ivec::Y(leaf))] = label as u16;
         }
         Ok((!group.labels.is_empty()).then_some(group))
     }

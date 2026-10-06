@@ -1,27 +1,26 @@
 // pxl-spec/bake/quadkey.rs
 
-//! A baked page's object-store name: its place in its zoom's page grid as a
-//! quadkey, coarsest digit first. A coarser page's name prefixes a finer one's
-//! over the same ground, and every well-formed name is a page.
+//! A baked tile's object-store name: its place in its zoom's tile grid as a
+//! quadkey, coarsest digit first. A coarser tile's name prefixes a finer one's
+//! over the same ground, and every well-formed name is a tile.
 
 use core::fmt;
 
-use crate::space::indexer::L3;
-use crate::space::pvf3::core::IVEC_X_W;
 use crate::space::pvf3::ivec::{self, IVec};
-use crate::space::pyramid::{pages_around, Page, GROUND_Z, TOP_Z};
+use crate::space::pyramid::{around, Tile, LEAF_Z, TOP_Z};
+use crate::space::zoom::Zoom;
 
-/// A z16 page's name length: the bits of its page grid, which is one world
-/// of pages. It follows the page's size, never the zoom.
-pub const PAGE_KEY_DEPTH: u32 = IVEC_X_W - L3.shamt() as u32;
+/// A leaf's name length: the bits of its tile grid, which is one world of
+/// tiles, so its zoom.
+pub const TILE_KEY_DEPTH: u32 = LEAF_Z as u32;
 
-const _: () = assert!(pages_around(TOP_Z) > 1, "every zoom's page has a name");
+const _: () = assert!(around(TOP_Z) > 1, "every zoom's tile has a name");
 
 /// x in the low bit, y in the high one.
 const DIGITS: &str = "0123";
 
-/// A page index's place in a grid `depth` bits a side. X wraps at the seam; Y
-/// flips, since rows count down from the north (pinned by `the_known_page`).
+/// A tile index's place in a grid `depth` bits a side. X wraps at the seam; Y
+/// flips, since rows count down from the north (pinned by `the_known_tile`).
 fn tile_of(idx: IVec, depth: u32) -> (u64, u64) {
     let n = 1i64 << depth;
     let x = (ivec::X(idx) + n / 2).rem_euclid(n) as u64;
@@ -52,10 +51,10 @@ pub fn quadkey_of(depth: u32, idx: IVec) -> Quadkey {
     Quadkey { depth, tx, ty }
 }
 
-/// The depth and page index a name addresses, Z zero; `None` if it is not a name.
+/// The depth and tile index a name addresses, Z zero; `None` if it is not a name.
 pub fn index_of(key: &str) -> Option<(u32, IVec)> {
     let depth = u32::try_from(key.len()).ok()?;
-    if depth == 0 || depth > PAGE_KEY_DEPTH {
+    if depth == 0 || depth > TILE_KEY_DEPTH {
         return None;
     }
     let (mut tx, mut ty) = (0i64, 0i64);
@@ -69,19 +68,19 @@ pub fn index_of(key: &str) -> Option<(u32, IVec)> {
     Some((depth, ivec::gather(tx - n / 2, n / 2 - 1 - ty, 0)))
 }
 
-/// The bits of the page grid at `z`, a name's length.
-fn depth_at(z: u32) -> u32 {
-    pages_around(z).trailing_zeros()
+/// The bits of the tile grid at `z`, a name's length.
+fn depth_at(zoom: Zoom) -> u32 {
+    around(zoom).trailing_zeros()
 }
 
-pub fn page_name(p: Page) -> Quadkey {
-    quadkey_of(depth_at(p.z), p.page)
+pub fn tile_name(p: Tile) -> Quadkey {
+    quadkey_of(depth_at(p.zoom), p.tile)
 }
 
-/// `page_name`'s inverse; `None` for a zoom the pyramid does not hold.
-pub fn page_of_name(name: &str) -> Option<Page> {
-    let (depth, page) = index_of(name)?;
-    (TOP_Z..=GROUND_Z).find(|&z| depth_at(z) == depth).map(|z| Page::new(z, page))
+/// `tile_name`'s inverse; `None` for a zoom the pyramid does not hold.
+pub fn tile_of_name(name: &str) -> Option<Tile> {
+    let (depth, tile) = index_of(name)?;
+    (TOP_Z..=LEAF_Z).find(|&z| depth_at(z) == depth).map(|z| Tile::new(z, tile))
 }
 
 #[cfg(test)]

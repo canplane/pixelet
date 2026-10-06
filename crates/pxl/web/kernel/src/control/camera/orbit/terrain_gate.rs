@@ -4,7 +4,6 @@
 //! the way. The controls keep what was asked; the drawn orbit stops short.
 
 use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{add3, V3};
 use xpute_core::math::scalar::wrap;
@@ -14,7 +13,8 @@ use crate::control::camera::orbit::orbit_eye_offset;
 use crate::control::navigation::support::{in_cell, passage, Passage};
 use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
 use crate::world::access::{Access, Answer};
-use crate::world::frame::coord::{local_height, local_world_to_canonical};
+use crate::world::frame::coord::world_to_canonical;
+use pxl_spec::space::zoom::index_of;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewTriple {
@@ -27,40 +27,35 @@ pub struct ViewTriple {
 /// that read only the offset could be walked through by panning.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewPose {
-    /// The floating origin `target` is expressed against.
-    pub origin: IVec,
     pub target: V3,
     pub dist: f64,
     pub polar: f64,
     pub azimuth: f64,
 }
 
-/// Both ends of a step must share one origin, or the walk between them
-/// crosses frames.
 pub fn pose(view: ViewTriple) -> Option<ViewPose> {
     Some(ViewPose {
-        origin: crate::world::frame::view::view().origin,
-        target: crate::control::camera::controller::center_local()?,
+        target: crate::control::camera::controller::center_world()?,
         dist: view.dist,
         polar: view.polar,
         azimuth: view.azimuth,
     })
 }
 
-/// None where no page is resident. Asked from the eye's own cell, so a cave's
+/// None where no tile is resident. Asked from the eye's own cell, so a cave's
 /// floor counts where the eye is in the cave.
 fn required_rise(at: &ViewPose) -> Option<f64> {
     let (_, eye) = eye(at);
-    let ground = local_height(Access::now().floor_under(&eye).value().flatten()?, at.origin);
+    let ground = Access::now().floor_under(&eye).value().flatten()?;
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
 /// Rise to the ground `passage` reaches under the eye; none where blocked.
 fn climb_rise(at: &ViewPose) -> Option<f64> {
     let (local, eye) = eye(at);
-    let center = local_world_to_canonical(&at.target, at.origin);
+    let center = world_to_canonical(&at.target);
     let access = Access::now();
-    let ground = match passage(&center, [local[0] - at.target[0], local[1] - at.target[1]], CELL.index_of(&eye)[2]) {
+    let ground = match passage(&center, [local[0] - at.target[0], local[1] - at.target[1]], index_of(CELL, &eye)[2]) {
         Passage::Open(cz) => access.floor_under(&in_cell(&eye, cz)),
         Passage::Unknown => access.floor_under(&eye),
         Passage::Blocked => return None,
@@ -69,7 +64,7 @@ fn climb_rise(at: &ViewPose) -> Option<f64> {
         Answer::Exact(Some(top)) | Answer::Coarser(Some(top), _) => top,
         Answer::Exact(None) | Answer::Coarser(None, _) | Answer::Nothing(_) => return None,
     };
-    Some(local_height(ground, at.origin) + EYE_CLEARANCE_U - at.target[2])
+    Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
 /// Positive inside the terrain.
@@ -80,9 +75,8 @@ fn penetration(at: &ViewPose) -> Option<f64> {
 /// The eye, local and canonical.
 fn eye(at: &ViewPose) -> (V3, Pvf3) {
     let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
-    let local: V3 = add3(&at.target, &offset);
-    let eye = local_world_to_canonical(&local, at.origin);
-    (local, eye)
+    let world: V3 = add3(&at.target, &offset);
+    (world, world_to_canonical(&world))
 }
 
 /// Testing only where a step lands lets the camera tunnel, since the orbit's
@@ -125,7 +119,6 @@ pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
 fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
     let turn = wrap(to.azimuth - from.azimuth, -core::f64::consts::PI, core::f64::consts::PI);
     ViewPose {
-        origin: from.origin,
         target: std::array::from_fn(|k| from.target[k] + (to.target[k] - from.target[k]) * t),
         dist: from.dist + (to.dist - from.dist) * t,
         polar: from.polar + (to.polar - from.polar) * t,
@@ -134,8 +127,8 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
 }
 
 fn in_solid(at: &ViewPose) -> bool {
-    let (local, eye) = eye(at);
-    Access::now().floor_under(&eye).value().flatten().is_some_and(|top| local_height(top, at.origin) > local[2])
+    let (world, eye) = eye(at);
+    Access::now().floor_under(&eye).value().flatten().is_some_and(|top| top > world[2])
 }
 
 /// What lies between the eye and the map center is not asked: that hides the

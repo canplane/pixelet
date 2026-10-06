@@ -761,7 +761,7 @@ pub struct MapState {
     pub is_off_center: bool,
     /// The map center in degrees: what the search measures distance from.
     pub center: Option<LonLat>,
-    /// The source has nothing at all under the map center: the page over it at the source's top was absent.
+    /// The source has nothing at all under the map center: the tile over it at the source's top was absent.
     pub outside: bool,
 }
 

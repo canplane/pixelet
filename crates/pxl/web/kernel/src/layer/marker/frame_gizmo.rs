@@ -6,7 +6,6 @@
 //! color; nothing is labeled.
 
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{floor3n, V3};
 
@@ -14,7 +13,7 @@ use crate::control::camera::controller::{azimuth, dist};
 use crate::kernel::kernel;
 use crate::world::access::Access;
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::{canonical_to_local, local_height};
+use crate::world::frame::coord::to_world;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use xpute_runtime::global::Global;
@@ -28,14 +27,17 @@ const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
 const RING_SEGMENTS: u32 = 64;
 
-/// Segments as pairs of vertices: position, then color.
-#[derive(Default)]
-struct Sketch(Vec<f32>);
+/// Segments as pairs of vertices: position about `about`, then color.
+struct Sketch {
+    about: V3,
+    lines: Vec<f32>,
+}
 
 impl Sketch {
     fn line(&mut self, from: V3, to: V3, color: V3) {
         for p in [from, to] {
-            self.0.extend([p[0], p[1], p[2], color[0], color[1], color[2], 1.0].map(|v| v as f32));
+            let [x, y, z] = core::array::from_fn(|k| p[k] - self.about[k]);
+            self.lines.extend([x, y, z, color[0], color[1], color[2], 1.0].map(|v| v as f32));
         }
     }
 
@@ -72,10 +74,10 @@ impl Sketch {
     }
 }
 
-fn sketch(map_center: &Pvf3, map_origin: IVec) -> Sketch {
-    let mut s = Sketch::default();
-    let center = canonical_to_local(map_center, map_origin);
-    let ground = Access::now().floor_under(map_center).value().flatten().map(|top| local_height(top, map_origin));
+fn sketch(map_center: &Pvf3) -> Sketch {
+    let center = to_world(map_center);
+    let mut s = Sketch { about: center, lines: Vec::new() };
+    let ground = Access::now().floor_under(map_center).value().flatten();
     let cell = floor3n(&[center[0], center[1], ground.unwrap_or(0.0)], U_PER_CELL);
     s.cube(cell, U_PER_CELL);
     s.point(center, BLACK);
@@ -96,8 +98,8 @@ fn sketch(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     s
 }
 
-/// Map center, origin, tiles' revision, and the azimuth the lines were drawn for.
-type Drawn = (Pvf3, IVec, u32, f64);
+/// Map center, tiles' revision, and the azimuth the lines were drawn for.
+type Drawn = (Pvf3, u32, f64);
 
 static GIZMOS: Global<Option<Drawn>> = Global::new();
 
@@ -106,7 +108,7 @@ fn set_lines(at: V3, vertices: &[f32]) {
     sched.debug.set(&mut sched.draw, at, vertices);
 }
 
-pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec) {
+pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>) {
     let drawn = GIZMOS.get(|| None);
     let Some(center) = map_center.filter(|_| show) else {
         if drawn.take().is_some() {
@@ -114,11 +116,12 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         }
         return;
     };
-    let key = (center, map_origin, Terrain::pyramid().paging().revision(), azimuth());
+    let key = (center, Terrain::pyramid().residency().revision(), azimuth());
     if *drawn == Some(key) {
         return;
     }
     *drawn = Some(key);
-    set_lines(crate::world::frame::view::view().chart(), &sketch(&center, map_origin).0);
+    let s = sketch(&center);
+    set_lines(s.about, &s.lines);
     request_world_tick();
 }

@@ -2,7 +2,7 @@
 
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
 @group(0) @binding(16) var earth_map: texture_2d_array<f32>;
-@group(0) @binding(17) var earth_pages: texture_2d_array<f32>;
+@group(0) @binding(17) var earth_tiles: texture_2d_array<f32>;
 
 
 /* where a point stands */
@@ -127,7 +127,7 @@ fn air_along(dir: vec3f) -> Air {
 
 // Reflectance, and in alpha its lights' square root, where `n` is the ground's up
 // in the map center's east, north and up. The global picture is read at the
-// point's latitude and longitude, a held page at the globe's inverse of it.
+// point's latitude and longitude, a held tile at the globe's inverse of it.
 fn earth_face(n: vec3f, octaves: f32) -> vec4f {
   let sin_lat = frame_globe().y;
   let cos_lat = frame_globe().z;
@@ -140,22 +140,23 @@ fn earth_face(n: vec3f, octaves: f32) -> vec4f {
   let global = textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0);
   let flat = off_globe_of(planet_center() + n * frame_planet().z, frame_planet(), frame_globe());
   let mercator = vec2f(center_lon, log(frame_globe().x)) + flat / frame_globe().w;
-  // A page, a z6 pixel a texel, takes over from the global picture's z3 over
-  // the octave a pixel goes from a z5 cell, at the pages' reach, to a z6 one.
+  // A tile, a ground cell a texel, takes over from the global picture, eight
+  // times coarser, over the octave a pixel goes from two cells, at the tiles'
+  // reach, to one.
   let share = clamp(-octaves, 0.0, 1.0);
   if (share <= 0.0) {
     return global;
   }
   let w = atmos_earth_window();
   let at = mercator / TAU * f32(w.w);
-  let page = vec2i(floor(at));
-  let d = vec2i(((page.x - w.x) % w.w + w.w) % w.w, page.y - w.y);
+  let tile = vec2i(floor(at));
+  let d = vec2i(((tile.x - w.x) % w.w + w.w) % w.w, tile.y - w.y);
   if (all(d >= vec2i(0)) && all(d < vec2i(w.z))) {
     let k = u32(d.y * w.z + d.x);
-    let per_word = 32u / EARTH_PAGE_BITS;
-    let layer = (atmos_earth_pages()[k / per_word] >> (EARTH_PAGE_BITS * (k % per_word))) & ((1u << EARTH_PAGE_BITS) - 1u);
+    let per_word = 32u / EARTH_TILE_BITS;
+    let layer = (atmos_earth_tiles()[k / per_word] >> (EARTH_TILE_BITS * (k % per_word))) & ((1u << EARTH_TILE_BITS) - 1u);
     if (layer > 0u) {
-      return mix(global, textureSampleLevel(earth_pages, atmos_sampler, fract(at), i32(layer - 1u), 0.0), share);
+      return mix(global, textureSampleLevel(earth_tiles, atmos_sampler, fract(at), i32(layer - 1u), 0.0), share);
     }
   }
   return global;

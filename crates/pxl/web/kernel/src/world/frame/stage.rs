@@ -7,13 +7,12 @@
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
-use pxl_render::gpu::renderer::{render_frame, EarthPages, FrameInput};
+use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 
-use crate::sched::profiler::record::MB;
+use crate::sched::profiler::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN, MB};
 use pxl_spec::asset::ingested::Asset;
-use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::GROUND_Z;
+use pxl_spec::space::pyramid::{GROUND, LEAF_Z};
 use xpute_core::math::scalar::round;
 
 use crate::host::handheld;
@@ -25,7 +24,6 @@ use crate::layer::character::preview::preview_rows;
 use crate::layer::decor::asset_store::kind_assets;
 use crate::layer::earth::{earth_upload, earth_window, EARTH_FRAMES};
 use crate::layer::environment::config::{ao_cfg, edge_cfg, rim_cfg};
-use crate::sched::profiler::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use crate::shell::setting::store::{settings_store, AoMode};
 use crate::text::text_raster;
 use crate::world::change::request_world_tick;
@@ -36,7 +34,7 @@ use crate::world::frame::resolution::resolution_observe;
 /// season, as Google Earth and Cesium keep one mosaic.
 const EARTH: Asset = Asset::sky_earth_07_webp;
 
-use crate::world::frame::view::{globe_anchor_local, view};
+use crate::world::frame::view::{sea_under_eye, view};
 
 const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");
 
@@ -49,10 +47,8 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&camera);
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
     s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
-    s[STAGE_AT::EYE_LOCAL..STAGE_AT::EYE_LOCAL + 3].copy_from_slice(&v.pose.eye);
-    s[STAGE_AT::GLOBE_ANCHOR..STAGE_AT::GLOBE_ANCHOR + 3].copy_from_slice(&globe_anchor_local());
-    s[STAGE_AT::ORIGIN] = ivec::to_real(ivec::X(v.origin));
-    s[STAGE_AT::ORIGIN + 1] = ivec::to_real(ivec::Y(v.origin));
+    s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.pose.eye);
+    s[STAGE_AT::GLOBE_ANCHOR..STAGE_AT::GLOBE_ANCHOR + 3].copy_from_slice(&sea_under_eye());
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
     s[STAGE_AT::FOV] = v.fov;
@@ -61,7 +57,7 @@ pub fn stage_write(resolution: f64) {
     // Largest drawn cell per unit of distance, for the badge occlusion test:
     // past a split distance cells are drawn 2 × 2, so twice the zoom's cell
     // over the distance.
-    s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(GROUND_Z as i32);
+    s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(GROUND.cell_zoom(LEAF_Z));
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { edge_cfg::STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { ao_cfg::STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
@@ -111,7 +107,7 @@ pub fn stage_render() {
         sheet: || load_image(Load::Sheet),
         moon: || load_image(Load::Asset(Asset::sky_moon_png)),
         earth: || load_image(Load::Asset(EARTH)),
-        earth_pages: EarthPages {
+        earth_tiles: EarthTiles {
             window,
             layers: &layers,
             upload: &mut earth_upload,

@@ -4,6 +4,7 @@
 
 use super::{post_shell, State};
 use crate::abi::cmd::{self as abi, Command};
+use pxl_spec::space::zoom::Zoom;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::abi::cmd as xpute_cmd;
@@ -92,8 +93,11 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::WORLD_SOURCE => {
             let p = abi::WorldSource::read(packet(pkt)?)?;
-            refuse_unless(p.top_z >= pxl_spec::space::pyramid::TOP_Z && p.top_z <= pxl_spec::space::pyramid::GROUND_Z, Errno::EINVAL)?;
-            crate::world::paging::floor::declare(p.top_z);
+            refuse_unless(
+                p.top_z >= u32::from(pxl_spec::space::pyramid::TOP_Z) && p.top_z <= u32::from(pxl_spec::space::pyramid::LEAF_Z),
+                Errno::EINVAL,
+            )?;
+            crate::world::residency::floor::declare(p.top_z as Zoom);
             Ok(Some(0))
         }
         Command::INPUT_RECT => {

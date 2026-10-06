@@ -49,7 +49,7 @@ export const LIMITS = {
   ZOOMS: 24 as number,
 } as const;
 
-/** One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z. */
+/** One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z. */
 export const FRAME = {
   t: 0 as number,
   dt_ms: 1 as number,
@@ -84,9 +84,9 @@ export const FRAME = {
   mounts_added: 82 as number,
   mounts_removed: 83 as number,
   mounts_layouts: 84 as number,
-  pages_total: 85 as number,
-  zoom_pages: 86 as number,
-  pages_poi: 110 as number,
+  tiles_total: 85 as number,
+  zoom_tiles: 86 as number,
+  tiles_poi: 110 as number,
   heap_used_mb: 111 as number,
   heap_live_mb: 112 as number,
   heap_run_mb: 113 as number,
@@ -96,7 +96,7 @@ export const FRAME = {
   heap_largest_free_mb: 117 as number,
   ring_cq_peak: 118 as number,
   ring_held_peak: 119 as number,
-  work_scans: 120 as number,
+  work_runs: 120 as number,
   work_bakes: 121 as number,
   work_fine_peak: 122 as number,
   work_coarse_peak: 123 as number,
@@ -134,9 +134,9 @@ export const FRAME_GROUPS = {
   stale: ["stale_hidden", "stale_uncovered", "stale_unready"],
   slot: ["slot_waits", "slot_wait_zooms", "slot_chained"],
   cap: ["cap_commit_left", "cap_mount_left", "cap_mount_full", "cap_record_refused"],
-  work: ["work_scans", "work_bakes", "work_fine_peak", "work_coarse_peak"],
+  work: ["work_runs", "work_bakes", "work_fine_peak", "work_coarse_peak"],
   q: ["q_terrain", "q_poi"],
-  pages: ["pages_total", "zoom_pages", "pages_poi"],
+  tiles: ["tiles_total", "zoom_tiles", "tiles_poi"],
   cover: ["cover_rule", "cover_drawn", "cover_gaps"],
   view: ["view_rays", "view_visits"],
   device: ["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"],
@@ -230,10 +230,10 @@ export const SUMMARY = {
     chunks: 21 as number,
     phases: 24 as number,
     gpu_spans: 39 as number,
-    per_s_scans: 60 as number,
+    per_s_runs: 60 as number,
     per_s_bakes: 61 as number,
     backlog_s: 62 as number,
-    backlog_per_s_scans: 63 as number,
+    backlog_per_s_runs: 63 as number,
     backlog_per_s_bakes: 64 as number,
     chunks_per_bake: 65 as number,
     mounts_added: 66 as number,
@@ -257,18 +257,15 @@ export const SUMMARY = {
     runs_total: 3 as number,
     coarse_boxes: 4 as number,
     coarse_low_fill: 5 as number,
-    bands_reused: 6 as number,
-    bands_allocated: 7 as number,
-    built_direct: 8 as number,
-    built_scans: 9 as number,
-    built_bakes: 10 as number,
-    built_starved: 11 as number,
-    atlas_repacks: 12 as number,
-    atlas_uploads: 13 as number,
-    WORDS: 14 as number,
+    built_runs: 6 as number,
+    built_bakes: 7 as number,
+    built_starved: 8 as number,
+    atlas_repacks: 9 as number,
+    atlas_uploads: 10 as number,
+    WORDS: 11 as number,
   },
   atlas: {
-    AT: 427 as number,
+    AT: 424 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -277,7 +274,7 @@ export const SUMMARY = {
     WORDS: 5 as number,
   },
   held: {
-    AT: 432 as number,
+    AT: 429 as number,
     run_sets: 0 as number,
     run_set_mb: 1 as number,
     tiers: 2 as number,
@@ -287,14 +284,14 @@ export const SUMMARY = {
     WORDS: 6 as number,
   },
   fetch: {
-    AT: 438 as number,
+    AT: 435 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   peak: {
-    AT: 441 as number,
+    AT: 438 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -316,13 +313,13 @@ export const SUMMARY = {
     WORDS: 18 as number,
   },
   steps: {
-    AT: 459 as number,
+    AT: 456 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   quality: {
-    AT: 620 as number,
+    AT: 617 as number,
     step: 0 as number,
     star: 1 as number,
     frames_held: 2 as number,
@@ -335,14 +332,14 @@ export const SUMMARY = {
   },
   /** The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for. */
   heap: {
-    AT: 628 as number,
+    AT: 625 as number,
     used_mb: 0 as number,
     requests: 1 as number,
     WORDS: 2 as number,
   },
-  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from. */
+  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from. */
   view: {
-    AT: 630 as number,
+    AT: 627 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -361,7 +358,7 @@ export const SUMMARY = {
     read_zoom: 15 as number,
     WORDS: 16 as number,
   },
-  WORDS: 646 as number,
+  WORDS: 643 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

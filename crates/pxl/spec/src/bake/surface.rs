@@ -1,16 +1,16 @@
 // pxl-spec/bake/surface.rs
 
-//! The surface a page's elevation draws and its bound over any piece of the
-//! page. The interpolant lives here because the index lane's bound is true
+//! The surface a tile's elevation draws and its bound over any piece of the
+//! tile. The interpolant lives here because the index lane's bound is true
 //! only of the function that draws it.
 
 use xpute_core::math::scalar::round;
 
-use super::constant::{ele_index, CELL, ELE_PAD, ELE_PADDED_SPAN, EXTENT_CELL, PAGE_ELE_SPAN};
+use super::constant::{ele_index, CELL, ELE_PAD, ELE_PADDED_SPAN, EXTENT_CELL, TILE_ELE_SPAN};
 use super::deck::Decks;
-use crate::space::pyramid::{EXTENT, PAGE_CELLS};
+use crate::space::pyramid::{EXTENT, TILE_CELLS};
 
-const CELL_STEP: f64 = PAGE_CELLS as f64 / PAGE_ELE_SPAN as f64;
+const CELL_STEP: f64 = TILE_CELLS as f64 / TILE_ELE_SPAN as f64;
 
 /// The continuous sample a texel coordinate falls at: a cell's center is its index plus a half.
 fn sample_at(t: f64) -> f64 {
@@ -24,7 +24,7 @@ fn catmull_rom(t: f64) -> [f64; 4] {
 }
 
 /// Catmull-Rom over the 4 × 4 padded samples about a texel point, in cells.
-pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
+pub fn bicubic(tile_ele: &[i16], tx: f64, ty: f64) -> i16 {
     let sx = sample_at(tx);
     let sy = sample_at(ty);
 
@@ -35,7 +35,7 @@ pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
     let wy = catmull_rom(sy - sy0 as f64);
 
     let span = ELE_PADDED_SPAN as i32;
-    let e = |idx: usize| page_ele[idx] as f64;
+    let e = |idx: usize| tile_ele[idx] as f64;
 
     if sx0 >= 1 && sx0 <= span - 3 && sy0 >= 1 && sy0 <= span - 3 {
         let row = |y: i32| {
@@ -61,7 +61,7 @@ pub fn bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
 /// The lowest and highest `bicubic` gives in the texel box, ends included.
 /// Catmull-Rom weights dip below zero by at most 1/8 an axis, so the
 /// interpolant overshoots a 4 × 4 window's range by at most 9/32 of it.
-pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 2] {
+pub fn bound(tile_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 2] {
     let span = ELE_PADDED_SPAN as i32;
     let starts = |t0: f64, t1: f64| sample_at(t0).floor() as i32..=sample_at(t1).floor() as i32;
     let (mut lo, mut hi) = (i32::MAX, i32::MIN);
@@ -70,7 +70,7 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
             let (mut wlo, mut whi) = (i32::MAX, i32::MIN);
             for y in wy - 1..=wy + 2 {
                 for x in wx - 1..=wx + 2 {
-                    let e = page_ele[ele_index(x.clamp(0, span - 1) as u32, y.clamp(0, span - 1) as u32)] as i32;
+                    let e = tile_ele[ele_index(x.clamp(0, span - 1) as u32, y.clamp(0, span - 1) as u32)] as i32;
                     (wlo, whi) = (wlo.min(e), whi.max(e));
                 }
             }
@@ -84,13 +84,13 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
 
 /// Per `EXTENT` cell, the lowest and highest of the surface (overshoot
 /// included), any deck top and any bore floor. Saturates at i16, about 78 km.
-pub fn extent_of(page_ele: &[i16], decks: &Decks) -> Vec<[i16; 2]> {
-    let n = CELL.count_in(EXTENT_CELL) as f64;
-    let side = EXTENT.page_cells();
+pub fn extent_of(tile_ele: &[i16], decks: &Decks) -> Vec<[i16; 2]> {
+    let n = crate::space::zoom::count(CELL, EXTENT_CELL) as f64;
+    let side = EXTENT.tile_cells();
     (0..side * side)
         .map(|index| {
-            let [ex, ey] = EXTENT.in_page(index).map(|v| v as f64 * n);
-            let [lo, hi] = bound(page_ele, [ex, ex + n], [ey, ey + n]);
+            let [ex, ey] = EXTENT.in_tile(index).map(|v| v as f64 * n);
+            let [lo, hi] = bound(tile_ele, [ex, ex + n], [ey, ey + n]);
             let deck = decks.highest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MIN, i32::from);
             let bore = decks.lowest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MAX, i32::from);
             let clamp = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32) as i16;

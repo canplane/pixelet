@@ -4,13 +4,14 @@ use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::Observation;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::V3;
 
 use super::*;
 use crate::world::observer::cell_angle;
 
 use crate::world::fixture::{self, eye, World};
+use crate::world::pyramid::chunk::{FINEST_CHUNK, TOP_CHUNK};
 
 fn ladder() -> Vec<Tau> {
     (0..6).map(|k| Tau::of(libm::pow(2f64, k as f64 / 2.0))).collect()
@@ -26,7 +27,7 @@ fn point(p: V3) -> Pvf3 {
 
 fn pieces_at(pieces: &[Chunk], p: V3) -> Vec<Chunk> {
     let at = point(p);
-    (TOP_Z..=GROUND_Z).rev().map(|z| Chunk::of(z, &at)).filter(|c| pieces.binary_search(c).is_ok()).collect()
+    (TOP_CHUNK..=FINEST_CHUNK).rev().map(|z| Chunk::holding(z, &at)).filter(|c| pieces.binary_search(c).is_ok()).collect()
 }
 
 fn around(eye: V3, radius: f64, z: f64) -> Vec<V3> {
@@ -75,7 +76,7 @@ fn the_cover_stands_all_around_and_ground_with_no_answer_is_no_piece() {
     }
     // Nothing is seen behind the eye, so the cover stands there at the top.
     let behind = pieces_at(d.pieces(), [EYE[0] - 20_000.0, EYE[1], GROUND]);
-    assert_eq!(behind[0].z(), TOP_Z, "ground behind the eye refined");
+    assert_eq!(behind[0].tile_zoom(), TOP_Z, "ground behind the eye refined");
 }
 
 /// From 2u over flat ground: refined across the screen as the criterion
@@ -92,10 +93,16 @@ fn grazing_ground_refines_across_the_screen_and_not_along_its_depth() {
                 let p = [EYE[0] + r * libm::cos(b), EYE[1] + r * libm::sin(b), GROUND - 0.5];
                 let over = pieces_at(&pieces, p);
                 assert_eq!(over.len(), 1, "{tau:?}: {p:?} under {over:?}");
-                let z = over[0].z() as i32;
-                let wanted = tau.z_at(r).clamp(TOP_Z as i32, GROUND_Z as i32);
-                assert!(z >= wanted, "{tau:?}: ground {r} away at {bearing}° left at z{z} where its cell crosses a cell finer than z{wanted}");
-                assert!(z - 1 <= wanted, "{tau:?}: ground {r} away refined to z{z}, past what its error across asks (z{wanted})");
+                // The tile whose cells the piece draws, against the one its distance asks.
+                let zoom = pxl_spec::space::pyramid::GROUND.z_of(over[0].drawn_zoom()).min(LEAF_Z as i32);
+                let wanted = tau.z_at(r) as i32;
+                assert!(
+                    zoom >= wanted,
+                    "{tau:?}: ground {r} away at {bearing}° left at z{zoom} where its cell crosses a cell finer than z{wanted}"
+                );
+                // A split takes all eight children, so the far ones of a chunk split
+                // for its near edge draw up to two zooms finer than they ask.
+                assert!(zoom - 2 <= wanted, "{tau:?}: ground {r} away refined to z{zoom}, past what its error across asks (z{wanted})");
             }
         }
     }
@@ -117,7 +124,10 @@ fn a_far_pole_inside_a_cell_is_not_refined_and_not_a_hole() {
     assert_eq!(pieces_at(thin.pieces(), top).len(), 1, "the pole is a hole or under two pieces");
 
     let tall = fixture::domain(o, &[tau], &pole(60.0));
-    let (z_flat, z_tall) = (pieces_at(flat.pieces(), top)[0].z(), pieces_at(tall.pieces(), [at[0] + 0.25, at[1] + 0.25, GROUND + 30.0])[0].z());
+    let (z_flat, z_tall) = (
+        pieces_at(flat.pieces(), top)[0].tile_zoom(),
+        pieces_at(tall.pieces(), [at[0] + 0.25, at[1] + 0.25, GROUND + 30.0])[0].tile_zoom(),
+    );
     assert!(z_tall > z_flat, "a pole crossing cells up the screen not refined: z{z_tall} against z{z_flat}");
 }
 
@@ -128,7 +138,7 @@ fn hidden_ground_keeps_its_depth() {
     let world = World::flat(GROUND).with([x0, -50_000.0, GROUND], [x1, 50_000.0, GROUND + 1_000.0]);
     let mut d = domain(eye(EYE, Some([1.0, 0.0, 0.0]), FAR, GROUND), &world);
     let cuts = cuts(&mut d);
-    assert!(cuts[0].2.iter().any(|c| c.z() == GROUND_Z - 1), "the ground before the wall is not refined");
+    assert!(cuts[0].2.iter().any(|c| c.tile_zoom() == LEAF_Z - 1), "the ground before the wall is not refined");
     for (tau, _, splits) in cuts {
         for c in splits {
             assert!(c.rect().0 < x1, "{tau:?}: {c:?} is wholly behind the wall and split");
@@ -141,19 +151,19 @@ fn the_cover_is_the_sources_top() {
     let top = 13;
     let o = Observation {
         top,
-        far: fault_radius(top),
-        ..eye(EYE, Some([1.0, 0.1, -0.2]), fault_radius(top), GROUND)
+        far: demand_reach(top),
+        ..eye(EYE, Some([1.0, 0.1, -0.2]), demand_reach(top), GROUND)
     };
     let mut d = domain(o, &World::flat(GROUND));
-    assert!(d.roots().iter().all(|c| c.z() == top), "a root not of the source's top");
+    assert!(d.roots().iter().all(|c| c.tile_zoom() == top), "a root not of the source's top");
     for (tau, pieces, splits) in cuts(&mut d) {
-        assert!(pieces.iter().chain(&splits).all(|c| c.z() >= top), "{tau:?}: a piece or split over the source's top");
-        for p in around(EYE, fault_radius(top) * 0.5, GROUND) {
+        assert!(pieces.iter().chain(&splits).all(|c| c.tile_zoom() >= top), "{tau:?}: a piece or split over the source's top");
+        for p in around(EYE, demand_reach(top) * 0.5, GROUND) {
             assert_eq!(pieces_at(&pieces, p).len(), 1, "{tau:?}: {p:?} in a gap or under two pieces");
         }
     }
     let c = d.pieces()[0];
-    assert!(d.wanted_over(c).z() >= top, "the view said to draw over the source's top");
+    assert!(d.wanted_over(c).tile_zoom() >= top, "the view said to draw over the source's top");
 }
 
 #[test]

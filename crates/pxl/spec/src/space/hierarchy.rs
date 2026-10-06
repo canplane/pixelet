@@ -1,89 +1,10 @@
 // pxl-spec/space/hierarchy.rs
 
-//! What a node is to the one it lies in. Every extent is a power of two of the
-//! unit, a `Scale`, so sizes from different bases cannot mix in one
-//! expression. In position, a parent is the coordinate halved and a child is
-//! told apart by each axis's low bit, in any number of axes.
+//! What a node is to the one it lies in. In position, a parent is the
+//! coordinate halved and a child is told apart by each axis's low bit, in any
+//! number of axes; a node's size is its zoom (`zoom.rs`).
 
-use super::pvf3::core::FRAC_W;
-use super::pvf3::pvf3::{self, Pvf3};
-use super::v3::Aabb;
-use xpute_core::math::scalar::round;
-
-/// A side of 2^shamt units: negative where it is finer than a unit.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Scale(i32);
-
-impl Scale {
-    /// Where a root is spelled; every other scale is stepped from one.
-    pub const fn of(shamt: i32) -> Scale {
-        Scale(shamt)
-    }
-
-    pub const fn shamt(self) -> i32 {
-        self.0
-    }
-
-    /// Negative `steps` go down.
-    pub const fn up(self, steps: i32) -> Scale {
-        Scale(self.0 + steps)
-    }
-
-    pub const fn down(self, steps: u32) -> Scale {
-        Scale(self.0 - steps as i32)
-    }
-
-    /// Negative where below.
-    pub const fn above(self, base: Scale) -> i32 {
-        self.0 - base.0
-    }
-
-    pub const fn count_in(self, outer: Scale) -> u32 {
-        if outer.0 < self.0 {
-            panic!()
-        }
-        1 << (outer.0 - self.0)
-    }
-
-    pub const fn side(self) -> f64 {
-        if self.0 >= 0 {
-            (1u64 << self.0) as f64
-        } else {
-            1.0 / (1u64 << -self.0) as f64
-        }
-    }
-
-    /// A floor on the signed lane.
-    pub const fn index(self, units: i64) -> i64 {
-        if self.0 >= 0 {
-            units >> self.0
-        } else {
-            units << -self.0
-        }
-    }
-
-    /// A floor on each signed lane; exact while a side is no finer than the fraction.
-    pub fn index_of(self, at: &Pvf3) -> [i64; 3] {
-        let shift = FRAC_W as i32 + self.0;
-        [pvf3::X(at) >> shift, pvf3::Y(at) >> shift, pvf3::Z(at) >> shift]
-    }
-
-    /// `index_of`'s inverse.
-    pub fn base_of(self, index: [i64; 3]) -> Pvf3 {
-        let shift = FRAC_W as i32 + self.0;
-        pvf3::gather(index[0] << shift, index[1] << shift, index[2] << shift)
-    }
-
-    pub fn cube(self, index: [i64; 3]) -> Aabb {
-        let side = self.side();
-        let min = index.map(|c| c as f64 * side);
-        Aabb { min, max: min.map(|v| v + side) }
-    }
-
-    pub fn of_side(units: f64) -> Scale {
-        Scale(round(libm::log2(units)) as i32)
-    }
-}
+use super::zoom::Zoom;
 
 /// A floor on the signed lanes.
 pub fn parent_of<const D: usize>(at: [i64; D]) -> [i64; D] {
@@ -121,11 +42,11 @@ pub fn first_descendant_of<const D: usize>(at: [i64; D], steps: u32) -> [i64; D]
 }
 
 /// Whether two nodes overlap; in one hierarchy they nest or are apart.
-pub fn share<const D: usize>((a_side, a): (Scale, [i64; D]), (b_side, b): (Scale, [i64; D])) -> bool {
-    if a_side <= b_side {
-        ancestor_of(a, b_side.above(a_side) as u32) == b
+pub fn share<const D: usize>((a_z, a): (Zoom, [i64; D]), (b_z, b): (Zoom, [i64; D])) -> bool {
+    if a_z >= b_z {
+        ancestor_of(a, u32::from(a_z - b_z)) == b
     } else {
-        ancestor_of(b, a_side.above(b_side) as u32) == a
+        ancestor_of(b, u32::from(b_z - a_z)) == a
     }
 }
 

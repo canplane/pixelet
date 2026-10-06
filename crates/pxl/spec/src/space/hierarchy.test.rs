@@ -35,42 +35,17 @@ fn several_steps_are_one_step_taken_as_many_times() {
     }
 }
 
-#[test]
-fn a_scale_is_one_power_of_two_however_it_is_read() {
-    let unit = Scale::of(0);
-    for s in [Scale::of(-3), unit, Scale::of(6), Scale::of(9)] {
-        assert_eq!(s.up(2).down(2), s);
-        assert_eq!(s.up(3).above(s), 3);
-        assert_eq!(Scale::of_side(s.side()), s);
-        assert_eq!(s.count_in(s.up(2)) * s.up(2).count_in(s.up(5)), s.count_in(s.up(5)));
-    }
-    assert_eq!(unit.count_in(Scale::of(9)) as f64, Scale::of(9).side());
-    assert_eq!(Scale::of(-3).side(), 0.125);
-}
-
-/// A point's side at a scale holds it, either side of the origin and below a unit.
-#[test]
-fn a_point_lies_in_the_side_whose_corner_is_under_it() {
-    for s in [Scale::of(-3), Scale::of(0), Scale::of(6)] {
-        for index in [[0i64, 0, 0], [5, -3, 2], [-1, -1, -1], [100, 7, -40]] {
-            assert_eq!(s.index_of(&s.base_of(index)), index);
-            let inside = pvf3::add(&s.base_of(index), &Scale::of(-8).base_of([1, 1, 1]));
-            assert_eq!(s.index_of(&inside), index, "{s:?} {index:?}");
-        }
-    }
-}
-
 /// Two nodes overlap exactly when one lies under the other.
 #[test]
 fn nodes_share_ground_only_where_one_lies_under_the_other() {
-    let at = (Scale::of(4), [3i64, -2]);
+    let at = (20, [3i64, -2]);
     assert!(share(at, at));
-    for steps in 1..4 {
-        let first = (Scale::of(4 - steps), first_descendant_of(at.1, steps as u32));
+    for steps in 1..4u8 {
+        let first = (20 + steps, first_descendant_of(at.1, u32::from(steps)));
         assert!(share(at, first) && share(first, at));
-        let beside = (Scale::of(4 - steps), first_descendant_of([4, -2], steps as u32));
+        let beside = (20 + steps, first_descendant_of([4, -2], u32::from(steps)));
         assert!(!share(at, beside) && !share(beside, at));
-        assert!(share((Scale::of(4 + steps), ancestor_of(at.1, steps as u32)), at));
+        assert!(share((20 - steps, ancestor_of(at.1, u32::from(steps))), at));
     }
 }
 

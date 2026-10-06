@@ -14,29 +14,30 @@ use crate::cell::cube::cube_types::{sentinel, Ground};
 use crate::cell::cube::Kind;
 use crate::space::adapter::epsg3857::u_per_m;
 use crate::space::pvf3::ivec::gather;
-use crate::space::pyramid::{Page, GROUND, GROUND_Z, PAGE_CELLS, TOP_Z};
+use crate::space::pyramid::{Tile, GROUND, LEAF_Z, TILE_CELLS, TOP_Z};
+use crate::space::zoom::Zoom;
 
 /// Changing it reshuffles everything scattered.
 pub const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
 
-// ---- scatter: a Poisson process on the z16 cell lattice ----
+// ---- scatter: a Poisson process on the leaf cell lattice ----
 
 const BLOCK: i64 = 16; // a block's side, in its birth zoom's cells
 const KEPT: f64 = 0.25; // a zoom keeps one in four of the next finer's
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Candidate {
-    pub cell: [i64; 2], // the z16 cell it stands at, at every zoom
-    pub born: u32,      // the coarsest zoom it stands at
+    pub cell: [i64; 2], // the leaf cell it stands at, at every zoom
+    pub born: Zoom,     // the coarsest zoom it stands at
     pub seed: u64,      // its own draws: variant, heading, size
 }
 
 /// A Poisson process, never a grid: a block at zoom m bears a Poisson count
-/// of candidates born there, each at a uniform z16 cell, and a candidate born
+/// of candidates born there, each at a uniform leaf cell, and a candidate born
 /// at m stands at every zoom from m finer. A cell at any zoom then holds `density`.
-fn each_candidate(tag: u64, density: f64, z: u32, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
+fn each_candidate(tag: u64, density: f64, zoom: Zoom, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
     let kind = derive_seed_u64(MASTER_SEED, tag);
-    for born in (TOP_Z..=z).rev() {
+    for born in (TOP_Z..=zoom).rev() {
         let side = BLOCK * i64::from(GROUND.finest_in(born));
         let share = if born == TOP_Z { 1.0 } else { 1.0 - KEPT };
         let mean = density * (BLOCK * BLOCK) as f64 * share;
@@ -73,12 +74,12 @@ fn poisson(mean: f64, u: f64) -> u64 {
     k
 }
 
-/// What stands at `z` in `region` (z16 cells, `[min, max)`), one a cell:
+/// What stands at `z` in `region` (leaf cells, `[min, max)`), one a cell:
 /// of two on one cell the coarser stays, so a zoom keeps what it had.
-pub fn scatter(tag: u64, density: f64, z: u32, region: [[i64; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
+pub fn scatter(tag: u64, density: f64, zoom: Zoom, region: [[i64; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
     out.clear();
     let mut grown = Ok(());
-    each_candidate(tag, density, z, region, |c| {
+    each_candidate(tag, density, zoom, region, |c| {
         if grown.is_ok() {
             grown = out.try_reserve(1).map(|()| out.push(c));
         }
@@ -89,10 +90,10 @@ pub fn scatter(tag: u64, density: f64, z: u32, region: [[i64; 2]; 2], out: &mut 
     Ok(())
 }
 
-/// What stands in one z16 cell at z16, as `scatter` keeps it.
+/// What stands in one leaf cell on the leaves, as `scatter` keeps it.
 pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2]) -> Option<Candidate> {
     let mut best: Option<Candidate> = None;
-    each_candidate(tag, density, GROUND_Z, [cell, [cell[0] + 1, cell[1] + 1]], |c| {
+    each_candidate(tag, density, LEAF_Z, [cell, [cell[0] + 1, cell[1] + 1]], |c| {
         if best.is_none_or(|b| (c.born, c.seed) < (b.born, b.seed)) {
             best = Some(c);
         }
@@ -102,13 +103,13 @@ pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2]) -> Option<Candidate> {
 
 // ---- piers ----
 
-/// Within Arnis's 19 m and OSM2World's 50 m; one lattice a z6 row.
+/// Within Arnis's 19 m and OSM2World's 50 m; one lattice a z5 row.
 pub const PIER_STEP_M: f64 = 32.0;
 
 pub const PIER_ACROSS: f64 = 0.7; // of the deck's width: OSM2World's `BridgeModule`
 pub const PIER_ALONG: f64 = PIER_ACROSS / 2.0; // OSM2World's
 
-/// A page's cells in the world, so a station is the world's and not a page's.
+/// A tile's cells in the world, so a station is the world's and not a tile's.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Frame {
     pub corner: [f64; 2], // south-west, in u
@@ -116,17 +117,17 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn of(page: Page) -> Frame {
-        let (x0, y0, side) = page.rect();
+    pub fn of(tile: Tile) -> Frame {
+        let (x0, y0, side) = tile.rect();
         Frame {
             corner: [x0, y0],
-            cell: side / f64::from(PAGE_CELLS),
+            cell: side / f64::from(TILE_CELLS),
         }
     }
 }
 
 /// Whether `at` is in the pier at the station nearest `near` on `[a, a + d)`,
-/// in the page's cells; half-open, so a joint's station is one segment's.
+/// in the tile's cells; half-open, so a joint's station is one segment's.
 pub fn pier_covers(frame: Frame, width: f64, a: [f64; 2], d: [f64; 2], near: [f64; 2], at: [f64; 2]) -> bool {
     let k = if d[0].abs() >= d[1].abs() { 0 } else { 1 };
     if d[k] == 0.0 {

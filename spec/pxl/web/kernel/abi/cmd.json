@@ -1490,7 +1490,7 @@
           "name": "outside",
           "type": "bool",
           "doc": [
-            "The source has nothing at all under the map center: the page over it at the source's top was absent."
+            "The source has nothing at all under the map center: the tile over it at the source's top was absent."
           ]
         }
       ]

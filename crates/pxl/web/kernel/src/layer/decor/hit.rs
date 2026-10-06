@@ -1,13 +1,12 @@
 // pxl-kernel/layer/decor/hit.rs
 
 //! Which decor the pointer's ray strikes, against the drawn triangles of the
-//! z16 chunks' decor: decor paints no voxel, so the access's ray passes through
+//! leaf chunks' decor: decor paints no voxel, so the access's ray passes through
 //! it. A placed instance resolves to its entry; a scattered one to its cell.
 
-use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::indexer::L2_IDX;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::GROUND_Z;
+use pxl_spec::bake::constant::{BAND, CELL};
+use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pyramid::LEAF_Z;
 use pxl_spec::space::v3::{cross3, dot3, sub3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
@@ -17,6 +16,8 @@ use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
 use crate::world::chunk::table::Scheduler;
+use pxl_spec::space::indexer::idx;
+use pxl_spec::space::zoom::index_of;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DecorStruck {
@@ -35,15 +36,14 @@ pub struct Scattered {
     pub scale: f64,
 }
 
-/// The ray is in the root frame, relative to `map_origin`. A decor wins only
+/// The ray is in the world's doubles. A decor wins only
 /// strictly nearer than `max_dist`, the world's hit, as a depth test decides.
-pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64) -> Option<DecorStruck> {
+pub fn raycast_decor(origin: V3, direction: V3, max_dist: f64) -> Option<DecorStruck> {
     let (_, sched) = kernel().world()?;
-    let frame = [ivec::to_real(ivec::X(map_origin)), ivec::to_real(ivec::Y(map_origin))];
-    let hit = hit_decor(sched, frame, origin, direction, max_dist)?;
+    let hit = hit_decor(sched, origin, direction, max_dist)?;
     if hit.band == NO_ENTRY {
         return Some(DecorStruck::Scattered(Scattered {
-            cell: hit.at.map(|v| (v / CELL.side()).floor() as i64),
+            cell: index_of(CELL, &crate::world::frame::coord::world_to_canonical(&hit.at)),
             group: hit.group,
             at: hit.at,
             rotation: hit.rotation,
@@ -54,7 +54,7 @@ pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64)
     Some(DecorStruck::Placed(EntryAt {
         col_idx: {
             let (x0, y0, _) = hit.cell.rect();
-            L2_IDX(ivec::gather(x0 as i64, y0 as i64, 0))
+            idx(BAND, ivec::gather(x0 as i64, y0 as i64, 0))
         },
         band_idx: hit.band as i32,
         pos: hit.pos,
@@ -91,18 +91,17 @@ fn decor_reach(sched: &Scheduler) -> f64 {
 }
 
 /// Hidden instances are tested too: the hidden one is what the eraser is over.
-fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
+fn hit_decor(sched: &Scheduler, o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
     let reach = decor_reach(sched);
     for (cell, base_x, base_y, words) in crate::layer::decor::cell::shown() {
-        // Only z16 cells name their placed entries; edits are made close by.
-        if cell.z() != GROUND_Z {
+        // Only leaf cells name their placed entries; edits are made close by.
+        if cell.tile_zoom() != LEAF_Z {
             continue;
         }
         let side = cell.rect().2;
-        let tx = base_x - origin[0];
-        let ty = base_y - origin[1];
+        let (tx, ty) = (pxl_spec::space::pvf3::nearest(base_x, o[0]), base_y);
         if !ray_meets_square(&o, &d, tx - reach, ty - reach, tx + side + reach, ty + side + reach, limit) {
             continue;
         }

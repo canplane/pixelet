@@ -7,7 +7,7 @@ use std::process::Command;
 use pxl_spec::bake::published::version_name;
 use xpute_core::math::scalar::round;
 
-/// The `Content-Encoding` every baked page is uploaded with, so the transport decodes it.
+/// The `Content-Encoding` every baked tile is uploaded with, so the transport decodes it.
 pub const CONTENT_ENCODING: &str = "zstd";
 
 /// FNV-1a 64.

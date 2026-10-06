@@ -92,13 +92,13 @@
     "REASONS": 4,
     "STEP_SLOTS": 32,
     "ZOOMS": 24,
-    "$ZOOMS": "A lane a zoom slot, by the zoom itself: slot z holds a cell of zoom z (pxl-spec adapter/3857.rs zoom_of)."
+    "$ZOOMS": "A lane a zoom slot, by the zoom itself: slot z holds a cell of zoom z's tiles, past the leaves for the objects' finer cells (pxl-spec space/pyramid.rs `Lattice::z_of`)."
   },
   "FRAME": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z."
+      "One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z."
     ],
     "t": 1,
     "dt_ms": 1,
@@ -133,9 +133,9 @@
     "mounts_added": 1,
     "mounts_removed": 1,
     "mounts_layouts": 1,
-    "pages_total": 1,
-    "zoom_pages": "LIMITS.ZOOMS",
-    "pages_poi": 1,
+    "tiles_total": 1,
+    "zoom_tiles": "LIMITS.ZOOMS",
+    "tiles_poi": 1,
     "heap_used_mb": 1,
     "heap_live_mb": 1,
     "heap_run_mb": 1,
@@ -145,7 +145,7 @@
     "heap_largest_free_mb": 1,
     "ring_cq_peak": 1,
     "ring_held_peak": 1,
-    "work_scans": 1,
+    "work_runs": 1,
     "work_bakes": 1,
     "work_fine_peak": 1,
     "work_coarse_peak": 1,
@@ -233,7 +233,7 @@
       "cap_record_refused"
     ],
     "work": [
-      "work_scans",
+      "work_runs",
       "work_bakes",
       "work_fine_peak",
       "work_coarse_peak"
@@ -242,10 +242,10 @@
       "q_terrain",
       "q_poi"
     ],
-    "pages": [
-      "pages_total",
-      "zoom_pages",
-      "pages_poi"
+    "tiles": [
+      "tiles_total",
+      "zoom_tiles",
+      "tiles_poi"
     ],
     "cover": [
       "cover_rule",
@@ -373,10 +373,10 @@
       "chunks": "SPREAD",
       "phases": "PHASE_NAMES * SPREAD",
       "gpu_spans": "GPU_SPAN_NAMES * SPREAD",
-      "per_s_scans": 1,
+      "per_s_runs": 1,
       "per_s_bakes": 1,
       "backlog_s": 1,
-      "backlog_per_s_scans": 1,
+      "backlog_per_s_runs": 1,
       "backlog_per_s_bakes": 1,
       "chunks_per_bake": 1,
       "mounts_added": 1,
@@ -396,10 +396,7 @@
       "runs_total": 1,
       "coarse_boxes": 1,
       "coarse_low_fill": 1,
-      "bands_reused": 1,
-      "bands_allocated": 1,
-      "built_direct": 1,
-      "built_scans": 1,
+      "built_runs": 1,
       "built_bakes": 1,
       "built_starved": 1,
       "atlas_repacks": 1,
@@ -468,7 +465,7 @@
     },
     "view": {
       "$doc": [
-        "Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from."
+        "Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from."
       ],
       "dist": 1,
       "polar": 1,

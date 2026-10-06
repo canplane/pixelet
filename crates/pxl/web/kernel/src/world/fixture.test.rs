@@ -8,8 +8,9 @@ use pxl_spec::space::observation::{Bounds, Contents, Frustum, Observation};
 use pxl_spec::space::pyramid::{GROUND, TOP_Z};
 use pxl_spec::space::v3::{add3, Aabb, V3};
 
-use crate::world::observer::{Footprint, Grid, Met, Observer, OnTile, Sight};
+use crate::world::observer::{Footprint, Grid, Met, Observer, OnPatch, Sight};
 use crate::world::pyramid::domain::{Domain, Price};
+use pxl_spec::space::zoom::{units, Zoom};
 
 #[derive(Clone)]
 pub struct World {
@@ -40,7 +41,7 @@ impl Bounds for World {
     /// The ground's lowest is its top cell's floor, as the index lane bounds
     /// it. Flat, it rises a cell's step over an index cell; a box is off by all
     /// of itself.
-    fn contents(&self, z: u32, region: Aabb) -> Contents {
+    fn contents(&self, zoom: Zoom, region: Aabb) -> Contents {
         if !self.answered {
             return Contents::Unknown;
         }
@@ -52,7 +53,7 @@ impl Bounds for World {
             }
             .meet(region)
         };
-        let cell = GROUND.side_at(z).side();
+        let cell = units(GROUND.cell_zoom(zoom));
         let (mut bound, mut rise): (Option<Aabb>, f64) = (None, 0.0);
         if let Some(g) = column(self.ground - 1.0 - self.slack, self.ground + self.slack) {
             bound = Some(g);
@@ -109,7 +110,7 @@ impl World {
 }
 
 impl Observer for World {
-    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnTile) -> u32 {
+    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnPatch) -> u32 {
         if !self.answered {
             return 0;
         }
@@ -177,7 +178,7 @@ pub fn eye(eye: V3, forward: Option<V3>, far: f64, ground: f64) -> Observation {
 }
 
 pub fn place(center: V3, dist: f64, polar: f64, azimuth: f64) {
-    use crate::control::camera::controller::{camera, set_eye_local};
+    use crate::control::camera::controller::{camera, set_eye_world};
     use crate::control::camera::orbit::{orbit, orbit_eye_offset};
     use crate::control::camera::store::{camera_store, Intent};
     orbit().dist = dist;
@@ -185,5 +186,5 @@ pub fn place(center: V3, dist: f64, polar: f64, azimuth: f64) {
     (cam.polar, cam.azimuth) = (polar, azimuth);
     camera_store().intent = Intent { dist, azimuth, polar };
     let e = orbit_eye_offset(dist, polar, azimuth);
-    set_eye_local(&add3(&center, &e));
+    set_eye_world(&add3(&center, &e));
 }

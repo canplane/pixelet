@@ -5,32 +5,32 @@
 
 use core::f64::consts::TAU;
 
-use crate::space::hierarchy::Scale;
-use crate::space::indexer::{FROM_L3_IDX, L3_RANGE};
-use crate::space::pvf3::core::IVEC_X_W;
+use crate::space::indexer::from_idx;
 use crate::space::pvf3::{projection, FVec, IVec, Pvf3, ROUND};
+use crate::space::pyramid::LEAF_Z;
+use crate::space::zoom::{units, Zoom};
 
 use super::epsg4326::EARTH_RADIUS_M;
 
 /// x and y in the DB's EPSG:3857 coordinates, z in ground metres.
 pub type G3857 = [f64; 3];
 
-/// A cell `side` wide as a web map's zoom (256-pixel tiles): the X lane is one
-/// world, so it spans 2^(IVEC_X_W − shamt) of them.
-pub const fn zoom_of(side: Scale) -> i32 {
-    IVEC_X_W as i32 - 8 - side.shamt()
+/// A cell at `cell_zoom` as a web map's zoom, whose 256-pixel tiles are 2^8
+/// of its cells across.
+pub const fn web_zoom_of(cell_zoom: Zoom) -> i32 {
+    cell_zoom as i32 - 8
 }
 
-/// The cell side a web map's `zoom` names: `zoom_of`'s inverse.
-pub const fn side_at_zoom(zoom: i32) -> Scale {
-    Scale::of(IVEC_X_W as i32 - 8 - zoom)
+/// The cell zoom a web map's `zoom` names: `web_zoom_of`'s inverse.
+pub const fn cell_zoom_of(web_zoom: i32) -> Zoom {
+    (web_zoom + 8) as Zoom
 }
 
 const U_PER_DB: f64 = ROUND / (TAU * EARTH_RADIUS_M); // EPSG:3857 spans 2πR
 
-/// sec φ = cosh(y / R), at the page's base so a page shares one value.
+/// sec φ = cosh(y / R), at the tile's base so a tile shares one value.
 pub fn scale_at(y_u: f64) -> f64 {
-    let base = (y_u / L3_RANGE as f64).floor() * L3_RANGE as f64;
+    let base = (y_u / units(LEAF_Z)).floor() * units(LEAF_Z);
     libm::cosh(base * TAU / ROUND)
 }
 
@@ -59,9 +59,9 @@ pub fn unproject(i: IVec, f: FVec) -> G3857 {
 pub type BBox3857 = [G3857; 2];
 
 /// The maximum is built in u: the exclusive +2^23u edge is not an IVec.
-pub fn get_page_bbox(page_idx: IVec) -> BBox3857 {
-    let min = projection::unproject(FROM_L3_IDX(page_idx), 0);
-    let span = L3_RANGE as f64;
+pub fn get_tile_bbox(tile_idx: IVec) -> BBox3857 {
+    let min = projection::unproject(from_idx(LEAF_Z, tile_idx), 0);
+    let span = units(LEAF_Z);
     [[to_db(min[0]), to_db(min[1]), 0.0], [to_db(min[0] + span), to_db(min[1] + span), 0.0]]
 }
 

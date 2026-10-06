@@ -1,14 +1,14 @@
 // pxl-geo-bake/deck.rs
 
-//! Decks and bores: what a page's bridges and tunnels are, read from the
+//! Decks and bores: what a tile's bridges and tunnels are, read from the
 //! source, and the lines the bake stores for them, solved as Arnis solves
 //! them (`deck/arnis.rs`).
 
 pub mod arnis;
 pub mod elevation;
 pub mod piece;
-pub mod way;
 pub mod source;
+pub mod way;
 
 use postgres::Client;
 use pxl_spec::bake::deck::Form;
@@ -17,9 +17,9 @@ use pxl_spec::space::adapter::epsg3857::G3857;
 use crate::terrain::repository::TerrainRepository;
 use source::Store;
 
-pub use arnis::solve_page;
+pub use arnis::solve_tile;
 
-/// What the solve leaves a page: its lines, and the ranges of ways they draw,
+/// What the solve leaves a tile: its lines, and the ranges of ways they draw,
 /// which the ground leaves unpainted. One solve makes both, so the road
 /// leaves the ground's paint exactly where its line begins.
 #[derive(Default)]
@@ -28,14 +28,14 @@ pub struct Solved {
     pub drawn: Vec<Drawn>,
 }
 
-/// A solved line: XY in DB coordinates, height and width in z16 cells.
+/// A solved line: XY in DB coordinates, height and width in leaf cells.
 pub struct Line {
     pub subtype: String,
     pub class: Option<String>,
     pub width_cells: f64,
     pub form: Form,
     pub points: Vec<G3857>,
-    /// A bore's clear space over its surface, in z16 cells; none for another form.
+    /// A bore's clear space over its surface, in leaf cells; none for another form.
     pub clear: u8,
 }
 
@@ -46,7 +46,7 @@ pub struct Drawn {
     pub range: [f64; 2],
 }
 
-/// What a solve reads through: the DB, and each page's rows.
+/// What a solve reads through: the DB, and each tile's rows.
 pub struct Reader<'a, S: Store> {
     pub client: &'a mut Client,
     pub repo: &'a TerrainRepository,

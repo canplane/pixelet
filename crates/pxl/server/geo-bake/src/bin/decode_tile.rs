@@ -1,15 +1,15 @@
 // pxl-geo-bake/bin/decode_tile.rs
 
-//! A baked terrain page read back the way the kernel reads it, checked
+//! A baked terrain tile read back the way the kernel reads it, checked
 //! against the bake's contract. A byte that is no look draws as unknown
 //! ground, so it is checked here. Run `--all` after
-//! `deno task bake:tiles`; one page also writes PNGs for the eye.
+//! `deno task bake:tiles`; one tile also writes PNGs for the eye.
 //!
 //!   decode_tile 12720250262323200                # one leaf: summary + PNGs
-//!   decode_tile 3179787687624704 --z 14          # a page at a coarser zoom
-//!   decode_tile 12720250262323200 --out /tmp/page
-//!   decode_tile out/terrain/v8/z16/12720250262323200  # a path works too
-//!   decode_tile --all                            # every page of every zoom, checked
+//!   decode_tile 3179787687624704 --z 14          # a tile at a coarser zoom
+//!   decode_tile 12720250262323200 --out /tmp/tile
+//!   decode_tile out/terrain/v8/z15/12720250262323200  # a path works too
+//!   decode_tile --all                            # every tile of every zoom, checked
 //!   decode_tile --all --version v7
 
 use std::collections::BTreeMap;
@@ -30,14 +30,14 @@ use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::surface::extent_of;
 use pxl_spec::cell::color;
 use pxl_spec::cell::cube::cube_types::{ground, Ground};
-use pxl_spec::space::pyramid::PAGE_CELLS;
+use pxl_spec::space::pyramid::TILE_CELLS;
 use xpute_core::math::scalar::round;
 use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
 
 /// Packed as a bake stores it, or identity from a deployment.
-fn read_page(path: &Path) -> Result<Vec<u8>, String> {
+fn read_tile(path: &Path) -> Result<Vec<u8>, String> {
     let raw = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     match encoding_of(&raw) {
         Some(_) => unpack(&raw).map_err(|e| e.to_string()),
@@ -45,7 +45,7 @@ fn read_page(path: &Path) -> Result<Vec<u8>, String> {
     }
 }
 
-struct Page {
+struct Tile {
     ele: Vec<i16>,
     cells: Vec<GroundCell>,
     extent: Vec<[i16; 2]>,
@@ -53,8 +53,8 @@ struct Page {
     decks: Decks,
 }
 
-fn decode(pkt: &[u8]) -> Result<Page, String> {
-    let t = decode_terrain(pkt).map_err(|e| format!("not a page: {e:?}"))?;
+fn decode(pkt: &[u8]) -> Result<Tile, String> {
+    let t = decode_terrain(pkt).map_err(|e| format!("not a tile: {e:?}"))?;
     let (ele, cells, extent, occupancy, decks) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent().to_vec(), t.index.occupancy, t.decks);
     // Nothing may follow the tree: the decoder only checks the payload is there.
     let at = WORD_SZ as usize;
@@ -62,7 +62,7 @@ fn decode(pkt: &[u8]) -> Result<Page, String> {
     if payload + HDR_SZ as usize != pkt.len() {
         return Err(format!("packet is {} bytes, header says {}", pkt.len(), payload + HDR_SZ as usize));
     }
-    Ok(Page { ele, cells, extent, occupancy, decks })
+    Ok(Tile { ele, cells, extent, occupancy, decks })
 }
 
 fn name_of(cell: GroundCell) -> &'static str {
@@ -79,11 +79,11 @@ struct Summary {
     faults: Vec<String>,
 }
 
-fn summarize(page: &Page) -> Summary {
-    let (min, max) = page.ele.iter().fold((i16::MAX, i16::MIN), |(lo, hi), &h| (lo.min(h), hi.max(h)));
-    let mean = page.ele.iter().map(|&h| h as f64).sum::<f64>() / page.ele.len() as f64;
+fn summarize(tile: &Tile) -> Summary {
+    let (min, max) = tile.ele.iter().fold((i16::MAX, i16::MIN), |(lo, hi), &h| (lo.min(h), hi.max(h)));
+    let mean = tile.ele.iter().map(|&h| h as f64).sum::<f64>() / tile.ele.len() as f64;
     let mut counts = BTreeMap::new();
-    for &cell in &page.cells {
+    for &cell in &tile.cells {
         *counts.entry(cell).or_insert(0) += 1;
     }
     let mut faults = Vec::new();
@@ -91,32 +91,32 @@ fn summarize(page: &Page) -> Summary {
     if !past.is_empty() {
         faults.push(format!("byte(s) that are no look — {}", past.join(", ")));
     }
-    let short = extent_of(&page.ele, &page.decks).iter().zip(&page.extent).filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi).count();
+    let short = extent_of(&tile.ele, &tile.decks).iter().zip(&tile.extent).filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi).count();
     if short > 0 {
-        faults.push(format!("{short} index cell(s) narrower than the page's own surface"));
+        faults.push(format!("{short} index cell(s) narrower than the tile's own surface"));
     }
-    let extent = page.extent.iter().fold([i16::MAX, i16::MIN], |[lo, hi], &[l, h]| [lo.min(l), hi.max(h)]);
+    let extent = tile.extent.iter().fold([i16::MAX, i16::MIN], |[lo, hi], &[l, h]| [lo.min(l), hi.max(h)]);
     Summary {
         min,
         max,
         mean,
         extent,
-        occupancy: page.occupancy,
+        occupancy: tile.occupancy,
         counts,
         faults,
     }
 }
 
 fn print_summary(name: &str, s: &Summary) {
-    println!("page {name}");
+    println!("tile {name}");
     println!("  ele  min {} max {} mean {:.2}{}", s.min, s.max, s.mean, if s.min == s.max { " (flat)" } else { "" });
     println!("  index  lowest {} highest {} occupancy {:#07b}", s.extent[0], s.extent[1], s.occupancy.bits());
     let list: Vec<String> = s.counts.iter().map(|(&c, n)| format!("{} {n}", name_of(c))).collect();
     println!("  ground    {}", list.join(", "));
 }
 
-fn print_bores(page: &Page) {
-    let bores: Vec<_> = page.decks.iter().filter(|d| d.form == Form::Bore).collect();
+fn print_bores(tile: &Tile) {
+    let bores: Vec<_> = tile.decks.iter().filter(|d| d.form == Form::Bore).collect();
     if bores.is_empty() {
         return;
     }
@@ -125,7 +125,7 @@ fn print_bores(page: &Page) {
         for i in 0..d.points.len() {
             let [x, y] = d.point(i);
             points += 1;
-            if i32::from(d.tops[i]) < i32::from(bicubic(&page.ele, x, y)) {
+            if i32::from(d.tops[i]) < i32::from(bicubic(&tile.ele, x, y)) {
                 under += 1;
             }
         }
@@ -169,9 +169,9 @@ fn png(width: u32, height: u32, channels: u8, pixels: &[u8]) -> Vec<u8> {
     out
 }
 
-fn heights_png(page: &Page, s: &Summary) -> Vec<u8> {
+fn heights_png(tile: &Tile, s: &Summary) -> Vec<u8> {
     let span = (s.max as f64 - s.min as f64).max(0.0);
-    let gray: Vec<u8> = page
+    let gray: Vec<u8> = tile
         .ele
         .iter()
         .map(|&h| if span == 0.0 { 128 } else { round((h as f64 - s.min as f64) / span * 255.0) as u8 })
@@ -183,8 +183,8 @@ fn rgb_of(cell: GroundCell) -> u32 {
     color::ground(cell).map_or(MAGENTA, |s| s.rgb)
 }
 
-fn ground_png(page: &Page) -> Vec<u8> {
-    let px: Vec<u8> = page
+fn ground_png(tile: &Tile) -> Vec<u8> {
+    let px: Vec<u8> = tile
         .cells
         .iter()
         .flat_map(|&c| {
@@ -192,14 +192,14 @@ fn ground_png(page: &Page) -> Vec<u8> {
             [(v >> 16) as u8, (v >> 8) as u8, v as u8]
         })
         .collect();
-    png(PAGE_CELLS, PAGE_CELLS, 3, &px)
+    png(TILE_CELLS, TILE_CELLS, 3, &px)
 }
 
-fn decks_png(page: &Page) -> Vec<u8> {
-    let n = PAGE_CELLS as i64;
+fn decks_png(tile: &Tile) -> Vec<u8> {
+    let n = TILE_CELLS as i64;
     let mut top = vec![f64::NEG_INFINITY; (n * n) as usize];
     let mut px = vec![0u8; (n * n * 3) as usize];
-    page.decks.over_grid(None, [0.0, 0.0], 1.0, [n, n], |x, y, _, over| {
+    tile.decks.over_grid(None, [0.0, 0.0], 1.0, [n, n], |x, y, _, over| {
         let i = (y * n + x) as usize;
         if over.top < top[i] {
             return;
@@ -208,14 +208,14 @@ fn decks_png(page: &Page) -> Vec<u8> {
         let v = rgb_of(over.kind);
         px[i * 3..i * 3 + 3].copy_from_slice(&[(v >> 16) as u8, (v >> 8) as u8, v as u8]);
     });
-    png(PAGE_CELLS, PAGE_CELLS, 3, &px)
+    png(TILE_CELLS, TILE_CELLS, 3, &px)
 }
 
-fn stored_pages(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
+fn stored_tiles(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let path = entry?.path();
         if path.is_dir() {
-            stored_pages(&path, out)?;
+            stored_tiles(&path, out)?;
         } else if !matches!(path.extension().and_then(|e| e.to_str()), Some("part" | "empty")) {
             out.push(path);
         }
@@ -223,22 +223,22 @@ fn stored_pages(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
     Ok(())
 }
 
-fn check_all(pages: &Path) -> ExitCode {
+fn check_all(tiles: &Path) -> ExitCode {
     let mut paths = Vec::new();
-    if let Err(e) = stored_pages(pages, &mut paths) {
-        eprintln!("[decode_tile] {}: {e} — bake first, or name the version", pages.display());
+    if let Err(e) = stored_tiles(tiles, &mut paths) {
+        eprintln!("[decode_tile] {}: {e} — bake first, or name the version", tiles.display());
         return ExitCode::FAILURE;
     }
     if paths.is_empty() {
-        eprintln!("[decode_tile] no pages under {} — bake first, or name the version", pages.display());
+        eprintln!("[decode_tile] no tiles under {} — bake first, or name the version", tiles.display());
         return ExitCode::FAILURE;
     }
     let mut bad = Vec::new();
     for (k, path) in paths.iter().enumerate() {
-        let name = path.strip_prefix(pages).unwrap_or(path).display().to_string();
-        match read_page(path).and_then(|pkt| decode(&pkt)) {
-            Ok(page) => {
-                let s = summarize(&page);
+        let name = path.strip_prefix(tiles).unwrap_or(path).display().to_string();
+        match read_tile(path).and_then(|pkt| decode(&pkt)) {
+            Ok(tile) => {
+                let s = summarize(&tile);
                 if !s.faults.is_empty() {
                     bad.push(format!("{name}: {}", s.faults.join("; ")));
                 }
@@ -246,36 +246,36 @@ fn check_all(pages: &Path) -> ExitCode {
             Err(e) => bad.push(format!("{name}: {e}")),
         }
         if (k + 1) % 1000 == 0 {
-            eprintln!("[decode_tile] {} pages read, {} at fault", k + 1, bad.len());
+            eprintln!("[decode_tile] {} tiles read, {} at fault", k + 1, bad.len());
         }
     }
     for line in &bad {
         eprintln!("  {line}");
     }
     if !bad.is_empty() {
-        eprintln!("[decode_tile] {} of {} page(s) under {} at fault", bad.len(), paths.len(), pages.display());
+        eprintln!("[decode_tile] {} of {} tile(s) under {} at fault", bad.len(), paths.len(), tiles.display());
         return ExitCode::FAILURE;
     }
-    println!("[decode_tile] ok — {} page(s) under {} read as the kernel reads them", paths.len(), pages.display());
+    println!("[decode_tile] ok — {} tile(s) under {} read as the kernel reads them", paths.len(), tiles.display());
     ExitCode::SUCCESS
 }
 
 fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
-    let page = decode(&read_page(path)?)?;
-    let s = summarize(&page);
+    let tile = decode(&read_tile(path)?)?;
+    let s = summarize(&tile);
     let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
     print_summary(&name, &s);
-    print_decks(&page.decks);
-    print_bores(&page);
+    print_decks(&tile.decks);
+    print_bores(&tile);
     for line in &s.faults {
         eprintln!("[decode_tile] {line}");
     }
     let dir = out.unwrap_or_else(|| Path::new("out/decoded").join(&name));
     let write = |file: String, bytes: Vec<u8>| std::fs::write(dir.join(&file), bytes).map_err(|e| format!("{file}: {e}"));
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    write("heights.png".into(), heights_png(&page, &s))?;
-    write("decks.png".into(), decks_png(&page))?;
-    write("ground.png".into(), ground_png(&page))?;
+    write("heights.png".into(), heights_png(&tile, &s))?;
+    write("decks.png".into(), decks_png(&tile))?;
+    write("ground.png".into(), ground_png(&tile))?;
     println!("[decode_tile] wrote heights.png, ground.png and decks.png under {}", dir.display());
     Ok(s.faults.is_empty())
 }
@@ -301,16 +301,16 @@ fn main() -> ExitCode {
         eprintln!("{e}\n{USAGE}");
         return ExitCode::from(2);
     }
-    let pages = Path::new("out/terrain").join(&version);
+    let tiles = Path::new("out/terrain").join(&version);
     if all {
-        return check_all(&pages);
+        return check_all(&tiles);
     }
     let Some(target) = target else {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     };
     let path = if target.bytes().all(|b| b.is_ascii_digit()) {
-        pages.join(format!("z{z}")).join(target)
+        tiles.join(format!("z{z}")).join(target)
     } else {
         PathBuf::from(target)
     };

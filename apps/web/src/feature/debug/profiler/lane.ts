@@ -13,13 +13,13 @@ import { CENSUS_TAGS, EFFECT_NAMES, FRAME, FRAME_GROUPS, GPU_SPAN_NAMES, LIMITS,
 
 const MB = 1048576;
 
-type ListLane = "phases" | "gpu_spans" | "census" | "zoom_tris" | "zoom_pages";
+type ListLane = "phases" | "gpu_spans" | "census" | "zoom_tris" | "zoom_tiles";
 type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
 type ScalarLane = Exclude<FrameLane, ListLane>;
 
 export type Frame =
   & { [K in ScalarLane]: f64 }
-  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; zoom_tris: f64[]; zoom_pages: f64[] };
+  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; zoom_tris: f64[]; zoom_tiles: f64[] };
 
 /** The kernel counts by zoom: slot z, bit z or a value z is zoom z. */
 export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
@@ -33,7 +33,7 @@ export const LIST_NAMES: Record<ListLane, readonly string[]> = {
   gpu_spans: GPU_SPAN_NAMES,
   census: CENSUS_TAGS,
   zoom_tris: ZOOM_NAMES,
-  zoom_pages: ZOOM_NAMES,
+  zoom_tiles: ZOOM_NAMES,
 };
 
 export const LANES: readonly { name: FrameLane; at: u32; width: u32 }[] = (() => {

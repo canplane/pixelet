@@ -4,31 +4,33 @@
 //! room, not an address and never the only copy: any tier takes any free
 //! slot of its pool and every mesh can be rebuilt from the records.
 //!
-//! Three pools: the z16 leaves' own tier (six-word boxes, a group of its
-//! own, since a group is one format), the coarse tiers (four-word boxes,
-//! shared groups), and the cover (one slot per possible root). A tier with
-//! more boxes than a slot fills several, chained. A mesh is never cut to a
+//! Three pools: chunks of a leaf's cells or finer (six-word textured
+//! boxes, a group of its own, since a group is one format), coarser chunks
+//! (four-word boxes, shared groups), and the cover (one slot per possible
+//! root). A tier with more boxes than a slot fills several, chained. A mesh is never cut to a
 //! slot, which left steep ground missing (2026-09-26), nor baked coarser to
 //! fit, which was a second quality policy.
 
 use pxl_render::look::globe::MERCATOR_RADIUS_U;
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND_Z, TOP_Z};
+use pxl_spec::bake::constant::CELL;
+use pxl_spec::space::pyramid::{CHUNK_DRAWN, LEAF_Z, TOP_Z};
 
 use crate::param::{ARENA_COARSE_GROUPS, ARENA_GROUP_SLOTS};
 use crate::world::pyramid::domain::cover_pieces;
+use pxl_spec::space::zoom::Zoom;
 
 const SLOTS: u32 = ARENA_GROUP_SLOTS;
 const COARSE_GROUPS: u32 = ARENA_COARSE_GROUPS;
 
 /// One box per column: ground is a heightfield, so a column is one run per chunk.
-pub const FINE_BOXES: u32 = CHUNK_CELLS * CHUNK_CELLS;
+pub const FINE_BOXES: u32 = CHUNK_DRAWN * CHUNK_DRAWN;
 pub const COARSE_BOXES: u32 = crate::param::COARSE_BOXES;
 
-/// Most slots a coarse-pool tier can fill: at step two a chunk bakes to at
-/// most 2·32³ boxes (each cell plus the floor under it). A bound from the
+/// Most slots a coarse-pool tier can fill: a chunk bakes to at most 2·32³
+/// boxes (each drawn cell plus the floor under it). A bound from the
 /// representation, which `RESERVE` keeps free for one coarsening.
-pub const COARSE_TIER_SLOTS: u32 = (2 * (CHUNK_CELLS / 2).pow(3)).div_ceil(COARSE_BOXES);
+pub const COARSE_TIER_SLOTS: u32 = (2 * CHUNK_DRAWN.pow(3)).div_ceil(COARSE_BOXES);
 
 pub const POOLS: usize = 3;
 
@@ -39,7 +41,7 @@ pub const COVER_BOXES: u32 = 2;
 /// most, so a root the cover lacks always finds one free.
 pub const COVER_SLOTS: u32 = {
     let (mut most, mut top) = (0, TOP_Z);
-    while top <= GROUND_Z {
+    while top <= LEAF_Z {
         let n = cover_pieces(top, MERCATOR_RADIUS_U);
         if n > most {
             most = n;
@@ -57,10 +59,12 @@ pub enum Pool {
 }
 
 impl Pool {
-    pub const fn of(z: u32, step: u32) -> Pool {
-        if step == CHUNK_CELLS {
+    /// A tier of `chunk` drawing cells of `cell_zoom`: itself as one cell, a
+    /// cover piece; textured cells, a leaf's or finer; or coarser ones.
+    pub const fn of(chunk: Zoom, cell_zoom: Zoom) -> Pool {
+        if cell_zoom == chunk {
             Pool::Cover
-        } else if z == GROUND_Z && step == 1 {
+        } else if cell_zoom >= CELL {
             Pool::Fine
         } else {
             Pool::Coarse
@@ -108,8 +112,8 @@ impl Pool {
 
 pub const ARENA: [u32; POOLS] = [Pool::Fine.slots(), Pool::Coarse.slots(), Pool::Cover.slots()];
 
-pub const fn capacity(z: u32, step: u32) -> u32 {
-    Pool::of(z, step).boxes()
+pub const fn capacity(chunk: Zoom, cell_zoom: Zoom) -> u32 {
+    Pool::of(chunk, cell_zoom).boxes()
 }
 
 pub const GROUPS: u32 = COARSE_GROUPS + 2;

@@ -168,7 +168,7 @@ place that builds a URL or reads one:
 | :-------- | :--------------------------------------------------- | :------------- |
 | `/geo/`   | the world's data                                     | pxl-geo        |
 | `/api/`   | the application                                      | pxl-api        |
-| `/tile/`  | baked pages, by kind, version and quadkey            | R2             |
+| `/tile/`  | baked tiles, by kind, version and quadkey            | R2             |
 | `/asset/` | models and textures, by path with a hash in the stem | R2             |
 
 The Worker claims all four (`wrangler.jsonc`'s `run_worker_first`) and splits
@@ -176,7 +176,7 @@ them: `/tile/*` and `/asset/*` come straight out of the bucket, and `/geo/*`
 and `/api/*` are reverse-proxied to `GEO_ORIGIN` and
 `API_ORIGIN` with the path unchanged. An asset's key _is_ its path without the
 leading slash — the root and the bucket's own prefix are the same word — where
-a page's key is its path with the tile root removed. Caddy on the VM then sends each root
+a tile's key is its path with the tile root removed. Caddy on the VM then sends each root
 to the container that answers it. Nothing is rewritten in transit: client,
 relay and origin use identical paths.
 

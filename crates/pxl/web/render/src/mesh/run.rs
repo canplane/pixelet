@@ -1,14 +1,11 @@
-// pxl-render/mesh/voxel_scan.rs
+// pxl-render/mesh/run.rs
 
-//! A chunk's bands to its column runs. A run is emitted when it opens and its
-//! length patched in when it ends, so walk and packing are one pass. The direct
-//! path (`begin_direct`) writes runs one call each from a layer's own source.
+//! A chunk's column runs, written one call each from the layers' own
+//! sources, a column at a time, and packed into one block (`RunSet`).
 
-use pxl_spec::bake::constant::{band_cell_z, BAND_CELLS};
-
-use crate::mesh::paint::terrain::adapter::ChunkSample;
-use crate::mesh::volume::{band_col, taps_of, unpack_material, MaterialClasses, BAND_VOXELS, SUB_CELL_NONE};
+use crate::mesh::word::{taps_of, unpack_material, SUB_CELL_NONE};
 use crate::mesh::{grow, try_push, Refused};
+use pxl_spec::space::pyramid::CHUNK_DRAWN;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -16,42 +13,11 @@ use xpute_core::status::errno::Errno;
 /// read every chunk seam as open air, losing occlusion, creases and culling
 /// there. Nothing is emitted from an apron column.
 pub const APRON: u32 = 1;
-pub const COL_SPAN: u32 = BAND_CELLS + 2 * APRON;
+pub const COL_SPAN: u32 = CHUNK_DRAWN + 2 * APRON;
 const COLUMN_CNT: usize = (COL_SPAN * COL_SPAN) as usize;
 
 pub fn apron_col(cx: u32, cy: u32) -> u32 {
     (cy + APRON) * COL_SPAN + cx + APRON
-}
-
-const SCAN_ROWS_PER_STEP: u32 = 8;
-
-pub struct ExtraView<'a> {
-    pub col: &'a [u32],
-    pub z: &'a [i32],
-    pub material: &'a [u32],
-    pub layer_idx: &'a [u8],
-    pub sub: &'a [u32],
-}
-
-/// Materials packed `0xCC_RRGGBB`, zero for air.
-pub struct BandView<'a> {
-    pub band_z: i32,
-    pub material: &'a [u32],
-    pub layer_idx: &'a [u8],
-    pub sub_cell: Option<&'a [u8]>,
-    pub extra: ExtraView<'a>,
-}
-
-impl BandView<'_> {
-    fn check(&self) {
-        xpute_core::ensure!(self.material.len() >= BAND_VOXELS && self.layer_idx.len() >= BAND_VOXELS, EINVAL);
-        if let Some(sub) = self.sub_cell {
-            xpute_core::ensure!(sub.len() >= BAND_VOXELS * 4, EINVAL);
-        }
-        let e = &self.extra;
-        let n = e.col.len();
-        xpute_core::ensure!(e.z.len() >= n && e.material.len() >= n && e.layer_idx.len() >= n && e.sub.len() >= n, EINVAL);
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -63,23 +29,9 @@ struct Run {
     g: u8,
     b: u8,
     material_class: u8,
-    sub_ox: u8,
-    sub_oy: u8,
-    sub_oz: u8,
-    sub_s: u8,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ScanStep {
-    Working,
-    /// Returned by every step until `provide_set` hands this many bytes.
-    NeedSet(u32),
-    Done,
-    /// The heap refused the runs room: the scan is over, and asked for again later.
-    Refused,
-}
-
-pub struct ScanContext {
+pub struct RunWriter {
     runs: Vec<Run>,
     starts: Vec<u32>,
     open: bool,
@@ -88,15 +40,15 @@ pub struct ScanContext {
     next_col: Option<u32>,
 }
 
-impl Default for ScanContext {
+impl Default for RunWriter {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ScanContext {
+impl RunWriter {
     pub fn new() -> Self {
-        ScanContext {
+        RunWriter {
             runs: Vec::with_capacity(1 << 13),
             starts: vec![0; COLUMN_CNT + 1],
             open: false,
@@ -106,25 +58,8 @@ impl ScanContext {
         }
     }
 
-    /// `bands` ascending by band_z. False when one is open.
-    pub fn begin(&mut self, bands: &[BandView]) -> bool {
-        if self.open {
-            return false;
-        }
-        for band in bands {
-            band.check();
-        }
-        self.runs.clear();
-        self.open = true;
-        self.row = 0;
-        self.packed = false;
-        self.next_col = None;
-        true
-    }
-
-    /// Columns in row-major order, each column's runs together. False when a scan
-    /// or a writer is open.
-    pub fn begin_direct(&mut self) -> bool {
+    /// Columns in row-major order, each column's runs together. False when one is open.
+    pub fn begin(&mut self) -> bool {
         if self.open {
             return false;
         }
@@ -136,7 +71,7 @@ impl ScanContext {
         true
     }
 
-    pub fn direct_column(&mut self, col: u32) {
+    pub fn column(&mut self, col: u32) {
         let next = self.next_col.or_bug(Errno::ENOTRECOVERABLE);
         xpute_core::ensure!(col < COLUMN_CNT as u32, ENOSPC);
         for c in next..=col {
@@ -145,60 +80,18 @@ impl ScanContext {
         self.next_col = Some(col + 1);
     }
 
-    pub fn direct_run(&mut self, z0: i32, z1: i32, material: u32, layer_idx: u8) -> Result<(), Refused> {
+    pub fn run(&mut self, z0: i32, z1: i32, material: u32, layer_idx: u8) -> Result<(), Refused> {
         xpute_core::ensure!(self.next_col.is_some_and(|n| n > 0), ENOTRECOVERABLE);
         try_push(&mut self.runs, run_of(z0, z1, material, layer_idx))
     }
 
-    pub fn close_direct(&mut self) -> u32 {
+    pub fn close(&mut self) -> u32 {
         let next = self.next_col.take().or_bug(Errno::ENOTRECOVERABLE);
         for c in next..=COLUMN_CNT as u32 {
             self.starts[c as usize] = self.runs.len() as u32;
         }
         self.row = COL_SPAN;
         self.set_bytes()
-    }
-
-    /// The rows are the padded ones, so every column is written in prefix-array order.
-    /// The apron's columns are the sample's, as a chunk with no bands reads them.
-    pub fn step(&mut self, bands: &[BandView], apron: &ChunkSample) -> ScanStep {
-        xpute_core::ensure!(self.open, ENOTRECOVERABLE);
-        if self.packed {
-            return ScanStep::Done;
-        }
-        if self.row >= COL_SPAN {
-            return ScanStep::NeedSet(self.set_bytes());
-        }
-        let end = COL_SPAN.min(self.row + SCAN_ROWS_PER_STEP);
-        for py in self.row..end {
-            for px in 0..COL_SPAN {
-                let col = (py * COL_SPAN + px) as usize;
-                self.starts[col] = self.runs.len() as u32;
-                let own = APRON..COL_SPAN - APRON;
-                let inner = own.contains(&px) && own.contains(&py);
-                let walked = if inner {
-                    walk_column(&mut self.runs, bands, px - APRON, py - APRON)
-                } else {
-                    self.apron_run(apron, col)
-                };
-                if walked.is_err() {
-                    self.abort();
-                    return ScanStep::Refused;
-                }
-            }
-        }
-        self.row = end;
-        if end >= COL_SPAN {
-            self.starts[COLUMN_CNT] = self.runs.len() as u32;
-            ScanStep::NeedSet(self.set_bytes())
-        } else {
-            ScanStep::Working
-        }
-    }
-
-    fn apron_run(&mut self, apron: &ChunkSample, col: usize) -> Result<(), Refused> {
-        let runs = &mut self.runs;
-        apron.column_runs(col, |lo, hi, material, layer| try_push(runs, run_of(lo, hi, material, layer)))
     }
 
     fn set_bytes(&self) -> u32 {
@@ -238,10 +131,8 @@ impl ScanContext {
             g[i] = run.g;
             b[i] = run.b;
             class[i] = run.material_class;
-            ox[i] = run.sub_ox;
-            oy[i] = run.sub_oy;
-            oz[i] = run.sub_oz;
-            size[i] = run.sub_s;
+            // A written run fills its cells; only a summary shrinks one.
+            (ox[i], oy[i], oz[i], size[i]) = (0, 0, 0, SUB_CELL_NONE);
         }
         self.packed = true;
     }
@@ -269,126 +160,8 @@ fn run_of(z0: i32, z1: i32, material: u32, layer_idx: u8) -> Run {
         g,
         b,
         material_class,
-        sub_ox: 0,
-        sub_oy: 0,
-        sub_oz: 0,
-        sub_s: SUB_CELL_NONE,
     }
 }
-
-fn push(runs: &mut Vec<Run>, run: Run) -> Result<usize, Refused> {
-    try_push(runs, run)?;
-    Ok(runs.len() - 1)
-}
-
-fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) -> Result<(), Refused> {
-    let col = band_col(cx, cy) as usize;
-    let mut open: Option<usize> = None;
-    let mut previous_band_z: Option<i32> = None;
-    for band in bands {
-        // Empty signed-Z bands break a material run; adjacent bands do not, or buried
-        // faces at a band boundary would reappear.
-        if previous_band_z.is_some_and(|p| band.band_z != p + 1) {
-            open = None;
-        }
-        previous_band_z = Some(band.band_z);
-
-        let base = col * BAND_CELLS as usize;
-        for local_z in 0..BAND_CELLS as usize {
-            let idx = base + local_z;
-            let packed = band.material[idx];
-            if packed == 0 {
-                open = None;
-                continue;
-            }
-            let z = band_cell_z(band.band_z) as i32 + local_z as i32;
-            let (material_class, [r, g, b]) = unpack_material(packed);
-            let layer_idx = band.layer_idx[idx];
-            let sub = band.sub_cell.map(|s| &s[idx * 4..idx * 4 + 4]);
-            let sub_s = sub.map_or(SUB_CELL_NONE, |s| s[3]);
-            if sub_s != SUB_CELL_NONE {
-                let s = sub.unwrap();
-                push(
-                    runs,
-                    Run {
-                        z0: z,
-                        z1: z,
-                        layer_taps: taps_of(layer_idx),
-                        r,
-                        g,
-                        b,
-                        material_class,
-                        sub_ox: s[0],
-                        sub_oy: s[1],
-                        sub_oz: s[2],
-                        sub_s,
-                    },
-                )?;
-                open = None;
-            } else if let Some(i) = open.filter(|&i| {
-                let o = &runs[i];
-                material_class != MaterialClasses::OBJECT && o.r == r && o.g == g && o.b == b && o.layer_taps == taps_of(layer_idx) && o.material_class == material_class
-            }) {
-                runs[i].z1 = z;
-            } else {
-                open = Some(push(
-                    runs,
-                    Run {
-                        z0: z,
-                        z1: z,
-                        layer_taps: taps_of(layer_idx),
-                        r,
-                        g,
-                        b,
-                        material_class,
-                        sub_ox: 0,
-                        sub_oy: 0,
-                        sub_oz: 0,
-                        sub_s: SUB_CELL_NONE,
-                    },
-                )?);
-            }
-        }
-
-        let e = &band.extra;
-        if !e.col.is_empty() {
-            let (lo, hi) = extra_range(e.col, col as u32);
-            for i in lo..hi {
-                let (material_class, [r, g, b]) = unpack_material(e.material[i]);
-                let s = e.sub[i];
-                push(
-                    runs,
-                    Run {
-                        z0: e.z[i],
-                        z1: e.z[i],
-                        layer_taps: taps_of(e.layer_idx[i]),
-                        r,
-                        g,
-                        b,
-                        material_class,
-                        sub_ox: s as u8,
-                        sub_oy: (s >> 8) as u8,
-                        sub_oz: (s >> 16) as u8,
-                        sub_s: (s >> 24) as u8,
-                    },
-                )?;
-            }
-        }
-    }
-    Ok(())
-}
-
-fn extra_range(cols: &[u32], col: u32) -> (usize, usize) {
-    let lo = cols.partition_point(|&c| c < col);
-    let mut hi = lo;
-    while hi < cols.len() && cols[hi] == col {
-        hi += 1;
-    }
-    (lo, hi)
-}
-
-// The run set: one block of lanes, widest element first, so a set read back
-// from its block needs no translation.
 
 pub struct RunSet<'a> {
     pub count: u32,

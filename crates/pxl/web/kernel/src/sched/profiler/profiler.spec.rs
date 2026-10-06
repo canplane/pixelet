@@ -224,7 +224,7 @@ pub mod LIMITS {
     pub const KEYS: &[&str] = &["PHASES_MAX", "REASONS", "STEP_SLOTS", "ZOOMS"];
 }
 
-/// One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_pages` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z.
+/// One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const dt_ms: u32 = 1;
@@ -259,9 +259,9 @@ pub mod FRAME {
     pub const mounts_added: u32 = 82;
     pub const mounts_removed: u32 = 83;
     pub const mounts_layouts: u32 = 84;
-    pub const pages_total: u32 = 85;
-    pub const zoom_pages: u32 = 86;
-    pub const pages_poi: u32 = 110;
+    pub const tiles_total: u32 = 85;
+    pub const zoom_tiles: u32 = 86;
+    pub const tiles_poi: u32 = 110;
     pub const heap_used_mb: u32 = 111;
     pub const heap_live_mb: u32 = 112;
     pub const heap_run_mb: u32 = 113;
@@ -271,7 +271,7 @@ pub mod FRAME {
     pub const heap_largest_free_mb: u32 = 117;
     pub const ring_cq_peak: u32 = 118;
     pub const ring_held_peak: u32 = 119;
-    pub const work_scans: u32 = 120;
+    pub const work_runs: u32 = 120;
     pub const work_bakes: u32 = 121;
     pub const work_fine_peak: u32 = 122;
     pub const work_coarse_peak: u32 = 123;
@@ -331,9 +331,9 @@ pub mod FRAME {
         "mounts_added",
         "mounts_removed",
         "mounts_layouts",
-        "pages_total",
-        "zoom_pages",
-        "pages_poi",
+        "tiles_total",
+        "zoom_tiles",
+        "tiles_poi",
         "heap_used_mb",
         "heap_live_mb",
         "heap_run_mb",
@@ -343,7 +343,7 @@ pub mod FRAME {
         "heap_largest_free_mb",
         "ring_cq_peak",
         "ring_held_peak",
-        "work_scans",
+        "work_runs",
         "work_bakes",
         "work_fine_peak",
         "work_coarse_peak",
@@ -390,16 +390,16 @@ pub mod FRAME_GROUPS {
     pub const stale: &[&str] = &["stale_hidden", "stale_uncovered", "stale_unready"];
     pub const slot: &[&str] = &["slot_waits", "slot_wait_zooms", "slot_chained"];
     pub const cap: &[&str] = &["cap_commit_left", "cap_mount_left", "cap_mount_full", "cap_record_refused"];
-    pub const work: &[&str] = &["work_scans", "work_bakes", "work_fine_peak", "work_coarse_peak"];
+    pub const work: &[&str] = &["work_runs", "work_bakes", "work_fine_peak", "work_coarse_peak"];
     pub const q: &[&str] = &["q_terrain", "q_poi"];
-    pub const pages: &[&str] = &["pages_total", "zoom_pages", "pages_poi"];
+    pub const tiles: &[&str] = &["tiles_total", "zoom_tiles", "tiles_poi"];
     pub const cover: &[&str] = &["cover_rule", "cover_drawn", "cover_gaps"];
     pub const view: &[&str] = &["view_rays", "view_visits"];
     pub const device: &[&str] = &["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"];
     pub const heap: &[&str] = &["heap_used_mb", "heap_live_mb", "heap_run_mb", "heap_slot_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"];
     pub const ring: &[&str] = &["ring_cq_peak", "ring_held_peak"];
     pub const KEYS: &[&str] = &[
-        "pace", "turn", "gpu", "lod", "mounts", "stale", "slot", "cap", "work", "q", "pages", "cover", "view", "device", "heap", "ring",
+        "pace", "turn", "gpu", "lod", "mounts", "stale", "slot", "cap", "work", "q", "tiles", "cover", "view", "device", "heap", "ring",
     ];
 }
 
@@ -512,10 +512,10 @@ pub mod SUMMARY {
         pub const chunks: u32 = 21;
         pub const phases: u32 = 24;
         pub const gpu_spans: u32 = 39;
-        pub const per_s_scans: u32 = 60;
+        pub const per_s_runs: u32 = 60;
         pub const per_s_bakes: u32 = 61;
         pub const backlog_s: u32 = 62;
-        pub const backlog_per_s_scans: u32 = 63;
+        pub const backlog_per_s_runs: u32 = 63;
         pub const backlog_per_s_bakes: u32 = 64;
         pub const chunks_per_bake: u32 = 65;
         pub const mounts_added: u32 = 66;
@@ -541,10 +541,10 @@ pub mod SUMMARY {
             "chunks",
             "phases",
             "gpu_spans",
-            "per_s_scans",
+            "per_s_runs",
             "per_s_bakes",
             "backlog_s",
-            "backlog_per_s_scans",
+            "backlog_per_s_runs",
             "backlog_per_s_bakes",
             "chunks_per_bake",
             "mounts_added",
@@ -570,15 +570,12 @@ pub mod SUMMARY {
         pub const runs_total: u32 = 3;
         pub const coarse_boxes: u32 = 4;
         pub const coarse_low_fill: u32 = 5;
-        pub const bands_reused: u32 = 6;
-        pub const bands_allocated: u32 = 7;
-        pub const built_direct: u32 = 8;
-        pub const built_scans: u32 = 9;
-        pub const built_bakes: u32 = 10;
-        pub const built_starved: u32 = 11;
-        pub const atlas_repacks: u32 = 12;
-        pub const atlas_uploads: u32 = 13;
-        pub const WORDS: u32 = 14;
+        pub const built_runs: u32 = 6;
+        pub const built_bakes: u32 = 7;
+        pub const built_starved: u32 = 8;
+        pub const atlas_repacks: u32 = 9;
+        pub const atlas_uploads: u32 = 10;
+        pub const WORDS: u32 = 11;
         pub const KEYS: &[&str] = &[
             "AT",
             "faces_kept",
@@ -587,10 +584,7 @@ pub mod SUMMARY {
             "runs_total",
             "coarse_boxes",
             "coarse_low_fill",
-            "bands_reused",
-            "bands_allocated",
-            "built_direct",
-            "built_scans",
+            "built_runs",
             "built_bakes",
             "built_starved",
             "atlas_repacks",
@@ -599,7 +593,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod atlas {
-        pub const AT: u32 = 427;
+        pub const AT: u32 = 424;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -609,7 +603,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
     pub mod held {
-        pub const AT: u32 = 432;
+        pub const AT: u32 = 429;
         pub const run_sets: u32 = 0;
         pub const run_set_mb: u32 = 1;
         pub const tiers: u32 = 2;
@@ -620,7 +614,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "run_sets", "run_set_mb", "tiers", "decor_blocks", "decor_instances", "decor_bytes", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 438;
+        pub const AT: u32 = 435;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -628,7 +622,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 441;
+        pub const AT: u32 = 438;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -672,14 +666,14 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 459;
+        pub const AT: u32 = 456;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 620;
+        pub const AT: u32 = 617;
         pub const step: u32 = 0;
         pub const star: u32 = 1;
         pub const frames_held: u32 = 2;
@@ -693,15 +687,15 @@ pub mod SUMMARY {
     }
     /// The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for.
     pub mod heap {
-        pub const AT: u32 = 628;
+        pub const AT: u32 = 625;
         pub const used_mb: u32 = 0;
         pub const requests: u32 = 1;
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "used_mb", "requests", "WORDS"];
     }
-    /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from.
+    /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from.
     pub mod view {
-        pub const AT: u32 = 630;
+        pub const AT: u32 = 627;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -740,7 +734,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 646;
+    pub const WORDS: u32 = 643;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "heap", "view", "WORDS"];
 }
 

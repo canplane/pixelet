@@ -12,9 +12,9 @@
 //! phone's GPU makes of those steps — divergence, the texture cache — is the
 //! experiment's to measure, not this.
 //!
-//! Pages come from a running tile server, as the client's do: rays are cast,
-//! the pages they lacked are fetched, and they are cast again until nothing
-//! they lack can be had. A page past the server's top zoom is not served,
+//! Tiles come from a running tile server, as the client's do: rays are cast,
+//! the tiles they lacked are fetched, and they are cast again until nothing
+//! they lack can be had. A tile past the server's top zoom is not served,
 //! and a ray that needs one answers coarser, as the client's would.
 //!
 //! Each view's steps are also written as a heatmap in screen coordinates
@@ -32,14 +32,14 @@ use std::process::Command;
 
 use pxl_kernel::layer::object::store::Store;
 use pxl_kernel::world::access::{Access, Answer, Detail, Ray};
-use pxl_kernel::world::paging::{Candidate, Paging, Victim};
+use pxl_kernel::world::residency::{Candidate, Residency, Victim};
 use pxl_spec::bake::format::{decode_terrain, Terrain};
-use pxl_spec::bake::quadkey::page_name;
+use pxl_spec::bake::quadkey::tile_name;
 use pxl_spec::space::adapter::epsg4326;
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::GROUND_Z;
-use pxl_spec::space::pyramid::{Page, GROUND};
+use pxl_spec::space::pyramid::LEAF_Z;
+use pxl_spec::space::pyramid::{Tile, GROUND};
 
 /// The phone the experiment is set on: an iPhone 13 mini's screen in
 /// points, drawn at the two ratios it names.
@@ -93,28 +93,28 @@ impl Victim for Keep {
     }
 }
 
-/// The pages a run has asked the server for and what came of it.
-struct Pages {
+/// The tiles a run has asked the server for and what came of it.
+struct Tiles {
     server: String,
-    paging: Paging<Terrain>,
-    tried: HashSet<Page>,
+    residency: Residency<Terrain>,
+    tried: HashSet<Tile>,
 }
 
-impl Pages {
+impl Tiles {
     /// `p`, fetched and held, once; false where it cannot be had.
-    fn fetch(&mut self, p: Page) -> bool {
+    fn fetch(&mut self, p: Tile) -> bool {
         if !self.tried.insert(p) {
             return false;
         }
-        let url = format!("{}/tile/terrain/{}", self.server, page_name(p));
+        let url = format!("{}/tile/terrain/{}", self.server, tile_name(p));
         let Ok(out) = Command::new("sh").arg("-c").arg(format!("curl -sf '{url}' | zstd -dq")).output() else {
             return false;
         };
         if !out.status.success() || out.stdout.is_empty() {
             return false;
         }
-        let Ok(page) = decode_terrain(&out.stdout) else { return false };
-        self.paging.admit(p, &Keep, |_| Ok::<_, ()>(page)).is_ok()
+        let Ok(tile) = decode_terrain(&out.stdout) else { return false };
+        self.residency.admit(p, &Keep, |_| Ok::<_, ()>(tile)).is_ok()
     }
 }
 
@@ -157,7 +157,7 @@ struct Tally {
     hit: usize,
 }
 
-fn cast(pages: &Pages, store: &Store, rays: &[Ray]) -> (Tally, Vec<Page>) {
+fn cast(tiles: &Tiles, store: &Store, rays: &[Ray]) -> (Tally, Vec<Tile>) {
     let mut t = Tally {
         steps: Vec::with_capacity(rays.len()),
         exact: 0,
@@ -168,7 +168,7 @@ fn cast(pages: &Pages, store: &Store, rays: &[Ray]) -> (Tally, Vec<Page>) {
     let mut lacked = Vec::new();
     for ray in rays {
         let visits = Cell::new(0);
-        let answer = Access::new(&pages.paging, store).counting(&visits).first_hit(ray, Detail::Distance(Tau::FINEST));
+        let answer = Access::new(&tiles.residency, store).counting(&visits).first_hit(ray, Detail::Distance(Tau::FINEST));
         t.steps.push(visits.get());
         match answer {
             Answer::Exact(h) => {
@@ -178,11 +178,11 @@ fn cast(pages: &Pages, store: &Store, rays: &[Ray]) -> (Tally, Vec<Page>) {
             Answer::Coarser(h, lack) => {
                 t.coarser += 1;
                 t.hit += usize::from(h.is_some());
-                lacked.push(lack.page);
+                lacked.push(lack.tile);
             }
             Answer::Nothing(lack) => {
                 t.nothing += 1;
-                lacked.push(lack.page);
+                lacked.push(lack.tile);
             }
         }
     }
@@ -225,32 +225,32 @@ fn main() {
     let (x, y) = (pvf3::to_real(pvf3::X(&at)), pvf3::to_real(pvf3::Y(&at)));
 
     let store = Store::default();
-    let mut pages = Pages {
+    let mut tiles = Tiles {
         server,
-        paging: Paging::default(),
+        residency: Residency::default(),
         tried: HashSet::new(),
     };
     // The eye's own column first, so it can stand on the ground.
-    let leaf = GROUND.cell_of(GROUND_Z, &point(x, y)).page();
+    let leaf = GROUND.cell_of(LEAF_Z, &point(x, y)).tile();
     let mut p = leaf;
     loop {
-        pages.fetch(p);
-        if p.z == pxl_spec::space::pyramid::TOP_Z {
+        tiles.fetch(p);
+        if p.zoom == pxl_spec::space::pyramid::TOP_Z {
             break;
         }
         p = p.parent();
     }
-    let ground = Access::new(&pages.paging, &store).at(&point(x, y), GROUND_Z).value().and_then(|g| g.top()).unwrap_or(0.0);
-    println!("at {lon}, {lat}: ground {ground:.1} u, pages from {}", pages.server);
+    let ground = Access::new(&tiles.residency, &store).at(&point(x, y), LEAF_Z).value().and_then(|g| g.top()).unwrap_or(0.0);
+    println!("at {lon}, {lat}: ground {ground:.1} u, tiles from {}", tiles.server);
 
     for view in VIEWS {
         let eye = [x, y, ground + view.height];
         let rays = rays(eye, view.pitch_deg);
         let mut tally = None;
         for _ in 0..ROUNDS {
-            let (t, lacked) = cast(&pages, &store, &rays);
+            let (t, lacked) = cast(&tiles, &store, &rays);
             tally = Some(t);
-            let fetched = lacked.into_iter().collect::<HashSet<_>>().into_iter().filter(|&p| pages.fetch(p)).count();
+            let fetched = lacked.into_iter().collect::<HashSet<_>>().into_iter().filter(|&p| tiles.fetch(p)).count();
             if fetched == 0 {
                 break;
             }
@@ -282,5 +282,5 @@ fn main() {
         }
     }
     println!();
-    println!("{} pages held of {} asked", pages.paging.held().count(), pages.tried.len());
+    println!("{} tiles held of {} asked", tiles.residency.held().count(), tiles.tried.len());
 }

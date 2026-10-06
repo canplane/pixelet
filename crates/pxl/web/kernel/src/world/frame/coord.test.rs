@@ -1,36 +1,19 @@
 // pxl-kernel/world/frame/coord.test.rs
-//
-// A height over the ground is the same from every origin, including past
-// the Z lane's half, where the lanes alone would wrap.
 
 use super::*;
+use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::pvf3;
+use pxl_spec::space::pvf3::ROUND;
 use xpute_core::math::rng::SplitMix64;
 
-#[test]
-fn a_height_over_the_ground_is_the_same_from_every_origin() {
-    let point = projection::project(250_000.0, -90_000.0, 30.25);
-    let ground = 12.5;
-    for origin_z in [0, 4096, 28_672, 32_768, -4096] {
-        let origin = ivec::gather(249_856, -94_208, origin_z);
-        let over = canonical_to_local(&point, origin)[2] - local_height(ground, origin);
-        assert_eq!(over, 30.25 - ground, "origin at z {origin_z}: {over} over the ground");
-    }
-}
-
 /// Taken back by its cell, a point the floats leave a hair under itself
-/// would fall a 256th of a unit each trip.
+/// would fall a 256th of a unit each trip; on whichever lap it is read.
 #[test]
 fn a_canonical_point_comes_back_through_floats() {
     let one = pxl_spec::space::pvf3::core::ONE as i64;
     let mut rng = SplitMix64::new(0x9e37_79b9_7f4a_7c15);
     let mut next = |span: i64| (u64::from(rng.next_u32()) % (2 * span as u64 + 1)) as i64 - span;
-    let origins = [
-        ivec::gather(0, 0, 0),
-        ivec::gather(249_856, -94_208, 4096),
-        ivec::gather(-3, 7, 32_768),
-        ivec::gather(1 << 20, -(1 << 20), -4096),
-    ];
+    let nears = [0.0, 249_856.0, -3.0 * ROUND, 2.5 * ROUND, -(1 << 23) as f64];
     for n in 0..20_000 {
         // Whole units near and far from the origin, and fractions a hair off a whole unit.
         let fraction = |r: i64| match r % 4 {
@@ -45,10 +28,20 @@ fn a_canonical_point_comes_back_through_floats() {
             u * one + f
         });
         let p = pvf3::gather(comps[0], comps[1], comps[2]);
-        for &origin in &origins {
-            let local = canonical_to_local(&p, origin);
-            let back = local_world_to_canonical_nearest(&local, origin);
-            assert_eq!(back, p, "{n}: {comps:?} against {origin}");
+        for near in nears {
+            let w = canonical_to_world(&p, near);
+            assert!((w[0] - near).abs() <= ROUND / 2.0, "{n}: {comps:?} unwrapped off {near}");
+            assert_eq!(world_to_canonical_nearest(&w), p, "{n}: {comps:?} near {near}");
         }
     }
+}
+
+/// Either side of the seam, a point a unit past it is a unit from the eye.
+#[test]
+fn x_is_continuous_across_the_seam() {
+    let east = projection::project(ROUND / 2.0 - 1.0, 0.0, 0.0);
+    let west = projection::project(-ROUND / 2.0 + 1.0, 0.0, 0.0);
+    let eye = ROUND / 2.0;
+    assert_eq!(canonical_to_world(&west, eye)[0] - canonical_to_world(&east, eye)[0], 2.0);
+    assert_eq!(ivec::X(world_to_canonical(&[eye + 1.0, 0.0, 0.0]).i), ivec::X(west.i));
 }

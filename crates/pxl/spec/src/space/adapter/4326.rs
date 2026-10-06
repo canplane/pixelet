@@ -5,16 +5,12 @@
 // Uppercase as the notation these macro-like helpers are written in.
 #![allow(non_snake_case)]
 
-use crate::space::pvf3::{FVec, IVec, Pvf3};
+use crate::space::pvf3::{FVec, IVec, Pvf3, REACH, ROUND};
 
 use super::epsg3857::{self, G3857};
 
 /// lng, lat, alt (metres above sea level).
 pub type G4326 = [f64; 3];
-
-/// Web Mercator's latitude limit; Y diverges past it.
-const LAT_MAX: f64 = 85.05112878;
-const LAT_MIN: f64 = -85.05112878;
 
 pub use crate::space::earth::EARTH_RADIUS_M;
 
@@ -26,8 +22,12 @@ fn NORMALIZE_LNG(lng: f64) -> f64 {
     ((((lng + 180.0) % 360.0) + 360.0) % 360.0) - 180.0
 }
 
+/// Into the Mercator square's latitudes: its Y edge is half a world from
+/// the equator, as wide as X is around, so the edge is atan(sinh π); Y
+/// diverges past it.
 fn CLAMP_LAT(lat: f64) -> f64 {
-    LAT_MIN.max(LAT_MAX.min(lat))
+    let max = libm::atan(libm::sinh(core::f64::consts::TAU * REACH.max[1] / ROUND)) * RAD_TO_DEG;
+    lat.clamp(-max, max)
 }
 
 fn LNG_TO_X(lng: f64) -> f64 {
@@ -81,8 +81,8 @@ pub fn dist(a: &G4326, b: &G4326) -> f64 {
 
 pub type BBox4326 = [G4326; 2];
 
-pub fn get_page_bbox(page_idx: IVec) -> BBox4326 {
-    let [min_m, max_m] = epsg3857::get_page_bbox(page_idx);
+pub fn get_tile_bbox(tile_idx: IVec) -> BBox4326 {
+    let [min_m, max_m] = epsg3857::get_tile_bbox(tile_idx);
 
     let min = from_mercator(&min_m);
     let mut max = from_mercator(&max_m);

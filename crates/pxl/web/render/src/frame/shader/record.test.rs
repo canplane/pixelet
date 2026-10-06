@@ -118,7 +118,7 @@ fn constant(kind: u32, name: &str) -> Vec<f64> {
 fn the_skys_layouts_match_their_structs() {
     use crate::gpu::{atmosphere as a, clouds as c, renderer as r, stars as s};
     assert_eq!(constant(SHADER_SKY, "ATMOS_VEC4S"), [(a::ATMOS_FLOATS / 4) as f64], "the air's words, declared once");
-    assert_eq!(constant(SHADER_SKY, "EARTH_PAGE_BITS"), [a::PAGE_BITS as f64], "the Earth window's packing");
+    assert_eq!(constant(SHADER_SKY, "EARTH_TILE_BITS"), [a::TILE_BITS as f64], "the Earth window's packing");
     holds(
         SHADER_SKY,
         "Atmosphere",
@@ -159,7 +159,7 @@ fn the_skys_layouts_match_their_structs() {
             ("city_light", a::CITY_LIGHT),
             ("earth_reach", a::EARTH_REACH),
             ("earth_window", a::EARTH_WINDOW),
-            ("earth_pages", a::EARTH_PAGES),
+            ("earth_tiles", a::EARTH_TILES),
         ],
     );
     holds(SHADER_SKY, "Sky", r::SKY_FLOATS, &[("ray", 0), ("pole", r::SKY_POLE), ("mapped", r::SKY_MAPPED)]);

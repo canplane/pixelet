@@ -1,7 +1,7 @@
 // pxl-kernel/layer/decor/cell.rs
 
 //! Decor as a payload of the chunks the terrain materializes: each mounted
-//! chunk holds the decor standing inside it, built over its zoom's page and
+//! chunk holds the decor standing inside it, built over its zoom's tile and
 //! the object store, and drawn while the chunk is. A block is immutable once
 //! built; how each instance is drawn (`present`) is decided per frame and
 //! rebuilds nothing.
@@ -9,14 +9,13 @@
 use std::collections::HashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
-use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource};
+use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, TileSource};
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, GROUND_Z};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, LEAF_Z};
 use pxl_spec::space::v3::{len3, sub3, V3};
 use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::alloc;
+use xpute_runtime::mem::heap::{alloc, free};
 use xpute_runtime::sched::frame_budget::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
@@ -33,9 +32,11 @@ use crate::world::chunk::table::Scheduler;
 use crate::world::observation::{eye, observation};
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
+use pxl_spec::bake::constant::BAND;
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::indexer::{from_idx, idx};
+use pxl_spec::space::zoom::{index, Zoom};
 use xpute_runtime::global::Global;
-use xpute_runtime::mem::heap::free;
 
 struct Block {
     at: u32,
@@ -57,11 +58,11 @@ impl Block {
     }
 }
 
-/// What a population depends on beyond its page and the seed.
+/// What a population depends on beyond its tile and the seed.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Sources {
-    /// The zoom of the page it is built from, coarser until its own comes.
-    read_from: u32,
+    /// The zoom of the tile it is built from, coarser until its own comes.
+    read_from: Zoom,
     revision: u32,
     shown: bool,
     hide: Option<DecorHide>,
@@ -114,13 +115,13 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
     let inside = |x: i64, y: i64| (x0..x0 + side).contains(&(x as f64)) && (y0..y0 + side).contains(&(y as f64));
     let hide = hide.filter(|h| match *h {
         DecorHide::Placed(at) => {
-            let o = FROM_L2_IDX(at.col_idx);
+            let o = from_idx(BAND, at.col_idx);
             inside(ivec::X(o), ivec::Y(o))
         }
-        DecorHide::Scattered([x, y, _]) => chunk.z() == GROUND_Z && inside(x, y),
+        DecorHide::Scattered([x, y, _]) => chunk.tile_zoom() == LEAF_Z && inside(x, y),
     });
     Some(Sources {
-        read_from: Terrain::pyramid().paging().drawn_from(chunk.page())?.z,
+        read_from: Terrain::pyramid().residency().drawn_from(chunk.tile())?.zoom,
         revision,
         shown: settings_store().decor,
         hide,
@@ -128,24 +129,25 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
 }
 
 fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
-    let pages = Terrain::pyramid();
-    // The page the terrain draws the chunk from, read over the chunk of its zoom.
-    let src = pages.paging().drawn_from(chunk.page())?;
-    let page = pages.paging().get(src)?;
+    let tiles = Terrain::pyramid();
+    // The tile the terrain draws the chunk from, read over the chunk whose cells
+    // are that tile's; past the leaves, the leaf chunk the chunk lies in.
+    let src = tiles.residency().drawn_from(chunk.tile())?;
+    let tile = tiles.residency().get(src)?;
     let mut over = chunk;
-    while over.z() > src.z {
+    while over.finer() > 0 || over.tile_zoom() > src.zoom {
         over = over.parent()?;
     }
-    let z = over.z();
+    let zoom = over.tile_zoom();
     let (cx0, cy0, _) = chunk.rect();
     let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
-    let (tx0, ty0) = over.in_page();
-    let view = Builder::page_view(page);
+    let (tx0, ty0) = over.in_tile();
+    let view = Builder::tile_view(tile);
     if sources.shown {
         let around = Around {
-            own: PageSource {
-                page: view,
+            own: TileSource {
+                tile: view,
                 frame: Frame::of(src),
                 origin: [0, 0],
                 n: 1,
@@ -157,33 +159,33 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
     c.placed.clear();
     c.placed.try_reserve(c.cols.len()).ok()?;
     c.placed.extend(c.cols.iter().map(|&col_idx| {
-        let o = FROM_L2_IDX(col_idx);
+        let o = from_idx(BAND, col_idx);
         Placed {
             col_idx,
             ox: ivec::X(o) as f64 - cx0,
             oy: ivec::Y(o) as f64 - cy0,
-            hittable: chunk.z() == GROUND_Z,
+            hittable: chunk.tile_zoom() == LEAF_Z,
         }
     }));
-    let target = GROUND.side_at(z);
-    let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-    match z < GROUND_Z && sources.shown {
+    let target = GROUND.cell_zoom(zoom);
+    let (cx, cy, span) = (index(target, x0), index(target, y0), CHUNK_CELLS as i64);
+    match zoom < LEAF_Z && sources.shown {
         true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
         false => c.folded.clear(),
     }
     let ground = Ground {
-        page: &view,
+        tile: &view,
         sample: &c.sample,
-        z,
+        zoom,
         x0,
         y0,
         tx0,
         ty0,
-        col_idx: (z == GROUND_Z).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
-        folded: (z < GROUND_Z).then_some(&c.folded),
+        col_idx: (zoom == LEAF_Z).then(|| idx(BAND, ivec::gather(x0, y0, 0))),
+        folded: (zoom < LEAF_Z).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
-    let step = GROUND.finest_in(z);
+    let step = GROUND.finest_in(zoom);
     let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown, chunk.region())?;
     let index = built.bytes();
     let heights = built.heights();
@@ -265,7 +267,7 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     let sprites = &mut c.sprites;
     for (&chunk, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
         let (x0, y0, side) = chunk.rect();
-        let translation = DrawList::translation([x0, y0, 0.0], frame_eye);
+        let translation = DrawList::translation([pxl_spec::space::pvf3::nearest(x0, frame_eye[0]), y0, 0.0], frame_eye);
         let [zlo, zhi] = block.heights.map(f64::from);
         let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
         let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());

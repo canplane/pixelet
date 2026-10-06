@@ -5,7 +5,6 @@
 
 use pxl_spec::space::mat4::Mat4;
 use pxl_spec::space::pvf3::core::{IVEC_X_W, IVEC_Y_W};
-use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::V3;
 
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD, PIPELINE_CLOUD_MARCH};
@@ -163,19 +162,14 @@ impl CloudPass {
     }
 }
 
-/// The origin is split on the lattice in integer lanes, so the shader never
-/// holds a world-sized coordinate. Shift and mask on two's complement are a
-/// floor and a remainder, so cells west of zero land in the right unit.
-pub fn field(origin: IVec, past: [f64; 2], env: &[f32]) -> CloudField {
-    let unit = ivec::sh(origin, -(LATTICE_SHAMT as i32));
-    let within = ivec::and(origin, ivec::fill((1 << LATTICE_SHAMT) - 1));
+/// The eye, in the world's doubles, split on the lattice into a whole unit
+/// and a fraction of one, so the shader never holds a world-sized coordinate.
+/// The world is `LATTICE_COUNT` units around, so a lap of X is a whole number
+/// of them and the unit wraps with it.
+pub fn field(eye: [f64; 2], env: &[f32]) -> CloudField {
     let side = (1u32 << LATTICE_SHAMT) as f64;
-    let at = [ivec::X, ivec::Y].map(|lane| lane(within) as f64);
-    let units: [f64; 2] = core::array::from_fn(|k| (at[k] + past[k]) / side);
-    let (base, frac) = (
-        core::array::from_fn(|k| ([ivec::X, ivec::Y][k](unit) + units[k].floor() as i64) as u32 & (LATTICE_COUNT - 1)),
-        core::array::from_fn(|k| (units[k] - units[k].floor()) as f32),
-    );
+    let units = eye.map(|v| v / side);
+    let (base, frac) = (units.map(|u| (u.floor() as i64).rem_euclid(i64::from(LATTICE_COUNT)) as u32), units.map(|u| (u - u.floor()) as f32));
     CloudField {
         base,
         frac,

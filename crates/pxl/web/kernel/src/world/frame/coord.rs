@@ -1,55 +1,40 @@
 // pxl-kernel/world/frame/coord.rs
 
-use pxl_spec::space::indexer::L4_RANGE;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+//! The world in doubles: a double holds the whole lattice with its fraction
+//! exactly, so positions are kept as the world's, X running on past a lap of
+//! it so that it is continuous about the eye.
+
+use pxl_spec::space::pvf3::nearest;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::{add3, V3};
-
-use pxl_spec::space::pyramid::anchor_span_of;
+use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
-/// The center floored to the zoom's anchor span across and a leaf's anchor
-/// up (heights do not scale). Scaled with the zoom so a rebase is as far on
-/// screen at every zoom; a fixed 4096u rebased nearly every frame of a pan.
-pub fn origin_for(center: IVec, z: u32) -> IVec {
-    let across = anchor_span_of(z);
-    let up = L4_RANGE as i64;
-    let floor = |v: i64, s: i64| v.div_euclid(s) * s;
-    ivec::gather(floor(ivec::X(center), across), floor(ivec::Y(center), across), floor(ivec::Z(center), up))
+use crate::world::frame::view::view;
+
+/// A canonical point in the world's doubles, on the lap nearest `near_x`.
+pub fn canonical_to_world(p: &Pvf3, near_x: f64) -> V3 {
+    let [x, y, z] = projection::unproject(p.i, p.f);
+    [nearest(x, near_x), y, z]
 }
 
-/// X the short way round, since its lane wraps the world. Y and Z are
-/// bounded: wrapping their difference would land a point a lane away.
-pub fn offset(i: IVec, origin: IVec) -> V3 {
-    let along = |lane: fn(IVec) -> i64| ivec::to_real(lane(i)) - ivec::to_real(lane(origin));
-    [ivec::to_real(ivec::X(ivec::sub(i, origin))), along(ivec::Y), along(ivec::Z)]
-}
-
-/// The origin follows the eye up, so a height read against the frame's own
-/// Z without this is off by the eye's height.
-pub fn local_height(z: f64, origin: IVec) -> f64 {
-    z - ivec::to_real(ivec::Z(origin))
-}
-
-pub fn canonical_to_local(p: &Pvf3, origin: IVec) -> V3 {
-    let at = offset(p.i, origin);
-    add3(&at, &projection::unproject(0, p.f))
+/// A canonical point in the world's doubles, on the lap nearest the eye.
+pub fn to_world(p: &Pvf3) -> V3 {
+    canonical_to_world(p, view().pose.eye[0])
 }
 
 /// Through `project`, the one door into PVF3: X goes round, Y and Z stop at
 /// the edge.
-pub fn local_world_to_canonical(local: &V3, map_origin: IVec) -> Pvf3 {
-    let o = ivec::to_v3(map_origin);
-    projection::project(o[0] + local[0], o[1] + local[1], o[2] + local[2])
+pub fn world_to_canonical(w: &V3) -> Pvf3 {
+    projection::project(w[0], w[1], w[2])
 }
 
-/// The nearest canonical point to `local`, unlike `local_world_to_canonical`
-/// which takes the cell it lies in. A point that went through floats and
-/// came back a hair under would otherwise step down each round trip.
-pub fn local_world_to_canonical_nearest(local: &V3, map_origin: IVec) -> Pvf3 {
+/// The nearest canonical point to `w`, unlike `world_to_canonical`, which
+/// takes the cell it lies in. A point that went through floats and came back
+/// a hair under would otherwise step down each round trip.
+pub fn world_to_canonical_nearest(w: &V3) -> Pvf3 {
     let one = pxl_spec::space::pvf3::core::ONE as f64;
-    local_world_to_canonical(&local.map(|v| round(v * one) / one), map_origin)
+    world_to_canonical(&w.map(|v| round(v * one) / one))
 }
 
 #[cfg(test)]

@@ -192,25 +192,25 @@ fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
     Some((look, if look == g::aeroway && !closed { Layer::Aeroway } else { layer }, feature))
 }
 
-pub fn buildings(row: &BuildingRow, page_min: G3857) -> Vec<Feature> {
+pub fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
     let kind = row.class.as_deref().or(row.subtype.as_deref()).unwrap_or("");
     let look = if MAJOR_BUILDING_CLASSES.contains(&kind) { g::building_major } else { g::building };
     let rank = Rank::by_area(Layer::Building, row.way_area, "", &row.gers_id);
-    wkb_to_geometries(&row.geom_wkb).iter().filter_map(|geom| Feature::of(geom, page_min, look, rank.clone())).collect()
+    wkb_to_geometries(&row.geom_wkb).iter().filter_map(|geom| Feature::of(geom, tile_min, look, rank.clone())).collect()
 }
 
 /// A segment's parts the ground shows: not where an unseen flag holds or a
 /// line draws it, cut square there, so the paint ends where the line begins;
 /// none of a `water` segment, a ferry route or a strait's label line, nor of a
 /// crossing, a line over a road the road already shows.
-pub fn ways(row: &Segment, drawn: &[Drawn], page_min: G3857) -> Vec<Feature> {
+pub fn ways(row: &Segment, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
     if row.subtype == "water" {
         return Vec::new();
     }
     let unseen = flag_ranges(row.flags.as_deref(), UNSEEN_FLAGS, cell_of(length_of(&row.geom_wkb)));
     let lined = merged(drawn.iter().filter(|c| c.gers_id == row.gers_id).map(|c| c.range).collect(), 0.0);
     let look = segment_type(&row.subtype, row.class.as_deref());
-    let cell_per_m = u_per_m(from_db(page_min[1])) / U_PER_CELL;
+    let cell_per_m = u_per_m(from_db(tile_min[1])) / U_PER_CELL;
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
         .flat_map(|g| split_ranged(g, [&unseen, &lined]))
@@ -221,7 +221,7 @@ pub fn ways(row: &Segment, drawn: &[Drawn], page_min: G3857) -> Vec<Feature> {
                 return None;
             }
             let rank = Rank::new(Layer::Road, paint_order(&row.subtype, row.class.as_deref(), shape.role), "", &row.gers_id);
-            let mut f = Feature::of(&geom, page_min, look, rank)?;
+            let mut f = Feature::of(&geom, tile_min, look, rank)?;
             f.closed = false;
             f.width = (width_m(&row.subtype, row.class.as_deref(), shape) * cell_per_m).min(WIDEST);
             f.cut = [a > 0.0, b < 1.0];
@@ -236,7 +236,7 @@ pub fn ways(row: &Segment, drawn: &[Drawn], page_min: G3857) -> Vec<Feature> {
 }
 
 /// Every Base row with a Carto fill; an area layer paints larger areas first.
-pub fn bases(row: &BaseRow, page_min: G3857) -> Vec<Feature> {
+pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
     let class = row.class.as_deref().unwrap_or("");
     wkb_to_geometries(&row.geom_wkb)
         .iter()
@@ -252,7 +252,7 @@ pub fn bases(row: &BaseRow, page_min: G3857) -> Vec<Feature> {
                 Layer::Aeroway => Rank::new(layer, i64::from(class == "runway"), feature, &row.gers_id),
                 _ => Rank::by_area(layer, row.way_area, feature, &row.gers_id),
             };
-            Feature::of(geom, page_min, look, rank)
+            Feature::of(geom, tile_min, look, rank)
         })
         .collect()
 }

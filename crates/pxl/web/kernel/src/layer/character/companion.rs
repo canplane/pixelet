@@ -6,8 +6,6 @@
 //! the world-scroll rate so the two cancel and it holds at screen center.
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
-use pxl_spec::space::pvf3::ivec::IVec;
-
 use crate::control::camera::approach::damp_alpha;
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::input::steering;
@@ -26,7 +24,7 @@ use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
 use crate::world::access::Access;
 use crate::world::change::wake_at;
-use crate::world::frame::coord::{local_height, local_world_to_canonical};
+use crate::world::frame::coord::world_to_canonical;
 use xpute_runtime::global::Global;
 
 pub const ACTORS_MAX: usize = Group::ALL.len();
@@ -132,7 +130,7 @@ impl Figure {
 
     /// `follows`: the target is followed as it moves, by a fix or by the keys,
     /// rather than walked to once it settles; a steered one faces its way.
-    fn step(&mut self, ctx: &TickContext, map_origin: IVec, target: [f64; 2], arrive_z: f64, follows: bool, steered: bool) {
+    fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_z: f64, follows: bool, steered: bool) {
         let variant = self.variant;
         self.acquire(target);
         if self.held.is_none() {
@@ -227,7 +225,7 @@ impl Figure {
         if arrived {
             *stands = arrive_z;
         } else if moved {
-            match step_from(map_origin, at, *stands) {
+            match step_from(at, *stands) {
                 Some(Some(z)) => *stands = z,
                 Some(None) if follows => {
                     at = target;
@@ -267,10 +265,9 @@ fn companion() -> &'static mut Companion {
     COMPANION.get(|| Companion { person: None, pet: None })
 }
 
-/// In world units, so a rebase moves nothing.
+/// In the world's doubles.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompanionProps {
-    pub map_origin: IVec,
     pub center: [f64; 2],
     /// The top of the floor under the map center.
     pub floor: f64,
@@ -306,14 +303,14 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
     let person_target = p.center;
     let person = figure_for(&mut c.person, person_variant, person_target);
-    person.step(ctx, p.map_origin, person_target, p.floor, follows, steered);
+    person.step(ctx, person_target, p.floor, follows, steered);
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
     let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
     // Its own floor beside the person, stepped to from the person's height.
-    let pet_z = step_from(p.map_origin, pet_target, p.floor).flatten().unwrap_or(p.floor);
-    pet.step(ctx, p.map_origin, pet_target, pet_z, follows, steered);
+    let pet_z = step_from(pet_target, p.floor).flatten().unwrap_or(p.floor);
+    pet.step(ctx, pet_target, pet_z, follows, steered);
 }
 
 /// (model, image handle) for the shell's skinned pass.
@@ -322,9 +319,8 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
     [&c.person, &c.pet].into_iter().flatten().filter_map(|w| w.held.as_ref()).map(|h| (h.model.model, h.skin))
 }
 
-/// None inside where a wall holds it; None outside where no page is resident.
-fn step_from(map_origin: IVec, [x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
-    let o = crate::world::frame::view::view().chart();
-    let at = local_world_to_canonical(&[x - o[0], y - o[1], local_height(over(stands), map_origin)], map_origin);
+/// None inside where a wall holds it; None outside where no tile is resident.
+fn step_from([x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
+    let at = world_to_canonical(&[x, y, over(stands)]);
     Access::now().support(&at, COMPANION_STEP_CELLS).value()
 }
