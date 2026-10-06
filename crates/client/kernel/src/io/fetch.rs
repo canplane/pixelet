@@ -6,6 +6,7 @@
 //! Every body is a heap block released in the command that decodes it,
 //! unless a store keeps it.
 
+use crate::world::pyramid::Observed as _;
 use core::fmt;
 
 use xpute_core::status::errno::Errno;
@@ -21,7 +22,6 @@ use crate::io::sched::{attempt_of, settle, Credit};
 use crate::layer::earth::{self, Earth};
 use crate::layer::geocode::store as geocode_store;
 use crate::world::change::world_edge;
-use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::place_tile::{group_key, DICT_OBJECT};
 use pxl_spec::bake::poi_tile::PoiTile;

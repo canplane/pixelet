@@ -34,7 +34,7 @@ use crate::world::chunk::mesh_slot::OCCUPANCY;
 use crate::world::chunk::source::{objects_met, Met};
 use crate::world::chunk::table::Scheduler;
 use crate::world::chunk::Chunk;
-use crate::world::pyramid::Layer;
+use crate::layer::Layer;
 use crate::world::view::observation::{eye, observation};
 use pxl_render::mesh::run::APRON;
 use pxl_spec::bake::format::Terrain;
@@ -121,7 +121,7 @@ fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
         }
     });
     Some(Sources {
-        read_from: Terrain::pyramid().residency().read(chunk.node(), chunk.cell_zoom()).value()?.from.zoom,
+        read_from: Terrain::residency().read(chunk.node(), chunk.cell_zoom()).value()?.from.zoom,
         objects: objects_met(&kernel().objects, chunk),
         shown: settings_store().decor,
         hide,
@@ -129,7 +129,7 @@ fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
 }
 
 fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
-    let terrain = Terrain::pyramid().residency();
+    let terrain = Terrain::residency();
     // The tile the terrain draws the chunk from, read over the chunk whose
     // side is that many of its cells; past the leaves, the chunk over it as wide.
     let src = terrain.read(chunk.node(), chunk.cell_zoom()).value()?.from;

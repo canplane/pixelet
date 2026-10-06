@@ -51,7 +51,7 @@ use xpute_runtime::global::Global;
 
 use crate::world::chunk::domain::{self, Domain};
 use crate::world::chunk::Chunk;
-use crate::world::pyramid::Layer as _;
+use crate::layer::Layer as _;
 use crate::world::view::observation::Order;
 use pxl_spec::bake::format::Terrain;
 
@@ -270,7 +270,7 @@ impl Env for Pieces<'_> {
     }
 
     fn buildable(&self, c: Chunk) -> bool {
-        Terrain::pyramid().residency().read(c.node(), c.cell_zoom()).value().is_some()
+        Terrain::residency().read(c.node(), c.cell_zoom()).value().is_some()
     }
 
     fn order(&self, c: Chunk) -> Order {

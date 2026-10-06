@@ -17,7 +17,7 @@ use crate::sched::profiler::spec::{LIMITS, SUMMARY};
 use crate::sched::profiler::task::TaskRow;
 use crate::sched::profiler::word::put;
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
-use crate::world::pyramid::Layer as _;
+use crate::layer::Layer as _;
 use crate::{kernel, with_world};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::adapter::epsg4326;
@@ -243,7 +243,7 @@ fn side(out: &mut [f64]) {
     );
 
     let [step, star] = crate::world::chunk::quality::reading();
-    let residency = Terrain::pyramid().residency();
+    let residency = Terrain::residency();
     let [admitted, evicted] = residency.churn();
     let [refined, changes_peak] = kernel().sched.pace();
     put(

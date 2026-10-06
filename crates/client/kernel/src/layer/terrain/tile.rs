@@ -5,6 +5,8 @@
 //! left as no object is drawn from the tile over it, whose cells there are
 //! open water; at the source's top, it is void.
 
+use crate::world::pyramid::Observed as _;
+use crate::layer::residency::Residency;
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{decode_terrain_into, Extent, GroundCell, Terrain, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
@@ -18,12 +20,12 @@ use crate::io::failure::Failure;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::layer::terrain::fixed::{coarse_off, deck_off, ele_off, extent_off, ground_off, COARSE_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::mem::fixed::{at, Range};
-use crate::world::pyramid::{Layer, Pyramid};
+use crate::layer::Layer;
 use pxl_spec::bake::format::Occupancy;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 
-static TERRAIN: Global<Pyramid<Terrain>> = Global::new();
+static TERRAIN: Global<Residency<Terrain>> = Global::new();
 
 impl Layer for Terrain {
     const CATEGORY: Category = Category::terrain;
@@ -35,8 +37,8 @@ impl Layer for Terrain {
     // The leaves carry the terrain topic; the zooms above are read through the
     // chunks that draw them.
 
-    fn pyramid() -> &'static mut Pyramid<Terrain> {
-        TERRAIN.get(Pyramid::default)
+    fn residency() -> &'static mut Residency<Terrain> {
+        TERRAIN.get(Residency::default)
     }
 
     fn empty() -> Option<Terrain> {

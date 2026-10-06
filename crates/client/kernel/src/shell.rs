@@ -5,6 +5,7 @@
 
 pub mod setting;
 
+use crate::world::pyramid::Observed as _;
 use pxl_spec::bake::place_tile::leaf_slot;
 use pxl_spec::cell::object::{decor_num_id, placeable_cube_num_id};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
@@ -28,7 +29,6 @@ use crate::scene::character::companion::companion_load_store;
 use crate::scene::character::preview::{preview_rows, CASES_MAX};
 use crate::sched::turn::world_platform;
 use crate::shell::setting::store::{settings_store, SettingKey};
-use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::zoom::idx;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;

@@ -18,7 +18,7 @@ use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::decor::build::DecorHide;
 use crate::world::chunk::table::{builds, Census, Frame};
-use crate::world::pyramid::Layer;
+use crate::layer::Layer;
 use crate::world::view::frame::pose::{sea_under_eye, view, view_resize};
 use crate::{kernel, with_world};
 use pxl_spec::bake::format::Terrain;
@@ -178,18 +178,18 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let counts = kernel().sched.take_counts();
     let rings = profiler_take_rings();
     let work = work_sample(c, &census);
-    let record_refused = Terrain::pyramid().take_refusals() as f64;
+    let record_refused = Terrain::residency().take_refusals() as f64;
     let [rays, visits] = crate::world::chunk::domain::take_work();
     if !profiler_recording() {
         return;
     }
     let host = c.host.clone();
     let mut tiles = TileSample::default();
-    for (p, _) in Terrain::pyramid().residency().held() {
+    for (p, _) in Terrain::residency().held() {
         tiles.by_zoom[p.zoom as usize] += 1.0;
     }
     tiles.total = tiles.by_zoom.iter().sum();
-    tiles.poi = PoiTile::pyramid().residency().held().count() as f64;
+    tiles.poi = PoiTile::residency().held().count() as f64;
     let mut gpu = host.gpu;
     for (tris, boxes) in gpu.zoom_tris.iter_mut().zip(census.zoom_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;
@@ -240,7 +240,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             // NaN: step 0 is past the arena
             let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
             // The goal's pieces a resident tile draws.
-            let residency = Terrain::pyramid().residency();
+            let residency = Terrain::residency();
             let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.read(c.node(), c.cell_zoom()).value().is_some()).count());
             CoverSample {
                 rule,

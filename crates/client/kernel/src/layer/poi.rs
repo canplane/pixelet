@@ -3,18 +3,18 @@
 //! Places as a layer of the pyramid: a tile counts the places in each of
 //! its cells, drawn as badges (`world/chunk/place.rs`).
 
+use crate::world::pyramid::Observed as _;
 use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
 use pxl_spec::bake::poi_tile::{self, PoiTile, POI_LATTICE};
 use pxl_spec::space::layer::lattice::Lattice;
 
-use crate::control::camera::controller::units_per_px_at;
 use crate::io::demand::{Category, Phases};
 use crate::io::failure::Failure;
 use crate::layer::residency::Residency;
 use crate::layer::{Answer, Bound, Query};
 use crate::param::{POI_ALL_ZOOM, POI_MAJOR_ZOOM};
 use crate::shell::setting::store::settings_store;
-use crate::world::pyramid::{Layer, Pyramid};
+use crate::layer::Layer;
 use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857::cell_zoom_of;
 use pxl_spec::space::coord::zoom::units;
@@ -23,7 +23,7 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_runtime::global::Global;
 
-static POI: Global<Pyramid<PoiTile>> = Global::new();
+static POI: Global<Residency<PoiTile>> = Global::new();
 
 impl Layer for PoiTile {
     const CATEGORY: Category = Category::poi;
@@ -32,12 +32,8 @@ impl Layer for PoiTile {
     fn occupancy(&self) -> Occupancy {
         self.occupancy
     }
-    fn reach() -> f64 {
-        MAJOR_UNITS_PER_PX / units_per_px_at(1.0)
-    }
-
-    fn pyramid() -> &'static mut Pyramid<PoiTile> {
-        POI.get(Pyramid::default)
+    fn residency() -> &'static mut Residency<PoiTile> {
+        POI.get(Residency::default)
     }
 
     /// Small, so held on the heap; the record is only a count slot.

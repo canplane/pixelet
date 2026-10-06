@@ -3,6 +3,7 @@
 //! The kernel's side of an observation: the eye, what it looks at, and what
 //! is known of what a box of the world holds.
 
+use crate::world::pyramid::Observed as _;
 use std::cmp::Ordering;
 
 use pxl_spec::bake::format::Terrain;
@@ -20,7 +21,7 @@ use crate::layer::{Answer, Query};
 use crate::scene::environment::fog::{eye_height, reach_at};
 use crate::scene::environment::state::globe;
 use crate::world::chunk::domain;
-use crate::world::pyramid::Layer as _;
+use crate::layer::Layer as _;
 use crate::world::query::Access;
 use crate::world::view::frame::pose::view;
 use crate::world::view::observer::Footprint;
@@ -119,7 +120,7 @@ impl ByFootprints<'_> {
 
 /// What the heights read of the ground: the terrain tiles known.
 pub fn ground_known(out: &mut Vec<(Tile, bool)>) {
-    Terrain::pyramid().residency().known(out);
+    Terrain::residency().known(out);
 }
 
 /// Where the objects changed, told to what works anything out from them;

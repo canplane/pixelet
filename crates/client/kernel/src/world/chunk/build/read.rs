@@ -15,7 +15,7 @@ use pxl_render::mesh::run::APRON;
 use crate::layer::terrain::Source;
 use crate::layer::{Answer, Query};
 use crate::world::chunk::Chunk as PyramidChunk;
-use crate::world::pyramid::Layer as _;
+use crate::layer::Layer as _;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -42,7 +42,7 @@ impl Read {
 /// The ground a chunk is built from, as the terrain answers it; what a build
 /// reads and what it is keyed by are this one reading.
 pub(crate) fn ground_of(leaf: PyramidChunk) -> (Answer<Source<'static>>, [Option<Source<'static>>; 8]) {
-    let terrain = Terrain::pyramid().residency();
+    let terrain = Terrain::residency();
     let mut beside = [None; 8];
     for ([qx, qy], p) in GROUND.read_beside(leaf.column(), leaf.cell_zoom(), APRON) {
         // A tile is read at its own cells.

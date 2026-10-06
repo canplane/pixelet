@@ -21,7 +21,7 @@ use crate::layer::object::store::{EntryAt, Store, AIR};
 use crate::world::chunk::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::world::chunk::decor::kind::{Kind, KINDS};
 use crate::world::chunk::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
-use crate::world::pyramid::Layer as _;
+use crate::layer::Layer as _;
 use crate::world::query::Access;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::deck::Decks;
@@ -156,7 +156,7 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let kind = KINDS.iter().find(|k| k.decor_value() == Some(value))?;
     let leaf = GROUND.cell_of(LEAF_ZOOM, at);
-    let tile = Terrain::pyramid().residency().get(leaf.tile())?;
+    let tile = Terrain::residency().get(leaf.tile())?;
     let ground = Access::now().at(at, LEAF_ZOOM).exact()?;
     let [ix, iy, iz] = index_of(GROUND.cell(), at);
     let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;

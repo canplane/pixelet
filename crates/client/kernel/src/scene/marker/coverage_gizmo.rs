@@ -8,6 +8,7 @@
 //! overlaid, the lines read as none of them, and laid along the ground they
 //! wavered with every cell they crossed.
 
+use crate::world::pyramid::Observed as _;
 use crate::layer::{Answer, Query};
 use std::collections::{HashMap, HashSet};
 
@@ -21,7 +22,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use crate::layer::residency::floor;
 use crate::scene::marker::debug_lines::DebugLines;
 use crate::world::chunk::Chunk;
-use crate::world::pyramid::Layer as _;
+use crate::layer::Layer as _;
 use crate::world::query::Access;
 use crate::world::view::frame::pose::view;
 use crate::world::view::observation::observation;
@@ -95,7 +96,7 @@ impl CoverageGizmo {
         let span = units(zoom);
         let about = v.pose.eye.map(|c| (c / span).floor() * span);
         let about = [about[0], about[1], 0.0];
-        let residency = Terrain::pyramid().residency();
+        let residency = Terrain::residency();
         let top = floor::top().unwrap_or(LEAF_ZOOM);
         let lined: HashSet<Tile> = Terrain::pyramid().demand().iter().map(|&p| line_top(p, top)).collect();
         let floor_only = |p: Tile| p.zoom <= top && !lined.contains(&p);

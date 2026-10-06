@@ -21,7 +21,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use floor::{Fallback, Floor};
 
 use crate::io::demand::{Ask, Why};
-use crate::world::pyramid::Layer;
+use crate::layer::Layer;
 
 /// Only the eye. Another point observer would add its own misses.
 const OBSERVERS: u32 = 1;

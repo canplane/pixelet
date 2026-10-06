@@ -12,7 +12,7 @@ use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
 use pxl_render::gpu::surface::DPR_MAX;
 use xpute_runtime::global::Global;
 
-use crate::world::pyramid::Layer;
+use crate::layer::Layer;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -33,7 +33,7 @@ pub enum Label {
 impl Label {
     /// Nameless once that tile has gone.
     fn place(tile: Tile, place: u32) -> Place<'static> {
-        PoiTile::pyramid().residency().get(tile).map_or(Place::default(), |p| p.places.get(place))
+        PoiTile::residency().get(tile).map_or(Place::default(), |p| p.places.get(place))
     }
 
     pub fn text(self) -> String {

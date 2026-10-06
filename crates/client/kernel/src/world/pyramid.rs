@@ -9,15 +9,24 @@
 //! first. Where a tile marks a child as no tile (`Layer::occupancy`), its
 //! ground is the tile's and the child is never asked for.
 
+use pxl_spec::bake::earth_tile::EARTH_REACH;
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::poi_tile::PoiTile;
+use xpute_runtime::global::Global;
+
+use crate::control::camera::controller::units_per_px_at;
+use crate::layer::earth::Earth;
+use crate::layer::poi::MAJOR_UNITS_PER_PX;
+use crate::layer::Layer;
+
 use std::collections::HashMap;
 
-use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::io::demand::{Ask, Category, Phases, Why};
+use crate::io::demand::{Ask, Phases, Why};
 use crate::io::failure::Failure;
 use crate::io::sched::declare;
 use crate::layer::residency::floor::{self, Fallback, Floor};
@@ -27,41 +36,45 @@ use crate::world::view::observation::{ground_known, observation, ByFootprints, O
 use crate::world::view::observer::Footprint;
 use pxl_spec::space::coord::zoom::Zoom;
 
-pub trait Layer: Clone + 'static {
-    const CATEGORY: Category;
-
-    /// Which of its children are tiles of their own, as the bake wrote it.
-    fn occupancy(&self) -> Occupancy;
-
-    /// Its tiles' cells, which say what of the grid a tile at each zoom draws.
-    const LATTICE: Lattice;
-
-    /// False for a layer that holds only the floor: it asks for no miss and no
-    /// destination, and its residency is sized so.
-    const DEMANDS: bool = true;
-
-    /// The coarsest zoom the layer's own source supplies whole, where one
-    /// differs from the ground's declared top (`floor::top`). Its floor is
-    /// then that zoom's whole reach about the eye: it is drawn past where
-    /// the ground stops.
-    const TOP: Option<Zoom> = None;
+/// A layer as the view asks of it: its demand, held beside its records.
+pub trait Observed: Layer {
+    fn pyramid() -> &'static mut Pyramid<Self>;
 
     /// How far from the eye the layer draws anything; past it nothing of it
     /// is asked for.
     fn reach() -> f64 {
         f64::INFINITY
     }
+}
 
-    fn pyramid() -> &'static mut Pyramid<Self>;
+static TERRAIN: Global<Pyramid<Terrain>> = Global::new();
+static POI: Global<Pyramid<PoiTile>> = Global::new();
+static EARTH: Global<Pyramid<Earth>> = Global::new();
 
-    fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
+impl Observed for Terrain {
+    fn pyramid() -> &'static mut Pyramid<Terrain> {
+        TERRAIN.get(Pyramid::default)
+    }
+}
 
-    /// A tile with nothing in it, which answers an absent tile at the top.
-    fn empty() -> Option<Self> {
-        None
+impl Observed for PoiTile {
+    fn pyramid() -> &'static mut Pyramid<PoiTile> {
+        POI.get(Pyramid::default)
     }
 
-    fn changed(_p: Tile, _present: bool) {}
+    fn reach() -> f64 {
+        MAJOR_UNITS_PER_PX / units_per_px_at(1.0)
+    }
+}
+
+impl Observed for Earth {
+    fn pyramid() -> &'static mut Pyramid<Earth> {
+        EARTH.get(Pyramid::default)
+    }
+
+    fn reach() -> f64 {
+        EARTH_REACH
+    }
 }
 
 /// Everything the asks depend on, as read; two turns agreeing on all of it
@@ -90,8 +103,8 @@ impl Victim for Farthest<'_> {
     }
 }
 
-pub struct Pyramid<L: Layer> {
-    residency: Residency<L>,
+pub struct Pyramid<L: Observed> {
+    layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
     demand: Vec<Tile>,
     wants: Vec<(u64, Ask)>,
@@ -104,10 +117,10 @@ pub struct Pyramid<L: Layer> {
     asks: HashMap<Tile, Ask>,
 }
 
-impl<L: Layer> Default for Pyramid<L> {
+impl<L: Observed> Default for Pyramid<L> {
     fn default() -> Self {
         Pyramid {
-            residency: Residency::default(),
+            layer: core::marker::PhantomData,
             observation: None,
             demand: Vec::new(),
             wants: Vec::new(),
@@ -119,21 +132,17 @@ impl<L: Layer> Default for Pyramid<L> {
     }
 }
 
-impl<L: Layer> Pyramid<L> {
-    pub fn residency(&self) -> &Residency<L> {
-        &self.residency
-    }
-
+impl<L: Observed> Pyramid<L> {
     pub fn set(&mut self, p: Tile, tile: L) {
-        self.residency.set(p, tile);
+        L::residency().set(p, tile);
     }
 
     pub fn answer_above(&mut self, p: Tile) {
-        self.residency.answer_above(p);
+        L::residency().answer_above(p);
     }
 
     pub fn take_refusals(&mut self) -> u32 {
-        self.residency.take_refusals()
+        L::residency().take_refusals()
     }
 
     pub fn observation(&self) -> Option<&Observation> {
@@ -151,7 +160,7 @@ impl<L: Layer> Pyramid<L> {
 
     /// Whether every tile the view needs has its answer.
     pub fn answered(&self) -> bool {
-        self.asks.keys().all(|&p| self.residency.has_answer(p))
+        self.asks.keys().all(|&p| L::residency().has_answer(p))
     }
 
     pub fn adopt(&mut self, p: Tile, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
@@ -162,13 +171,13 @@ impl<L: Layer> Pyramid<L> {
     pub fn absent(&mut self, p: Tile) {
         let top = L::TOP.or(floor::top()).unwrap_or(L::LATTICE.top());
         match L::empty() {
-            Some(empty) if p.zoom <= top => self.residency.set(p, empty),
-            _ => self.residency.answer_above(p),
+            Some(empty) if p.zoom <= top => L::residency().set(p, empty),
+            _ => L::residency().answer_above(p),
         }
     }
 
     pub fn admit(&mut self, p: Tile, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
-        self.residency.admit(p, &Farthest(self.observation.as_ref(), L::LATTICE), receive)
+        L::residency().admit(p, &Farthest(self.observation.as_ref(), L::LATTICE), receive)
     }
 
     /// Builds the asks for `o`: the estimator's demand, the floor and the
@@ -198,7 +207,7 @@ impl<L: Layer> Pyramid<L> {
             demand.sort_unstable();
             demand.dedup();
             for &p in &demand {
-                let at = self.residency.source(p).unwrap_or(p);
+                let at = L::residency().source(p).unwrap_or(p);
                 ask(&mut asks, at, Ask { why: Why::Demand, order: order(o, p) });
                 // A line already asked is asked to the top.
                 for q in std::iter::successors(Some(at), |q| (q.zoom > top).then(|| q.parent())).skip(1) {
@@ -250,10 +259,10 @@ impl<L: Layer> Pyramid<L> {
         self.wants.clear();
         self.wants.extend(
             asks.iter()
-                .filter(|(p, _)| !self.residency.resident(**p) && !self.residency.settled(**p))
+                .filter(|(p, _)| !L::residency().resident(**p) && !L::residency().settled(**p))
                 .map(|(p, &a)| (p.subject(), a)),
         );
-        self.residency.ask(&asks);
+        L::residency().ask(&asks);
         self.asks = asks;
 
         self.observation = o.copied();
@@ -315,7 +324,7 @@ impl<L: Layer> Pyramid<L> {
             lacks: Vec::new(),
         });
         (now.o, now.floor, now.destination, now.tau) = (o, floor_now, destination, tau);
-        self.residency.known(&mut now.own);
+        L::residency().known(&mut now.own);
         ground_known(&mut now.terrain);
         now.footprints.clear();
         now.footprints.extend_from_slice(published.map_or(&[], |d| d.footprints()));
@@ -337,7 +346,7 @@ impl<L: Layer> Pyramid<L> {
                 top,
             );
             // Observing can let tiles go: record what is known after it.
-            self.residency.known(&mut now.own);
+            L::residency().known(&mut now.own);
             ground_known(&mut now.terrain);
             self.now = self.last.replace(now);
         } else {
@@ -354,7 +363,7 @@ impl<L: Layer> Pyramid<L> {
     pub fn idle(&mut self) {
         self.wants.clear();
         self.asks.clear();
-        self.residency.ask(&self.asks);
+        L::residency().ask(&self.asks);
         declare(L::CATEGORY, &[]);
         self.last = None;
     }

@@ -6,6 +6,7 @@
 
 pub mod badge;
 
+use crate::world::pyramid::Observed as _;
 use crate::control::camera::controller::units_per_px_at;
 use crate::layer::poi::{enabled, rank_of, Places, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
 use crate::layer::{Answer, Query};
@@ -16,7 +17,7 @@ use crate::scene::billboard::selection::select_visible_billboards;
 use crate::scene::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::sched::tick::TickContext;
 use crate::world::chunk::Chunk;
-use crate::world::pyramid::Layer;
+use crate::layer::Layer;
 use crate::world::query::{Access, Detail, Ray};
 use crate::world::view::frame::pose::ndc_to_px;
 use crate::world::view::observation::ground_known;
@@ -112,7 +113,7 @@ pub fn step(ctx: &mut TickContext) {
         badge::retain(&HashSet::new());
         return;
     }
-    let tiles = PoiTile::pyramid();
+    let _tiles = PoiTile::pyramid();
     if crate::world::chunk::domain::current().is_none() {
         return;
     }
@@ -121,7 +122,7 @@ pub fn step(ctx: &mut TickContext) {
     p.now.drawn.clear();
     p.now.drawn.extend(p.mounted.iter().filter(|m| m.1).map(|m| m.0));
     p.now.drawn.sort_unstable();
-    tiles.residency().known(&mut p.now.tiles);
+    PoiTile::residency().known(&mut p.now.tiles);
     ground_known(&mut p.now.terrain);
     let stale = core::mem::take(&mut p.objects_written) | (p.found_for.as_ref() != Some(&p.now));
     if stale {
@@ -135,7 +136,7 @@ pub fn step(ctx: &mut TickContext) {
     let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
         let read_zoom = POI_LATTICE.read_zoom(chunk.cell_zoom());
-        let Answer::Exact(Places { tile: poi, from: src }) = tiles.residency().read(chunk.node(), chunk.cell_zoom()) else {
+        let Answer::Exact(Places { tile: poi, from: src }) = PoiTile::residency().read(chunk.node(), chunk.cell_zoom()) else {
             continue;
         };
         // Where the source cell is wider than the chunk, its place counts only if it
