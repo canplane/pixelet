@@ -8,17 +8,18 @@
 //! Its zoom is the source's declared top (`declare`), never guessed from
 //! what fails. Until declared, nothing is observed.
 
-use pxl_spec::space::lod::{tiles_within, REACH_TILES};
-use pxl_spec::space::observation::Observation;
-use pxl_spec::space::pyramid::{Tile, TOP_Z};
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::demand::{tiles_within, REACH_TILES};
+use pxl_spec::space::camera::eye::Observation;
+use pxl_spec::space::layer::tile::Tile;
 
-use pxl_spec::space::zoom::Zoom;
+use pxl_spec::space::coord::zoom::Zoom;
 use xpute_runtime::global::Global;
 
 static DECLARED: Global<Option<Zoom>> = Global::new();
 
 pub fn declare(top_z: Zoom) {
-    xpute_core::ensure!(top_z >= TOP_Z, EINVAL, top_z);
+    xpute_core::ensure!(top_z >= GROUND.top(), EINVAL, top_z);
     *DECLARED.get(Default::default) = Some(top_z);
 }
 
@@ -29,7 +30,8 @@ pub fn top() -> Option<Zoom> {
 pub trait Fallback {
     const TILES: u32;
 
-    fn floor(o: &Observation, each: impl FnMut(Tile));
+    /// `top`: the coarsest zoom the source supplies whole.
+    fn floor(o: &Observation, top: Zoom, each: impl FnMut(Tile));
 }
 
 /// The top's tiles with ground within the far edge of the eye itself, which
@@ -43,10 +45,10 @@ impl Fallback for TopRing {
     /// ground is no wider, so these are at most the tiles a miss can name there.
     const TILES: u32 = REACH_TILES;
 
-    fn floor(o: &Observation, each: impl FnMut(Tile)) {
+    fn floor(o: &Observation, top: Zoom, each: impl FnMut(Tile)) {
         let over = (o.eye[2] - o.ground).max(0.0);
-        if over < o.far {
-            tiles_within(o.top, [o.eye[0], o.eye[1]], (o.far * o.far - over * over).sqrt()).for_each(each);
+        if over < o.far() {
+            tiles_within(top, [o.eye[0], o.eye[1]], (o.far() * o.far() - over * over).sqrt()).for_each(each);
         }
     }
 }

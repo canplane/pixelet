@@ -16,7 +16,7 @@ use crate::bake::named::{NameLanes, NamesView};
 
 use crate::bake::quadkey::{quadkey_of, Quadkey, TILE_KEY_DEPTH};
 use crate::place::PlaceRank;
-use crate::space::pvf3::ivec::IVec;
+use crate::space::coord::pvf3::ivec::IVec;
 use xpute_core::status::bug::OrBug;
 
 pub const DICT_OBJECT: &str = "_dict";

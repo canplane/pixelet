@@ -4,7 +4,7 @@
 
 use super::{post_shell, State};
 use crate::abi::cmd::{self as abi, Command};
-use pxl_spec::space::zoom::Zoom;
+use pxl_spec::space::coord::zoom::Zoom;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::abi::cmd as xpute_cmd;
@@ -87,14 +87,14 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 },
             });
             settings_load(p.settings);
-            crate::layer::object::store::load();
+            crate::layer::object::repository::open();
             // The shell holds the kernel's state from its first render on.
             applied(s)
         }
         Command::WORLD_SOURCE => {
             let p = abi::WorldSource::read(packet(pkt)?)?;
             refuse_unless(
-                p.top_z >= u32::from(pxl_spec::space::pyramid::TOP_Z) && p.top_z <= u32::from(pxl_spec::space::pyramid::LEAF_Z),
+                p.top_z >= u32::from(pxl_spec::space::layer::lattice::GROUND.top()) && p.top_z <= u32::from(pxl_spec::space::layer::tile::LEAF_ZOOM),
                 Errno::EINVAL,
             )?;
             crate::world::residency::floor::declare(p.top_z as Zoom);
@@ -225,7 +225,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             if visible {
                 device_orientation::orientation_visible();
             } else {
-                crate::layer::object::store::flush_save();
+                crate::layer::object::repository::flush();
             }
             Ok(Some(0))
         }

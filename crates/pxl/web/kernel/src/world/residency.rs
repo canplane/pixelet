@@ -13,26 +13,23 @@
 
 pub mod floor;
 
+use pxl_spec::space::coord::zoom::Zoom;
 use std::collections::HashMap;
 
-use pxl_spec::space::lod::REACH_TILES;
-use pxl_spec::space::pyramid::{Tile, LEAF_Z, TOP_Z};
+use pxl_spec::space::layer::demand::REACH_TILES;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use floor::{Fallback, Floor};
 
 use crate::io::demand::{Ask, Why};
 use crate::world::pyramid::Layer;
 
-/// The zooms the pyramid holds, z15 to its top.
-pub const PYRAMID_ZOOMS: u32 = (LEAF_Z - TOP_Z + 1) as u32;
 
 /// Only the eye. Another point observer would add its own misses.
 const OBSERVERS: u32 = 1;
 
 pub const ZOOM_DEMAND_TILES: u32 = REACH_TILES;
 
-/// A destination's line from its leaf to the top.
-pub const DESTINATION_TILES: u32 = PYRAMID_ZOOMS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Hold {
@@ -85,8 +82,6 @@ pub struct Residency<L: Layer> {
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
     going: Vec<Tile>,
-    /// Moves whenever a tile is held, let go, or answered by the tile over it.
-    revision: u32,
     refused: u32,
     admitted: u32,
     evicted: u32,
@@ -96,14 +91,20 @@ pub struct Residency<L: Layer> {
 /// that asks only for the floor (`Layer::DEMANDS` false) asks for no miss, no
 /// line over one, no destination and nothing speculative.
 impl<L: Layer> Residency<L> {
-    const DEMAND_TILES: u32 = if L::DEMANDS { OBSERVERS * ZOOM_DEMAND_TILES * PYRAMID_ZOOMS } else { 0 };
+    /// The zooms the layer's pyramid holds, its leaves to its lattice's top.
+    pub const ZOOMS: u32 = (LEAF_ZOOM - L::LATTICE.top() + 1) as u32;
+
+    /// A destination's line from its leaf to the top.
+    pub const DESTINATION_TILES: u32 = Self::ZOOMS;
+
+    const DEMAND_TILES: u32 = if L::DEMANDS { OBSERVERS * ZOOM_DEMAND_TILES * Self::ZOOMS } else { 0 };
 
     /// The lines over the misses, every zoom's but the finest.
-    const ANCESTOR_TILES: u32 = if L::DEMANDS { OBSERVERS * ZOOM_DEMAND_TILES * (PYRAMID_ZOOMS - 1) } else { 0 };
+    const ANCESTOR_TILES: u32 = if L::DEMANDS { OBSERVERS * ZOOM_DEMAND_TILES * (Self::ZOOMS - 1) } else { 0 };
 
     /// Held hard apart from the view: the floor and a destination's line. A new
     /// consumer that cannot take a coarser answer would declare its tiles here.
-    const PINNED_TILES: u32 = Floor::TILES + if L::DEMANDS { DESTINATION_TILES } else { 0 };
+    const PINNED_TILES: u32 = Floor::TILES + if L::DEMANDS { Self::DESTINATION_TILES } else { 0 };
 
     /// What is held hard at most.
     const HARD_TILES: u32 = Self::PINNED_TILES + Self::ANCESTOR_TILES;
@@ -134,7 +135,6 @@ impl<L: Layer> Default for Residency<L> {
             // Lowest first, as the frames are taken.
             free: (0..Self::FRAMES).rev().collect(),
             going: Vec::with_capacity(Self::ENTRIES as usize),
-            revision: 0,
             refused: 0,
             admitted: 0,
             evicted: 0,
@@ -142,8 +142,9 @@ impl<L: Layer> Default for Residency<L> {
     }
 }
 
-fn line(p: Tile) -> impl Iterator<Item = Tile> {
-    std::iter::successors(Some(p), |q| (q.zoom > TOP_Z).then(|| q.parent()))
+/// A tile and the ones over it to `top`.
+fn line(p: Tile, top: Zoom) -> impl Iterator<Item = Tile> {
+    std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent()))
 }
 
 impl<L: Layer> Residency<L> {
@@ -190,8 +191,16 @@ impl<L: Layer> Residency<L> {
         Self::FRAMES - self.free.len() as u32
     }
 
-    pub fn revision(&self) -> u32 {
-        self.revision
+    /// What is known of each tile it knows, sorted: held, or answered by the
+    /// tile over it. What reads the layer compares this, not a count of changes.
+    pub fn known(&self, out: &mut Vec<(Tile, bool)>) {
+        out.clear();
+        out.extend(self.tiles.iter().filter_map(|(&p, e)| match (&e.held, e.answered) {
+            (Some(_), _) => Some((p, true)),
+            (None, true) => Some((p, false)),
+            (None, false) => None,
+        }));
+        out.sort_unstable();
     }
 
     /// Answered for itself, the top too, or settled by the tile over it.
@@ -199,7 +208,7 @@ impl<L: Layer> Residency<L> {
         if self.entry(q).is_some_and(|e| e.answered) {
             return true;
         }
-        if q.zoom <= TOP_Z {
+        if q.zoom <= L::LATTICE.top() {
             return false;
         }
         let over = q.parent();
@@ -207,12 +216,12 @@ impl<L: Layer> Residency<L> {
     }
 
     pub fn settled(&self, p: Tile) -> bool {
-        line(p).any(|q| self.said(q))
+        line(p, L::LATTICE.top()).any(|q| self.said(q))
     }
 
     /// The finest resident tile on `p`'s line: the miss's answer.
     pub fn drawn_from(&self, p: Tile) -> Option<Tile> {
-        line(p).find(|&q| self.resident(q))
+        line(p, L::LATTICE.top()).find(|&q| self.resident(q))
     }
 
     /// The resident tile that says `p`'s ground exactly; none where `p` is a
@@ -221,7 +230,7 @@ impl<L: Layer> Residency<L> {
         if self.resident(p) {
             return Some(p);
         }
-        let mut none = line(p).find(|&q| self.said(q))?;
+        let mut none = line(p, L::LATTICE.top()).find(|&q| self.said(q))?;
         loop {
             let over = none.parent();
             if self.resident(over) {
@@ -239,12 +248,10 @@ impl<L: Layer> Residency<L> {
     /// left to normal turnover.
     pub fn ask(&mut self, asks: &HashMap<Tile, Ask>) {
         xpute_core::ensure!(asks.len() <= Self::ASKS as usize, ENOTRECOVERABLE, asks.len());
-        let mut changed = false;
         for (p, e) in &mut self.tiles {
             e.ask = asks.get(p).copied();
-            if e.ask.is_none() && e.answered {
+            if e.ask.is_none() {
                 e.answered = false;
-                changed = true;
             }
         }
         let mut going = core::mem::take(&mut self.going);
@@ -257,15 +264,11 @@ impl<L: Layer> Residency<L> {
         );
         for &p in &going {
             self.remove(p);
-            changed = true;
         }
         self.going = going;
         self.tiles.retain(|_, e| !e.idle());
         for (&p, &a) in asks {
             self.entry_mut(p).ask = Some(a);
-        }
-        if changed {
-            self.revision = self.revision.wrapping_add(1);
         }
     }
 
@@ -366,16 +369,12 @@ impl<L: Layer> Residency<L> {
         if self.asked(p).is_none() {
             return;
         }
-        let e = self.entry_mut(p);
-        if !core::mem::replace(&mut e.answered, true) {
-            self.revision = self.revision.wrapping_add(1);
-        }
+        self.entry_mut(p).answered = true;
     }
 
     fn put(&mut self, p: Tile, body: L, frame: Option<u32>) {
-        let settles = if p.zoom < LEAF_Z { p.children().map(|c| body.settles(p, c)) } else { [false; 4] };
+        let settles = if p.zoom < LEAF_ZOOM { p.children().map(|c| body.settles(p, c)) } else { [false; 4] };
         self.entry_mut(p).held = Some(Held { body, frame, settles });
-        self.revision = self.revision.wrapping_add(1);
         L::changed(p, true);
     }
 
@@ -386,7 +385,6 @@ impl<L: Layer> Residency<L> {
         if e.get().idle() {
             e.remove();
         }
-        self.revision = self.revision.wrapping_add(1);
         L::changed(p, false);
         held.frame
     }

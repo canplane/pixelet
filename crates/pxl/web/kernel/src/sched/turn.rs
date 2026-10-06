@@ -128,7 +128,7 @@ fn world_tasks() {
         && spawn(crate::io::load::gltf_task(), Arrival as u8)
         && spawn(crate::world::chunk::stage::build_task(), Build as u8)
         && spawn(crate::layer::decor::asset_store::decor_asset_task(), Background as u8)
-        && spawn(crate::layer::object::store::save_task(), Background as u8);
+        && spawn(crate::layer::object::repository::task(), Background as u8);
     if !spawned {
         std::process::abort();
     }
@@ -175,7 +175,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, hover, hover_cursor_step());
     // device_coord is not gated like map_center: the puck keeps its last coordinate across a transient none.
     effect!(worst, puck, location_puck_step(map_navigation().device_coord));
-    effect!(worst, objects, crate::layer::object::store::flush_save_if_due());
+    effect!(worst, objects, crate::layer::object::repository::step());
     effect!(worst, settings, crate::shell::setting::store::settings_keep_step());
     // After every producer has spoken, including assets asked for during the turn.
     effect!(worst, assets, crate::io::sched::declare(crate::io::demand::Category::asset, crate::io::load::load_wants()));

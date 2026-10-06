@@ -5,9 +5,9 @@
 
 use pxl_spec::bake::place_tile::leaf_slot;
 use pxl_spec::cell::object::{decor_num_id, placeable_cube_num_id};
-use pxl_spec::space::adapter::epsg4326;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::adapter::epsg4326;
+use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
@@ -29,8 +29,8 @@ use crate::shell::setting::store::{settings_store, SettingKey};
 use crate::shell::ui::scale::m_per_px;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::pyramid::LEAF_Z;
-use pxl_spec::space::zoom::idx;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::coord::zoom::idx;
 
 /// The center tile's place, broad to narrow. Every language is sent, so
 /// switching language re-reads rather than refetches.
@@ -66,7 +66,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let settings = settings_store();
     let companion = companion_load_store();
     let at = crate::control::camera::controller::map_center();
-    let tile = at.map(|c| idx(LEAF_Z, c.i));
+    let tile = at.map(|c| idx(LEAF_ZOOM, c.i));
     let center = at.map(|c| {
         let g = epsg4326::unproject(c.i, c.f);
         LonLat { lon: g[0], lat: g[1] }

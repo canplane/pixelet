@@ -3,14 +3,15 @@
 //! A layer's pyramid on disk, a directory a zoom, folded by the same
 //! one-zoom function the client runs.
 
+use pxl_spec::space::layer::lattice::GROUND;
 use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
-use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{Folds, Tile, LEAF_Z, TOP_Z};
-use pxl_spec::space::zoom::Zoom;
+use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::tile::{Folds, Tile, LEAF_ZOOM};
 
 use crate::util::{measure_output, pack, unpack, write_atomic, Level};
 
@@ -121,10 +122,10 @@ pub fn fold_stored<L: Layer>(set: &TileSet, parent: Tile, absent: &impl Absent<L
     Ok(fold_parent(parent, |p| read.get(&p), absent))
 }
 
-/// Folds every zoom up to `TOP_Z` or the first empty one.
+/// Folds every zoom up to `GROUND.top()` or the first empty one.
 pub fn build<L: Layer>(set: &TileSet, absent: &impl Absent<L>, workers: usize) -> Result<Zoom, String> {
-    let mut top = LEAF_Z;
-    for zoom in (TOP_Z..LEAF_Z).rev() {
+    let mut top = LEAF_ZOOM;
+    for zoom in (GROUND.top()..LEAF_ZOOM).rev() {
         let children = set.tiles(zoom + 1)?;
         if children.is_empty() {
             break;
@@ -146,7 +147,7 @@ pub fn build<L: Layer>(set: &TileSet, absent: &impl Absent<L>, workers: usize) -
 /// update re-packs alike.
 pub fn refold<L: Layer>(set: &TileSet, mut changed: HashSet<Tile>, absent: &impl Absent<L>) -> Result<usize, String> {
     let mut written = 0;
-    for zoom in (TOP_Z..LEAF_Z).rev() {
+    for zoom in (GROUND.top()..LEAF_ZOOM).rev() {
         if changed.is_empty() {
             break;
         }
@@ -178,7 +179,7 @@ pub fn refold<L: Layer>(set: &TileSet, mut changed: HashSet<Tile>, absent: &impl
 /// whole set before any is removed. Returns how many.
 pub fn prune<L: Layer>(set: &TileSet, top: Zoom) -> Result<usize, String> {
     let mut gone = Vec::new();
-    for zoom in top + 1..=LEAF_Z {
+    for zoom in top + 1..=LEAF_ZOOM {
         let mut parents: HashMap<Tile, Option<L>> = HashMap::new();
         for p in set.tiles(zoom)? {
             let parent = p.parent();
@@ -201,7 +202,7 @@ pub fn prune<L: Layer>(set: &TileSet, top: Zoom) -> Result<usize, String> {
 pub fn write_manifest(set: &TileSet, top: Zoom, built: Option<&str>, layer: serde_json::Value) -> Result<(), String> {
     let (mut objects, mut bytes) = measure_output(&set.root).map_err(|e| e.to_string())?;
     let mut zooms = Vec::new();
-    for zoom in (top..=LEAF_Z).rev() {
+    for zoom in (top..=LEAF_ZOOM).rev() {
         let (n, b) = measure_output(&set.zoom_dir(zoom)).map_err(|e| e.to_string())?;
         zooms.push(serde_json::json!({ "z": zoom, "objects": n, "bytes": b }));
         objects += n;

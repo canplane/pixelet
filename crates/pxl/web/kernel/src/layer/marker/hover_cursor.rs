@@ -7,10 +7,11 @@ use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_C
 use pxl_render::look::style::marker_colors;
 use pxl_render::mesh::chunk_mesher::{mesh_words, write_lone_box, Heights, FINE_BOX_WORDS};
 use pxl_render::mesh::word::NO_LAYER;
-use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_of, placeable_cube_rgb, PlaceableCube};
-use pxl_spec::space::pyramid::LEAF_Z;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::coord::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
@@ -26,7 +27,7 @@ use crate::layer::object::store::{carve_entry, get_placed_object, restores_scatt
 use crate::shell::setting::store::settings_store;
 use crate::world::access::Access;
 use crate::world::change::request_world_tick;
-use crate::world::chunk::build::World;
+use crate::kernel::World;
 use crate::world::chunk::source::chunk_sources_changed;
 use xpute_runtime::global::Global;
 
@@ -85,11 +86,11 @@ pub fn hover_cursor_step() {
     let preview_size = match (&hovered_object, active_tool) {
         (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
         (_, ActiveTool::Decor) => DECOR_SIZE,
-        _ if digging_terrain || scattered => U_PER_CELL,
+        _ if digging_terrain || scattered => units(GROUND.cell()),
         _ => object_size_of(ui.object_tier),
     };
 
-    let current_scale = if use_object_style { preview_size } else { U_PER_CELL };
+    let current_scale = if use_object_style { preview_size } else { units(GROUND.cell()) };
     // The same check as the commit, so preview and placement cannot disagree.
     let blocked = match (&hovered, active_tool) {
         (None, _) => false,
@@ -118,7 +119,7 @@ pub fn hover_cursor_step() {
 
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let cell = Access::now().at(h, LEAF_Z).value().map_or(0, |g| g.cell);
+            let cell = Access::now().at(h, LEAF_ZOOM).value().map_or(0, |g| g.cell);
             placeable_cube_of(u32::from(cell))
         }
         _ => None,
@@ -203,7 +204,7 @@ pub fn hover_cursor_step() {
         }
         _ => Ghost::None,
     };
-    let changed = with_world(|world, sched| match ghost {
+    let changed = with_world(|world, _, sched| match ghost {
         Ghost::None => sched.ghost.clear(&mut sched.draw),
         Ghost::Decor { at, group, rotation, scale } => sched.ghost.set_decor(&mut sched.draw, at, group, rotation as f32, scale as f32),
         Ghost::Box { at, size, value, rgb, coplanar } => sched.ghost.set_box(world, &mut sched.draw, at, size, value, rgb, coplanar),

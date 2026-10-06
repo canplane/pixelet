@@ -10,16 +10,16 @@ use std::process::ExitCode;
 
 use pxl_geo_bake::coverage::Coverage;
 use pxl_spec::bake::constant::TILE_ELE_SPAN;
-use pxl_spec::space::coord::adapter::epsg3857::to_db;
-use pxl_spec::space::pyramid::LEAF_Z;
+use pxl_spec::space::coord::adapter::epsg3857::mer_from_u;
 use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 fn run() -> Result<(), String> {
     let coverage = Coverage::of_source()?;
     eprintln!("[elevation_shards] {} shards", coverage.shards().count());
-    let stride = to_db(units(LEAF_Z)) / f64::from(TILE_ELE_SPAN);
+    let stride = mer_from_u(units(LEAF_ZOOM)) / f64::from(TILE_ELE_SPAN);
     for shard in coverage.shards() {
-        let [x0, y0, x1, y1] = shard.rect().map(to_db);
+        let [x0, y0, x1, y1] = shard.rect().map(mer_from_u);
         println!("{} {x0} {y0} {x1} {y1} {stride}", shard.name());
     }
     Ok(())

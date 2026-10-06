@@ -6,7 +6,7 @@
 
 use core::future::Future;
 
-use pxl_spec::space::mat4::{mat4, mat4_mul, Mat4};
+use pxl_spec::space::coord::mat4::{mat4, mat4_mul, Mat4};
 
 use xpute_core::codec::json::{read_json, JsonValue};
 use xpute_core::status::errno::Errno;

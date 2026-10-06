@@ -4,8 +4,8 @@
 //! and 400 units across, so a texel is a fifth of a unit at 2048; any wider and
 //! the shadow reads as blocks. 16 MB at 2048, 4 MB at 1024 on a phone.
 
-use pxl_spec::space::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
-use pxl_spec::space::v3::{dot3, norm3, V3};
+use pxl_spec::space::coord::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
+use pxl_spec::space::coord::v3::{dot3, norm3, V3};
 
 use crate::frame::shader::record::FRAME_FLOATS;
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, Gpu, Stamp};

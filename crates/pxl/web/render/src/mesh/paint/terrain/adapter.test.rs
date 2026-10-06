@@ -1,7 +1,7 @@
 // pxl-render/mesh/paint/terrain/adapter.test.rs
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::space::pyramid::{Tile, LEAF_Z};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use super::*;
 use crate::mesh::run::apron_col;
@@ -13,7 +13,7 @@ fn a_chunk_with_no_surface_has_no_ground_and_no_floor() {
     let cells = vec![sentinel::void; (TILE_CELLS * TILE_CELLS) as usize];
     let ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     let decks = Decks::default();
-    let tile = Tile::new(LEAF_Z, 0);
+    let tile = Tile::new(LEAF_ZOOM, 0);
     let own = TileSource {
         tile: TileView {
             cells: &cells,

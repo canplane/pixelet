@@ -5,7 +5,7 @@
 //! upsample to a one-byte map every lit pass reads at group 0 binding 7.
 //! About 11 bytes a pixel and one extra geometry pass.
 
-use pxl_spec::space::mat4::{mat4_invert, Mat4};
+use pxl_spec::space::coord::mat4::{mat4_invert, Mat4};
 
 use crate::frame::shader::record::{PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE, PIPELINE_AO_UPSAMPLE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};

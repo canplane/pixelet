@@ -6,7 +6,7 @@
 //! renderers and converters the bake follows assume. What is not in use, a
 //! way abandoned, disused or under construction, is no part at all.
 
-use pxl_spec::space::adapter::epsg3857::G3857;
+use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
 use crate::terrain::pipeline::overture::between::{cell_of, Line, Rules};
 use crate::terrain::pipeline::overture::role::Role;

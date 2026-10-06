@@ -1,6 +1,6 @@
 // pxl-render/mesh/paint/terrain/elevation.test.rs
 
-use pxl_spec::space::pyramid::TILE_CELLS;
+use pxl_spec::space::layer::lattice::TILE_CELLS;
 
 use super::*;
 

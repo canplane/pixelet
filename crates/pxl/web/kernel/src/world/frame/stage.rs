@@ -10,7 +10,8 @@ use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 
-use crate::sched::profiler::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN, MB};
+use crate::mem::MB;
+use crate::sched::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use pxl_spec::asset::ingested::Asset;
 use xpute_core::math::scalar::round;
 
@@ -71,8 +72,8 @@ pub fn stage_render() {
     if load_image(Load::Asset(EARTH)).is_none() {
         return;
     }
-    let lists = kernel().sched.draw.take();
-    let models = &kernel().sched.models;
+    let lists = kernel().scene.draw.take();
+    let models = &kernel().scene.models;
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
     let variants = kind_assets().iter().flat_map(|entry| {
         (0..entry.models.len()).map(move |v| {
@@ -98,7 +99,7 @@ pub fn stage_render() {
     let (window, layers) = earth_window();
     let out = render_frame(FrameInput {
         lists,
-        environment: &kernel().sched.environment.out,
+        environment: &kernel().scene.environment.out,
         decor: &decor,
         skins: &skins[..skin_cnt],
         cases: &cases[..case_cnt],

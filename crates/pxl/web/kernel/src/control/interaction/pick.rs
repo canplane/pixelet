@@ -4,22 +4,23 @@
 //! is what is on the screen about the eye; and what a hit means for a
 //! placement or an erase.
 
-use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::LEAF_Z;
-use pxl_spec::space::v3::V3;
+use pxl_spec::bake::constant::OBJECT_FINEST;
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::coord::v3::V3;
 
 use crate::layer::object::store::{get_placed_object, Entry};
 use crate::world::access::{Access, Detail, Hit, Ray, Struck};
 use crate::world::frame::coord::world_to_canonical;
-use pxl_spec::space::v3::Aabb;
+use pxl_spec::space::coord::v3::Aabb;
 
 /// A product number: what can be edited is a sphere about the observer.
-const PICK_REACH_U: f64 = 32.0 * U_PER_CELL;
+const PICK_REACH_U: f64 = 32.0;
 
-// Above the 1/256-grid round trip's error (±U_PER_CELL/512), below the gap
-// between any two OBJECT_SIZES tiers (U_PER_CELL/8).
-const SAME_EXTENT_EPS: f64 = U_PER_CELL / 128.0;
+// Above the 1/256-grid round trip's error (±1/512 u), below the gap between
+// any two OBJECT_SIZES tiers (the finest's side).
+const SAME_EXTENT_EPS: f64 = units(OBJECT_FINEST) / 16.0;
 
 /// The octree only stores a `size` object on these lines; any other corner
 /// was re-snapped by the write later, which caused overlapping placements.
@@ -94,7 +95,7 @@ pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
         reach: PICK_REACH_U,
     };
     // A coarser tile's answer is a summary, not what is held.
-    let hit = Access::now().first_hit(&ray, Detail::Zoom(LEAF_Z)).exact().flatten()?;
+    let hit = Access::now().first_hit(&ray, Detail::Zoom(LEAF_ZOOM)).exact().flatten()?;
     Some(PickResult { hit })
 }
 

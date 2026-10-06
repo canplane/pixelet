@@ -5,9 +5,9 @@
 //! itself; the map center is that point, derived and never kept. A tracker
 //! overrides either while it holds the pose, since a tracked turn can roll.
 
-use pxl_spec::space::mat4::{mat4, mat4_mul, mat4_rotation_z, Mat4};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::{add3, sub3, V3};
+use pxl_spec::space::coord::mat4::{mat4, mat4_mul, mat4_rotation_z, Mat4};
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::v3::{add3, sub3, V3};
 
 use crate::control::camera::config::camera_cfg::projection::FOV;
 use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};

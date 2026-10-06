@@ -11,11 +11,11 @@
 //! fit, which was a second quality policy.
 
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::pyramid::CHUNK_CELLS;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::camera::grid::CHUNK_CELLS;
 
 use crate::param::{ARENA_COARSE_GROUPS, COARSE_POOL_BYTES, FINE_POOL_BYTES};
-use pxl_spec::space::zoom::Zoom;
+use pxl_spec::space::coord::zoom::Zoom;
 
 const COARSE_GROUPS: u32 = ARENA_COARSE_GROUPS;
 
@@ -44,7 +44,7 @@ pub enum Pool {
 impl Pool {
     /// A tier drawing cells of `cell_zoom`: textured, a leaf's or finer; or coarser.
     pub const fn of(cell_zoom: Zoom) -> Pool {
-        if cell_zoom >= CELL {
+        if cell_zoom >= GROUND.cell() {
             Pool::Fine
         } else {
             Pool::Coarse

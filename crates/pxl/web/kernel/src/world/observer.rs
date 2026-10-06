@@ -10,9 +10,10 @@
 //! do not depend on quality, so one cast serves every step. Footprints are
 //! reused across small moves (`Sight`) as an acceleration only.
 
-use pxl_spec::space::lod::{Tau, SPLIT};
-use pxl_spec::space::observation::{Observation, Requirement};
-use pxl_spec::space::v3::{dot3, len3, mul3n, sub3, Aabb, V3};
+use pxl_spec::space::camera::grid::{Tau, SPLIT};
+use pxl_spec::space::camera::eye::Observation;
+use pxl_spec::space::layer::demand::Requirement;
+use pxl_spec::space::coord::v3::{dot3, len3, mul3n, sub3, Aabb, V3};
 
 use crate::param;
 use crate::world::access::{Access, Detail, Ray};
@@ -261,9 +262,9 @@ impl Observer for EdgeRays<'_> {
             &mut |direction| {
                 let ray = Ray { origin: eye, direction, reach: far };
                 let answer = self.0.first_hit(&ray, Detail::Distance(self.1));
-                let lack = answer.lack().map(|l| Requirement {
-                    zoom: l.tile.zoom,
-                    region: l.tile.region(),
+                let lack = answer.lack().map(|tile| Requirement {
+                    zoom: tile.zoom,
+                    region: tile.region(),
                 });
                 let hit = answer.value().flatten().map(|hit| (std::array::from_fn(|k| hit.point[k] - hit.normal[k] * INSIDE), hit.t));
                 (hit, lack)
@@ -305,7 +306,7 @@ impl Sight {
                     .map(|&(a, b)| libm::acos(dot3(&a, &b).clamp(-1.0, 1.0)))
                     .fold(0.0, f64::max);
                 let reshaped = (0..2).any(|k| (was.tan[k] - lens.tan[k]).abs() > 1e-9 * lens.tan[k]);
-                across != grid.across() || reshaped || turned > shift || (o.far - far).abs() > shift * far
+                across != grid.across() || reshaped || turned > shift || (o.far() - far).abs() > shift * far
             });
         if whole {
             let n = grid.count() as usize;
@@ -325,14 +326,14 @@ impl Sight {
                         let (x0, y0, x1, y1) = f.reach;
                         moved_eye > shift * f.near || moved.iter().any(|&(x, y, side)| x < x1 && x + side > x0 && y < y1 && y + side > y0)
                     }
-                    None => moved_eye > shift * o.far || !moved.is_empty(),
+                    None => moved_eye > shift * o.far() || !moved.is_empty(),
                 }
         };
         let mut recast = core::mem::take(&mut self.recast);
         recast.clear();
         recast.extend((0..grid.count() as usize).map(stale));
         let (patches, lacks, eyes) = (&mut self.patches, &mut self.lacks, &mut self.eyes);
-        let rays = observer.observe(&grid, o.far, &|k| recast[k], &mut self.met, &mut |k, f, lacked| {
+        let rays = observer.observe(&grid, o.far(), &|k| recast[k], &mut self.met, &mut |k, f, lacked| {
             patches[k] = f;
             lacks[k] = lacked;
             eyes[k] = lens.eye;
@@ -341,7 +342,7 @@ impl Sight {
         // Kept from the last full cast, so a slow turn is measured whole rather
         // than a frame at a time.
         if whole {
-            self.cast = Some((lens, grid.across(), o.far));
+            self.cast = Some((lens, grid.across(), o.far()));
         }
         rays
     }

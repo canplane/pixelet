@@ -11,24 +11,26 @@
 
 pub mod chunk;
 pub mod domain;
-pub mod read;
 
 use std::collections::HashMap;
 
-use pxl_spec::space::lod::Tau;
-use pxl_spec::space::observation::{Bounds, DemandEstimator, Observation, Requirement, Storage as _, Tiled};
-use pxl_spec::space::pyramid::{Folds, Lattice, Tile, LEAF_Z, TOP_Z};
+use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::camera::eye::Observation;
+use pxl_spec::space::layer::demand::{Bounds, DemandEstimator, Requirement, Storage as _, Tiled};
+use pxl_spec::space::layer::lattice::Lattice;
+use pxl_spec::space::layer::tile::{Folds, Tile, LEAF_ZOOM};
 
 use crate::io::demand::{Ask, Category, Phases, Why};
 use crate::io::sched::declare;
 use crate::param;
-use crate::sched::profiler::record::Failure;
-use crate::world::observation::{heights_revision, observation, ByFootprints, Known, Order};
+use crate::io::failure::Failure;
+use crate::world::observation::{ground_known, observation, ByFootprints, Known, Order};
+use crate::world::observer::Footprint;
 use crate::world::prefetch::{NoPrefetch, Prefetch};
 use crate::world::quality;
 use crate::world::residency::floor::{self, Fallback, Floor};
-use crate::world::residency::{Candidate, Residency, Victim, DESTINATION_TILES, ZOOM_DEMAND_TILES};
-use pxl_spec::space::zoom::Zoom;
+use crate::world::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
+use pxl_spec::space::coord::zoom::Zoom;
 
 pub trait Layer: Folds + Clone + 'static {
     const CATEGORY: Category;
@@ -68,9 +70,21 @@ pub trait Layer: Folds + Clone + 'static {
     }
 }
 
-/// Everything the asks depend on; two turns agreeing on all of it ask for
-/// the same tiles, so the second decides nothing.
-type Seen = (Option<Observation>, [Option<Tile>; Floor::TILES as usize], Option<Tile>, u32, (u32, u32), Tau, u32);
+/// Everything the asks depend on, as read; two turns agreeing on all of it
+/// ask for the same tiles, so the second decides nothing.
+#[derive(PartialEq)]
+struct Seen {
+    o: Option<Observation>,
+    floor: [Option<Tile>; Floor::TILES as usize],
+    destination: Option<Tile>,
+    tau: Tau,
+    /// The layer's own tiles known, and the ground's.
+    own: Vec<(Tile, bool)>,
+    terrain: Vec<(Tile, bool)>,
+    /// The published goal's.
+    footprints: Vec<Footprint>,
+    lacks: Vec<Requirement>,
+}
 
 /// No speculation: the view converges to exact on misses alone, and
 /// speculation would only buy latency.
@@ -92,6 +106,10 @@ pub struct Pyramid<L: Layer> {
     demand: Vec<Tile>,
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
+    /// What this turn reads, kept so a turn allocates nothing.
+    now: Option<Seen>,
+    /// Objects were written since it last observed.
+    objects_written: bool,
     /// Reused across observations so observing stops allocating once warm.
     asks: HashMap<Tile, Ask>,
     hints: Vec<(Order, Tile)>,
@@ -105,6 +123,8 @@ impl<L: Layer> Default for Pyramid<L> {
             demand: Vec::new(),
             wants: Vec::new(),
             last: None,
+            now: None,
+            objects_written: false,
             asks: HashMap::with_capacity(Residency::<L>::ASKS as usize),
             hints: Vec::new(),
         }
@@ -134,7 +154,7 @@ impl<L: Layer> Pyramid<L> {
 
     /// The floor's tiles as last observed.
     pub fn floor(&self) -> impl Iterator<Item = Tile> + '_ {
-        self.last.iter().flat_map(|seen| seen.1.iter().flatten().copied())
+        self.last.iter().flat_map(|seen| seen.floor.iter().flatten().copied())
     }
 
     pub fn demand(&self) -> &[Tile] {
@@ -152,7 +172,7 @@ impl<L: Layer> Pyramid<L> {
 
     /// No object for `p`: the tile over it says its ground; at the source's top, `Layer::empty`.
     pub fn absent(&mut self, p: Tile) {
-        let top = L::TOP.or(floor::top()).unwrap_or(TOP_Z);
+        let top = L::TOP.or(floor::top()).unwrap_or(L::LATTICE.top());
         match L::empty() {
             Some(empty) if p.zoom <= top => self.residency.set(p, empty),
             _ => self.residency.answer_above(p),
@@ -178,6 +198,7 @@ impl<L: Layer> Pyramid<L> {
         estimator: &impl DemandEstimator,
         prefetch: &impl Prefetch,
         tau: Tau,
+        top: Zoom,
         allowance: u32,
     ) {
         let mut demand = core::mem::take(&mut self.demand);
@@ -198,7 +219,7 @@ impl<L: Layer> Pyramid<L> {
                 let at = self.residency.source(p).unwrap_or(p);
                 ask(&mut asks, at, Ask { why: Why::Demand, order: order(o, p) });
                 // A line already asked is asked to the top.
-                for q in std::iter::successors(Some(at), |q| (q.zoom > o.top).then(|| q.parent())).skip(1) {
+                for q in std::iter::successors(Some(at), |q| (q.zoom > top).then(|| q.parent())).skip(1) {
                     if asks.get(&q).is_some_and(|a| a.why <= Why::Ancestor) {
                         break;
                     }
@@ -214,14 +235,14 @@ impl<L: Layer> Pyramid<L> {
             }
             // More demanded than the structure's bound means the capacity is broken too:
             // a miss's line has ground within its reach, so it stays in each zoom's ring.
-            let mut read = [0u32; LEAF_Z as usize + 1];
+            let mut read = [0u32; LEAF_ZOOM as usize + 1];
             for p in asks.keys() {
                 read[p.zoom as usize] += 1;
             }
             xpute_core::ensure!(read.iter().all(|&n| n <= ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
             let mut floor = 0u32;
             let f = floor_at.unwrap_or(o);
-            Floor::floor(f, |p| {
+            Floor::floor(f, top, |p| {
                 floor += 1;
                 ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
             });
@@ -242,7 +263,7 @@ impl<L: Layer> Pyramid<L> {
                 },
             );
         }
-        xpute_core::ensure!(named <= if L::DEMANDS { DESTINATION_TILES } else { 0 }, ENOTRECOVERABLE, named);
+        xpute_core::ensure!(named <= if L::DEMANDS { Residency::<L>::DESTINATION_TILES } else { 0 }, ENOTRECOVERABLE, named);
 
         let mut hints = core::mem::take(&mut self.hints);
         hints.clear();
@@ -293,11 +314,12 @@ impl<L: Layer> Pyramid<L> {
     /// at the first fix the camera waits for that ground. `far` cuts the
     /// observation where the layer stops being drawn.
     pub fn step(&mut self, destination: Option<Tile>) {
-        let Some(top) = L::TOP.or(floor::top()) else { return };
+        // Nothing coarser than the layer's own top is drawn, whatever the source holds.
+        let Some(top) = L::TOP.or(floor::top()).map(|t| t.max(L::LATTICE.top())) else { return };
         // demand follows the published goal
         let published = domain::current();
         let own = |o: Observation| match L::TOP {
-            Some(top) => Observation { top, far: L::reach(), ..o },
+            Some(_) => Observation { reach: L::reach(), fog: f64::INFINITY, ..o },
             None => o,
         };
         let live = observation().map(own);
@@ -306,7 +328,7 @@ impl<L: Layer> Pyramid<L> {
         let mut floor_now = [None; Floor::TILES as usize];
         if let Some(l) = &live {
             let mut n = 0;
-            Floor::floor(l, |p| {
+            Floor::floor(l, top, |p| {
                 if n < floor_now.len() {
                     floor_now[n] = Some(p);
                 }
@@ -320,9 +342,25 @@ impl<L: Layer> Pyramid<L> {
             Some(_) => quality::effective().tau(),
             None => Tau::FINEST,
         };
-        let o = seen_from.map(|o| Observation { far: o.far.min(L::reach()), ..o });
-        let seen = (o, floor_now, destination, self.residency.revision(), heights_revision(), tau, domain::revision());
-        if self.last != Some(seen) {
+        let o = seen_from.map(|o| Observation { reach: o.reach.min(L::reach()), ..o });
+        let mut now = self.now.take().unwrap_or_else(|| Seen {
+            o: None,
+            floor: [None; Floor::TILES as usize],
+            destination: None,
+            tau,
+            own: Vec::new(),
+            terrain: Vec::new(),
+            footprints: Vec::new(),
+            lacks: Vec::new(),
+        });
+        (now.o, now.floor, now.destination, now.tau) = (o, floor_now, destination, tau);
+        self.residency.known(&mut now.own);
+        ground_known(&mut now.terrain);
+        now.footprints.clear();
+        now.footprints.extend_from_slice(published.map_or(&[], |d| d.footprints()));
+        now.lacks.clear();
+        now.lacks.extend_from_slice(published.map_or(&[], |d| d.lacks()));
+        if core::mem::take(&mut self.objects_written) | (self.last.as_ref() != Some(&now)) {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent())));
             self.observe(
                 o.as_ref(),
@@ -332,17 +370,27 @@ impl<L: Layer> Pyramid<L> {
                 &ByFootprints {
                     tau,
                     lattice: L::LATTICE,
+                    top,
                     footprints: published.map_or(&[], |d| d.footprints()),
                     lacks: published.map_or(&[], |d| d.lacks()),
                 },
                 &PREFETCH,
                 tau,
+                top,
                 param::HINT_ALLOWANCE,
             );
-            // Observing can let tiles go, moving the revision: record the state after it.
-            self.last = Some((o, floor_now, destination, self.residency.revision(), heights_revision(), tau, domain::revision()));
+            // Observing can let tiles go: record what is known after it.
+            self.residency.known(&mut now.own);
+            ground_known(&mut now.terrain);
+            self.now = self.last.replace(now);
+        } else {
+            self.now = Some(now);
         }
         declare(L::CATEGORY, &self.wants);
+    }
+
+    pub fn objects_written(&mut self) {
+        self.objects_written = true;
     }
 
     /// A layer the view does not show keeps what it holds and asks for nothing.

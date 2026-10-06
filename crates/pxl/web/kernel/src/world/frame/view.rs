@@ -4,12 +4,12 @@
 //! all in the world's doubles (`world/frame/coord.rs`). A controller makes
 //! the pose; nothing here knows which.
 
-use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::adapter::epsg4326::{self, G4326};
-use pxl_spec::space::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_mul, mat4_perspective, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4};
-use pxl_spec::space::observation::Frustum;
-use pxl_spec::space::v3::V3;
-use pxl_spec::space::zoom::nearest;
+use pxl_spec::space::coord::adapter::epsg3857;
+use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
+use pxl_spec::space::coord::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_mul, mat4_perspective, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4};
+use pxl_spec::space::camera::eye::Frustum;
+use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::world::nearest;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::pose;
@@ -91,7 +91,7 @@ pub fn sea_under_eye() -> V3 {
 pub fn globe_anchor() -> Option<G4326> {
     crate::control::camera::controller::camera().eye?;
     let [x, y, _] = sea_under_eye();
-    Some(epsg4326::from_mercator(&[epsg3857::to_db(nearest(x, 0.0)), epsg3857::to_db(y), 0.0]))
+    Some(epsg4326::from_mercator(&[epsg3857::mer_from_u(nearest(x, 0.0)), epsg3857::mer_from_u(y), 0.0]))
 }
 
 pub fn view_resize(width: f64, height: f64) {

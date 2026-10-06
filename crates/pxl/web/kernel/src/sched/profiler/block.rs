@@ -7,7 +7,8 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::sched::profiler::record::{words, FrameSample, Words, CENSUS_LEN, GPU_SPANS, ZOOMS};
+use crate::sched::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS, ZOOMS};
+use crate::sched::profiler::word::{words, Words};
 use crate::sched::profiler::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUMMARY, TASK_PHASE_NAMES, TASK_SUMMARY};
 
 const REASONS: usize = LIMITS::REASONS as usize;

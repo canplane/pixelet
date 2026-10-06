@@ -3,18 +3,29 @@
 // The query's laws over a leaf tile's four children folded into their
 // parent as the bake folds them, and objects written into a store.
 
+use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::format::Ground;
 use pxl_spec::cell::cube_types::{self, ground, sentinel};
 use pxl_spec::cell::object::{placeable_cube_num_id, PlaceableCube};
-use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::TILE_CELLS;
+use pxl_spec::space::coord::pvf3::ivec;
+use pxl_spec::space::layer::lattice::TILE_CELLS;
 
 use super::*;
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::world;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::coord::v3::V3;
+
+use crate::layer::object::store::Store;
+use crate::world::residency::Residency;
+use pxl_spec::space::coord::zoom::{index_of, Zoom};
+
+
 use crate::layer::object::store::Write;
 use crate::serial;
 use crate::world::residency::{Candidate, Victim};
-use pxl_spec::space::zoom::Zoom;
 
 const PADDED: usize = ELE_PADDED_SPAN as usize;
 const SPAN: usize = TILE_CELLS as usize;
@@ -29,7 +40,7 @@ impl Victim for Keep {
 }
 
 fn top() -> Tile {
-    Tile::new(LEAF_Z - 1, ivec::gather(40, -20, 0))
+    Tile::new(LEAF_ZOOM - 1, ivec::gather(40, -20, 0))
 }
 
 fn resident(held: &[(Tile, Terrain)]) -> Residency<Terrain> {
@@ -41,7 +52,7 @@ fn resident(held: &[(Tile, Terrain)]) -> Residency<Terrain> {
 }
 
 fn point(x: f64, y: f64) -> Pvf3 {
-    projection::project(x, y, 0.0)
+    world::point(x, y, 0.0)
 }
 
 fn down(at: [f64; 2]) -> Ray {
@@ -53,11 +64,10 @@ fn down(at: [f64; 2]) -> Ray {
 }
 
 fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
-    let at = projection::project(corner[0], corner[1], corner[2]);
+    let at = world::point(corner[0], corner[1], corner[2]);
     store.write([Write {
-        zoom: side,
-        at: index_of(side, &at),
-        state,
+        key: pxl_spec::space::hierarchy::morton::key_of::<3>(side, index_of(side, &at)),
+        id: state,
     }]);
 }
 
@@ -78,16 +88,16 @@ fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
 
     let empty = Store::default();
     let access = Access::new(&residency, &empty);
-    assert_eq!(access.at(&point(at[0], at[1]), LEAF_Z).value().unwrap().top(), None);
+    assert_eq!(access.at(&point(at[0], at[1]), LEAF_ZOOM).value().unwrap().top(), None);
     assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(None));
-    assert_eq!(access.first_hit(&down(at), Detail::Zoom(LEAF_Z)).value().flatten(), None);
+    assert_eq!(access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).value().flatten(), None);
 
     let mut store = Store::default();
     let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
-    write(&mut store, [x0 + 10.0, y0 + 10.0, 5.0], CELL, red);
+    write(&mut store, [x0 + 10.0, y0 + 10.0, 5.0], OBJECT_COARSEST, red);
     let access = Access::new(&residency, &store);
     assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(6.0)));
-    let hit = access.first_hit(&down(at), Detail::Zoom(LEAF_Z)).value().flatten().unwrap();
+    let hit = access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).value().flatten().unwrap();
     assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
 }
 
@@ -113,7 +123,7 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
     let store = Store::default();
     let access = Access::new(&residency, &store);
     assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(10.0)));
-    let hit = access.first_hit(&down(at), Detail::Zoom(LEAF_Z)).value().flatten().unwrap();
+    let hit = access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).value().flatten().unwrap();
     assert_eq!(hit.point[2], 10.0, "{hit:?}");
 }
 
@@ -122,22 +132,22 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
 #[test]
 fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let _g = serial();
-    let n = pxl_spec::space::zoom::around(LEAF_Z);
+    let n = pxl_spec::space::coord::world::around(LEAF_ZOOM);
     let flat = || {
         let cells = vec![ground::land; SPAN * SPAN];
         Terrain::leaf(vec![5; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
     };
-    let tile = |x: i64| pxl_spec::space::pyramid::tile_at(LEAF_Z, [x, 0]);
+    let tile = |x: i64| pxl_spec::space::layer::tile::tile_at(LEAF_ZOOM, [x, 0]);
     let residency = resident(&[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())]);
-    let seam = pxl_spec::space::zoom::ROUND / 2.0;
-    let top = Access::new(&residency, &Store::default()).at(&point(-seam + 20.5, 100.5), LEAF_Z).value().unwrap().top().unwrap();
+    let seam = pxl_spec::space::coord::world::ROUND / 2.0;
+    let top = Access::new(&residency, &Store::default()).at(&point(-seam + 20.5, 100.5), LEAF_ZOOM).value().unwrap().top().unwrap();
 
     let mut store = Store::default();
     let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
-    write(&mut store, [-seam + 40.0, 100.0, top], CELL, red);
+    write(&mut store, [-seam + 40.0, 100.0, top], OBJECT_COARSEST, red);
     let access = Access::new(&residency, &store);
 
-    let ground = access.first_hit(&down([seam + 20.5, 100.5]), Detail::Zoom(LEAF_Z)).exact().flatten().unwrap();
+    let ground = access.first_hit(&down([seam + 20.5, 100.5]), Detail::Zoom(LEAF_ZOOM)).exact().flatten().unwrap();
     assert_eq!([ground.point[0], ground.point[2]], [seam + 20.5, top], "{ground:?}");
 
     let along = Ray {
@@ -145,7 +155,7 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
         direction: [1.0, 0.0, 0.0],
         reach: 200.0,
     };
-    let hit = access.first_hit(&along, Detail::Zoom(LEAF_Z)).exact().flatten().unwrap();
+    let hit = access.first_hit(&along, Detail::Zoom(LEAF_ZOOM)).exact().flatten().unwrap();
     assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
     assert_eq!(hit.point[0], seam + 40.0, "{hit:?}");
 }

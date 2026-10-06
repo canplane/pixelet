@@ -6,7 +6,7 @@
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::cell::cube_types::Ground;
 use pxl_spec::cell::Kind;
-use pxl_spec::space::pyramid::{GROUND, TILE_CELLS};
+use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 
 /// A kind stands where the cell's look is one of `types`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -1,7 +1,7 @@
 // pxl-kernel/control/navigation/store.rs
 
-use pxl_spec::space::adapter::epsg4326;
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::adapter::epsg4326;
+use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 
 use crate::control::sensor::store::device_location_store;
 use xpute_runtime::global::Global;

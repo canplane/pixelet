@@ -112,7 +112,7 @@ impl Figure {
         let (Some(model), Some(skin)) = (model_of(variant.model, variant.height_u), load_image(Load::Asset(variant.skin))) else {
             return;
         };
-        let Some(Some(actor)) = with_world(|_, sched| sched.models.new_actor(&mut sched.draw, model.model)) else {
+        let Some(Some(actor)) = with_world(|_, _, scene| scene.models.new_actor(&mut scene.draw, model.model)) else {
             return;
         };
         self.held = Some(Held { actor, model, skin });
@@ -122,7 +122,7 @@ impl Figure {
 
     fn release(&mut self) {
         if let Some(held) = self.held.take() {
-            with_world(|_world, sched| sched.models.remove_actor(&mut sched.draw, held.actor));
+            with_world(|_, _, scene| scene.models.remove_actor(&mut scene.draw, held.actor));
         }
         self.set_ready(false);
     }
@@ -237,7 +237,7 @@ impl Figure {
         self.at = at;
 
         let Some(held) = &self.held else { return };
-        let sched = &mut kernel().sched;
+        let sched = &mut kernel().scene;
         if let Some(a) = sched.models.actor(held.actor) {
             a.at = [at[0], at[1], *stands];
             a.rotation_z = self.heading as f32;

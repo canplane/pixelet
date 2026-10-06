@@ -7,12 +7,12 @@
 use pxl_render::gpu::api::word_bytes;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, TileView};
 use pxl_render::mesh::run::apron_col;
-use pxl_spec::bake::constant::CELL;
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
-use pxl_spec::space::lod::target_cell_px;
-use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{GROUND, LEAF_Z};
-use pxl_spec::space::v3::Aabb;
+use pxl_spec::space::camera::grid::target_cell_px;
+use pxl_spec::space::coord::pvf3::ivec::IVec;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::coord::v3::Aabb;
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use std::collections::{HashMap, TryReserveError};
@@ -26,8 +26,8 @@ use crate::world::pyramid::Layer as _;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::deck::Decks;
 use pxl_spec::bake::format::{GroundCell, Terrain};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::zoom::{count, index, index_of, units, Zoom};
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::zoom::{count, index, index_of, units, Zoom};
 use xpute_core::math::scalar::round;
 
 /// A kind is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
@@ -155,12 +155,12 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
 /// nothing written there. None where the tile is not resident.
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let kind = KINDS.iter().find(|k| k.decor_value() == Some(value))?;
-    let leaf = GROUND.cell_of(LEAF_Z, at);
+    let leaf = GROUND.cell_of(LEAF_ZOOM, at);
     let tile = Terrain::pyramid().residency().get(leaf.tile())?;
-    let ground = Access::now().at(at, LEAF_Z).exact()?;
-    let [ix, iy, iz] = index_of(CELL, at);
+    let ground = Access::now().at(at, LEAF_ZOOM).exact()?;
+    let [ix, iy, iz] = index_of(GROUND.cell(), at);
     let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;
-    (ground.top().map(|top| round(top / units(CELL)) as i64) == Some(iz)).then(|| draw(kind, candidate, &tile.ground.cells, &tile.decks, leaf.in_tile()))?
+    (ground.top().map(|top| round(top / units(GROUND.cell())) as i64) == Some(iz)).then(|| draw(kind, candidate, &tile.ground.cells, &tile.decks, leaf.in_tile()))?
 }
 
 impl<'s> DecorBuild<'s> {
@@ -236,7 +236,7 @@ impl<'s> DecorBuild<'s> {
     /// sees, not on leaf cells it cannot.
     fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
         let (cells, lines) = (ground.tile.cells, ground.tile.decks);
-        let (own, atom) = (GROUND.cell_zoom(ground.zoom), GROUND.cell_zoom(LEAF_Z));
+        let (own, atom) = (GROUND.cell_zoom(ground.zoom), GROUND.cell_zoom(LEAF_ZOOM));
         let (lx0, ly0) = (index(own, ground.x0), index(own, ground.y0));
         let per = i64::from(count(atom, own));
         let min = [index(atom, ground.x0), index(atom, ground.y0)];
@@ -257,7 +257,7 @@ impl<'s> DecorBuild<'s> {
             // A leaf in the cell overrides the scatter: a cube or air hides it, the leaf gone brings it back.
             // Folded, only a fill does.
             let hides = match ground.folded {
-                None => store.holds(CELL, [gx, gy, i64::from(ele)]),
+                None => store.holds(GROUND.cell(), [gx, gy, i64::from(ele)]),
                 Some(f) => f.get(&[lx0 + dx as i64, ly0 + dy as i64, index(own, ele as i64)]).is_some_and(|&s| s != AIR),
             };
             if hides {

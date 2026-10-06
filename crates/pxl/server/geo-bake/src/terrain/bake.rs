@@ -4,8 +4,9 @@
 
 use pxl_spec::bake::deck::Decks;
 use pxl_spec::bake::format::{Ground, Terrain};
-use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::coord::adapter::epsg3857;
+use pxl_spec::space::coord::pvf3::ivec::IVec;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::deck::Drawn;
 use crate::terrain::pipeline::feature::{local, Feature};
@@ -25,7 +26,7 @@ pub fn assemble(surface: Surface, lines: Decks) -> Terrain {
 
 /// `drawn`: the ranges of the tile's ways its lines draw.
 pub fn bake_surface(tile_idx: IVec, ele: Vec<i16>, source: &TileSource, drawn: &[Drawn]) -> Surface {
-    let tile_min = epsg3857::get_tile_bbox(tile_idx)[0];
+    let tile_min = epsg3857::get_tile_bbox(LEAF_ZOOM, tile_idx)[0];
     let mut features: Vec<Feature> = Vec::new();
     features.extend(source.building_rows.iter().flat_map(|row| buildings(row, tile_min)));
     features.extend(source.segment_rows.iter().flat_map(|row| ways(row, drawn, tile_min)));

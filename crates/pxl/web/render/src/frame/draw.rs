@@ -4,7 +4,7 @@
 //! A free cancels its block's pending upload and rewrites: the block may be
 //! reused before the list runs.
 
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::coord::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 

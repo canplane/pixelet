@@ -35,17 +35,18 @@ use pxl_kernel::world::access::{Access, Answer, Detail, Ray};
 use pxl_kernel::world::residency::{Candidate, Residency, Victim};
 use pxl_spec::bake::format::{decode_terrain, Terrain};
 use pxl_spec::bake::quadkey::tile_name;
-use pxl_spec::space::adapter::epsg4326;
-use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::LEAF_Z;
-use pxl_spec::space::pyramid::{Tile, GROUND};
+use pxl_spec::space::coord::adapter::epsg4326;
+use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::Tile;
 
 /// The phone the experiment is set on: an iPhone 13 mini's screen in
 /// points, drawn at the two ratios it names.
 const SCREEN_PT: [f64; 2] = [375.0, 812.0];
 const RATIOS: [f64; 2] = [2.0, 3.0];
-/// The camera's vertical field of view (pxl-spec space/lod.rs
+/// The camera's vertical field of view (pxl-spec space/camera/grid.rs
 /// `REFERENCE_FOV_DEG`).
 const FOV_DEG: f64 = 50.0;
 /// One ray every this many points across and down: the steps' spread, not
@@ -119,7 +120,7 @@ impl Tiles {
 }
 
 fn point(x: f64, y: f64) -> Pvf3 {
-    pxl_spec::space::pvf3::projection::project(x, y, 0.0)
+    pxl_spec::space::coord::world::point(x, y, 0.0)
 }
 
 /// The rays of a view through `eye`, one every `STRIDE_PT` points.
@@ -178,11 +179,11 @@ fn cast(tiles: &Tiles, store: &Store, rays: &[Ray]) -> (Tally, Vec<Tile>) {
             Answer::Coarser(h, lack) => {
                 t.coarser += 1;
                 t.hit += usize::from(h.is_some());
-                lacked.push(lack.tile);
+                lacked.push(lack);
             }
             Answer::Nothing(lack) => {
                 t.nothing += 1;
-                lacked.push(lack.tile);
+                lacked.push(lack);
             }
         }
     }
@@ -231,16 +232,16 @@ fn main() {
         tried: HashSet::new(),
     };
     // The eye's own column first, so it can stand on the ground.
-    let leaf = GROUND.cell_of(LEAF_Z, &point(x, y)).tile();
+    let leaf = GROUND.cell_of(LEAF_ZOOM, &point(x, y)).tile();
     let mut p = leaf;
     loop {
         tiles.fetch(p);
-        if p.zoom == pxl_spec::space::pyramid::TOP_Z {
+        if p.zoom == pxl_spec::space::layer::lattice::GROUND.top() {
             break;
         }
         p = p.parent();
     }
-    let ground = Access::new(&tiles.residency, &store).at(&point(x, y), LEAF_Z).value().and_then(|g| g.top()).unwrap_or(0.0);
+    let ground = Access::new(&tiles.residency, &store).at(&point(x, y), LEAF_ZOOM).value().and_then(|g| g.top()).unwrap_or(0.0);
     println!("at {lon}, {lat}: ground {ground:.1} u, tiles from {}", tiles.server);
 
     for view in VIEWS {

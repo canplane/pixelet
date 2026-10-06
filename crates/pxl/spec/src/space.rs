@@ -1,18 +1,10 @@
 // pxl-spec/space.rs
 
-//! Positions and their structures: the fixed-point vector, the space
-//! hierarchy, map projections and lattice structures.
+//! Positions and their structures, each layer reading only those under it:
+//! coordinates and sizes, the hierarchy over them, the camera's grid, and
+//! how a layer's tiles map onto it.
 
-pub mod adapter;
-#[path = "space/earth.spec.rs"]
-pub mod earth;
+pub mod camera;
+pub mod coord;
 pub mod hierarchy;
-pub mod lod;
-pub mod mat4;
-pub mod morton;
-pub mod observation;
-pub mod pvf3;
-pub mod pyramid;
-pub mod sparse_tree;
-pub mod v3;
-pub mod zoom;
+pub mod layer;

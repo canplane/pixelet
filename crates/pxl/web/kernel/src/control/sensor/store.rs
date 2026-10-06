@@ -3,7 +3,7 @@
 //! The device's GPS and compass readings, and which changes are significant
 //! enough to keep.
 
-use pxl_spec::space::adapter::epsg4326::G4326;
+use pxl_spec::space::coord::adapter::epsg4326::G4326;
 
 use crate::abi::cmd::Message;
 pub use crate::abi::cmd::{DevicePoseStatus, PermissionAnswer};

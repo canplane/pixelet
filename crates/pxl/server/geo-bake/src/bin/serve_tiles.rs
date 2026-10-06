@@ -19,11 +19,12 @@ use pxl_geo_bake::demand::{
 use pxl_geo_bake::pyramid::TileSet;
 use pxl_geo_bake::util::CONTENT_ENCODING;
 use pxl_server::admin_auth::admin_auth;
-use pxl_spec::bake::published::{PUBLISHED_TOP_Z, PUBLISHED_VERSION};
+use pxl_spec::bake::published::{PUBLISHED_TOP_ZOOM, PUBLISHED_VERSION};
 use pxl_spec::bake::quadkey::tile_of_name;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
-use pxl_spec::space::pyramid::{LEAF_Z, TOP_Z};
-use pxl_spec::space::zoom::Zoom;
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -211,9 +212,9 @@ fn run() -> Result<(), String> {
     }
 
     let (tiles, top_z) = match baked {
-        Some(dir) => (Tiles::Baked(dir), PUBLISHED_TOP_Z),
+        Some(dir) => (Tiles::Baked(dir), PUBLISHED_TOP_ZOOM),
         None => {
-            let top_z = LEAF_Z.checked_sub(folds).filter(|&z| z >= TOP_Z).ok_or("--folds past the pyramid's top")?;
+            let top_z = LEAF_ZOOM.checked_sub(folds).filter(|&z| z >= GROUND.top()).ok_or("--folds past the pyramid's top")?;
             (Tiles::Demand(Server::open(workers, cache, top_z, limits)?), top_z)
         }
     };

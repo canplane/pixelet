@@ -20,7 +20,7 @@ use crate::io::demand::Ask;
 use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle, Credit};
 use crate::layer::decor::asset_store::decor_assets_arrived;
-use crate::sched::profiler::record::{Failure, Outcome};
+use crate::io::failure::{Failure, Outcome};
 use crate::world::change::{request_world_tick, world_edge};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;

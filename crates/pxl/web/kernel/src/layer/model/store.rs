@@ -8,7 +8,7 @@
 
 use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::coord::v3::V3;
 use xpute_runtime::abi::handle::Slots;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};

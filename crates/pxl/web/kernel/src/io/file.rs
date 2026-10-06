@@ -114,7 +114,7 @@ pub fn opened(fd: Fd, res: i32, detail: u32) {
         Owner::Fetch { key, at_ms } => crate::io::fetch::opened(fd, key, at_ms, res, detail),
         Owner::Model { key } => crate::io::load::model_opened(fd, key, res),
         Owner::Image { key } => crate::io::load::image_opened(fd, key, res),
-        Owner::Objects => crate::layer::object::store::objects_opened(fd, res),
+        Owner::Objects => crate::layer::object::repository::opened(fd, res),
         Owner::Write => {}
     }
 }

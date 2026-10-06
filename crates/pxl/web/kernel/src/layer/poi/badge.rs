@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::poi_tile::{kind_color, kind_icon, Place, PoiTile};
-use pxl_spec::space::pyramid::Tile;
+use pxl_spec::space::layer::tile::Tile;
 
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::text::text_width;

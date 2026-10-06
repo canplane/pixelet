@@ -4,9 +4,9 @@
 //! is no control: the target stands where the pan's walk stands it, and the
 //! drawn eye eases to it, so a step comes as every other move does.
 
-use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::v3::V3;
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};

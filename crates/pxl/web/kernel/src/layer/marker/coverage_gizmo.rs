@@ -12,19 +12,19 @@ use std::collections::{HashMap, HashSet};
 
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pyramid::{Tile, GROUND, LEAF_Z, TOP_Z};
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::coord::world;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::coord::v3::V3;
 
 use crate::layer::marker::debug_lines::DebugLines;
 use crate::world::access::Access;
 use crate::world::frame::view::view;
 use crate::world::observation::observation;
 use crate::world::pyramid::chunk::Chunk;
-use crate::world::pyramid::read::TileRead;
 use crate::world::pyramid::Layer as _;
 use crate::world::residency::floor;
-use pxl_spec::space::zoom::{units, within, Zoom};
+use pxl_spec::space::coord::zoom::{units, within, Zoom};
 
 /// What an edge marks, lowest first: a stretch takes the highest over it.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -67,22 +67,21 @@ impl Mark {
 /// Dashes along a dashed stretch, every other one drawn.
 const DASHES: u32 = 16;
 
-/// What the lines were drawn for: the drawn set's, the goal's and the tiles'
-/// revisions, and the origin.
-type Seen = (u32, u32, u32, [u64; 3]);
-
 #[derive(Default)]
 pub struct CoverageGizmo {
     lines: DebugLines,
+    /// What is drawn, and about where; none while hidden.
+    drawn: Option<[f64; 3]>,
     lane: Vec<f32>,
-    seen: Option<Seen>,
+    /// The lines laid this step, kept so a step allocates nothing.
+    next: Vec<f32>,
 }
 
 impl CoverageGizmo {
     /// `drawn` sorted.
-    pub fn step(&mut self, draw: &mut DrawList, show: bool, revisions: (u32, u32, u32), goal: &[Chunk], drawn: &[Chunk]) {
+    pub fn step(&mut self, draw: &mut DrawList, show: bool, goal: &[Chunk], drawn: &[Chunk]) {
         if !show {
-            if self.seen.take().is_some() {
+            if self.drawn.take().is_some() {
                 self.lines.set(draw, [0.0; 3], &[]);
             }
             return;
@@ -91,17 +90,12 @@ impl CoverageGizmo {
         // Its lines are f32 about the corner under the eye of a tile about as wide as
         // the eye is high: what is near resolves, and a move rebuilds them once a height.
         let height = observation().map_or(0.0, |o| o.eye[2] - o.ground).max(1.0);
-        let zoom = within(height).clamp(i32::from(TOP_Z), i32::from(LEAF_Z)) as Zoom;
+        let zoom = within(height).clamp(i32::from(GROUND.top()), i32::from(LEAF_ZOOM)) as Zoom;
         let span = units(zoom);
         let about = v.pose.eye.map(|c| (c / span).floor() * span);
         let about = [about[0], about[1], 0.0];
-        let seen = (revisions.0, revisions.1, revisions.2, about.map(f64::to_bits));
-        if self.seen == Some(seen) {
-            return;
-        }
-        self.seen = Some(seen);
         let residency = Terrain::pyramid().residency();
-        let top = floor::top().unwrap_or(LEAF_Z);
+        let top = floor::top().unwrap_or(LEAF_ZOOM);
         let lined: HashSet<Tile> = Terrain::pyramid().demand().iter().map(|&p| line_top(p, top)).collect();
         let floor_only = |p: Tile| p.zoom <= top && !lined.contains(&p);
         let over: HashSet<Chunk> = drawn.iter().flat_map(|d| d.ancestors()).collect();
@@ -111,7 +105,7 @@ impl CoverageGizmo {
             if covered {
                 continue;
             }
-            let mark = match residency.drawn_from(TileRead::of(GROUND, g).tile()) {
+            let mark = match residency.drawn_from(GROUND.read_tile(g.column())) {
                 None => Mark::NoTile,
                 Some(src) if floor_only(src) => Mark::FloorOnly,
                 Some(_) => Mark::Unbuilt,
@@ -120,7 +114,7 @@ impl CoverageGizmo {
         }
         let mut tiles: Vec<Tile> = Vec::with_capacity(drawn.len());
         for &d in drawn {
-            let tile = TileRead::of(GROUND, d).tile();
+            let tile = GROUND.read_tile(d.column());
             let from_floor = residency.source(tile).is_none() && residency.drawn_from(tile).is_some_and(floor_only);
             lines.square(d.rect(), if from_floor { Mark::DrawnFromFloor } else { Mark::Drawn });
             tiles.push(tile);
@@ -130,9 +124,13 @@ impl CoverageGizmo {
         for p in tiles {
             lines.square(p.rect(), Mark::Tile);
         }
-        self.lane.clear();
-        lines.lay(&mut self.lane, about, &Access::now());
-        self.lines.set(draw, about, &self.lane);
+        self.next.clear();
+        lines.lay(&mut self.next, about, &Access::now());
+        if self.drawn != Some(about) || self.next != self.lane {
+            self.lines.set(draw, about, &self.next);
+            self.drawn = Some(about);
+            core::mem::swap(&mut self.next, &mut self.lane);
+        }
     }
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
@@ -169,8 +167,8 @@ impl Lines {
     /// ground.
     fn lay(&self, lane: &mut Vec<f32>, origin: V3, access: &Access) {
         let ground = |x: f64, y: f64| -> [f64; 3] {
-            let z = access.surface_support(&projection::project(x, y, 0.0)).value().flatten().unwrap_or(0.0);
-            [pxl_spec::space::zoom::nearest(x, origin[0]) - origin[0], y - origin[1], z - origin[2]]
+            let z = access.surface_support(&world::point(x, y, 0.0)).value().flatten().unwrap_or(0.0);
+            [pxl_spec::space::coord::world::nearest(x, origin[0]) - origin[0], y - origin[1], z - origin[2]]
         };
         let mut ends: Vec<(f64, bool, Mark)> = Vec::new();
         for (&(axis, at), edges) in &self.0 {

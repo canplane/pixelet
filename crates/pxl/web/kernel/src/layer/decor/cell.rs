@@ -11,9 +11,11 @@ use std::collections::HashMap;
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, TileSource};
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
-use pxl_spec::space::v3::{len3, sub3, V3};
-use pxl_spec::space::zoom::{cube, nearest, nearest_box};
+use pxl_spec::space::camera::grid::CHUNK_CELLS;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::coord::v3::{len3, sub3, V3};
+use pxl_spec::space::coord::zoom::cube;
+use pxl_spec::space::coord::world::{nearest, nearest_box};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 use xpute_runtime::sched::frame_budget::FrameBudget;
@@ -28,16 +30,15 @@ use crate::layer::object::store::Store;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{draws_as_held, Builder};
 use crate::world::chunk::mesh_slot::OCCUPANCY;
-use crate::world::chunk::source::objects_revision_of;
+use crate::kernel::kernel;
+use crate::world::chunk::source::{objects_met, Met};
 use crate::world::chunk::table::Scheduler;
 use crate::world::observation::{eye, observation};
 use crate::world::pyramid::chunk::Chunk;
-use crate::world::pyramid::read::TileRead;
 use crate::world::pyramid::Layer;
 use pxl_render::mesh::run::APRON;
-use pxl_spec::bake::constant::CELL;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::zoom::{index, Zoom};
+use pxl_spec::space::coord::zoom::{index, Zoom};
 use xpute_runtime::global::Global;
 
 struct Block {
@@ -61,11 +62,11 @@ impl Block {
 }
 
 /// What a population depends on beyond its tile and the seed.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 struct Sources {
     /// The zoom of the tile it is built from, coarser until its own comes.
     read_from: Zoom,
-    revision: u32,
+    objects: Option<Vec<Met>>,
     shown: bool,
     hide: Option<DecorHide>,
 }
@@ -102,26 +103,26 @@ fn may_show(chunk: Chunk, largest: f64) -> bool {
     let Some(o) = observation() else { return false };
     let near = nearest_box(&chunk.region(), o.eye[0]).nearest(o.eye);
     let d = len3(&sub3(&near, &o.eye)).max(1e-3);
-    d <= o.far && largest / units_per_px_at(d) >= decor_sprite_px()
+    d <= o.far() && largest / units_per_px_at(d) >= decor_sprite_px()
 }
 
 fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
     let (x0, y0, side) = chunk.rect();
     let inside = |x: f64, y: f64| (x0..x0 + side).contains(&x) && (y0..y0 + side).contains(&y);
     // Only where the chunk draws it as it is held: a fold is no one's to hide.
-    let own = draws_as_held(chunk, CELL);
+    let own = draws_as_held(chunk, GROUND.cell());
     let hide = hide.filter(|h| {
         own && match *h {
             DecorHide::Placed(e) => {
-                let o = nearest_box(&cube(e.zoom, e.at), x0 + side / 2.0);
+                let o = nearest_box(&cube(e.zoom(), e.at()), x0 + side / 2.0);
                 inside((o.min[0] + o.max[0]) / 2.0, (o.min[1] + o.max[1]) / 2.0)
             }
             DecorHide::Scattered([x, y, _]) => inside(x as f64, y as f64),
         }
     });
     Some(Sources {
-        read_from: Terrain::pyramid().residency().drawn_from(TileRead::of(GROUND, chunk).tile())?.zoom,
-        revision: objects_revision_of(chunk),
+        read_from: Terrain::pyramid().residency().drawn_from(GROUND.read_tile(chunk.column()))?.zoom,
+        objects: objects_met(&kernel().objects, chunk),
         shown: settings_store().decor,
         hide,
     })
@@ -131,16 +132,16 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
     let tiles = Terrain::pyramid();
     // The tile the terrain draws the chunk from, read over the chunk whose
     // side is that many of its cells; past the leaves, the chunk over it as wide.
-    let src = tiles.residency().drawn_from(TileRead::of(GROUND, chunk).tile())?;
+    let src = tiles.residency().drawn_from(GROUND.read_tile(chunk.column()))?;
     let tile = tiles.residency().get(src)?;
-    let mut over = TileRead::of(GROUND, chunk);
-    while over.tile_cells() < CHUNK_CELLS || over.tile_zoom() > src.zoom {
+    let mut over = chunk;
+    while GROUND.read_side(over.zoom()) < CHUNK_CELLS || GROUND.read_zoom(over.zoom()) > src.zoom {
         over = over.parent()?;
     }
-    let (zoom, side) = (over.tile_zoom(), over.tile_cells());
-    let (x0, y0, _) = over.chunk().rect();
+    let (zoom, side) = (GROUND.read_zoom(over.zoom()), GROUND.read_side(over.zoom()));
+    let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
-    let (tx0, ty0) = over.in_tile();
+    let (tx0, ty0) = GROUND.read_at(over.column());
     let view = Builder::tile_view(tile);
     if sources.shown {
         let around = Around {
@@ -155,10 +156,10 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         c.sample.read(&around, [tx0 as i64, ty0 as i64], side + 2 * APRON).ok()?;
     }
     // Interaction reads what is drawn as it is held, never a fold of it.
-    let own = draws_as_held(chunk, CELL);
+    let own = draws_as_held(chunk, GROUND.cell());
     let target = GROUND.cell_zoom(zoom);
     let (cx, cy, span) = (index(target, x0), index(target, y0), i64::from(side));
-    match target < CELL && sources.shown {
+    match target < GROUND.cell() && sources.shown {
         true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
         false => c.folded.clear(),
     }
@@ -171,7 +172,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         tx0,
         ty0,
         side,
-        folded: (target < CELL).then_some(&c.folded),
+        folded: (target < GROUND.cell()).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
     let built = DecorBuild::build(
@@ -212,7 +213,7 @@ fn release(block: Block, draw: &mut DrawList) {
 /// Builds the decor of the chunks the terrain has mounted, within what is
 /// left of the turn as the chunks' builds are, and lets go of what an
 /// unmounted chunk held.
-pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<DecorHide>, frame_eye: V3, budget: &FrameBudget) {
+pub fn step(kinds: &[&Kind], store: &Store, sched: &Scheduler, draw: &mut DrawList, hide: Option<DecorHide>, frame_eye: V3, budget: &FrameBudget) {
     let c = cells();
     let mut mounted = core::mem::take(&mut c.mounted);
     sched.mounted(&mut mounted);
@@ -223,10 +224,9 @@ pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<
     c.gone.extend(c.blocks.keys().copied().filter(|k| !held(k)));
     for k in c.gone.drain(..) {
         if let Some(b) = c.blocks.remove(&k) {
-            release(b, &mut sched.draw);
+            release(b, draw);
         }
     }
-    let draw = &mut sched.draw;
     budget.run(
         mounted.iter().map(|m| m.0),
         |chunk| {
@@ -251,7 +251,7 @@ pub fn step(kinds: &[&Kind], store: &Store, sched: &mut Scheduler, hide: Option<
         }
     }
     c.mounted = mounted;
-    present(c, &mut sched.draw, frame_eye);
+    present(c, draw, frame_eye);
 }
 
 /// Per frame, each instance as model, sprite or nothing by its projected

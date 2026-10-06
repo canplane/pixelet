@@ -3,7 +3,7 @@
 //! Minimal WKB decoder: Point, LineString, Polygon, MultiPolygon; EWKB flags
 //! and ISO dimensions. SRID is ignored (3857 assumed); Z is kept as a deck's top.
 
-use pxl_spec::space::adapter::epsg3857::G3857;
+use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
 pub struct WkbGeometry {
     pub points: Vec<G3857>,

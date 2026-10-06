@@ -1,8 +1,8 @@
 // pxl-kernel/layer/object/store.test.rs
 
 use pxl_spec::cell::cube_types::Block;
-use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::GROUND;
+use pxl_spec::space::coord::pvf3::ivec;
+use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;
 use xpute_core::math::rng::SplitMix64;
@@ -15,18 +15,20 @@ fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
 fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
     let mut store = Store::default();
     for at in [[8, 16, 24], [-3, 5, -7]] {
-        assert_eq!(store.write([Write { zoom: CELL, at, state: 3 }]), vec![EntryAt { zoom: CELL, at }]);
+        assert!(!store.write([Write { key: key(OBJECT_COARSEST, at), id: 3 }]).is_empty());
         assert_eq!(
-            store.node(OBJECT_FINEST, first_descendant_of(at, u32::from(OBJECT_FINEST - CELL))).0.state,
+            store.node(OBJECT_FINEST, first_descendant_of(at, u32::from(OBJECT_FINEST - OBJECT_COARSEST))).0.state,
             3,
             "a cell leaf covers its steps"
         );
         let mut met = Vec::new();
-        store.each_in(CELL, at, &mut |e| met.push(*e));
-        assert_eq!(met, vec![Entry { zoom: CELL, at, state: 3 }]);
-        store.write([Write { zoom: CELL, at, state: VOID }]);
-        assert!(store.tree.is_empty());
-        assert!(store.write([Write { zoom: CELL, at, state: VOID }]).is_empty(), "erasing nothing changes nothing");
+        store.each_in(OBJECT_COARSEST, at, &mut |e| met.push(*e));
+        assert_eq!(met, vec![Entry { zoom: OBJECT_COARSEST, at, state: 3 }]);
+        store.write([Write { key: key(OBJECT_COARSEST, at), id: VOID }]);
+        let mut left = 0;
+        store.each(&mut |_| left += 1);
+        assert_eq!(left, 0);
+        assert!(store.write([Write { key: key(OBJECT_COARSEST, at), id: VOID }]).is_empty(), "erasing nothing changes nothing");
     }
 }
 
@@ -49,13 +51,12 @@ fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (HashMap<[i64; 3], u32>
     let mut store = Store::default();
     let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
-        zoom: CELL,
-        at: [base[0] + x, base[1] + y, z],
-        state,
+        key: key(OBJECT_COARSEST, [base[0] + x, base[1] + y, z]),
+        id: state,
     }));
     let target = GROUND.cell_zoom(zoom);
-    let corner = base.map(|v| v >> (CELL - target));
-    let per = 64 >> (CELL - target);
+    let corner = base.map(|v| v >> (GROUND.cell() - target));
+    let per = 64 >> (GROUND.cell() - target);
     let mut out = HashMap::new();
     store.fold_at(target, corner, [corner[0] + per, corner[1] + per], None, &mut out).unwrap();
     (out, corner)
@@ -67,29 +68,29 @@ fn red() -> u32 {
 
 #[test]
 fn a_cell_folds_to_itself_on_a_leaf() {
-    let (out, [x, y]) = folded(&[(3, 4, 5, red())], LEAF_Z);
+    let (out, [x, y]) = folded(&[(3, 4, 5, red())], LEAF_ZOOM);
     assert_eq!(out.get(&[x + 3, y + 4, 5]), Some(&red()));
     assert_eq!(out.len(), 1);
 }
 
 #[test]
 fn a_lone_cube_goes_at_the_first_fold_and_a_slab_of_half_stays() {
-    assert!(folded(&[(0, 0, 0, red())], LEAF_Z - 1).0.is_empty());
-    let (out, [x, y]) = folded(&[(0, 0, 0, red()), (1, 0, 0, red()), (0, 1, 0, red()), (1, 1, 0, red())], LEAF_Z - 1);
+    assert!(folded(&[(0, 0, 0, red())], LEAF_ZOOM - 1).0.is_empty());
+    let (out, [x, y]) = folded(&[(0, 0, 0, red()), (1, 0, 0, red()), (0, 1, 0, red()), (1, 1, 0, red())], LEAF_ZOOM - 1);
     assert_eq!(out.get(&[x, y, 0]), Some(&red()));
 }
 
 #[test]
 fn a_solid_block_keeps_folding_while_it_fills_its_parent() {
     let cube: Vec<_> = (0..64).map(|k| (k % 4, k / 4 % 4, k / 16, red())).collect();
-    let (out, [x, y]) = folded(&cube, LEAF_Z - 2);
+    let (out, [x, y]) = folded(&cube, LEAF_ZOOM - 2);
     assert_eq!(out.get(&[x, y, 0]), Some(&red()));
     assert_eq!(out.len(), 1);
 }
 
 #[test]
 fn air_is_a_value_and_folds_like_one() {
-    let (out, [x, y]) = folded(&[(0, 0, 0, AIR), (1, 0, 0, AIR), (0, 1, 0, AIR), (1, 1, 0, AIR), (0, 0, 1, AIR)], LEAF_Z - 1);
+    let (out, [x, y]) = folded(&[(0, 0, 0, AIR), (1, 0, 0, AIR), (0, 1, 0, AIR), (1, 1, 0, AIR), (0, 0, 1, AIR)], LEAF_ZOOM - 1);
     assert_eq!(out.get(&[x, y, 0]), Some(&AIR));
 }
 
@@ -100,7 +101,7 @@ fn entry_boxes(store: &Store) -> Vec<Aabb> {
     };
     let mut out = Vec::new();
     store.entries_in(&all, &mut |e| {
-        if present(e.state) {
+        if e.state != VOID {
             out.push(e.cube());
         }
     });

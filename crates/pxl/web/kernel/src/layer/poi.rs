@@ -8,16 +8,16 @@ pub mod placement;
 
 use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
 use pxl_spec::bake::poi_tile::{self, PoiTile, POI_LATTICE};
-use pxl_spec::space::pyramid::Lattice;
+use pxl_spec::space::layer::lattice::Lattice;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::io::demand::{Category, Phases};
 use crate::param::{POI_ALL_ZOOM, POI_MAJOR_ZOOM};
-use crate::sched::profiler::record::Failure;
+use crate::io::failure::Failure;
 use crate::shell::setting::store::settings_store;
 use crate::world::pyramid::{Layer, Pyramid};
-use pxl_spec::space::adapter::epsg3857::cell_zoom_of;
-use pxl_spec::space::zoom::units;
+use pxl_spec::space::coord::adapter::epsg3857::cell_zoom_of;
+use pxl_spec::space::coord::zoom::units;
 use xpute_runtime::global::Global;
 
 static POI: Global<Pyramid<PoiTile>> = Global::new();

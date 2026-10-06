@@ -4,7 +4,7 @@
 //! and runs the table's pass; in the report phase it hands the frame's
 //! numbers to the profiler.
 
-use pxl_spec::space::v3::sub3;
+use pxl_spec::space::coord::v3::sub3;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
@@ -12,19 +12,17 @@ use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::decor::build::DecorHide;
 use crate::layer::environment::state::globe;
-use crate::sched::profiler::record::{
-    profiler_record_frame, profiler_recording, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample,
-    TurnSample, ViewSample, WorkSample, MB,
-};
+use crate::mem::MB;
+use crate::sched::profiler::frame::{CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample, TurnSample, ViewSample, WorkSample};
+use crate::sched::profiler::record::{profiler_record_frame, profiler_recording, profiler_take_rings};
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::table::{builds, Census, Frame};
 use crate::world::frame::view::{sea_under_eye, view, view_resize};
-use crate::world::pyramid::read::TileRead;
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
-use pxl_spec::space::pyramid::GROUND;
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 
@@ -134,17 +132,17 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     };
 
     let t0 = now();
-    let draw = with_world(|_, sched| sched.tick(frame, &now)).unwrap_or(false);
+    let draw = with_world(|_, sched, scene| sched.tick(frame, &now, scene)).unwrap_or(false);
     // Decor lists after the chunks have listed theirs.
     {
         let k = kernel();
         let edits = crate::layer::marker::hover_cursor::render_edits();
         let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
-        crate::layer::decor::cell::step(&crate::layer::decor::kind::KINDS, &k.objects, &mut k.sched, hide, frame.eye, &ctx.budget);
+        crate::layer::decor::cell::step(&crate::layer::decor::kind::KINDS, &k.objects, &k.sched, &mut k.scene.draw, hide, frame.eye, &ctx.budget);
     }
     crate::layer::poi::placement::step(ctx);
-    let sched = &mut kernel().sched;
-    sched.billboards.draw(&mut sched.draw, &sched.models, frame.eye);
+    let scene = &mut kernel().scene;
+    scene.billboards.draw(&mut scene.draw, &scene.models, frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();
@@ -160,7 +158,7 @@ pub async fn build_task() {
         loop {
             yield_if_spent(world_edge).await;
             let budget = world_edge().remaining();
-            let worked = with_world(|world, sched| sched.build_step(world, budget)).unwrap_or(false);
+            let worked = with_world(|world, sched, _| sched.build_step(world, budget)).unwrap_or(false);
             if !worked {
                 break;
             }
@@ -243,7 +241,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
             // The goal's pieces a resident tile draws.
             let residency = Terrain::pyramid().residency();
-            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.drawn_from(TileRead::of(GROUND, **c).tile()).is_some()).count());
+            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.drawn_from(GROUND.read_tile(c.column())).is_some()).count());
             CoverSample {
                 rule,
                 drawn: drawn as f64,

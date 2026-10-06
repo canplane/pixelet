@@ -15,13 +15,14 @@
 //! `Need`). Smoothing coarsens at a publish, and refines one step after
 //! `QUALITY_WAIT_MS` with `QUALITY_MARGIN` to spare.
 
-use pxl_spec::space::lod::{target_cell_px, Tau, SPLIT};
+use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 
 use crate::kernel::kernel;
 use crate::param;
 use crate::world::chunk::frontier::{Need, Slots, HEADROOM};
 use crate::world::chunk::mesh_slot::{Pool, ARENA, POOLS};
 use crate::world::frame::view::view;
+use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::domain;
 use xpute_runtime::global::Global;
 
@@ -116,6 +117,8 @@ impl Smooth {
 struct Quality {
     smooth: Smooth,
     star: usize,
+    /// What the walk prices chunks at, read each turn into a buffer kept.
+    priced: Vec<(Chunk, u32)>,
 }
 
 static QUALITY: Global<Quality> = Global::new();
@@ -132,7 +135,9 @@ pub fn reading() -> [usize; 2] {
 
 /// Starts the next goal walk over the ladder.
 pub fn sight() {
-    domain::start(&ladder(), kernel().sched.needs_revision());
+    let q = QUALITY.get(Quality::default);
+    kernel().sched.priced(&mut q.priced);
+    domain::start(&ladder(), &q.priced);
 }
 
 /// A slice of the goal walk, then the step that fits.

@@ -5,8 +5,9 @@
 //! known exactly, never at a guessed height corrected later. A place named
 //! with its height is put as it is (`go_to`).
 
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{Tile, GROUND, LEAF_Z};
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::control::camera::controller::{put_center, Motion};
 use crate::control::navigation::support::{exact, unknown_z};
@@ -38,7 +39,7 @@ pub fn cancel() {
 
 /// Whose ground the terrain is asked for.
 pub fn tile() -> Option<Tile> {
-    destination().map(|(at, _)| GROUND.cell_of(LEAF_Z, &at).tile())
+    destination().map(|(at, _)| GROUND.cell_of(LEAF_ZOOM, &at).tile())
 }
 
 /// Only the exact ground puts it; a coarser tile over it is not its ground.

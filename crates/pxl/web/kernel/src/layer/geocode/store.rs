@@ -10,7 +10,7 @@
 //! not one; its want waits out the request scheduler's retry.
 
 use pxl_spec::bake::place_tile::{open_place_dict, open_place_group, PlaceGroupView, PlacesView};
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::coord::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};

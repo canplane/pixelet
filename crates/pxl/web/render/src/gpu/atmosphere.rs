@@ -5,10 +5,10 @@
 //! redrawn only when the light's height or the camera's altitude moves (the
 //! table is kept relative to the light's azimuth); and every frame the exposure.
 
-use pxl_spec::bake::earth_tile::{self, EARTH_TEXELS, EARTH_Z};
+use pxl_spec::bake::earth_tile::{self, EARTH_TEXELS, EARTH_ZOOM};
 
-use pxl_spec::space::v3::V3;
-use pxl_spec::space::zoom::around;
+use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::world::around;
 
 use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_IRRADIANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
@@ -143,7 +143,7 @@ impl Atmosphere {
         words[SUN_DIR + 2] = 1.0;
         words[EARTH_REACH] = earth_tile::EARTH_REACH as f32;
         words[EARTH_WINDOW + 2] = f32::from_bits(earth_tile::EARTH_ACROSS);
-        words[EARTH_WINDOW + 3] = f32::from_bits(around(EARTH_Z) as u32);
+        words[EARTH_WINDOW + 3] = f32::from_bits(around(EARTH_ZOOM) as u32);
 
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);

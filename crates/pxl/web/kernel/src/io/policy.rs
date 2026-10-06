@@ -19,9 +19,9 @@
 use crate::io::demand::{Ask, Category, Why};
 use crate::io::sched::{Rank, Serve};
 use crate::param;
-use crate::sched::profiler::record::Outcome;
+use crate::io::failure::Outcome;
 use crate::world::observation::Order;
-use pxl_spec::space::pyramid::Tile;
+use pxl_spec::space::layer::tile::Tile;
 
 /// A layer's classes: needed or speculative, each seen or unseen.
 const SHELLS: u8 = 2 * 2;

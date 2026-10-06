@@ -4,7 +4,7 @@
 //! planes set from it.
 
 use pxl_render::look::globe::MERCATOR_RADIUS_KM;
-use pxl_spec::space::pvf3::projection;
+use pxl_spec::space::coord::world;
 
 use crate::control::camera::config::camera_cfg;
 use crate::layer::environment::config::render_cfg;
@@ -27,7 +27,7 @@ pub fn reach_at(altitude: f64) -> f64 {
 /// From the point's own height, so a cave's floor counts in a cave; the
 /// datum where nothing is held.
 fn ground_under(at: [f64; 3]) -> f64 {
-    let point = projection::project(at[0], at[1], at[2]);
+    let point = world::point(at[0], at[1], at[2]);
     Access::now().floor_under(&point).value().flatten().unwrap_or(0.0)
 }
 

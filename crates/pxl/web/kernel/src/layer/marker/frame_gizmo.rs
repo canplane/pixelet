@@ -5,17 +5,16 @@
 //! one through north. The view's forward, its up and north are told apart by
 //! color; nothing is labeled.
 
-use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::{floor3n, V3};
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::v3::{floor3n, V3};
 
 use crate::control::camera::controller::{azimuth, dist};
 use crate::kernel::kernel;
 use crate::world::access::Access;
 use crate::world::change::request_world_tick;
 use crate::world::frame::coord::to_world;
-use crate::world::pyramid::Layer as _;
-use pxl_spec::bake::format::Terrain;
 use xpute_runtime::global::Global;
 
 const BLACK: V3 = [0.0, 0.0, 0.0];
@@ -78,8 +77,8 @@ fn sketch(map_center: &Pvf3) -> Sketch {
     let center = to_world(map_center);
     let mut s = Sketch { about: center, lines: Vec::new() };
     let ground = Access::now().floor_under(map_center).value().flatten();
-    let cell = floor3n(&[center[0], center[1], ground.unwrap_or(0.0)], U_PER_CELL);
-    s.cube(cell, U_PER_CELL);
+    let cell = floor3n(&[center[0], center[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
+    s.cube(cell, units(GROUND.cell()));
     s.point(center, BLACK);
     // First person the eye is the map center, and nothing about it is seen.
     if dist() == 0.0 {
@@ -98,13 +97,11 @@ fn sketch(map_center: &Pvf3) -> Sketch {
     s
 }
 
-/// Map center, tiles' revision, and the azimuth the lines were drawn for.
-type Drawn = (Pvf3, u32, f64);
-
-static GIZMOS: Global<Option<Drawn>> = Global::new();
+/// What is drawn: the lines and what they are about.
+static GIZMOS: Global<Option<(V3, Vec<f32>)>> = Global::new();
 
 fn set_lines(at: V3, vertices: &[f32]) {
-    let Some((_, sched)) = kernel().world() else { return };
+    let Some((_, _, sched)) = kernel().world() else { return };
     sched.debug.set(&mut sched.draw, at, vertices);
 }
 
@@ -116,12 +113,11 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>) {
         }
         return;
     };
-    let key = (center, Terrain::pyramid().residency().revision(), azimuth());
-    if *drawn == Some(key) {
+    let s = sketch(&center);
+    if drawn.as_ref().is_some_and(|(about, lines)| *about == s.about && *lines == s.lines) {
         return;
     }
-    *drawn = Some(key);
-    let s = sketch(&center);
     set_lines(s.about, &s.lines);
+    *drawn = Some((s.about, s.lines));
     request_world_tick();
 }

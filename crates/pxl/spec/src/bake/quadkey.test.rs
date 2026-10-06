@@ -1,6 +1,7 @@
 // pxl-spec/bake/quadkey.test.rs
 
 use super::*;
+use crate::space::layer::lattice::GROUND;
 
 /// A Bundang tile, (11569, 3671): rows count from the south and a first
 /// digit is the signs, written out because the orientation is what can be
@@ -18,7 +19,7 @@ fn the_known_tile_is_the_tile_it_stands_on() {
 #[test]
 fn a_coarser_tile_is_named_by_a_prefix_of_the_leaf_over_it() {
     let leaf = quadkey_of(TILE_KEY_DEPTH, BUNDANG).to_string();
-    for zoom in TOP_Z..LEAF_Z {
+    for zoom in GROUND.top()..LEAF_ZOOM {
         let coarse = tile_name(Tile::over(zoom, BUNDANG)).to_string();
         assert_eq!(coarse.len(), usize::from(zoom), "a zoom is its length");
         assert!(leaf.starts_with(&coarse), "z{zoom} {coarse} is not a prefix of {leaf}");
@@ -30,7 +31,7 @@ fn every_tile_survives_the_round_trip_at_every_zoom() {
     let n = 1i64 << TILE_KEY_DEPTH;
     for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
         for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
-            for zoom in TOP_Z..=LEAF_Z {
+            for zoom in GROUND.top()..=LEAF_ZOOM {
                 let depth = u32::from(zoom);
                 let idx = Tile::over(zoom, ivec::gather(x, y, 0)).tile;
                 let key = quadkey_of(depth, idx).to_string();
@@ -62,7 +63,7 @@ fn what_is_not_a_name_is_refused() {
 /// A name round-trips at every zoom of the pyramid, and a name no zoom holds is no tile.
 #[test]
 fn a_tile_s_name_reads_back_as_the_tile_and_only_a_held_zoom_is_one() {
-    for zoom in TOP_Z..=LEAF_Z {
+    for zoom in GROUND.top()..=LEAF_ZOOM {
         let p = Tile::new(zoom, ivec::gather(-3, 5, 0));
         assert_eq!(tile_of_name(&tile_name(p).to_string()), Some(p), "z{zoom}");
     }

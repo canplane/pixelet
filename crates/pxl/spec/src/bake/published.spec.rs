@@ -87,6 +87,6 @@ impl PublishedVersion {
 /// answers the same object at the tile root's `source`, its `--folds` zooms
 /// over the leaves (pxl-geo-bake bin/serve_tiles.rs); neither is guessed from
 /// what fails.
-pub const PUBLISHED_TOP_Z: crate::space::zoom::Zoom = 5;
+pub const PUBLISHED_TOP_ZOOM: crate::space::coord::zoom::Zoom = 5;
 
-const _: () = assert!(PUBLISHED_TOP_Z >= crate::space::pyramid::TOP_Z, "a published zoom past the pyramid's top");
+const _: () = assert!(PUBLISHED_TOP_ZOOM >= crate::space::layer::lattice::GROUND.top(), "a published zoom past the pyramid's top");

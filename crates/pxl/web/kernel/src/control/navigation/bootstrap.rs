@@ -1,8 +1,8 @@
 // pxl-kernel/control/navigation/bootstrap.rs
 
-use pxl_spec::space::adapter::epsg4326::{self, G4326};
-use pxl_spec::space::pvf3::core::FRAC_W;
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
+use pxl_spec::space::coord::pvf3::core::FRAC_W;
+use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 
 use crate::control::camera::controller::map_center;
 use crate::control::camera::controller::Motion;

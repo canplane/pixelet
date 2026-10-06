@@ -123,10 +123,10 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     rs.extend(["        }", "    }", "}"].map(String::from));
     rs.push(String::new());
     rs.extend(rs_doc(&source_doc, "", "///"));
-    rs.push(format!("pub const PUBLISHED_TOP_Z: crate::space::zoom::Zoom = {top_z};"));
+    rs.push(format!("pub const PUBLISHED_TOP_ZOOM: crate::space::coord::zoom::Zoom = {top_z};"));
     rs.extend([
         String::new(),
-        "const _: () = assert!(PUBLISHED_TOP_Z >= crate::space::pyramid::TOP_Z, \"a published zoom past the pyramid's top\");".to_string(),
+        "const _: () = assert!(PUBLISHED_TOP_ZOOM >= crate::space::layer::lattice::GROUND.top(), \"a published zoom past the pyramid's top\");".to_string(),
     ]);
     Ok(vec![
         Output::new("apps/web/src/config/published.spec.ts", file(&ts)),

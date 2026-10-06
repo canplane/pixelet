@@ -15,19 +15,21 @@ use crate::param::POI_MAJOR_RANK;
 use crate::sched::tick::TickContext;
 use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::view::ndc_to_px;
+use crate::world::observation::ground_known;
 use crate::world::pyramid::chunk::Chunk;
-use crate::world::pyramid::read::TileRead;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
-use pxl_spec::space::zoom::nearest;
+use pxl_spec::space::coord::world::nearest;
 use xpute_runtime::global::Global;
 
 use pxl_spec::bake::poi_tile::{PoiTile, POI_LATTICE};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pvf3::{projection, REACH};
-use pxl_spec::space::pyramid::{Cell, GROUND, LEAF_Z};
-use pxl_spec::space::v3::len3;
-use pxl_spec::space::zoom::{count, Zoom};
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::pvf3::pack;
+use pxl_spec::space::coord::world::REACH;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::{Cell, Tile, LEAF_ZOOM};
+use pxl_spec::space::coord::v3::len3;
+use pxl_spec::space::coord::zoom::{count, Zoom};
 use std::collections::HashSet;
 
 #[derive(Default)]
@@ -43,12 +45,27 @@ struct Placement {
     found: Vec<(Cell, Label, Cell, f64, Shown, [f64; 3])>,
     /// The drawn chunks, the tiles and the heights `found` was read from: an
     /// eye move that changes none of them casts no ray.
-    found_for: Option<(u32, u32, (u32, u32))>,
+    found_for: Option<Found>,
+    /// The same, read this turn.
+    now: Found,
+    /// Objects were written since `found` was read.
+    objects_written: bool,
     mounted: Vec<(Chunk, bool, bool)>,
     labeled: Vec<(Label, Pvf3)>,
     instances: Vec<f32>,
 }
 static PLACEMENT: Global<Placement> = Global::new();
+
+#[derive(Default, PartialEq)]
+struct Found {
+    drawn: Vec<Chunk>,
+    tiles: Vec<(Tile, bool)>,
+    terrain: Vec<(Tile, bool)>,
+}
+
+pub fn objects_written() {
+    PLACEMENT.get(Placement::default).objects_written = true;
+}
 
 /// Every place, or only the prominent: what a cell shows by the units a
 /// logical pixel spans there.
@@ -70,7 +87,7 @@ fn shown_at(units_per_px: f64) -> Option<Shown> {
 
 /// None where nothing over it is known.
 fn top_at(at: &Pvf3, zoom: Zoom) -> Option<f64> {
-    let xy = projection::unproject(at.i, at.f);
+    let xy = pack::unpack(at.i, at.f);
     let (high, low) = (REACH.max[2], REACH.min[2]);
     let ray = Ray {
         origin: [xy[0], xy[1], high],
@@ -97,18 +114,25 @@ pub fn step(ctx: &mut TickContext) {
         return;
     }
     let sched = &crate::kernel::kernel().sched;
-    let key = Some((sched.drawn_revision(), tiles.residency().revision(), crate::world::observation::heights_revision()));
-    let stale = p.found_for != key;
-    p.found_for = key;
+    sched.mounted(&mut p.mounted);
+    p.now.drawn.clear();
+    p.now.drawn.extend(p.mounted.iter().filter(|m| m.1).map(|m| m.0));
+    p.now.drawn.sort_unstable();
+    tiles.residency().known(&mut p.now.tiles);
+    ground_known(&mut p.now.terrain);
+    let stale = core::mem::take(&mut p.objects_written) | (p.found_for.as_ref() != Some(&p.now));
+    if stale {
+        let now = core::mem::take(&mut p.now);
+        p.now = p.found_for.replace(now).unwrap_or_default();
+    }
     let mut found = core::mem::take(&mut p.found);
     if stale {
         found.clear();
-        sched.mounted(&mut p.mounted);
     }
     let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
-        let read = TileRead::of(POI_LATTICE, chunk);
-        let Some(src) = tiles.residency().source(read.tile()) else { continue };
+        let read_zoom = POI_LATTICE.read_zoom(chunk.zoom());
+        let Some(src) = tiles.residency().source(POI_LATTICE.read_tile(chunk.column())) else { continue };
         let Some(poi) = tiles.residency().get(src) else { continue };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.
@@ -124,28 +148,28 @@ pub fn step(ctx: &mut TickContext) {
                 // Near, a place or a count; farther, only a prominent enough place.
                 // A count stands at its cell's middle.
                 let all = match (c.count, poi.shown(c).next()) {
-                    (1, Some((place, _, at))) => (Label::Place { tile: src, place }, cell.inner_at(GROUND, LEAF_Z, at)),
-                    _ => (Label::Count(c.count, c.partial), GROUND.cell_of(LEAF_Z, &cell.mid())),
+                    (1, Some((place, _, at))) => (Label::Place { tile: src, place }, cell.inner_at(GROUND, LEAF_ZOOM, at)),
+                    _ => (Label::Count(c.count, c.partial), GROUND.cell_of(LEAF_ZOOM, &cell.mid())),
                 };
                 let major = poi
                     .shown(c)
                     .map(|(i, p, at)| (i, rank_of(p.kind), at))
                     .filter(|s| s.1 <= POI_MAJOR_RANK)
                     .min_by_key(|s| s.1)
-                    .map(|(place, _, at)| (Label::Place { tile: src, place }, cell.inner_at(GROUND, LEAF_Z, at)));
+                    .map(|(place, _, at)| (Label::Place { tile: src, place }, cell.inner_at(GROUND, LEAF_ZOOM, at)));
                 let mid = cell.mid();
-                let mid = projection::unproject(mid.i, mid.f);
+                let mid = pack::unpack(mid.i, mid.f);
                 for (shown, (label, ground)) in [(Shown::All, all)].into_iter().chain(major.map(|m| (Shown::Major, m))) {
                     if m == 0 && Chunk::holding(chunk.zoom(), &ground.mid()).column() != chunk.named().column() {
                         continue;
                     }
                     // Counted only by the chunk the top of what stands there is in, so a
                     // column's several chunks do not repeat it.
-                    let Some(top) = top_at(&ground.mid(), read.tile_zoom()) else { continue };
+                    let Some(top) = top_at(&ground.mid(), read_zoom) else { continue };
                     if top - 1.0 < h0 || top - 1.0 >= h1 {
                         continue;
                     }
-                    found.push((POI_LATTICE.cell_of(read.tile_zoom(), &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
+                    found.push((POI_LATTICE.cell_of(read_zoom, &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
                 }
             }
         }

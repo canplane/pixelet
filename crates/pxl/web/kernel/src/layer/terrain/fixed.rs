@@ -10,7 +10,7 @@ use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::deck::{MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::bake::format::{Extent, COARSE_LANE};
-use pxl_spec::space::pyramid::{EXTENT, TILE_CELLS};
+use pxl_spec::space::layer::lattice::{EXTENT, TILE_CELLS};
 
 use crate::world::residency::Residency;
 use pxl_spec::bake::format::Terrain;

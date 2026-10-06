@@ -9,11 +9,11 @@ mod terrain;
 use cache::Cache;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
-use pxl_spec::space::pyramid::{Folds, Tile};
+use pxl_spec::space::layer::tile::{Folds, Tile};
 use std::path::PathBuf;
 
 use crate::coverage::Coverage;
-use pxl_spec::space::zoom::Zoom;
+use pxl_spec::space::coord::zoom::Zoom;
 use std::sync::{Arc, Mutex};
 
 pub mod job;

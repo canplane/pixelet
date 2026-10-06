@@ -4,6 +4,7 @@
 //! orders it; `fetch` and `load` decode what arrives.
 
 pub mod demand;
+pub mod failure;
 pub mod fetch;
 pub mod file;
 pub mod load;

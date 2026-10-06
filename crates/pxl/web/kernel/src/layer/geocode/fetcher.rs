@@ -5,18 +5,18 @@
 //! terrain tile: a label must not take a credit from the ground.
 
 use pxl_spec::bake::place_tile::GROUP_SHAMT;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 
 use crate::io::demand::{Ask, Category};
 use crate::io::sched::declare;
 use crate::layer::geocode::store;
-use pxl_spec::space::pyramid::LEAF_Z;
-use pxl_spec::space::zoom::idx;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::coord::zoom::idx;
 
 const DICT_SUBJECT: u64 = 0;
 
 pub fn center_group() -> Option<IVec> {
-    crate::control::camera::controller::map_center().map(|c| ivec::sh(idx(LEAF_Z, c.i), -(GROUP_SHAMT as i32)))
+    crate::control::camera::controller::map_center().map(|c| ivec::sh(idx(LEAF_ZOOM, c.i), -(GROUP_SHAMT as i32)))
 }
 
 /// Declared every turn: an unchanged set changes nothing, so nothing is

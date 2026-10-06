@@ -22,6 +22,7 @@
 //! change it is baked for reaches: a structure it solves again that runs out of
 //! it meets the base's solve of it at the region's edge.
 
+use pxl_spec::space::layer::lattice::GROUND;
 use std::collections::HashSet;
 use std::fs;
 use std::os::unix::fs::MetadataExt;
@@ -36,7 +37,7 @@ use pxl_spec::bake::format::{encode_terrain, SNAPSHOT_KEY};
 use pxl_spec::bake::published::{FORMAT, PUBLISHED_VERSION};
 use pxl_spec::bake::quadkey::{tile_name, tile_of_name};
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::{Coverage, Overture};
@@ -268,7 +269,7 @@ fn link_tree(from: &Path, to: &Path) -> Result<(), String> {
 /// a tile linked from it is the same file, and any other one is checked by content.
 fn snapshot_over(full: &TileSet, tiles: &TileSet) -> Result<(Vec<String>, Vec<String>), String> {
     let (mut written, mut removed) = (Vec::new(), Vec::new());
-    for zoom in TOP_ZOOM..=LEAF_ZOOM {
+    for zoom in GROUND.top()..=LEAF_ZOOM {
         let here: HashSet<Tile> = tiles.tiles(zoom)?.into_iter().collect();
         for &p in &here {
             let (a, b) = (full.path(p), tiles.path(p));
@@ -339,7 +340,7 @@ fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_js
     write_json(&snapshot, &serde_json::json!({ "base": full_name, "written": written, "removed": removed }))?;
     println!("[bake/region] over {}: {} written, {} removed", full.root.display(), written.len(), removed.len());
 
-    let top = (TOP_ZOOM..LEAF_ZOOM).rev().take_while(|&z| tiles.zoom_dir(z).exists()).last().unwrap_or(LEAF_ZOOM);
+    let top = (GROUND.top()..LEAF_ZOOM).rev().take_while(|&z| tiles.zoom_dir(z).exists()).last().unwrap_or(LEAF_ZOOM);
     let base_name = base.root.file_name().map(|n| n.to_string_lossy().to_string());
     // The kind's one manifest describes the last bake, which is the base only if it says so.
     let mut fields = read_json(&base.root.join("../manifest.json"));

@@ -3,8 +3,8 @@
 //! Executes the scheduler's draw lists on the device, in the kernel's own turn.
 //! Depth is reversed f32 throughout (depth.wgsl).
 
-use pxl_spec::space::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
-use pxl_spec::space::v3::{norm3, sub3, V3};
+use pxl_spec::space::coord::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
+use pxl_spec::space::coord::v3::{norm3, sub3, V3};
 use xpute_core::math::scalar::round;
 use xpute_runtime::abi::handle::handle_slot;
 use xpute_runtime::global::Global;

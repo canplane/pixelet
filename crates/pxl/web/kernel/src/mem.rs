@@ -2,6 +2,9 @@
 
 //! Which sections the linear memory is cut into, and what `.fixed` holds.
 
+/// A mebibyte, the unit memory is reported in.
+pub const MB: f64 = 1_048_576.0;
+
 pub mod fixed;
 pub mod heap;
 pub mod section;

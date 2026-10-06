@@ -8,8 +8,8 @@ use super::{Dataset, Failure, Kind};
 use crate::pyramid::{fold_stored, Absent, Layer, TileSet};
 use crate::util::{pack, Level};
 use pxl_spec::bake::quadkey::tile_of_name;
-use pxl_spec::space::pyramid::{Tile, LEAF_Z};
-use pxl_spec::space::zoom::Zoom;
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
@@ -36,7 +36,7 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, as
                 if !d.source.holds(p) {
                     return d.cache.publish(&key(p), None).map_err(Failure::from);
                 }
-                if p.zoom < LEAF_Z {
+                if p.zoom < LEAF_ZOOM {
                     for below in d.source.sources(p) {
                         tokio::time::timeout_at(lease.deadline, bake_missing(d.clone(), runner.clone(), kind, below, false))
                             .await
@@ -55,7 +55,7 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, as
 }
 
 pub(super) fn execute<L: Layer>(p: Tile, cache: &Path, out: &Path, leaf: impl FnOnce() -> Result<Option<L>, String>, absent: &impl Absent<L>) -> Result<(), String> {
-    let tile = if p.zoom == LEAF_Z { leaf()? } else { fold_stored(&TileSet::new(cache), p, absent)? };
+    let tile = if p.zoom == LEAF_ZOOM { leaf()? } else { fold_stored(&TileSet::new(cache), p, absent)? };
     let packet = tile.map(|tile| pack(&tile.encode()?, Level::Live).map_err(|e| e.to_string())).transpose()?;
     job::write_packet(out, packet.as_deref())
 }

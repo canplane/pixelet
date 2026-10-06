@@ -1,27 +1,30 @@
 // pxl-kernel/world/pyramid/domain.test.rs
 
-use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::coord::world;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::v3::V3;
 
 use super::*;
+use crate::world::fixture::Free;
+use crate::world::pyramid::chunk::Chunk;
 use crate::world::observer::cell_angle;
 
 use crate::world::fixture::{self, eye, World};
-use crate::world::pyramid::chunk::{FINEST_CHUNK, TOP_CHUNK};
 
 fn ladder() -> Vec<Tau> {
     (0..6).map(|k| Tau::of(libm::pow(2f64, k as f64 / 2.0))).collect()
 }
 
 fn point(p: V3) -> Pvf3 {
-    projection::project(p[0], p[1], p[2])
+    world::point(p[0], p[1], p[2])
 }
 
 fn pieces_at(pieces: &[Chunk], p: V3) -> Vec<Chunk> {
     let at = point(p);
-    (TOP_CHUNK..=FINEST_CHUNK).rev().map(|z| Chunk::holding(z, &at)).filter(|c| pieces.binary_search(c).is_ok()).collect()
+    let mut over: Vec<Chunk> = pieces.iter().copied().filter(|c| *c == Chunk::holding(c.zoom(), &at)).collect();
+    over.sort_unstable_by_key(|c| std::cmp::Reverse(c.zoom()));
+    over
 }
 
 const GROUND: f64 = 10.5;
@@ -58,12 +61,12 @@ fn remaking_a_moving_view_allocates_nothing_once_it_has_held_the_most() {
     };
     let mut sight = crate::world::observer::Sight::default();
     sight.observe(&path(0), &world, true, &[]);
-    let mut d = Domain::priced(path(0), &ladder, 0, Box::new(world.clone()), sight.footprints(), &Free);
+    let mut d = Domain::priced(path(0), pxl_spec::space::layer::lattice::GROUND.top(), &ladder, 0, Box::new(world.clone()), sight.footprints(), &Free);
     let walk = |d: &mut Domain, sight: &mut crate::world::observer::Sight| {
         for k in 0..24 {
             let o = path(k);
             sight.observe(&o, &world, false, &[]);
-            d.begin(o, &ladder, sight.footprints(), core::iter::empty());
+            d.begin(o, pxl_spec::space::layer::lattice::GROUND.top(), &ladder, sight.footprints(), core::iter::empty());
             d.run(&Free, &|| false, &mut 0);
             d.put(0);
             for step in 0..ladder.len() {

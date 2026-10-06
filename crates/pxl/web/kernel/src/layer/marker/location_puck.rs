@@ -5,10 +5,11 @@
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use pxl_render::gpu::api::word_bytes;
-use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::{add3, center3n, floor3n, V3};
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::coord::world;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::v3::{add3, center3n, floor3n, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
@@ -17,12 +18,11 @@ use crate::layer::environment::fog::view_reach;
 use crate::world::access::Access;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::table::Frame;
-use crate::world::observation::heights_revision;
 use xpute_runtime::global::Global;
 
-// A world-space footprint (4u), independent of U_PER_CELL; the .707 is a
+// A world-space footprint (4u), whatever the ground's cell; the .707 is a
 // one-cell diagonal correction.
-const ZONE_RADIUS_CELL: f64 = 4.0 / U_PER_CELL - 0.707;
+const ZONE_RADIUS_CELL: f64 = 4.0 / units(GROUND.cell()) - 0.707;
 const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 
 /// Which of its sides (top, bottom, right, left) lie on the zone's border.
@@ -47,7 +47,7 @@ fn zone_samples() -> Vec<ZoneSample> {
             let d_right = (dx + 1.0) * (dx + 1.0) + dy2;
             let d_left = (dx - 1.0) * (dx - 1.0) + dy2;
             out.push(ZoneSample {
-                off: [dx * U_PER_CELL, dy * U_PER_CELL, -U_PER_CELL],
+                off: [dx * units(GROUND.cell()), dy * units(GROUND.cell()), -units(GROUND.cell())],
                 borders: [
                     flag(d_top > ZONE_RADIUS2_CELL),
                     flag(d_bottom > ZONE_RADIUS2_CELL),
@@ -67,9 +67,11 @@ struct Puck {
     last_known_device_coord: Option<Pvf3>,
     /// None until grounded, rather than drawing at a guessed height.
     last_known_center_z: Option<f64>,
-    /// The zone's center and the `heights_revision` it was grounded against: a
-    /// tile arriving or an edit grounds it again.
-    zone_for: Option<(V3, (u32, u32))>,
+    /// What is drawn: the zone's center and its instances, so grounding it
+    /// again to the same heights draws nothing anew.
+    drawn: Option<(V3, Vec<f32>)>,
+    /// The zone grounded this step, kept so a step allocates nothing.
+    lane: Vec<f32>,
     beacon_for: Option<([f64; 2], bool)>,
     shown: bool,
 }
@@ -81,7 +83,8 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         samples: zone_samples(),
         last_known_device_coord: None,
         last_known_center_z: None,
-        zone_for: None,
+        drawn: None,
+        lane: Vec::new(),
         beacon_for: None,
         shown: false,
     });
@@ -101,41 +104,43 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         return clear(p);
     };
     let raw = [pos[0], pos[1], center_z];
-    let center_pos = floor3n(&raw, U_PER_CELL);
+    let center_pos = floor3n(&raw, units(GROUND.cell()));
 
-    let revision = heights_revision();
-    if p.zone_for != Some((center_pos, revision)) {
-        p.zone_for = Some((center_pos, revision));
-        let mut lane: Vec<f32> = Vec::with_capacity(p.samples.len() * ZONE_INSTANCE_FLOATS);
-        for s in &p.samples {
-            let v = add3(&center_pos, &s.off);
-            let coord = projection::project(v[0], v[1], v[2]);
-            // An unloaded neighbor tile falls back to the center's height; 0 would sink
-            // or launch that instance.
-            let delta_ele = Access::now().surface_support(&coord).value().flatten().unwrap_or(center_pos[2]) - center_pos[2];
-            let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
-            let v = center3n(&lifted, U_PER_CELL);
-            lane.extend([
-                v[0] as f32,
-                v[1] as f32,
-                v[2] as f32,
-                s.borders[0] as f32,
-                s.borders[1] as f32,
-                s.borders[2] as f32,
-                s.borders[3] as f32,
-            ]);
-        }
-        with_world(|_, sched| sched.markers.set_zone(&mut sched.draw, center_pos, &lane, ZONE_RADIUS_CELL * U_PER_CELL));
+    let mut lane = core::mem::take(&mut p.lane);
+    lane.clear();
+    for s in &p.samples {
+        let v = add3(&center_pos, &s.off);
+        let coord = world::point(v[0], v[1], v[2]);
+        // An unloaded neighbor tile falls back to the center's height; 0 would sink
+        // or launch that instance.
+        let delta_ele = Access::now().surface_support(&coord).value().flatten().unwrap_or(center_pos[2]) - center_pos[2];
+        let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
+        let v = center3n(&lifted, units(GROUND.cell()));
+        lane.extend([
+            v[0] as f32,
+            v[1] as f32,
+            v[2] as f32,
+            s.borders[0] as f32,
+            s.borders[1] as f32,
+            s.borders[2] as f32,
+            s.borders[3] as f32,
+        ]);
+    }
+    if p.drawn.as_ref().is_none_or(|(c, l)| *c != center_pos || *l != lane) {
+        with_world(|_, _, scene| scene.markers.set_zone(&mut scene.draw, center_pos, &lane, ZONE_RADIUS_CELL * units(GROUND.cell())));
+        let old = p.drawn.replace((center_pos, lane)).map(|(_, l)| l);
+        lane = old.unwrap_or_default();
         p.shown = true;
         request_world_tick();
     }
+    p.lane = lane;
 
     // The beacon adds back what the zone's cell flooring dropped, so it moves
     // smoothly rather than in whole-cell jumps.
-    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], kernel().sched.environment.night());
+    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], kernel().scene.environment.night());
     if p.beacon_for != Some(beacon) {
         p.beacon_for = Some(beacon);
-        kernel().sched.markers.set_beacon(beacon.0, beacon.1);
+        kernel().scene.markers.set_beacon(beacon.0, beacon.1);
     }
 }
 
@@ -144,8 +149,8 @@ fn clear(p: &mut Puck) {
         return;
     }
     p.shown = false;
-    p.zone_for = None;
-    with_world(|_world, sched| sched.markers.clear(&mut sched.draw));
+    p.drawn = None;
+    with_world(|_, _, scene| scene.markers.clear(&mut scene.draw));
     request_world_tick();
 }
 

@@ -5,11 +5,12 @@
 
 pub mod pick;
 
-use pxl_spec::bake::constant::{CELL, U_PER_CELL};
+
+use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::v3::V3;
 
 pub use crate::abi::cmd::ActiveTool;
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
@@ -21,7 +22,7 @@ use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, Entry, EntryAt};
 use crate::world::access::Hit;
 use crate::world::frame::view::view_ray;
-use pxl_spec::space::zoom::{base_of, of_side};
+use pxl_spec::space::coord::zoom::{base_of, of_side, units};
 use xpute_runtime::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -156,15 +157,15 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     };
     // A scattered decor is passed through.
     hover.approach = Some(match &struck {
-        Some(Struck::Object(o)) => world_adjacent_corner(&hit, U_PER_CELL, Some(&object_aabb(o))),
-        Some(Struck::Scattered(s)) => base_of(CELL, s.cell),
-        None => world_adjacent_corner(&hit, U_PER_CELL, None),
+        Some(Struck::Object(o)) => world_adjacent_corner(&hit, units(GROUND.cell()), Some(&object_aabb(o))),
+        Some(Struck::Scattered(s)) => base_of(GROUND.cell(), s.cell),
+        None => world_adjacent_corner(&hit, units(GROUND.cell()), None),
     });
     hover.coord = Some(match struck {
         Some(Struck::Object(o)) => o.corner(),
-        Some(Struck::Scattered(s)) => base_of(CELL, s.cell),
+        Some(Struck::Scattered(s)) => base_of(GROUND.cell(), s.cell),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
-        None => world_struck_corner(&hit, U_PER_CELL),
+        None => world_struck_corner(&hit, units(GROUND.cell())),
     });
 }
 
@@ -174,7 +175,7 @@ fn folded_at(hit: &Hit) -> bool {
     let [x, y, z] = hit.cube.center();
     let at = crate::world::frame::coord::world_to_canonical(&[x, y, z]);
     let held = of_side(hit.cube.extent()[0]);
-    crate::kernel::with_world(|_, sched| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
+    crate::kernel::with_world(|_, sched, _| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
 }
 
 /// A tap at `ndc_x`, `ndc_y` with the tool held.
@@ -199,11 +200,11 @@ pub(crate) fn tap(ndc_x: f64, ndc_y: f64) {
         ActiveTool::Eraser => {
             match (hover.object_at, hover.scattered) {
                 (Some(at), _) => remove(at),
-                (None, Some(s)) => place_air(&base_of(CELL, s.cell), U_PER_CELL),
+                (None, Some(s)) => place_air(&base_of(GROUND.cell(), s.cell), units(GROUND.cell())),
                 // AIR, not VOID: terrain has no leaf to delete. A whole cell, never the
                 // size tier: the scan emits nothing for a zero material whatever its
                 // sub-cell bytes, so a smaller leaf would save a bite nobody took.
-                (None, None) => place_air(&hovered, U_PER_CELL),
+                (None, None) => place_air(&hovered, units(GROUND.cell())),
             }
         }
         ActiveTool::Decor | ActiveTool::Object => {

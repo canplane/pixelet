@@ -5,7 +5,7 @@
 //! once here rather than per corner per frame. Nothing is drawn in daylight.
 //! The catalog's stars are the whole night sky: no Milky Way and no planets.
 
-use pxl_spec::space::mat4::Mat4;
+use pxl_spec::space::coord::mat4::Mat4;
 
 use crate::frame::shader::record::PIPELINE_STARS;
 use crate::frame::stage::{stage_lane, STAGE_AT};

@@ -12,7 +12,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use crate::cli::Flags;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 
 use crate::util::{fmt_bytes, fmt_dur, pack, write_atomic, Level};
 

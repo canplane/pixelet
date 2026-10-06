@@ -25,7 +25,7 @@ how it gets there and how you know it arrived.
 | `_meta/build-counter`   | the official build count    | fixed name             | mutable; taken and written by CI's gate, never by hand        |
 
 A tile is named by its **quadkey**: its 2D Morton key at the zoom the tile is
-held at (pxl-spec space/morton.rs), one base-4 digit a zoom, coarsest first,
+held at (pxl-spec space/hierarchy/morton.rs), one base-4 digit a zoom, coarsest first,
 rows counted from the south (pxl-spec bake/quadkey.rs). The length is the zoom, so nothing writes a zoom down, and
 the three bakes differ only in how long a name they have — terrain and POI 5
 to 15 digits for the pyramid they share, geocode 11 because a group covers 16

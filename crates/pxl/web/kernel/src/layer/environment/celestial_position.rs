@@ -3,7 +3,7 @@
 //! Where the sun, the moon and the stars are, by the standard low-precision
 //! formulas: the sun to about 0.01°, the moon to roughly 0.3–1°.
 
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::coord::v3::V3;
 
 const DEG: f64 = core::f64::consts::PI / 180.0;
 

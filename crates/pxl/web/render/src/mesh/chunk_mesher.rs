@@ -5,7 +5,7 @@
 //! its cells into a run set of its own. The mesh is written through caller
 //! blocks of any size (`Step::NeedMesh`, `Step::Full`).
 
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::coord::v3::V3;
 use xpute_core::math::scalar::round;
 
 use crate::look::color::{linear, srgb};
@@ -13,7 +13,7 @@ use crate::mesh::paint::palette::layer_mean;
 use crate::mesh::run::{OwnedRunSet, RunSet, COL_SPAN};
 use crate::mesh::word::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, MaterialClasses, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::{grow, Refused};
-use pxl_spec::space::pyramid::CHUNK_CELLS;
+use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -22,7 +22,7 @@ const MAX_BAKE_SPAN: usize = COL_SPAN as usize;
 const LOW_FILL_THRESHOLD: f64 = 0.25;
 
 /// A coarse cell's children one zoom finer.
-const CHILDREN: f64 = pxl_spec::space::hierarchy::children(3) as f64;
+const CHILDREN: f64 = pxl_spec::space::hierarchy::tree::children(3) as f64;
 
 const FULL_FACE_CNT: u32 = 6;
 const OPEN_BOTTOM_FACE_CNT: u32 = FULL_FACE_CNT - 1;

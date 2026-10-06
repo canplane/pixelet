@@ -7,9 +7,9 @@
 
 pub mod terrain_gate;
 
-use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 
-use pxl_spec::space::v3::{add3, V3};
+use pxl_spec::space::coord::v3::{add3, V3};
 use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
@@ -23,7 +23,6 @@ use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::control::navigation::support::target;
 use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
 use crate::world::frame::view::view_compose;
-use crate::world::observation::heights_revision;
 use terrain_gate::{allowed_view, climb_polar, ViewTriple};
 use xpute_runtime::global::Global;
 
@@ -59,45 +58,6 @@ const CLIMB_RISE_DAMP: f64 = 20.0;
 
 /// Slower than the controls ease, so passing over a ridge does not bob the view.
 const CLIMB_RELAX_DAMP: f64 = 5.0;
-
-/// The climb samples terrain twice and was asked every ticked frame at rest;
-/// it changes only with the view, the map center or `heights_revision`.
-struct ClimbMemo {
-    dist: f64,
-    polar: f64,
-    azimuth: f64,
-    center: Option<Pvf3>,
-    revision: (u32, u32),
-    polar_out: f64,
-}
-
-static MEMO: Global<ClimbMemo> = Global::new();
-
-fn climb_polar_memo(dist: f64, polar: f64, azimuth: f64) -> f64 {
-    let memo = MEMO.get(|| ClimbMemo {
-        dist: f64::NAN,
-        polar: f64::NAN,
-        azimuth: f64::NAN,
-        center: None,
-        revision: (u32::MAX, u32::MAX),
-        polar_out: f64::NAN,
-    });
-    let center = map_center();
-    let revision = heights_revision();
-    if dist == memo.dist && polar == memo.polar && azimuth == memo.azimuth && center == memo.center && revision == memo.revision {
-        return memo.polar_out;
-    }
-    let out = climb_polar(dist, polar, azimuth);
-    *memo = ClimbMemo {
-        dist,
-        polar,
-        azimuth,
-        center,
-        revision,
-        polar_out: out,
-    };
-    out
-}
 
 /// Gated by terrain where the controls are written, so turning back moves at
 /// once. `climb` limits only a tilt asked: a zoom it answers by pitching the
@@ -191,7 +151,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     // `climb` pitches the look toward straight down instead of shortening dist:
     // rising fast and relaxing slowly while the ground bounds it.
     let polar = match settings_store().orbit_obstacle {
-        OrbitObstacleMode::climb => climb_polar_memo(o.dist, vs.polar, vs.azimuth),
+        OrbitObstacleMode::climb => climb_polar(o.dist, vs.polar, vs.azimuth),
         _ => vs.polar,
     };
     let rate = match (polar < vs.polar, polar < cam.polar) {

@@ -4,9 +4,10 @@
 //! (pxl-spec bake/quadkey.rs).
 
 use pxl_spec::bake::quadkey::tile_name;
-use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{Tile, LEAF_Z, TOP_Z};
-use pxl_spec::space::zoom::Zoom;
+use pxl_spec::space::coord::pvf3::ivec::IVec;
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 /// The bakes held as a pyramid; geocode writes its quadkeys itself.
 pub fn of(prefix: &str) -> Result<(), String> {
@@ -21,7 +22,7 @@ pub fn of(prefix: &str) -> Result<(), String> {
 pub fn rename(rest: &str) -> Result<String, String> {
     let (zoom, tile) = rest.split_once('/').ok_or("a pyramid tile is a zoom and a tile")?;
     let z = zoom.strip_prefix('z').and_then(|z| z.parse::<Zoom>().ok()).ok_or_else(|| format!("{zoom}: not a zoom"))?;
-    if !(TOP_Z..=LEAF_Z).contains(&z) {
+    if !(GROUND.top()..=LEAF_ZOOM).contains(&z) {
         return Err(format!("z{z} is past the pyramid"));
     }
     let tile = tile.parse::<IVec>().map_err(|e| format!("{tile}: {e}"))?;

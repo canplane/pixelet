@@ -1,7 +1,7 @@
 {
   "$doc": [
     "The Earth as the map takes it: Web Mercator's sphere, which every meter the",
-    "map measures is a meter of (pxl-spec space/adapter/4326.rs)."
+    "map measures is a meter of (pxl-spec space/coord/adapter/4326.rs)."
   ],
   "EARTH_RADIUS_M": {
     "$value": 6378137,

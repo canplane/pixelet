@@ -3,36 +3,17 @@
 //! A chunk: a cube of the camera grid's cells, `CHUNK_STEPS` zooms finer than
 //! itself, built and drawn as one. Never fetched or held; only its address
 //! exists, and an empty one is never made. It names only the grid's cells:
-//! which of a layer's tiles holds them is the layer's (`read.rs`).
+//! which of a layer's tiles holds them is its lattice's (`Lattice::read_tile`).
 
-use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::space::hierarchy::{child_of, parent_of};
-use pxl_spec::space::lod::reach_cell;
-use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{CHUNK_STEPS, TOP_Z};
-use pxl_spec::space::v3::Aabb;
-use pxl_spec::space::zoom::wrap_cell;
-use pxl_spec::space::zoom::{base_of, index_of, units, Zoom};
+use pxl_spec::space::hierarchy::tree::{child_of, parent_of};
+use pxl_spec::space::coord::pvf3::ivec::IVec;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::camera::grid::CHUNK_STEPS;
+use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::world::wrap_cell;
+use pxl_spec::space::coord::zoom::{base_of, index_of, units, Zoom, SHARD_ZOOM};
 
 pub const CHILDREN: usize = 8;
-
-/// The chunk whose cells are the grid's at `cell`.
-pub const fn chunk_of(cell: Zoom) -> Zoom {
-    cell - CHUNK_STEPS
-}
-
-/// A view's roots over a top at `top`: the chunks whose cells are the
-/// coarsest the top's reach draws.
-pub const fn root_of(top: Zoom) -> Zoom {
-    chunk_of(reach_cell(top))
-}
-
-/// The coarsest chunk: the roots over the coarsest top.
-pub const TOP_CHUNK: Zoom = root_of(TOP_Z);
-
-/// The finest chunk: its cells are the objects' finest.
-pub const FINEST_CHUNK: Zoom = chunk_of(OBJECT_FINEST);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Chunk {
@@ -120,8 +101,9 @@ impl Chunk {
         (self.zoom, [x, y])
     }
 
+    /// None for a 3D root.
     pub fn parent(self) -> Option<Chunk> {
-        (self.zoom > TOP_CHUNK).then(|| Chunk {
+        (self.zoom > SHARD_ZOOM).then(|| Chunk {
             zoom: self.zoom - 1,
             at: parent_of(self.at),
         })

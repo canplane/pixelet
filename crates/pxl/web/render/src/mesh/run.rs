@@ -5,8 +5,9 @@
 
 use crate::mesh::word::{taps_of, unpack_material, SUB_CELL_NONE};
 use crate::mesh::{grow, try_push, Refused};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
-use pxl_spec::space::zoom::count;
+use pxl_spec::space::camera::grid::CHUNK_CELLS;
+use pxl_spec::space::coord::zoom::count;
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 

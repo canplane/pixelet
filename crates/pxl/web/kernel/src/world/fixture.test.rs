@@ -3,14 +3,15 @@
 // A world known exactly for the goal's tests: flat ground with solid boxes,
 // as bounds (`Bounds`) and as what tiles touch (`Observer`).
 
-use pxl_spec::space::lod::Tau;
-use pxl_spec::space::observation::{Bounds, Contents, Frustum, Observation};
-use pxl_spec::space::pyramid::TOP_Z;
-use pxl_spec::space::v3::{add3, Aabb, V3};
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::camera::eye::{Frustum, Observation};
+use pxl_spec::space::layer::demand::{Bounds, Contents};
+use pxl_spec::space::coord::v3::{add3, Aabb, V3};
 
 use crate::world::observer::{Footprint, Grid, Met, Observer, OnPatch, Sight};
 use crate::world::pyramid::domain::{Domain, Price};
-use pxl_spec::space::zoom::Zoom;
+use pxl_spec::space::coord::zoom::Zoom;
 
 #[derive(Clone)]
 pub struct World {
@@ -38,6 +39,10 @@ impl World {
 }
 
 impl Bounds for World {
+    fn finest(&self, _region: Aabb) -> Zoom {
+        GROUND.cell()
+    }
+
     /// The ground's lowest is its top cell's floor, as the index lane bounds it.
     fn contents(&self, _cell: Zoom, region: Aabb) -> Contents {
         if !self.answered {
@@ -113,11 +118,11 @@ pub fn footprints(o: &Observation, world: &World) -> Vec<Footprint> {
 }
 
 pub fn domain(o: Observation, ladder: &[Tau], world: &World) -> Domain {
-    domain_priced(o, ladder, world, &crate::world::pyramid::domain::Free)
+    domain_priced(o, ladder, world, &Free)
 }
 
 pub fn domain_priced(o: Observation, ladder: &[Tau], world: &World, price: &dyn Price) -> Domain {
-    Domain::priced(o, ladder, 0, Box::new(world.clone()), &footprints(&o, world), price)
+    Domain::priced(o, GROUND.top(), ladder, 0, Box::new(world.clone()), &footprints(&o, world), price)
 }
 
 fn unit(v: V3) -> V3 {
@@ -157,8 +162,8 @@ pub fn eye(eye: V3, forward: Option<V3>, far: f64, ground: f64) -> Observation {
     Observation {
         eye,
         frustum: forward.map(|f| frustum(eye, f, REFERENCE, far)),
-        far,
-        top: TOP_Z,
+        reach: far,
+        fog: f64::INFINITY,
         planet: f64::INFINITY,
         ground,
     }
@@ -174,4 +179,23 @@ pub fn place(center: V3, dist: f64, polar: f64, azimuth: f64) {
     camera_store().intent = Intent { dist, azimuth, polar };
     let e = orbit_eye_offset(dist, polar, azimuth);
     set_eye_world(&add3(&center, &e));
+}
+
+/// No cost, no limit.
+pub struct Free;
+
+use crate::world::chunk::mesh_slot::POOLS;
+
+impl crate::world::pyramid::domain::Price for Free {
+    fn piece(&self, _: crate::world::pyramid::chunk::Chunk, _: f64, _: pxl_spec::space::camera::grid::Tau) -> [u32; POOLS] {
+        [0; POOLS]
+    }
+
+    fn split(&self, _: crate::world::pyramid::chunk::Chunk) -> [u32; POOLS] {
+        [0; POOLS]
+    }
+
+    fn over(&self, _: &[u32; POOLS]) -> bool {
+        false
+    }
 }

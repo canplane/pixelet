@@ -5,8 +5,8 @@
 //! camera, since a badge is drawn above its anchor), and with a box on
 //! screen. Overlaps are kept: a badge stands for the places under its cell.
 
-use pxl_spec::space::mat4::mat4_transform_point;
-use pxl_spec::space::v3::{add3, dot3, sub3};
+use pxl_spec::space::coord::mat4::mat4_transform_point;
+use pxl_spec::space::coord::v3::{add3, dot3, sub3};
 
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::environment::state::globe;

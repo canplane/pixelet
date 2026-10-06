@@ -5,20 +5,21 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
-use pxl_spec::bake::earth_tile::{self, EARTH_ACROSS, EARTH_HELD, EARTH_REACH, EARTH_Z};
-use pxl_spec::space::zoom::{around, wrap_index};
+use pxl_spec::bake::earth_tile::{self, EARTH_ACROSS, EARTH_HELD, EARTH_REACH, EARTH_ZOOM};
+use pxl_spec::space::coord::world::{around, wrap_index};
 
-use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::{Folds, Lattice, Tile};
+use pxl_spec::space::coord::pvf3::ivec;
+use pxl_spec::space::layer::lattice::Lattice;
+use pxl_spec::space::layer::tile::{Folds, Tile};
 use xpute_runtime::global::Global;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
 
 use crate::io::demand::{Category, Phases};
-use crate::sched::profiler::record::Failure;
+use crate::io::failure::Failure;
 use crate::world::pyramid::{Layer, Pyramid};
 use crate::world::residency::Residency;
-use pxl_spec::space::zoom::Zoom;
+use pxl_spec::space::coord::zoom::Zoom;
 
 /// What a held tile is: its texels are in its frame's layer on the GPU.
 #[derive(Clone)]
@@ -37,7 +38,7 @@ impl Layer for Earth {
     const CATEGORY: Category = Category::earth;
     const LATTICE: Lattice = earth_tile::EARTH;
     const DEMANDS: bool = false;
-    const TOP: Option<Zoom> = Some(EARTH_Z);
+    const TOP: Option<Zoom> = Some(EARTH_ZOOM);
 
     fn reach() -> f64 {
         EARTH_REACH
@@ -114,8 +115,8 @@ pub fn earth_window() -> ([i32; 2], [u32; EARTH_HELD as usize]) {
     let at = |p: Tile| [ivec::X(p.tile), ivec::Y(p.tile)];
     let Some([first, _]) = pyramid.floor().next().map(at) else { return ([0; 2], layers) };
     // X wraps: the window's west tile is the one fewest tiles east of the first.
-    let around = around(EARTH_Z);
-    let east = |x: i64| wrap_index(EARTH_Z, x - first);
+    let around = around(EARTH_ZOOM);
+    let east = |x: i64| wrap_index(EARTH_ZOOM, x - first);
     let x0 = first + pyramid.floor().map(|p| east(at(p)[0])).min().unwrap_or(0);
     let y0 = pyramid.floor().map(|p| at(p)[1]).min().unwrap_or(0);
     for p in pyramid.floor() {

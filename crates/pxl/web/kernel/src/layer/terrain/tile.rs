@@ -7,13 +7,14 @@
 
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{decode_terrain_into, Extent, GroundCell, Terrain, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{Lattice, Tile, GROUND, LEAF_Z};
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::layer::lattice::{Lattice, GROUND};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::mem::base::ptr_at;
 
-use crate::sched::profiler::record::Failure;
+use crate::io::failure::Failure;
 
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::layer::terrain::fixed::{coarse_off, deck_off, ele_off, extent_off, ground_off, COARSE_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
@@ -94,7 +95,7 @@ unsafe fn room_of(record: u32) -> TileRoom {
 /// The source has nothing under `at`: the ground cell there, as the finest
 /// tile held over it gives it, is void.
 pub fn void_under(at: &Pvf3) -> bool {
-    Access::now().at(at, LEAF_Z).value().is_some_and(|g| g.top().is_none())
+    Access::now().at(at, LEAF_ZOOM).value().is_some_and(|g| g.top().is_none())
 }
 
 pub fn terrain_step() {

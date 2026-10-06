@@ -3,6 +3,7 @@
 //! What a tile's solve reads.
 
 use postgres::Client;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -56,7 +57,7 @@ impl TileRows {
 }
 
 fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: IVec) -> Result<TileRows, String> {
-    let [min, max] = epsg3857::get_tile_bbox(tile);
+    let [min, max] = epsg3857::get_tile_bbox(LEAF_ZOOM, tile);
     let env: [&(dyn ToSql + Sync); 4] = [&min[0], &min[1], &max[0], &max[1]];
     let read = |client: &mut Client, sql: &str| client.query(sql, &env).map_err(|e| e.to_string());
     let ways = read(client, SEGMENTS_SQL)?;

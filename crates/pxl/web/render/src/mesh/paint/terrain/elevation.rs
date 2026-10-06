@@ -6,7 +6,7 @@
 use pxl_spec::bake::format::{Ground, GroundCell};
 use pxl_spec::bake::ground::cell_shift;
 use pxl_spec::bake::surface::bicubic;
-use pxl_spec::space::pyramid::GROUND;
+use pxl_spec::space::layer::lattice::GROUND;
 
 /// Signed because the padded raster reaches ELE_PAD samples past the tile, so a
 /// chunk at the edge can read its neighbor's ground.

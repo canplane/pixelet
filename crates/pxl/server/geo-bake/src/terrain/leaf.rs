@@ -4,12 +4,13 @@
 //! source covers it and land touches it; the offline bake and the dev server
 //! ask the same question, so both produce the same objects.
 
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use std::path::Path;
 
 use postgres::types::ToSql;
 use postgres::Client;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::coord::adapter::epsg3857::{self, to_db};
+use pxl_spec::space::coord::adapter::epsg3857::{self, mer_from_u};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 
 use crate::coverage::Coverage;
@@ -47,14 +48,14 @@ pub fn has_ground(client: &mut Client, tiles: &[IVec]) -> Result<Vec<bool>, post
     let bbox: Vec<[f64; 4]> = tiles
         .iter()
         .map(|&p| {
-            let bb = epsg3857::get_tile_bbox(p);
+            let bb = epsg3857::get_tile_bbox(LEAF_ZOOM, p);
             [bb[0][0], bb[0][1], bb[1][0], bb[1][1]]
         })
         .collect();
     let ord: Vec<i32> = (0..tiles.len() as i32).collect();
     let col = |k: usize| -> Vec<f64> { bbox.iter().map(|b| b[k]).collect() };
     let (minx, miny, maxx, maxy) = (col(0), col(1), col(2), col(3));
-    let reach = to_db(DRAWN_REACH_U);
+    let reach = mer_from_u(DRAWN_REACH_U);
     let params: [&(dyn ToSql + Sync); 6] = [&ord, &minx, &miny, &maxx, &maxy, &reach];
 
     let mut out = vec![false; tiles.len()];
@@ -69,7 +70,7 @@ pub fn has_ground(client: &mut Client, tiles: &[IVec]) -> Result<Vec<bool>, post
 pub fn bake_leaf(r: &mut deck::Reader<impl Store>, tile: IVec) -> Result<(Terrain, bool), String> {
     let (solved, _) = deck::solve_tile(r, tile)?;
     let (surface, flat) = fetch_surface(r.repo, r.client, tile, &solved.drawn)?;
-    let lines = bake_decks(&solved.lines, epsg3857::get_tile_bbox(tile)[0]).ok_or("a tile's decks overflow a record")?;
+    let lines = bake_decks(&solved.lines, epsg3857::get_tile_bbox(LEAF_ZOOM, tile)[0]).ok_or("a tile's decks overflow a record")?;
     Ok((assemble(surface, lines), flat))
 }
 
@@ -101,7 +102,7 @@ pub fn write_land_tiles(path: &Path, coverage: &Coverage, release: &str, land: &
 
 fn land_key(coverage: &Coverage, release: &str) -> serde_json::Value {
     serde_json::json!({
-        "leaf_z": pxl_spec::space::pyramid::LEAF_Z,
+        "leaf_z": pxl_spec::space::layer::tile::LEAF_ZOOM,
         "shards": coverage.shards().map(|s| s.name()).collect::<Vec<_>>(),
         "ground": format!("{GROUND:016x}"),
         "release": release,

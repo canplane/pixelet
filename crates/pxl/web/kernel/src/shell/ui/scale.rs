@@ -2,8 +2,8 @@
 
 //! The view's scale at the map center, as the meters a logical pixel spans.
 
-use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::pvf3::pvf3;
+use pxl_spec::space::coord::adapter::epsg3857;
+use pxl_spec::space::coord::pvf3::pvf3;
 
 use crate::control::camera::controller::{dist, map_center, units_per_px_at};
 

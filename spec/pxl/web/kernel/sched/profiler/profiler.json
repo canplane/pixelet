@@ -92,13 +92,13 @@
     "REASONS": 4,
     "STEP_SLOTS": 32,
     "ZOOMS": 24,
-    "$ZOOMS": "A lane a zoom slot, by the zoom itself: slot z holds a cell of zoom z's tiles, past the leaves for the objects' finer cells (pxl-spec space/pyramid.rs `Lattice::z_of`)."
+    "$ZOOMS": "A lane a zoom slot, by the zoom itself: slot z holds a cell of zoom z's tiles, past the leaves for the objects' finer cells (pxl-spec space/layer/lattice.rs `Lattice::z_of`)."
   },
   "FRAME": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z."
+      "One rendered frame (sched/profiler/frame.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z."
     ],
     "t": 1,
     "dt_ms": 1,
@@ -282,7 +282,7 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One settled task (sched/profiler/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's."
+      "One settled task (sched/profiler/task.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's."
     ],
     "category": 1,
     "subject": 1,

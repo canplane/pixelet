@@ -17,7 +17,7 @@
 //! always possible. A coarsening waits `COARSEN_HOLD_MS` before it is made,
 //! unless the arena refused a move last step.
 
-use pxl_spec::space::lod::Tau;
+use pxl_spec::space::camera::grid::Tau;
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
 use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};

@@ -8,6 +8,7 @@ use pxl_geo_spec::overture::division::{self, rank_of, Division, CONTAINING_SQL, 
 use pxl_spec::bake::place_tile::{leaf_slot, Named, PlaceGroup, APPROX, GROUP_TILES, LOCAL, NO_LABEL};
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::geocode::{PartSource, PlaceDict};
 
@@ -67,7 +68,7 @@ impl GeocodeProvider {
         let (xs, ys): (Vec<f64>, Vec<f64>) = leaves
             .iter()
             .map(|&leaf| {
-                let bb = epsg3857::get_tile_bbox(leaf);
+                let bb = epsg3857::get_tile_bbox(LEAF_ZOOM, leaf);
                 ((bb[0][0] + bb[1][0]) / 2.0, (bb[0][1] + bb[1][1]) / 2.0)
             })
             .unzip();

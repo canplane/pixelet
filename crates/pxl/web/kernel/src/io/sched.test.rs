@@ -7,7 +7,7 @@ use super::*;
 use crate::io::demand::Why;
 use xpute_core::status::errno::Errno;
 
-use crate::sched::profiler::record::{Failure, Outcome};
+use crate::io::failure::{Failure, Outcome};
 use crate::world::observation::Order;
 
 struct ByWhy;

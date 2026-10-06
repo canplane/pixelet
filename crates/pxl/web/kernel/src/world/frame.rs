@@ -6,5 +6,6 @@
 
 pub mod coord;
 pub mod resolution;
+pub mod scene;
 pub mod stage;
 pub mod view;

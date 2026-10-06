@@ -6,16 +6,16 @@
 //! that floor; a center put over coarser ground keeps its Z unknown and
 //! stands on the finest ground known there until the leaves' is.
 
-use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::pvf3::core::{FRAC_W, IVEC_Z_W};
-use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::LEAF_Z;
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::coord::pvf3::core::{FRAC_W, IVEC_Z_W};
+use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::coord::v3::V3;
 
 use crate::shell::setting::store::settings_store;
 use crate::world::access::{Access, Answer, Detail, Ray};
 use crate::world::frame::coord::{to_world, world_to_canonical};
-use pxl_spec::space::zoom::{index_of, units};
+use pxl_spec::space::coord::zoom::{index_of, units};
 
 /// The Z lane's floor, under any ground.
 const UNKNOWN_Z: i64 = -(1 << (IVEC_Z_W - 1)) << FRAC_W;
@@ -45,12 +45,12 @@ pub fn stand(at: &Pvf3) -> Pvf3 {
 
 /// The center's height over a floor whose top is `top`.
 pub fn over(top: f64) -> f64 {
-    top + units(CELL) / 2.0
+    top + units(GROUND.cell()) / 2.0
 }
 
 /// The top of the floor `center` stands over.
 pub fn floor_of(center: &Pvf3) -> f64 {
-    pvf3::to_real(pvf3::Z(center)) - units(CELL) / 2.0
+    pvf3::to_real(pvf3::Z(center)) - units(GROUND.cell()) / 2.0
 }
 
 fn stand_over(at: &Pvf3, top: f64) -> Pvf3 {
@@ -108,7 +108,7 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) ->
         return *from;
     }
     let mut at = to;
-    match passage(from, way, index_of(CELL, from)[2]) {
+    match passage(from, way, index_of(GROUND.cell(), from)[2]) {
         Passage::Open(cz) => at = in_cell(&to, cz),
         Passage::Unknown => {}
         Passage::Blocked => return *from,
@@ -122,7 +122,7 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) ->
 
 /// `at` in cell height `cz`.
 pub fn in_cell(at: &Pvf3, cz: i64) -> Pvf3 {
-    stand_over(at, cz as f64 * units(CELL))
+    stand_over(at, cz as f64 * units(GROUND.cell()))
 }
 
 pub enum Passage {
@@ -137,7 +137,7 @@ pub fn passage(from: &Pvf3, way: [f64; 2], start: i64) -> Passage {
     let access = Access::now();
     let Some(ceiling) = access.ceiling_over(from).exact() else { return Passage::Blocked };
     let length = libm::hypot(way[0], way[1]);
-    let side = units(CELL);
+    let side = units(GROUND.cell());
     let [x, y] = [pvf3::to_real(pvf3::X(from)), pvf3::to_real(pvf3::Y(from))];
     let dir = if length > 0.0 { [way[0] / length, way[1] / length] } else { [0.0, 0.0] };
     let mut cz = start;
@@ -152,7 +152,7 @@ pub fn passage(from: &Pvf3, way: [f64; 2], start: i64) -> Passage {
             direction: [dir[0], dir[1], 0.0],
             reach: length - t,
         };
-        match access.first_hit(&ray, Detail::Zoom(LEAF_Z)) {
+        match access.first_hit(&ray, Detail::Zoom(LEAF_ZOOM)) {
             Answer::Exact(None) => return Passage::Open(cz),
             Answer::Exact(Some(hit)) => {
                 let p = ray.at(hit.t + side / 2.0);

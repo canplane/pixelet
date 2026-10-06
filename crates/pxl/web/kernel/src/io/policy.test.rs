@@ -1,5 +1,6 @@
 // pxl-kernel/io/policy.test.rs
 
+use pxl_spec::space::layer::lattice::GROUND;
 use super::*;
 
 fn at(why: Why, seen: bool, near: f64) -> Ask {
@@ -43,11 +44,11 @@ fn only_a_failure_waits() {
 
 #[test]
 fn of_tiles_as_near_the_finer_is_asked_first() {
-    use pxl_spec::space::pyramid::{LEAF_Z, TOP_Z};
+    use pxl_spec::space::layer::tile::LEAF_ZOOM;
     let p = Policy::standard();
     let eye = at(Why::Floor, true, 0.0);
     let rank = |zoom| p.rank(Category::terrain, Tile { zoom, tile: 0 }.subject(), eye, 0.0);
-    let (leaf, top) = (rank(LEAF_Z), rank(TOP_Z));
+    let (leaf, top) = (rank(LEAF_ZOOM), rank(GROUND.top()));
     assert_eq!((leaf.class, leaf.distance), (top.class, top.distance));
     assert!(leaf.detail > top.detail);
 }

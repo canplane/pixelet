@@ -5,9 +5,9 @@
 
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_render::look::globe::Globe;
-use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::adapter::epsg4326::G4326;
-use pxl_spec::space::v3::{len3, V3};
+use pxl_spec::space::coord::adapter::epsg3857;
+use pxl_spec::space::coord::adapter::epsg4326::G4326;
+use pxl_spec::space::coord::v3::{len3, V3};
 
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
 use crate::host::wall_now;
@@ -55,7 +55,7 @@ pub fn globe() -> Globe {
 /// Runs before the chunks' step.
 pub fn map_environment_step() {
     let e = environment();
-    let sched = &mut kernel().sched;
+    let sched = &mut kernel().scene;
 
     // Observed from the globe's anchor, which the world is laid on the planet about.
     let center = globe_anchor();

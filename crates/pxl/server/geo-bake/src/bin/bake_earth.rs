@@ -15,19 +15,20 @@
 //!
 //!   deno task bake:earth
 
-use pxl_spec::space::zoom::around;
+use pxl_spec::space::coord::world::around;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use image::ImageFormat;
 
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
-use pxl_spec::bake::earth_tile::{self, EARTH_TEXELS, EARTH_Z};
+use pxl_spec::bake::earth_tile::{self, EARTH_TEXELS, EARTH_ZOOM};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::quadkey::tile_name;
-use pxl_spec::space::adapter::{epsg3857, epsg4326};
-use pxl_spec::space::pvf3::pvf3;
-use pxl_spec::space::pyramid::{tile_at, GROUND};
+use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
+use pxl_spec::space::coord::pvf3::pvf3;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::tile_at;
 
 const DAY: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74393/world.topo.200407.3x21600x10800.jpg";
 const NIGHT: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144897/BlackMarble_2016_";
@@ -161,12 +162,12 @@ impl<const N: usize> Plate<'_, N> {
 
 /// Longitude and latitude, in degrees, of a point of the plane in units.
 fn lng_lat(x: f64, y: f64) -> [f64; 2] {
-    let [lng, lat, _] = epsg4326::from_mercator(&[epsg3857::to_db(x), epsg3857::to_db(y), 0.0]);
+    let [lng, lat, _] = epsg4326::from_mercator(&[epsg3857::mer_from_u(x), epsg3857::mer_from_u(y), 0.0]);
     [lng, lat]
 }
 
 fn tile_texels(px: i64, py: i64, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
-    let tile = tile_at(EARTH_Z, [px, py]);
+    let tile = tile_at(EARTH_ZOOM, [px, py]);
     let mut rgba = vec![0u8; earth_tile::EARTH_BYTES];
     for ty in 0..EARTH_TEXELS {
         for tx in 0..EARTH_TEXELS {
@@ -272,7 +273,7 @@ fn run() -> Result<(), String> {
     global(&day_plate, &night_plate, Path::new("asset/sky/earth/07.webp"))?;
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     // Every tile of the zoom: the Mercator square, one world across and as high.
-    let half = around(EARTH_Z) / 2;
+    let half = around(EARTH_ZOOM) / 2;
     let tiles: Vec<[i64; 2]> = (-half..half).flat_map(|y| (-half..half).map(move |x| [x, y])).collect();
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
     let written = std::sync::atomic::AtomicU32::new(0);
@@ -283,7 +284,7 @@ fn run() -> Result<(), String> {
             scope.spawn(move || {
                 for &[px, py] in tiles.iter().skip(t).step_by(threads) {
                     let Some(rgba) = tile_texels(px, py, day, night) else { continue };
-                    let name = tile_name(tile_at(EARTH_Z, [px, py])).to_string();
+                    let name = tile_name(tile_at(EARTH_ZOOM, [px, py])).to_string();
                     let stored = earth_tile::encode(&rgba)
                         .map_err(|e| format!("{e:?}"))
                         .and_then(|pkt| pack(&pkt, Level::Stored).map_err(|e| e.to_string()));
@@ -300,7 +301,7 @@ fn run() -> Result<(), String> {
     }
     let objects = written.into_inner();
     println!("[earth] {objects} tiles -> {}", out.display());
-    write_manifest(&out, git_sha().as_deref(), serde_json::json!({ "objects": objects, "z": EARTH_Z }))
+    write_manifest(&out, git_sha().as_deref(), serde_json::json!({ "objects": objects, "z": EARTH_ZOOM }))
 }
 
 fn main() -> ExitCode {

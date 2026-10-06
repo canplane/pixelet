@@ -32,7 +32,7 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Option<IVec>) ->
     let select = PLACES_SQL.replace("{category}", CATEGORY_SQL);
     let rows = match within {
         Some(p) => {
-            let [[x0, y0, _], [x1, y1, _]] = epsg3857::get_tile_bbox(p);
+            let [[x0, y0, _], [x1, y1, _]] = epsg3857::get_tile_bbox(LEAF_ZOOM, p);
             client.query(&format!("{select} WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)"), &[&x0, &y0, &x1, &y1])
         }
         None => client.query(&select, &[]),

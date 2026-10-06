@@ -19,14 +19,14 @@ use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle, Credit};
 use crate::layer::earth::{self, Earth};
 use crate::layer::geocode::store as geocode_store;
-use crate::sched::profiler::record::{Failure, Outcome};
+use crate::io::failure::{Failure, Outcome};
 use crate::world::change::world_edge;
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::place_tile::{group_name, DICT_OBJECT};
 use pxl_spec::bake::poi_tile::PoiTile;
 use pxl_spec::bake::quadkey::tile_name;
-use pxl_spec::space::pyramid::Tile;
+use pxl_spec::space::layer::tile::Tile;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 

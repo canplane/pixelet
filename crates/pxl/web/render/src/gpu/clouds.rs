@@ -3,9 +3,9 @@
 //! The cloud slab: marched over a texture half the screen's size, then laid
 //! over the opaque world at its own, reading a tile baked once per device.
 
-use pxl_spec::space::mat4::Mat4;
-use pxl_spec::space::pvf3::core::{IVEC_X_W, IVEC_Y_W};
-use pxl_spec::space::v3::V3;
+use pxl_spec::space::coord::mat4::Mat4;
+use pxl_spec::space::coord::pvf3::core::{IVEC_X_W, IVEC_Y_W};
+use pxl_spec::space::coord::v3::V3;
 
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD, PIPELINE_CLOUD_MARCH};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};

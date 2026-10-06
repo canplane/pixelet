@@ -4,8 +4,8 @@
 //! decor of chunks drawing it as held: decor paints no voxel, so the access's
 //! ray passes through it. A placed instance resolves to its entry; a scattered one to its cell.
 
-use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::v3::{cross3, dot3, sub3, Aabb, V3};
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::coord::v3::{cross3, dot3, sub3, Aabb, V3};
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::kernel;
@@ -14,8 +14,8 @@ use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
 use crate::world::chunk::build::draws_as_held;
-use crate::world::chunk::table::Scheduler;
-use pxl_spec::space::zoom::{index_of, units, wrap_cell, Zoom};
+use crate::layer::model::store::Models;
+use pxl_spec::space::coord::zoom::{index_of, units, Zoom};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DecorStruck {
@@ -37,11 +37,11 @@ pub struct Scattered {
 /// The ray is in the world's doubles. A decor wins only
 /// strictly nearer than `max_dist`, the world's hit, as a depth test decides.
 pub fn raycast_decor(origin: V3, direction: V3, max_dist: f64) -> Option<DecorStruck> {
-    let (_, sched) = kernel().world()?;
-    let hit = hit_decor(sched, origin, direction, max_dist)?;
+    let (_, _, scene) = kernel().world()?;
+    let hit = hit_decor(&scene.models, origin, direction, max_dist)?;
     if hit.entry == NO_ENTRY {
         return Some(DecorStruck::Scattered(Scattered {
-            cell: index_of(CELL, &crate::world::frame::coord::world_to_canonical(&hit.at)),
+            cell: index_of(GROUND.cell(), &crate::world::frame::coord::world_to_canonical(&hit.at)),
             group: hit.group,
             at: hit.at,
             rotation: hit.rotation,
@@ -52,7 +52,7 @@ pub fn raycast_decor(origin: V3, direction: V3, max_dist: f64) -> Option<DecorSt
     let zoom = hit.entry as Zoom;
     let side = units(zoom);
     let at = [(hit.at[0] / side).floor() as i64, (hit.at[1] / side).floor() as i64, (hit.at[2] / side).floor() as i64];
-    Some(DecorStruck::Placed(EntryAt { zoom, at: wrap_cell(zoom, at) }))
+    Some(DecorStruck::Placed(EntryAt::new(zoom, at)))
 }
 
 /// `entry` is NO_ENTRY for a scattered instance.
@@ -73,32 +73,32 @@ fn group_models() -> impl Iterator<Item = Option<u32>> {
 
 /// The largest model's bounding radius at the largest decor size; only for
 /// skipping cells the ray never comes near.
-fn decor_reach(sched: &Scheduler) -> f64 {
+fn decor_reach(models: &Models) -> f64 {
     let radius = group_models()
         .flatten()
-        .filter_map(|m| sched.models.mesh(m))
+        .filter_map(|m| models.mesh(m))
         .map(|m| m.radius as f64 * m.scale as f64)
         .fold(0.0, f64::max);
     radius * DECOR_SIZE
 }
 
 /// Hidden instances are tested too: the hidden one is what the eraser is over.
-fn hit_decor(sched: &Scheduler, o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
+fn hit_decor(models: &Models, o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
-    let reach = decor_reach(sched);
+    let reach = decor_reach(models);
     for (cell, base_x, base_y, words) in crate::layer::decor::cell::shown() {
         // A chunk drawing decor folded strikes none of it.
-        if !draws_as_held(cell, CELL) {
+        if !draws_as_held(cell, GROUND.cell()) {
             continue;
         }
         let side = cell.rect().2;
-        let (tx, ty) = (pxl_spec::space::zoom::nearest(base_x, o[0]), base_y);
+        let (tx, ty) = (pxl_spec::space::coord::world::nearest(base_x, o[0]), base_y);
         if !ray_meets_square(&o, &d, tx - reach, ty - reach, tx + side + reach, ty + side + reach, limit) {
             continue;
         }
         for (group, ((offset, count), model)) in decor_groups(words).zip(group_models()).enumerate() {
-            let Some(mesh) = model.and_then(|m| sched.models.mesh(m)) else { continue };
+            let Some(mesh) = model.and_then(|m| models.mesh(m)) else { continue };
             let lanes = GroupLanes {
                 first: offset as usize,
                 count: count as usize,

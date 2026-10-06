@@ -12,7 +12,7 @@ use super::deck::{self, Decks};
 use super::ground::SHIFT_RANGE;
 use super::malformed;
 use super::surface::extent_of;
-use crate::space::pyramid::{EXTENT, TILE_CELLS};
+use crate::space::layer::lattice::{EXTENT, TILE_CELLS};
 
 /// A tile's lane lengths; a tile is these and no other size.
 pub const GROUND_LANE: usize = (TILE_CELLS * TILE_CELLS) as usize;

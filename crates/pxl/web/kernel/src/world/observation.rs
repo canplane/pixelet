@@ -6,24 +6,28 @@
 use std::cmp::Ordering;
 
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::hierarchy::ancestor_of;
-use pxl_spec::space::lod::{demand_reach, Tau};
-use pxl_spec::space::observation::{band, Bounds, Contents, DemandEstimator, Frustum, Observation, Requirement};
-use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{tile_at, Lattice, Tile, CHUNK_STEPS, GROUND, LEAF_Z, TOP_Z};
-use pxl_spec::space::v3::Aabb;
+use pxl_spec::space::hierarchy::tree::ancestor_of;
+use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::camera::eye::{Frustum, Observation};
+use pxl_spec::space::layer::demand::{band, Bounds, Contents, DemandEstimator, Requirement};
+use pxl_spec::space::coord::world::REACH;
+use pxl_spec::space::camera::grid::CHUNK_STEPS;
+use pxl_spec::space::layer::lattice::{Lattice, GROUND};
+use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
+use pxl_spec::space::coord::v3::Aabb;
 
 use crate::kernel::kernel;
 use crate::layer::environment::fog::{eye_height, reach_at};
 use crate::layer::environment::state::globe;
-use crate::layer::object::store::objects_revision;
+use crate::layer::earth::Earth;
+use crate::world::pyramid::domain;
+use pxl_spec::bake::poi_tile::PoiTile;
 use crate::world::access::Access;
 use crate::world::frame::view::view;
 use crate::world::observer::Footprint;
 use crate::world::pyramid::Layer as _;
 use crate::world::residency::floor;
-use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::zoom::{of_side, units, Zoom};
+use pxl_spec::space::coord::zoom::{of_side, units, Zoom};
 
 pub fn eye() -> Option<[f64; 3]> {
     crate::control::camera::controller::camera().eye?;
@@ -43,8 +47,8 @@ pub fn observation() -> Option<Observation> {
     Some(Observation {
         eye,
         frustum: Some(frustum_of_view()),
-        far: reach_at(eye[2]).min(demand_reach(top)),
-        top,
+        reach: GROUND.demand_reach(top),
+        fog: reach_at(eye[2]),
         planet: globe().radius_u(),
         ground: eye[2] - height,
     })
@@ -58,7 +62,7 @@ pub struct Known;
 
 impl Bounds for Known {
     fn contents(&self, cell: Zoom, region: Aabb) -> Contents {
-        let zoom = GROUND.grid_z(cell).clamp(i32::from(TOP_Z), i32::from(LEAF_Z)) as Zoom;
+        let zoom = GROUND.grid_z(cell).clamp(i32::from(GROUND.top()), i32::from(LEAF_ZOOM)) as Zoom;
         let (h0, h1) = (region.min[2], region.max[2]);
         let cut = |(lo, hi): (f64, f64)| (lo <= h1 && hi >= h0).then(|| (lo.max(h0), hi.min(h1)));
         let mut known = true;
@@ -87,7 +91,7 @@ impl Bounds for Known {
     }
 
     fn finest(&self, region: Aabb) -> Zoom {
-        kernel().objects.finest_in(&region).map_or(CELL, |z| z.max(CELL))
+        kernel().objects.finest_in(&region).map_or(GROUND.cell(), |z| z.max(GROUND.cell()))
     }
 }
 
@@ -141,6 +145,8 @@ pub struct ByFootprints<'a> {
     pub tau: Tau,
     /// The layer's, whose tiles' cells say which zoom a distance asks for.
     pub lattice: Lattice,
+    /// The coarsest zoom the source supplies whole; no requirement is coarser.
+    pub top: Zoom,
     pub footprints: &'a [Footprint],
     pub lacks: &'a [Requirement],
 }
@@ -152,23 +158,23 @@ impl DemandEstimator for ByFootprints<'_> {
             max: [x1, y1, REACH.max[2]],
         };
         let required = |zoom: Zoom, region: Aabb| {
-            let (from, to) = band(o, self.tau, self.lattice, zoom)?;
+            let (from, to) = band(o, self.tau, self.lattice, self.top, zoom)?;
             let held = bounds.contents(self.lattice.grid_cell(zoom), region).within(region)?;
             let m = o.measure(&held);
-            (m.seen && m.near < to && m.near <= o.far && m.far >= from).then_some(Requirement { zoom, region })
+            (m.seen && m.near < to && m.near <= o.far() && m.far >= from).then_some(Requirement { zoom, region })
         };
         for lack in self.lacks {
             let r = lack.region;
             let region = column(r.min[0], r.min[1], r.max[0], r.max[1]);
-            if let Some(r) = (o.top..=lack.zoom).rev().find_map(|z| required(z, region)) {
+            if let Some(r) = (self.top..=lack.zoom).rev().find_map(|z| required(z, region)) {
                 each(r);
             }
         }
         for f in self.footprints {
             let b = f.aabb();
-            for zoom in (o.top..=LEAF_Z).rev() {
-                let Some((_, to)) = band(o, self.tau, self.lattice, zoom) else { break };
-                let reach = to.min(o.far);
+            for zoom in (self.top..=LEAF_ZOOM).rev() {
+                let Some((_, to)) = band(o, self.tau, self.lattice, self.top, zoom) else { break };
+                let reach = to.min(o.far());
                 let lo = [b.min[0].max(o.eye[0] - reach), b.min[1].max(o.eye[1] - reach)];
                 let hi = [b.max[0].min(o.eye[0] + reach), b.max[1].min(o.eye[1] + reach)];
                 if lo[0] > hi[0] || lo[1] > hi[1] {
@@ -192,9 +198,19 @@ impl DemandEstimator for ByFootprints<'_> {
     }
 }
 
-/// Moves whenever a terrain tile comes or goes or an object is written.
-pub fn heights_revision() -> (u32, u32) {
-    (Terrain::pyramid().residency().revision(), objects_revision())
+/// What `Known` and the heights read of the ground: the terrain tiles known.
+pub fn ground_known(out: &mut Vec<(Tile, bool)>) {
+    Terrain::pyramid().residency().known(out);
+}
+
+/// Where the objects changed, told to what works anything out from them;
+/// what is drawn hears it through its sources (`chunk/source.rs`).
+pub fn objects_written(regions: &[Aabb]) {
+    domain::objects_written(regions);
+    Terrain::pyramid().objects_written();
+    PoiTile::pyramid().objects_written();
+    Earth::pyramid().objects_written();
+    crate::layer::poi::placement::objects_written();
 }
 
 /// Seen before unseen, then nearer first. Every layer's work is taken in
