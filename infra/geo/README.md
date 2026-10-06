@@ -62,10 +62,9 @@ made from.
 
 A public S3 release — no key, no portal step. The ingest reaches it through
 Overture's official `overturemaps` CLI, installed on first use into
-`cache/overture/.venv`: it downloads a shard's GeoParquet, a little wider than
-the shard since its bbox test is strict, to `cache/overture/<type>/`, kept
-until the release changes; the ingest then keeps the rows that meet the
-shard.
+`cache/overture/.venv`: it downloads a type's GeoParquet over every shard at once, a little wider
+since its bbox test is strict, to `cache/overture/<type>.parquet`, kept until
+the release changes; the ingest then puts each feature in its shard.
 
 ### GEDTM30 v1.2 (OpenGeoHub / OpenLandMap)
 
