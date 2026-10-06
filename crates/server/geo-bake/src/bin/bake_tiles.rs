@@ -28,9 +28,8 @@ use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use postgres::Client;
 use pxl_spec::bake::format::{encode_terrain, SNAPSHOT_KEY};
@@ -46,7 +45,8 @@ use pxl_geo_bake::pyramid::{build, refold, write_manifest, TileSet};
 use pxl_geo_bake::terrain::absent::Absence;
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf, has_ground, land_tiles, write_land_tiles};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
-use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, next_version, pack, refuse_mixed, Level};
+use pxl_geo_bake::tile::walk::{self, Done};
+use pxl_geo_bake::util::{git_sha, next_version, pack, refuse_mixed, Level};
 
 const CLASSIFY_BATCH: usize = 2000;
 
@@ -150,71 +150,6 @@ fn classify_land_tiles(client: &mut Client, candidates: &[IVec]) -> Result<Vec<I
         println!("[bake/classify] {done}/{} land={}", candidates.len(), land.len());
     }
     Ok(land)
-}
-
-#[derive(Default)]
-struct Totals {
-    done: u64,
-    skipped: u64,
-    failed: u64,
-    bytes: u64,
-    flat_ele: u64,
-}
-
-fn over_tiles<W>(what: &str, tiles: &[IVec], workers: usize, open: impl Fn() -> Result<W, String> + Sync, each: impl Fn(&mut W, IVec) -> Result<Option<u64>, String> + Sync) -> Totals {
-    let next = AtomicUsize::new(0);
-    let totals = Mutex::new(Totals::default());
-    let started = Instant::now();
-    std::thread::scope(|scope| {
-        for _ in 0..workers.max(1) {
-            scope.spawn(|| {
-                let mut w = match open() {
-                    Ok(w) => w,
-                    Err(err) => return eprintln!("[bake/{what}] worker failed to start: {err}"),
-                };
-                loop {
-                    let i = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(&tile) = tiles.get(i) else { break };
-                    let result = each(&mut w, tile);
-                    let mut t = totals.lock().expect("totals");
-                    match result {
-                        Ok(Some(bytes)) => {
-                            t.done += 1;
-                            t.bytes += bytes;
-                        }
-                        Ok(None) => t.skipped += 1,
-                        Err(err) => {
-                            t.failed += 1;
-                            eprintln!("[bake/{what}/{}] failed: {err}", ivec::repr(tile));
-                        }
-                    }
-                    let n = t.done + t.skipped + t.failed;
-                    if n.is_multiple_of(1000) {
-                        let rate = started.elapsed().as_secs_f64() * 1000.0 / t.done.max(1) as f64;
-                        println!(
-                            "[bake/{what}] {n}/{} done={} skipped={} failed={} {} {rate:.0}ms/tile eta={}",
-                            tiles.len(),
-                            t.done,
-                            t.skipped,
-                            t.failed,
-                            fmt_bytes(t.bytes as f64),
-                            fmt_dur(rate * (tiles.len() as u64 - n) as f64)
-                        );
-                    }
-                }
-            });
-        }
-    });
-    let t = totals.into_inner().expect("totals");
-    println!(
-        "[bake/{what}] done in {}: done={} skipped={} failed={} {}",
-        fmt_dur(started.elapsed().as_secs_f64() * 1000.0),
-        t.done,
-        t.skipped,
-        t.failed,
-        fmt_bytes(t.bytes as f64)
-    );
-    t
 }
 
 struct Db {
@@ -411,67 +346,41 @@ fn run() -> Result<(), String> {
         rows.sort_unstable_by_key(|&p| (ivec::Y(p), ivec::X(p)));
         let band = rows.len().div_ceil(args.concurrency.max(1)).max(1);
         let walks: Vec<Vec<IVec>> = rows.chunks(band).map(zigzag).collect();
-        let totals = Mutex::new(Totals::default());
-        std::thread::scope(|scope| {
-            let all = rows.len();
-            for walk in &walks {
-                let (totals, leaves, raster) = (&totals, &leaves, &raster);
-                scope.spawn(move || {
-                    let mut db = match connect(source, raster) {
-                        Ok(db) => db,
-                        Err(err) => return eprintln!("[bake/leaf] worker failed to start: {err}"),
-                    };
-                    let mut held = deck::source::Walk::default();
-                    for &tile in walk {
-                        held.keep_around(tile);
-                        let at = Tile::new(LEAF_ZOOM, tile);
-                        let mut flat = false;
-                        let baked = (|| -> Result<Option<u64>, String> {
-                            if !fresh && leaves.path(at).exists() {
-                                return Ok(None);
-                            }
-                            let (terrain, off_raster) = bake_leaf(
-                                &mut deck::Reader {
-                                    client: &mut db.client,
-                                    repo: &db.repo,
-                                    store: &mut held,
-                                },
-                                tile,
-                            )?;
-                            flat = off_raster;
-                            let packed = pack(&encode_terrain(&terrain).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
-                            leaves.write(at, &packed)?;
-                            Ok(Some(packed.len() as u64))
-                        })();
-                        let mut t = totals.lock().expect("totals");
-                        t.flat_ele += u64::from(flat);
-                        match baked {
-                            Ok(Some(bytes)) => (t.done, t.bytes) = (t.done + 1, t.bytes + bytes),
-                            Ok(None) => t.skipped += 1,
-                            Err(err) => {
-                                t.failed += 1;
-                                eprintln!("[bake/leaf/{}] failed: {err}", ivec::repr(tile));
-                            }
-                        }
-                        let n = t.done + t.skipped + t.failed;
-                        if n.is_multiple_of(1000) {
-                            println!("[bake/leaf] {n}/{all} done={} skipped={} failed={} {}", t.done, t.skipped, t.failed, fmt_bytes(t.bytes as f64));
-                        }
-                    }
-                });
-            }
-        });
-        let t = totals.into_inner().expect("totals");
-        println!("[bake/leaf] done: done={} skipped={} failed={} {}", t.done, t.skipped, t.failed, fmt_bytes(t.bytes as f64));
+        let flat = AtomicU64::new(0);
+        let t = walk::over(
+            "leaf",
+            &walks,
+            walks.len(),
+            1000,
+            ivec::repr,
+            || Ok((connect(source, &raster)?, deck::source::Walk::default())),
+            |(db, held), tile| {
+                held.keep_around(tile);
+                let at = Tile::new(LEAF_ZOOM, tile);
+                if !fresh && leaves.path(at).exists() {
+                    return Ok(Done::Skipped);
+                }
+                let (terrain, off_raster) = bake_leaf(
+                    &mut deck::Reader {
+                        client: &mut db.client,
+                        repo: &db.repo,
+                        store: held,
+                    },
+                    tile,
+                )?;
+                flat.fetch_add(u64::from(off_raster), Ordering::Relaxed);
+                let packed = pack(&encode_terrain(&terrain).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
+                leaves.write(at, &packed)?;
+                Ok(Done::Wrote { bytes: packed.len() as u64, items: 0 })
+            },
+        );
         if t.failed > 0 {
             return Err(format!("{} tiles failed", t.failed));
         }
         // A degraded tile never shows up in `failed`, so report it here.
-        if t.flat_ele > 0 {
-            eprintln!(
-                "[bake/leaf] WARNING: {} tiles are out of the elevation raster's reach and were baked FLAT (zero-filled elevation).",
-                t.flat_ele
-            );
+        let flat = flat.into_inner();
+        if flat > 0 {
+            eprintln!("[bake/leaf] WARNING: {flat} tiles are out of the elevation raster's reach and were baked FLAT (zero-filled elevation).");
         }
         write_json(
             &args.build.join("leaf.json"),
@@ -500,15 +409,21 @@ fn run() -> Result<(), String> {
         }
         fs::create_dir_all(&tiles.root).map_err(|e| e.to_string())?;
 
-        let t = over_tiles(
+        let bands: Vec<Vec<IVec>> = targets.iter().map(|&t| vec![t]).collect();
+        let t = walk::over(
             "assemble",
-            targets,
+            &bands,
             args.concurrency,
+            1000,
+            ivec::repr,
             || Ok(()),
             |_, tile| {
                 let (from, to) = (leaves.path(Tile::new(LEAF_ZOOM, tile)), tiles.path(Tile::new(LEAF_ZOOM, tile)));
                 fs::hard_link(&from, &to).map_err(|e| format!("{}: {e}: run --stage leaf", from.display()))?;
-                Ok(Some(fs::metadata(&to).map_err(|e| e.to_string())?.len()))
+                Ok(Done::Wrote {
+                    bytes: fs::metadata(&to).map_err(|e| e.to_string())?.len(),
+                    items: 0,
+                })
             },
         );
         if t.failed > 0 {
