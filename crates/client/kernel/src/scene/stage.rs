@@ -23,7 +23,6 @@ use crate::layer::earth::{earth_upload, earth_window, EARTH_FRAMES};
 use crate::scene::billboard::sheet::billboard_sheet;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
-use crate::scene::environment::config::{ao_cfg, edge_cfg, rim_cfg};
 use crate::shell::setting::store::{settings_store, AoMode};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::decor::asset_store::kind_assets;
@@ -57,12 +56,12 @@ pub fn stage_write(resolution: f64) {
     // Largest drawn cell per unit of distance, for the badge occlusion test:
     // a cell is drawn from its split distance on.
     s[STAGE_AT::LOD_CELL] = crate::world::view::observer::cell_angle(crate::world::chunk::quality::effective().tau());
-    s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { edge_cfg::STRENGTH } else { 0.0 };
-    s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { ao_cfg::STRENGTH } else { 0.0 };
+    s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
+    s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
     s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
-    s[STAGE_AT::EDGE_WIDTH] = edge_cfg::WIDTH;
-    s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { rim_cfg::INTENSITY } else { 0.0 };
+    s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH;
+    s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { crate::param::RIM_INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
     s[STAGE_AT::RESOLUTION] = resolution;
 }

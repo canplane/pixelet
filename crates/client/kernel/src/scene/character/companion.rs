@@ -7,7 +7,6 @@
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::control::camera::approach::damp_alpha;
-use crate::control::camera::config::camera_cfg;
 use crate::control::camera::input::steering;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::control::navigation::support::over;
@@ -38,7 +37,7 @@ const SETTLE_DELAY_S: f64 = 0.15;
 
 // The world scroll's own rate: the two cancel, holding the character at
 // screen center, so this is the only position smoothing in follow mode.
-const FOLLOW_LERP_K: f64 = camera_cfg::smooth::POS_DAMP;
+const FOLLOW_LERP_K: f64 = crate::param::POS_DAMP;
 
 // +PI turns a model whose forward is -Y into the screen, back to the camera.
 const FOLLOW_FACING: f64 = core::f64::consts::PI;

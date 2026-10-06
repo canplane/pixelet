@@ -9,8 +9,8 @@ use pxl_spec::space::coord::mat4::{mat4, mat4_mul, mat4_rotation_quat, mat4_rota
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::{add3, sub3, V3};
 
-use crate::control::camera::config::camera_cfg::projection::FOV;
-use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
+use crate::param::FOV;
+use crate::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::control::navigation::support::{is_unknown, pan_to, unknown_z};
@@ -243,7 +243,7 @@ pub fn reset_azimuth() {
 
 pub fn reset_dist() {
     set_intent(IntentPatch {
-        dist: Some(crate::control::camera::config::camera_cfg::view::DEFAULT_DIST),
+        dist: Some(crate::param::DEFAULT_DIST),
         ..Default::default()
     });
 }
@@ -251,7 +251,7 @@ pub fn reset_dist() {
 /// Going to a place: a view far out comes back in; one the user brought
 /// nearer stays, as map apps do.
 pub fn come_in_to_default() {
-    let default = crate::control::camera::config::camera_cfg::view::DEFAULT_DIST;
+    let default = crate::param::DEFAULT_DIST;
     if camera_store().intent.dist > default {
         reset_dist();
     }

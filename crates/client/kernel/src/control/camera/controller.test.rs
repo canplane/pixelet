@@ -1,7 +1,6 @@
 // pxl-kernel/control/camera/controller.test.rs
 
 use super::*;
-use crate::control::camera::config::camera_cfg;
 use crate::serial;
 use crate::shell::setting::store::OrbitObstacleMode;
 use crate::world::fixture::place;
@@ -36,7 +35,7 @@ fn the_map_center_is_the_eye_pushed_the_radius_along_the_look() {
     let mut rng = Rng(0x5eed);
     for n in 0..200 {
         let center = [rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 40.0];
-        let (dist, polar, azimuth) = (camera_cfg::view::MIN_DIST + rng.unit() * 2_000.0, rng.unit() * core::f64::consts::PI, rng.unit() * 6.0 - 3.0);
+        let (dist, polar, azimuth) = (crate::param::MIN_DIST + rng.unit() * 2_000.0, rng.unit() * core::f64::consts::PI, rng.unit() * 6.0 - 3.0);
         place(center, dist, polar, azimuth);
         assert!(near(center_world().unwrap(), center, 1e-9), "{n}: third person");
         controllers().base = CameraMode::free;
@@ -57,7 +56,7 @@ fn a_change_of_person_leaves_the_map_center() {
     let mut rng = Rng(0xc0de);
     for n in 0..100 {
         let center = [rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 40.0];
-        let (dist, polar, azimuth) = (camera_cfg::view::MIN_DIST + rng.unit() * 2_000.0, rng.unit() * core::f64::consts::PI, rng.unit() * 6.0 - 3.0);
+        let (dist, polar, azimuth) = (crate::param::MIN_DIST + rng.unit() * 2_000.0, rng.unit() * core::f64::consts::PI, rng.unit() * 6.0 - 3.0);
         place(center, dist, polar, azimuth);
         let mut first: Option<V3> = None;
         for mode in [CameraMode::free, CameraMode::orbit, CameraMode::free, CameraMode::orbit] {
@@ -103,9 +102,9 @@ fn a_pinch_keeps_no_debt() {
     }
     assert_eq!(camera_store().intent.dist, from, "brought back, the pinch did not ask where it began");
     pinch(1.0e-3);
-    assert_eq!(camera_store().intent.dist, camera_cfg::view::MAX_DIST, "past the farthest");
+    assert_eq!(camera_store().intent.dist, crate::param::MAX_DIST, "past the farthest");
     pinch(2.0e-3);
-    assert_eq!(camera_store().intent.dist, camera_cfg::view::MAX_DIST / 2.0, "the closing went to the refused share");
+    assert_eq!(camera_store().intent.dist, crate::param::MAX_DIST / 2.0, "the closing went to the refused share");
     settings_store().orbit_obstacle = collision;
     third_person();
 }

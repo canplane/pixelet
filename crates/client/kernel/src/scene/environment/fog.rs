@@ -6,8 +6,6 @@
 use pxl_render::look::globe::MERCATOR_RADIUS_KM;
 use pxl_spec::space::coord::world;
 
-use crate::control::camera::config::camera_cfg;
-use crate::scene::environment::config::render_cfg;
 use crate::scene::environment::state::globe;
 use crate::world::query::Access;
 use crate::world::view::observation::eye;
@@ -57,9 +55,9 @@ fn scale(reach: f64) -> f64 {
 }
 
 pub fn near_clip_at(altitude: f64) -> f64 {
-    camera_cfg::projection::NEAR * scale(reach_at(altitude))
+    crate::param::NEAR * scale(reach_at(altitude))
 }
 
 pub fn far_clip_at(altitude: f64) -> f64 {
-    reach_at(altitude) * render_cfg::FAR_CLIP
+    reach_at(altitude) * crate::param::FAR_CLIP
 }

@@ -13,10 +13,9 @@ use pxl_spec::space::coord::v3::{add3, V3};
 use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
-use crate::control::camera::config::camera_cfg;
-use crate::control::camera::config::camera_cfg::input::DOLLY_GAIN;
-use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
-use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MIN_DIST};
+use crate::param::DOLLY_GAIN;
+use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
+use crate::param::{MAX_DIST, MIN_DIST};
 use crate::control::camera::controller::{camera, center_world, look_dir, look_domain, map_center, set_eye_world};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
@@ -37,9 +36,9 @@ static ORBIT: Global<OrbitState> = Global::new();
 
 pub fn orbit() -> &'static mut OrbitState {
     ORBIT.get(|| OrbitState {
-        dist: camera_cfg::view::DEFAULT_DIST,
+        dist: crate::param::DEFAULT_DIST,
         to: None,
-        pinch_from: Anchor::new(camera_cfg::view::DEFAULT_DIST, 1.0),
+        pinch_from: Anchor::new(crate::param::DEFAULT_DIST, 1.0),
     })
 }
 

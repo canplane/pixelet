@@ -8,7 +8,7 @@ use pxl_spec::space::coord::v3::{add3, V3};
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_core::math::scalar::wrap;
 
-use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
+use crate::param::EYE_CLEARANCE_U;
 use crate::control::camera::orbit::orbit_eye_offset;
 use crate::control::navigation::support::{in_cell, passage, Passage};
 use crate::layer::Answer;

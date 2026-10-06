@@ -3,7 +3,6 @@
 //! The camera and everything that moves it.
 
 pub mod approach;
-pub mod config;
 pub mod controller;
 pub mod free;
 pub mod gesture;

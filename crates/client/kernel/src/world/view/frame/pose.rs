@@ -11,7 +11,6 @@ use pxl_spec::space::coord::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
-use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::pose;
 use crate::scene::environment::fog::{far_clip_at, near_clip_at};
 use xpute_runtime::global::Global;
@@ -49,8 +48,8 @@ impl View {
             },
             width: 1.0,
             height: 1.0,
-            fov: camera_cfg::projection::FOV,
-            near: camera_cfg::projection::NEAR,
+            fov: crate::param::FOV,
+            near: crate::param::NEAR,
             // Set with the camera; reversed depth takes an endless far until then.
             far: f64::INFINITY,
             view_matrix: mat4(),
