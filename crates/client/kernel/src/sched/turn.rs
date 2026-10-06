@@ -4,6 +4,7 @@
 //! then the tick's phases under one budget, then the draw. The other tasks
 //! wait on what they work on.
 
+use pxl_spec::space::coord::aabb::Aabb;
 use xpute_runtime::sched::edge::{notified, Notify};
 
 use crate::control::camera::input::camera_input_step;
@@ -179,11 +180,12 @@ pub fn world_turn() -> f64 {
     effect!(worst, view, crate::world::view::frame::pose::view_compose());
     effect!(worst, geocode, geocode_fetcher_step());
     effect!(worst, decor, decor_assets_wanted());
+    effect!(worst, objects, crate::layer::object::repository::step());
+    effect!(worst, written, written_step());
     effect!(worst, chunk_sources, chunk_sources_step());
     effect!(worst, hover, hover_cursor_step());
     // device_coord is not gated like map_center: the puck keeps its last coordinate across a transient none.
     effect!(worst, puck, location_puck_step(map_navigation().device_coord));
-    effect!(worst, objects, crate::layer::object::repository::step());
     effect!(worst, settings, crate::shell::setting::store::settings_keep_step());
     // After every producer has spoken, including assets asked for during the turn.
     effect!(worst, assets, crate::io::sched::declare(crate::io::demand::Category::asset, crate::io::load::load_wants()));
@@ -302,4 +304,22 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
         request_world_tick();
     }
     report
+}
+
+/// Where the objects were written this turn, told to what draws them and what
+/// is worked out from them: the chunks' sources, the goal, each layer's demand
+/// and the places.
+fn written_step() {
+    static REGIONS: Global<Vec<Aabb>> = Global::new();
+    let regions = REGIONS.get(Vec::new);
+    crate::layer::object::store::take_written(regions);
+    if regions.is_empty() {
+        return;
+    }
+    crate::world::chunk::source::chunk_sources_changed();
+    crate::world::chunk::domain::objects_written(regions);
+    Terrain::pyramid().objects_written();
+    PoiTile::pyramid().objects_written();
+    Earth::pyramid().objects_written();
+    crate::world::chunk::place::objects_written();
 }

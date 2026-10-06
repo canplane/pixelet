@@ -4,7 +4,6 @@
 //! is known of what a box of the world holds.
 
 use crate::io::demand::Order;
-use crate::world::pyramid::Observed as _;
 
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::camera::eye::{Frustum, Observation};
@@ -16,17 +15,14 @@ use pxl_spec::space::layer::demand::band;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 
-use crate::layer::earth::Earth;
 use crate::layer::residency::floor;
 use crate::layer::Layer as _;
 use crate::layer::{Answer, Query};
 use crate::scene::environment::fog::{eye_height, reach_at};
 use crate::scene::environment::state::globe;
-use crate::world::chunk::domain;
 use crate::world::query::Access;
 use crate::world::view::frame::pose::view;
 use crate::world::view::observer::Footprint;
-use pxl_spec::bake::poi_tile::PoiTile;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 
 pub fn eye() -> Option<V3> {
@@ -124,15 +120,6 @@ pub fn ground_known(out: &mut Vec<(Tile, bool)>) {
     Terrain::residency().known(out);
 }
 
-/// Where the objects changed, told to what works anything out from them;
-/// what is drawn hears it through its sources (`chunk/source.rs`).
-pub fn objects_written(regions: &[Aabb]) {
-    domain::objects_written(regions);
-    Terrain::pyramid().objects_written();
-    PoiTile::pyramid().objects_written();
-    Earth::pyramid().objects_written();
-    crate::world::chunk::place::objects_written();
-}
 
 /// A layer's tile's order, read in the grid's cells its own fold into: all
 /// of it where nothing is known.

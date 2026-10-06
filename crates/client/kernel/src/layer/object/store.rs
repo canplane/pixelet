@@ -6,6 +6,7 @@
 //! shows is read from the leaves over and under it, folding by the objects'
 //! majority, and never kept.
 
+use xpute_runtime::global::Global;
 use std::collections::HashMap;
 
 use fnv::FnvBuildHasher;
@@ -30,8 +31,6 @@ use xpute_core::status::errno::Errno;
 use crate::kernel;
 use crate::layer::{Answer, Bound, Query};
 use crate::world::change::request_world_tick;
-use crate::world::chunk::source::chunk_sources_changed;
-use crate::world::view::observation::objects_written;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EntryKind {
@@ -86,12 +85,19 @@ pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) {
     }
 }
 
-/// Where the objects changed: what draws them compares what it draws at its
-/// next turn, and what is worked out from them redoes what lies there.
+static WRITTEN: Global<Vec<Aabb>> = Global::new();
+
+/// Where the objects changed, kept for the turn to tell what draws them and
+/// what is worked out from them (`take_written`); storage calls nothing above it.
 pub(super) fn written(regions: &[Aabb]) {
-    chunk_sources_changed();
-    objects_written(regions);
+    WRITTEN.get(Vec::new).extend_from_slice(regions);
     request_world_tick();
+}
+
+/// The regions written since the turn last took them, into `out`.
+pub fn take_written(out: &mut Vec<Aabb>) {
+    out.clear();
+    core::mem::swap(out, WRITTEN.get(Vec::new));
 }
 
 pub const VOID: u32 = cube_types::sentinel::void as u32;

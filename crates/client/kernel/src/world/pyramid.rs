@@ -26,13 +26,13 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
+use crate::io::demand::Order;
 use crate::io::demand::{Ask, Phases, Why};
 use crate::io::failure::Failure;
 use crate::io::sched::declare;
 use crate::layer::residency::floor::{self, Fallback, Floor};
 use crate::layer::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
 use crate::world::chunk::quality;
-use crate::io::demand::Order;
 use crate::world::view::observation::{ground_known, observation, ByFootprints};
 use crate::world::view::observer::Footprint;
 use pxl_spec::space::coord::zoom::Zoom;

@@ -126,7 +126,6 @@ impl Order {
         let m = o.measure(b);
         Order { seen: m.seen, near: m.near }
     }
-
 }
 
 impl Ord for Order {

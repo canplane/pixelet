@@ -14,9 +14,9 @@ use pxl_spec::space::layer::demand::cubes_meeting;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 
+use crate::io::demand::Order;
 use crate::layer::{Answer, Bound};
 use crate::world::chunk::mesh_slot::POOLS;
-use crate::io::demand::Order;
 use crate::world::view::observer::{cell_angle, Footprint, Lens};
 
 use crate::world::chunk::Chunk;

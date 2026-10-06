@@ -50,10 +50,10 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::global::Global;
 
+use crate::io::demand::Order;
 use crate::layer::Layer as _;
 use crate::world::chunk::domain::{self, Domain};
 use crate::world::chunk::Chunk;
-use crate::io::demand::Order;
 use pxl_spec::bake::format::Terrain;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

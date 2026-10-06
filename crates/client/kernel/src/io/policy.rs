@@ -16,11 +16,11 @@
 //! Everything else ties, after the view. Rank orders what starts; nothing
 //! running is stopped for it.
 
+use crate::io::demand::Order;
 use crate::io::demand::{Ask, Category};
 use crate::io::failure::Outcome;
 use crate::io::sched::{Rank, Serve};
 use crate::param;
-use crate::io::demand::Order;
 use pxl_spec::space::layer::tile::Tile;
 
 /// A layer's classes: seen or unseen.

@@ -55,9 +55,9 @@ impl Layer for Terrain {
     }
 
     /// The ground under whatever this tile is the finest resident one over
-    /// changes, so chunks compare their sources next turn.
+    /// changes, so chunks compare their sources next turn (`take_changed`).
     fn changed(_p: Tile, _present: bool) {
-        crate::world::chunk::source::chunk_sources_changed();
+        *CHANGED.get(|| false) = true;
     }
 }
 
@@ -94,4 +94,11 @@ unsafe fn room_of(record: u32) -> TileRoom {
             },
         }
     }
+}
+
+static CHANGED: Global<bool> = Global::new();
+
+/// Whether the ground anything is drawn from changed since last asked.
+pub fn take_changed() -> bool {
+    core::mem::take(CHANGED.get(|| false))
 }
