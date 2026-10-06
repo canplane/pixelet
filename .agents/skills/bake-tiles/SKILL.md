@@ -7,7 +7,7 @@ description: Bake terrain, POI and reverse-geocode tiles from the geo DB into ou
 
 The deployed API answers forward search only. Terrain, POI and reverse
 geocode are static objects in the bucket, produced offline
-by the tools in `crates/pxl/server/geo-bake` from the local geo database. This is
+by the tools in `crates/server/geo-bake` from the local geo database. This is
 how each set gets built and checked; getting it into the bucket is
 [publish-bucket](../publish-bucket/SKILL.md).
 
@@ -25,7 +25,7 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 Every tool writes to `./out/<kind>/<version>`. The version is
 `v<format>.<day>.<n>`: the kind's `FORMAT` in
-`spec/pxl/spec/bake/published.json`, the day the bake ran (UTC) and that
+`spec/spec/bake/published.json`, the day the bake ran (UTC) and that
 day's count of bakes of the kind, from 1 — `v7.2026-10-04.1`
 (`pxl-spec bake/published.spec.rs` `version_name`). What it was baked from
 is the manifest's: the Overture release its tables were ingested from and the
@@ -247,7 +247,7 @@ places and, of each kind, the place of least id with the leaf cell it
 stands in — its names, held to 32 code points, the source's own id and its
 kind by name, from a pool of places held once a tile. A kind is the place's
 category as the search list names it (`pxl-geo-spec overture/properties.rs`),
-one of `spec/pxl/spec/bake/poi_badge.json`'s. The leaves are counted from `overture_places`, the zooms above are
+one of `spec/spec/bake/poi_badge.json`'s. The leaves are counted from `overture_places`, the zooms above are
 folded by adding, with the same fold driver terrain uses
 (`geo-bake/src/pyramid.rs`), and then every tile its parent settles is let go
 (`prune`): where no cell over a tile holds two places, the tile over it says

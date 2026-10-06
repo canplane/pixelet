@@ -49,9 +49,9 @@ and the elevation exactly them.
 | **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                             | `elevation_catalog` | `elevation/script/setup-elevation.sh` |
 | **OSM land polygons**<br>coastline                                               | `osm_land_polygons`                                                                                                                                            | none                | `coastline/script/setup-coastline.sh` |
 
-`COAST_SQL` (`crates/pxl/server/geo-bake/src/terrain/repository.rs`) carves
+`COAST_SQL` (`crates/server/geo-bake/src/terrain/repository.rs`) carves
 the coast at bake time out of `osm_land_polygons`, and `HAS_GROUND_SQL`
-(`crates/pxl/server/geo-bake/src/terrain/leaf.rs`) calls a page open water
+(`crates/server/geo-bake/src/terrain/leaf.rs`) calls a page open water
 when no `overture_base_land` row or building touches its bbox and no way
 (not a ferry) comes within `DRAWN_REACH_U` of it.
 

@@ -1,6 +1,6 @@
-# Repo-root .dockerignore — crates/pxl/geo/Dockerfile builds from this context
+# Repo-root .dockerignore — crates/server/geo/Dockerfile builds from this context
 # (see that file's own top comment on why the context is the whole repo,
-# not just apps/api/).
+# not just crates/).
 
 .git
 node_modules
@@ -14,3 +14,4 @@ dist
 !.env.example
 cache
 infra/geo/**/warped
+**/target

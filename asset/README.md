@@ -14,7 +14,7 @@ asset/
 
 ## What to run, and when
 
-Each is a binary of `pxl-tool` (`crates/pxl/tool`), run by a task, and
+Each is a binary of `pxl-tool` (`crates/tool`), run by a task, and
 `deno task check` clippies and tests every one with the rest.
 
 ### After changing anything under `actor/`, `cube/` or `decor/`
@@ -27,7 +27,7 @@ It copies every file to `./out/asset/{glb,png,webp}/<sha256>`, composes the
 sixty texture tiles into one WebP sheet, measures every model's extent out of
 its glTF, and writes the two tables that name them:
 
-- `crates/pxl/spec/src/asset/ingested.spec.rs` — what the kernel compiles
+- `crates/spec/src/asset/ingested.spec.rs` — what the kernel compiles
 - `apps/web/src/catalog/asset/ingested.spec.ts` — what the shell compiles
 
 **Commit both tables with the asset change, and upload before deploying.**

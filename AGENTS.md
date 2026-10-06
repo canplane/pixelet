@@ -6,10 +6,11 @@ about.
 
 What the system is: [README.md](./README.md) and
 [ARCHITECTURE.md](./ARCHITECTURE.md) for the application,
-[README.xpute.md](./README.xpute.md) and
-[ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) for the system under it.
-**The two `.xpute` documents never name pixelet**: the export drops the infix
-and ships them to the xpute repository unchanged. How the four are written:
+[xpute/README.md](./xpute/README.md) and
+[xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) for the system under it.
+**`xpute/` never names pixelet**: it is xpute's repository root, copied
+there byte for byte (`xpute/script/export.ts`) with its own Cargo and Deno
+workspaces, toolchain and checks. How the four are written:
 [.agents/skills/write-documents](./.agents/skills/write-documents/SKILL.md).
 Why past decisions went as they did: [decision/](./decision/). What is
 queued: [BACKLOG.md](./BACKLOG.md). Procedures — a bake, a publish — are the
@@ -34,8 +35,8 @@ multi-gigabyte PostGIS dataset. Ingestion and operations are
 
 ## Boundaries
 
-The tree is grouped by where a thing runs (`crates/xpute`,
-`crates/pxl/{spec,web,server}`, `packages/xpute`, `apps/web`, `apps/native`);
+The tree is grouped by where a thing runs (`xpute/`, `crates/{spec,client,server}`,
+`apps/web`, `apps/native`);
 README.md has the map. Three lines erode by accident:
 
 - **xpute holds no domain.** No coordinates, terrain, tiles or Overture in
@@ -45,7 +46,7 @@ README.md has the map. Three lines erode by accident:
   a doorbell, a quota from the frame, I/O asked of the host. `runtime`
   depends on `core`, never the reverse. `core` is symmetric across every
   language xpute is written in, held to it by the golden records under
-  `spec/xpute/golden/`. `runtime`'s host and guest are two ends of one
+  `xpute/spec/golden/`. `runtime`'s host and guest are two ends of one
   arrangement: a module missing on one side is no gap, only the format must
   agree, and its guests in different languages are symmetric as `core` is,
   each in its own language's shape. Never number the languages, hosts or
@@ -76,9 +77,9 @@ the boundary in the wrong place.
 **A tool that makes a file is Rust; one that talks to a service is
 TypeScript.** What writes or reads a format the Rust side owns, or processes
 a binary — the asset ingest, the stars, the Moon, the brand, the code
-generated from `spec/` — is a binary of `pxl-tool` (`crates/pxl/tool`) and
+generated from `spec/` — is a binary of `pxl-tool` (`crates/tool`) and
 links no crate it writes into. The shell's build is `apps/web/script/`; the
-tree's checks, the export and what reaches a deployment or a bucket are
+tree's checks and what reaches a deployment or a bucket are
 `script/`; a script under `infra/` makes a database's state.
 
 **On an iPhone, a control a touch lands on is UIKit's.** SwiftUI (`@expo/ui`)
@@ -214,12 +215,12 @@ seam is not finished.
 **Every source file opens with a comment naming its logical path** — the
 import-map path (`// @pxl/web/feature/map/ui/view.tsx`), for Rust the package
 as Cargo.toml spells it and the path under `src/` (`// pxl-spec/space/coord/zoom.rs`),
-for C++ the path itself (`// cpp/xpute/runtime/ipc/ring.cpp`); an executable
+for C++ the path from its repository's root (`// cpp/runtime/ipc/ring.cpp`); an executable
 script opens on its interpreter. `check:rules` holds every file to it.
 
 **A name's case follows its side.** `PascalCase` for types,
 `SCREAMING_SNAKE_CASE` for module constants; functions and locals
-`snake_case` in Rust, `packages/xpute` and `apps/web/src/kernel/`, which
+`snake_case` in Rust, `xpute/packages` and `apps/web/src/kernel/`, which
 share the kernel's vocabulary, and `camelCase` in the rest of `apps/` and in
 `script/`. An acronym is a word (`assetUrl`). A name that crosses — a
 packet's field, a catalog entry, a profiler record — keeps the kernel's
@@ -254,7 +255,7 @@ for a millisecond or coordinate; `u64` for a key; `i32` for what can be
 
 **A double is the same bits on every platform.** Rounding is xpute's `round`
 (half to even, as WGSL); a transcendental is the pinned `libm`'s, never the
-platform's, which `crates/pxl/clippy.toml` refuses.
+platform's, which `crates/clippy.toml` refuses.
 
 **`pxl` is for code, `pixelet` for infrastructure.** Import paths and storage
 keys abbreviate (`@xpute/core`, `pxl:lang`); provisioned resources spell it

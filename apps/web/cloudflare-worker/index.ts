@@ -6,7 +6,7 @@
  *
  * Static assets are handled by the platform before this script runs (see
  * wrangler.jsonc). What reaches this script is the roots of
- * spec/pxl/spec/route.json: `/tile/*` and `/asset/*` come straight out of the
+ * spec/spec/route.json: `/tile/*` and `/asset/*` come straight out of the
  * R2 bucket, and `/geo/*` and `/api/*` are reverse-proxied to GEO_ORIGIN and API_ORIGIN as-is (see infra/README.md).
  * Keeping it on the app's own hostname is what makes them same-origin, so no
  * CORS policy exists to configure or get wrong — see

@@ -36,7 +36,7 @@ That is what a later split of the bucket would be: a prefix match, not a
 second re-keying.
 
 The versions the client requests are `PUBLISHED_VERSION` in
-`spec/pxl/spec/bake/published.json`; the asset keys are the generated table
+`spec/spec/bake/published.json`; the asset keys are the generated table
 `apps/web/src/catalog/asset/ingested.spec.ts`. The object
 name carries no extension, so **content-type and content-encoding are
 stored with the object at upload** — that is what every flag below is for.
@@ -104,7 +104,7 @@ invariants a flat tree would have to restate as a rule about name lengths. So
 the names are translated on the way out, by hard links, which costs no bytes:
 
 ```bash
-version=$(jq -r .PUBLISHED_VERSION.terrain spec/pxl/spec/bake/published.json)
+version=$(jq -r .PUBLISHED_VERSION.terrain spec/spec/bake/published.json)
 cargo run --release --manifest-path crates/Cargo.toml --bin rekey_tiles -- link \
   --bake terrain --from "./out/terrain/$version" --to "./out/terrain/$version.bucket"
 ```
@@ -157,7 +157,7 @@ so one version holds one encoding.
 The same two steps as terrain, from `poi/` and with no `land_tiles.json`:
 
 ```bash
-version=$(jq -r .PUBLISHED_VERSION.poi spec/pxl/spec/bake/published.json)
+version=$(jq -r .PUBLISHED_VERSION.poi spec/spec/bake/published.json)
 cargo run --release --manifest-path crates/Cargo.toml --bin rekey_tiles -- link \
   --bake poi --from "./out/poi/$version" --to "./out/poi/$version.bucket"
 
@@ -192,7 +192,7 @@ Empty markers are local.
 ```bash
 deno task ingest:asset
 # -> ./out/asset/<path>/<stem>-<12 hex>.<ext>, the tree the bucket holds, and
-#    regenerates crates/pxl/spec/src/asset/ingested.spec.rs and
+#    regenerates crates/spec/src/asset/ingested.spec.rs and
 #    apps/web/src/catalog/asset/ingested.spec.ts
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do

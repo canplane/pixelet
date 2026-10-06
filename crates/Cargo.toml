@@ -1,53 +1,45 @@
 # The project's Rust, both ends of it, grouped by which end a crate is on:
-# pxl/web reaches the browser, pxl/server does not, and pxl/spec is what both
-# follow. `server` is what geo and api are called together, so pxl-server —
-# what either needs before it can answer anything — is the group's own
-# directory, and the two processes sit inside it.
+# client/ reaches the browser and the device, server/ does not, and spec/ is
+# what both follow.
+# `server` is what geo and api are called together, so pxl-server — what
+# either needs before it can answer anything — is the group's own directory,
+# and the two processes sit inside it.
 #
 # The client is one core compiled to one WebAssembly module that the main
 # thread and each worker instantiate for themselves
-# (decision/20260912-why-the-destination-is-wasm.md): pxl/render, pxl/kernel and
-# pxl/wasm. On a device the same core is linked into the app instead, through
-# pxl/native, which draws with wgpu where the page's host draws with the
+# (decision/20260912-why-the-destination-is-wasm.md): pxl-render, pxl-kernel and
+# pxl-wasm. On a device the same core is linked into the app instead, through
+# pxl-native, which draws with wgpu where the page's host draws with the
 # browser's WebGPU. The server end is native
-# (decision/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl/geo
-# and pxl/api over pxl/server, pxl/geo-bake beside them for what is baked
-# rather than answered, and pxl/overture where the two geo halves read the
+# (decision/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl-geo
+# and pxl-api over pxl-server, pxl-geo-bake beside them for what is baked
+# rather than answered, and pxl-overture where the two geo halves read the
 # same tables.
 #
-# pxl/spec is what both ends follow, and xpute/core what both are built on.
+# spec/ is what both ends follow, and xpute (../xpute/crates/, its own
+# workspace) what both are built on.
 # Nothing else crosses: a third-party dependency in either ships every byte
 # to the client and is read as this tree's own code, so each one below is
 # there because it was held to what it replaced and did not differ — and
-# nothing in the client's crates may assume WebAssembly; pxl/wasm is the one
+# nothing in the client's crates may assume WebAssembly; pxl-wasm is the one
 # crate that does.
 
 [workspace]
 resolver = "2"
 members = [
-  "xpute/core",
-  "xpute/runtime",
-  "xpute/conformance",
-  "pxl/spec",
-  "pxl/web/render",
-  "pxl/web/kernel",
-  "pxl/web/wasm",
-  "pxl/web/native",
-  "pxl/server",
-  "pxl/server/geo-spec",
-  "pxl/server/geo",
-  "pxl/server/api",
-  "pxl/server/geo-bake",
-  "pxl/tool",
+  "spec",
+  "client/render",
+  "client/kernel",
+  "client/wasm",
+  "client/native",
+  "server",
+  "server/geo-spec",
+  "server/geo",
+  "server/api",
+  "server/geo-bake",
+  "tool",
 ]
 
-# libm is pinned so transcendentals are bit-reproducible in every environment.
-#
-# It sits above the header on purpose. script/export-xpute.ts carries a
-# dependency's reason by reading back from its line to the one before it,
-# and a header stops that read — so what is under the header goes to the
-# xpute repository and what is over it stays here. This names a crate that
-# repository does not have.
 [workspace.dependencies]
 # The transcendental functions, FreeBSD msun's as the libm crate carries
 # them, so a double is the same bits on the server, in the module and in a
@@ -75,7 +67,7 @@ indexmap = "2"
 # what they are — `.cast()`, `.cast_const()`, `&raw`, `ptr::from_ref` — and
 # any `as *const` or `as *mut` left is an offset made a pointer, which
 # script/check-rules.ts refuses. A crate takes these with `[lints]
-# workspace = true`; xpute-runtime, exported on its own, spells them itself.
+# workspace = true`; xpute-runtime, in its own workspace, spells them itself.
 [workspace.lints.clippy]
 ptr_as_ptr = "warn"
 ptr_cast_constness = "warn"

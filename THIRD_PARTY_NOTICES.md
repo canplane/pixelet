@@ -4,7 +4,7 @@ One port here is of someone else's code rather than our own, and its
 license asks for a notice to travel with the copy; each file carries it, and
 this records where it came from. xpute, the system pixelet runs on, is
 developed in this repository and keeps its own record of what it ported:
-[THIRD_PARTY_NOTICES.xpute.md](./THIRD_PARTY_NOTICES.xpute.md).
+[xpute/THIRD_PARTY_NOTICES.md](./xpute/THIRD_PARTY_NOTICES.md).
 
 This file covers copied source only. Crates and npm packages that are merely
 depended on are not listed: `crates/Cargo.toml` and `apps/web/deno.jsonc`
@@ -15,7 +15,7 @@ Data sources have their own obligations and their own place:
 `apps/web/src/feature/setting/section/attribution.tsx` is where the ones
 that must reach a user are shown.
 
-## louis-e/arnis — `crates/pxl/server/geo-bake/src/deck/arnis.rs`, `crates/pxl/spec/src/procedural.rs`
+## louis-e/arnis — `crates/server/geo-bake/src/deck/arnis.rs`, `crates/spec/src/procedural.rs`
 
 How bridges and tunnels stand is [louis-e/arnis][arnis] at `c96872e`
 (Apache-2.0), its [element processing][processing] for bridges,
