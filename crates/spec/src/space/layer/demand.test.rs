@@ -114,14 +114,14 @@ fn tiled_storage_maps_a_square_to_its_tile_and_ground_to_every_tile_under_it() {
                 min: [x0, y0, -7.0],
                 max: [x0 + span, y0 + span, 900.0],
             };
-            Tiled.tiles(&Requirement { zoom, region: square }, &mut |p| tiles.push(p));
+            super::tiles(&Requirement { zoom, region: square }, &mut |p| tiles.push(p));
             assert_eq!(tiles, vec![tile_at(zoom, [x, y])]);
             tiles.clear();
             let wider = Aabb {
                 min: [x0 + 0.5 * span, y0, 0.0],
                 max: [x0 + 2.0 * span, y0 + 1.5 * span, 0.0],
             };
-            Tiled.tiles(&Requirement { zoom, region: wider }, &mut |p| tiles.push(p));
+            super::tiles(&Requirement { zoom, region: wider }, &mut |p| tiles.push(p));
             assert_eq!(tiles.len(), 4, "z{zoom}: {tiles:?}");
         }
     }

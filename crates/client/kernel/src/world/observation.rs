@@ -6,27 +6,27 @@
 use std::cmp::Ordering;
 
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::hierarchy::tree::ancestor_of;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::camera::eye::{Frustum, Observation};
-use pxl_spec::space::layer::demand::{band, Bounds, Contents, DemandEstimator, Requirement};
-use pxl_spec::space::coord::world::REACH;
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::camera::grid::CHUNK_STEPS;
+use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::world::REACH;
+use pxl_spec::space::hierarchy::tree::ancestor_of;
+use pxl_spec::space::layer::demand::{band, Bounds, Contents, Requirement};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
-use pxl_spec::space::coord::v3::Aabb;
 
 use crate::kernel::kernel;
+use crate::layer::earth::Earth;
 use crate::layer::environment::fog::{eye_height, reach_at};
 use crate::layer::environment::state::globe;
-use crate::layer::earth::Earth;
-use crate::world::pyramid::domain;
-use pxl_spec::bake::poi_tile::PoiTile;
 use crate::world::access::Access;
 use crate::world::frame::view::view;
 use crate::world::observer::Footprint;
+use crate::world::pyramid::domain;
 use crate::world::pyramid::Layer as _;
 use crate::world::residency::floor;
+use pxl_spec::bake::poi_tile::PoiTile;
 use pxl_spec::space::coord::zoom::{of_side, units, Zoom};
 
 pub fn eye() -> Option<[f64; 3]> {
@@ -151,8 +151,8 @@ pub struct ByFootprints<'a> {
     pub lacks: &'a [Requirement],
 }
 
-impl DemandEstimator for ByFootprints<'_> {
-    fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement)) {
+impl ByFootprints<'_> {
+    pub fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement)) {
         let column = |x0: f64, y0: f64, x1: f64, y1: f64| Aabb {
             min: [x0, y0, REACH.min[2]],
             max: [x1, y1, REACH.max[2]],

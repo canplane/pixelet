@@ -14,16 +14,16 @@ pub mod domain;
 
 use std::collections::HashMap;
 
-use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::layer::demand::{Bounds, DemandEstimator, Requirement, Storage as _, Tiled};
-use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::bake::format::Occupancy;
+use pxl_spec::space::camera::eye::Observation;
+use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::layer::demand::{tiles, Bounds, Requirement};
+use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::io::demand::{Ask, Category, Phases, Why};
-use crate::io::sched::declare;
 use crate::io::failure::Failure;
+use crate::io::sched::declare;
 use crate::world::observation::{ground_known, observation, ByFootprints, Known, Order};
 use crate::world::observer::Footprint;
 use crate::world::quality;
@@ -68,7 +68,7 @@ pub trait Layer: Clone + 'static {
     fn changed(_p: Tile, _present: bool) {}
 
     fn tiles(r: &Requirement, each: &mut dyn FnMut(Tile)) {
-        Tiled.tiles(r, each);
+        tiles(r, each);
     }
 }
 
@@ -189,7 +189,7 @@ impl<L: Layer> Pyramid<L> {
         floor_at: Option<&Observation>,
         destination: impl Iterator<Item = Tile>,
         bounds: &impl Bounds,
-        estimator: &impl DemandEstimator,
+        estimator: &ByFootprints,
         top: Zoom,
     ) {
         let mut demand = core::mem::take(&mut self.demand);
@@ -256,7 +256,6 @@ impl<L: Layer> Pyramid<L> {
         }
         xpute_core::ensure!(named <= if L::DEMANDS { Residency::<L>::DESTINATION_TILES } else { 0 }, ENOTRECOVERABLE, named);
 
-
         self.wants.clear();
         self.wants.extend(
             asks.iter()
@@ -286,7 +285,11 @@ impl<L: Layer> Pyramid<L> {
         // demand follows the published goal
         let published = domain::current();
         let own = |o: Observation| match L::TOP {
-            Some(_) => Observation { reach: L::reach(), fog: f64::INFINITY, ..o },
+            Some(_) => Observation {
+                reach: L::reach(),
+                fog: f64::INFINITY,
+                ..o
+            },
             None => o,
         };
         let live = observation().map(own);

@@ -1,10 +1,10 @@
 // pxl-spec/space/layer/demand.rs
 
 //! What an observation requires, before anything is a tile: information at a
-//! zoom over a region (`Requirement`). A layer's storage maps a requirement
-//! to tiles (`Storage`). An estimator names a superset of the exact demand
-//! from what is known (`DemandEstimator`); never less, since a requirement
-//! left out is ground that never refines. What is known of a box is asked
+//! zoom over a region (`Requirement`), named as the tiles under it (`tiles`).
+//! What estimates them names a superset of the exact demand from what is
+//! known; never less, since a requirement left out is ground that never
+//! refines. What is known of a box is asked
 //! in the grid's cells (`Bounds`); a layer says which of its zooms folds
 //! into them by its lattice.
 
@@ -82,33 +82,19 @@ impl Bounds for Unknown {
     }
 }
 
-pub trait Storage {
-    fn tiles(&self, r: &Requirement, each: &mut dyn FnMut(Tile));
-}
-
-/// The pyramid's 2D tiles, as terrain and places keep them.
-pub struct Tiled;
-
-impl Storage for Tiled {
-    /// Every tile under the region; edges are inclusive south and west only.
-    fn tiles(&self, r: &Requirement, each: &mut dyn FnMut(Tile)) {
-        let span = units(r.zoom);
-        let rows = |k: usize| {
-            let first = (r.region.min[k] / span).floor() as i64;
-            first..=((r.region.max[k] / span).ceil() as i64 - 1).max(first)
-        };
-        let ys = tile_rows(r.zoom);
-        for y in rows(1).filter(|y| ys.contains(y)) {
-            for x in rows(0) {
-                each(tile_at(r.zoom, [x, y]));
-            }
+/// Every tile under a requirement's region; edges are inclusive south and west only.
+pub fn tiles(r: &Requirement, each: &mut dyn FnMut(Tile)) {
+    let span = units(r.zoom);
+    let rows = |k: usize| {
+        let first = (r.region.min[k] / span).floor() as i64;
+        first..=((r.region.max[k] / span).ceil() as i64 - 1).max(first)
+    };
+    let ys = tile_rows(r.zoom);
+    for y in rows(1).filter(|y| ys.contains(y)) {
+        for x in rows(0) {
+            each(tile_at(r.zoom, [x, y]));
         }
     }
-}
-
-/// Names a superset of what an observation's samples require.
-pub trait DemandEstimator {
-    fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement));
 }
 
 /// The distances a layer's `zoom` is required over: from where the grid's
