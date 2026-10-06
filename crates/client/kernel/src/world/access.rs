@@ -16,12 +16,14 @@ mod query;
 mod ray;
 mod support;
 mod terrain;
+mod world;
 
 pub use answer::{Answer, Ground, Relief};
 pub use ground::Access;
 pub use query::{Bound, Query};
 pub use ray::{Detail, Hit, Ray, Struck};
 pub use terrain::{tile_view, Source};
+pub use world::Cube;
 
 #[cfg(test)]
 #[path = "access.test.rs"]
