@@ -151,7 +151,7 @@ fn hit_decor(sched: &Scheduler, o: V3, d: [f64; 3], max_dist: f64) -> Option<Dec
                                 cell,
                                 band,
                                 pos: words[lanes.pos_at(i)],
-                                at: [base_x + lane(0, i), base_y + lane(1, i), lane(2, i)],
+                                at: [tx + lane(0, i), ty + lane(1, i), lane(2, i)],
                                 group: group as u32,
                                 rotation: spin,
                                 scale: lane(4, i),

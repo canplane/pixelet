@@ -12,6 +12,7 @@ use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, TileSource};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::{nearest, nearest_box};
 use pxl_spec::space::pyramid::{CHUNK_DRAWN, GROUND, LEAF_Z};
 use pxl_spec::space::v3::{len3, sub3, V3};
 use xpute_runtime::mem::base::ptr_at;
@@ -100,8 +101,7 @@ fn largest_possible(kinds: &[&Kind]) -> f64 {
 /// Whether anything a chunk could hold is in reach and over the sprite's floor.
 fn may_show(chunk: Chunk, largest: f64) -> bool {
     let Some(o) = observation() else { return false };
-    let region = chunk.region();
-    let near = region.nearest(o.eye);
+    let near = nearest_box(&chunk.region(), o.eye[0]).nearest(o.eye);
     let d = len3(&sub3(&near, &o.eye)).max(1e-3);
     d <= o.far && largest / units_per_px_at(d) >= decor_sprite_px()
 }
@@ -272,7 +272,8 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     let sprites = &mut c.sprites;
     for (&chunk, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
         let (x0, y0, side) = chunk.rect();
-        let translation = DrawList::translation([pxl_spec::space::pvf3::nearest(x0, frame_eye[0]), y0, 0.0], frame_eye);
+        let translation = DrawList::translation([nearest(x0, frame_eye[0]), y0, 0.0], frame_eye);
+        let x0 = nearest(x0, eye[0]);
         let [zlo, zhi] = block.heights.map(f64::from);
         let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
         let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());

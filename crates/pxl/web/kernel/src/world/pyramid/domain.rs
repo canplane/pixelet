@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::lod::{cubes_meeting, demand_reach, Tau};
 use pxl_spec::space::observation::{Bounds, Contents, Observation, Requirement};
-use pxl_spec::space::pvf3::REACH;
+use pxl_spec::space::pvf3::{nearest_box, REACH};
 use pxl_spec::space::pyramid::{chunk_zoom, Tile};
 use pxl_spec::space::v3::Aabb;
 
@@ -265,7 +265,7 @@ impl Domain {
             }
         }
         let touching = (start, self.touching.len() as u32 - start);
-        let nearest = bound.nearest(self.o.eye);
+        let nearest = nearest_box(&bound, self.o.eye[0]).nearest(self.o.eye);
         let error_angle = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
         let order = Order::of(&self.o, &bound);
         // Drawn as finely as anything under it is held, there is nothing to refine.
@@ -421,7 +421,7 @@ pub fn start(ladder: &[Tau], extra: u32) {
     made.key = Some(key);
     let resident: HashSet<Tile> = Terrain::pyramid().residency().held().map(|(p, _)| p).collect();
     let near = |p: &Tile| {
-        let r = pxl_spec::space::pvf3::nearest_box(&p.region(), o.eye[0]);
+        let r = nearest_box(&p.region(), o.eye[0]);
         (r.min[0], r.min[1], r.max[0] - r.min[0])
     };
     let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(near).collect();

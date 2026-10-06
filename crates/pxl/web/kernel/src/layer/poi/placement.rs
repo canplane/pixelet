@@ -132,7 +132,6 @@ pub fn step(ctx: &mut TickContext) {
                     .map(|(place, _, at)| (Label::Place { tile: src, place }, cell.inner_at(GROUND, LEAF_Z, at)));
                 let mid = cell.mid();
                 let mid = projection::unproject(mid.i, mid.f);
-                let mid = [nearest(mid[0], chunk.rect().0), mid[1]];
                 for (shown, (label, ground)) in [(Shown::All, all)].into_iter().chain(major.map(|m| (Shown::Major, m))) {
                     if m == 0 && Chunk::holding(chunk.zoom(), &ground.mid()).column() != chunk.named().column() {
                         continue;
@@ -154,7 +153,8 @@ pub fn step(ctx: &mut TickContext) {
     labeled.clear();
     let eye = crate::world::observation::eye().unwrap_or_default();
     for &(_, label, stands, top, shown, at) in &found {
-        let d = len3(&[at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]]);
+        // Found once while it stands, so its lap is chosen as the eye moves.
+        let d = len3(&[nearest(at[0], eye[0]) - eye[0], at[1] - eye[1], at[2] - eye[2]]);
         if shown_at(units_per_px_at(d)) != Some(shown) {
             continue;
         }
