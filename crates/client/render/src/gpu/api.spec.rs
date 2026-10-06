@@ -112,8 +112,6 @@ pub mod stamp {
 
 /// A record's operation, then its arguments. Bytes go as their count, then the bytes padded to a word.
 pub mod op {
-    /// every object the host holds let go
-    pub const RESET: u32 = 1;
     /// id, size, usage
     pub const BUFFER: u32 = 2;
     /// id, width, height, layers, format, mips, usage
@@ -171,7 +169,6 @@ pub mod op {
     /// encoder, source, x, y, target, x, y, layer, width, height: a region of one texture's first mip into another's layer
     pub const COPY_TEXTURE: u32 = 31;
     pub const KEYS: &[&str] = &[
-        "RESET",
         "BUFFER",
         "TEXTURE",
         "IMAGE_TEXTURE",

@@ -1056,7 +1056,6 @@ impl Gpu {
         }
     }
 
-    /// Timestamps are not asked for on a device (DeviceInfo).
     pub fn query_set(&self, id: u32, count: u32) {
         let Some(d) = device() else { return };
         let set = d.device.create_query_set(&wgpu::QuerySetDescriptor {

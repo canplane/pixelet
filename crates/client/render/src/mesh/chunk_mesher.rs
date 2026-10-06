@@ -17,8 +17,6 @@ use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-const MAX_BAKE_SPAN: usize = COL_SPAN as usize;
-
 const LOW_FILL_THRESHOLD: f64 = 0.25;
 
 /// A coarse cell's children one zoom finer.
@@ -103,9 +101,7 @@ pub const fn box_words(fine: bool) -> u32 {
 const XY_STEPS: f64 = 256.0;
 const _: () = assert!(COL_SPAN as f64 * XY_STEPS <= 65536.0, "a fine box's corner and width live in a u16 each");
 const COARSE_XY_STEPS: f64 = 8.0;
-/// A chunk's cells.
-const COARSE_RES_MAX: u32 = CHUNK_CELLS;
-const _: () = assert!(COARSE_RES_MAX * (COARSE_XY_STEPS as u32) <= 256, "a coarse box's corner and width live in a byte each");
+const _: () = assert!(CHUNK_CELLS * (COARSE_XY_STEPS as u32) <= 256, "a coarse box's corner and width live in a byte each");
 const Z_STEPS: f64 = 65535.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -139,12 +135,6 @@ impl Heights {
     }
 }
 
-/// One block for the whole mesh: a block per lane once moved +344 MB in a
-/// single frame on a zoom-out rebuilding ~2000 chunks.
-pub fn mesh_words(box_cnt: u32, words: u32) -> u32 {
-    box_cnt * words
-}
-
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub struct Counters {
     pub total_runs: u32,
@@ -159,7 +149,6 @@ pub struct Counters {
 pub struct Mesh {
     pub box_cnt: u32,
     pub heights: Heights,
-    pub box_words: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -276,17 +265,11 @@ pub struct BakeContext {
 }
 
 impl Default for BakeContext {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BakeContext {
-    pub fn new() -> Self {
+    fn default() -> BakeContext {
         BakeContext {
             surviving: Vec::with_capacity(6 << 12),
-            merge_run: vec![None; MAX_BAKE_SPAN * MAX_BAKE_SPAN],
-            merge_mask: vec![0; MAX_BAKE_SPAN * MAX_BAKE_SPAN],
+            merge_run: vec![None; COL_SPAN as usize * COL_SPAN as usize],
+            merge_mask: vec![0; COL_SPAN as usize * COL_SPAN as usize],
             buckets: Vec::with_capacity(1 << 12),
             coarse: OwnedRunSet::default(),
             clipped: None,
@@ -302,7 +285,9 @@ impl BakeContext {
             counters: Counters::default(),
         }
     }
+}
 
+impl BakeContext {
     /// `unit` is a column's width and `z_unit` a run's cell's height, in units;
     /// at `lod_step` past 1 the chunk is summarized `lod_step` columns a cell.
     /// `fine` boxes carry texture taps. `clip` cuts a whole-column set to the
@@ -326,7 +311,7 @@ impl BakeContext {
             (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, z_unit) } else { Heights::default() })
         };
         self.textured = textured;
-        xpute_core::ensure!(span as usize <= MAX_BAKE_SPAN, ENOSPC, span, MAX_BAKE_SPAN);
+        xpute_core::ensure!(span <= COL_SPAN, ENOSPC, span, COL_SPAN);
         // Reserved up front: doubling on a dense chunk held the old block and the new together.
         self.surviving.reserve((count as usize) * 6);
         self.done = false;
@@ -426,7 +411,6 @@ impl BakeContext {
         Mesh {
             box_cnt: self.box_cnt,
             heights: self.heights,
-            box_words: self.box_words,
         }
     }
 
@@ -489,7 +473,9 @@ impl BakeContext {
                     for i in set.start[col as usize]..end {
                         let i = i as usize;
                         self.counters.total_runs += 1;
-                        let mask = run_face_mask(set, span, cx, cy, i) | if set.z1[i] >= set.z0[i] { rim(cx, cy) } else { 0 };
+                        let faces = run_faces(set, span, cx, cy, i);
+                        // A run with no height shows its top alone.
+                        let mask = if set.z1[i] >= set.z0[i] { faces | rim(cx, cy) } else { faces & !(ALL_FACES & !FACE_PZ) };
                         self.counters.faces_possible += if run_include_bottom(set, col as usize, i) { FULL_FACE_CNT } else { OPEN_BOTTOM_FACE_CNT };
                         if mask & ALL_FACES == 0 {
                             self.counters.culled += 1;
@@ -578,7 +564,8 @@ impl BakeContext {
                 self.counters.faces_kept += faces;
                 box_total += (faces > 0) as u32;
             }
-            self.mesh_words = mesh_words(box_total, self.box_words);
+            // One block for the whole mesh: one a lane moved hundreds of MB in a frame.
+            self.mesh_words = box_total * self.box_words;
             self.box_cnt = 0;
             b.phase = 2;
             b.emit_at = 0;
@@ -788,12 +775,11 @@ impl BakeContext {
 
     /// Buckets have distinct heights, so sorting visits them lowest first.
     /// `edge_low` is the lowest ground across the chunk's edge, which the skirt hangs to.
-    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, bucket: i32, edge_low: Option<i32>) {
+    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, step: i32, edge_low: Option<i32>) {
         let grown = self.coarse.grow_runs(2 * cnt as usize);
         if !self.room(grown) {
             return;
         }
-        let step = bucket;
         let cell = start as usize..(start + cnt) as usize;
         self.buckets[cell.clone()].sort_unstable_by_key(|acc| acc.bz);
         let volume = step as f64 * (lod_step * lod_step) as f64;
@@ -962,7 +948,7 @@ pub fn box_bounds(m: &[u32], unit: f64, heights: Heights) -> (V3, [f64; 3]) {
     ([half(m[0], false), half(m[0], true), z0], [half(m[1], false), half(m[1], true), dz])
 }
 
-pub fn box_z(m: &[u32]) -> (u32, u32) {
+fn box_z(m: &[u32]) -> (u32, u32) {
     (m[2] & 0xffff, m[2] >> 16)
 }
 
@@ -1057,14 +1043,6 @@ fn side_bits(mut mask: u32, rel: u32, face: u32, crease: u32, rises: u32, dips: 
     }
     if rel & DIPS_BELOW != 0 {
         mask |= dips;
-    }
-    mask
-}
-
-fn run_face_mask(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
-    let mask = run_faces(set, span, cx, cy, i);
-    if set.z1[i] < set.z0[i] {
-        return mask & !(ALL_FACES & !FACE_PZ);
     }
     mask
 }

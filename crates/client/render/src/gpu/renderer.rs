@@ -43,10 +43,10 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
-pub const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
+const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
 
 pub(crate) const VIEW_PROJ: usize = FRAME_AT[0];
-pub(crate) const CAMERA_POS: usize = FRAME_AT[1];
+const CAMERA_POS: usize = FRAME_AT[1];
 const EDGE_STRENGTH: usize = FRAME_AT[2];
 const ENV: usize = FRAME_AT[3];
 const LOW_SPEC: usize = FRAME_AT[4];
@@ -60,8 +60,8 @@ const AO_STRENGTH: usize = FRAME_AT[11];
 const SCREEN_AO: usize = FRAME_AT[12];
 const LIGHT_VIEW_PROJ: usize = FRAME_AT[13];
 const OTHER: usize = FRAME_AT[14];
-pub(crate) const PLANET: usize = FRAME_AT[15];
-pub(crate) const GLOBE: usize = FRAME_AT[16];
+const PLANET: usize = FRAME_AT[15];
+const GLOBE: usize = FRAME_AT[16];
 const UP: usize = FRAME_AT[17];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
@@ -85,7 +85,7 @@ const SPAN_WORLD: usize = 4;
 const SPAN_BADGES: usize = 5;
 const SPAN_CASES: usize = 6;
 
-pub type Frame = [f32; FRAME_FLOATS];
+type Frame = [f32; FRAME_FLOATS];
 
 pub struct FrameInput<'a> {
     pub lists: Lists<'a>,
@@ -303,8 +303,8 @@ pub struct Blocks {
     index_cnt: &'static mut [u32],
     buffer: &'static mut [u32],
     group: &'static mut [u32],
-    pub count: u32,
-    pub bytes: u64,
+    count: u32,
+    bytes: u64,
     missing: u32,
 }
 
@@ -598,7 +598,6 @@ impl DebugPass {
 /// A variant picker case: its own frame, drawn at one sample with no shadow.
 struct Case {
     frame_buffer: u32,
-    frame: Frame,
     frames: FrameGroups,
     skinned: SkinnedPass,
 }
@@ -614,7 +613,6 @@ impl Case {
         let layout = frame_layout(g, pipelines);
         Case {
             frame_buffer,
-            frame: [0.0; FRAME_FLOATS],
             frames: FrameGroups::new(g, layout, frame_buffer, shadow.blank_entries(1), None, ao.blank_entry(7), air),
             skinned: SkinnedPass::new(g, pipelines, align),
         }
@@ -667,8 +665,6 @@ pub struct Renderer {
     debug: DebugPass,
     cases: [Option<Case>; SURFACES],
     order: Vec<u32>,
-    gpu_ms: f64,
-    gpu_spans: [f64; GPU_SPANS.len()],
 }
 
 impl Renderer {
@@ -755,8 +751,6 @@ impl Renderer {
             moon,
             cases: [const { None }; SURFACES],
             order: Vec::new(),
-            gpu_ms: 0.0,
-            gpu_spans: [0.0; GPU_SPANS.len()],
         };
         r.chunk_groups(g);
         r
@@ -1010,13 +1004,12 @@ impl Renderer {
         release(pass);
         self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
         self.draw_cases(g, encoder, &draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
+        let (mut gpu_ms, mut gpu_spans) = (0.0, [0.0; GPU_SPANS.len()]);
         if q != 0 {
             let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
             g.timestamps(encoder, q, written);
-            for (k, ms) in self.gpu_spans.iter_mut().enumerate() {
-                *ms = g.gpu_ms(k as u32);
-            }
-            self.gpu_ms = g.gpu_ms(GPU_SPANS.len() as u32);
+            gpu_spans = core::array::from_fn(|k| g.gpu_ms(k as u32));
+            gpu_ms = g.gpu_ms(GPU_SPANS.len() as u32);
         }
         g.submit(encoder);
         release(encoder);
@@ -1025,7 +1018,7 @@ impl Renderer {
         if skipped {
             REDRAW.set(true);
         }
-        let stat = self.stat(draws.records, world, skipped);
+        let stat = self.stat(draws.records, world, skipped, (gpu_ms, gpu_spans));
         self.order = order;
         stat
     }
@@ -1059,11 +1052,10 @@ impl Renderer {
         for (id, _, _, own) in Self::cases(draws, cases) {
             let Some(s) = surface(id) else { continue };
             let Some(case) = self.cases[handle_slot(id) as usize].as_mut() else { continue };
-            let world_frame = self.frame;
             let u = uniform_of(uniforms, own);
             let actor = [u[0] as f64, u[1] as f64, u[2] as f64];
-            let u = &mut case.frame;
-            *u = world_frame;
+            let mut frame = self.frame;
+            let u = &mut frame;
             let (mut proj, mut view, mut t, mut m, mut n) = (mat4(), mat4(), mat4(), mat4(), mat4());
             mat4_perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, 0.1, 100.0);
             mat4_look_at(&mut view, CASE_EYE, CASE_TARGET, [0.0, 0.0, 1.0]);
@@ -1082,7 +1074,7 @@ impl Renderer {
             u[SCREEN_AO] = 0.0;
             // No planet: the case is a room of its own.
             u[PLANET + 2] = 0.0;
-            g.write_buffer(case.frame_buffer, 0, bytes(&case.frame));
+            g.write_buffer(case.frame_buffer, 0, bytes(&frame));
             let view_id = object();
             g.current(s.handle, view_id);
             let pass = object();
@@ -1096,7 +1088,7 @@ impl Renderer {
 
     /// What the scheduler asked for: a draw passed over because its block, skin or
     /// sprite is not on the device yet is still counted.
-    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, skipped: bool) -> FrameStat {
+    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, skipped: bool, (gpu_ms, gpu_spans): (f64, [f64; GPU_SPANS.len()])) -> FrameStat {
         let b = blocks();
         let mut triangles = 0u32;
         let mut census = [[0.0; 2]; PIPELINES as usize];
@@ -1119,7 +1111,7 @@ impl Renderer {
         }
         let px = world.width as f64 * world.height as f64;
         FrameStat {
-            gpu_ms: self.gpu_ms,
+            gpu_ms,
             draw_calls: draws.len() as f64,
             triangles: triangles as f64,
             buffers: b.count as f64,
@@ -1129,7 +1121,7 @@ impl Renderer {
             layers_mb: round(self.layers.bytes as f64 / MB),
             px,
             census,
-            gpu_spans: self.gpu_spans,
+            gpu_spans,
             arena_mb: round(arena_bytes() as f64 / MB),
             skipped: f64::from(u8::from(skipped)),
         }

@@ -94,8 +94,6 @@ export const stamp = {
 
 /** A record's operation, then its arguments. Bytes go as their count, then the bytes padded to a word. */
 export const op = {
-  /** every object the host holds let go */
-  RESET: 1 as number,
   /** id, size, usage */
   BUFFER: 2 as number,
   /** id, width, height, layers, format, mips, usage */

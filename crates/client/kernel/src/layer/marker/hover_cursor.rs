@@ -5,7 +5,7 @@
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
 use pxl_render::look::style::marker_colors;
-use pxl_render::mesh::chunk_mesher::{mesh_words, write_lone_box, Heights, FINE_BOX_WORDS};
+use pxl_render::mesh::chunk_mesher::{write_lone_box, Heights, FINE_BOX_WORDS};
 use pxl_render::mesh::word::NO_LAYER;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -256,7 +256,7 @@ impl GhostDraw {
         if self.held.as_ref().is_some_and(|h| h.shape == shape) {
             return moved;
         }
-        let bytes = mesh_words(1, FINE_BOX_WORDS) * 4;
+        let bytes = FINE_BOX_WORDS * 4;
         let Some(block) = self.replace(draw, shape, bytes) else { return true };
         // SAFETY: a block of the words asked for, this ghost's until replaced.
         let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), bytes as usize / 4) };

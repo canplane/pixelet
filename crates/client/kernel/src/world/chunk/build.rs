@@ -134,7 +134,7 @@ impl Default for Builder {
         Builder {
             chunks: ByMount::new(),
             direct: RunWriter::new(),
-            bake: BakeContext::new(),
+            bake: BakeContext::default(),
             bake_job: None,
             sample: ChunkSample::default(),
             leaf_sample: ChunkSample::default(),

@@ -105,7 +105,6 @@
   "op": {
     "$type": "u32",
     "$doc": ["A record's operation, then its arguments. Bytes go as their count, then the bytes padded to a word."],
-    "RESET": { "$value": 1, "$doc": ["every object the host holds let go"] },
     "BUFFER": { "$value": 2, "$doc": ["id, size, usage"] },
     "TEXTURE": { "$value": 3, "$doc": ["id, width, height, layers, format, mips, usage"] },
     "IMAGE_TEXTURE": { "$value": 4, "$doc": ["id, image: a texture of an image a load holds, at its size, with it in it"] },
