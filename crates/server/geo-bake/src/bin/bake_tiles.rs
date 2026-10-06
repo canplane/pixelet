@@ -38,7 +38,7 @@ use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use pxl_geo_bake::cli::Flags;
-use pxl_geo_bake::coverage::{Coverage, Overture};
+use pxl_geo_bake::coverage::{holdings, Coverage, Overture};
 use pxl_geo_bake::deck;
 use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::pyramid::{build, refold, write_manifest, TileSet};
@@ -113,29 +113,6 @@ fn parse_args() -> Result<Args, String> {
         args.stages = vec![Stage::Leaf, Stage::Assemble];
     }
     Ok(args)
-}
-
-/// What the geo DB held when a version was baked; the version name says nothing of it.
-fn read_source_catalogs(client: &mut Client, source: &Overture) -> serde_json::Value {
-    let sql = "SELECT shard, data_date::text AS data_date, file_name, status FROM elevation_catalog ORDER BY shard";
-    let elevation: Vec<serde_json::Value> = match client.query(sql, &[]) {
-        Ok(rows) => rows
-            .iter()
-            .map(|r| {
-                serde_json::json!({
-                    "shard": r.get::<_, String>("shard"),
-                    "data_date": r.get::<_, Option<String>>("data_date"),
-                    "file_name": r.get::<_, String>("file_name"),
-                    "status": r.get::<_, String>("status"),
-                })
-            })
-            .collect(),
-        Err(err) => {
-            eprintln!("[bake/provenance] could not read elevation_catalog: {err}");
-            Vec::new()
-        }
-    };
-    serde_json::json!({ "overture": source.manifest(), "elevation_catalog": elevation })
 }
 
 fn classify_land_tiles(client: &mut Client, candidates: &[IVec]) -> Result<Vec<IVec>, postgres::Error> {
@@ -391,7 +368,7 @@ fn run() -> Result<(), String> {
                 "land_tiles": land.len(),
                 "release": source.release,
                 "regions": args.regions.iter().map(|r| r.name()).collect::<Vec<_>>(),
-                "source": read_source_catalogs(&mut client, source),
+                "source": holdings(&mut client, &leaf::READS)?,
             }),
         )?;
     }

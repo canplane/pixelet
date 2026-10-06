@@ -14,7 +14,7 @@ use pxl_spec::space::layer::tile::Tile;
 use crate::pyramid::Layer;
 use std::path::PathBuf;
 
-use crate::coverage::Coverage;
+use crate::coverage::{holdings, Coverage};
 use pxl_spec::space::coord::zoom::Zoom;
 use std::sync::Arc;
 
@@ -36,6 +36,15 @@ impl Kind {
             _ => None,
         }
     }
+    /// What its bake reads of the geo DB.
+    fn reads(self) -> &'static [&'static [&'static str]] {
+        match self {
+            Self::Terrain => &crate::terrain::leaf::READS,
+            Self::Poi => &[&crate::poi::READS],
+            Self::Geocode => &[&crate::geocode::provider::overture::READS],
+        }
+    }
+
     pub fn name(self) -> &'static str {
         match self {
             Self::Terrain => "terrain",
@@ -110,18 +119,22 @@ pub struct Server {
     top_z: Zoom,
 }
 impl Server {
-    /// Another source's cache is removed, never read.
     pub fn open(workers: usize, base: PathBuf, top_z: Zoom, limits: Limits) -> Result<Self, String> {
         let owner = claim(&base)?;
-        let source = base.join(source_id()?);
-        for entry in std::fs::read_dir(&base).map_err(|e| e.to_string())?.flatten() {
-            if entry.path() != source && entry.file_name() != LOCK {
-                std::fs::remove_dir_all(entry.path()).or_else(|_| std::fs::remove_file(entry.path())).map_err(|e| e.to_string())?;
-            }
-        }
         let runner = Arc::new(Runner::new(workers, limits)?);
+        let binary = std::fs::read(std::env::current_exe().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
+        let mut client = postgres::Client::connect(&url, postgres::NoTls).map_err(|e| e.to_string())?;
         let datasets = [Kind::Terrain, Kind::Poi, Kind::Geocode].map(|k| {
-            prune(&source.join(k.name()))?;
+            let root = base.join(k.name());
+            let source = root.join(source_id(&binary, &holdings(&mut client, k.reads())?));
+            // Another source's cache is removed, never read.
+            for entry in std::fs::read_dir(&root).into_iter().flatten().flatten() {
+                if entry.path() != source {
+                    std::fs::remove_dir_all(entry.path()).or_else(|_| std::fs::remove_file(entry.path())).map_err(|e| e.to_string())?;
+                }
+            }
+            prune(&source)?;
             Dataset::open(&source, k, &runner).map(Arc::new)
         });
         let [t, p, g] = datasets;
@@ -145,27 +158,13 @@ impl Server {
     }
 }
 
-/// The binary and the catalogs a tile here is baked from.
-fn source_id() -> Result<String, String> {
+/// A kind's cache's name: the binary that bakes it and what the DB holds for its reads.
+fn source_id(binary: &[u8], holdings: &serde_json::Value) -> String {
     use std::hash::{Hash, Hasher};
     let mut h = std::hash::DefaultHasher::new();
-    std::fs::read(std::env::current_exe().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?.hash(&mut h);
-    let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
-    let mut client = postgres::Client::connect(&url, postgres::NoTls).map_err(|e| e.to_string())?;
-    for sql in SOURCE_SQL {
-        for row in client.query(sql, &[]).map_err(|e| format!("{sql}: {e}"))? {
-            (0..row.len()).map(|i| row.get::<_, Option<String>>(i)).collect::<Vec<_>>().hash(&mut h);
-        }
-    }
-    Ok(format!("{:016x}", h.finish()))
+    (binary, holdings.to_string()).hash(&mut h);
+    format!("{:016x}", h.finish())
 }
-
-/// The catalogs of what a bake reads; the coastline keeps none, so its rows are counted.
-const SOURCE_SQL: [&str; 3] = [
-    "SELECT file_name, node, data_date, imported_at::text, total_count::text FROM overture_catalog ORDER BY file_name, node",
-    "SELECT shard, data_date::text, file_name, status, imported_at::text, total_count::text FROM elevation_catalog ORDER BY shard",
-    "SELECT count(*)::text FROM osm_land_polygons",
-];
 
 const LOCK: &str = ".lock";
 

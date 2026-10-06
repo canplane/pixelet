@@ -176,8 +176,6 @@ pub fn tables_of<'a>(reads: &[&[&'a str]]) -> Vec<&'a str> {
 pub struct Overture {
     url: String,
     pub release: String,
-    /// Each table read, with its row count.
-    tables: Vec<(String, i64)>,
 }
 
 const INGEST: &str = "run ./infra/geo/overture/script/ingest.rs";
@@ -191,37 +189,49 @@ impl Overture {
         let want: BTreeSet<String> = need.iter().map(|n| n.name()).collect();
         let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
         let rows = client
-            .query(&format!("SELECT file_name, node, data_date, total_count FROM {CATALOG} WHERE file_name = ANY($1)"), &[&tables])
+            .query(&format!("SELECT file_name, node, data_date FROM {CATALOG} WHERE file_name = ANY($1)"), &[&tables])
             .map_err(|e| format!("{CATALOG}: {e}: {INGEST}"))?;
         let mut release: Option<(String, String)> = None;
-        let mut out = Vec::with_capacity(tables.len());
         for &table in &tables {
-            let have: BTreeMap<&str, (&str, i64)> = rows.iter().filter(|r| r.get::<_, &str>(0) == table).map(|r| (r.get(1), (r.get(2), r.get(3)))).collect();
+            let have: BTreeMap<&str, &str> = rows.iter().filter(|r| r.get::<_, &str>(0) == table).map(|r| (r.get(1), r.get(2))).collect();
             let missing = want.iter().filter(|n| !have.contains_key(n.as_str())).count();
             let extra = have.keys().filter(|n| !held.contains(**n)).count();
             if missing + extra > 0 {
                 return Err(format!("{table} lacks {missing} of the shards needed and holds {extra} past the coverage's: {INGEST}"));
             }
-            for (date, _) in have.values() {
+            for date in have.values() {
                 match &release {
                     None => release = Some((table.to_string(), date.to_string())),
                     Some((first, r)) if r != date => return Err(format!("{table} holds release {date} and {first} {r}: one bake reads one release; {INGEST}")),
                     Some(_) => {}
                 }
             }
-            out.push((table.to_string(), have.values().map(|(_, n)| n).sum()));
         }
         let (_, release) = release.ok_or("a bake that reads no Overture table")?;
-        Ok((Overture { url, release, tables: out }, client))
+        Ok((Overture { url, release }, client))
     }
 
     pub fn connect(&self) -> Result<Client, String> {
         Client::connect(&self.url, NoTls).map_err(|e| e.to_string())
     }
+}
 
-    /// What a manifest records of the source.
-    pub fn manifest(&self) -> serde_json::Value {
-        let tables: serde_json::Map<String, serde_json::Value> = self.tables.iter().map(|(t, n)| (t.clone(), serde_json::json!({ "release": self.release, "row_count": n }))).collect();
-        serde_json::Value::Object(tables)
-    }
+/// What the geo DB holds for `reads`, the one description of a bake's source:
+/// each Overture table it names, the elevation and the coastline. A manifest
+/// records it and the dev cache is named by it; an ingest changes it.
+pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Value, String> {
+    let tables = tables_of(reads);
+    let text = |client: &mut Client, sql: &str, params: &[&(dyn postgres::types::ToSql + Sync)]| -> Result<Vec<Vec<Option<String>>>, String> {
+        let rows = client.query(sql, params).map_err(|e| format!("{sql}: {e}"))?;
+        Ok(rows.iter().map(|r| (0..r.len()).map(|i| r.get::<_, Option<String>>(i)).collect()).collect())
+    };
+    let overture = text(
+        client,
+        &format!("SELECT file_name, max(data_date), max(imported_at)::text, sum(total_count)::text FROM {CATALOG} WHERE file_name = ANY($1) GROUP BY file_name ORDER BY file_name"),
+        &[&tables],
+    )?;
+    let elevation = text(client, "SELECT shard, data_date::text, file_name, status, imported_at::text FROM elevation_catalog ORDER BY shard", &[])?;
+    // The coastline keeps no catalog; its import makes the table anew.
+    let coastline = text(client, "SELECT pg_relation_filenode(to_regclass('osm_land_polygons'))::text", &[])?;
+    Ok(serde_json::json!({ "overture": overture, "elevation": elevation, "coastline": coastline }))
 }

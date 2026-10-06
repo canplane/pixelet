@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-use crate::coverage::{Coverage, Overture};
+use crate::coverage::{holdings, Coverage, Overture};
 use crate::terrain::leaf::land_tiles;
 use crate::tile::walk::{self, Args, Target, Tile};
 use crate::util::{fmt_bytes, git_sha, measure_output, refuse_mixed, write_manifest};
@@ -20,6 +20,7 @@ pub struct Bake<'a> {
     pub format: Option<&'a str>,
     /// Opened for what the bake reads, the land list's classification too.
     pub source: &'a Overture,
+    pub reads: &'a [&'a [&'a str]],
 }
 
 pub fn bake<T>(
@@ -65,7 +66,7 @@ pub fn bake<T>(
         "run": { "baked": t.baked, "empty": t.empty, "skipped": t.skipped, "failed": t.failed, "items": t.items, "bytes": t.bytes },
         "content_type": b.content_type,
         "release": b.source.release,
-        "source": b.source.manifest(),
+        "source": holdings(&mut b.source.connect()?, b.reads)?,
     });
     if let Some(format) = b.format {
         fields["format"] = serde_json::Value::String(format.to_string());

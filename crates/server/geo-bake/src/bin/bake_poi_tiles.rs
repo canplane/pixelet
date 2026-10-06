@@ -9,7 +9,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use pxl_geo_bake::cli::Flags;
-use pxl_geo_bake::coverage::{Coverage, Overture};
+use pxl_geo_bake::coverage::{holdings, Coverage, Overture};
 use pxl_geo_bake::poi::{self, leaves};
 use pxl_geo_bake::pyramid::{build, prune, write_manifest, Layer, TileSet};
 use pxl_geo_bake::util::{git_sha, next_version, pack, refuse_mixed, Level};
@@ -43,7 +43,12 @@ fn run() -> Result<(), String> {
     println!("[bake/poi] z{LEAF_ZOOM}: {} tiles", tiles.len());
     let top = build(&set, &PoiTile::default(), concurrency)?;
     println!("[bake/poi] {} tiles their parent marks as none let go", prune::<PoiTile>(&set, top)?);
-    write_manifest(&set, top, built.as_deref(), serde_json::json!({ "release": source.release, "source": source.manifest() }))?;
+    write_manifest(
+        &set,
+        top,
+        built.as_deref(),
+        serde_json::json!({ "release": source.release, "source": holdings(&mut client, &[&poi::READS])? }),
+    )?;
     println!("[bake/poi] complete to z{top}: {}", out.display());
     Ok(())
 }
