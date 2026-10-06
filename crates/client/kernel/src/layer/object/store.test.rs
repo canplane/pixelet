@@ -24,11 +24,22 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
         let mut met = Vec::new();
         store.each_in(OBJECT_COARSEST, at, &mut |e| met.push(*e));
         assert_eq!(met, vec![Entry { zoom: OBJECT_COARSEST, at, state: 3 }]);
-        store.write([Write { key: key(OBJECT_COARSEST, at), id: VOID }]);
+        store.write([Write {
+            key: key(OBJECT_COARSEST, at),
+            id: VOID,
+        }]);
         let mut left = 0;
         store.each(&mut |_| left += 1);
         assert_eq!(left, 0);
-        assert!(store.write([Write { key: key(OBJECT_COARSEST, at), id: VOID }]).is_empty(), "erasing nothing changes nothing");
+        assert!(
+            store
+                .write([Write {
+                    key: key(OBJECT_COARSEST, at),
+                    id: VOID
+                }])
+                .is_empty(),
+            "erasing nothing changes nothing"
+        );
     }
 }
 

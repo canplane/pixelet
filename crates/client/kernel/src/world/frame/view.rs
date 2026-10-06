@@ -4,10 +4,10 @@
 //! all in the world's doubles (`world/frame/coord.rs`). A controller makes
 //! the pose; nothing here knows which.
 
+use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
 use pxl_spec::space::coord::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_mul, mat4_perspective, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4};
-use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 

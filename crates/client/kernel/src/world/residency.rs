@@ -23,12 +23,10 @@ use floor::{Fallback, Floor};
 use crate::io::demand::{Ask, Why};
 use crate::world::pyramid::Layer;
 
-
 /// Only the eye. Another point observer would add its own misses.
 const OBSERVERS: u32 = 1;
 
 pub const ZOOM_DEMAND_TILES: u32 = REACH_TILES;
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Hold {

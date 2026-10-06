@@ -5,22 +5,22 @@
 
 use pxl_spec::space::coord::world::nearest_box;
 
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::layer::tile::Tile;
 
 use crate::world::access::Access;
 use crate::world::observation::{ground_known, observation, Known};
-use crate::world::residency::floor;
 use crate::world::observer::{EdgeRays, Sight};
+use crate::world::residency::floor;
 use xpute_runtime::global::Global;
 
 use crate::world::pyramid::chunk::Chunk;
 use pxl_spec::space::coord::zoom::Zoom;
 
-use super::Price;
 use super::walk::Domain;
+use super::Price;
 
 #[derive(Default)]
 struct Made {

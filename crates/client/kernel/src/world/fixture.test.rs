@@ -3,11 +3,11 @@
 // A world known exactly for the goal's tests: flat ground with solid boxes,
 // as bounds (`Bounds`) and as what tiles touch (`Observer`).
 
-use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::camera::eye::{Frustum, Observation};
-use pxl_spec::space::layer::demand::{Bounds, Contents};
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::v3::{add3, Aabb, V3};
+use pxl_spec::space::layer::demand::{Bounds, Contents};
+use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::world::observer::{Footprint, Grid, Met, Observer, OnPatch, Sight};
 use crate::world::pyramid::domain::{Domain, Price};

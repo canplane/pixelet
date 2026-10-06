@@ -23,11 +23,11 @@ use image::ImageFormat;
 
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
 use pxl_spec::bake::earth_tile::{self, EARTH_ZOOM};
-use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::pvf3::pvf3;
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::tile::tile_at;
 
 const DAY: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74393/world.topo.200407.3x21600x10800.jpg";

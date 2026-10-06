@@ -5,18 +5,18 @@
 //! `put`; indexing lanes by hand let sections drift out of order (2026-09-23).
 
 use crate::control::camera::controller;
+use crate::io::failure::Outcome;
 use crate::io::sched::{counts, credits};
 use crate::kernel::{kernel, with_world};
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::sched::profiler::block::TASK_PHASES;
 use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
-use crate::sched::profiler::log::window_counters;
-use crate::io::failure::Outcome;
 use crate::sched::profiler::frame::FrameSample;
+use crate::sched::profiler::log::window_counters;
 use crate::sched::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
+use crate::sched::profiler::spec::{LIMITS, SUMMARY};
 use crate::sched::profiler::task::TaskRow;
 use crate::sched::profiler::word::put;
-use crate::sched::profiler::spec::{LIMITS, SUMMARY};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;

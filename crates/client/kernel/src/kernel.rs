@@ -34,7 +34,6 @@ pub fn kernel() -> &'static mut Kernel {
     KERNEL.get(Kernel::new)
 }
 
-
 /// The objects and the painter, borrowed together for a turn's build.
 pub struct World<'a> {
     pub store: &'a crate::layer::object::store::Store,
@@ -46,7 +45,11 @@ impl Kernel {
     /// the memory map is laid.
     pub fn world(&mut self) -> Option<(World<'_>, &mut Scheduler, &mut Scene)> {
         let Kernel {
-            laid_out, objects, painter, sched, scene,
+            laid_out,
+            objects,
+            painter,
+            sched,
+            scene,
         } = self;
         if !*laid_out {
             return None;

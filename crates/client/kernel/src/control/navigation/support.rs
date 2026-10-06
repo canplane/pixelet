@@ -6,11 +6,11 @@
 //! that floor; a center put over coarser ground keeps its Z unknown and
 //! stands on the finest ground known there until the leaves' is.
 
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::coord::pvf3::core::{FRAC_W, IVEC_Z_W};
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::shell::setting::store::settings_store;
 use crate::world::access::{Access, Answer, Detail, Ray};

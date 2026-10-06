@@ -10,9 +10,9 @@ use pxl_render::mesh::run::apron_col;
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::camera::grid::target_cell_px;
 use pxl_spec::space::coord::pvf3::ivec::IVec;
+use pxl_spec::space::coord::v3::Aabb;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use pxl_spec::space::coord::v3::Aabb;
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use std::collections::{HashMap, TryReserveError};

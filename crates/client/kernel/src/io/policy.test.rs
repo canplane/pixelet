@@ -1,8 +1,8 @@
 // pxl-kernel/io/policy.test.rs
 
-use pxl_spec::space::layer::lattice::GROUND;
 use super::*;
 use crate::io::demand::Why;
+use pxl_spec::space::layer::lattice::GROUND;
 
 fn at(why: Why, seen: bool, near: f64) -> Ask {
     Ask { why, order: Order { seen, near } }

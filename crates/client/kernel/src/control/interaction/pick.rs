@@ -5,10 +5,10 @@
 //! placement or an erase.
 
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::layer::object::store::{get_placed_object, Entry};
 use crate::world::access::{Access, Detail, Hit, Ray, Struck};

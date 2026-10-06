@@ -10,10 +10,10 @@
 //! do not depend on quality, so one cast serves every step. Footprints are
 //! reused across small moves (`Sight`) as an acceleration only.
 
-use pxl_spec::space::camera::grid::{Tau, SPLIT};
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::layer::demand::Requirement;
+use pxl_spec::space::camera::grid::{Tau, SPLIT};
 use pxl_spec::space::coord::v3::{dot3, len3, mul3n, sub3, Aabb, V3};
+use pxl_spec::space::layer::demand::Requirement;
 
 use crate::param;
 use crate::world::access::{Access, Detail, Ray};

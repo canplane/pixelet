@@ -3,8 +3,8 @@
 // The query's laws over a leaf tile's four children folded into their
 // parent as the bake folds them, and objects written into a store.
 
-use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
+use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::bake::format::Ground;
 use pxl_spec::cell::cube_types::{self, ground, sentinel};
 use pxl_spec::cell::object::{placeable_cube_num_id, PlaceableCube};
@@ -14,14 +14,13 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 use super::*;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
-use pxl_spec::space::coord::v3::V3;
 
 use crate::layer::object::store::Store;
 use crate::world::residency::Residency;
 use pxl_spec::space::coord::zoom::{index_of, Zoom};
-
 
 use crate::layer::object::store::Write;
 use crate::serial;

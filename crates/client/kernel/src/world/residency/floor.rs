@@ -8,9 +8,9 @@
 //! Its zoom is the source's declared top (`declare`), never guessed from
 //! what fails. Until declared, nothing is observed.
 
-use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::demand::{tiles_within, REACH_TILES};
 use pxl_spec::space::camera::eye::Observation;
+use pxl_spec::space::layer::demand::{tiles_within, REACH_TILES};
+use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 
 use pxl_spec::space::coord::zoom::Zoom;

@@ -6,8 +6,6 @@ use pxl_spec::bake::format::GroundCell;
 use pxl_spec::cell::cube_types::sentinel;
 use pxl_spec::space::layer::tile::Tile;
 
-
-
 /// A coarser answer carries the tile it lacked, so none passes for exact.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Answer<T> {

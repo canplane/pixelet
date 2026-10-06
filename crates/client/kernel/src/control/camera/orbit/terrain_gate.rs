@@ -3,9 +3,9 @@
 //! How far the orbit gets toward what the controls ask before terrain is in
 //! the way. The controls keep what was asked; the drawn orbit stops short.
 
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::{add3, V3};
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;

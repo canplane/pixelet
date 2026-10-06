@@ -21,8 +21,8 @@ use crate::layer::terrain::fixed::{coarse_off, deck_off, ele_off, extent_off, gr
 use crate::mem::fixed::{at, Range};
 use crate::world::access::Access;
 use crate::world::pyramid::{Layer, Pyramid};
-use xpute_runtime::clock::now;
 use pxl_spec::bake::format::Occupancy;
+use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 
 static TERRAIN: Global<Pyramid<Terrain>> = Global::new();

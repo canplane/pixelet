@@ -5,12 +5,11 @@
 
 pub mod pick;
 
-
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::layer::lattice::GROUND;
 
 pub use crate::abi::cmd::ActiveTool;
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};

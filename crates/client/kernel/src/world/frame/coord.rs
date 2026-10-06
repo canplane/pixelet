@@ -5,9 +5,9 @@
 //! it so that it is continuous about the eye.
 
 use pxl_spec::space::coord::pvf3::pack;
-use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::nearest;
 use xpute_core::math::scalar::round;
 

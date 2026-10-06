@@ -11,9 +11,8 @@ use pxl_spec::space::coord::v3::Aabb;
 use crate::layer::object::store::Store;
 
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
-use pxl_spec::space::hierarchy::tree::first_descendant_of;
 use pxl_spec::space::coord::zoom::{count, units, Zoom};
-
+use pxl_spec::space::hierarchy::tree::first_descendant_of;
 
 /// The zoom a chunk's runs are written at: the records its cells fold
 /// (`GROUND`'s fold finer) where anything is held finer than its cells, else its

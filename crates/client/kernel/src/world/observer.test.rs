@@ -1,7 +1,7 @@
 // pxl-kernel/world/observer.test.rs
 
-use pxl_spec::space::coord::mat4::{mat4, mat4_frustum_planes, mat4_look_at, mat4_mul, mat4_perspective};
 use pxl_spec::space::camera::eye::Frustum;
+use pxl_spec::space::coord::mat4::{mat4, mat4_frustum_planes, mat4_look_at, mat4_mul, mat4_perspective};
 
 use super::*;
 

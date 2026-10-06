@@ -7,16 +7,17 @@ use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_C
 use pxl_render::look::color::marker;
 use pxl_render::mesh::chunk_mesher::{write_lone_box, Heights, FINE_BOX_WORDS};
 use pxl_render::mesh::word::NO_LAYER;
+use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_of, placeable_cube_rgb, PlaceableCube};
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_of, placeable_cube_rgb, PlaceableCube};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use pxl_spec::space::coord::v3::V3;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::kernel::with_world;
+use crate::kernel::World;
 use crate::layer::decor::asset_store::decor_assets_for;
 use crate::layer::decor::build::user_decor_pick;
 use crate::layer::decor::instance::NO_ENTRY;
@@ -27,7 +28,6 @@ use crate::layer::object::store::{carve_entry, get_placed_object, restores_scatt
 use crate::shell::setting::store::settings_store;
 use crate::world::access::Access;
 use crate::world::change::request_world_tick;
-use crate::kernel::World;
 use crate::world::chunk::source::chunk_sources_changed;
 use xpute_runtime::global::Global;
 

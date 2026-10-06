@@ -30,8 +30,8 @@ use crate::sched::turn::world_platform;
 use crate::shell::setting::store::{settings_store, SettingKey};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use pxl_spec::space::coord::zoom::idx;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// The center tile's place, broad to narrow. Every language is sent, so
 /// switching language re-reads rather than refetches.

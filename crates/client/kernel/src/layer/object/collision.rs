@@ -1,8 +1,8 @@
 // pxl-kernel/layer/object/collision.rs
 
-use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::hierarchy::tree::share;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::hierarchy::tree::share;
+use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::layer::decor::build::scatters_at;
 use crate::layer::decor::kind::KINDS;

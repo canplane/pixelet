@@ -5,10 +5,10 @@
 //! one through north. The view's forward, its up and north are told apart by
 //! color; nothing is labeled.
 
-use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::{floor3n, V3};
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::control::camera::controller::{azimuth, dist};
 use crate::kernel::kernel;

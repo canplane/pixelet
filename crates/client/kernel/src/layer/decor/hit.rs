@@ -4,17 +4,17 @@
 //! decor of chunks drawing it as held: decor paints no voxel, so the access's
 //! ray passes through it. A placed instance resolves to its entry; a scattered one to its cell.
 
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::coord::v3::{cross3, dot3, sub3, Aabb, V3};
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::kernel;
 use crate::layer::decor::asset_store::kind_assets;
 use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
+use crate::layer::model::store::Models;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
 use crate::world::chunk::build::draws_as_held;
-use crate::layer::model::store::Models;
 use pxl_spec::space::coord::zoom::{index_of, units, Zoom};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -74,11 +74,7 @@ fn group_models() -> impl Iterator<Item = Option<u32>> {
 /// The largest model's bounding radius at the largest decor size; only for
 /// skipping cells the ray never comes near.
 fn decor_reach(models: &Models) -> f64 {
-    let radius = group_models()
-        .flatten()
-        .filter_map(|m| models.mesh(m))
-        .map(|m| m.radius as f64 * m.scale as f64)
-        .fold(0.0, f64::max);
+    let radius = group_models().flatten().filter_map(|m| models.mesh(m)).map(|m| m.radius as f64 * m.scale as f64).fold(0.0, f64::max);
     radius * DECOR_SIZE
 }
 

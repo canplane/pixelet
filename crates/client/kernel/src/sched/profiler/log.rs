@@ -11,8 +11,8 @@ use crate::layer::billboard::sheet::billboard_sheet;
 use crate::sched::profiler::block::CountersBlock;
 use crate::sched::profiler::frame::FrameSample;
 use crate::sched::profiler::record::{drop_front, fixed_lane, profiler_recording_start, profiler_recording_stop, profiler_set_sink, Lane, ProfilerSink};
-use crate::sched::profiler::task::TaskRow;
 use crate::sched::profiler::summary::{missed, overran};
+use crate::sched::profiler::task::TaskRow;
 use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
 use xpute_runtime::global::Global;
 

@@ -1,14 +1,14 @@
 // pxl-kernel/world/pyramid/domain.test.rs
 
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
+use pxl_spec::space::coord::world;
 
 use super::*;
 use crate::world::fixture::Free;
-use crate::world::pyramid::chunk::Chunk;
 use crate::world::observer::cell_angle;
+use crate::world::pyramid::chunk::Chunk;
 
 use crate::world::fixture::{self, eye, World};
 
