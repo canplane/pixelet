@@ -7,7 +7,7 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Cell, Tile};
 
-use crate::kernel::kernel;
+use crate::kernel;
 use crate::layer::object::store::Store;
 use crate::layer::residency::Residency;
 use crate::world::pyramid::{Layer as _, Pyramid};

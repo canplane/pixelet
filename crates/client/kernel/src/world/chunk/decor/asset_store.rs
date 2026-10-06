@@ -7,7 +7,7 @@
 use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
-use crate::host::heap_stat;
+use crate::door::host::heap_stat;
 use crate::io::load::{load_failed, load_gltf, load_image, Load};
 use crate::scene::model::asset::register_model;
 use crate::world::change::{request_world_tick, world_edge};

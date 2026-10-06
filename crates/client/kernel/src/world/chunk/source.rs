@@ -8,8 +8,8 @@ use pxl_spec::space::coord::v3::Aabb;
 
 use std::collections::HashMap;
 
-use crate::kernel::with_world;
 use crate::layer::object::store::Store;
+use crate::with_world;
 use crate::world::chunk::build::{folded_cells, runs_of};
 use crate::world::chunk::Chunk as PyramidChunk;
 use pxl_spec::space::coord::world::nearest_box;

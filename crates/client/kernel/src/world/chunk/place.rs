@@ -116,7 +116,7 @@ pub fn step(ctx: &mut TickContext) {
     if crate::world::chunk::domain::current().is_none() {
         return;
     }
-    let sched = &crate::kernel::kernel().sched;
+    let sched = &crate::kernel().sched;
     sched.mounted(&mut p.mounted);
     p.now.drawn.clear();
     p.now.drawn.extend(p.mounted.iter().filter(|m| m.1).map(|m| m.0));

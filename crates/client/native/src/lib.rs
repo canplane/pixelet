@@ -24,7 +24,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use pxl_kernel::door::Bracket;
-use pxl_kernel::host::Stop;
+use pxl_kernel::door::host::Stop;
 
 /// The device's clock, in milliseconds from the first reading: a turn's quota
 /// is spent against it, and only differences are read.
@@ -33,7 +33,7 @@ fn now() -> f64 {
     START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
-fn heap_stat() -> pxl_kernel::host::HeapStat {
+fn heap_stat() -> pxl_kernel::door::host::HeapStat {
     memory::ALLOC.stat()
 }
 

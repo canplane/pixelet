@@ -5,8 +5,8 @@ use std::collections::{HashMap, HashSet};
 use pxl_spec::bake::poi_tile::{kind_color, kind_icon, Place, PoiTile};
 use pxl_spec::space::layer::tile::Tile;
 
+use crate::io::text::text_width;
 use crate::scene::billboard::sheet::billboard_sheet;
-use crate::text::text_width;
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
 use pxl_render::gpu::surface::DPR_MAX;

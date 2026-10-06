@@ -70,14 +70,14 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 interactive: p.interactive,
                 credits: p.credits,
             });
-            crate::host::set_wall_now(p.unix_ms);
+            crate::door::host::set_wall_now(p.unix_ms);
             Ok(Some(0))
         }
         Command::WORLD_BOOT => {
             let p = abi::WorldBoot::read(packet(pkt)?)?;
             super::host_attached(s);
-            crate::host::set_development(p.development);
-            crate::host::set_handheld(p.handheld);
+            crate::door::host::set_development(p.development);
+            crate::door::host::set_handheld(p.handheld);
             crate::sched::turn::set_world_platform(crate::sched::turn::Platform {
                 geolocation: p.geolocation,
                 orientation: device_orientation::OrientationPlatform {

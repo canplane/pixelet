@@ -12,7 +12,6 @@ use crate::control::camera::input::steering;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::control::navigation::support::over;
 use crate::io::load::{load_image, Load};
-use crate::kernel::{kernel, with_world};
 use crate::param::COMPANION_STEP_CELLS;
 use crate::scene::character::chat_bubble::chat_bubble_step;
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
@@ -24,6 +23,7 @@ use crate::shell::setting::store::settings_store;
 use crate::world::change::wake_at;
 use crate::world::query::Access;
 use crate::world::view::frame::coord::world_to_canonical;
+use crate::{kernel, with_world};
 use xpute_runtime::global::Global;
 
 pub const ACTORS_MAX: usize = Group::ALL.len();

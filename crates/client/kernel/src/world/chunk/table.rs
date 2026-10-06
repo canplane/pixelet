@@ -33,8 +33,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
-use crate::kernel::kernel;
-use crate::kernel::World;
+use crate::kernel;
 use crate::layer::object::store::EntryAt;
 use crate::param;
 use crate::scene::marker::hover_cursor::{render_edits, RenderEdits};
@@ -44,6 +43,7 @@ use crate::world::chunk::build::{draws_as_held, BuildEvent, Builder};
 use crate::world::chunk::frontier::{pool_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, OCCUPANCY};
 use crate::world::chunk::source::{draws, objects_drawn, Drawn};
+use crate::World;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;

@@ -15,7 +15,7 @@ use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 use crate::abi::host::root;
-use crate::host::decode_image;
+use crate::door::host::decode_image;
 use crate::io::demand::Ask;
 use crate::io::failure::{Failure, Outcome};
 use crate::io::file::{self, Owner};

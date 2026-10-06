@@ -28,7 +28,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-use crate::kernel::kernel;
+use crate::kernel;
 use crate::layer::object::repository;
 use crate::layer::{Answer, Bound, Query};
 use crate::world::change::request_world_tick;

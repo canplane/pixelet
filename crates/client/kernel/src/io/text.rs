@@ -1,4 +1,4 @@
-// pxl-kernel/text.rs
+// pxl-kernel/io/text.rs
 
 //! Text laid out and drawn by the platform, asked through the host stream
 //! (TEXT_LAYOUT, TEXT_RASTER) and answered next turn. Each world frame keeps
@@ -12,7 +12,7 @@ use pxl_render::gpu::text::{raster_box, Font, Raster};
 use xpute_runtime::mem::base::off_of_slice;
 
 use crate::abi::host::op;
-use crate::host::{host_offer, turn};
+use crate::door::host::{host_offer, turn};
 use xpute_runtime::global::Global;
 
 /// (weight, px bits, max width bits; 0 for one line, text).

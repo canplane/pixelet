@@ -86,7 +86,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             // which over a source's void leaves nothing to draw.
             status: match crate::world::view::observation::eye() {
                 None => MapStatus::Idle,
-                Some(_) if crate::kernel::kernel().sched.shows_ground() || Terrain::pyramid().answered() => MapStatus::Success,
+                Some(_) if crate::kernel().sched.shows_ground() || Terrain::pyramid().answered() => MapStatus::Success,
                 Some(_) => MapStatus::Loading,
             },
             is_off_center: map_navigation().is_off_center,

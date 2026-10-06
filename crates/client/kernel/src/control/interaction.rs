@@ -174,7 +174,7 @@ fn folded_at(hit: &Hit) -> bool {
     let [x, y, z] = hit.cube.center();
     let at = crate::world::view::frame::coord::world_to_canonical(&[x, y, z]);
     let held = of_side(hit.cube.extent()[0]);
-    crate::kernel::with_world(|_, sched, _| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
+    crate::with_world(|_, sched, _| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
 }
 
 /// A tap at `ndc_x`, `ndc_y` with the tool held.

@@ -21,7 +21,7 @@ use xpute_runtime::mem::heap::{alloc, free};
 use xpute_runtime::sched::frame_budget::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
-use crate::kernel::kernel;
+use crate::kernel;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::Store;
 use crate::shell::setting::store::settings_store;

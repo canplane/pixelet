@@ -22,7 +22,7 @@ use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
 use pxl_render::mesh::run::RunWriter;
 use std::collections::HashMap;
 
-use crate::kernel::World;
+use crate::World;
 
 use crate::world::chunk::mesh_slot::OCCUPANCY;
 use crate::world::chunk::Chunk as PyramidChunk;
@@ -221,7 +221,7 @@ impl Builder {
         self.stat.starved += 1;
         self.abort_work_of(id);
         self.leave_runs(id);
-        let releases = crate::host::heap_stat().releases;
+        let releases = crate::door::host::heap_stat().releases;
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
         }
@@ -277,7 +277,7 @@ impl Builder {
         if !c.want {
             return Progress::Done;
         }
-        if c.refused.is_some_and(|r| r == crate::host::heap_stat().releases) {
+        if c.refused.is_some_and(|r| r == crate::door::host::heap_stat().releases) {
             return Progress::Blocked;
         }
         if self.runs_of(id).is_none() {

@@ -15,16 +15,16 @@ use crate::sched::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_
 use pxl_spec::asset::ingested::Asset;
 use xpute_core::math::scalar::round;
 
-use crate::host::handheld;
+use crate::door::host::handheld;
 use crate::io::load::{load_image, Load};
-use crate::kernel::kernel;
+use crate::io::text::text_raster;
+use crate::kernel;
 use crate::layer::earth::{earth_upload, earth_window, EARTH_FRAMES};
 use crate::scene::billboard::sheet::billboard_sheet;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
 use crate::scene::environment::config::{ao_cfg, edge_cfg, rim_cfg};
 use crate::shell::setting::store::{settings_store, AoMode};
-use crate::text::text_raster;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::decor::asset_store::kind_assets;
 use crate::world::chunk::stage::set_host_frame_stat;

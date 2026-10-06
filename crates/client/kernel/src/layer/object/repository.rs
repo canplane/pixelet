@@ -15,9 +15,9 @@ use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 use xpute_runtime::sched::edge::{notified, Notify};
 
-use crate::host::turn;
+use crate::door::host::turn;
 use crate::io::file::{self, Kept, Owner};
-use crate::kernel::kernel;
+use crate::kernel;
 use crate::layer::object::store::{apply, written, Write};
 use crate::world::change::wake_at;
 

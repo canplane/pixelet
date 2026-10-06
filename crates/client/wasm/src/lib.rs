@@ -71,7 +71,7 @@ extern "C" {
 }
 
 /// The allocator's reading, for the profiler and the heap's row.
-fn heap_stat() -> pxl_kernel::host::HeapStat {
+fn heap_stat() -> pxl_kernel::door::host::HeapStat {
     pxl_kernel::mem::heap::heap_stat(&ALLOC)
 }
 

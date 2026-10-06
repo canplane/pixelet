@@ -10,7 +10,6 @@ use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
 use crate::io::sched::pending_count;
-use crate::kernel::{kernel, with_world};
 use crate::mem::MB;
 use crate::scene::environment::state::globe;
 use crate::sched::profiler::frame::{CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample, TurnSample, ViewSample, WorkSample};
@@ -21,6 +20,7 @@ use crate::world::chunk::decor::build::DecorHide;
 use crate::world::chunk::table::{builds, Census, Frame};
 use crate::world::pyramid::Layer;
 use crate::world::view::frame::pose::{sea_under_eye, view, view_resize};
+use crate::{kernel, with_world};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
 use xpute_runtime::clock::now;
@@ -100,7 +100,7 @@ fn work_sample(c: &mut CoreTick, census: &Census) -> WorkSample {
 /// complements. `run` and `slot` are unrounded because their difference is
 /// smaller than rounding would hide.
 fn heap_sample() -> HeapSample {
-    let h = crate::host::heap_stat();
+    let h = crate::door::host::heap_stat();
     HeapSample {
         used_mb: round(h.used as f64 / MB),
         live_mb: round(h.live as f64 / MB),

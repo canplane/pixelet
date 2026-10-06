@@ -11,7 +11,7 @@ use pxl_spec::bake::place_tile::DICT_OBJECT;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::abi::host::{root, OBJECTS_PATH, SETTINGS_PATH};
-use crate::host::sys;
+use crate::door::host::sys;
 use crate::io::load::LOADS;
 use crate::io::sched::Credit;
 use crate::mem::spec::MIN_HEAP_BYTES;

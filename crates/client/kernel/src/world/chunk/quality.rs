@@ -17,7 +17,7 @@
 
 use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 
-use crate::kernel::kernel;
+use crate::kernel;
 use crate::param;
 use crate::world::chunk::domain;
 use crate::world::chunk::frontier::{Need, Slots, HEADROOM};

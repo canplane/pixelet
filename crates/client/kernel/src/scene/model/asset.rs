@@ -14,7 +14,7 @@ use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4::{mat4_transform_direction, mat4_transform_point};
 use xpute_runtime::mem::base::ptr_at;
 
-use crate::kernel::with_world;
+use crate::with_world;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelHandle {

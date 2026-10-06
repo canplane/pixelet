@@ -24,7 +24,7 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 use std::alloc::{GlobalAlloc, Layout, System};
 
-use pxl_kernel::host::HeapStat;
+use pxl_kernel::door::host::HeapStat;
 use pxl_kernel::mem::heap::{heap_stat, HeapBounds, KernelAlloc};
 
 use crate::thread::on_kernel_thread;

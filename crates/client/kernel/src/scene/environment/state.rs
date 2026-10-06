@@ -10,8 +10,8 @@ use pxl_spec::space::coord::adapter::epsg4326::G4326;
 use pxl_spec::space::coord::v3::{len3, V3};
 
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
-use crate::host::wall_now;
-use crate::kernel::kernel;
+use crate::door::host::wall_now;
+use crate::kernel;
 use crate::scene::environment::celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use crate::scene::environment::fog::eye_ground;
 use crate::world::change::wake_at;

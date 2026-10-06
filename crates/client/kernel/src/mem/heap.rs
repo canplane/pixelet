@@ -10,7 +10,7 @@ use core::marker::PhantomData;
 use xpute_core::alloc::buddy_tree::Range;
 use xpute_core::alloc::slab::SlabMalloc;
 
-use crate::host::HeapStat;
+use crate::door::host::HeapStat;
 use crate::mem::section;
 
 pub trait HeapBounds {
