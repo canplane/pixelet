@@ -3,7 +3,6 @@
 //! The first thing a ray meets: ground walked a region at a time, decks and placed objects, at the detail the distance or a zoom asks.
 
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::bake::format::drawn;
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_voxel};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
@@ -15,6 +14,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use crate::layer::object::store::EntryAt;
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
 
+use super::query::Query;
 use super::{answer::*, column::*, ground::*};
 
 /// Probe distance past a boundary, in units: far below the lattice's finest
@@ -226,33 +226,33 @@ impl<'a> Access<'a> {
         let from = ray.at(t + NUDGE);
         let at = on_ground(&from);
         (GROUND.top()..zoom).find_map(|coarser| {
-            let body = self.terrain.get(GROUND.cell_of(coarser, &at).tile())?;
             let e = EXTENT.cell_of(coarser, &at);
-            let [_, hi] = drawn(body.index.extent()[e.index() as usize]);
+            // Only ground known exactly lets a ray pass over it.
+            let hi = match self.terrain.bounds(e.node(), GROUND.grid_zoom(coarser)) {
+                Answer::Exact(b) => b.map_or(f64::NEG_INFINITY, |b| b.aabb.max[2]),
+                _ => return None,
+            };
             let out = exit(ray, corner(e.zoom(), &from), units(e.zoom())).min(until).max(t + NUDGE);
             let (za, zb) = (ray.at(t)[2], ray.at(out)[2]);
-            (za.min(zb) > hi as f64 * units(GROUND.cell())).then_some(out)
+            (za.min(zb) > hi).then_some(out)
         })
     }
 
     pub(super) fn region(&self, p: &V3, zoom: Zoom) -> Region {
-        let at = on_ground(p);
-        let tile = GROUND.cell_of(zoom, &at).tile();
-        let (cell_zoom, terrain) = match self.terrain.drawn(tile) {
-            Some((src, body)) => {
-                // The drawn-from tile's index cell, or the asked tile if smaller: one bound
-                // and one tile across it.
-                let e = EXTENT.cell_of(src.zoom, &at);
-                let [lo, hi] = drawn(body.index.extent()[e.index() as usize]);
-                let exact = self.terrain.source(tile).is_some();
-                (e.zoom().max(zoom), Some(((lo as f64 * units(GROUND.cell()), hi as f64 * units(GROUND.cell())), exact)))
+        // One index cell of the tile at `zoom`: one bound across it, the whole tile where none is known.
+        let e = EXTENT.cell_of(zoom, &on_ground(p));
+        let (cell_zoom, terrain) = match self.terrain.bounds(e.node(), GROUND.grid_zoom(zoom)) {
+            Answer::Nothing(_) => (zoom, None),
+            known => {
+                let exact = matches!(known, Answer::Exact(_));
+                let held = known.value().flatten().map_or((f64::INFINITY, f64::NEG_INFINITY), |b| (b.aabb.min[2], b.aabb.max[2]));
+                (e.zoom(), Some((held, exact)))
             }
-            None => (zoom, None),
         };
         Region {
             base: corner(cell_zoom, p),
             side: units(cell_zoom),
-            tile,
+            tile: e.tile(),
             terrain,
         }
     }

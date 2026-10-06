@@ -188,6 +188,10 @@ impl Cell {
         self.zoom
     }
 
+    pub fn node(self) -> Node<2> {
+        (self.zoom, self.at)
+    }
+
     pub fn in_tile(self) -> [u32; 2] {
         offset_in(self.at, self.shamt()).map(|v| v as u32)
     }
