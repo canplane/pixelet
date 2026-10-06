@@ -8,7 +8,7 @@ use std::collections::TryReserveError;
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 use xpute_core::math::scalar::round;
 
-use crate::bake::deck::{Occupies, Over};
+use crate::bake::deck::{slab_depth, Occupies, Over};
 use crate::bake::format::GroundCell;
 use crate::cell::cube::cube_types::{sentinel, Ground};
 use crate::cell::cube::Kind;
@@ -103,11 +103,27 @@ pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2]) -> Option<Candidate> {
 
 // ---- piers ----
 
-/// Within Arnis's 19 m and OSM2World's 50 m; one lattice a z5 row.
-pub const PIER_STEP_M: f64 = 32.0;
+// A bridge the source names no structure for is Arnis's beam bridge
+// (`bridge_styles.rs` `pier_interval`, `place_pier_bent`): a bent every 8 m,
+// 12 m once its half width passes two cells, of one-cell columns.
+pub const BEAM_PILLAR_INTERVAL_M: f64 = 8.0;
+pub const WIDE_BEAM_PIER_INTERVAL_M: f64 = 12.0;
 
-pub const PIER_ACROSS: f64 = 0.7; // of the deck's width: OSM2World's `BridgeModule`
-pub const PIER_ALONG: f64 = PIER_ACROSS / 2.0; // OSM2World's
+/// Arnis's `LOWER_DECK_GAP`: a deck at least this far under a pier's blocks it.
+const LOWER_DECK_GAP_M: f64 = 5.0;
+
+/// Arnis's `place_pillar`: a deck this near the ground rests on it.
+pub const PIER_MIN_RISE_M: f64 = 2.0;
+
+/// A bent's columns across the deck, from its line: the middle, both edges,
+/// or both and the middle, by its half width in cells.
+fn bent(half: i32) -> &'static [i32] {
+    match half {
+        ..=2 => &[0],
+        3..=4 => &[-1, 1],
+        _ => &[-1, 0, 1],
+    }
+}
 
 /// A tile's cells in the world, so a station is the world's and not a tile's.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -133,7 +149,9 @@ pub fn pier_covers(frame: Frame, width: f64, a: [f64; 2], d: [f64; 2], near: [f6
     if d[k] == 0.0 {
         return false;
     }
-    let lattice = PIER_STEP_M * u_per_m(frame.corner[1]);
+    let half = round(width / 2.0) as i32;
+    let step_m = if half <= 2 { BEAM_PILLAR_INTERVAL_M } else { WIDE_BEAM_PIER_INTERVAL_M };
+    let lattice = step_m * u_per_m(frame.corner[1]);
     let station = round((frame.corner[k] + near[k] * frame.cell) / lattice) * lattice;
     let t = ((station - frame.corner[k]) / frame.cell - a[k]) / d[k];
     if !(0.0..1.0).contains(&t) {
@@ -143,19 +161,23 @@ pub fn pier_covers(frame: Frame, width: f64, a: [f64; 2], d: [f64; 2], near: [f6
     let dir = [d[0] / len, d[1] / len];
     let rel = [at[0] - (a[0] + d[0] * t), at[1] - (a[1] + d[1] * t)];
     let along = (rel[0] * dir[0] + rel[1] * dir[1]).abs();
-    let across = (rel[0] * dir[1] - rel[1] * dir[0]).abs();
-    // At least the station's own cell.
-    along <= (PIER_ALONG * width / 2.0).max(0.5) && across <= (PIER_ACROSS * width / 2.0).max(0.5)
+    let across = rel[0] * dir[1] - rel[1] * dir[0];
+    // an edge column stands a cell in from the edge
+    along <= 0.5 && bent(half).iter().any(|&side| (across - f64::from(side * (half - 1).max(0))).abs() <= 0.5)
 }
 
-/// None on a way or a building at grade (Arnis `support_blocked`, OSM2World),
-/// none over a lower deck or ramp (Arnis), none where the terrain gives no
-/// surface to stand on; water stops none.
+/// None on a way at grade or over a deck `LOWER_DECK_GAP_M` or more under
+/// its own (Arnis `support_blocked`), none where the terrain gives no surface
+/// to stand on; water stops none.
 pub fn pier_stands(pier: [i32; 2], cell: GroundCell, column: impl IntoIterator<Item = Over>, ground: i32, cell_per_m: f64) -> Option<[i32; 2]> {
-    if cell == sentinel::void || Ground::of(cell).is_some_and(|g| matches!(g.kind(), Kind::Transport | Kind::Structure)) {
+    if cell == sentinel::void || Ground::of(cell).is_some_and(|g| g.kind() == Kind::Transport) {
         return None;
     }
-    let lower = column.into_iter().any(|o| matches!(o.occupies(ground, cell_per_m), Occupies::Above { slab, .. } if slab[1] <= pier[1]));
+    let surface = pier[1] + slab_depth(cell_per_m);
+    let gap = round(LOWER_DECK_GAP_M * cell_per_m) as i32;
+    let lower = column
+        .into_iter()
+        .any(|o| matches!(o.occupies(ground, cell_per_m), Occupies::Above { slab, .. } if slab[1] <= surface - gap));
     (!lower).then_some(pier)
 }
 

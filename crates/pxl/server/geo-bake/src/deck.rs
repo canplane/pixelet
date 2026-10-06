@@ -23,6 +23,19 @@ pub use arnis::solve_tile;
 pub const DECK_FLAGS: &[&str] = &["is_bridge"];
 pub const BORE_FLAGS: &[&str] = &["is_tunnel"];
 
+/// The flags that keep a way's part out of a form, as Arnis keeps it: no
+/// indoor bridge (`is_bridge_way`), no road tunnel indoors or under
+/// construction (`renders_as_highway_tunnel`), no rail bridge or tunnel on
+/// a line abandoned or unbuilt (`RAIL_TRACK_TYPES`, `renders_as_rail_bridge`).
+pub fn barred(form: Form, subtype: &str) -> &'static [&'static str] {
+    match (form, subtype == "rail") {
+        (Form::Deck, false) => &["is_tunnel", "is_indoor"],
+        (Form::Deck, true) => &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"],
+        (_, false) => &["is_indoor", "is_under_construction"],
+        (_, true) => &["is_under_construction", "is_abandoned"],
+    }
+}
+
 /// What the solve leaves a tile: its lines, and the ranges of ways they draw,
 /// which the ground leaves unpainted. One solve makes both, so the road
 /// leaves the ground's paint exactly where its line begins.

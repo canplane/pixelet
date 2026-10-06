@@ -24,13 +24,16 @@ use crate::deck::elevation::{sample_cells, tile_of};
 use crate::deck::piece::{pieces_of, pieces_over, End, Piece};
 use crate::deck::source::{ring, Store};
 use crate::deck::way::{Polyline, Way};
-use crate::deck::DECK_FLAGS;
+use crate::deck::{barred, DECK_FLAGS};
 use crate::deck::{Drawn, Line, Reader, Solved};
 use crate::segment::Segment;
 use crate::terrain::bake::Surface;
 use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, value_at, without};
 use crate::terrain::pipeline::overture::width::{width_cells, WayShape};
 use crate::wkb::wkb_to_geometries;
+
+/// What Arnis takes for no way at grade (`grade_obstacle`, `is_at_grade_track`).
+const GRADE_BARRED: &[&str] = &["is_indoor", "is_under_construction", "is_abandoned"];
 
 // ---- Arnis's numbers, in metres or as ratios, under its names ----
 const LAYER_HEIGHT_STEP_M: f64 = 6.0;
@@ -303,7 +306,8 @@ impl Source {
                 // a subway runs underground wherever it is no bridge (Arnis `wants_rail_tunnel`)
                 if is_subway(s) {
                     let cell = cell_of(length_of(&s.geom_wkb));
-                    pieces.extend(pieces_over(s, Form::Bore, &without(&[[0.0, 1.0]], &flag_ranges(s.flags.as_deref(), DECK_FLAGS, cell))));
+                    let off = [DECK_FLAGS, barred(Form::Bore, &s.subtype)].concat();
+                    pieces.extend(pieces_over(s, Form::Bore, &without(&[[0.0, 1.0]], &flag_ranges(s.flags.as_deref(), &off, cell))));
                 } else {
                     pieces.extend(pieces_of(s, Form::Bore));
                 }
@@ -415,6 +419,11 @@ fn is_non_vehicular(class: &str) -> bool {
     matches!(class, "footway" | "pedestrian" | "path" | "cycleway" | "bridleway" | "steps")
 }
 
+/// Arnis's `is_pedestrian_way_tags`: what a tunnel's approach matches on foot.
+fn is_pedestrian(class: &str) -> bool {
+    matches!(class, "footway" | "pedestrian" | "steps")
+}
+
 /// Arnis's `effective_layer`: the layer, never below 0; a bridge untagged is 1.
 fn effective_layer(r: &Run) -> i64 {
     r.piece.layer.map(|l| l.max(0)).unwrap_or(i64::from(r.piece.form == Form::Deck))
@@ -477,8 +486,9 @@ impl Obstacles {
         };
         for way in src.ways.values() {
             let row = &way.row;
-            // a way off the ground, or flagged anywhere, is no grade a deck clears (Arnis `grade_obstacle`)
-            if row.flagged() || value_at(row.levels.as_deref(), 0.5).is_some_and(|l| l != 0.0) {
+            // a way raised, flagged anywhere, indoors, unbuilt or abandoned is no grade a
+            // deck clears (Arnis `grade_obstacle`, `is_at_grade_track`); one sunk below 0 is
+            if row.flagged() || value_at(row.levels.as_deref(), 0.5).is_some_and(|l| l > 0.0) || !flag_ranges(row.flags.as_deref(), GRADE_BARRED, 1.0).is_empty() {
                 continue;
             }
             match row.subtype.as_str() {
@@ -765,7 +775,9 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                 for gers in src.way_ends.get(e).into_iter().flatten() {
                     let way = &src.ways[gers];
                     let raised = value_at(way.row.levels.as_deref(), 0.5).is_some_and(|l| l >= 1.0);
-                    if way.row.flagged() || !raised || claimed.contains(gers) {
+                    // a road's alone, never indoors (Arnis `is_ramp_candidate`)
+                    let indoor = !flag_ranges(way.row.flags.as_deref(), &["is_indoor"], 1.0).is_empty();
+                    if way.row.subtype != "road" || way.row.flagged() || indoor || !raised || claimed.contains(gers) {
                         continue;
                     }
                     let Some(line) = way_from(way, e) else { continue };
@@ -1024,9 +1036,10 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units
         }
         out.push((q, ys.into_iter().zip(&r.terrain).map(|(y, &t)| y.unwrap_or_default().max(t)).collect()));
     }
-    let mut uf = Uf((0..level.len()).collect());
+    // joined through every rail bridge, a carried one included, as Arnis's `rail_uf`
+    let mut uf = Uf((0..rail.len()).collect());
     let mut at_end: HashMap<(&End, i64), usize> = HashMap::new();
-    for (i, &q) in level.iter().enumerate() {
+    for (i, &q) in rail.iter().enumerate() {
         for e in &runs[q].ends {
             match at_end.get(&(e, effective_layer(&runs[q]))) {
                 Some(&j) => uf.union(i, j),
@@ -1037,8 +1050,10 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units
         }
     }
     let mut groups: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-    for (i, &l) in level.iter().enumerate() {
-        groups.entry(uf.find(i)).or_default().push(l);
+    for (i, &q) in rail.iter().enumerate() {
+        if level.contains(&q) {
+            groups.entry(uf.find(i)).or_default().push(q);
+        }
     }
     for g in groups.into_values() {
         report.rail_bridges += 1;
@@ -1150,7 +1165,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
     for &q in &tunnels {
         let r = &runs[q];
         let want = units.c(TUNNEL_COVER_DROP_M) + layer_extra(r);
-        let walking = is_non_vehicular(r.piece.class.as_deref().unwrap_or(""));
+        let walking = is_pedestrian(r.piece.class.as_deref().unwrap_or(""));
         for e in 0..2 {
             let node = &r.ends[e];
             if internal(q, e) || drops.contains_key(node) || want <= 0 {
@@ -1166,7 +1181,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
                     .into_iter()
                     .flatten()
                     .filter(|g| !taken.contains(*g) && claims.get(*g).is_none_or(|c| c.len() < 2))
-                    .filter(|g| surface(g).is_some_and(|w| is_non_vehicular(w.row.class.as_deref().unwrap_or("")) == walking))
+                    .filter(|g| surface(g).is_some_and(|w| is_pedestrian(w.row.class.as_deref().unwrap_or("")) == walking))
                     .cloned()
                     .collect();
                 out.sort();

@@ -34,6 +34,15 @@ surfaces was drafted and aborted the day before
   tunnel wherever it is no bridge.
 - **`layer`** is the source's `level_rules`, for height and order alike, as
   Arnis uses it.
+- **A pier** is a beam bridge's, the style Arnis gives a bridge the source
+  names no structure for: a bent every 8 m, 12 m past a half width of two
+  cells, of one-cell columns at the middle, the edges or both; none where
+  the deck is 2 m or less over the ground, on a way at grade or over a deck
+  5 m or more below.
+- **What is built** is what Arnis builds: no bridge indoors, no road tunnel
+  indoors or unbuilt, no rail bridge or tunnel on a line abandoned or
+  unbuilt; a way at grade that is indoors, unbuilt or abandoned is nothing a
+  deck clears, and one below layer 0 is.
 
 Arnis's numbers are metres — a block is a metre upright on the Earth (its
 `celestial.rs`) — and each is taken into the page's cells by the page's
@@ -52,7 +61,7 @@ of these is ported.
 
 What Overture says in Arnis's tags is this bake's reading: `layer` is
 `level_rules`; a ramp candidate is a way with no bridge or tunnel flag and
-a level of 1 or more; a waterway to clear is a line of Overture's water
+a level of 1 or more, a road and not indoors; a waterway to clear is a line of Overture's water
 classed or subtyped river, canal or stream.
 
 ## What it leaves

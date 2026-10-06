@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::cell::cube::cube_types::ground;
-use crate::procedural::{pier_stands, Frame, PIER_ALONG, PIER_STEP_M};
+use crate::procedural::{pier_stands, Frame, BEAM_PILLAR_INTERVAL_M};
 use crate::space::adapter::epsg3857::u_per_m;
 
 fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Decks {
@@ -36,14 +36,14 @@ fn a_narrow_deck_along_a_diagonal_is_one_band() {
 
 #[test]
 fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() {
-    // Two u a cell; a pier is the cells within its half-length of a station.
+    // Two u a cell; a narrow deck's bent is the one cell at its station.
     let frame = Some(Frame { corner: [0.0, 0.0], cell: 2.0 });
-    let station = PIER_STEP_M * u_per_m(0.0) / 2.0;
+    let station = BEAM_PILLAR_INTERVAL_M * u_per_m(0.0) / 2.0;
     let d = one(&[[1.0, 3.0], [41.0, 3.0]], &[20, 20], 4.0);
     let piers: Vec<f64> = (0..42).map(|x| f64::from(x) + 0.5).filter(|&x| d.over_point(frame, [x, 3.0], 1.0).any(|o| o.pier)).collect();
     let expected: Vec<f64> = (0..42)
         .map(|x| f64::from(x) + 0.5)
-        .filter(|&x| x > 1.0 && (x - round(x / station) * station).abs() <= PIER_ALONG * 4.0 / 2.0)
+        .filter(|&x| x > 1.0 && x < 41.0 && (x - round(x / station) * station).abs() <= 0.5)
         .collect();
     assert!(!expected.is_empty());
     assert_eq!(piers, expected);
