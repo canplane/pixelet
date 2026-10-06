@@ -26,8 +26,8 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 use crate::param::MAX_CREDITS;
 

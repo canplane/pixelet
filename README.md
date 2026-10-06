@@ -199,7 +199,7 @@ Two formats were made here: **PVF3**, pixelet's packed fixed-point coordinate, a
 ├── spec/                     # JSON every language is generated from (pxl-tool),
 │                             #   grouped as crates/ is: spec/, client/
 ├── xpute/                    # The system under it, its own repository's root and workspaces:
-│                             #   crates/, packages/ and cpp/ in each language, spec/ the contract
+│                             #   rust/, ts/ and cpp/ by language: core, guest, host; spec/ the contract
 ├── asset/                    # Shipped models and texture pack (cube, decor, actor),
 │                             #   imported by nothing
 ├── script/                   # the spec generator, the tree's checks, the deployment smoke
@@ -213,14 +213,14 @@ A crate's root holds its modules, the directories sorted by kind and the one-fil
 
 Two gitignored trees hold what the tree makes, each for one reader: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and `cache/` is what `dev:local` bakes on demand and `decode_tile` writes, deleted at no cost. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 
-| Crate           | Directories                                                                                               |
-| --------------- | --------------------------------------------------------------------------------------------------------- |
-| `xpute-core`    | `abi` `alloc` `codec` `collection` `math` `status` `wire`, plus `golden`                                  |
-| `xpute-runtime` | `abi` `ipc` `mem` `sched`, plus `clock`, `global`                                                         |
-| `pxl-spec`      | `asset` `bake` `cell` `space`, plus `place`, `procedural`, `route`                                        |
-| `pxl-render`    | `mesh` `asset` `look` `frame` `gpu`                                                                       |
-| `pxl-kernel`    | `abi` `door` `mem` `sched` `world` `layer` `io` `control` `shell`, plus `host`, `kernel`, `param`, `text` |
-| `pxl-geo-bake`  | `terrain` `deck` `geocode` `tile` `demand` `bin`, plus `poi` `pyramid` and six helpers of one file        |
+| Crate          | Directories                                                                                               |
+| -------------- | --------------------------------------------------------------------------------------------------------- |
+| `xpute-core`   | `abi` `alloc` `codec` `collection` `math` `status` `wire`, plus `golden`                                  |
+| `xpute-guest`  | `abi` `ipc` `mem` `sched`, plus `clock`, `global`                                                         |
+| `pxl-spec`     | `asset` `bake` `cell` `space`, plus `place`, `procedural`, `route`                                        |
+| `pxl-render`   | `mesh` `asset` `look` `frame` `gpu`                                                                       |
+| `pxl-kernel`   | `abi` `door` `mem` `sched` `world` `layer` `io` `control` `shell`, plus `host`, `kernel`, `param`, `text` |
+| `pxl-geo-bake` | `terrain` `deck` `geocode` `tile` `demand` `bin`, plus `poi` `pyramid` and six helpers of one file        |
 
 The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 

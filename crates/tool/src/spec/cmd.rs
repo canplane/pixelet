@@ -312,7 +312,7 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
     }
     out.push(format!("import type {{ {} }} from \"@xpute/core/abi/array.ts\";", uses.arrays.join(", ")));
     out.push(format!("import type {{ {} }} from \"@xpute/core/abi/word.ts\";", uses.words.join(", ")));
-    out.push("import { packet } from \"@xpute/runtime/ipc/doorbell.ts\";".into());
+    out.push("import { packet } from \"@xpute/host/ipc/doorbell.ts\";".into());
     for e in &spec.enums {
         out.push(String::new());
         if let Some(doc) = &e.doc {
@@ -829,10 +829,10 @@ struct Target {
 const TARGETS: [Target; 2] = [
     Target {
         json: "xpute/spec/abi/cmd.json",
-        ts: "xpute/packages/runtime/src/abi/cmd.spec.ts",
-        ts_logical: "@xpute/runtime/abi/cmd.spec.ts",
-        rs_dir: "xpute/crates/runtime/src/abi",
-        rs_logical: "xpute-runtime/abi",
+        ts: "xpute/ts/host/src/abi/cmd.spec.ts",
+        ts_logical: "@xpute/host/abi/cmd.spec.ts",
+        rs_dir: "xpute/rust/guest/src/abi",
+        rs_logical: "xpute-guest/abi",
         number: "crate::abi::number",
         cpp: Some(("xpute/cpp/runtime/abi/cmd.spec.hpp", "xpute::abi")),
     },
@@ -842,7 +842,7 @@ const TARGETS: [Target; 2] = [
         ts_logical: "@pxl/web/kernel/abi/cmd.spec.ts",
         rs_dir: "crates/client/kernel/src/abi",
         rs_logical: "pxl-kernel/abi",
-        number: "xpute_runtime::abi::number",
+        number: "xpute_guest::abi::number",
         cpp: None,
     },
 ];

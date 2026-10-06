@@ -7,7 +7,7 @@
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::{cross3, dot3, sub3, V3};
 use pxl_spec::space::layer::lattice::GROUND;
-use xpute_runtime::mem::base::ptr_at;
+use xpute_guest::mem::base::ptr_at;
 
 use crate::kernel;
 use crate::layer::object::size::DECOR_SIZE;

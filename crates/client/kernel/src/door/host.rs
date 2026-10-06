@@ -8,14 +8,14 @@
 use core::panic::Location;
 
 use xpute_core::status::errno::Errno;
-use xpute_runtime::ipc::stream::{record_bytes, WORD};
-use xpute_runtime::ipc::sys::{descriptor_turn_bytes, Sys};
-use xpute_runtime::mem::base::ptr_at;
+use xpute_guest::ipc::stream::{record_bytes, WORD};
+use xpute_guest::ipc::sys::{descriptor_turn_bytes, Sys};
+use xpute_guest::mem::base::ptr_at;
 
 use crate::abi::host::{op, stream};
 use crate::io::file::{Kept, PATH_BYTES};
 use crate::param::MAX_CREDITS;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 static SYS: Global<Option<Sys>> = Global::new();
 

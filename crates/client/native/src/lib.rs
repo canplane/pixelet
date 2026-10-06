@@ -23,8 +23,8 @@ use thread::on_kernel;
 use std::sync::OnceLock;
 use std::time::Instant;
 
-use pxl_kernel::door::Bracket;
 use pxl_kernel::door::host::Stop;
+use pxl_kernel::door::Bracket;
 
 /// The device's clock, in milliseconds from the first reading: a turn's quota
 /// is spent against it, and only differences are read.
@@ -79,7 +79,7 @@ pub extern "C" fn pxl_interrupt(quota_ms: f64) -> f64 {
 pub unsafe extern "C" fn pxl_memory(bytes: *mut u32) -> *mut u8 {
     let at = on_kernel(|| {
         memory::region();
-        xpute_runtime::mem::base::ptr_at::<u8>(0).expose_provenance()
+        xpute_guest::mem::base::ptr_at::<u8>(0).expose_provenance()
     });
     if !bytes.is_null() {
         // SAFETY: the caller's word.

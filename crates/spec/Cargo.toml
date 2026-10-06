@@ -17,10 +17,10 @@ serde = ["dep:serde"]
 fnv.workspace = true
 libm.workspace = true
 serde = { version = "1", features = ["derive"], optional = true }
-xpute-core = { path = "../../xpute/crates/core" }
+xpute-core = { path = "../../xpute/rust/core" }
 
 [dev-dependencies]
 hex.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-xpute-core = { path = "../../xpute/crates/core", features = ["golden"] }
+xpute-core = { path = "../../xpute/rust/core", features = ["golden"] }

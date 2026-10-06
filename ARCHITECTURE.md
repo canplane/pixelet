@@ -142,7 +142,7 @@ One line decides a thing's language: **what shares `pxl-spec` is Rust**.
 generic kit   │ @xpute/core   │  mirrors   │ xpute-core    │  ┐
               └───────┬───────┘            └───────┬───────┘  │ xpute — xpute/ARCHITECTURE.md
               ┌───────▼───────┐            ┌───────▼───────┐  │
-runtime       │ @xpute/runtime│ two ends   │ xpute-runtime │  ┘
+runtime       │ @xpute/host│ two ends   │ xpute-guest │  ┘
               └───────┬───────┘ of one     └───────┬───────┘
                       │                    ┌───────▼───────┐            ┌──────────────┐
 model                 │   spec/ ─writes─▶  │ pxl-spec      │ ◀──────────┤ pxl-geo      │  forward search

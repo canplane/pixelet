@@ -22,8 +22,8 @@ use crate::{kernel, with_world};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pack;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 const MISSED_INTERVALS: f64 = 1.5;
 

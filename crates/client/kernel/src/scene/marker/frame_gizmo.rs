@@ -15,7 +15,7 @@ use crate::kernel;
 use crate::world::change::request_world_tick;
 use crate::world::query::Access;
 use crate::world::view::frame::coord::to_world;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 const BLACK: [f64; 3] = [0.0, 0.0, 0.0];
 const RED: [f64; 3] = [1.0, 0.0, 0.0];

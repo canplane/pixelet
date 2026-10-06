@@ -5,8 +5,8 @@
 //! reused before the list runs.
 
 use pxl_spec::space::coord::v3::V3;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{alloc, free};
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{alloc, free};
 
 /// Upload record: handle, address, byte length, vertex count, index count.
 pub const UPLOAD_WORDS: usize = 5;

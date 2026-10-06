@@ -44,8 +44,8 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "xpute/spec/conformance/guest.json",
-        ts: Some("xpute/packages/conformance/src/guest.spec.ts"),
-        rs: Some("xpute/crates/conformance/src/guest.spec.rs"),
+        ts: Some("xpute/ts/conformance/src/guest.spec.ts"),
+        rs: Some("xpute/rust/conformance/src/guest.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -53,8 +53,8 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "xpute/spec/ipc/directory.json",
-        ts: Some("xpute/packages/runtime/src/ipc/directory.spec.ts"),
-        rs: Some("xpute/crates/runtime/src/ipc/directory.spec.rs"),
+        ts: Some("xpute/ts/host/src/ipc/directory.spec.ts"),
+        rs: Some("xpute/rust/guest/src/ipc/directory.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -62,8 +62,8 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "xpute/spec/ipc/frame.json",
-        ts: Some("xpute/packages/runtime/src/ipc/frame.spec.ts"),
-        rs: Some("xpute/crates/runtime/src/ipc/frame.spec.rs"),
+        ts: Some("xpute/ts/host/src/ipc/frame.spec.ts"),
+        rs: Some("xpute/rust/guest/src/ipc/frame.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -71,8 +71,8 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "xpute/spec/ipc/ring.json",
-        ts: Some("xpute/packages/runtime/src/ipc/ring.spec.ts"),
-        rs: Some("xpute/crates/runtime/src/ipc/ring.spec.rs"),
+        ts: Some("xpute/ts/host/src/ipc/ring.spec.ts"),
+        rs: Some("xpute/rust/guest/src/ipc/ring.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -80,8 +80,8 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "xpute/spec/ipc/sys.json",
-        ts: Some("xpute/packages/runtime/src/ipc/sys.spec.ts"),
-        rs: Some("xpute/crates/runtime/src/ipc/sys.spec.rs"),
+        ts: Some("xpute/ts/host/src/ipc/sys.spec.ts"),
+        rs: Some("xpute/rust/guest/src/ipc/sys.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -356,8 +356,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         if let Some(ts_path) = d.ts {
             let logical = [
                 ("apps/web/src/", "@pxl/web/"),
-                ("xpute/packages/runtime/src/", "@xpute/runtime/"),
-                ("xpute/packages/conformance/src/", "@xpute/conformance/"),
+                ("xpute/ts/host/src/", "@xpute/host/"),
+                ("xpute/ts/conformance/src/", "@xpute/conformance/"),
             ]
             .iter()
             .find_map(|(dir, name)| ts_path.strip_prefix(dir).map(|p| format!("{name}{p}")))
@@ -413,12 +413,12 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 ("crates/client/kernel/src/", "pxl-kernel"),
                 ("crates/client/render/src/", "pxl-render"),
                 ("crates/spec/src/", "pxl-spec"),
-                ("xpute/crates/runtime/src/", "xpute-runtime"),
-                ("xpute/crates/conformance/src/", "xpute-conformance"),
+                ("xpute/rust/guest/src/", "xpute-guest"),
+                ("xpute/rust/conformance/src/", "xpute-conformance"),
             ]
             .iter()
             .find_map(|(dir, name)| rs_path.strip_prefix(dir).map(|rest| (*name, rest)))
-            .ok_or(format!("{rs_path}: not under pxl-kernel, pxl-render, pxl-spec, xpute-runtime or xpute-conformance"))?;
+            .ok_or(format!("{rs_path}: not under pxl-kernel, pxl-render, pxl-spec, xpute-guest or xpute-conformance"))?;
             let mut rs = vec![format!("// {crate_name}/{under_src}"), "//".into(), super::generated(d.json, base)];
             if let Some(doc) = &head_doc {
                 rs.push("//".into());

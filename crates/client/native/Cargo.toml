@@ -15,8 +15,8 @@ test = false
 doctest = false
 
 [dependencies]
-xpute-core = { path = "../../../xpute/crates/core" }
-xpute-runtime = { path = "../../../xpute/crates/runtime" }
+xpute-core = { path = "../../../xpute/rust/core" }
+xpute-guest = { path = "../../../xpute/rust/guest" }
 pxl-kernel = { path = "../kernel", default-features = false }
 pxl-render = { path = "../render" }
 # The view's layer or window made a surface on (src/surface.rs); the device

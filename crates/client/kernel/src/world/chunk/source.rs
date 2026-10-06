@@ -15,7 +15,7 @@ use crate::world::chunk::Chunk as PyramidChunk;
 use pxl_spec::space::coord::world::nearest_box;
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
 

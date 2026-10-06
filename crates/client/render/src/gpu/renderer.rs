@@ -6,10 +6,10 @@
 use pxl_spec::space::coord::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
 use pxl_spec::space::coord::v3::{norm3, sub3, V3};
 use xpute_core::math::scalar::round;
-use xpute_runtime::abi::handle::handle_slot;
-use xpute_runtime::global::Global;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{alloc, free};
+use xpute_guest::abi::handle::handle_slot;
+use xpute_guest::global::Global;
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{alloc, free};
 
 use crate::asset::atlas::BillboardAtlas;
 use crate::frame::draw::{

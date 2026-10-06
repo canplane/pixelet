@@ -24,7 +24,7 @@ use crate::world::chunk::frontier::{Need, Slots, HEADROOM};
 use crate::world::chunk::mesh_slot::{Pool, ARENA, POOLS};
 use crate::world::chunk::Chunk;
 use crate::world::view::frame::pose::view;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 const _: () = assert!(param::QUALITY_WAIT_MS > 0.0, "a policy asked twice at one instant would step finer twice");
 const _: () = assert!(param::TAU_STEP > 1.0, "a step that is not coarser");
@@ -155,7 +155,7 @@ pub fn step(stop: &dyn Fn() -> bool) {
         d.need(k).is_some_and(|n| fits(n, ARENA, HEADROOM, if roomy { spare } else { [0; POOLS] }))
     });
     q.star = star;
-    let at = q.smooth.follow(star, roomy, param::QUALITY_WAIT_MS, xpute_runtime::clock::now());
+    let at = q.smooth.follow(star, roomy, param::QUALITY_WAIT_MS, xpute_guest::clock::now());
     domain::put(at);
 }
 

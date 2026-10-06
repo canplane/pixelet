@@ -96,9 +96,9 @@
   },
 
   "imports": {
-    "@xpute/core/": "./xpute/packages/core/src/",
-    "@xpute/runtime/": "./xpute/packages/runtime/src/",
-    "@xpute/conformance/": "./xpute/packages/conformance/src/",
+    "@xpute/core/": "./xpute/ts/core/src/",
+    "@xpute/host/": "./xpute/ts/host/src/",
+    "@xpute/conformance/": "./xpute/ts/conformance/src/",
 
     "@std/assert": "jsr:@std/assert@^1",
 

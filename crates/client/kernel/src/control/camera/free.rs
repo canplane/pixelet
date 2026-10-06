@@ -16,7 +16,7 @@ use crate::control::navigation::support::target;
 use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::world::query::{Access, Detail, Ray};
 use crate::world::view::frame::pose::{view, view_compose};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 /// The first resident thing it meets, else the sea, else `fallback` along it.
 pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {

@@ -16,9 +16,9 @@ use pxl_spec::space::coord::v3::{len3, sub3, V3};
 use pxl_spec::space::coord::world::{nearest, nearest_box};
 use pxl_spec::space::coord::zoom::cube;
 use pxl_spec::space::layer::lattice::GROUND;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{alloc, free};
-use xpute_runtime::sched::frame_budget::FrameBudget;
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{alloc, free};
+use xpute_guest::sched::frame_budget::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::kernel;
@@ -39,7 +39,7 @@ use crate::world::view::observation::{eye, observation};
 use pxl_render::mesh::run::APRON;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::zoom::{index, Zoom};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 struct Block {
     at: u32,

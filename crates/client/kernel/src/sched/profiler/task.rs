@@ -5,8 +5,8 @@
 use core::mem::{offset_of, size_of};
 use std::collections::HashMap;
 
-use xpute_runtime::global::Global;
-use xpute_runtime::mem::base::off_of_slice;
+use xpute_guest::global::Global;
+use xpute_guest::mem::base::off_of_slice;
 
 use crate::io::demand::{DemandKey, Phases};
 use crate::io::failure::{Failure, Outcome};

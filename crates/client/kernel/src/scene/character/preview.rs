@@ -12,7 +12,7 @@ use crate::scene::model::asset::ModelHandle;
 use crate::sched::tick::TickContext;
 use crate::world::change::request_world_tick;
 use crate::{kernel, with_world};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
 /// Past any terrain and the fog, so the world never draws it.

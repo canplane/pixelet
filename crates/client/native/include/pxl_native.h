@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 // The doorbell: a turn of quota_ms, and when the kernel wants the next, in ms
-// (xpute_runtime::sched::quantum). The first lays the memory out.
+// (xpute_guest::sched::quantum). The first lays the memory out.
 double pxl_interrupt(double quota_ms);
 
 // The memory: its first byte, with its bytes written through `bytes` (which

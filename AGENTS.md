@@ -42,14 +42,14 @@ README.md has the map. Three lines erode by accident:
 - **xpute holds no domain.** No coordinates, terrain, tiles or Overture in
   `xpute-core` or `@xpute/core`; those are `pxl-spec`'s. The view
   (`pxl-render`) knows the model and nothing of the kernel (`pxl-kernel`).
-- **`core` is taken as it is; `runtime` asks you to run its way** — a turn on
-  a doorbell, a quota from the frame, I/O asked of the host. `runtime`
-  depends on `core`, never the reverse. `core` is symmetric across every
+- **`core` is taken as it is; `guest` and `host` ask you to run their way**
+  — a turn on a doorbell, a quota from the frame, I/O asked of the host.
+  Both depend on `core`, never the reverse. `core` is symmetric across every
   language xpute is written in, held to it by the golden records under
-  `xpute/spec/golden/`. `runtime`'s host and guest are two ends of one
-  arrangement: a module missing on one side is no gap, only the format must
-  agree, and its guests in different languages are symmetric as `core` is,
-  each in its own language's shape. Never number the languages, hosts or
+  `xpute/spec/golden/`. `guest` and `host` are the two ends of one
+  arrangement, named by role, not language: a module missing on one side is
+  no gap, only the format must agree, and the guests in different languages
+  are symmetric as `core` is, each in its own language's shape. Never number the languages, hosts or
   guests: the count is stale the day one more arrives.
 - **`pxl-spec` is the one model and has no TypeScript twin.** The shell reads
   a tile through the kernel, never by decoding one; what it holds — the cell
@@ -220,7 +220,7 @@ script opens on its interpreter. `check:rules` holds every file to it.
 
 **A name's case follows its side.** `PascalCase` for types,
 `SCREAMING_SNAKE_CASE` for module constants; functions and locals
-`snake_case` in Rust, `xpute/packages` and `apps/web/src/kernel/`, which
+`snake_case` in Rust, `xpute/ts` and `apps/web/src/kernel/`, which
 share the kernel's vocabulary, and `camelCase` in the rest of `apps/` and in
 `script/`. An acronym is a word (`assetUrl`). A name that crosses — a
 packet's field, a catalog entry, a profiler record — keeps the kernel's

@@ -14,7 +14,7 @@ use crate::sched::profiler::record::{drop_front, fixed_lane, profiler_recording_
 use crate::sched::profiler::summary::{missed, overran};
 use crate::sched::profiler::task::TaskRow;
 use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 fn counters() -> CountersBlock {
     let k = kernel();

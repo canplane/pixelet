@@ -120,7 +120,6 @@ pub fn ground_known(out: &mut Vec<(Tile, bool)>) {
     Terrain::residency().known(out);
 }
 
-
 /// A layer's tile's order, read in the grid's cells its own fold into: all
 /// of it where nothing is known.
 pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile) -> Order {

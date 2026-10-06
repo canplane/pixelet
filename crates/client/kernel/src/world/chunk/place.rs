@@ -25,7 +25,7 @@ use badge::Label;
 use pxl_render::asset::atlas::NO_SLOT;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 use pxl_spec::bake::poi_tile::{PoiTile, POI_LATTICE};
 use pxl_spec::space::coord::pvf3::pack;

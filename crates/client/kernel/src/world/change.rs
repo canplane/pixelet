@@ -3,9 +3,9 @@
 //! The world's turn edge: when its tasks run, and a frame asked for, since
 //! the canvas renders on demand.
 
-use xpute_runtime::sched::edge::Edge;
+use xpute_guest::sched::edge::Edge;
 
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 /// The kernel's tasks (`world_tasks`); an executor sizes its pool by it.
 pub const TASKS: usize = 6;
@@ -19,7 +19,7 @@ pub fn world_edge() -> &'static mut Edge<TASKS> {
 /// A task queued and not yet polled (a turn without a frame polls none)
 /// asks for the next turn too.
 pub fn world_fall() -> f64 {
-    if xpute_runtime::sched::task::pending() {
+    if xpute_guest::sched::task::pending() {
         world_edge().ask_next();
     }
     world_edge().fall()

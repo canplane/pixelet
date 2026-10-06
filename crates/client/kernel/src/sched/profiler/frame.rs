@@ -5,7 +5,7 @@
 use core::mem::{offset_of, size_of};
 
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use xpute_runtime::sched::tick::PHASES;
+use xpute_guest::sched::tick::PHASES;
 
 use crate::sched::profiler::spec::{CENSUS_TAGS, FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, WORST};
 use crate::sched::profiler::word::{words, Words};

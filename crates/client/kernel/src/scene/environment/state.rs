@@ -17,8 +17,8 @@ use crate::scene::environment::fog::eye_ground;
 use crate::world::change::wake_at;
 use crate::world::chunk::table::Frame;
 use crate::world::view::frame::pose::globe_anchor;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 // The sky moves with the wall clock and nothing else asks for a frame while
 // the view is still, so the clock asks for one this often.

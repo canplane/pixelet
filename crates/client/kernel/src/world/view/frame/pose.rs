@@ -13,7 +13,7 @@ use pxl_spec::space::coord::world::nearest;
 
 use crate::control::camera::controller::pose;
 use crate::scene::environment::fog::{far_clip_at, near_clip_at};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
 #[derive(Clone, Copy, Debug, PartialEq)]

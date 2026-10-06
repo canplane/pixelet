@@ -9,8 +9,8 @@ use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{box_words, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_spec::bake::constant::EntryAt;
 use std::collections::HashMap;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::Block;
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::Block;
 
 use crate::layer::object::store::AIR;
 use crate::mem::fixed::{at, Range};

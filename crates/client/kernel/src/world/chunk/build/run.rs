@@ -7,8 +7,8 @@ use pxl_spec::space::layer::lattice::GROUND;
 use crate::param::BAKE_ROWS_PER_STEP;
 use pxl_render::mesh::paint::column::{stands_of, write_rows};
 use pxl_render::mesh::run::{RunSet, APRON};
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{alloc, free};
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{alloc, free};
 
 use crate::scene::marker::hover_cursor::render_edits;
 use crate::world::chunk::source::draws;

@@ -11,7 +11,7 @@ use crate::scene::billboard::sheet::billboard_sheet;
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
 use pxl_render::gpu::surface::DPR_MAX;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 use crate::layer::{Answer, Layer, Query};
 use xpute_core::status::bug::OrBug;

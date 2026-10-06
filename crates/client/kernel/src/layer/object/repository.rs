@@ -11,9 +11,9 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
-use xpute_runtime::sched::edge::{notified, Notify};
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
+use xpute_guest::sched::edge::{notified, Notify};
 
 use crate::door::host::turn;
 use crate::io::file::{self, Kept, Owner};

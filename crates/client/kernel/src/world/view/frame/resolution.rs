@@ -10,7 +10,7 @@ use pxl_render::gpu::surface::{DPR_MAX, DPR_MIN};
 use crate::param;
 use crate::sched::tick::TickState;
 use crate::shell::setting::store::{settings_store, ResolutionMode};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 struct Resolution {
     ratio: f64,

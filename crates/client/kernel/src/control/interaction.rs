@@ -25,7 +25,7 @@ use crate::world::chunk::decor::hit::{raycast_decor, DecorStruck, Scattered};
 use crate::world::query::Hit;
 use crate::world::view::frame::pose::view_ray;
 use pxl_spec::space::coord::zoom::{base_of, of_side, units};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Holding {

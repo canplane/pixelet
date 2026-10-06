@@ -6,7 +6,7 @@ use pxl_spec::asset::ingested::Asset;
 
 use crate::io::load::{load_gltf, Load};
 use crate::scene::model::asset::{register_model, ModelHandle};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 use crate::scene::character::variant_spec::groups::{person, pet};
 pub use crate::scene::character::variant_spec::Group;

@@ -12,7 +12,7 @@ use crate::io::file::{self, Kept};
 use crate::sched::profiler::log::profiler_follow;
 pub use crate::shell::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 /// A dev-only setting outside a development build is not offered: storage
 /// outlives the build, and a value with no row left to turn it off would stay

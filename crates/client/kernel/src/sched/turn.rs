@@ -5,7 +5,7 @@
 //! wait on what they work on.
 
 use pxl_spec::space::coord::aabb::Aabb;
-use xpute_runtime::sched::edge::{notified, Notify};
+use xpute_guest::sched::edge::{notified, Notify};
 
 use crate::control::camera::input::camera_input_step;
 use crate::control::navigation::bootstrap::map_bootstrap_step;
@@ -33,9 +33,9 @@ use crate::world::chunk::decor::asset_store::decor_assets_wanted;
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
 use crate::world::pyramid::Observed as _;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
-use xpute_runtime::sched::tick::{TickReport, COSMETIC, INTERACTION, REPORT, VISIBLE};
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
+use xpute_guest::sched::tick::{TickReport, COSMETIC, INTERACTION, REPORT, VISIBLE};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Platform {
@@ -130,7 +130,7 @@ enum TaskPriority {
 
 /// No more than change.rs's TASKS; a refusal means the executor holds fewer, and aborts.
 fn world_tasks() {
-    use xpute_runtime::sched::task::spawn;
+    use xpute_guest::sched::task::spawn;
     use TaskPriority::*;
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)

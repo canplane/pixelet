@@ -2,7 +2,7 @@
 
 //! The kernel's memory on a device: one region taken from the system at the
 //! first request and never given back, the base every address the kernel
-//! names is an offset from (xpute_runtime::mem::base), and the allocator over
+//! names is an offset from (xpute_guest::mem::base), and the allocator over
 //! it — the slab over a buddy the module has (pxl-wasm), so a `Vec` the kernel
 //! hands the shell lies in the memory the shell reads.
 //!
@@ -86,7 +86,7 @@ pub fn region() -> usize {
     let addr = region.expose_provenance();
     match REGION.compare_exchange(0, addr, Ordering::AcqRel, Ordering::Acquire) {
         Ok(_) => {
-            xpute_runtime::mem::base::set_base(addr, bytes);
+            xpute_guest::mem::base::set_base(addr, bytes);
             addr
         }
         Err(won) => {

@@ -10,8 +10,8 @@ use pxl_render::gpu::surface::DPR_MAX;
 use crate::io::text::text_lines;
 use crate::scene::billboard::field::billboard_instance;
 use crate::scene::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 // `ts` lets the bubble time itself from when the line was said, so a
 // character swap cannot make a dismissed line look new.

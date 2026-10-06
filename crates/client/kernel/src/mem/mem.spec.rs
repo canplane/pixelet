@@ -57,7 +57,7 @@ pub const SUBMISSION_CAPACITY: u32 = 2048;
 /// what it was sent and raises its own signals besides; twice is the present
 /// sizing, giving the two the same room, and not a bound derived from either.
 /// Nothing is overrun if it is wrong: a command whose signals and reply would
-/// not fit waits for the next turn (xpute-runtime ipc/door.rs). A power of
+/// not fit waits for the next turn (xpute-guest ipc/door.rs). A power of
 /// two, as the submission ring's.
 pub const COMPLETION_CAPACITY: u32 = 4096;
 
@@ -68,7 +68,7 @@ pub const RING_DESC_AT: u32 = 1048576;
 /// that a ring deepened does not move the payloads of the ring before it.
 pub const RING_SLOT_AT: u32 = 2097152;
 
-/// Where the kernel's directory is (xpute-runtime ipc/directory.rs): the page under
+/// Where the kernel's directory is (xpute-guest ipc/directory.rs): the page under
 /// GLOBAL_BASE, past the rings' payloads. At an address both sides are built with
 /// rather than one the module hands out, so the shell finds it with no call but the
 /// first turn's, which lays the memory out and writes it.

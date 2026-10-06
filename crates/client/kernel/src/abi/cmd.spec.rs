@@ -33,7 +33,7 @@ use core::fmt::Display;
 
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{PacketWriter, TreeReader};
-use xpute_runtime::abi::number::{finite, integer, unknown};
+use xpute_guest::abi::number::{finite, integer, unknown};
 
 /// What a command is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

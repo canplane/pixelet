@@ -12,10 +12,10 @@
 use pxl_spec::bake::place_tile::{open_place_dict, open_place_group, PlaceGroupView, PlacesView};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{free, Block};
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{free, Block};
 
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 /// The block goes back when the packet drops, since the `'static` view cannot
 /// keep its own lifetime.

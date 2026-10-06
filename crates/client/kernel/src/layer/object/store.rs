@@ -6,8 +6,8 @@
 //! shows is read from the leaves over and under it, folding by the objects'
 //! majority, and never kept.
 
-use xpute_runtime::global::Global;
 use std::collections::HashMap;
+use xpute_guest::global::Global;
 
 use fnv::FnvBuildHasher;
 use std::collections::TryReserveError;

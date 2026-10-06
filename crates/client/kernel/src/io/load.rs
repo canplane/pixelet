@@ -12,7 +12,7 @@ use std::rc::Rc;
 
 use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use pxl_spec::asset::ingested::Asset;
-use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
+use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 use crate::abi::host::root;
 use crate::door::host::decode_image;
@@ -24,8 +24,8 @@ use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::decor::asset_store::decor_assets_arrived;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
-use xpute_runtime::abi::handle::Slots;
-use xpute_runtime::global::Global;
+use xpute_guest::abi::handle::Slots;
+use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadKind {

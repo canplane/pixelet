@@ -12,7 +12,7 @@ use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
-use xpute_runtime::mem::base::ptr_at;
+use xpute_guest::mem::base::ptr_at;
 
 use crate::io::failure::Failure;
 
@@ -21,8 +21,8 @@ use crate::layer::terrain::fixed::{coarse_off, deck_off, ele_off, extent_off, gr
 use crate::layer::Layer;
 use crate::mem::fixed::{at, Range};
 use pxl_spec::bake::format::Occupancy;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 static TERRAIN: Global<Residency<Terrain>> = Global::new();
 

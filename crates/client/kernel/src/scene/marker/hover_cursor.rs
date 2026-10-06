@@ -12,8 +12,8 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{alloc, free};
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{alloc, free};
 
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::edit::{carve_entry, get_placed_object, restores_scattered};
@@ -30,7 +30,7 @@ use crate::world::chunk::decor::kind::kind_for;
 use crate::world::chunk::source::chunk_sources_changed;
 use crate::world::query::Access;
 use crate::World;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 enum Ghost {
     None,

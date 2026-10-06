@@ -20,7 +20,7 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::tile::Tile;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 static POI: Global<Residency<PoiTile>> = Global::new();
 

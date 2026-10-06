@@ -28,7 +28,7 @@
 import type { BranchCursor, NodeCursor } from "@xpute/core/wire/xtp/mod.ts";
 import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, i32, u32, u8 } from "@xpute/core/abi/word.ts";
-import { packet } from "@xpute/runtime/ipc/doorbell.ts";
+import { packet } from "@xpute/host/ipc/doorbell.ts";
 
 /** What a command is about. */
 export const enum Major {

@@ -10,7 +10,7 @@ import { dirname, join, relative } from "@std/path";
 const XPUTE = dirname(dirname(new URL(import.meta.url).pathname));
 
 /** Neither written nor compared: build output and lock files. */
-const UNMANAGED = ["crates/target/", "target/", "node_modules/", "crates/Cargo.lock", "deno.lock"];
+const UNMANAGED = ["rust/target/", "target/", "node_modules/", "rust/Cargo.lock", "deno.lock"];
 
 const unmanaged = (path: string) => UNMANAGED.some((u) => (u.endsWith("/") ? path.startsWith(u) : path === u));
 

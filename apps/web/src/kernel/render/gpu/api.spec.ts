@@ -64,7 +64,7 @@ export const load = {
 } as const;
 
 /** The one place the renderer's calls cross (gpu/api.rs): a stream
- * (xpute-runtime ipc/stream.rs) in a range of the kernel's memory, which the
+ * (xpute-guest ipc/stream.rs) in a range of the kernel's memory, which the
  * kernel writes its calls into during a turn and the host runs once the turn
  * has returned. A record carries everything it names, bytes included, so
  * nothing a record reads lies outside it.

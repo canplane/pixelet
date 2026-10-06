@@ -7,7 +7,7 @@
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { Directory } from "@xpute/runtime/ipc/directory.ts";
+import { Directory } from "@xpute/host/ipc/directory.ts";
 
 import { DIRECTORY_AT } from "@/kernel/mem/mem.spec.ts";
 

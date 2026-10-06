@@ -7,7 +7,7 @@
 use crate::layer::Query;
 use pxl_spec::space::coord::v3::sub3;
 use xpute_core::math::scalar::round;
-use xpute_runtime::sched::edge::{notified, yield_if_spent};
+use xpute_guest::sched::edge::{notified, yield_if_spent};
 
 use crate::io::sched::pending_count;
 use crate::layer::Layer;
@@ -23,8 +23,8 @@ use crate::world::view::frame::pose::{sea_under_eye, view, view_resize};
 use crate::{kernel, with_world};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 const BOX_TRIANGLES: f64 = 12.0;
 

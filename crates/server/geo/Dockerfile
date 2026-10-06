@@ -7,7 +7,7 @@ FROM rust:1.98.1-slim-trixie AS build
 WORKDIR /src
 
 COPY crates ./crates
-COPY xpute/crates ./xpute/crates
+COPY xpute/rust ./xpute/rust
 
 # The server profile, not release: release aborts on panic.
 # `sharing=locked`: both images share the registry cache, and cargo's package

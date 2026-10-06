@@ -4,8 +4,8 @@
 //! reaches its owner and one for a closed descriptor reaches no one. A
 //! native test has no host and opens nothing.
 
-use xpute_runtime::ipc::file::Files;
-use xpute_runtime::ipc::sys::Fd;
+use xpute_guest::ipc::file::Files;
+use xpute_guest::ipc::sys::Fd;
 
 use pxl_spec::bake::place_tile::DICT_OBJECT;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -16,7 +16,7 @@ use crate::io::load::LOADS;
 use crate::io::sched::Credit;
 use crate::mem::spec::MIN_HEAP_BYTES;
 use xpute_core::status::errno::Errno;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 /// A file the kernel keeps in storage. Storage is opened and written only by
 /// one of these, so what a turn can record there follows from how many.

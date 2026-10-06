@@ -9,11 +9,11 @@ use std::collections::HashMap;
 
 use pxl_render::gpu::surface::DPR_MAX;
 use pxl_render::gpu::text::{raster_box, Font, Raster};
-use xpute_runtime::mem::base::off_of_slice;
+use xpute_guest::mem::base::off_of_slice;
 
 use crate::abi::host::op;
 use crate::door::host::{host_offer, turn};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 /// (weight, px bits, max width bits; 0 for one line, text).
 type LayoutKey = (u32, u32, u32, String);

@@ -3,8 +3,8 @@
 //! The front of memory, below GLOBAL_BASE: the rings' descriptors, their
 //! slot payloads and the directory's page, at fixed addresses from mem.json.
 
-use xpute_runtime::ipc::door::{DoorLayout, RingLayout};
-use xpute_runtime::ipc::ring::{ring_bytes, slots_bytes};
+use xpute_guest::ipc::door::{DoorLayout, RingLayout};
+use xpute_guest::ipc::ring::{ring_bytes, slots_bytes};
 
 use crate::mem::section::page_up;
 use crate::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, PAGE_BYTES, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};

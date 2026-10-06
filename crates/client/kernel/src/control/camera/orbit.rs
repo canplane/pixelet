@@ -23,7 +23,7 @@ use crate::param::{MAX_DIST, MIN_DIST};
 use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
 use crate::world::view::frame::pose::view_compose;
 use terrain_gate::{allowed_view, climb_polar, ViewTriple};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 pub struct OrbitState {
     pub dist: f64,

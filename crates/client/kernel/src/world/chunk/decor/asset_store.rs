@@ -5,14 +5,14 @@
 //! lanes. A skin is the load cache's (`load_image`), asked of it where read.
 
 use pxl_spec::asset::ingested::Asset;
-use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
+use xpute_guest::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::door::host::heap_stat;
 use crate::io::load::{load_failed, load_gltf, load_image, Load};
 use crate::scene::model::asset::register_model;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::decor::kind::{Kind, KINDS};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 #[derive(Clone)]
 pub struct KindAssets {

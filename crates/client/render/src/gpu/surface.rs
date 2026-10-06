@@ -4,8 +4,8 @@
 //! into the layout box, so a stale or smaller buffer still shows whole.
 
 use xpute_core::math::scalar::round;
-use xpute_runtime::abi::handle::{handle_slot, HandleTable};
-use xpute_runtime::global::Global;
+use xpute_guest::abi::handle::{handle_slot, HandleTable};
+use xpute_guest::global::Global;
 
 use crate::gpu::api_spec::surface_role;
 

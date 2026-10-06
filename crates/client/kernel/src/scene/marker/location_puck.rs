@@ -10,15 +10,15 @@ use pxl_spec::space::coord::v3::{add3, center3, floor3, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{alloc, free};
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{alloc, free};
 
 use crate::scene::environment::fog::view_reach;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::table::Frame;
 use crate::world::query::Access;
 use crate::{kernel, with_world};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 // A world-space footprint (4u), whatever the ground's cell; the .707 is a
 // one-cell diagonal correction.

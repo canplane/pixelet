@@ -21,7 +21,7 @@ use pxl_render::mesh::paint::object::Painter;
 use crate::layer::object::store::Store;
 use crate::scene::Scene;
 use crate::world::chunk::table::Scheduler;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 pub struct Kernel {
     /// The memory map is laid; nothing of the world is made before it.

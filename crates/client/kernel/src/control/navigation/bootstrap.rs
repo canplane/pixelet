@@ -9,7 +9,7 @@ use crate::control::camera::controller::Motion;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, DevicePoseStatus};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 /// Where the map starts with no fix: Seoul City Hall. Also lights the first
 /// frames and decides day or night before `map_center` exists.

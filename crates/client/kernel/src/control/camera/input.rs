@@ -21,8 +21,8 @@ use crate::world::change::request_world_tick;
 use crate::world::view::frame::pose::view;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DragMode {

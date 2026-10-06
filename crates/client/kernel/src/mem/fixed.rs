@@ -15,8 +15,8 @@
 
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::section::{span_of, Section};
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::section::{span_of, Section};
 
 use pxl_render::gpu::api_spec::stream;
 use pxl_render::gpu::renderer::{block_slots, blocks_bytes};

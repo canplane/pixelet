@@ -14,7 +14,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 
 use pxl_spec::space::coord::zoom::Zoom;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 static DECLARED: Global<Option<Zoom>> = Global::new();
 

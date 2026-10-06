@@ -14,9 +14,9 @@ use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::Tile;
-use xpute_runtime::global::Global;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{free, Block};
+use xpute_guest::global::Global;
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{free, Block};
 
 use crate::io::demand::{Category, Phases};
 use crate::io::failure::Failure;

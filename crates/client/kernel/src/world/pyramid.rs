@@ -12,7 +12,7 @@
 use pxl_spec::bake::earth_tile::EARTH_REACH;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::layer::earth::Earth;

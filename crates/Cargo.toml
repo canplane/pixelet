@@ -16,7 +16,7 @@
 # rather than answered, and pxl-geo-spec where the two geo halves read the
 # same tables.
 #
-# spec/ is what both ends follow, and xpute (../xpute/crates/, its own
+# spec/ is what both ends follow, and xpute (../xpute/rust/, its own
 # workspace) what both are built on.
 # Nothing else crosses: a third-party dependency in either ships every byte
 # to the client and is read as this tree's own code, so each one below is
@@ -60,14 +60,14 @@ hex = "0.4"
 indexmap = "2"
 
 # The client's crates name the kernel's memory by offsets from one base
-# (xpute-runtime mem/base.rs), and an offset cast straight to a pointer
+# (xpute-guest mem/base.rs), and an offset cast straight to a pointer
 # reads the wrong memory wherever the base is not 0 — on a device, where the
 # kernel faulted reading a terrain page from address 92 MB. `as` spells that
 # cast and every harmless one alike, so the harmless ones are made to say
 # what they are — `.cast()`, `.cast_const()`, `&raw`, `ptr::from_ref` — and
 # any `as *const` or `as *mut` left is an offset made a pointer, which
 # script/check-rules.ts refuses. A crate takes these with `[lints]
-# workspace = true`; xpute-runtime, in its own workspace, spells them itself.
+# workspace = true`; xpute-guest, in its own workspace, spells them itself.
 [workspace.lints.clippy]
 ptr_as_ptr = "warn"
 ptr_cast_constness = "warn"

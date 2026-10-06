@@ -2,7 +2,7 @@
 
 //! The kernel's side of the doorbell, which a bracket (pxl-wasm, pxl-native)
 //! hands each turn to: the directory, commands applied, signals raised. The
-//! rings are xpute's (`xpute_runtime::ipc::door`).
+//! rings are xpute's (`xpute_guest::ipc::door`).
 
 mod apply;
 mod executor;
@@ -17,11 +17,11 @@ use crate::mem::section;
 use layout::DOOR_LAYOUT;
 use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
-use xpute_runtime::global::Global;
-use xpute_runtime::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
-use xpute_runtime::ipc::door::Door;
-use xpute_runtime::ipc::ring::Ring;
-use xpute_runtime::mem::base::{off_of, off_of_slice, ptr_at};
+use xpute_guest::global::Global;
+use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
+use xpute_guest::ipc::door::Door;
+use xpute_guest::ipc::ring::Ring;
+use xpute_guest::mem::base::{off_of, off_of_slice, ptr_at};
 
 pub struct Bracket {
     pub given: u32,
@@ -96,7 +96,7 @@ fn host_attached(s: &mut State) {
 
 /// First turn: lays out memory and writes the directory at DIRECTORY_AT.
 fn boot(b: &Bracket) {
-    xpute_runtime::clock::set_clock(b.clock);
+    xpute_guest::clock::set_clock(b.clock);
     crate::door::host::set_heap_stat(b.heap_stat);
     crate::door::host::set_last_words(b.last_words);
     executor::install();
@@ -164,7 +164,7 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
     crate::world::change::world_edge().rise(quota_ms);
     door().drain(|number, pkt| apply::apply(s, number, pkt));
     if quota_ms > 0.0 || world_frame_waiting() {
-        xpute_runtime::sched::task::poll();
+        xpute_guest::sched::task::poll();
     }
     if take_world_drawn() {
         post_shell(s);
