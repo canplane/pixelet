@@ -18,7 +18,7 @@ use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_ai
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::{Aabb, V3};
-use pxl_spec::space::coord::world::{around, nearest, wrap_index, ROUND, REACH};
+use pxl_spec::space::coord::world::{around, nearest, ROUND, REACH};
 use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
@@ -295,35 +295,14 @@ impl Store {
         }
     }
 
-    /// Every node anything is under, from the roots down, a node entered
-    /// where `enter` says so: its zoom, its index and cube there, and its value
-    /// if it is a leaf. With `within`, only the columns it meets, in its frame.
-    fn descend(&self, within: Option<&Aabb>, enter: &mut Enter) {
-        let about = within.map_or(f64::NAN, about);
-        let mut root = |k: u128, tree: &Tree| {
+    /// Every node anything is under, from the roots down, in `about`'s
+    /// frame, a node entered where `enter` says so: its zoom, its index and
+    /// cube there, and its value if it is a leaf.
+    fn descend(&self, about: f64, enter: &mut Enter) {
+        for (&k, tree) in &self.columns {
             let (_, col) = node_of::<3>(k);
             for (s, slot) in tree.block(0).enumerate() {
                 self.walk(tree, slot, ROOT, child(SHARD_ZOOM, col, s), about, enter);
-            }
-        };
-        let Some(b) = within else {
-            self.columns.iter().for_each(|(&k, tree)| root(k, tree));
-            return;
-        };
-        // The columns the box meets, or every column where they are fewer.
-        let side = units(SHARD_ZOOM);
-        let [x0, y0, x1, y1] = [b.min[0], b.min[1], b.max[0], b.max[1]].map(|v| (v / side).floor() as i64);
-        let met = (x1 - x0 + 1).min(around(SHARD_ZOOM)) * (y1 - y0 + 1);
-        if met > self.columns.len() as i64 {
-            self.columns.iter().for_each(|(&k, tree)| root(k, tree));
-            return;
-        }
-        for y in y0..=y1 {
-            for x in x0..=x1.min(x0 + around(SHARD_ZOOM) - 1) {
-                let k = key(SHARD_ZOOM, [wrap_index(SHARD_ZOOM, x), y, 0]);
-                if let Some(tree) = self.columns.get(&k) {
-                    root(k, tree);
-                }
             }
         }
     }
@@ -347,7 +326,7 @@ impl Store {
 
     /// Every leaf, as the lanes name it.
     pub fn each(&self, visit: &mut dyn FnMut(&Entry)) {
-        self.descend(None, &mut |zoom, at, _, leaf| {
+        self.descend(f64::NAN, &mut |zoom, at, _, leaf| {
             if let Some(v) = leaf {
                 visit(&Entry { zoom, at, state: u32::from(v) });
             }
@@ -357,7 +336,7 @@ impl Store {
 
     /// Every leaf whose cube meets `query`, X in `query`'s frame.
     pub fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
-        self.descend(Some(query), &mut |zoom, at, whole, leaf| {
+        self.descend(about(query), &mut |zoom, at, whole, leaf| {
             if whole.meet(*query).is_none() {
                 return false;
             }
@@ -485,7 +464,7 @@ impl Store {
             min: [from[0] as f64 * side, from[1] as f64 * side, REACH.min[2]],
             max: [to[0] as f64 * side, to[1] as f64 * side, REACH.max[2]],
         };
-        self.descend(Some(&query), &mut |zoom, at, whole, leaf| {
+        self.descend(about(&query), &mut |zoom, at, whole, leaf| {
             if whole.meet(query).is_none() || refused.is_err() {
                 return false;
             }
