@@ -3,7 +3,6 @@
 //! Places as a layer of the pyramid: a tile counts the places in each of
 //! its cells, drawn as badges (`world/chunk/place.rs`).
 
-use crate::world::pyramid::Observed as _;
 use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
 use pxl_spec::bake::poi_tile::{self, PoiTile, POI_LATTICE};
 use pxl_spec::space::layer::lattice::Lattice;
@@ -106,11 +105,3 @@ pub fn rank_of(kind: u8) -> u16 {
     }
 }
 
-/// Nothing is fetched while places are hidden.
-pub fn poi_step() {
-    if enabled() {
-        PoiTile::pyramid().step(None);
-    } else {
-        PoiTile::pyramid().idle();
-    }
-}

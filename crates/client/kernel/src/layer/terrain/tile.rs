@@ -5,7 +5,6 @@
 //! left as no object is drawn from the tile over it, whose cells there are
 //! open water; at the source's top, it is void.
 
-use crate::world::pyramid::Observed as _;
 use crate::layer::residency::Residency;
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{decode_terrain_into, Extent, GroundCell, Terrain, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
@@ -97,7 +96,3 @@ unsafe fn room_of(record: u32) -> TileRoom {
     }
 }
 
-pub fn terrain_step() {
-    let terrain = Terrain::pyramid();
-    terrain.step(crate::control::navigation::destination::tile());
-}

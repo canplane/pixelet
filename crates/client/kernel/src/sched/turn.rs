@@ -15,7 +15,11 @@ use crate::control::sensor::geolocation::geolocation_step;
 use crate::io::sched::{pump, set_credits};
 use crate::io::text::text_rise;
 use crate::layer::geocode::fetcher::geocode_fetcher_step;
-use crate::layer::terrain::tile::terrain_step;
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::poi_tile::PoiTile;
+
+use crate::layer::earth::Earth;
+use crate::world::pyramid::Observed as _;
 use crate::scene::character::companion::{companion_step, CompanionProps};
 use crate::scene::environment::state::map_environment_step;
 use crate::scene::marker::frame_gizmo::debug_gizmos_step;
@@ -77,9 +81,13 @@ fn goal_tick(ctx: &mut TickContext) {
 
 /// Each pyramid layer's tiles, from the published goal.
 fn demand_tick(_: &mut TickContext) {
-    terrain_step();
-    crate::layer::poi::poi_step();
-    crate::layer::earth::earth_step();
+    Terrain::pyramid().step(crate::control::navigation::destination::tile());
+    // Nothing is fetched while places are hidden.
+    match crate::layer::poi::enabled() {
+        true => PoiTile::pyramid().step(None),
+        false => PoiTile::pyramid().idle(),
+    }
+    Earth::pyramid().step(None);
 }
 
 fn camera_input_tick(_: &mut TickContext) {

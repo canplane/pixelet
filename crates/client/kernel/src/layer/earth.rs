@@ -86,10 +86,6 @@ pub fn adopt(p: Tile, block: Block, phases: &mut Phases) -> Result<(), Failure> 
     result
 }
 
-pub fn earth_step() {
-    Earth::pyramid().step(None);
-}
-
 /// Each waiting packet's texels to `write`, into its frame's layer, while it
 /// takes them.
 pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
