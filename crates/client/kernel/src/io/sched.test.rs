@@ -8,7 +8,7 @@ use crate::io::demand::Why;
 use xpute_core::status::errno::Errno;
 
 use crate::io::failure::{Failure, Outcome};
-use crate::world::view::observation::Order;
+use crate::io::demand::Order;
 
 struct ByWhy;
 

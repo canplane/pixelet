@@ -32,7 +32,8 @@ use crate::io::sched::declare;
 use crate::layer::residency::floor::{self, Fallback, Floor};
 use crate::layer::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
 use crate::world::chunk::quality;
-use crate::world::view::observation::{ground_known, observation, ByFootprints, Order};
+use crate::io::demand::Order;
+use crate::world::view::observation::{ground_known, observation, ByFootprints};
 use crate::world::view::observer::Footprint;
 use pxl_spec::space::coord::zoom::Zoom;
 
@@ -98,7 +99,7 @@ struct Farthest<'a>(Option<&'a Observation>, Lattice);
 
 impl Victim for Farthest<'_> {
     fn victim(&self, candidates: &[Candidate]) -> Option<usize> {
-        let order = |c: &Candidate| self.0.map_or(Order::LAST, |o| Order::of_tile(o, self.1, c.tile));
+        let order = |c: &Candidate| self.0.map_or(Order::LAST, |o| crate::world::view::observation::order_of_tile(o, self.1, c.tile));
         (0..candidates.len()).max_by_key(|&i| order(&candidates[i]))
     }
 }
@@ -199,7 +200,7 @@ impl<L: Observed> Pyramid<L> {
         let ask = |asks: &mut HashMap<Tile, Ask>, p: Tile, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
-        let order = |o: &Observation, p: Tile| Order::of_tile(o, L::LATTICE, p);
+        let order = |o: &Observation, p: Tile| crate::world::view::observation::order_of_tile(o, L::LATTICE, p);
         if let Some(o) = o {
             if L::DEMANDS {
                 estimator.requirements(o, &mut |p| demand.push(p));

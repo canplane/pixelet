@@ -3,8 +3,8 @@
 //! The kernel's side of an observation: the eye, what it looks at, and what
 //! is known of what a box of the world holds.
 
+use crate::io::demand::Order;
 use crate::world::pyramid::Observed as _;
-use std::cmp::Ordering;
 
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::camera::eye::{Frustum, Observation};
@@ -134,47 +134,8 @@ pub fn objects_written(regions: &[Aabb]) {
     crate::world::chunk::place::objects_written();
 }
 
-/// Seen before unseen, then nearer first. Every layer's work is taken in
-/// this order, and eviction in reverse.
-#[derive(Clone, Copy, Debug)]
-pub struct Order {
-    pub seen: bool,
-    pub near: f64,
+/// A layer's tile's order, read in the grid's cells its own fold into: all
+/// of it where nothing is known.
+pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile) -> Order {
+    Order::of(o, &within(p.node(), lattice.grid_zoom(p.zoom)).unwrap_or(p.region()))
 }
-
-impl Order {
-    pub const LAST: Order = Order { seen: false, near: f64::INFINITY };
-
-    pub const FIRST: Order = Order { seen: true, near: 0.0 };
-
-    pub fn of(o: &Observation, b: &Aabb) -> Order {
-        let m = o.measure(b);
-        Order { seen: m.seen, near: m.near }
-    }
-
-    /// A layer's tile, read in the grid's cells its own fold into: all of it
-    /// where nothing is known.
-    pub fn of_tile(o: &Observation, lattice: Lattice, p: Tile) -> Order {
-        Order::of(o, &within(p.node(), lattice.grid_zoom(p.zoom)).unwrap_or(p.region()))
-    }
-}
-
-impl Ord for Order {
-    fn cmp(&self, other: &Order) -> Ordering {
-        other.seen.cmp(&self.seen).then(self.near.total_cmp(&other.near))
-    }
-}
-
-impl PartialOrd for Order {
-    fn partial_cmp(&self, other: &Order) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for Order {
-    fn eq(&self, other: &Order) -> bool {
-        self.cmp(other).is_eq()
-    }
-}
-
-impl Eq for Order {}

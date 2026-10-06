@@ -24,7 +24,7 @@ use crate::world::chunk::domain::Price;
 use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};
 use crate::world::chunk::quality::fits;
 use crate::world::chunk::Chunk;
-use crate::world::view::observation::Order;
+use crate::io::demand::Order;
 
 pub type Slots = [u32; POOLS];
 
