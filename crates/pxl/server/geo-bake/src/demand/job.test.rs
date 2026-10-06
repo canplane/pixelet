@@ -65,3 +65,31 @@ async fn waiting_does_not_renew_the_execution_budget() {
     let expired = Instant::now() - Duration::from_secs(1);
     assert!(matches!(supervise(command, expired).await, Err(Failure::Limited(_))));
 }
+
+#[tokio::test]
+async fn a_free_worker_goes_to_what_a_client_waits_on_before_a_folds_older_ask() {
+    let workers = Arc::new(Workers {
+        state: Mutex::new((1, VecDeque::new())),
+    });
+    let lease = |asked: bool| Lease {
+        deadline: Instant::now() + Duration::from_secs(5),
+        asked: Arc::new(AtomicBool::new(asked)),
+    };
+    let held = workers.acquire(&lease(true)).await.unwrap();
+    let order = Arc::new(Mutex::new(Vec::new()));
+    let wait = |name: &'static str, l: Lease| {
+        let (workers, order) = (workers.clone(), order.clone());
+        tokio::spawn(async move {
+            let _worker = workers.acquire(&l).await.unwrap();
+            order.lock().unwrap().push(name);
+        })
+    };
+    let fold = wait("fold", lease(false));
+    tokio::task::yield_now().await;
+    let asked = wait("asked", lease(true));
+    tokio::task::yield_now().await;
+    drop(held);
+    asked.await.unwrap();
+    fold.await.unwrap();
+    assert_eq!(*order.lock().unwrap(), ["asked", "fold"]);
+}

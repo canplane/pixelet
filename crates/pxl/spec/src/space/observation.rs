@@ -6,10 +6,9 @@
 //! from what is known (`DemandEstimator`); never less, since a requirement
 //! left out is ground that never refines.
 
-use super::lod::{cubes_meeting, demand_reach, observed_cell, Tau};
+use super::lod::{cubes_meeting, demand_reach, Tau};
 use super::pvf3::nearest_box;
-use super::pyramid::DRAWN_STEPS;
-use super::pyramid::{tile_at, tile_rows, Tile, LEAF_Z, TOP_Z};
+use super::pyramid::{tile_at, tile_rows, Tile, GROUND, LEAF_Z, TOP_Z};
 use super::v3::{dot3, Aabb, V3};
 use super::zoom::{units, Zoom};
 use crate::bake::constant::CELL;
@@ -98,11 +97,12 @@ pub struct Requirement {
 pub enum Contents {
     Unknown,
     Empty,
-    /// Everything is inside `bound`, drawn off by up to `error` per axis.
-    /// Conservative, not tight.
+    /// Everything is inside `bound`, its surface off by up to `rise` upright
+    /// within a cell. Conservative, not tight; across, the error is the cell
+    /// the reader draws, which is the reader's.
     Holds {
         bound: Aabb,
-        error: V3,
+        rise: f64,
     },
 }
 
@@ -176,7 +176,7 @@ pub struct ByBounds {
 /// The distances `z` is required over: its split distance (0 for the leaves) to the
 /// next coarser zoom's, or to the far edge for the top. None past the far edge.
 pub fn band(o: &Observation, tau: Tau, zoom: Zoom) -> Option<(f64, f64)> {
-    let from = if zoom == LEAF_Z { 0.0 } else { tau.split_distance(observed_cell(zoom, DRAWN_STEPS)) };
+    let from = if zoom == LEAF_Z { 0.0 } else { tau.split_distance(GROUND.cell_zoom(zoom)) };
     let to = if zoom == o.top { demand_reach(zoom) } else { tau.demand_reach(zoom) };
     (from <= o.far).then_some((from, to))
 }

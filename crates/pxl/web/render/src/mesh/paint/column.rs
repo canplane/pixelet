@@ -16,12 +16,15 @@ use crate::mesh::run::{RunWriter, APRON, COL_SPAN};
 pub type Stands = (i32, i32, Option<(u32, u8)>);
 
 /// Every column of the padded grid, apron included. `step` is leaf cells a
-/// cell spans; heights are leaf cells.
+/// cell spans; heights are leaf cells. A cell in `mixed` shows that material
+/// over what its value would (`Painter::mean_of`).
+#[allow(clippy::too_many_arguments)]
 pub fn write_column_runs(
     direct: &mut RunWriter,
     sample: &ChunkSample,
     painter: &Painter,
     cells: &HashMap<[i64; 3], u32>,
+    mixed: &HashMap<[i64; 3], (u32, u8)>,
     (cx0, cy0): (i64, i64),
     step: u32,
     stands: &mut Vec<(u32, Stands)>,
@@ -35,7 +38,8 @@ pub fn write_column_runs(
     for (&[x, y, z], &state) in cells {
         let (px, py) = (x - cx0 + apron, y - cy0 + apron);
         if (0..span).contains(&px) && (0..span).contains(&py) {
-            stands.push(((py * span + px) as u32, (z as i32 * s, z as i32 * s + s, painter.material_of(state))));
+            let material = painter.material_of(state).map(|m| mixed.get(&[x, y, z]).copied().unwrap_or(m));
+            stands.push(((py * span + px) as u32, (z as i32 * s, z as i32 * s + s, material)));
         }
     }
     for i in 0..columns {

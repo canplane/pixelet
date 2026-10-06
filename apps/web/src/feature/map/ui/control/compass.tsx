@@ -6,12 +6,11 @@ import { Path, Svg } from "react-native-svg";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { LABEL, NORTH } from "@platform/palette.ts";
-import { chrome } from "@/shared/ui/theme.ts";
+import { chrome, SECONDARY } from "@/shared/ui/theme.ts";
 import type { f64 } from "@xpute/core/abi/word.ts";
 
 const NEEDLE_HALF = 16;
 const NEEDLE_WIDTH = 9;
-const LIT = 0.75;
 const NEEDLE_ROUND = 2;
 /** How far toward south the halves' seam bends at the middle, so the two
  * colors meet in a chevron, as a physical needle's bevel does. */
@@ -53,9 +52,12 @@ export function CompassFace() {
       }
       <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${turn}rad` }] }]}>
         <Svg width={chrome.control} height={chrome.control} viewBox={BOX}>
-          <Path d={face(-NEEDLE_HALF, -w, SEAM_BEND)} fill={NORTH} fillOpacity={LIT} />
+          {
+            // A face's far side in the secondary label's emphasis, red's as the label's.
+          }
+          <Path d={face(-NEEDLE_HALF, -w, SEAM_BEND)} fill={NORTH} fillOpacity={SECONDARY} />
           <Path d={face(-NEEDLE_HALF, w, SEAM_BEND)} fill={NORTH} />
-          <Path d={face(NEEDLE_HALF, -w, SEAM_BEND)} fill={LABEL.primary} fillOpacity={LIT} />
+          <Path d={face(NEEDLE_HALF, -w, SEAM_BEND)} fill={LABEL.secondary} />
           <Path d={face(NEEDLE_HALF, w, SEAM_BEND)} fill={LABEL.primary} />
         </Svg>
       </View>

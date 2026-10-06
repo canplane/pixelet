@@ -13,9 +13,9 @@ use pxl_render::mesh::paint::column::{write_column_runs, Stands};
 use pxl_render::mesh::paint::object::adapter::Painter;
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, TileSource, TileView};
 use pxl_render::mesh::run::{RunSet, RunWriter, APRON, COL_SPAN};
-use pxl_spec::bake::constant::{unpack_pos, EntryAt, BAND, CELL};
+use pxl_spec::bake::constant::{unpack_pos, EntryAt, BAND, CELL, OBJECT_FINEST};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use std::collections::HashMap;
+use std::collections::{HashMap, TryReserveError};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 
@@ -108,28 +108,31 @@ struct Runs {
     count: u32,
 }
 
-/// Where a tile's ground is read from: itself (`n` = 1) or the nearest
-/// resident tile over it (`drawn_from`).
+/// Where a tile's ground is read from, for cells drawn at `drawn`: itself or
+/// the nearest resident tile over it (`drawn_from`).
 #[derive(Clone, Copy)]
 struct Source {
     tile: &'static Terrain,
     frame: Frame,
     origin: [i64; 2],
-    n: u32,
+    shift: i32,
 }
 
 impl Source {
     /// Found by key, so a tile that is gone never yields another tile's bytes.
-    fn of(p: Tile) -> Option<Source> {
+    fn of(p: Tile, drawn: Zoom) -> Option<Source> {
         let pyramid = Terrain::pyramid();
         let src = pyramid.residency().drawn_from(p)?;
         let tile = pyramid.residency().get(src)?;
         let corner = GROUND.cell_at(p, GROUND.cell_index(0, 0));
+        // In `p`'s cells, a whole tile's worth, so as many drawn cells exactly.
+        let [x, y] = corner.in_tile_above(p.zoom - src.zoom);
+        let coarser = u32::from(GROUND.cell_zoom(p.zoom) - drawn);
         Some(Source {
             tile,
             frame: Frame::of(src),
-            origin: corner.in_tile_above(p.zoom - src.zoom),
-            n: count(GROUND.cell_zoom(p.zoom), GROUND.cell_zoom(src.zoom)),
+            origin: [x >> coarser, y >> coarser],
+            shift: i32::from(drawn) - i32::from(GROUND.cell_zoom(src.zoom)),
         })
     }
 
@@ -138,7 +141,7 @@ impl Source {
             tile: Builder::tile_view(self.tile),
             frame: self.frame,
             origin: self.origin,
-            n: self.n,
+            shift: self.shift,
         }
     }
 }
@@ -150,6 +153,8 @@ struct Read {
     own: Source,
     beside: [Option<Source>; 8],
     first: [i64; 2],
+    tile_shamt: u32,
+    zoom: Zoom,
 }
 
 impl Read {
@@ -157,6 +162,9 @@ impl Read {
         Around {
             own: self.own.view(),
             beside: self.beside.map(|b| b.as_ref().map(Source::view)),
+            tile_shamt: self.tile_shamt,
+            zoom: self.zoom,
+            textured: settings_store().textures,
         }
     }
 }
@@ -184,27 +192,29 @@ impl Chunk {
     /// chunk's, which its sample refines (`ChunkSample::refine`).
     fn read(&self) -> Option<Read> {
         let leaf = self.leaf();
+        let drawn = leaf.drawn_zoom();
         let mut beside = [None; 8];
         for ([qx, qy], p) in leaf.tiles_beside(APRON) {
-            beside[beside_index(qx, qy)] = Source::of(p);
+            beside[beside_index(qx, qy)] = Source::of(p, drawn);
         }
         let (x0, y0) = leaf.in_tile();
         Some(Read {
-            own: Source::of(leaf.tile())?,
+            own: Source::of(leaf.tile(), drawn)?,
             beside,
             first: [x0 as i64, y0 as i64],
+            tile_shamt: GROUND.tile_cell_shamt().checked_add_signed(leaf.finer()).or_bug(Errno::ENOTRECOVERABLE),
+            zoom: drawn,
         })
     }
 
-    /// Itself, or past the leaves the leaf chunk it lies in.
+    /// Itself, or past the leaves the leaf chunk it lies in, which draws a leaf's cells.
     fn leaf(&self) -> PyramidChunk {
-        core::iter::once(self.at).chain(self.at.ancestors()).find(|k| k.finer() == 0).or_bug(Errno::ENOTRECOVERABLE)
+        core::iter::once(self.at).chain(self.at.ancestors()).find(|k| k.finer() <= 0).or_bug(Errno::ENOTRECOVERABLE)
     }
 
     /// Where its first drawn cell lies in its leaf chunk, in its drawn cells.
     fn in_leaf(&self) -> [u32; 2] {
-        let k = self.at.finer();
-        offset_in(self.at.column().1, k).map(|v| v as u32 * CHUNK_DRAWN)
+        offset_in(self.at.column().1, self.at.finer() as u32).map(|v| v as u32 * CHUNK_DRAWN)
     }
 
     fn wants(&self, cell_zoom: Zoom) -> bool {
@@ -287,6 +297,9 @@ pub struct Builder {
     leaf_sample: ChunkSample,
     run_holds: [Option<RunHold>; RUN_SETS],
     folded: HashMap<[i64; 3], u32>,
+    /// The objects a zoom finer than drawn, whose colors a drawn cell's are.
+    children: HashMap<[i64; 3], u32>,
+    mixed: HashMap<[i64; 3], (u32, u8)>,
     stands: Vec<(u32, Stands)>,
     pub stat: BuildStat,
 }
@@ -308,6 +321,8 @@ impl Builder {
             leaf_sample: ChunkSample::default(),
             run_holds: [const { None }; RUN_SETS],
             folded: HashMap::new(),
+            children: HashMap::new(),
+            mixed: HashMap::new(),
             stands: Vec::new(),
             stat: BuildStat::default(),
         }
@@ -520,10 +535,12 @@ impl Builder {
         }
         let c = self.chunks[&id];
         let k = c.at.finer();
-        let sampled = if k == 0 {
+        let sampled = if k <= 0 {
             self.sample.read(&read.around(), read.first)
         } else {
-            self.leaf_sample.read(&read.around(), read.first).and_then(|()| self.sample.refine(&self.leaf_sample, k, c.in_leaf()))
+            self.leaf_sample
+                .read(&read.around(), read.first)
+                .and_then(|()| self.sample.refine(&self.leaf_sample, k as u32, c.in_leaf()))
         };
         if sampled.is_err() {
             self.refuse(id);
@@ -538,8 +555,13 @@ impl Builder {
             self.refuse(id);
             return Progress::Blocked;
         }
-        if let Some(carve) = edits.carve.filter(|e| e.col_idx == c.col_idx()) {
+        let carve = edits.carve.filter(|e| e.col_idx == c.col_idx());
+        if let Some(carve) = carve {
             carve_into(&mut self.folded, carve, target);
+        }
+        if self.mix_children(world, target, [cx, cy], edits.hide, carve).is_err() {
+            self.refuse(id);
+            return Progress::Blocked;
         }
         xpute_core::ensure!(self.direct.begin(), ENOTRECOVERABLE);
         let written = write_column_runs(
@@ -547,6 +569,7 @@ impl Builder {
             &self.sample,
             world.painter,
             &self.folded,
+            &self.mixed,
             (cx, cy),
             (units(target) / z_unit(c.at)) as u32,
             &mut self.stands,
@@ -557,6 +580,32 @@ impl Builder {
             return Progress::Blocked;
         }
         self.close(id)
+    }
+
+    /// Each drawn cell's color as its children's, a zoom finer, as the ground's
+    /// four are (`ChunkSample::read`); its shape stays the fold's majority.
+    fn mix_children(&mut self, world: &World, target: Zoom, [cx, cy]: [i64; 2], hide: Option<EntryAt>, carve: Option<EntryAt>) -> Result<(), TryReserveError> {
+        self.mixed.clear();
+        if target >= OBJECT_FINEST || self.folded.is_empty() {
+            return Ok(());
+        }
+        let span = CHUNK_DRAWN as i64;
+        let finer = target + 1;
+        world
+            .store
+            .fold_at(finer, [2 * cx - 2, 2 * cy - 2], [2 * (cx + span + 1), 2 * (cy + span + 1)], hide, &mut self.children)?;
+        if let Some(carve) = carve {
+            carve_into(&mut self.children, carve, finer);
+        }
+        self.mixed.try_reserve(self.folded.len())?;
+        let textured = settings_store().textures;
+        for (&[x, y, z], &v) in &self.folded {
+            let kids = (0..8).filter_map(|q| self.children.get(&[2 * x + (q & 1), 2 * y + ((q >> 1) & 1), 2 * z + (q >> 2)]).copied());
+            if let Some(m) = world.painter.mean_of(v, kids, textured) {
+                self.mixed.insert([x, y, z], m);
+            }
+        }
+        Ok(())
     }
 
     fn close(&mut self, id: u32) -> Progress {

@@ -13,16 +13,17 @@ use std::collections::{HashMap, HashSet};
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pyramid::{Tile, LEAF_Z};
+use pxl_spec::space::pyramid::{Tile, LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::V3;
 
 use crate::layer::marker::debug_lines::DebugLines;
 use crate::world::access::Access;
 use crate::world::frame::view::view;
+use crate::world::observation::observation;
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer as _;
 use crate::world::residency::floor;
-use pxl_spec::space::zoom::{units, Zoom};
+use pxl_spec::space::zoom::{units, within, Zoom};
 
 /// What an edge marks, lowest first: a stretch takes the highest over it.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -86,8 +87,11 @@ impl CoverageGizmo {
             return;
         }
         let v = view();
-        // Its lines are f32 about a leaf's corner under the eye, near enough to resolve.
-        let span = units(LEAF_Z);
+        // Its lines are f32 about the corner under the eye of a tile about as wide as
+        // the eye is high: what is near resolves, and a move rebuilds them once a height.
+        let height = observation().map_or(0.0, |o| (o.eye[2] - o.ground).max(1.0));
+        let zoom = within(height).clamp(i32::from(TOP_Z), i32::from(LEAF_Z)) as Zoom;
+        let span = units(zoom);
         let about = v.pose.eye.map(|c| (c / span).floor() * span);
         let about = [about[0], about[1], 0.0];
         let seen = (revisions.0, revisions.1, revisions.2, about.map(f64::to_bits));

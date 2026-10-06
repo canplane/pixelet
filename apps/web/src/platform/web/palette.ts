@@ -2,11 +2,11 @@
 
 /** iOS's light-mode label and status colors, so the page and an iPhone draw alike. */
 
-import { alpha, color, SYSTEM } from "@/shared/ui/theme.ts";
+import { alpha, color, SECONDARY, SYSTEM } from "@/shared/ui/theme.ts";
 
 export const LABEL: { primary: string; secondary: string; tertiary: string; placeholder: string } = {
   primary: color.black,
-  secondary: alpha(color.labelGray, 0.6),
+  secondary: alpha(color.labelGray, SECONDARY),
   tertiary: alpha(color.labelGray, 0.3),
   placeholder: alpha(color.labelGray, 0.3),
 };

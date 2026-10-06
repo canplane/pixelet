@@ -93,16 +93,14 @@ fn grazing_ground_refines_across_the_screen_and_not_along_its_depth() {
                 let p = [EYE[0] + r * libm::cos(b), EYE[1] + r * libm::sin(b), GROUND - 0.5];
                 let over = pieces_at(&pieces, p);
                 assert_eq!(over.len(), 1, "{tau:?}: {p:?} under {over:?}");
-                // The tile whose cells the piece draws, against the one its distance asks.
-                let zoom = pxl_spec::space::pyramid::GROUND.z_of(over[0].drawn_zoom()).min(LEAF_Z as i32);
+                // The tile the piece reads, against the one its distance asks.
+                let zoom = over[0].tile_zoom() as i32;
                 let wanted = tau.z_at(r) as i32;
                 assert!(
                     zoom >= wanted,
                     "{tau:?}: ground {r} away at {bearing}° left at z{zoom} where its cell crosses a cell finer than z{wanted}"
                 );
-                // A split takes all eight children, so the far ones of a chunk split
-                // for its near edge draw up to two zooms finer than they ask.
-                assert!(zoom - 2 <= wanted, "{tau:?}: ground {r} away refined to z{zoom}, past what its error across asks (z{wanted})");
+                assert!(zoom - 1 <= wanted, "{tau:?}: ground {r} away refined to z{zoom}, past what its error across asks (z{wanted})");
             }
         }
     }

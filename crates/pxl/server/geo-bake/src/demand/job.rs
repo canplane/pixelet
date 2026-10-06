@@ -1,15 +1,17 @@
 // pxl-geo-bake/demand/job.rs
 
+use super::cache::Lease;
 use super::{Dataset, Failure};
 use postgres::Client;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc, Mutex,
 };
 use tokio::process::Command;
-use tokio::sync::Semaphore;
+use tokio::sync::{oneshot, Semaphore};
 
 #[derive(Clone, Copy)]
 pub struct Limits {
@@ -31,8 +33,71 @@ pub enum Job {
 
 pub struct Runner {
     pub(super) admission: Arc<Semaphore>,
-    running: Arc<Semaphore>,
+    workers: Arc<Workers>,
     pub(super) limits: Limits,
+}
+
+/// The worker processes, a free one handed to the oldest job a client waits
+/// on before any a fold alone needs: a fold over a cold zoom bakes every
+/// tile under it, and the tile on screen must not queue behind them.
+struct Workers {
+    state: Mutex<(usize, VecDeque<Waiter>)>,
+}
+
+struct Waiter {
+    asked: Arc<AtomicBool>,
+    wake: oneshot::Sender<()>,
+}
+
+struct Worker(Arc<Workers>);
+
+impl Drop for Worker {
+    fn drop(&mut self) {
+        self.0.release();
+    }
+}
+
+impl Workers {
+    fn release(&self) {
+        let mut state = self.state.lock().expect("workers");
+        let (free, waiting) = &mut *state;
+        loop {
+            let next = waiting.iter().position(|w| w.asked.load(Ordering::Relaxed)).or((!waiting.is_empty()).then_some(0));
+            let Some(i) = next else {
+                *free += 1;
+                return;
+            };
+            // A waiter past its deadline has dropped its end and is skipped.
+            if waiting.remove(i).expect("a waiter").wake.send(()).is_ok() {
+                return;
+            }
+        }
+    }
+
+    async fn acquire(self: &Arc<Self>, lease: &Lease) -> Result<Worker, Failure> {
+        let mut woken = {
+            let mut state = self.state.lock().expect("workers");
+            let (free, waiting) = &mut *state;
+            if *free > 0 && waiting.is_empty() {
+                *free -= 1;
+                return Ok(Worker(self.clone()));
+            }
+            let (wake, woken) = oneshot::channel();
+            waiting.push_back(Waiter { asked: lease.asked.clone(), wake });
+            woken
+        };
+        match tokio::time::timeout_at(lease.deadline, &mut woken).await {
+            Ok(Ok(())) => Ok(Worker(self.clone())),
+            _ => {
+                // A worker handed over as the deadline passed is given back.
+                woken.close();
+                if woken.try_recv().is_ok() {
+                    drop(Worker(self.clone()));
+                }
+                Err(Failure::Limited("demand queue deadline"))
+            }
+        }
+    }
 }
 
 pub(super) enum Publication {
@@ -76,16 +141,16 @@ impl Runner {
         }
         Ok(Self {
             admission: Arc::new(Semaphore::new(workers + limits.queued)),
-            running: Arc::new(Semaphore::new(workers)),
+            workers: Arc::new(Workers {
+                state: Mutex::new((workers, VecDeque::new())),
+            }),
             limits,
         })
     }
 
-    pub(super) async fn run(&self, job: Job, data: Arc<Dataset>, deadline: tokio::time::Instant, publication: Publication) -> Result<(), Failure> {
-        let _permit = tokio::time::timeout_at(deadline, self.running.clone().acquire_owned())
-            .await
-            .map_err(|_| Failure::Limited("demand queue deadline"))?
-            .expect("runner open");
+    pub(super) async fn run(&self, job: Job, data: Arc<Dataset>, lease: Lease, publication: Publication) -> Result<(), Failure> {
+        let _worker = self.workers.acquire(&lease).await?;
+        let deadline = lease.deadline;
         static SERIAL: AtomicU64 = AtomicU64::new(0);
         let out = Staging(data.cache.root.join(format!(".work-{}", SERIAL.fetch_add(1, Ordering::Relaxed))));
         std::fs::create_dir_all(&out.0).map_err(|e| e.to_string())?;

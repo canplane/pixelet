@@ -34,7 +34,8 @@ pub const REACH: Aabb = {
 
 /// The copy of `x` nearest `about`: where a stored X stands for an eye at `about`.
 pub fn nearest(x: f64, about: f64) -> f64 {
-    about + (x - about + ROUND / 2.0).rem_euclid(ROUND) - ROUND / 2.0
+    // Whole laps added to `x`, so a point already on the lap comes back unchanged.
+    x - ROUND * libm::floor((x - about) / ROUND + 0.5)
 }
 
 /// `b` moved round the world to the copy nearest `about`.

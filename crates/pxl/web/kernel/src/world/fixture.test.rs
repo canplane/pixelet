@@ -65,11 +65,9 @@ impl Bounds for World {
                 rise = rise.max(b.max[2] - b.min[2]);
             }
         }
-        let extent = region.extent();
-        let error = [cell, cell, rise];
         bound.map_or(Contents::Empty, |bound| Contents::Holds {
             bound,
-            error: std::array::from_fn(|k| error[k].clamp(0.0, extent[k])),
+            rise: rise.clamp(0.0, region.extent()[2]),
         })
     }
 }

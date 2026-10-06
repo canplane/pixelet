@@ -5,6 +5,7 @@ use crate::util::{pack, write_atomic, Level};
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use tokio::sync::{Notify, Semaphore};
 
@@ -12,6 +13,14 @@ use tokio::sync::{Notify, Semaphore};
 struct Flight {
     result: OnceLock<Result<(), Failure>>,
     done: Notify,
+    asked: Arc<AtomicBool>,
+}
+
+/// What a job runs under: when it must be done by, and whether a client is
+/// waiting on it, which turns true when one joins a job a fold started.
+pub struct Lease {
+    pub deadline: tokio::time::Instant,
+    pub asked: Arc<AtomicBool>,
 }
 
 pub struct Cache {
@@ -38,8 +47,9 @@ impl Cache {
 
     /// The job, not the HTTP connection, owns its lifetime. Failures stay failed
     /// within the generation; resource refusals leave nothing. Do not time out this
-    /// future: it would release the key before the work stopped.
-    pub async fn once<F>(&self, key: String, make: impl FnOnce(tokio::time::Instant) -> F + Send + 'static) -> Result<(), Failure>
+    /// future: it would release the key before the work stopped. `asked` is
+    /// whether a client waits on it, rather than only a fold over it.
+    pub async fn once<F>(&self, key: String, asked: bool, make: impl FnOnce(Lease) -> F + Send + 'static) -> Result<(), Failure>
     where
         F: Future<Output = Result<(), Failure>> + Send + 'static,
     {
@@ -57,12 +67,16 @@ impl Cache {
                 }
             }
         };
+        if asked {
+            flight.asked.store(true, Ordering::Relaxed);
+        }
         if let Some(permit) = permit {
             let task = flight.clone();
+            let asked = flight.asked.clone();
             let jobs = self.flights.clone();
             let deadline = tokio::time::Instant::now() + self.deadline;
             tokio::spawn(async move {
-                let job = async move { make(deadline).await };
+                let job = async move { make(Lease { deadline, asked }).await };
                 let result = tokio::spawn(job).await.map_err(|e| Failure::Bake(e.to_string())).and_then(|r| r);
                 if matches!(result, Ok(()) | Err(Failure::Limited(_))) {
                     jobs.lock().expect("flights").remove(&key);

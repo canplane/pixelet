@@ -17,6 +17,7 @@ impl Serve for ByWhy {
         Rank {
             class: ask.why as u8,
             distance: ask.order.near,
+            detail: 0,
         }
     }
 
@@ -153,7 +154,11 @@ struct Restless;
 
 impl Serve for Restless {
     fn rank(&self, _category: Category, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
-        Rank { class: 0, distance: ask.order.near }
+        Rank {
+            class: 0,
+            distance: ask.order.near,
+            detail: 0,
+        }
     }
 
     fn intake(&self) -> u32 {

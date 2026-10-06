@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::lod::{cubes_meeting, demand_reach, Tau};
 use pxl_spec::space::observation::{Bounds, Contents, Observation, Requirement};
-use pxl_spec::space::pvf3::REACH;
+use pxl_spec::space::pvf3::{nearest_box, REACH};
 use pxl_spec::space::pyramid::{chunk_zoom, Tile};
 use pxl_spec::space::v3::Aabb;
 
@@ -247,10 +247,10 @@ impl Domain {
                 let half = units(c.zoom()) / 2.0;
                 (bound, [half, half, bound.extent()[2]])
             }
-            // The rule measures its cells, not the coarser ones it draws.
-            (Contents::Holds { bound, error }, _) => {
-                let cell = units(c.cell_zoom()).min(bound.extent()[0]);
-                (bound, [cell, cell, error[2]])
+            // Across, the cell the rule measures the chunk in.
+            (Contents::Holds { bound, rise }, _) => {
+                let cell = units(c.cell_zoom());
+                (bound, [cell, cell, rise])
             }
             // evicted between slices: the parent's bound holds
             (_, Some((bound, error))) => (bound.meet(c.region()).unwrap_or(c.region()), error),
@@ -265,7 +265,7 @@ impl Domain {
             }
         }
         let touching = (start, self.touching.len() as u32 - start);
-        let nearest = bound.nearest(self.o.eye);
+        let nearest = nearest_box(&bound, self.o.eye[0]).nearest(self.o.eye);
         let error_angle = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
         let order = Order::of(&self.o, &bound);
         // Drawn as finely as anything under it is held, there is nothing to refine.
@@ -421,7 +421,7 @@ pub fn start(ladder: &[Tau], extra: u32) {
     made.key = Some(key);
     let resident: HashSet<Tile> = Terrain::pyramid().residency().held().map(|(p, _)| p).collect();
     let near = |p: &Tile| {
-        let r = pxl_spec::space::pvf3::nearest_box(&p.region(), o.eye[0]);
+        let r = nearest_box(&p.region(), o.eye[0]);
         (r.min[0], r.min[1], r.max[0] - r.min[0])
     };
     let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(near).collect();

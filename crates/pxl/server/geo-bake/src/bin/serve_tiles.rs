@@ -22,6 +22,7 @@ use pxl_server::admin_auth::admin_auth;
 use pxl_spec::bake::published::{PUBLISHED_TOP_Z, PUBLISHED_VERSION};
 use pxl_spec::bake::quadkey::tile_of_name;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
+use pxl_spec::space::pyramid::{LEAF_Z, TOP_Z};
 use pxl_spec::space::zoom::Zoom;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -76,7 +77,7 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
         Ok(Some(bytes)) => packed(bytes),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(Failure::BadName) => (StatusCode::BAD_REQUEST, "bad tile name").into_response(),
-        Err(Failure::Unavailable) => (StatusCode::SERVICE_UNAVAILABLE, "past --top-z").into_response(),
+        Err(Failure::Unavailable) => (StatusCode::SERVICE_UNAVAILABLE, "past --folds").into_response(),
         Err(Failure::Limited(reason)) => (StatusCode::SERVICE_UNAVAILABLE, reason).into_response(),
         Err(Failure::Bake(e)) => {
             eprintln!("[tile/{name}] {e}");
@@ -187,7 +188,8 @@ fn run() -> Result<(), String> {
     let mut asset_dir = PathBuf::from("./out/asset");
     let mut workers: usize = 4;
     let mut cache = PathBuf::from("./out/dev");
-    let mut top_z: Zoom = 12;
+    // Zooms folded over the leaves: a cold tile at the top bakes 4^folds leaves.
+    let mut folds: Zoom = 2;
     let mut baked: Option<PathBuf> = None;
     let mut out = PathBuf::from("./out");
 
@@ -201,7 +203,7 @@ fn run() -> Result<(), String> {
             "--job-seconds" => limits.seconds = flags.parse()?,
             "--workers" => workers = flags.parse()?,
             "--cache" => cache = PathBuf::from(flags.value()?),
-            "--top-z" => top_z = flags.parse()?,
+            "--folds" => folds = flags.parse()?,
             "--baked" => baked = Some(PathBuf::from(flags.value()?)),
             "--out" => out = PathBuf::from(flags.value()?),
             other => return Err(format!("unknown flag: {other}")),
@@ -210,7 +212,10 @@ fn run() -> Result<(), String> {
 
     let (tiles, top_z) = match baked {
         Some(dir) => (Tiles::Baked(dir), PUBLISHED_TOP_Z),
-        None => (Tiles::Demand(Server::open(workers, cache, top_z, limits)?), top_z),
+        None => {
+            let top_z = LEAF_Z.checked_sub(folds).filter(|&z| z >= TOP_Z).ok_or("--folds past the pyramid's top")?;
+            (Tiles::Demand(Server::open(workers, cache, top_z, limits)?), top_z)
+        }
     };
     let app = Arc::new(App { tiles, top_z, asset_dir, out });
 

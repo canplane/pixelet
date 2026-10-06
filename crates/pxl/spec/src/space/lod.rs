@@ -5,7 +5,7 @@
 //! resident bound is proved before anything of the world or screen is known.
 
 use super::pvf3::REACH;
-use super::pyramid::{tile_at, tile_rows, Tile, DRAWN_STEPS, GROUND, LEAF_Z, TOP_Z};
+use super::pyramid::{tile_at, tile_rows, Tile, GROUND, LEAF_Z, TOP_Z};
 use super::v3::Aabb;
 use super::zoom::{units, Zoom, UNIT_Z};
 
@@ -70,10 +70,10 @@ impl Tau {
         cell_at(r * self.0)
     }
 
-    /// The tile zoom the ground is drawn from at `r`: the one whose observed
-    /// cell is the rule's, held to the pyramid.
+    /// The tile zoom a chunk at `r` reads: the one whose cells are the rule's,
+    /// which it draws a step coarser, each drawn cell the mean of four; held to the pyramid.
     pub fn z_at(self, r: f64) -> Zoom {
-        (GROUND.z_of(self.cell_at(r)) - DRAWN_STEPS as i32).clamp(TOP_Z as i32, LEAF_Z as i32) as Zoom
+        GROUND.z_of(self.cell_at(r)).clamp(TOP_Z as i32, LEAF_Z as i32) as Zoom
     }
 
     pub const fn demand_reach(self, zoom: Zoom) -> f64 {
@@ -81,38 +81,17 @@ impl Tau {
     }
 }
 
-/// The cell the rule measures a tile at `zoom` by, for a layer drawing its
-/// tile's cells `drawn` zooms coarser than the rule's: the ground a step
-/// (`DRAWN_STEPS`), a picture drawn a texel a cell none.
-pub const fn observed_cell(zoom: Zoom, drawn: Zoom) -> Zoom {
-    GROUND.cell_zoom(zoom) + drawn
-}
-
-/// How far from an observer's foot a demand at `z` can lie, for a layer
-/// drawing `drawn` zooms coarser: the split distance of the observed cell a
-/// zoom coarser. Bounds the run along the ground too.
-pub const fn reach_of(zoom: Zoom, drawn: Zoom) -> f64 {
-    split_distance(observed_cell(zoom - 1, drawn))
-}
-
-/// The ground's.
+/// How far from an observer's foot a demand at `z` can lie: the split
+/// distance of the ground's cell a zoom coarser. Bounds the run along the ground too.
 pub const fn demand_reach(zoom: Zoom) -> f64 {
-    reach_of(zoom, DRAWN_STEPS)
+    split_distance(GROUND.cell_zoom(zoom - 1))
 }
 
 /// The most tiles a zoom's demand span along an axis: ⌊d / tile⌋ + 2, the same at every zoom.
-pub const fn reach_across(drawn: Zoom) -> u32 {
-    (2.0 * reach_of(LEAF_Z, drawn) / units(LEAF_Z)) as u32 + 2
-}
+pub const REACH_ACROSS: u32 = (2.0 * demand_reach(LEAF_Z) / units(LEAF_Z)) as u32 + 2;
 
 /// The most tiles a zoom's demand name about one observer.
-pub const fn reach_tiles(drawn: Zoom) -> u32 {
-    reach_across(drawn) * reach_across(drawn)
-}
-
-/// The ground's.
-pub const REACH_ACROSS: u32 = reach_across(DRAWN_STEPS);
-pub const REACH_TILES: u32 = reach_tiles(DRAWN_STEPS);
+pub const REACH_TILES: u32 = REACH_ACROSS * REACH_ACROSS;
 
 /// Every tile at `z` with ground within `radius` of `at`.
 pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Tile> {

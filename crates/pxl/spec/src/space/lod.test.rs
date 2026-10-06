@@ -4,7 +4,7 @@ use super::*;
 
 /// The ground's zoom a distance draws, past the pyramid's ends too.
 fn zoom_at(r: f64) -> i32 {
-    GROUND.z_of(cell_at(r)) - 1
+    GROUND.z_of(cell_at(r))
 }
 
 /// Feet on a tile's corners, edges and inside, either side of the origin.
@@ -27,11 +27,11 @@ fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Tile> {
 }
 
 #[test]
-fn a_zoom_faults_on_at_most_three_by_three_tiles_wherever_the_foot_stands() {
+fn a_zoom_demands_at_most_its_reach_in_tiles_wherever_the_foot_stands() {
     for zoom in TOP_Z..=LEAF_Z {
         for foot in feet(zoom) {
             let n = demands(zoom, foot).len() as u32;
-            assert!(n <= REACH_TILES && n <= 9, "z{zoom} at {foot:?}: {n} tiles");
+            assert!(n <= REACH_TILES, "z{zoom} at {foot:?}: {n} tiles");
         }
     }
 }
@@ -95,11 +95,7 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
         }
     }
     for z in TOP_Z as i32..=LEAF_Z as i32 + 3 {
-        assert_eq!(zoom_at(split_distance(observed_cell(z as Zoom, DRAWN_STEPS))), z, "a zoom begins at its split distance");
-        assert_eq!(
-            zoom_at(split_distance(observed_cell(z as Zoom - 1, DRAWN_STEPS)) * (1.0 - 1e-12)),
-            z,
-            "and ends where the next coarser begins"
-        );
+        assert_eq!(zoom_at(split_distance(GROUND.cell_zoom(z as Zoom))), z, "a zoom begins at its split distance");
+        assert_eq!(zoom_at(split_distance(GROUND.cell_zoom(z as Zoom - 1)) * (1.0 - 1e-12)), z, "and ends where the next coarser begins");
     }
 }

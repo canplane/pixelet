@@ -33,7 +33,7 @@ impl Bounds for World {
             max: [hi[0], hi[1], top],
         };
         match column.meet(region) {
-            Some(bound) => Contents::Holds { bound, error: [0.0; 3] },
+            Some(bound) => Contents::Holds { bound, rise: 0.0 },
             None => Contents::Empty,
         }
     }

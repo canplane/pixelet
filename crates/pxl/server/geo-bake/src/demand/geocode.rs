@@ -21,11 +21,11 @@ pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, name: &str)
     let d = data.clone();
     let r = runner.clone();
     data.cache
-        .once(DICT_OBJECT.into(), move |deadline| async move {
+        .once(DICT_OBJECT.into(), true, move |lease| async move {
             r.run(
                 Job::Dictionary,
                 d.clone(),
-                deadline,
+                lease,
                 Publication::Directory {
                     source: "dictionary".into(),
                     target: DICT_OBJECT.into(),
@@ -38,7 +38,7 @@ pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, name: &str)
         let d = data.clone();
         let name = name.to_owned();
         data.cache
-            .once(name.clone(), move |deadline| async move {
+            .once(name.clone(), true, move |lease| async move {
                 runner
                     .run(
                         Job::Geocode {
@@ -46,7 +46,7 @@ pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, name: &str)
                             dictionary: d.cache.root.join(DICT_OBJECT).join("dictionary.json"),
                         },
                         d.clone(),
-                        deadline,
+                        lease,
                         Publication::Packet(name),
                     )
                     .await

@@ -29,11 +29,12 @@ use xpute_runtime::global::Global;
 
 use crate::param::MAX_CREDITS;
 
-/// Ordered by `class`, then `distance`, lower first.
+/// Ordered by `class`, then `distance`, lower first, then `detail`, higher first.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rank {
     pub class: u8,
     pub distance: f64,
+    pub detail: u8,
 }
 
 pub trait Serve {
@@ -98,6 +99,7 @@ impl Placed {
             .class
             .cmp(&other.rank.class)
             .then(self.rank.distance.total_cmp(&other.rank.distance))
+            .then(other.rank.detail.cmp(&self.rank.detail))
             // Meaningless tie-break, so two runs of the same turn start the same work.
             .then((self.category as u8, self.subject).cmp(&(other.category as u8, other.subject)))
     }

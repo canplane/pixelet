@@ -715,9 +715,8 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         }
     }
     let mut groups: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-    for i in 0..road.len() {
-        let root = uf.find(i);
-        groups.entry(root).or_default().push(road[i]);
+    for (i, &r) in road.iter().enumerate() {
+        groups.entry(uf.find(i)).or_default().push(r);
     }
     let mut groups: Vec<Vec<usize>> = groups.into_values().collect();
     groups.sort_by_key(|g| (g.iter().map(|&q| effective_layer(&runs[q])).max().unwrap_or(0), runs[g[0]].piece.id()));
@@ -896,8 +895,8 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
             let len = (ramp_len(total as f64, units) as usize).clamp(1, cap);
             if ramp_s {
                 let top = ys[m][len];
-                for k in 0..len {
-                    ys[m][k] = ys[m][k].min(round(f64::from(gs) + f64::from(top - gs) * k as f64 / len as f64) as i32);
+                for (k, y) in ys[m][..len].iter_mut().enumerate() {
+                    *y = (*y).min(round(f64::from(gs) + f64::from(top - gs) * k as f64 / len as f64) as i32);
                 }
             }
             if ramp_e {
@@ -1034,9 +1033,8 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units
         }
     }
     let mut groups: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-    for i in 0..level.len() {
-        let root = uf.find(i);
-        groups.entry(root).or_default().push(level[i]);
+    for (i, &l) in level.iter().enumerate() {
+        groups.entry(uf.find(i)).or_default().push(l);
     }
     for g in groups.into_values() {
         report.rail_bridges += 1;

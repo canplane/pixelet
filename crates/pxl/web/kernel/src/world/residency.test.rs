@@ -17,9 +17,9 @@ use crate::layer::environment::fog::reach_at;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::prefetch::{Prefetch, Reach};
 use crate::world::pyramid::Pyramid;
+use crate::world::residency::floor::{Fallback, Floor};
 use pxl_spec::space::lod::{demand_reach, Tau};
 use pxl_spec::space::observation::{ByBounds, Observation, Unknown};
-use crate::world::residency::floor::{Fallback, Floor};
 
 const HEIGHT: f64 = 1000.0;
 
@@ -96,7 +96,7 @@ impl Serve for Hostile {
             Hostile::Lifo => -enqueue_ms,
             Hostile::Nearest => ask.order.near,
         };
-        Rank { class: 0, distance }
+        Rank { class: 0, distance, detail: 0 }
     }
 
     fn intake(&self) -> u32 {

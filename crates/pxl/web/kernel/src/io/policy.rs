@@ -7,7 +7,9 @@
 //! 1. By layer, the order a view builds up (the user's order,
 //!    2026-09-26): terrain, then the catalog assets decor draws with, then
 //!    places.
-//! 2. Within a layer, seen before unseen and nearer first, speculation last.
+//! 2. Within a layer, seen before unseen and nearer first, speculation last;
+//!    of tiles as near, the finer first, so the leaf under the eye is not
+//!    asked after the coarse tiles over it, which cost a fold where baked on demand.
 //!    Ranking holes before coarse ground instead put the top tile's 2 km
 //!    cubes in front of the eye for seconds on a cold start (2026-09-26).
 //!
@@ -19,6 +21,7 @@ use crate::io::sched::{Rank, Serve};
 use crate::param;
 use crate::sched::profiler::record::Outcome;
 use crate::world::observation::Order;
+use pxl_spec::space::pyramid::Tile;
 
 /// A layer's classes: needed or speculative, each seen or unseen.
 const SHELLS: u8 = 2 * 2;
@@ -41,25 +44,38 @@ impl Policy {
     }
 }
 
-fn tile(layer: Category, ask: Ask) -> Rank {
+fn tile(layer: Category, subject: u64, ask: Ask) -> Rank {
     if ask.order == Order::LAST {
-        return Rank { class: ASIDE, distance: 0.0 };
+        return Rank {
+            class: ASIDE,
+            distance: 0.0,
+            detail: 0,
+        };
     }
     let base = if layer == Category::terrain { TERRAIN } else { PLACES };
     let shell = u8::from(ask.why == Why::Hint);
     Rank {
         class: base + 2 * shell + !ask.order.seen as u8,
         distance: ask.order.near,
+        detail: Tile::of_subject(subject).zoom,
     }
 }
 
 impl Serve for Policy {
-    fn rank(&self, category: Category, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
+    fn rank(&self, category: Category, subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         match category {
-            Category::terrain | Category::poi | Category::earth => tile(category, ask),
-            Category::asset => Rank { class: ASSET, distance: 0.0 },
+            Category::terrain | Category::poi | Category::earth => tile(category, subject, ask),
+            Category::asset => Rank {
+                class: ASSET,
+                distance: 0.0,
+                detail: 0,
+            },
             // Neither blocks the other: the label renders on the turn both are there.
-            Category::geocode | Category::geocode_dict => Rank { class: ASIDE, distance: 0.0 },
+            Category::geocode | Category::geocode_dict => Rank {
+                class: ASIDE,
+                distance: 0.0,
+                detail: 0,
+            },
         }
     }
 
