@@ -46,6 +46,12 @@ pub fn of_side(units: f64) -> Zoom {
     (UNIT_Z as i32 - round(libm::log2(units)) as i32) as Zoom
 }
 
+/// The zoom of the widest power-of-two side no wider than `units`, signed:
+/// past the world it is below zero.
+pub fn within(units: f64) -> i32 {
+    UNIT_Z as i32 - libm::floor(libm::log2(units)) as i32
+}
+
 /// A floor on the signed lane.
 pub const fn index(zoom: Zoom, units: i64) -> i64 {
     let s = shamt(zoom);
