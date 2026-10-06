@@ -20,7 +20,6 @@ use crate::kernel::kernel;
 use crate::layer::earth::Earth;
 use crate::layer::environment::fog::{eye_height, reach_at};
 use crate::layer::environment::state::globe;
-use crate::world::access::Access;
 use crate::world::frame::view::view;
 use crate::world::observer::Footprint;
 use crate::world::pyramid::domain;
@@ -103,7 +102,7 @@ struct Node {
 /// None where no terrain tile over the node is resident.
 fn read(zoom: Zoom, node: (Zoom, [i64; 2])) -> Option<Node> {
     let tile = tile_at(zoom, ancestor_of(node.1, u32::from(node.0 - zoom)));
-    let relief = Access::now().relief(tile, node).value()?;
+    let relief = Terrain::pyramid().residency().relief(tile, node).value()?;
     Some(Node { ground: relief.extent })
 }
 

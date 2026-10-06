@@ -4,6 +4,7 @@
 //! and runs the table's pass; in the report phase it hands the frame's
 //! numbers to the profiler.
 
+use crate::world::access::Query;
 use pxl_spec::space::coord::v3::sub3;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
@@ -22,7 +23,6 @@ use crate::world::frame::view::{sea_under_eye, view, view_resize};
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
-use pxl_spec::space::layer::lattice::GROUND;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 
@@ -241,7 +241,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
             // The goal's pieces a resident tile draws.
             let residency = Terrain::pyramid().residency();
-            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.drawn_from(GROUND.read_tile(c.column(), c.cell_zoom())).is_some()).count());
+            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.read(c.node(), c.cell_zoom()).value().is_some()).count());
             CoverSample {
                 rule,
                 drawn: drawn as f64,

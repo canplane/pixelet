@@ -8,6 +8,7 @@
 //! overlaid, the lines read as none of them, and laid along the ground they
 //! wavered with every cell they crossed.
 
+use crate::world::access::{Answer, Query};
 use std::collections::{HashMap, HashSet};
 
 use pxl_render::frame::draw::DrawList;
@@ -105,9 +106,9 @@ impl CoverageGizmo {
             if covered {
                 continue;
             }
-            let mark = match residency.drawn_from(GROUND.read_tile(g.column(), g.cell_zoom())) {
+            let mark = match residency.read(g.node(), g.cell_zoom()).value() {
                 None => Mark::NoTile,
-                Some(src) if floor_only(src) => Mark::FloorOnly,
+                Some(s) if floor_only(s.from) => Mark::FloorOnly,
                 Some(_) => Mark::Unbuilt,
             };
             lines.square(g.rect(), mark);
@@ -115,7 +116,7 @@ impl CoverageGizmo {
         let mut tiles: Vec<Tile> = Vec::with_capacity(drawn.len());
         for &d in drawn {
             let tile = GROUND.read_tile(d.column(), d.cell_zoom());
-            let from_floor = residency.source(tile).is_none() && residency.drawn_from(tile).is_some_and(floor_only);
+            let from_floor = matches!(residency.read(d.node(), d.cell_zoom()), Answer::Coarser(s, _) if floor_only(s.from));
             lines.square(d.rect(), if from_floor { Mark::DrawnFromFloor } else { Mark::Drawn });
             tiles.push(tile);
         }

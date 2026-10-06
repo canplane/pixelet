@@ -29,7 +29,7 @@ use crate::layer::decor::scatter::SCALE_JITTER;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::Store;
 use crate::shell::setting::store::settings_store;
-use crate::world::chunk::build::{draws_as_held, Builder};
+use crate::world::chunk::build::draws_as_held;
 use crate::world::chunk::mesh_slot::OCCUPANCY;
 use crate::world::chunk::source::{objects_met, Met};
 use crate::world::chunk::table::Scheduler;
@@ -142,7 +142,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
     let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
     let (tx0, ty0) = GROUND.read_at(over.column(), over.cell_zoom());
-    let view = Builder::tile_view(tile);
+    let view = crate::world::access::tile_view(tile);
     if sources.shown {
         let around = Around {
             own: TileSource {

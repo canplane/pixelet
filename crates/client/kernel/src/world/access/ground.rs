@@ -4,14 +4,14 @@
 
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
+use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Cell, Tile};
 
 use crate::kernel::kernel;
 use crate::layer::object::store::Store;
 use crate::world::pyramid::{Layer as _, Pyramid};
 use crate::world::residency::Residency;
-use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
+use pxl_spec::space::coord::zoom::{count, units};
 
 use super::answer::*;
 
@@ -55,41 +55,10 @@ impl<'a> Access<'a> {
     /// `ChunkSample::read` samples a chunk drawn from a coarser tile.
     pub(super) fn ground(&self, cell: Cell) -> Answer<Ground> {
         let tile = cell.tile();
-        let Some((src, body)) = self.drawn_from(tile) else { return Answer::Nothing(tile) };
+        let Some((src, body)) = self.terrain.drawn(tile) else { return Answer::Nothing(tile) };
         let [tx, ty] = sample_in(cell, src);
         let cell = body.ground.cells[GROUND.cell_index(tx as u32, ty as u32) as usize];
         let height = ground_ele_at(&body.ele, Some(GroundLanes::of(&body.ground)), tx, ty) as f64 * units(GROUND.cell());
-        self.answer(tile, Ground { height, cell })
-    }
-
-    pub(super) fn drawn_from(&self, tile: Tile) -> Option<(Tile, &'a Terrain)> {
-        let src = self.terrain.drawn_from(tile)?;
-        Some((src, self.terrain.get(src)?))
-    }
-
-    pub(super) fn answer<T>(&self, tile: Tile, v: T) -> Answer<T> {
-        match self.terrain.source(tile) {
-            Some(_) => Answer::Exact(v),
-            None => Answer::Coarser(v, tile),
-        }
-    }
-
-    /// Bound on the ground over a node of `tile`'s zoom and every zoom finer than
-    /// it, from one block of the index lane. For deciding descent, never for
-    /// what is drawn.
-    pub fn relief(&self, tile: Tile, (side, at): (Zoom, [i64; 2])) -> Answer<Relief> {
-        let Some((src, body)) = self.drawn_from(tile) else {
-            return Answer::Nothing(tile);
-        };
-        let index = EXTENT.cell_zoom(src.zoom);
-        let first = EXTENT.cell_of(src.zoom, &base_of(side, [at[0], at[1], 0]));
-        let across = if side < index { count(index, side) } else { 1 };
-        let b = body.index.over(first.in_tile(), across);
-        self.answer(
-            tile,
-            Relief {
-                extent: (f64::from(b.lo) * units(GROUND.cell()), f64::from(b.hi) * units(GROUND.cell())),
-            },
-        )
+        self.terrain.answer(tile, Ground { height, cell })
     }
 }

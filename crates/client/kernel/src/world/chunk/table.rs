@@ -14,6 +14,8 @@ pub use census::{Census, ChunkCounts, ChunkHeld};
 pub use mesh::Meshes;
 pub use mount::MOUNTS_BYTES;
 
+use crate::world::access::Query;
+use crate::world::chunk::build::{ground_of, leaf_of};
 use mesh::*;
 use mount::*;
 
@@ -21,8 +23,6 @@ use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch};
 use pxl_render::look::globe::Globe;
 use pxl_render::mesh::chunk_mesher::Heights;
-use pxl_render::mesh::paint::terrain::adapter::beside_index;
-use pxl_render::mesh::run::APRON;
 
 use crate::sched::profiler::frame::ZOOMS;
 use pxl_spec::space::camera::eye::Frustum;
@@ -139,19 +139,15 @@ impl Sources {
     fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
         let drawn = |at: &EntryAt| draws(k, *at) && draws_as_held(k, at.zoom());
+        let objects = objects_drawn(&kernel().objects, k);
+        let (own, beside) = ground_of(leaf_of(k, objects.as_ref().map_or(k.cell_zoom(), Drawn::runs)));
         Sources {
             textured: settings.textures,
-            objects: objects_drawn(&kernel().objects, k),
+            objects,
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
-            read_from: Terrain::pyramid().residency().drawn_from(GROUND.read_tile(k.column(), k.cell_zoom())).map(|p| p.zoom),
-            beside_from: {
-                let mut from = [None; 8];
-                for ([qx, qy], p) in GROUND.read_beside(k.column(), k.cell_zoom(), APRON) {
-                    from[beside_index(qx, qy)] = Terrain::pyramid().residency().drawn_from(p).map(|p| p.zoom);
-                }
-                from
-            },
+            read_from: own.value().map(|s| s.from.zoom),
+            beside_from: beside.map(|b| b.map(|s| s.from.zoom)),
         }
     }
 }
@@ -274,7 +270,7 @@ impl Env for Pieces<'_> {
     }
 
     fn buildable(&self, c: Chunk) -> bool {
-        Terrain::pyramid().residency().drawn_from(GROUND.read_tile(c.column(), c.cell_zoom())).is_some()
+        Terrain::pyramid().residency().read(c.node(), c.cell_zoom()).value().is_some()
     }
 
     fn order(&self, c: Chunk) -> Order {

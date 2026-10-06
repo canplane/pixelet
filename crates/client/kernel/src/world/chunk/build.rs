@@ -9,12 +9,12 @@ mod run;
 mod shape;
 
 pub use bake::BAKE_BYTES;
+pub(crate) use read::{ground_of, leaf_of};
 pub use shape::{draws_as_held, folded_cells, runs_of};
 
 use bake::{carve_into, BakeJob};
 use run::{RunHold, RunsJob, RUN_SETS};
 use shape::*;
-
 
 use pxl_render::mesh::chunk_mesher::{BakeContext, Heights};
 use pxl_render::mesh::paint::column::Stands;

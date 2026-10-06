@@ -7,10 +7,10 @@ use pxl_spec::bake::format::drawn;
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_voxel};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::v3::{Aabb, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
-use pxl_spec::space::coord::v3::{Aabb, V3};
 
 use crate::layer::object::store::EntryAt;
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
@@ -238,7 +238,7 @@ impl<'a> Access<'a> {
     pub(super) fn region(&self, p: &V3, zoom: Zoom) -> Region {
         let at = on_ground(p);
         let tile = GROUND.cell_of(zoom, &at).tile();
-        let (cell_zoom, terrain) = match self.drawn_from(tile) {
+        let (cell_zoom, terrain) = match self.terrain.drawn(tile) {
             Some((src, body)) => {
                 // The drawn-from tile's index cell, or the asked tile if smaller: one bound
                 // and one tile across it.

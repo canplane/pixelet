@@ -78,7 +78,7 @@ impl<'a> Access<'a> {
     /// Decks and bore air over a cell, as the chunk paints them (`Over::occupies`).
     pub(super) fn lines_over(&self, cell: Cell, ground_height: f64) -> Lines {
         let mut lines = Lines::default();
-        let Some((src, body)) = self.drawn_from(cell.tile()) else { return lines };
+        let Some((src, body)) = self.terrain.drawn(cell.tile()) else { return lines };
         let (at, side) = (sample_in(cell, src), 1.0 / count(GROUND.cell_zoom(cell.tile_zoom()), GROUND.cell_zoom(src.zoom)) as f64);
         let cell_u = units(GROUND.cell());
         let ground = round(ground_height / cell_u) as i32;
