@@ -8,30 +8,20 @@
 //! other baked tile is; a tile with no object is answered by the global picture.
 
 use crate::bake::malformed;
-use crate::space::camera::grid::split_distance;
-use crate::space::coord::zoom::{units, Zoom};
-use crate::space::layer::lattice::{Lattice, GROUND};
+use crate::space::coord::zoom::Zoom;
+use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
-/// The Earth's one zoom: its lattice's top.
-pub const EARTH_ZOOM: Zoom = EARTH.top();
+/// The Earth's one zoom: the ground's top. Its tiles are the ground's lattice,
+/// a ground cell a texel, so the tile follows the grid as the ground does.
+pub const EARTH_ZOOM: Zoom = GROUND.top();
 
-/// The picture's texels, a ground cell each; the camera grid's cell holds two
-/// of them a side where its tile is drawn, so the tile follows the grid in proportion.
-pub const EARTH: Lattice = Lattice::new(GROUND.cell()).folding(1);
+/// How far from the eye the tiles are drawn, before the global picture: the
+/// ground's demand at that zoom.
+pub const EARTH_REACH: f64 = GROUND.demand_reach(EARTH_ZOOM);
 
-/// How far from the eye the tiles are drawn, before the global picture.
-pub const EARTH_REACH: f64 = split_distance(EARTH.grid_cell(EARTH_ZOOM - 1));
-
-/// The tiles about the eye within the reach, a side and in all.
-pub const EARTH_ACROSS: u32 = (2.0 * EARTH_REACH / units(EARTH_ZOOM)) as u32 + 2;
-pub const EARTH_HELD: u32 = EARTH_ACROSS * EARTH_ACROSS;
-
-/// A tile's cells on a side, each a texel.
-pub const EARTH_TEXELS: u32 = GROUND.tile_cells();
-
-pub const EARTH_BYTES: usize = (EARTH_TEXELS * EARTH_TEXELS * 4) as usize;
+pub const EARTH_BYTES: usize = (TILE_CELLS * TILE_CELLS * 4) as usize;
 
 pub fn encode(rgba: &[u8]) -> Result<Vec<u8>, MarshalError> {
     if rgba.len() != EARTH_BYTES {

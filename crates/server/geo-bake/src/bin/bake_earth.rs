@@ -22,7 +22,8 @@ use std::process::ExitCode;
 use image::ImageFormat;
 
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
-use pxl_spec::bake::earth_tile::{self, EARTH_TEXELS, EARTH_ZOOM};
+use pxl_spec::bake::earth_tile::{self, EARTH_ZOOM};
+use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::pvf3::pvf3;
@@ -168,8 +169,8 @@ fn lng_lat(x: f64, y: f64) -> [f64; 2] {
 fn tile_texels(px: i64, py: i64, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
     let tile = tile_at(EARTH_ZOOM, [px, py]);
     let mut rgba = vec![0u8; earth_tile::EARTH_BYTES];
-    for ty in 0..EARTH_TEXELS {
-        for tx in 0..EARTH_TEXELS {
+    for ty in 0..TILE_CELLS {
+        for tx in 0..TILE_CELLS {
             let index = GROUND.cell_index(tx, ty);
             let cell = GROUND.cell_at(tile, index);
             let (base, side) = (cell.base(), cell.side());

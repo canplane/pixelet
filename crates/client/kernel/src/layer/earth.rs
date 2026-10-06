@@ -5,12 +5,13 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
-use pxl_spec::bake::earth_tile::{self, EARTH_ACROSS, EARTH_HELD, EARTH_REACH, EARTH_ZOOM};
+use pxl_spec::bake::earth_tile::{self, EARTH_REACH, EARTH_ZOOM};
 use pxl_spec::space::coord::world::{around, wrap_index};
+use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
 
-use pxl_spec::space::coord::pvf3::ivec;
-use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::bake::format::Occupancy;
+use pxl_spec::space::coord::pvf3::ivec;
+use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_runtime::global::Global;
 use xpute_runtime::mem::base::ptr_at;
@@ -30,14 +31,14 @@ static EARTH: Global<Pyramid<Earth>> = Global::new();
 
 impl Layer for Earth {
     const CATEGORY: Category = Category::earth;
-    const LATTICE: Lattice = earth_tile::EARTH;
+    const LATTICE: Lattice = GROUND;
     const DEMANDS: bool = false;
+    const TOP: Option<Zoom> = Some(EARTH_ZOOM);
 
     /// Only the top zoom is baked: no child is a tile.
     fn occupancy(&self) -> Occupancy {
         Occupancy::ZERO
     }
-    const TOP: Option<Zoom> = Some(EARTH_ZOOM);
 
     fn reach() -> f64 {
         EARTH_REACH
@@ -108,8 +109,8 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
 /// The floor's tiles at the top as a window, its south-west tile first, and
 /// per tile row by row its layer plus one, zero where the global picture
 /// answers: residency as the GPU reads it, kept nowhere.
-pub fn earth_window() -> ([i32; 2], [u32; EARTH_HELD as usize]) {
-    let mut layers = [0; EARTH_HELD as usize];
+pub fn earth_window() -> ([i32; 2], [u32; REACH_TILES as usize]) {
+    let mut layers = [0; REACH_TILES as usize];
     let pyramid = Earth::pyramid();
     let at = |p: Tile| [ivec::X(p.tile), ivec::Y(p.tile)];
     let Some([first, _]) = pyramid.floor().next().map(at) else { return ([0; 2], layers) };
@@ -123,7 +124,7 @@ pub fn earth_window() -> ([i32; 2], [u32; EARTH_HELD as usize]) {
         if uploads()[record as usize].is_none() {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
-            layers[(dy * EARTH_ACROSS + dx) as usize] = record + 1;
+            layers[(dy * REACH_ACROSS + dx) as usize] = record + 1;
         }
     }
     ([x0 as i32, y0 as i32], layers)

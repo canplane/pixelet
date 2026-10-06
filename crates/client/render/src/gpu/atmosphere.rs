@@ -5,7 +5,9 @@
 //! redrawn only when the light's height or the camera's altitude moves (the
 //! table is kept relative to the light's azimuth); and every frame the exposure.
 
-use pxl_spec::bake::earth_tile::{self, EARTH_TEXELS, EARTH_ZOOM};
+use pxl_spec::bake::earth_tile::{self, EARTH_ZOOM};
+use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
+use pxl_spec::space::layer::lattice::TILE_CELLS;
 
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::around;
@@ -65,7 +67,7 @@ pub(crate) const EARTH_TILES: usize = 56;
 pub const AIR_WORDS: usize = 50;
 
 /// A layer for each tile the Earth layer's floor holds at once: its residency's frames.
-pub const EARTH_LAYERS: u32 = earth_tile::EARTH_HELD;
+pub const EARTH_LAYERS: u32 = REACH_TILES;
 /// A tile's layer plus one in four bits, eight to a word.
 pub(crate) const TILE_BITS: u32 = 4;
 const _: () = assert!(EARTH_LAYERS < 1 << TILE_BITS && EARTH_LAYERS <= 32 / TILE_BITS * 4, "the window's layers fit their word");
@@ -142,7 +144,7 @@ impl Atmosphere {
         }
         words[SUN_DIR + 2] = 1.0;
         words[EARTH_REACH] = earth_tile::EARTH_REACH as f32;
-        words[EARTH_WINDOW + 2] = f32::from_bits(earth_tile::EARTH_ACROSS);
+        words[EARTH_WINDOW + 2] = f32::from_bits(REACH_ACROSS);
         words[EARTH_WINDOW + 3] = f32::from_bits(around(EARTH_ZOOM) as u32);
 
         let sampler = object();
@@ -182,8 +184,8 @@ impl Atmosphere {
                 let (texture, view) = (object(), object());
                 g.texture(
                     texture,
-                    EARTH_TEXELS,
-                    EARTH_TEXELS,
+                    TILE_CELLS,
+                    TILE_CELLS,
                     EARTH_LAYERS,
                     format::RGBA8_SRGB,
                     1,
@@ -250,7 +252,7 @@ impl Atmosphere {
             if !room(texels.len() as u32) {
                 return false;
             }
-            g.write_texture(texture, layer, EARTH_TEXELS, EARTH_TEXELS, texels);
+            g.write_texture(texture, layer, TILE_CELLS, TILE_CELLS, texels);
             true
         });
         let w = &mut self.words;
