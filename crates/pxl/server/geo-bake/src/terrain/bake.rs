@@ -8,7 +8,6 @@ use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
 
 use crate::deck::Drawn;
-use crate::terrain::pipeline::corridor::corridor_fills;
 use crate::terrain::pipeline::feature::{local, Feature};
 use crate::terrain::pipeline::ground::{bake_ground, Coast};
 use crate::terrain::pipeline::overture::policy::{bases, buildings, ways};
@@ -31,8 +30,6 @@ pub fn bake_surface(tile_idx: IVec, ele: Vec<i16>, source: &TileSource, drawn: &
     features.extend(source.building_rows.iter().flat_map(|row| buildings(row, tile_min)));
     features.extend(source.segment_rows.iter().flat_map(|row| ways(row, drawn, tile_min)));
     features.extend(source.base_rows.iter().flat_map(|row| bases(row, tile_min)));
-    let fills = corridor_fills(&features);
-    features.extend(fills);
 
     // no coast row is open sea; one whose land covers the tile is dropped, all land
     let shore: Vec<_> = source

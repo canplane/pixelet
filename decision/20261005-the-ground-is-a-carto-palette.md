@@ -124,11 +124,10 @@ shows. For the same reason a bridge's own area (`man_made=bridge`, Carto's
 `bridge` layer) is not painted: the deck is drawn from the ways on it, and
 the ground under it shows what is there.
 
-A line is painted at a width. A way's comes from its lanes
-(`overture/width.rs`); a waterway's, a runway's, a taxiway's and a pier's
-are Arnis's in metres, and a line none of them sizes, a breakwater, a dam,
-a weir, a platform or a cutline, is Carto's width at z16, the zoom whose
-pixel is a cell, without its casing.
+A line is painted at Carto's width at z16, the zoom whose pixel is a cell,
+casing included: a way's (`overture/width.rs`) as a waterway's, a runway's
+or a pier's. Carto reads no measured width and counts no lanes, so the bake
+reads neither, and a deck is as wide as the way it carries.
 
 On a shore the sea is what the coastline leaves, fixed before any feature
 paints, and landcover and water do not paint it. It is read from the coast,

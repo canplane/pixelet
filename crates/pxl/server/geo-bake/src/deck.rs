@@ -19,6 +19,10 @@ use source::Store;
 
 pub use arnis::solve_tile;
 
+/// A way's parts these lift onto a deck or sink into a bore.
+pub const DECK_FLAGS: &[&str] = &["is_bridge"];
+pub const BORE_FLAGS: &[&str] = &["is_tunnel"];
+
 /// What the solve leaves a tile: its lines, and the ranges of ways they draw,
 /// which the ground leaves unpainted. One solve makes both, so the road
 /// leaves the ground's paint exactly where its line begins.

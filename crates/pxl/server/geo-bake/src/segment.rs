@@ -10,7 +10,7 @@ use crate::terrain::pipeline::overture::width::WayColumns;
 macro_rules! segment_columns {
     () => {
         "t.gers_id, t.subtype, t.class, COALESCE(t.road_flags, t.rail_flags)::text AS flags, t.level_rules::text AS levels,
-    t.width_rules::text AS widths, t.access_restrictions::text AS access, t.subclass, t.subclass_rules::text AS subclasses,
+ t.subclass, t.subclass_rules::text AS subclasses,
     (t.properties->'connectors')::text AS connectors, ST_AsBinary(t.geom) AS geom_wkb"
     };
 }
@@ -22,8 +22,6 @@ pub struct Segment {
     pub class: Option<String>,
     pub flags: Option<String>,
     pub levels: Option<String>,
-    pub widths: Option<String>,
-    pub access: Option<String>,
     pub subclass: Option<String>,
     pub subclasses: Option<String>,
     /// Where along it it joins other segments.
@@ -39,8 +37,6 @@ impl Segment {
             class: r.get("class"),
             flags: r.get("flags"),
             levels: r.get("levels"),
-            widths: r.get("widths"),
-            access: r.get("access"),
             subclass: r.get("subclass"),
             subclasses: r.get("subclasses"),
             connectors: r.get("connectors"),
@@ -51,8 +47,6 @@ impl Segment {
     pub fn columns(&self) -> WayColumns<'_> {
         WayColumns {
             flags: self.flags.as_deref(),
-            widths: self.widths.as_deref(),
-            access: self.access.as_deref(),
             subclass: self.subclass.as_deref(),
             subclasses: self.subclasses.as_deref(),
         }

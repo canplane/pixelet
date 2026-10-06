@@ -12,7 +12,7 @@ pub enum Role {
     Sidewalk,
     Crossing,
     Link,
-    /// A service road's own lane: a driveway, a parking aisle, an alley.
+    /// Carto's minor service road: a driveway, a parking aisle.
     Lane,
 }
 
@@ -22,7 +22,7 @@ impl Role {
             "sidewalk" => Role::Sidewalk,
             "crosswalk" | "cycle_crossing" => Role::Crossing,
             "link" => Role::Link,
-            "driveway" | "parking_aisle" | "alley" => Role::Lane,
+            "driveway" | "parking_aisle" => Role::Lane,
             _ => Role::Way,
         }
     }

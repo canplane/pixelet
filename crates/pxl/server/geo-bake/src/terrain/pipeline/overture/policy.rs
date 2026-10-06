@@ -7,18 +7,16 @@
 //! `water.mss`, `buildings.mss`, `roads.mss`, `project.mml`); a class Carto
 //! draws no fill for paints nothing, and the land under it shows.
 
-use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::bake::deck::WIDEST;
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::cell::cube::cube_types::ground as g;
-use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m, G3857};
+use pxl_spec::space::adapter::epsg3857::G3857;
 
 use crate::deck::Drawn;
 use crate::segment::Segment;
-use crate::terrain::pipeline::feature::{closes, Feature, Joins, Layer, Rank};
+use crate::terrain::pipeline::feature::{closes, Feature, Layer, Rank};
 use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, merged, split_ranged};
 use crate::terrain::pipeline::overture::role::Role;
-use crate::terrain::pipeline::overture::width::{width_m, WayShape};
+use crate::terrain::pipeline::overture::width::{width_cells, WayShape};
 use crate::terrain::repository::{BaseRow, BuildingRow};
 use crate::wkb::wkb_to_geometries;
 
@@ -51,9 +49,6 @@ pub fn segment_type(subtype: &str, class: Option<&str>) -> GroundCell {
     }
 }
 
-/// One-way ways of these classes are carriageways, not one-way streets.
-const THROUGH_CLASSES: [&str; 5] = ["motorway", "trunk", "primary", "secondary", "tertiary"];
-
 /// Carto's `building-major-fill`: a place of worship, a terminal or a station.
 /// Overture's `religious` subtype with no class is `amenity=place_of_worship`.
 const MAJOR_BUILDING_CLASSES: [&str; 9] = ["cathedral", "chapel", "church", "mosque", "religious", "shrine", "synagogue", "temple", "train_station"];
@@ -62,11 +57,7 @@ const MAJOR_BUILDING_CLASSES: [&str; 9] = ["cathedral", "chapel", "church", "mos
 /// remain) nor `is_covered` (the buildings paint over it).
 pub const UNSEEN_FLAGS: &[&str] = &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"];
 
-pub const BORE_FLAGS: &[&str] = &["is_tunnel"];
-
 pub const LINK_FLAGS: &[&str] = &["is_link"];
-
-pub const DECK_FLAGS: &[&str] = &["is_bridge"];
 
 /// What a Base row paints: its look, Carto's layer, and Carto's `feature`.
 type Paint = (GroundCell, Layer, &'static str);
@@ -157,16 +148,17 @@ fn land_paint(class: &str) -> Option<Paint> {
     })
 }
 
-/// `water-lines`' waterways, each Arnis's channel width in metres
-/// (`waterways.rs` `get_waterway_width`); a line of another class has no fill.
-const WATERWAY_M: [(&str, f64); 5] = [("river", 8.0), ("canal", 6.0), ("stream", 3.0), ("ditch", 2.0), ("drain", 1.0)];
+/// `water-lines`' waterways, each its fill's width at z16 (`water.mss`: a
+/// canal is a stream by `@canal-scale-factor`, a ditch and a drain take z14's
+/// until z17); a line of another class has no fill.
+const WATERWAYS: [(&str, f64); 5] = [("river", 8.0), ("canal", 4.2), ("stream", 3.0), ("ditch", 2.0), ("drain", 2.0)];
 
 /// Water areas but what Carto draws as landcover in water's color or as a
 /// shoal; a physical feature or a spring (a bay, a strait) has no fill.
 fn water_paint(subtype: &str, class: &str, closed: bool) -> Option<Paint> {
     use Layer::Landcover as L;
     if !closed {
-        return WATERWAY_M.iter().any(|(c, _)| *c == class).then_some((g::water, Layer::WaterLine, ""));
+        return WATERWAYS.iter().any(|(c, _)| *c == class).then_some((g::water, Layer::WaterLine, ""));
     }
     Some(match (subtype, class) {
         (_, "shoal") => (g::beach, L, "natural_shoal"),
@@ -223,19 +215,19 @@ fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
     Some((look, if look == g::aeroway && !closed { Layer::Aeroway } else { layer }, feature))
 }
 
-/// A Base line's width in cells: Arnis's in metres where it gives one, else
-/// Carto's at the zoom a cell is a pixel of (`web_zoom_of(CELL)`, z16), its
-/// fill without the casing.
-fn line_width(source: &str, class: &str, cell_per_m: f64) -> f64 {
+/// A runway's, the widest line Carto draws at z16.
+pub const WIDEST_LINE: f64 = 24.0;
+
+/// A Base line's width in cells: Carto's at z16, as a way's
+/// (`overture/width.rs`), its casing included.
+fn line_width(source: &str, class: &str) -> f64 {
     match (source, class) {
-        ("water", _) => WATERWAY_M.iter().find(|(c, _)| *c == class).map_or(0.0, |(_, m)| m * cell_per_m),
-        // Arnis's `AEROWAY_DEFAULT_HALF_M` a side.
-        (_, "runway" | "taxiway") => 24.0 * cell_per_m,
-        // Arnis's `generate_pier` default.
-        (_, "pier") => 3.0 * cell_per_m,
-        (_, "breakwater" | "platform") => 4.0,
-        (_, "dam" | "weir") => 2.0,
-        (_, "cutline") => 6.0,
+        ("water", _) => WATERWAYS.iter().find(|(c, _)| *c == class).map_or(0.0, |(_, w)| *w),
+        (_, "runway") => WIDEST_LINE,
+        (_, "taxiway") => 8.0,
+        (_, "dam" | "breakwater") => 4.0,
+        (_, "pier" | "weir") => 2.0,
+        (_, "platform" | "cutline") => 6.0,
         _ => 0.0,
     }
 }
@@ -244,11 +236,6 @@ fn line_width(source: &str, class: &str, cell_per_m: f64) -> f64 {
 /// line layer, and among piers a pier over a breakwater.
 fn barrier_order(class: &str, closed: bool) -> i64 {
     4 * i64::from(!closed) + if class == "pier" { 3 } else { 1 }
-}
-
-/// A cell's width in metres where a tile lies.
-fn cell_per_m(tile_min: G3857) -> f64 {
-    u_per_m(from_db(tile_min[1])) / U_PER_CELL
 }
 
 pub fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
@@ -269,7 +256,6 @@ pub fn ways(row: &Segment, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
     let unseen = flag_ranges(row.flags.as_deref(), UNSEEN_FLAGS, cell_of(length_of(&row.geom_wkb)));
     let lined = merged(drawn.iter().filter(|c| c.gers_id == row.gers_id).map(|c| c.range).collect(), 0.0);
     let look = segment_type(&row.subtype, row.class.as_deref());
-    let cell_per_m = cell_per_m(tile_min);
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
         .flat_map(|g| split_ranged(g, [&unseen, &lined]))
@@ -282,13 +268,8 @@ pub fn ways(row: &Segment, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
             let rank = Rank::new(Layer::Road, paint_order(&row.subtype, row.class.as_deref(), shape.role), "", &row.gers_id);
             let mut f = Feature::of(&geom, tile_min, look, rank)?;
             f.closed = false;
-            f.width = (width_m(&row.subtype, row.class.as_deref(), shape) * cell_per_m).min(WIDEST);
+            f.width = width_cells(&row.subtype, row.class.as_deref(), shape);
             f.cut = [a > 0.0, b < 1.0];
-            f.joins = match shape.role {
-                Role::Sidewalk => Some(Joins::Road),
-                _ if shape.oneway && row.subtype == "road" && THROUGH_CLASSES.contains(&row.class.as_deref().unwrap_or("")) => Some(Joins::Carriageway),
-                _ => None,
-            };
             Some(f)
         })
         .collect()
@@ -297,7 +278,6 @@ pub fn ways(row: &Segment, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
 /// Every Base row with a Carto fill; an area layer paints larger areas first.
 pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
     let (source, subtype, class) = (row.source.as_str(), row.subtype.as_deref().unwrap_or(""), row.class.as_deref().unwrap_or(""));
-    let cell_per_m = cell_per_m(tile_min);
     wkb_to_geometries(&row.geom_wkb)
         .iter()
         .filter_map(|geom| {
@@ -319,7 +299,7 @@ pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
             };
             let mut f = Feature::of(geom, tile_min, look, rank)?;
             if !closed {
-                f.width = line_width(source, class, cell_per_m);
+                f.width = line_width(source, class);
             }
             Some(f)
         })

@@ -24,12 +24,12 @@ use crate::deck::elevation::{sample_cells, tile_of};
 use crate::deck::piece::{pieces_of, pieces_over, End, Piece};
 use crate::deck::source::{ring, Store};
 use crate::deck::way::{Polyline, Way};
+use crate::deck::DECK_FLAGS;
 use crate::deck::{Drawn, Line, Reader, Solved};
 use crate::segment::Segment;
 use crate::terrain::bake::Surface;
 use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, value_at, without};
-use crate::terrain::pipeline::overture::policy::DECK_FLAGS;
-use crate::terrain::pipeline::overture::width::{width_m, WayShape};
+use crate::terrain::pipeline::overture::width::{width_cells, WayShape};
 use crate::wkb::wkb_to_geometries;
 
 // ---- Arnis's numbers, in metres or as ratios, under its names ----
@@ -153,12 +153,12 @@ impl Run {
 
 /// A way at grade made to stand off it, a bridge's ramp or a tunnel's
 /// approach: a grade line at `points`.
-fn graded(way: &Way, points: Vec<[f64; 3]>, units: Units) -> (Line, Drawn) {
+fn graded(way: &Way, points: Vec<[f64; 3]>) -> (Line, Drawn) {
     (
         Line {
             subtype: way.row.subtype.clone(),
             class: way.row.class.clone(),
-            width_cells: way_width_m(&way.row) * units.cell_per_m,
+            width_cells: way_width(&way.row),
             form: Form::Grade,
             points,
             clear: 0,
@@ -208,7 +208,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
     loop {
         let before = (scope.len(), src.loaded.len());
         for id in scope.clone() {
-            src.sample(r, &id, units)?;
+            src.sample(r, &id)?;
             let s = &src.pieces[&id].piece;
             scope.extend(s.ends.iter().flat_map(|e| src.by_end.get(e).into_iter().flatten().cloned()).collect::<Vec<_>>());
             if s.form == Form::Deck {
@@ -227,7 +227,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
         }
     }
     let t = Instant::now();
-    let runs = runs_of(&src, &scope, lo, units);
+    let runs = runs_of(&src, &scope, lo);
     let obstacles = Obstacles::of(&src, lo, units);
     let mut lines: Vec<(Line, Drawn)> = Vec::new();
 
@@ -336,7 +336,7 @@ impl Source {
     }
 
     /// A piece's cells inside the ring, the tiles its footprint reaches read first.
-    fn sample(&mut self, r: &mut Reader<impl Store>, id: &Id, units: Units) -> Result<(), String> {
+    fn sample(&mut self, r: &mut Reader<impl Store>, id: &Id) -> Result<(), String> {
         let s = &self.pieces[id];
         if s.samples.is_some() {
             return Ok(());
@@ -344,7 +344,7 @@ impl Source {
         let step = to_db(U_PER_CELL);
         let line = Polyline::of(s.piece.points.iter().map(|p| [p[0], p[1]]));
         let length = line.length();
-        let reach = to_db((line_reach(s.piece.width_m * units.cell_per_m) + 16.0) * U_PER_CELL);
+        let reach = to_db((line_reach(s.piece.width_cells) + 16.0) * U_PER_CELL);
         let at: Vec<(usize, [f64; 2])> = (0..=s.n)
             .map(|k| (k, line.at((k as f64 * step).min(length))))
             .filter(|(_, p)| self.ring.contains(&tile_of(*p)))
@@ -370,7 +370,7 @@ impl Source {
 }
 
 /// Each piece in scope as its stretches inside the ring.
-fn runs_of(src: &Source, scope: &BTreeSet<Id>, origin: [f64; 2], units: Units) -> Vec<Run> {
+fn runs_of(src: &Source, scope: &BTreeSet<Id>, origin: [f64; 2]) -> Vec<Run> {
     let mut out = Vec::new();
     for id in scope {
         let s = &src.pieces[id];
@@ -403,8 +403,8 @@ fn runs_of(src: &Source, scope: &BTreeSet<Id>, origin: [f64; 2], units: Units) -
                 ends,
                 clipped,
                 nodes,
-                half: units.c(s.piece.width_m / 2.0),
-                width_cells: s.piece.width_m * units.cell_per_m,
+                half: half_of(s.piece.width_cells),
+                width_cells: s.piece.width_cells,
             });
         }
     }
@@ -420,9 +420,14 @@ fn effective_layer(r: &Run) -> i64 {
     r.piece.layer.map(|l| l.max(0)).unwrap_or(i64::from(r.piece.form == Form::Deck))
 }
 
-/// A way's width at its middle, in ground metres.
-fn way_width_m(row: &Segment) -> f64 {
-    width_m(&row.subtype, row.class.as_deref(), WayShape::at(row.columns(), 0.5))
+/// A way's width at its middle, in cells.
+fn way_width(row: &Segment) -> f64 {
+    width_cells(&row.subtype, row.class.as_deref(), WayShape::at(row.columns(), 0.5))
+}
+
+/// Half a width, in whole cells.
+fn half_of(width_cells: f64) -> i32 {
+    round(width_cells / 2.0) as i32
 }
 
 // ---- what a deck must clear: ways at grade and waterways, bucketed ----
@@ -480,7 +485,7 @@ impl Obstacles {
                 "road" => {
                     let class = row.class.as_deref().unwrap_or("");
                     let headroom = if is_non_vehicular(class) || class == "track" { PATH_HEADROOM_M } else { ROAD_HEADROOM_M };
-                    let half = units.c(way_width_m(row) / 2.0);
+                    let half = half_of(way_width(row));
                     add(&mut out, &way.line.points, half, units.c(headroom));
                 }
                 "rail" if !is_subway(row) => {
@@ -936,7 +941,6 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                     .enumerate()
                     .map(|(k, p)| [p[0], p[1], round(f64::from(deck_y) + f64::from(ground - deck_y) * k as f64 / denom)])
                     .collect(),
-                units,
             ));
             report.ramps += 1;
         }
@@ -1230,7 +1234,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
                 [p[0], p[1], f64::from(t - drop)]
             })
             .collect();
-        lines.push(graded(w, points, units));
+        lines.push(graded(w, points));
         report.approaches += 1;
     }
 

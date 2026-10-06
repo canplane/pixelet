@@ -58,13 +58,6 @@ impl Rank {
     }
 }
 
-/// The way beside it that it shares one paved strip with; the gap is paved too.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Joins {
-    Road,
-    Carriageway,
-}
-
 #[derive(Clone, Debug)]
 pub struct Feature {
     pub points: Vec<P>,
@@ -76,7 +69,6 @@ pub struct Feature {
     pub cut: [bool; 2],
     pub cell: GroundCell,
     pub rank: Rank,
-    pub joins: Option<Joins>,
 }
 
 /// In the tile's cells from its corner.
@@ -101,7 +93,6 @@ impl Feature {
             cut: [false; 2],
             cell,
             rank,
-            joins: None,
         })
     }
 }
