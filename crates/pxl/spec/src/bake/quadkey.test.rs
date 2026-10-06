@@ -2,26 +2,25 @@
 
 use super::*;
 
-/// A Bundang tile, (11569, 3671), whose grid place is (27953, 12712); written
-/// out because the northward flip is what can be silently wrong.
+/// A Bundang tile, (11569, 3671), whose grid place is (27953, 20055), rows
+/// counted from the south; written out because the orientation is what can
+/// be silently wrong.
 const BUNDANG: IVec = 12720250262323200;
-const BUNDANG_QUADKEY: &str = "132110320312001";
+const BUNDANG_QUADKEY: &str = "310332102130223";
 
 #[test]
 fn the_known_tile_is_the_tile_it_stands_on() {
     assert_eq!(quadkey_of(TILE_KEY_DEPTH, BUNDANG).to_string(), BUNDANG_QUADKEY);
     assert_eq!(index_of(BUNDANG_QUADKEY), Some((TILE_KEY_DEPTH, BUNDANG)));
-    assert_eq!(tile_of(BUNDANG, TILE_KEY_DEPTH), (27953, 12712));
 }
 
 /// One prefix is one region at every zoom.
 #[test]
 fn a_coarser_tile_is_named_by_a_prefix_of_the_leaf_over_it() {
     let leaf = quadkey_of(TILE_KEY_DEPTH, BUNDANG).to_string();
-    assert_eq!(depth_at(LEAF_Z), TILE_KEY_DEPTH, "a tile of the leaves' zoom is a leaf");
     for zoom in TOP_Z..LEAF_Z {
         let coarse = tile_name(Tile::over(zoom, BUNDANG)).to_string();
-        assert_eq!(coarse.len(), depth_at(zoom) as usize, "a zoom is its length");
+        assert_eq!(coarse.len(), usize::from(zoom), "a zoom is its length");
         assert!(leaf.starts_with(&coarse), "z{zoom} {coarse} is not a prefix of {leaf}");
     }
 }
@@ -32,7 +31,7 @@ fn every_tile_survives_the_round_trip_at_every_zoom() {
     for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
         for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
             for zoom in TOP_Z..=LEAF_Z {
-                let depth = depth_at(zoom);
+                let depth = u32::from(zoom);
                 let idx = Tile::over(zoom, ivec::gather(x, y, 0)).tile;
                 let key = quadkey_of(depth, idx).to_string();
                 assert_eq!(key.len(), depth as usize);

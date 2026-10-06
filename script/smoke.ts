@@ -14,11 +14,11 @@ import { INGESTED } from "../apps/web/src/catalog/asset/ingested.spec.ts";
 import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route.spec.ts";
 
 /** A land page in Bundang, the one infra/README's procedure names: the zoom-15 quadkey. */
-const PAGE = "132110320312001";
+const PAGE = "310332102130223";
 
 /** PAGE's geocode group, four zooms coarser: its first eleven digits. Written
  * out, since computing it would copy pxl-spec's arithmetic into TypeScript. */
-const GEOCODE_GROUP = "13211032031";
+const GEOCODE_GROUP = "31033210213";
 
 const ASSET_KEY = Object.values(INGESTED)[0].key;
 

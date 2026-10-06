@@ -130,7 +130,7 @@ tiles above whose `Folds::sources` read a tile that changed, a zoom at a time,
 until a zoom changes nothing. Minutes, where a full bake is hours:
 
 ```bash
-deno task bake:tiles --region 132110320312 --base ./out/terrain/<version>
+deno task bake:tiles --region 310332102130 --base ./out/terrain/<version>
 ```
 
 Every tile it writes is what a full bake of the same code writes; the tiles
