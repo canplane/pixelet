@@ -142,7 +142,9 @@ background, `@land-color`, which is also what land no feature covers shows.
 The palette holds only what can be painted: a look no Overture class
 reaches (a fire station's area, a rest area, a bus guideway, a raceway, mud,
 a prison) is not defined, since Overture's conversion from the tags drops
-every source of it. A new look joins the palette only where no look has
+every source of it. Nor is what is not in use painted, a construction site
+or a brownfield, a way under construction, abandoned or disused, so neither
+has a look. A new look joins the palette only where no look has
 Carto's color: a glacier
 is Carto's `@glacier`, drawn with the water areas, a dam `@dam`, a
 breakwater and a weir `@breakwater-color`, and each railway Carto draws in a

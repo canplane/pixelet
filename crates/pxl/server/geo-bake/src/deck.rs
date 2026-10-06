@@ -14,36 +14,10 @@ use postgres::Client;
 use pxl_spec::bake::deck::Form;
 use pxl_spec::space::adapter::epsg3857::G3857;
 
-use crate::segment::Segment;
 use crate::terrain::repository::TerrainRepository;
 use source::Store;
 
 pub use arnis::solve_tile;
-
-/// A way's parts these lift onto a deck or sink into a bore.
-pub const DECK_FLAGS: &[&str] = &["is_bridge"];
-pub const BORE_FLAGS: &[&str] = &["is_tunnel"];
-
-/// Bridged or tunnelled somewhere along it.
-pub fn structural(row: &Segment) -> bool {
-    row.has(DECK_FLAGS) || row.has(BORE_FLAGS)
-}
-
-/// What Arnis takes for no way at grade (`grade_obstacle`, `is_at_grade_track`).
-pub const GRADE_BARRED: &[&str] = &["is_indoor", "is_under_construction", "is_abandoned"];
-
-/// The flags that keep a way's part out of a form, as Arnis keeps it: no
-/// indoor bridge (`is_bridge_way`), no road tunnel indoors or under
-/// construction (`renders_as_highway_tunnel`), no rail bridge or tunnel on
-/// a line abandoned or unbuilt (`RAIL_TRACK_TYPES`, `renders_as_rail_bridge`).
-pub fn barred(form: Form, subtype: &str) -> &'static [&'static str] {
-    match (form, subtype == "rail") {
-        (Form::Deck, false) => &["is_tunnel", "is_indoor"],
-        (Form::Deck, true) => &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"],
-        (_, false) => &["is_indoor", "is_under_construction"],
-        (_, true) => &["is_under_construction", "is_abandoned"],
-    }
-}
 
 /// What the solve leaves a tile: its lines, and the ranges of ways they draw,
 /// which the ground leaves unpainted. One solve makes both, so the road

@@ -3,9 +3,9 @@
 //! What a way is to the road beside it, per Overture's `subclass`; decides
 //! width, whether it paints, paint order and which gap is paved.
 
-use crate::terrain::pipeline::overture::between::text_at;
+use crate::terrain::pipeline::overture::between::Rules;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Role {
     #[default]
     Way,
@@ -27,7 +27,7 @@ impl Role {
         }
     }
 
-    pub fn at(subclass: Option<&str>, rules: Option<&str>, at: f64) -> Role {
-        text_at(rules, at).as_deref().or(subclass).map_or(Role::Way, Role::of)
+    pub fn at(subclass: Option<&str>, rules: &Rules, at: f64) -> Role {
+        rules.at(at).and_then(|v| v.as_str()).or(subclass).map_or(Role::Way, Role::of)
     }
 }

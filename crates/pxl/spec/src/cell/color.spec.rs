@@ -51,7 +51,6 @@ pub const fn ground(t: u8) -> Option<Swatch> {
         cube_types::ground::commercial => Some(Swatch::new(0xf2dad9)),
         cube_types::ground::industrial => Some(Swatch::new(0xebdbe8)),
         cube_types::ground::power => Some(Swatch::new(0xe2cbde)),
-        cube_types::ground::construction => Some(Swatch::new(0xc7c7b4)),
         cube_types::ground::landfill => Some(Swatch::new(0xb6b592)),
         cube_types::ground::quarry => Some(Swatch::new(0xc5c3c3)),
         cube_types::ground::societal_amenities => Some(Swatch::new(0xffffe5)),

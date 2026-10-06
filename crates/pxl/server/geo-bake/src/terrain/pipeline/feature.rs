@@ -83,6 +83,19 @@ pub fn closes(g: &WkbGeometry) -> bool {
 }
 
 impl Feature {
+    /// A line of no width yet, from its points; None where it has none.
+    pub fn line(points: &[G3857], tile_min: G3857, cell: GroundCell, rank: Rank) -> Option<Feature> {
+        (!points.is_empty()).then(|| Feature {
+            points: points.iter().map(|&p| local(p, tile_min)).collect(),
+            holes: Vec::new(),
+            closed: false,
+            width: 0.0,
+            cut: [false; 2],
+            cell,
+            rank,
+        })
+    }
+
     /// An area, or a line of no width, from a geometry; None where it has no points.
     pub fn of(g: &WkbGeometry, tile_min: G3857, cell: GroundCell, rank: Rank) -> Option<Feature> {
         (!g.points.is_empty()).then(|| Feature {

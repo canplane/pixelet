@@ -157,7 +157,7 @@ impl TerrainRepository {
                     geom_wkb: wkb(row),
                 })
                 .collect(),
-            segment_rows: client.query(&self.segments, &bbox)?.iter().map(Segment::of).collect(),
+            segment_rows: client.query(&self.segments, &bbox)?.iter().flat_map(Segment::of).collect(),
             base_rows: client
                 .query(&self.base, &[bbox[0], bbox[1], bbox[2], bbox[3], &self.infrastructure])?
                 .iter()

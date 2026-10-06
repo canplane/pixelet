@@ -67,7 +67,7 @@ fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: IVec) -> Resul
     // the paint of its ways is no matter to the ground's height, so none is drawn
     let (surface, _) = fetch_surface(repo, client, tile, &[])?;
     Ok(TileRows {
-        ways: ways.iter().map(Segment::of).collect(),
+        ways: ways.iter().flat_map(Segment::of).collect(),
         water: water.iter().map(|r| (r.get("subtype"), r.get("class"), r.get::<_, &[u8]>("geom_wkb").to_vec())).collect(),
         ele: surface.ele,
         cells: surface.ground.cells.to_vec(),

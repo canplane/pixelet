@@ -114,10 +114,6 @@ export default {
       hex: "#e2cbde",
       rgb: 14863326,
     },
-    construction: {
-      hex: "#c7c7b4",
-      rgb: 13092788,
-    },
     landfill: {
       hex: "#b6b592",
       rgb: 11974034,

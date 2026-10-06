@@ -5,36 +5,12 @@
 //! pixel is a cell (`web_zoom_of(CELL)`), its casing included. Carto reads no
 //! measured width, nor a way's lanes, and neither does the bake.
 
-use crate::terrain::pipeline::overture::between::flag_at;
-use crate::terrain::pipeline::overture::policy::LINK_FLAGS;
 use crate::terrain::pipeline::overture::role::Role;
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct WayShape {
-    pub role: Role,
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct WayColumns<'a> {
-    pub flags: Option<&'a str>,
-    pub subclass: Option<&'a str>,
-    pub subclasses: Option<&'a str>,
-}
-
-impl WayShape {
-    pub fn at(c: WayColumns, at: f64) -> WayShape {
-        let role = match Role::at(c.subclass, c.subclasses, at) {
-            Role::Way if flag_at(c.flags, LINK_FLAGS, 0.0, at) => Role::Link,
-            role => role,
-        };
-        WayShape { role }
-    }
-}
 
 /// `@footway-width-z16`: a sidewalk is a footway.
 const FOOTWAY: f64 = 1.3;
 
-pub fn width_cells(subtype: &str, class: Option<&str>, shape: WayShape) -> f64 {
+pub fn width_cells(subtype: &str, class: Option<&str>, role: Role) -> f64 {
     let c = class.unwrap_or("");
     if subtype == "rail" {
         // Each railway's line at z16 (`railway_*`).
@@ -45,7 +21,7 @@ pub fn width_cells(subtype: &str, class: Option<&str>, shape: WayShape) -> f64 {
             _ => 4.0,
         };
     }
-    match shape.role {
+    match role {
         Role::Sidewalk | Role::Crossing => return FOOTWAY,
         // `@minor-service-width-z16`: a driveway, a parking aisle.
         Role::Lane => return 2.0,

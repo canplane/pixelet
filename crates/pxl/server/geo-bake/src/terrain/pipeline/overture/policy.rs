@@ -14,9 +14,9 @@ use pxl_spec::space::adapter::epsg3857::G3857;
 use crate::deck::Drawn;
 use crate::segment::Segment;
 use crate::terrain::pipeline::feature::{closes, Feature, Layer, Rank};
-use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, merged, split_ranged};
+use crate::terrain::pipeline::overture::between::{merged, uncovered, Line};
 use crate::terrain::pipeline::overture::role::Role;
-use crate::terrain::pipeline::overture::width::{width_cells, WayShape};
+use crate::terrain::pipeline::overture::width::width_cells;
 use crate::terrain::repository::{BaseRow, BuildingRow};
 use crate::wkb::wkb_to_geometries;
 
@@ -53,12 +53,6 @@ pub fn segment_type(subtype: &str, class: Option<&str>) -> GroundCell {
 /// Overture's `religious` subtype with no class is `amenity=place_of_worship`.
 const MAJOR_BUILDING_CLASSES: [&str; 9] = ["cathedral", "chapel", "church", "mosque", "religious", "shrine", "synagogue", "temple", "train_station"];
 
-/// Nothing of a way under these shows from above. Not `is_disused` (the rails
-/// remain) nor `is_covered` (the buildings paint over it).
-pub const UNSEEN_FLAGS: &[&str] = &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"];
-
-pub const LINK_FLAGS: &[&str] = &["is_link"];
-
 /// What a Base row paints: its look, Carto's layer, and Carto's `feature`.
 type Paint = (GroundCell, Layer, &'static str);
 
@@ -73,8 +67,6 @@ fn land_use_paint(class: &str) -> Option<Paint> {
         "commercial" => (g::commercial, L, "landuse_commercial"),
         "industrial" => (g::industrial, L, "landuse_industrial"),
         "works" => (g::industrial, L, "man_made_works"),
-        "construction" => (g::construction, L, "landuse_construction"),
-        "brownfield" => (g::construction, L, "landuse_brownfield"),
         "landfill" => (g::landfill, L, "landuse_landfill"),
         "quarry" => (g::quarry, L, "landuse_quarry"),
         "farmland" => (g::farmland, L, "landuse_farmland"),
@@ -250,34 +242,39 @@ pub fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
     wkb_to_geometries(&row.geom_wkb).iter().filter_map(|geom| Feature::of(geom, tile_min, look, rank.clone())).collect()
 }
 
-/// A segment's parts the ground shows: not where an unseen flag holds or a
-/// line draws it, cut square there, so the paint ends where the line begins;
-/// none of a `water` segment, a ferry route or a strait's label line, nor of a
-/// crossing, a line over a road the road already shows.
+/// What of a segment's part the ground shows: none of a tunnel or an indoor
+/// passage, which show nothing from above, nor of a `water` segment, a ferry
+/// route or a strait's label line, nor of a crossing, a line over a road the
+/// road already shows; and not where a line draws it, cut square there, so
+/// the paint ends where the line begins.
 pub fn ways(row: &Segment, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
-    if row.subtype == "water" {
+    if row.subtype == "water" || row.tags.tunnel || row.tags.indoor || row.tags.role == Role::Crossing {
         return Vec::new();
     }
-    let unseen = flag_ranges(row.flags.as_deref(), UNSEEN_FLAGS, cell_of(length_of(&row.geom_wkb)));
-    let lined = merged(drawn.iter().filter(|c| c.gers_id == row.gers_id).map(|c| c.range).collect(), 0.0);
+    // the lines' ranges are the segment's; in the part's own
+    let [a0, b0] = row.span;
+    let lined = merged(
+        drawn
+            .iter()
+            .filter(|c| c.gers_id == row.gers_id && c.range[1] > a0 && c.range[0] < b0)
+            .map(|c| c.range.map(|f| ((f - a0) / (b0 - a0)).clamp(0.0, 1.0)))
+            .collect(),
+        0.0,
+    );
     let look = segment_type(&row.subtype, row.class.as_deref());
-    wkb_to_geometries(&row.geom_wkb)
-        .into_iter()
-        .flat_map(|g| split_ranged(g, [&unseen, &lined]))
-        .filter(|([unseen, lined], ..)| !unseen && !lined)
-        .filter_map(|(_, [a, b], geom)| {
-            let shape = WayShape::at(row.columns(), (a + b) / 2.0);
-            if shape.role == Role::Crossing {
-                return None;
-            }
-            let rank = Rank::new(Layer::Road, paint_order(&row.subtype, row.class.as_deref(), shape.role), "", &row.gers_id);
-            let mut f = Feature::of(&geom, tile_min, look, rank)?;
-            f.closed = false;
-            f.width = width_cells(&row.subtype, row.class.as_deref(), shape);
-            f.cut = [a > 0.0, b < 1.0];
-            Some(f)
-        })
-        .collect()
+    let rank = Rank::new(Layer::Road, paint_order(&row.subtype, row.class.as_deref(), row.tags.role), "", &row.gers_id);
+    let paint = |points: &[G3857], [a, b]: [f64; 2]| {
+        let mut f = Feature::line(points, tile_min, look, rank.clone())?;
+        f.width = width_cells(&row.subtype, row.class.as_deref(), row.tags.role);
+        // square where the segment is cut, round at its own ends
+        f.cut = [a > 0.0 || a0 > 0.0, b < 1.0 || b0 < 1.0];
+        Some(f)
+    };
+    if lined.is_empty() {
+        return paint(&row.points, [0.0, 1.0]).into_iter().collect();
+    }
+    let Some(line) = Line::of(&row.points) else { return Vec::new() };
+    uncovered(&lined).into_iter().filter_map(|r| paint(&line.between(r[0], r[1]), r)).collect()
 }
 
 /// Every Base row with a Carto fill; an area layer paints larger areas first.
