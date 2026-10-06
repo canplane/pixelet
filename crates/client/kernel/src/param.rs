@@ -88,11 +88,6 @@ pub const COMMITS_PER_FRAME: u32 = 8;
 /// Attempts one pump starts; credits already bound what is out.
 pub const INTAKE: u32 = u32::MAX;
 
-// ---- latency hiding ----
-
-/// Most speculative tiles a layer asks for at once.
-pub const HINT_ALLOWANCE: u32 = 128;
-
 // ---- I/O robustness ----
 
 pub const RETRY_MS: f64 = 2_000.0;

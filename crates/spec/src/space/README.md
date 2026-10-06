@@ -80,8 +80,6 @@ Meaning enters at an **adapter**, and only there:
   plane's, in u, or the ground's, in meters; `scale_factor` relates them, and
   `mer_from_u`/`u_from_mer` are the only way to or from Mercator's meter.
 - `coord/adapter/4326.rs` — lon/lat, and the projection to and from 3857.
-- `coord/adapter/yup.rs` — a Y-up basis, for a boundary that meets one. Nothing
-  imports it, which the file says is the expected state.
 
 ### What the adapter makes the zooms, here
 

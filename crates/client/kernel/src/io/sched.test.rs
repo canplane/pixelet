@@ -43,6 +43,14 @@ fn ask(why: Why, near: f64) -> Ask {
     }
 }
 
+/// A class worse than any seen ask.
+fn unseen(near: f64) -> Ask {
+    Ask {
+        why: Why::Demand,
+        order: Order { seen: false, near },
+    }
+}
+
 fn started<S: Serve>(l: &mut RequestScheduler<S>) -> Vec<u64> {
     let mut out = Vec::new();
     l.take_started(|credit, _, _| out.push(credit.key()));
@@ -118,7 +126,7 @@ fn a_failure_waits_rather_than_asking_straight_back() {
 #[test]
 fn a_current_demand_is_said_whatever_old_work_is_draining() {
     let mut l = scheduler();
-    l.declare(Category::terrain, &[(1, ask(Why::Hint, 0.0)), (2, ask(Why::Hint, 1.0))], 0.0);
+    l.declare(Category::terrain, &[(1, unseen(0.0)), (2, unseen(1.0))], 0.0);
     l.pump(0.0);
     let out = started(&mut l);
     assert_eq!(out.len(), 2);
@@ -137,13 +145,13 @@ fn a_current_demand_is_said_whatever_old_work_is_draining() {
 fn a_running_attempt_is_never_stopped_for_a_better_want() {
     let mut l = scheduler();
     l.set_credits(1);
-    l.declare(Category::terrain, &[(1, ask(Why::Hint, 5.0))], 0.0);
+    l.declare(Category::terrain, &[(1, unseen(5.0))], 0.0);
     l.pump(0.0);
     let _ = started(&mut l);
-    l.declare(Category::terrain, &[(1, ask(Why::Hint, 5.0)), (2, ask(Why::Hint, 0.0))], 0.0);
+    l.declare(Category::terrain, &[(1, unseen(5.0)), (2, unseen(0.0))], 0.0);
     l.pump(0.0);
     assert!(stopped(&mut l).is_empty(), "distance says which to start, not which to restart");
-    l.declare(Category::terrain, &[(1, ask(Why::Hint, 5.0)), (3, ask(Why::Demand, 9.0))], 0.0);
+    l.declare(Category::terrain, &[(1, unseen(5.0)), (3, ask(Why::Demand, 9.0))], 0.0);
     l.pump(0.0);
     assert!(stopped(&mut l).is_empty(), "a class better waits for a free credit");
     assert!(started(&mut l).is_empty(), "and starts nothing meanwhile");

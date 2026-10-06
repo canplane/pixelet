@@ -2,6 +2,7 @@
 
 use pxl_spec::space::layer::lattice::GROUND;
 use super::*;
+use crate::io::demand::Why;
 
 fn at(why: Why, seen: bool, near: f64) -> Ask {
     Ask { why, order: Order { seen, near } }
@@ -26,12 +27,11 @@ fn the_ground_goes_before_what_stands_on_it() {
 }
 
 #[test]
-fn what_the_view_needs_is_asked_for_out_from_the_eye_and_speculation_after() {
+fn what_the_view_needs_is_asked_for_out_from_the_eye() {
     let t = |why, seen, near| key(Category::terrain, at(why, seen, near));
     assert!(before(t(Why::Demand, true, 10.0), t(Why::Demand, true, 20.0)), "nearer first");
     assert!(before(t(Why::Demand, true, 900.0), t(Why::Demand, false, 1.0)), "seen before unseen");
     assert_eq!(t(Why::Floor, true, 10.0), t(Why::Demand, true, 10.0), "the fallback's tiles at their own place");
-    assert!(before(t(Why::Demand, false, 1e9), t(Why::Hint, true, 0.0)), "speculation after everything needed");
 }
 
 #[test]

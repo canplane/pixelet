@@ -4,8 +4,7 @@
 //! tiles held (residency.rs) and what an observation asks for of them.
 //!
 //! Asks are the observation's demand, as the estimator names it, merged with
-//! the fallback's tiles, a destination's and speculation, the best reason per
-//! tile. Nothing drawn enters them except the shared quality, which is
+//! the fallback's tiles and a destination's, the best reason per tile. Nothing drawn enters them except the shared quality, which is
 //! decided first. Where a tile settles a child's ground (`Folds::settles`),
 //! the child is never asked for.
 
@@ -22,11 +21,9 @@ use pxl_spec::space::layer::tile::{Folds, Tile, LEAF_ZOOM};
 
 use crate::io::demand::{Ask, Category, Phases, Why};
 use crate::io::sched::declare;
-use crate::param;
 use crate::io::failure::Failure;
 use crate::world::observation::{ground_known, observation, ByFootprints, Known, Order};
 use crate::world::observer::Footprint;
-use crate::world::prefetch::{NoPrefetch, Prefetch};
 use crate::world::quality;
 use crate::world::residency::floor::{self, Fallback, Floor};
 use crate::world::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
@@ -38,8 +35,8 @@ pub trait Layer: Folds + Clone + 'static {
     /// Its tiles' cells, which say what of the grid a tile at each zoom draws.
     const LATTICE: Lattice;
 
-    /// False for a layer that holds only the floor: it asks for no miss, no
-    /// destination and nothing speculative, and its residency is sized so.
+    /// False for a layer that holds only the floor: it asks for no miss and no
+    /// destination, and its residency is sized so.
     const DEMANDS: bool = true;
 
     /// The coarsest zoom the layer's own source supplies whole, where one
@@ -86,17 +83,13 @@ struct Seen {
     lacks: Vec<Requirement>,
 }
 
-/// No speculation: the view converges to exact on misses alone, and
-/// speculation would only buy latency.
-const PREFETCH: NoPrefetch = NoPrefetch;
-
-/// Evicts unhinted tiles before hinted ones, then the one last in view order.
+/// Evicts the tile last in view order.
 struct Farthest<'a>(Option<&'a Observation>, Lattice);
 
 impl Victim for Farthest<'_> {
     fn victim(&self, candidates: &[Candidate]) -> Option<usize> {
         let order = |c: &Candidate| self.0.map_or(Order::LAST, |o| Order::of_tile(o, self.1, c.tile));
-        (0..candidates.len()).max_by_key(|&i| (!candidates[i].hinted, order(&candidates[i])))
+        (0..candidates.len()).max_by_key(|&i| order(&candidates[i]))
     }
 }
 
@@ -112,7 +105,6 @@ pub struct Pyramid<L: Layer> {
     objects_written: bool,
     /// Reused across observations so observing stops allocating once warm.
     asks: HashMap<Tile, Ask>,
-    hints: Vec<(Order, Tile)>,
 }
 
 impl<L: Layer> Default for Pyramid<L> {
@@ -125,8 +117,7 @@ impl<L: Layer> Default for Pyramid<L> {
             last: None,
             now: None,
             objects_written: false,
-            asks: HashMap::with_capacity(Residency::<L>::ASKS as usize),
-            hints: Vec::new(),
+            asks: HashMap::with_capacity(Residency::<L>::FRAMES as usize),
         }
     }
 }
@@ -161,9 +152,9 @@ impl<L: Layer> Pyramid<L> {
         &self.demand
     }
 
-    /// Whether every tile the view needs has its answer; speculation aside.
+    /// Whether every tile the view needs has its answer.
     pub fn answered(&self) -> bool {
-        self.asks.iter().all(|(&p, a)| a.why == Why::Hint || self.residency.has_answer(p))
+        self.asks.keys().all(|&p| self.residency.has_answer(p))
     }
 
     pub fn adopt(&mut self, p: Tile, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
@@ -183,10 +174,8 @@ impl<L: Layer> Pyramid<L> {
         self.residency.admit(p, &Farthest(self.observation.as_ref(), L::LATTICE), receive)
     }
 
-    /// Builds the asks for `o`: the estimator's demand, the floor, the
-    /// destination's line, and speculation up to `allowance`. Speculation
-    /// only takes frames left over after everything hard and demanded, so
-    /// nothing is fetched just to find no frame.
+    /// Builds the asks for `o`: the estimator's demand, the floor and the
+    /// destination's line.
     #[allow(clippy::too_many_arguments)]
     pub fn observe(
         &mut self,
@@ -196,10 +185,7 @@ impl<L: Layer> Pyramid<L> {
         destination: impl Iterator<Item = Tile>,
         bounds: &impl Bounds,
         estimator: &impl DemandEstimator,
-        prefetch: &impl Prefetch,
-        tau: Tau,
         top: Zoom,
-        allowance: u32,
     ) {
         let mut demand = core::mem::take(&mut self.demand);
         demand.clear();
@@ -265,30 +251,6 @@ impl<L: Layer> Pyramid<L> {
         }
         xpute_core::ensure!(named <= if L::DEMANDS { Residency::<L>::DESTINATION_TILES } else { 0 }, ENOTRECOVERABLE, named);
 
-        let mut hints = core::mem::take(&mut self.hints);
-        hints.clear();
-        if let (Some(o), true) = (o, L::DEMANDS) {
-            let needed = asks.keys().filter(|&&p| self.residency.takes_frame(p)).count() as u32;
-            let mut room = Residency::<L>::FRAMES.saturating_sub(needed).min(allowance);
-            prefetch.speculate(o, tau, &mut |p| {
-                if !asks.contains_key(&p) {
-                    hints.push((order(o, p), p));
-                }
-            });
-            hints.sort_unstable();
-            hints.dedup_by_key(|h| h.1);
-            // Settled or empty tiles take no frame but still count against `ASKS`.
-            let mut tiles = Residency::<L>::ASKS.saturating_sub(asks.len() as u32);
-            for &(order, p) in &hints {
-                let new = u32::from(self.residency.takes_frame(p));
-                if new > room || tiles == 0 {
-                    break;
-                }
-                room -= new;
-                tiles -= 1;
-                ask(&mut asks, p, Ask { why: Why::Hint, order });
-            }
-        }
 
         self.wants.clear();
         self.wants.extend(
@@ -297,7 +259,7 @@ impl<L: Layer> Pyramid<L> {
                 .map(|(p, &a)| (p.subject(), a)),
         );
         self.residency.ask(&asks);
-        (self.asks, self.hints) = (asks, hints);
+        self.asks = asks;
 
         self.observation = o.copied();
         self.demand = demand;
@@ -374,10 +336,7 @@ impl<L: Layer> Pyramid<L> {
                     footprints: published.map_or(&[], |d| d.footprints()),
                     lacks: published.map_or(&[], |d| d.lacks()),
                 },
-                &PREFETCH,
-                tau,
                 top,
-                param::HINT_ALLOWANCE,
             );
             // Observing can let tiles go: record what is known after it.
             self.residency.known(&mut now.own);

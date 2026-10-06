@@ -7,4 +7,3 @@
 pub mod epsg3857;
 #[path = "adapter/4326.rs"]
 pub mod epsg4326;
-pub mod yup;

@@ -7,7 +7,7 @@
 //! 1. By layer, the order a view builds up (the user's order,
 //!    2026-09-26): terrain, then the catalog assets decor draws with, then
 //!    places.
-//! 2. Within a layer, seen before unseen and nearer first, speculation last;
+//! 2. Within a layer, seen before unseen and nearer first;
 //!    of tiles as near, the finer first, so the leaf under the eye is not
 //!    asked after the coarse tiles over it, which cost a fold where baked on demand.
 //!    Ranking holes before coarse ground instead put the top tile's 2 km
@@ -16,15 +16,15 @@
 //! Everything else ties, after the view. Rank orders what starts; nothing
 //! running is stopped for it.
 
-use crate::io::demand::{Ask, Category, Why};
+use crate::io::demand::{Ask, Category};
 use crate::io::sched::{Rank, Serve};
 use crate::param;
 use crate::io::failure::Outcome;
 use crate::world::observation::Order;
 use pxl_spec::space::layer::tile::Tile;
 
-/// A layer's classes: needed or speculative, each seen or unseen.
-const SHELLS: u8 = 2 * 2;
+/// A layer's classes: seen or unseen.
+const SHELLS: u8 = 2;
 const TERRAIN: u8 = 0;
 const ASSET: u8 = TERRAIN + SHELLS;
 const PLACES: u8 = ASSET + 1;
@@ -53,9 +53,8 @@ fn tile(layer: Category, subject: u64, ask: Ask) -> Rank {
         };
     }
     let base = if layer == Category::terrain { TERRAIN } else { PLACES };
-    let shell = u8::from(ask.why == Why::Hint);
     Rank {
-        class: base + 2 * shell + !ask.order.seen as u8,
+        class: base + !ask.order.seen as u8,
         distance: ask.order.near,
         detail: Tile::of_subject(subject).zoom,
     }

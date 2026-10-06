@@ -84,7 +84,6 @@ pub enum Why {
     /// looks and leaving a zoom shows its parent at once (Cesium's `preloadAncestors`).
     Ancestor,
     Demand,
-    Hint,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

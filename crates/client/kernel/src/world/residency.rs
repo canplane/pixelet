@@ -8,8 +8,7 @@
 //!
 //! Capacity is asserted, not observed, since thrash here would be silent:
 //! frames cover everything held hard plus everything demand can name at once
-//! (the reach), so a view at rest converges to exact. Speculation only
-//! ever takes frames nothing else holds.
+//! (the reach), so a view at rest converges to exact.
 
 pub mod floor;
 
@@ -41,7 +40,6 @@ enum Hold {
 #[derive(Clone, Copy, Debug)]
 pub struct Candidate {
     pub tile: Tile,
-    pub hinted: bool,
 }
 
 /// Which frame goes when one must, chosen only among those that may, so a
@@ -89,7 +87,7 @@ pub struct Residency<L: Layer> {
 
 /// What a layer's residency holds at once, from what it asks for. A layer
 /// that asks only for the floor (`Layer::DEMANDS` false) asks for no miss, no
-/// line over one, no destination and nothing speculative.
+/// line over one and no destination.
 impl<L: Layer> Residency<L> {
     /// The zooms the layer's pyramid holds, its leaves to its lattice's top.
     pub const ZOOMS: u32 = (LEAF_ZOOM - L::LATTICE.top() + 1) as u32;
@@ -118,11 +116,9 @@ impl<L: Layer> Residency<L> {
     /// the view reads never gives up another the view reads.
     pub const FRAMES: u32 = Self::PINNED_TILES + Self::DEMAND_TILES;
 
-    /// A miss's line is among the demand's asks; speculation takes at most the frames.
-    pub const ASKS: u32 = Self::PINNED_TILES + Self::DEMAND_TILES + if L::DEMANDS { Self::FRAMES } else { 0 };
-
-    /// Tiles residency knows of at once: every framed tile and every asked one.
-    const ENTRIES: u32 = Self::FRAMES + Self::ASKS;
+    /// Tiles residency knows of at once: every framed tile and every asked
+    /// one, and what is asked is at most the frames.
+    const ENTRIES: u32 = 2 * Self::FRAMES;
 
     const SAFE: () = assert!(Self::FRAMES >= Self::HARD_TILES + Self::WORKSPACE, "safety: no frame for a tile nothing holds hard to land in");
 }
@@ -247,7 +243,7 @@ impl<L: Layer> Residency<L> {
     /// they cost no frame, so nothing would ever evict them. Framed tiles are
     /// left to normal turnover.
     pub fn ask(&mut self, asks: &HashMap<Tile, Ask>) {
-        xpute_core::ensure!(asks.len() <= Self::ASKS as usize, ENOTRECOVERABLE, asks.len());
+        xpute_core::ensure!(asks.len() <= Self::FRAMES as usize, ENOTRECOVERABLE, asks.len());
         for (p, e) in &mut self.tiles {
             e.ask = asks.get(p).copied();
             if e.ask.is_none() {
@@ -272,11 +268,6 @@ impl<L: Layer> Residency<L> {
         }
     }
 
-    /// A tile not yet held counts as taking one: whether it is empty is known only on arrival.
-    pub fn takes_frame(&self, p: Tile) -> bool {
-        !self.settled(p) && (self.framed(p) || !self.resident(p))
-    }
-
     pub fn asked(&self, p: Tile) -> Option<Ask> {
         self.entry(p)?.ask
     }
@@ -286,18 +277,13 @@ impl<L: Layer> Residency<L> {
         match e.ask.map(|a| a.why) {
             Some(Why::Floor | Why::Destination | Why::Ancestor) => Hold::Hard,
             Some(Why::Demand) => Hold::Demand,
-            Some(Why::Hint) | None => Hold::Cache,
+            None => Hold::Cache,
         }
     }
 
-    fn hinted(&self, p: Tile) -> bool {
-        self.asked(p).is_some_and(|a| a.why == Why::Hint)
-    }
-
     /// A frame for arriving `p`: its own, a free one, or a victim among frames
-    /// held only as cache (speculation never evicts other speculation). None
-    /// only for a speculative tile, counted; for anything stronger, none means
-    /// the capacity bound is broken.
+    /// held only as cache. None only for a tile no longer asked for, counted;
+    /// for one asked for, none means the capacity bound is broken.
     fn frame_for(&mut self, p: Tile, victim: &impl Victim) -> Option<u32> {
         if self.framed(p) {
             return self.remove(p);
@@ -305,18 +291,17 @@ impl<L: Layer> Residency<L> {
         if let Some(free) = self.free.pop() {
             return Some(free);
         }
-        let speculative = self.hold(p) == Hold::Cache;
+        let unasked = self.hold(p) == Hold::Cache;
         let mut candidates: Vec<Candidate> = self
             .tiles
             .iter()
             .filter(|&(&q, _)| self.framed(q) && self.hold(q) == Hold::Cache)
-            .map(|(&q, _)| Candidate { tile: q, hinted: self.hinted(q) })
-            .filter(|c| !(speculative && c.hinted))
+            .map(|(&q, _)| Candidate { tile: q })
             .collect();
         // Sorted, so the policy sees the same list for the same state.
         candidates.sort_unstable_by_key(|c| c.tile);
         let Some(at) = victim.victim(&candidates) else {
-            xpute_core::ensure!(speculative, ENOTRECOVERABLE, p.zoom);
+            xpute_core::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
             self.refused += 1;
             return None;
         };

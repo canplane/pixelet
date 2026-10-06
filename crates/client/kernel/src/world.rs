@@ -9,7 +9,6 @@ pub mod chunk;
 pub mod frame;
 pub mod observation;
 pub mod observer;
-pub mod prefetch;
 pub mod pyramid;
 pub mod quality;
 pub mod residency;
