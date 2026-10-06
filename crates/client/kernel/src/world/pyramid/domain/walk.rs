@@ -6,12 +6,12 @@
 use pxl_spec::space::coord::world::nearest_box;
 use std::collections::HashMap;
 
-use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::layer::demand::cubes_meeting;
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::layer::demand::{Bounds, Contents, Requirement};
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::layer::demand::cubes_meeting;
+use pxl_spec::space::layer::demand::{Bounds, Contents, Requirement};
+use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::world::chunk::mesh_slot::POOLS;
 use crate::world::observation::Order;
@@ -43,7 +43,6 @@ impl Cut {
     pub fn pieces(&self) -> &[Chunk] {
         &self.pieces
     }
-
 }
 
 #[derive(Clone, Copy)]
@@ -145,7 +144,7 @@ impl Domain {
                 made: false,
             });
         }
-        let (coarsest, far) = (GROUND.grid_cell(top), o.far());
+        let (coarsest, far) = (GROUND.grid_zoom(top), o.far());
         let mut start = core::mem::take(&mut self.start);
         start.clear();
         start.extend(cubes_meeting(units(SHARD_ZOOM), o.reach(far)).map(|at| Chunk::indexed(SHARD_ZOOM, at)));
@@ -163,12 +162,7 @@ impl Domain {
         start.sort_unstable();
         let top = ladder.len() as u8;
         for &c in &start {
-            self.open.push(Open {
-                c,
-                to: top,
-                from: None,
-                parent: None,
-            });
+            self.open.push(Open { c, to: top, from: None, parent: None });
         }
         self.start = start;
     }

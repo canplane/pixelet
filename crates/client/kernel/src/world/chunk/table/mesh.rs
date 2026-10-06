@@ -2,19 +2,17 @@
 
 //! The mesh slots' chains: a tier holds its slots at once, is written a part at a time, and lands whole or not at all.
 
-
 use pxl_render::gpu::arena::{arena_epoch, arena_write};
 use pxl_render::mesh::chunk_mesher::box_bounds;
 
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_runtime::mem::base::ptr_at;
 
 use crate::world::chunk::build::{BuildEvent, Builder};
 use crate::world::chunk::frontier::pool_of;
 use crate::world::chunk::mesh_slot::{capacity, group_box_words, slot_at, Pool, FINE_BOXES};
 use pxl_spec::space::coord::zoom::units;
-
 
 use super::*;
 
@@ -210,7 +208,7 @@ pub(super) fn refuse(slots: &mut [Slot], i: usize, meshes: &mut Meshes, generati
     slots[i].need = Some((generation, k));
     slots[i].fresh = true;
     meshes.waits += 1;
-    meshes.wait_zooms |= 1 << GROUND.z_of(slots[i].chunk.cell_zoom());
+    meshes.wait_zooms |= 1 << GROUND.tile_zoom(slots[i].chunk.cell_zoom());
     false
 }
 

@@ -122,7 +122,7 @@ together (`Tile`, `layer/tile.rs`); `idx(LEAF_ZOOM, addr)` always answers the le
 question: which 512u square.
 
 The distance chooses a cell zoom (`camera/grid.rs` `cell_at`), and terrain's tile
-zoom is the one whose cells those are (`Lattice::z_of`); the kernel's mesher
+zoom is the one whose cells those are (`Lattice::tile_zoom`); the kernel's mesher
 measures its own step against the same cell zoom
 ([every size is a zoom](../../../../decision/20261006-every-size-is-a-zoom.md)).
 

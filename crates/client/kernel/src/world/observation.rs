@@ -62,7 +62,7 @@ pub struct Known;
 
 impl Bounds for Known {
     fn contents(&self, cell: Zoom, region: Aabb) -> Contents {
-        let zoom = GROUND.grid_z(cell).clamp(i32::from(GROUND.top()), i32::from(LEAF_ZOOM)) as Zoom;
+        let zoom = GROUND.tile_zoom_of_grid(cell).clamp(i32::from(GROUND.top()), i32::from(LEAF_ZOOM)) as Zoom;
         let (h0, h1) = (region.min[2], region.max[2]);
         let cut = |(lo, hi): (f64, f64)| (lo <= h1 && hi >= h0).then(|| (lo.max(h0), hi.min(h1)));
         let mut known = true;
@@ -159,7 +159,7 @@ impl ByFootprints<'_> {
         };
         let required = |zoom: Zoom, region: Aabb| {
             let (from, to) = band(o, self.tau, self.lattice, self.top, zoom)?;
-            let held = bounds.contents(self.lattice.grid_cell(zoom), region).within(region)?;
+            let held = bounds.contents(self.lattice.grid_zoom(zoom), region).within(region)?;
             let m = o.measure(&held);
             (m.seen && m.near < to && m.near <= o.far() && m.far >= from).then_some(Requirement { zoom, region })
         };
@@ -238,7 +238,7 @@ impl Order {
 
     /// A layer's tile, read in the grid's cells its own fold into.
     pub fn of_tile(o: &Observation, lattice: Lattice, p: Tile) -> Order {
-        Order::of_region(o, &Known, lattice.grid_cell(p.zoom), p.region())
+        Order::of_region(o, &Known, lattice.grid_zoom(p.zoom), p.region())
     }
 }
 

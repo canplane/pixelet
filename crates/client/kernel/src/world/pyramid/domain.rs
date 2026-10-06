@@ -8,7 +8,7 @@
 //! with, and is published whole.
 //!
 //! The walk starts from the 3D roots within reach (`SHARD_ZOOM`), split while
-//! their cells are coarser than any the top's reach draws (`Lattice::grid_cell`).
+//! their cells are coarser than any the top's reach draws (`Lattice::grid_zoom`).
 //! Every chunk it then starts from that holds anything is a piece, all around
 //! the eye, so ground turned to shows a piece and never a hole. A chunk
 //! splits only where some patch's footprint touches it and its projected

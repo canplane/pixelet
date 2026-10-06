@@ -43,7 +43,7 @@ impl Lattice {
     /// ground's lands on z5 exactly: z8's chunks have z13 cells, which the
     /// ground's 512 a tile and one fold make a z5 tile's.
     pub const fn top(self) -> Zoom {
-        self.grid_z(SHARD_ZOOM + CHUNK_STEPS) as Zoom
+        self.tile_zoom_of_grid(SHARD_ZOOM + CHUNK_STEPS) as Zoom
     }
 
     // What a layer reads for a chunk, named by its zoom and column: the tile
@@ -52,7 +52,7 @@ impl Lattice {
 
     /// The zoom of the tile a chunk at `chunk_zoom` reads.
     pub const fn read_zoom(self, chunk_zoom: Zoom) -> Zoom {
-        let z = self.grid_z(chunk_zoom + CHUNK_STEPS);
+        let z = self.tile_zoom_of_grid(chunk_zoom + CHUNK_STEPS);
         (if z < LEAF_ZOOM as i32 { z } else { LEAF_ZOOM as i32 }) as Zoom
     }
 
@@ -91,13 +91,13 @@ impl Lattice {
 
     /// The tile whose records fold into the grid's cell at `r`; held to the pyramid.
     pub fn z_at(self, tau: Tau, r: f64) -> Zoom {
-        self.grid_z(tau.cell_at(r)).clamp(self.top() as i32, LEAF_ZOOM as i32) as Zoom
+        self.tile_zoom_of_grid(tau.cell_at(r)).clamp(self.top() as i32, LEAF_ZOOM as i32) as Zoom
     }
 
     /// How far from an observer's foot a demand at `zoom` can lie: where the
     /// grid's cell a zoom coarser begins. Bounds the run along the ground too.
     pub const fn demand_reach(self, zoom: Zoom) -> f64 {
-        split_distance(self.grid_cell(zoom - 1))
+        split_distance(self.grid_zoom(zoom - 1))
     }
 
     /// Its finest cell's zoom: its cells' on a leaf tile.
@@ -106,13 +106,13 @@ impl Lattice {
     }
 
     /// The grid's cell a tile at `zoom` is drawn in.
-    pub const fn grid_cell(self, zoom: Zoom) -> Zoom {
+    pub const fn grid_zoom(self, zoom: Zoom) -> Zoom {
         self.cell_zoom(zoom) - self.fold
     }
 
     /// The tile whose cells fold into the grid's cell `cell`, past the pyramid's ends too.
-    pub const fn grid_z(self, cell: Zoom) -> i32 {
-        self.z_of(cell) + self.fold as i32
+    pub const fn tile_zoom_of_grid(self, cell: Zoom) -> i32 {
+        self.tile_zoom(cell) + self.fold as i32
     }
 
     /// Its cells' zoom on a tile at `z`.
@@ -121,7 +121,7 @@ impl Lattice {
     }
 
     /// The tile zoom whose cells are at `cell_zoom`, past the pyramid's either end alike.
-    pub const fn z_of(self, cell_zoom: Zoom) -> i32 {
+    pub const fn tile_zoom(self, cell_zoom: Zoom) -> i32 {
         cell_zoom as i32 - self.tile_cell_shamt() as i32
     }
 

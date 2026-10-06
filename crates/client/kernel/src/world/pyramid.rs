@@ -199,7 +199,7 @@ impl<L: Layer> Pyramid<L> {
         let ask = |asks: &mut HashMap<Tile, Ask>, p: Tile, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
-        let order = |o: &Observation, p: Tile| Order::of_region(o, bounds, L::LATTICE.grid_cell(p.zoom), p.region());
+        let order = |o: &Observation, p: Tile| Order::of_region(o, bounds, L::LATTICE.grid_zoom(p.zoom), p.region());
         if let Some(o) = o {
             if L::DEMANDS {
                 estimator.requirements(o, bounds, &mut |r| L::tiles(&r, &mut |p| demand.push(p)));

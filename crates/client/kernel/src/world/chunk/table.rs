@@ -25,25 +25,25 @@ use pxl_render::mesh::paint::terrain::adapter::beside_index;
 use pxl_render::mesh::run::APRON;
 
 use crate::sched::profiler::frame::ZOOMS;
-use pxl_spec::space::layer::demand::Bounds as _;
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::coord::v3::{dot3, len3, Aabb, V3};
+use pxl_spec::space::layer::demand::Bounds as _;
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
+use crate::kernel::kernel;
+use crate::kernel::World;
 use crate::layer::marker::hover_cursor::{render_edits, RenderEdits};
-use crate::world::frame::scene::Scene;
 use crate::layer::object::store::EntryAt;
 use crate::param;
 use crate::shell::setting::store::settings_store;
-use crate::kernel::World;
 use crate::world::chunk::build::{draws_as_held, BuildEvent, Builder};
 use crate::world::chunk::frontier::{pool_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, OCCUPANCY};
-use crate::kernel::kernel;
 use crate::world::chunk::source::{draws, objects_drawn, Drawn};
+use crate::world::frame::scene::Scene;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -383,7 +383,10 @@ impl Scheduler {
     }
 
     fn drawn_slot(&self, p: &Pvf3) -> Option<&Slot> {
-        self.slots.iter().filter(|s| s.role == Role::Drawn && s.chunk.named() == Chunk::holding(s.chunk.zoom(), p)).max_by_key(|s| s.chunk.zoom())
+        self.slots
+            .iter()
+            .filter(|s| s.role == Role::Drawn && s.chunk.named() == Chunk::holding(s.chunk.zoom(), p))
+            .max_by_key(|s| s.chunk.zoom())
     }
 
     /// The cells the finest drawn chunk holding `p` is drawn in.
@@ -398,7 +401,7 @@ impl Scheduler {
         let s = self.drawn_slot(p)?;
         Some((
             GROUND.read_zoom(s.chunk.zoom()) as i32,
-            s.layout.map(|_| GROUND.z_of(s.chunk.cell_zoom())),
+            s.layout.map(|_| GROUND.tile_zoom(s.chunk.cell_zoom())),
             s.sources.read_from.map(|z| z as i32),
         ))
     }
@@ -714,7 +717,7 @@ impl Scheduler {
                 left -= n;
                 slot = self.meshes.next[at_slot].get();
             }
-            self.zoom_boxes[GROUND.z_of(s.chunk.cell_zoom()) as usize] += t.box_cnt;
+            self.zoom_boxes[GROUND.tile_zoom(s.chunk.cell_zoom()) as usize] += t.box_cnt;
         }
     }
 

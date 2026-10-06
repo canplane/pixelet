@@ -278,6 +278,6 @@ pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
 const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "profiler.json names the renderer's spans");
 
 const _: () = assert!(
-    pxl_spec::space::layer::lattice::GROUND.z_of(OBJECT_FINEST) < ZOOMS as i32,
+    pxl_spec::space::layer::lattice::GROUND.tile_zoom(OBJECT_FINEST) < ZOOMS as i32,
     "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
 );

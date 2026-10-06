@@ -89,8 +89,8 @@ pub fn tiles(r: &Requirement, each: &mut dyn FnMut(Tile)) {
 /// coarser one's does, or the reach of the source's `top` at `zoom` alone,
 /// unscaled. None past the far edge.
 pub fn band(o: &Observation, tau: Tau, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<(f64, f64)> {
-    let from = if zoom == LEAF_ZOOM { 0.0 } else { tau.split_distance(lattice.grid_cell(zoom)) };
-    let coarser = lattice.grid_cell(zoom - 1);
+    let from = if zoom == LEAF_ZOOM { 0.0 } else { tau.split_distance(lattice.grid_zoom(zoom)) };
+    let coarser = lattice.grid_zoom(zoom - 1);
     let to = if zoom == top { split_distance(coarser) } else { tau.split_distance(coarser) };
     (from <= o.far()).then_some((from, to))
 }
