@@ -6,6 +6,13 @@
 
 use core::f64::consts::FRAC_1_SQRT_2;
 
+use xpute_core::math::scalar::round;
+
+/// Half a way's width, in whole cells.
+pub fn half_cells(width: f64) -> i32 {
+    round(width / 2.0) as i32
+}
+
 /// How far from its line a way of `width` cells covers a cell's center.
 pub fn reach(width: f64) -> f64 {
     (width * 0.5).max(FRAC_1_SQRT_2)

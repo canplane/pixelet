@@ -44,6 +44,12 @@ surfaces was drafted and aborted the day before
   unbuilt; a way at grade that is indoors, unbuilt or abandoned is nothing a
   deck clears, and one below layer 0 is.
 
+What lies across a way, a structure's or what it clears, is the ground's:
+a deck, a bore, a pier's bent and a way or a waterway under a bridge are as
+wide as Carto draws them (`overture/width.rs`), where Arnis sizes each by
+its own widths or clears a waterway's centerline. Its distances along and
+between ways stay its own.
+
 Arnis's numbers are metres — a block is a metre upright on the Earth (its
 `celestial.rs`) — and each is taken into the page's cells by the page's
 scale, `u_per_m` at the page's base, rounded half to even

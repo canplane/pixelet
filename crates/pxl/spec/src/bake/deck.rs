@@ -11,7 +11,7 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
 use super::{malformed, way};
-use crate::procedural::{pier_covers, Frame, PIER_MIN_RISE_M};
+use crate::procedural::{pier_covers, Frame};
 use crate::space::hierarchy::child_of;
 use crate::space::pyramid::{GROUND, TILE_CELLS};
 use crate::space::zoom::Zoom;
@@ -31,6 +31,10 @@ pub const WIDEST: f64 = u8::MAX as f64 / POINT_SCALE;
 
 /// A deck's slab under its surface, in ground metres: Arnis's `DECK_STRUCTURE_DEPTH`.
 pub const DECK_THICKNESS_M: f64 = 2.0;
+
+/// Clear height a deck keeps over a deck under it, in ground metres: Arnis's
+/// `STACKED_DECK_HEADROOM`.
+pub const STACKED_DECK_HEADROOM_M: f64 = 6.0;
 
 /// A deck's slab in cells, at least one.
 pub fn slab_depth(cell_per_m: f64) -> i32 {
@@ -163,7 +167,7 @@ impl Over {
                 let lo = low - slab_depth(cell_per_m);
                 Occupies::Above {
                     slab: [lo, top],
-                    pier: (self.pier && f64::from(low - ground) > PIER_MIN_RISE_M * cell_per_m && lo > ground).then_some([ground, lo]),
+                    pier: (self.pier && lo > ground).then_some([ground, lo]),
                 }
             }
             Form::Bore => Occupies::Through {

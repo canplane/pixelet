@@ -3,6 +3,7 @@
 //! An Overture transportation segment as the bake reads it, for the ground
 //! and the deck solve alike.
 
+use crate::terrain::pipeline::overture::between::flag_ranges;
 use crate::terrain::pipeline::overture::width::WayColumns;
 
 /// The columns of `overture_transportation t` a [`Segment`] is read from.
@@ -52,8 +53,8 @@ impl Segment {
         }
     }
 
-    /// Bridged or tunnelled somewhere along it.
-    pub fn flagged(&self) -> bool {
-        self.flags.as_deref().is_some_and(|f| f.contains("is_bridge") || f.contains("is_tunnel"))
+    /// Whether any of `flags` holds anywhere along it.
+    pub fn has(&self, flags: &[&str]) -> bool {
+        !flag_ranges(self.flags.as_deref(), flags, 1.0).is_empty()
     }
 }

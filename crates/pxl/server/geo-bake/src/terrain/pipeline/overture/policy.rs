@@ -153,12 +153,17 @@ fn land_paint(class: &str) -> Option<Paint> {
 /// until z17); a line of another class has no fill.
 const WATERWAYS: [(&str, f64); 5] = [("river", 8.0), ("canal", 4.2), ("stream", 3.0), ("ditch", 2.0), ("drain", 2.0)];
 
+/// A waterway line's width in cells, if Carto draws one of its class.
+pub fn waterway_width(class: &str) -> Option<f64> {
+    WATERWAYS.iter().find(|(c, _)| *c == class).map(|(_, w)| *w)
+}
+
 /// Water areas but what Carto draws as landcover in water's color or as a
 /// shoal; a physical feature or a spring (a bay, a strait) has no fill.
 fn water_paint(subtype: &str, class: &str, closed: bool) -> Option<Paint> {
     use Layer::Landcover as L;
     if !closed {
-        return WATERWAYS.iter().any(|(c, _)| *c == class).then_some((g::water, Layer::WaterLine, ""));
+        return waterway_width(class).map(|_| (g::water, Layer::WaterLine, ""));
     }
     Some(match (subtype, class) {
         (_, "shoal") => (g::beach, L, "natural_shoal"),
@@ -222,7 +227,7 @@ pub const WIDEST_LINE: f64 = 24.0;
 /// (`overture/width.rs`), its casing included.
 fn line_width(source: &str, class: &str) -> f64 {
     match (source, class) {
-        ("water", _) => WATERWAYS.iter().find(|(c, _)| *c == class).map_or(0.0, |(_, w)| *w),
+        ("water", _) => waterway_width(class).unwrap_or(0.0),
         (_, "runway") => WIDEST_LINE,
         (_, "taxiway") => 8.0,
         (_, "dam" | "breakwater") => 4.0,
