@@ -6,115 +6,44 @@
 
 pub type V3 = [f64; 3];
 
-pub fn fill3(e: f64) -> V3 {
-    [e, e, e]
-}
-
-pub fn set3(x: f64, y: f64, z: f64) -> V3 {
-    [x, y, z]
-}
-
-pub fn copy3(from: &V3) -> V3 {
-    [from[0], from[1], from[2]]
-}
-
-pub fn neg3(v: &V3) -> V3 {
-    [-v[0], -v[1], -v[2]]
-}
-pub fn abs3(v: &V3) -> V3 {
-    [v[0].abs(), v[1].abs(), v[2].abs()]
+pub fn scale3(v: &V3, k: f64) -> V3 {
+    [v[0] * k, v[1] * k, v[2] * k]
 }
 
 pub fn add3(v: &V3, w: &V3) -> V3 {
     [v[0] + w[0], v[1] + w[1], v[2] + w[2]]
 }
-pub fn add3n(v: &V3, k: f64) -> V3 {
-    [v[0] + k, v[1] + k, v[2] + k]
-}
 pub fn sub3(v: &V3, w: &V3) -> V3 {
     [v[0] - w[0], v[1] - w[1], v[2] - w[2]]
-}
-pub fn sub3n(v: &V3, k: f64) -> V3 {
-    [v[0] - k, v[1] - k, v[2] - k]
-}
-pub fn mul3(v: &V3, w: &V3) -> V3 {
-    [v[0] * w[0], v[1] * w[1], v[2] * w[2]]
-}
-pub fn mul3n(v: &V3, k: f64) -> V3 {
-    [v[0] * k, v[1] * k, v[2] * k]
-}
-pub fn div3(v: &V3, w: &V3) -> V3 {
-    [v[0] / w[0], v[1] / w[1], v[2] / w[2]]
-}
-pub fn div3n(v: &V3, k: f64) -> V3 {
-    [v[0] / k, v[1] / k, v[2] / k]
-}
-pub fn mod3(v: &V3, w: &V3) -> V3 {
-    [v[0] % w[0], v[1] % w[1], v[2] % w[2]]
-}
-pub fn mod3n(v: &V3, k: f64) -> V3 {
-    [v[0] % k, v[1] % k, v[2] % k]
 }
 
 pub fn dot3(v: &V3, w: &V3) -> f64 {
     v[0] * w[0] + v[1] * w[1] + v[2] * w[2]
 }
 pub fn len3(v: &V3) -> f64 {
-    dot3(v, v).sqrt()
+    libm::hypot(libm::hypot(v[0], v[1]), v[2])
 }
 pub fn cross3(v: &V3, w: &V3) -> V3 {
     [v[1] * w[2] - v[2] * w[1], v[2] * w[0] - v[0] * w[2], v[0] * w[1] - v[1] * w[0]]
 }
+/// A zero vector stays zero.
 pub fn norm3(v: &V3) -> V3 {
     let len = match len3(v) {
         0.0 => 1.0,
         l => l,
     };
-    div3n(v, len)
+    [v[0] / len, v[1] / len, v[2] / len]
 }
 
-use xpute_core::math::scalar::round;
-
-pub fn floor3(base: &V3, span: &V3) -> V3 {
-    [(base[0] / span[0]).floor() * span[0], (base[1] / span[1]).floor() * span[1], (base[2] / span[2]).floor() * span[2]]
-}
 pub fn floor3n(v: &V3, k: f64) -> V3 {
     [(v[0] / k).floor() * k, (v[1] / k).floor() * k, (v[2] / k).floor() * k]
-}
-pub fn center3(base: &V3, span: &V3) -> V3 {
-    add3(&floor3(base, span), &mul3n(span, 0.5))
-}
-pub fn center3n(v: &V3, k: f64) -> V3 {
-    add3n(&floor3n(v, k), k * 0.5)
-}
-pub fn ceil3(base: &V3, span: &V3) -> V3 {
-    [(base[0] / span[0]).ceil() * span[0], (base[1] / span[1]).ceil() * span[1], (base[2] / span[2]).ceil() * span[2]]
 }
 pub fn ceil3n(v: &V3, k: f64) -> V3 {
     [(v[0] / k).ceil() * k, (v[1] / k).ceil() * k, (v[2] / k).ceil() * k]
 }
-pub fn round3(base: &V3, span: &V3) -> V3 {
-    [round(base[0] / span[0]) * span[0], round(base[1] / span[1]) * span[1], round(base[2] / span[2]) * span[2]]
-}
-pub fn round3n(v: &V3, k: f64) -> V3 {
-    [round(v[0] / k) * k, round(v[1] / k) * k, round(v[2] / k) * k]
-}
-
-/// `x | 0`: ToInt32 — the fraction dropped, modulo 2^32, NaN to 0.
-fn to_int32(x: f64) -> i32 {
-    if x.is_finite() {
-        (x.trunc() % 4_294_967_296.0) as i64 as i32
-    } else {
-        0
-    }
-}
-
-pub fn i3(v: &V3) -> V3 {
-    [to_int32(v[0]) as f64, to_int32(v[1]) as f64, to_int32(v[2]) as f64]
-}
-
-pub fn snap3n(v: &V3, mask: i32) -> V3 {
-    [(to_int32(v[0]) & !mask) as f64, (to_int32(v[1]) & !mask) as f64, (to_int32(v[2]) & !mask) as f64]
+/// The middle of the cell of side `k` holding `v`.
+pub fn center3n(v: &V3, k: f64) -> V3 {
+    floor3n(v, k).map(|c| c + k * 0.5)
 }
 
 /// An axis-aligned box, in units.
