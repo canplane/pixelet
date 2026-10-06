@@ -13,7 +13,7 @@
 # browser's WebGPU. The server end is native
 # (decision/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl-geo
 # and pxl-api over pxl-server, pxl-geo-bake beside them for what is baked
-# rather than answered, and pxl-overture where the two geo halves read the
+# rather than answered, and pxl-geo-spec where the two geo halves read the
 # same tables.
 #
 # spec/ is what both ends follow, and xpute (../xpute/crates/, its own
