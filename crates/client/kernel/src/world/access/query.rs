@@ -18,6 +18,15 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use crate::world::access::answer::Answer;
 
+/// What a node holds, as far as a descent needs: a box holding what is
+/// stored there, and the finest zoom any of it is held at, past which nothing
+/// is told apart.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Bound {
+    pub aabb: Aabb,
+    pub finest: Zoom,
+}
+
 /// A layer's answers, by the node asked.
 pub trait Query {
     /// A node's cells at the zoom asked: a view over what holds them, never
@@ -28,9 +37,9 @@ pub trait Query {
         Self: 'a;
 
     /// Where anything stands in the node, as its cells at `cell` are read:
-    /// none where nothing does, else a box holding what is stored there. What
-    /// is not known is the answer's, not a box's: no third state.
-    fn bounds(&self, node: Node<3>, cell: Zoom) -> Answer<Option<Aabb>>;
+    /// none where nothing does. What is not known is the answer's, not a
+    /// bound's: no third state.
+    fn bounds(&self, node: Node<3>, cell: Zoom) -> Answer<Option<Bound>>;
 
     /// The node's cells at `cell`, no coarser than the node.
     fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Self::Record<'_>>;

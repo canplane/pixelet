@@ -18,7 +18,7 @@ mod support;
 
 pub use answer::{Answer, Ground, Relief};
 pub use ground::Access;
-pub use query::Query;
+pub use query::{Bound, Query};
 pub use ray::{Detail, Hit, Ray, Struck};
 
 #[cfg(test)]
