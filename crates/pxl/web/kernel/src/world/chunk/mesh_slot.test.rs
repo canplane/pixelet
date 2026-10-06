@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn a_slot_lies_inside_its_group_and_no_two_overlap() {
-    for p in [Pool::Fine, Pool::Coarse] {
+    for p in [Pool::Fine, Pool::Coarse, Pool::Cover] {
         let mut spans: Vec<(u32, u32, u32)> = p
             .range()
             .map(|at| {

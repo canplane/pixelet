@@ -7,9 +7,9 @@
 //! interval of steps. It runs a slice a turn on the observation it began
 //! with, and is published whole.
 //!
-//! Every root within reach that holds anything is a piece, all around the
-//! eye, so ground turned to shows a root and never a hole: a root is a chunk
-//! whose cells are as wide as a chunk at the top's reach (`root_of`). A chunk splits only where some patch's footprint touches it and its
+//! Every chunk at the top within reach that holds anything is a piece (the
+//! cover), all around the eye, so ground turned to shows the cover and never
+//! a hole. A chunk splits only where some patch's footprint touches it and its
 //! projected error crosses a cell (`Lens::error` against `cell_angle`). A
 //! chunk splits only within `split_reach`, which bounds the goal whatever the
 //! screen. A coarser quality splits a subset of what a finer one does.
@@ -18,7 +18,7 @@ use pxl_spec::space::zoom::nearest_box;
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::lod::{cubes_meeting, demand_reach, Tau};
+use pxl_spec::space::lod::{cubes_meeting, demand_reach, reach_cell, Tau};
 use pxl_spec::space::observation::{Bounds, Contents, Observation, Requirement};
 use pxl_spec::space::pvf3::REACH;
 use pxl_spec::space::pyramid::Tile;
@@ -30,16 +30,16 @@ use crate::world::observation::{heights_revision, observation, Known, Order};
 use crate::world::observer::{cell_angle, EdgeRays, Footprint, Lens, Sight};
 use xpute_runtime::global::Global;
 
-use super::chunk::{root_of, Chunk};
+use super::chunk::{chunk_of, Chunk};
 use super::Layer as _;
 use pxl_spec::space::zoom::{units, Zoom};
 
-/// Most roots there can be: every root meeting the far
+/// Most pieces the cover can be: every chunk at the top meeting the far
 /// edge's box (`Observation::reach`), clamped to the position lane. An
 /// interval of `d` meets at most ⌊d / side⌋ + 2 chunks, and the reach is
 /// 2 · `SPLIT` / `CHUNK_CELLS` chunks each way at every zoom.
-pub const fn root_pieces(top: Zoom, planet: f64) -> u32 {
-    let (far, side) = (demand_reach(top), units(root_of(top)));
+pub const fn cover_pieces(top: Zoom, planet: f64) -> u32 {
+    let (far, side) = (demand_reach(top), units(chunk_of(reach_cell(top))));
     let reach = [2.0 * far, 2.0 * far, 2.0 * far + far * far / (2.0 * planet)];
     let (mut n, mut k) = (1, 0);
     while k < 3 {
@@ -81,7 +81,7 @@ impl Cut {
 
 /// Mesh slots per pool.
 pub trait Price {
-    fn piece(&self, c: Chunk, near: f64, tau: Tau) -> [u32; POOLS];
+    fn piece(&self, c: Chunk, outermost: bool, near: f64, tau: Tau) -> [u32; POOLS];
     fn split(&self, c: Chunk) -> [u32; POOLS];
     /// stop counting a step needing `n`
     fn over(&self, n: &[u32; POOLS]) -> bool;
@@ -91,7 +91,7 @@ pub trait Price {
 pub struct Free;
 
 impl Price for Free {
-    fn piece(&self, _: Chunk, _: f64, _: Tau) -> [u32; POOLS] {
+    fn piece(&self, _: Chunk, _: bool, _: f64, _: Tau) -> [u32; POOLS] {
         [0; POOLS]
     }
 
@@ -242,6 +242,8 @@ impl Domain {
             return;
         }
         let (bound, error) = match (self.contents(c), parent) {
+            // A cover piece is drawn one cell per chunk and measured as drawn.
+            (Contents::Holds { bound }, _) if self.outermost(c) => (bound, [units(c.zoom()) / 2.0; 3]),
             // The chunk's cell, alike on every axis.
             (Contents::Holds { bound }, _) => (bound, [units(c.cell_zoom()); 3]),
             // evicted between slices: the parent's bound holds
@@ -290,15 +292,12 @@ impl Domain {
         }
         let splits_to = from_step.min(to);
         self.seen.insert(c, Seen { order, from: from_step, to });
+        let outermost = self.outermost(c);
         for k in self.tracked..self.ladder.len() {
             let at = k as u8;
             let add = if from_step <= at && at < to {
                 self.counted[k] += 1;
-                // A root's room is kept apart (`ROOT_SLOTS`).
-                if c.zoom() == self.root() {
-                    continue;
-                }
-                price.piece(c, order.near, self.ladder[k])
+                price.piece(c, outermost, order.near, self.ladder[k])
             } else if at < splits_to {
                 price.split(c)
             } else {
@@ -483,9 +482,8 @@ impl Domain {
         Order::of(&self.o, &bound)
     }
 
-    /// The roots' zoom.
-    pub fn root(&self) -> Zoom {
-        root_of(self.o.top)
+    pub fn outermost(&self, c: Chunk) -> bool {
+        c.zoom() <= chunk_of(reach_cell(self.o.top))
     }
 
     pub fn pieces(&self) -> &[Chunk] {
@@ -504,13 +502,13 @@ impl Domain {
         &self.ladder
     }
 
-    /// Counted against `root_pieces`, which the observation alone bounds.
+    /// Counted against `cover_pieces`, which the observation alone bounds.
     fn find_roots(&mut self) {
         let top = self.o.top;
         let mut roots = core::mem::take(&mut self.roots);
         roots.clear();
-        for at in cubes_meeting(units(root_of(top)), self.o.reach(self.o.far)) {
-            let c = Chunk::indexed(root_of(top), at);
+        for at in cubes_meeting(units(chunk_of(reach_cell(top))), self.o.reach(self.o.far)) {
+            let c = Chunk::indexed(chunk_of(reach_cell(top)), at);
             if Order::of(&self.o, &c.region()).near >= self.o.far {
                 continue;
             }
@@ -524,7 +522,7 @@ impl Domain {
                 }
             }
         }
-        xpute_core::ensure!(roots.len() as u32 <= root_pieces(top, self.o.planet), ENOTRECOVERABLE, roots.len());
+        xpute_core::ensure!(roots.len() as u32 <= cover_pieces(top, self.o.planet), ENOTRECOVERABLE, roots.len());
         roots.sort_unstable();
         self.roots = roots;
     }
@@ -537,7 +535,7 @@ impl Domain {
     pub fn wanted_over(&self, c: Chunk) -> Chunk {
         std::iter::once(c)
             .chain(c.ancestors())
-            .filter(|k| k.zoom() >= root_of(self.o.top) && !self.splits(*k))
+            .filter(|k| k.zoom() >= chunk_of(reach_cell(self.o.top)) && !self.splits(*k))
             .last()
             .unwrap_or(c)
     }

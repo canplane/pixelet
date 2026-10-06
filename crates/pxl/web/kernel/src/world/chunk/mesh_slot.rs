@@ -4,10 +4,10 @@
 //! room, not an address and never the only copy: any tier takes any free
 //! slot of its pool and every mesh can be rebuilt from the records.
 //!
-//! Two pools: chunks of a leaf's cells or finer (six-word textured boxes, a
-//! group of its own, since a group is one format) and coarser chunks
-//! (four-word boxes, shared groups), where the roots' room is kept
-//! (`ROOT_SLOTS`). A tier with more boxes than a slot fills several, chained. A mesh is never cut to a
+//! Three pools: chunks of a leaf's cells or finer (six-word textured
+//! boxes, a group of its own, since a group is one format), coarser chunks
+//! (four-word boxes, shared groups), and the cover (one slot per possible
+//! root). A tier with more boxes than a slot fills several, chained. A mesh is never cut to a
 //! slot, which left steep ground missing (2026-09-26), nor baked coarser to
 //! fit, which was a second quality policy.
 
@@ -17,7 +17,7 @@ use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::pyramid::{CHUNK_CELLS, LEAF_Z, TOP_Z};
 
 use crate::param::{ARENA_COARSE_GROUPS, COARSE_POOL_BYTES, FINE_POOL_BYTES};
-use crate::world::pyramid::domain::root_pieces;
+use crate::world::pyramid::domain::cover_pieces;
 use pxl_spec::space::zoom::Zoom;
 
 const COARSE_GROUPS: u32 = ARENA_COARSE_GROUPS;
@@ -36,35 +36,39 @@ const GROUP_SLOTS: u32 = COARSE_POOL_BYTES / COARSE_GROUPS / (COARSE_BOXES * COA
 /// representation, which `RESERVE` keeps free for one coarsening.
 pub const COARSE_TIER_SLOTS: u32 = (2 * CHUNK_CELLS.pow(3)).div_ceil(COARSE_BOXES);
 
-pub const POOLS: usize = 2;
+pub const POOLS: usize = 3;
 
-/// Kept in the coarse pool for the roots, which no other chunk takes: the
-/// most roots over any top, each a coarse chunk filling at most
-/// `COARSE_TIER_SLOTS`. So a root the view lacks always finds room.
-pub const ROOT_SLOTS: u32 = {
+/// At its coarsest a chunk is one cell: its box and the floor under it.
+pub const COVER_BOXES: u32 = 2;
+
+/// The most cover pieces over any top. Exact: each root holds one slot at
+/// most, so a root the cover lacks always finds one free.
+pub const COVER_SLOTS: u32 = {
     let (mut most, mut top) = (0, TOP_Z);
     while top <= LEAF_Z {
-        let n = root_pieces(top, MERCATOR_RADIUS_U);
+        let n = cover_pieces(top, MERCATOR_RADIUS_U);
         if n > most {
             most = n;
         }
         top += 1;
     }
-    most * COARSE_TIER_SLOTS
+    most
 };
-
-const _: () = assert!(ROOT_SLOTS + COARSE_TIER_SLOTS <= COARSE_GROUPS * GROUP_SLOTS, "the coarse pool short of the roots and a coarsening");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Pool {
     Fine = 0,
     Coarse = 1,
+    Cover = 2,
 }
 
 impl Pool {
-    /// A tier drawing cells of `cell_zoom`: textured, a leaf's or finer; or coarser.
-    pub const fn of(cell_zoom: Zoom) -> Pool {
-        if cell_zoom >= CELL {
+    /// A tier of `chunk` drawing cells of `cell_zoom`: itself as one cell, a
+    /// cover piece; textured cells, a leaf's or finer; or coarser ones.
+    pub const fn of(chunk: Zoom, cell_zoom: Zoom) -> Pool {
+        if cell_zoom == chunk {
+            Pool::Cover
+        } else if cell_zoom >= CELL {
             Pool::Fine
         } else {
             Pool::Coarse
@@ -75,6 +79,7 @@ impl Pool {
         match self {
             Pool::Fine => FINE_SLOTS,
             Pool::Coarse => COARSE_GROUPS * GROUP_SLOTS,
+            Pool::Cover => COVER_SLOTS,
         }
     }
 
@@ -82,6 +87,7 @@ impl Pool {
         match self {
             Pool::Fine => FINE_BOXES,
             Pool::Coarse => COARSE_BOXES,
+            Pool::Cover => COVER_BOXES,
         }
     }
 
@@ -89,6 +95,7 @@ impl Pool {
         match self {
             Pool::Coarse => 0,
             Pool::Fine => Pool::Coarse.slots() as usize,
+            Pool::Cover => (Pool::Coarse.slots() + Pool::Fine.slots()) as usize,
         }
     }
 
@@ -99,29 +106,35 @@ impl Pool {
     pub const fn at(index: usize) -> Pool {
         if index < Pool::Fine.first() {
             Pool::Coarse
-        } else {
+        } else if index < Pool::Cover.first() {
             Pool::Fine
+        } else {
+            Pool::Cover
         }
     }
 }
 
-pub const ARENA: [u32; POOLS] = [Pool::Fine.slots(), Pool::Coarse.slots()];
+pub const ARENA: [u32; POOLS] = [Pool::Fine.slots(), Pool::Coarse.slots(), Pool::Cover.slots()];
 
-pub const fn capacity(cell_zoom: Zoom) -> u32 {
-    Pool::of(cell_zoom).boxes()
+pub const fn capacity(chunk: Zoom, cell_zoom: Zoom) -> u32 {
+    Pool::of(chunk, cell_zoom).boxes()
 }
 
-pub const GROUPS: u32 = COARSE_GROUPS + 1;
+pub const GROUPS: u32 = COARSE_GROUPS + 2;
 const FINE_GROUP: u32 = COARSE_GROUPS;
-pub const OCCUPANCY: usize = (Pool::Coarse.slots() + Pool::Fine.slots()) as usize;
+const COVER_GROUP: u32 = COARSE_GROUPS + 1;
+pub const OCCUPANCY: usize = (Pool::Coarse.slots() + Pool::Fine.slots() + Pool::Cover.slots()) as usize;
 
 // WebGPU's default ceiling on one storage binding.
 const _: () = assert!(group_bytes_of(0) as u64 <= 128 << 20, "an arena group past a storage binding's limit");
 const _: () = assert!(group_bytes_of(FINE_GROUP) as u64 <= 128 << 20, "the leaves' group past a storage binding's limit");
+const _: () = assert!(group_bytes_of(COVER_GROUP) as u64 <= 128 << 20, "the cover's group past a storage binding's limit");
 
 const fn pool_of_group(group: u32) -> Pool {
     if group == FINE_GROUP {
         Pool::Fine
+    } else if group == COVER_GROUP {
+        Pool::Cover
     } else {
         Pool::Coarse
     }
@@ -168,6 +181,7 @@ pub fn slot_at(index: usize) -> MeshSlot {
     let (group, residue) = match pool {
         Pool::Coarse => (n / GROUP_SLOTS, n % GROUP_SLOTS),
         Pool::Fine => (FINE_GROUP, n),
+        Pool::Cover => (COVER_GROUP, n),
     };
     let capacity = pool.boxes();
     MeshSlot {

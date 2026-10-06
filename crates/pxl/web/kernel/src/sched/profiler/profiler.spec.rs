@@ -680,13 +680,14 @@ pub mod SUMMARY {
         pub const admitted: u32 = 3;
         pub const evicted: u32 = 4;
         pub const refined: u32 = 5;
-        pub const changes_peak: u32 = 6;
-        pub const WORDS: u32 = 7;
-        pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "refined", "changes_peak", "WORDS"];
+        pub const retiered: u32 = 6;
+        pub const changes_peak: u32 = 7;
+        pub const WORDS: u32 = 8;
+        pub const KEYS: &[&str] = &["AT", "step", "star", "frames_held", "admitted", "evicted", "refined", "retiered", "changes_peak", "WORDS"];
     }
     /// The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for.
     pub mod heap {
-        pub const AT: u32 = 624;
+        pub const AT: u32 = 625;
         pub const used_mb: u32 = 0;
         pub const requests: u32 = 1;
         pub const WORDS: u32 = 2;
@@ -694,7 +695,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from.
     pub mod view {
-        pub const AT: u32 = 626;
+        pub const AT: u32 = 627;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -733,7 +734,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 642;
+    pub const WORDS: u32 = 643;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "heap", "view", "WORDS"];
 }
 

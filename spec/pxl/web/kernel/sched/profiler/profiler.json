@@ -453,6 +453,7 @@
       "admitted": 1,
       "evicted": 1,
       "refined": 1,
+      "retiered": 1,
       "changes_peak": 1
     },
     "heap": {

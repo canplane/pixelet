@@ -47,7 +47,7 @@ fn runs_zoom(c: PyramidChunk, finest: Zoom) -> Zoom {
 }
 
 /// How many run columns a tier drawing `cell_zoom` folds into a cell along an
-/// axis (the mesher's step): one, or the fold's.
+/// axis (the mesher's step): one, the fold's, or the whole chunk for a cover piece.
 fn mesh_step(cell_zoom: Zoom, runs: Zoom) -> u32 {
     count(runs, cell_zoom)
 }
@@ -87,15 +87,12 @@ pub const RUN_SETS: usize = 2;
 pub enum BuildEvent {
     /// All slots for a tier are asked for at once, before any is written. If
     /// refused, the bake is thrown away and the need recorded (`Slot::need`).
-    Reserve {
-        id: u32,
-        generation: u32,
-        boxes: u32,
-    },
+    Reserve { id: u32, generation: u32, cell_zoom: Zoom, boxes: u32 },
     /// One slot's worth of boxes (less for the last) at `at` in `.fixed.bake`.
     Part {
         id: u32,
         generation: u32,
+        cell_zoom: Zoom,
         at: u32,
         first: u32,
         box_cnt: u32,
@@ -104,6 +101,7 @@ pub enum BuildEvent {
     Tier {
         id: u32,
         generation: u32,
+        cell_zoom: Zoom,
         box_cnt: u32,
         heights: Heights,
     },
@@ -192,8 +190,7 @@ impl Read {
 struct Chunk {
     at: PyramidChunk,
     generation: u32,
-    /// Its tier is asked for.
-    want: bool,
+    want: [Option<Zoom>; 2],
     /// Heap release count at the last refusal: until something is freed the same
     /// request would fail, so the chunk is skipped.
     refused: Option<u32>,
@@ -235,6 +232,14 @@ impl Chunk {
     fn in_leaf(&self, runs: Zoom) -> [u32; 2] {
         offset_in(self.at.column().1, self.finer(runs)).map(|v| v as u32 * (run_span(self.at, runs) - 2 * APRON))
     }
+
+    fn wants(&self, cell_zoom: Zoom) -> bool {
+        self.want.contains(&Some(cell_zoom))
+    }
+
+    fn wanted(&self) -> impl Iterator<Item = Zoom> + '_ {
+        self.want.iter().copied().flatten()
+    }
 }
 
 /// The one chunk whose runs are being written, a few rows a step: its sample
@@ -248,6 +253,7 @@ struct RunsJob {
 
 struct BakeJob {
     id: u32,
+    cell_zoom: Zoom,
     generation: u32,
     mesh: Option<Block>,
     handed: u32,
@@ -362,7 +368,7 @@ impl Builder {
             Chunk {
                 at,
                 generation: 0,
-                want: false,
+                want: [None; 2],
                 refused: None,
             },
         );
@@ -381,18 +387,19 @@ impl Builder {
         }
     }
 
-    pub fn baking(&self) -> Option<(u32, u32)> {
-        self.bake_job.as_ref().map(|j| (j.id, j.generation))
+    pub fn baking(&self) -> Option<(u32, Zoom, u32)> {
+        self.bake_job.as_ref().map(|j| (j.id, j.cell_zoom, j.generation))
     }
 
     /// A bake of a tier no longer wanted gives its slot back now.
-    pub fn want(&mut self, id: u32, want: bool) {
+    pub fn want(&mut self, id: u32, want: [Option<Zoom>; 2]) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
         c.want = want;
-        if !want {
-            if matches!(&self.bake_job, Some(j) if j.id == id) {
-                self.abort_bake();
-            }
+        let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.cell_zoom));
+        if stale {
+            self.abort_bake();
+        }
+        if want == [None, None] {
             self.end_runs_job(|j| j.id == id);
             self.leave_runs(id);
         }
@@ -481,11 +488,15 @@ impl Builder {
         }
     }
 
-    fn unwant(&mut self, id: u32) {
+    fn unwant(&mut self, id: u32, cell_zoom: Zoom) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
-        c.want = false;
-        self.end_runs_job(|j| j.id == id);
-        self.leave_runs(id);
+        for w in c.want.iter_mut().filter(|w| **w == Some(cell_zoom)) {
+            *w = None;
+        }
+        if c.wanted().next().is_none() {
+            self.end_runs_job(|j| j.id == id);
+            self.leave_runs(id);
+        }
     }
 
     fn abort_bake(&mut self) {
@@ -534,7 +545,7 @@ impl Builder {
 
     fn advance(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
         let Some(c) = self.chunks.get(&id) else { return Progress::Done };
-        if !c.want {
+        if c.wanted().next().is_none() {
             return Progress::Done;
         }
         if c.refused.is_some_and(|r| r == crate::host::heap_stat().releases) {
@@ -686,7 +697,7 @@ impl Builder {
             if self.bake_job.is_some() {
                 return Progress::Blocked;
             }
-            let cell_zoom = c.at.cell_zoom();
+            let cell_zoom = c.wanted().next().unwrap();
             // Runs span the whole column; this chunk bakes only its own heights, in its runs' cells.
             let (z0, z1) = c.at.z_range();
             let z = z_unit(runs.zoom);
@@ -699,6 +710,7 @@ impl Builder {
             }
             self.bake_job = Some(BakeJob {
                 id,
+                cell_zoom,
                 generation: c.generation,
                 mesh: None,
                 handed: 0,
@@ -715,18 +727,19 @@ impl Builder {
                 // All slots are held at once or the bake is thrown away: a mesh is never
                 // cut, never baked coarser, and never waits while holding the one bake.
                 let job = self.bake_job.as_ref().unwrap();
-                let cell_zoom = c.at.cell_zoom();
-                let (words_a_box, room_a_slot) = (box_words(cell_zoom >= CELL), capacity(cell_zoom));
+                let fine = job.cell_zoom >= CELL;
+                let (words_a_box, room_a_slot) = (box_words(fine), capacity(c.at.zoom(), job.cell_zoom));
                 let boxes = words / words_a_box;
                 let asked = BuildEvent::Reserve {
                     id,
                     generation: job.generation,
+                    cell_zoom: job.cell_zoom,
                     boxes,
                 };
                 if !emit(asked) {
-                    self.bake_job = None;
+                    let job = self.bake_job.take().unwrap();
                     self.bake.abort();
-                    self.unwant(id);
+                    self.unwant(id, job.cell_zoom);
                     return Progress::Busy;
                 }
                 let block = boxes.min(room_a_slot) * words_a_box;
@@ -746,11 +759,13 @@ impl Builder {
                 if gpu().is_some() && device_ready() && !room(bytes) {
                     return Progress::Blocked;
                 }
-                let words_a_box = box_words(c.at.cell_zoom() >= CELL);
+                let fine = job.cell_zoom >= CELL;
+                let words_a_box = box_words(fine);
                 let n = bytes / 4 / words_a_box;
                 emit(BuildEvent::Part {
                     id,
                     generation: job.generation,
+                    cell_zoom: job.cell_zoom,
                     at: at as u32,
                     first: job.handed,
                     box_cnt: n,
@@ -781,16 +796,18 @@ impl Builder {
                     emit(BuildEvent::Part {
                         id,
                         generation: job.generation,
+                        cell_zoom: job.cell_zoom,
                         at: at as u32,
                         first: job.handed,
                         box_cnt: mesh.box_cnt - job.handed,
                         heights: mesh.heights,
                     });
                 }
-                self.unwant(id);
+                self.unwant(id, job.cell_zoom);
                 emit(BuildEvent::Tier {
                     id,
                     generation: job.generation,
+                    cell_zoom: job.cell_zoom,
                     box_cnt: mesh.box_cnt,
                     heights: mesh.heights,
                 });

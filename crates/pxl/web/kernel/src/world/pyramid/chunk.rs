@@ -22,15 +22,8 @@ pub const fn chunk_of(cell: Zoom) -> Zoom {
     cell - CHUNK_STEPS
 }
 
-/// A view's roots over a top at `top`: each of its cells as wide as a chunk
-/// whose cells are the coarsest the top's reach draws, so it stands for one
-/// such chunk where nothing seen asks for more.
-pub const fn root_of(top: Zoom) -> Zoom {
-    chunk_of(chunk_of(reach_cell(top)))
-}
-
-/// The coarsest chunk: the roots over the coarsest top.
-pub const TOP_CHUNK: Zoom = root_of(TOP_Z);
+/// The coarsest chunk: its cells are the coarsest any view draws.
+pub const TOP_CHUNK: Zoom = chunk_of(reach_cell(TOP_Z));
 
 /// The finest chunk: its cells are the objects' finest.
 pub const FINEST_CHUNK: Zoom = chunk_of(OBJECT_FINEST);

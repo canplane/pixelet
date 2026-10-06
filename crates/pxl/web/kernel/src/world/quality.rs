@@ -15,6 +15,8 @@
 //! `Need`). Smoothing coarsens at a publish, and refines one step after
 //! `QUALITY_WAIT_MS` with `QUALITY_MARGIN` to spare.
 
+use pxl_render::look::globe::MERCATOR_RADIUS_U;
+use pxl_spec::bake::published::PUBLISHED_TOP_Z;
 use pxl_spec::space::lod::{target_cell_px, Tau, SPLIT};
 
 use crate::kernel::kernel;
@@ -22,13 +24,17 @@ use crate::param;
 use crate::world::chunk::frontier::{Need, Slots, HEADROOM};
 use crate::world::chunk::mesh_slot::{Pool, ARENA, POOLS};
 use crate::world::frame::view::view;
-use crate::world::pyramid::domain;
+use crate::world::pyramid::domain::{self, cover_pieces};
 use xpute_runtime::global::Global;
 
 const _: () = assert!(param::QUALITY_WAIT_MS > 0.0, "a policy asked twice at one instant would step finer twice");
 const _: () = assert!(param::TAU_STEP > 1.0, "a step that is not coarser");
-// The headroom, the roots' room among it, fits the arena, so the floor's
-// answer is always drawn.
+// The cover's pool holds every piece it can have, and the headroom fits
+// the other pools, so the floor's answer is always drawn.
+const _: () = assert!(
+    cover_pieces(PUBLISHED_TOP_Z, MERCATOR_RADIUS_U) <= ARENA[Pool::Cover as usize],
+    "the published source's cover does not fit its pool: ground it answers could stay unresolved"
+);
 const _: () = assert!(
     HEADROOM[Pool::Fine as usize] <= ARENA[Pool::Fine as usize] && HEADROOM[Pool::Coarse as usize] <= ARENA[Pool::Coarse as usize],
     "the headroom does not fit the arena: a view could be left with no move it can make"
@@ -77,9 +83,9 @@ pub fn around(at: usize, len: usize, mut fit: impl FnMut(usize, bool) -> bool) -
     (finer(&mut fit, false), finer(&mut fit, true))
 }
 
-/// Room the policy keeps past a step before it goes finer.
+/// None for the cover, whose pieces are the roots at every quality.
 fn margin() -> Slots {
-    ARENA.map(|n| (n as f64 * param::QUALITY_MARGIN) as u32)
+    core::array::from_fn(|p| if p == Pool::Cover as usize { 0 } else { (ARENA[p] as f64 * param::QUALITY_MARGIN) as u32 })
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -140,7 +146,7 @@ pub fn step(stop: &dyn Fn() -> bool) {
     let q = QUALITY.get(Quality::default);
     let sched = &kernel().sched;
     let price = Need {
-        slots: |c| sched.slots_of(c),
+        slots: |c, cube| sched.slots_of(c, cube),
         admit: true,
     };
     domain::advance(q.smooth.at(), &price, stop);

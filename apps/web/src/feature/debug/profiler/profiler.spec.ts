@@ -326,19 +326,20 @@ export const SUMMARY = {
     admitted: 3 as number,
     evicted: 4 as number,
     refined: 5 as number,
-    changes_peak: 6 as number,
-    WORDS: 7 as number,
+    retiered: 6 as number,
+    changes_peak: 7 as number,
+    WORDS: 8 as number,
   },
   /** The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for. */
   heap: {
-    AT: 624 as number,
+    AT: 625 as number,
     used_mb: 0 as number,
     requests: 1 as number,
     WORDS: 2 as number,
   },
   /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from. */
   view: {
-    AT: 626 as number,
+    AT: 627 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -357,7 +358,7 @@ export const SUMMARY = {
     read_zoom: 15 as number,
     WORDS: 16 as number,
   },
-  WORDS: 642 as number,
+  WORDS: 643 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */
