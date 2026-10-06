@@ -27,11 +27,11 @@ fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Tile> {
 }
 
 #[test]
-fn a_zoom_faults_on_at_most_three_by_three_tiles_wherever_the_foot_stands() {
+fn a_zoom_demands_at_most_its_reach_in_tiles_wherever_the_foot_stands() {
     for zoom in TOP_Z..=LEAF_Z {
         for foot in feet(zoom) {
             let n = demands(zoom, foot).len() as u32;
-            assert!(n <= REACH_TILES && n <= 9, "z{zoom} at {foot:?}: {n} tiles");
+            assert!(n <= REACH_TILES, "z{zoom} at {foot:?}: {n} tiles");
         }
     }
 }

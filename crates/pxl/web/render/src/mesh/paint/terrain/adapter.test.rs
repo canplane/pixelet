@@ -30,6 +30,11 @@ fn a_chunk_with_no_surface_has_no_ground_and_no_floor() {
     let i = apron_col(0, 0) as usize;
     assert!(!sample.has_ground(i));
     let mut runs = 0;
-    sample.column_runs(i, |_, _, _, _| Ok::<(), ()>(runs += 1)).unwrap();
+    sample
+        .column_runs(i, |_, _, _, _| {
+            runs += 1;
+            Ok::<(), ()>(())
+        })
+        .unwrap();
     assert_eq!(runs, 0);
 }

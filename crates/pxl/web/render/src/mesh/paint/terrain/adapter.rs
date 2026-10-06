@@ -274,7 +274,7 @@ impl ChunkSample {
                 let o = over[i].2;
                 i += 1;
                 let Some((slab, slab_layer)) = tables.of(o.kind) else { continue };
-                let ground = self.ele[col] as i32;
+                let ground = self.ele[col];
                 let (slab_at, pier_at) = match o.occupies(ground, cell_per_m) {
                     Occupies::Grade => {
                         (self.material[col], self.layer_idx[col]) = (slab, slab_layer);
@@ -383,7 +383,7 @@ impl ChunkSample {
         if !self.has_ground(i) {
             return Ok(());
         }
-        let top = (self.ele[i] as i32).min(to);
+        let top = self.ele[i].min(to);
         let (m, l) = (self.material[i], self.layer_idx[i]);
         let mut part = |lo: i32, hi: i32, m: u32, l: u8| if lo.max(from) < hi { run(lo.max(from), hi - 1, m, l) } else { Ok(()) };
         let b = self.bore[i];

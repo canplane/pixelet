@@ -527,7 +527,7 @@ fn run() -> Result<(), String> {
             return Err(format!("{} tiles failed to assemble", t.failed));
         }
 
-        let top = build(&tiles, &Absence::new(coverage.clone()), args.concurrency)?;
+        let top = build(&tiles, &Absence::new(coverage), args.concurrency)?;
         write_manifest(
             &tiles,
             top,
