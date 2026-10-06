@@ -106,9 +106,9 @@ const DATA_SPECS: [DataSpec; 14] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/client/kernel/layer/character/variant.json",
+        json: "spec/client/kernel/scene/character/variant.json",
         ts: Some("apps/web/src/feature/character/variant.spec.ts"),
-        rs: Some("crates/client/kernel/src/layer/character/variant.spec.rs"),
+        rs: Some("crates/client/kernel/src/scene/character/variant.spec.rs"),
         module: Some("variant_spec"),
         enums: Enums::All,
         ts_names: Some(&["groups", "PERSON_GENDER_PREFIXES"]),

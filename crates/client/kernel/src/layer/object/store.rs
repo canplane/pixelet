@@ -18,23 +18,24 @@ use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_ai
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::{Aabb, V3};
-use pxl_spec::space::coord::world::{around, nearest, ROUND, REACH};
+use pxl_spec::space::coord::world::{around, nearest, REACH, ROUND};
 use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
-use pxl_spec::space::hierarchy::tree::{child_of, first_descendant_of};
+use pxl_spec::space::hierarchy::tree::{child_of, first_descendant_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
 use crate::kernel::kernel;
-use crate::layer::decor::build::{scatters_at, Draw};
 use crate::layer::object::repository;
-use crate::world::access::Access;
+use crate::layer::{Answer, Bound, Query};
 use crate::world::change::request_world_tick;
+use crate::world::chunk::decor::build::{scatters_at, Draw};
 use crate::world::chunk::source::chunk_sources_changed;
-use crate::world::observation::objects_written;
+use crate::world::query::Access;
+use crate::world::view::observation::objects_written;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EntryKind {
@@ -277,7 +278,11 @@ impl Store {
     fn find(&self, zoom: Zoom, at: [i64; 3]) -> Option<Found<'_>> {
         let tree = self.columns.get(&key(SHARD_ZOOM, column(zoom, at)))?;
         let (depth, slot) = tree.get(u32::from(zoom - SHARD_ZOOM), at);
-        Some(Found { tree, zoom: SHARD_ZOOM + depth as Zoom, slot })
+        Some(Found {
+            tree,
+            zoom: SHARD_ZOOM + depth as Zoom,
+            slot,
+        })
     }
 
     /// What a node shows: a leaf's value, or its children folded.
@@ -372,7 +377,11 @@ impl Store {
         let about = about(&cube(zoom, at));
         match f.slot {
             Slot::Leaf(EMPTY) => {}
-            Slot::Leaf(v) => visit(&Entry { zoom: f.zoom, at: moved(f.zoom, at.map(|c| c >> (zoom - f.zoom)), about), state: u32::from(v) }),
+            Slot::Leaf(v) => visit(&Entry {
+                zoom: f.zoom,
+                at: moved(f.zoom, at.map(|c| c >> (zoom - f.zoom)), about),
+                state: u32::from(v),
+            }),
             branch => self.walk(f.tree, branch, zoom, at, about, &mut |zoom, at, _, leaf| {
                 if let Some(v) = leaf {
                     visit(&Entry { zoom, at, state: u32::from(v) });
@@ -503,8 +512,22 @@ impl Store {
         let Some(f) = self.find(zoom, at) else { return empty };
         match f.slot {
             Slot::Leaf(EMPTY) => empty,
-            Slot::Leaf(v) => (Entry { zoom: f.zoom, at: at.map(|c| c >> (zoom - f.zoom)), state: u32::from(v) }, false),
-            branch => (Entry { zoom, at, state: u32::from(self.fold(f.tree, branch, zoom, at, None)) }, true),
+            Slot::Leaf(v) => (
+                Entry {
+                    zoom: f.zoom,
+                    at: at.map(|c| c >> (zoom - f.zoom)),
+                    state: u32::from(v),
+                },
+                false,
+            ),
+            branch => (
+                Entry {
+                    zoom,
+                    at,
+                    state: u32::from(self.fold(f.tree, branch, zoom, at, None)),
+                },
+                true,
+            ),
         }
     }
 
@@ -597,6 +620,76 @@ fn try_insert(out: &mut HashMap<[i64; 3], u32>, k: [i64; 3], v: u32) -> Result<(
     }
     out.insert(k, v);
     Ok(())
+}
+
+/// A node's objects at a cell zoom, as the query reads them: the store and
+/// what was asked, folded when read, nothing kept.
+#[derive(Clone, Copy)]
+pub struct Cells<'a> {
+    store: &'a Store,
+    node: Node<3>,
+    cell: Zoom,
+}
+
+impl Cells<'_> {
+    /// What the objects fold to in the cells `from..to` at the asked zoom, with `hide` left out.
+    pub fn fold(&self, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
+        self.store.fold_at(self.cell, from, to, hide, out)
+    }
+
+    /// Every leaf meeting the node's cube.
+    pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
+        self.store.entries_in(&cube(self.node.0, self.node.1), visit);
+    }
+}
+
+impl Query for Store {
+    type Record<'a> = Cells<'a>;
+
+    /// All resident, so every answer is exact. Read at `cell`: a node held
+    /// finer than its cells is one cube and `finest` one past `cell`, so the
+    /// cost is the asker's resolution — one find for a node read whole.
+    fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+        let mut out: Option<Bound> = None;
+        let mut hold = |aabb: Aabb, finest: Zoom| {
+            out = Some(out.map_or(Bound { aabb, finest }, |o| Bound {
+                aabb: o.aabb.join(aabb),
+                finest: o.finest.max(finest),
+            }))
+        };
+        let whole = region(node);
+        // One tree holds a cube under a column's root; else its columns' leaves.
+        let Some(at) = (D == 3 && node.0 >= SHARD_ZOOM).then(|| [node.1[0], node.1[1], node.1[2]]) else {
+            self.entries_in(&whole, &mut |e| {
+                if let Some(b) = e.cube().meet(whole) {
+                    hold(b, e.zoom.min(cell + 1));
+                }
+            });
+            return Answer::Exact(out);
+        };
+        let zoom = node.0;
+        match self.find(zoom, at) {
+            None => {}
+            Some(Found { slot: Slot::Leaf(EMPTY), .. }) => {}
+            Some(Found { slot: Slot::Leaf(_), zoom: z, .. }) => hold(whole, z),
+            Some(f) => self.walk(f.tree, f.slot, zoom, at, about(&whole), &mut |z, _, c, leaf| {
+                if leaf.is_some() {
+                    hold(*c, z);
+                    false
+                } else if z >= cell {
+                    hold(*c, cell + 1);
+                    false
+                } else {
+                    true
+                }
+            }),
+        }
+        Answer::Exact(out)
+    }
+
+    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Cells<'_>> {
+        Answer::Exact(Cells { store: self, node, cell })
+    }
 }
 
 #[cfg(test)]

@@ -5,8 +5,8 @@
 // session.
 
 use crate::layer::object::size::OBJECT_SIZES;
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::coord::pvf3::{fvec, ivec};
+use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;
 

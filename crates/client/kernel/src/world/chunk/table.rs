@@ -14,6 +14,9 @@ pub use census::{Census, ChunkCounts, ChunkHeld};
 pub use mesh::Meshes;
 pub use mount::MOUNTS_BYTES;
 
+use crate::layer::Query;
+use crate::world::chunk::build::{ground_of, leaf_of};
+use crate::world::query::Access;
 use mesh::*;
 use mount::*;
 
@@ -21,38 +24,35 @@ use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch};
 use pxl_render::look::globe::Globe;
 use pxl_render::mesh::chunk_mesher::Heights;
-use pxl_render::mesh::paint::terrain::adapter::beside_index;
-use pxl_render::mesh::run::APRON;
 
 use crate::sched::profiler::frame::ZOOMS;
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::{dot3, len3, Aabb, V3};
-use pxl_spec::space::layer::demand::Bounds as _;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
 use crate::kernel::kernel;
 use crate::kernel::World;
-use crate::layer::marker::hover_cursor::{render_edits, RenderEdits};
 use crate::layer::object::store::EntryAt;
 use crate::param;
+use crate::scene::marker::hover_cursor::{render_edits, RenderEdits};
+use crate::scene::Scene;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{draws_as_held, BuildEvent, Builder};
 use crate::world::chunk::frontier::{pool_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, OCCUPANCY};
 use crate::world::chunk::source::{draws, objects_drawn, Drawn};
-use crate::world::frame::scene::Scene;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::global::Global;
 
-use crate::world::observation::{Known, Order};
-use crate::world::pyramid::chunk::Chunk;
-use crate::world::pyramid::domain::{self, Domain};
+use crate::world::chunk::domain::{self, Domain};
+use crate::world::chunk::Chunk;
 use crate::world::pyramid::Layer as _;
+use crate::world::view::observation::Order;
 use pxl_spec::bake::format::Terrain;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,19 +139,15 @@ impl Sources {
     fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
         let drawn = |at: &EntryAt| draws(k, *at) && draws_as_held(k, at.zoom());
+        let objects = objects_drawn(&kernel().objects, k);
+        let (own, beside) = ground_of(leaf_of(k, objects.as_ref().map_or(k.cell_zoom(), Drawn::runs)));
         Sources {
             textured: settings.textures,
-            objects: objects_drawn(&kernel().objects, k),
+            objects,
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
-            read_from: Terrain::pyramid().residency().drawn_from(GROUND.read_tile(k.column())).map(|p| p.zoom),
-            beside_from: {
-                let mut from = [None; 8];
-                for ([qx, qy], p) in GROUND.read_beside(k.column(), APRON) {
-                    from[beside_index(qx, qy)] = Terrain::pyramid().residency().drawn_from(p).map(|p| p.zoom);
-                }
-                from
-            },
+            read_from: own.value().map(|s| s.from.zoom),
+            beside_from: beside.map(|b| b.map(|s| s.from.zoom)),
         }
     }
 }
@@ -167,7 +163,7 @@ impl Slot {
     /// then never built, leaving holes with nothing left to fetch.
     fn unmeasured(&mut self) {
         let region = self.chunk.region();
-        let b = Known.contents(self.chunk.cell_zoom(), region).within(region).unwrap_or(region);
+        let b = Access::now().bounds(self.chunk.node(), self.chunk.cell_zoom()).value().flatten().map_or(region, |b| b.aabb);
         let c = b.center();
         self.bc = [c[0] - region.min[0], c[1] - region.min[1], c[2]];
         self.radius = b.radius();
@@ -274,7 +270,7 @@ impl Env for Pieces<'_> {
     }
 
     fn buildable(&self, c: Chunk) -> bool {
-        Terrain::pyramid().residency().drawn_from(GROUND.read_tile(c.column())).is_some()
+        Terrain::pyramid().residency().read(c.node(), c.cell_zoom()).value().is_some()
     }
 
     fn order(&self, c: Chunk) -> Order {
@@ -400,7 +396,7 @@ impl Scheduler {
     pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
         let s = self.drawn_slot(p)?;
         Some((
-            GROUND.read_zoom(s.chunk.zoom()) as i32,
+            GROUND.read_zoom(s.chunk.cell_zoom()) as i32,
             s.layout.map(|_| GROUND.tile_zoom(s.chunk.cell_zoom())),
             s.sources.read_from.map(|z| z as i32),
         ))

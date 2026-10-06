@@ -22,7 +22,7 @@ use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::store::{camera_store, Intent, IntentPatch};
 use crate::control::navigation::support::target;
 use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
-use crate::world::frame::view::view_compose;
+use crate::world::view::frame::pose::view_compose;
 use terrain_gate::{allowed_view, climb_polar, ViewTriple};
 use xpute_runtime::global::Global;
 

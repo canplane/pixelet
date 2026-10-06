@@ -57,15 +57,15 @@ impl Range {
 }
 
 /// None is let go.
-pub const MODELS_MAX: usize = crate::layer::character::variant::MODELS_MAX + crate::layer::decor::asset_store::MODELS_MAX;
+pub const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::world::chunk::decor::asset_store::MODELS_MAX;
 
-pub const ACTORS_MAX: usize = crate::layer::character::companion::ACTORS_MAX + crate::layer::character::preview::CASES_MAX;
+pub const ACTORS_MAX: usize = crate::scene::character::companion::ACTORS_MAX + crate::scene::character::preview::CASES_MAX;
 
 const SINGLE_BLOCKS: usize = 3;
 
 /// Each owner's bound summed, so the table cannot fill. The renderer frees
 /// a list's blocks before taking its uploads, so it never holds more.
-pub const MAX_LIVE_BLOCKS: usize = crate::layer::decor::cell::BLOCKS_MAX + MODELS_MAX + ACTORS_MAX + crate::layer::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
+pub const MAX_LIVE_BLOCKS: usize = crate::world::chunk::decor::cell::BLOCKS_MAX + MODELS_MAX + ACTORS_MAX + crate::scene::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
 
 pub const BLOCK_SLOTS: usize = block_slots(MAX_LIVE_BLOCKS);
 

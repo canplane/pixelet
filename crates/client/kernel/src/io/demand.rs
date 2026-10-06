@@ -6,7 +6,7 @@
 use pxl_spec::bake::published::BakeKind;
 
 pub use crate::sched::profiler::spec::TaskPhaseName;
-use crate::world::observation::Order;
+use crate::world::view::observation::Order;
 
 pub const PHASES_MAX: usize = 6;
 

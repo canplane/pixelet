@@ -15,13 +15,13 @@
 use core::cmp::Ordering;
 
 use crate::io::demand::{Ask, Category, DemandKey, Phases};
+use crate::io::failure::{Failure, Outcome};
 use crate::io::load::LOADS;
 use crate::io::policy::Policy;
 use crate::layer::earth::Earth;
-use crate::io::failure::{Failure, Outcome};
+use crate::layer::residency::Residency;
 use crate::sched::profiler::record::profiler_record;
 use crate::sched::profiler::task::TaskRecord;
-use crate::world::residency::Residency;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
 use xpute_core::status::bug::OrBug;

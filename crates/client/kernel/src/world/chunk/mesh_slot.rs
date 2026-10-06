@@ -11,8 +11,8 @@
 //! fit, which was a second quality policy.
 
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
+use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::param::{ARENA_COARSE_GROUPS, COARSE_POOL_BYTES, FINE_POOL_BYTES};
 use pxl_spec::space::coord::zoom::Zoom;

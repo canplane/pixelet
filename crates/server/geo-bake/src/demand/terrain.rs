@@ -6,7 +6,7 @@ use crate::terrain::absent::Absence;
 use pxl_spec::space::layer::tile::Tile;
 
 /// Each tile's rows the deck solve read and each structure it solved, kept
-/// for the tiles around while the server runs.
+/// beside the tiles of the source they came from.
 pub(super) const SOURCE: &str = ".source";
 
 pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {

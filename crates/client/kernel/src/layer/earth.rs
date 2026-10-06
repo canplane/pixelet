@@ -19,8 +19,8 @@ use xpute_runtime::mem::heap::{free, Block};
 
 use crate::io::demand::{Category, Phases};
 use crate::io::failure::Failure;
+use crate::layer::residency::Residency;
 use crate::world::pyramid::{Layer, Pyramid};
-use crate::world::residency::Residency;
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// What a held tile is: its texels are in its frame's layer on the GPU.

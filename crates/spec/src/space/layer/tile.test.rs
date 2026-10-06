@@ -122,3 +122,56 @@ fn a_point_goes_round_in_x_and_stops_at_the_edge_in_y() {
         assert!(!tile_rows(zoom).contains(&(n / 2)));
     }
 }
+
+/// A Bundang tile, (11569, 3671): rows count from the south and a first
+/// digit is the signs, written out because the orientation is what can be
+/// silently wrong. The bucket's keys are these names.
+const BUNDANG: IVec = 12720250262323200;
+const BUNDANG_NAME: &str = "010332102130223";
+
+#[test]
+fn the_known_tile_is_named_as_the_bucket_holds_it() {
+    let leaf = Tile::new(LEAF_ZOOM, BUNDANG);
+    assert_eq!(leaf.name(), BUNDANG_NAME);
+    assert_eq!(Tile::of_name(BUNDANG_NAME), Some(leaf));
+}
+
+/// One prefix is one region at every zoom, and a name's length is its zoom.
+#[test]
+fn a_coarser_tile_is_named_by_a_prefix_of_the_leaf_under_it() {
+    for zoom in GROUND.top()..LEAF_ZOOM {
+        let coarse = Tile::over(zoom, BUNDANG).name();
+        assert_eq!(coarse.len(), usize::from(zoom));
+        assert!(BUNDANG_NAME.starts_with(&coarse), "z{zoom} {coarse}");
+    }
+}
+
+#[test]
+fn every_tile_survives_its_name_at_every_zoom() {
+    let n = 1i64 << LEAF_ZOOM;
+    for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
+        for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
+            for zoom in GROUND.top()..=LEAF_ZOOM {
+                let p = Tile::over(zoom, ivec::gather(x, y, 0));
+                assert_eq!(Tile::of_name(&p.name()), Some(p), "({x}, {y}) at z{zoom}");
+            }
+        }
+    }
+}
+
+/// An index past the seam names the tile it stands on.
+#[test]
+fn the_seam_wraps_rather_than_falling_outside() {
+    let n = 1i64 << LEAF_ZOOM;
+    assert_eq!(Tile::new(LEAF_ZOOM, ivec::gather(n / 2, 0, 0)).name(), Tile::new(LEAF_ZOOM, ivec::gather(-n / 2, 0, 0)).name());
+}
+
+#[test]
+fn what_is_not_a_held_tile_s_name_is_refused() {
+    assert_eq!(Tile::of_name(""), None);
+    assert_eq!(Tile::of_name("4"), None, "a digit is a zoom's two bits");
+    assert_eq!(Tile::of_name("13211032031200a"), None);
+    assert_eq!(Tile::of_name("-1321103203120"), None, "the digits carry the sign");
+    assert_eq!(Tile::of_name(&"0".repeat(usize::from(LEAF_ZOOM) + 1)), None, "nothing is finer than a leaf");
+    assert_eq!(Tile::of_name("0"), None, "coarser than the top");
+}

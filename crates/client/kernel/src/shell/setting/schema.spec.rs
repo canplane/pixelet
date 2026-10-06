@@ -111,7 +111,7 @@ impl AoMode {
 ///   auto  — the device's, at most two, lowered while the frames run over
 ///           their budget — the display's interval, no tighter than a
 ///           sixtieth of a second — and raised again once they have room
-///           (crates/client/kernel/src/world/frame/resolution.rs).
+///           (crates/client/kernel/src/world/view/frame/resolution.rs).
 ///   fixed — the device's, at most two, whatever the frames cost.
 ///   low   — one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -200,7 +200,7 @@ pub enum SettingKey {
     resolution = 11,
     /// The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
     debug_overlay = 12,
-    /// Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (layer/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (layer/marker/coverage_gizmo.rs).
+    /// Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs).
     gizmos = 13,
     person = 14,
     pet = 15,

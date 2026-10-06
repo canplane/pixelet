@@ -8,6 +8,7 @@
 //! first digit is its sign. A coarser key's digits prefix a finer one's over
 //! the same ground, in any number of axes.
 
+use super::tree::Node;
 use crate::space::coord::pvf3::core::{IVEC_X_W, IVEC_Y_W, IVEC_Z_W};
 use crate::space::coord::zoom::{Zoom, UNIT_ZOOM};
 use core::fmt;
@@ -42,7 +43,7 @@ pub fn key_of<const D: usize>(zoom: Zoom, at: [i64; D]) -> u128 {
 }
 
 /// `key_of`'s inverse: the zoom, and each axis's index at it, signed.
-pub fn node_of<const D: usize>(key: u128) -> (Zoom, [i64; D]) {
+pub fn node_of<const D: usize>(key: u128) -> Node<D> {
     let n = 126 - key.trailing_zeros();
     let (mut zoom, mut read, mut at) = (0, 0, [0i64; D]);
     while read < n {

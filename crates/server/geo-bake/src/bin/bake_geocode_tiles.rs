@@ -32,7 +32,8 @@ struct Worker {
 }
 
 fn run() -> Result<(), String> {
-    let (source, mut client) = Overture::reading(&[&overture::READS, &leaf::GROUND_READS], &pxl_geo_bake::coverage::Coverage::of_source()?.shards().collect())?;
+    let reads: [&[&str]; 2] = [&overture::READS, &leaf::GROUND_READS];
+    let (source, mut client) = Overture::reading(&reads, &pxl_geo_bake::coverage::Coverage::of_source()?.shards().collect())?;
 
     let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
     let dict = PlaceDict::of(provider.dictionary(&mut client).map_err(|e| e.to_string())?);
@@ -49,6 +50,7 @@ fn run() -> Result<(), String> {
             content_type: "application/octet-stream",
             format: Some("xtp place dictionary and groups (encode_place_dict, encode_place_group)"),
             source: &source,
+            reads: &reads,
         },
         |out| write_atomic(&out.join(DICT_OBJECT), &packed_dict).map_err(|e| e.to_string()),
         || {

@@ -31,7 +31,7 @@
       "What the published bake declares of itself to the client: `top_z`, the",
       "coarsest zoom of the pyramid it supplies whole, terrain and POI alike. The",
       "client's floor is held there, all around the eye, and the far edge is where",
-      "that zoom ends (pxl-kernel world/residency/floor.rs). The dev tile server",
+      "that zoom ends (pxl-kernel layer/residency/floor.rs). The dev tile server",
       "answers the same object at the tile root's `source`, its `--folds` zooms",
       "over the leaves (pxl-geo-bake bin/serve_tiles.rs); neither is guessed from",
       "what fails."

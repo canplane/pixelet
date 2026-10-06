@@ -19,7 +19,7 @@ use crate::control::interaction::{clear_hover, clear_hover_coord, hover_at, tap}
 use crate::control::navigation::destination::cancel as cancel_destination;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::request_world_tick;
-use crate::world::frame::view::view;
+use crate::world::view::frame::pose::view;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::clock::now;

@@ -13,6 +13,7 @@ pub mod kernel;
 pub mod layer;
 pub mod mem;
 pub mod param;
+pub mod scene;
 pub mod sched;
 pub mod shell;
 pub mod text;

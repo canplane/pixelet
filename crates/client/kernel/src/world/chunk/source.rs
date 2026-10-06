@@ -11,10 +11,10 @@ use std::collections::HashMap;
 use crate::kernel::with_world;
 use crate::layer::object::store::Store;
 use crate::world::chunk::build::{folded_cells, runs_of};
-use crate::world::pyramid::chunk::Chunk as PyramidChunk;
-use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
-use pxl_spec::space::coord::zoom::{cube, units, Zoom};
+use crate::world::chunk::Chunk as PyramidChunk;
 use pxl_spec::space::coord::world::nearest_box;
+use pxl_spec::space::coord::zoom::{cube, units, Zoom};
+use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use xpute_runtime::global::Global;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
@@ -55,6 +55,13 @@ pub struct Drawn {
     cells: Vec<u64>,
 }
 
+impl Drawn {
+    /// The zoom the chunk's runs are written at.
+    pub fn runs(&self) -> Zoom {
+        self.runs
+    }
+}
+
 pub fn objects_drawn(store: &Store, k: PyramidChunk) -> Option<Drawn> {
     let (runs, held) = runs_of(store, k);
     let mut cells = Vec::new();
@@ -64,7 +71,11 @@ pub fn objects_drawn(store: &Store, k: PyramidChunk) -> Option<Drawn> {
         store.fold_at(runs, from, to, None, &mut folded).ok()?;
         cells.try_reserve_exact(folded.len()).ok()?;
         // X and Y within the grid fit a byte each (`folded_cells`); Z is the lane's.
-        cells.extend(folded.into_iter().map(|([x, y, z], v)| (x - from[0]) as u64 | ((y - from[1]) as u64) << 8 | u64::from(z as i32 as u32) << 16 | u64::from(v as u16) << 48));
+        cells.extend(
+            folded
+                .into_iter()
+                .map(|([x, y, z], v)| (x - from[0]) as u64 | ((y - from[1]) as u64) << 8 | u64::from(z as i32 as u32) << 16 | u64::from(v as u16) << 48),
+        );
         cells.sort_unstable();
     }
     Some(Drawn { runs, cells })
@@ -85,7 +96,11 @@ pub fn objects_met(store: &Store, k: PyramidChunk) -> Option<Vec<Met>> {
     let mut out: Vec<Met> = Vec::new();
     let mut refused = false;
     store.entries_in(&k.region(), &mut |e| {
-        let from = if e.zoom >= zoom { first_descendant_of(corner, u32::from(e.zoom - zoom)) } else { ancestor_of(corner, u32::from(zoom - e.zoom)) };
+        let from = if e.zoom >= zoom {
+            first_descendant_of(corner, u32::from(e.zoom - zoom))
+        } else {
+            ancestor_of(corner, u32::from(zoom - e.zoom))
+        };
         refused |= out.try_reserve(1).is_err();
         if !refused {
             out.push(Met {

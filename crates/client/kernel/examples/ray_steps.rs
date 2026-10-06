@@ -5,7 +5,7 @@
 //! drawn"): straight down, at 45° and along the ground at street level.
 //!
 //! A cast's cost is pixels times steps. The pixels are the screen's; the
-//! steps are the query's own (world/access.rs `first_hit`): the regions read
+//! steps are the query's own (world/query.rs `first_hit`): the regions read
 //! and the cells walked. Both are counted here on the CPU over real terrain,
 //! which says before any shader is written how many steps a pixel would pay,
 //! and how far a grazing view's spread runs past a view from above. What a
@@ -31,8 +31,9 @@ use std::collections::HashSet;
 use std::process::Command;
 
 use pxl_kernel::layer::object::store::Store;
-use pxl_kernel::world::access::{Access, Answer, Detail, Ray};
-use pxl_kernel::world::residency::{Candidate, Residency, Victim};
+use pxl_kernel::layer::residency::{Candidate, Residency, Victim};
+use pxl_kernel::layer::Answer;
+use pxl_kernel::world::query::{Access, Detail, Ray};
 use pxl_spec::bake::format::{decode_terrain, Terrain};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg4326;

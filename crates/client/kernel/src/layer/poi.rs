@@ -1,10 +1,7 @@
 // pxl-kernel/layer/poi.rs
 
 //! Places as a layer of the pyramid: a tile counts the places in each of
-//! its cells, drawn as badges (placement.rs).
-
-pub mod badge;
-pub mod placement;
+//! its cells, drawn as badges (`world/chunk/place.rs`).
 
 use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
 use pxl_spec::bake::poi_tile::{self, PoiTile, POI_LATTICE};
@@ -12,13 +9,18 @@ use pxl_spec::space::layer::lattice::Lattice;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::io::demand::{Category, Phases};
-use crate::param::{POI_ALL_ZOOM, POI_MAJOR_ZOOM};
 use crate::io::failure::Failure;
+use crate::layer::residency::Residency;
+use crate::layer::{Answer, Bound, Query};
+use crate::param::{POI_ALL_ZOOM, POI_MAJOR_ZOOM};
 use crate::shell::setting::store::settings_store;
 use crate::world::pyramid::{Layer, Pyramid};
+use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857::cell_zoom_of;
 use pxl_spec::space::coord::zoom::units;
-use pxl_spec::bake::format::Occupancy;
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::layer::tile::Tile;
 use xpute_runtime::global::Global;
 
 static POI: Global<Pyramid<PoiTile>> = Global::new();
@@ -45,6 +47,32 @@ impl Layer for PoiTile {
 
     fn empty() -> Option<PoiTile> {
         Some(PoiTile::default())
+    }
+}
+
+/// A node's places: the tile that says them and that tile's name.
+#[derive(Clone, Copy)]
+pub struct Places<'a> {
+    pub tile: &'a PoiTile,
+    pub from: Tile,
+}
+
+impl Query for Residency<PoiTile> {
+    type Record<'a> = Places<'a>;
+
+    /// A place fills nothing: it stands on the surface drawn there.
+    fn bounds<const D: usize>(&self, _node: Node<D>, _cell: Zoom) -> Answer<Option<Bound>> {
+        Answer::Exact(None)
+    }
+
+    /// From the resident tile that says the node's tile exactly, a parent
+    /// settling it included; a miss is nothing, never a coarser count.
+    fn read(&self, (zoom, [x, y, _]): Node<3>, cell: Zoom) -> Answer<Places<'_>> {
+        let p = POI_LATTICE.read_tile((zoom, [x, y]), cell);
+        match self.source(p).and_then(|src| Some(Places { tile: self.get(src)?, from: src })) {
+            Some(places) => Answer::Exact(places),
+            None => Answer::Nothing(p),
+        }
     }
 }
 

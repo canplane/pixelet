@@ -9,26 +9,22 @@
 //! first. Where a tile marks a child as no tile (`Layer::occupancy`), its
 //! ground is the tile's and the child is never asked for.
 
-pub mod chunk;
-pub mod domain;
-
 use std::collections::HashMap;
 
 use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::layer::demand::{tiles, Bounds, Requirement};
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::io::demand::{Ask, Category, Phases, Why};
 use crate::io::failure::Failure;
 use crate::io::sched::declare;
-use crate::world::observation::{ground_known, observation, ByFootprints, Known, Order};
-use crate::world::observer::Footprint;
-use crate::world::quality;
-use crate::world::residency::floor::{self, Fallback, Floor};
-use crate::world::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
+use crate::layer::residency::floor::{self, Fallback, Floor};
+use crate::layer::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
+use crate::world::chunk::quality;
+use crate::world::view::observation::{ground_known, observation, ByFootprints, Order};
+use crate::world::view::observer::Footprint;
 use pxl_spec::space::coord::zoom::Zoom;
 
 pub trait Layer: Clone + 'static {
@@ -66,10 +62,6 @@ pub trait Layer: Clone + 'static {
     }
 
     fn changed(_p: Tile, _present: bool) {}
-
-    fn tiles(r: &Requirement, each: &mut dyn FnMut(Tile)) {
-        tiles(r, each);
-    }
 }
 
 /// Everything the asks depend on, as read; two turns agreeing on all of it
@@ -85,7 +77,7 @@ struct Seen {
     terrain: Vec<(Tile, bool)>,
     /// The published goal's.
     footprints: Vec<Footprint>,
-    lacks: Vec<Requirement>,
+    lacks: Vec<Tile>,
 }
 
 /// Evicts the tile last in view order.
@@ -188,7 +180,6 @@ impl<L: Layer> Pyramid<L> {
         // the floor's eye, if not `o`'s
         floor_at: Option<&Observation>,
         destination: impl Iterator<Item = Tile>,
-        bounds: &impl Bounds,
         estimator: &ByFootprints,
         top: Zoom,
     ) {
@@ -199,10 +190,10 @@ impl<L: Layer> Pyramid<L> {
         let ask = |asks: &mut HashMap<Tile, Ask>, p: Tile, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
-        let order = |o: &Observation, p: Tile| Order::of_region(o, bounds, L::LATTICE.grid_zoom(p.zoom), p.region());
+        let order = |o: &Observation, p: Tile| Order::of_tile(o, L::LATTICE, p);
         if let Some(o) = o {
             if L::DEMANDS {
-                estimator.requirements(o, bounds, &mut |r| L::tiles(&r, &mut |p| demand.push(p)));
+                estimator.requirements(o, &mut |p| demand.push(p));
             }
             demand.sort_unstable();
             demand.dedup();
@@ -283,7 +274,7 @@ impl<L: Layer> Pyramid<L> {
         // Nothing coarser than the layer's own top is drawn, whatever the source holds.
         let Some(top) = L::TOP.or(floor::top()).map(|t| t.max(L::LATTICE.top())) else { return };
         // demand follows the published goal
-        let published = domain::current();
+        let published = crate::world::chunk::domain::current();
         let own = |o: Observation| match L::TOP {
             Some(_) => Observation {
                 reach: L::reach(),
@@ -336,7 +327,6 @@ impl<L: Layer> Pyramid<L> {
                 o.as_ref(),
                 live.as_ref(),
                 line,
-                &Known,
                 &ByFootprints {
                     tau,
                     lattice: L::LATTICE,

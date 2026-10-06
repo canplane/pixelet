@@ -10,7 +10,7 @@ use pxl_render::mesh::run::{RunSet, APRON};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
-use crate::layer::marker::hover_cursor::render_edits;
+use crate::scene::marker::hover_cursor::render_edits;
 use crate::world::chunk::source::draws;
 
 use pxl_spec::space::coord::zoom::{units, Zoom};
@@ -142,7 +142,7 @@ impl Builder {
             self.sample.read(&read.around(), read.first, span)
         } else {
             let leaf = c.leaf(target);
-            let leaf_span = run_span(leaf, GROUND.cell_zoom(GROUND.read_zoom(leaf.zoom())));
+            let leaf_span = run_span(leaf, GROUND.cell_zoom(GROUND.read_zoom(leaf.cell_zoom())));
             self.leaf_sample
                 .read(&read.around(), read.first, leaf_span)
                 .and_then(|()| self.sample.refine(&self.leaf_sample, k, c.in_leaf(target), span))

@@ -3,9 +3,9 @@
 //! What a placed object may be sized to. The shell names a size by tier,
 //! never by length, so changing the cell rescales every tier.
 
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_TIERS};
 use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::layer::lattice::GROUND;
 
 /// Tier `i` is the cell `i` steps finer, coarsest first.
 pub const OBJECT_SIZES: [f64; OBJECT_TIERS] = {
