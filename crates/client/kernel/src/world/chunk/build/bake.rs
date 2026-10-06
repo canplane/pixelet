@@ -79,7 +79,16 @@ impl Builder {
             let (unit, fine) = (units(runs.zoom), cell_zoom >= GROUND.cell());
             if self
                 .bake
-                .begin(&set, count(runs.zoom, cell_zoom), unit, z, fine, settings_store().textures, crate::param::BAKE_ROWS_PER_STEP, clip)
+                .begin(
+                    &set,
+                    count(runs.zoom, cell_zoom),
+                    unit,
+                    z,
+                    fine,
+                    settings_store().textures,
+                    (crate::param::BAKE_ROWS_PER_STEP, crate::param::BAKE_BOXES_PER_STEP),
+                    clip,
+                )
                 .is_err()
             {
                 self.refuse(id);

@@ -89,3 +89,6 @@ pub const POI_MAJOR_RANK: u16 = 40;
 /// Rows a bake writes or meshes a step, so one chunk never takes a turn's
 /// budget whole; the mesher is handed it.
 pub const BAKE_ROWS_PER_STEP: u32 = 8;
+
+/// Boxes the mesher emits a step, for the same budget.
+pub const BAKE_BOXES_PER_STEP: u32 = 512;

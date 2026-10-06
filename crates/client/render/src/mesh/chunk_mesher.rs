@@ -74,8 +74,6 @@ const DIPS_BELOW: u32 = 4;
 const ABUTS_SIDE: u32 = 8;
 const ALL_RELATIONS: u32 = HIDES_SIDE | ABUTS_SIDE | RISES_ABOVE | DIPS_BELOW;
 
-const BAKE_BOXES_PER_STEP: usize = 512;
-
 /// The fine format: corner and width in u16 steps of its cell, floor and height
 /// in u16 mesh steps, sRGB color, four layer taps, face mask.
 ///
@@ -257,6 +255,7 @@ pub struct BakeContext {
     textured: bool,
     /// Rows a step bakes, the asker's to set.
     rows: u32,
+    boxes: u32,
     mesh_words: u32,
     box_cnt: u32,
     open: Option<Open>,
@@ -279,6 +278,7 @@ impl Default for BakeContext {
             box_words: FINE_BOX_WORDS,
             textured: true,
             rows: 1,
+            boxes: 1,
             mesh_words: 0,
             box_cnt: 0,
             open: None,
@@ -295,9 +295,9 @@ impl BakeContext {
     /// `fine` boxes carry texture taps. `clip` cuts a whole-column set to the
     /// chunk's heights, and every step reads the cut set. One bake at a time.
     #[allow(clippy::too_many_arguments)]
-    pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, rows: u32, clip: Option<(i32, i32)>) -> Result<(), Refused> {
+    pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, (rows, boxes): (u32, u32), clip: Option<(i32, i32)>) -> Result<(), Refused> {
         xpute_core::ensure!(self.open.is_none(), ENOTRECOVERABLE);
-        self.rows = rows;
+        (self.rows, self.boxes) = (rows, boxes);
         self.refused = false;
         match clip {
             Some((z0, z1)) => {
@@ -579,7 +579,7 @@ impl BakeContext {
         // Boxes without taps show the layer's mean where the pack is drawn, as the boxes with them do.
         let mean = self.box_words != FINE_BOX_WORDS && self.textured;
         let apron = b.apron as f64;
-        let emit_end = self.surviving.len().min(b.emit_at + BAKE_BOXES_PER_STEP * 6);
+        let emit_end = self.surviving.len().min(b.emit_at + self.boxes as usize * 6);
         let mut s_i = b.emit_at;
         while s_i < emit_end {
             let s = &self.surviving[s_i..s_i + 6];
