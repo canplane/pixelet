@@ -134,7 +134,7 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   (`world/observation.rs`) answers; a point or a ray is asked of the query
   (`world/access.rs`). Nothing outside a layer reads its records in the
   layer's shape, and which of a layer's tiles holds a chunk's cells is the
-  layer's lattice's (`pxl-spec space/layer/read.rs` `read_tile`). A placed object lives in the chunks its cube is in — built,
+  layer's lattice's (`pxl-spec space/layer/lattice.rs` `read_tile`). A placed object lives in the chunks its cube is in — built,
   remade and drawn with it — and shares the lattice and the fold rule
   (`majority`, `pxl-spec bake/fold.rs`).
 - **2.5D is how ground is stored, not how anything behaves.** What the view

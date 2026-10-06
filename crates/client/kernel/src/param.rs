@@ -4,7 +4,7 @@
 //! grouped by the policy it tunes. None is a correctness bound: set to its
 //! least, the view still converges, only coarser or later.
 
-use pxl_spec::space::layer::read::TILE_CHUNKS;
+use pxl_spec::space::layer::lattice::TILE_CHUNKS;
 
 // ---- product quality ----
 
