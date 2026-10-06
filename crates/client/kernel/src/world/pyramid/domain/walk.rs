@@ -20,7 +20,7 @@ use crate::world::observer::{cell_angle, Footprint, Lens};
 use crate::world::pyramid::chunk::Chunk;
 use pxl_spec::space::coord::zoom::{units, Zoom, SHARD_ZOOM};
 
-use super::price::Price;
+use super::Price;
 
 /// How near a chunk must come for its error to cross a cell: the error is
 /// at most its diagonal over its distance less the diagonal.

@@ -348,7 +348,7 @@ function optional<T>(c: NodeCursor, read: (b: BranchCursor) => T): T | null {
   return present === undefined ? null : read(present.as_branch());
 }
 
-/** What the page's UI shows of the kernel (shell/shell.rs): written after a turn that changed it, and replaced whole. */
+/** What the page's UI shows of the kernel (shell.rs): written after a turn that changed it, and replaced whole. */
 export interface Snapshot {
   map: MapState;
   location: LocationState;

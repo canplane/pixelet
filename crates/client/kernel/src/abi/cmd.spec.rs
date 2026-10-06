@@ -677,7 +677,7 @@ impl Command {
     }
 }
 
-/// What the page's UI shows of the kernel (shell/shell.rs): written after a turn that changed it, and replaced whole.
+/// What the page's UI shows of the kernel (shell.rs): written after a turn that changed it, and replaced whole.
 pub struct Snapshot<'a> {
     pub map: MapState,
     pub location: LocationState,

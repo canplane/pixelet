@@ -50,7 +50,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     use crate::sched::profiler::log::{profiler_set_logging, profiler_window_start, profiler_window_stop};
     use crate::sched::turn::world_platform;
     use crate::shell::setting::store::{settings_load, settings_store};
-    use crate::shell::shell as ui;
+    use crate::shell as ui;
     use crate::world::change::request_world_tick;
 
     if let Some(cmd) = xpute_cmd::Command::of(number) {

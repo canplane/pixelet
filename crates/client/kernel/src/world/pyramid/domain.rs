@@ -17,12 +17,23 @@
 //! coarser quality splits a subset of what a finer one does.
 
 mod job;
-mod price;
 mod walk;
 
+use pxl_spec::space::camera::grid::Tau;
+
+use crate::world::chunk::mesh_slot::POOLS;
+use crate::world::pyramid::chunk::Chunk;
+
 pub use job::{advance, current, objects_written, put, start, take_work, walking};
-pub use price::Price;
 pub use walk::Domain;
+
+/// Mesh slots per pool.
+pub trait Price {
+    fn piece(&self, c: Chunk, near: f64, tau: Tau) -> [u32; POOLS];
+    fn split(&self, c: Chunk) -> [u32; POOLS];
+    /// stop counting a step needing `n`
+    fn over(&self, n: &[u32; POOLS]) -> bool;
+}
 
 #[cfg(test)]
 #[path = "domain.test.rs"]

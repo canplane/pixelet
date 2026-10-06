@@ -19,7 +19,7 @@ use xpute_runtime::global::Global;
 use crate::world::pyramid::chunk::Chunk;
 use pxl_spec::space::coord::zoom::Zoom;
 
-use super::price::Price;
+use super::Price;
 use super::walk::Domain;
 
 #[derive(Default)]

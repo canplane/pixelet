@@ -88,7 +88,7 @@ fn host_attached(s: &mut State) {
     for handle in open {
         close_surface(handle);
     }
-    crate::shell::shell::sensors_close();
+    crate::shell::sensors_close();
     crate::text::text_forget();
     s.snapshot = 0;
 }
@@ -203,7 +203,7 @@ fn post_shell(s: &mut State) {
     }
     let buf = SNAPSHOT.get(Vec::new);
     let len = loop {
-        if let Some(len) = crate::shell::shell::ui_snapshot(buf) {
+        if let Some(len) = crate::shell::ui_snapshot(buf) {
             break len;
         }
         let room = (buf.len() * 2).max(section::PAGE_BYTES as usize);
