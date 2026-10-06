@@ -4,7 +4,7 @@ use super::*;
 
 /// The ground's zoom a distance draws, past the pyramid's ends too.
 fn zoom_at(r: f64) -> i32 {
-    GROUND.z_of(cell_at(r)) - 1
+    GROUND.z_of(cell_at(r))
 }
 
 /// Feet on a tile's corners, edges and inside, either side of the origin.

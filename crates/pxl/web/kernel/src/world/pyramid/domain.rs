@@ -247,10 +247,10 @@ impl Domain {
                 let half = units(c.zoom()) / 2.0;
                 (bound, [half, half, bound.extent()[2]])
             }
-            // The rule measures its cells, not the coarser ones it draws.
-            (Contents::Holds { bound, error }, _) => {
-                let cell = units(c.cell_zoom()).min(bound.extent()[0]);
-                (bound, [cell, cell, error[2]])
+            // Across, the cell the rule measures the chunk in.
+            (Contents::Holds { bound, rise }, _) => {
+                let cell = units(c.cell_zoom());
+                (bound, [cell, cell, rise])
             }
             // evicted between slices: the parent's bound holds
             (_, Some((bound, error))) => (bound.meet(c.region()).unwrap_or(c.region()), error),

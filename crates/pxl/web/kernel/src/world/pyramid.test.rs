@@ -44,7 +44,7 @@ impl Bounds for Flat {
             min: [region.min[0], region.min[1], 0.0],
             max: [region.max[0], region.max[1], 0.0],
         };
-        ground.meet(region).map_or(Contents::Empty, |bound| Contents::Holds { bound, error: [0.0; 3] })
+        ground.meet(region).map_or(Contents::Empty, |bound| Contents::Holds { bound, rise: 0.0 })
     }
 }
 

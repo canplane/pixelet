@@ -85,14 +85,10 @@ impl Bounds for Known {
         match (known, bound) {
             (false, _) => Contents::Unknown,
             (true, None) => Contents::Empty,
-            (true, Some(bound)) => {
-                let extent = region.extent();
-                let error = [cell, cell, rise];
-                Contents::Holds {
-                    bound,
-                    error: std::array::from_fn(|k| error[k].clamp(0.0, extent[k])),
-                }
-            }
+            (true, Some(bound)) => Contents::Holds {
+                bound,
+                rise: rise.clamp(0.0, region.extent()[2]),
+            },
         }
     }
 

@@ -97,11 +97,12 @@ pub struct Requirement {
 pub enum Contents {
     Unknown,
     Empty,
-    /// Everything is inside `bound`, drawn off by up to `error` per axis.
-    /// Conservative, not tight.
+    /// Everything is inside `bound`, its surface off by up to `rise` upright
+    /// within a cell. Conservative, not tight; across, the error is the cell
+    /// the reader draws, which is the reader's.
     Holds {
         bound: Aabb,
-        error: V3,
+        rise: f64,
     },
 }
 
