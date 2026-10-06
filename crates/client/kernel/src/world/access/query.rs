@@ -14,11 +14,9 @@
 
 use pxl_spec::space::coord::v3::Aabb;
 use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::hierarchy::tree::Node;
 
 use crate::world::access::answer::Answer;
-
-/// A cube of the hierarchy: its zoom and its index there.
-pub type Node = (Zoom, [i64; 3]);
 
 /// A layer's answers, by the node asked.
 pub trait Query {
@@ -32,8 +30,8 @@ pub trait Query {
     /// Where anything stands in the node, as its cells at `cell` are read:
     /// none where nothing does, else a box holding what is stored there. What
     /// is not known is the answer's, not a box's: no third state.
-    fn bounds(&self, node: Node, cell: Zoom) -> Answer<Option<Aabb>>;
+    fn bounds(&self, node: Node<3>, cell: Zoom) -> Answer<Option<Aabb>>;
 
     /// The node's cells at `cell`, no coarser than the node.
-    fn read(&self, node: Node, cell: Zoom) -> Answer<Self::Record<'_>>;
+    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Self::Record<'_>>;
 }

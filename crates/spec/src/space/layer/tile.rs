@@ -14,7 +14,7 @@ use crate::space::coord::v3::Aabb;
 use crate::space::coord::world::{self, around, wrap_index, REACH};
 use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
-use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, slot_of};
+use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, slot_of, Node};
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
 /// world 2^15 round.
@@ -83,7 +83,7 @@ impl Tile {
         })
     }
 
-    pub fn node(self) -> (Zoom, [i64; 2]) {
+    pub fn node(self) -> Node<2> {
         (self.zoom, self.at())
     }
 

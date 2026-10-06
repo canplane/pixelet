@@ -6,6 +6,9 @@
 
 use crate::space::coord::zoom::Zoom;
 
+/// A node of the hierarchy in `D` axes: its zoom and its index there.
+pub type Node<const D: usize> = (Zoom, [i64; D]);
+
 /// A floor on the signed lanes.
 pub fn parent_of<const D: usize>(at: [i64; D]) -> [i64; D] {
     at.map(|v| v.div_euclid(2))
@@ -42,7 +45,7 @@ pub fn first_descendant_of<const D: usize>(at: [i64; D], steps: u32) -> [i64; D]
 }
 
 /// Whether two nodes overlap; in one hierarchy they nest or are apart.
-pub fn share<const D: usize>((a_z, a): (Zoom, [i64; D]), (b_z, b): (Zoom, [i64; D])) -> bool {
+pub fn share<const D: usize>((a_z, a): Node<D>, (b_z, b): Node<D>) -> bool {
     if a_z >= b_z {
         ancestor_of(a, u32::from(a_z - b_z)) == b
     } else {
