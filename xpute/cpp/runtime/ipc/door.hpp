@@ -29,8 +29,9 @@ using DoorNote = void (*)(std::uint32_t completions, std::uint32_t left);
 
 class Door {
   public:
-    Door(Ring submission, Ring completion, std::uint32_t reserve, DoorNote note = nullptr) noexcept
-        : sq_(submission), cq_(completion), reserve_(reserve), note_(note) {}
+    // `most_signals` is what one command may raise, the program's bound.
+    Door(Ring submission, Ring completion, std::uint32_t most_signals, DoorNote note = nullptr) noexcept
+        : sq_(submission), cq_(completion), reserve_(most_signals + 1), note_(note) {}
 
     const Ring &submission() const noexcept { return sq_; }
     const Ring &completion() const noexcept { return cq_; }
@@ -84,6 +85,7 @@ class Door {
 
     Ring sq_;
     Ring cq_;
+    // What one command may leave: its signals and its reply.
     std::uint32_t reserve_;
     DoorNote note_;
 };

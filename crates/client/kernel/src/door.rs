@@ -2,7 +2,7 @@
 
 //! The kernel's side of the doorbell, which a bracket (pxl-wasm, pxl-native)
 //! hands each turn to: the directory, commands applied, signals raised. The
-//! rings are xpute's (`xpute_runtime::ipc::doorbell`).
+//! rings are xpute's (`xpute_runtime::ipc::door`).
 
 mod apply;
 mod executor;
@@ -18,7 +18,7 @@ use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
 use xpute_runtime::global::Global;
 use xpute_runtime::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
-use xpute_runtime::ipc::doorbell::Door;
+use xpute_runtime::ipc::door::Door;
 use xpute_runtime::ipc::ring::Ring;
 use xpute_runtime::mem::base::{off_of, off_of_slice, ptr_at};
 
@@ -47,7 +47,7 @@ fn door() -> &'static Door {
     DOOR.get(|| {
         // SAFETY: the module's memory, which never moves and outlives the door;
         // the ranges are the layout's alone.
-        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, crate::sched::profiler::record::profiler_note_rings) }
+        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, crate::param::MOST_SIGNALS, crate::sched::profiler::record::profiler_note_rings) }
     })
 }
 

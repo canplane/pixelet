@@ -13,7 +13,7 @@ use xpute_core::wire::xtp::TreeReader;
 use xpute_runtime::abi::cmd::{Command, SysOpened};
 use xpute_runtime::abi::handle::HandleTable;
 use xpute_runtime::ipc::directory::{directory_words, spec::key, write_directory};
-use xpute_runtime::ipc::doorbell::{Applied, Door, DoorLayout, RingLayout};
+use xpute_runtime::ipc::door::{Applied, Door, DoorLayout, RingLayout};
 use xpute_runtime::ipc::file::Files;
 use xpute_runtime::ipc::ring::{ring_bytes, slots_bytes};
 use xpute_runtime::ipc::stream::Stream;
@@ -87,7 +87,7 @@ unsafe fn boot(mem: *mut u8, range: u32, now: Now) -> u32 {
     // SAFETY: the caller's memory; the ranges are the layout's.
     let (door, stream, sys, directory) = unsafe {
         (
-            Door::init(mem, &layout, |_, _| {}),
+            Door::init(mem, &layout, spec::MOST_RAISE, |_, _| {}),
             Stream::new(core::slice::from_raw_parts_mut(at::<u32>(mem, range + STREAM_AT), spec::STREAM_WORDS as usize), 1),
             Sys::new(core::slice::from_raw_parts_mut(at::<u32>(mem, range + SYS_AT), spec::SYS_WORDS as usize)),
             core::slice::from_raw_parts_mut(at::<u32>(mem, range + DIRECTORY_AT), directory_words(4)),

@@ -1,4 +1,4 @@
-// xpute-runtime/ipc/doorbell.test.rs
+// xpute-runtime/ipc/door.test.rs
 
 use super::*;
 use crate::ipc::ring::{ring_bytes, slots_bytes};
@@ -6,6 +6,8 @@ use crate::ipc::ring::{ring_bytes, slots_bytes};
 const SQ: u32 = 8;
 const CQ: u32 = 256;
 const SLOT: u32 = 64;
+const MOST_SIGNALS: u32 = 64;
+const MOST_COMPLETIONS: u32 = MOST_SIGNALS + 1;
 
 fn door() -> (Door, Box<[u8]>) {
     let sq_desc = 8;
@@ -28,7 +30,7 @@ fn door() -> (Door, Box<[u8]>) {
     };
     // SAFETY: the buffer outlives the door — both are returned together and
     // the caller holds them for the test.
-    let d = unsafe { Door::init(buf.as_mut_ptr(), &layout, |_, _| {}) };
+    let d = unsafe { Door::init(buf.as_mut_ptr(), &layout, MOST_SIGNALS, |_, _| {}) };
     (d, buf)
 }
 

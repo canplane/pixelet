@@ -2,14 +2,16 @@
 
 #include "directory.hpp"
 
-#include <cstdlib>
+#include "../../core/math/scalar.hpp"
+#include "../../core/status/bug.hpp"
 
 namespace xpute {
 
-void write_directory(Memory mem, std::uint32_t at, std::span<const Entry> entries) noexcept {
+void write_directory(Memory mem, std::uint32_t at, std::uint32_t words, std::span<const Entry> entries) noexcept {
+    ensure(directory_words(static_cast<std::uint32_t>(entries.size())) <= words, Errno::enospc, entries.size());
     for (std::size_t i = 0; i < entries.size(); i++) {
         for (std::size_t j = 0; j < i; j++) {
-            if (entries[j].key == entries[i].key) std::abort();
+            ensure(entries[j].key != entries[i].key, Errno::einval, entries[i].key);
         }
     }
     mem.set_word(at, directory::MAGIC);
@@ -22,6 +24,15 @@ void write_directory(Memory mem, std::uint32_t at, std::span<const Entry> entrie
         mem.set_word(off + 4, e.value);
         off += 8;
     }
+}
+
+std::array<Entry, 3> quantum_entries(const QuantumPolicy &q) noexcept {
+    auto scaled = [](double v) { return static_cast<std::uint32_t>(round(v * directory::QUANTUM_SCALE)); };
+    return {{
+        {directory::key::MARGIN_SHARE, scaled(q.margin_share)},
+        {directory::key::BATCH_FRAMES, scaled(q.batch_frames)},
+        {directory::key::SETTLE_MS, scaled(q.settle_ms)},
+    }};
 }
 
 } // namespace xpute

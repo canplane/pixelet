@@ -26,7 +26,7 @@ export const SUBMISSION_CAPACITY: u32 = 2048 as number;
  * what it was sent and raises its own signals besides; twice is the present
  * sizing, giving the two the same room, and not a bound derived from either.
  * Nothing is overrun if it is wrong: a command whose signals and reply would
- * not fit waits for the next turn (xpute-runtime ipc/doorbell.rs). A power of
+ * not fit waits for the next turn (xpute-runtime ipc/door.rs). A power of
  * two, as the submission ring's. */
 export const COMPLETION_CAPACITY: u32 = 4096 as number;
 

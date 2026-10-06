@@ -141,7 +141,7 @@ Applied apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> packet)
 // Every offset written is the memory's, so the range's start is added to each.
 std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
     Door door(Ring::init(m, range + SUBMISSION_DESC_AT, SUBMISSION_CAPACITY, range + SUBMISSION_SLOT_AT, SLOT_BYTES),
-              Ring::init(m, range + COMPLETION_DESC_AT, COMPLETION_CAPACITY, range + COMPLETION_SLOT_AT, SLOT_BYTES), MOST_RAISE + 1);
+              Ring::init(m, range + COMPLETION_DESC_AT, COMPLETION_CAPACITY, range + COMPLETION_SLOT_AT, SLOT_BYTES), MOST_RAISE);
     new (m.at(range + STATE_AT)) State{
         .door = door, .stream = Stream(m, range + STREAM_AT, STREAM_WORDS), .sys = Sys(m, range + SYS_AT, SYS_WORDS), .files = {}, .handles = {}, .now = now};
     const std::array<Entry, 4> entries{{
@@ -150,7 +150,7 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now) {
         {key::STREAM, range + STREAM_AT},
         {directory::key::SYS, range + SYS_AT},
     }};
-    write_directory(m, range + DIRECTORY_AT, entries);
+    write_directory(m, range + DIRECTORY_AT, directory_words(entries.size()), entries);
     return range + DIRECTORY_AT;
 }
 

@@ -26,7 +26,7 @@ Fixture door() {
     std::uint32_t sq_desc = 8, cq_desc = sq_desc + Ring::bytes(SQ), sq_slot = cq_desc + Ring::bytes(CQ), cq_slot = sq_slot + Ring::slots_bytes(SQ, SLOT);
     std::vector<std::uint64_t> buf((cq_slot + Ring::slots_bytes(CQ, SLOT)) / 8 + 1);
     Memory mem(reinterpret_cast<std::uintptr_t>(buf.data()), buf.size() * 8);
-    Door d(Ring::init(mem, sq_desc, SQ, sq_slot, SLOT), Ring::init(mem, cq_desc, CQ, cq_slot, SLOT), MOST_COMPLETIONS);
+    Door d(Ring::init(mem, sq_desc, SQ, sq_slot, SLOT), Ring::init(mem, cq_desc, CQ, cq_slot, SLOT), MOST_SIGNALS);
     return Fixture{std::move(buf), d};
 }
 

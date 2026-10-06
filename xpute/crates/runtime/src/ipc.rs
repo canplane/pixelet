@@ -1,7 +1,7 @@
 // xpute-runtime/ipc.rs
 
 pub mod directory;
-pub mod doorbell;
+pub mod door;
 pub mod file;
 pub mod frame;
 pub mod ring;

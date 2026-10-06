@@ -1,4 +1,4 @@
-// xpute-runtime/ipc/doorbell.rs
+// xpute-runtime/ipc/door.rs
 
 //! The guest's end of its rings: submissions applied in order, completions
 //! posted in place. The host reads the completion ring dry before it rings
@@ -29,15 +29,11 @@ pub type Write<'a> = &'a dyn Fn(&mut [u8]) -> Option<u32>;
 /// None for an unknown command, which replies ENOSYS.
 pub type Applied = Result<Option<i32>, MarshalError>;
 
-/// Signals one command may raise; a bound per command, not per turn.
-const MOST_SIGNALS: u32 = 64;
-
-/// Its signals and its reply.
-const MOST_COMPLETIONS: u32 = MOST_SIGNALS + 1;
-
 pub struct Door {
     sq: Ring,
     cq: Ring,
+    /// What one command may leave: its signals and its reply.
+    reserve: u32,
     /// Told the completion ring's length and the submissions left unapplied.
     note: fn(u32, u32),
 }
@@ -45,8 +41,9 @@ pub struct Door {
 impl Door {
     /// # Safety
     /// `mem` stays valid and never moves for as long as the door is used, and
-    /// the ranges `layout` names are the door's alone.
-    pub unsafe fn init(mem: *mut u8, layout: &DoorLayout, note: fn(u32, u32)) -> Door {
+    /// the ranges `layout` names are the door's alone. `most_signals` is what
+    /// one command may raise, the program's bound.
+    pub unsafe fn init(mem: *mut u8, layout: &DoorLayout, most_signals: u32, note: fn(u32, u32)) -> Door {
         let ring = |r: &RingLayout| {
             // SAFETY: the caller's memory and ranges.
             unsafe { Ring::init(mem, r.desc_at, r.capacity, r.slot_at, layout.slot_bytes) }
@@ -54,6 +51,7 @@ impl Door {
         Door {
             sq: ring(&layout.submission),
             cq: ring(&layout.completion),
+            reserve: most_signals + 1,
             note,
         }
     }
@@ -92,7 +90,7 @@ impl Door {
     /// An unapplied command can wait in the submission ring; what it would
     /// raise could not wait anywhere, so room is checked before it starts.
     fn has_room(&self) -> bool {
-        self.cq.len() + MOST_COMPLETIONS <= self.cq.capacity
+        self.cq.len() + self.reserve <= self.cq.capacity
     }
 
     pub fn pending(&self) -> bool {
@@ -133,5 +131,5 @@ impl Door {
 }
 
 #[cfg(test)]
-#[path = "doorbell.test.rs"]
+#[path = "door.test.rs"]
 mod test;

@@ -95,6 +95,12 @@ pub const RETRY_MS: f64 = 2_000.0;
 /// Most fetches out at once, whatever the host grants.
 pub const MAX_CREDITS: u32 = 16;
 
+// ---- the rings ----
+
+/// Signals one command may raise. A command starts only while the completion
+/// ring has room for these and its reply, so a larger bound starts fewer a turn.
+pub const MOST_SIGNALS: u32 = 64;
+
 // ---- the turn's budget ----
 
 /// Share of the frame left unspent for the host's own work; a share, so a
