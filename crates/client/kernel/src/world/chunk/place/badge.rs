@@ -2,7 +2,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use pxl_spec::bake::poi_tile::{kind_color, kind_icon, Place, PoiTile};
+use pxl_spec::bake::poi_tile::{kind_color, kind_icon, Place, PoiTile, POI_LATTICE};
+use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::io::text::text_width;
@@ -12,7 +13,7 @@ use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
 use pxl_render::gpu::surface::DPR_MAX;
 use xpute_runtime::global::Global;
 
-use crate::layer::Layer;
+use crate::layer::{Answer, Layer, Query};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -33,7 +34,12 @@ pub enum Label {
 impl Label {
     /// Nameless once that tile has gone.
     fn place(tile: Tile, place: u32) -> Place<'static> {
-        PoiTile::residency().get(tile).map_or(Place::default(), |p| p.places.get(place))
+        // Read as the tile itself answers, at its own cells: another tile's place index names another place.
+        let node = (tile.zoom, [ivec::X(tile.tile), ivec::Y(tile.tile), 0]);
+        match PoiTile::residency().read(node, POI_LATTICE.grid_zoom(tile.zoom)) {
+            Answer::Exact(p) if p.from == tile => p.tile.places.get(place),
+            _ => Place::default(),
+        }
     }
 
     pub fn text(self) -> String {
