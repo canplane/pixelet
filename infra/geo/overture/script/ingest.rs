@@ -14,7 +14,7 @@ serde_json = "1"
 ---
 
 //! Every Overture type into db-geo, a shard at a time: a table a type, a row
-//! a feature and a shard it meets, with its properties as the release holds
+//! a feature, in the shard holding its bbox's lower corner, with its properties as the release holds
 //! them and its geometry. A shard is a tile at `SHARD_ZOOM`, the coverage's
 //! (`pxl-geo-bake coverage.rs`); what it holds depends on it alone, so shards
 //! ingested one by one are the shards ingested together. The official
@@ -241,13 +241,11 @@ impl Shard {
     }
 
     /// Whether a feature whose vertices span `[lo_x, lo_y, hi_x, hi_y]` in
-    /// meters meets the shard. Both are half open: a span ending on an edge
-    /// stops short of it, and the edge is the shard's whose left or bottom it
-    /// is; a single point on it lies there alone.
-    fn meets(&self, [lo_x, lo_y, hi_x, hi_y]: [f64; 4]) -> bool {
+    /// meters is the shard's: its lower corner lies in it, half open, so every
+    /// feature is one shard's.
+    fn holds(&self, [lo_x, lo_y, _, _]: [f64; 4]) -> bool {
         let [left, bottom, right, top] = self.m;
-        let axis = |lo: f64, hi: f64, from: f64, to: f64| lo < to && (hi > from || (lo == hi && lo >= from));
-        axis(lo_x, hi_x, left, right) && axis(lo_y, hi_y, bottom, top)
+        (left..right).contains(&lo_x) && (bottom..top).contains(&lo_y)
     }
 
     /// The bbox the CLI is asked for, wider than the shard by `SLACK_DEG`.
@@ -323,7 +321,7 @@ fn vertices(b: &[u8], at: &mut usize, each: &mut dyn FnMut(f64, f64)) -> Result<
 }
 
 
-/// The features that meet the shard. The properties are every column but the
+/// The shard's features. The properties are every column but the
 /// id, the geometry and the bbox, a null one left out; the geometry is the
 /// release's WKB, its doubles as written.
 fn rows(group: &RecordBatch, shard: &Shard) -> Result<Vec<Row>, String> {
@@ -339,7 +337,7 @@ fn rows(group: &RecordBatch, shard: &Shard) -> Result<Vec<Row>, String> {
             return Err(format!("{}: a feature with no id or geometry", if id.is_null(i) { "?" } else { id.value(i) }));
         }
         let span = span_m(geometry.value(i)).map_err(|e| format!("{}: {e}", id.value(i)))?;
-        if !shard.meets(span) {
+        if !shard.holds(span) {
             continue;
         }
         let mut object = Map::new();
@@ -438,7 +436,6 @@ CREATE TABLE IF NOT EXISTS overture_catalog (
 );
 ";
 
-/// A feature over a shard's edge is a row in each shard it meets.
 fn schema(ty: &Type) -> String {
     let t = ty.table;
     let mut sql = format!(

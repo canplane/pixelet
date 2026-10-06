@@ -11,9 +11,10 @@ database that is expensive to rebuild.
 
 > **The database is filled a shard at a time, and a shard is whole or absent.**
 > A shard is a z8 tile (`SHARD_ZOOM`), named by its Morton key, its edges in
-> EPSG:3857 meters rounded half to even. A feature is a row in each shard its
-> bbox meets, the bbox its vertices' extremes in meters, rounded the same way;
-> both are half open, so a bbox ending on an edge is the next shard's alone.
+> EPSG:3857 meters rounded half to even. A feature is a row in the one shard
+> holding its bbox's lower corner, the bbox its vertices' extremes in meters,
+> rounded the same way; a shard is half open, so a corner on an edge is the
+> next shard's.
 > What a shard holds depends on the shard alone, so shards ingested one by one
 > are the shards ingested together. Each ingest replaces a shard's rows before
 > it writes them, and writes the shard's catalog row last; a run stopped
