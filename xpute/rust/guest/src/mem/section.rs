@@ -12,6 +12,10 @@
 /// nothing decided here.
 pub const PAGE_BYTES: u32 = 4096;
 
+// The buddy's leaf is its log2; any other page would be a smaller leaf than
+// the sections align to.
+const _: () = assert!(PAGE_BYTES.is_power_of_two());
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Section {
     pub offset: u32,
