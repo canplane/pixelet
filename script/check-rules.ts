@@ -143,7 +143,7 @@ for (const f of files) {
   });
 }
 
-const OFFSET_CRATES = ["xpute/rust/guest/src/", "crates/client/kernel/src/", "crates/client/render/src/", "crates/client/wasm/src/", "crates/client/native/src/"];
+const OFFSET_CRATES = ["xpute/rust/guest/src/", "crates/client/kernel/src/", "crates/client/render/src/", "crates/client-bracket/wasm/src/", "crates/client-bracket/native/src/"];
 const CAST_TO_POINTER = /\bas\s+\*(const|mut)\b/;
 
 for (const f of files) {

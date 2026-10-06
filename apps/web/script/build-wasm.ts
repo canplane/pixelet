@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run -A
-// Builds the Rust core's module (crates/client/wasm) to where
+// Builds the Rust core's module (crates/client-bracket/wasm) to where
 // src/platform/web/core.ts loads it.
 //
 //   deno run -A script/build-wasm.ts [--published]

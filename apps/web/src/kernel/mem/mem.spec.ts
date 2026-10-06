@@ -10,7 +10,7 @@
 //
 //   crates/client/kernel/src/mem/section.rs   the map — the fixed ranges and the heap
 //   crates/client/kernel/src/door/layout.rs   the front — the rings and the directory
-//   crates/client/wasm/build.rs               the linker flags for the module
+//   crates/client-bracket/wasm/build.rs               the linker flags for the module
 //   apps/web/src/kernel/mem.ts                 the reservation the shell makes
 
 import type { u32 } from "@xpute/core/abi/word.ts";

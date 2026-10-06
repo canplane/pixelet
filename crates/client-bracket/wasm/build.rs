@@ -17,7 +17,7 @@
 // `deno task check:spec` fails where what is on disk is not what the JSON
 // writes).
 
-#[path = "../kernel/src/mem/mem.spec.rs"]
+#[path = "../../client/kernel/src/mem/mem.spec.rs"]
 mod spec;
 
 use spec::{DESKTOP_BYTES, GLOBAL_BASE, PHONE_BYTES, STACK_BYTES};

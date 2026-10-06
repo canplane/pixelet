@@ -187,7 +187,8 @@ Two formats were made here: **PVF3**, pixelet's packed fixed-point coordinate, a
 │   ├── spec/                 #   pxl-spec: the model both ends follow
 │   ├── client/               #   what the client runs
 │   │   ├── render/           #     pxl-render: the view
-│   │   ├── kernel/           #     pxl-kernel: the stores, the schedulers, the turn
+│   │   └── kernel/           #     pxl-kernel: the stores, the schedulers, the turn
+│   ├── client-bracket/       #   where the client is plugged in to run, no domain
 │   │   ├── wasm/             #     pxl-wasm: the kernel as one WebAssembly module
 │   │   └── native/           #     pxl-native: the kernel as a device app's library
 │   ├── server/               #   pxl-server: what geo and api both need to start

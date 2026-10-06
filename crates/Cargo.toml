@@ -5,12 +5,13 @@
 # either needs before it can answer anything — is the group's own directory,
 # and the two processes sit inside it.
 #
-# The client is one core compiled to one WebAssembly module that the main
-# thread and each worker instantiate for themselves
-# (decision/20260912-why-the-destination-is-wasm.md): pxl-render, pxl-kernel and
-# pxl-wasm. On a device the same core is linked into the app instead, through
-# pxl-native, which draws with wgpu where the page's host draws with the
-# browser's WebGPU. The server end is native
+# The client is one core, pxl-render and pxl-kernel, and client-bracket/ is
+# how it is plugged into a place to run: pxl-wasm, the one WebAssembly module the
+# main thread and each worker instantiate for themselves
+# (decision/20260912-why-the-destination-is-wasm.md), and pxl-native, linked
+# into a device's app, which draws with wgpu where the page's host draws with
+# the browser's WebGPU. A bracket is no domain: it gives the guest its
+# bounds, its clock and its doorbell (xpute-guest). The server end is native
 # (decision/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl-geo
 # and pxl-api over pxl-server, pxl-geo-bake beside them for what is baked
 # rather than answered, and pxl-geo-spec where the two geo halves read the
@@ -21,8 +22,8 @@
 # Nothing else crosses: a third-party dependency in either ships every byte
 # to the client and is read as this tree's own code, so each one below is
 # there because it was held to what it replaced and did not differ — and
-# nothing in the client's crates may assume WebAssembly; pxl-wasm is the one
-# crate that does.
+# nothing in the client's crates may assume WebAssembly; pxl-wasm, a bracket,
+# is the one crate that does.
 
 [workspace]
 resolver = "2"
@@ -30,8 +31,8 @@ members = [
   "spec",
   "client/render",
   "client/kernel",
-  "client/wasm",
-  "client/native",
+  "client-bracket/wasm",
+  "client-bracket/native",
   "server",
   "server/geo-spec",
   "server/geo",
