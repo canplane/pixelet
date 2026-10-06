@@ -24,8 +24,7 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 use std::alloc::{GlobalAlloc, Layout, System};
 
-use pxl_kernel::door::host::HeapStat;
-use pxl_kernel::mem::heap::{heap_stat, HeapBounds, KernelAlloc};
+use xpute_guest::mem::heap::{heap_stat, Bounds, Heap, HeapStat};
 
 use crate::thread::on_kernel_thread;
 use pxl_kernel::mem::section;
@@ -101,7 +100,7 @@ pub fn region() -> usize {
 /// the region, as the module's is to the end of its memory.
 struct RegionBounds;
 
-impl HeapBounds for RegionBounds {
+impl Bounds for RegionBounds {
     fn base() -> usize {
         region() + section::heap_at(DATA_END) as usize
     }
@@ -165,14 +164,14 @@ impl SysLock {
 /// The slab behind the system's lock.
 pub struct Locked {
     lock: SysLock,
-    slab: KernelAlloc<RegionBounds>,
+    slab: Heap<RegionBounds>,
 }
 
 // SAFETY: the slab is only reached holding the lock.
 unsafe impl Sync for Locked {}
 
 impl Locked {
-    fn with<R>(&self, f: impl FnOnce(&KernelAlloc<RegionBounds>) -> R) -> R {
+    fn with<R>(&self, f: impl FnOnce(&Heap<RegionBounds>) -> R) -> R {
         self.lock.hold(|| f(&self.slab))
     }
 
@@ -248,5 +247,5 @@ unsafe impl GlobalAlloc for Locked {
 #[global_allocator]
 pub static ALLOC: Locked = Locked {
     lock: SysLock::new(),
-    slab: KernelAlloc::new(),
+    slab: Heap::new(),
 };

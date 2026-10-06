@@ -12,31 +12,15 @@
 //! shell rings.
 
 use pxl_kernel::door::Bracket;
-use pxl_kernel::mem::heap::{HeapBounds, KernelAlloc};
 use pxl_kernel::mem::section;
+use xpute_guest::mem::heap::{Bounds, Heap, HeapStat};
+use xpute_guest::module::{data_end, given, now};
 
 extern "C" {
-    /// Where the linker stopped: the end of `.rodata`, `.data` and `.bss`, and
-    /// so where the kernel may begin placing its own ranges. wasm-ld defines
-    /// it, and `--global-base` (build.rs) is what decides where the data it
-    /// measures began.
-    ///
-    /// Not `__heap_base`, though that symbol sits eight bytes further on and
-    /// would do. The linker calls it that because a C runtime starts its
-    /// `sbrk` there; this kernel's heap is past the fixed ranges and past the
-    /// terrain, so borrowing the name would leave `heap` meaning two things
-    /// two hundred megabytes apart.
-    #[allow(non_upper_case_globals)]
-    static __data_end: u8;
     /// The top of the stack: `-z stack-size` past its start, which
     /// `--stack-first` puts at the bottom of the memory. wasm-ld defines it.
     #[allow(non_upper_case_globals)]
     static __stack_high: u8;
-}
-
-/// Where the linker stopped, as an address.
-fn data_end() -> u32 {
-    core::ptr::addr_of!(__data_end) as u32
 }
 
 /// Where the module's heap lies: from the page past the last fixed range to
@@ -44,40 +28,22 @@ fn data_end() -> u32 {
 /// it — the stack, the rings, the linker's data, and `.fixed`.
 struct ModuleBounds;
 
-impl HeapBounds for ModuleBounds {
+impl Bounds for ModuleBounds {
     fn base() -> usize {
         section::heap_at(data_end()) as usize
     }
     fn end() -> usize {
-        core::arch::wasm32::memory_size(0) * (1 << 16)
+        given() as usize
     }
 }
 
 /// The module's one allocator (pxl_kernel::mem::heap).
 #[global_allocator]
-static ALLOC: KernelAlloc<ModuleBounds> = KernelAlloc::new();
-
-// `wasm_import_module` is what makes this an import, and it is load-bearing
-// rather than documentation. wasm-ld used to be handed `--allow-undefined`,
-// under which any symbol nothing defined became an import of the module named
-// `env` — which is the module the shell instantiates with
-// (apps/web/src/kernel/module.ts). Rust stopped passing that flag in 1.96, so
-// an extern block that says nothing is a link error.
-#[link(wasm_import_module = "env")]
-extern "C" {
-    /// The client's clock, in milliseconds: what a tick's budget is spent against.
-    #[link_name = "now"]
-    fn host_now() -> f64;
-}
+static ALLOC: Heap<ModuleBounds> = Heap::new();
 
 /// The allocator's reading, for the profiler and the heap's row.
-fn heap_stat() -> pxl_kernel::door::host::HeapStat {
-    pxl_kernel::mem::heap::heap_stat(&ALLOC)
-}
-
-fn now() -> f64 {
-    // SAFETY: an import with no arguments.
-    unsafe { host_now() }
+fn heap_stat() -> HeapStat {
+    xpute_guest::mem::heap::heap_stat(&ALLOC)
 }
 
 /// What this module gives the kernel: the memory the page grew it to, the
@@ -85,7 +51,7 @@ fn now() -> f64 {
 fn bracket() -> Bracket {
     let stack_high = core::ptr::addr_of!(__stack_high) as u32;
     xpute_core::ensure!(stack_high == pxl_kernel::mem::spec::STACK_BYTES, ENOTRECOVERABLE, stack_high);
-    let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
+    let given = given();
     Bracket {
         given: given.min(u32::MAX as u64) as u32,
         data_end: data_end(),

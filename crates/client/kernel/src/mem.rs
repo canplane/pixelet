@@ -6,7 +6,6 @@
 pub const MB: f64 = 1_048_576.0;
 
 pub mod fixed;
-pub mod heap;
 pub mod section;
 #[path = "mem/mem.spec.rs"]
 pub mod spec;

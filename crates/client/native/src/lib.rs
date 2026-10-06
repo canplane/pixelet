@@ -33,7 +33,7 @@ fn now() -> f64 {
     START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
-fn heap_stat() -> pxl_kernel::door::host::HeapStat {
+fn heap_stat() -> xpute_guest::mem::heap::HeapStat {
     memory::ALLOC.stat()
 }
 

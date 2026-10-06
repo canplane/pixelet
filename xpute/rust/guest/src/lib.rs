@@ -8,4 +8,6 @@ pub mod clock;
 pub mod global;
 pub mod ipc;
 pub mod mem;
+#[cfg(target_arch = "wasm32")]
+pub mod module;
 pub mod sched;

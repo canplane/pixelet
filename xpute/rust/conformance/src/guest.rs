@@ -157,19 +157,13 @@ pub unsafe extern "C" fn xpute_conformance_interrupt(mem: *mut u8, _quota_ms: f6
 #[cfg(target_arch = "wasm32")]
 mod module {
     use super::*;
-    use xpute_core::alloc::buddy_tree::Range;
-    use xpute_core::alloc::slab::SlabMalloc;
+    use xpute_guest::mem::heap::{Bounds, Heap};
+    use xpute_guest::module::{data_end, given};
 
-    struct Heap;
+    /// The heap is the range's last part, `HEAP_BYTES` from `HEAP_AT`.
+    struct Range;
 
-    const HEAP_LOG2: usize = spec::HEAP_BYTES.trailing_zeros() as usize;
-    const SPLIT_BYTES: usize = (1 << (HEAP_LOG2 - 12)) / 8;
-
-    impl Range for Heap {
-        const MIN_LOG2: usize = 12;
-        const MAX_LOG2: usize = HEAP_LOG2;
-        type Split = [u8; SPLIT_BYTES];
-        const SPLIT_INIT: Self::Split = [0; SPLIT_BYTES];
+    impl Bounds for Range {
         fn base() -> usize {
             (range_at() + HEAP_AT) as usize
         }
@@ -179,35 +173,21 @@ mod module {
     }
 
     #[global_allocator]
-    static ALLOC: SlabMalloc<Heap> = SlabMalloc::new();
-
-    extern "C" {
-        /// Defined by wasm-ld: the end of the stack and data.
-        #[allow(non_upper_case_globals)]
-        static __heap_base: u8;
-    }
-
-    #[link(wasm_import_module = "env")]
-    extern "C" {
-        #[link_name = "now"]
-        fn host_now() -> f64;
-    }
+    static ALLOC: Heap<Range> = Heap::new();
 
     extern "C" fn now() -> f64 {
-        // SAFETY: an import with no arguments.
-        unsafe { host_now() }
+        xpute_guest::module::now()
     }
 
     fn range_at() -> u32 {
-        page_up(core::ptr::addr_of!(__heap_base) as u32)
+        page_up(data_end())
     }
 
     #[no_mangle]
     pub extern "C" fn xpute_conformance_boot() -> u32 {
         let range = range_at();
-        let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
         // A host that sized the memory for another guest.
-        xpute_core::ensure!(range as u64 + spec::MEMORY_BYTES as u64 <= given, ENOMEM, range);
+        xpute_core::ensure!(range as u64 + spec::MEMORY_BYTES as u64 <= given(), ENOMEM, range);
         // SAFETY: the module's memory, from address 0, and the range inside
         // it past what the linker placed.
         unsafe { boot(core::ptr::null_mut(), range, now) }

@@ -6,6 +6,7 @@
 // its budget mid-turn.
 
 use core::panic::Location;
+pub use xpute_guest::mem::heap::HeapStat;
 
 use xpute_core::status::errno::Errno;
 use xpute_guest::ipc::stream::{record_bytes, WORD};
@@ -128,24 +129,6 @@ pub fn set_wall_now(unix_ms: f64) {
 
 pub fn wall_now() -> f64 {
     *WALL_MS.get(|| 0.0)
-}
-
-/// One reading of the allocator, so compared fields are from one moment.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HeapStat {
-    pub range: usize,
-    /// A high-water mark, not a holding.
-    pub used: usize,
-    pub live: usize,
-    pub run: usize,
-    pub slot: usize,
-    /// Past the tree's current root the range is untouched rather than listed,
-    /// so this is not the free space.
-    pub largest_free: usize,
-    /// Moves exactly when a request refused before might now be served.
-    pub releases: u32,
-    pub refusals: u32,
-    pub requests: u32,
 }
 
 static HEAP: Global<fn() -> HeapStat> = Global::new();
