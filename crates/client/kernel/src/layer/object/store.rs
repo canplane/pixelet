@@ -646,18 +646,43 @@ impl Cells<'_> {
 impl Query for Store {
     type Record<'a> = Cells<'a>;
 
-    /// All resident, so every answer is exact.
-    fn bounds(&self, node: Node<3>, _cell: Zoom) -> Answer<Option<Bound>> {
-        let region = cube(node.0, node.1);
+    /// All resident, so every answer is exact. Read at `cell`: a node held
+    /// finer than its cells is one cube and `finest` one past `cell`, so the
+    /// cost is the asker's resolution — one find for a node read whole.
+    fn bounds(&self, (zoom, at): Node<3>, cell: Zoom) -> Answer<Option<Bound>> {
         let mut out: Option<Bound> = None;
-        self.entries_in(&region, &mut |e| {
-            if let Some(b) = e.cube().meet(region) {
-                out = Some(out.map_or(Bound { aabb: b, finest: e.zoom }, |o| Bound {
-                    aabb: o.aabb.join(b),
-                    finest: o.finest.max(e.zoom),
-                }));
-            }
-        });
+        let mut hold = |aabb: Aabb, finest: Zoom| {
+            out = Some(out.map_or(Bound { aabb, finest }, |o| Bound {
+                aabb: o.aabb.join(aabb),
+                finest: o.finest.max(finest),
+            }))
+        };
+        let whole = cube(zoom, at);
+        // Over a column's root no one tree holds the node: its columns' leaves.
+        if zoom < SHARD_ZOOM {
+            self.entries_in(&whole, &mut |e| {
+                if let Some(b) = e.cube().meet(whole) {
+                    hold(b, e.zoom.min(cell + 1));
+                }
+            });
+            return Answer::Exact(out);
+        }
+        match self.find(zoom, at) {
+            None => {}
+            Some(Found { slot: Slot::Leaf(EMPTY), .. }) => {}
+            Some(Found { slot: Slot::Leaf(_), zoom: z, .. }) => hold(whole, z),
+            Some(f) => self.walk(f.tree, f.slot, zoom, at, about(&whole), &mut |z, _, c, leaf| {
+                if leaf.is_some() {
+                    hold(*c, z);
+                    false
+                } else if z >= cell {
+                    hold(*c, cell + 1);
+                    false
+                } else {
+                    true
+                }
+            }),
+        }
         Answer::Exact(out)
     }
 
