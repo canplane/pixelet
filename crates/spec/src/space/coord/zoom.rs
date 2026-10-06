@@ -20,6 +20,9 @@ pub const UNIT_ZOOM: Zoom = IVEC_X_W as Zoom;
 /// world's data is ingested a tile of it, a shard, at a time.
 pub const SHARD_ZOOM: Zoom = UNIT_ZOOM - IVEC_Z_W as Zoom;
 
+/// Where Z takes its first digit: the cubes under a column, its 3D roots.
+pub const CUBE_ZOOM: Zoom = SHARD_ZOOM + 1;
+
 /// The finest a point resolves: a fraction's step.
 pub const FINEST_ZOOM: Zoom = UNIT_ZOOM + FRAC_W as Zoom;
 

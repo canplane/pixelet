@@ -8,7 +8,7 @@ use super::pvf3::core::{IVEC_Y_W, IVEC_Z_W, ONE};
 use super::pvf3::pack::pack;
 use super::pvf3::Pvf3;
 use super::v3::{Aabb, V3};
-use super::zoom::{units, Zoom};
+use super::zoom::{cube, units, Zoom};
 
 /// Every point the world holds, in units. X is unbounded: the lane is one world round.
 pub const REACH: Aabb = {
@@ -63,4 +63,16 @@ pub fn nearest_box(b: &Aabb, about: f64) -> Aabb {
         return *b;
     }
     b.moved([nearest(x, about) - x, 0.0, 0.0])
+}
+
+/// A node's X moved by whole rounds to the round nearest `about`; as it is
+/// where `about` is not finite.
+pub fn node_near(zoom: Zoom, at: [i64; 3], about: f64) -> [i64; 3] {
+    if !about.is_finite() {
+        return at;
+    }
+    let whole = cube(zoom, at);
+    let x = (whole.min[0] + whole.max[0]) / 2.0;
+    let rounds = ((nearest(x, about) - x) / ROUND).round() as i64;
+    [at[0] + rounds * around(zoom), at[1], at[2]]
 }

@@ -12,7 +12,10 @@ use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::layer::object::store::EntryAt;
-use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
+use pxl_spec::space::coord::world::node_near;
+use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::hierarchy::morton::child_cube;
+use pxl_spec::space::hierarchy::tree::Node;
 
 use super::{column::*, ground::*};
 use crate::layer::Query;
@@ -395,13 +398,12 @@ impl<'a> Access<'a> {
         Some(hit(ray, t, normal, Aabb { min, max: min.map(|v| v + side) }, Struck::Ground))
     }
 
-    /// First object the ray meets, nearest first (`Store::along_ray`), in cells
-    /// of `cell_zoom`: a leaf no finer than the cell is hit at its own cube, a
-    /// cell holding finer is hit whole by what it folds to, as it is drawn.
+    /// First object the ray meets, in cells of `cell_zoom`, each read through the objects' query.
     pub(super) fn objects(&self, ray: &Ray, (t0, t1): (f64, f64), cell_zoom: Zoom) -> Option<Hit> {
         let mut met = None;
-        self.objects.along_ray(ray.origin, ray.direction, (t0, t1), cell_zoom, &mut |cell| {
-            let (e, folded) = self.objects.node(cell_zoom, cell);
+        self.objects_along((ray.origin, ray.direction), (t0, t1), cell_zoom, &mut |cell| {
+            let Answer::Exact(cells) = self.objects.read((cell_zoom, cell), cell_zoom) else { return false };
+            let (e, folded) = cells.node();
             met = (object_value_is_voxel(e.state) && !object_value_is_air(e.state))
                 .then(|| match folded {
                     true => cell_hit(ray, cell, cell_zoom, t0),
@@ -411,5 +413,89 @@ impl<'a> Access<'a> {
             met.is_some()
         });
         met
+    }
+
+    /// Every cell of `cell_zoom` that may hold objects along the ray, in ray
+    /// order, until `each` stops it: a descent over the objects' bounds, each
+    /// node read whole, from the column roots the ray crosses, nearest child first.
+    fn objects_along(&self, ray: (V3, V3), span: (f64, f64), cell_zoom: Zoom, each: &mut dyn FnMut([i64; 3]) -> bool) {
+        let side = units(cell_zoom);
+        cells_along(ray, span, units(SHARD_ZOOM), &mut |[x, y, half]| {
+            let mut met = [(0.0, [0; 3]); 8];
+            let mut n = 0;
+            for s in 0..8 {
+                let at = child_cube(SHARD_ZOOM, [x, y, 0], s);
+                if at[2] != half || !self.objects_held(CUBE_ZOOM, at) {
+                    continue;
+                }
+                if let Some(c) = slab(ray, &cube(CUBE_ZOOM, at).snapped_out(side), span) {
+                    met[n] = (c.0, at);
+                    n += 1;
+                }
+            }
+            met[..n].sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+            met[..n].iter().any(|&(_, at)| self.objects_down(ray, span, cell_zoom, (CUBE_ZOOM, at), each))
+        });
+    }
+
+    fn objects_down(&self, ray: (V3, V3), span: (f64, f64), cell_zoom: Zoom, (zoom, at): Node<3>, each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
+        let side = units(cell_zoom);
+        let here = node_near(zoom, at, ray.0[0]);
+        let Some(s) = slab(ray, &cube(zoom, here).snapped_out(side), span) else { return false };
+        if zoom == cell_zoom {
+            return each(here);
+        }
+        let mut met = [(0.0, [0; 3]); 8];
+        let mut n = 0;
+        for k in 0..8 {
+            let at = child_cube(zoom, at, k);
+            if !self.objects_held(zoom + 1, at) {
+                continue;
+            }
+            if let Some(cs) = slab(ray, &cube(zoom + 1, node_near(zoom + 1, at, ray.0[0])).snapped_out(side), s) {
+                met[n] = (cs.0, at);
+                n += 1;
+            }
+        }
+        met[..n].sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+        met[..n].iter().any(|&(_, at)| self.objects_down(ray, s, cell_zoom, (zoom + 1, at), each))
+    }
+
+    /// Whether anything is placed in the cube, read whole: one find.
+    fn objects_held(&self, zoom: Zoom, at: [i64; 3]) -> bool {
+        self.objects.bounds((zoom, at), zoom).value().flatten().is_some()
+    }
+}
+
+fn slab((o, d): (V3, V3), b: &Aabb, (t0, t1): (f64, f64)) -> Option<(f64, f64)> {
+    let (enter, leave, _) = b.span_along(o, d)?;
+    let (enter, leave) = (enter.max(t0), leave.min(t1));
+    (enter <= leave).then_some((enter, leave))
+}
+
+/// Amanatides–Woo traversal of `side` cells; returns whether `each` stopped it.
+fn cells_along((o, d): (V3, V3), (t0, t1): (f64, f64), side: f64, each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
+    let start = [0, 1, 2].map(|k| o[k] + d[k] * t0);
+    let mut cell = start.map(|v| (v / side).floor() as i64);
+    let mut next = [0.0; 3];
+    let mut delta = [0.0; 3];
+    for k in 0..3 {
+        if d[k].abs() < 1e-12 {
+            (next[k], delta[k]) = (f64::INFINITY, f64::INFINITY);
+        } else {
+            let face = (cell[k] + i64::from(d[k] > 0.0)) as f64 * side;
+            (next[k], delta[k]) = ((face - o[k]) / d[k], side / d[k].abs());
+        }
+    }
+    loop {
+        let k = (0..3).min_by(|&a, &b| next[a].total_cmp(&next[b])).unwrap_or(0);
+        if each(cell) {
+            return true;
+        }
+        if next[k] >= t1 {
+            return false;
+        }
+        cell[k] += if d[k] > 0.0 { 1 } else { -1 };
+        next[k] += delta[k];
     }
 }
