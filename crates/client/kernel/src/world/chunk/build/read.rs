@@ -12,8 +12,9 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around};
 use pxl_render::mesh::run::APRON;
 
-use crate::world::access::{Answer, Query, Source};
-use crate::world::pyramid::chunk::Chunk as PyramidChunk;
+use crate::layer::terrain::Source;
+use crate::layer::{Answer, Query};
+use crate::world::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;

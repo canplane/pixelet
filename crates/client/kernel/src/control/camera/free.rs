@@ -14,8 +14,8 @@ use crate::control::camera::controller::look_domain;
 use crate::control::camera::controller::{camera, eye_world, map_center, set_eye_world};
 use crate::control::camera::store::camera_store;
 use crate::control::navigation::support::target;
-use crate::world::access::{Access, Detail, Ray};
-use crate::world::frame::view::{view, view_compose};
+use crate::world::query::{Access, Detail, Ray};
+use crate::world::view::frame::pose::{view, view_compose};
 use xpute_runtime::global::Global;
 
 /// The first resident thing it meets, else the sea, else `fallback` along it.

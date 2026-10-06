@@ -9,7 +9,7 @@ use xpute_runtime::mem::section::span_of;
 use crate::mem::fixed::{lane, range, Range};
 use crate::world::chunk::mesh_slot::OCCUPANCY;
 
-use crate::world::pyramid::chunk::Chunk;
+use crate::world::chunk::Chunk;
 
 /// An index in a `.fixed.mounts` lane, stored plus one so a zeroed lane reads as none.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

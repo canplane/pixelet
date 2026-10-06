@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use crate::kernel::World;
 
 use crate::world::chunk::mesh_slot::OCCUPANCY;
-use crate::world::pyramid::chunk::Chunk as PyramidChunk;
+use crate::world::chunk::Chunk as PyramidChunk;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 

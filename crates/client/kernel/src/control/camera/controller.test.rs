@@ -5,7 +5,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::serial;
 use crate::shell::setting::store::OrbitObstacleMode;
 use crate::world::fixture::place;
-use crate::world::frame::coord::to_world;
+use crate::world::view::frame::coord::to_world;
 
 struct Rng(u64);
 

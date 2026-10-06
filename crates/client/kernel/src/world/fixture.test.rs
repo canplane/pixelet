@@ -11,9 +11,9 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::world::access::{Answer, Bound};
-use crate::world::observer::{Footprint, Grid, Met, Observer, OnPatch, Sight};
-use crate::world::pyramid::domain::{Domain, Price};
+use crate::layer::{Answer, Bound};
+use crate::world::chunk::domain::{Domain, Price};
+use crate::world::view::observer::{Footprint, Grid, Met, Observer, OnPatch, Sight};
 use pxl_spec::space::coord::zoom::Zoom;
 
 #[derive(Clone)]
@@ -198,12 +198,12 @@ pub struct Free;
 
 use crate::world::chunk::mesh_slot::POOLS;
 
-impl crate::world::pyramid::domain::Price for Free {
-    fn piece(&self, _: crate::world::pyramid::chunk::Chunk, _: f64, _: pxl_spec::space::camera::grid::Tau) -> [u32; POOLS] {
+impl crate::world::chunk::domain::Price for Free {
+    fn piece(&self, _: crate::world::chunk::Chunk, _: f64, _: pxl_spec::space::camera::grid::Tau) -> [u32; POOLS] {
         [0; POOLS]
     }
 
-    fn split(&self, _: crate::world::pyramid::chunk::Chunk) -> [u32; POOLS] {
+    fn split(&self, _: crate::world::chunk::Chunk) -> [u32; POOLS] {
         [0; POOLS]
     }
 

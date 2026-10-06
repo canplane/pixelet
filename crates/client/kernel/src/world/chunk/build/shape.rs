@@ -8,9 +8,9 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_render::mesh::run::APRON;
 
 use crate::layer::object::store::Store;
-use crate::world::access::Query;
+use crate::layer::Query;
 
-use crate::world::pyramid::chunk::Chunk as PyramidChunk;
+use crate::world::chunk::Chunk as PyramidChunk;
 use pxl_spec::space::coord::zoom::{count, units, Zoom};
 use pxl_spec::space::hierarchy::tree::first_descendant_of;
 

@@ -22,10 +22,10 @@ use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::store::{device_location_store, device_orientation_store};
-use crate::layer::character::companion::companion_load_store;
-use crate::layer::character::preview::{preview_rows, CASES_MAX};
 use crate::layer::geocode::fetcher::center_group;
 use crate::layer::geocode::store as geocode_store;
+use crate::scene::character::companion::companion_load_store;
+use crate::scene::character::preview::{preview_rows, CASES_MAX};
 use crate::sched::turn::world_platform;
 use crate::shell::setting::store::{settings_store, SettingKey};
 use crate::world::pyramid::Layer as _;
@@ -84,14 +84,14 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         map: MapState {
             // Loaded once ground is drawn, or every tile the view needs has answered,
             // which over a source's void leaves nothing to draw.
-            status: match crate::world::observation::eye() {
+            status: match crate::world::view::observation::eye() {
                 None => MapStatus::Idle,
                 Some(_) if crate::kernel::kernel().sched.shows_ground() || Terrain::pyramid().answered() => MapStatus::Success,
                 Some(_) => MapStatus::Loading,
             },
             is_off_center: map_navigation().is_off_center,
             center,
-            outside: at.is_some_and(|c| crate::layer::terrain::tile::void_under(&c)),
+            outside: at.is_some_and(|c| void_under(&c)),
         },
         location: LocationState {
             status: location.pose.status(),
@@ -205,4 +205,10 @@ pub fn sensors_close() {
 fn m_per_px() -> f64 {
     let y_u = map_center().map_or(0.0, |c| pvf3::to_real(pvf3::Y(&c)));
     units_per_px_at(dist()) / epsg3857::u_per_m(y_u)
+}
+
+/// The source has nothing under `at`: the ground cell there, as the finest
+/// tile held over it gives it, is void.
+fn void_under(at: &Pvf3) -> bool {
+    crate::world::query::Access::now().at(at, LEAF_ZOOM).value().is_some_and(|g| g.top().is_none())
 }

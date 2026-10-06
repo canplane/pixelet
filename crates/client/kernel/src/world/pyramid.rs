@@ -9,9 +9,6 @@
 //! first. Where a tile marks a child as no tile (`Layer::occupancy`), its
 //! ground is the tile's and the child is never asked for.
 
-pub mod chunk;
-pub mod domain;
-
 use std::collections::HashMap;
 
 use pxl_spec::bake::format::Occupancy;
@@ -23,11 +20,11 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use crate::io::demand::{Ask, Category, Phases, Why};
 use crate::io::failure::Failure;
 use crate::io::sched::declare;
-use crate::world::observation::{ground_known, observation, ByFootprints, Order};
-use crate::world::observer::Footprint;
-use crate::world::quality;
-use crate::world::residency::floor::{self, Fallback, Floor};
-use crate::world::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
+use crate::layer::residency::floor::{self, Fallback, Floor};
+use crate::layer::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
+use crate::world::chunk::quality;
+use crate::world::view::observation::{ground_known, observation, ByFootprints, Order};
+use crate::world::view::observer::Footprint;
 use pxl_spec::space::coord::zoom::Zoom;
 
 pub trait Layer: Clone + 'static {
@@ -277,7 +274,7 @@ impl<L: Layer> Pyramid<L> {
         // Nothing coarser than the layer's own top is drawn, whatever the source holds.
         let Some(top) = L::TOP.or(floor::top()).map(|t| t.max(L::LATTICE.top())) else { return };
         // demand follows the published goal
-        let published = domain::current();
+        let published = crate::world::chunk::domain::current();
         let own = |o: Observation| match L::TOP {
             Some(_) => Observation {
                 reach: L::reach(),

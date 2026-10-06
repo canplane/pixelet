@@ -3,15 +3,11 @@
 //! The world the kernel keeps: resident tiles, the query over them, the
 //! chunks meshed from them, and the frame's view.
 
-pub mod access;
 pub mod change;
 pub mod chunk;
-pub mod frame;
-pub mod observation;
-pub mod observer;
 pub mod pyramid;
-pub mod quality;
-pub mod residency;
+pub mod query;
+pub mod view;
 
 #[cfg(test)]
 #[path = "world/fixture.test.rs"]

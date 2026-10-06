@@ -79,7 +79,7 @@ fn close_surface(handle: u32) {
     if let Some(closed) = pxl_render::gpu::surface::surface_close(handle) {
         pxl_render::gpu::renderer::surface_closed(closed);
     }
-    crate::layer::character::preview::preview_close(handle);
+    crate::scene::character::preview::preview_close(handle);
 }
 
 fn host_attached(s: &mut State) {

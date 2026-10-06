@@ -11,9 +11,10 @@ use xpute_core::math::scalar::wrap;
 use crate::control::camera::config::camera_cfg::view::EYE_CLEARANCE_U;
 use crate::control::camera::orbit::orbit_eye_offset;
 use crate::control::navigation::support::{in_cell, passage, Passage};
+use crate::layer::Answer;
 use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
-use crate::world::access::{Access, Answer};
-use crate::world::frame::coord::world_to_canonical;
+use crate::world::query::Access;
+use crate::world::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::zoom::index_of;
 
 #[derive(Clone, Copy, Debug, PartialEq)]

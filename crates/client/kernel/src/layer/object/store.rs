@@ -29,13 +29,13 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
 use crate::kernel::kernel;
-use crate::layer::decor::build::{scatters_at, Draw};
 use crate::layer::object::repository;
-use crate::world::access::Access;
-use crate::world::access::{Answer, Bound, Query};
+use crate::layer::{Answer, Bound, Query};
 use crate::world::change::request_world_tick;
+use crate::world::chunk::decor::build::{scatters_at, Draw};
 use crate::world::chunk::source::chunk_sources_changed;
-use crate::world::observation::objects_written;
+use crate::world::query::Access;
+use crate::world::view::observation::objects_written;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EntryKind {

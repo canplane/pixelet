@@ -10,7 +10,7 @@ use pxl_render::mesh::run::{RunSet, APRON};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
-use crate::layer::marker::hover_cursor::render_edits;
+use crate::scene::marker::hover_cursor::render_edits;
 use crate::world::chunk::source::draws;
 
 use pxl_spec::space::coord::zoom::{units, Zoom};

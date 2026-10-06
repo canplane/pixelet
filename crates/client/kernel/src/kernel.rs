@@ -3,8 +3,8 @@
 use pxl_render::mesh::paint::object::Painter;
 
 use crate::layer::object::store::Store;
+use crate::scene::Scene;
 use crate::world::chunk::table::Scheduler;
-use crate::world::frame::scene::Scene;
 use xpute_runtime::global::Global;
 
 pub struct Kernel {

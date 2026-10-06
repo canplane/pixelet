@@ -12,7 +12,7 @@ use pxl_spec::bake::format::GroundCell;
 use pxl_spec::bake::format::{Extent, COARSE_LANE};
 use pxl_spec::space::layer::lattice::{EXTENT, TILE_CELLS};
 
-use crate::world::residency::Residency;
+use crate::layer::residency::Residency;
 use pxl_spec::bake::format::Terrain;
 
 const FRAMES: u32 = Residency::<Terrain>::FRAMES;

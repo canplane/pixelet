@@ -12,9 +12,10 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
+use crate::layer::Answer;
 use crate::shell::setting::store::settings_store;
-use crate::world::access::{Access, Answer, Detail, Ray};
-use crate::world::frame::coord::{to_world, world_to_canonical};
+use crate::world::query::{Access, Detail, Ray};
+use crate::world::view::frame::coord::{to_world, world_to_canonical};
 use pxl_spec::space::coord::zoom::{index_of, units};
 
 /// The Z lane's floor, under any ground.

@@ -7,7 +7,7 @@
 //! watch. Only frames that missed a vsync while moving or overran are kept.
 
 use crate::kernel::kernel;
-use crate::layer::billboard::sheet::billboard_sheet;
+use crate::scene::billboard::sheet::billboard_sheet;
 use crate::sched::profiler::block::CountersBlock;
 use crate::sched::profiler::frame::FrameSample;
 use crate::sched::profiler::record::{drop_front, fixed_lane, profiler_recording_start, profiler_recording_stop, profiler_set_sink, Lane, ProfilerSink};

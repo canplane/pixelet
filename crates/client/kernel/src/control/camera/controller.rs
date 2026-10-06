@@ -17,8 +17,8 @@ use crate::control::navigation::support::{is_unknown, pan_to, unknown_z};
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::{settings_store, CameraMode};
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::{world_to_canonical, world_to_canonical_nearest};
-use crate::world::frame::view::{view, view_compose, ObserverPose};
+use crate::world::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
+use crate::world::view::frame::pose::{view, view_compose, ObserverPose};
 use xpute_core::math::scalar::wrap;
 use xpute_runtime::global::Global;
 

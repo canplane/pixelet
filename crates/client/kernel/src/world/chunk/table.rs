@@ -14,8 +14,9 @@ pub use census::{Census, ChunkCounts, ChunkHeld};
 pub use mesh::Meshes;
 pub use mount::MOUNTS_BYTES;
 
-use crate::world::access::{Access, Query};
+use crate::layer::Query;
 use crate::world::chunk::build::{ground_of, leaf_of};
+use crate::world::query::Access;
 use mesh::*;
 use mount::*;
 
@@ -34,24 +35,24 @@ use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats
 
 use crate::kernel::kernel;
 use crate::kernel::World;
-use crate::layer::marker::hover_cursor::{render_edits, RenderEdits};
 use crate::layer::object::store::EntryAt;
 use crate::param;
+use crate::scene::marker::hover_cursor::{render_edits, RenderEdits};
+use crate::scene::Scene;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{draws_as_held, BuildEvent, Builder};
 use crate::world::chunk::frontier::{pool_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, OCCUPANCY};
 use crate::world::chunk::source::{draws, objects_drawn, Drawn};
-use crate::world::frame::scene::Scene;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::global::Global;
 
-use crate::world::observation::Order;
-use crate::world::pyramid::chunk::Chunk;
-use crate::world::pyramid::domain::{self, Domain};
+use crate::world::chunk::domain::{self, Domain};
+use crate::world::chunk::Chunk;
 use crate::world::pyramid::Layer as _;
+use crate::world::view::observation::Order;
 use pxl_spec::bake::format::Terrain;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

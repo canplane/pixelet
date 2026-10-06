@@ -8,7 +8,7 @@ use crate::control::camera::controller;
 use crate::io::failure::Outcome;
 use crate::io::sched::{counts, credits};
 use crate::kernel::{kernel, with_world};
-use crate::layer::billboard::sheet::billboard_sheet;
+use crate::scene::billboard::sheet::billboard_sheet;
 use crate::sched::profiler::block::TASK_PHASES;
 use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::sched::profiler::frame::FrameSample;
@@ -217,7 +217,7 @@ fn side(out: &mut [f64]) {
     );
 
     let held = with_world(|_, sched, _| sched.held()).unwrap_or_default();
-    let (decor_blocks, decor_instances) = crate::layer::decor::cell::counts();
+    let (decor_blocks, decor_instances) = crate::world::chunk::decor::cell::counts();
     put(
         out,
         SUMMARY::held::AT,
@@ -227,7 +227,7 @@ fn side(out: &mut [f64]) {
             tiers: held.tiers as f64,
             decor_blocks: decor_blocks as f64,
             decor_instances: decor_instances as f64,
-            decor_bytes: crate::layer::decor::cell::bytes() as f64,
+            decor_bytes: crate::world::chunk::decor::cell::bytes() as f64,
         },
     );
 
@@ -242,7 +242,7 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let [step, star] = crate::world::quality::reading();
+    let [step, star] = crate::world::chunk::quality::reading();
     let residency = Terrain::pyramid().residency();
     let [admitted, evicted] = residency.churn();
     let [refined, changes_peak] = kernel().sched.pace();
@@ -285,7 +285,7 @@ fn side(out: &mut [f64]) {
             dist: controller::dist(),
             polar: controller::polar(),
             azimuth: controller::azimuth(),
-            tau: crate::world::pyramid::domain::current().map_or(f64::NAN, |d| d.tau().scale()),
+            tau: crate::world::chunk::domain::current().map_or(f64::NAN, |d| d.tau().scale()),
             center_lon,
             center_lat,
             center_z,

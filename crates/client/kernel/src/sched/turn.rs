@@ -13,19 +13,19 @@ use crate::control::navigation::store::{map_navigation, map_navigation_step};
 use crate::control::sensor::device_orientation::{orientation_watchdog_step, OrientationPlatform};
 use crate::control::sensor::geolocation::geolocation_step;
 use crate::io::sched::{pump, set_credits};
-use crate::layer::character::companion::{companion_step, CompanionProps};
-use crate::layer::decor::asset_store::decor_assets_wanted;
-use crate::layer::environment::state::map_environment_step;
 use crate::layer::geocode::fetcher::geocode_fetcher_step;
-use crate::layer::marker::frame_gizmo::debug_gizmos_step;
-use crate::layer::marker::hover_cursor::hover_cursor_step;
-use crate::layer::marker::location_puck::location_puck_step;
 use crate::layer::terrain::tile::terrain_step;
+use crate::scene::character::companion::{companion_step, CompanionProps};
+use crate::scene::environment::state::map_environment_step;
+use crate::scene::marker::frame_gizmo::debug_gizmos_step;
+use crate::scene::marker::hover_cursor::hover_cursor_step;
+use crate::scene::marker::location_puck::location_puck_step;
 use crate::sched::profiler::spec::EffectName;
 use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickState};
 use crate::shell::setting::store::settings_store;
 use crate::text::text_rise;
 use crate::world::change::{request_world_tick, world_edge};
+use crate::world::chunk::decor::asset_store::decor_assets_wanted;
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
 use xpute_runtime::clock::now;
@@ -44,7 +44,7 @@ fn companion_props() -> Option<CompanionProps> {
         return None;
     }
     let map_center = crate::control::camera::controller::map_center()?;
-    let center = crate::world::frame::coord::to_world(&map_center);
+    let center = crate::world::view::frame::coord::to_world(&map_center);
     Some(CompanionProps {
         center: [center[0], center[1]],
         floor: crate::control::navigation::support::floor_of(&map_center),
@@ -63,14 +63,14 @@ fn debug_gizmos_tick(_: &mut TickContext) {
 
 /// The rays a new goal starts from.
 fn sight_tick(_: &mut TickContext) {
-    crate::world::quality::sight();
+    crate::world::chunk::quality::sight();
 }
 
 /// A slice of the goal walk, then quality. An unfinished walk asks for another turn.
 fn goal_tick(ctx: &mut TickContext) {
     let end = now() + ctx.budget.remaining() * crate::param::VIEW_SHARE;
-    crate::world::quality::step(&|| now() >= end);
-    if crate::world::pyramid::domain::walking() {
+    crate::world::chunk::quality::step(&|| now() >= end);
+    if crate::world::chunk::domain::walking() {
         ctx.invalidate();
     }
 }
@@ -99,7 +99,7 @@ pub fn boot() {
     // After the view has moved, so the environment sees this tick's camera.
     on_tick(INTERACTION, environment_tick, StepName::environment);
     on_tick(INTERACTION, companion_tick, StepName::companion);
-    on_tick(INTERACTION, crate::layer::character::preview::preview_step, StepName::preview);
+    on_tick(INTERACTION, crate::scene::character::preview::preview_step, StepName::preview);
     on_tick(VISIBLE, sight_tick, StepName::sight);
     on_tick(VISIBLE, goal_tick, StepName::goal);
     on_tick(VISIBLE, demand_tick, StepName::demand);
@@ -127,7 +127,7 @@ fn world_tasks() {
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
         && spawn(crate::io::load::gltf_task(), Arrival as u8)
         && spawn(crate::world::chunk::stage::build_task(), Build as u8)
-        && spawn(crate::layer::decor::asset_store::decor_asset_task(), Background as u8)
+        && spawn(crate::world::chunk::decor::asset_store::decor_asset_task(), Background as u8)
         && spawn(crate::layer::object::repository::task(), Background as u8);
     if !spawned {
         std::process::abort();
@@ -168,7 +168,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, follow, follow_mode_step());
     effect!(worst, destination, crate::control::navigation::destination::destination_step());
     // After every writer of the map center, before anything observes the view.
-    effect!(worst, view, crate::world::frame::view::view_compose());
+    effect!(worst, view, crate::world::view::frame::pose::view_compose());
     effect!(worst, geocode, geocode_fetcher_step());
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, chunk_sources, chunk_sources_step());
@@ -285,8 +285,8 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let report = run_tick(state, step, quota_ms, edge_at);
     let after_tick = now();
     pump();
-    crate::world::frame::stage::stage_write(crate::world::frame::resolution::resolution_step(state));
-    crate::world::frame::stage::stage_render();
+    crate::scene::stage::stage_write(crate::world::view::frame::resolution::resolution_step(state));
+    crate::scene::stage::stage_render();
     let done = now();
     set_turn_timing(effects_ms, done - after_tick);
     set_host_task_ms(done - t0);

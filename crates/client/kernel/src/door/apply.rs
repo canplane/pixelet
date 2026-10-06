@@ -97,7 +97,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 p.top_z >= u32::from(pxl_spec::space::layer::lattice::GROUND.top()) && p.top_z <= u32::from(pxl_spec::space::layer::tile::LEAF_ZOOM),
                 Errno::EINVAL,
             )?;
-            crate::world::residency::floor::declare(p.top_z as Zoom);
+            crate::layer::residency::floor::declare(p.top_z as Zoom);
             Ok(Some(0))
         }
         Command::INPUT_RECT => {
@@ -285,17 +285,17 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             applied(s)
         }
         Command::CHAT_SEND => {
-            crate::layer::character::chat_bubble::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
+            crate::scene::character::chat_bubble::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
             applied(s)
         }
         Command::PREVIEW_OPEN => {
             let p = abi::PreviewOpen::read(packet(pkt)?)?;
             refuse_unless(pxl_render::gpu::surface::surface(p.surface).is_some(), Errno::EBADF)?;
-            refuse_unless(crate::layer::character::preview::preview_open(p.surface, p.group, p.number), Errno::EINVAL)?;
+            refuse_unless(crate::scene::character::preview::preview_open(p.surface, p.group, p.number), Errno::EINVAL)?;
             applied(s)
         }
         Command::PREVIEW_CLOSE => {
-            refuse_unless(crate::layer::character::preview::preview_close(abi::PreviewClose::read(packet(pkt)?)?.surface), Errno::EBADF)?;
+            refuse_unless(crate::scene::character::preview::preview_close(abi::PreviewClose::read(packet(pkt)?)?.surface), Errno::EBADF)?;
             applied(s)
         }
         // Records only while the profiler setting is on: a window opened with the

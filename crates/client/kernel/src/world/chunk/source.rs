@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use crate::kernel::with_world;
 use crate::layer::object::store::Store;
 use crate::world::chunk::build::{folded_cells, runs_of};
-use crate::world::pyramid::chunk::Chunk as PyramidChunk;
+use crate::world::chunk::Chunk as PyramidChunk;
 use pxl_spec::space::coord::world::nearest_box;
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
