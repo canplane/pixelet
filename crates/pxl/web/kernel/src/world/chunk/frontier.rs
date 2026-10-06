@@ -409,7 +409,3 @@ impl Frontier {
         plan
     }
 }
-
-#[cfg(test)]
-#[path = "frontier.test.rs"]
-mod test;

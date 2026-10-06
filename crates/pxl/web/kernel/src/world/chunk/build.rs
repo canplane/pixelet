@@ -13,7 +13,7 @@ use pxl_render::mesh::paint::column::{stands_of, write_rows, Stands};
 use pxl_render::mesh::paint::object::adapter::Painter;
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, TileSource, TileView};
 use pxl_render::mesh::run::{RunSet, RunWriter, APRON};
-use pxl_spec::bake::constant::{unpack_pos, EntryAt, BAND, CELL};
+use pxl_spec::bake::constant::{EntryAt, CELL};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::Aabb;
 use std::collections::HashMap;
@@ -21,17 +21,18 @@ use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 
 use crate::layer::marker::hover_cursor::render_edits;
-use crate::layer::object::store::{At, Store, AIR};
+use crate::layer::object::store::{Store, AIR};
 use crate::mem::fixed::{at, Range};
 use crate::shell::setting::store::settings_store;
+use crate::world::chunk::source::draws;
 
 use crate::world::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES, OCCUPANCY};
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
+use crate::world::pyramid::read::TileRead;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::offset_in;
-use pxl_spec::space::zoom::idx;
-use pxl_spec::space::zoom::{count, index, index_of, units, Zoom};
+use pxl_spec::space::zoom::{around, base_of, count, index, index_of, units, Zoom};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -200,21 +201,18 @@ impl Chunk {
         self.at.corner()
     }
 
-    fn col_idx(&self) -> IVec {
-        idx(BAND, self.base())
-    }
-
     /// The chunk's tile and the apron beside it; past the leaves, its leaf
     /// chunk's, which its sample refines (`ChunkSample::refine`).
     fn read(&self, runs: Zoom) -> Option<Read> {
         let leaf = self.leaf(runs);
         let mut beside = [None; 8];
-        for ([qx, qy], p) in leaf.tiles_beside(APRON) {
+        let read = TileRead::of(GROUND, leaf);
+        for ([qx, qy], p) in read.tiles_beside(APRON) {
             beside[beside_index(qx, qy)] = Source::of(p);
         }
-        let (x0, y0) = leaf.in_tile();
+        let (x0, y0) = read.in_tile();
         Some(Read {
-            own: Source::of(leaf.tile())?,
+            own: Source::of(read.tile())?,
             beside,
             first: [x0 as i64, y0 as i64],
         })
@@ -222,7 +220,7 @@ impl Chunk {
 
     /// Zooms runs at `runs` are finer than its tile's cells: none but past the leaves.
     fn finer(&self, runs: Zoom) -> u32 {
-        u32::from(runs - GROUND.cell_zoom(self.at.tile_zoom()))
+        u32::from(runs - GROUND.cell_zoom(TileRead::of(GROUND, self.at).tile_zoom()))
     }
 
     /// Itself, or past the leaves the chunk over it whose runs are its tile's cells.
@@ -592,7 +590,7 @@ impl Builder {
             self.sample.read(&read.around(), read.first, span)
         } else {
             let leaf = c.leaf(target);
-            let leaf_span = run_span(leaf, GROUND.cell_zoom(leaf.tile_zoom()));
+            let leaf_span = run_span(leaf, GROUND.cell_zoom(TileRead::of(GROUND, leaf).tile_zoom()));
             self.leaf_sample
                 .read(&read.around(), read.first, leaf_span)
                 .and_then(|()| self.sample.refine(&self.leaf_sample, k, c.in_leaf(target), span))
@@ -606,17 +604,12 @@ impl Builder {
         self.folded.clear();
         // One cell of apron, which a fold reads (`tiers_draw`).
         let (from, to) = ([cx - 1, cy - 1], [cx + inner + 1, cy + inner + 1]);
-        if finest.is_some()
-            && world
-                .store
-                .fold_at(target, from, to, edits.hide.filter(|&e| draws_as_held(c.at, unpack_pos(e.pos).3)), &mut self.folded)
-                .is_err()
-        {
+        if finest.is_some() && world.store.fold_at(target, from, to, edits.hide.filter(|&e| draws_as_held(c.at, e.zoom)), &mut self.folded).is_err() {
             self.refuse(id);
             return Progress::Blocked;
         }
-        if let Some(carve) = edits.carve.filter(|&e| e.col_idx == c.col_idx() && draws_as_held(c.at, unpack_pos(e.pos).3)) {
-            carve_into(&mut self.folded, carve, target);
+        if let Some(carve) = edits.carve.filter(|&e| draws(c.at, e) && draws_as_held(c.at, e.zoom)) {
+            carve_into(&mut self.folded, carve, target, from[0]);
         }
         let step = (units(target) / z_unit(target)) as u32;
         if stands_of(&self.sample, world.painter, &self.folded, (cx, cy), step, &mut self.stands).is_err() {
@@ -824,16 +817,12 @@ impl Builder {
     }
 }
 
-/// The eraser's preview: the cells at `zoom` its entry covers, cut to air.
-fn carve_into(cells: &mut HashMap<[i64; 3], u32>, carve: EntryAt, zoom: Zoom) {
-    let (x, y, z, own) = unpack_pos(carve.pos);
-    let corner = At {
-        col_idx: carve.col_idx,
-        band: carve.band_idx,
-        step: [x, y, z],
-    }
-    .corner();
-    let [ix, iy, iz] = index_of(zoom, &corner);
+/// The eraser's preview: the cells at `zoom` its entry covers, cut to air,
+/// X in the frame of the cells from `from_x`.
+fn carve_into(cells: &mut HashMap<[i64; 3], u32>, carve: EntryAt, zoom: Zoom, from_x: i64) {
+    let own = carve.zoom;
+    let [ix, iy, iz] = index_of(zoom, &base_of(own, carve.at));
+    let ix = from_x + (ix - from_x).rem_euclid(around(zoom));
     let n = if own < zoom { i64::from(count(zoom, own)) } else { 1 };
     for dz in 0..n {
         for dy in 0..n {

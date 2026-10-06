@@ -14,11 +14,11 @@ use xpute_runtime::sched::edge::Edge;
 use crate::kernel::kernel;
 use xpute_runtime::global::Global;
 
-pub const OBJECT_COLUMN: WorldTopic = 0;
-/// Moved by a write to any column the chunk draws, so a chunk reads one
-/// revision rather than summing its columns'.
-pub const TIERS_CHUNK: WorldTopic = 1;
-pub const WORLD_TOPICS: WorldTopic = TIERS_CHUNK + 1;
+/// Moved by every write to the objects.
+pub const OBJECTS: WorldTopic = 0;
+/// Moved by a write to any cube a chunk draws.
+pub const CHUNK_OBJECTS: WorldTopic = 1;
+pub const WORLD_TOPICS: WorldTopic = CHUNK_OBJECTS + 1;
 
 pub type WorldTopic = u32;
 pub type Revision = u32;

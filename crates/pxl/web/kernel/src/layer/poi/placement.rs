@@ -16,6 +16,7 @@ use crate::sched::tick::TickContext;
 use crate::world::access::{Access, Detail, Ray};
 use crate::world::frame::view::ndc_to_px;
 use crate::world::pyramid::chunk::Chunk;
+use crate::world::pyramid::read::TileRead;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
 use pxl_spec::space::zoom::nearest;
@@ -106,7 +107,8 @@ pub fn step(ctx: &mut TickContext) {
     }
     let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
-        let Some(src) = tiles.residency().source(chunk.tile()) else { continue };
+        let read = TileRead::of(POI_LATTICE, chunk);
+        let Some(src) = tiles.residency().source(read.tile()) else { continue };
         let Some(poi) = tiles.residency().get(src) else { continue };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.
@@ -139,11 +141,11 @@ pub fn step(ctx: &mut TickContext) {
                     }
                     // Counted only by the chunk the top of what stands there is in, so a
                     // column's several chunks do not repeat it.
-                    let Some(top) = top_at(&ground.mid(), chunk.tile_zoom()) else { continue };
+                    let Some(top) = top_at(&ground.mid(), read.tile_zoom()) else { continue };
                     if top - 1.0 < h0 || top - 1.0 >= h1 {
                         continue;
                     }
-                    found.push((POI_LATTICE.cell_of(chunk.tile_zoom(), &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
+                    found.push((POI_LATTICE.cell_of(read.tile_zoom(), &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
                 }
             }
         }

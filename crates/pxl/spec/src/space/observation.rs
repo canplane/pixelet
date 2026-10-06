@@ -4,10 +4,12 @@
 //! zoom over a region (`Requirement`). A layer's storage maps a requirement
 //! to tiles (`Storage`). An estimator names a superset of the exact demand
 //! from what is known (`DemandEstimator`); never less, since a requirement
-//! left out is ground that never refines.
+//! left out is ground that never refines. What is known of a box is asked
+//! in the grid's cells (`Bounds`); a layer says which of its zooms folds
+//! into them by its lattice.
 
-use super::lod::{cubes_meeting, demand_reach, Tau};
-use super::pyramid::{tile_at, tile_rows, Tile, GROUND, LEAF_Z, TOP_Z};
+use super::lod::{split_distance, Tau};
+use super::pyramid::{tile_at, tile_rows, Lattice, Tile, LEAF_Z};
 use super::v3::{dot3, Aabb, V3};
 use super::zoom::nearest_box;
 use super::zoom::{units, Zoom};
@@ -115,10 +117,11 @@ impl Contents {
     }
 }
 
-/// What is known of the world. Never less than the truth, and at a coarser
-/// zoom never less than at a finer one under it.
+/// What is known of the world, read for the grid's cells at `cell`. Never
+/// less than the truth, and at a coarser cell never less than at a finer one
+/// under it.
 pub trait Bounds {
-    fn contents(&self, zoom: Zoom, region: Aabb) -> Contents;
+    fn contents(&self, cell: Zoom, region: Aabb) -> Contents;
 
     /// The finest cell zoom anything in `region` is held at: the ground's
     /// leaf cell unless a layer finer stands there.
@@ -130,7 +133,7 @@ pub trait Bounds {
 pub struct Unknown;
 
 impl Bounds for Unknown {
-    fn contents(&self, _zoom: Zoom, _region: Aabb) -> Contents {
+    fn contents(&self, _cell: Zoom, _region: Aabb) -> Contents {
         Contents::Unknown
     }
 }
@@ -164,40 +167,15 @@ pub trait DemandEstimator {
     fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement));
 }
 
-/// The estimator from bounds alone: a cube at zoom `z` is required when some
-/// of what it holds can be seen and its distance range overlaps `z`'s band.
-/// Hidden cubes are required too.
-pub struct ByBounds {
-    pub tau: Tau,
-}
-
-/// The distances `z` is required over: its split distance (0 for the leaves) to the
-/// next coarser zoom's, or to the far edge for the top. None past the far edge.
-pub fn band(o: &Observation, tau: Tau, zoom: Zoom) -> Option<(f64, f64)> {
-    let from = if zoom == LEAF_Z { 0.0 } else { tau.split_distance(GROUND.grid_cell(zoom)) };
-    let to = if zoom == o.top { demand_reach(zoom) } else { tau.demand_reach(zoom) };
+/// The distances a layer's `zoom` is required over: from where the grid's
+/// cell its tiles fold into begins (0 for the leaves) to where the next
+/// coarser one's does, or the reach of a top at `zoom` alone, unscaled.
+/// None past the far edge.
+pub fn band(o: &Observation, tau: Tau, lattice: Lattice, zoom: Zoom) -> Option<(f64, f64)> {
+    let from = if zoom == LEAF_Z { 0.0 } else { tau.split_distance(lattice.grid_cell(zoom)) };
+    let coarser = lattice.grid_cell(zoom - 1);
+    let to = if zoom == o.top { split_distance(coarser) } else { tau.split_distance(coarser) };
     (from <= o.far).then_some((from, to))
-}
-
-impl DemandEstimator for ByBounds {
-    fn requirements(&self, o: &Observation, bounds: &impl Bounds, each: &mut dyn FnMut(Requirement)) {
-        xpute_core::ensure!(o.top >= TOP_Z && o.far <= demand_reach(o.top), EINVAL);
-        for zoom in (o.top..=LEAF_Z).rev() {
-            let Some((from, to)) = band(o, self.tau, zoom) else { break };
-            let span = units(zoom);
-            for at in cubes_meeting(span, o.reach(to.min(o.far))) {
-                let region = Aabb {
-                    min: at.map(|c| c as f64 * span),
-                    max: at.map(|c| (c + 1) as f64 * span),
-                };
-                let Some(held) = bounds.contents(zoom, region).within(region) else { continue };
-                let m = o.measure(&held);
-                if m.seen && m.near < to && m.near <= o.far && m.far >= from {
-                    each(Requirement { zoom, region });
-                }
-            }
-        }
-    }
 }
 
 #[cfg(test)]

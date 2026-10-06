@@ -9,7 +9,7 @@ use pxl_spec::bake::earth_tile::{self, EARTH_ACROSS, EARTH_HELD, EARTH_REACH, EA
 use pxl_spec::space::zoom::{around, wrap_index};
 
 use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::{Folds, Tile};
+use pxl_spec::space::pyramid::{Folds, Lattice, Tile};
 use xpute_runtime::global::Global;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
@@ -35,6 +35,7 @@ static EARTH: Global<Pyramid<Earth>> = Global::new();
 
 impl Layer for Earth {
     const CATEGORY: Category = Category::earth;
+    const LATTICE: Lattice = earth_tile::EARTH;
     const DEMANDS: bool = false;
     const TOP: Option<Zoom> = Some(EARTH_Z);
 

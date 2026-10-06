@@ -39,7 +39,7 @@ impl World {
 
 impl Bounds for World {
     /// The ground's lowest is its top cell's floor, as the index lane bounds it.
-    fn contents(&self, _zoom: Zoom, region: Aabb) -> Contents {
+    fn contents(&self, _cell: Zoom, region: Aabb) -> Contents {
         if !self.answered {
             return Contents::Unknown;
         }

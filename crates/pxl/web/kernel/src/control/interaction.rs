@@ -21,7 +21,6 @@ use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, Entry, EntryAt};
 use crate::world::access::Hit;
 use crate::world::frame::view::view_ray;
-use pxl_spec::space::pyramid::GROUND;
 use pxl_spec::space::zoom::{base_of, of_side};
 use xpute_runtime::global::Global;
 
@@ -148,7 +147,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
 
     let struck = resolve_struck(&hit, origin, direction);
     hover.object_at = match &struck {
-        Some(Struck::Object(o)) => Some(o.at()),
+        Some(Struck::Object(o)) => Some(o.id()),
         _ => None,
     };
     hover.scattered = match struck {
@@ -174,11 +173,8 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
 fn folded_at(hit: &Hit) -> bool {
     let [x, y, z] = hit.cube.center();
     let at = crate::world::frame::coord::world_to_canonical(&[x, y, z]);
-    let held = GROUND.z_of(of_side(hit.cube.extent()[0]));
-    crate::kernel::with_world(|_, sched| sched.drawn_at(&at))
-        .flatten()
-        .and_then(|(_, cells, _)| cells)
-        .is_some_and(|cells| cells < held)
+    let held = of_side(hit.cube.extent()[0]);
+    crate::kernel::with_world(|_, sched| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
 }
 
 /// A tap at `ndc_x`, `ndc_y` with the tool held.

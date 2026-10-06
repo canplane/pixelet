@@ -1,19 +1,17 @@
 // pxl-kernel/world/chunk/source.rs
 
-//! What a chunk is made of past its tile: which columns' objects and which
-//! bands it draws, and their revisions. A chunk is a cube, so an object
-//! written is in one chunk per zoom, not every chunk over its column.
+//! Which written cubes a chunk draws, and their revision. A chunk is a cube,
+//! so a cube written is in the chunks over it at each zoom and their
+//! neighbours through the fold's apron, not every chunk over its column.
 
-use pxl_spec::bake::constant::{BandZ, BAND, BAND_UNITS};
-use pxl_spec::space::hierarchy::ancestor_of;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::space::v3::Aabb;
 
 use crate::kernel::with_world;
-use crate::world::change::{bump_world, world_changes, TIERS_CHUNK};
+use crate::world::change::{bump_world, world_changes, CHUNK_OBJECTS};
 use crate::world::pyramid::chunk::{Chunk as PyramidChunk, FINEST_CHUNK, TOP_CHUNK};
-use pxl_spec::space::zoom::from_idx;
-use pxl_spec::space::zoom::units;
+use pxl_spec::space::pyramid::CHUNK_STEPS;
+use pxl_spec::space::zoom::{cube, nearest_box, units};
 use xpute_runtime::global::Global;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
@@ -29,64 +27,47 @@ pub fn chunk_sources_step() {
     }
 }
 
-/// A chunk draws the objects of every column its runs or their one-cell apron
-/// (`Store::fold_at`) lie over.
-pub fn tiers_draw(k: PyramidChunk, col: IVec) -> bool {
-    let (x0, y0, side) = k.rect();
-    // A cell of apron, at most the chunk's own: what the runs' fold reads.
-    let cell = units(k.cell_zoom());
-    let o = from_idx(BAND, col);
-    // The column's copy nearest the chunk, so a fold across the antimeridian is met.
-    let ox = pxl_spec::space::zoom::nearest(ivec::X(o) as f64, x0);
-    let oy = ivec::Y(o) as f64;
-    let across = |b: f64, o: f64| o < b + side + cell && o + BAND_UNITS > b - cell;
-    across(x0, ox) && across(y0, oy)
+/// The chunk with a cell of apron across, what its runs' fold reads (`Store::fold_at`).
+fn reach(k: PyramidChunk) -> Aabb {
+    let (cell, r) = (units(k.cell_zoom()), k.region());
+    Aabb {
+        min: [r.min[0] - cell, r.min[1] - cell, r.min[2]],
+        max: [r.max[0] + cell, r.max[1] + cell, r.max[2]],
+    }
 }
 
-/// Whether `k` draws a height of `band`: one chunk a zoom holds it up to
-/// the band's, and past it the band holds several.
-pub fn draws_band(k: PyramidChunk, band: BandZ) -> bool {
-    let h = k.node().1[2];
-    if k.zoom() <= BAND {
-        ancestor_of([i64::from(band)], u32::from(BAND - k.zoom()))[0] == h
-    } else {
-        ancestor_of([h], u32::from(k.zoom() - BAND))[0] == i64::from(band)
-    }
+/// Whether `k` draws the cube at `e`.
+pub fn draws(k: PyramidChunk, e: EntryAt) -> bool {
+    let r = reach(k);
+    let b = nearest_box(&cube(e.zoom, e.at), (r.min[0] + r.max[0]) / 2.0);
+    (0..3).all(|a| b.min[a] < r.max[a] && b.max[a] > r.min[a])
 }
 
 /// One word: the zoom, then each axis's index in a field wide enough for
 /// the finest chunk's: an index at zoom z runs z bits across the world.
 fn chunk_key(k: PyramidChunk) -> i64 {
     let (zoom, [x, y, h]) = k.named().node();
-    (i64::from(zoom - TOP_CHUNK) << 58) | ((x & 0x3f_ffff) << 36) | ((y & 0x3f_ffff) << 14) | (h & 0x3fff)
+    (i64::from(zoom) << 58) | ((x & 0x3f_ffff) << 36) | ((y & 0x3f_ffff) << 14) | (h & 0x3fff)
 }
 
-const _: () = assert!(FINEST_CHUNK - TOP_CHUNK < 32 && FINEST_CHUNK <= 22, "a chunk's key past its fields");
+const _: () = assert!(FINEST_CHUNK < 1 << 5 && FINEST_CHUNK <= 22, "a chunk's key past its fields");
 
 pub fn objects_revision_of(k: PyramidChunk) -> u32 {
-    world_changes().revision_of(TIERS_CHUNK, chunk_key(k))
+    world_changes().revision_of(CHUNK_OBJECTS, chunk_key(k))
 }
 
-/// Moves exactly the chunks whose tiers draw the band: those holding it at
-/// each zoom, and their neighbours through the fold's apron.
-pub fn band_written(col: IVec, band: BandZ) {
-    let corner = Pvf3 { i: from_idx(BAND, col), f: 0 };
+/// Moves exactly the chunks that draw the cube at `e`.
+pub fn written(e: EntryAt) {
+    let b = cube(e.zoom, e.at);
     for zoom in TOP_CHUNK..=FINEST_CHUNK {
-        // Chunks a band column's side and height holds, at least one.
-        let n = 1i64 << zoom.saturating_sub(BAND);
-        let column = PyramidChunk::holding(zoom, &corner);
-        let low = if zoom <= BAND {
-            ancestor_of([i64::from(band)], u32::from(BAND - zoom))[0]
-        } else {
-            i64::from(band) << (zoom - BAND)
-        };
-        let home = column.beside(0, 0, low - column.node().1[2]);
-        for dh in 0..n {
-            for dy in -1..=n {
-                for dx in -1..=n {
-                    let k = home.beside(dx, dy, dh);
-                    if tiers_draw(k, col) {
-                        bump_world(TIERS_CHUNK, chunk_key(k) as u64);
+        let (side, cell) = (units(zoom), units(zoom + CHUNK_STEPS));
+        let range = |a: usize, apron: f64| ((b.min[a] - apron) / side).floor() as i64..((b.max[a] + apron) / side).ceil() as i64;
+        for h in range(2, 0.0) {
+            for y in range(1, cell) {
+                for x in range(0, cell) {
+                    let k = PyramidChunk::indexed(zoom, [x, y, h]);
+                    if draws(k, e) {
+                        bump_world(CHUNK_OBJECTS, chunk_key(k) as u64);
                     }
                 }
             }

@@ -104,7 +104,7 @@ pub fn hover_cursor_step() {
     let hidden = hovered_object.filter(|_| active_tool == ActiveTool::Eraser);
     let kind = hidden.map(|o| o.kind());
     let edits = RenderEdits {
-        hide: hidden.map(|o| o.at()),
+        hide: hidden.map(|o| o.id()),
         hide_in: (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. }))),
         // What is one voxel below shows through the ghost.
         carve: hovered.filter(|_| digging_terrain).map(|h| carve_entry(&h, preview_size)),

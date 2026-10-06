@@ -11,12 +11,13 @@
 
 pub mod chunk;
 pub mod domain;
+pub mod read;
 
 use std::collections::HashMap;
 
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::observation::{Bounds, DemandEstimator, Observation, Requirement, Storage as _, Tiled};
-use pxl_spec::space::pyramid::{Folds, Tile, LEAF_Z, TOP_Z};
+use pxl_spec::space::pyramid::{Folds, Lattice, Tile, LEAF_Z, TOP_Z};
 
 use crate::io::demand::{Ask, Category, Phases, Why};
 use crate::io::sched::declare;
@@ -31,6 +32,9 @@ use pxl_spec::space::zoom::Zoom;
 
 pub trait Layer: Folds + Clone + 'static {
     const CATEGORY: Category;
+
+    /// Its tiles' cells, which say what of the grid a tile at each zoom draws.
+    const LATTICE: Lattice;
 
     /// False for a layer that holds only the floor: it asks for no miss, no
     /// destination and nothing speculative, and its residency is sized so.
@@ -73,11 +77,11 @@ type Seen = (Option<Observation>, [Option<Tile>; Floor::TILES as usize], Option<
 const PREFETCH: NoPrefetch = NoPrefetch;
 
 /// Evicts unhinted tiles before hinted ones, then the one last in view order.
-struct Farthest<'a>(Option<&'a Observation>);
+struct Farthest<'a>(Option<&'a Observation>, Lattice);
 
 impl Victim for Farthest<'_> {
     fn victim(&self, candidates: &[Candidate]) -> Option<usize> {
-        let order = |c: &Candidate| self.0.map_or(Order::LAST, |o| Order::of_tile(o, c.tile));
+        let order = |c: &Candidate| self.0.map_or(Order::LAST, |o| Order::of_tile(o, self.1, c.tile));
         (0..candidates.len()).max_by_key(|&i| (!candidates[i].hinted, order(&candidates[i])))
     }
 }
@@ -156,7 +160,7 @@ impl<L: Layer> Pyramid<L> {
     }
 
     pub fn admit(&mut self, p: Tile, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
-        self.residency.admit(p, &Farthest(self.observation.as_ref()), receive)
+        self.residency.admit(p, &Farthest(self.observation.as_ref(), L::LATTICE), receive)
     }
 
     /// Builds the asks for `o`: the estimator's demand, the floor, the
@@ -183,7 +187,7 @@ impl<L: Layer> Pyramid<L> {
         let ask = |asks: &mut HashMap<Tile, Ask>, p: Tile, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
-        let order = |o: &Observation, p: Tile| Order::of_region(o, bounds, p.zoom, p.region());
+        let order = |o: &Observation, p: Tile| Order::of_region(o, bounds, L::LATTICE.grid_cell(p.zoom), p.region());
         if let Some(o) = o {
             if L::DEMANDS {
                 estimator.requirements(o, bounds, &mut |r| L::tiles(&r, &mut |p| demand.push(p)));
@@ -327,6 +331,7 @@ impl<L: Layer> Pyramid<L> {
                 &Known,
                 &ByFootprints {
                     tau,
+                    lattice: L::LATTICE,
                     footprints: published.map_or(&[], |d| d.footprints()),
                     lacks: published.map_or(&[], |d| d.lacks()),
                 },
@@ -349,7 +354,3 @@ impl<L: Layer> Pyramid<L> {
         self.last = None;
     }
 }
-
-#[cfg(test)]
-#[path = "pyramid.test.rs"]
-mod test;

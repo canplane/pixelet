@@ -15,7 +15,7 @@ use super::pvf3::pvf3::{self, Pvf3};
 use super::pvf3::{projection, REACH};
 use super::v3::Aabb;
 use super::zoom::{around, base_of, count, idx, index_of, shamt, units, wrap_index, Zoom, FINEST_Z};
-use crate::bake::constant::{BAND, CELL, DECK_CELL, EXTENT_CELL};
+use crate::bake::constant::{CELL, DECK_CELL, EXTENT_CELL};
 
 /// The leaves' zoom: a ground tile is 512 cells a side.
 pub const LEAF_Z: Zoom = CELL - 9;
@@ -38,9 +38,9 @@ pub struct Lattice {
 }
 
 impl Lattice {
-    /// Finer than a point resolves, or coarser than the store's band, holds no tile.
+    /// Finer than a point resolves, or no finer than the leaf tile, holds no tile.
     pub const fn new(cell: Zoom) -> Lattice {
-        if cell >= FINEST_Z || cell < BAND {
+        if cell >= FINEST_Z || cell <= LEAF_Z {
             panic!()
         }
         Lattice { cell, fold: 0 }
@@ -263,11 +263,6 @@ impl Tile {
     }
 }
 
-/// The zoom of the chunk whose cells fold a tile at `zoom`'s.
-pub const fn chunk_zoom(zoom: Zoom) -> Zoom {
-    GROUND.grid_cell(zoom) - CHUNK_STEPS
-}
-
 /// The 4×4 tiles a zoom finer around a tile's children, each at
 /// `neighbor_index`; X wraps and a tile past Y's edge has no object.
 pub fn neighborhood(p: Tile) -> [Tile; 16] {
@@ -388,7 +383,7 @@ impl Cell {
 }
 
 /// A layer's tile as the pyramid holds it. One fold makes each zoom's tiles
-/// from the next finer one's, run by the bake and by the client. A parent reads its four
+/// from the next finer one's, run by the bake. A parent reads its four
 /// children unless `sources` says otherwise.
 pub trait Folds: Sized {
     fn sources(p: Tile) -> Vec<Tile> {

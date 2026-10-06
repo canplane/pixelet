@@ -10,7 +10,7 @@
 //! lane's bounds instead, since a coarse drawn surface can sit below a peak.
 
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
-use pxl_spec::bake::constant::{CellZ, BAND, CELL, CELL_STEPS, OBJECT_FINEST, U_PER_CELL};
+use pxl_spec::bake::constant::{CELL, CELL_STEPS, OBJECT_FINEST, U_PER_CELL};
 use pxl_spec::bake::deck::Occupies;
 use pxl_spec::bake::fold::majority;
 use pxl_spec::bake::format::{drawn, GroundCell, Terrain};
@@ -18,10 +18,8 @@ use pxl_spec::cell::cube_types::sentinel;
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_decor, object_value_is_voxel};
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::space::adapter::epsg3857::u_per_m;
-use pxl_spec::space::hierarchy::{ancestor_of, child_of, first_descendant_of, offset_in};
+use pxl_spec::space::hierarchy::child_of;
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pvf3::ivec::TO_XY;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{projection, REACH};
 use pxl_spec::space::pyramid::{Cell, Tile, EXTENT, GROUND, LEAF_Z, TOP_Z};
@@ -29,10 +27,9 @@ use pxl_spec::space::v3::{add3, Aabb, V3};
 
 use crate::io::demand::Category;
 use crate::kernel::kernel;
-use crate::layer::object::store::{Entry, EntryAt, Store};
+use crate::layer::object::store::{EntryAt, Store};
 use crate::world::pyramid::{Layer as _, Pyramid};
 use crate::world::residency::Residency;
-use pxl_spec::space::zoom::idx;
 use pxl_spec::space::zoom::{base_of, count, cube, index_of, units, Zoom};
 use xpute_core::math::scalar::round;
 
@@ -49,13 +46,15 @@ pub enum Detail {
 }
 
 impl Detail {
-    fn at(self, t: f64) -> (Zoom, f64) {
+    /// The ground's tile zoom from `t`, the cell zoom objects are met in, and
+    /// how far both hold. At a stated zoom objects are met as they are held.
+    fn at(self, t: f64) -> (Zoom, Zoom, f64) {
         match self {
-            Detail::Zoom(z) => (z, f64::INFINITY),
+            Detail::Zoom(z) => (z, OBJECT_FINEST, f64::INFINITY),
             Detail::Distance(tau) => {
                 let zoom = tau.z_at(t);
                 let until = if zoom == TOP_Z { f64::INFINITY } else { tau.demand_reach(zoom) };
-                (zoom, until)
+                (zoom, tau.cell_at(t).min(OBJECT_FINEST), until)
             }
         }
     }
@@ -140,8 +139,6 @@ struct Composed {
     cell: [i64; 2],
     top: Option<f64>,
     lines: Lines,
-    col_idx: IVec,
-    local: [i64; 2],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -317,7 +314,7 @@ impl<'a> Access<'a> {
             let n = CELL_STEPS as i64;
             let fine = units(OBJECT_FINEST);
             let solid = |cz: i64| {
-                if !self.objects.may_hold([ix, iy, cz]) {
+                if !self.objects.holds(CELL, [ix, iy, cz]) {
                     return made((cz as f64 + 0.5) * side);
                 }
                 filled_cell(|[x, y, z]| {
@@ -338,15 +335,10 @@ impl<'a> Access<'a> {
         let [ix, iy] = cell;
         let base = base_of(CELL, [ix, iy, 0]);
         let ground = self.ground(GROUND.cell_of(LEAF_Z, &base));
-        let [kx, ky, _] = index_of(BAND, &base);
-        let col_idx = idx(BAND, TO_XY(base.i));
-        let local = [ix - kx * cells_across(), iy - ky * cells_across()];
         ground.map(|g| Composed {
             cell,
             top: g.top(),
             lines: self.lines_over(GROUND.cell_of(LEAF_Z, &base), g.height),
-            col_idx,
-            local,
         })
     }
 
@@ -354,7 +346,7 @@ impl<'a> Access<'a> {
     /// an object's voxel entry (air entries included).
     fn holds(&self, c: &Composed, cz: i64) -> bool {
         let z = cz as f64 * units(CELL);
-        !c.lines.air.is_some_and(|[lo, hi]| z >= lo && z < hi) && !self.taken(c.col_idx, c.local, cz)
+        !c.lines.air.is_some_and(|[lo, hi]| z >= lo && z < hi) && !self.taken(c.cell, cz)
     }
 
     /// Height at the cell's center in the drawn-from tile, sampled as
@@ -423,9 +415,9 @@ impl<'a> Access<'a> {
         let mut answered = false;
         let mut t = 0.0;
         while t < ray.reach {
-            let (zoom, until) = detail.at(t);
+            let (zoom, cells, until) = detail.at(t);
             let end = until.min(ray.reach);
-            let objects = self.objects(ray, (t, end), zoom);
+            let objects = self.objects(ray, (t, end), cells);
             let limit = objects.map_or(end, |o| o.t);
             let ground = self.ground_first(ray, (t, limit), zoom, &mut lack, &mut answered).filter(|g| g.t <= limit);
             if let Some(hit) = ground.or(objects) {
@@ -678,58 +670,30 @@ impl<'a> Access<'a> {
         Some(hit(ray, t, normal, Aabb { min, max: min.map(|v| v + side) }, Struck::Ground))
     }
 
-    /// First object the ray meets, nearest first (`Store::along_ray`). On the leaves
-    /// voxel entries are hit at their own boxes; above the leaves the folded cell is
-    /// hit whole, matching what that zoom draws.
-    fn objects(&self, ray: &Ray, (t0, t1): (f64, f64), zoom: Zoom) -> Option<Hit> {
-        let cell_zoom = GROUND.cell_zoom(zoom);
-        let side = units(cell_zoom);
+    /// First object the ray meets, nearest first (`Store::along_ray`), in cells
+    /// of `cell_zoom`: a leaf no finer than the cell is hit at its own cube, a
+    /// cell holding finer is hit whole by what it folds to, as it is drawn.
+    fn objects(&self, ray: &Ray, (t0, t1): (f64, f64), cell_zoom: Zoom) -> Option<Hit> {
         let mut met = None;
-        self.objects.along_ray(ray.origin, ray.direction, (t0, t1), cell_zoom, &mut |[x, y, h]| {
-            met = if zoom == LEAF_Z {
-                let steps = u32::from(CELL - BAND);
-                let [cx, cy] = ancestor_of([x, y], steps);
-                let col_idx = crate::layer::object::store::column_at([cx, cy]);
-                let entries = self.cell_entries(col_idx, offset_in([x, y], steps), h);
-                let corner = first_descendant_of([cx, cy], steps).map(|v| v as f64 * side);
-                object_hit(ray, entries, corner)
-            } else {
-                let v = u32::from(self.objects.folded_value(cell_zoom, [x, y, h]));
-                (object_value_is_voxel(v) && !object_value_is_air(v)).then(|| cell_hit(ray, [x, y, h], cell_zoom, t0)).flatten()
-            };
+        self.objects.along_ray(ray.origin, ray.direction, (t0, t1), cell_zoom, &mut |cell| {
+            let (e, folded) = self.objects.node(cell_zoom, cell);
+            met = (object_value_is_voxel(e.state) && !object_value_is_air(e.state))
+                .then(|| match folded {
+                    true => cell_hit(ray, cell, cell_zoom, t0),
+                    false => ray_box(ray, e.cube()).map(|(t, normal)| hit(ray, t, normal, e.cube(), Struck::Object(e.id()))),
+                })
+                .flatten();
             met.is_some()
         });
         met
     }
 
-    fn taken(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> bool {
-        let Some(run) = self.objects.cell(col_idx, cx as u32, cy as u32, cz as CellZ) else { return false };
-        let Some(e) = self.objects.entries(col_idx) else { return false };
-        (run.start as usize..(run.start + run.count) as usize).any(|k| !object_value_is_decor(e.state[k]))
+    /// Whether a voxel entry, air included, takes the cell.
+    fn taken(&self, [ix, iy]: [i64; 2], cz: i64) -> bool {
+        let mut taken = false;
+        self.objects.each_in(CELL, [ix, iy, cz], &mut |e| taken |= !object_value_is_decor(e.state));
+        taken
     }
-
-    /// Decor paints no voxel, so a cell of decor alone is the ground's.
-    fn cell_entries(&self, col_idx: IVec, [cx, cy]: [i64; 2], cz: i64) -> impl Iterator<Item = Entry> + '_ {
-        let run = self.objects.cell(col_idx, cx as u32, cy as u32, cz as CellZ);
-        let e = run.and(self.objects.entries(col_idx));
-        let ks = match (run, e) {
-            (Some(run), Some(_)) => run.start as usize..(run.start + run.count) as usize,
-            _ => 0..0,
-        };
-        ks.filter_map(move |k| {
-            let e = e?;
-            (!object_value_is_decor(e.state[k])).then(|| {
-                let mut cursor = Entry::default();
-                cursor.at_column(col_idx);
-                cursor.load(e.band[k], e.pos[k], e.state[k]);
-                cursor
-            })
-        })
-    }
-}
-
-fn cells_across() -> i64 {
-    count(CELL, BAND) as i64
 }
 
 fn exit(ray: &Ray, base: [f64; 2], side: f64) -> f64 {
@@ -757,21 +721,6 @@ fn wall_normal(ray: &Ray, t: f64, side: f64) -> V3 {
     let mut n = [0.0; 3];
     n[k] = if ray.direction[k] > 0.0 { -1.0 } else { 1.0 };
     n
-}
-
-fn object_hit(ray: &Ray, entries: impl Iterator<Item = Entry>, [x0, y0]: [f64; 2]) -> Option<Hit> {
-    let mut best: Option<Hit> = None;
-    for e in entries.filter(|e| !object_value_is_air(e.state)) {
-        let [lx, ly, lz] = e.local();
-        let min = [x0 + lx, y0 + ly, lz];
-        let cube = Aabb { min, max: min.map(|v| v + e.size()) };
-        let Some((t, normal)) = ray_box(ray, cube) else { continue };
-        if best.is_some_and(|b| b.t <= t) {
-            continue;
-        }
-        best = Some(hit(ray, t, normal, cube, Struck::Object(e.at())));
-    }
-    best
 }
 
 fn ray_box(ray: &Ray, cube: Aabb) -> Option<(f64, V3)> {

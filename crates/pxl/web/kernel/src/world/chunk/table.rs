@@ -37,7 +37,7 @@ use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{draws_as_held, BuildEvent, Builder, World};
 use crate::world::chunk::frontier::{pool_of, zoom_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{capacity, group_box_words, group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, COVER_SLOTS, FINE_BOXES, OCCUPANCY};
-use crate::world::chunk::source::{draws_band, objects_revision_of, tiers_draw};
+use crate::world::chunk::source::{draws, objects_revision_of};
 use pxl_spec::space::zoom::{units, Zoom};
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
@@ -47,8 +47,8 @@ use xpute_runtime::global::Global;
 use crate::world::observation::{Known, Order};
 use crate::world::pyramid::chunk::{Chunk, FINEST_CHUNK, TOP_CHUNK};
 use crate::world::pyramid::domain::{self, Domain};
+use crate::world::pyramid::read::TileRead;
 use crate::world::pyramid::Layer as _;
-use pxl_spec::bake::constant::unpack_pos;
 use pxl_spec::bake::format::Terrain;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -153,16 +153,16 @@ struct Sources {
 impl Sources {
     fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
-        let drawn = |at: &EntryAt| tiers_draw(k, at.col_idx) && draws_band(k, at.band_idx) && draws_as_held(k, unpack_pos(at.pos).3);
+        let drawn = |at: &EntryAt| draws(k, *at) && draws_as_held(k, at.zoom);
         Sources {
             textured: settings.textures,
             objects_revision: objects_revision_of(k),
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
-            read_from: Terrain::pyramid().residency().drawn_from(k.tile()).map(|p| p.zoom),
+            read_from: Terrain::pyramid().residency().drawn_from(TileRead::of(GROUND, k).tile()).map(|p| p.zoom),
             beside_from: {
                 let mut from = [None; 8];
-                for ([qx, qy], p) in k.tiles_beside(APRON) {
+                for ([qx, qy], p) in TileRead::of(GROUND, k).tiles_beside(APRON) {
                     from[beside_index(qx, qy)] = Terrain::pyramid().residency().drawn_from(p).map(|p| p.zoom);
                 }
                 from
@@ -182,7 +182,7 @@ impl Slot {
     /// then never built, leaving holes with nothing left to fetch.
     fn unmeasured(&mut self) {
         let region = self.chunk.region();
-        let b = Known.contents(self.chunk.tile_zoom(), region).within(region).unwrap_or(region);
+        let b = Known.contents(self.chunk.cell_zoom(), region).within(region).unwrap_or(region);
         let c = b.center();
         self.bc = [c[0] - region.min[0], c[1] - region.min[1], c[2]];
         self.radius = b.radius();
@@ -443,7 +443,7 @@ impl Env for Pieces<'_> {
     }
 
     fn buildable(&self, c: Chunk) -> bool {
-        Terrain::pyramid().residency().drawn_from(c.tile()).is_some()
+        Terrain::pyramid().residency().drawn_from(TileRead::of(GROUND, c).tile()).is_some()
     }
 
     fn order(&self, c: Chunk) -> Order {
@@ -555,14 +555,26 @@ impl Scheduler {
         out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn, s.in_frustum)));
     }
 
-    /// The finest drawn chunk holding `p`, as tile zooms: its own tile's, its
-    /// cells', and the one it is read from.
-    pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
-        let s = (TOP_CHUNK..=FINEST_CHUNK)
+    fn drawn_slot(&self, p: &Pvf3) -> Option<&Slot> {
+        (TOP_CHUNK..=FINEST_CHUNK)
             .rev()
-            .find_map(|z| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk.named() == Chunk::holding(z, p)))?;
-        // In tile zooms, as the gauge reads them: the chunk's tile, its cells', and what was read.
-        Some((s.chunk.tile_zoom() as i32, s.layout.map(|(cell_zoom, _)| GROUND.z_of(cell_zoom)), s.sources.read_from.map(|z| z as i32)))
+            .find_map(|z| self.slots.iter().find(|s| s.role == Role::Drawn && s.chunk.named() == Chunk::holding(z, p)))
+    }
+
+    /// The cells the finest drawn chunk holding `p` is drawn in.
+    pub fn cells_at(&self, p: &Pvf3) -> Option<Zoom> {
+        self.drawn_slot(p)?.layout.map(|(cell_zoom, _)| cell_zoom)
+    }
+
+    /// The finest drawn chunk holding `p`, as tile zooms, as the gauge reads
+    /// them: its own tile's, its cells', and the one it is read from.
+    pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
+        let s = self.drawn_slot(p)?;
+        Some((
+            TileRead::of(GROUND, s.chunk).tile_zoom() as i32,
+            s.layout.map(|(cell_zoom, _)| GROUND.z_of(cell_zoom)),
+            s.sources.read_from.map(|z| z as i32),
+        ))
     }
 
     /// Whether the last frame drew any ground on screen.

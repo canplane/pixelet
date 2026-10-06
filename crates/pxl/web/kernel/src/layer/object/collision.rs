@@ -12,15 +12,12 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::v3::Aabb;
 use pxl_spec::space::zoom::{base_of, index_of, of_side};
 
-/// Every cube sits on its own size's lattice and is at most a cell, so two
-/// share space exactly when one's node lies under the other's.
+/// Every cube sits on its own size's lattice, so two share space exactly
+/// when one's node lies under the other's.
 pub fn find_overlapping_object(corner: &Pvf3, size: f64) -> Option<Entry> {
-    let cube_node = |corner: &Pvf3, size: f64| {
-        let side = of_side(size);
-        (side, index_of(side, corner))
-    };
-    let candidate = cube_node(corner, size);
-    objects_at(corner).into_iter().find(|o| share(candidate, cube_node(&o.corner(), o.size())))
+    let side = of_side(size);
+    let candidate = (side, index_of(side, corner));
+    objects_at(corner).into_iter().find(|o| share(candidate, (o.zoom, o.at)))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

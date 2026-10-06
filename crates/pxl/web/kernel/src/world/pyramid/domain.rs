@@ -18,10 +18,10 @@ use pxl_spec::space::zoom::nearest_box;
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::lod::{cubes_meeting, demand_reach, Tau};
+use pxl_spec::space::lod::{cubes_meeting, demand_reach, reach_cell, Tau};
 use pxl_spec::space::observation::{Bounds, Contents, Observation, Requirement};
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_zoom, Tile};
+use pxl_spec::space::pyramid::Tile;
 use pxl_spec::space::v3::Aabb;
 
 use crate::world::access::Access;
@@ -30,7 +30,7 @@ use crate::world::observation::{heights_revision, observation, Known, Order};
 use crate::world::observer::{cell_angle, EdgeRays, Footprint, Lens, Sight};
 use xpute_runtime::global::Global;
 
-use super::chunk::Chunk;
+use super::chunk::{chunk_of, Chunk};
 use super::Layer as _;
 use pxl_spec::space::zoom::{units, Zoom};
 
@@ -39,7 +39,7 @@ use pxl_spec::space::zoom::{units, Zoom};
 /// interval of `d` meets at most ⌊d / side⌋ + 2 chunks, and the reach is
 /// 2 · `SPLIT` / `CHUNK_CELLS` chunks each way at every zoom.
 pub const fn cover_pieces(top: Zoom, planet: f64) -> u32 {
-    let (far, side) = (demand_reach(top), units(chunk_zoom(top)));
+    let (far, side) = (demand_reach(top), units(chunk_of(reach_cell(top))));
     let reach = [2.0 * far, 2.0 * far, 2.0 * far + far * far / (2.0 * planet)];
     let (mut n, mut k) = (1, 0);
     while k < 3 {
@@ -465,7 +465,7 @@ pub fn revision() -> u32 {
 
 impl Domain {
     fn contents(&self, c: Chunk) -> Contents {
-        self.known.contents(c.tile_zoom(), c.region())
+        self.known.contents(c.cell_zoom(), c.region())
     }
 
     /// Measured from where in `c` anything stands: a bound, not the drawn
@@ -483,7 +483,7 @@ impl Domain {
     }
 
     pub fn outermost(&self, c: Chunk) -> bool {
-        c.zoom() <= chunk_zoom(self.o.top)
+        c.zoom() <= chunk_of(reach_cell(self.o.top))
     }
 
     pub fn pieces(&self) -> &[Chunk] {
@@ -507,8 +507,8 @@ impl Domain {
         let top = self.o.top;
         let mut roots = core::mem::take(&mut self.roots);
         roots.clear();
-        for at in cubes_meeting(units(chunk_zoom(top)), self.o.reach(self.o.far)) {
-            let c = Chunk::indexed(chunk_zoom(top), at);
+        for at in cubes_meeting(units(chunk_of(reach_cell(top))), self.o.reach(self.o.far)) {
+            let c = Chunk::indexed(chunk_of(reach_cell(top)), at);
             if Order::of(&self.o, &c.region()).near >= self.o.far {
                 continue;
             }
@@ -535,7 +535,7 @@ impl Domain {
     pub fn wanted_over(&self, c: Chunk) -> Chunk {
         std::iter::once(c)
             .chain(c.ancestors())
-            .filter(|k| k.zoom() >= chunk_zoom(self.o.top) && !self.splits(*k))
+            .filter(|k| k.zoom() >= chunk_of(reach_cell(self.o.top)) && !self.splits(*k))
             .last()
             .unwrap_or(c)
     }

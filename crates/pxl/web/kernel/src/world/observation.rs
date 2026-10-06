@@ -10,7 +10,7 @@ use pxl_spec::space::hierarchy::ancestor_of;
 use pxl_spec::space::lod::{demand_reach, Tau};
 use pxl_spec::space::observation::{band, Bounds, Contents, DemandEstimator, Frustum, Observation, Requirement};
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_zoom, tile_at, Tile, LEAF_Z};
+use pxl_spec::space::pyramid::{tile_at, Lattice, Tile, CHUNK_STEPS, GROUND, LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::Aabb;
 
 use crate::kernel::kernel;
@@ -23,7 +23,7 @@ use crate::world::observer::Footprint;
 use crate::world::pyramid::Layer as _;
 use crate::world::residency::floor;
 use pxl_spec::bake::constant::CELL;
-use pxl_spec::space::zoom::{units, Zoom};
+use pxl_spec::space::zoom::{of_side, units, Zoom};
 
 pub fn eye() -> Option<[f64; 3]> {
     crate::control::camera::controller::camera().eye?;
@@ -51,17 +51,19 @@ pub fn observation() -> Option<Observation> {
 }
 
 /// What the kernel knows of the world: terrain index bounds (from the tile
-/// or the nearest resident one over it) and the objects' 3D bounds. Unknown
-/// where no terrain tile over part of the box is held; a folded-away object counts whole.
+/// whose cells fold into the grid's at `cell`, or the nearest resident one
+/// over it) and the objects' 3D bounds. Unknown where no terrain tile over
+/// part of the box is held; a folded-away object counts whole.
 pub struct Known;
 
 impl Bounds for Known {
-    fn contents(&self, zoom: Zoom, region: Aabb) -> Contents {
+    fn contents(&self, cell: Zoom, region: Aabb) -> Contents {
+        let zoom = GROUND.grid_z(cell).clamp(i32::from(TOP_Z), i32::from(LEAF_Z)) as Zoom;
         let (h0, h1) = (region.min[2], region.max[2]);
         let cut = |(lo, hi): (f64, f64)| (lo <= h1 && hi >= h0).then(|| (lo.max(h0), hi.min(h1)));
         let mut known = true;
         let mut bound: Option<Aabb> = None;
-        under(zoom, region, &mut |node, square| {
+        under(zoom, cell - CHUNK_STEPS, region, &mut |node, square| {
             let Some(n) = read(zoom, node) else {
                 known = false;
                 return;
@@ -101,14 +103,10 @@ fn read(zoom: Zoom, node: (Zoom, [i64; 2])) -> Option<Node> {
     Some(Node { ground: relief.extent })
 }
 
-/// Each flat-lattice node at `z` under `region`: the region itself where
-/// it is exactly one node, else its columns.
-fn under(zoom: Zoom, region: Aabb, each: &mut dyn FnMut((Zoom, [i64; 2]), Aabb)) {
-    let column = chunk_zoom(zoom);
+/// Each node of a tile at `zoom` under `region`: the region itself where it is
+/// exactly one, else its squares `column` wide.
+fn under(zoom: Zoom, column: Zoom, region: Aabb, each: &mut dyn FnMut((Zoom, [i64; 2]), Aabb)) {
     let side = region.max[0] - region.min[0];
-    let node = (0..=chunk_zoom(LEAF_Z) - LEAF_Z)
-        .map(|k| column - k)
-        .find(|&s| units(s) == side && region.max[1] - region.min[1] == side);
     let square = |s: Zoom, [x, y]: [i64; 2]| {
         let (x0, y0) = (x as f64 * units(s), y as f64 * units(s));
         let covered = Aabb {
@@ -117,10 +115,15 @@ fn under(zoom: Zoom, region: Aabb, each: &mut dyn FnMut((Zoom, [i64; 2]), Aabb))
         };
         covered.meet(region).unwrap_or(covered)
     };
-    if let Some(s) = node.filter(|&s| region.min[0] % units(s) == 0.0 && region.min[1] % units(s) == 0.0) {
+    let whole = side > 0.0 && region.max[1] - region.min[1] == side && units(of_side(side)) == side;
+    if let Some(s) = whole
+        .then(|| of_side(side))
+        .filter(|&s| s >= zoom && region.min[0] % units(s) == 0.0 && region.min[1] % units(s) == 0.0)
+    {
         let at = [(region.min[0] / units(s)) as i64, (region.min[1] / units(s)) as i64];
         return each((s, at), square(s, at));
     }
+    let column = column.max(zoom);
     let rows = |k: usize| (region.min[k] / units(column)).floor() as i64..=((region.max[k] / units(column)).ceil() as i64 - 1);
     for y in rows(1) {
         for x in rows(0) {
@@ -136,6 +139,8 @@ fn under(zoom: Zoom, region: Aabb, each: &mut dyn FnMut((Zoom, [i64; 2]), Aabb))
 /// short of it.
 pub struct ByFootprints<'a> {
     pub tau: Tau,
+    /// The layer's, whose tiles' cells say which zoom a distance asks for.
+    pub lattice: Lattice,
     pub footprints: &'a [Footprint],
     pub lacks: &'a [Requirement],
 }
@@ -147,8 +152,8 @@ impl DemandEstimator for ByFootprints<'_> {
             max: [x1, y1, REACH.max[2]],
         };
         let required = |zoom: Zoom, region: Aabb| {
-            let (from, to) = band(o, self.tau, zoom)?;
-            let held = bounds.contents(zoom, region).within(region)?;
+            let (from, to) = band(o, self.tau, self.lattice, zoom)?;
+            let held = bounds.contents(self.lattice.grid_cell(zoom), region).within(region)?;
             let m = o.measure(&held);
             (m.seen && m.near < to && m.near <= o.far && m.far >= from).then_some(Requirement { zoom, region })
         };
@@ -162,7 +167,7 @@ impl DemandEstimator for ByFootprints<'_> {
         for f in self.footprints {
             let b = f.aabb();
             for zoom in (o.top..=LEAF_Z).rev() {
-                let Some((_, to)) = band(o, self.tau, zoom) else { break };
+                let Some((_, to)) = band(o, self.tau, self.lattice, zoom) else { break };
                 let reach = to.min(o.far);
                 let lo = [b.min[0].max(o.eye[0] - reach), b.min[1].max(o.eye[1] - reach)];
                 let hi = [b.max[0].min(o.eye[0] + reach), b.max[1].min(o.eye[1] + reach)];
@@ -211,12 +216,13 @@ impl Order {
     }
 
     /// All of `region` where nothing is known.
-    pub fn of_region<B: Bounds + ?Sized>(o: &Observation, bounds: &B, zoom: Zoom, region: Aabb) -> Order {
-        Order::of(o, &bounds.contents(zoom, region).within(region).unwrap_or(region))
+    pub fn of_region<B: Bounds + ?Sized>(o: &Observation, bounds: &B, cell: Zoom, region: Aabb) -> Order {
+        Order::of(o, &bounds.contents(cell, region).within(region).unwrap_or(region))
     }
 
-    pub fn of_tile(o: &Observation, p: Tile) -> Order {
-        Order::of_region(o, &Known, p.zoom, p.region())
+    /// A layer's tile, read in the grid's cells its own fold into.
+    pub fn of_tile(o: &Observation, lattice: Lattice, p: Tile) -> Order {
+        Order::of_region(o, &Known, lattice.grid_cell(p.zoom), p.region())
     }
 }
 

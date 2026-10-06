@@ -5,10 +5,8 @@
 //! from a floor shared by the chunk. Decks stand off the column as runs of
 //! their own; a bore or a cutting takes the air over its floor out of the
 //! column.
-//! The floor is rounded down to a whole band, since a volume allocates whole
-//! bands and a floor inside one would open another for a few voxels.
 
-use pxl_spec::bake::constant::{BAND_CELLS, U_PER_CELL};
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::deck::{Decks, Occupies, Over};
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::cell::color;
@@ -242,10 +240,9 @@ impl ChunkSample {
                 }
             }
         }
-        let band = BAND_CELLS as i32 * self.scale;
         match lowest {
             i32::MAX => i32::MIN,
-            lowest => (lowest - TERRAIN_Z_MARGIN * self.scale).div_euclid(band) * band,
+            lowest => lowest - TERRAIN_Z_MARGIN * self.scale,
         }
     }
 

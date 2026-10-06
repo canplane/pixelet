@@ -82,10 +82,16 @@ impl Tau {
     }
 }
 
+/// The coarsest grid cell drawn within the ground's reach of a top at `top`:
+/// what its tiles' cells fold into.
+pub const fn reach_cell(top: Zoom) -> Zoom {
+    GROUND.grid_cell(top)
+}
+
 /// How far from an observer's foot a demand at `z` can lie: where the grid's
 /// cell a zoom coarser begins. Bounds the run along the ground too.
 pub const fn demand_reach(zoom: Zoom) -> f64 {
-    split_distance(GROUND.grid_cell(zoom - 1))
+    split_distance(reach_cell(zoom - 1))
 }
 
 /// The most tiles a zoom's demand span along an axis: ⌊d / tile⌋ + 2, the same at every zoom.

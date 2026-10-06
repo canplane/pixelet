@@ -24,8 +24,6 @@ Every size in the world is a **zoom**. The X lane of a position is one world of 
 | ---- | ------ | -------------------------------------------------------- |
 | z27  | `1/8u` | a placed object's finest cell                            |
 | z24  | `1u`   | a ground cell, the unit a position names                 |
-| z19  | `32u`  | the chunk whose cells are a leaf's                       |
-| z18  | `64u`  | an object band                                           |
 | z15  | `512u` | a leaf tile: the finest terrain is fetched and stored at |
 | z5   |        | the coarsest tile, where the pyramid stops for now       |
 
@@ -33,15 +31,13 @@ The words for what is sized build on one another. A **cell** is the granule at a
 
 Whether a layer fills one axis, two or three at a size is its own choice. A **raster** fills two — terrain's tile, a raster of pixels with height, which is why it is 2.5D and not 3D — and a **volume** all three, the shape the objects take. A lattice address goes to its cell at any zoom and back by the same two operations (`pxl-spec space/zoom.rs` `idx`, `from_idx`).
 
-One more word is the objects' store's. A **band** is a 64u cube of a column, z18, which holds one sparse tree of what is placed in it.
+| Layer                       | Size      | Shape  | Concrete type                                          |
+| --------------------------- | --------- | ------ | ------------------------------------------------------ |
+| terrain, source             | a tile    | Raster | a `.fixed.terrain` record                              |
+| object, source              | the world | Volume | one sparse octree, leaves catalog values at their zoom |
+| terrain + object, for build | a chunk   | Runs   | a column run set (`pxl-render mesh/run.rs`)            |
 
-| Layer                       | Size       | Shape  | Concrete type                               |
-| --------------------------- | ---------- | ------ | ------------------------------------------- |
-| terrain, source             | a tile     | Raster | a `.fixed.terrain` record                   |
-| object, source              | a z18 band | Volume | sparse tree per band, leaves catalog values |
-| terrain + object, for build | a chunk    | Runs   | a column run set (`pxl-render mesh/run.rs`) |
-
-Objects are client-local. The store (`pxl-kernel layer/object/store.rs`) keeps a sparse octree per occupied band, leaves being catalog values, and derives the chunk's entries as columns inside every write, in the trees' walk order, so a cell's entries are one run found by a binary search — the occupancy and hit queries read no index of their own. It persists to the platform's storage — `localStorage` in a tab, `UserDefaults` on an iPhone, `SharedPreferences` on Android — as five columns per leaf tile — tile-local `x`, `y` and `z`, footprint side, value — under a key that carries the layout's version. One chunk — a slot of `world/chunk/table.rs`, built by `world/chunk/build.rs` — is one cube of its zoom, named by zoom and x, y and z (`world/pyramid/chunk.rs`); the runs of the column it stands in are written once for every height its content reaches, and each chunk of the column bakes the part in its own heights.
+Objects are client-local. The store (`pxl-kernel layer/object/store.rs`) keeps one sparse octree over the world (`pxl-spec space/sparse_tree.rs`), a leaf a catalog value at its own zoom, and every node at every zoom holds the same three things — a leaf its value, a branch the majority of its eight, the box of everything under it and the finest zoom held there. A write changes the path to its cube and nothing beside it, and every query — a cell's entries, a box's bound, a ray's cells, what a cell folds to — is the same descent at every zoom. It persists to the platform's storage — `localStorage` in a tab, `UserDefaults` on an iPhone, `SharedPreferences` on Android — as five columns per leaf tile — tile-local `x`, `y` and `z`, footprint side, value — under a key that carries the layout's version. One chunk — a slot of `world/chunk/table.rs`, built by `world/chunk/build.rs` — is one cube of its zoom, named by zoom and x, y and z (`world/pyramid/chunk.rs`); the runs of the column it stands in are written once for every height its content reaches, and each chunk of the column bakes the part in its own heights.
 
 ## Coordinate System — PVF3
 
@@ -92,11 +88,11 @@ Between the world and the screen are seven concerns, each with its own bound and
 | Materialization | what is drawn from what is held                | the arena                            | `world/pyramid/domain.rs`, `world/chunk/frontier.rs` |
 | Scheduling      | which waiting work runs now                    | the turn's quota and the credits     | `io/sched.rs`, `io/policy.rs`                        |
 
-**Storage** keeps each layer as its data is: terrain a heightfield in a 2D pyramid of tiles, placed objects sparse bands in columns. A tile carries, in its own lanes, the lowest and highest anything under it stands and which of its children exist — its **index** — so it is read the moment it is resident, with nothing over it required.
+**Storage** keeps each layer as its data is: terrain a heightfield in a 2D pyramid of tiles, placed objects one sparse octree. A tile carries, in its own lanes, the lowest and highest anything under it stands and which of its children exist — its **index** — so it is read the moment it is resident, with nothing over it required.
 
 **The query** is the only place a layer's shape is known (`world/access.rs`). It answers a value at a point at a zoom, the extent of a region, or the first thing a ray meets, and it says what it lacked: an exact answer, a coarser one with the tile it would have needed, or none. It fetches nothing, holds nothing and keeps no copy; the pointer, the camera's clearance, the map center's footing and the view's own observations all ask it. Whether a ray goes down into a piece of ground is decided by the index, never by the surface a coarse tile draws, which averages away the peaks under it; a resident tile over the one asked lets a ray pass all it bounds at once, and one that is not resident lets it skip nothing. What a box of the world holds is the one question demand and materialization both ask (`pxl-spec space/observation.rs` `Bounds::contents`: unknown, empty, or inside a conservative bound with an error along each axis), answered from the same records (`world/observation.rs` `Known`), so no axis is special above a layer.
 
-**Demand** is what an observation requires — the ground at the resolution its distance chooses — before it is any tile; the layer's storage maps the requirement to its tiles. The exact requirement depends on what the world holds, so it is estimated from what is known. The screen is cut into **patches** coarser than its cells (`pxl-kernel param.rs` `OBSERVED_PATCH`), each casting its corner rays, and what is required is the ground the patches reach, at each zoom whose band of distance some of it lies in, and what their rays read coarser than asked (`world/observation.rs` `ByFootprints`). Ground behind what the patches meet is required at no zoom; the fallback answers it. Where the rays met coarse ground they name what they lacked, and once it comes the patches over it are cast again, so the requirement grows to what the exact records make it. From bounds alone, every tile whose box can be seen and hidden ground too, is the estimator of the spec's own laws (`ByBounds`). A tile of the requirement that is not resident is a miss, asked for at the zoom it wants, never a zoom at a time.
+**Demand** is what an observation requires — the ground at the resolution its distance chooses — before it is any tile; the layer's storage maps the requirement to its tiles. The exact requirement depends on what the world holds, so it is estimated from what is known. The screen is cut into **patches** coarser than its cells (`pxl-kernel param.rs` `OBSERVED_PATCH`), each casting its corner rays, and what is required is the ground the patches reach, at each zoom whose band of distance some of it lies in, and what their rays read coarser than asked (`world/observation.rs` `ByFootprints`). Ground behind what the patches meet is required at no zoom; the fallback answers it. Where the rays met coarse ground they name what they lacked, and once it comes the patches over it are cast again, so the requirement grows to what the exact records make it. A tile of the requirement that is not resident is a miss, asked for at the zoom it wants, never a zoom at a time.
 
 **Residency** holds a tile hard for the fallback, for the demand while it is demanded, or as cache; only the hard set is correctness. Every reader of the ground takes the fallback's answer where the exact tile is not resident. Its capacity is two asserts: one frame for everything held hard and one to land in (safety), and everything demand can name at once besides (convergence). A tile that arrives takes a free record or one nothing holds hard and the view does not read, the farthest first; speculation takes only one that speculation does not hold either. The fallback is a law — every observation has an answer — kept here by holding the coarsest zoom the source supplies whole, all around the eye (`world/residency/floor.rs`). The source declares that zoom: the published version in its metadata, the dev tile server at `/tile/source`. A region is unresolved until the fallback lands over it, then covered coarse, then covered as finely as it is observed, and it never goes back.
 
@@ -264,7 +260,7 @@ The commands are `spec/pxl/web/kernel/abi/cmd.json`'s, numbered from `0x10` past
 
 The kernel also posts messages nobody asked for: a fetch to start or cancel, a model or image to decode, a sensor to watch, a console line, a new snapshot. Those are its signals.
 
-The world's revisions (`world/change.rs`) say what is stored has changed: one per column, and one per chunk, which a write to a band it draws moves (`world/chunk/source.rs` `band_written`), so a chunk reads one revision rather than summing its columns'. They move on a write and on nothing else: the eraser's previews are a chunk's sources, not a change to the store. A reader compares a revision with the one it last read; nothing is called when one moves.
+The world's revisions (`world/change.rs`) say what is stored has changed: one for the objects, and one per chunk, which a write to a cube it draws moves (`world/chunk/source.rs` `written`), so a chunk reads one revision rather than summing what it draws. They move on a write and on nothing else: the eraser's previews are a chunk's sources, not a change to the store. A reader compares a revision with the one it last read; nothing is called when one moves.
 
 ## The memory map
 
@@ -307,7 +303,7 @@ What the renderer reads each frame is laid out as **column lanes**, structure-of
 
 # The engine
 
-Everything here serves one meeting. The ground arrives as a dense raster for a whole tile; what the player places is a sparse tree per band. The two are stored apart and travel apart, and they meet once, when a chunk is built. What comes out of that meeting is one set of spans, one per stretch of a column that holds a single material — the **runs** the rest of this half is about. The pointer never reads them: it asks the records, through the functions the paint reads them with, so it meets what is drawn.
+Everything here serves one meeting. The ground arrives as a dense raster for a whole tile; what the player places is one sparse octree. The two are stored apart and travel apart, and they meet once, when a chunk is built. What comes out of that meeting is one set of spans, one per stretch of a column that holds a single material — the **runs** the rest of this half is about. The pointer never reads them: it asks the records, through the functions the paint reads them with, so it meets what is drawn.
 
 ## Chunk pipeline
 
