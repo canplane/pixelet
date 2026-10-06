@@ -11,10 +11,10 @@ use crate::space::coord::pvf3::ivec::{self, IVec, TO_XY};
 use crate::space::coord::pvf3::pack;
 use crate::space::coord::pvf3::pvf3::{self, Pvf3};
 use crate::space::coord::v3::Aabb;
-use crate::space::coord::world::{self, around, wrap_index, REACH};
+use crate::space::coord::world::{self, around, wrap_index};
 use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
-use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, slot_of, Node};
+use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, region, slot_of, Node};
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
 /// world 2^15 round.
@@ -106,11 +106,7 @@ impl Tile {
 
     /// The tile as a box of the world: its square, every height.
     pub fn region(self) -> Aabb {
-        let (x0, y0, side) = self.rect();
-        Aabb {
-            min: [x0, y0, REACH.min[2]],
-            max: [x0 + side, y0 + side, REACH.max[2]],
-        }
+        region(self.node())
     }
 
     /// A demand's subject: the key with the zoom in the Z lane.

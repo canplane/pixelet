@@ -41,7 +41,7 @@ impl Query for Access<'_> {
     where
         Self: 'b;
 
-    fn bounds(&self, node: Node<3>, cell: Zoom) -> Answer<Option<Bound>> {
+    fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let objects = self.objects.bounds(node, cell).value().flatten();
         self.terrain.bounds(node, cell).map(|ground| join(ground, objects))
     }

@@ -39,7 +39,8 @@ pub trait Query {
     /// Where anything stands in the node, as its cells at `cell` are read:
     /// none where nothing does. What is not known is the answer's, not a
     /// bound's: no third state.
-    fn bounds(&self, node: Node<3>, cell: Zoom) -> Answer<Option<Bound>>;
+    /// A node in fewer than three axes is the column over the rest.
+    fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>>;
 
     /// The node's cells at `cell`, no coarser than the node.
     fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Self::Record<'_>>;

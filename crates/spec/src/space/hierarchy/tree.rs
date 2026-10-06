@@ -4,10 +4,24 @@
 //! coordinate halved and a child is told apart by each axis's low bit, in any
 //! number of axes; a node's size is its zoom (`zoom.rs`).
 
-use crate::space::coord::zoom::Zoom;
+use crate::space::coord::v3::Aabb;
+use crate::space::coord::world::REACH;
+use crate::space::coord::zoom::{units, Zoom};
 
 /// A node of the hierarchy in `D` axes: its zoom and its index there.
 pub type Node<const D: usize> = (Zoom, [i64; D]);
+
+/// The box a node stands for: a cube in three axes, and in fewer the column
+/// over every axis it does not name, as far as the lanes reach.
+pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
+    let side = units(zoom);
+    let mut b = REACH;
+    for k in 0..D {
+        b.min[k] = at[k] as f64 * side;
+        b.max[k] = b.min[k] + side;
+    }
+    b
+}
 
 /// A floor on the signed lanes.
 pub fn parent_of<const D: usize>(at: [i64; D]) -> [i64; D] {

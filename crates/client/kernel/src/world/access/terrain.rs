@@ -8,7 +8,7 @@ use pxl_render::mesh::paint::terrain::adapter::{TileSource, TileView};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::zoom::{base_of, count, cube, units, Zoom};
-use pxl_spec::space::hierarchy::tree::{ancestor_of, Node};
+use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 
@@ -85,10 +85,11 @@ impl Residency<Terrain> {
 impl Query for Residency<Terrain> {
     type Record<'a> = Source<'a>;
 
-    fn bounds(&self, (zoom, [x, y, z]): Node<3>, cell: Zoom) -> Answer<Option<Bound>> {
+    fn bounds<const D: usize>(&self, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+        let [x, y] = [at[0], at[1]];
         let read = GROUND.tile_zoom_of_grid(cell).clamp(i32::from(GROUND.top()), i32::from(LEAF_ZOOM)) as Zoom;
         let tile = tile_at(read, ancestor_of([x, y], u32::from(zoom - read)));
-        let whole = cube(zoom, [x, y, z]);
+        let whole = region((zoom, at));
         self.relief(tile, (zoom, [x, y])).map(|r| {
             let (lo, hi) = (r.extent.0.max(whole.min[2]), r.extent.1.min(whole.max[2]));
             (lo <= hi).then(|| Bound {
