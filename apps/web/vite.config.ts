@@ -259,7 +259,7 @@ const remoteOriginDefault = "https://plei.me";
 // anti-HMR. The shell's kernel glue is here too: its modules hold the one
 // kernel's memory and device, and a hot-swapped copy ran beside them — a
 // second device beside the renderer's objects on the first.
-const corePathIncludes = ["/xpute/ts/core/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
+const corePathIncludes = ["/xpute/ts/core/", "/xpute/ts/host/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
 function fullReloadOnCoreChange() {
   function isCoreFile(file: string): boolean {
     const p = file.replaceAll("\\", "/");
@@ -275,7 +275,7 @@ function fullReloadOnCoreChange() {
     enforce: "pre" as const,
 
     // Vite's watcher covers `root`, which here is apps/web: without this,
-    // nothing under packages/ is watched, handleHotUpdate below never runs
+    // nothing under xpute/ts/ is watched, handleHotUpdate below never runs
     // for a core file, and the server keeps serving the transform it cached
     // at first import — a core edit does nothing, and a browser reload does
     // not help because the staleness is on the server.
@@ -428,7 +428,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       buildStamp(),
       remoteConsole(),
-      constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "packages")], path.resolve(__dirname, "..", "..")),
+      constEnum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "xpute", "ts")], path.resolve(__dirname, "..", "..")),
       deno(),
       react(),
 
@@ -507,7 +507,7 @@ export default defineConfig(({ mode }) => {
       // back to apps/web itself and 403s any `/@fs/` request for a file
       // outside it — invisible for plain .ts imports, which the deno plugin
       // resolves, but fatal for an asset import (`import x from "*.png"`)
-      // that points into packages/. The repo root allowed once covers every
+      // that points into xpute/ts/. The repo root allowed once covers every
       // such path.
       fs: { allow: [path.resolve(__dirname, "..", "..")] },
       // Each prefix forwarded whole and unrewritten.
