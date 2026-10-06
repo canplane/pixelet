@@ -6,6 +6,7 @@
 //! built; how each instance is drawn (`present`) is decided per frame and
 //! rebuilds nothing.
 
+use crate::world::access::Query;
 use std::collections::HashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};

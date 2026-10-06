@@ -6,9 +6,9 @@ use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use pxl_render::mesh::run::APRON;
-use pxl_spec::space::coord::v3::Aabb;
 
 use crate::layer::object::store::Store;
+use crate::world::access::Query;
 
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use pxl_spec::space::coord::zoom::{count, units, Zoom};
@@ -25,15 +25,18 @@ pub(super) fn runs_zoom(c: PyramidChunk, finest: Zoom) -> Zoom {
 }
 
 /// The zoom a chunk's runs are written at, and whether any object is held
-/// over its column and apron: the runs are the whole column's.
+/// over its column or the columns beside it, all heights: the runs are the
+/// whole column's, and its apron reaches one cell into each neighbour.
 pub fn runs_of(store: &Store, c: PyramidChunk) -> (Zoom, bool) {
-    let (x0, y0, side) = c.rect();
-    let apron = units(c.cell_zoom());
-    let column = Aabb {
-        min: [x0 - apron, y0 - apron, f64::NEG_INFINITY],
-        max: [x0 + side + apron, y0 + side + apron, f64::INFINITY],
-    };
-    let finest = store.finest_in(&column);
+    let (zoom, [x, y]) = c.column();
+    let mut finest: Option<Zoom> = None;
+    for dy in -1..=1 {
+        for dx in -1..=1 {
+            if let Some(b) = store.bounds((zoom, [x + dx, y + dy]), c.cell_zoom()).value().flatten() {
+                finest = Some(finest.map_or(b.finest, |f| f.max(b.finest)));
+            }
+        }
+    }
     (runs_zoom(c, finest.map_or(GROUND.cell(), |z| z.max(GROUND.cell()))), finest.is_some())
 }
 

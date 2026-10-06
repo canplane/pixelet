@@ -7,7 +7,7 @@
 use pxl_render::mesh::paint::terrain::adapter::{TileSource, TileView};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::coord::zoom::{base_of, count, cube, units, Zoom};
+use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
