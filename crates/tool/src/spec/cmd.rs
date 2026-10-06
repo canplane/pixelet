@@ -31,7 +31,6 @@ struct Member {
 #[derive(Deserialize)]
 struct Section {
     section: String,
-    doc: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -55,9 +54,7 @@ struct Enum {
 struct Extern {
     name: String,
     rs: String,
-    ts: Option<String>,
     repr: Option<String>,
-    unknown: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -88,7 +85,7 @@ enum Kind {
     Record,
 }
 
-const NUMBERS: [&str; 5] = ["u8", "u32", "i32", "u64", "f64"];
+const NUMBERS: [&str; 4] = ["u8", "u32", "i32", "f64"];
 
 impl Spec {
     fn kind(&self, ty: &str) -> Result<Kind, String> {
@@ -138,12 +135,12 @@ fn literal(value: u32, format: &str) -> String {
     }
 }
 
-fn typed_array(ty: &str, arrays: [&str; 3], name: &str) -> Result<String, String> {
-    match ty {
-        "u32" => Ok(arrays[0].to_string()),
-        "u64" => Ok(arrays[1].to_string()),
-        "f64" => Ok(arrays[2].to_string()),
-        _ => Err(format!("cmd.json: a list of {ty} ({name}) is not packed")),
+/// Only a list of u32 is packed.
+fn packed(f: &Field) -> Result<(), String> {
+    if f.ty == "u32" {
+        Ok(())
+    } else {
+        Err(format!("cmd.json: a list of {} ({}) is not packed", f.ty, f.name))
     }
 }
 
@@ -152,7 +149,7 @@ fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
         Kind::Number => f.ty.clone(),
         Kind::Bool => "boolean".to_string(),
         Kind::Str => "string".to_string(),
-        Kind::Extern if spec.extern_of(&f.ty).is_some_and(|x| x.ts.is_none()) => "u32".to_string(),
+        Kind::Extern => "u32".to_string(),
         _ => f.ty.clone(),
     };
     Ok(if f.list {
@@ -166,10 +163,6 @@ fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
 
 fn ts_write(spec: &Spec, f: &Field, value: &str) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
-    if f.list && kind == Kind::Number {
-        let array = typed_array(&f.ty, ["Uint32Array", "BigUint64Array", "Float64Array"], &f.name)?;
-        return Ok(format!(".{}_array({array}.from({value}))", f.ty));
-    }
     if f.list || kind == Kind::Record {
         return Err(format!("cmd.json: the shell writes no {} ({})", if f.list { "list" } else { "record" }, f.name));
     }
@@ -191,8 +184,8 @@ fn ts_read(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {
         if kind != Kind::Number {
             return Err(format!("cmd.json: a list of {} ({}) is not written", f.ty, f.name));
         }
-        let array = typed_array(&f.ty, ["U32Array", "U64Array", "F64Array"], &f.name)?;
-        return Ok(format!("Array.from(b.at({i}).get<{array}>())"));
+        packed(f)?;
+        return Ok(format!("Array.from(b.at({i}).get<U32Array>())"));
     }
     if kind == Kind::Record {
         return Ok(if f.optional {
@@ -225,7 +218,7 @@ impl TsUses {
             if f.list && NUMBERS.contains(&f.ty.as_str()) {
                 TsUses::add(&mut self.arrays, format!("{}Array", f.ty.to_uppercase()));
             }
-            if spec.kind(&f.ty)? == Kind::Extern && spec.extern_of(&f.ty).is_some_and(|x| x.ts.is_none()) {
+            if spec.kind(&f.ty)? == Kind::Extern {
                 TsUses::add(&mut self.words, "u32".to_string());
             }
             if let Some(doc) = &f.doc {
@@ -320,11 +313,6 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
     out.push(format!("import type {{ {} }} from \"@xpute/core/abi/array.ts\";", uses.arrays.join(", ")));
     out.push(format!("import type {{ {} }} from \"@xpute/core/abi/word.ts\";", uses.words.join(", ")));
     out.push("import { packet } from \"@xpute/runtime/ipc/doorbell.ts\";".into());
-    for x in &spec.externs {
-        if let Some(ts) = &x.ts {
-            out.push(format!("import type {{ {} }} from \"{ts}\";", x.name));
-        }
-    }
     for e in &spec.enums {
         out.push(String::new());
         if let Some(doc) = &e.doc {
@@ -335,10 +323,6 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
             match entry {
                 Entry::Section(s) => {
                     out.extend([String::new(), format!("  // ---- {} ----", s.section)]);
-                    if let Some(doc) = &s.doc {
-                        out.push("  //".into());
-                        out.extend(super::line_comments(doc, "  "));
-                    }
                     out.push(String::new());
                 }
                 Entry::Member(m) => {
@@ -357,18 +341,14 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
 
 fn cpp_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
-    if f.list && kind == Kind::Number {
-        return Ok(format!("xtp::Elements<{}>", cpp_number(&f.ty)));
-    }
-    if f.list || kind == Kind::Record {
-        return Err(format!("cmd.json: a guest reads no {} ({})", if f.list { "list" } else { "record" }, f.name));
+    if f.list {
+        return Err(format!("cmd.json: a C++ guest reads no list ({})", f.name));
     }
     let one = match kind {
         Kind::Number => cpp_number(&f.ty).to_string(),
         Kind::Str => "std::string_view".to_string(),
         Kind::Bool => "bool".to_string(),
-        Kind::Enum => f.ty.clone(),
-        _ => return Err(format!("cmd.json: {} names another table's enum, which C++ is not given", f.name)),
+        _ => return Err(format!("cmd.json: a C++ guest reads no {} ({})", f.ty, f.name)),
     };
     Ok(if f.optional { format!("std::optional<{one}>") } else { one })
 }
@@ -378,42 +358,18 @@ fn cpp_number(ty: &str) -> &'static str {
         "u8" => "std::uint8_t",
         "u32" => "std::uint32_t",
         "i32" => "std::int32_t",
-        "u64" => "std::uint64_t",
         _ => "double",
     }
 }
 
 fn cpp_read_one(spec: &Spec, f: &Field, c: &str, to: &str) -> Result<Vec<String>, String> {
-    let kind = spec.kind(&f.ty)?;
-    let (call, conv) = if f.list {
-        (format!("{c}->get_array<{}>()", cpp_number(&f.ty)), "*v".to_string())
-    } else {
-        match kind {
-            Kind::Number => match f.ty.as_str() {
-                "u64" => (format!("{c}->get_u64()"), "*v".to_string()),
-                "f64" => (format!("{c}->get_number()"), "*v".to_string()),
-                ty => (format!("{c}->get_number()"), format!("saturate_as<{}>(*v)", cpp_number(ty))),
-            },
-            Kind::Bool => (format!("{c}->get_bool()"), "*v".to_string()),
-            Kind::Str => (format!("{c}->get_str_ref()"), "*v".to_string()),
-            _ => {
-                let e = spec.enums.iter().find(|e| e.name == f.ty).ok_or(format!("cmd.json: no type {}", f.ty))?;
-                let member = format!("member_of<{}>(saturate_as<std::uint32_t>(*v))", f.ty);
-                let read = match &e.unknown {
-                    Some(u) => format!("{member}.value_or({}::{u})", f.ty),
-                    None => {
-                        return Ok(vec![
-                            format!("auto v = {c}.get_number();"),
-                            "if (!v) return v.error();".to_string(),
-                            format!("std::optional<{}> m = {member};", f.ty),
-                            "if (!m) return marshal_error(Errno::einval);".to_string(),
-                            format!("{to} = *m;"),
-                        ])
-                    }
-                };
-                (format!("{c}->get_number()"), read)
-            }
-        }
+    let (call, conv) = match spec.kind(&f.ty)? {
+        Kind::Number => match f.ty.as_str() {
+            "f64" => (format!("{c}->get_number()"), "*v".to_string()),
+            ty => (format!("{c}->get_number()"), format!("saturate_as<{}>(*v)", cpp_number(ty))),
+        },
+        Kind::Bool => (format!("{c}->get_bool()"), "*v".to_string()),
+        _ => (format!("{c}->get_str_ref()"), "*v".to_string()),
     };
     Ok(vec![format!("auto v = {call};"), "if (!v) return v.error();".to_string(), format!("{to} = {conv};")])
 }
@@ -429,69 +385,6 @@ fn cpp_read(spec: &Spec, f: &Field, i: usize) -> Result<Vec<String>, String> {
     }
     out.push("}".to_string());
     Ok(out)
-}
-
-/// A list of records is a callback called twice, once to count, since a
-/// branch's table precedes its children.
-fn cpp_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
-    let kind = spec.kind(&f.ty)?;
-    if f.list {
-        return match kind {
-            Kind::Number => Ok(format!("std::span<const {}>", cpp_number(&f.ty))),
-            _ => Err(format!("cmd.json: a C++ guest writes no list of {} ({})", f.ty, f.name)),
-        };
-    }
-    let one = match kind {
-        Kind::Number => cpp_number(&f.ty).to_string(),
-        Kind::Bool => "bool".to_string(),
-        Kind::Str => "std::string_view".to_string(),
-        Kind::Record | Kind::Enum => f.ty.clone(),
-        Kind::Extern => return Err(format!("cmd.json: {} names another table's enum, which C++ is not given", f.name)),
-    };
-    Ok(if f.optional { format!("std::optional<{one}>") } else { one })
-}
-
-fn cpp_write(spec: &Spec, f: &Field) -> Result<String, String> {
-    let kind = spec.kind(&f.ty)?;
-    let v = &f.name;
-    if f.list {
-        return Ok(format!("w.{}_array({v});", f.ty));
-    }
-    Ok(match kind {
-        Kind::Record if f.optional => format!("if ({v}) w.branch({}::FIELDS, [this](xtp::PacketWriter &w) {{ {v}->write(w); }}); else w.no_branch();", f.ty),
-        Kind::Record => format!("w.branch({}::FIELDS, [this](xtp::PacketWriter &w) {{ {v}.write(w); }});", f.ty),
-        Kind::Str => format!("w.str({v});"),
-        Kind::Enum if f.optional => format!("w.u32({v} ? std::optional(static_cast<std::uint32_t>(*{v})) : std::nullopt);"),
-        Kind::Enum => format!("w.u32(static_cast<std::uint32_t>({v}));"),
-        Kind::Bool => format!("w.boolean({v});"),
-        _ => format!("w.{}({v});", f.ty),
-    })
-}
-
-fn cpp_writer(spec: &Spec, out: &mut Vec<String>, name: &str, doc: Option<&[String]>, fields: &[Field]) -> Result<(), String> {
-    out.push(String::new());
-    if let Some(doc) = doc {
-        out.extend(super::line_comments(doc, ""));
-    }
-    out.push(format!("struct {name} {{"));
-    for f in fields {
-        if let Some(doc) = &f.doc {
-            out.extend(super::line_comments(doc, "    "));
-        }
-        out.push(format!("    {} {};", cpp_write_type(spec, f)?, f.name));
-    }
-    out.extend([
-        String::new(),
-        "    // The children it is written as.".to_string(),
-        format!("    static constexpr std::uint32_t FIELDS = {};", fields.len()),
-        String::new(),
-        "    void write([[maybe_unused]] xtp::PacketWriter &w) const noexcept {".to_string(),
-    ]);
-    for f in fields {
-        out.push(format!("        {}", cpp_write(spec, f)?));
-    }
-    out.extend(["    }".to_string(), "};".to_string()]);
-    Ok(())
 }
 
 fn cpp(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, String> {
@@ -529,10 +422,6 @@ fn cpp(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, S
             match entry {
                 Entry::Section(s) => {
                     out.extend([String::new(), format!("    // ---- {} ----", s.section)]);
-                    if let Some(doc) = &s.doc {
-                        out.push("    //".into());
-                        out.extend(super::line_comments(doc, "    "));
-                    }
                 }
                 Entry::Member(m) => {
                     if let Some(doc) = &m.doc {
@@ -559,11 +448,14 @@ fn cpp(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, S
             format!("namespace {namespace} {{"),
         ]);
     }
-    for r in &spec.records {
-        cpp_writer(spec, &mut out, &r.name, r.doc.as_deref(), &r.fields)?;
+    if !spec.records.is_empty() {
+        return Err(format!("{}: a C++ guest writes no record", t.json));
     }
     for c in spec.commands()? {
         let name = pascal(&c.name);
+        if c.signal.is_some() {
+            return Err(format!("{}: a C++ guest raises no signal ({})", t.json, c.name));
+        }
         if let Some(packet) = &c.packet {
             out.extend([String::new(), format!("// Command::{}'s packet.", c.name), format!("struct {name} {{")]);
             for f in packet {
@@ -585,10 +477,6 @@ fn cpp(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, S
                 out.extend(cpp_read(spec, f, i)?.into_iter().map(|l| format!("        {l}")));
             }
             out.extend(["        return out;".to_string(), "    }".to_string(), "};".to_string()]);
-        }
-        if let Some(signal) = &c.signal {
-            let doc = [format!("Command::{}'s signal.", c.name)];
-            cpp_writer(spec, &mut out, &format!("{name}Signal"), Some(&doc), signal)?;
         }
     }
     out.extend([String::new(), format!("}} // namespace {namespace}")]);
@@ -642,7 +530,6 @@ fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
     match kind {
         Kind::Number => {
             return Ok(match f.ty.as_str() {
-                "u64" => format!("{c}.get_u64()?"),
                 "f64" => format!("finite({c}.get_number()?)?"),
                 ty => format!("integer::<{ty}>({c}.get_number()?)?"),
             })
@@ -655,7 +542,7 @@ fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
         Some(e) => (None, e.unknown.clone()),
         None => {
             let x = spec.extern_of(&f.ty).ok_or(format!("cmd.json: no type {}", f.ty))?;
-            (x.repr.clone(), x.unknown.clone())
+            (x.repr.clone(), None)
         }
     };
     let path = rs_enum(spec, &f.ty);
@@ -691,6 +578,9 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
         }
         return Ok(format!("&'a dyn Fn(&mut dyn FnMut(&{}))", rs_record(spec, &f.ty, "'_")?));
     }
+    if f.optional && kind == Kind::Str {
+        return Err(format!("cmd.json: an optional str ({}) is not written", f.name));
+    }
     let one = match kind {
         Kind::Number => f.ty.clone(),
         Kind::Bool => "bool".to_string(),
@@ -720,7 +610,6 @@ fn rs_write(spec: &Spec, f: &Field) -> Result<Vec<String>, String> {
     Ok(vec![match kind {
         Kind::Record if f.optional => format!("match &{v} {{ Some(r) => w.branch({fields}, |w| r.write(w)), None => w.no_branch() }};"),
         Kind::Record => format!("w.branch({fields}, |w| {v}.write(w));"),
-        Kind::Str if f.optional => format!("match {v} {{ Some(s) => w.str_display(s), None => w.str(None) }};"),
         Kind::Str => format!("w.str_display({v});"),
         Kind::Enum | Kind::Extern if f.optional => format!("w.u32({v}.map(|m| m as u32));"),
         Kind::Enum | Kind::Extern => format!("w.u32(Some({v} as u32));"),
@@ -817,10 +706,6 @@ fn rs(spec: &Spec, t: &Target) -> Result<String, String> {
             match entry {
                 Entry::Section(s) => {
                     out.extend([String::new(), format!("    // ---- {} ----", s.section)]);
-                    if let Some(doc) = &s.doc {
-                        out.push("    //".into());
-                        out.extend(super::line_comments(doc, "    "));
-                    }
                 }
                 Entry::Member(m) => {
                     if let Some(doc) = &m.doc {
@@ -901,7 +786,7 @@ fn test_rs(spec: &Spec, t: &Target) -> Result<String, String> {
                 cmds.push(m);
             } else if e.name == "Major" {
                 majors.push((m.value, &m.name));
-            } else if e.name.ends_with("Minor") && !minors.iter().any(|t| t.name == e.name) {
+            } else if e.name.ends_with("Minor") {
                 minors.push(e);
             }
         }
@@ -926,7 +811,6 @@ fn test_rs(spec: &Spec, t: &Target) -> Result<String, String> {
         }
         let major = majors
             .iter()
-            .rev()
             .find(|(v, _)| *v == c.value >> 8)
             .map(|(_, n)| *n)
             .ok_or(format!("cmd.json: {} has no major", c.name))?;
