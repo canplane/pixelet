@@ -12,15 +12,16 @@ use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, TileSource};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::coord::v3::{len3, sub3, V3};
-use pxl_spec::space::coord::zoom::cube;
 use pxl_spec::space::coord::world::{nearest, nearest_box};
+use pxl_spec::space::coord::zoom::cube;
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 use xpute_runtime::sched::frame_budget::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
+use crate::kernel::kernel;
 use crate::layer::decor::build::{decor_gone_px, decor_sprite_px, variant_extent, DecorBuild, DecorHide, Ground};
 use crate::layer::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::layer::decor::kind::{Kind, KINDS};
@@ -30,7 +31,6 @@ use crate::layer::object::store::Store;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{draws_as_held, Builder};
 use crate::world::chunk::mesh_slot::OCCUPANCY;
-use crate::kernel::kernel;
 use crate::world::chunk::source::{objects_met, Met};
 use crate::world::chunk::table::Scheduler;
 use crate::world::observation::{eye, observation};
@@ -121,7 +121,7 @@ fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
         }
     });
     Some(Sources {
-        read_from: Terrain::pyramid().residency().drawn_from(GROUND.read_tile(chunk.column()))?.zoom,
+        read_from: Terrain::pyramid().residency().drawn_from(GROUND.read_tile(chunk.column(), chunk.cell_zoom()))?.zoom,
         objects: objects_met(&kernel().objects, chunk),
         shown: settings_store().decor,
         hide,
@@ -132,16 +132,16 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
     let tiles = Terrain::pyramid();
     // The tile the terrain draws the chunk from, read over the chunk whose
     // side is that many of its cells; past the leaves, the chunk over it as wide.
-    let src = tiles.residency().drawn_from(GROUND.read_tile(chunk.column()))?;
+    let src = tiles.residency().drawn_from(GROUND.read_tile(chunk.column(), chunk.cell_zoom()))?;
     let tile = tiles.residency().get(src)?;
     let mut over = chunk;
-    while GROUND.read_side(over.zoom()) < CHUNK_CELLS || GROUND.read_zoom(over.zoom()) > src.zoom {
+    while GROUND.read_side(over.zoom(), over.cell_zoom()) < CHUNK_CELLS || GROUND.read_zoom(over.cell_zoom()) > src.zoom {
         over = over.parent()?;
     }
-    let (zoom, side) = (GROUND.read_zoom(over.zoom()), GROUND.read_side(over.zoom()));
+    let (zoom, side) = (GROUND.read_zoom(over.cell_zoom()), GROUND.read_side(over.zoom(), over.cell_zoom()));
     let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
-    let (tx0, ty0) = GROUND.read_at(over.column());
+    let (tx0, ty0) = GROUND.read_at(over.column(), over.cell_zoom());
     let view = Builder::tile_view(tile);
     if sources.shown {
         let around = Around {

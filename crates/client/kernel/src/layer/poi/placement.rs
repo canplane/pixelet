@@ -23,13 +23,13 @@ use pxl_spec::space::coord::world::nearest;
 use xpute_runtime::global::Global;
 
 use pxl_spec::bake::poi_tile::{PoiTile, POI_LATTICE};
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::pvf3::pack;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::v3::len3;
 use pxl_spec::space::coord::world::REACH;
+use pxl_spec::space::coord::zoom::{count, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Cell, Tile, LEAF_ZOOM};
-use pxl_spec::space::coord::v3::len3;
-use pxl_spec::space::coord::zoom::{count, Zoom};
 use std::collections::HashSet;
 
 #[derive(Default)]
@@ -131,8 +131,8 @@ pub fn step(ctx: &mut TickContext) {
     }
     let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
-        let read_zoom = POI_LATTICE.read_zoom(chunk.zoom());
-        let Some(src) = tiles.residency().source(POI_LATTICE.read_tile(chunk.column())) else { continue };
+        let read_zoom = POI_LATTICE.read_zoom(chunk.cell_zoom());
+        let Some(src) = tiles.residency().source(POI_LATTICE.read_tile(chunk.column(), chunk.cell_zoom())) else { continue };
         let Some(poi) = tiles.residency().get(src) else { continue };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.

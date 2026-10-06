@@ -12,10 +12,10 @@ use std::collections::{HashMap, HashSet};
 
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
-use pxl_spec::space::coord::v3::V3;
 
 use crate::layer::marker::debug_lines::DebugLines;
 use crate::world::access::Access;
@@ -105,7 +105,7 @@ impl CoverageGizmo {
             if covered {
                 continue;
             }
-            let mark = match residency.drawn_from(GROUND.read_tile(g.column())) {
+            let mark = match residency.drawn_from(GROUND.read_tile(g.column(), g.cell_zoom())) {
                 None => Mark::NoTile,
                 Some(src) if floor_only(src) => Mark::FloorOnly,
                 Some(_) => Mark::Unbuilt,
@@ -114,7 +114,7 @@ impl CoverageGizmo {
         }
         let mut tiles: Vec<Tile> = Vec::with_capacity(drawn.len());
         for &d in drawn {
-            let tile = GROUND.read_tile(d.column());
+            let tile = GROUND.read_tile(d.column(), d.cell_zoom());
             let from_floor = residency.source(tile).is_none() && residency.drawn_from(tile).is_some_and(floor_only);
             lines.square(d.rect(), if from_floor { Mark::DrawnFromFloor } else { Mark::Drawn });
             tiles.push(tile);

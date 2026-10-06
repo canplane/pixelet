@@ -144,10 +144,10 @@ impl Sources {
             objects: objects_drawn(&kernel().objects, k),
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
-            read_from: Terrain::pyramid().residency().drawn_from(GROUND.read_tile(k.column())).map(|p| p.zoom),
+            read_from: Terrain::pyramid().residency().drawn_from(GROUND.read_tile(k.column(), k.cell_zoom())).map(|p| p.zoom),
             beside_from: {
                 let mut from = [None; 8];
-                for ([qx, qy], p) in GROUND.read_beside(k.column(), APRON) {
+                for ([qx, qy], p) in GROUND.read_beside(k.column(), k.cell_zoom(), APRON) {
                     from[beside_index(qx, qy)] = Terrain::pyramid().residency().drawn_from(p).map(|p| p.zoom);
                 }
                 from
@@ -274,7 +274,7 @@ impl Env for Pieces<'_> {
     }
 
     fn buildable(&self, c: Chunk) -> bool {
-        Terrain::pyramid().residency().drawn_from(GROUND.read_tile(c.column())).is_some()
+        Terrain::pyramid().residency().drawn_from(GROUND.read_tile(c.column(), c.cell_zoom())).is_some()
     }
 
     fn order(&self, c: Chunk) -> Order {
@@ -400,7 +400,7 @@ impl Scheduler {
     pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
         let s = self.drawn_slot(p)?;
         Some((
-            GROUND.read_zoom(s.chunk.zoom()) as i32,
+            GROUND.read_zoom(s.chunk.cell_zoom()) as i32,
             s.layout.map(|_| GROUND.tile_zoom(s.chunk.cell_zoom())),
             s.sources.read_from.map(|z| z as i32),
         ))

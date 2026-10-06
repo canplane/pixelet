@@ -142,7 +142,7 @@ impl Builder {
             self.sample.read(&read.around(), read.first, span)
         } else {
             let leaf = c.leaf(target);
-            let leaf_span = run_span(leaf, GROUND.cell_zoom(GROUND.read_zoom(leaf.zoom())));
+            let leaf_span = run_span(leaf, GROUND.cell_zoom(GROUND.read_zoom(leaf.cell_zoom())));
             self.leaf_sample
                 .read(&read.around(), read.first, leaf_span)
                 .and_then(|()| self.sample.refine(&self.leaf_sample, k, c.in_leaf(target), span))

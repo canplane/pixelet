@@ -241,7 +241,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
             // The goal's pieces a resident tile draws.
             let residency = Terrain::pyramid().residency();
-            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.drawn_from(GROUND.read_tile(c.column())).is_some()).count());
+            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.drawn_from(GROUND.read_tile(c.column(), c.cell_zoom())).is_some()).count());
             CoverSample {
                 rule,
                 drawn: drawn as f64,

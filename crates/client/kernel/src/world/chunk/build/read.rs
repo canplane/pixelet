@@ -9,12 +9,11 @@ use pxl_spec::space::layer::tile::Tile;
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, TileSource, TileView};
 use pxl_render::mesh::run::APRON;
 
-
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::hierarchy::tree::offset_in;
 use pxl_spec::space::coord::zoom::{count, Zoom};
+use pxl_spec::space::hierarchy::tree::offset_in;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -79,12 +78,12 @@ impl Chunk {
     pub(super) fn read(&self, runs: Zoom) -> Option<Read> {
         let leaf = self.leaf(runs);
         let mut beside = [None; 8];
-        for ([qx, qy], p) in GROUND.read_beside(leaf.column(), APRON) {
+        for ([qx, qy], p) in GROUND.read_beside(leaf.column(), leaf.cell_zoom(), APRON) {
             beside[beside_index(qx, qy)] = Source::of(p);
         }
-        let (x0, y0) = GROUND.read_at(leaf.column());
+        let (x0, y0) = GROUND.read_at(leaf.column(), leaf.cell_zoom());
         Some(Read {
-            own: Source::of(GROUND.read_tile(leaf.column()))?,
+            own: Source::of(GROUND.read_tile(leaf.column(), leaf.cell_zoom()))?,
             beside,
             first: [x0 as i64, y0 as i64],
         })
@@ -92,7 +91,7 @@ impl Chunk {
 
     /// Zooms runs at `runs` are finer than its tile's cells: none but past the leaves.
     pub(super) fn finer(&self, runs: Zoom) -> u32 {
-        u32::from(runs - GROUND.cell_zoom(GROUND.read_zoom(self.at.zoom())))
+        u32::from(runs - GROUND.cell_zoom(GROUND.read_zoom(self.at.cell_zoom())))
     }
 
     /// Itself, or past the leaves the chunk over it whose runs are its tile's cells.
