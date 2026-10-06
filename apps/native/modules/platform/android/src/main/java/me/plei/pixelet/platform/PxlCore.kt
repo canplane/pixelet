@@ -6,7 +6,7 @@ import android.view.Surface
 import java.nio.ByteBuffer
 
 /**
- * The kernel as this app calls it: the Rust core (crates/pxl/web/native),
+ * The kernel as this app calls it: the Rust core (crates/client/native),
  * loaded as the shared library the app's build puts beside it, and reached
  * through the functions its src/android.rs names for JNI — the same calls an
  * iPhone's Swift makes through the C ABI. Whatever reaches the kernel runs on

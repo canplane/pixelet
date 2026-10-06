@@ -259,7 +259,7 @@ const remoteOriginDefault = "https://plei.me";
 // anti-HMR. The shell's kernel glue is here too: its modules hold the one
 // kernel's memory and device, and a hot-swapped copy ran beside them — a
 // second device beside the renderer's objects on the first.
-const corePathIncludes = ["/packages/xpute/core/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
+const corePathIncludes = ["/xpute/packages/core/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
 function fullReloadOnCoreChange() {
   function isCoreFile(file: string): boolean {
     const p = file.replaceAll("\\", "/");

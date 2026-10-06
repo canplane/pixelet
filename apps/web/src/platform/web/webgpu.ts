@@ -316,10 +316,6 @@ function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
   const d = device!;
   const k = a + n;
   switch (code) {
-    case op.RESET:
-      for (const o of objects) (o as { destroy?: () => void } | undefined)?.destroy?.();
-      objects.length = 0;
-      break;
     case op.BUFFER: {
       const [id, size, usage] = [w[a], w[a + 1], w[a + 2]];
       // A refused buffer is not an exception but an invalid object, so a device

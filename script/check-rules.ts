@@ -40,11 +40,11 @@ function header(f: string): string | null {
     }
     return null;
   }
-  if (/^cpp\/.*\.(cpp|hpp)$/.test(f)) return f;
+  if (/^xpute\/cpp\/.*\.(cpp|hpp)$/.test(f)) return f.slice("xpute/".length);
   if (!/\.tsx?$/.test(f)) return null;
   const app = f.match(/^apps\/([\w-]+)\/(?:src\/)?(.*)$/);
   if (app) return `@pxl/${app[1]}/${app[2]}`;
-  const pkg = f.match(/^packages\/xpute\/(\w+)\/src\/(.*)$/);
+  const pkg = f.match(/^xpute\/packages\/(\w+)\/src\/(.*)$/);
   return pkg ? `@xpute/${pkg[1]}/${pkg[2]}` : null;
 }
 
@@ -73,7 +73,7 @@ function exists(path: string, from: string): boolean {
     return suffixes.has(`apps/${app}/src/${within.join("/")}`) || suffixes.has(`apps/${app}/${within.join("/")}`);
   }
   if (head === "@") return suffixes.has(`apps/web/src/${tail}`);
-  if (head === "@xpute") return suffixes.has(`packages/xpute/${rest[0]}/src/${rest.slice(1).join("/")}`);
+  if (head === "@xpute") return suffixes.has(`xpute/packages/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir && (suffixes.has(`${dir}src/${tail}`) || suffixes.has(`${dir}${tail}`))) return true;
   // By what git ignores, not disk: CI runs this before any build.
@@ -98,7 +98,7 @@ function resolve(path: string, from: string): string[] {
     tails.add(`apps/${app}/src/${within.join("/")}`).add(`apps/${app}/${within.join("/")}`);
   }
   if (head === "@") tails.add(`apps/web/src/${tail}`);
-  if (head === "@xpute") tails.add(`packages/xpute/${rest[0]}/src/${rest.slice(1).join("/")}`);
+  if (head === "@xpute") tails.add(`xpute/packages/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir) tails.add(`${dir}src/${tail}`).add(`${dir}${tail}`);
   return files.filter((f) => [...tails].some((t) => f === t || f.endsWith(`/${t}`)));
@@ -130,7 +130,7 @@ for (const f of files) {
   });
 }
 
-const LATTICE_OWNERS = ["crates/pxl/spec/src/space/", "crates/pxl/spec/src/bake/constant.rs"];
+const LATTICE_OWNERS = ["crates/spec/src/space/", "crates/spec/src/bake/constant.rs"];
 const SHIFT = /(\b(PAGE_CELLS|CHUNK_CELLS)\b|\bshamt\()[^;]*(<<|>>)|(<<|>>)[^;]*\bshamt\(/;
 const IN_PAGE = /[%/]\s*PAGE_CELLS\b|(rem|div)_euclid\(\s*PAGE_CELLS\b|\*\s*PAGE_CELLS\b(\s+as\s+\w+)?\s*\+/;
 
@@ -143,7 +143,7 @@ for (const f of files) {
   });
 }
 
-const OFFSET_CRATES = ["crates/xpute/runtime/src/", "crates/pxl/web/kernel/src/", "crates/pxl/web/render/src/", "crates/pxl/web/wasm/src/", "crates/pxl/web/native/src/"];
+const OFFSET_CRATES = ["xpute/crates/runtime/src/", "crates/client/kernel/src/", "crates/client/render/src/", "crates/client/wasm/src/", "crates/client/native/src/"];
 const CAST_TO_POINTER = /\bas\s+\*(const|mut)\b/;
 
 for (const f of files) {

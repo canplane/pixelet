@@ -10,7 +10,7 @@ import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 
 /**
- * A view the kernel draws into (crates/pxl/web/native), SurfaceView.swift's
+ * A view the kernel draws into (crates/client/native), SurfaceView.swift's
  * on Android: a SurfaceView, whose surface is a window of its own the system
  * composes under the app's views, so the kernel's frames and the shell's
  * chrome are drawn apart. The view binds the kernel's surface to it itself:

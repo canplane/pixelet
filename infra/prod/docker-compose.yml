@@ -48,14 +48,14 @@ services:
     networks:
       - pixelet
 
-  # crates/pxl/geo, the world's data server
+  # crates/geo, the world's data server
   # (decision/20260918-the-server-in-rust-and-the-line-already-drawn.md). The
   # service is still called `api` because that is the hostname Caddy proxies to
   # and renaming it is a restart of the stack for a word.
   api:
     build:
       context: ../..
-      dockerfile: crates/pxl/server/geo/Dockerfile
+      dockerfile: crates/server/geo/Dockerfile
     container_name: pixelet-api
     restart: unless-stopped
     depends_on:
@@ -69,14 +69,14 @@ services:
     networks:
       - pixelet
 
-  # crates/pxl/api. It answers nothing yet and is here for the same reason the
+  # crates/api. It answers nothing yet and is here for the same reason the
   # TypeScript's own db-main pool was: the shape a first route arrives into —
   # the root, the origin, the container and the secret — rather than one to be
   # assembled on the day it is written.
   app:
     build:
       context: ../..
-      dockerfile: crates/pxl/server/api/Dockerfile
+      dockerfile: crates/server/api/Dockerfile
     container_name: pixelet-app
     restart: unless-stopped
     depends_on:

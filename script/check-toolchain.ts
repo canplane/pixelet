@@ -13,12 +13,16 @@ const toolchain = await Deno.readTextFile(join(root, "rust-toolchain.toml"));
 const channel = toolchain.match(/^\s*channel\s*=\s*"([^"]+)"/m)?.[1];
 if (!channel) throw new Error("rust-toolchain.toml: no [toolchain] channel to check anything against");
 
+// xpute's own pin, for its repository, says the same Rust.
+const xpute = (await Deno.readTextFile(join(root, "xpute/rust-toolchain.toml"))).match(/^\s*channel\s*=\s*"([^"]+)"/m)?.[1];
+
 const IMAGES = [
-  "crates/pxl/server/geo/Dockerfile",
-  "crates/pxl/server/api/Dockerfile",
+  "crates/server/geo/Dockerfile",
+  "crates/server/api/Dockerfile",
 ];
 
 const wrong: string[] = [];
+if (xpute !== channel) wrong.push(`xpute/rust-toolchain.toml: says ${xpute} where rust-toolchain.toml says ${channel}`);
 for (const path of IMAGES) {
   const text = await Deno.readTextFile(join(root, path));
   const tag = text.match(/^FROM\s+rust:([^\s-]+)-/m)?.[1];

@@ -82,11 +82,11 @@ are unrelated to this project.
    reaches the origin through a proxied record.
 
 5. **Repo** — `git clone` or `rsync` the tree onto the VM. Both Dockerfiles
-   take the whole repo as their build context: the servers are `crates/pxl/server/geo`
-   and `crates/pxl/server/api`, and their dependencies are path dependencies in the
+   take the whole repo as their build context: the servers are `crates/server/geo`
+   and `crates/server/api`, and their dependencies are path dependencies in the
    same Cargo workspace, so `crates/` has to be present whole for Cargo to
-   resolve it. Each sits beside its own crate: `crates/pxl/server/geo/Dockerfile` and
-   `crates/pxl/server/api/Dockerfile`.
+   resolve it. Each sits beside its own crate: `crates/server/geo/Dockerfile` and
+   `crates/server/api/Dockerfile`.
 
 6. **The production `.env`**
    ```sh
@@ -161,14 +161,14 @@ docker compose up -d --build
 
 ### Wiring
 
-Four roots, decided in `spec/pxl/spec/route.json` and written from there into every
+Four roots, decided in `spec/spec/route.json` and written from there into every
 place that builds a URL or reads one:
 
 | Root      | What it is                                           | Who answers it |
 | :-------- | :--------------------------------------------------- | :------------- |
 | `/geo/`   | the world's data                                     | pxl-geo        |
 | `/api/`   | the application                                      | pxl-api        |
-| `/tile/`  | baked tiles, by kind, version and quadkey            | R2             |
+| `/tile/`  | baked tiles, by kind, version and name               | R2             |
 | `/asset/` | models and textures, by path with a hash in the stem | R2             |
 
 The Worker claims all four (`wrangler.jsonc`'s `run_worker_first`) and splits

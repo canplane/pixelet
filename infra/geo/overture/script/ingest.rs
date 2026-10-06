@@ -7,9 +7,9 @@ edition = "2021"
 arrow = { version = "60", default-features = false }
 parquet = { version = "60", default-features = false, features = ["arrow", "snap", "zstd"] }
 postgres = "0.19"
-pxl-geo-bake = { path = "../../../../crates/pxl/server/geo-bake" }
-pxl-spec = { path = "../../../../crates/pxl/spec" }
-xpute-core = { path = "../../../../crates/xpute/core" }
+pxl-geo-bake = { path = "../../../../crates/server/geo-bake" }
+pxl-spec = { path = "../../../../crates/spec" }
+xpute-core = { path = "../../../../xpute/crates/core" }
 serde_json = "1"
 ---
 
@@ -103,7 +103,7 @@ const TYPES: &[Type] = &[
 
 /// The official CLI, a tool regenerable under `cache/`, and what it downloads,
 /// the source, kept beside this script.
-const VENV: &str = "./cache/overture/.venv";
+const VENV: &str = "./infra/geo/overture/.venv";
 const EXTRACTS: &str = "./infra/geo/overture/raw";
 
 const BATCH: usize = 300;

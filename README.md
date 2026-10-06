@@ -10,13 +10,13 @@ _Started on December 15, 2025._
 
 <img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.png" height="480">
 
-The client is a small operating system. A Rust **kernel** holds the world, schedules its own work and draws; a TypeScript **shell** drives it the way a driver drives a device, and decides nothing about the world. The same two run in a browser tab and in a device app: in the tab the kernel is one WebAssembly module drawing through the page's WebGPU, and on a device it is linked into a React Native app and draws through wgpu. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./ARCHITECTURE.xpute.md), which is generic and knows nothing of any of this. What follows is pixelet's own.
+The client is a small operating system. A Rust **kernel** holds the world, schedules its own work and draws; a TypeScript **shell** drives it the way a driver drives a device, and decides nothing about the world. The same two run in a browser tab and in a device app: in the tab the kernel is one WebAssembly module drawing through the page's WebGPU, and on a device it is linked into a React Native app and draws through wgpu. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./xpute/ARCHITECTURE.md), which is generic and knows nothing of any of this. What follows is pixelet's own.
 
 - **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into tiles of 512² cells, a ground raster of OpenStreetMap Carto's looks and an elevation raster each. A tile is fetched into one of a fixed number of records in memory and kept there until a tile the view wants needs the room.
 - **One coordinate, 96 bits of fixed point.** A position is two packed words — three integer fields for which block, three 8-bit fractions for where inside it — so it resolves to 1/256 of a block. The arithmetic is integer, so it is the same bits on every machine, and the X field is cyclic, so the world wraps at the longitude seam.
 - **The view is cubes about the eye.** What is drawn is decided from the eye alone, in three dimensions: a chunk is a cube of its zoom, 32 cells of the camera grid a side, and it is split into eight while its cells would cover too much of the screen; what lies inside one cell is folded into one thing drawn. A cube with nothing in it is never made, so the air costs nothing, and everything a view asks for — tiles fetched, chunks built, records given up — goes in one order out from the eye. Storage stays 2D; only the addresses are 3D.
 - **Terrain and what you build meet only when a chunk is built.** The chunk is a cube, Minecraft's section at 32 cells a side rather than 16. The ground is a dense raster for a whole tile; placed objects are one sparse octree over the world, and an object belongs to every chunk its cube is in. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
-- **What a view holds is bounded before anything is fetched.** Every tile a view reads lies within a fixed reach of the eye, at most 3 × 3 a zoom, so the records tiles live in are sized for it at compile time and a tile the view reads never has to push out another. What it asks for is only what it drew coarser than it wanted; the rest is speculation, which takes only room nothing else holds.
+- **What a view holds is bounded before anything is fetched.** Every tile a view reads lies within a fixed reach of the eye, at most 3 × 3 a zoom, so the records tiles live in are sized for it at compile time and a tile the view reads never has to push out another. What it asks for is only what it drew coarser than it wanted.
 - **Numbers, not strings.** Commands, catalogs, assets and messages are numbered once in JSON under `spec/`, and both languages are generated from it. Nothing is ever looked up by name.
 
 ---
@@ -159,7 +159,7 @@ the client                              /geo/search ─▶ pxl-geo ─▶ db-geo
 filled by the bakes, offline
 ```
 
-The four roots are written in one file, `spec/pxl/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
+The four roots are written in one file, `spec/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
 
 Two formats were made here: **PVF3**, pixelet's packed fixed-point coordinate, and **XTP**, xpute's relocatable binary tree, read without copying.
 
@@ -184,31 +184,22 @@ Two formats were made here: **PVF3**, pixelet's packed fixed-point coordinate, a
 │       ├── src/platform/     #   what differs on a device, behind @platform/
 │       └── modules/platform/ #   its native half: one module, the view, the linked kernel
 ├── crates/                   # The Rust workspace, grouped by where a crate runs
-│   ├── xpute/
-│   │   ├── core/             #   xpute-core: collections, codecs, XTP, errno — no domain
-│   │   ├── runtime/          #   xpute-runtime: the rings, the turn, the memory a module is given
-│   │   └── conformance/      #   a Rust guest the contract's traces run against
-│   └── pxl/
-│       ├── spec/             #   pxl-spec: the model both ends follow
-│       ├── web/              #   what the client runs
-│       │   ├── render/       #     pxl-render: the view
-│       │   ├── kernel/       #     pxl-kernel: the stores, the schedulers, the turn
-│       │   ├── wasm/         #     pxl-wasm: the kernel as one WebAssembly module
-│       │   └── native/       #     pxl-native: the kernel as a device app's library
-│       ├── server/           #   pxl-server: what geo and api both need to start
-│       │   ├── geo-spec/     #     pxl-geo-spec: geographic provider values (Overture today)
-│       │   ├── geo/          #     pxl-geo: the world's data server (/geo)
-│       │   ├── api/          #     pxl-api: the application server (/api)
-│       │   └── geo-bake/     #     pxl-geo-bake: the three tile bakes and the dev tile server
-│       └── tool/             #   pxl-tool: the ingest and the bakes that write files the tree keeps
-├── packages/                 # The TypeScript workspace packages
-│   └── xpute/
-│       ├── core/             #   @xpute/core: the same kit in TypeScript
-│       ├── runtime/          #   @xpute/runtime: the rings' host end and the reservation
-│       └── conformance/      #   the host that runs the traces against every guest
-├── cpp/xpute/                # xpute in C++: core, runtime, and a guest for the traces
+│   ├── spec/                 #   pxl-spec: the model both ends follow
+│   ├── client/               #   what the client runs
+│   │   ├── render/           #     pxl-render: the view
+│   │   ├── kernel/           #     pxl-kernel: the stores, the schedulers, the turn
+│   │   ├── wasm/             #     pxl-wasm: the kernel as one WebAssembly module
+│   │   └── native/           #     pxl-native: the kernel as a device app's library
+│   ├── server/               #   pxl-server: what geo and api both need to start
+│   │   ├── geo-spec/         #     pxl-geo-spec: geographic provider values (Overture today)
+│   │   ├── geo/              #     pxl-geo: the world's data server (/geo)
+│   │   ├── api/              #     pxl-api: the application server (/api)
+│   │   └── geo-bake/         #     pxl-geo-bake: the three tile bakes and the dev tile server
+│   └── tool/                 #   pxl-tool: the ingest and the bakes that write files the tree keeps
 ├── spec/                     # JSON every language is generated from (pxl-tool),
-│                             #   grouped as crates/ is: xpute/, pxl/{spec, web, server}
+│                             #   grouped as crates/ is: spec/, client/
+├── xpute/                    # The system under it, its own repository's root and workspaces:
+│                             #   crates/, packages/ and cpp/ in each language, spec/ the contract
 ├── asset/                    # Shipped models and texture pack (cube, decor, actor),
 │                             #   imported by nothing
 ├── script/                   # the spec generator, the tree's checks, the deployment smoke
@@ -239,7 +230,7 @@ The casing in the tree is not mixed by accident. Rust, the xpute packages and th
 
 [AGENTS.md](./AGENTS.md) is how to work in the tree, [BACKLOG.md](./BACKLOG.md) what is queued next, and [decision/](./decision/) why things went the way they did.
 
-Four files carry a `.xpute` infix: [README.xpute.md](./README.xpute.md) and [ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) — the system under the application, its memory, rings, turn, handles, contract and wire formats — with `LICENSE.xpute` and `THIRD_PARTY_NOTICES.xpute.md` beside them. They belong to the xpute repository and live here because xpute is developed here. None of them names pixelet, which is what lets `script/export-xpute.ts` drop the infix and send them out as they are.
+Four files carry a `.xpute` infix: [xpute/README.md](./xpute/README.md) and [xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) — the system under the application, its memory, rings, turn, handles, contract and wire formats — with `xpute/LICENSE` and `xpute/THIRD_PARTY_NOTICES.md` beside them. They belong to the xpute repository and live here because xpute is developed here. None of them names pixelet, which is what lets `xpute/script/export.ts` drop the infix and send them out as they are.
 
 ---
 

@@ -7,7 +7,7 @@ description: Bake terrain, POI and reverse-geocode tiles from the geo DB into ou
 
 The deployed API answers forward search only. Terrain, POI and reverse
 geocode are static objects in the bucket, produced offline
-by the tools in `crates/pxl/server/geo-bake` from the local geo database. This is
+by the tools in `crates/server/geo-bake` from the local geo database. This is
 how each set gets built and checked; getting it into the bucket is
 [publish-bucket](../publish-bucket/SKILL.md).
 
@@ -25,18 +25,15 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 Every tool writes to `./out/<kind>/<version>`. The version is
 `v<format>.<day>.<n>`: the kind's `FORMAT` in
-`spec/pxl/spec/bake/published.json`, the day the bake ran (UTC) and that
+`spec/spec/bake/published.json`, the day the bake ran (UTC) and that
 day's count of bakes of the kind, from 1 — `v7.2026-10-04.1`
 (`pxl-spec bake/published.spec.rs` `version_name`). What it was baked from
 is the manifest's: the Overture release its tables were ingested from and the
 commit it was built at. The last path segment of `--out` overrides it.
 
-The bucket names a tile by its **quadkey** and nothing else (publish-bucket).
-Geocode writes that name straight out, so for it the filename _is_ the object
-key. Terrain and POI, the two pyramids, do not: they write
-`z<zoom>/<tile index>`, because the fold clears a zoom's directory to redo it
-and drops the zooms a run did not reach. Their names are translated at
-publish, by hard links, which is the one step geocode skips.
+A tile is named by its 2D Morton key written a digit a zoom, and every bake
+writes that name straight out, flat in its version: the filename _is_ the
+object key, and a name's length is its zoom (publish-bucket).
 
 Terrain goes first for geocode: it does not classify land itself, it
 read the `land_tiles.json` terrain leaves next to its output directory
@@ -112,7 +109,7 @@ deno task bake:tiles --out ./out/terrain/<version> --force
 | `--limit <n>`       | stop after n tiles (smoke test)                                    |
 | `--force`           | bake leaves already on disk again, and solve every structure again |
 | `--reclassify`      | ignore the cached land/ocean scan and redo it                      |
-| `--region <qk>`     | bake again only the land tiles under a quadkey, repeatable         |
+| `--region <name>`   | bake again only the land tiles under a tile, repeatable            |
 | `--base <dir>`      | the version a region is baked over (default the published one)     |
 
 It runs long enough to want a log file rather than a terminal:
@@ -123,10 +120,10 @@ grep '^\[bake\] ' /tmp/bake.log | tail -2
 ```
 
 A fix that reaches one area need not bake every tile again. `--region`
-bakes the land tiles under a quadkey prefix again, by the code as it is now,
+bakes the land tiles under a tile's name again, by the code as it is now,
 and assembles a new version from `--base`: the base's tiles linked whole, the
 region's leaves in place of the ones that differ, and folded again only the
-tiles above whose `Folds::sources` read a tile that changed, a zoom at a time,
+tiles above whose `Layer::sources` read a tile that changed, a zoom at a time,
 until a zoom changes nothing. Minutes, where a full bake is hours:
 
 ```bash
@@ -203,12 +200,12 @@ that, worked back from how far each thing draws:
    not the objects. With `deno task dev:tiles` up — not `dev`, which proxies
    every route to the live deployment:
 
-   The dev server answers the bucket's addresses, so it takes the quadkey
+   The dev server answers the bucket's addresses, so it takes the tile's name
    while the file on disk is still under its zoom — one tile, two names:
 
    ```bash
-   curl -s localhost:3001/tile/terrain/<quadkey> | zstd -dcq | shasum
-   zstd -dcq ./out/terrain/<version>/z<zoom>/<tile_idx> | shasum   # gunzip -c before zstd
+   curl -s localhost:3001/tile/terrain/<name> | zstd -dcq | shasum
+   zstd -dcq ./out/terrain/<version>/<name> | shasum   # gunzip -c before zstd
    ```
 
    A coarse tile makes the dev server bake the missing tiles under it first, so the
@@ -217,27 +214,10 @@ that, worked back from how far each thing draws:
 
 ### Looking at a bake before it is published
 
-The dev tile server serves a tile from its cache when the tile's file is
-there and bakes it only when it is not, and its cache is laid out as a
-baked set is: `<cache>/terrain/z<zoom>/<tile_idx>`, zstd as the
-bake writes them (`demand.rs`, `--cache`, `./cache/tile` by default). So a
-finished bake is looked at in the app, with nothing uploaded, by putting it
-where the cache is:
-
-```bash
-# with the dev tile server stopped
-mv cache/tile/terrain cache/tile/terrain.on-demand   # or remove it
-cp -al out/terrain/<version> cache/tile/terrain
-deno task dev:local
-```
-
-`cp -al` links the files rather than copying them, so it takes no space,
-and the cache's purge (`POST …/world/terrain/cache/invalidate`) unlinks the
-links and leaves the bake under `out/terrain/<version>` as it was. A tile
-the bake has no object for — open water past the coverage, a zoom coarser
-than the pyramid's top — is still baked on demand into the cache beside the
-linked ones. After a purge the server bakes everything on demand again; link
-the set back in to see the bake.
+A finished bake is on disk as the bucket holds it, so it is looked at in
+the app with nothing uploaded by serving `out/` as it is: `deno task
+dev:baked` runs the tile server with `--baked ./out`, which answers each
+kind from its published version's directory (`serve_tiles.rs` `baked`).
 
 ## POI
 
@@ -247,9 +227,9 @@ places and, of each kind, the place of least id with the leaf cell it
 stands in — its names, held to 32 code points, the source's own id and its
 kind by name, from a pool of places held once a tile. A kind is the place's
 category as the search list names it (`pxl-geo-spec overture/properties.rs`),
-one of `spec/pxl/spec/bake/poi_badge.json`'s. The leaves are counted from `overture_places`, the zooms above are
+one of `spec/spec/bake/poi_badge.json`'s. The leaves are counted from `overture_places`, the zooms above are
 folded by adding, with the same fold driver terrain uses
-(`geo-bake/src/pyramid.rs`), and then every tile its parent settles is let go
+(`geo-bake/src/pyramid.rs`), and then every tile its parent's occupancy marks none is let go
 (`prune`): where no cell over a tile holds two places, the tile over it says
 all of its ground, so the tree stops there.
 
@@ -297,13 +277,13 @@ Only a change to **how the client reads a tile** — its format in
 
 The local tile server shares one demand path across terrain, POI and geocode
 (`geo-bake/src/demand/`). `--cache` is the parent directory, default `cache/tile`;
-each kind owns a private generation beneath it. Concurrent requests join the
+each kind owns a directory under the source it bakes from. Concurrent requests join the
 same job, packets are written atomically, and responses carry zstd encoding.
 All three kinds share the server's `--workers` execution slots (default 4)
 and `--queue` additional admitted-job slots (default 64). Dependencies count
 against admission too; terrain resolves them sequentially, without a task
 fan-out. A new job over the limit gets 503; a cached result or an existing
-job needs no new slot. `--job-seconds` (default 30) bounds each generation
+job needs no new slot. `--job-seconds` (default 30) bounds each
 job, including its dependency and execution-slot waits. One absolute deadline
 is assigned on admission; starting the bake does not reset it. The job remains
 joinable and keeps its admission slot until process termination and reaping
@@ -318,18 +298,9 @@ not a cap on process memory or total cached disk bytes.
 alike, in zooms over the leaves: a tile coarser is answered 503, since each
 one folds the whole zoom under it on first request, and a tile a client
 asks for takes a worker before one a fold alone needs. Geocode groups have a fixed bake footprint.
-The common job limits apply to all of them and survive cache invalidation.
-A tile is cached while its file is in `cache/tile/<kind>/`, and a restart keeps
-it. After re-ingest or a bake change, invalidate the affected kind as a whole
-— a restart alone serves the old tiles:
-
-```bash
-curl -X POST localhost:3001/geo/internal/world/terrain/cache/invalidate -H "x-admin-token: $ADMIN_TOKEN"
-# Likewise .../world/poi/... and .../world/geocode/...; send no body.
-# The header is checked only when ADMIN_TOKEN is set.
-```
-
-Invalidation swaps the generation. Old requests can finish against their old
-directory but cannot publish into the new one; the old directory is removed
-when its last job finishes. Geocode's dictionary and groups share a generation;
-a pyramid layer's tiles share one.
+The common job limits apply to all of them.
+A tile is cached under the source it was baked from,
+`cache/tile/<source>/<kind>/`, where `<source>` names the running binary and
+the geo DB's catalogs (`demand.rs` `source_id`). A restart keeps the cache
+while both are the same; after a re-ingest or a bake change, a restart starts
+an empty one and removes the old.

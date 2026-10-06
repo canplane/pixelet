@@ -1,0 +1,54 @@
+// pxl-render/mesh/paint/terrain/elevation.rs
+
+//! Tile elevation in cells (1 cell = 1 texel). Prefixes: c chunk index,
+//! d loop delta, t texel, s padded source sample.
+
+use pxl_spec::bake::format::{Ground, GroundCell};
+use pxl_spec::bake::ground::cell_shift;
+use pxl_spec::bake::surface::bicubic;
+use pxl_spec::space::layer::lattice::GROUND;
+
+/// Signed because the padded raster reaches ELE_PAD samples past the tile, so a
+/// chunk at the edge can read its neighbor's ground.
+pub fn sample_ele(tile_ele: &[i16], tx: i32, ty: i32) -> i16 {
+    bicubic(tile_ele, tx as f64 + 0.5, ty as f64 + 0.5)
+}
+
+/// One answer for every way a caller holds a tile's ground cells.
+#[derive(Clone, Copy)]
+pub struct GroundLanes<'a> {
+    pub cells: &'a [GroundCell],
+}
+
+impl<'a> GroundLanes<'a> {
+    pub fn of(ground: &'a Ground) -> GroundLanes<'a> {
+        GroundLanes { cells: &ground.cells }
+    }
+
+    pub fn get(&self, i: usize) -> GroundCell {
+        self.cells[i]
+    }
+
+    /// The look's shift in units, so a shoreline steps down to the water. A
+    /// real height every consumer takes through `ground_ele`.
+    pub fn shift(&self, i: usize) -> i16 {
+        cell_shift(self.cells[i])
+    }
+}
+
+/// The ground's top face, in cells: the stored height h means cells up to
+/// h − 1 are ground and the surface is at z = h. A layer's raise or sink
+/// (`cell_shift`) goes on top; outside the tile (`ground` none) there is none.
+pub fn ground_ele(tile_ele: &[i16], ground: Option<GroundLanes>, tx: i32, ty: i32) -> i16 {
+    ground_ele_at(tile_ele, ground, tx as f64 + 0.5, ty as f64 + 0.5)
+}
+
+/// At a point in texels, with the shift of the tile cell it lies in.
+pub fn ground_ele_at(tile_ele: &[i16], ground: Option<GroundLanes>, tx: f64, ty: f64) -> i16 {
+    let ele = bicubic(tile_ele, tx, ty);
+    ground.map_or(ele, |g| ele + g.shift(GROUND.cell_index(tx.floor() as u32, ty.floor() as u32) as usize))
+}
+
+#[cfg(test)]
+#[path = "elevation.test.rs"]
+mod test;

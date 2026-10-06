@@ -81,7 +81,7 @@ env:
   # letters it assigns is the optimizer's own business — so the version is
   # pinned rather than taken from apt, where it also lags by years.
   BINARYEN_VERSION: "132"
-  # The C++ guest's wasm build (script/cpp.ts wasm, under deno task test);
+  # The C++ guest's wasm build (xpute/script/cpp.ts wasm, under deno task test);
   # pinned for the same reason, since its clang decides what the module holds.
   WASI_SDK_VERSION: "34"
 
@@ -213,10 +213,10 @@ jobs:
           # rust-toolchain.toml is in the list because the module is what that
           # file's compiler emitted, and unlike the servers the client has no
           # second copy of the version to change alongside it.
-          # crates/pxl/tool is the repository's own tooling, which nothing
+          # crates/tool is the repository's own tooling, which nothing
           # the bundle holds is built from; what it writes lands elsewhere in
           # the tree and is caught there.
-          if printf '%s\n' "$changed" | grep -v '^crates/pxl/tool/' | grep -qE '^(apps/|crates/|packages/|spec/|deno\.jsonc|deno\.lock|rust-toolchain\.toml)'; then
+          if printf '%s\n' "$changed" | grep -v '^crates/tool/' | grep -qE '^(apps/|crates/|packages/|spec/|deno\.jsonc|deno\.lock|rust-toolchain\.toml)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -287,8 +287,8 @@ jobs:
           else
             changed="crates/"
           fi
-          # crates/pxl/tool is in no image; see the client's scope above.
-          if printf '%s\n' "$changed" | grep -v '^crates/pxl/tool/' | grep -qE '^(crates/|infra/prod/|crates/pxl/server/geo/Dockerfile|\.dockerignore)'; then
+          # crates/tool is in no image; see the client's scope above.
+          if printf '%s\n' "$changed" | grep -v '^crates/tool/' | grep -qE '^(crates/|infra/prod/|crates/server/geo/Dockerfile|\.dockerignore)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"

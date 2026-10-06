@@ -1,0 +1,9 @@
+.DS_Store
+*.log
+node_modules/
+# Build output: the Rust workspace's, and the C++'s (script/cpp.ts).
+crates/target/
+target/
+# A library's locks are its consumer's to keep.
+crates/Cargo.lock
+deno.lock

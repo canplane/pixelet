@@ -20,8 +20,7 @@ import {
   orientationSupported,
 } from "@platform/sensor.ts";
 import { declare_source } from "@/kernel/io/source.ts";
-import { read_asset } from "@/kernel/io/load.ts";
-import { read_object } from "@/kernel/io/fetch.ts";
+import { read_asset, read_object } from "@/kernel/io/read.ts";
 import { bind_root, read_storage } from "@/kernel/host.ts";
 import { BAKE_KINDS, type BakeKind } from "@/config/published.spec.ts";
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";

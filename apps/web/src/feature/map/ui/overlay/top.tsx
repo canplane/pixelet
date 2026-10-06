@@ -21,9 +21,10 @@ import { LocationButtons } from "../control/location-buttons.tsx";
 import { ViewButtons } from "../control/view-buttons.tsx";
 import { BusyDim } from "../busy-dim.tsx";
 import { useChromeTop } from "../chrome.ts";
-import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
+import { CircularButton } from "@/shared/ui/circular-button.tsx";
 
 export function TopOverlays() {
+  const { t } = useTranslation();
   const top = useChromeTop();
 
   const { width } = useWindowSize();
@@ -53,7 +54,7 @@ export function TopOverlays() {
       </View>
 
       <BusyDim style={[styles.left, { top }]}>
-        <SettingsTriggerButton />
+        <CircularButton glyph="line.3.horizontal" onPress={() => openModal("settings")} label={t("settings.trigger_aria_label")} />
         {__IS_DEV__ && <DummyChatText />}
       </BusyDim>
 

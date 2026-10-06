@@ -6,7 +6,7 @@ import QuartzCore
 import UIKit
 
 /// A view backed by a Metal layer, which the kernel draws into
-/// (crates/pxl/web/native). The view owns its layer, so it binds the kernel's
+/// (crates/client/native). The view owns its layer, so it binds the kernel's
 /// surface to it itself: the surface the shell names (`surface`), while the
 /// view is in a window, and never past the moment it lets the layer go. A
 /// view reaches its window after it is mounted and laid out, so it says when

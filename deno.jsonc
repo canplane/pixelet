@@ -4,16 +4,13 @@
   "workspace": [
     "apps/web",
     // A package.json member: Expo and Metro find packages the npm way.
-    "apps/native",
-
-    "packages/xpute/core",
-    "packages/xpute/runtime",
-    "packages/xpute/conformance"
+    "apps/native"
   ],
   "nodeModulesDir": "auto",
 
-  // Vite's deps cache and the trees of generated or downloaded data are no workspace source.
-  "exclude": ["**/.vite/", "**/dist/", "**/node_modules/", "out/", "cache/", "infra/geo/elevation/warped/"],
+  // Vite's deps cache and the trees of generated or downloaded data are no workspace source;
+  // xpute/ is its own workspace, reached through the import map below.
+  "exclude": ["xpute/", "**/.vite/", "**/dist/", "**/node_modules/", "out/", "cache/", "infra/geo/elevation/warped/"],
 
   "tasks": {
     // Every route is the published deployment's, so not for bake work: its tile prefix is frozen.
@@ -58,32 +55,30 @@
     // Reads with wrangler's login and hcloud's context.
     "usage": "./script/usage.ts",
 
-    "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:native && deno task check:xpute && deno task check:rust && deno task check:cpp && deno task check:spec",
+    "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:native && deno task check:xpute && deno task check:rust && deno task check:spec",
     "check:diff": "./script/check-diff.ts",
     "check:fmt": "deno fmt --check",
     "check:web": "deno task --cwd apps/web check",
     // check:web never reaches the device's own modules.
     "check:native": "deno check apps/native/src",
-    "check:xpute": "deno check packages/xpute/core/src/**/*.ts && deno check packages/xpute/runtime/src/**/*.ts && deno check packages/xpute/conformance/src/**/*.ts",
-    "check:cpp": "./script/cpp.ts check",
+    "check:xpute": "deno task --cwd xpute check",
     // The wasm32 pass builds no `.test.rs`; the host pass does.
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p xpute-conformance -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p xpute-conformance -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
     // A Rust version written twice is a binary built on a compiler the gate never ran.
     "check:toolchain": "./script/check-toolchain.ts",
     "check:rules": "./script/check-rules.ts",
     "check:spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec",
     "spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec -- --write",
 
-    "test": "deno task test:web && deno task test:xpute && deno task test:rust && deno task test:cpp",
+    "test": "deno task test:web && deno task test:xpute && deno task test:rust",
     "test:web": "deno task --cwd apps/web test",
-    "test:xpute": "deno test -A packages/xpute/core/src && deno test -A packages/xpute/runtime/src && cargo build --manifest-path crates/Cargo.toml -p xpute-conformance && cargo build --manifest-path crates/Cargo.toml -p xpute-conformance --target wasm32-unknown-unknown && ./script/cpp.ts guest && ./script/cpp.ts wasm && deno test -A packages/xpute/conformance/src",
-    "test:cpp": "./script/cpp.ts test",
+    "test:xpute": "deno task --cwd xpute test",
     // pxl-tool holds every model to the committed table, which has been wrong by hand before.
-    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
+    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
 
     "lint": "deno lint",
 
-    "export:xpute": "./script/export-xpute.ts",
+    "export:xpute": "./xpute/script/export.ts",
     "fmt": "deno fmt",
 
     // Named paths only; nothing is found by name and deleted.
@@ -101,9 +96,9 @@
   },
 
   "imports": {
-    "@xpute/core/": "./packages/xpute/core/src/",
-    "@xpute/runtime/": "./packages/xpute/runtime/src/",
-    "@xpute/conformance/": "./packages/xpute/conformance/src/",
+    "@xpute/core/": "./xpute/packages/core/src/",
+    "@xpute/runtime/": "./xpute/packages/runtime/src/",
+    "@xpute/conformance/": "./xpute/packages/conformance/src/",
 
     "@std/assert": "jsr:@std/assert@^1",
 
@@ -121,7 +116,7 @@
     "proseWrap": "preserve",
 
     // The tests read the golden records byte for byte.
-    "exclude": ["node_modules/", "dist/", "crates/**/golden/", "spec/xpute/golden/"]
+    "exclude": ["node_modules/", "dist/", "crates/**/golden/"]
   },
 
   "lint": {
