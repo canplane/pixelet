@@ -8,8 +8,8 @@
 //! overlaid, the lines read as none of them, and laid along the ground they
 //! wavered with every cell they crossed.
 
-use crate::world::pyramid::Observed as _;
 use crate::layer::{Answer, Query};
+use crate::world::pyramid::Observed as _;
 use std::collections::{HashMap, HashSet};
 
 use pxl_render::frame::draw::DrawList;
@@ -20,9 +20,9 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::layer::residency::floor;
+use crate::layer::Layer as _;
 use crate::scene::marker::debug_lines::DebugLines;
 use crate::world::chunk::Chunk;
-use crate::layer::Layer as _;
 use crate::world::query::Access;
 use crate::world::view::frame::pose::view;
 use crate::world::view::observation::observation;
@@ -73,7 +73,7 @@ const DASHES: u32 = 16;
 pub struct CoverageGizmo {
     lines: DebugLines,
     /// What is drawn, and about where; none while hidden.
-    drawn: Option<[f64; 3]>,
+    drawn: Option<V3>,
     lane: Vec<f32>,
     /// The lines laid this step, kept so a step allocates nothing.
     next: Vec<f32>,
@@ -168,7 +168,7 @@ impl Lines {
     /// the highest mark over it and is drawn straight between its ends on the
     /// ground.
     fn lay(&self, lane: &mut Vec<f32>, origin: V3, access: &Access) {
-        let ground = |x: f64, y: f64| -> [f64; 3] {
+        let ground = |x: f64, y: f64| -> V3 {
             let z = access.surface_support(&world::point(x, y, 0.0)).value().flatten().unwrap_or(0.0);
             [pxl_spec::space::coord::world::nearest(x, origin[0]) - origin[0], y - origin[1], z - origin[2]]
         };
@@ -204,7 +204,7 @@ impl Lines {
     }
 }
 
-fn stretch(lane: &mut Vec<f32>, a: [f64; 3], b: [f64; 3], mark: Mark) {
+fn stretch(lane: &mut Vec<f32>, a: V3, b: V3, mark: Mark) {
     let pieces = if mark.dashed() { DASHES } else { 1 };
     let at = |t: u32| -> [f32; 3] { core::array::from_fn(|i| (a[i] + (b[i] - a[i]) * t as f64 / pieces as f64) as f32) };
     for i in (0..pieces).step_by(2) {

@@ -4,7 +4,8 @@
 //! decor of chunks drawing it as held: decor paints no voxel, so the access's
 //! ray passes through it. A placed instance resolves to its entry; a scattered one to its cell.
 
-use pxl_spec::space::coord::v3::{cross3, dot3, sub3, Aabb, V3};
+use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::v3::{cross3, dot3, sub3, V3};
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_runtime::mem::base::ptr_at;
 
@@ -29,7 +30,7 @@ pub enum DecorStruck {
 pub struct Scattered {
     pub cell: [i64; 3],
     pub group: u32,
-    pub at: [f64; 3],
+    pub at: V3,
     pub rotation: f64,
     pub scale: f64,
 }
@@ -59,7 +60,7 @@ pub fn raycast_decor(origin: V3, direction: V3, max_dist: f64) -> Option<DecorSt
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DecorHit {
     pub entry: u32,
-    pub at: [f64; 3],
+    pub at: V3,
     pub group: u32,
     pub rotation: f64,
     pub scale: f64,
@@ -79,7 +80,7 @@ fn decor_reach(models: &Models) -> f64 {
 }
 
 /// Hidden instances are tested too: the hidden one is what the eraser is over.
-fn hit_decor(models: &Models, o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
+fn hit_decor(models: &Models, o: V3, d: V3, max_dist: f64) -> Option<DecorHit> {
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
     let reach = decor_reach(models);
@@ -122,8 +123,8 @@ fn hit_decor(models: &Models, o: V3, d: [f64; 3], max_dist: f64) -> Option<Decor
                 }
                 // Into the model's frame: spin undone, the stand-up quarter turn about X, scale.
                 let (sn, cs) = libm::sincos(-spin);
-                let unturn = |v: [f64; 3]| [v[0] * cs - v[1] * sn, v[0] * sn + v[1] * cs, v[2]];
-                let to_model = |v: [f64; 3]| {
+                let unturn = |v: V3| [v[0] * cs - v[1] * sn, v[0] * sn + v[1] * cs, v[2]];
+                let to_model = |v: V3| {
                     let u = unturn(v);
                     [u[0] / s, u[2] / s, -u[1] / s]
                 };
@@ -152,7 +153,7 @@ fn hit_decor(models: &Models, o: V3, d: [f64; 3], max_dist: f64) -> Option<Decor
     best
 }
 
-fn ray_meets_square(o: &V3, d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f64, limit: f64) -> bool {
+fn ray_meets_square(o: &V3, d: &V3, x0: f64, y0: f64, x1: f64, y1: f64, limit: f64) -> bool {
     let square = Aabb {
         min: [x0, y0, f64::NEG_INFINITY],
         max: [x1, y1, f64::INFINITY],
@@ -161,7 +162,7 @@ fn ray_meets_square(o: &V3, d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f64, li
 }
 
 /// `p` is relative to the sphere's center.
-fn ray_meets_sphere(p: &V3, d: &[f64; 3], r: f64, limit: f64) -> bool {
+fn ray_meets_sphere(p: &V3, d: &V3, r: f64, limit: f64) -> bool {
     let b = dot3(p, d);
     let c = dot3(p, p) - r * r;
     if c <= 0.0 {

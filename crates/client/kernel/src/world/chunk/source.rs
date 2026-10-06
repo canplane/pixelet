@@ -4,7 +4,7 @@
 //! catalog numbers it reads, so a chunk is remade only where they differ.
 
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::aabb::Aabb;
 
 use std::collections::HashMap;
 

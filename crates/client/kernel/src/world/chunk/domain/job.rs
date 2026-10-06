@@ -7,7 +7,7 @@ use pxl_spec::space::coord::world::nearest_box;
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::layer::residency::floor;

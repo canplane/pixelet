@@ -27,8 +27,9 @@ use pxl_render::mesh::chunk_mesher::Heights;
 
 use crate::sched::profiler::frame::ZOOMS;
 use pxl_spec::space::camera::eye::Frustum;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::v3::{dot3, len3, Aabb, V3};
+use pxl_spec::space::coord::v3::{dot3, len3, V3};
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
@@ -49,9 +50,9 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::global::Global;
 
+use crate::layer::Layer as _;
 use crate::world::chunk::domain::{self, Domain};
 use crate::world::chunk::Chunk;
-use crate::layer::Layer as _;
 use crate::world::view::observation::Order;
 use pxl_spec::bake::format::Terrain;
 

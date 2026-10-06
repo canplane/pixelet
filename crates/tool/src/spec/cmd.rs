@@ -789,11 +789,7 @@ fn test_rs(spec: &Spec, t: &Target) -> Result<String, String> {
         if c.value == 0 {
             continue;
         }
-        let major = majors
-            .iter()
-            .find(|(v, _)| *v == c.value >> 8)
-            .map(|(_, n)| *n)
-            .ok_or(format!("cmd.json: {} has no major", c.name))?;
+        let major = majors.iter().find(|(v, _)| *v == c.value >> 8).map(|(_, n)| *n).ok_or(format!("cmd.json: {} has no major", c.name))?;
         let minor_value = c.value & 0xff;
         let table_name = format!("{}Minor", pascal(major));
         let table = minors.iter().find(|t| t.name == table_name);

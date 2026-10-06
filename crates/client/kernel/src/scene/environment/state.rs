@@ -7,7 +7,7 @@ use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_render::look::globe::Globe;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg4326::G4326;
-use pxl_spec::space::coord::v3::{len3, V3};
+use pxl_spec::space::coord::v3::len3;
 
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
 use crate::door::host::wall_now;
@@ -84,8 +84,8 @@ pub struct EnvironmentDraw {
     started: bool,
     /// Days since J2000.0, from the host's wall clock.
     days: f64,
-    sun: V3,
-    moon: V3,
+    sun: [f64; 3],
+    moon: [f64; 3],
     stars: f64,
     /// Seconds of wall time since the first observation: a tick's delta is
     /// clamped and sparse at rest, which ran clouds and stars slow, and the

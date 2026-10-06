@@ -18,8 +18,8 @@ use crate::io::failure::Failure;
 
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::layer::terrain::fixed::{coarse_off, deck_off, ele_off, extent_off, ground_off, COARSE_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
-use crate::mem::fixed::{at, Range};
 use crate::layer::Layer;
+use crate::mem::fixed::{at, Range};
 use pxl_spec::bake::format::Occupancy;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
@@ -95,4 +95,3 @@ unsafe fn room_of(record: u32) -> TileRoom {
         }
     }
 }
-

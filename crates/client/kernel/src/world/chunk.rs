@@ -19,9 +19,9 @@ pub mod stage;
 pub mod table;
 
 use pxl_spec::space::camera::grid::CHUNK_STEPS;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::v3::Aabb;
 use pxl_spec::space::coord::world::wrap_cell;
 use pxl_spec::space::coord::zoom::{base_of, index_of, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::{child_of, parent_of};

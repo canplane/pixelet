@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::cubes_meeting;
 use pxl_spec::space::layer::lattice::GROUND;

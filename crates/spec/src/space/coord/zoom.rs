@@ -5,10 +5,10 @@
 //! size are each named by this one number; a bigger zoom is finer, and one
 //! zoom finer is half as wide.
 
+use super::aabb::Aabb;
 use super::pvf3::core::{FRAC_W, IVEC_X_W, IVEC_Z_W};
 use super::pvf3::ivec::{self, IVec};
 use super::pvf3::pvf3::{self, Pvf3};
-use super::v3::Aabb;
 use xpute_core::math::scalar::round;
 
 pub type Zoom = u8;

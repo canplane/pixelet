@@ -12,7 +12,7 @@
 //! along a direction is a descent over `bounds`, and a value at a point is
 //! `read` of the cell there. No third query is written beside them.
 
-use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 

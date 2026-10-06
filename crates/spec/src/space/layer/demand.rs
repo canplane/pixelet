@@ -10,7 +10,7 @@ use super::lattice::{Lattice, GROUND};
 use super::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 use crate::space::camera::eye::Observation;
 use crate::space::camera::grid::{split_distance, Tau};
-use crate::space::coord::v3::Aabb;
+use crate::space::coord::aabb::Aabb;
 use crate::space::coord::world::REACH;
 use crate::space::coord::zoom::{units, Zoom};
 

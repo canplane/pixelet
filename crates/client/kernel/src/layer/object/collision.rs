@@ -8,7 +8,7 @@ use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{holds_entry, objects_at, Entry, EntryKind};
 use crate::world::chunk::decor::build::scatters_at;
 use crate::world::chunk::decor::kind::KINDS;
-use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{base_of, index_of, of_side, units};
 
 /// Every cube sits on its own size's lattice, so two share space exactly

@@ -6,9 +6,9 @@
 
 pub mod badge;
 
-use crate::world::pyramid::Observed as _;
 use crate::control::camera::controller::units_per_px_at;
 use crate::layer::poi::{enabled, rank_of, Places, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
+use crate::layer::Layer;
 use crate::layer::{Answer, Query};
 use crate::param::POI_MAJOR_RANK;
 use crate::scene::billboard::batch::BillboardBatch;
@@ -17,12 +17,13 @@ use crate::scene::billboard::selection::select_visible_billboards;
 use crate::scene::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::sched::tick::TickContext;
 use crate::world::chunk::Chunk;
-use crate::layer::Layer;
+use crate::world::pyramid::Observed as _;
 use crate::world::query::{Access, Detail, Ray};
 use crate::world::view::frame::pose::ndc_to_px;
 use crate::world::view::observation::ground_known;
 use badge::Label;
 use pxl_render::asset::atlas::NO_SLOT;
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 use xpute_runtime::global::Global;
 
@@ -46,7 +47,7 @@ struct Placement {
     hits: Vec<([f64; 4], Label, Pvf3)>,
     /// Kept so a settled turn asks the heap for nothing. Each with the scale
     /// it shows at and where in its POI cell that scale is read.
-    found: Vec<(Cell, Label, Cell, f64, Shown, [f64; 3])>,
+    found: Vec<(Cell, Label, Cell, f64, Shown, V3)>,
     /// The drawn chunks, the tiles and the heights `found` was read from: an
     /// eye move that changes none of them casts no ray.
     found_for: Option<Found>,

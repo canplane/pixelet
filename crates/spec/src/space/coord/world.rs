@@ -4,10 +4,11 @@
 //! end where their lanes do. A position enters the world only here, held
 //! inside it, so no lane ever wraps where the world does not.
 
+use super::aabb::Aabb;
 use super::pvf3::core::{IVEC_Y_W, IVEC_Z_W, ONE};
 use super::pvf3::pack::pack;
 use super::pvf3::Pvf3;
-use super::v3::{Aabb, V3};
+use super::v3::V3;
 use super::zoom::{cube, units, Zoom};
 
 /// Every point the world holds, in units. X is unbounded: the lane is one world round.

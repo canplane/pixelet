@@ -13,9 +13,9 @@ use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around};
 use pxl_render::mesh::run::APRON;
 
 use crate::layer::terrain::Source;
+use crate::layer::Layer as _;
 use crate::layer::{Answer, Query};
 use crate::world::chunk::Chunk as PyramidChunk;
-use crate::layer::Layer as _;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 

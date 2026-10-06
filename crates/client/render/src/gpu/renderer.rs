@@ -809,7 +809,7 @@ impl Renderer {
         let eye = [0.0; 3];
         // The globe places by offset from its anchor and height alone, so placing in
         // the eye's frame matches the world less the eye.
-        let center: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_world[k]);
+        let center: V3 = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_world[k]);
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let up = norm3(&sub3(&eye, &planet_center));

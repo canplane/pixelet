@@ -38,6 +38,7 @@ use pxl_spec::bake::format::{decode_terrain, Terrain};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -124,7 +125,7 @@ fn point(x: f64, y: f64) -> Pvf3 {
 }
 
 /// The rays of a view through `eye`, one every `STRIDE_PT` points.
-fn rays(eye: [f64; 3], pitch_deg: f64) -> Vec<Ray> {
+fn rays(eye: V3, pitch_deg: f64) -> Vec<Ray> {
     let p = pitch_deg.to_radians();
     let forward = [0.0, libm::cos(p), libm::sin(p)];
     let right = [1.0, 0.0, 0.0];
@@ -137,7 +138,7 @@ fn rays(eye: [f64; 3], pitch_deg: f64) -> Vec<Ray> {
         for i in 0..w {
             let x = (2.0 * (i as f64 + 0.5) / w as f64 - 1.0) * half * aspect;
             let y = (1.0 - 2.0 * (j as f64 + 0.5) / h as f64) * half;
-            let d: [f64; 3] = std::array::from_fn(|k| forward[k] + x * right[k] + y * up[k]);
+            let d: V3 = std::array::from_fn(|k| forward[k] + x * right[k] + y * up[k]);
             let n = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
             out.push(Ray {
                 origin: eye,

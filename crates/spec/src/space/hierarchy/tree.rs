@@ -4,7 +4,7 @@
 //! coordinate halved and a child is told apart by each axis's low bit, in any
 //! number of axes; a node's size is its zoom (`zoom.rs`).
 
-use crate::space::coord::v3::Aabb;
+use crate::space::coord::aabb::Aabb;
 use crate::space::coord::world::REACH;
 use crate::space::coord::zoom::{units, Zoom};
 

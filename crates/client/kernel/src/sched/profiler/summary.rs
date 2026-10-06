@@ -7,6 +7,7 @@
 use crate::control::camera::controller;
 use crate::io::failure::Outcome;
 use crate::io::sched::{counts, credits};
+use crate::layer::Layer as _;
 use crate::scene::billboard::sheet::billboard_sheet;
 use crate::sched::profiler::block::TASK_PHASES;
 use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
@@ -17,7 +18,6 @@ use crate::sched::profiler::spec::{LIMITS, SUMMARY};
 use crate::sched::profiler::task::TaskRow;
 use crate::sched::profiler::word::put;
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
-use crate::layer::Layer as _;
 use crate::{kernel, with_world};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::adapter::epsg4326;

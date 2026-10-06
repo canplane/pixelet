@@ -10,10 +10,10 @@ use pxl_spec::space::layer::lattice::Lattice;
 use crate::io::demand::{Category, Phases};
 use crate::io::failure::Failure;
 use crate::layer::residency::Residency;
+use crate::layer::Layer;
 use crate::layer::{Answer, Bound, Query};
 use crate::param::{POI_ALL_ZOOM, POI_MAJOR_ZOOM};
 use crate::shell::setting::store::settings_store;
-use crate::layer::Layer;
 use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857::cell_zoom_of;
 use pxl_spec::space::coord::zoom::units;
@@ -104,4 +104,3 @@ pub fn rank_of(kind: u8) -> u16 {
         _ => 1000,
     }
 }
-

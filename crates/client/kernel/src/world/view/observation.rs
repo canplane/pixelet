@@ -9,7 +9,8 @@ use std::cmp::Ordering;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::camera::eye::{Frustum, Observation};
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::hierarchy::tree::{region, Node};
 use pxl_spec::space::layer::demand::band;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
@@ -17,18 +18,18 @@ use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 
 use crate::layer::earth::Earth;
 use crate::layer::residency::floor;
+use crate::layer::Layer as _;
 use crate::layer::{Answer, Query};
 use crate::scene::environment::fog::{eye_height, reach_at};
 use crate::scene::environment::state::globe;
 use crate::world::chunk::domain;
-use crate::layer::Layer as _;
 use crate::world::query::Access;
 use crate::world::view::frame::pose::view;
 use crate::world::view::observer::Footprint;
 use pxl_spec::bake::poi_tile::PoiTile;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 
-pub fn eye() -> Option<[f64; 3]> {
+pub fn eye() -> Option<V3> {
     crate::control::camera::controller::camera().eye?;
     Some(view().pose.eye)
 }

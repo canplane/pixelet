@@ -19,7 +19,6 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
 
 use crate::layer::earth::Earth;
-use crate::world::pyramid::Observed as _;
 use crate::scene::character::companion::{companion_step, CompanionProps};
 use crate::scene::environment::state::map_environment_step;
 use crate::scene::marker::frame_gizmo::debug_gizmos_step;
@@ -32,6 +31,7 @@ use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::decor::asset_store::decor_assets_wanted;
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
+use crate::world::pyramid::Observed as _;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 use xpute_runtime::sched::tick::{TickReport, COSMETIC, INTERACTION, REPORT, VISIBLE};

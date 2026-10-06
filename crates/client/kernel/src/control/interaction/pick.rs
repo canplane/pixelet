@@ -13,7 +13,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use crate::layer::object::store::{get_placed_object, Entry};
 use crate::world::query::{Access, Detail, Hit, Ray, Struck};
 use crate::world::view::frame::coord::world_to_canonical;
-use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::aabb::Aabb;
 
 /// A product number: what can be edited is a sphere about the observer.
 const PICK_REACH_U: f64 = 32.0;

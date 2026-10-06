@@ -92,7 +92,7 @@ impl Query for Residency<Terrain> {
         self.relief(tile, (zoom, [x, y])).map(|r| {
             let (lo, hi) = (r.extent.0.max(whole.min[2]), r.extent.1.min(whole.max[2]));
             (lo <= hi).then(|| Bound {
-                aabb: pxl_spec::space::coord::v3::Aabb {
+                aabb: pxl_spec::space::coord::aabb::Aabb {
                     min: [whole.min[0], whole.min[1], lo],
                     max: [whole.max[0], whole.max[1], hi],
                 },

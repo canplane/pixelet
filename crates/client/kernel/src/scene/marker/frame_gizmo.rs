@@ -6,7 +6,7 @@
 //! color; nothing is labeled.
 
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::v3::{floor3n, V3};
+use pxl_spec::space::coord::v3::{floor3, V3};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
@@ -17,10 +17,10 @@ use crate::world::query::Access;
 use crate::world::view::frame::coord::to_world;
 use xpute_runtime::global::Global;
 
-const BLACK: V3 = [0.0, 0.0, 0.0];
-const RED: V3 = [1.0, 0.0, 0.0];
-const GREEN: V3 = [0.0, 1.0, 0.0];
-const BLUE: V3 = [0.0, 0.0, 1.0];
+const BLACK: [f64; 3] = [0.0, 0.0, 0.0];
+const RED: [f64; 3] = [1.0, 0.0, 0.0];
+const GREEN: [f64; 3] = [0.0, 1.0, 0.0];
+const BLUE: [f64; 3] = [0.0, 0.0, 1.0];
 /// Half the cross a point is drawn as.
 const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
@@ -33,14 +33,14 @@ struct Sketch {
 }
 
 impl Sketch {
-    fn line(&mut self, from: V3, to: V3, color: V3) {
+    fn line(&mut self, from: V3, to: V3, color: [f64; 3]) {
         for p in [from, to] {
             let [x, y, z] = core::array::from_fn(|k| p[k] - self.about[k]);
             self.lines.extend([x, y, z, color[0], color[1], color[2], 1.0].map(|v| v as f32));
         }
     }
 
-    fn point(&mut self, at: V3, color: V3) {
+    fn point(&mut self, at: V3, color: [f64; 3]) {
         for axis in 0..3 {
             let (mut a, mut b) = (at, at);
             a[axis] -= POINT_HALF;
@@ -62,7 +62,7 @@ impl Sketch {
     }
 
     /// Dashed, of `RING_RADIUS` about `center` in the plane of the unit axes `a` and `b`.
-    fn ring(&mut self, center: V3, a: V3, b: V3, color: V3) {
+    fn ring(&mut self, center: V3, a: V3, b: V3, color: [f64; 3]) {
         let at = |i: u32| -> V3 {
             let (s, c) = libm::sincos(i as f64 / RING_SEGMENTS as f64 * core::f64::consts::TAU);
             core::array::from_fn(|k| center[k] + (a[k] * c + b[k] * s) * RING_RADIUS)
@@ -77,7 +77,7 @@ fn sketch(map_center: &Pvf3) -> Sketch {
     let center = to_world(map_center);
     let mut s = Sketch { about: center, lines: Vec::new() };
     let ground = Access::now().floor_under(map_center).value().flatten();
-    let cell = floor3n(&[center[0], center[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
+    let cell = floor3(&[center[0], center[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
     s.cube(cell, units(GROUND.cell()));
     s.point(center, BLACK);
     // First person the eye is the map center, and nothing about it is seen.

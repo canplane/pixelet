@@ -10,6 +10,7 @@ use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
 use crate::io::sched::pending_count;
+use crate::layer::Layer;
 use crate::mem::MB;
 use crate::scene::environment::state::globe;
 use crate::sched::profiler::frame::{CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample, TurnSample, ViewSample, WorkSample};
@@ -18,7 +19,6 @@ use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::decor::build::DecorHide;
 use crate::world::chunk::table::{builds, Census, Frame};
-use crate::layer::Layer;
 use crate::world::view::frame::pose::{sea_under_eye, view, view_resize};
 use crate::{kernel, with_world};
 use pxl_spec::bake::format::Terrain;

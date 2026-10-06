@@ -5,7 +5,8 @@
 
 use pxl_spec::space::camera::eye::{Frustum, Observation};
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::v3::{add3, Aabb, V3};
+use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::v3::{add3, V3};
 use pxl_spec::space::coord::zoom::cube;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
