@@ -23,7 +23,11 @@ chunk's voxel volume. So the ground and the objects did their LOD two ways.
   error, a cell on every axis, crosses an observed cell and something under
   it is held finer than its cells, read off what is stored
   (`Bounds::finest`). The ground stops at a leaf's cells, z24; objects at
-  their finest held. A chunk is addressed by its own zoom. No tier.
+  their finest held. A chunk is addressed by its own zoom. No tier, and no
+  second form: the roots drawn all around the eye are chunks a chunk's worth
+  coarser than the coarsest the reach draws, each cell one piece of what a
+  one-cell cover had drawn, with their room kept apart in the coarse pool
+  rather than in a pool of their own.
 - **Folding is the layer's.** A cube folds its records one zoom finer
   (`space/pyramid.rs` `Lattice::fold`, the ground's `GROUND`): a cell's color is the mean of its
   children's top surfaces, with up to four of their texture layers, and

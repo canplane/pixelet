@@ -10,11 +10,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-- **A chunk keeps two forms** (decision/20261006-a-chunk-goes-past-the-leaves.md):
-  a cover piece is drawn as one cell, every other chunk as its cells, and
-  retiering moves between them (`world/chunk/table.rs`, `Pool::Cover` in
-  `world/chunk/mesh_slot.rs`). The cover's slot a root is what proves the
-  cover always fits; one form needs another proof of it.
 - **How the samples are drawn.** On the iPhone 13 mini, four shapes over the
   same tiles and views: today's boxes, the same as masked faces, a ray a
   pixel, and a bounded observation a cell — what the rule asks for, a cell
