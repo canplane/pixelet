@@ -13,7 +13,7 @@
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{Tau, SPLIT};
 use pxl_spec::space::coord::v3::{dot3, len3, mul3n, sub3, Aabb, V3};
-use pxl_spec::space::layer::demand::Requirement;
+use pxl_spec::space::layer::tile::Tile;
 
 use crate::param;
 use crate::world::access::{Access, Detail, Ray};
@@ -242,11 +242,11 @@ pub trait Observer {
 
 pub type OnPatch<'a> = dyn FnMut(usize, Option<Footprint>, Lacks) + 'a;
 
-pub type Lacks = [Option<Requirement>; 4];
+pub type Lacks = [Option<Tile>; 4];
 
 /// A lack is given as a requirement (zoom and ground), never as a tile,
 /// which is the layer's to name.
-pub type Met = (Option<(V3, f64)>, Option<Requirement>);
+pub type Met = (Option<(V3, f64)>, Option<Tile>);
 
 /// Corner rays against what is resident, at the target quality's zooms, so
 /// the answer is the same whichever step is in force.
@@ -262,10 +262,7 @@ impl Observer for EdgeRays<'_> {
             &mut |direction| {
                 let ray = Ray { origin: eye, direction, reach: far };
                 let answer = self.0.first_hit(&ray, Detail::Distance(self.1));
-                let lack = answer.lack().map(|tile| Requirement {
-                    zoom: tile.zoom,
-                    region: tile.region(),
-                });
+                let lack = answer.lack();
                 let hit = answer.value().flatten().map(|hit| (std::array::from_fn(|k| hit.point[k] - hit.normal[k] * INSIDE), hit.t));
                 (hit, lack)
             },
@@ -351,7 +348,7 @@ impl Sight {
         self.patches.iter().flatten()
     }
 
-    pub fn lacks(&self) -> impl Iterator<Item = &Requirement> {
+    pub fn lacks(&self) -> impl Iterator<Item = &Tile> {
         self.lacks.iter().flatten().flatten()
     }
 }

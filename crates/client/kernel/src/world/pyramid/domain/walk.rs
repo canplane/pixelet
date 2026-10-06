@@ -11,8 +11,8 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::v3::Aabb;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::cubes_meeting;
-use pxl_spec::space::layer::demand::Requirement;
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::Tile;
 
 use crate::world::access::{Answer, Bound};
 use crate::world::chunk::mesh_slot::POOLS;
@@ -68,7 +68,7 @@ pub struct Domain {
     o: Observation,
     lens: Option<Lens>,
     footprints: Vec<Footprint>,
-    lacks: Vec<Requirement>,
+    lacks: Vec<Tile>,
     /// The world's bound of a node at a cell zoom, as the query answers it.
     bounds: Box<dyn Fn(Node<3>, Zoom) -> Answer<Option<Bound>>>,
     /// What the walk starts from, kept to be reused.
@@ -126,7 +126,7 @@ impl Domain {
     }
 
     /// `top`: the coarsest zoom the ground's source supplies whole.
-    pub(super) fn begin<'a, 'b>(&mut self, o: Observation, top: Zoom, ladder: &[Tau], footprints: impl IntoIterator<Item = &'a Footprint>, lacks: impl IntoIterator<Item = &'b Requirement>) {
+    pub(super) fn begin<'a, 'b>(&mut self, o: Observation, top: Zoom, ladder: &[Tau], footprints: impl IntoIterator<Item = &'a Footprint>, lacks: impl IntoIterator<Item = &'b Tile>) {
         xpute_core::ensure!(!ladder.is_empty() && ladder.len() < u8::MAX as usize, EINVAL);
         self.o = o;
         self.lens = Lens::of(&o);
@@ -342,7 +342,7 @@ impl Domain {
         &self.footprints
     }
 
-    pub fn lacks(&self) -> &[Requirement] {
+    pub fn lacks(&self) -> &[Tile] {
         &self.lacks
     }
 }

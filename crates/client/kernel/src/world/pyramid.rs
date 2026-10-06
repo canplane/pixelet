@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::layer::demand::{tiles, Requirement};
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
@@ -81,7 +80,7 @@ struct Seen {
     terrain: Vec<(Tile, bool)>,
     /// The published goal's.
     footprints: Vec<Footprint>,
-    lacks: Vec<Requirement>,
+    lacks: Vec<Tile>,
 }
 
 /// Evicts the tile last in view order.
@@ -197,7 +196,7 @@ impl<L: Layer> Pyramid<L> {
         let order = |o: &Observation, p: Tile| Order::of_tile(o, L::LATTICE, p);
         if let Some(o) = o {
             if L::DEMANDS {
-                estimator.requirements(o, &mut |r| tiles(&r, &mut |p| demand.push(p)));
+                estimator.requirements(o, &mut |p| demand.push(p));
             }
             demand.sort_unstable();
             demand.dedup();

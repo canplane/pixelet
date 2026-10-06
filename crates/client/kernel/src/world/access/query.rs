@@ -19,8 +19,9 @@ use pxl_spec::space::hierarchy::tree::Node;
 use crate::world::access::answer::Answer;
 
 /// What a node holds, as far as a descent needs: a box holding what is
-/// stored there, and the finest zoom any of it is held at, past which nothing
-/// is told apart.
+/// stored there, and the finest zoom any of it is held at, read no finer than
+/// one past the cell asked — all a reader of cells can tell apart is whether
+/// something is finer than them.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bound {
     pub aabb: Aabb,

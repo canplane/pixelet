@@ -1,8 +1,7 @@
 // pxl-spec/space/layer/demand.rs
 
-//! What an observation requires, before anything is a tile: information at a
-//! zoom over a region (`Requirement`), named as the tiles under it (`tiles`).
-//! What estimates them names a superset of the exact demand from what is
+//! What an observation requires: a tile, its column known at its zoom. What
+//! estimates them names a superset of the exact demand from what is
 //! known; never less, since a requirement left out is ground that never
 //! refines. What is known of a node is the kernel's query
 //! (`pxl-kernel world/access/query.rs`), asked in the grid's cells.
@@ -14,28 +13,6 @@ use crate::space::camera::grid::{split_distance, Tau};
 use crate::space::coord::v3::Aabb;
 use crate::space::coord::world::REACH;
 use crate::space::coord::zoom::{units, Zoom};
-
-/// What stands in `region` known at `z`; the leaves' for anything finer.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Requirement {
-    pub zoom: Zoom,
-    pub region: Aabb,
-}
-
-/// Every tile under a requirement's region; edges are inclusive south and west only.
-pub fn tiles(r: &Requirement, each: &mut dyn FnMut(Tile)) {
-    let span = units(r.zoom);
-    let rows = |k: usize| {
-        let first = (r.region.min[k] / span).floor() as i64;
-        first..=((r.region.max[k] / span).ceil() as i64 - 1).max(first)
-    };
-    let ys = tile_rows(r.zoom);
-    for y in rows(1).filter(|y| ys.contains(y)) {
-        for x in rows(0) {
-            each(tile_at(r.zoom, [x, y]));
-        }
-    }
-}
 
 /// The distances a layer's `zoom` is required over: from where the grid's
 /// cell its tiles fold into begins (0 for the leaves) to where the next
