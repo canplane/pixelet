@@ -1,12 +1,12 @@
 // pxl-render/mesh.rs
 
-//! A chunk's voxels to triangles: the volume, the scan to column runs, and the
+//! A chunk's cells to triangles: the column runs its layers write, and the
 //! mesher. A face between two solid cells is never drawn.
 
 pub mod chunk_mesher;
 pub mod paint;
-pub mod volume;
-pub mod voxel_scan;
+pub mod run;
+pub mod word;
 
 // A build's workspace grows with what stands in the chunk, so it is the heap's.
 // Growth asks for room first; a refused build ends, what is drawn stays drawn,

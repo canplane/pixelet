@@ -130,11 +130,12 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
 
 fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
     let tiles = Terrain::pyramid();
-    // The tile the terrain draws the chunk from, read over the chunk of its zoom.
+    // The tile the terrain draws the chunk from, read over the chunk whose cells
+    // are that tile's; past the leaves, the leaf chunk the chunk lies in.
     let src = tiles.residency().drawn_from(chunk.tile())?;
     let tile = tiles.residency().get(src)?;
     let mut over = chunk;
-    while over.tile_zoom() > src.zoom {
+    while over.finer() > 0 || over.tile_zoom() > src.zoom {
         over = over.parent()?;
     }
     let zoom = over.tile_zoom();

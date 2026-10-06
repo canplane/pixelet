@@ -17,15 +17,12 @@
 //! always possible. A coarsening waits `COARSEN_HOLD_MS` before it is made,
 //! unless the arena refused a move last step.
 
-use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pyramid::{chunk_zoom, GROUND, LEAF_Z, TOP_Z};
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
-use crate::world::chunk::build::mesh_step;
 use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};
 use crate::world::observation::Order;
-use crate::world::pyramid::chunk::Chunk;
+use crate::world::pyramid::chunk::{Chunk, LEAF_CHUNK};
 use crate::world::pyramid::domain::Price;
 use crate::world::quality::fits;
 use pxl_spec::space::zoom::Zoom;
@@ -40,41 +37,19 @@ pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS, 0];
 /// for each refinement in flight holding the piece it replaces.
 pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1], 0];
 
-/// The cell zoom the rule wants at `near`: a cell twice the LOD's, since
-/// terrain draws its cells averaged 2 × 2, on past a leaf's down to the
-/// objects' finest.
-fn wanted_zoom(near: f64, tau: Tau) -> Zoom {
-    tau.cell_at(near).saturating_sub(1).clamp(chunk_zoom(TOP_Z), OBJECT_FINEST)
-}
-
-/// A wanted cell zoom as a chunk at `z` draws it: clamped to its own cells
-/// averaged 2 × 2, and finer than its cells only on the leaves where it holds
-/// objects. The outermost (cover) pieces always take the coarsest cell zoom, one
-/// slot each.
-///
-/// A chunk read from a coarser tile still uses its own cell zoom: drawing it at
-/// that tile's cells made blocks over the sea after a jump (2026-09-26).
-fn drawn_zoom(cell_zoom: Zoom, zoom: Zoom, outermost: bool, objects: bool) -> Zoom {
+/// What a chunk draws: its cells, or, a cover piece, itself as one cell.
+/// The quality alone moves which chunks are drawn; a mesh too big for one
+/// slot fills more slots and is never drawn coarser for it.
+pub fn zoom_of(c: Chunk, outermost: bool) -> Zoom {
     if outermost {
-        return chunk_zoom(zoom);
+        c.zoom()
+    } else {
+        c.drawn_zoom()
     }
-    let own = GROUND.cell_zoom(zoom);
-    let finest = match (zoom == LEAF_Z, objects) {
-        (true, true) => OBJECT_FINEST,
-        (true, false) => own,
-        (false, _) => own - 1,
-    };
-    cell_zoom.clamp(own - 1, finest)
-}
-
-/// The quality alone moves the cell zoom; a mesh too big for one slot fills more
-/// slots and is never drawn coarser for it.
-pub fn zoom_of(c: Chunk, outermost: bool, near: f64, tau: Tau, objects: bool) -> Zoom {
-    drawn_zoom(wanted_zoom(near, tau), c.tile_zoom(), outermost, objects)
 }
 
 pub fn pool_of(c: Chunk, cell_zoom: Zoom) -> Pool {
-    Pool::of(c.tile_zoom(), mesh_step(cell_zoom, c.tile_zoom()))
+    Pool::of(c.zoom(), cell_zoom)
 }
 
 /// Slots per pool, counted before allocation. A leaf piece also takes a coarse
@@ -86,8 +61,8 @@ pub struct Need<F> {
 }
 
 impl<F: Fn(Chunk, Zoom) -> u32> Price for Need<F> {
-    fn piece(&self, c: Chunk, outermost: bool, near: f64, tau: Tau) -> Slots {
-        let cell_zoom = zoom_of(c, outermost, near, tau, false);
+    fn piece(&self, c: Chunk, outermost: bool, _near: f64, _tau: Tau) -> Slots {
+        let cell_zoom = zoom_of(c, outermost);
         let k = (self.slots)(c, cell_zoom);
         match pool_of(c, cell_zoom) {
             Pool::Coarse => [0, k, 0],
@@ -97,7 +72,7 @@ impl<F: Fn(Chunk, Zoom) -> u32> Price for Need<F> {
     }
 
     fn split(&self, c: Chunk) -> Slots {
-        if c.tile_zoom() == LEAF_Z - 1 {
+        if c.zoom() == LEAF_CHUNK - 1 {
             [0, 1, 0]
         } else {
             [0; POOLS]

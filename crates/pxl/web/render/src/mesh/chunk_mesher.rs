@@ -11,9 +11,10 @@ use xpute_core::math::scalar::round;
 
 use crate::look::color::linear;
 use crate::mesh::paint::palette::shader_meta::layer_mean;
-use crate::mesh::volume::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, MaterialClasses, NO_LAYER, SUB_CELL_NONE};
-use crate::mesh::voxel_scan::{OwnedRunSet, RunSet, COL_SPAN};
+use crate::mesh::run::{OwnedRunSet, RunSet, COL_SPAN};
+use crate::mesh::word::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, MaterialClasses, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::{grow, Refused};
+use pxl_spec::space::pyramid::CHUNK_DRAWN;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -82,16 +83,15 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 /// The fine format: corner and width in u16 steps of its cell, floor and height
 /// in u16 mesh steps, sRGB color, four layer taps, face mask.
 ///
-/// The coarse format drops the taps (only leaf cells are textured) and holds
-/// corner and width in a byte an axis: a chunk k zooms coarser than a leaf's is
-/// never drawn nearer than 192·2^k, so its cell is one to two `target_cell_px` (pxl-spec space/lod.rs) and an eighth of it
-/// is at most 1.5 px; its mesh is at most 32 cells across, so cell index and
-/// eighth fit a byte exactly. 24 and 16 bytes a box, against 84 a vertex once.
+/// The coarse format drops the taps (only cells a leaf's or finer are
+/// textured) and holds corner and width in a byte an axis, in eighth cells:
+/// a box is whole cells but for a cover piece's summary, and a chunk draws
+/// 32 cells across. 24 and 16 bytes a box, against 84 a vertex once.
 pub const FINE_BOX_WORDS: u32 = 6;
 pub const COARSE_BOX_WORDS: u32 = 4;
 
-pub const fn box_words(lod_step: u32) -> u32 {
-    if lod_step == 1 {
+pub const fn box_words(fine: bool) -> u32 {
+    if fine {
         FINE_BOX_WORDS
     } else {
         COARSE_BOX_WORDS
@@ -103,8 +103,8 @@ pub const fn box_words(lod_step: u32) -> u32 {
 /// own floor and step instead, since a run's z is the world's.
 const XY_STEPS: f64 = 256.0;
 const COARSE_XY_STEPS: f64 = 8.0;
-/// A chunk's 64 cells over the smallest merging step.
-const COARSE_RES_MAX: u32 = 64 / 2;
+/// A chunk's drawn cells.
+const COARSE_RES_MAX: u32 = CHUNK_DRAWN;
 const _: () = assert!(COARSE_RES_MAX * (COARSE_XY_STEPS as u32) <= 256, "a coarse box's corner and width live in a byte each");
 const Z_STEPS: f64 = 65535.0;
 
@@ -121,7 +121,8 @@ impl Default for Heights {
 }
 
 impl Heights {
-    fn of(set: &RunSet) -> Heights {
+    /// In units, from a set whose cells are `z_unit` tall.
+    fn of(set: &RunSet, z_unit: f64) -> Heights {
         let (mut lo, mut hi) = (i32::MAX, i32::MIN);
         for i in 0..set.count as usize {
             lo = lo.min(set.z0[i]);
@@ -130,9 +131,9 @@ impl Heights {
         if lo > hi {
             return Heights::default();
         }
-        let span = (hi - lo) as f64;
+        let span = (hi - lo) as f64 * z_unit;
         Heights {
-            floor: lo as f64,
+            floor: lo as f64 * z_unit,
             step: (span / Z_STEPS).max(f64::MIN_POSITIVE),
         }
     }
@@ -227,9 +228,9 @@ struct FineBake {
     span: u32,
     /// Read past an edge, never walked or emitted from.
     apron: u32,
-    /// A coarse tier's columns are `lod_step` wide, those of a chunk k zooms
-    /// coarser than a leaf's 2^k; a run's cell is a unit tall at every zoom.
-    xy_scale: u32,
+    /// A column's width and a run's cell's height, in units.
+    unit: f64,
+    z_unit: f64,
     phase: u8,
     row: u32,
     emit_at: usize,
@@ -300,9 +301,12 @@ impl BakeContext {
         }
     }
 
-    /// `scale` is 1 for a leaf chunk, 2^k for one k zooms coarser. `clip` cuts a whole-column
-    /// set to the chunk's heights, and every step reads the cut set. One bake at a time.
-    pub fn begin(&mut self, set: &RunSet, lod_step: u32, scale: u32, textured: bool, clip: Option<(i32, i32)>) -> Result<(), Refused> {
+    /// `unit` is a column's width and `z_unit` a run's cell's height, in units;
+    /// at `lod_step` past 1 the chunk is summarized `lod_step` columns a cell.
+    /// `fine` boxes carry texture taps. `clip` cuts a whole-column set to the
+    /// chunk's heights, and every step reads the cut set. One bake at a time.
+    #[allow(clippy::too_many_arguments)]
+    pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, clip: Option<(i32, i32)>) -> Result<(), Refused> {
         xpute_core::ensure!(self.open.is_none(), ENOTRECOVERABLE);
         self.refused = false;
         match clip {
@@ -317,7 +321,7 @@ impl BakeContext {
         let (count, span, apron, heights) = {
             let cut = self.clipped.as_ref().map(OwnedRunSet::view);
             let set = cut.as_ref().unwrap_or(set);
-            (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set) } else { Heights::default() })
+            (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, z_unit) } else { Heights::default() })
         };
         self.textured = textured;
         xpute_core::ensure!(span as usize <= MAX_BAKE_SPAN, ENOSPC, span, MAX_BAKE_SPAN);
@@ -328,10 +332,11 @@ impl BakeContext {
         self.mesh_words = 0;
         self.box_cnt = 0;
         self.heights = heights;
-        self.box_words = box_words(lod_step);
+        self.box_words = box_words(fine && lod_step == 1);
         self.open = Some(if lod_step == 1 {
-            Open::Fine(self.begin_fine(span, apron, scale))
+            Open::Fine(self.begin_fine(span, apron, unit, z_unit))
         } else {
+            let scale = round(unit / z_unit) as u32;
             let inner = span - 2 * apron;
             xpute_core::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), EINVAL, lod_step, inner);
             Open::Coarse(CoarseBake {
@@ -431,12 +436,13 @@ impl BakeContext {
         self.buckets.clear();
     }
 
-    fn begin_fine(&mut self, span: u32, apron: u32, xy_scale: u32) -> FineBake {
+    fn begin_fine(&mut self, span: u32, apron: u32, unit: f64, z_unit: f64) -> FineBake {
         self.merge_run[..(span * span) as usize].fill(None);
         FineBake {
             span,
             apron,
-            xy_scale,
+            unit,
+            z_unit,
             phase: 0,
             row: apron,
             emit_at: 0,
@@ -576,8 +582,9 @@ impl BakeContext {
             return false;
         }
 
-        let unit = b.xy_scale as f64 * U_PER_CELL;
-        let z_unit = U_PER_CELL;
+        let (unit, z_unit) = (b.unit, b.z_unit);
+        // Boxes without taps show the layer's mean where the pack is drawn, as the boxes with them do.
+        let mean = self.box_words != FINE_BOX_WORDS && self.textured;
         let apron = b.apron as f64;
         let emit_end = self.surviving.len().min(b.emit_at + BAKE_BOXES_PER_STEP * 6);
         let mut s_i = b.emit_at;
@@ -609,7 +616,9 @@ impl BakeContext {
                     b.emit_at = s_i;
                     return false;
                 }
-                self.emit_box([min_x, min_y, min_z], [size_x, size_y, size_z], [set.r[i], set.g[i], set.b[i]], set.layer_taps[i], mask, unit);
+                let swatch = [set.r[i], set.g[i], set.b[i]];
+                let rgb = if mean { layer_mean(set.layer_taps[i] & 255, swatch) } else { swatch };
+                self.emit_box([min_x, min_y, min_z], [size_x, size_y, size_z], rgb, set.layer_taps[i], mask, unit);
             }
             s_i += 6;
         }
@@ -710,8 +719,8 @@ impl BakeContext {
                 return false;
             }
             self.coarse.start.push(self.coarse.z0.len() as u32);
-            self.heights = Heights::of(&self.coarse.view());
-            b.fine = Some(self.begin_fine(res, 0, lod_step * scale));
+            self.heights = Heights::of(&self.coarse.view(), U_PER_CELL);
+            b.fine = Some(self.begin_fine(res, 0, (lod_step * scale) as f64 * U_PER_CELL, U_PER_CELL));
             b.phase = 2;
             return false;
         }

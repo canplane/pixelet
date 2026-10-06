@@ -13,28 +13,13 @@ use crate::world::fixture::{self, eye, World};
 use crate::world::pyramid::domain::Domain;
 use pxl_spec::space::zoom::{units, Zoom};
 
-/// Objects go finer than the ground's cell zoom only within the leaves' reach.
-#[test]
-fn objects_draw_the_grounds_cube_and_go_finer_only_under_the_leaves() {
-    let leaf = GROUND.cell_zoom(LEAF_Z);
-    for cell_zoom in 16..=30 {
-        let (ground, objects) = (drawn_zoom(cell_zoom, LEAF_Z, false, false), drawn_zoom(cell_zoom, LEAF_Z, false, true));
-        if cell_zoom <= leaf {
-            assert_eq!(objects, ground, "z{cell_zoom}");
-        } else {
-            assert_eq!(ground, leaf, "z{cell_zoom}");
-            assert_eq!(objects, cell_zoom.min(OBJECT_FINEST), "z{cell_zoom}");
-        }
-    }
-}
-
 /// 16 × 16 leaf chunks.
 const ROOT: Zoom = 4;
 
 fn at(zoom: Zoom, x: i64, y: i64) -> Chunk {
     let side = units(chunk_zoom(LEAF_Z)) as i64;
-    Chunk::of(
-        zoom,
+    Chunk::holding(
+        chunk_zoom(zoom),
         &Pvf3 {
             i: ivec::gather(x * side, y * side, 0),
             f: 0,
@@ -366,7 +351,7 @@ fn the_count_is_never_less_at_a_finer_quality_nor_less_than_the_cut() {
             }
             let cut = d.cut_at(k);
             let (tau, pieces) = (cut.tau(), cut.pieces().to_vec());
-            let of = |pool: Pool| pieces.iter().filter(|&&c| pool_of(c, zoom_of(c, d.outermost(c), d.order_of(c).near, tau, false)) == pool).count() as u32;
+            let of = |pool: Pool| pieces.iter().filter(|&&c| pool_of(c, zoom_of(c, d.outermost(c))) == pool).count() as u32;
             assert!(
                 n[k][Pool::Coarse as usize] + n[k][Pool::Cover as usize] >= pieces.len() as u32,
                 "height {height}, {tau:?}: coarse under the cut"

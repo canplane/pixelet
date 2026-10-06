@@ -18,7 +18,6 @@ fn counters() -> CountersBlock {
     let k = kernel();
     let st = k.sched.builder.stat;
     let c = k.sched.builder.bake_context().counters;
-    let bands = k.volumes.as_ref().map_or([0; 2], |v| [v.stat.allocated, v.stat.reused]);
     let atlas = billboard_sheet().stats();
     CountersBlock {
         faces_kept: c.faces_kept as f64,
@@ -27,10 +26,7 @@ fn counters() -> CountersBlock {
         runs_total: c.total_runs as f64,
         coarse_boxes: c.coarse_total as f64,
         coarse_low_fill: c.coarse_low_fill as f64,
-        bands_reused: bands[1] as f64,
-        bands_allocated: bands[0] as f64,
-        built_direct: st.direct as f64,
-        built_scans: st.scans as f64,
+        built_runs: st.runs as f64,
         built_bakes: st.bakes as f64,
         built_starved: st.starved as f64,
         atlas_repacks: atlas.repacks as f64,

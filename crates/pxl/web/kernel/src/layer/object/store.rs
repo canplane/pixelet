@@ -8,7 +8,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, TryReserveError};
 
 use base64::Engine;
-use pxl_render::mesh::paint::object::adapter::Entries;
 use pxl_spec::bake::constant::{
     band_cell_z, band_of, in_cell, pack_pos, unpack_pos, BandZ, CellZ, BAND, BAND_CELL_SHAMT, BAND_UNITS, CELL, OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, STEP_UNITS, U_PER_CELL,
 };
@@ -1179,6 +1178,25 @@ fn try_insert(out: &mut HashMap<[i64; 3], u32>, k: [i64; 3], v: u32) -> Result<(
     }
     out.insert(k, v);
     Ok(())
+}
+
+/// A column's entries, in band and walk order, a lane a field.
+#[derive(Clone, Copy)]
+pub struct Entries<'a> {
+    pub col_idx: IVec,
+    pub band: &'a [BandZ],
+    pub pos: &'a [u32],
+    pub state: &'a [u32],
+}
+
+impl Entries<'_> {
+    pub fn at(&self, k: usize) -> EntryAt {
+        EntryAt {
+            col_idx: self.col_idx,
+            band_idx: self.band[k],
+            pos: self.pos[k],
+        }
+    }
 }
 
 #[cfg(test)]

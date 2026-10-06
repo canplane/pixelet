@@ -22,6 +22,7 @@ use crate::world::frame::view::view;
 use crate::world::observer::Footprint;
 use crate::world::pyramid::Layer as _;
 use crate::world::residency::floor;
+use pxl_spec::bake::constant::{CELL, OBJECT_FINEST};
 use pxl_spec::space::zoom::{units, Zoom};
 
 pub fn eye() -> Option<[f64; 3]> {
@@ -92,6 +93,14 @@ impl Bounds for Known {
                     error: std::array::from_fn(|k| error[k].clamp(0.0, extent[k])),
                 }
             }
+        }
+    }
+
+    fn finest(&self, region: Aabb) -> Zoom {
+        if kernel().objects.bound_in(&region).is_some() {
+            OBJECT_FINEST
+        } else {
+            CELL
         }
     }
 }

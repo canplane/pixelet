@@ -4,7 +4,7 @@ use super::*;
 
 /// The ground's zoom a distance draws, past the pyramid's ends too.
 fn zoom_at(r: f64) -> i32 {
-    GROUND.z_of(cell_at(r))
+    GROUND.z_of(cell_at(r)) - 1
 }
 
 /// Feet on a tile's corners, edges and inside, either side of the origin.
@@ -95,7 +95,7 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
         }
     }
     for z in TOP_Z as i32..=LEAF_Z as i32 + 3 {
-        assert_eq!(zoom_at(split_distance(GROUND.cell_zoom(z as Zoom))), z, "a zoom begins at its split distance");
-        assert_eq!(zoom_at(split_distance(GROUND.cell_zoom(z as Zoom - 1)) * (1.0 - 1e-12)), z, "and ends where the next coarser begins");
+        assert_eq!(zoom_at(split_distance(observed_cell(z as Zoom))), z, "a zoom begins at its split distance");
+        assert_eq!(zoom_at(split_distance(observed_cell(z as Zoom - 1)) * (1.0 - 1e-12)), z, "and ends where the next coarser begins");
     }
 }

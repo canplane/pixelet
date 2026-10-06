@@ -6,7 +6,7 @@
 
 use pxl_render::gpu::api::word_bytes;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, TileView};
-use pxl_render::mesh::voxel_scan::apron_col;
+use pxl_render::mesh::run::apron_col;
 use pxl_spec::bake::constant::{unpack_pos, CELL, U_PER_CELL};
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::lod::target_cell_px;

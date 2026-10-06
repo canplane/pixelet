@@ -85,14 +85,14 @@ pub fn take_draw() -> bool {
 
 fn work_sample(c: &mut CoreTick, census: &Census) -> WorkSample {
     let st = kernel().sched.builder.stat;
-    let scans = st.scans + st.direct;
+    let runs = st.runs;
     let sample = WorkSample {
-        scans: scans.wrapping_sub(c.last_work.0) as f64,
+        runs: runs.wrapping_sub(c.last_work.0) as f64,
         bakes: st.bakes.wrapping_sub(c.last_work.1) as f64,
         fine_peak: census.fine_peak as f64,
         coarse_peak: census.coarse_peak as f64,
     };
-    c.last_work = (scans, st.bakes);
+    c.last_work = (runs, st.bakes);
     sample
 }
 
@@ -132,7 +132,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     };
 
     let t0 = now();
-    let draw = with_world(|world, sched| sched.tick(world, frame, &now)).unwrap_or(false);
+    let draw = with_world(|_, sched| sched.tick(frame, &now)).unwrap_or(false);
     // Decor lists after the chunks have listed theirs.
     {
         let k = kernel();

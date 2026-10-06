@@ -11,6 +11,7 @@ use super::*;
 use crate::world::observer::cell_angle;
 
 use crate::world::fixture::{self, eye, World};
+use crate::world::pyramid::chunk::{FINEST_CHUNK, TOP_CHUNK};
 
 fn ladder() -> Vec<Tau> {
     (0..6).map(|k| Tau::of(libm::pow(2f64, k as f64 / 2.0))).collect()
@@ -26,7 +27,7 @@ fn point(p: V3) -> Pvf3 {
 
 fn pieces_at(pieces: &[Chunk], p: V3) -> Vec<Chunk> {
     let at = point(p);
-    (TOP_Z..=LEAF_Z).rev().map(|z| Chunk::of(z, &at)).filter(|c| pieces.binary_search(c).is_ok()).collect()
+    (TOP_CHUNK..=FINEST_CHUNK).rev().map(|z| Chunk::holding(z, &at)).filter(|c| pieces.binary_search(c).is_ok()).collect()
 }
 
 fn around(eye: V3, radius: f64, z: f64) -> Vec<V3> {
@@ -92,13 +93,16 @@ fn grazing_ground_refines_across_the_screen_and_not_along_its_depth() {
                 let p = [EYE[0] + r * libm::cos(b), EYE[1] + r * libm::sin(b), GROUND - 0.5];
                 let over = pieces_at(&pieces, p);
                 assert_eq!(over.len(), 1, "{tau:?}: {p:?} under {over:?}");
-                let zoom = over[0].tile_zoom() as i32;
+                // The tile whose cells the piece draws, against the one its distance asks.
+                let zoom = pxl_spec::space::pyramid::GROUND.z_of(over[0].drawn_zoom()).min(LEAF_Z as i32);
                 let wanted = tau.z_at(r) as i32;
                 assert!(
                     zoom >= wanted,
                     "{tau:?}: ground {r} away at {bearing}° left at z{zoom} where its cell crosses a cell finer than z{wanted}"
                 );
-                assert!(zoom - 1 <= wanted, "{tau:?}: ground {r} away refined to z{zoom}, past what its error across asks (z{wanted})");
+                // A split takes all eight children, so the far ones of a chunk split
+                // for its near edge draw up to two zooms finer than they ask.
+                assert!(zoom - 2 <= wanted, "{tau:?}: ground {r} away refined to z{zoom}, past what its error across asks (z{wanted})");
             }
         }
     }

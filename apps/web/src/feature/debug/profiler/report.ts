@@ -49,7 +49,6 @@ function windowSection(r: ProfilerReport): string[] {
   if (f === null) return ["frames n=0"];
   const last = f.last;
   const c = r.sections.counters;
-  const bands = c.bands_reused + c.bands_allocated;
   const spans = f.gpu_spans.filter((s) => s.spread.max > 0).map((s) => `${s.name} ${n1(s.spread.p95)}`).join("  ");
   const zooms = f.zoom_tris.map((t, z) => [z, t] as const).filter(([, t]) => t > 0).map(([z, t]) => `${zoomName(z)} ${tris(t)}`).join("  ");
   const steps = r.steps.length === 0 ? "none" : [...r.steps].sort((a, b) => b.ms / b.count - a.ms / a.count).map((s) => `${s.phase}/${s.name} ${n1(s.ms / s.count)}/${n1(s.max_ms)}`).join("  ");
@@ -69,12 +68,11 @@ function windowSection(r: ProfilerReport): string[] {
     `  steps   ${steps}   (ms per frame, max)`,
     `  by tag  ${f.census.map((t) => `${t.tag} ${round(t.draws)}/${tris(t.tris)}`).join("  ")}   (draws/tris a frame, mean)`,
     `  by zoom ${zooms || "-"}   (terrain tris a frame, mean)`,
-    `  build   ${c.built_direct} direct  ${c.built_scans} scans  ${c.built_bakes} bakes  ${c.built_starved} refused a block`,
+    `  build   ${c.built_runs} runs  ${c.built_bakes} bakes  ${c.built_starved} refused a block`,
     `  per     chunks/bake ${f.chunks_per_bake === null ? "-" : n1(f.chunks_per_bake)}ms   (workload-normalized; comparable across sessions)`,
-    `  rate    ${n1(f.perS[1])} bakes/s  ${n1(f.perS[0])} scans/s   while backlog ${n1(f.backlogPerS[1])} bakes/s  ${n1(f.backlogPerS[0])} scans/s over ${n1(f.backlog_s)}s`,
+    `  rate    ${n1(f.perS[1])} bakes/s  ${n1(f.perS[0])} runs/s   while backlog ${n1(f.backlogPerS[1])} bakes/s  ${n1(f.backlogPerS[0])} runs/s over ${n1(f.backlog_s)}s`,
     `  faces   kept ${c.faces_kept} / ${c.faces_possible} (${pct(c.faces_kept, c.faces_possible)}%)  runs culled ${c.runs_culled}/${c.runs_total}`,
     `  coarse  boxes ${c.coarse_boxes}  low fill ${c.coarse_low_fill} (${pct(c.coarse_low_fill, c.coarse_boxes)}%; a cull at this fill was measured and did not pay)`,
-    `  bands   reused ${c.bands_reused} / ${bands} (${pct(c.bands_reused, bands)}%)  ~1.31MB each; a miss borrows from the heap`,
     `  mounts  window +${f.mounts[0]}/-${f.mounts[1]}   heap ${signed(f.used_delta_mb)}MB`,
     `  waits   releases ${last.lod_offscreen_pending} pending, oldest ${round(last.lod_oldest_release_ms)} ms${starved(last.lod_oldest_release_ms)}   on-screen oldest ${
       round(last.lod_oldest_visible_ms)

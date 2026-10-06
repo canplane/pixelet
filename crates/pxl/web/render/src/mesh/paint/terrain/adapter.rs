@@ -18,13 +18,13 @@ use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::{ancestor_of, offset_in};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, TILE_CELLS};
+use pxl_spec::space::pyramid::{GROUND, TILE_CELLS};
 
 use crate::mesh::paint::palette::shader_meta::rgb255;
 use crate::mesh::paint::palette::tex_array::LAYER_IDX;
 use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
-use crate::mesh::volume::{pack_material, MaterialClasses, Volumes, Voxel, NO_LAYER};
-use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
+use crate::mesh::run::{APRON, COL_SPAN};
+use crate::mesh::word::{pack_material, MaterialClasses, NO_LAYER};
 use crate::mesh::{try_push, Refused};
 use std::sync::LazyLock;
 
@@ -132,7 +132,7 @@ pub struct ChunkSample {
     pub material: Vec<u32>,
     pub layer_idx: Vec<u8>,
     /// In cells; a column's top is one below it.
-    pub ele: Vec<i16>,
+    pub ele: Vec<i32>,
     pub floor: i32,
     /// Column `i`'s spans are `spans[span_at[i]..span_at[i + 1]]`, lowest first,
     /// none overlapping; the apron's have none.
@@ -212,7 +212,7 @@ impl ChunkSample {
                 let lanes = on_tile.then_some(GroundLanes { cells: tile.cells });
                 let center = |v: i64| (v as f64 + 0.5) / n as f64;
                 let ele = ground_ele_at(tile.ele, lanes, center(x), center(y)) as i32;
-                self.ele[i] = ele as i16;
+                self.ele[i] = ele;
                 // The floor is the chunk's own: a neighbor's valley must not drop it.
                 if inner && cell != sentinel::void {
                     min_ele = min_ele.min(ele);
@@ -335,6 +335,42 @@ impl ChunkSample {
         Ok(())
     }
 
+    /// The sample of a chunk `k` zooms finer than the leaf chunk `leaf` was
+    /// read for, its first cell `at` its own cells into that chunk: each column
+    /// is the leaf column it lies in, heights in its own cells. Terrain is
+    /// drawn as finely as it is held, so nothing is invented.
+    pub fn refine(&mut self, leaf: &ChunkSample, k: u32, at: [u32; 2]) -> Result<(), Refused> {
+        let scale = 1i32 << k;
+        let in_leaf = |v: u32, p: u32| (i64::from(v) + i64::from(p) - i64::from(APRON)).div_euclid(i64::from(scale)) + i64::from(APRON);
+        self.spans.clear();
+        for py in 0..COL_SPAN {
+            for px in 0..COL_SPAN {
+                let i = (py * COL_SPAN + px) as usize;
+                let j = (in_leaf(at[1], py) * i64::from(COL_SPAN) + in_leaf(at[0], px)) as usize;
+                self.material[i] = leaf.material[j];
+                self.layer_idx[i] = leaf.layer_idx[j];
+                self.look[i] = leaf.look[j];
+                self.ele[i] = leaf.ele[j] * scale;
+                let b = leaf.bore[j];
+                self.bore[i] = Bore { air: b.air.map(|v| v * scale), ..b };
+                self.span_at[i] = self.spans.len() as u32;
+                for s in &leaf.spans[leaf.span_at[j] as usize..leaf.span_at[j + 1] as usize] {
+                    try_push(
+                        &mut self.spans,
+                        Span {
+                            lo: s.lo * scale,
+                            hi: s.hi * scale,
+                            ..*s
+                        },
+                    )?;
+                }
+            }
+        }
+        self.span_at[COL_SPAN2] = self.spans.len() as u32;
+        self.floor = if leaf.floor == i32::MIN { i32::MIN } else { leaf.floor * scale };
+        Ok(())
+    }
+
     /// The column's ground as inclusive runs: a top face at `ele` is cells up to
     /// `ele − 1` (`hi − 1` below). Through a bore: the ground under its floor,
     /// the way on the floor's cell, and the ground standing over its air.
@@ -366,23 +402,6 @@ impl ChunkSample {
             run(s.lo, s.hi - 1, s.material, s.layer)?;
         }
         Ok(())
-    }
-
-    /// The apron's columns are not painted: the volume is the chunk's.
-    pub fn paint(&self, volumes: &mut Volumes, volume: u32) -> bool {
-        let mut painted = true;
-        for cy in 0..CHUNK_CELLS {
-            for cx in 0..CHUNK_CELLS {
-                let _ = self.column_runs(apron_col(cx, cy) as usize, |lo, hi, material, layer_idx| {
-                    painted &= volumes.fill_column(volume, (cx, cy), lo, hi, Voxel { material, layer_idx, sub: 0 });
-                    Ok::<(), ()>(())
-                });
-                if !painted {
-                    return false;
-                }
-            }
-        }
-        true
     }
 }
 

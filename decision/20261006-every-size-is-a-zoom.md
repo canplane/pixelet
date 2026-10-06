@@ -60,5 +60,5 @@ nothing else. Sizes are zoom arithmetic: a chunk of cells is
 
 A tile's name (its quadkey), key and bytes, and the bake's directories
 named by tile zoom: no published set changes. Making a chunk 64 cells of
-its own zoom for objects too is still the separate step
-[a zoom names a page grid](./20261006-a-zoom-names-a-page-grid.md) left.
+its own zoom for objects too was the next step:
+[a chunk goes past the leaves](./20261006-a-chunk-goes-past-the-leaves.md).

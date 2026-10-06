@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use crate::mesh::paint::object::adapter::Painter;
 use crate::mesh::paint::terrain::adapter::ChunkSample;
-use crate::mesh::voxel_scan::{ScanContext, APRON, COL_SPAN};
+use crate::mesh::run::{RunWriter, APRON, COL_SPAN};
 
 /// Bottom to top exclusive, in leaf cells: a folded object, air, or a deck's span.
 pub type Stands = (i32, i32, Option<(u32, u8)>);
@@ -18,7 +18,7 @@ pub type Stands = (i32, i32, Option<(u32, u8)>);
 /// Every column of the padded grid, apron included. `step` is leaf cells a
 /// cell spans; heights are leaf cells.
 pub fn write_column_runs(
-    direct: &mut ScanContext,
+    direct: &mut RunWriter,
     sample: &ChunkSample,
     painter: &Painter,
     cells: &HashMap<[i64; 3], u32>,
@@ -46,8 +46,8 @@ pub fn write_column_runs(
     stands.sort_unstable_by_key(|&(col, (z, _, _))| (col, z));
     let mut next = 0;
     for i in 0..columns {
-        direct.direct_column(i as u32);
-        let ground = |direct: &mut ScanContext, from: i32, to: i32| sample.ground_runs(i, from, to, |lo, hi, m, l| direct.direct_run(lo, hi, m, l));
+        direct.column(i as u32);
+        let ground = |direct: &mut RunWriter, from: i32, to: i32| sample.ground_runs(i, from, to, |lo, hi, m, l| direct.run(lo, hi, m, l));
         // Under the floor a stand is inside the ground; where there is none, nothing hides it.
         let mut z = if sample.has_ground(i) { sample.floor } else { i32::MIN };
         while next < stands.len() && stands[next].0 == i as u32 {
@@ -58,7 +58,7 @@ pub fn write_column_runs(
             }
             ground(direct, z, lo)?;
             if let Some((m, l)) = stand {
-                direct.direct_run(lo, hi - 1, m, l)?;
+                direct.run(lo, hi - 1, m, l)?;
             }
             z = hi;
         }

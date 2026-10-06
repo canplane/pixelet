@@ -28,6 +28,10 @@ pub const TOP_Z: Zoom = 5;
 /// A chunk is 64 cells a side: its zoom is its cells' less this.
 pub const CHUNK_STEPS: Zoom = 6;
 
+/// Zooms a drawn cell is coarser than the cell the LOD rule measures, as a
+/// mip level is drawn from twice the texels it is sampled at.
+pub const DRAWN_STEPS: Zoom = 1;
+
 /// A layer's lattice: its cell is its tile's side over its own count of
 /// cells, the same at every zoom; held as the cell's zoom on a leaf.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -66,10 +70,6 @@ impl Lattice {
 
     pub const fn tile_cells(self) -> u32 {
         count(self.cell, LEAF_Z)
-    }
-
-    pub const fn chunk_cells(self) -> u32 {
-        count(self.cell, chunk_zoom(LEAF_Z))
     }
 
     pub const fn cell_index(self, tx: u32, ty: u32) -> u32 {
@@ -163,9 +163,13 @@ pub const DECK: Lattice = Lattice::new(DECK_CELL);
 
 pub const TILE_CELLS: u32 = GROUND.tile_cells();
 
-pub const CHUNK_CELLS: u32 = GROUND.chunk_cells();
+pub const CHUNK_CELLS: u32 = 1 << CHUNK_STEPS;
 
-pub const TILE_CHUNKS: u32 = TILE_CELLS / CHUNK_CELLS;
+/// Chunks a tile's side holds at its own zoom.
+pub const TILE_CHUNKS: u32 = TILE_CELLS / CHUNK_DRAWN;
+
+/// A chunk's drawn cells a side.
+pub const CHUNK_DRAWN: u32 = CHUNK_CELLS >> DRAWN_STEPS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Tile {
@@ -243,9 +247,9 @@ impl Tile {
     }
 }
 
-/// A ground chunk's zoom on a tile at `z`.
+/// The zoom of the chunk drawing a tile at `zoom`'s cells.
 pub const fn chunk_zoom(zoom: Zoom) -> Zoom {
-    GROUND.cell_zoom(zoom) - CHUNK_STEPS
+    GROUND.cell_zoom(zoom) + DRAWN_STEPS - CHUNK_STEPS
 }
 
 /// The 4×4 tiles a zoom finer around a tile's children, each at

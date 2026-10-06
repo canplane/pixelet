@@ -23,7 +23,7 @@ use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{projection, REACH};
-use pxl_spec::space::pyramid::{chunk_zoom, Cell, Tile, EXTENT, GROUND, LEAF_Z, TOP_Z};
+use pxl_spec::space::pyramid::{Cell, Tile, EXTENT, GROUND, LEAF_Z, TOP_Z};
 use pxl_spec::space::v3::{add3, Aabb, V3};
 use pxl_spec::space::xy::TO_XY;
 
@@ -341,7 +341,7 @@ impl<'a> Access<'a> {
         let [ix, iy] = cell;
         let base = base_of(CELL, [ix, iy, 0]);
         let ground = self.ground(GROUND.cell_of(LEAF_Z, &base));
-        let [kx, ky, _] = index_of(chunk_zoom(LEAF_Z), &base);
+        let [kx, ky, _] = index_of(BAND, &base);
         let col_idx = idx(BAND, TO_XY(base.i));
         let local = [ix - kx * cells_across(), iy - ky * cells_across()];
         ground.map(|g| Composed {
@@ -691,7 +691,7 @@ impl<'a> Access<'a> {
         let mut met = None;
         self.objects.along_ray(ray.origin, ray.direction, (t0, t1), cell_zoom, &mut |[x, y, h]| {
             met = if zoom == LEAF_Z {
-                let steps = u32::from(CELL - chunk_zoom(LEAF_Z));
+                let steps = u32::from(CELL - BAND);
                 let [cx, cy] = ancestor_of([x, y], steps);
                 let col_idx = crate::layer::object::store::column_at([cx, cy]);
                 let entries = self.cell_entries(col_idx, offset_in([x, y], steps), h);
@@ -733,7 +733,7 @@ impl<'a> Access<'a> {
 }
 
 fn cells_across() -> i64 {
-    count(CELL, chunk_zoom(LEAF_Z)) as i64
+    count(CELL, BAND) as i64
 }
 
 fn exit(ray: &Ray, base: [f64; 2], side: f64) -> f64 {

@@ -134,7 +134,7 @@ pub fn step(ctx: &mut TickContext) {
                 let mid = projection::unproject(mid.i, mid.f);
                 let mid = [nearest(mid[0], chunk.rect().0), mid[1]];
                 for (shown, (label, ground)) in [(Shown::All, all)].into_iter().chain(major.map(|m| (Shown::Major, m))) {
-                    if m == 0 && Chunk::of(chunk.tile_zoom(), &ground.mid()).column() != chunk.named().column() {
+                    if m == 0 && Chunk::holding(chunk.zoom(), &ground.mid()).column() != chunk.named().column() {
                         continue;
                     }
                     // Counted only by the chunk the top of what stands there is in, so a

@@ -4,6 +4,7 @@ use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::space::pyramid::{Tile, LEAF_Z};
 
 use super::*;
+use crate::mesh::run::apron_col;
 
 /// A tile past the coverage gives no surface, so it puts no floor under
 /// what is placed there.

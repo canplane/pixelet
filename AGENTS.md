@@ -143,13 +143,16 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
 - **A mark stands at a cell's center** (`Cell::center`), at the height of the
   surface drawn there: one thing's at the leaf cell it stands in, many at
   their cell's middle (`pxl-kernel layer/poi/placement.rs`).
-- **One rule chooses the cell; a layer chooses its detail.** The cell is the
-  distance's (`pxl-spec space/lod.rs` `Tau::cell_at`, one factor τ), finer
-  than a leaf's too near the eye, and terrain's zoom the one whose cell it
-  is (`Tau::z_at`), refined only where the screen sees an error cross a
-  cell. The detail a layer draws at it is its own — terrain 2 × 2 averaged,
-  places a lattice sixty-four ground cells wide, objects their own cells —
-  never a second rule; past a layer's data it draws its finest.
+- **One rule chooses the chunk; a layer chooses its detail.** The cell is
+  the distance's (`pxl-spec space/lod.rs` `Tau::cell_at`, one factor τ), a
+  chunk is drawn in cells a step coarser (`space/pyramid.rs`
+  `DRAWN_STEPS`), and terrain's zoom is the tile whose cells those are
+  (`Tau::z_at`); a chunk refines only where the screen sees an error cross
+  a cell and something under it is held finer. The detail a layer draws at
+  it is its own — terrain its tile's cells, the bake's fold of the finer,
+  places a lattice sixty-four ground cells wide, objects their cells folded
+  by majority — never a second rule; past a layer's data it draws its
+  finest.
 - **Dev is guarded like terrain.** The tile server answers no tile coarser
   than `--top-z`, the whole guard for every layer. A source declares the
   coarsest zoom it supplies whole — the published version in its metadata,

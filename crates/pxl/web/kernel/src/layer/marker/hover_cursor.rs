@@ -6,7 +6,7 @@
 use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
 use pxl_render::look::style::marker_colors;
 use pxl_render::mesh::chunk_mesher::{mesh_words, write_lone_box, Heights, FINE_BOX_WORDS};
-use pxl_render::mesh::volume::NO_LAYER;
+use pxl_render::mesh::word::NO_LAYER;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_of, placeable_cube_rgb, PlaceableCube};
 use pxl_spec::space::pyramid::LEAF_Z;

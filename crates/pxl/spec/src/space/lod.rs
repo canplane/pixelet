@@ -5,7 +5,7 @@
 //! resident bound is proved before anything of the world or screen is known.
 
 use super::pvf3::REACH;
-use super::pyramid::{tile_at, tile_rows, Tile, GROUND, LEAF_Z, TOP_Z};
+use super::pyramid::{tile_at, tile_rows, Tile, DRAWN_STEPS, GROUND, LEAF_Z, TOP_Z};
 use super::v3::Aabb;
 use super::zoom::{units, Zoom, UNIT_Z};
 
@@ -70,9 +70,10 @@ impl Tau {
         cell_at(r * self.0)
     }
 
-    /// The tile zoom the ground is drawn from at `r`: its cells', held to the pyramid.
+    /// The tile zoom the ground is drawn from at `r`: the one whose observed
+    /// cell is the rule's, held to the pyramid.
     pub fn z_at(self, r: f64) -> Zoom {
-        GROUND.z_of(self.cell_at(r)).clamp(TOP_Z as i32, LEAF_Z as i32) as Zoom
+        (GROUND.z_of(self.cell_at(r)) - DRAWN_STEPS as i32).clamp(TOP_Z as i32, LEAF_Z as i32) as Zoom
     }
 
     pub const fn demand_reach(self, zoom: Zoom) -> f64 {
@@ -80,10 +81,16 @@ impl Tau {
     }
 }
 
+/// The cell the rule measures a tile at `zoom` by: a tile's cells are drawn
+/// as they are, and a drawn cell is coarser than the rule's (`DRAWN_STEPS`).
+pub const fn observed_cell(zoom: Zoom) -> Zoom {
+    GROUND.cell_zoom(zoom) + DRAWN_STEPS
+}
+
 /// How far from an observer's foot a demand at `z` can lie: the split
-/// distance of the ground's cell a zoom coarser. Bounds the run along the ground too.
+/// distance of the observed cell a zoom coarser. Bounds the run along the ground too.
 pub const fn demand_reach(zoom: Zoom) -> f64 {
-    split_distance(GROUND.cell_zoom(zoom - 1))
+    split_distance(observed_cell(zoom - 1))
 }
 
 /// The most tiles a zoom's demand span along an axis: ⌊d / tile⌋ + 2, the same at every zoom.

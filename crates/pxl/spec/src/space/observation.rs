@@ -6,11 +6,12 @@
 //! from what is known (`DemandEstimator`); never less, since a requirement
 //! left out is ground that never refines.
 
-use super::lod::{cubes_meeting, demand_reach, Tau};
+use super::lod::{cubes_meeting, demand_reach, observed_cell, Tau};
 use super::pvf3::nearest_box;
-use super::pyramid::{tile_at, tile_rows, Tile, GROUND, LEAF_Z, TOP_Z};
+use super::pyramid::{tile_at, tile_rows, Tile, LEAF_Z, TOP_Z};
 use super::v3::{dot3, Aabb, V3};
 use super::zoom::{units, Zoom};
+use crate::bake::constant::CELL;
 
 /// Six planes, normals in, `n · x + d ≥ 0` inside, in world units.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -119,6 +120,12 @@ impl Contents {
 /// zoom never less than at a finer one under it.
 pub trait Bounds {
     fn contents(&self, zoom: Zoom, region: Aabb) -> Contents;
+
+    /// The finest cell zoom anything in `region` is held at: the ground's
+    /// leaf cell unless a layer finer stands there.
+    fn finest(&self, _region: Aabb) -> Zoom {
+        CELL
+    }
 }
 
 pub struct Unknown;
@@ -168,7 +175,7 @@ pub struct ByBounds {
 /// The distances `z` is required over: its split distance (0 for the leaves) to the
 /// next coarser zoom's, or to the far edge for the top. None past the far edge.
 pub fn band(o: &Observation, tau: Tau, zoom: Zoom) -> Option<(f64, f64)> {
-    let from = if zoom == LEAF_Z { 0.0 } else { tau.split_distance(GROUND.cell_zoom(zoom)) };
+    let from = if zoom == LEAF_Z { 0.0 } else { tau.split_distance(observed_cell(zoom)) };
     let to = if zoom == o.top { demand_reach(zoom) } else { tau.demand_reach(zoom) };
     (from <= o.far).then_some((from, to))
 }

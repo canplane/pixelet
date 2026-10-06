@@ -40,20 +40,20 @@ A block on screen has come a long way: a provider's geometry, a bake, a fetch, a
                               │
 the player's placements ──────┤
 a sparse tree per band        ▼             one chunk, a 64³ cube
-                terrain paint + object paint
+                terrain + folded objects
                               │
                               ▼
                          column runs
                               │
                ┌──────────────┴─────────────────┐
                ▼                                ▼
-      a mesh per LOD tier               the pointer's ray
+      a mesh per chunk                  the pointer's ray
                │                                │
                ▼                                ▼
      draw list ──▶ WebGPU          a hit, from the same runs
 ```
 
-`pxl-geo-bake` bakes, `pxl-kernel` holds the tiles and schedules the builds, and `pxl-render` paints, scans, meshes and draws: through the page's WebGPU in a tab, through wgpu on a device.
+`pxl-geo-bake` bakes, `pxl-kernel` holds the tiles and schedules the builds, and `pxl-render` writes runs, meshes and draws: through the page's WebGPU in a tab, through wgpu on a device.
 
 Above the dashed line is served as files; below it runs on the client, on the turn's quota.
 
