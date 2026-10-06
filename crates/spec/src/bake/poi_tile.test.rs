@@ -10,7 +10,7 @@ fn leaf() -> Tile {
 
 /// The corner of POI cell (tx, ty), then `dx`, `dy` leaf cells in.
 fn point(tx: u32, ty: u32, dx: u32, dy: u32) -> Pvf3 {
-    let base = POI_LATTICE.cell_base(leaf(), tx, ty);
+    let base = POI_LATTICE.cell_at(leaf(), POI_LATTICE.cell_index(tx, ty)).base();
     POI_LATTICE.cell_of(LEAF_ZOOM, &base).inner_at(GROUND, LEAF_ZOOM, [dx, dy]).mid()
 }
 
@@ -98,7 +98,7 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
 fn a_tile_settles_every_child_but_one_under_a_crowd() {
     let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
     let [crowd, lone, empty, _] = p.children();
-    let at = |k: Tile, dx: u32| POI_LATTICE.cell_of(LEAF_ZOOM, &POI_LATTICE.cell_base(k, 0, 0)).inner_at(GROUND, LEAF_ZOOM, [dx, 0]).mid();
+    let at = |k: Tile, dx: u32| POI_LATTICE.cell_at(k, 0).inner_at(GROUND, LEAF_ZOOM, [dx, 0]).mid();
     let leaves = [
         (crowd, PoiTile::of_places(LEAF_ZOOM, [(at(crowd, 0), called("A", "1")), (at(crowd, 1), called("B", "2"))], true)),
         (lone, PoiTile::of_places(LEAF_ZOOM, [(at(lone, 0), called("C", "3"))], true)),

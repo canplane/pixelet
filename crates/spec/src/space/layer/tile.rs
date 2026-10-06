@@ -12,9 +12,9 @@ use crate::space::coord::pvf3::pack;
 use crate::space::coord::pvf3::pvf3::{self, Pvf3};
 use crate::space::coord::v3::Aabb;
 use crate::space::coord::world::{self, around, wrap_index, REACH};
-use crate::space::coord::zoom::{base_of, count, shamt, units, Zoom};
+use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
-use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of};
+use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, slot_of};
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
 /// world 2^15 round.
@@ -153,13 +153,14 @@ pub fn tile_at(zoom: Zoom, [x, y]: [i64; 2]) -> Tile {
 /// Where a tile's own children sit in its neighborhood, in `slot_of`'s order.
 pub const CHILDREN: [usize; 4] = [5, 6, 9, 10];
 
-/// A cell of the pyramid: lattice, tile and index. Built only from a point
-/// or a tile's own index, so a mismatched zoom and index cannot be held.
+/// A cell of the pyramid: a node of the one hierarchy at its lattice's cell
+/// zoom. Its tile is its ancestor the lattice's shift up, and its place in
+/// that tile is where it lies in it; both are read off the node.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Cell {
     pub(super) lattice: Lattice,
-    pub(super) tile: Tile,
-    pub(super) index: u32,
+    pub(super) zoom: Zoom,
+    pub(super) at: [i64; 2],
 }
 
 impl Cell {
@@ -167,30 +168,36 @@ impl Cell {
         self.lattice
     }
 
-    pub fn tile(self) -> Tile {
-        self.tile
+    fn shamt(self) -> u32 {
+        self.lattice.tile_cell_shamt()
     }
 
+    pub fn tile(self) -> Tile {
+        let [x, y] = ancestor_of(self.at, self.shamt());
+        Tile::new(self.tile_zoom(), ivec::gather(x, y, 0))
+    }
+
+    /// Its place in its tile, as every lane of the tile numbers it.
     pub fn index(self) -> u32 {
-        self.index
+        let [tx, ty] = self.in_tile();
+        self.lattice.cell_index(tx, ty)
     }
 
     pub fn tile_zoom(self) -> Zoom {
-        self.tile.zoom
+        self.zoom - self.shamt() as Zoom
     }
 
     /// Its own.
     pub fn zoom(self) -> Zoom {
-        self.lattice.cell_zoom(self.tile.zoom)
+        self.zoom
     }
 
     pub fn in_tile(self) -> [u32; 2] {
-        self.lattice.in_tile(self.index)
+        offset_in(self.at, self.shamt()).map(|v| v as u32)
     }
 
     pub fn base(self) -> Pvf3 {
-        let [tx, ty] = self.in_tile();
-        self.lattice.cell_base(self.tile, tx, ty)
+        base_of(self.zoom, [self.at[0], self.at[1], 0])
     }
 
     pub fn mid(self) -> Pvf3 {
@@ -205,32 +212,32 @@ impl Cell {
 
     /// The cell `steps` zooms coarser it lies in.
     pub fn up(self, steps: Zoom) -> Cell {
-        self.lattice.cell_of(self.tile.zoom - steps, &self.base())
+        Cell {
+            zoom: self.zoom - steps,
+            at: ancestor_of(self.at, u32::from(steps)),
+            ..self
+        }
     }
 
     /// Where `inner`, no coarser and inside this cell, lies in it, in `inner`'s sides.
     pub fn offset_of(self, inner: Cell) -> [u32; 2] {
-        let (outer, inner_base) = (self.base(), inner.base());
-        let shift = FRAC_W as i32 + shamt(inner.zoom());
-        let lane = |o: i64, i: i64| ((i - o) >> shift) as u32;
-        [lane(pvf3::X(&outer), pvf3::X(&inner_base)), lane(pvf3::Y(&outer), pvf3::Y(&inner_base))]
+        offset_in(inner.at, u32::from(inner.zoom - self.zoom)).map(|v| v as u32)
     }
 
     /// Where this cell lies in the tile `steps` zooms coarser, in its own sides.
     pub fn in_tile_above(self, steps: Zoom) -> [i64; 2] {
-        let up = self.up(steps);
-        let [ax, ay] = up.in_tile();
-        let n = count(self.zoom(), up.zoom()) as i64;
-        let [ox, oy] = up.offset_of(self);
-        [ax as i64 * n + ox as i64, ay as i64 * n + oy as i64]
+        offset_in(self.at, self.shamt() + u32::from(steps))
     }
 
     /// `offset_of`'s inverse.
     pub fn inner_at(self, lattice: Lattice, zoom: Zoom, offset: [u32; 2]) -> Cell {
-        let base = self.base();
-        let shift = FRAC_W as i32 + shamt(lattice.cell_zoom(zoom));
-        let at = pvf3::gather(pvf3::X(&base) + ((offset[0] as i64) << shift), pvf3::Y(&base) + ((offset[1] as i64) << shift), 0);
-        lattice.cell_of(zoom, &at)
+        let zoom = lattice.cell_zoom(zoom);
+        let [x, y] = first_descendant_of(self.at, u32::from(zoom - self.zoom));
+        Cell {
+            lattice,
+            zoom,
+            at: [x + i64::from(offset[0]), y + i64::from(offset[1])],
+        }
     }
 
     /// The point every layer stands a thing at: the XY center, half a side above

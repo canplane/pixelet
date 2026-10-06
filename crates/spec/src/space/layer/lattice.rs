@@ -6,9 +6,8 @@
 use super::tile::{Cell, Tile, LEAF_ZOOM};
 use crate::bake::constant::{DECK_CELL, EXTENT_CELL};
 use crate::space::camera::grid::CHUNK_STEPS;
-use crate::space::coord::pvf3::ivec;
 use crate::space::coord::pvf3::Pvf3;
-use crate::space::coord::zoom::{base_of, count, idx, index_of, Zoom, FINEST_ZOOM, SHARD_ZOOM};
+use crate::space::coord::zoom::{count, index_of, Zoom, FINEST_ZOOM, SHARD_ZOOM};
 use crate::space::hierarchy::tree::{child_of, first_descendant_of, parent_of, slot_of};
 
 /// A layer's lattice: its cell is its tile's side over its own count of
@@ -91,24 +90,21 @@ impl Lattice {
 
     /// The cell at `z` a point stands in; a point, since a cell may be finer than a unit.
     pub fn cell_of(self, zoom: Zoom, at: &Pvf3) -> Cell {
-        let tile = Tile::over(zoom, idx(LEAF_ZOOM, at.i));
-        let [x, y, _] = index_of(self.cell_zoom(zoom), at);
-        let [x0, y0] = first_descendant_of([ivec::X(tile.tile), ivec::Y(tile.tile)], self.tile_cell_shamt());
-        Cell {
-            lattice: self,
-            tile,
-            index: self.cell_index((x - x0) as u32, (y - y0) as u32),
-        }
+        let zoom = self.cell_zoom(zoom);
+        let [x, y, _] = index_of(zoom, at);
+        Cell { lattice: self, zoom, at: [x, y] }
     }
 
     pub fn cell_at(self, tile: Tile, index: u32) -> Cell {
         xpute_core::ensure!(index < self.tile_cells() * self.tile_cells(), ENOTRECOVERABLE);
-        Cell { lattice: self, tile, index }
-    }
-
-    pub fn cell_base(self, tile: Tile, tx: u32, ty: u32) -> Pvf3 {
-        let [x0, y0] = first_descendant_of([ivec::X(tile.tile), ivec::Y(tile.tile)], self.tile_cell_shamt());
-        base_of(self.cell_zoom(tile.zoom), [x0 + i64::from(tx), y0 + i64::from(ty), 0])
+        let (zoom, at) = tile.node();
+        let [x0, y0] = first_descendant_of(at, self.tile_cell_shamt());
+        let [tx, ty] = self.in_tile(index);
+        Cell {
+            lattice: self,
+            zoom: self.cell_zoom(zoom),
+            at: [x0 + i64::from(tx), y0 + i64::from(ty)],
+        }
     }
 
     // A tile's four children form one square of 2n × 2n cells a zoom finer, slot q at (q & 1, q >> 1).
@@ -128,13 +124,6 @@ impl Lattice {
         let [x0, y0] = [(x % n) as u32, (y % n) as u32];
         let cells = std::array::from_fn(|q| self.cell_index(x0 + (q & 1) as u32, y0 + (q >> 1) as u32));
         (slot_of([x / n, y / n]), cells)
-    }
-
-    /// The cells of this lattice under `outer`'s cell `index` of the same tile, row by row.
-    pub fn under(self, outer: Lattice, index: u32) -> impl Iterator<Item = u32> {
-        let n = count(self.cell, outer.cell);
-        let [x0, y0] = outer.in_tile(index).map(|v| v * n);
-        (0..n).flat_map(move |dy| (0..n).map(move |dx| self.cell_index(x0 + dx, y0 + dy)))
     }
 
     pub const fn in_tile(self, index: u32) -> [u32; 2] {
