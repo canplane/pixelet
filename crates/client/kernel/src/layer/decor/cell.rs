@@ -9,8 +9,7 @@
 use std::collections::HashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
-use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, TileSource};
-use pxl_spec::procedural::Frame;
+use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::v3::{len3, sub3, V3};
 use pxl_spec::space::coord::world::{nearest, nearest_box};
@@ -121,7 +120,7 @@ fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
         }
     });
     Some(Sources {
-        read_from: Terrain::pyramid().residency().drawn_from(GROUND.read_tile(chunk.column(), chunk.cell_zoom()))?.zoom,
+        read_from: Terrain::pyramid().residency().read(chunk.node(), chunk.cell_zoom()).value()?.from.zoom,
         objects: objects_met(&kernel().objects, chunk),
         shown: settings_store().decor,
         hide,
@@ -129,11 +128,10 @@ fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
 }
 
 fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
-    let tiles = Terrain::pyramid();
+    let terrain = Terrain::pyramid().residency();
     // The tile the terrain draws the chunk from, read over the chunk whose
     // side is that many of its cells; past the leaves, the chunk over it as wide.
-    let src = tiles.residency().drawn_from(GROUND.read_tile(chunk.column(), chunk.cell_zoom()))?;
-    let tile = tiles.residency().get(src)?;
+    let src = terrain.read(chunk.node(), chunk.cell_zoom()).value()?.from;
     let mut over = chunk;
     while GROUND.read_side(over.zoom(), over.cell_zoom()) < CHUNK_CELLS || GROUND.read_zoom(over.cell_zoom()) > src.zoom {
         over = over.parent()?;
@@ -142,15 +140,12 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
     let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
     let (tx0, ty0) = GROUND.read_at(over.column(), over.cell_zoom());
-    let view = crate::world::access::tile_view(tile);
+    // Read over `over`, whose tile is `src` itself.
+    let own = terrain.read(over.node(), over.cell_zoom()).value()?;
+    let view = own.view().tile;
     if sources.shown {
         let around = Around {
-            own: TileSource {
-                tile: view,
-                frame: Frame::of(src),
-                origin: [0, 0],
-                n: 1,
-            },
+            own: own.view(),
             beside: [None; 8],
         };
         c.sample.read(&around, [tx0 as i64, ty0 as i64], side + 2 * APRON).ok()?;
