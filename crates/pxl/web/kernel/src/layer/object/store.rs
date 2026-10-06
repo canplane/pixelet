@@ -63,7 +63,8 @@ pub fn column_at([x, y]: [i64; 2]) -> IVec {
 }
 
 /// The cell at a column's corner, on z = 0.
-fn column_cell(col_idx: IVec) -> [i64; 3] {
+/// A column's corner cell.
+pub fn column_cell(col_idx: IVec) -> [i64; 3] {
     index_of(CELL, &Pvf3 { i: from_idx(BAND, col_idx), f: 0 })
 }
 

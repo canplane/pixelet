@@ -12,7 +12,7 @@ use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, TileSource};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, LEAF_Z};
+use pxl_spec::space::pyramid::{CHUNK_DRAWN, GROUND, LEAF_Z};
 use pxl_spec::space::v3::{len3, sub3, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
@@ -168,7 +168,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         }
     }));
     let target = GROUND.cell_zoom(zoom);
-    let (cx, cy, span) = (index(target, x0), index(target, y0), CHUNK_CELLS as i64);
+    let (cx, cy, span) = (index(target, x0), index(target, y0), CHUNK_DRAWN as i64);
     match zoom < LEAF_Z && sources.shown {
         true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
         false => c.folded.clear(),

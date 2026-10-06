@@ -178,7 +178,7 @@ impl TerrainRepository {
                 .iter()
                 .map(|row| CoastRow {
                     geom_wkb: wkb(row),
-                    covers_tile: row.get("covers_page"),
+                    covers_tile: row.get("covers_tile"),
                 })
                 .collect(),
         })

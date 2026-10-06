@@ -11,7 +11,7 @@ use pxl_spec::bake::constant::{unpack_pos, CELL, U_PER_CELL};
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::lod::target_cell_px;
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, LEAF_Z};
+use pxl_spec::space::pyramid::{CHUNK_DRAWN, GROUND, LEAF_Z};
 use pxl_spec::space::v3::Aabb;
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
@@ -20,7 +20,7 @@ use std::collections::{HashMap, TryReserveError};
 use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::layer::decor::kind::{Kind, KINDS};
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
-use crate::layer::object::store::{At, EntryAt, Store, AIR};
+use crate::layer::object::store::{column_cell, At, EntryAt, Store, AIR};
 use crate::world::access::Access;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::asset::ingested::Asset;
@@ -264,7 +264,7 @@ impl<'s> DecorBuild<'s> {
         let (lx0, ly0) = (index(own, ground.x0), index(own, ground.y0));
         let per = i64::from(count(atom, own));
         let min = [index(atom, ground.x0), index(atom, ground.y0)];
-        let span = i64::from(CHUNK_CELLS) * per;
+        let span = i64::from(CHUNK_DRAWN) * per;
         let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
         scatter(kind.seed.tag, kind.seed.density, ground.zoom, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
         for i in 0..scratch.candidates.len() {
@@ -280,7 +280,12 @@ impl<'s> DecorBuild<'s> {
                 continue;
             }
             // A leaf in the cell overrides the scatter: a cube or air hides it, the leaf gone brings it back.
-            if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some()) {
+            // The cell is the column's, which a chunk narrower than a column starts inside.
+            let held = |c: IVec| {
+                let [ox, oy, _] = column_cell(c);
+                store.cell(c, (gx - ox) as u32, (gy - oy) as u32, ele).is_some()
+            };
+            if has_entries && ground.col_idx.is_some_and(held) {
                 continue;
             }
             let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, index(own, ele as i64)]).is_some_and(|&s| s != AIR);
