@@ -40,3 +40,14 @@ fn only_a_failure_waits() {
     assert_eq!(p.retry_after(Outcome::ok), None);
     assert_eq!(p.retry_after(Outcome::aborted), None);
 }
+
+#[test]
+fn of_tiles_as_near_the_finer_is_asked_first() {
+    use pxl_spec::space::pyramid::{LEAF_Z, TOP_Z};
+    let p = Policy::standard();
+    let eye = at(Why::Floor, true, 0.0);
+    let rank = |zoom| p.rank(Category::terrain, Tile { zoom, tile: 0 }.subject(), eye, 0.0);
+    let (leaf, top) = (rank(LEAF_Z), rank(TOP_Z));
+    assert_eq!((leaf.class, leaf.distance), (top.class, top.distance));
+    assert!(leaf.detail > top.detail);
+}

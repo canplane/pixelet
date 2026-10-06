@@ -96,7 +96,7 @@ impl Serve for Hostile {
             Hostile::Lifo => -enqueue_ms,
             Hostile::Nearest => ask.order.near,
         };
-        Rank { class: 0, distance }
+        Rank { class: 0, distance, detail: 0 }
     }
 
     fn intake(&self) -> u32 {
