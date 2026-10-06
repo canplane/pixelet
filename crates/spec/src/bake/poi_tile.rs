@@ -11,7 +11,7 @@
 
 use std::collections::HashMap;
 
-use crate::bake::format::Occupancy;
+use crate::bake::format::{occupancy_of, Occupancy};
 use crate::bake::poi_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
 use crate::space::coord::pvf3::pvf3::Pvf3;
 use crate::space::layer::lattice::{Lattice, GROUND};
@@ -360,7 +360,7 @@ pub fn decode(bytes: &[u8]) -> Result<PoiTile, MarshalError> {
         root.at(2)?.get_array::<u8>()?,
         root.at(3)?.get_array::<u32>()?,
     );
-    let occupancy = u8::try_from(root.at(4)?.get_number()? as i64).ok().and_then(Occupancy::of_bits).ok_or_else(malformed)?;
+    let occupancy = occupancy_of(root.at(4)?.get_number()?)?;
     let (shown, at, kinds, ids) = (root.at(5)?.get_array::<u32>()?, root.at(6)?.get_array::<u16>()?, root.at(7)?.get_strs()?, root.at(8)?.get_strs()?);
     let (n, places) = (cells.len(), kinds.len() as usize);
     let runs_fit = starts.len() == n + 1 && starts[0] == 0 && starts.windows(2).all(|w| w[0] <= w[1]) && starts[n] as usize == shown.len();

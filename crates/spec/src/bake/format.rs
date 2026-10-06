@@ -102,7 +102,7 @@ pub struct Extent {
 }
 
 /// A partial version's list, beside its tiles: the full version it overlays
-/// and the tiles it writes or removes over it, by quadkey. A version without
+/// and the tiles it writes or removes over it, by name. A version without
 /// one is full.
 pub const SNAPSHOT_KEY: &str = "_snapshot";
 
@@ -315,8 +315,10 @@ fn pairs(flat: &[i16]) -> Result<&[[i16; 2]], MarshalError> {
     }
 }
 
-fn occupancy_of(number: f64) -> Result<Occupancy, MarshalError> {
-    u8::try_from(number as i64).ok().and_then(Occupancy::of_bits).ok_or_else(malformed)
+/// A whole number a byte holds, never a cast of one that is not.
+pub fn occupancy_of(number: f64) -> Result<Occupancy, MarshalError> {
+    let whole = number.fract() == 0.0 && (0.0..=255.0).contains(&number);
+    whole.then(|| number as u8).and_then(Occupancy::of_bits).ok_or_else(malformed)
 }
 
 #[cfg(test)]
