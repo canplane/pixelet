@@ -76,7 +76,7 @@ pub struct Frame {
 impl Frame {
     /// A point about the anchor, its X on the anchor's lap.
     pub fn world_of(&self, at: V3) -> V3 {
-        let x = crate::world::frame::coord::unwrap_x(at[0], self.anchor[0]);
+        let x = pxl_spec::space::pvf3::nearest(at[0], self.anchor[0]);
         [x - self.anchor[0], at[1] - self.anchor[1], at[2] - self.anchor[2]]
     }
 }
@@ -911,7 +911,7 @@ impl Scheduler {
                 continue;
             }
             let (x0, y0) = s.base();
-            let translation = DrawList::translation([crate::world::frame::coord::unwrap_x(x0, frame.eye[0]), y0, 0.0], frame.eye);
+            let translation = DrawList::translation([pxl_spec::space::pvf3::nearest(x0, frame.eye[0]), y0, 0.0], frame.eye);
             let Some(t) = s.tier(cell_zoom, generation) else { continue };
             // Slots are recycled between chunks, so a chunk must draw only from a slot
             // it holds; otherwise it can draw another chunk's ground.

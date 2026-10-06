@@ -101,7 +101,7 @@ fn hit_decor(sched: &Scheduler, o: V3, d: [f64; 3], max_dist: f64) -> Option<Dec
             continue;
         }
         let side = cell.rect().2;
-        let (tx, ty) = (crate::world::frame::coord::unwrap_x(base_x, o[0]), base_y);
+        let (tx, ty) = (pxl_spec::space::pvf3::nearest(base_x, o[0]), base_y);
         if !ray_meets_square(&o, &d, tx - reach, ty - reach, tx + side + reach, ty + side + reach, limit) {
             continue;
         }

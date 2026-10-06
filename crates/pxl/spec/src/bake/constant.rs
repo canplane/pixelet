@@ -1,6 +1,7 @@
 // pxl-spec/bake/constant.rs
 
 use crate::space::hierarchy::{ancestor_of, first_descendant_of};
+use crate::space::pvf3::core::IVEC_Z_W;
 use crate::space::pvf3::ivec::IVec;
 use crate::space::pyramid::{CHUNK_STEPS, LEAF_Z};
 use crate::space::sparse_tree::mem::SparseTreeLayout;
@@ -14,6 +15,7 @@ pub const U_PER_CELL: f64 = units(CELL);
 
 // Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL
 // resample and the client's bicubic, and stored as i16 cells.
+const _: () = assert!(IVEC_Z_W == i16::BITS && CELL == UNIT_Z, "a height in i16 cells is the Z lane");
 /// Inner elevation samples across one leaf tile: a tile is about twice its
 /// side in units in meters wide and the source is about 30 m, rounded to 32 m.
 pub const TILE_ELE_SPAN: u32 = 1 << (shamt(LEAF_Z) + 1 - 5);

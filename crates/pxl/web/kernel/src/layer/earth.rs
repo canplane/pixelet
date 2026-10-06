@@ -8,7 +8,7 @@
 use pxl_spec::bake::earth_tile::{self, EARTH_Z};
 use pxl_spec::space::lod::{REACH_ACROSS, REACH_TILES};
 use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::{around, Folds, Tile};
+use pxl_spec::space::pyramid::{around, wrap_index, Folds, Tile};
 use xpute_runtime::global::Global;
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
@@ -109,7 +109,7 @@ pub fn earth_window() -> ([i32; 2], [u32; REACH_TILES as usize]) {
     let Some([first, _]) = pyramid.floor().next().map(at) else { return ([0; 2], layers) };
     // X wraps: the window's west tile is the one fewest tiles east of the first.
     let around = around(EARTH_Z);
-    let east = |x: i64| (x - first + around / 2).rem_euclid(around) - around / 2;
+    let east = |x: i64| wrap_index(EARTH_Z, x - first);
     let x0 = first + pyramid.floor().map(|p| east(at(p)[0])).min().unwrap_or(0);
     let y0 = pyramid.floor().map(|p| at(p)[1]).min().unwrap_or(0);
     for p in pyramid.floor() {

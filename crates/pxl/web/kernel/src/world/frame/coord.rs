@@ -4,23 +4,18 @@
 //! exactly, so positions are kept as the world's, X running on past a lap of
 //! it so that it is continuous about the eye.
 
+use pxl_spec::space::pvf3::nearest;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pvf3::ROUND;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
 use crate::world::frame::view::view;
 
-/// A canonical X on the lap nearest `near_x`.
-pub fn unwrap_x(x: f64, near_x: f64) -> f64 {
-    x + round((near_x - x) / ROUND) * ROUND
-}
-
 /// A canonical point in the world's doubles, on the lap nearest `near_x`.
 pub fn canonical_to_world(p: &Pvf3, near_x: f64) -> V3 {
     let [x, y, z] = projection::unproject(p.i, p.f);
-    [unwrap_x(x, near_x), y, z]
+    [nearest(x, near_x), y, z]
 }
 
 /// A canonical point in the world's doubles, on the lap nearest the eye.
