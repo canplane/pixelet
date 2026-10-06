@@ -42,7 +42,7 @@ pub const DEF: Kind = Kind {
         density: 0.004,
         orientation: DecorOrientationMode::AlignTransport,
     },
-    rules: DecorRules::on(&[g::motorway, g::trunk, g::primary, g::secondary, g::tertiary]),
+    rules: DecorRules::on(&[g::motorway, g::trunk, g::primary, g::secondary, g::residential_road]),
     variants: &VARIANTS,
     decor_id: Some(Decor::car),
 };

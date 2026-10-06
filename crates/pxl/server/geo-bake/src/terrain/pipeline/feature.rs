@@ -18,7 +18,15 @@ pub type P = [f64; 2];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Layer {
     Landcover,
+    /// `landcover-line`: a cutline.
+    LandcoverLine,
+    /// `water-lines`: a river, canal, stream, drain or ditch drawn as a line.
+    WaterLine,
     Water,
+    /// `water-barriers-poly` and `-line`: a dam, a weir.
+    WaterBarrier,
+    /// `piers-poly` and `-line`: a pier, a breakwater, a groyne.
+    Pier,
     /// `highway-area-fill`: pedestrian areas, platforms, an aeroway's areas.
     RoadArea,
     Road,
@@ -50,13 +58,6 @@ impl Rank {
     }
 }
 
-/// The way beside it that it shares one paved strip with; the gap is paved too.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Joins {
-    Road,
-    Carriageway,
-}
-
 #[derive(Clone, Debug)]
 pub struct Feature {
     pub points: Vec<P>,
@@ -68,7 +69,6 @@ pub struct Feature {
     pub cut: [bool; 2],
     pub cell: GroundCell,
     pub rank: Rank,
-    pub joins: Option<Joins>,
 }
 
 /// In the tile's cells from its corner.
@@ -93,7 +93,6 @@ impl Feature {
             cut: [false; 2],
             cell,
             rank,
-            joins: None,
         })
     }
 }

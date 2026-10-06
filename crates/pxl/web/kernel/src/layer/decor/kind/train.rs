@@ -37,7 +37,7 @@ pub const DEF: Kind = Kind {
         density: 0.004,
         orientation: DecorOrientationMode::AlignTransport,
     },
-    rules: DecorRules::on(&[g::rail, g::subway]),
+    rules: DecorRules::on(&[g::tram, g::light_rail, g::subway, g::monorail, g::rail]),
     variants: &VARIANTS,
     decor_id: Some(Decor::train),
 };

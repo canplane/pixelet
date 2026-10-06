@@ -51,7 +51,7 @@ pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
     ordered.sort_by(|a, b| a.rank.cmp(&b.rank));
     for f in ordered {
         let mask = match f.rank.layer {
-            Layer::Landcover | Layer::Water => sea.as_deref(),
+            Layer::Landcover | Layer::LandcoverLine | Layer::WaterLine | Layer::Water => sea.as_deref(),
             _ => None,
         };
         if f.closed {

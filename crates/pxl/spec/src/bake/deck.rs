@@ -32,6 +32,15 @@ pub const WIDEST: f64 = u8::MAX as f64 / POINT_SCALE;
 /// A deck's slab under its surface, in ground metres: Arnis's `DECK_STRUCTURE_DEPTH`.
 pub const DECK_THICKNESS_M: f64 = 2.0;
 
+/// Clear height a deck keeps over a deck under it, in ground metres: Arnis's
+/// `STACKED_DECK_HEADROOM`.
+pub const STACKED_DECK_HEADROOM_M: f64 = 6.0;
+
+/// A deck's slab in cells, at least one.
+pub fn slab_depth(cell_per_m: f64) -> i32 {
+    (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1)
+}
+
 /// What a line is, from the source's flags alone; the byte is the wire's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -155,7 +164,7 @@ impl Over {
         let (low, top) = (round(self.low) as i32, round(self.top) as i32);
         match self.form {
             Form::Deck => {
-                let lo = low - (round(DECK_THICKNESS_M * cell_per_m) as i32).max(1);
+                let lo = low - slab_depth(cell_per_m);
                 Occupies::Above {
                     slab: [lo, top],
                     pier: (self.pier && lo > ground).then_some([ground, lo]),

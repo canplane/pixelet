@@ -30,7 +30,10 @@ others, and a building stood over a road, as it does again here.
 Carto names each look it paints by a variable (`@forest`, `@residential-fill`)
 or, where it has none, by the feature it paints (`railway_rail`). A look is
 one key: two Carto variables of one color are one key, and a key is named
-after the variable it is painted as. Carto changes its colors between
+after the variable it is painted as. Tertiary, residential and service roads
+are all white in Carto, which tells them apart by width alone
+(openstreetmap-carto#1736), so they are one key, `residential_road`, and
+differ on the ground in width and paint order as they do there. Carto changes its colors between
 releases, so the palette is held to one release, and the catalog's `doc` cites
 the variable each value comes from.
 
@@ -42,8 +45,8 @@ The fold keeps its majority and its tie, the corner that alternates with the
 zoom (`pxl-spec bake/fold.rs` `majority`), now over the one value.
 
 Carto has one water fill, so water is one key, river and lake alike. A
-wetland is drawn by its `wetland` tag, which Overture does not carry, so it
-takes `grass`, the fill most of Carto's wetlands get.
+wetland is filled by its `wetland` tag, which Overture does not carry, and
+Carto fills a wetland without one not at all, so it paints nothing.
 
 ## One value space
 
@@ -83,12 +86,15 @@ later rank paints over an earlier one, and only the parts of one source share
 a rank, which paint one look. The rank is Carto's sort, compared field by field
 (`terrain/pipeline/feature.rs` `Rank`):
 
-1. The layer, in the order `project.mml` stacks them: landcover, water, the
-   areas of highways, platforms and aeroways (`highway-area-fill`), roads,
-   buildings, aeroway lines.
+1. The layer, in the order `project.mml` stacks them: landcover, the
+   cutlines (`landcover-line`), the waterways drawn as lines, the water
+   areas, dams and weirs (`water-barriers`), piers and breakwaters
+   (`piers`), the areas of highways, platforms and aeroways
+   (`highway-area-fill`), roads, buildings, aeroway lines.
 2. The layer's own order: an area layer larger `way_area` first, the whole
    source's, so a page that clips it or a part of it ranks as the rest do;
-   roads by Carto's `z`; a runway over a taxiway.
+   roads by Carto's `z`; a runway over a taxiway; a water barrier's or a
+   pier's areas under its lines, and a pier over a breakwater.
 3. Carto's `feature`, which breaks a tie in landcover (`landuse_forest`), kept
    by the bake beside the look, since several features share one look and the
    look's number orders nothing.
@@ -114,7 +120,14 @@ over or under it is not painted: a bridge is a deck, a tunnel a bore, both
 lines the bake writes beside the ground (decision/20261001-ways-off-the-ground.md),
 and an indoor passage is left off. A road with none of those flags that
 crosses a building's footprint is where the order speaks, and the building
-shows.
+shows. For the same reason a bridge's own area (`man_made=bridge`, Carto's
+`bridge` layer) is not painted: the deck is drawn from the ways on it, and
+the ground under it shows what is there.
+
+A line is painted at Carto's width at z16, the zoom whose pixel is a cell,
+casing included: a way's (`overture/width.rs`) as a waterway's, a runway's
+or a pier's. Carto reads no measured width and counts no lanes, so the bake
+reads neither, and a deck is as wide as the way it carries.
 
 On a shore the sea is what the coastline leaves, fixed before any feature
 paints, and landcover and water do not paint it. It is read from the coast,
@@ -126,8 +139,17 @@ OpenStreetMap tag the class comes from; Overture's `land_use` classes are the
 tags' values. A class Carto draws no fill for (a military area, a nature
 reserve, a dune) paints nothing, and the land under it shows Carto's
 background, `@land-color`, which is also what land no feature covers shows.
-A new look joins the palette only where no look has Carto's color: a glacier
-is Carto's `@glacier`, drawn with the water areas.
+The palette holds only what can be painted: a look no Overture class
+reaches (a fire station's area, a rest area, a bus guideway, a raceway, mud,
+a prison) is not defined, since Overture's conversion from the tags drops
+every source of it. A new look joins the palette only where no look has
+Carto's color: a glacier
+is Carto's `@glacier`, drawn with the water areas, a dam `@dam`, a
+breakwater and a weir `@breakwater-color`, and each railway Carto draws in a
+gray of its own (tram, light rail, subway, monorail, rail) its own key; a
+pier is `@land-color`, painted over the water. Carto's golf areas are read
+by Overture's `golf` subtype, so a bunker there is sand and a military one
+nothing.
 
 ## What it costs
 

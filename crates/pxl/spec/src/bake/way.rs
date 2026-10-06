@@ -6,11 +6,12 @@
 
 use core::f64::consts::FRAC_1_SQRT_2;
 
-use super::format::GroundCell;
-use crate::cell::cube::cube_types::ground;
+use xpute_core::math::scalar::round;
 
-/// The looks of a way for feet, a bicycle or a horse rather than a vehicle.
-pub const PATHS: [GroundCell; 4] = [ground::footway, ground::cycleway, ground::bridleway, ground::pedestrian];
+/// Half a way's width, in whole cells.
+pub fn half_cells(width: f64) -> i32 {
+    round(width / 2.0) as i32
+}
 
 /// How far from its line a way of `width` cells covers a cell's center.
 pub fn reach(width: f64) -> f64 {

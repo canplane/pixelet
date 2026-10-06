@@ -6,10 +6,10 @@ use pxl_spec::bake::deck::Form;
 use pxl_spec::space::adapter::epsg3857::G3857;
 
 use crate::deck::way::Polyline;
+use crate::deck::{barred, BORE_FLAGS, DECK_FLAGS};
 use crate::segment::Segment;
 use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, split_ranged, value_at, without, Line, Range};
-use crate::terrain::pipeline::overture::policy::{BORE_FLAGS, DECK_FLAGS, UNSEEN_FLAGS};
-use crate::terrain::pipeline::overture::width::{width_m, WayShape};
+use crate::terrain::pipeline::overture::width::{width_cells, WayShape};
 use crate::wkb::wkb_to_geometries;
 
 #[derive(Clone)]
@@ -19,7 +19,7 @@ pub struct Piece {
     pub class: Option<String>,
     /// OSM's `layer` where the source gives one (`level_rules`).
     pub layer: Option<i64>,
-    pub width_m: f64,
+    pub width_cells: f64,
     pub form: Form,
     pub points: Vec<G3857>,
     /// What each end is, first and last; ends meet where these are equal.
@@ -80,13 +80,13 @@ impl Piece {
 
 pub fn pieces_of(row: &Segment, form: Form) -> Vec<Piece> {
     let flags = row.flags.as_deref();
-    let (on, less): (&[&str], Vec<&str>) = match form {
-        Form::Deck => (DECK_FLAGS, UNSEEN_FLAGS.to_vec()),
-        Form::Bore => (BORE_FLAGS, UNSEEN_FLAGS.iter().copied().filter(|f| !BORE_FLAGS.contains(f)).collect()),
+    let on = match form {
+        Form::Deck => DECK_FLAGS,
+        Form::Bore => BORE_FLAGS,
         Form::Grade => return Vec::new(), // no flag makes one
     };
     let cell = cell_of(length_of(&row.geom_wkb));
-    pieces_over(row, form, &without(&flag_ranges(flags, on, cell), &flag_ranges(flags, &less, cell)))
+    pieces_over(row, form, &without(&flag_ranges(flags, on, cell), &flag_ranges(flags, barred(form, &row.subtype), cell)))
 }
 
 /// The pieces of `row` over `deck`, its ranges of the form, as fractions of its length.
@@ -112,7 +112,7 @@ pub fn pieces_over(row: &Segment, form: Form, deck: &[Range]) -> Vec<Piece> {
                 subtype: row.subtype.clone(),
                 class: row.class.clone(),
                 layer: value_at(row.levels.as_deref(), mid).map(|v| v as i64),
-                width_m: width_m(&row.subtype, row.class.as_deref(), shape),
+                width_cells: width_cells(&row.subtype, row.class.as_deref(), shape),
                 form,
                 ends: [End::of(&row.gers_id, whole, a), End::of(&row.gers_id, whole, b)],
                 start: a * length,

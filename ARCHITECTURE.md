@@ -118,7 +118,6 @@ The bake is `pxl-geo-bake`, and it writes the same formats the client reads — 
 Overture rows and the elevation raster, from PostGIS
   → deck solve (every bridge and tunnel reaching the tile, solved whole: its lines, and the ranges of ways they draw)
   → overture/policy (row → feature: its shape, the cell it paints, its rank)
-  → corridor (the gap between two ways that are one strip of road, paved)
   → ground (features rasterized into one look a cell, the coast's land over the sea)
   → encode_terrain (elevation + ground + lines → XTP)
 ```

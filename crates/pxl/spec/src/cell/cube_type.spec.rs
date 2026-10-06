@@ -47,135 +47,131 @@ pub mod cube_types {
         pub const sand: u8 = 3;
         /// beach and shoal: Carto @beach
         pub const beach: u8 = 4;
-        /// mud: Carto @mud, its 30% over @land-color, as a cell is opaque
-        pub const mud: u8 = 5;
         /// heath and bog: Carto @heath
-        pub const heath: u8 = 6;
+        pub const heath: u8 = 5;
         /// scrub and mangrove: Carto @scrub
-        pub const scrub: u8 = 7;
+        pub const scrub: u8 = 6;
         /// grass, meadow, garden, village green, marsh, wet meadow: Carto @grass
-        pub const grass: u8 = 8;
+        pub const grass: u8 = 7;
         /// park: Carto @park
-        pub const park: u8 = 9;
+        pub const park: u8 = 8;
         /// playground, recreation ground, stadium, sports centre: Carto @leisure, lighten(@park, 5%)
-        pub const leisure: u8 = 10;
+        pub const leisure: u8 = 9;
         /// pitch and track: Carto @pitch
-        pub const pitch: u8 = 11;
+        pub const pitch: u8 = 10;
         /// forest, wood, swamp: Carto @forest
-        pub const forest: u8 = 12;
+        pub const forest: u8 = 11;
         /// orchard, vineyard, plant nursery: Carto @orchard
-        pub const orchard: u8 = 13;
+        pub const orchard: u8 = 12;
         /// allotments: Carto @allotments
-        pub const allotments: u8 = 14;
+        pub const allotments: u8 = 13;
         /// farmland and greenhouses: Carto @farmland
-        pub const farmland: u8 = 15;
+        pub const farmland: u8 = 14;
         /// farmyard: Carto @farmyard
-        pub const farmyard: u8 = 16;
+        pub const farmyard: u8 = 15;
         /// campsite and golf course: Carto @campsite
-        pub const campsite: u8 = 17;
+        pub const campsite: u8 = 16;
         /// cemetery and grave yard: Carto @cemetery
-        pub const cemetery: u8 = 18;
+        pub const cemetery: u8 = 17;
         /// residential: Carto @residential
-        pub const residential: u8 = 19;
+        pub const residential: u8 = 18;
         /// garages: Carto @garages
-        pub const garages: u8 = 20;
+        pub const garages: u8 = 19;
         /// retail: Carto @retail
-        pub const retail: u8 = 21;
+        pub const retail: u8 = 20;
         /// commercial: Carto @commercial
-        pub const commercial: u8 = 22;
+        pub const commercial: u8 = 21;
         /// industrial, railway, works: Carto @industrial
-        pub const industrial: u8 = 23;
+        pub const industrial: u8 = 22;
         /// power plant and substation: Carto @power, darken(@industrial, 5%)
-        pub const power: u8 = 24;
+        pub const power: u8 = 23;
         /// construction and brownfield: Carto @construction
-        pub const construction: u8 = 25;
+        pub const construction: u8 = 24;
         /// landfill: Carto's landuse_landfill, a value with no name
-        pub const landfill: u8 = 26;
+        pub const landfill: u8 = 25;
         /// quarry: Carto @quarry
-        pub const quarry: u8 = 27;
+        pub const quarry: u8 = 26;
         /// school, college, university, hospital, clinic: Carto @societal_amenities
-        pub const societal_amenities: u8 = 28;
+        pub const societal_amenities: u8 = 27;
         /// a religious site: Carto @place_of_worship
-        pub const place_of_worship: u8 = 29;
-        /// fire station and police: Carto's amenity_fire_station and amenity_police, one value with no name
-        pub const fire_station: u8 = 30;
-        /// prison: Carto's amenity_prison, a value with no name
-        pub const prison: u8 = 31;
+        pub const place_of_worship: u8 = 28;
         /// aerodrome, bus station, ferry terminal: Carto @transportation-area
-        pub const transportation_area: u8 = 32;
-        /// rest area: Carto @rest_area
-        pub const rest_area: u8 = 33;
+        pub const transportation_area: u8 = 29;
         /// parking: Carto @parking
-        pub const parking: u8 = 34;
+        pub const parking: u8 = 30;
         /// apron: Carto @apron
-        pub const apron: u8 = 35;
+        pub const apron: u8 = 31;
 
         // ---- water ----
 
         /// glacier: Carto @glacier, drawn with the water areas
-        pub const glacier: u8 = 36;
+        pub const glacier: u8 = 32;
         /// sea, lake, river, canal, any water: Carto @water-color
-        pub const water: u8 = 37;
+        pub const water: u8 = 33;
+
+        // ---- water features ----
+
+        /// dam: Carto @dam
+        pub const dam: u8 = 34;
+        /// breakwater, groyne, weir: Carto @breakwater-color, @weir-line
+        pub const breakwater: u8 = 35;
 
         // ---- buildings ----
 
         /// a building: Carto @building-fill
-        pub const building: u8 = 38;
+        pub const building: u8 = 36;
         /// a place of worship, a terminal, a station: Carto @building-major-fill at z16 and finer, as a cell is z16
-        pub const building_major: u8 = 39;
+        pub const building_major: u8 = 37;
 
         // ---- roads, by Carto's z ----
 
         /// footway, steps, path: Carto @footway-fill, @steps-fill
-        pub const footway: u8 = 40;
+        pub const footway: u8 = 38;
         /// cycleway: Carto @cycleway-fill
-        pub const cycleway: u8 = 41;
+        pub const cycleway: u8 = 39;
         /// bridleway: Carto @bridleway-fill
-        pub const bridleway: u8 = 42;
+        pub const bridleway: u8 = 40;
         /// track, an agricultural or forest way: Carto @track-fill
-        pub const track: u8 = 43;
-        /// bus guideway: Carto @bus-guideway-fill
-        pub const bus_guideway: u8 = 44;
-        /// service road, a driveway, a parking aisle, an alley: Carto @service-fill
-        pub const service: u8 = 45;
+        pub const track: u8 = 41;
         /// pedestrian street: Carto @pedestrian-fill
-        pub const pedestrian: u8 = 46;
+        pub const pedestrian: u8 = 42;
         /// living street: Carto @living-street-fill
-        pub const living_street: u8 = 47;
-        /// residential and unclassified: Carto @residential-fill
-        pub const residential_road: u8 = 48;
+        pub const living_street: u8 = 43;
+        /// tertiary, residential, unclassified and service, told apart by width: Carto @tertiary-fill, @residential-fill, @service-fill
+        pub const residential_road: u8 = 44;
         /// a road of no known class: Carto @road-fill
-        pub const road: u8 = 49;
-        /// raceway: Carto @raceway-fill
-        pub const raceway: u8 = 50;
-        /// tertiary: Carto @tertiary-fill
-        pub const tertiary: u8 = 51;
+        pub const road: u8 = 45;
         /// secondary: Carto @secondary-fill
-        pub const secondary: u8 = 52;
+        pub const secondary: u8 = 46;
         /// primary: Carto @primary-fill
-        pub const primary: u8 = 53;
+        pub const primary: u8 = 47;
         /// trunk: Carto @trunk-fill
-        pub const trunk: u8 = 54;
+        pub const trunk: u8 = 48;
         /// motorway: Carto @motorway-fill
-        pub const motorway: u8 = 55;
+        pub const motorway: u8 = 49;
         /// platform: Carto @platform-fill
-        pub const platform: u8 = 56;
-        /// subway, light rail, tram, monorail: Carto's railway_subway, a value with no name
-        pub const subway: u8 = 57;
+        pub const platform: u8 = 50;
+        /// tram: Carto's railway_tram, a value with no name
+        pub const tram: u8 = 51;
+        /// light rail, narrow gauge, funicular: Carto's railway_light_rail, a value with no name
+        pub const light_rail: u8 = 52;
+        /// subway: Carto's railway_subway, a value with no name
+        pub const subway: u8 = 53;
+        /// monorail: Carto's railway_monorail, a value with no name
+        pub const monorail: u8 = 54;
         /// rail: Carto's railway_rail, a value with no name
-        pub const rail: u8 = 58;
+        pub const rail: u8 = 55;
 
         // ---- aeroways ----
 
         /// runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill
-        pub const aeroway: u8 = 59;
+        pub const aeroway: u8 = 56;
 
         pub const ENTRIES: &[(&str, u8)] = &[
             ("land", land),
             ("bare_ground", bare_ground),
             ("sand", sand),
             ("beach", beach),
-            ("mud", mud),
             ("heath", heath),
             ("scrub", scrub),
             ("grass", grass),
@@ -200,34 +196,32 @@ pub mod cube_types {
             ("quarry", quarry),
             ("societal_amenities", societal_amenities),
             ("place_of_worship", place_of_worship),
-            ("fire_station", fire_station),
-            ("prison", prison),
             ("transportation_area", transportation_area),
-            ("rest_area", rest_area),
             ("parking", parking),
             ("apron", apron),
             ("glacier", glacier),
             ("water", water),
+            ("dam", dam),
+            ("breakwater", breakwater),
             ("building", building),
             ("building_major", building_major),
             ("footway", footway),
             ("cycleway", cycleway),
             ("bridleway", bridleway),
             ("track", track),
-            ("bus_guideway", bus_guideway),
-            ("service", service),
             ("pedestrian", pedestrian),
             ("living_street", living_street),
             ("residential_road", residential_road),
             ("road", road),
-            ("raceway", raceway),
-            ("tertiary", tertiary),
             ("secondary", secondary),
             ("primary", primary),
             ("trunk", trunk),
             ("motorway", motorway),
             ("platform", platform),
+            ("tram", tram),
+            ("light_rail", light_rail),
             ("subway", subway),
+            ("monorail", monorail),
             ("rail", rail),
             ("aeroway", aeroway),
         ];
@@ -269,71 +263,67 @@ pub mod cube_types {
         bare_ground = 2,
         sand = 3,
         beach = 4,
-        mud = 5,
-        heath = 6,
-        scrub = 7,
-        grass = 8,
-        park = 9,
-        leisure = 10,
-        pitch = 11,
-        forest = 12,
-        orchard = 13,
-        allotments = 14,
-        farmland = 15,
-        farmyard = 16,
-        campsite = 17,
-        cemetery = 18,
-        residential = 19,
-        garages = 20,
-        retail = 21,
-        commercial = 22,
-        industrial = 23,
-        power = 24,
-        construction = 25,
-        landfill = 26,
-        quarry = 27,
-        societal_amenities = 28,
-        place_of_worship = 29,
-        fire_station = 30,
-        prison = 31,
-        transportation_area = 32,
-        rest_area = 33,
-        parking = 34,
-        apron = 35,
-        glacier = 36,
-        water = 37,
-        building = 38,
-        building_major = 39,
-        footway = 40,
-        cycleway = 41,
-        bridleway = 42,
-        track = 43,
-        bus_guideway = 44,
-        service = 45,
-        pedestrian = 46,
-        living_street = 47,
-        residential_road = 48,
-        road = 49,
-        raceway = 50,
-        tertiary = 51,
-        secondary = 52,
-        primary = 53,
-        trunk = 54,
-        motorway = 55,
-        platform = 56,
-        subway = 57,
-        rail = 58,
-        aeroway = 59,
+        heath = 5,
+        scrub = 6,
+        grass = 7,
+        park = 8,
+        leisure = 9,
+        pitch = 10,
+        forest = 11,
+        orchard = 12,
+        allotments = 13,
+        farmland = 14,
+        farmyard = 15,
+        campsite = 16,
+        cemetery = 17,
+        residential = 18,
+        garages = 19,
+        retail = 20,
+        commercial = 21,
+        industrial = 22,
+        power = 23,
+        construction = 24,
+        landfill = 25,
+        quarry = 26,
+        societal_amenities = 27,
+        place_of_worship = 28,
+        transportation_area = 29,
+        parking = 30,
+        apron = 31,
+        glacier = 32,
+        water = 33,
+        dam = 34,
+        breakwater = 35,
+        building = 36,
+        building_major = 37,
+        footway = 38,
+        cycleway = 39,
+        bridleway = 40,
+        track = 41,
+        pedestrian = 42,
+        living_street = 43,
+        residential_road = 44,
+        road = 45,
+        secondary = 46,
+        primary = 47,
+        trunk = 48,
+        motorway = 49,
+        platform = 50,
+        tram = 51,
+        light_rail = 52,
+        subway = 53,
+        monorail = 54,
+        rail = 55,
+        aeroway = 56,
     }
 
     impl Ground {
         /// Every look, in paint order.
-        pub const ALL: [Ground; 59] = [
+        pub const ALL: [Ground; 56] = [
             Ground::land,
             Ground::bare_ground,
             Ground::sand,
             Ground::beach,
-            Ground::mud,
             Ground::heath,
             Ground::scrub,
             Ground::grass,
@@ -358,34 +348,32 @@ pub mod cube_types {
             Ground::quarry,
             Ground::societal_amenities,
             Ground::place_of_worship,
-            Ground::fire_station,
-            Ground::prison,
             Ground::transportation_area,
-            Ground::rest_area,
             Ground::parking,
             Ground::apron,
             Ground::glacier,
             Ground::water,
+            Ground::dam,
+            Ground::breakwater,
             Ground::building,
             Ground::building_major,
             Ground::footway,
             Ground::cycleway,
             Ground::bridleway,
             Ground::track,
-            Ground::bus_guideway,
-            Ground::service,
             Ground::pedestrian,
             Ground::living_street,
             Ground::residential_road,
             Ground::road,
-            Ground::raceway,
-            Ground::tertiary,
             Ground::secondary,
             Ground::primary,
             Ground::trunk,
             Ground::motorway,
             Ground::platform,
+            Ground::tram,
+            Ground::light_rail,
             Ground::subway,
+            Ground::monorail,
             Ground::rail,
             Ground::aeroway,
         ];
@@ -397,61 +385,58 @@ pub mod cube_types {
                 2 => Some(Ground::bare_ground),
                 3 => Some(Ground::sand),
                 4 => Some(Ground::beach),
-                5 => Some(Ground::mud),
-                6 => Some(Ground::heath),
-                7 => Some(Ground::scrub),
-                8 => Some(Ground::grass),
-                9 => Some(Ground::park),
-                10 => Some(Ground::leisure),
-                11 => Some(Ground::pitch),
-                12 => Some(Ground::forest),
-                13 => Some(Ground::orchard),
-                14 => Some(Ground::allotments),
-                15 => Some(Ground::farmland),
-                16 => Some(Ground::farmyard),
-                17 => Some(Ground::campsite),
-                18 => Some(Ground::cemetery),
-                19 => Some(Ground::residential),
-                20 => Some(Ground::garages),
-                21 => Some(Ground::retail),
-                22 => Some(Ground::commercial),
-                23 => Some(Ground::industrial),
-                24 => Some(Ground::power),
-                25 => Some(Ground::construction),
-                26 => Some(Ground::landfill),
-                27 => Some(Ground::quarry),
-                28 => Some(Ground::societal_amenities),
-                29 => Some(Ground::place_of_worship),
-                30 => Some(Ground::fire_station),
-                31 => Some(Ground::prison),
-                32 => Some(Ground::transportation_area),
-                33 => Some(Ground::rest_area),
-                34 => Some(Ground::parking),
-                35 => Some(Ground::apron),
-                36 => Some(Ground::glacier),
-                37 => Some(Ground::water),
-                38 => Some(Ground::building),
-                39 => Some(Ground::building_major),
-                40 => Some(Ground::footway),
-                41 => Some(Ground::cycleway),
-                42 => Some(Ground::bridleway),
-                43 => Some(Ground::track),
-                44 => Some(Ground::bus_guideway),
-                45 => Some(Ground::service),
-                46 => Some(Ground::pedestrian),
-                47 => Some(Ground::living_street),
-                48 => Some(Ground::residential_road),
-                49 => Some(Ground::road),
-                50 => Some(Ground::raceway),
-                51 => Some(Ground::tertiary),
-                52 => Some(Ground::secondary),
-                53 => Some(Ground::primary),
-                54 => Some(Ground::trunk),
-                55 => Some(Ground::motorway),
-                56 => Some(Ground::platform),
-                57 => Some(Ground::subway),
-                58 => Some(Ground::rail),
-                59 => Some(Ground::aeroway),
+                5 => Some(Ground::heath),
+                6 => Some(Ground::scrub),
+                7 => Some(Ground::grass),
+                8 => Some(Ground::park),
+                9 => Some(Ground::leisure),
+                10 => Some(Ground::pitch),
+                11 => Some(Ground::forest),
+                12 => Some(Ground::orchard),
+                13 => Some(Ground::allotments),
+                14 => Some(Ground::farmland),
+                15 => Some(Ground::farmyard),
+                16 => Some(Ground::campsite),
+                17 => Some(Ground::cemetery),
+                18 => Some(Ground::residential),
+                19 => Some(Ground::garages),
+                20 => Some(Ground::retail),
+                21 => Some(Ground::commercial),
+                22 => Some(Ground::industrial),
+                23 => Some(Ground::power),
+                24 => Some(Ground::construction),
+                25 => Some(Ground::landfill),
+                26 => Some(Ground::quarry),
+                27 => Some(Ground::societal_amenities),
+                28 => Some(Ground::place_of_worship),
+                29 => Some(Ground::transportation_area),
+                30 => Some(Ground::parking),
+                31 => Some(Ground::apron),
+                32 => Some(Ground::glacier),
+                33 => Some(Ground::water),
+                34 => Some(Ground::dam),
+                35 => Some(Ground::breakwater),
+                36 => Some(Ground::building),
+                37 => Some(Ground::building_major),
+                38 => Some(Ground::footway),
+                39 => Some(Ground::cycleway),
+                40 => Some(Ground::bridleway),
+                41 => Some(Ground::track),
+                42 => Some(Ground::pedestrian),
+                43 => Some(Ground::living_street),
+                44 => Some(Ground::residential_road),
+                45 => Some(Ground::road),
+                46 => Some(Ground::secondary),
+                47 => Some(Ground::primary),
+                48 => Some(Ground::trunk),
+                49 => Some(Ground::motorway),
+                50 => Some(Ground::platform),
+                51 => Some(Ground::tram),
+                52 => Some(Ground::light_rail),
+                53 => Some(Ground::subway),
+                54 => Some(Ground::monorail),
+                55 => Some(Ground::rail),
+                56 => Some(Ground::aeroway),
                 _ => None,
             }
         }
@@ -462,7 +447,6 @@ pub mod cube_types {
                 Ground::bare_ground => Kind::Land,
                 Ground::sand => Kind::Land,
                 Ground::beach => Kind::Land,
-                Ground::mud => Kind::Land,
                 Ground::heath => Kind::Land,
                 Ground::scrub => Kind::Land,
                 Ground::grass => Kind::Land,
@@ -487,34 +471,32 @@ pub mod cube_types {
                 Ground::quarry => Kind::Land,
                 Ground::societal_amenities => Kind::Land,
                 Ground::place_of_worship => Kind::Land,
-                Ground::fire_station => Kind::Land,
-                Ground::prison => Kind::Land,
                 Ground::transportation_area => Kind::Land,
-                Ground::rest_area => Kind::Land,
                 Ground::parking => Kind::Land,
                 Ground::apron => Kind::Land,
                 Ground::glacier => Kind::Land,
                 Ground::water => Kind::Water,
+                Ground::dam => Kind::Structure,
+                Ground::breakwater => Kind::Structure,
                 Ground::building => Kind::Structure,
                 Ground::building_major => Kind::Structure,
                 Ground::footway => Kind::Transport,
                 Ground::cycleway => Kind::Transport,
                 Ground::bridleway => Kind::Transport,
                 Ground::track => Kind::Transport,
-                Ground::bus_guideway => Kind::Transport,
-                Ground::service => Kind::Transport,
                 Ground::pedestrian => Kind::Transport,
                 Ground::living_street => Kind::Transport,
                 Ground::residential_road => Kind::Transport,
                 Ground::road => Kind::Transport,
-                Ground::raceway => Kind::Transport,
-                Ground::tertiary => Kind::Transport,
                 Ground::secondary => Kind::Transport,
                 Ground::primary => Kind::Transport,
                 Ground::trunk => Kind::Transport,
                 Ground::motorway => Kind::Transport,
                 Ground::platform => Kind::Transport,
+                Ground::tram => Kind::Transport,
+                Ground::light_rail => Kind::Transport,
                 Ground::subway => Kind::Transport,
+                Ground::monorail => Kind::Transport,
                 Ground::rail => Kind::Transport,
                 Ground::aeroway => Kind::Transport,
             }

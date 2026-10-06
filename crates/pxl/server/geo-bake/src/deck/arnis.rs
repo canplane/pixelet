@@ -1,8 +1,24 @@
 // pxl-geo-bake/deck/arnis.rs
 
-//! Bridges and tunnels for one tile, heights as Arnis (OSM to Minecraft,
-//! Apache-2.0) solves them in its element processing for bridges, highways
-//! and railways, without the blocks it places: a road bridge's deck is the
+// Copyright (c) 2022-2026 Louis Erbkamm (louis-e)
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! louis-e/arnis `c96872e` ported, changed to read Overture's fields for
+//! OSM's tags and to take its widths from the ground: bridges and tunnels
+//! for one tile, heights as Arnis solves them in its element processing for
+//! bridges, highways and railways, without the blocks it places: a road
+//! bridge's deck is the
 //! least concave line over what it must clear, a rail viaduct one level with
 //! ramps, a road tunnel as deep as its cover asks and reached by its approach
 //! roads sinking into the portal, a rail tunnel at a fixed depth under the
@@ -15,7 +31,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::time::Instant;
 
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::bake::deck::{footprint as line_reach, Form};
+use pxl_spec::bake::deck::{footprint as line_reach, Form, STACKED_DECK_HEADROOM_M};
+use pxl_spec::bake::way::half_cells;
 use pxl_spec::space::adapter::epsg3857::{from_db, get_tile_bbox, to_db, u_per_m};
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::math::scalar::round;
@@ -24,12 +41,13 @@ use crate::deck::elevation::{sample_cells, tile_of};
 use crate::deck::piece::{pieces_of, pieces_over, End, Piece};
 use crate::deck::source::{ring, Store};
 use crate::deck::way::{Polyline, Way};
+use crate::deck::{barred, structural, DECK_FLAGS, GRADE_BARRED};
 use crate::deck::{Drawn, Line, Reader, Solved};
 use crate::segment::Segment;
 use crate::terrain::bake::Surface;
 use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, value_at, without};
-use crate::terrain::pipeline::overture::policy::DECK_FLAGS;
-use crate::terrain::pipeline::overture::width::{width_m, WayShape};
+use crate::terrain::pipeline::overture::policy::waterway_width;
+use crate::terrain::pipeline::overture::width::{width_cells, WayShape};
 use crate::wkb::wkb_to_geometries;
 
 // ---- Arnis's numbers, in metres or as ratios, under its names ----
@@ -44,7 +62,6 @@ const PATH_HEADROOM_M: f64 = 5.0;
 const RAIL_HEADROOM_M: f64 = 8.0;
 const RIVER_HEADROOM_M: f64 = 4.0;
 const STREAM_HEADROOM_M: f64 = 2.0;
-const STACKED_DECK_HEADROOM_M: f64 = 6.0;
 const MAX_CLEARANCE_SLOPE: f64 = 1.0;
 const PROFILE_MONOTONIC_TOLERANCE_M: f64 = 2.0;
 const OBSTACLE_GRID_M: f64 = 64.0;
@@ -153,12 +170,12 @@ impl Run {
 
 /// A way at grade made to stand off it, a bridge's ramp or a tunnel's
 /// approach: a grade line at `points`.
-fn graded(way: &Way, points: Vec<[f64; 3]>, units: Units) -> (Line, Drawn) {
+fn graded(way: &Way, points: Vec<[f64; 3]>) -> (Line, Drawn) {
     (
         Line {
             subtype: way.row.subtype.clone(),
             class: way.row.class.clone(),
-            width_cells: way_width_m(&way.row) * units.cell_per_m,
+            width_cells: way_width(&way.row),
             form: Form::Grade,
             points,
             clear: 0,
@@ -208,7 +225,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
     loop {
         let before = (scope.len(), src.loaded.len());
         for id in scope.clone() {
-            src.sample(r, &id, units)?;
+            src.sample(r, &id)?;
             let s = &src.pieces[&id].piece;
             scope.extend(s.ends.iter().flat_map(|e| src.by_end.get(e).into_iter().flatten().cloned()).collect::<Vec<_>>());
             if s.form == Form::Deck {
@@ -227,7 +244,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<(Solved, Rep
         }
     }
     let t = Instant::now();
-    let runs = runs_of(&src, &scope, lo, units);
+    let runs = runs_of(&src, &scope, lo);
     let obstacles = Obstacles::of(&src, lo, units);
     let mut lines: Vec<(Line, Drawn)> = Vec::new();
 
@@ -298,12 +315,13 @@ impl Source {
                 continue;
             }
             let mut pieces = Vec::new();
-            if s.flagged() || is_subway(s) {
+            if structural(s) || is_subway(s) {
                 pieces.extend(pieces_of(s, Form::Deck));
                 // a subway runs underground wherever it is no bridge (Arnis `wants_rail_tunnel`)
                 if is_subway(s) {
                     let cell = cell_of(length_of(&s.geom_wkb));
-                    pieces.extend(pieces_over(s, Form::Bore, &without(&[[0.0, 1.0]], &flag_ranges(s.flags.as_deref(), DECK_FLAGS, cell))));
+                    let off = [DECK_FLAGS, barred(Form::Bore, &s.subtype)].concat();
+                    pieces.extend(pieces_over(s, Form::Bore, &without(&[[0.0, 1.0]], &flag_ranges(s.flags.as_deref(), &off, cell))));
                 } else {
                     pieces.extend(pieces_of(s, Form::Bore));
                 }
@@ -336,7 +354,7 @@ impl Source {
     }
 
     /// A piece's cells inside the ring, the tiles its footprint reaches read first.
-    fn sample(&mut self, r: &mut Reader<impl Store>, id: &Id, units: Units) -> Result<(), String> {
+    fn sample(&mut self, r: &mut Reader<impl Store>, id: &Id) -> Result<(), String> {
         let s = &self.pieces[id];
         if s.samples.is_some() {
             return Ok(());
@@ -344,7 +362,7 @@ impl Source {
         let step = to_db(U_PER_CELL);
         let line = Polyline::of(s.piece.points.iter().map(|p| [p[0], p[1]]));
         let length = line.length();
-        let reach = to_db((line_reach(s.piece.width_m * units.cell_per_m) + 16.0) * U_PER_CELL);
+        let reach = to_db((line_reach(s.piece.width_cells) + 16.0) * U_PER_CELL);
         let at: Vec<(usize, [f64; 2])> = (0..=s.n)
             .map(|k| (k, line.at((k as f64 * step).min(length))))
             .filter(|(_, p)| self.ring.contains(&tile_of(*p)))
@@ -370,7 +388,7 @@ impl Source {
 }
 
 /// Each piece in scope as its stretches inside the ring.
-fn runs_of(src: &Source, scope: &BTreeSet<Id>, origin: [f64; 2], units: Units) -> Vec<Run> {
+fn runs_of(src: &Source, scope: &BTreeSet<Id>, origin: [f64; 2]) -> Vec<Run> {
     let mut out = Vec::new();
     for id in scope {
         let s = &src.pieces[id];
@@ -403,8 +421,8 @@ fn runs_of(src: &Source, scope: &BTreeSet<Id>, origin: [f64; 2], units: Units) -
                 ends,
                 clipped,
                 nodes,
-                half: units.c(s.piece.width_m / 2.0),
-                width_cells: s.piece.width_m * units.cell_per_m,
+                half: half_cells(s.piece.width_cells),
+                width_cells: s.piece.width_cells,
             });
         }
     }
@@ -415,14 +433,19 @@ fn is_non_vehicular(class: &str) -> bool {
     matches!(class, "footway" | "pedestrian" | "path" | "cycleway" | "bridleway" | "steps")
 }
 
+/// Arnis's `is_pedestrian_way_tags`: what a tunnel's approach matches on foot.
+fn is_pedestrian(class: &str) -> bool {
+    matches!(class, "footway" | "pedestrian" | "steps")
+}
+
 /// Arnis's `effective_layer`: the layer, never below 0; a bridge untagged is 1.
 fn effective_layer(r: &Run) -> i64 {
     r.piece.layer.map(|l| l.max(0)).unwrap_or(i64::from(r.piece.form == Form::Deck))
 }
 
-/// A way's width at its middle, in ground metres.
-fn way_width_m(row: &Segment) -> f64 {
-    width_m(&row.subtype, row.class.as_deref(), WayShape::at(row.columns(), 0.5))
+/// A way's width at its middle, in cells.
+fn way_width(row: &Segment) -> f64 {
+    width_cells(&row.subtype, row.class.as_deref(), WayShape::at(row.columns(), 0.5))
 }
 
 // ---- what a deck must clear: ways at grade and waterways, bucketed ----
@@ -472,31 +495,34 @@ impl Obstacles {
         };
         for way in src.ways.values() {
             let row = &way.row;
-            // a way off the ground, or flagged anywhere, is no grade a deck clears (Arnis `grade_obstacle`)
-            if row.flagged() || value_at(row.levels.as_deref(), 0.5).is_some_and(|l| l != 0.0) {
+            // a way raised, flagged anywhere, indoors, unbuilt or abandoned is no grade a
+            // deck clears (Arnis `grade_obstacle`, `is_at_grade_track`); one sunk below 0 is
+            if structural(row) || value_at(row.levels.as_deref(), 0.5).is_some_and(|l| l > 0.0) || row.has(GRADE_BARRED) {
                 continue;
             }
             match row.subtype.as_str() {
                 "road" => {
                     let class = row.class.as_deref().unwrap_or("");
                     let headroom = if is_non_vehicular(class) || class == "track" { PATH_HEADROOM_M } else { ROAD_HEADROOM_M };
-                    let half = units.c(way_width_m(row) / 2.0);
+                    let half = half_cells(way_width(row));
                     add(&mut out, &way.line.points, half, units.c(headroom));
                 }
                 "rail" if !is_subway(row) => {
                     let headroom = if row.class.as_deref() == Some("tram") { ROAD_HEADROOM_M } else { RAIL_HEADROOM_M };
-                    add(&mut out, &way.line.points, units.c(BLOCK_M), units.c(headroom));
+                    add(&mut out, &way.line.points, half_cells(way_width(row)), units.c(headroom));
                 }
                 _ => {}
             }
         }
         for (class, subtype, points) in &src.water {
-            let headroom = match class.as_deref().unwrap_or(subtype) {
+            let class = class.as_deref().unwrap_or(subtype);
+            let headroom = match class {
                 "river" | "canal" => RIVER_HEADROOM_M,
                 "stream" => STREAM_HEADROOM_M,
                 _ => continue,
             };
-            add(&mut out, points, 0, units.c(headroom));
+            // as wide as the ground draws it, where Arnis clears its centerline
+            add(&mut out, points, half_cells(waterway_width(class).unwrap_or(0.0)), units.c(headroom));
         }
         out
     }
@@ -760,7 +786,8 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                 for gers in src.way_ends.get(e).into_iter().flatten() {
                     let way = &src.ways[gers];
                     let raised = value_at(way.row.levels.as_deref(), 0.5).is_some_and(|l| l >= 1.0);
-                    if way.row.flagged() || !raised || claimed.contains(gers) {
+                    // a road's alone, never indoors (Arnis `is_ramp_candidate`)
+                    if way.row.subtype != "road" || structural(&way.row) || way.row.has(&["is_indoor"]) || !raised || claimed.contains(gers) {
                         continue;
                     }
                     let Some(line) = way_from(way, e) else { continue };
@@ -936,7 +963,6 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                     .enumerate()
                     .map(|(k, p)| [p[0], p[1], round(f64::from(deck_y) + f64::from(ground - deck_y) * k as f64 / denom)])
                     .collect(),
-                units,
             ));
             report.ramps += 1;
         }
@@ -1020,9 +1046,10 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units
         }
         out.push((q, ys.into_iter().zip(&r.terrain).map(|(y, &t)| y.unwrap_or_default().max(t)).collect()));
     }
-    let mut uf = Uf((0..level.len()).collect());
+    // joined through every rail bridge, a carried one included, as Arnis's `rail_uf`
+    let mut uf = Uf((0..rail.len()).collect());
     let mut at_end: HashMap<(&End, i64), usize> = HashMap::new();
-    for (i, &q) in level.iter().enumerate() {
+    for (i, &q) in rail.iter().enumerate() {
         for e in &runs[q].ends {
             match at_end.get(&(e, effective_layer(&runs[q]))) {
                 Some(&j) => uf.union(i, j),
@@ -1033,8 +1060,10 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units
         }
     }
     let mut groups: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-    for (i, &l) in level.iter().enumerate() {
-        groups.entry(uf.find(i)).or_default().push(l);
+    for (i, &q) in rail.iter().enumerate() {
+        if level.contains(&q) {
+            groups.entry(uf.find(i)).or_default().push(q);
+        }
     }
     for g in groups.into_values() {
         report.rail_bridges += 1;
@@ -1139,14 +1168,14 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
     // ---- the approaches: ways at grade from a portal, as far as the drop needs and the road goes on;
     // a portal on a bridge's middle has none, so it stays at the terrain under the deck, as in Arnis ----
     let portal_nodes: HashSet<&End> = tunnels.iter().flat_map(|&q| (0..2).filter(move |&e| !internal(q, e)).map(move |e| &runs[q].ends[e])).collect();
-    let surface = |gers: &str| src.ways.get(gers).filter(|w| !w.row.flagged() && w.row.subtype == "road" && !ramp_ways.contains(gers));
+    let surface = |gers: &str| src.ways.get(gers).filter(|w| !structural(&w.row) && w.row.subtype == "road" && !ramp_ways.contains(gers));
     let ways_len = |gers: &str| cells_along(&src.ways[gers].line.points).len() as i32;
     let mut claims: BTreeMap<String, Vec<Claim>> = BTreeMap::new();
     let mut drops: HashMap<End, i32> = HashMap::new();
     for &q in &tunnels {
         let r = &runs[q];
         let want = units.c(TUNNEL_COVER_DROP_M) + layer_extra(r);
-        let walking = is_non_vehicular(r.piece.class.as_deref().unwrap_or(""));
+        let walking = is_pedestrian(r.piece.class.as_deref().unwrap_or(""));
         for e in 0..2 {
             let node = &r.ends[e];
             if internal(q, e) || drops.contains_key(node) || want <= 0 {
@@ -1162,7 +1191,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
                     .into_iter()
                     .flatten()
                     .filter(|g| !taken.contains(*g) && claims.get(*g).is_none_or(|c| c.len() < 2))
-                    .filter(|g| surface(g).is_some_and(|w| is_non_vehicular(w.row.class.as_deref().unwrap_or("")) == walking))
+                    .filter(|g| surface(g).is_some_and(|w| is_pedestrian(w.row.class.as_deref().unwrap_or("")) == walking))
                     .cloned()
                     .collect();
                 out.sort();
@@ -1230,7 +1259,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<String>, units: 
                 [p[0], p[1], f64::from(t - drop)]
             })
             .collect();
-        lines.push(graded(w, points, units));
+        lines.push(graded(w, points));
         report.approaches += 1;
     }
 

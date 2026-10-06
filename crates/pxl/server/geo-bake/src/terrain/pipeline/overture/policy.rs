@@ -7,29 +7,29 @@
 //! `water.mss`, `buildings.mss`, `roads.mss`, `project.mml`); a class Carto
 //! draws no fill for paints nothing, and the land under it shows.
 
-use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::bake::deck::WIDEST;
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::cell::cube::cube_types::ground as g;
-use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m, G3857};
+use pxl_spec::space::adapter::epsg3857::G3857;
 
 use crate::deck::Drawn;
 use crate::segment::Segment;
-use crate::terrain::pipeline::feature::{closes, Feature, Joins, Layer, Rank};
+use crate::terrain::pipeline::feature::{closes, Feature, Layer, Rank};
 use crate::terrain::pipeline::overture::between::{cell_of, flag_ranges, length_of, merged, split_ranged};
 use crate::terrain::pipeline::overture::role::Role;
-use crate::terrain::pipeline::overture::width::{width_m, WayShape};
+use crate::terrain::pipeline::overture::width::{width_cells, WayShape};
 use crate::terrain::repository::{BaseRow, BuildingRow};
 use crate::wkb::wkb_to_geometries;
 
-/// A way's look: Carto's `highway` and `railway` values, Overture's
-/// `unclassified` the residential road it is drawn as, `path` and `steps`
-/// footways.
+/// A way's look: Carto's `highway` and `railway` values, its white roads one
+/// look told apart by width, `path` and `steps` footways.
 pub fn segment_type(subtype: &str, class: Option<&str>) -> GroundCell {
     let c = class.unwrap_or("");
     if subtype == "rail" {
         return match c {
-            "subway" | "light_rail" | "tram" | "monorail" => g::subway,
+            "tram" => g::tram,
+            "light_rail" | "narrow_gauge" | "funicular" => g::light_rail,
+            "subway" => g::subway,
+            "monorail" => g::monorail,
             _ => g::rail,
         };
     }
@@ -38,10 +38,8 @@ pub fn segment_type(subtype: &str, class: Option<&str>) -> GroundCell {
         "trunk" => g::trunk,
         "primary" => g::primary,
         "secondary" => g::secondary,
-        "tertiary" => g::tertiary,
-        "residential" | "unclassified" => g::residential_road,
+        "tertiary" | "residential" | "unclassified" | "service" => g::residential_road,
         "living_street" => g::living_street,
-        "service" => g::service,
         "pedestrian" => g::pedestrian,
         "track" => g::track,
         "cycleway" => g::cycleway,
@@ -51,21 +49,15 @@ pub fn segment_type(subtype: &str, class: Option<&str>) -> GroundCell {
     }
 }
 
-/// One-way ways of these classes are carriageways, not one-way streets.
-const THROUGH_CLASSES: [&str; 5] = ["motorway", "trunk", "primary", "secondary", "tertiary"];
-
 /// Carto's `building-major-fill`: a place of worship, a terminal or a station.
-const MAJOR_BUILDING_CLASSES: [&str; 9] = ["cathedral", "chapel", "church", "mosque", "shrine", "synagogue", "temple", "train_station", "transportation"];
+/// Overture's `religious` subtype with no class is `amenity=place_of_worship`.
+const MAJOR_BUILDING_CLASSES: [&str; 9] = ["cathedral", "chapel", "church", "mosque", "religious", "shrine", "synagogue", "temple", "train_station"];
 
 /// Nothing of a way under these shows from above. Not `is_disused` (the rails
 /// remain) nor `is_covered` (the buildings paint over it).
 pub const UNSEEN_FLAGS: &[&str] = &["is_tunnel", "is_indoor", "is_under_construction", "is_abandoned"];
 
-pub const BORE_FLAGS: &[&str] = &["is_tunnel"];
-
 pub const LINK_FLAGS: &[&str] = &["is_link"];
-
-pub const DECK_FLAGS: &[&str] = &["is_bridge"];
 
 /// What a Base row paints: its look, Carto's layer, and Carto's `feature`.
 type Paint = (GroundCell, Layer, &'static str);
@@ -80,7 +72,6 @@ fn land_use_paint(class: &str) -> Option<Paint> {
         "retail" => (g::retail, L, "landuse_retail"),
         "commercial" => (g::commercial, L, "landuse_commercial"),
         "industrial" => (g::industrial, L, "landuse_industrial"),
-        "railway" => (g::industrial, L, "landuse_railway"),
         "works" => (g::industrial, L, "man_made_works"),
         "construction" => (g::construction, L, "landuse_construction"),
         "brownfield" => (g::construction, L, "landuse_brownfield"),
@@ -95,7 +86,6 @@ fn land_use_paint(class: &str) -> Option<Paint> {
         "allotments" => (g::allotments, L, "landuse_allotments"),
         "cemetery" => (g::cemetery, L, "landuse_cemetery"),
         "grave_yard" => (g::cemetery, L, "amenity_grave_yard"),
-        "forest" => (g::forest, L, "landuse_forest"),
         "meadow" => (g::grass, L, "landuse_meadow"),
         "grass" => (g::grass, L, "landuse_grass"),
         "village_green" => (g::grass, L, "landuse_village_green"),
@@ -119,18 +109,32 @@ fn land_use_paint(class: &str) -> Option<Paint> {
         "hospital" => (g::societal_amenities, L, "amenity_hospital"),
         "clinic" => (g::societal_amenities, L, "amenity_clinic"),
         "salt_pond" => (g::water, L, "landuse_salt_pond"),
-        "airfield" => (g::transportation_area, L, "aeroway_aerodrome"),
         "pedestrian" | "plaza" => (g::pedestrian, RoadArea, "highway_pedestrian"),
         _ => return None,
     })
 }
 
-/// `natural`, as Overture's land classes carry it; Carto draws a wetland by
-/// its `wetland` tag, which Overture drops, so it is the grass most of them are.
+/// `golf.mss`, by the `golf` tag; a water hazard has no fill.
+fn golf_paint(class: &str) -> Option<Paint> {
+    use Layer::Landcover as L;
+    Some(match class {
+        "tee" => (g::grass, L, "golf_tee"),
+        "fairway" => (g::grass, L, "golf_fairway"),
+        "rough" => (g::grass, L, "golf_rough"),
+        "driving_range" => (g::grass, L, "golf_driving_range"),
+        "green" => (g::pitch, L, "golf_green"),
+        "bunker" => (g::sand, L, "golf_bunker"),
+        _ => return None,
+    })
+}
+
+/// `natural`, as Overture's land classes carry it; Carto fills a wetland by
+/// its `wetland` tag, which Overture drops, and one without it not at all.
 fn land_paint(class: &str) -> Option<Paint> {
     use Layer::Landcover as L;
     Some(match class {
-        "wood" | "forest" => (g::forest, L, "natural_wood"),
+        "wood" => (g::forest, L, "natural_wood"),
+        "forest" => (g::forest, L, "landuse_forest"),
         "bare_rock" => (g::bare_ground, L, "natural_bare_rock"),
         "scree" => (g::bare_ground, L, "natural_scree"),
         "shingle" => (g::bare_ground, L, "natural_shingle"),
@@ -139,21 +143,33 @@ fn land_paint(class: &str) -> Option<Paint> {
         "heath" => (g::heath, L, "natural_heath"),
         "scrub" => (g::scrub, L, "natural_scrub"),
         "grassland" => (g::grass, L, "natural_grassland"),
-        "wetland" => (g::grass, L, "natural_wetland"),
         "glacier" => (g::glacier, Layer::Water, "natural_glacier"),
         _ => return None,
     })
 }
 
+/// `water-lines`' waterways, each its fill's width at z16 (`water.mss`: a
+/// canal is a stream by `@canal-scale-factor`, a ditch and a drain take z14's
+/// until z17); a line of another class has no fill.
+const WATERWAYS: [(&str, f64); 5] = [("river", 8.0), ("canal", 4.2), ("stream", 3.0), ("ditch", 2.0), ("drain", 2.0)];
+
+/// A waterway line's width in cells, if Carto draws one of its class.
+pub fn waterway_width(class: &str) -> Option<f64> {
+    WATERWAYS.iter().find(|(c, _)| *c == class).map(|(_, w)| *w)
+}
+
 /// Water areas but what Carto draws as landcover in water's color or as a
-/// shoal; a strait's label line paints nothing.
-fn water_paint(class: &str) -> Option<Paint> {
+/// shoal; a physical feature or a spring (a bay, a strait) has no fill.
+fn water_paint(subtype: &str, class: &str, closed: bool) -> Option<Paint> {
     use Layer::Landcover as L;
-    Some(match class {
-        "strait" => return None,
-        "shoal" => (g::beach, L, "natural_shoal"),
-        "salt_pond" => (g::water, L, "landuse_salt_pond"),
-        "swimming_pool" => (g::water, L, "leisure_swimming_pool"),
+    if !closed {
+        return waterway_width(class).map(|_| (g::water, Layer::WaterLine, ""));
+    }
+    Some(match (subtype, class) {
+        (_, "shoal") => (g::beach, L, "natural_shoal"),
+        (_, "salt_pond") => (g::water, L, "landuse_salt_pond"),
+        (_, "swimming_pool") => (g::water, L, "leisure_swimming_pool"),
+        ("physical" | "spring", _) => return None,
         _ => (g::water, Layer::Water, ""),
     })
 }
@@ -176,20 +192,55 @@ pub const INFRASTRUCTURE: &[(&str, Paint)] = {
         ("bus_station", (g::transportation_area, L, "amenity_bus_station")),
         ("ferry_terminal", (g::transportation_area, L, "amenity_ferry_terminal")),
         ("railway_station", (g::industrial, L, "railway_station")),
+        ("subway_station", (g::industrial, L, "railway_station")),
         ("substation", (g::power, L, "power_substation")),
         ("generator", (g::power, L, "power_generator")),
         ("plant", (g::power, L, "power_plant")),
-        ("camp_site", (g::campsite, L, "tourism_camp_site")),
         ("platform", (g::platform, RoadArea, "railway_platform")),
         ("runway", (g::aeroway, RoadArea, "aeroway_runway")),
         ("taxiway", (g::aeroway, RoadArea, "aeroway_taxiway")),
         ("helipad", (g::aeroway, RoadArea, "aeroway_helipad")),
+        ("seaplane_airport", (g::transportation_area, L, "aeroway_aerodrome")),
+        ("dam", (g::dam, Layer::WaterBarrier, "waterway_dam")),
+        ("weir", (g::breakwater, Layer::WaterBarrier, "waterway_weir")),
+        ("breakwater", (g::breakwater, Layer::Pier, "man_made_breakwater")),
+        ("pier", (g::land, Layer::Pier, "man_made_pier")),
+        ("cutline", (g::grass, Layer::LandcoverLine, "man_made_cutline")),
     ]
 };
 
+/// Carto draws these as lines alone.
+const LINE_ONLY: [&str; 2] = ["weir", "cutline"];
+
 fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
     let &(_, (look, layer, feature)) = INFRASTRUCTURE.iter().find(|(c, _)| *c == class)?;
+    if closed && LINE_ONLY.contains(&class) {
+        return None;
+    }
     Some((look, if look == g::aeroway && !closed { Layer::Aeroway } else { layer }, feature))
+}
+
+/// A runway's, the widest line Carto draws at z16.
+pub const WIDEST_LINE: f64 = 24.0;
+
+/// A Base line's width in cells: Carto's at z16, as a way's
+/// (`overture/width.rs`), its casing included.
+fn line_width(source: &str, class: &str) -> f64 {
+    match (source, class) {
+        ("water", _) => waterway_width(class).unwrap_or(0.0),
+        (_, "runway") => WIDEST_LINE,
+        (_, "taxiway") => 8.0,
+        (_, "dam" | "breakwater") => 4.0,
+        (_, "pier" | "weir") => 2.0,
+        (_, "platform" | "cutline") => 6.0,
+        _ => 0.0,
+    }
+}
+
+/// Carto's `water-barriers` and `piers` stack their area layer under their
+/// line layer, and among piers a pier over a breakwater.
+fn barrier_order(class: &str, closed: bool) -> i64 {
+    4 * i64::from(!closed) + if class == "pier" { 3 } else { 1 }
 }
 
 pub fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
@@ -210,7 +261,6 @@ pub fn ways(row: &Segment, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
     let unseen = flag_ranges(row.flags.as_deref(), UNSEEN_FLAGS, cell_of(length_of(&row.geom_wkb)));
     let lined = merged(drawn.iter().filter(|c| c.gers_id == row.gers_id).map(|c| c.range).collect(), 0.0);
     let look = segment_type(&row.subtype, row.class.as_deref());
-    let cell_per_m = u_per_m(from_db(tile_min[1])) / U_PER_CELL;
     wkb_to_geometries(&row.geom_wkb)
         .into_iter()
         .flat_map(|g| split_ranged(g, [&unseen, &lined]))
@@ -223,13 +273,8 @@ pub fn ways(row: &Segment, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
             let rank = Rank::new(Layer::Road, paint_order(&row.subtype, row.class.as_deref(), shape.role), "", &row.gers_id);
             let mut f = Feature::of(&geom, tile_min, look, rank)?;
             f.closed = false;
-            f.width = (width_m(&row.subtype, row.class.as_deref(), shape) * cell_per_m).min(WIDEST);
+            f.width = width_cells(&row.subtype, row.class.as_deref(), shape);
             f.cut = [a > 0.0, b < 1.0];
-            f.joins = match shape.role {
-                Role::Sidewalk => Some(Joins::Road),
-                _ if shape.oneway && row.subtype == "road" && THROUGH_CLASSES.contains(&row.class.as_deref().unwrap_or("")) => Some(Joins::Carriageway),
-                _ => None,
-            };
             Some(f)
         })
         .collect()
@@ -237,22 +282,31 @@ pub fn ways(row: &Segment, drawn: &[Drawn], tile_min: G3857) -> Vec<Feature> {
 
 /// Every Base row with a Carto fill; an area layer paints larger areas first.
 pub fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
-    let class = row.class.as_deref().unwrap_or("");
+    let (source, subtype, class) = (row.source.as_str(), row.subtype.as_deref().unwrap_or(""), row.class.as_deref().unwrap_or(""));
     wkb_to_geometries(&row.geom_wkb)
         .iter()
         .filter_map(|geom| {
-            let (look, layer, feature) = match row.source.as_str() {
-                "water" => water_paint(class),
+            let closed = closes(geom);
+            let (look, layer, feature) = match source {
+                "water" => water_paint(subtype, class, closed),
                 "land" => land_paint(class),
-                "infrastructure" => infrastructure_paint(class, closes(geom)),
+                "infrastructure" => infrastructure_paint(class, closed),
+                // A land use line is a leisure track, which Carto draws from z17.
+                _ if !closed => None,
+                _ if subtype == "golf" => golf_paint(class).or_else(|| land_use_paint(class)),
                 _ => land_use_paint(class),
             }?;
             let rank = match layer {
                 // Carto's `aeroways` puts a runway over a taxiway.
                 Layer::Aeroway => Rank::new(layer, i64::from(class == "runway"), feature, &row.gers_id),
+                Layer::WaterBarrier | Layer::Pier => Rank::new(layer, barrier_order(class, closed), feature, &row.gers_id),
                 _ => Rank::by_area(layer, row.way_area, feature, &row.gers_id),
             };
-            Feature::of(geom, tile_min, look, rank)
+            let mut f = Feature::of(geom, tile_min, look, rank)?;
+            if !closed {
+                f.width = line_width(source, class);
+            }
+            Some(f)
         })
         .collect()
 }
