@@ -98,26 +98,27 @@ pub enum Done {
 /// neighbors), a lone item balances.
 pub fn over<T: Copy + Sync, W>(
     tag: &str,
-    bands: &[Vec<T>],
+    bands: &[&[T]],
     workers: usize,
     every: u64,
     show: impl Fn(T) -> String + Sync,
     open: impl Fn() -> Result<W, String> + Sync,
     one: impl Fn(&mut W, T) -> Result<Done, String> + Sync,
-) -> Tally {
+) -> Result<Tally, String> {
     let all: u64 = bands.iter().map(|b| b.len() as u64).sum();
     let next = AtomicUsize::new(0);
     let totals = Mutex::new(Tally::default());
+    let refused = Mutex::new(None);
     let started = Instant::now();
     std::thread::scope(|scope| {
         for _ in 0..workers.max(1) {
             scope.spawn(|| {
                 let mut w = match open() {
                     Ok(w) => w,
-                    Err(err) => return eprintln!("[bake/{tag}] worker failed to start: {err}"),
+                    Err(err) => return *refused.lock().expect("refused") = Some(err),
                 };
                 while let Some(band) = bands.get(next.fetch_add(1, Ordering::Relaxed)) {
-                    for &item in band {
+                    for &item in *band {
                         let outcome = one(&mut w, item);
                         let mut t = totals.lock().expect("totals");
                         match outcome {
@@ -148,6 +149,10 @@ pub fn over<T: Copy + Sync, W>(
             });
         }
     });
+    // A worker that never started leaves its share undone, which no count shows.
+    if let Some(err) = refused.into_inner().expect("refused") {
+        return Err(format!("[bake/{tag}] a worker failed to start: {err}"));
+    }
     let t = totals.into_inner().expect("totals");
     println!(
         "[bake/{tag}] done in {}: baked={} empty={} skipped={} failed={} {}",
@@ -158,7 +163,7 @@ pub fn over<T: Copy + Sync, W>(
         t.failed,
         fmt_bytes(t.bytes as f64)
     );
-    t
+    Ok(t)
 }
 
 /// One object a geocode group; resumable unless `--force`.
@@ -171,8 +176,9 @@ pub fn walk<T>(
     connect: impl Fn() -> Result<T, String> + Sync,
     one: impl Fn(&mut T, &Target) -> Result<Tile, String> + Sync,
 ) -> Result<Tally, String> {
-    let bands: Vec<Vec<&Target>> = targets.iter().map(|t| vec![t]).collect();
-    Ok(over(
+    let items: Vec<&Target> = targets.iter().collect();
+    let bands: Vec<&[&Target]> = items.chunks(1).collect();
+    over(
         tag,
         &bands,
         args.concurrency,
@@ -194,5 +200,5 @@ pub fn walk<T>(
                 }
             }
         },
-    ))
+    )
 }

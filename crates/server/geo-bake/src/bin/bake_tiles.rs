@@ -198,8 +198,9 @@ fn link_all(from: &Path, to: &Path) -> Result<(), String> {
 /// a tile linked from it is the same file, and any other one is checked by content.
 fn snapshot_over(full: &TileSet, tiles: &TileSet) -> Result<(Vec<String>, Vec<String>), String> {
     let (mut written, mut removed) = (Vec::new(), Vec::new());
+    let (full_listed, listed) = (full.by_zoom()?, tiles.by_zoom()?);
     for zoom in GROUND.top()..=LEAF_ZOOM {
-        let here: HashSet<Tile> = tiles.tiles(zoom)?.into_iter().collect();
+        let here: HashSet<Tile> = listed.get(&zoom).into_iter().flatten().copied().collect();
         for &p in &here {
             let (a, b) = (full.path(p), tiles.path(p));
             let same = match (fs::metadata(&a), fs::metadata(&b)) {
@@ -210,7 +211,7 @@ fn snapshot_over(full: &TileSet, tiles: &TileSet) -> Result<(Vec<String>, Vec<St
                 written.push(p.name());
             }
         }
-        removed.extend(full.tiles(zoom)?.into_iter().filter(|p| !here.contains(p)).map(Tile::name));
+        removed.extend(full_listed.get(&zoom).into_iter().flatten().filter(|p| !here.contains(p)).map(|p| p.name()));
     }
     Ok((written, removed))
 }
@@ -230,7 +231,7 @@ fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_js
 
     let region_land: HashSet<IVec> = land.iter().copied().filter(|&p| args.in_region(p)).collect();
     let mut changed = HashSet::new();
-    for at in base.tiles(LEAF_ZOOM)? {
+    for at in base.by_zoom()?.remove(&LEAF_ZOOM).unwrap_or_default() {
         if args.in_region(at.tile) && !region_land.contains(&at.tile) {
             tiles.remove(at)?;
             changed.insert(at);
@@ -269,7 +270,7 @@ fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_js
     write_json(&snapshot, &serde_json::json!({ "base": full_name, "written": written, "removed": removed }))?;
     println!("[bake/region] over {}: {} written, {} removed", full.root.display(), written.len(), removed.len());
 
-    let top = tiles.all()?.into_iter().map(|p| p.zoom).min().unwrap_or(LEAF_ZOOM);
+    let top = tiles.by_zoom()?.into_keys().next().unwrap_or(LEAF_ZOOM);
     let base_name = base.root.file_name().map(|n| n.to_string_lossy().to_string());
     // The kind's one manifest describes the last bake, which is the base only if it says so.
     let mut fields = read_json(&base.root.join("../manifest.json"));
@@ -347,10 +348,11 @@ fn run() -> Result<(), String> {
         let band = rows.len().div_ceil(args.concurrency.max(1)).max(1);
         let walks: Vec<Vec<IVec>> = rows.chunks(band).map(zigzag).collect();
         let flat = AtomicU64::new(0);
+        let bands: Vec<&[IVec]> = walks.iter().map(Vec::as_slice).collect();
         let t = walk::over(
             "leaf",
-            &walks,
-            walks.len(),
+            &bands,
+            bands.len(),
             1000,
             ivec::repr,
             || Ok((connect(source, &raster)?, deck::source::Walk::default())),
@@ -373,7 +375,7 @@ fn run() -> Result<(), String> {
                 leaves.write(at, &packed)?;
                 Ok(Done::Wrote { bytes: packed.len() as u64, items: 0 })
             },
-        );
+        )?;
         if t.failed > 0 {
             return Err(format!("{} tiles failed", t.failed));
         }
@@ -409,7 +411,7 @@ fn run() -> Result<(), String> {
         }
         fs::create_dir_all(&tiles.root).map_err(|e| e.to_string())?;
 
-        let bands: Vec<Vec<IVec>> = targets.iter().map(|&t| vec![t]).collect();
+        let bands: Vec<&[IVec]> = targets.chunks(1).collect();
         let t = walk::over(
             "assemble",
             &bands,
@@ -425,7 +427,7 @@ fn run() -> Result<(), String> {
                     items: 0,
                 })
             },
-        );
+        )?;
         if t.failed > 0 {
             return Err(format!("{} tiles failed to assemble", t.failed));
         }
