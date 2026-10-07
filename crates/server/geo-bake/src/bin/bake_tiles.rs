@@ -294,10 +294,7 @@ fn assemble_region(args: &Args, coverage: &Coverage, leaves: &TileSet, land: &[I
             f.remove(measured);
         }
         f.insert("base".into(), serde_json::json!({ "version": base_name, "release": base_release }));
-        f.insert(
-            "regions".into(),
-            serde_json::json!({ "tiles": leaf["regions"], "release": leaf["release"] }),
-        );
+        f.insert("regions".into(), serde_json::json!({ "tiles": leaf["regions"], "release": leaf["release"] }));
     }
     write_manifest(&tiles, top, sha, fields)
 }
