@@ -70,6 +70,8 @@ pub fn reach_at(y: f64) -> f64 {
 /// The shard a point lies in, by name. A division is a row in every shard
 /// its apron meets, so one containing the point is a row in the point's
 /// shard: that copy alone is read, not each of a region's dozens.
+/// A point outside every ingested shard names nothing: an apron holds only
+/// what reaches into it, so what it would answer there is partial.
 pub fn shard_of(x: f64, y: f64) -> String {
     let at = [x, y].map(|m| (u_from_mer(m) / units(SHARD_ZOOM)).floor() as i64);
     morton::name::<2>(morton::key_of(SHARD_ZOOM, at))
