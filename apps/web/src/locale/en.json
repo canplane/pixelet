@@ -101,12 +101,12 @@
         "description": "Shows camera and view state, frame timing, GPU, memory, and request activity."
       },
       "world_gizmo": {
-        "label": "World gizmo",
+        "label": "World Gizmo",
         "description": "Draws the view center, its cell and the axis rings in the world, for debugging."
       },
       "camera_gizmo": {
-        "label": "Camera gizmo",
-        "description": "Overlays the camera grid as equal-area rings about the screen's center, and tints the world by how its drawn cells compare: green about one grid cell, blue finer, red coarser."
+        "label": "Camera Gizmo",
+        "description": "Overlays equal-area rings around the screen's center and colors the world by the size of its drawn cells: green near one grid cell, blue finer, red coarser."
       }
     },
     "disclaimer": {
