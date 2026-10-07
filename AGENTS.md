@@ -190,6 +190,11 @@ What a chunk can make when drawn — a deck's slab, a tunnel's mouth — is the
 client's; the bake carries only what the client cannot work out
 ([decision/20261001-ways-off-the-ground.md](./decision/20261001-ways-off-the-ground.md)).
 
+**A read is scoped by the policy that consumes it.** What the bake asks of
+the database is what its paint policy uses: the policy's own tables are the
+read's filter (`pxl-geo-bake overture/policy.rs`), never a second list kept
+in SQL beside them.
+
 ## Scope
 
 The MVP is a concept demo — real-world location (Pokémon GO), block building
@@ -373,7 +378,7 @@ inspire what happens inside a cell or a chunk, never the structure.
   `pxl-kernel param.rs` under the policy it tunes, with its reason. A module
   reads the contract above a concept, not the concept: a controller's words
   (a pivot, a radius, a zoom) stay in the controller, and what is generic
-  reads the geometric fact (the eye, the look, the map center). Code keeping
+  reads the geometric fact (the eye, the look, the focus). Code keeping
   one value in step with another is a second copy of a truth — remove it, do
   not tune the sync — and a derived value is never written back into its
   source each turn; an outside event writes the source once. Where data is
