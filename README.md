@@ -37,7 +37,7 @@ tiles ────────────────────────�
 
 ## The eye decides
 
-The world has its own fixed lattice. The eye lays a second grid over it, cells of one angle each, so they grow with distance. Where the eye can tell more apart, chunks split; where it cannot, they fold into one thing drawn.
+The world has its own fixed lattice. The eye lays a second grid over it, cells of equal solid angle, so they grow with distance. Where the eye can tell more apart, chunks split; where it cannot, they fold into one thing drawn.
 
 ---
 
