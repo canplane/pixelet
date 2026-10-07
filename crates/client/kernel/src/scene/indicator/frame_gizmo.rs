@@ -1,4 +1,4 @@
-// pxl-kernel/scene/marker/frame_gizmo.rs
+// pxl-kernel/scene/indicator/frame_gizmo.rs
 
 //! The frame gizmo (the `world_gizmo` setting), as debug lines: the focus and
 //! its cell, and about it a level ring, an upright ring facing the screen and

@@ -106,10 +106,13 @@ pub enum InputMinor {
     POSE = 0x09,
     POSE_END = 0x0a,
     HOLD = 0x0b,
+    MARKER_WORDS = 0x0c,
+    MARKER_CANCEL = 0x0d,
+    MARKER_PUT = 0x0e,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 11] = [
+    pub const ALL: [InputMinor; 14] = [
         InputMinor::RECT,
         InputMinor::POINTER,
         InputMinor::WHEEL,
@@ -121,6 +124,9 @@ impl InputMinor {
         InputMinor::POSE,
         InputMinor::POSE_END,
         InputMinor::HOLD,
+        InputMinor::MARKER_WORDS,
+        InputMinor::MARKER_CANCEL,
+        InputMinor::MARKER_PUT,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -293,10 +299,12 @@ pub enum PointerPhase {
     Move = 1,
     Up = 2,
     Out = 3,
+    /// The pointer's gesture ends with no tap: the platform took it, or the shell spent it on something of its own.
+    Cancel = 4,
 }
 
 impl PointerPhase {
-    pub const ALL: [PointerPhase; 4] = [PointerPhase::Down, PointerPhase::Move, PointerPhase::Up, PointerPhase::Out];
+    pub const ALL: [PointerPhase; 5] = [PointerPhase::Down, PointerPhase::Move, PointerPhase::Up, PointerPhase::Out, PointerPhase::Cancel];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<PointerPhase> {
@@ -331,10 +339,11 @@ pub enum ActiveTool {
     Object = 1,
     Decor = 2,
     Eraser = 3,
+    Marker = 4,
 }
 
 impl ActiveTool {
-    pub const ALL: [ActiveTool; 4] = [ActiveTool::Pointer, ActiveTool::Object, ActiveTool::Decor, ActiveTool::Eraser];
+    pub const ALL: [ActiveTool; 5] = [ActiveTool::Pointer, ActiveTool::Object, ActiveTool::Decor, ActiveTool::Eraser, ActiveTool::Marker];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<ActiveTool> {
@@ -564,6 +573,12 @@ pub enum Command {
     INPUT_POINTER = 0x1102,
     /// What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
     INPUT_HOLD = 0x110b,
+    /// The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut.
+    INPUT_MARKER_WORDS = 0x110c,
+    /// The marker the tool left waiting is let go, nothing put up.
+    INPUT_MARKER_CANCEL = 0x110d,
+    /// The waiting marker is put up with its words, if its place is still free or still a marker, and nothing waits after.
+    INPUT_MARKER_PUT = 0x110e,
     INPUT_WHEEL = 0x1103,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_KEYS = 0x1106,
@@ -628,7 +643,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 41] = [
+    pub const ALL: [Command; 44] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::IMAGE_DECODED,
@@ -644,6 +659,9 @@ impl Command {
         Command::INPUT_RECT,
         Command::INPUT_POINTER,
         Command::INPUT_HOLD,
+        Command::INPUT_MARKER_WORDS,
+        Command::INPUT_MARKER_CANCEL,
+        Command::INPUT_MARKER_PUT,
         Command::INPUT_WHEEL,
         Command::INPUT_KEYS,
         Command::GPU_READY,
@@ -683,7 +701,7 @@ pub struct Snapshot<'a> {
     pub focus: FocusState,
     pub location: LocationState,
     pub companion: CompanionState,
-    pub holding: HoldingState,
+    pub holding: HoldingState<'a>,
     pub orientation: OrientationState,
     /// The view's azimuth.
     pub azimuth: f64,
@@ -801,24 +819,30 @@ impl CompanionState {
     }
 }
 
-/// What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held.
-pub struct HoldingState {
+/// What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held; and a marker the tool left waiting for its words.
+pub struct HoldingState<'a> {
     pub tool: ActiveTool,
     /// The held cube, by its number in the catalog's one value space.
     pub cube: u32,
     pub decor: u32,
     pub tier: u32,
+    /// Whether a marker the tool left waits for its words, which INPUT_MARKER_PUT or INPUT_MARKER_CANCEL ends.
+    pub marker: bool,
+    /// The waiting marker's words, which the shell takes up when it starts waiting: the marker's own where one stands there, none where it is new.
+    pub words: &'a dyn Display,
 }
 
-impl HoldingState {
+impl HoldingState<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 4;
+    pub const FIELDS: u32 = 6;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.tool as u32));
         w.u32(Some(self.cube));
         w.u32(Some(self.decor));
         w.u32(Some(self.tier));
+        w.bool(Some(self.marker));
+        w.str_display(self.words);
     }
 }
 
@@ -1020,7 +1044,7 @@ pub struct WorldBoot<'a> {
     /// reports a failure itself (SENSOR_ORIENTATION_LOST).
     pub orientation_silence_is_loss: bool,
     /// What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
-    /// (host.json's STORAGE_KEYS), handed over unread as a process is handed its environment,
+    /// (host.json's SETTINGS_PATH), handed over unread as a process is handed its environment,
     /// which the kernel reads and from then on writes itself.
     pub settings: &'a str,
 }
@@ -1182,6 +1206,19 @@ impl InputHold {
             value: integer::<u32>(f.at(1)?.get_number()?)?,
             tier: integer::<u32>(f.at(2)?.get_number()?)?,
         })
+    }
+}
+
+/// Command::INPUT_MARKER_WORDS's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct InputMarkerWords<'a> {
+    pub text: &'a str,
+}
+
+impl<'a> InputMarkerWords<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<InputMarkerWords<'a>, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(InputMarkerWords { text: f.at(0)?.get_str_ref()? })
     }
 }
 

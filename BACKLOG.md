@@ -45,6 +45,7 @@ Nothing now.
 
 ## P2
 
+
 - **Terrain's lanes are one record, which keeps it from being a quadtree.**
   A tile is its ground, elevation, decks and index together
   (`crates/spec/src/bake/format.rs` `Terrain`), each with its own lattice and

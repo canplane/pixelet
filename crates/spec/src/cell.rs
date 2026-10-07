@@ -10,6 +10,7 @@ pub mod color;
 mod cube_type;
 #[path = "cell/decor.spec.rs"]
 pub mod decor;
+pub mod ext;
 #[path = "cell/id.spec.rs"]
 pub mod id;
 pub mod object;

@@ -68,7 +68,7 @@ fn place(p: &mut Sketch, name: &str, icon: &str, color: u32, logical_w: f32) {
     anchor_dot(p, logical_w);
 }
 
-fn cluster(p: &mut Sketch, label: &str, logical_w: f32) {
+fn labeled_pill(p: &mut Sketch, label: &str, logical_w: f32) {
     pill(p, logical_w);
     p.text(BADGE_FONT, WHITE, label, logical_w / 2.0, PILL_H / 2.0 + 1.0, Align::Center);
     anchor_dot(p, logical_w);
@@ -209,7 +209,7 @@ impl BadgePass {
             let Some(spec) = sheet.slot_draw(slot) else { continue };
             let mut p = Sketch::default();
             match spec {
-                DrawSpec::Cluster { label, logical_w } => cluster(&mut p, label, *logical_w as f32),
+                DrawSpec::Pill { label, logical_w } => labeled_pill(&mut p, label, *logical_w as f32),
                 DrawSpec::Place { name, icon, color, logical_w } => place(&mut p, name, icon, *color, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w, box_h } => bubble(&mut p, lines, *box_w as f32, *box_h as f32),
             }

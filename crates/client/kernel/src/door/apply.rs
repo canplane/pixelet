@@ -123,6 +123,9 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                     }
                 }
                 abi::PointerPhase::Out => camera_pointer_out(),
+                abi::PointerPhase::Cancel => {
+                    camera_pointer_up(p.kind, p.id);
+                }
             }
             Ok(Some(0))
         }
@@ -140,10 +143,23 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 abi::ActiveTool::Decor => {
                     holding.decor_id = or_refuse(u16::try_from(p.value).ok().and_then(DecorId::of), Errno::EINVAL)?;
                 }
-                abi::ActiveTool::Pointer | abi::ActiveTool::Eraser => {}
+                abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Marker => {}
             }
             hold(holding);
             camera_rehover();
+            Ok(Some(0))
+        }
+        Command::INPUT_MARKER_WORDS => {
+            let text = abi::InputMarkerWords::read(packet(pkt)?)?.text;
+            or_refuse(crate::control::interaction::edit::draft_words(text).ok(), Errno::EMSGSIZE)?;
+            Ok(Some(0))
+        }
+        Command::INPUT_MARKER_PUT => {
+            crate::control::interaction::edit::put_marker();
+            Ok(Some(0))
+        }
+        Command::INPUT_MARKER_CANCEL => {
+            crate::control::interaction::edit::cancel_marker();
             Ok(Some(0))
         }
         Command::INPUT_WHEEL => {
@@ -398,13 +414,18 @@ fn profiler_take(s: &mut State) -> u32 {
 #[path = "apply.test.rs"]
 mod test;
 
-/// A badge takes a tap before the ground under it, with the pointer tool only.
+/// A badge takes a tap before the ground under it: the pointer goes to it,
+/// the eraser takes away a marker someone put up, and the marker tool has the
+/// waiting marker stand there.
 fn tap_at(x: f64, y: f64) {
     use crate::chunk::place::Went;
+    use crate::control::interaction::ActiveTool;
     use crate::control::navigation::destination::{go_into_place, go_to_place};
-    match crate::control::interaction::taps_badges().then(|| crate::chunk::place::tap(x, y)).flatten() {
-        Some(Went::To(at)) => go_to_place(at),
-        Some(Went::Into(at)) => go_into_place(at),
-        None => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
+    match (crate::control::interaction::holding().active_tool, crate::chunk::place::tap(x, y)) {
+        (ActiveTool::Pointer, Some(Went::To(at) | Went::Marker(_, at))) => go_to_place(at),
+        (ActiveTool::Pointer, Some(Went::Into(at))) => go_into_place(at),
+        (ActiveTool::Eraser, Some(Went::Marker(e, _))) => crate::control::interaction::edit::remove(e),
+        (ActiveTool::Marker, Some(Went::Marker(e, _))) => crate::control::interaction::edit::wait_at(e),
+        _ => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
     }
 }

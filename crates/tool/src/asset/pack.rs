@@ -35,30 +35,27 @@ struct Entry {
     style: Style,
 }
 
+/// The ground's looks: each a top, and some a side and a bottom.
 #[derive(Deserialize)]
-struct Terrain {
-    top: BTreeMap<String, BTreeMap<String, Entry>>,
+struct Ground {
+    top: BTreeMap<String, Entry>,
     side: BTreeMap<String, Entry>,
     #[serde(default)]
     bottom: BTreeMap<String, Entry>,
 }
 
 #[derive(Deserialize)]
-struct Objects {
-    block: BTreeMap<String, Entry>,
-}
-
-#[derive(Deserialize)]
 struct Manifest {
-    terrain: Terrain,
-    objects: Objects,
+    ground: Ground,
+    /// The object's colors, each a top.
+    object: BTreeMap<String, Entry>,
 }
 
-/// Which cube face an entry is, by the manifest's keys; a placed block is the
-/// `block` channel's top.
+/// Which cube face an entry is, by the manifest's keys: a top is of the
+/// catalog's group (`ground` or `object`), a side and a bottom the ground's.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Slot {
-    Top { channel: String, ty: String },
+    Top { group: String, ty: String },
     Side { ty: String },
     Bottom { ty: String },
 }
@@ -93,34 +90,32 @@ pub fn load(cube_dir: &Path) -> Result<Vec<Item>, String> {
         });
     };
 
-    for (channel, types) in &manifest.terrain.top {
-        for (ty, entry) in types {
-            push(
-                format!("terrain.top.{channel}.{ty}"),
-                Slot::Top {
-                    channel: channel.clone(),
-                    ty: ty.clone(),
-                },
-                entry,
-            );
-        }
+    for (ty, entry) in &manifest.ground.top {
+        push(
+            format!("ground.top.{ty}"),
+            Slot::Top {
+                group: "ground".into(),
+                ty: ty.clone(),
+            },
+            entry,
+        );
     }
     // A side and a bottom come together (Minecraft's grass block): a side alone
     // leaves the cells below the surface nothing right to wear.
-    if let Some(ty) = manifest.terrain.side.keys().find(|ty| !manifest.terrain.bottom.contains_key(*ty)) {
-        return Err(format!("manifest.json: terrain.side.{ty} has no terrain.bottom.{ty}"));
+    if let Some(ty) = manifest.ground.side.keys().find(|ty| !manifest.ground.bottom.contains_key(*ty)) {
+        return Err(format!("manifest.json: ground.side.{ty} has no ground.bottom.{ty}"));
     }
-    for (ty, entry) in &manifest.terrain.side {
-        push(format!("terrain.side.{ty}"), Slot::Side { ty: ty.clone() }, entry);
+    for (ty, entry) in &manifest.ground.side {
+        push(format!("ground.side.{ty}"), Slot::Side { ty: ty.clone() }, entry);
     }
-    for (ty, entry) in &manifest.terrain.bottom {
-        push(format!("terrain.bottom.{ty}"), Slot::Bottom { ty: ty.clone() }, entry);
+    for (ty, entry) in &manifest.ground.bottom {
+        push(format!("ground.bottom.{ty}"), Slot::Bottom { ty: ty.clone() }, entry);
     }
-    for (ty, entry) in &manifest.objects.block {
+    for (ty, entry) in &manifest.object {
         push(
-            format!("objects.block.{ty}"),
+            format!("object.{ty}"),
             Slot::Top {
-                channel: "block".to_string(),
+                group: "object".into(),
                 ty: ty.clone(),
             },
             entry,

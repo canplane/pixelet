@@ -6,7 +6,7 @@
 pub mod actor;
 pub mod character;
 pub mod environment;
-pub mod marker;
+pub mod indicator;
 pub mod stage;
 
 use pxl_render::frame::draw::DrawList;
@@ -16,16 +16,16 @@ use crate::chunk::table::Frame;
 use crate::model::registry::Models;
 use crate::scene::actor::Actors;
 use crate::scene::environment::EnvironmentDraw;
-use crate::scene::marker::coverage_gizmo::CoverageGizmo;
-use crate::scene::marker::debug_lines::DebugLines;
-use crate::scene::marker::hover_cursor::GhostDraw;
-use crate::scene::marker::location_puck::Markers;
+use crate::scene::indicator::coverage_gizmo::CoverageGizmo;
+use crate::scene::indicator::debug_lines::DebugLines;
+use crate::scene::indicator::hover_cursor::GhostDraw;
+use crate::scene::indicator::location_puck::LocationPuck;
 
 #[derive(Default)]
 pub struct Scene {
     pub ghost: GhostDraw,
     pub actors: Actors,
-    pub markers: Markers,
+    pub puck: LocationPuck,
     pub environment: EnvironmentDraw,
     pub debug: DebugLines,
     pub coverage: CoverageGizmo,
@@ -34,7 +34,7 @@ pub struct Scene {
 impl Scene {
     /// Advances what animates; whether anything did.
     pub fn tick(&mut self, draw: &mut DrawList, models: &Models, frame: &Frame) -> bool {
-        self.actors.tick(draw, models, frame.delta_s as f32) | self.markers.tick(frame) | self.environment.tick(frame)
+        self.actors.tick(draw, models, frame.delta_s as f32) | self.puck.tick(frame) | self.environment.tick(frame)
     }
 
     /// Begins the frame's list with every layer but the chunks.
@@ -42,7 +42,7 @@ impl Scene {
         draw.begin_frame();
         self.ghost.draw(draw, eye);
         self.actors.draw(draw, models, eye);
-        self.markers.draw(draw, eye);
+        self.puck.draw(draw, eye);
         self.debug.draw(draw, eye);
         self.coverage.draw(draw, eye);
     }

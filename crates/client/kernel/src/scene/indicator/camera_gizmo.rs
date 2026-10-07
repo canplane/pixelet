@@ -1,4 +1,4 @@
-// pxl-kernel/scene/marker/camera_gizmo.rs
+// pxl-kernel/scene/indicator/camera_gizmo.rs
 
 //! The camera gizmo (the `camera_gizmo` setting): the camera grid's cells over
 //! the screen, drawn per pixel by the renderer (`pxl-render

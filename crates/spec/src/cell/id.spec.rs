@@ -5,7 +5,8 @@
 // A cell's id is a u16: its shape's class over which shape of that class it is.
 // `id >> SHAPE_BITS` is the class, the low bits the shape. The class is what a
 // thing is drawn and struck as, and what its metadata is: a cube a meshed box
-// with none, decor a model with a variant, heading and scale.
+// with none, decor a model with a variant, heading and scale, a marker a
+// label put up at a place, drawn flat to the camera.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
@@ -22,11 +23,12 @@ pub const SHAPE_BITS: u32 = 10;
 pub enum Class {
     cube = 0,
     decor = 1,
+    marker = 2,
 }
 
 impl Class {
     /// Every member, in the JSON's own order.
-    pub const ALL: [Class; 2] = [Class::cube, Class::decor];
+    pub const ALL: [Class; 3] = [Class::cube, Class::decor, Class::marker];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
@@ -38,4 +40,5 @@ impl Class {
 pub mod CLASS {
     pub const cube: u16 = 0;
     pub const decor: u16 = 1;
+    pub const marker: u16 = 2;
 }

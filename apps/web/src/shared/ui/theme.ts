@@ -31,6 +31,7 @@ export const SYSTEM = {
   orange: "#FF9500",
   yellow: "#FFCC00",
   green: "#34C759",
+  blue: "#007AFF",
   purple: "#AF52DE",
   dark: "#1C1C1E",
 } as const;
@@ -56,6 +57,8 @@ export const color = {
   labelGray: "#3C3C43",
   band: SYSTEM.dark,
   send: CORAL.base,
+  /** A marker's words set, apart from a chat line sent. */
+  confirm: SYSTEM.blue,
   self: CORAL.deep,
   /** The status hues lightened toward white, for a sensor glyph over the map. */
   pendingGlyph: tint(SYSTEM.orange, 0.6),

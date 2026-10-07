@@ -107,13 +107,12 @@ function program(code: u32, w: U32Array, a: u32): void {
 
 type Open = (path: string, signal: AbortSignal) => U8Array | Promise<U8Array>;
 
-/** Where STORAGE's files are kept: the keys they had before the kernel named them. */
-const STORAGE_KEYS: Record<string, string> = { [SETTINGS_PATH]: "pxl:settings", [OBJECTS_PATH]: "pxl:object:v14" };
+/** STORAGE's files, each kept under its path, so a path's version is its key's. */
+const STORAGE_PATHS: readonly string[] = [SETTINGS_PATH, OBJECTS_PATH];
 
 function storage_key(path: string): string {
-  const key = STORAGE_KEYS[path];
-  if (key === undefined) throw new FileError(Errno.ENOENT);
-  return key;
+  if (!STORAGE_PATHS.includes(path)) throw new FileError(Errno.ENOENT);
+  return `pxl:${path.replaceAll("/", ":")}`;
 }
 
 /** A STORAGE file's text, or null where none is kept. */

@@ -1,4 +1,4 @@
-// pxl-kernel/scene/marker/coverage_gizmo.rs
+// pxl-kernel/scene/indicator/coverage_gizmo.rs
 
 //! The coverage gizmo (the `world_gizmo` setting), as translucent debug lines: the
 //! drawn pieces, the goal's pieces nothing drawn covers and the drawn pieces'
@@ -23,7 +23,7 @@ use crate::chunk::Chunk;
 use crate::layer::residency::floor;
 use crate::layer::Layer as _;
 use crate::query::World;
-use crate::scene::marker::debug_lines::DebugLines;
+use crate::scene::indicator::debug_lines::DebugLines;
 use crate::view::frame::pose::view;
 use crate::view::observation::observation;
 use pxl_spec::space::coord::zoom::{units, within, Zoom};

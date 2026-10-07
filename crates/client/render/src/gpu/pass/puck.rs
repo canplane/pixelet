@@ -9,7 +9,7 @@ use crate::gpu::atmosphere::AIR_WORDS;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{buffer_size, Blocks, Draws};
 use crate::look::color::linear_rgb;
-use crate::look::color::marker;
+use crate::look::color::indicator;
 
 const BEACON_RADIUS: f32 = 0.3;
 
@@ -105,7 +105,7 @@ impl PuckPass {
         };
         let (box_p, box_uv, box_i) = box_lanes();
         let (oct_p, oct_n) = octahedron_lanes();
-        let [r, gr, b] = linear_rgb(marker::ACTION);
+        let [r, gr, b] = linear_rgb(indicator::ACTION);
         // The beacon is lit through the air: the air's words, transmittance and sampler.
         let mut lit = buffer_entry(0, frame_buffer).to_vec();
         lit.extend(air.as_chunks::<5>().0.iter().filter(|c| [8, 9, 11].contains(&c[0])).flatten());

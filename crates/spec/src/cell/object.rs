@@ -4,14 +4,14 @@
 //! (`cell/id.json`). In the cube class the byte range is the ground's palette,
 //! so a cube in a look stores the look's number, and past it is what only an
 //! object is: air and the placed colors (`cell/cube_type.json`); the decor
-//! class is the decor kinds (`cell/decor.json`).
+//! class is the decor kinds (`cell/decor.json`), and the marker class a label.
 
 #![allow(non_upper_case_globals)]
 
 use std::sync::LazyLock;
 
 use crate::cell::color;
-use crate::cell::cube_types::{object, Block, Ground};
+use crate::cell::cube_types::{object, Ground, Object};
 use crate::cell::id::{Class, SHAPE_BITS};
 use crate::cell::{decor_types, DecorId};
 
@@ -27,6 +27,14 @@ pub fn class_of(value: u32) -> Option<Class> {
 
 pub fn object_value_is_decor(value: u32) -> bool {
     class_of(value) == Some(Class::decor)
+}
+
+/// The one marker a placement puts up: a label, which its shape does not tell
+/// apart from another's.
+pub const MARKER: u32 = (Class::marker as u32) << SHAPE_BITS;
+
+pub fn object_value_is_marker(value: u32) -> bool {
+    class_of(value) == Some(Class::marker)
 }
 
 /// Whether a leaf is drawn as a voxel (a placeable cube or air) rather than
@@ -57,14 +65,14 @@ pub static decor_ids: LazyLock<Vec<DecorId>> = LazyLock::new(|| {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaceableCube {
     Ground(Ground),
-    Block(Block),
+    Object(Object),
 }
 
 /// The value a placement stores.
 pub fn placeable_cube_num_id(cube: PlaceableCube) -> u32 {
     match cube {
         PlaceableCube::Ground(g) => g as u32,
-        PlaceableCube::Block(b) => b as u32,
+        PlaceableCube::Object(b) => b as u32,
     }
 }
 
@@ -72,20 +80,20 @@ pub fn placeable_cube_num_id(cube: PlaceableCube) -> u32 {
 pub fn placeable_cube_of(num_id: u32) -> Option<PlaceableCube> {
     match u8::try_from(num_id) {
         Ok(byte) => Ground::of(byte).map(PlaceableCube::Ground),
-        Err(_) => u16::try_from(num_id).ok().and_then(Block::of).map(PlaceableCube::Block),
+        Err(_) => u16::try_from(num_id).ok().and_then(Object::of).map(PlaceableCube::Object),
     }
 }
 
 pub fn placeable_cube_rgb(cube: PlaceableCube) -> Option<u32> {
     match cube {
         PlaceableCube::Ground(g) => color::ground(g as u8),
-        PlaceableCube::Block(b) => color::object(b as u16),
+        PlaceableCube::Object(b) => color::object(b as u16),
     }
     .map(|s| s.rgb)
 }
 
 /// The placed colors first, then the palette in paint order.
-pub static placeable_cubes: LazyLock<Vec<PlaceableCube>> = LazyLock::new(|| Block::ALL.into_iter().map(PlaceableCube::Block).chain(Ground::ALL.into_iter().map(PlaceableCube::Ground)).collect());
+pub static placeable_cubes: LazyLock<Vec<PlaceableCube>> = LazyLock::new(|| Object::ALL.into_iter().map(PlaceableCube::Object).chain(Ground::ALL.into_iter().map(PlaceableCube::Ground)).collect());
 
 #[cfg(test)]
 #[path = "object.test.rs"]
