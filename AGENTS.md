@@ -277,13 +277,72 @@ code, its behavior or git history, and when the author contradicts one,
 defer. A path a comment or document names must exist (`check:rules`);
 `decision/` names the files of its day and is exempt.
 
+## The main axis
+
+Every structural question is judged against one picture, and a change is
+wanted where it points the code further down it.
+
+- **The eye decides.** The view is a grid of angular cells about the eye; a
+  cell's ray lands at a distance that fixes the resolution there, and a
+  chunk is that grid's cells at one zoom.
+- **The query is the only seam.** A chunk asks a node of the query — a
+  bound to descend by, the records to build from — and storage's shape
+  stays behind it; render is handed cells.
+- **Descent carries what it knows.** Drawing and casting descend the
+  pyramid, each step answered from its parent, never re-asked from the top.
+  Speed is sought only inside that hierarchy (the camera grid's resolution,
+  the folded pyramid); a special-cased fast path beside it is refused even
+  when measured faster. How a thing is drawn is weighed as a whole, on the
+  CPU or on the GPU, never one kind of it sent to the other side.
+- **Dependencies point one way:** turn, door and shell (the UI's way in)
+  wire everything from the top, and nothing below names them; control's
+  input feeds the view; scene → chunk → view → query → layer;
+  io and the turn's edge and phases below everyone, io as transport; leaves
+  (settings, models, billboards) below what reads them. The profiler is a
+  debug path beside the axis: it reads anything, and production reaches it
+  only where it records. An edge up the axis is a defect.
+
+**Reducing is measured by what disappears** — a state, an owner, a name, a
+path, a copy — never by line count. In order of value:
+
+1. **One fact, one representation.** Two expressions of one fact fold into
+   one; done repeatedly, it is what leaves the dependencies a tree. A rebake
+   or a broken old artifact weighs nothing against it. Two voices for one
+   role means one goes; the one exception is an interface whose
+   implementations genuinely differ, as each layer answers the query.
+2. **One fact, one owner** ("Architecture first" below). A fact the bake and
+   the client both need — the drawn surface, its bound — is one function
+   where both compile, and a bound is derived from that function's own
+   reads, never from a second fact about it.
+3. **A state removed rather than handled**, in "Architecture first"'s order.
+
+**Never by force.** Things merge because they turn out to be one structure —
+a lattice under several layers, a column at every zoom — and what differs by
+nature is split. Either is done whole: a decision once made is carried
+through completely, and is not reopened by an audit. The code usually
+already does what is wanted; the change makes it say so once, by extending
+the structure that holds the fact, not by inventing mechanism beside it.
+
+**Identity, not revision.** A tile's content is fixed by its name within a
+version, and a version is named by the source and the code that made it
+(the dev cache is; a published version must be made to be); what changes is
+which identity answers a node. Keys compare identities, and the one change event left
+carries identities, not a counter — only content that mutates under a fixed
+key, the objects' edits, needs its own. An extremal summary (max, OR, a
+revision) carries every change to the top, so one is stored only where a
+bound is the contract and content changes only at bake; where content
+mutates, it is computed from the records when asked.
+
 ## Architecture first
 
 The tree is being built, not maintained: making it structurally simple and
 correct is the objective, and the current structure, tests and line count
 have no value of their own. Take the structurally correct shape, matching
-real prior art where it exists (Minecraft's chunks for grid content,
-Cesium's `skipLevelOfDetail` for a tile tree whose nodes arrive out of order).
+real prior art where it exists. Google Earth and the web map's tile pyramid
+are the axioms for structure, storage, tiling and invalidation across zooms,
+with Cesium's 3D Tiles (`skipLevelOfDetail`) for a tile tree whose nodes
+arrive out of order. Minecraft is neither isotropic nor a pyramid: it can
+inspire what happens inside a cell or a chunk, never the structure.
 
 - **An existing mechanism is not a constraint.** An abstraction, boundary,
   queue, cache, slot layout, format, API or test earns no deference by
@@ -404,7 +463,9 @@ performance; contracts outside the tree; effort; diff size.
   agent at a time in an order agreed once, each taking the latest, fixing,
   committing and pushing before the next. A broken intermediate state is
   allowed; correctness is held where work is integrated. An agent commits
-  its own paths only (`git commit -- <paths>`): the index is shared. A build
+  its own paths only (`git commit -- <paths>`): the index is shared, and a
+  path carries every hunk in it, so read each file's diff first and name
+  another's hunk in the commit. A build
   that fails on the working tree is no one's commit yet; say whose file it
   is before calling main broken.
 - Code, comments and documentation stay in English.
