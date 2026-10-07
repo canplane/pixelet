@@ -4,8 +4,10 @@
 //
 // The profiler's records and blocks as the kernel lays them out and the shell reads
 // them in place (profiler/record.rs, apps/web/src/feature/debug/profiler/view.ts):
-// word offsets, eight bytes a word, and the names the numbers index, a task's
-// io's (spec/client/kernel/io/demand.json). A packed table gives each field's
+// word offsets, eight bytes a word. The names the numbers index are their owners':
+// a task's io's (spec/client/kernel/io/demand.json), a step's and an effect's the
+// turn's (spec/client/kernel/turn/step.json), a GPU span's the renderer's
+// (spec/client/render/gpu/span.json). A packed table gives each field's
 // width and the generator lays the offsets out. Nothing is built
 // for a read: the kernel writes numbers where they stay, and the words for them are
 // the shell's.
@@ -13,31 +15,6 @@
 export const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"] as const;
 
 export const PHASE_NAMES = ["interaction", "visible", "content", "cosmetic", "report"] as const;
-
-export const STEP_NAMES = ["controller", "input", "camera", "environment", "companion", "preview", "sight", "goal", "demand", "chunks", "debug_gizmos", "profiler"] as const;
-
-export const EFFECT_NAMES = [
-  "navigation",
-  "bootstrap",
-  "geolocation",
-  "orientation",
-  "follow",
-  "destination",
-  "view",
-  "geocode",
-  "decor",
-  "objects",
-  "written",
-  "chunk_sources",
-  "edit",
-  "hover",
-  "puck",
-  "settings",
-  "assets",
-  "pump",
-] as const;
-
-export const GPU_SPAN_NAMES = ["air", "shadow", "prepass", "ao", "world", "badges", "cases"] as const;
 
 export const LIMITS = {
   PHASES_MAX: 6 as number,

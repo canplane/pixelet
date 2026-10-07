@@ -9,7 +9,9 @@
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 
-import { CENSUS_TAGS, EFFECT_NAMES, FRAME, FRAME_GROUPS, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES } from "./profiler.spec.ts";
+import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS, PHASE_NAMES } from "./profiler.spec.ts";
+import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
+import { GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
 
 const MB = 1048576;
 

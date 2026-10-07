@@ -1,0 +1,41 @@
+{
+  "$doc": [
+    "The turn's vocabulary, the kernel's and the shell's: the steps a tick runs, as turn.rs",
+    "registers them, and the effects a turn runs around them. The profiler records and",
+    "reports them by these names (spec/client/kernel/profiler/profiler.json)."
+  ],
+  "STEP_NAMES": [
+    "controller",
+    "input",
+    "camera",
+    "environment",
+    "companion",
+    "preview",
+    "sight",
+    "goal",
+    "demand",
+    "chunks",
+    "debug_gizmos",
+    "profiler"
+  ],
+  "EFFECT_NAMES": [
+    "navigation",
+    "bootstrap",
+    "geolocation",
+    "orientation",
+    "follow",
+    "destination",
+    "view",
+    "geocode",
+    "decor",
+    "objects",
+    "written",
+    "chunk_sources",
+    "edit",
+    "hover",
+    "puck",
+    "settings",
+    "assets",
+    "pump"
+  ]
+}

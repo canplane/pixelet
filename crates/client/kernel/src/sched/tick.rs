@@ -7,7 +7,6 @@ use xpute_guest::sched::quantum::QuantumPolicy;
 use xpute_guest::sched::tick::{Phase, StepStats, Tick, TickPolicy, TickReport};
 
 use crate::param;
-pub use crate::profiler::spec::StepName;
 use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -60,9 +59,10 @@ pub fn tick_step_stats_reset() {
     tick().step_stats_reset();
 }
 
-/// Returns the id `off_tick` takes.
-pub fn on_tick(phase: Phase, step: TickStep, name: StepName) -> u32 {
-    tick().on_tick(phase, step, name as u32)
+/// Returns the id `off_tick` takes. `name` is the caller's index into its own
+/// step names (the turn's, turn/step.spec.rs).
+pub fn on_tick(phase: Phase, step: TickStep, name: u32) -> u32 {
+    tick().on_tick(phase, step, name)
 }
 
 pub fn off_tick(id: u32) {

@@ -3,6 +3,7 @@
 //! Executes the scheduler's draw lists on the device, in the kernel's own turn.
 //! Depth is reversed f32 throughout (depth.wgsl).
 
+use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
 use pxl_spec::space::coord::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
 use pxl_spec::space::coord::v3::{norm3, sub3, V3};
 use xpute_core::math::scalar::round;
@@ -74,16 +75,14 @@ const MB: f64 = 1_048_576.0;
 /// The Moon's near side as download_moon cuts it; sky.wgsl reads its half.
 const MOON_TEX_SZ: u32 = 512;
 
-/// In the order the frame encodes them; the profiler's GPU_SPAN_NAMES match.
-pub const GPU_SPANS: [&str; 7] = ["air", "shadow", "prepass", "ao", "world", "badges", "cases"];
-const _: () = assert!(GPU_SPANS.len() <= 32, "a span a bit of the mask the host is told");
-const SPAN_AIR: usize = 0;
-const SPAN_SHADOW: usize = 1;
-const SPAN_PREPASS: usize = 2;
-const SPAN_AO: usize = 3;
-const SPAN_WORLD: usize = 4;
-const SPAN_BADGES: usize = 5;
-const SPAN_CASES: usize = 6;
+const _: () = assert!(GPU_SPAN_NAMES.len() <= 32, "a span a bit of the mask the host is told");
+const SPAN_AIR: usize = GpuSpanName::air as usize;
+const SPAN_SHADOW: usize = GpuSpanName::shadow as usize;
+const SPAN_PREPASS: usize = GpuSpanName::prepass as usize;
+const SPAN_AO: usize = GpuSpanName::ao as usize;
+const SPAN_WORLD: usize = GpuSpanName::world as usize;
+const SPAN_BADGES: usize = GpuSpanName::badges as usize;
+const SPAN_CASES: usize = GpuSpanName::cases as usize;
 
 type Frame = [f32; FRAME_FLOATS];
 
@@ -134,7 +133,7 @@ pub struct FrameStat {
     pub layers_mb: f64,
     pub px: f64,
     pub census: [[f64; 2]; PIPELINES as usize],
-    pub gpu_spans: [f64; GPU_SPANS.len()],
+    pub gpu_spans: [f64; GPU_SPAN_NAMES.len()],
     pub arena_mb: f64,
     /// 1 where the frame did not fit the GPU stream and was not drawn.
     pub skipped: f64,
@@ -706,7 +705,7 @@ impl Renderer {
         );
         let query_set = if device.timestamps {
             let q = object();
-            g.query_set(q, 2 * GPU_SPANS.len() as u32);
+            g.query_set(q, 2 * GPU_SPAN_NAMES.len() as u32);
             q
         } else {
             0
@@ -948,7 +947,7 @@ impl Renderer {
         self.prepare_cases(g, &draws, uniforms, input.cases);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
-        let mut stamps: [Stamp; GPU_SPANS.len()] = core::array::from_fn(|span| Stamp::of(q, span));
+        let mut stamps: [Stamp; GPU_SPAN_NAMES.len()] = core::array::from_fn(|span| Stamp::of(q, span));
         // What outlives the frame is drawn and submitted ahead of it: from here on
         // the frame only describes itself.
         let ahead = object();
@@ -1004,12 +1003,12 @@ impl Renderer {
         release(pass);
         self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
         self.draw_cases(g, encoder, &draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
-        let (mut gpu_ms, mut gpu_spans) = (0.0, [0.0; GPU_SPANS.len()]);
+        let (mut gpu_ms, mut gpu_spans) = (0.0, [0.0; GPU_SPAN_NAMES.len()]);
         if q != 0 {
             let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
             g.timestamps(encoder, q, written);
             gpu_spans = core::array::from_fn(|k| g.gpu_ms(k as u32));
-            gpu_ms = g.gpu_ms(GPU_SPANS.len() as u32);
+            gpu_ms = g.gpu_ms(GPU_SPAN_NAMES.len() as u32);
         }
         g.submit(encoder);
         release(encoder);
@@ -1088,7 +1087,7 @@ impl Renderer {
 
     /// What the scheduler asked for: a draw passed over because its block, skin or
     /// sprite is not on the device yet is still counted.
-    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, skipped: bool, (gpu_ms, gpu_spans): (f64, [f64; GPU_SPANS.len()])) -> FrameStat {
+    fn stat(&self, draws: &[[u32; DRAW_WORDS]], world: &Surface, skipped: bool, (gpu_ms, gpu_spans): (f64, [f64; GPU_SPAN_NAMES.len()])) -> FrameStat {
         let b = blocks();
         let mut triangles = 0u32;
         let mut census = [[0.0; 2]; PIPELINES as usize];

@@ -14,7 +14,9 @@ import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
 import { CATEGORY_NAMES, OUTCOME_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/demand.spec.ts";
 import { kernel_call, kernel_memory } from "@/kernel/shell.ts";
 
-import { CENSUS_TAGS, FRAME, GPU_SPAN_NAMES, LOG, PHASE_NAMES, READ, SPREAD, STEP, STEP_NAMES, SUMMARY, TASK, TASK_SUMMARY, WORST } from "./profiler.spec.ts";
+import { CENSUS_TAGS, FRAME, LOG, PHASE_NAMES, READ, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WORST } from "./profiler.spec.ts";
+import { STEP_NAMES } from "@/kernel/turn/step.spec.ts";
+import { GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
 import { type Frame, frameAt } from "./lane.ts";
 import { type LongFrame, longFramesSince } from "./long-frame.ts";
 

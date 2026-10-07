@@ -1,0 +1,15 @@
+{
+  "$doc": [
+    "The GPU spans a frame is timed in, in the order the renderer encodes them",
+    "(pxl-render gpu/renderer.rs); the profiler records and reports them by these names."
+  ],
+  "GPU_SPAN_NAMES": [
+    "air",
+    "shadow",
+    "prepass",
+    "ao",
+    "world",
+    "badges",
+    "cases"
+  ]
+}

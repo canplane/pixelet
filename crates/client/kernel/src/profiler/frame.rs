@@ -7,8 +7,9 @@ use core::mem::{offset_of, size_of};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use xpute_guest::sched::tick::PHASES;
 
-use crate::profiler::spec::{CENSUS_TAGS, FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, WORST};
+use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, PHASE_NAMES, SUMMARY, WORST};
 use crate::profiler::word::{words, Words};
+use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
 
@@ -274,8 +275,6 @@ const _: () = assert!(PHASE_NAMES.len() == PHASES.len(), "profiler.json names th
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
 pub const ZOOMS: usize = LIMITS::ZOOMS as usize;
-
-const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "profiler.json names the renderer's spans");
 
 const _: () = assert!(
     pxl_spec::space::layer::lattice::GROUND.tile_zoom(OBJECT_FINEST) < ZOOMS as i32,

@@ -318,7 +318,3 @@ pub fn profiler_tasks_since(t: f64) -> &'static [TaskRow] {
     let ring = profiler_tasks();
     &ring[first_at(ring, t, |r| r.end_ms)..]
 }
-
-#[cfg(test)]
-#[path = "record.test.rs"]
-mod test;

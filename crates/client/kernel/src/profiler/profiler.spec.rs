@@ -4,8 +4,10 @@
 //
 // The profiler's records and blocks as the kernel lays them out and the shell reads
 // them in place (profiler/record.rs, apps/web/src/feature/debug/profiler/view.ts):
-// word offsets, eight bytes a word, and the names the numbers index, a task's
-// io's (spec/client/kernel/io/demand.json). A packed table gives each field's
+// word offsets, eight bytes a word. The names the numbers index are their owners':
+// a task's io's (spec/client/kernel/io/demand.json), a step's and an effect's the
+// turn's (spec/client/kernel/turn/step.json), a GPU span's the renderer's
+// (spec/client/render/gpu/span.json). A packed table gives each field's
 // width and the generator lays the offsets out. Nothing is built
 // for a read: the kernel writes numbers where they stay, and the words for them are
 // the shell's.
@@ -16,141 +18,11 @@
 //
 // `dead_code` because a table is generated whole: an entry earns its
 // place in the JSON, not by having a caller in this crate.
-#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
+#![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
 pub const CENSUS_TAGS: &[&str] = &["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"];
 
 pub const PHASE_NAMES: &[&str] = &["interaction", "visible", "content", "cosmetic", "report"];
-
-pub const STEP_NAMES: &[&str] = &[
-    "controller",
-    "input",
-    "camera",
-    "environment",
-    "companion",
-    "preview",
-    "sight",
-    "goal",
-    "demand",
-    "chunks",
-    "debug_gizmos",
-    "profiler",
-];
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum StepName {
-    controller = 0,
-    input = 1,
-    camera = 2,
-    environment = 3,
-    companion = 4,
-    preview = 5,
-    sight = 6,
-    goal = 7,
-    demand = 8,
-    chunks = 9,
-    debug_gizmos = 10,
-    profiler = 11,
-}
-
-impl StepName {
-    /// Every member, in the JSON's own order.
-    pub const ALL: [StepName; 12] = [
-        StepName::controller,
-        StepName::input,
-        StepName::camera,
-        StepName::environment,
-        StepName::companion,
-        StepName::preview,
-        StepName::sight,
-        StepName::goal,
-        StepName::demand,
-        StepName::chunks,
-        StepName::debug_gizmos,
-        StepName::profiler,
-    ];
-
-    /// The member a number names, or none for a number the set does not
-    /// give out.
-    pub fn of(value: u8) -> Option<StepName> {
-        StepName::ALL.into_iter().find(|member| *member as u8 == value)
-    }
-}
-
-pub const EFFECT_NAMES: &[&str] = &[
-    "navigation",
-    "bootstrap",
-    "geolocation",
-    "orientation",
-    "follow",
-    "destination",
-    "view",
-    "geocode",
-    "decor",
-    "objects",
-    "written",
-    "chunk_sources",
-    "edit",
-    "hover",
-    "puck",
-    "settings",
-    "assets",
-    "pump",
-];
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum EffectName {
-    navigation = 0,
-    bootstrap = 1,
-    geolocation = 2,
-    orientation = 3,
-    follow = 4,
-    destination = 5,
-    view = 6,
-    geocode = 7,
-    decor = 8,
-    objects = 9,
-    written = 10,
-    chunk_sources = 11,
-    edit = 12,
-    hover = 13,
-    puck = 14,
-    settings = 15,
-    assets = 16,
-    pump = 17,
-}
-
-impl EffectName {
-    /// Every member, in the JSON's own order.
-    pub const ALL: [EffectName; 18] = [
-        EffectName::navigation,
-        EffectName::bootstrap,
-        EffectName::geolocation,
-        EffectName::orientation,
-        EffectName::follow,
-        EffectName::destination,
-        EffectName::view,
-        EffectName::geocode,
-        EffectName::decor,
-        EffectName::objects,
-        EffectName::written,
-        EffectName::chunk_sources,
-        EffectName::edit,
-        EffectName::hover,
-        EffectName::puck,
-        EffectName::settings,
-        EffectName::assets,
-        EffectName::pump,
-    ];
-
-    /// The member a number names, or none for a number the set does not
-    /// give out.
-    pub fn of(value: u8) -> Option<EffectName> {
-        EffectName::ALL.into_iter().find(|member| *member as u8 == value)
-    }
-}
-
-pub const GPU_SPAN_NAMES: &[&str] = &["air", "shadow", "prepass", "ao", "world", "badges", "cases"];
 
 pub mod LIMITS {
     pub const PHASES_MAX: u32 = 6;

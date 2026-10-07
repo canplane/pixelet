@@ -26,7 +26,7 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 15] = [
+const DATA_SPECS: [DataSpec; 17] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
@@ -158,12 +158,32 @@ const DATA_SPECS: [DataSpec; 15] = [
         cpp: None,
     },
     DataSpec {
+        json: "spec/client/kernel/turn/step.json",
+        uses: &[],
+        ts: Some("apps/web/src/kernel/turn/step.spec.ts"),
+        rs: Some("crates/client/kernel/src/turn/step.spec.rs"),
+        module: Some("spec"),
+        enums: Enums::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
+        ts_names: None,
+        cpp: None,
+    },
+    DataSpec {
+        json: "spec/client/render/gpu/span.json",
+        uses: &[],
+        ts: Some("apps/web/src/kernel/render/gpu/span.spec.ts"),
+        rs: Some("crates/client/render/src/gpu/span.spec.rs"),
+        module: Some("span_spec"),
+        enums: Enums::Named(&["GPU_SPAN_NAMES"]),
+        ts_names: None,
+        cpp: None,
+    },
+    DataSpec {
         json: "spec/client/kernel/profiler/profiler.json",
-        uses: &["spec/client/kernel/io/demand.json"],
+        uses: &["spec/client/kernel/io/demand.json", "spec/client/kernel/turn/step.json", "spec/client/render/gpu/span.json"],
         ts: Some("apps/web/src/feature/debug/profiler/profiler.spec.ts"),
         rs: Some("crates/client/kernel/src/profiler/profiler.spec.rs"),
         module: Some("spec"),
-        enums: Enums::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
+        enums: Enums::None,
         ts_names: None,
         cpp: None,
     },
