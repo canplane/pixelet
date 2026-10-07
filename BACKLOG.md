@@ -63,6 +63,14 @@ Nothing now.
   each lane alone, and all together, could leave out, against the requests
   more layers would cost under the Worker's daily cap
   ([decision/20260816-deployment-hosting.md](./decision/20260816-deployment-hosting.md)).
+- **A bake is kept a shard at a time, as the ingest is.** The catalog says
+  which shards the database holds, but a terrain bake keeps its state for
+  the whole coverage: one land list (`land_tiles.json`), one `leaf.json` of
+  what built the leaves, and a region named by tiles, `--grow` deriving the
+  shards each run (`crates/server/geo-bake/src/bin/bake_tiles.rs`). Each
+  shard's land list, leaves, coast and source identity its own would make a
+  shard one unit from ingest to version: a shard ingested again is baked
+  again alone, and `--region` and `--grow` become one question, which shards.
 
 ## Parked, with the reason on file
 
