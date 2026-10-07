@@ -600,10 +600,10 @@ pub enum CubeFace {
     Bottom,
 }
 
-/// The texture pack as one sheet: `columns` tiles of `cell` pixels per
+/// The texture pack as one image: `columns` tiles of `cell` pixels per
 /// row, tile n at column n % columns and row n / columns, and `tiles` the
 /// cube face each tile is.
-pub struct Sheet {
+pub struct Pack {
     pub bytes: u64,
     pub cell: u32,
     pub columns: u32,
@@ -616,7 +616,7 @@ pub struct Sheet {
     pub means: &'static [[u8; 3]],
 }
 
-pub const SHEET: Sheet = Sheet {
+pub const PACK: Pack = Pack {
     bytes: 391170,
     cell: 256,
     columns: 8,

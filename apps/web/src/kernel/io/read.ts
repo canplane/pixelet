@@ -9,7 +9,7 @@ import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
-import { INGESTED, SHEET } from "@/catalog/asset/ingested.spec.ts";
+import { INGESTED, PACK } from "@/catalog/asset/ingested.spec.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
 import { BAKE_KINDS } from "@/config/published.spec.ts";
 import { assetUrl, tileUrl } from "@/config/route.ts";
@@ -52,9 +52,9 @@ export async function read_object(bake: u32, name: string, signal: AbortSignal):
 
 const KEYS: readonly string[] = Object.values(INGESTED).map((a) => a.key);
 
-/** A load number: an asset's index in the ingest's table, or one past it for the texture sheet. */
+/** A load number: an asset's index in the ingest's table, or one past it for the texture pack. */
 export async function read_asset(load: u32, signal: AbortSignal): Promise<U8Array> {
-  const key = load === KEYS.length ? SHEET.key : KEYS[load];
+  const key = load === KEYS.length ? PACK.key : KEYS[load];
   if (key === undefined) throw new FileError(Errno.ENOENT);
   return get(assetUrl(key), key, signal);
 }

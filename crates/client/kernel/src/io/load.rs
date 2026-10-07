@@ -32,7 +32,7 @@ pub enum LoadKind {
     Image = 1,
 }
 
-/// The texture pack's image (the ingest's `SHEET`) is written beside the asset table, not as a row of it.
+/// The texture pack's image is written beside the asset table, not as a row of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Load {
     Asset(Asset),

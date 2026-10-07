@@ -16,7 +16,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico"] }
 regex = "1"
-# `image` encodes WebP lossless only; the sheet is lossy q92.
+# `image` encodes WebP lossless only; the pack is lossy q92.
 webp = "0.3"
 flate2 = "1"
 ureq = "2"
