@@ -10,16 +10,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-- **How the samples are drawn.** On the iPhone 13 mini, four shapes over the
-  same tiles and views: today's boxes, the same as masked faces, a ray a
-  pixel, and a bounded observation a cell — what the rule asks for, a cell
-  being an angular footprint and not a sample point. Each shape is built
-  whole on the CPU and whole on the GPU, one representation either way:
-  CPU or GPU is a question of the whole drawing, never of one kind of
-  thing sent to the other side. The steps a cast pays
-  are measured already, and where on the screen they lie
-  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./decision/20260928-what-is-drawn-is-what-the-screen-covers.md),
-  "the steps, measured").
+Nothing now.
 
 ## P1
 
@@ -75,6 +66,20 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## Parked, with the reason on file
 
+- **Publishing**: a push to `deploy`, any upload to the bucket (terrain, POI,
+  geocode) and the copy into production's db-geo, held until the user says
+  the time is right, since the bake side has refactoring ahead. Meanwhile a
+  bake is looked at through `dev:baked` and `preview:baked`.
+- **How the samples are drawn**, held until the user says the time is
+  right. On the iPhone 13 mini, four shapes over the same tiles and views: today's boxes, the same as masked faces, a ray a
+  pixel, and a bounded observation a cell — what the rule asks for, a cell
+  being an angular footprint and not a sample point. Each shape is built
+  whole on the CPU and whole on the GPU, one representation either way:
+  CPU or GPU is a question of the whole drawing, never of one kind of
+  thing sent to the other side. The steps a cast pays
+  are measured already, and where on the screen they lie
+  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./decision/20260928-what-is-drawn-is-what-the-screen-covers.md),
+  "the steps, measured").
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
   program WASI's calls translated into the contract's requests, which is what
   would let an existing program in. Not without one to build it against;
