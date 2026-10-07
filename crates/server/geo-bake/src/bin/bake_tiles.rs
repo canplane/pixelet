@@ -16,14 +16,16 @@
 //!   --region <name>      bake again only the land tiles under that tile, repeatable; assemble then
 //!                        links --base whole and folds again only what those tiles reach
 //!   --base <dir>         the version a region bake starts from (default the published one)
+//!   --grow               a region bake of the coverage's shards the base does not hold
 //!
 //! A region bake gives its tiles what a full bake of the same code gives them;
-//! the tiles outside keep the base's. So a region must hold everything the
+//! the tiles outside keep the base's, so the base must be of this code
+//! (`BUILT_KEY`), or the bake refuses it. A region must hold everything the
 //! change it is baked for reaches: a structure it solves again that runs out of
 //! it meets the base's solve of it at the region's edge.
 
 use pxl_spec::space::layer::lattice::GROUND;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
@@ -32,7 +34,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use postgres::Client;
-use pxl_spec::bake::format::{encode_terrain, SNAPSHOT_KEY};
+use pxl_spec::bake::format::{encode_terrain, BUILT_KEY, SNAPSHOT_KEY};
 use pxl_spec::bake::published::{FORMAT, PUBLISHED_VERSION};
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -46,7 +48,7 @@ use pxl_geo_bake::terrain::absent::Absence;
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf, has_ground, land_tiles, write_land_tiles};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::tile::walk::{self, Done};
-use pxl_geo_bake::util::{git_sha, next_version, pack, refuse_mixed, Level};
+use pxl_geo_bake::util::{code_id, git_sha, next_version, pack, source_id, Level};
 
 const CLASSIFY_BATCH: usize = 2000;
 
@@ -66,11 +68,16 @@ struct Args {
     reclassify: bool,
     regions: Vec<Tile>,
     base: Option<PathBuf>,
+    grow: bool,
 }
 
 impl Args {
     fn in_region(&self, tile: IVec) -> bool {
         self.regions.iter().any(|r| Tile::over(r.zoom, tile) == *r)
+    }
+
+    fn base(&self) -> TileSet {
+        TileSet::new(self.base.clone().unwrap_or_else(|| Path::new("./out/terrain").join(PUBLISHED_VERSION.terrain)))
     }
 }
 
@@ -85,6 +92,7 @@ fn parse_args() -> Result<Args, String> {
         reclassify: false,
         regions: Vec::new(),
         base: None,
+        grow: false,
     };
 
     let mut flags = Flags::from_env();
@@ -106,6 +114,7 @@ fn parse_args() -> Result<Args, String> {
                 args.regions.push(Tile::of_name(&key).ok_or(format!("--region {key}: not a tile's name"))?);
             }
             "--base" => args.base = Some(PathBuf::from(flags.value()?)),
+            "--grow" => args.grow = true,
             other => return Err(format!("unknown flag: {other}")),
         }
     }
@@ -161,6 +170,23 @@ fn read_json(path: &Path) -> serde_json::Value {
     fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(serde_json::Value::Null)
 }
 
+/// Names the code a version's tiles were baked by and the shards they
+/// cover; written anew, never through a link from the base.
+fn write_built(tiles: &TileSet, code: &str, shards: &BTreeSet<String>) -> Result<(), String> {
+    let path = tiles.root.join(BUILT_KEY);
+    let _ = fs::remove_file(&path);
+    write_json(&path, &serde_json::json!({ "code": code, "shards": shards }))
+}
+
+fn names(list: &serde_json::Value) -> BTreeSet<String> {
+    list.as_array().into_iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).collect()
+}
+
+/// Whether two nodes named alike overlap: a name is its ancestors' with a digit a zoom.
+fn overlap(a: &str, b: &str) -> bool {
+    a.starts_with(b) || b.starts_with(a)
+}
+
 /// Every file in `from` hard-linked into `to`.
 fn link_all(from: &Path, to: &Path) -> Result<(), String> {
     fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
@@ -195,11 +221,18 @@ fn snapshot_over(full: &TileSet, tiles: &TileSet) -> Result<(Vec<String>, Vec<St
 
 /// A region over a base: the base linked whole, the region's leaves in its
 /// leaves' place where they differ, and what those reach folded again.
-fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_json::Value, built: Option<&str>) -> Result<(), String> {
-    let base = TileSet::new(args.base.clone().unwrap_or_else(|| Path::new("./out/terrain").join(PUBLISHED_VERSION.terrain)));
+fn assemble_region(args: &Args, coverage: &Coverage, leaves: &TileSet, land: &[IVec], leaf: &serde_json::Value, code: &str, sha: Option<&str>) -> Result<(), String> {
+    let base = args.base();
     if !base.root.is_dir() {
         return Err(format!("{}: no base to bake a region over; name one with --base", base.root.display()));
     }
+    let built = read_json(&base.root.join(BUILT_KEY));
+    if built["code"].as_str() != Some(code) {
+        return Err(format!("{}: baked by code {}, this is {code}; bake the whole set", base.root.display(), built["code"]));
+    }
+    // What the version holds: the base's shards and those the regions reach.
+    let mut shards = names(&built["shards"]);
+    shards.extend(coverage.shards().map(|s| s.name()).filter(|s| args.regions.iter().any(|r| overlap(&r.name(), s))));
     let tiles = TileSet::new(args.out.clone().unwrap_or_else(|| next_version("./out/terrain", FORMAT.terrain)));
     if tiles.root.exists() {
         fs::remove_dir_all(&tiles.root).map_err(|e| e.to_string())?;
@@ -225,7 +258,7 @@ fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_js
         changed.insert(at);
     }
     let leaves_changed = changed.len();
-    let folded = refold(&tiles, changed, &Absence::new(Coverage::of_source()?))?;
+    let folded = refold(&tiles, changed, &Absence::new(coverage.clone()))?;
     println!("[bake/region] {leaves_changed} leaves changed, {folded} tiles above folded again -> {}", tiles.root.display());
 
     // Uploaded, the version is its changes over one full version, never over
@@ -245,6 +278,7 @@ fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_js
     let _ = fs::remove_file(&snapshot);
     let full_name = full.root.file_name().map(|n| n.to_string_lossy().to_string());
     write_json(&snapshot, &serde_json::json!({ "base": full_name, "written": written, "removed": removed }))?;
+    write_built(&tiles, code, &shards)?;
     println!("[bake/region] over {}: {} written, {} removed", full.root.display(), written.len(), removed.len());
 
     let top = tiles.by_zoom()?.into_keys().next().unwrap_or(LEAF_ZOOM);
@@ -262,17 +296,33 @@ fn assemble_region(args: &Args, leaves: &TileSet, land: &[IVec], leaf: &serde_js
         f.insert("base".into(), serde_json::json!({ "version": base_name, "release": base_release }));
         f.insert(
             "regions".into(),
-            serde_json::json!({ "tiles": leaf["regions"], "release": leaf["release"], "leaf_git_sha": leaf["git_sha"] }),
+            serde_json::json!({ "tiles": leaf["regions"], "release": leaf["release"] }),
         );
     }
-    write_manifest(&tiles, top, built, fields)
+    write_manifest(&tiles, top, sha, fields)
 }
 
 fn run() -> Result<(), String> {
-    let built = git_sha();
-    let args = parse_args()?;
+    let sha = git_sha();
+    let code = code_id()?;
+    let mut args = parse_args()?;
     let leaves = TileSet::new(args.build.join("leaf"));
     let coverage = Coverage::of_source()?;
+    if args.grow {
+        if !args.regions.is_empty() {
+            return Err("--grow names its own regions: the shards the base does not hold".into());
+        }
+        let held = names(&read_json(&args.base().root.join(BUILT_KEY))["shards"]);
+        let want: BTreeSet<String> = coverage.shards().map(|s| s.name()).collect();
+        if let Some(gone) = held.difference(&want).next() {
+            return Err(format!("the base holds {gone}, which the coverage does not: bake the whole set"));
+        }
+        args.regions = want.difference(&held).map(|n| Tile::of_name(n).ok_or(format!("{n}: not a tile's name"))).collect::<Result<_, _>>()?;
+        if args.regions.is_empty() {
+            return Err("the base holds every shard of the coverage: nothing to grow".into());
+        }
+        println!("[bake/grow] {} shards the base does not hold", args.regions.len());
+    }
     let land_cache = args.out.as_deref().and_then(Path::parent).unwrap_or(Path::new("./out/terrain")).join("land_tiles.json");
     let (source, mut checked) = match args.stages.iter().any(|&s| s != Stage::Assemble) {
         true => Overture::reading(&leaf::READS, &coverage.shards().collect()).map(|(s, c)| (Some(s), Some(c)))?,
@@ -314,10 +364,27 @@ fn run() -> Result<(), String> {
         };
         // A region's tiles are baked again whatever is on disk, by the code that changed.
         let fresh = args.force || !args.regions.is_empty();
-        fs::create_dir_all(&leaves.root).map_err(|e| e.to_string())?;
-        if !fresh {
-            refuse_mixed(&leaves.root)?;
+        // The leaves are of one code and one source: another's are removed, never read.
+        let leaf_json = args.build.join("leaf.json");
+        let source_holdings = holdings(&mut client, &leaf::READS)?;
+        let id = source_id(&code, &source_holdings);
+        if read_json(&leaf_json)["id"].as_str() != Some(id.as_str()) && leaves.root.exists() {
+            println!("[bake/leaf] {} holds another code's or source's leaves: removed", leaves.root.display());
+            fs::remove_dir_all(&leaves.root).map_err(|e| e.to_string())?;
         }
+        fs::create_dir_all(&leaves.root).map_err(|e| e.to_string())?;
+        let leaf_record = |done: bool| {
+            serde_json::json!({
+                "code": code,
+                "id": id,
+                "done": done,
+                "land_tiles": land.len(),
+                "release": source.release,
+                "regions": args.regions.iter().map(|r| r.name()).collect::<Vec<_>>(),
+                "source": source_holdings,
+            })
+        };
+        write_json(&leaf_json, &leaf_record(false))?;
         // Each worker walks its own band of rows, zigzag, so a tile's eight
         // around it were mostly read for the tile before.
         let mut rows: Vec<IVec> = targets.to_vec();
@@ -361,16 +428,7 @@ fn run() -> Result<(), String> {
         if flat > 0 {
             eprintln!("[bake/leaf] WARNING: {flat} tiles are out of the elevation raster's reach and were baked FLAT (zero-filled elevation).");
         }
-        write_json(
-            &args.build.join("leaf.json"),
-            &serde_json::json!({
-                "git_sha": built,
-                "land_tiles": land.len(),
-                "release": source.release,
-                "regions": args.regions.iter().map(|r| r.name()).collect::<Vec<_>>(),
-                "source": holdings(&mut client, &leaf::READS)?,
-            }),
-        )?;
+        write_json(&leaf_json, &leaf_record(true))?;
     }
 
     let land = land_tiles(&land_cache, &coverage, source.as_ref().map(|s| s.release.as_str()))?;
@@ -379,8 +437,11 @@ fn run() -> Result<(), String> {
     if args.stages.contains(&Stage::Assemble) {
         let leaf = read_json(&args.build.join("leaf.json"));
         let release = leaf["release"].as_str().ok_or("leaf.json names no release: run --stage leaf")?.to_string();
+        if leaf["code"].as_str() != Some(code.as_str()) || leaf["done"] != true {
+            return Err(format!("{}: its leaves are not all this code's ({code}): run --stage leaf", args.build.display()));
+        }
         if !args.regions.is_empty() {
-            return assemble_region(&args, &leaves, &land, &leaf, built.as_deref());
+            return assemble_region(&args, &coverage, &leaves, &land, &leaf, &code, sha.as_deref());
         }
         let tiles = TileSet::new(args.out.clone().unwrap_or_else(|| next_version("./out/terrain", FORMAT.terrain)));
         if tiles.root.exists() {
@@ -410,17 +471,17 @@ fn run() -> Result<(), String> {
         }
 
         let top = build(&tiles, &Absence::new(coverage.clone()), args.concurrency)?;
+        write_built(&tiles, &code, &coverage.shards().map(|s| s.name()).collect())?;
         write_manifest(
             &tiles,
             top,
-            built.as_deref(),
+            sha.as_deref(),
             serde_json::json!({
                 "shards": coverage.shards().map(|s| s.name()).collect::<Vec<_>>(),
                 "candidate_pages": coverage.tiles().len(),
                 "land_tiles": land.len(),
                 "release": release,
                 "source": leaf["source"],
-                "built": { "leaf_git_sha": leaf["git_sha"] },
             }),
         )?;
     }

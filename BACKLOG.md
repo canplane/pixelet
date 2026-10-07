@@ -37,18 +37,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   (`pxl-geo-spec overture/properties.rs`), where Carto's `amenity-points.mss`
   gives each tag an icon and a color.
 
-- **A tile's key does not name the code that baked it.** A region bake
-  links its `--base` whole and rebakes only the region
-  (`crates/server/geo-bake/src/bin/bake_tiles.rs`); nothing compares the
-  base's bake code, which the manifest records only as a `git_sha`, so a
-  region baked after a change to the drawn surface or the decks sits beside
-  tiles from the old code with no error. The dev cache already keys by the
-  bake binary and the holdings (`crates/server/geo-bake/src/demand.rs`
-  `source_id`); that identity in every manifest, and a region bake refusing
-  a base that differs in anything but holdings, closes it. Which leaves a
-  coverage grow rebakes is the operator's `--region` list, where the
-  coverage could say it.
-
 ## Parked, with the reason on file
 
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI

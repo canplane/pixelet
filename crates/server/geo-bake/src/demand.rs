@@ -122,12 +122,12 @@ impl Server {
     pub fn open(workers: usize, base: PathBuf, top_z: Zoom, limits: Limits) -> Result<Self, String> {
         let owner = claim(&base)?;
         let runner = Arc::new(Runner::new(workers, limits)?);
-        let binary = std::fs::read(std::env::current_exe().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        let code = crate::util::code_id()?;
         let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
         let mut client = postgres::Client::connect(&url, postgres::NoTls).map_err(|e| e.to_string())?;
         let datasets = [Kind::Terrain, Kind::Poi, Kind::Geocode].map(|k| {
             let root = base.join(k.name());
-            let source = root.join(source_id(&binary, &holdings(&mut client, k.reads())?));
+            let source = root.join(crate::util::source_id(&code, &holdings(&mut client, k.reads())?));
             // Another source's cache is removed, never read.
             for entry in std::fs::read_dir(&root).into_iter().flatten().flatten() {
                 if entry.path() != source {
@@ -156,14 +156,6 @@ impl Server {
         let Some(path) = path else { return Ok(None) };
         data.cache.read(&path).await.map_err(Failure::Bake)
     }
-}
-
-/// A kind's cache's name: the binary that bakes it and what the DB holds for its reads.
-fn source_id(binary: &[u8], holdings: &serde_json::Value) -> String {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::hash::DefaultHasher::new();
-    (binary, holdings.to_string()).hash(&mut h);
-    format!("{:016x}", h.finish())
 }
 
 const LOCK: &str = ".lock";

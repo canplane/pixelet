@@ -111,6 +111,7 @@ deno task bake:tiles --out ./out/terrain/<version> --force
 | `--reclassify`      | ignore the cached land/ocean scan and redo it                      |
 | `--region <name>`   | bake again only the land tiles under a tile, repeatable            |
 | `--base <dir>`      | the version a region is baked over (default the published one)     |
+| `--grow`            | a region bake of the coverage's shards the base does not hold      |
 
 It runs long enough to want a log file rather than a terminal:
 
@@ -131,8 +132,13 @@ deno task bake:tiles --region 010332102130 --base ./out/terrain/<version>
 ```
 
 Every tile it writes is what a full bake of the same code writes; the tiles
-outside the region keep the base's. So **the region must hold everything the
-change reaches**: a structure solved again that runs out of the region meets
+outside the region keep the base's, so **the base must be of this code**: a
+version names the binary that baked it in its `_built`, and a region bake
+refuses a base of other code. A change to what a tile is made of is a full
+bake. `_built` also lists the shards the version covers, so when the
+coverage grows, `--grow` bakes exactly the shards it gained over the base and
+refuses a base holding a shard the coverage dropped. And **the region must
+hold everything the change reaches**: a structure solved again that runs out of the region meets
 the base's solve of it at the edge. Choosing the region is the caller's job.
 The manifest records the base and the region's release, which may differ.
 
@@ -144,7 +150,9 @@ A region baked over a partial version lists its changes over that one's
 full base, earlier partial's included.
 
 What it produces, beside `leaf/` under `--build` with a `leaf.json` of what
-built it:
+built it — one code and one source a directory: the leaf stage removes
+another's leaves rather than resume over them, and assemble refuses leaves
+not all of its own code:
 
 - `z15/`, one packed object per tile anything is drawn in — land, or a way,
   building, deck or bore — the leaves
