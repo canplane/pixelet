@@ -1,6 +1,6 @@
 // pxl-kernel/control/camera/free.rs
 
-//! The free camera turns about its eye, which is the map center. Its height
+//! The free camera turns about its eye, which is the focus. Its height
 //! is no control: the target stands where the pan's walk stands it, and the
 //! drawn eye eases to it, so a step comes as every other move does.
 
@@ -10,7 +10,7 @@ use pxl_spec::space::coord::v3::V3;
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::controller::look_domain;
-use crate::control::camera::controller::{camera, eye_world, map_center, set_eye_world};
+use crate::control::camera::controller::{camera, eye_world, focus, set_eye_world};
 use crate::control::camera::state::camera_state;
 use crate::control::navigation::support::target;
 use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
@@ -45,9 +45,9 @@ fn to() -> &'static mut Option<Pvf3> {
 const EYE_EPS: f64 = 0.001;
 const LOOK_EPS: f64 = 0.0001;
 
-/// First person, the eye's target is the map center.
+/// First person, the eye's target is the focus.
 pub(crate) fn target_center() -> Option<Pvf3> {
-    to().or_else(map_center)
+    to().or_else(focus)
 }
 
 pub(crate) fn put(at: Pvf3, snap: bool) {

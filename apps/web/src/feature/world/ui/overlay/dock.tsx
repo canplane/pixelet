@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/overlay/dock.tsx
+// @pxl/web/feature/world/ui/overlay/dock.tsx
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -112,7 +112,7 @@ function SizeFlyout({ hover }: { hover: u32 | null }) {
       {TIERS.map((tier) => {
         const mark = sizeMark(tier);
         return (
-          <View key={tier} accessibilityLabel={t("map.dock.object_size", { n: OBJECT_TIERS - tier })} style={styles.flyoutItem}>
+          <View key={tier} accessibilityLabel={t("world.dock.object_size", { n: OBJECT_TIERS - tier })} style={styles.flyoutItem}>
             <Motion to={{ scale: hover === tier ? 1.25 : 1 }} transition={SNAP}>
               <View
                 style={[
@@ -384,7 +384,7 @@ export function Dock() {
                   value={messageText}
                   onChangeText={setMessageText}
                   onSubmit={sendMessage}
-                  placeholder={t("map.dock.message_placeholder")}
+                  placeholder={t("world.dock.message_placeholder")}
                   placeholderTextColor={LABEL.placeholder}
                   style={styles.messageInput}
                 />
@@ -394,7 +394,7 @@ export function Dock() {
                   onPress={sendMessage}
                   disabled={isSending || !fits}
                   accessibilityRole="button"
-                  accessibilityLabel={t("map.dock.send")}
+                  accessibilityLabel={t("world.dock.send")}
                   style={({ pressed }) => [styles.send, pressed && styles.sendPressed, !fits && styles.sendRefused]}
                 >
                   <Glyph glyph="arrow.up" size={chrome.glyph} weight="bold" color={color.white} />
@@ -408,8 +408,8 @@ export function Dock() {
             STRIP.ground,
             <View style={[styles.strip, { maxWidth: barWidth }]}>
               <View style={styles.group}>
-                <ToolButton label={t("map.dock.pointer")} glyph="hand.point.up.left" active={activeTool === ActiveTool.Pointer} onPress={() => holdTool(ActiveTool.Pointer)} />
-                <ToolButton label={t("map.dock.eraser")} glyph="eraser" active={activeTool === ActiveTool.Eraser} onPress={() => holdTool(ActiveTool.Eraser)} />
+                <ToolButton label={t("world.dock.pointer")} glyph="hand.point.up.left" active={activeTool === ActiveTool.Pointer} onPress={() => holdTool(ActiveTool.Pointer)} />
+                <ToolButton label={t("world.dock.eraser")} glyph="eraser" active={activeTool === ActiveTool.Eraser} onPress={() => holdTool(ActiveTool.Eraser)} />
               </View>
 
               <View style={styles.divider} />
@@ -429,7 +429,7 @@ export function Dock() {
               <View style={styles.divider} />
 
               <View style={styles.group}>
-                <ToolButton label={t("map.dock.drawer_tooltip")} glyph="archivebox" onPress={() => openModal("drawer")} />
+                <ToolButton label={t("world.dock.drawer_tooltip")} glyph="archivebox" onPress={() => openModal("drawer")} />
               </View>
             </View>,
             { tint: STRIP.ground, onContentWidth: setStripWidth },

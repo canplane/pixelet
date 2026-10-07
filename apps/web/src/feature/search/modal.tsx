@@ -21,8 +21,8 @@ import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { CATEGORY_BADGE, DEFAULT_BADGE } from "./poi_badge.spec.ts";
-import { assembleLabel, localName, primaryLanguage } from "@/feature/map/geocode/label.ts";
-import { useCenterCoordinates, usePlaceLabel } from "@/feature/map/geocode/center.ts";
+import { assembleLabel, localName, primaryLanguage } from "@/feature/world/geocode/label.ts";
+import { useCenterCoordinates, usePlaceLabel } from "@/feature/world/geocode/center.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 
@@ -71,8 +71,8 @@ function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; 
 }
 
 const SECTIONS = [
-  { kind: "division", label: "map.search.section_areas" },
-  { kind: "poi", label: "map.search.section_places" },
+  { kind: "division", label: "world.search.section_areas" },
+  { kind: "poi", label: "world.search.section_places" },
 ] as const;
 
 function poseColor(status: DevicePoseStatus): string {
@@ -97,8 +97,8 @@ function LocateCard() {
       <Backing fill={color.ground} place={BackingPlace.OnSheet} interactive style={styles.locateCard}>
         <Pressable onPress={kernel_enable_location} accessibilityRole="button" style={styles.locateRow}>
           <Glyph glyph="location" size={chrome.glyph} color={poseColor(location)} />
-          <Text numberOfLines={1} maxFontSizeMultiplier={textScale.chrome} style={styles.locateLabel}>{t("map.sensors.label")}</Text>
-          <Text maxFontSizeMultiplier={textScale.chrome} style={styles.locateAction}>{t("map.sensors.turn_on")}</Text>
+          <Text numberOfLines={1} maxFontSizeMultiplier={textScale.chrome} style={styles.locateLabel}>{t("world.sensors.label")}</Text>
+          <Text maxFontSizeMultiplier={textScale.chrome} style={styles.locateAction}>{t("world.sensors.turn_on")}</Text>
         </Pressable>
       </Backing>
     </AboveKeyboard>
@@ -113,7 +113,7 @@ function MapCenter() {
   if (coordinates === null) return null;
   return (
     <View>
-      <SectionTitle style={styles.sectionHeader}>{t("map.search.map_center")}</SectionTitle>
+      <SectionTitle style={styles.sectionHeader}>{t("world.search.focus")}</SectionTitle>
       <View style={styles.center}>
         {place !== null && <Text numberOfLines={2} style={styles.name}>{place}</Text>}
         <Text style={[styles.small, styles.numbers]}>{coordinates}</Text>
@@ -145,7 +145,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     if (q === "") return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      const near = kernel_snapshot().map.center ?? undefined;
+      const near = kernel_snapshot().focus.center ?? undefined;
       fetchSearch(q, { near, signal: controller.signal })
         .then((results) => controller.signal.aborted || setFound({ query: q, results, origin: near ?? null }))
         .catch(() => controller.signal.aborted || setFound({ query: q, results: [], origin: null }));
@@ -166,7 +166,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Panel label={t("map.search.placeholder")} onClose={onClose}>
+    <Panel label={t("world.search.placeholder")} onClose={onClose}>
       <PanelBody
         bar={
           <PanelBar {...KEEPS_KEYBOARD} onClose={onClose}>
@@ -175,7 +175,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
               <TextField
                 value={query}
                 onChangeText={setQuery}
-                placeholder={t("map.search.placeholder")}
+                placeholder={t("world.search.placeholder")}
                 placeholderTextColor={LABEL.placeholder}
                 clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
                 style={styles.field}
@@ -184,7 +184,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 <Pressable
                   onPress={() => setQuery("")}
                   accessibilityRole="button"
-                  accessibilityLabel={t("map.search.clear_aria_label")}
+                  accessibilityLabel={t("world.search.clear_aria_label")}
                   style={styles.clearReach}
                 >
                   <View style={styles.clear}>
@@ -198,7 +198,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
       >
         <ScrollView style={styles.results} contentContainerStyle={styles.resultsRoom} keyboardShouldPersistTaps="handled">
           {q === "" && <MapCenter />}
-          {q !== "" && results.length === 0 && <Text style={styles.empty}>{loading ? t("map.search.loading") : t("map.search.no_results")}</Text>}
+          {q !== "" && results.length === 0 && <Text style={styles.empty}>{loading ? t("world.search.loading") : t("world.search.no_results")}</Text>}
 
           {SECTIONS.map(({ kind, label }) => {
             const rows = results.filter((r) => r.kind === kind);

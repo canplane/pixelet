@@ -40,7 +40,7 @@ const DATA_SPECS: [DataSpec; 18] = [
     DataSpec {
         json: "spec/spec/place.json",
         uses: &[],
-        ts: Some("apps/web/src/feature/map/geocode/place.spec.ts"),
+        ts: Some("apps/web/src/feature/world/geocode/place.spec.ts"),
         rs: Some("crates/spec/src/place.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,

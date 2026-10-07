@@ -1,8 +1,8 @@
 // pxl-kernel/scene/character/companion.rs
 
-//! A companion (person + pet) at map_center. When map_center comes to rest it
+//! A companion (person + pet) at focus. When focus comes to rest it
 //! makes a fixed-duration catch-up walk there; in follow mode, where
-//! map_center is a ~1 Hz GPS stream that never rests, it instead glides at
+//! focus is a ~1 Hz GPS stream that never rests, it instead glides at
 //! the world-scroll rate so the two cancel and it holds at screen center.
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
@@ -175,7 +175,7 @@ impl Figure {
             }
             // A release fixes the destination at once: a pan begun inside the settle
             // delay holds the target moving, so waiting would plan nothing. The settle
-            // tracker covers every other way the map moves.
+            // tracker covers every other way the view moves.
             let destination = if released {
                 self.settle = SettleTracker::new(target, now);
                 Some(target)
@@ -197,7 +197,7 @@ impl Figure {
                     });
                 }
             }
-            // A plan in flight finishes even once the map moves again: dropping it
+            // A plan in flight finishes even once the view moves again: dropping it
             // stalled the figure during gestures and a run of quick pans ended in one jump.
             let (step, heading) = self.walk_plan.as_ref().map_or((self.at, None), |plan| plan.at(now));
             if heading.is_none() {
@@ -270,7 +270,7 @@ fn companion() -> &'static mut Companion {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompanionProps {
     pub center: [f64; 2],
-    /// The top of the floor under the map center.
+    /// The top of the floor under the focus.
     pub floor: f64,
 }
 
@@ -327,7 +327,7 @@ fn step_from([x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
 }
 
 /// Whether the companion's models have loaded: a live, unpersisted signal
-/// for the map toast. A fresh figure always starts unloaded.
+/// for the loading toast. A fresh figure always starts unloaded.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CompanionLoadStore {
     pub person_ready: bool,

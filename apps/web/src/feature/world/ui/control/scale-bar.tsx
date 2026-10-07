@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/control/scale-bar.tsx
+// @pxl/web/feature/world/ui/control/scale-bar.tsx
 
 import { StyleSheet, View } from "react-native";
 import { G, Path, Svg } from "react-native-svg";

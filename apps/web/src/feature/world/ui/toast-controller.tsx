@@ -1,10 +1,10 @@
-// @pxl/web/feature/map/ui/toast-controller.tsx
+// @pxl/web/feature/world/ui/toast-controller.tsx
 
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { messageKey } from "@/locale/message-key.ts";
-import { DevicePoseStatus, MapStatus } from "@/kernel/abi/cmd.spec.ts";
+import { DevicePoseStatus, GroundStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { toastDismiss, toastShow, ToastTone } from "@/shared/ui/toast/store.ts";
@@ -47,7 +47,7 @@ export function ToastController() {
     }
   }, [orientationError]);
 
-  const outside = useKernel((s) => s.map.outside);
+  const outside = useKernel((s) => s.focus.outside);
 
   useEffect(() => {
     if (outside) {
@@ -58,17 +58,17 @@ export function ToastController() {
   }, [outside]);
 
   // An empty screen always says it is loading; the ready word is the first world's alone.
-  const mapStatus = useKernel((s) => s.map.status);
+  const groundStatus = useKernel((s) => s.focus.status);
   const companionLoading = useKernel((s) => !s.companion.person_ready || !s.companion.pet_ready);
   const announced = useRef(false);
   const loadingShown = useRef(false);
   const readyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    if (mapStatus === MapStatus.Loading || (!announced.current && companionLoading)) {
+    if (groundStatus === GroundStatus.Loading || (!announced.current && companionLoading)) {
       clearTimeout(readyTimer.current);
       loadingShown.current = true;
-      const key = mapStatus === MapStatus.Loading ? "toast.map_loading" : "toast.companion_loading";
+      const key = groundStatus === GroundStatus.Loading ? "toast.world_loading" : "toast.companion_loading";
       toastShow(Report.World, { message: tRef.current(key), tone: ToastTone.Loading });
       return;
     }
@@ -82,7 +82,7 @@ export function ToastController() {
     toastShow(Report.World, { message: tRef.current("toast.world_ready"), tone: ToastTone.Ready });
     // Not the effect's cleanup: the next status would run it first.
     readyTimer.current = setTimeout(() => toastDismiss(Report.World), READY_MS);
-  }, [mapStatus, companionLoading]);
+  }, [groundStatus, companionLoading]);
 
   return null;
 }

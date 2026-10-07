@@ -151,7 +151,7 @@ fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
     s.pointer_y = -((client_y - rect.top) / rect.height) * 2.0 + 1.0;
 }
 
-/// A pan puts the map center by hand, so a pending destination is canceled.
+/// A pan puts the focus by hand, so a pending destination is canceled.
 fn do_pan(dx: f64, dy: f64) {
     if active() != Active::Tracked {
         cancel_destination();

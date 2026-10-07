@@ -91,7 +91,7 @@ impl WorldMinor {
     }
 }
 
-/// The input's verbs: the canvas, the pointer, the map controls.
+/// The input's verbs: the canvas, the pointer, the camera controls.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum InputMinor {
@@ -429,19 +429,19 @@ impl PermissionAnswer {
 /// on a first load or after a jump, Idle before there is a view.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u32)]
-pub enum MapStatus {
+pub enum GroundStatus {
     #[default]
     Idle = 0,
     Loading = 1,
     Success = 2,
 }
 
-impl MapStatus {
-    pub const ALL: [MapStatus; 3] = [MapStatus::Idle, MapStatus::Loading, MapStatus::Success];
+impl GroundStatus {
+    pub const ALL: [GroundStatus; 3] = [GroundStatus::Idle, GroundStatus::Loading, GroundStatus::Success];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<MapStatus> {
-        MapStatus::ALL.into_iter().find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<GroundStatus> {
+        GroundStatus::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -593,7 +593,7 @@ pub enum Command {
     INPUT_VIEW = 0x1105,
     /// The compass's press: north up.
     INPUT_COMPASS_RESET = 0x1107,
-    /// A search result: the map center moved there.
+    /// A search result: the focus moved there.
     INPUT_GO_TO = 0x1108,
     /// A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
     /// (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
@@ -602,9 +602,9 @@ pub enum Command {
     INPUT_POSE = 0x1109,
     /// The tracker let the camera go: back to the controller it had.
     INPUT_POSE_END = 0x110a,
-    /// The map is on screen and wants the sensors.
+    /// The world is on screen and wants the sensors.
     SENSOR_OPEN = 0x1208,
-    /// The map is gone, and the sensors are let go.
+    /// The world is gone, and the sensors are let go.
     SENSOR_CLOSE = 0x1209,
     /// The search panel's location card: the location asked for. The compass is asked for
     /// where it is used, entering follow mode (TRACKING), and never alone: nothing reads it
@@ -680,7 +680,7 @@ impl Command {
 
 /// What the page's UI shows of the kernel (shell.rs): written after a turn that changed it, and replaced whole.
 pub struct Snapshot<'a> {
-    pub map: MapState,
+    pub focus: FocusState,
     pub location: LocationState,
     pub companion: CompanionState,
     pub holding: HoldingState,
@@ -693,9 +693,9 @@ pub struct Snapshot<'a> {
     pub zooming: bool,
     /// Every setting's value by its SettingKey, as SETTING_SET carries one.
     pub settings: &'a [u32],
-    /// The meters a logical pixel spans at the map center, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it.
+    /// The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it.
     pub m_per_px: f64,
-    /// The place the map center is in, broad to narrow, every rung of it; empty where
+    /// The place the focus is in, broad to narrow, every rung of it; empty where
     /// the center is in none or the packets it is read out of have not arrived.
     pub place: &'a dyn Fn(&mut dyn FnMut(&PlacePart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
@@ -707,7 +707,7 @@ impl Snapshot<'_> {
     pub const FIELDS: u32 = 13;
 
     pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(MapState::FIELDS, |w| self.map.write(w));
+        w.branch(FocusState::FIELDS, |w| self.focus.write(w));
         w.branch(LocationState::FIELDS, |w| self.location.write(w));
         w.branch(CompanionState::FIELDS, |w| self.companion.write(w));
         w.branch(HoldingState::FIELDS, |w| self.holding.write(w));
@@ -729,16 +729,16 @@ impl Snapshot<'_> {
     }
 }
 
-pub struct MapState {
-    pub status: MapStatus,
+pub struct FocusState {
+    pub status: GroundStatus,
     pub is_off_center: bool,
-    /// The map center in degrees: what the search measures distance from.
+    /// The focus in degrees: what the search measures distance from.
     pub center: Option<LonLat>,
-    /// The source has nothing at all under the map center: the tile over it at the source's top was absent.
+    /// The source has nothing at all under the focus: the tile over it at the source's top was absent.
     pub outside: bool,
 }
 
-impl MapState {
+impl FocusState {
     /// The children it is written as.
     pub const FIELDS: u32 = 4;
 

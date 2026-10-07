@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/overlay/dummy-chat-text.tsx
+// @pxl/web/feature/world/ui/overlay/dummy-chat-text.tsx
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -21,7 +21,7 @@ export function DummyChatText() {
     <Pressable onHoverIn={() => setHovered(true)} onHoverOut={() => setHovered(false)} style={[styles.lines, { maxWidth: Math.min(320, width - 2 * chrome.inset) }]}>
       {chatLines.map((line, i) => (
         <View key={line.id} style={[styles.line, { opacity: hovered ? 0.95 : 0.23 + 0.47 * ((i + 1) / chatLines.length) }]}>
-          <Text style={[styles.text, styles.self]}>{t("map.chat.self_label")}</Text>
+          <Text style={[styles.text, styles.self]}>{t("world.chat.self_label")}</Text>
           <Text style={[styles.text, styles.said]}>{line.text}</Text>
         </View>
       ))}

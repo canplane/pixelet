@@ -12,13 +12,13 @@ use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
-use crate::abi::cmd::{CompanionState, HoldingState, LocationState, LonLat, MapState, MapStatus, OrientationState, PlaceName, PlacePart, Snapshot};
-use crate::control::camera::controller::{dist, map_center, units_per_px_at, Motion};
+use crate::abi::cmd::{CompanionState, FocusState, GroundStatus, HoldingState, LocationState, LonLat, OrientationState, PlaceName, PlacePart, Snapshot};
+use crate::control::camera::controller::{dist, focus, units_per_px_at, Motion};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
 use crate::control::interaction::holding;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::follow_mode::{following, set_following};
-use crate::control::navigation::off_center::map_navigation;
+use crate::control::navigation::off_center::off_center;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::reading::{device_location_store, device_orientation_store};
@@ -36,7 +36,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 /// switching language re-reads rather than refetches.
 fn place_parts(tile: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
     let parts = tile
-        .zip(crate::control::camera::controller::map_center().map(|c| group_of(&c)))
+        .zip(crate::control::camera::controller::focus().map(|c| group_of(&c)))
         .zip(geocode_store::dict())
         .and_then(|((tile, group), dict)| {
             let group = geocode_store::group_of(group)?;
@@ -65,7 +65,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let camera = camera_state();
     let settings = settings_store();
     let companion = companion_load_store();
-    let at = crate::control::camera::controller::map_center();
+    let at = crate::control::camera::controller::focus();
     let tile = at.map(|c| idx(LEAF_ZOOM, c.i));
     let center = at.map(|c| {
         let g = epsg4326::unproject(c.i, c.f);
@@ -80,15 +80,15 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         preview_cnt += 1;
     }
     let snapshot = Snapshot {
-        map: MapState {
+        focus: FocusState {
             // Loaded once ground is drawn, or every tile the view needs has answered,
             // which over a source's void leaves nothing to draw.
             status: match crate::view::observation::eye() {
-                None => MapStatus::Idle,
-                Some(_) if crate::kernel().sched.shows_ground() || Terrain::demand().answered() => MapStatus::Success,
-                Some(_) => MapStatus::Loading,
+                None => GroundStatus::Idle,
+                Some(_) if crate::kernel().sched.shows_ground() || Terrain::demand().answered() => GroundStatus::Success,
+                Some(_) => GroundStatus::Loading,
             },
-            is_off_center: map_navigation().is_off_center,
+            is_off_center: off_center().is_off_center,
             center,
             outside: at.is_some_and(|c| void_under(&c)),
         },
@@ -130,15 +130,15 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
 pub fn tracking_action(tracking: Tracking) {
     match tracking {
         Tracking::Recenter => {
-            // A fix's Z is altitude, absent on most and never the map's ground height.
-            if let Some(device) = map_navigation().device_coord {
+            // A fix's Z is altitude, absent on most and never the ground's height.
+            if let Some(device) = off_center().device_coord {
                 go_to_ground(device, Motion::Snap);
             }
             set_following(false);
             crate::control::camera::controller::come_in_to_default();
         }
         Tracking::Follow => {
-            // The heading is asked for, and the map turns with it once it comes;
+            // The heading is asked for, and the view turns with it once it comes;
             // where there is none, following is where one is alone.
             request_orientation(world_platform().orientation);
             set_following(true);
@@ -198,10 +198,10 @@ pub fn sensors_close() {
     orientation_close();
 }
 
-/// The view's scale at the map center, as the meters a logical pixel spans;
+/// The view's scale at the focus, as the meters a logical pixel spans;
 /// 0 where the camera stands at the center: no distance, no scale.
 fn m_per_px() -> f64 {
-    let y_u = map_center().map_or(0.0, |c| pvf3::to_real(pvf3::Y(&c)));
+    let y_u = focus().map_or(0.0, |c| pvf3::to_real(pvf3::Y(&c)));
     units_per_px_at(dist()) / epsg3857::u_per_m(y_u)
 }
 

@@ -20,12 +20,12 @@
     "builds the chunks again."
   ],
   "SETTING_SECTIONS": {
-    "$value": ["display", "navigation", "camera", "lighting", "debug", "character", "map"],
+    "$value": ["display", "navigation", "camera", "lighting", "debug", "character", "world"],
     "$doc": [
       "The sheet's sections, in the order they are shown. `character` is not a",
       "section of the sheet at all — its two settings are picked from the",
-      "drawer's Character tab (feature/character/picker.tsx), and `map`'s from the",
-      "buttons floating over the map (feature/map/ui/control/)."
+      "drawer's Character tab (feature/character/picker.tsx), and `world`'s from the",
+      "buttons floating over the world (feature/world/ui/control/)."
     ]
   },
   "RESOLUTION_MODES": {
@@ -46,9 +46,9 @@
     "$doc": [
       "Which controller makes the camera's pose.",
       "",
-      "  orbit — third person: the camera turns about the map center, its",
-      "          radius ahead of the eye, and a drag moves the map center.",
-      "  free  — first person: the eye is the map center and turns in place;",
+      "  orbit — third person: the camera turns about the focus, its",
+      "          radius ahead of the eye, and a drag moves the focus.",
+      "  free  — first person: the eye is the focus and turns in place;",
       "          a drag walks it as the orbit's center walks, the eye at its",
       "          height over where the walk stands."
     ]
@@ -130,16 +130,16 @@
       "sources_chunks": true
     },
     "poi": {
-      "$doc": ["The places' badges over the map, from the published POI tiles."],
+      "$doc": ["The places' badges over the world, from the published POI tiles."],
       "kind": "toggle",
       "default": false,
-      "section": "map",
+      "section": "world",
       "cost": "low"
     },
     "tilt_lock": {
       "$doc": [
         "Rotate-drag and pinch stop writing polar; azimuth is unaffected.",
-        "Off by default: the tilt is the one control a map view is expected to",
+        "Off by default: the tilt is the one control a view from above is expected to",
         "have, and locking it reads as the app being stuck."
       ],
       "kind": "toggle",
@@ -149,18 +149,18 @@
     "camera_mode": {
       "$doc": [
         "Which controller makes the camera's pose; CAMERA_MODES says each. To",
-        "first person the person stands at the map center, the eye at its",
-        "height over the ground; to third the map center is laid on the ground",
+        "first person the person stands at the focus, the eye at its",
+        "height over the ground; to third the focus is laid on the ground",
         "and the eye steps back by the radius."
       ],
       "kind": "choice",
       "default": "orbit",
       "options": "CAMERA_MODES",
-      "section": "map"
+      "section": "world"
     },
     "surface_follow": {
       "$doc": [
-        "The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."
+        "The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck."
       ],
       "kind": "toggle",
       "default": true,
@@ -233,7 +233,15 @@
     },
     "gizmos": {
       "$doc": [
-        "Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs)."
+        "Markers for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs)."
+      ],
+      "kind": "toggle",
+      "default": false,
+      "section": "debug"
+    },
+    "camera_gizmo": {
+      "$doc": [
+        "A HUD of the camera grid's cells about the eye, each marked by how wide the drawn chunk's cell where its center ray lands spans against the grid's (scene/marker/camera_gizmo.rs)."
       ],
       "kind": "toggle",
       "default": false,

@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/geocode/center.ts
+// @pxl/web/feature/world/geocode/center.ts
 
 import type { f64, u8 } from "@xpute/core/abi/word.ts";
 import { useTranslation } from "react-i18next";
@@ -13,14 +13,14 @@ import { assembleLabel, primaryLanguage } from "./label.ts";
 export function usePlaceLabel(): string | null {
   const { i18n } = useTranslation();
   return useKernel((s) => {
-    const deepest = deepestRank(s.m_per_px, s.map.center?.lat ?? 0);
+    const deepest = deepestRank(s.m_per_px, s.focus.center?.lat ?? 0);
     const parts = s.place.filter((p) => p.rank <= deepest);
     return parts.length === 0 ? null : assembleLabel(parts.map((p) => ({ name: p.name, names: Object.fromEntries(p.names.map((n) => [n.lang, n.name])) })), primaryLanguage(i18n.language));
   });
 }
 
 export function useCenterCoordinates(): string | null {
-  return useKernel((s) => s.map.center && coordinateLabel(s.map.center));
+  return useKernel((s) => s.focus.center && coordinateLabel(s.focus.center));
 }
 
 /** Four decimals: about eleven meters. */

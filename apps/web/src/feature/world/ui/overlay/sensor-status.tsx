@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/overlay/sensor-status.tsx
+// @pxl/web/feature/world/ui/overlay/sensor-status.tsx
 
 import { StyleSheet, View } from "react-native";
 

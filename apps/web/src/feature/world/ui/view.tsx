@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/view.tsx
+// @pxl/web/feature/world/ui/view.tsx
 
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
@@ -45,7 +45,7 @@ function Overlays() {
   );
 }
 
-export function MapView() {
+export function WorldView() {
   return (
     <View style={[StyleSheet.absoluteFill, styles.root]}>
       <ToastController />

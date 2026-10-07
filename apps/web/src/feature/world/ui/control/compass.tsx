@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/control/compass.tsx
+// @pxl/web/feature/world/ui/control/compass.tsx
 
 import { StyleSheet, View } from "react-native";
 import { Path, Svg } from "react-native-svg";

@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/control/location-buttons.tsx
+// @pxl/web/feature/world/ui/control/location-buttons.tsx
 
 import { useTranslation } from "react-i18next";
 
@@ -7,7 +7,7 @@ import { Motion } from "@platform/motion.tsx";
 import { LABEL } from "@platform/palette.ts";
 import { Command, DevicePoseStatus, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_tracking, useKernel } from "@/kernel/shell.ts";
-import { CompassFace } from "@/feature/map/ui/control/compass.tsx";
+import { CompassFace } from "@/feature/world/ui/control/compass.tsx";
 import { ButtonStack } from "@/shared/ui/button-stack.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { SETTLE } from "@/shared/ui/motion/transition.ts";
@@ -15,9 +15,9 @@ import { chrome, color } from "@/shared/ui/theme.ts";
 
 /** MKUserTrackingButton's glyphs. */
 const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
-  [Tracking.Recenter]: { glyph: "location", label: "map.controls.move_to_location" },
-  [Tracking.Follow]: { glyph: "location.fill", label: "map.controls.start_compass_mode" },
-  [Tracking.Unfollow]: { glyph: "location.north.line.fill", label: "map.controls.exit_compass_mode" },
+  [Tracking.Recenter]: { glyph: "location", label: "world.controls.move_to_location" },
+  [Tracking.Follow]: { glyph: "location.fill", label: "world.controls.start_compass_mode" },
+  [Tracking.Unfollow]: { glyph: "location.north.line.fill", label: "world.controls.exit_compass_mode" },
 };
 
 export function LocationButtons() {
@@ -25,7 +25,7 @@ export function LocationButtons() {
   const status = useKernel((s) => s.location.status);
   const hasLocation = useKernel((s) => s.location.has_location);
   const following = useKernel((s) => s.is_follow_mode);
-  const offCenter = useKernel((s) => s.map.is_off_center);
+  const offCenter = useKernel((s) => s.focus.is_off_center);
 
   const press = following ? Tracking.Unfollow : offCenter ? Tracking.Recenter : Tracking.Follow;
   const { glyph, label } = PRESS[press];
@@ -47,7 +47,7 @@ export function LocationButtons() {
           ),
         },
         {
-          label: t("map.controls.reset_orientation"),
+          label: t("world.controls.reset_orientation"),
           onPress: () => kernel_command(Command.INPUT_COMPASS_RESET),
           disabled: following,
           face: <CompassFace />,

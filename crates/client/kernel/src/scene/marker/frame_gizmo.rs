@@ -1,6 +1,6 @@
 // pxl-kernel/scene/marker/frame_gizmo.rs
 
-//! The debug gizmos (the `gizmos` setting), as debug lines: the map center and
+//! The debug gizmos (the `gizmos` setting), as debug lines: the focus and
 //! its cell, and about it a level ring, an upright ring facing the screen and
 //! one through north. The view's forward, its up and north are told apart by
 //! color; nothing is labeled.
@@ -73,14 +73,14 @@ impl Sketch {
     }
 }
 
-fn sketch(map_center: &Pvf3) -> Sketch {
-    let center = to_world(map_center);
+fn sketch(focus: &Pvf3) -> Sketch {
+    let center = to_world(focus);
     let mut s = Sketch { about: center, lines: Vec::new() };
-    let ground = World::now().floor_under(map_center).value().flatten();
+    let ground = World::now().floor_under(focus).value().flatten();
     let cell = floor3(&[center[0], center[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
     s.cube(cell, units(GROUND.cell()));
     s.point(center, BLACK);
-    // First person the eye is the map center, and nothing about it is seen.
+    // First person the eye is the focus, and nothing about it is seen.
     if dist() == 0.0 {
         return s;
     }
@@ -105,9 +105,9 @@ fn set_lines(at: V3, vertices: &[f32]) {
     scene.debug.set(draw, at, vertices);
 }
 
-pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>) {
+pub fn debug_gizmos_step(show: bool, focus: Option<Pvf3>) {
     let drawn = GIZMOS.get(|| None);
-    let Some(center) = map_center.filter(|_| show) else {
+    let Some(center) = focus.filter(|_| show) else {
         if drawn.take().is_some() {
             set_lines([0.0; 3], &[]);
         }

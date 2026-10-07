@@ -1,13 +1,13 @@
-// @pxl/web/page/map.tsx
+// @pxl/web/page/world.tsx
 
 import { StyleSheet, View } from "react-native";
 
-import { MapView } from "@/feature/map/ui/view.tsx";
+import { WorldView } from "@/feature/world/ui/view.tsx";
 
-function MapPage() {
+function WorldPage() {
   return (
     <View style={styles.page}>
-      <MapView />
+      <WorldView />
     </View>
   );
 }
@@ -16,4 +16,4 @@ const styles = StyleSheet.create({
   page: { flex: 1, width: "100%", alignItems: "center" },
 });
 
-export default MapPage;
+export default WorldPage;

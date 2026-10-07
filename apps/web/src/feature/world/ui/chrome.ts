@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/chrome.ts
+// @pxl/web/feature/world/ui/chrome.ts
 
 import { useSafeArea } from "@platform/safe-area.ts";
 import { useViewportTop } from "@platform/viewport.ts";

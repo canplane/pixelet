@@ -53,7 +53,7 @@ export const enum WorldMinor {
   SOURCE = 0x05,
 }
 
-/** The input's verbs: the canvas, the pointer, the map controls. */
+/** The input's verbs: the canvas, the pointer, the camera controls. */
 export const enum InputMinor {
   RECT = 0x01,
   POINTER = 0x02,
@@ -184,7 +184,7 @@ export const enum PermissionAnswer {
 
 /** Whether the view shows any ground: Loading while the screen has none,
  * on a first load or after a jump, Idle before there is a view. */
-export const enum MapStatus {
+export const enum GroundStatus {
   Idle = 0,
   Loading = 1,
   Success = 2,
@@ -304,7 +304,7 @@ export const enum Command {
   INPUT_VIEW = 0x1105,
   /** The compass's press: north up. */
   INPUT_COMPASS_RESET = 0x1107,
-  /** A search result: the map center moved there. */
+  /** A search result: the focus moved there. */
   INPUT_GO_TO = 0x1108,
   /** A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
    * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
@@ -313,9 +313,9 @@ export const enum Command {
   INPUT_POSE = 0x1109,
   /** The tracker let the camera go: back to the controller it had. */
   INPUT_POSE_END = 0x110a,
-  /** The map is on screen and wants the sensors. */
+  /** The world is on screen and wants the sensors. */
   SENSOR_OPEN = 0x1208,
-  /** The map is gone, and the sensors are let go. */
+  /** The world is gone, and the sensors are let go. */
   SENSOR_CLOSE = 0x1209,
   /** The search panel's location card: the location asked for. The compass is asked for
    * where it is used, entering follow mode (TRACKING), and never alone: nothing reads it
@@ -351,7 +351,7 @@ function optional<T>(c: NodeCursor, read: (b: BranchCursor) => T): T | null {
 
 /** What the page's UI shows of the kernel (shell.rs): written after a turn that changed it, and replaced whole. */
 export interface Snapshot {
-  map: MapState;
+  focus: FocusState;
   location: LocationState;
   companion: CompanionState;
   holding: HoldingState;
@@ -364,9 +364,9 @@ export interface Snapshot {
   zooming: boolean;
   /** Every setting's value by its SettingKey, as SETTING_SET carries one. */
   settings: u32[];
-  /** The meters a logical pixel spans at the map center, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it. */
+  /** The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it. */
   m_per_px: f64;
-  /** The place the map center is in, broad to narrow, every rung of it; empty where
+  /** The place the focus is in, broad to narrow, every rung of it; empty where
    * the center is in none or the packets it is read out of have not arrived. */
   place: PlacePart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
@@ -375,7 +375,7 @@ export interface Snapshot {
 
 export function read_snapshot(b: BranchCursor): Snapshot {
   return {
-    map: read_map_state(b.at_branch(0)),
+    focus: read_focus_state(b.at_branch(0)),
     location: read_location_state(b.at_branch(1)),
     companion: read_companion_state(b.at_branch(2)),
     holding: read_holding_state(b.at_branch(3)),
@@ -391,17 +391,17 @@ export function read_snapshot(b: BranchCursor): Snapshot {
   };
 }
 
-export interface MapState {
-  status: MapStatus;
+export interface FocusState {
+  status: GroundStatus;
   is_off_center: boolean;
-  /** The map center in degrees: what the search measures distance from. */
+  /** The focus in degrees: what the search measures distance from. */
   center: LonLat | null;
-  /** The source has nothing at all under the map center: the tile over it at the source's top was absent. */
+  /** The source has nothing at all under the focus: the tile over it at the source's top was absent. */
   outside: boolean;
 }
 
-export function read_map_state(b: BranchCursor): MapState {
-  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat), outside: b.at(3).get<boolean>() };
+export function read_focus_state(b: BranchCursor): FocusState {
+  return { status: b.at(0).get<GroundStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat), outside: b.at(3).get<boolean>() };
 }
 
 export interface LonLat {

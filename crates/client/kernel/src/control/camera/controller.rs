@@ -2,7 +2,7 @@
 
 //! The camera (an eye and a look) and which controller moves it. The orbit
 //! turns about a point `dist` ahead of the eye, the free camera about the eye
-//! itself; the map center is that point, derived and never kept. A tracker
+//! itself; the focus is that point, derived and never kept. A tracker
 //! overrides either while it holds the pose, since a tracked turn can roll.
 
 use pxl_spec::space::coord::mat4::{mat4, mat4_mul, mat4_rotation_quat, mat4_rotation_z, mat4_transform_point, mat4_transpose, Mat4};
@@ -56,7 +56,7 @@ pub fn units_per_px_at(dist: f64) -> f64 {
 }
 
 /// The eye is kept in the world's doubles: a canonical point's 1/256 rounding
-/// held in it would walk the map center as the orbit re-derives the eye each
+/// held in it would walk the focus as the orbit re-derives the eye each
 /// frame.
 pub struct Camera {
     pub eye: Option<V3>,
@@ -102,7 +102,7 @@ pub fn polar() -> f64 {
     camera().polar
 }
 
-pub fn center_world() -> Option<V3> {
+pub fn focus_world() -> Option<V3> {
     camera().eye?;
     if active() == Active::Tracked {
         return Some(view().at().eye);
@@ -112,8 +112,8 @@ pub fn center_world() -> Option<V3> {
     Some(std::array::from_fn(|k| e[k] + d[k] * r))
 }
 
-pub fn map_center() -> Option<Pvf3> {
-    let at = center_world()?;
+pub fn focus() -> Option<Pvf3> {
+    let at = focus_world()?;
     let c = world_to_canonical(&at);
     Some(c)
 }
@@ -306,7 +306,7 @@ fn switch() -> bool {
     true
 }
 
-/// The other controller's camera is put at the current map center at once,
+/// The other controller's camera is put at the current focus at once,
 /// so nothing eases away. While a tracker holds the pose the change waits
 /// until it lets go.
 fn take_mode(want: CameraMode) -> bool {
@@ -317,7 +317,7 @@ fn take_mode(want: CameraMode) -> bool {
     // Taken back to the nearest canonical point, or a few round trips walk the
     // character away. A height not yet known stays unknown.
     let unknown = target_center().is_some_and(|t| is_unknown(&t));
-    let center = center_world().map(|local| {
+    let center = focus_world().map(|local| {
         let c = world_to_canonical_nearest(&local);
         if unknown {
             unknown_z(&c)

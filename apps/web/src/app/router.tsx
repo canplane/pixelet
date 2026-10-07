@@ -5,7 +5,7 @@ import type { RouteObject } from "react-router-dom";
 
 import { devRoutes } from "@/feature/dev/route.tsx";
 import { AppLayout } from "./layout.tsx";
-import MapPage from "@/page/map.tsx";
+import WorldPage from "@/page/world.tsx";
 
 const routes: RouteObject[] = [
   {
@@ -16,7 +16,7 @@ const routes: RouteObject[] = [
       </AppLayout>
     ),
     children: [
-      { path: "", element: <MapPage /> },
+      { path: "", element: <WorldPage /> },
 
       ...(__IS_DEV__ ? devRoutes : []),
 

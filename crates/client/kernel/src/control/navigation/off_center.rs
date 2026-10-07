@@ -7,7 +7,7 @@ use crate::control::sensor::reading::device_location_store;
 use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct MapNavigation {
+pub struct OffCenter {
     pub device_coord: Option<Pvf3>,
     pub is_off_center: bool,
 }
@@ -18,20 +18,20 @@ fn device_coord() -> Option<Pvf3> {
     device_location_store().location.map(|location| epsg4326::project(&location.coords))
 }
 
-/// Whether the map center has wandered off the device, as of this turn.
-pub fn map_navigation() -> MapNavigation {
-    MapNavigation {
+/// Whether the focus has wandered off the device, as of this turn.
+pub fn off_center() -> OffCenter {
+    OffCenter {
         device_coord: device_coord(),
         is_off_center: *OFF_CENTER.get(|| false),
     }
 }
 
-/// Whether the map center is off the device, decided once a turn.
-pub fn map_navigation_step() {
+/// Whether the focus is off the device, decided once a turn.
+pub fn off_center_step() {
     let off = OFF_CENTER.get(|| false);
     // Horizontal only: the fix's Z is GPS altitude and the center's is terrain
     // from another source, and their mismatch could hold it off-center forever.
-    match (crate::control::camera::controller::map_center(), device_coord()) {
+    match (crate::control::camera::controller::focus(), device_coord()) {
         (Some(center), Some(device)) => {
             // PVF3 X wraps a full world period, so the difference is short across the
             // antimeridian.

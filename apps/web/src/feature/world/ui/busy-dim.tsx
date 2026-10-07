@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/busy-dim.tsx
+// @pxl/web/feature/world/ui/busy-dim.tsx
 
 import type { ReactNode } from "react";
 import type { StyleProp, ViewStyle } from "react-native";

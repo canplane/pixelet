@@ -1,9 +1,9 @@
-// @pxl/web/feature/map/ui/overlay/current-address.tsx
+// @pxl/web/feature/world/ui/overlay/current-address.tsx
 
 import { StyleSheet } from "react-native";
 
 import { Motion } from "@platform/motion.tsx";
-import { useCenterCoordinates, usePlaceLabel } from "@/feature/map/geocode/center.ts";
+import { useCenterCoordinates, usePlaceLabel } from "@/feature/world/geocode/center.ts";
 import { FADE } from "@/shared/ui/motion/transition.ts";
 import { HaloText } from "@/shared/ui/halo.tsx";
 import { color, textStyle, weight } from "@/shared/ui/theme.ts";

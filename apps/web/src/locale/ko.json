@@ -98,11 +98,15 @@
       "section_caption": "화면과 스케줄러를 들여다보는 진단 도구입니다",
       "debug_overlay": {
         "label": "디버그 오버레이",
-        "description": "카메라와 지도 위치, 프레임·GPU·메모리·요청 상태를 보여줍니다."
+        "description": "카메라와 초점 위치, 프레임·GPU·메모리·요청 상태를 보여줍니다."
       },
       "gizmos": {
         "label": "기즈모",
-        "description": "지도 중심과 그 셀, 축 원을 월드 위에 그려 디버깅을 돕습니다."
+        "description": "초점과 그 셀, 축 원을 월드 위에 그려 디버깅을 돕습니다."
+      },
+      "camera_gizmo": {
+        "label": "카메라 기즈모",
+        "description": "카메라 격자의 셀을 화면에 겹쳐, 그 자리에 그려진 디테일이 격자에 맞는지 색으로 보여 줍니다: 초록은 격자대로, 파랑은 더 세밀, 빨강은 더 거침, 회색은 데이터의 가장 세밀한 수준, 자홍은 아무것도 그려지지 않은 곳."
       }
     },
     "disclaimer": {
@@ -121,8 +125,8 @@
       "tagline": "현실 세계를 캔버스 삼아 블록을 쌓습니다."
     },
     "navigation": {
-      "section_title": "지도 이동",
-      "section_caption": "지도를 끌어 중심을 옮길 때의 동작을 설정합니다."
+      "section_title": "시점 이동",
+      "section_caption": "화면을 끌어 시점을 옮길 때의 동작을 설정합니다."
     }
   },
   "drawer": {
@@ -193,11 +197,11 @@
   "toast": {
     "location_checking": "현재 위치를 확인하고 있습니다.",
     "world_ready": "공간을 불러왔습니다.",
-    "map_loading": "공간을 불러오고 있습니다.",
+    "world_loading": "공간을 불러오고 있습니다.",
     "companion_loading": "동행을 준비하고 있습니다.",
     "outside": "서비스 지역이 아닙니다."
   },
-  "map": {
+  "world": {
     "dock": {
       "pointer": "포인터",
       "eraser": "지우개",
@@ -228,7 +232,7 @@
       "no_results": "검색 결과가 없습니다",
       "section_areas": "지역",
       "section_places": "장소",
-      "map_center": "현재 위치"
+      "focus": "현재 위치"
     }
   },
   "unsupported": {

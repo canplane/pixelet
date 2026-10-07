@@ -1,4 +1,4 @@
-// @pxl/web/feature/map/ui/control/view-buttons.tsx
+// @pxl/web/feature/world/ui/control/view-buttons.tsx
 
 import { useTranslation } from "react-i18next";
 
@@ -20,12 +20,12 @@ export function ViewButtons() {
       items={[
         {
           glyph: first ? "eye" : "figure.stand",
-          label: t(first ? "map.controls.third_person" : "map.controls.first_person"),
+          label: t(first ? "world.controls.third_person" : "world.controls.first_person"),
           onPress: () => kernel_setting(MODE.key, first ? ORBIT : FREE),
         },
         {
           glyph: places ? "mappin.circle.fill" : "mappin.circle",
-          label: t(places ? "map.controls.hide_places" : "map.controls.show_places"),
+          label: t(places ? "world.controls.hide_places" : "world.controls.show_places"),
           onPress: () => kernel_setting(POI, places ? 0 : 1),
           isActive: places,
         },

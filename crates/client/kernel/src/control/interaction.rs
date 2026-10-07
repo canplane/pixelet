@@ -54,7 +54,7 @@ pub struct Hover {
     pub object_at: Option<EntryAt>,
     /// A scattered decor has no entry.
     pub scattered: Option<Scattered>,
-    /// Where the map center sent there starts from.
+    /// Where the focus sent there starts from.
     pub approach: Option<Pvf3>,
 }
 

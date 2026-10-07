@@ -36,7 +36,7 @@ pub struct ViewPose {
 
 pub fn pose(view: ViewTriple) -> Option<ViewPose> {
     Some(ViewPose {
-        target: crate::control::camera::controller::center_world()?,
+        target: crate::control::camera::controller::focus_world()?,
         dist: view.dist,
         polar: view.polar,
         azimuth: view.azimuth,
@@ -132,7 +132,7 @@ fn in_solid(at: &ViewPose) -> bool {
     World::now().floor_under(&eye).value().flatten().is_some_and(|top| top > world[2])
 }
 
-/// What lies between the eye and the map center is not asked: that hides the
+/// What lies between the eye and the focus is not asked: that hides the
 /// center but is not the eye running into anything.
 fn path_clear(from: &ViewPose, to: &ViewPose) -> bool {
     (1..=STEP_SAMPLES).all(|i| !in_solid(&between(from, to, i as f64 / STEP_SAMPLES as f64)))

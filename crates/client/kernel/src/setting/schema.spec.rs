@@ -28,9 +28,9 @@
 
 /// Which controller makes the camera's pose.
 ///
-///   orbit — third person: the camera turns about the map center, its
-///           radius ahead of the eye, and a drag moves the map center.
-///   free  — first person: the eye is the map center and turns in place;
+///   orbit — third person: the camera turns about the focus, its
+///           radius ahead of the eye, and a drag moves the focus.
+///   free  — first person: the eye is the focus and turns in place;
 ///           a drag walks it as the orbit's center walks, the eye at its
 ///           height over where the walk stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -167,18 +167,18 @@ pub enum SettingKey {
     /// would being decided and not built. The badge is an ordering, and this is
     /// the one to reach for before any shading term.
     decor = 1,
-    /// The places' badges over the map, from the published POI tiles.
+    /// The places' badges over the world, from the published POI tiles.
     poi = 2,
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
-    /// Off by default: the tilt is the one control a map view is expected to
+    /// Off by default: the tilt is the one control a view from above is expected to
     /// have, and locking it reads as the app being stuck.
     tilt_lock = 3,
     /// Which controller makes the camera's pose; CAMERA_MODES says each. To
-    /// first person the person stands at the map center, the eye at its
-    /// height over the ground; to third the map center is laid on the ground
+    /// first person the person stands at the focus, the eye at its
+    /// height over the ground; to third the focus is laid on the ground
     /// and the eye steps back by the radius.
     camera_mode = 4,
-    /// The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck.
+    /// The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck.
     surface_follow = 5,
     /// What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each.
     orbit_obstacle = 6,
@@ -200,14 +200,16 @@ pub enum SettingKey {
     resolution = 11,
     /// The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
     debug_overlay = 12,
-    /// Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs).
+    /// Markers for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs).
     gizmos = 13,
-    person = 14,
-    pet = 15,
+    /// A HUD of the camera grid's cells about the eye, each marked by how wide the drawn chunk's cell where its center ray lands spans against the grid's (scene/marker/camera_gizmo.rs).
+    camera_gizmo = 14,
+    person = 15,
+    pet = 16,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 16] = [
+    pub const ALL: [SettingKey; 17] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::poi,
@@ -222,6 +224,7 @@ impl SettingKey {
         SettingKey::resolution,
         SettingKey::debug_overlay,
         SettingKey::gizmos,
+        SettingKey::camera_gizmo,
         SettingKey::person,
         SettingKey::pet,
     ];
@@ -247,6 +250,7 @@ impl SettingKey {
             SettingKey::resolution => SettingKind::Choice,
             SettingKey::debug_overlay => SettingKind::Toggle,
             SettingKey::gizmos => SettingKind::Toggle,
+            SettingKey::camera_gizmo => SettingKind::Toggle,
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
         }
@@ -269,6 +273,7 @@ impl SettingKey {
             SettingKey::resolution => "resolution",
             SettingKey::debug_overlay => "debug_overlay",
             SettingKey::gizmos => "gizmos",
+            SettingKey::camera_gizmo => "camera_gizmo",
             SettingKey::person => "person",
             SettingKey::pet => "pet",
         }
@@ -321,6 +326,7 @@ pub struct Settings {
     pub resolution: ResolutionMode,
     pub debug_overlay: bool,
     pub gizmos: bool,
+    pub camera_gizmo: bool,
     pub person: u8,
     pub pet: u8,
 }
@@ -342,6 +348,7 @@ impl Settings {
         resolution: ResolutionMode::auto,
         debug_overlay: false,
         gizmos: false,
+        camera_gizmo: false,
         person: 1,
         pet: 5,
     };
@@ -364,6 +371,7 @@ impl Settings {
             SettingKey::resolution => self.resolution as u32,
             SettingKey::debug_overlay => self.debug_overlay as u32,
             SettingKey::gizmos => self.gizmos as u32,
+            SettingKey::camera_gizmo => self.camera_gizmo as u32,
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
         }
@@ -399,6 +407,7 @@ impl Settings {
             },
             SettingKey::debug_overlay if value <= 1 => self.debug_overlay = value == 1,
             SettingKey::gizmos if value <= 1 => self.gizmos = value == 1,
+            SettingKey::camera_gizmo if value <= 1 => self.camera_gizmo = value == 1,
             SettingKey::person => match u8::try_from(value) {
                 Ok(n) => self.person = n,
                 Err(_) => return false,

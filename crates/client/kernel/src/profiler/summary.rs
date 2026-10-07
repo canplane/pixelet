@@ -262,7 +262,7 @@ fn side(out: &mut [f64]) {
     let hover = crate::control::interaction::hover().coord;
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| pack::unpack(p.i, p.f));
     let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
-    let [center_lon, center_lat, center_z] = controller::map_center().map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
+    let [center_lon, center_lat, center_z] = controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
     let (chunk_zoom, tier_zoom, read_zoom) = hover
         .and_then(|p| with_parts(|_, sched, _| sched.drawn_at(&p)).flatten())
         .map_or((None, None, None), |(c, t, r)| (Some(c), t, r));

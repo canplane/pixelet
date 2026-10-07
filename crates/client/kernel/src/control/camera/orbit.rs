@@ -1,6 +1,6 @@
 // pxl-kernel/control/camera/orbit.rs
 
-//! The orbit camera: the eye moves over a sphere about the map center, the
+//! The orbit camera: the eye moves over a sphere about the focus, the
 //! radius being the zoom. The controls write the target; `turn` brings what
 //! is drawn to it (approach.rs). Everything that reads the world reads the
 //! drawn state.
@@ -13,7 +13,7 @@ use pxl_spec::space::coord::v3::{add3, V3};
 use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
-use crate::control::camera::controller::{camera, center_world, look_dir, look_domain, map_center, set_eye_world};
+use crate::control::camera::controller::{camera, focus, focus_world, look_dir, look_domain, set_eye_world};
 use crate::control::camera::gesture::{spread, Anchor};
 use crate::control::camera::state::{camera_state, Intent, IntentPatch};
 use crate::control::navigation::support::target;
@@ -120,14 +120,14 @@ pub fn zoom_to(dist: f64) -> f64 {
 }
 
 pub(crate) fn target_center() -> Option<Pvf3> {
-    orbit().to.or_else(map_center)
+    orbit().to.or_else(focus)
 }
 
 pub(crate) fn put(at: Pvf3, snap: bool) {
     orbit().to = Some(at);
     if snap {
         let (o, cam) = (orbit(), camera());
-        let center = target(&mut o.to, center_world().unwrap_or_default());
+        let center = target(&mut o.to, focus_world().unwrap_or_default());
         let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
         set_eye_world(&add3(&center, &e));
     }
@@ -135,7 +135,7 @@ pub(crate) fn put(at: Pvf3, snap: bool) {
 
 /// Whether still moving; None where the camera stands nowhere.
 pub(crate) fn turn(delta: f64) -> Option<bool> {
-    let drawn_center = center_world()?;
+    let drawn_center = focus_world()?;
     let vs = camera_state().intent;
     let (o, cam) = (orbit(), camera());
     let was = (drawn_center, o.dist, cam.polar, cam.azimuth);

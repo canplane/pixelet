@@ -1,6 +1,6 @@
 // pxl-kernel/scene/environment.rs
 
-//! Time of day and the light it gives: where the map is and the wall clock
+//! Time of day and the light it gives: where the view is and the wall clock
 //! as inputs; the sun and moon placed, and the light and sky they give.
 
 pub mod celestial_position;
@@ -33,7 +33,7 @@ fn environment() -> &'static mut Environment {
 }
 
 /// Runs before the chunks' step.
-pub fn map_environment_step() {
+pub fn environment_step() {
     let e = environment();
     let sched = &mut kernel().scene;
 
@@ -48,7 +48,7 @@ pub fn map_environment_step() {
 
 /// Below this the transition counts as done and stops asking for frames.
 const SETTLE_EPS: f64 = 0.005;
-/// The sun and moon follow a jump of the map in about 1.5 s and never step.
+/// The sun and moon follow a jump of the view in about 1.5 s and never step.
 const EASE_RATE: f64 = 1.5;
 
 pub struct EnvironmentDraw {

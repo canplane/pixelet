@@ -101,6 +101,12 @@ of cells a side, the same at every zoom (`Lattice`), so terrain's z24 cells
 make z15 tiles.
 Where several zooms meet, a name says whose it is (`cell_zoom`). A web map's
 zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
+**The pyramid is planar and never leaves Pvf3** (`pxl-spec space/coord/pvf3.rs`),
+which follows 3857 and leaves the poles out (`space/coord/adapter/4326.rs`
+`CLAMP_LAT`). The planet is its superset, a sphere: where the pyramid holds
+no tile, the sphere answers (the Earth's global picture, `pxl-kernel
+layer/earth.rs` `earth_window`). A plane and a sphere are two domains, not
+two copies of one fact, and no fold carries the pyramid onto the sphere.
 
 - **The view keeps only what an observer can tell apart.** The world is
   stored in each layer's shape; what the view holds and does is bounded by
@@ -216,7 +222,7 @@ conversion in two places, or two computations of one quantity meeting at a
 seam is not finished.
 
 **Every source file opens with a comment naming its logical path** — the
-import-map path (`// @pxl/web/feature/map/ui/view.tsx`), for Rust the package
+import-map path (`// @pxl/web/feature/world/ui/view.tsx`), for Rust the package
 as Cargo.toml spells it and the path under `src/` (`// pxl-spec/space/coord/zoom.rs`),
 for C++ the path from its repository's root (`// cpp/guest/ipc/ring.cpp`); an executable
 script opens on its interpreter. `check:rules` holds every file to it.
