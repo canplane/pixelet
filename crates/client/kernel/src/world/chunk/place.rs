@@ -8,6 +8,7 @@ pub mod badge;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::layer::poi::{enabled, rank_of, Places, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
+use crate::layer::Layer;
 use crate::layer::{Answer, Query};
 use crate::param::POI_MAJOR_RANK;
 use crate::scene::billboard::batch::BillboardBatch;
@@ -16,14 +17,15 @@ use crate::scene::billboard::selection::select_visible_billboards;
 use crate::scene::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::sched::tick::TickContext;
 use crate::world::chunk::Chunk;
-use crate::world::pyramid::Layer;
+use crate::world::pyramid::Observed as _;
 use crate::world::query::{Access, Detail, Ray};
 use crate::world::view::frame::pose::ndc_to_px;
 use crate::world::view::observation::ground_known;
 use badge::Label;
 use pxl_render::asset::atlas::NO_SLOT;
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 use pxl_spec::bake::poi_tile::{PoiTile, POI_LATTICE};
 use pxl_spec::space::coord::pvf3::pack;
@@ -45,7 +47,7 @@ struct Placement {
     hits: Vec<([f64; 4], Label, Pvf3)>,
     /// Kept so a settled turn asks the heap for nothing. Each with the scale
     /// it shows at and where in its POI cell that scale is read.
-    found: Vec<(Cell, Label, Cell, f64, Shown, [f64; 3])>,
+    found: Vec<(Cell, Label, Cell, f64, Shown, V3)>,
     /// The drawn chunks, the tiles and the heights `found` was read from: an
     /// eye move that changes none of them casts no ray.
     found_for: Option<Found>,
@@ -112,16 +114,16 @@ pub fn step(ctx: &mut TickContext) {
         badge::retain(&HashSet::new());
         return;
     }
-    let tiles = PoiTile::pyramid();
+    let _tiles = PoiTile::pyramid();
     if crate::world::chunk::domain::current().is_none() {
         return;
     }
-    let sched = &crate::kernel::kernel().sched;
+    let sched = &crate::kernel().sched;
     sched.mounted(&mut p.mounted);
     p.now.drawn.clear();
     p.now.drawn.extend(p.mounted.iter().filter(|m| m.1).map(|m| m.0));
     p.now.drawn.sort_unstable();
-    tiles.residency().known(&mut p.now.tiles);
+    PoiTile::residency().known(&mut p.now.tiles);
     ground_known(&mut p.now.terrain);
     let stale = core::mem::take(&mut p.objects_written) | (p.found_for.as_ref() != Some(&p.now));
     if stale {
@@ -135,7 +137,7 @@ pub fn step(ctx: &mut TickContext) {
     let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
         let read_zoom = POI_LATTICE.read_zoom(chunk.cell_zoom());
-        let Answer::Exact(Places { tile: poi, from: src }) = tiles.residency().read(chunk.node(), chunk.cell_zoom()) else {
+        let Answer::Exact(Places { tile: poi, from: src }) = PoiTile::residency().read(chunk.node(), chunk.cell_zoom()) else {
             continue;
         };
         // Where the source cell is wider than the chunk, its place counts only if it

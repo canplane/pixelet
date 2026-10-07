@@ -8,7 +8,7 @@
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
-import { FileError } from "@xpute/runtime/ipc/sys.ts";
+import { FileError } from "@xpute/host/ipc/sys.ts";
 import { INGESTED, SHEET } from "@/catalog/asset/ingested.spec.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
 import { BAKE_KINDS } from "@/config/published.spec.ts";

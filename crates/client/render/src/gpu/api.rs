@@ -16,13 +16,13 @@ pub use device::{hold_image, open_device, surface_bind, surface_unbind, surfaces
 #[cfg(target_arch = "wasm32")]
 pub use record::{frame_begin, frame_commit, frame_room, gpu, gpu_publish, install, room, Gpu};
 
-use xpute_runtime::abi::handle::HandleTable;
+use xpute_guest::abi::handle::HandleTable;
 
 use crate::gpu::api_spec::resource;
 
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 pub mod buffer_usage {
     pub const COPY_SRC: u32 = 0x0004;

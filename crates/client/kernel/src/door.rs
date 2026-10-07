@@ -2,25 +2,26 @@
 
 //! The kernel's side of the doorbell, which a bracket (pxl-wasm, pxl-native)
 //! hands each turn to: the directory, commands applied, signals raised. The
-//! rings are xpute's (`xpute_runtime::ipc::door`).
+//! rings are xpute's (`xpute_guest::ipc::door`).
 
 mod apply;
 mod executor;
+pub mod host;
 pub mod layout;
 
 use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
-use crate::host::HeapStat;
-use crate::kernel::kernel;
+use crate::door::host::HeapStat;
+use crate::kernel;
 use crate::mem::fixed::Range;
 use crate::mem::section;
 use layout::DOOR_LAYOUT;
 use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
-use xpute_runtime::global::Global;
-use xpute_runtime::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
-use xpute_runtime::ipc::door::Door;
-use xpute_runtime::ipc::ring::Ring;
-use xpute_runtime::mem::base::{off_of, off_of_slice, ptr_at};
+use xpute_guest::global::Global;
+use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
+use xpute_guest::ipc::door::Door;
+use xpute_guest::ipc::ring::Ring;
+use xpute_guest::mem::base::{off_of, off_of_slice, ptr_at};
 
 pub struct Bracket {
     pub given: u32,
@@ -31,7 +32,7 @@ pub struct Bracket {
     /// Where a bracket whose process dies with the kernel reports why: no host
     /// is left to run the record, and a panic's text is not in its numbers.
     /// None where the host outlives the kernel (a page).
-    pub last_words: Option<crate::host::LastWords>,
+    pub last_words: Option<crate::door::host::LastWords>,
 }
 
 struct State {
@@ -89,25 +90,25 @@ fn host_attached(s: &mut State) {
         close_surface(handle);
     }
     crate::shell::sensors_close();
-    crate::text::text_forget();
+    crate::io::text::text_forget();
     s.snapshot = 0;
 }
 
 /// First turn: lays out memory and writes the directory at DIRECTORY_AT.
 fn boot(b: &Bracket) {
-    xpute_runtime::clock::set_clock(b.clock);
-    crate::host::set_heap_stat(b.heap_stat);
-    crate::host::set_last_words(b.last_words);
+    xpute_guest::clock::set_clock(b.clock);
+    crate::door::host::set_heap_stat(b.heap_stat);
+    crate::door::host::set_last_words(b.last_words);
     executor::install();
     // Named invariants report through `bug!`; a core panic reports only its location.
-    xpute_core::status::bug::set_report(crate::host::host_bug);
+    xpute_core::status::bug::set_report(crate::door::host::host_bug);
     std::panic::set_hook(Box::new(|info| {
-        if crate::host::stopped() {
+        if crate::door::host::stopped() {
             return;
         }
-        crate::host::last_words(crate::host::Stop::Panic(info));
+        crate::door::host::last_words(crate::door::host::Stop::Panic(info));
         if let Some(at) = info.location() {
-            crate::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
+            crate::door::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
         }
     }));
     let gpu_stream = lay_out(b);
@@ -141,7 +142,7 @@ fn lay_out(b: &Bracket) -> u32 {
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {
-        crate::host::set_host_stream(fixed_at(Range::Host));
+        crate::door::host::set_host_stream(fixed_at(Range::Host));
         pxl_render::gpu::renderer::set_blocks(fixed_at(Range::Blocks), crate::mem::fixed::BLOCK_SLOTS);
         pxl_render::gpu::api::install(fixed_at(Range::Gpu))
     }
@@ -159,17 +160,17 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
     if core::mem::take(&mut s.profiler_taken) {
         crate::sched::profiler::log::profiler_log_clear();
     }
-    crate::host::host_rise();
+    crate::door::host::host_rise();
     crate::world::change::world_edge().rise(quota_ms);
     door().drain(|number, pkt| apply::apply(s, number, pkt));
     if quota_ms > 0.0 || world_frame_waiting() {
-        xpute_runtime::sched::task::poll();
+        xpute_guest::sched::task::poll();
     }
     if take_world_drawn() {
         post_shell(s);
     }
     pxl_render::gpu::api::gpu_publish();
-    crate::host::host_fall();
+    crate::door::host::host_fall();
     let wake = crate::world::change::world_fall();
     // What the completion ring had no room for is still in the submission ring.
     if door().pending() {

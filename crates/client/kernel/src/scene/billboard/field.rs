@@ -7,7 +7,7 @@
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_BADGE};
 use pxl_render::gpu::api::bytes;
 use pxl_spec::space::coord::v3::V3;
-use xpute_runtime::abi::handle::Slots;
+use xpute_guest::abi::handle::Slots;
 
 use crate::scene::billboard::sheet::billboard_sheet;
 use crate::scene::model::store::Models;

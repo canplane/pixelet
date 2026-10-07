@@ -7,7 +7,7 @@
 use crate::control::camera::controller;
 use crate::io::failure::Outcome;
 use crate::io::sched::{counts, credits};
-use crate::kernel::{kernel, with_world};
+use crate::layer::Layer as _;
 use crate::scene::billboard::sheet::billboard_sheet;
 use crate::sched::profiler::block::TASK_PHASES;
 use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
@@ -18,12 +18,12 @@ use crate::sched::profiler::spec::{LIMITS, SUMMARY};
 use crate::sched::profiler::task::TaskRow;
 use crate::sched::profiler::word::put;
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
-use crate::world::pyramid::Layer as _;
+use crate::{kernel, with_world};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pack;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 const MISSED_INTERVALS: f64 = 1.5;
 
@@ -243,7 +243,7 @@ fn side(out: &mut [f64]) {
     );
 
     let [step, star] = crate::world::chunk::quality::reading();
-    let residency = Terrain::pyramid().residency();
+    let residency = Terrain::residency();
     let [admitted, evicted] = residency.churn();
     let [refined, changes_peak] = kernel().sched.pace();
     put(
@@ -260,7 +260,7 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let h = crate::host::heap_stat();
+    let h = crate::door::host::heap_stat();
     put(
         out,
         SUMMARY::heap::AT,

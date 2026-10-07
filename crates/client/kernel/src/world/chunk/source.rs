@@ -4,18 +4,18 @@
 //! catalog numbers it reads, so a chunk is remade only where they differ.
 
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::aabb::Aabb;
 
 use std::collections::HashMap;
 
-use crate::kernel::with_world;
 use crate::layer::object::store::Store;
+use crate::with_world;
 use crate::world::chunk::build::{folded_cells, runs_of};
 use crate::world::chunk::Chunk as PyramidChunk;
 use pxl_spec::space::coord::world::nearest_box;
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
 
@@ -25,7 +25,7 @@ pub fn chunk_sources_changed() {
 }
 
 pub fn chunk_sources_step() {
-    if core::mem::take(SOURCES_CHANGED.get(|| false)) {
+    if core::mem::take(SOURCES_CHANGED.get(|| false)) | crate::layer::terrain::tile::take_changed() {
         with_world(|_, sched, _| sched.sources_step());
     }
 }
@@ -63,21 +63,19 @@ impl Drawn {
 }
 
 pub fn objects_drawn(store: &Store, k: PyramidChunk) -> Option<Drawn> {
-    let (runs, held) = runs_of(store, k);
+    let runs = runs_of(store, k);
     let mut cells = Vec::new();
-    if held {
-        let (from, to) = folded_cells(k, runs);
-        let mut folded = HashMap::new();
-        store.fold_at(runs, from, to, None, &mut folded).ok()?;
-        cells.try_reserve_exact(folded.len()).ok()?;
-        // X and Y within the grid fit a byte each (`folded_cells`); Z is the lane's.
-        cells.extend(
-            folded
-                .into_iter()
-                .map(|([x, y, z], v)| (x - from[0]) as u64 | ((y - from[1]) as u64) << 8 | u64::from(z as i32 as u32) << 16 | u64::from(v as u16) << 48),
-        );
-        cells.sort_unstable();
-    }
+    let (from, to) = folded_cells(k, runs);
+    let mut folded = HashMap::new();
+    store.fold_at(runs, from, to, None, &mut folded).ok()?;
+    cells.try_reserve_exact(folded.len()).ok()?;
+    // X and Y within the grid fit a byte each (`folded_cells`); Z is the lane's.
+    cells.extend(
+        folded
+            .into_iter()
+            .map(|([x, y, z], v)| (x - from[0]) as u64 | ((y - from[1]) as u64) << 8 | u64::from(z as i32 as u32) << 16 | u64::from(v as u16) << 48),
+    );
+    cells.sort_unstable();
     Some(Drawn { runs, cells })
 }
 

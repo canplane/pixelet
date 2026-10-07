@@ -8,8 +8,8 @@
 
 import type { U32Array } from "@xpute/core/abi/array.ts";
 import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
-import { handle_slot } from "@xpute/runtime/abi/handle.ts";
-import { bytes_of, each_record, text_of } from "@xpute/runtime/ipc/stream.ts";
+import { handle_slot } from "@xpute/host/abi/handle.ts";
+import { bytes_of, each_record, text_of } from "@xpute/host/ipc/stream.ts";
 
 import { DEV_BUNDLE } from "@/config/bundle.ts";
 import { address, compare, dimension, filter, format, load, op, record, resource, stamp, stream } from "@/kernel/render/gpu/api.spec.ts";

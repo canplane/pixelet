@@ -6,13 +6,14 @@
 //! Every body is a heap block released in the command that decodes it,
 //! unless a store keeps it.
 
+use crate::world::pyramid::Observed as _;
 use core::fmt;
 
 use xpute_core::status::errno::Errno;
-use xpute_runtime::ipc::sys::Fd;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{alloc, free, Block};
-use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
+use xpute_guest::ipc::sys::Fd;
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{alloc, free, Block};
+use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::failure::{Failure, Outcome};
@@ -21,14 +22,13 @@ use crate::io::sched::{attempt_of, settle, Credit};
 use crate::layer::earth::{self, Earth};
 use crate::layer::geocode::store as geocode_store;
 use crate::world::change::world_edge;
-use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::place_tile::{group_key, DICT_OBJECT};
 use pxl_spec::bake::poi_tile::PoiTile;
 use pxl_spec::space::hierarchy::morton::write_name;
 use pxl_spec::space::layer::tile::Tile;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 pub struct DemandName(pub Category, pub u64);
 

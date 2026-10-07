@@ -6,7 +6,7 @@
 
 use crate::gpu::api::{buffer_usage, gpu, object};
 use crate::gpu::renderer::device_ready;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 /// One buffer a group of slots.
 pub const ARENA_GROUPS: usize = 8;

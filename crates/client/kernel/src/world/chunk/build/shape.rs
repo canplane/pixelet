@@ -24,20 +24,11 @@ pub(super) fn runs_zoom(c: PyramidChunk, finest: Zoom) -> Zoom {
     }
 }
 
-/// The zoom a chunk's runs are written at, and whether any object is held
-/// over its column or the columns beside it, all heights: the runs are the
-/// whole column's, and its apron reaches one cell into each neighbour.
-pub fn runs_of(store: &Store, c: PyramidChunk) -> (Zoom, bool) {
-    let (zoom, [x, y]) = c.column();
-    let mut finest: Option<Zoom> = None;
-    for dy in -1..=1 {
-        for dx in -1..=1 {
-            if let Some(b) = store.bounds((zoom, [x + dx, y + dy]), c.cell_zoom()).value().flatten() {
-                finest = Some(finest.map_or(b.finest, |f| f.max(b.finest)));
-            }
-        }
-    }
-    (runs_zoom(c, finest.map_or(GROUND.cell(), |z| z.max(GROUND.cell()))), finest.is_some())
+/// The zoom a chunk's runs are written at, from its own column alone: its
+/// apron is read at that zoom, as a neighbour of another zoom is.
+pub fn runs_of(store: &Store, c: PyramidChunk) -> Zoom {
+    let finest = store.bounds(c.column(), c.cell_zoom()).value().flatten().map(|b| b.finest);
+    runs_zoom(c, finest.map_or(GROUND.cell(), |z| z.max(GROUND.cell())))
 }
 
 /// The runs' cells, X and Y, a chunk's objects are folded over: its own and

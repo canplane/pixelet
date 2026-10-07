@@ -4,11 +4,11 @@
 
 use pxl_spec::space::layer::lattice::GROUND;
 
-use pxl_render::mesh::chunk_mesher::BAKE_ROWS_PER_STEP;
+use crate::param::BAKE_ROWS_PER_STEP;
 use pxl_render::mesh::paint::column::{stands_of, write_rows};
 use pxl_render::mesh::run::{RunSet, APRON};
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{alloc, free};
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{alloc, free};
 
 use crate::scene::marker::hover_cursor::render_edits;
 use crate::world::chunk::source::draws;
@@ -130,7 +130,7 @@ impl Builder {
             None => {}
         }
         let c = self.chunks[&id];
-        let (target, held) = runs_of(world.store, c.at);
+        let target = runs_of(world.store, c.at);
         let Some(read) = c.read(target) else {
             return Progress::Blocked;
         };
@@ -155,7 +155,7 @@ impl Builder {
         self.folded.clear();
         let (from, to) = folded_cells(c.at, target);
         let (cx, cy) = (from[0] + 1, from[1] + 1);
-        if held && world.store.fold_at(target, from, to, edits.hide.filter(|&e| draws_as_held(c.at, e.zoom())), &mut self.folded).is_err() {
+        if world.store.fold_at(target, from, to, edits.hide.filter(|&e| draws_as_held(c.at, e.zoom())), &mut self.folded).is_err() {
             self.refuse(id);
             return Progress::Blocked;
         }

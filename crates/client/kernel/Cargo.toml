@@ -12,8 +12,8 @@ base64.workspace = true
 fnv.workspace = true
 indexmap.workspace = true
 libm.workspace = true
-xpute-runtime = { path = "../../../xpute/crates/runtime" }
-xpute-core = { path = "../../../xpute/crates/core" }
+xpute-guest = { path = "../../../xpute/rust/guest" }
+xpute-core = { path = "../../../xpute/rust/core" }
 pxl-spec = { path = "../../spec" }
 pxl-render = { path = "../render" }
 # The executor the door polls the kernel's tasks on inside a turn

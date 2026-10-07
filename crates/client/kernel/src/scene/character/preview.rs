@@ -6,13 +6,13 @@
 //! silhouettes, not scale.
 
 use crate::io::load::{load_image, Load};
-use crate::kernel::{kernel, with_world};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::scene::character::variant_spec::IDLE_CLIP;
 use crate::scene::model::asset::ModelHandle;
 use crate::sched::tick::TickContext;
 use crate::world::change::request_world_tick;
-use xpute_runtime::global::Global;
+use crate::{kernel, with_world};
+use xpute_guest::global::Global;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
 /// Past any terrain and the fog, so the world never draws it.

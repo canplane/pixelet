@@ -6,19 +6,19 @@
 use pxl_render::frame::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::v3::{add3, center3n, floor3n, V3};
+use pxl_spec::space::coord::v3::{add3, center3, floor3, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{alloc, free};
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{alloc, free};
 
-use crate::kernel::{kernel, with_world};
 use crate::scene::environment::fog::view_reach;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::table::Frame;
 use crate::world::query::Access;
-use xpute_runtime::global::Global;
+use crate::{kernel, with_world};
+use xpute_guest::global::Global;
 
 // A world-space footprint (4u), whatever the ground's cell; the .707 is a
 // one-cell diagonal correction.
@@ -104,7 +104,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         return clear(p);
     };
     let raw = [pos[0], pos[1], center_z];
-    let center_pos = floor3n(&raw, units(GROUND.cell()));
+    let center_pos = floor3(&raw, units(GROUND.cell()));
 
     let mut lane = core::mem::take(&mut p.lane);
     lane.clear();
@@ -115,7 +115,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         // or launch that instance.
         let delta_ele = Access::now().surface_support(&coord).value().flatten().unwrap_or(center_pos[2]) - center_pos[2];
         let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
-        let v = center3n(&lifted, units(GROUND.cell()));
+        let v = center3(&lifted, units(GROUND.cell()));
         lane.extend([
             v[0] as f32,
             v[1] as f32,

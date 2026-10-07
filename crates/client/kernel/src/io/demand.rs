@@ -6,7 +6,10 @@
 use pxl_spec::bake::published::BakeKind;
 
 pub use crate::sched::profiler::spec::TaskPhaseName;
-use crate::world::view::observation::Order;
+use core::cmp::Ordering;
+
+use pxl_spec::space::camera::eye::Observation;
+use pxl_spec::space::coord::aabb::Aabb;
 
 pub const PHASES_MAX: usize = 6;
 
@@ -105,3 +108,42 @@ impl Ask {
         }
     }
 }
+
+/// Seen before unseen, then nearer first. Every layer's work is taken in
+/// this order, and eviction in reverse.
+#[derive(Clone, Copy, Debug)]
+pub struct Order {
+    pub seen: bool,
+    pub near: f64,
+}
+
+impl Order {
+    pub const LAST: Order = Order { seen: false, near: f64::INFINITY };
+
+    pub const FIRST: Order = Order { seen: true, near: 0.0 };
+
+    pub fn of(o: &Observation, b: &Aabb) -> Order {
+        let m = o.measure(b);
+        Order { seen: m.seen, near: m.near }
+    }
+}
+
+impl Ord for Order {
+    fn cmp(&self, other: &Order) -> Ordering {
+        other.seen.cmp(&self.seen).then(self.near.total_cmp(&other.near))
+    }
+}
+
+impl PartialOrd for Order {
+    fn partial_cmp(&self, other: &Order) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Order {
+    fn eq(&self, other: &Order) -> bool {
+        self.cmp(other).is_eq()
+    }
+}
+
+impl Eq for Order {}

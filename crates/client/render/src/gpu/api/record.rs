@@ -6,9 +6,9 @@
 
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
-use xpute_runtime::global::Global;
-use xpute_runtime::ipc::stream::{Stream, WORD};
-use xpute_runtime::mem::base::ptr_at;
+use xpute_guest::global::Global;
+use xpute_guest::ipc::stream::{Stream, WORD};
+use xpute_guest::mem::base::ptr_at;
 
 use crate::gpu::api_spec::{op, stream};
 

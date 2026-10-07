@@ -7,18 +7,18 @@ use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_render::look::globe::Globe;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg4326::G4326;
-use pxl_spec::space::coord::v3::{len3, V3};
+use pxl_spec::space::coord::v3::len3;
 
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
-use crate::host::wall_now;
-use crate::kernel::kernel;
+use crate::door::host::wall_now;
+use crate::kernel;
 use crate::scene::environment::celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use crate::scene::environment::fog::eye_ground;
 use crate::world::change::wake_at;
 use crate::world::chunk::table::Frame;
 use crate::world::view::frame::pose::globe_anchor;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 // The sky moves with the wall clock and nothing else asks for a frame while
 // the view is still, so the clock asks for one this often.
@@ -84,8 +84,8 @@ pub struct EnvironmentDraw {
     started: bool,
     /// Days since J2000.0, from the host's wall clock.
     days: f64,
-    sun: V3,
-    moon: V3,
+    sun: [f64; 3],
+    moon: [f64; 3],
     stars: f64,
     /// Seconds of wall time since the first observation: a tick's delta is
     /// clamped and sparse at rest, which ran clouds and stars slow, and the

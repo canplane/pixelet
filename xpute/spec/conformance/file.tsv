@@ -1,4 +1,4 @@
-# A guest's files (xpute-runtime ipc/file, the system calls in ARCHITECTURE.md): what a guest
+# A guest's files (xpute-guest ipc/file, the system calls in ARCHITECTURE.md): what a guest
 # owes the host's answers to its opens. The host's own end — roots, paths, reads, writes — is
 # sys/file.tsv's; this is the guest's, held across every guest. A descriptor is a handle, so the
 # trace binds them by name and holds them to relations, as handle.tsv does.

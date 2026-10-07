@@ -9,7 +9,7 @@ parquet = { version = "60", default-features = false, features = ["arrow", "snap
 postgres = "0.19"
 pxl-geo-bake = { path = "../../../../crates/server/geo-bake" }
 pxl-spec = { path = "../../../../crates/spec" }
-xpute-core = { path = "../../../../xpute/crates/core" }
+xpute-core = { path = "../../../../xpute/rust/core" }
 serde_json = "1"
 ---
 

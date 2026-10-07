@@ -7,7 +7,7 @@ FROM rust:1.98.1-slim-trixie AS build
 WORKDIR /src
 
 COPY crates ./crates
-COPY xpute/crates ./xpute/crates
+COPY xpute/rust ./xpute/rust
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/src/crates/target \

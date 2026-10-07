@@ -3,7 +3,7 @@
 # The device's half of the app's platform (apps/native/src/platform/): the
 # view the kernel draws into, the kernel linked with it, and what the shell
 # asks of the system — storage, the clipboard, text, the compass. The kernel
-# is the Rust core (crates/client/native), built by this pod's script phase
+# is the Rust core (crates/client-bracket/native), built by this pod's script phase
 # (apps/native/script/build-native.ts) for the configuration and the SDK the
 # app is, into a directory each has of its own, which the app links from and
 # Swift imports it from (`import PxlNative`, the core's include/). Not named
@@ -36,7 +36,7 @@ Pod::Spec.new do |s|
     always_out_of_date: '1',
   }
   s.pod_target_xcconfig = {
-    'SWIFT_INCLUDE_PATHS' => '"$(PODS_TARGET_SRCROOT)/../../../../../crates/client/native/include"',
+    'SWIFT_INCLUDE_PATHS' => '"$(PODS_TARGET_SRCROOT)/../../../../../crates/client-bracket/native/include"',
   }
   # The simulator the kernel is built for is an Apple silicon Mac's, arm64
   # alone (build-native.ts); a Release build makes every architecture it is

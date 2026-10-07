@@ -8,10 +8,9 @@
 
 use std::collections::BTreeMap;
 
-use camera_cfg::input::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_PX_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
+use crate::param::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_PX_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
 
 pub use crate::abi::cmd::PointerKind;
-use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{active, Active};
 use crate::control::camera::gesture::{linear, Anchor};
 use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
@@ -22,8 +21,8 @@ use crate::world::change::request_world_tick;
 use crate::world::view::frame::pose::view;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DragMode {

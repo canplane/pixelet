@@ -2,7 +2,7 @@
 
 //! What the kernel and the shell agree on, generated from cmd.json,
 //! host.json and directory.json. What any guest and host share is
-//! `xpute_runtime::abi`'s.
+//! `xpute_guest::abi`'s.
 
 #[path = "abi/cmd.spec.rs"]
 pub mod cmd;

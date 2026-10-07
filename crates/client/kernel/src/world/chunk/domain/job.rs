@@ -7,7 +7,7 @@ use pxl_spec::space::coord::world::nearest_box;
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::layer::residency::floor;
@@ -15,7 +15,7 @@ use crate::layer::Query;
 use crate::world::query::Access;
 use crate::world::view::observation::{ground_known, observation};
 use crate::world::view::observer::{EdgeRays, Sight};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 use crate::world::chunk::Chunk;
 use pxl_spec::space::coord::zoom::Zoom;

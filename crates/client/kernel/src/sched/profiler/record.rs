@@ -7,9 +7,9 @@
 
 use core::mem::size_of;
 
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
-use xpute_runtime::mem::section::span_of;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
+use xpute_guest::mem::section::span_of;
 
 use crate::mem::fixed::{lane, range, Range};
 use crate::sched::profiler::frame::{FramePeak, FrameSample, RingSample, WorstFrame};

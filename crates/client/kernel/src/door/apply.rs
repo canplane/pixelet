@@ -7,8 +7,8 @@ use crate::abi::cmd::{self as abi, Command};
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
-use xpute_runtime::abi::cmd as xpute_cmd;
-use xpute_runtime::mem::base::{off_of, off_of_slice};
+use xpute_guest::abi::cmd as xpute_cmd;
+use xpute_guest::mem::base::{off_of, off_of_slice};
 
 fn packet<'a>(pkt: &Option<&'a [u8]>) -> Result<&'a [u8], MarshalError> {
     or_refuse(*pkt, Errno::EBADMSG)
@@ -70,14 +70,14 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 interactive: p.interactive,
                 credits: p.credits,
             });
-            crate::host::set_wall_now(p.unix_ms);
+            crate::door::host::set_wall_now(p.unix_ms);
             Ok(Some(0))
         }
         Command::WORLD_BOOT => {
             let p = abi::WorldBoot::read(packet(pkt)?)?;
             super::host_attached(s);
-            crate::host::set_development(p.development);
-            crate::host::set_handheld(p.handheld);
+            crate::door::host::set_development(p.development);
+            crate::door::host::set_handheld(p.handheld);
             crate::sched::turn::set_world_platform(crate::sched::turn::Platform {
                 geolocation: p.geolocation,
                 orientation: device_orientation::OrientationPlatform {
@@ -269,7 +269,9 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::SURFACE_RESIZE => {
             let p = abi::SurfaceResize::read(packet(pkt)?)?;
             refuse_unless(p.device_pixel_ratio > 0.0, Errno::EINVAL)?;
-            refuse_unless(pxl_render::gpu::surface::surface_resize(p.surface, p.width, p.height, p.device_pixel_ratio), Errno::EBADF)?;
+            let role = pxl_render::gpu::surface::surface(p.surface).map_or(0, |s| s.role);
+            let ratio = crate::world::view::frame::resolution::surface_ratio(role, [p.width, p.height], p.device_pixel_ratio);
+            refuse_unless(pxl_render::gpu::surface::surface_resize(p.surface, p.width, p.height, p.device_pixel_ratio, ratio), Errno::EBADF)?;
             request_world_tick();
             Ok(Some(0))
         }
@@ -347,7 +349,7 @@ fn profiler_read(window_ms: f64) -> u32 {
     use crate::sched::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
     use crate::sched::profiler::spec::READ;
     // On the heap, not a static: a native build's statics are outside the shell-readable memory.
-    static WORDS: xpute_runtime::global::Global<Box<[u32; READ::WORDS as usize]>> = xpute_runtime::global::Global::new();
+    static WORDS: xpute_guest::global::Global<Box<[u32; READ::WORDS as usize]>> = xpute_guest::global::Global::new();
     let summary = crate::sched::profiler::summary::profiler_summarize(window_ms);
     let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
@@ -367,7 +369,7 @@ fn profiler_read(window_ms: f64) -> u32 {
 fn profiler_take(s: &mut State) -> u32 {
     use crate::sched::profiler::spec::LOG;
     // On the heap, as READ's words are.
-    static WORDS: xpute_runtime::global::Global<Box<[u32; LOG::WORDS as usize]>> = xpute_runtime::global::Global::new();
+    static WORDS: xpute_guest::global::Global<Box<[u32; LOG::WORDS as usize]>> = xpute_guest::global::Global::new();
     let (tasks, frames) = crate::sched::profiler::log::profiler_log_rows();
     let w = WORDS.get(|| Box::new([0; LOG::WORDS as usize]));
     w[LOG::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;

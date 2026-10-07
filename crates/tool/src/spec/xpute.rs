@@ -165,8 +165,8 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
         .map(String::from),
     );
     Ok(vec![
-        Output::new("xpute/packages/core/src/status/errno.spec.ts", file(&ts)),
-        Output::new("xpute/crates/core/src/status/errno.spec.rs", file(&rs)),
+        Output::new("xpute/ts/core/src/status/errno.spec.ts", file(&ts)),
+        Output::new("xpute/rust/core/src/status/errno.spec.rs", file(&rs)),
         Output::new("xpute/cpp/core/status/errno.spec.hpp", file(&cpp)),
     ])
 }

@@ -6,11 +6,11 @@
 //! here only; a layer owns what a cell carries and how it folds.
 
 use super::lattice::{Lattice, GROUND};
+use crate::space::coord::aabb::Aabb;
 use crate::space::coord::pvf3::core::FRAC_W;
 use crate::space::coord::pvf3::ivec::{self, IVec, TO_XY};
 use crate::space::coord::pvf3::pack;
 use crate::space::coord::pvf3::pvf3::{self, Pvf3};
-use crate::space::coord::v3::Aabb;
 use crate::space::coord::world::{self, around, wrap_index};
 use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};

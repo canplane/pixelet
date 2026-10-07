@@ -3,11 +3,12 @@
 //! The front of memory, below GLOBAL_BASE: the rings' descriptors, their
 //! slot payloads and the directory's page, at fixed addresses from mem.json.
 
-use xpute_runtime::ipc::door::{DoorLayout, RingLayout};
-use xpute_runtime::ipc::ring::{ring_bytes, slots_bytes};
+use xpute_guest::ipc::door::{DoorLayout, RingLayout};
+use xpute_guest::ipc::ring::{ring_bytes, slots_bytes};
 
 use crate::mem::section::page_up;
-use crate::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, PAGE_BYTES, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};
+use crate::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};
+use xpute_guest::mem::section::PAGE_BYTES;
 
 /// A packet is at most a page; anything larger crosses by address. A page
 /// is also the buddy's smallest block.

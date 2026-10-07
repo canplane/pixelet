@@ -7,7 +7,7 @@
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { Strobe } from "@xpute/runtime/sched/strobe.ts";
+import { Strobe } from "@xpute/host/sched/strobe.ts";
 import { Command, encode_world_frame } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
 import { directory } from "@/kernel/module.ts";

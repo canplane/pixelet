@@ -3,31 +3,29 @@
 //! The kernel's side of an observation: the eye, what it looks at, and what
 //! is known of what a box of the world holds.
 
-use std::cmp::Ordering;
+use crate::io::demand::Order;
 
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::camera::eye::{Frustum, Observation};
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::hierarchy::tree::{region, Node};
 use pxl_spec::space::layer::demand::band;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 
-use crate::layer::earth::Earth;
 use crate::layer::residency::floor;
+use crate::layer::Layer as _;
 use crate::layer::{Answer, Query};
 use crate::scene::environment::fog::{eye_height, reach_at};
 use crate::scene::environment::state::globe;
-use crate::world::chunk::domain;
-use crate::world::pyramid::Layer as _;
 use crate::world::query::Access;
 use crate::world::view::frame::pose::view;
 use crate::world::view::observer::Footprint;
-use pxl_spec::bake::poi_tile::PoiTile;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 
-pub fn eye() -> Option<[f64; 3]> {
+pub fn eye() -> Option<V3> {
     crate::control::camera::controller::camera().eye?;
     Some(view().pose.eye)
 }
@@ -119,60 +117,11 @@ impl ByFootprints<'_> {
 
 /// What the heights read of the ground: the terrain tiles known.
 pub fn ground_known(out: &mut Vec<(Tile, bool)>) {
-    Terrain::pyramid().residency().known(out);
+    Terrain::residency().known(out);
 }
 
-/// Where the objects changed, told to what works anything out from them;
-/// what is drawn hears it through its sources (`chunk/source.rs`).
-pub fn objects_written(regions: &[Aabb]) {
-    domain::objects_written(regions);
-    Terrain::pyramid().objects_written();
-    PoiTile::pyramid().objects_written();
-    Earth::pyramid().objects_written();
-    crate::world::chunk::place::objects_written();
+/// A layer's tile's order, read in the grid's cells its own fold into: all
+/// of it where nothing is known.
+pub fn order_of_tile(o: &Observation, lattice: Lattice, p: Tile) -> Order {
+    Order::of(o, &within(p.node(), lattice.grid_zoom(p.zoom)).unwrap_or(p.region()))
 }
-
-/// Seen before unseen, then nearer first. Every layer's work is taken in
-/// this order, and eviction in reverse.
-#[derive(Clone, Copy, Debug)]
-pub struct Order {
-    pub seen: bool,
-    pub near: f64,
-}
-
-impl Order {
-    pub const LAST: Order = Order { seen: false, near: f64::INFINITY };
-
-    pub const FIRST: Order = Order { seen: true, near: 0.0 };
-
-    pub fn of(o: &Observation, b: &Aabb) -> Order {
-        let m = o.measure(b);
-        Order { seen: m.seen, near: m.near }
-    }
-
-    /// A layer's tile, read in the grid's cells its own fold into: all of it
-    /// where nothing is known.
-    pub fn of_tile(o: &Observation, lattice: Lattice, p: Tile) -> Order {
-        Order::of(o, &within(p.node(), lattice.grid_zoom(p.zoom)).unwrap_or(p.region()))
-    }
-}
-
-impl Ord for Order {
-    fn cmp(&self, other: &Order) -> Ordering {
-        other.seen.cmp(&self.seen).then(self.near.total_cmp(&other.near))
-    }
-}
-
-impl PartialOrd for Order {
-    fn partial_cmp(&self, other: &Order) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for Order {
-    fn eq(&self, other: &Order) -> bool {
-        self.cmp(other).is_eq()
-    }
-}
-
-impl Eq for Order {}

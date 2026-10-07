@@ -4,10 +4,10 @@ import { assert, assertEquals } from "@std/assert";
 
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
-import * as frame from "@xpute/runtime/ipc/frame.ts";
-import { key } from "@xpute/runtime/ipc/directory.spec.ts";
-import { Ring } from "@xpute/runtime/ipc/ring.ts";
-import { Command } from "@xpute/runtime/abi/cmd.spec.ts";
+import * as frame from "@xpute/host/ipc/frame.ts";
+import { key } from "@xpute/host/ipc/directory.spec.ts";
+import { Ring } from "@xpute/host/ipc/ring.ts";
+import { Command } from "@xpute/host/abi/cmd.spec.ts";
 
 import { CORE, load_core } from "@/kernel/mem.ts";
 import { directory } from "@/kernel/module.ts";

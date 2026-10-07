@@ -3,7 +3,7 @@
 //! Text is laid out and drawn by the platform, which owns the fonts, fallback
 //! and color glyphs and shapes a line whole; the renderer gets pixels.
 
-use crate::gpu::surface::DPR_MAX;
+use crate::gpu::sheet::SHEET_SCALE;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Font {
@@ -28,9 +28,9 @@ pub type TextOf = fn(Font, u32, &str) -> Option<Raster<'static>>;
 /// Half an em either side and two ems tall, for glyphs that reach past their
 /// advance and em box.
 pub fn raster_box(font: Font, advance: f32) -> ([u32; 2], [f32; 2]) {
-    let em = font.px * DPR_MAX as f32;
+    let em = font.px * SHEET_SCALE as f32;
     let margin = (em / 2.0).ceil();
-    let width = (advance * DPR_MAX as f32 + 2.0 * margin).ceil() as u32;
+    let width = (advance * SHEET_SCALE as f32 + 2.0 * margin).ceil() as u32;
     let height = (2.0 * em).ceil() as u32;
     ([width, height], [margin, height as f32 / 2.0])
 }

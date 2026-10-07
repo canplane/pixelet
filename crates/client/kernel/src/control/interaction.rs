@@ -3,6 +3,8 @@
 //! What the pointer picks and edits, apart from what it does to the camera:
 //! the tool it holds, what is under it, and what a tap does with that.
 
+pub mod collision;
+pub mod edit;
 pub mod pick;
 
 use pxl_spec::cell::object::PlaceableCube;
@@ -12,17 +14,18 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::layer::lattice::GROUND;
 
 pub use crate::abi::cmd::ActiveTool;
+use crate::control::interaction::collision::{anchor_center, object_aabb};
+use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
+use crate::control::interaction::edit::{get_placed_object, place, place_air, place_decor, remove};
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
-use crate::layer::object::collision::{anchor_center, object_aabb};
-use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
-use crate::layer::object::store::{get_placed_object, place, place_air, place_decor, remove, Entry, EntryAt};
+use crate::layer::object::store::{Entry, EntryAt};
 use crate::world::chunk::decor::hit::{raycast_decor, DecorStruck, Scattered};
 use crate::world::query::Hit;
 use crate::world::view::frame::pose::view_ray;
 use pxl_spec::space::coord::zoom::{base_of, of_side, units};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Holding {
@@ -174,7 +177,7 @@ fn folded_at(hit: &Hit) -> bool {
     let [x, y, z] = hit.cube.center();
     let at = crate::world::view::frame::coord::world_to_canonical(&[x, y, z]);
     let held = of_side(hit.cube.extent()[0]);
-    crate::kernel::with_world(|_, sched, _| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
+    crate::with_world(|_, sched, _| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
 }
 
 /// A tap at `ndc_x`, `ndc_y` with the tool held.

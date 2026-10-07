@@ -7,8 +7,8 @@ pub use crate::abi::cmd::GeolocationErrorCode;
 use crate::abi::cmd::Message;
 use crate::control::sensor::store::{device_location_store, Pose};
 use crate::world::change::wake_at;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 /// A timeout or unavailable fix is momentary (indoors, tunnels). The watch
 /// must stop on error, or a dead one races the next, but nothing else

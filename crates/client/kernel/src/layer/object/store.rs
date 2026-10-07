@@ -7,35 +7,30 @@
 //! majority, and never kept.
 
 use std::collections::HashMap;
+use xpute_guest::global::Global;
 
 use fnv::FnvBuildHasher;
 use std::collections::TryReserveError;
 
 pub use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
+use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::fold::majority;
-use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, PlaceableCube};
+use pxl_spec::cell::object::{decor_id_from_num, object_value_is_decor, object_value_is_voxel, placeable_cube_of, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::v3::{Aabb, V3};
-use pxl_spec::space::coord::world::{around, nearest, REACH, ROUND};
-use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, units, Zoom, SHARD_ZOOM};
-use pxl_spec::space::hierarchy::morton::{key_of, node_of};
+use pxl_spec::space::coord::world::{node_near, REACH};
+use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::hierarchy::morton::{child_cube, key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
-use pxl_spec::space::hierarchy::tree::{child_of, first_descendant_of, region, Node};
+use pxl_spec::space::hierarchy::tree::{first_descendant_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-use crate::kernel::kernel;
-use crate::layer::object::repository;
+use crate::kernel;
 use crate::layer::{Answer, Bound, Query};
 use crate::world::change::request_world_tick;
-use crate::world::chunk::decor::build::{scatters_at, Draw};
-use crate::world::chunk::source::chunk_sources_changed;
-use crate::world::query::Access;
-use crate::world::view::observation::objects_written;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EntryKind {
@@ -83,122 +78,26 @@ impl Entry {
     }
 }
 
-fn read_state(coord: &Pvf3) -> u32 {
-    u32::from(kernel().objects.folded_value(OBJECT_FINEST, index_of(OBJECT_FINEST, coord)))
-}
-
-pub(super) fn apply(writes: impl IntoIterator<Item = Write>) {
+pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) {
     let regions = kernel().objects.write(writes);
     if !regions.is_empty() {
         written(&regions);
     }
 }
 
-/// Where the objects changed: what draws them compares what it draws at its
-/// next turn, and what is worked out from them redoes what lies there.
+static WRITTEN: Global<Vec<Aabb>> = Global::new();
+
+/// Where the objects changed, kept for the turn to tell what draws them and
+/// what is worked out from them (`take_written`); storage calls nothing above it.
 pub(super) fn written(regions: &[Aabb]) {
-    chunk_sources_changed();
-    objects_written(regions);
+    WRITTEN.get(Vec::new).extend_from_slice(regions);
     request_world_tick();
 }
 
-/// Whether any leaf, air included, is written in the cell `at` lies in.
-pub fn holds_entry(at: &Pvf3) -> bool {
-    kernel().objects.holds(OBJECT_COARSEST, index_of(OBJECT_COARSEST, at))
-}
-
-/// What stands in the cell `at` lies in, air left out.
-pub fn objects_at(at: &Pvf3) -> Vec<Entry> {
-    let mut out = Vec::new();
-    kernel().objects.each_in(OBJECT_COARSEST, index_of(OBJECT_COARSEST, at), &mut |entry| {
-        if !object_value_is_air(entry.state) {
-            out.push(*entry);
-        }
-    });
-    out
-}
-
-pub fn get_placed_object(at: EntryAt) -> Option<Entry> {
-    let state = u32::from(kernel().objects.placed(at.zoom(), at.at())?);
-    (!object_value_is_air(state)).then_some(Entry { zoom: at.zoom(), at: at.at(), state })
-}
-
-/// The never-written AIR entry the eraser's preview injects into the drawn
-/// build where it hovers bare terrain: the cube of `size` holding `at`.
-pub fn carve_entry(at: &Pvf3, size: f64) -> EntryAt {
-    let zoom = of_side(size);
-    EntryAt::new(zoom, index_of(zoom, at))
-}
-
-// ---- Mutations ----
-
-/// A write of VOID collapses its path back, so a redundant record never sits in a save.
-fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
-    submit(write_of(coord, size, val));
-}
-
-/// A write is made here at once and sent to be kept.
-fn submit(write: Write) {
-    apply([write]);
-    repository::send(&write);
-}
-
-fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
-    // Size is a power of two by construction; the nearest zoom only guards
-    // against float noise.
-    let zoom = of_side(size);
-    Write {
-        key: key(zoom, index_of(zoom, coord)),
-        id: val,
-    }
-}
-
-/// Whether a whole-cell pick of a look only undoes a carve: the terrain must
-/// show that look there, and the cell must already hold an AIR leaf (the look
-/// is per column, so without this every cube stacked on matching ground was
-/// dropped).
-fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
-    if size < units(GROUND.cell()) {
-        return false;
-    }
-    let PlaceableCube::Ground(look) = cube else { return false };
-    // Only the resident finest leaf can say; elsewhere the cube is written as asked.
-    let Some(ground) = Access::now().at(at, LEAF_ZOOM).exact() else { return false };
-    if ground.cell != look as u8 {
-        return false;
-    }
-    object_value_is_air(read_state(at))
-}
-
-/// A redundant re-paint of a carve writes VOID, as remove() does.
-pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube) {
-    let val = if place_value_is_redundant(at, size, cube) { VOID } else { placeable_cube_num_id(cube) };
-    write_object_value(at, size, val);
-}
-
-/// Placing the decor a scatter stands in a cell an erase emptied writes
-/// VOID, so the scattered instance returns as it was.
-pub fn place_decor(at: &Pvf3, size: f64, decor_id: DecorId) {
-    let value = if restores_scattered(at, size, decor_id).is_some() { VOID } else { decor_num_id(decor_id) };
-    write_object_value(at, size, value);
-}
-
-/// The scattered instance `place_decor` would bring back, for its preview.
-pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Draw> {
-    (size >= units(GROUND.cell()) && object_value_is_air(read_state(at))).then(|| scatters_at(decor_num_id(decor_id), at))?
-}
-
-/// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
-/// baked terrain, which has no leaf of its own to delete.
-pub fn place_air(at: &Pvf3, size: f64) {
-    write_object_value(at, size, cube_types::object::air as u32);
-}
-
-pub fn remove(at: EntryAt) {
-    submit(Write {
-        key: key(at.zoom(), at.at()),
-        id: VOID,
-    });
+/// The regions written since the turn last took them, into `out`.
+pub fn take_written(out: &mut Vec<Aabb>) {
+    out.clear();
+    core::mem::swap(out, WRITTEN.get(Vec::new));
 }
 
 pub const VOID: u32 = cube_types::sentinel::void as u32;
@@ -206,21 +105,10 @@ pub const AIR: u32 = cube_types::object::air as u32;
 pub const UNKNOWN: u32 = cube_types::sentinel::unknown as u32;
 const _: () = assert!(VOID == 0);
 
-/// The nodes a column's tree starts from: where Z takes its first digit.
-const ROOT: Zoom = SHARD_ZOOM + 1;
-
 const EMPTY: u16 = VOID as u16;
 
 fn key(zoom: Zoom, at: [i64; 3]) -> u128 {
     key_of::<3>(zoom, at)
-}
-
-/// A child of the node at `zoom`, its Z as its lane names it: the digits Z
-/// has there, two's complement, so the first is its sign.
-fn child(zoom: Zoom, at: [i64; 3], slot: usize) -> [i64; 3] {
-    let [x, y, z] = child_of(at, slot);
-    let w = 64 - u32::from(zoom + 1 - SHARD_ZOOM);
-    [x, y, (z << w) >> w]
 }
 
 /// The column, a node at `SHARD_ZOOM`, a node is under.
@@ -243,6 +131,18 @@ pub struct Write {
     pub id: u32,
 }
 
+impl Write {
+    /// `id` at the cube of `size` holding `coord`. Size is a power of two by
+    /// construction; the nearest zoom only guards against float noise.
+    pub fn at(coord: &Pvf3, size: f64, id: u32) -> Write {
+        let zoom = of_side(size);
+        Write {
+            key: key(zoom, index_of(zoom, coord)),
+            id,
+        }
+    }
+}
+
 /// The placed objects: one tree of leaves a column, nothing kept of what a
 /// branch holds.
 #[derive(Default)]
@@ -255,17 +155,6 @@ type Tree = SparseTree<u16, 3>;
 /// A node met in a descent: its zoom, its index and cube in the asker's frame,
 /// its value if it is a leaf; whether to go under it.
 type Enter<'a> = dyn FnMut(Zoom, [i64; 3], &Aabb, Option<u16>) -> bool + 'a;
-
-/// A node's X moved to the round nearest `about`.
-fn moved(zoom: Zoom, at: [i64; 3], about: f64) -> [i64; 3] {
-    if !about.is_finite() {
-        return at;
-    }
-    let whole = cube(zoom, at);
-    let x = (whole.min[0] + whole.max[0]) / 2.0;
-    let rounds = ((nearest(x, about) - x) / ROUND).round() as i64;
-    [at[0] + rounds * around(zoom), at[1], at[2]]
-}
 
 /// Where a node stands in its column's tree: the node or the leaf over it.
 struct Found<'a> {
@@ -293,7 +182,7 @@ impl Store {
             Slot::Branch(block) => {
                 let mut kids = [EMPTY; 8];
                 for (k, s) in tree.block(block).enumerate() {
-                    kids[k] = self.fold(tree, s, zoom + 1, child(zoom, at, k), hide);
+                    kids[k] = self.fold(tree, s, zoom + 1, child_cube(zoom, at, k), hide);
                 }
                 fold_cell(kids, zoom)
             }
@@ -307,7 +196,7 @@ impl Store {
         for (&k, tree) in &self.columns {
             let (_, col) = node_of::<3>(k);
             for (s, slot) in tree.block(0).enumerate() {
-                self.walk(tree, slot, ROOT, child(SHARD_ZOOM, col, s), about, enter);
+                self.walk(tree, slot, CUBE_ZOOM, child_cube(SHARD_ZOOM, col, s), about, enter);
             }
         }
     }
@@ -318,13 +207,13 @@ impl Store {
             Slot::Leaf(v) => Some(v),
             Slot::Branch(_) => None,
         };
-        let here = moved(zoom, at, about);
+        let here = node_near(zoom, at, about);
         if !enter(zoom, here, &cube(zoom, here), leaf) {
             return;
         }
         if let Slot::Branch(block) = slot {
             for (k, s) in tree.block(block).enumerate() {
-                self.walk(tree, s, zoom + 1, child(zoom, at, k), about, enter);
+                self.walk(tree, s, zoom + 1, child_cube(zoom, at, k), about, enter);
             }
         }
     }
@@ -379,7 +268,7 @@ impl Store {
             Slot::Leaf(EMPTY) => {}
             Slot::Leaf(v) => visit(&Entry {
                 zoom: f.zoom,
-                at: moved(f.zoom, at.map(|c| c >> (zoom - f.zoom)), about),
+                at: node_near(f.zoom, at.map(|c| c >> (zoom - f.zoom)), about),
                 state: u32::from(v),
             }),
             branch => self.walk(f.tree, branch, zoom, at, about, &mut |zoom, at, _, leaf| {
@@ -404,61 +293,6 @@ impl Store {
             max: [(x + 1) as f64 * side, (y + 1) as f64 * side, REACH.max[2]],
         };
         self.bound_in(&column).map(|b| (b.max[2] / side).ceil() as i64)
-    }
-
-    /// Every cell of `cell_zoom` that may hold objects along the ray, in ray
-    /// order, until `each` stops it: the 3D roots' cubes it crosses in turn,
-    /// and in each the children it meets nearest first.
-    pub fn along_ray(&self, origin: V3, direction: V3, span: (f64, f64), cell_zoom: Zoom, each: &mut dyn FnMut([i64; 3]) -> bool) {
-        let ray = (origin, direction);
-        let side = units(cell_zoom);
-        cells_along(ray, span, units(SHARD_ZOOM), &mut |[x, y, half]| {
-            let Some(tree) = self.columns.get(&key(SHARD_ZOOM, [x, y, 0])) else { return false };
-            let mut met = [(0.0, Slot::Leaf(EMPTY), [0; 3]); 8];
-            let mut n = 0;
-            for (s, slot) in tree.block(0).enumerate() {
-                let at = child(SHARD_ZOOM, [x, y, 0], s);
-                if slot == Slot::Leaf(EMPTY) || at[2] != half {
-                    continue;
-                }
-                if let Some(c) = slab(ray, &cube(ROOT, at).snapped_out(side), span) {
-                    met[n] = (c.0, slot, at);
-                    n += 1;
-                }
-            }
-            met[..n].sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
-            met[..n].iter().any(|&(_, slot, at)| self.along(tree, slot, ray, span, cell_zoom, ROOT, at, each))
-        });
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn along(&self, tree: &Tree, slot: Slot<u16>, ray: (V3, V3), span: (f64, f64), cell_zoom: Zoom, zoom: Zoom, at: [i64; 3], each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
-        let side = units(cell_zoom);
-        let here = moved(zoom, at, ray.0[0]);
-        let Some(s) = slab(ray, &cube(zoom, here).snapped_out(side), span) else { return false };
-        if zoom == cell_zoom {
-            return each(here);
-        }
-        let block = match slot {
-            Slot::Leaf(EMPTY) => return false,
-            // A leaf coarser than the cell is every cell of it.
-            Slot::Leaf(_) => return cells_along(ray, s, side, each),
-            Slot::Branch(block) => block,
-        };
-        let mut met: [(f64, Slot<u16>, [i64; 3]); 8] = [(0.0, Slot::Leaf(EMPTY), [0; 3]); 8];
-        let mut n = 0;
-        for (k, c) in tree.block(block).enumerate() {
-            let at = child(zoom, at, k);
-            if c == Slot::Leaf(EMPTY) {
-                continue;
-            }
-            if let Some(cs) = slab(ray, &cube(zoom + 1, moved(zoom + 1, at, ray.0[0])).snapped_out(side), s) {
-                met[n] = (cs.0, c, at);
-                n += 1;
-            }
-        }
-        met[..n].sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
-        met[..n].iter().any(|&(_, c, at)| self.along(tree, c, ray, s, cell_zoom, zoom + 1, at, each))
     }
 
     /// What the objects fold to in the cells `from..to` of `target`, at every
@@ -537,7 +371,7 @@ impl Store {
     }
 
     /// The value placed at exactly this node, if one is.
-    fn placed(&self, zoom: Zoom, at: [i64; 3]) -> Option<u16> {
+    pub(crate) fn placed(&self, zoom: Zoom, at: [i64; 3]) -> Option<u16> {
         let f = self.find(zoom, at)?;
         match f.slot {
             Slot::Leaf(v) if f.zoom == zoom && v != EMPTY => Some(v),
@@ -550,7 +384,7 @@ impl Store {
         let mut changed = Vec::new();
         for Write { key: k, id } in writes {
             let (zoom, at) = node_of::<3>(k);
-            xpute_core::ensure!((ROOT..=OBJECT_FINEST).contains(&zoom), ENOTRECOVERABLE, zoom);
+            xpute_core::ensure!((CUBE_ZOOM..=OBJECT_FINEST).contains(&zoom), ENOTRECOVERABLE, zoom);
             let value = u16::try_from(id).or_bug(Errno::EOVERFLOW);
             let col = key(SHARD_ZOOM, column(zoom, at));
             let tree = match self.columns.get_mut(&col) {
@@ -581,39 +415,6 @@ fn about(b: &Aabb) -> f64 {
     (b.min[0] + b.max[0]) / 2.0
 }
 
-fn slab((o, d): (V3, V3), b: &Aabb, (t0, t1): (f64, f64)) -> Option<(f64, f64)> {
-    let (enter, leave, _) = b.span_along(o, d)?;
-    let (enter, leave) = (enter.max(t0), leave.min(t1));
-    (enter <= leave).then_some((enter, leave))
-}
-
-/// Amanatides–Woo traversal of `side` cells; returns whether `each` stopped it.
-fn cells_along((o, d): (V3, V3), (t0, t1): (f64, f64), side: f64, each: &mut dyn FnMut([i64; 3]) -> bool) -> bool {
-    let start = [0, 1, 2].map(|k| o[k] + d[k] * t0);
-    let mut cell = start.map(|v| (v / side).floor() as i64);
-    let mut next = [0.0; 3];
-    let mut delta = [0.0; 3];
-    for k in 0..3 {
-        if d[k].abs() < 1e-12 {
-            (next[k], delta[k]) = (f64::INFINITY, f64::INFINITY);
-        } else {
-            let face = (cell[k] + i64::from(d[k] > 0.0)) as f64 * side;
-            (next[k], delta[k]) = ((face - o[k]) / d[k], side / d[k].abs());
-        }
-    }
-    loop {
-        let k = (0..3).min_by(|&a, &b| next[a].total_cmp(&next[b])).unwrap_or(0);
-        if each(cell) {
-            return true;
-        }
-        if next[k] >= t1 {
-            return false;
-        }
-        cell[k] += if d[k] > 0.0 { 1 } else { -1 };
-        next[k] += delta[k];
-    }
-}
-
 fn try_insert(out: &mut HashMap<[i64; 3], u32>, k: [i64; 3], v: u32) -> Result<(), TryReserveError> {
     if out.len() == out.capacity() {
         out.try_reserve(out.len().max(16))?;
@@ -637,9 +438,19 @@ impl Cells<'_> {
         self.store.fold_at(self.cell, from, to, hide, out)
     }
 
-    /// Every leaf meeting the node's cube.
+    /// The leaf holding the node, or the node as its eight fold to, and whether it is that fold.
+    pub fn node(&self) -> (Entry, bool) {
+        self.store.node(self.node.0, self.node.1)
+    }
+
+    /// Every leaf in the node, or the one over it.
     pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
-        self.store.entries_in(&cube(self.node.0, self.node.1), visit);
+        self.store.each_in(self.node.0, self.node.1, visit);
+    }
+
+    /// The value placed at exactly the node, if one is.
+    pub fn placed(&self) -> Option<u16> {
+        self.store.placed(self.node.0, self.node.1)
     }
 }
 

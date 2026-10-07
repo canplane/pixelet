@@ -8,8 +8,8 @@ use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
-use xpute_runtime::abi::handle::handle_slot;
-use xpute_runtime::global::Global;
+use xpute_guest::abi::handle::handle_slot;
+use xpute_guest::global::Global;
 
 use super::NONE;
 use crate::frame::shader::record::VERTEX_ENTRY;

@@ -2,7 +2,8 @@
 
 //! The observer: where the eye is, what it looks at and how far it sees.
 
-use crate::space::coord::v3::{dot3, Aabb, V3};
+use crate::space::coord::aabb::Aabb;
+use crate::space::coord::v3::{dot3, V3};
 use crate::space::coord::world::nearest_box;
 
 /// Six planes, normals in, `n · x + d ≥ 0` inside, in world units.

@@ -1,0 +1,28 @@
+[package]
+name = "pxl-wasm"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+# The module links against an imported memory and the shell's imports; it has
+# no native test binary. The core's tests are pxl-kernel's and xpute-core's.
+test = false
+doctest = false
+
+[dependencies]
+xpute-core = { path = "../../../xpute/rust/core" }
+xpute-guest = { path = "../../../xpute/rust/guest" }
+pxl-kernel = { path = "../../client/kernel", default-features = false }
+
+[features]
+# Forwarded to the kernel. On for a module anyone works on; the published one
+# is built `--no-default-features` (apps/web/script/build-wasm.ts) and
+# carries no dev-only setting.
+default = ["dev"]
+dev = ["pxl-kernel/dev"]
+
+[lints]
+workspace = true

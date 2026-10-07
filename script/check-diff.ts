@@ -93,7 +93,7 @@ const formatted = present.filter((path) => /\.(ts|tsx|js|json|jsonc|md)$/.test(p
 if (formatted.length) runs.push({ label: "check:fmt", argv: ["deno", "fmt", "--check", ...formatted] });
 if (changed.some((path) => /^(rust-toolchain\.toml|\.tool-versions|crates\/.*Dockerfile)$/.test(path))) task("check:toolchain");
 task("check:rules");
-const xpute = under("xpute/packages/");
+const xpute = under("xpute/ts/");
 if (xpute || under("apps/web/")) task("check:web");
 if (xpute || under("apps/web/") || under("apps/native/")) task("check:native");
 if (xpute) task("check:xpute");

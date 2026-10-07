@@ -3,9 +3,9 @@
 //! The frame's uniforms as the kernel decides them, in one lane of doubles at a
 //! fixed address; the renderer reads it in place.
 
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
-pub const STAGE_WORDS: usize = STAGE_AT::RESOLUTION + 1;
+pub const STAGE_WORDS: usize = STAGE_AT::SCREEN_AO + 1;
 
 /// Where each value sits in the lane.
 #[allow(non_snake_case)]
@@ -32,8 +32,6 @@ pub mod STAGE_AT {
     pub const SHADOWS: usize = 64;
     pub const AO_STRENGTH: usize = 65;
     pub const SCREEN_AO: usize = 66;
-    /// Device pixels per CSS pixel the world is drawn at this frame.
-    pub const RESOLUTION: usize = 67;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

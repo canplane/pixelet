@@ -93,6 +93,13 @@ pub fn key_of_name<const D: usize>(name: &str) -> Option<u128> {
     Some((digits << (127 - n)) | (1 << (126 - n)))
 }
 
+/// A cube's child at `slot`, its Z as Z's digits there name it: two's
+/// complement, so the first is its sign. X and Y keep the index as given.
+pub fn child_cube(zoom: Zoom, at: [i64; 3], slot: usize) -> [i64; 3] {
+    let [x, y, z] = crate::space::hierarchy::tree::child_of(at, slot);
+    [x, y, signed(z, digits(2, zoom + 1))]
+}
+
 /// `v`'s low `width` bits as a two's complement number.
 fn signed(v: i64, width: u32) -> i64 {
     match width {

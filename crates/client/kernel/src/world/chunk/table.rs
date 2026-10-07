@@ -27,14 +27,14 @@ use pxl_render::mesh::chunk_mesher::Heights;
 
 use crate::sched::profiler::frame::ZOOMS;
 use pxl_spec::space::camera::eye::Frustum;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::v3::{dot3, len3, Aabb, V3};
+use pxl_spec::space::coord::v3::{dot3, len3, V3};
 use pxl_spec::space::layer::lattice::GROUND;
-use xpute_runtime::sched::edge::Notify;
-use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
+use xpute_guest::sched::edge::Notify;
+use xpute_guest::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
-use crate::kernel::kernel;
-use crate::kernel::World;
+use crate::kernel;
 use crate::layer::object::store::EntryAt;
 use crate::param;
 use crate::scene::marker::hover_cursor::{render_edits, RenderEdits};
@@ -44,15 +44,16 @@ use crate::world::chunk::build::{draws_as_held, BuildEvent, Builder};
 use crate::world::chunk::frontier::{pool_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, OCCUPANCY};
 use crate::world::chunk::source::{draws, objects_drawn, Drawn};
+use crate::World;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
+use crate::io::demand::Order;
+use crate::layer::Layer as _;
 use crate::world::chunk::domain::{self, Domain};
 use crate::world::chunk::Chunk;
-use crate::world::pyramid::Layer as _;
-use crate::world::view::observation::Order;
 use pxl_spec::bake::format::Terrain;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -270,7 +271,7 @@ impl Env for Pieces<'_> {
     }
 
     fn buildable(&self, c: Chunk) -> bool {
-        Terrain::pyramid().residency().read(c.node(), c.cell_zoom()).value().is_some()
+        Terrain::residency().read(c.node(), c.cell_zoom()).value().is_some()
     }
 
     fn order(&self, c: Chunk) -> Order {
@@ -449,7 +450,7 @@ impl Scheduler {
         self.place[id as usize] = Nth::of(self.slots.len());
         self.slots.push(slot);
         let i = self.slots.len() - 1;
-        self.recheck(i, xpute_runtime::clock::now());
+        self.recheck(i, xpute_guest::clock::now());
         self.view_dirty = true;
     }
 
@@ -516,7 +517,7 @@ impl Scheduler {
     pub fn build_step(&mut self, world: &mut World, budget_ms: f64) -> bool {
         let (slots, place, meshes, landed) = (&mut self.slots, &*self.place, &mut self.meshes, &mut self.landed);
         landed.clear();
-        let worked = self.builder.tick(world, &self.builds, budget_ms, &xpute_runtime::clock::now, &mut |e| match e {
+        let worked = self.builder.tick(world, &self.builds, budget_ms, &xpute_guest::clock::now, &mut |e| match e {
             BuildEvent::Reserve { .. } => reserve(slots, place, meshes, e),
             BuildEvent::Part { .. } => {
                 part(slots, place, meshes, e);
@@ -571,7 +572,7 @@ impl Scheduler {
         sc.drawn.sort_unstable();
         sc.building.sort_unstable_by_key(|&(c, _)| c);
         let now = Now {
-            ms: xpute_runtime::clock::now(),
+            ms: xpute_guest::clock::now(),
             goal: d.pieces(),
             drawn: &sc.drawn,
             building: &sc.building,

@@ -1,0 +1,33 @@
+# The Rust kit, and the guest end over it. `core` is what any program that
+# links it may use; `guest` asks to be run its way — a turn on a doorbell, a
+# quota measured from the frame, I/O asked of the host — and depends on
+# `core`, never the reverse. `conformance` is the guest the
+# contract's traces drive (spec/conformance/).
+
+[workspace]
+resolver = "2"
+members = ["core", "guest", "conformance"]
+
+[workspace.dependencies]
+# A set whose position is the value: insert appends, swap_remove moves the
+# last entry into the hole, and a caller keeps its own lanes at the same
+# positions.
+indexmap = "2"
+# What a test reads a golden packet's bytes back as.
+hex = "0.4"
+
+[workspace.package]
+edition = "2021"
+version = "0.0.0"
+publish = false
+
+# A guest is a module someone downloads, so its size is what it is built for;
+# a trap ends a guest, so nothing unwinds.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+panic = "abort"

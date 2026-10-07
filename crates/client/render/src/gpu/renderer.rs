@@ -6,10 +6,10 @@
 use pxl_spec::space::coord::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
 use pxl_spec::space::coord::v3::{norm3, sub3, V3};
 use xpute_core::math::scalar::round;
-use xpute_runtime::abi::handle::handle_slot;
-use xpute_runtime::global::Global;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{alloc, free};
+use xpute_guest::abi::handle::handle_slot;
+use xpute_guest::global::Global;
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{alloc, free};
 
 use crate::asset::atlas::BillboardAtlas;
 use crate::frame::draw::{
@@ -809,7 +809,7 @@ impl Renderer {
         let eye = [0.0; 3];
         // The globe places by offset from its anchor and height alone, so placing in
         // the eye's frame matches the world less the eye.
-        let center: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_world[k]);
+        let center: V3 = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_world[k]);
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let up = norm3(&sub3(&eye, &planet_center));
@@ -1131,8 +1131,7 @@ impl Renderer {
 /// A new size is applied once it has held SETTLE_TURNS turns; until then the
 /// page scales the old buffer.
 fn targets(g: &Gpu, s: &mut Surface) {
-    let ratio = (s.role == surface_role::WORLD).then(|| stage_lane()[STAGE_AT::RESOLUTION]).filter(|r| *r > 0.0);
-    let (width, height) = s.buffer_px(ratio);
+    let (width, height) = s.buffer_px();
     if !s.configured {
         g.configure(s.handle);
         s.configured = true;

@@ -25,7 +25,7 @@ import expo.modules.kotlin.typedarray.Uint8Array
  * core took — no copy, so a ring the shell writes is the ring the kernel
  * reads. The shell calls on the JavaScript thread, one call at a time; the
  * core runs each on its own thread while this one waits
- * (crates/client/native/src/thread.rs), and an image's decode runs off both.
+ * (crates/client-bracket/native/src/thread.rs), and an image's decode runs off both.
  */
 class PlatformModule : Module() {
   private val context: Context

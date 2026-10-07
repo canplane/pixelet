@@ -42,14 +42,14 @@ README.md has the map. Three lines erode by accident:
 - **xpute holds no domain.** No coordinates, terrain, tiles or Overture in
   `xpute-core` or `@xpute/core`; those are `pxl-spec`'s. The view
   (`pxl-render`) knows the model and nothing of the kernel (`pxl-kernel`).
-- **`core` is taken as it is; `runtime` asks you to run its way** — a turn on
-  a doorbell, a quota from the frame, I/O asked of the host. `runtime`
-  depends on `core`, never the reverse. `core` is symmetric across every
+- **`core` is taken as it is; `guest` and `host` ask you to run their way**
+  — a turn on a doorbell, a quota from the frame, I/O asked of the host.
+  Both depend on `core`, never the reverse. `core` is symmetric across every
   language xpute is written in, held to it by the golden records under
-  `xpute/spec/golden/`. `runtime`'s host and guest are two ends of one
-  arrangement: a module missing on one side is no gap, only the format must
-  agree, and its guests in different languages are symmetric as `core` is,
-  each in its own language's shape. Never number the languages, hosts or
+  `xpute/spec/golden/`. `guest` and `host` are the two ends of one
+  arrangement, named by role, not language: a module missing on one side is
+  no gap, only the format must agree, and the guests in different languages
+  are symmetric as `core` is, each in its own language's shape. Never number the languages, hosts or
   guests: the count is stale the day one more arrives.
 - **`pxl-spec` is the one model and has no TypeScript twin.** The shell reads
   a tile through the kernel, never by decoding one; what it holds — the cell
@@ -129,9 +129,10 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
   and x, y, z (`world/chunk.rs`); a cube that holds nothing is no
   chunk. Terrain and POI are tiles, a 2D heightfield and a 2D count; placed
-  objects are resident in their store, a sparse tree a z8 column. What a box holds
-  is asked of `Bounds` (`pxl-spec space/layer/demand.rs`), which `Known`
-  (`world/view/observation.rs`) answers; a point or a ray is asked of the query
+  objects are resident in their store, a sparse tree a z8 column. Each layer,
+  and the world composed of them, is read through one query
+  (`layer/query.rs` `Query`): what a node holds and its records, at a cell
+  zoom the asker states; a point or a ray is asked of the world's
   (`world/query.rs`). Nothing outside a layer reads its records in the
   layer's shape, and which of a layer's tiles holds a chunk's cells is the
   layer's lattice's (`pxl-spec space/layer/lattice.rs` `read_tile`). A placed object lives in the chunks its cube is in — built,
@@ -151,10 +152,12 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   drawn. A chunk is that grid's cells, so it refines only where the screen
   sees an error cross a cell, alike on every axis, and something under it
   is held finer. What lies inside a cell is its layer's to fold into one,
-  never a second rule outside it: a cube's records one zoom finer
-  (`space/layer/lattice.rs` `Lattice::fold`, the ground's `GROUND`) fold to their surfaces' mean color and their
-  fill's volume, places to a lattice sixty-four ground cells wide; past a
-  layer's data it draws its finest. What is folded is a summary, so nothing
+  never a second rule outside it: terrain's by majority and average in the
+  bake, objects' by `majority`, places' to a lattice sixty-four ground cells
+  wide. A chunk draws a cell from what is composed there one zoom finer
+  (`space/layer/lattice.rs` `Lattice::fold`, the ground's `GROUND`) as its
+  surfaces' mean color and its fill's volume (`pxl-render
+  mesh/chunk_mesher.rs`); past a layer's data it draws its finest. What is folded is a summary, so nothing
   in a folded cell is struck, hidden or cut by a preview.
 - **Dev is guarded like terrain.** The tile server answers no tile more than
   `--folds` zooms over the leaves, the whole guard for every layer. A source declares the
@@ -220,7 +223,7 @@ script opens on its interpreter. `check:rules` holds every file to it.
 
 **A name's case follows its side.** `PascalCase` for types,
 `SCREAMING_SNAKE_CASE` for module constants; functions and locals
-`snake_case` in Rust, `xpute/packages` and `apps/web/src/kernel/`, which
+`snake_case` in Rust, `xpute/ts` and `apps/web/src/kernel/`, which
 share the kernel's vocabulary, and `camelCase` in the rest of `apps/` and in
 `script/`. An acronym is a word (`assetUrl`). A name that crosses — a
 packet's field, a catalog entry, a profiler record — keeps the kernel's

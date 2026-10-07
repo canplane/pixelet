@@ -9,8 +9,8 @@ use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, device_orientation_store, DevicePoseStatus};
 use crate::world::change::wake_at;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 /// Per heading sample, not per frame: compass jitter (worse indoors) passes
 /// the store's 1.5° dead zone, and this smooths it before it reaches azimuth.

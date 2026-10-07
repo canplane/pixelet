@@ -6,8 +6,8 @@
 use pxl_render::asset::atlas::BillboardAtlas;
 use pxl_spec::space::coord::v3::V3;
 
-use crate::kernel::kernel;
-use xpute_runtime::global::Global;
+use crate::kernel;
+use xpute_guest::global::Global;
 
 static SHEET: Global<BillboardAtlas> = Global::new();
 

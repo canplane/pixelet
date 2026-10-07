@@ -3,8 +3,6 @@
 //! Where the sun, the moon and the stars are, by the standard low-precision
 //! formulas: the sun to about 0.01°, the moon to roughly 0.3–1°.
 
-use pxl_spec::space::coord::v3::V3;
-
 const DEG: f64 = core::f64::consts::PI / 180.0;
 
 fn norm360(deg: f64) -> f64 {
@@ -44,7 +42,7 @@ fn local_sidereal(d: f64, lon: f64) -> f64 {
 
 /// X east, Y north, Z up, at distance 100. Azimuth by Duffett-Smith's
 /// construction.
-fn local_direction(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> V3 {
+fn local_direction(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> [f64; 3] {
     let lst = local_sidereal(d, lon);
     let hour_angle = (lst - ra + 180.0).rem_euclid(360.0) - 180.0;
     let (ha, dec, lat) = (hour_angle * DEG, dec * DEG, lat * DEG);
@@ -63,7 +61,7 @@ pub fn j2000_days(unix_ms: f64) -> f64 {
     unix_ms / 86_400_000.0 + 2_440_587.5 - 2_451_545.0
 }
 
-pub fn sun_position(d: f64, lat: f64, lon: f64) -> V3 {
+pub fn sun_position(d: f64, lat: f64, lon: f64) -> [f64; 3] {
     let (ra, dec, _) = sun_equatorial(d);
     local_direction(ra, dec, lat, lon, d)
 }
@@ -71,13 +69,13 @@ pub fn sun_position(d: f64, lat: f64, lon: f64) -> V3 {
 /// Equatorial (X to the vernal equinox, Z to the pole) to local (X east,
 /// Y north, Z up), as rows: the same sky as `local_direction` as one matrix
 /// for the nine thousand stars.
-pub fn equatorial_to_local(d: f64, lat: f64, lon: f64) -> [V3; 3] {
+pub fn equatorial_to_local(d: f64, lat: f64, lon: f64) -> [[f64; 3]; 3] {
     let (sl, cl) = libm::sincos(local_sidereal(d, lon) * DEG);
     let (sp, cp) = libm::sincos(lat * DEG);
     [[-sl, cl, 0.0], [-sp * cl, -sp * sl, cp], [cp * cl, cp * sl, sp]]
 }
 
-pub fn moon_position(d: f64, lat: f64, lon: f64) -> V3 {
+pub fn moon_position(d: f64, lat: f64, lon: f64) -> [f64; 3] {
     let (_, _, obliquity) = sun_equatorial(d);
     let (ra, dec) = moon_equatorial(d, obliquity);
     local_direction(ra, dec, lat, lon, d)

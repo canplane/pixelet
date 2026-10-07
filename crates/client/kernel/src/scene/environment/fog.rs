@@ -4,10 +4,9 @@
 //! planes set from it.
 
 use pxl_render::look::globe::MERCATOR_RADIUS_KM;
+use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 
-use crate::control::camera::config::camera_cfg;
-use crate::scene::environment::config::render_cfg;
 use crate::scene::environment::state::globe;
 use crate::world::query::Access;
 use crate::world::view::observation::eye;
@@ -26,7 +25,7 @@ pub fn reach_at(altitude: f64) -> f64 {
 
 /// From the point's own height, so a cave's floor counts in a cave; the
 /// datum where nothing is held.
-fn ground_under(at: [f64; 3]) -> f64 {
+fn ground_under(at: V3) -> f64 {
     let point = world::point(at[0], at[1], at[2]);
     Access::now().floor_under(&point).value().flatten().unwrap_or(0.0)
 }
@@ -37,7 +36,7 @@ pub fn eye_ground() -> f64 {
 }
 
 /// What the origin grain is measured from.
-pub fn height_at(at: [f64; 3]) -> f64 {
+pub fn height_at(at: V3) -> f64 {
     (at[2] - ground_under(at)).max(0.0)
 }
 
@@ -57,9 +56,9 @@ fn scale(reach: f64) -> f64 {
 }
 
 pub fn near_clip_at(altitude: f64) -> f64 {
-    camera_cfg::projection::NEAR * scale(reach_at(altitude))
+    crate::param::NEAR * scale(reach_at(altitude))
 }
 
 pub fn far_clip_at(altitude: f64) -> f64 {
-    reach_at(altitude) * render_cfg::FAR_CLIP
+    reach_at(altitude) * crate::param::FAR_CLIP
 }

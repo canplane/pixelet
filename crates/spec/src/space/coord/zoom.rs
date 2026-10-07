@@ -5,10 +5,10 @@
 //! size are each named by this one number; a bigger zoom is finer, and one
 //! zoom finer is half as wide.
 
+use super::aabb::Aabb;
 use super::pvf3::core::{FRAC_W, IVEC_X_W, IVEC_Z_W};
 use super::pvf3::ivec::{self, IVec};
 use super::pvf3::pvf3::{self, Pvf3};
-use super::v3::Aabb;
 use xpute_core::math::scalar::round;
 
 pub type Zoom = u8;
@@ -19,6 +19,9 @@ pub const UNIT_ZOOM: Zoom = IVEC_X_W as Zoom;
 /// The coarsest cube that holds the whole Z lane: 3D begins here, and the
 /// world's data is ingested a tile of it, a shard, at a time.
 pub const SHARD_ZOOM: Zoom = UNIT_ZOOM - IVEC_Z_W as Zoom;
+
+/// Where Z takes its first digit: the cubes under a column, its 3D roots.
+pub const CUBE_ZOOM: Zoom = SHARD_ZOOM + 1;
 
 /// The finest a point resolves: a fraction's step.
 pub const FINEST_ZOOM: Zoom = UNIT_ZOOM + FRAC_W as Zoom;

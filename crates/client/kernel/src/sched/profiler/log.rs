@@ -6,7 +6,7 @@
 //! take the module down during the very fetch burst it was turned on to
 //! watch. Only frames that missed a vsync while moving or overran are kept.
 
-use crate::kernel::kernel;
+use crate::kernel;
 use crate::scene::billboard::sheet::billboard_sheet;
 use crate::sched::profiler::block::CountersBlock;
 use crate::sched::profiler::frame::FrameSample;
@@ -14,7 +14,7 @@ use crate::sched::profiler::record::{drop_front, fixed_lane, profiler_recording_
 use crate::sched::profiler::summary::{missed, overran};
 use crate::sched::profiler::task::TaskRow;
 use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 fn counters() -> CountersBlock {
     let k = kernel();

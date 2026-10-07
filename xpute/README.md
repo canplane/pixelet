@@ -31,21 +31,21 @@ What the guest cannot do itself — a file, a call to a device — it asks for i
 
 [ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped that way: the memory, the rings, the turn, the handles, the contract either end must keep, the wire formats, the records.
 
-## `core` and `runtime`
+## `core`, `guest` and `host`
 
 `core` is a kit and nothing more — collections, codecs, scalar math, an errno table, the wire formats. Link it and use it: it knows nothing of turns, hosts or memories.
 
 Golden records under `spec/golden/` hold the languages to each other wherever bytes cross.
 
-`runtime` is the arrangement above. Its host end and its guest end are the two ends of one thing, not two implementations of it: a module on one side with nothing facing it is not a gap to fill, and what the two owe each other is not matching module lists but matching formats. Its guest end exists in more than one language, and those are one end, so they match as `core` does.
+`guest` and `host` are the arrangement above, named by the end each is. They are the two ends of one thing, not two implementations of it: a module on one side with nothing facing it is not a gap to fill, and what the two owe each other is not matching module lists but matching formats. The guest end exists in more than one language, and those are one end, so they match as `core` does.
 
 ```text
-crates/core  ·  packages/core  ·  cpp/core     the same kit, in each language
-crates/runtime  ·  packages/runtime                  the guest end · the host end
-cpp/runtime                                                the guest end once more, in C++
-crates/conformance  ·  cpp/conformance               a guest in each, and the contract's traces
-packages/conformance                                       the host that runs the traces against them
-spec                                                       numbers all of them are generated from
+rust/core  ·  ts/core  ·  cpp/core                the same kit, in each language
+rust/guest  ·  ts/host                            the guest end · the host end
+cpp/runtime                                       the guest end once more, in C++
+rust/conformance  ·  cpp/conformance              a guest in each, and the contract's traces
+ts/conformance                                    the host that runs the traces against them
+spec                                              numbers all of them are generated from
 ```
 
 ## What it leaves to whoever uses it

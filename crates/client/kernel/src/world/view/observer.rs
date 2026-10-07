@@ -12,7 +12,8 @@
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{Tau, SPLIT};
-use pxl_spec::space::coord::v3::{dot3, len3, mul3n, sub3, Aabb, V3};
+use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::v3::{dot3, len3, scale3, sub3, V3};
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::param;
@@ -74,7 +75,7 @@ impl Lens {
         let (tx, ty) = (on(self.right, 0), on(self.up, 1));
         let d = unit(std::array::from_fn(|k| self.forward[k] + tx * self.right[k] + ty * self.up[k])).unwrap_or(self.forward);
         [self.right, self.up].map(|a| {
-            let square = sub3(&a, &mul3n(&d, dot3(&a, &d)));
+            let square = sub3(&a, &scale3(&d, dot3(&a, &d)));
             let Some(a) = unit(square) else { return f64::INFINITY };
             (0..3).map(|k| error[k] * a[k].abs()).sum::<f64>() / depth
         })

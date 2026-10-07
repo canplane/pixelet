@@ -9,14 +9,14 @@ use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
 
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
-use crate::control::camera::config::camera_cfg::smooth::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::control::camera::controller::look_domain;
 use crate::control::camera::controller::{camera, eye_world, map_center, set_eye_world};
 use crate::control::camera::store::camera_store;
 use crate::control::navigation::support::target;
+use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::world::query::{Access, Detail, Ray};
 use crate::world::view::frame::pose::{view, view_compose};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 /// The first resident thing it meets, else the sea, else `fallback` along it.
 pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {

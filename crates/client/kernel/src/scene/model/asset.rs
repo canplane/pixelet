@@ -12,9 +12,9 @@ use std::collections::HashMap;
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
 use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4::{mat4_transform_direction, mat4_transform_point};
-use xpute_runtime::mem::base::ptr_at;
+use xpute_guest::mem::base::ptr_at;
 
-use crate::kernel::with_world;
+use crate::with_world;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelHandle {

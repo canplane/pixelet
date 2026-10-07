@@ -11,7 +11,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::control::camera::controller::{put_center, Motion};
 use crate::control::navigation::support::{exact, unknown_z};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 static DESTINATION: Global<Option<(Pvf3, Motion)>> = Global::new();
 

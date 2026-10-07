@@ -5,6 +5,9 @@ use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;
+use pxl_spec::bake::constant::OBJECT_COARSEST;
+use pxl_spec::cell::object::{placeable_cube_num_id, PlaceableCube};
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_core::math::rng::SplitMix64;
 
 fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
@@ -120,7 +123,7 @@ fn entry_boxes(store: &Store) -> Vec<Aabb> {
 }
 
 fn cube_at(store: &mut Store, [x, y, z]: [i64; 3], state: u32) {
-    store.write([write_of(&corner(x, y, z), 1.0, state)]);
+    store.write([Write::at(&corner(x, y, z), 1.0, state)]);
 }
 
 /// The index may give a box with only air in it, never none where an entry

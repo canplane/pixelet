@@ -7,10 +7,10 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Cell, Tile};
 
-use crate::kernel::kernel;
+use crate::kernel;
 use crate::layer::object::store::Store;
 use crate::layer::residency::Residency;
-use crate::world::pyramid::{Layer as _, Pyramid};
+use crate::layer::Layer as _;
 use pxl_spec::space::coord::zoom::{count, units};
 
 use crate::layer::*;
@@ -24,9 +24,8 @@ pub struct Access<'a> {
 
 impl Access<'static> {
     pub fn now() -> Access<'static> {
-        let pyramid: &'static Pyramid<Terrain> = Terrain::pyramid();
         let objects: &'static Store = &kernel().objects;
-        Access::new(pyramid.residency(), objects)
+        Access::new(Terrain::residency(), objects)
     }
 }
 

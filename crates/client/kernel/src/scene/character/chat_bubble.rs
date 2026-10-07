@@ -5,13 +5,13 @@
 
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::BUBBLE_FONT;
-use pxl_render::gpu::surface::DPR_MAX;
+use pxl_render::gpu::sheet::SHEET_SCALE;
 
+use crate::io::text::text_lines;
 use crate::scene::billboard::field::billboard_instance;
 use crate::scene::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
-use crate::text::text_lines;
-use xpute_runtime::clock::now;
-use xpute_runtime::global::Global;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 // `ts` lets the bubble time itself from when the line was said, so a
 // character swap cannot make a dismissed line look new.
@@ -104,8 +104,8 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
                 return;
             };
             let slot = billboard_sheet().add(
-                layout.box_w * DPR_MAX,
-                layout.logical_h * DPR_MAX,
+                layout.box_w * SHEET_SCALE,
+                layout.logical_h * SHEET_SCALE,
                 DrawSpec::Bubble {
                     lines: layout.lines.clone(),
                     box_w: layout.box_w,

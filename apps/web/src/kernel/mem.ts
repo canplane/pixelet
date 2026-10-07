@@ -6,9 +6,9 @@
  */
 
 import type { f64 } from "@xpute/core/abi/word.ts";
-import { Doorbell } from "@xpute/runtime/ipc/doorbell.ts";
+import { Doorbell } from "@xpute/host/ipc/doorbell.ts";
 import { openCore } from "@platform/core.ts";
-import { key } from "@xpute/runtime/ipc/directory.spec.ts";
+import { key } from "@xpute/host/ipc/directory.spec.ts";
 import { type Core, directory } from "@/kernel/module.ts";
 import { run_host_stream } from "@/kernel/host.ts";
 

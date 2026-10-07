@@ -4,7 +4,7 @@
 
 use core::mem::size_of;
 
-use xpute_runtime::mem::section::span_of;
+use xpute_guest::mem::section::span_of;
 
 use crate::mem::fixed::{lane, range, Range};
 use crate::world::chunk::mesh_slot::OCCUPANCY;

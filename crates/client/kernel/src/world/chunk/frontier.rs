@@ -19,12 +19,12 @@
 
 use pxl_spec::space::camera::grid::Tau;
 
+use crate::io::demand::Order;
 use crate::param::REFINEMENTS_IN_FLIGHT;
 use crate::world::chunk::domain::Price;
 use crate::world::chunk::mesh_slot::{Pool, ARENA, COARSE_TIER_SLOTS, POOLS};
 use crate::world::chunk::quality::fits;
 use crate::world::chunk::Chunk;
-use crate::world::view::observation::Order;
 
 pub type Slots = [u32; POOLS];
 

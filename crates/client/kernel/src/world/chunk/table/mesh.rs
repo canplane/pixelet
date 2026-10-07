@@ -5,9 +5,9 @@
 use pxl_render::gpu::arena::{arena_epoch, arena_write};
 use pxl_render::mesh::chunk_mesher::box_bounds;
 
-use pxl_spec::space::coord::v3::Aabb;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::layer::lattice::GROUND;
-use xpute_runtime::mem::base::ptr_at;
+use xpute_guest::mem::base::ptr_at;
 
 use crate::world::chunk::build::{BuildEvent, Builder};
 use crate::world::chunk::frontier::pool_of;

@@ -3,12 +3,12 @@
 //! The world's tick: xpute's tick mechanism with the kernel's phase shares,
 //! settle time, declared quantum and step table.
 
-use xpute_runtime::sched::quantum::QuantumPolicy;
-use xpute_runtime::sched::tick::{Phase, StepStats, Tick, TickPolicy, TickReport};
+use xpute_guest::sched::quantum::QuantumPolicy;
+use xpute_guest::sched::tick::{Phase, StepStats, Tick, TickPolicy, TickReport};
 
 use crate::param;
 pub use crate::sched::profiler::spec::StepName;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TickState {
@@ -23,8 +23,8 @@ pub struct TickState {
     pub gap_s: f64,
 }
 
-pub type TickContext<'a> = xpute_runtime::sched::tick::TickContext<'a, TickState>;
-pub type TickStep = xpute_runtime::sched::tick::TickStep<TickState>;
+pub type TickContext<'a> = xpute_guest::sched::tick::TickContext<'a, TickState>;
+pub type TickStep = xpute_guest::sched::tick::TickStep<TickState>;
 
 pub const QUANTUM: QuantumPolicy = QuantumPolicy {
     margin_share: param::QUANTUM_MARGIN_SHARE,

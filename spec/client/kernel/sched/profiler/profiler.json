@@ -69,10 +69,11 @@
     "view",
     "geocode",
     "decor",
+    "objects",
+    "written",
     "chunk_sources",
     "hover",
     "puck",
-    "objects",
     "settings",
     "assets",
     "pump"

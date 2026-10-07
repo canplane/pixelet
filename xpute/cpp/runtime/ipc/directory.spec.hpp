@@ -4,7 +4,7 @@
 //
 // The directory: where a host finds what its guest laid out in the memory. The guest's
 // first turn writes it, and the host reads it once, at the one offset it knows outside
-// the memory (xpute-runtime ipc/directory.rs, and the contract's rule 0 in
+// the memory (xpute-guest ipc/directory.rs, and the contract's rule 0 in
 // ARCHITECTURE.md).
 //
 // Its words: MAGIC, VERSION, how many entries follow, and a word kept at 0; then that

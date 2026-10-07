@@ -5,7 +5,8 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
-use pxl_spec::bake::earth_tile::{self, EARTH_REACH, EARTH_ZOOM};
+use crate::world::pyramid::Observed as _;
+use pxl_spec::bake::earth_tile::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::world::{around, wrap_index};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
 
@@ -13,21 +14,21 @@ use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::Tile;
-use xpute_runtime::global::Global;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{free, Block};
+use xpute_guest::global::Global;
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{free, Block};
 
 use crate::io::demand::{Category, Phases};
 use crate::io::failure::Failure;
 use crate::layer::residency::Residency;
-use crate::world::pyramid::{Layer, Pyramid};
+use crate::layer::Layer;
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// What a held tile is: its texels are in its frame's layer on the GPU.
 #[derive(Clone)]
 pub struct Earth;
 
-static EARTH: Global<Pyramid<Earth>> = Global::new();
+static EARTH: Global<Residency<Earth>> = Global::new();
 
 impl Layer for Earth {
     const CATEGORY: Category = Category::earth;
@@ -40,12 +41,8 @@ impl Layer for Earth {
         Occupancy::ZERO
     }
 
-    fn reach() -> f64 {
-        EARTH_REACH
-    }
-
-    fn pyramid() -> &'static mut Pyramid<Earth> {
-        EARTH.get(Pyramid::default)
+    fn residency() -> &'static mut Residency<Earth> {
+        EARTH.get(Residency::default)
     }
 
     fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<Earth, Failure> {
@@ -89,10 +86,6 @@ pub fn adopt(p: Tile, block: Block, phases: &mut Phases) -> Result<(), Failure> 
     result
 }
 
-pub fn earth_step() {
-    Earth::pyramid().step(None);
-}
-
 /// Each waiting packet's texels to `write`, into its frame's layer, while it
 /// takes them.
 pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
@@ -120,7 +113,7 @@ pub fn earth_window() -> ([i32; 2], [u32; REACH_TILES as usize]) {
     let x0 = first + pyramid.floor().map(|p| east(at(p)[0])).min().unwrap_or(0);
     let y0 = pyramid.floor().map(|p| at(p)[1]).min().unwrap_or(0);
     for p in pyramid.floor() {
-        let Some(record) = pyramid.residency().frame(p) else { continue };
+        let Some(record) = Earth::residency().frame(p) else { continue };
         if uploads()[record as usize].is_none() {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);

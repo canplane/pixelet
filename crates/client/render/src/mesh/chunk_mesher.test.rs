@@ -69,7 +69,7 @@ fn a_column_off_the_sets_edge_is_air_and_leaves_the_side_open() {
 fn bake_in_blocks(set: &OwnedRunSet, lod_step: u32, block: u32) -> Vec<u32> {
     let mut bake = BakeContext::default();
     let view = set.view();
-    assert!(bake.begin(&view, lod_step, 1.0, 1.0, lod_step == 1, true, None).is_ok());
+    assert!(bake.begin(&view, lod_step, 1.0, 1.0, lod_step == 1, true, (8, 512), None).is_ok());
     let words_a_box = box_words(lod_step == 1);
     let mut buf = vec![0u32; (block * words_a_box) as usize];
     let mut out: Vec<u32> = Vec::new();
@@ -120,7 +120,7 @@ fn a_mesh_written_through_blocks_is_the_mesh_written_whole() {
 fn east_faces(set: &OwnedRunSet, lod_step: u32) -> Vec<(f64, f64)> {
     let mut bake = BakeContext::default();
     let view = set.view();
-    assert!(bake.begin(&view, lod_step, 1.0, 1.0, lod_step == 1, true, None).is_ok());
+    assert!(bake.begin(&view, lod_step, 1.0, 1.0, lod_step == 1, true, (8, 512), None).is_ok());
     let words = box_words(lod_step == 1);
     let mut buf: Vec<u32> = Vec::new();
     loop {

@@ -16,14 +16,15 @@ use pxl_spec::space::coord::v3::{len3, sub3, V3};
 use pxl_spec::space::coord::world::{nearest, nearest_box};
 use pxl_spec::space::coord::zoom::cube;
 use pxl_spec::space::layer::lattice::GROUND;
-use xpute_runtime::mem::base::ptr_at;
-use xpute_runtime::mem::heap::{alloc, free};
-use xpute_runtime::sched::frame_budget::FrameBudget;
+use xpute_guest::mem::base::ptr_at;
+use xpute_guest::mem::heap::{alloc, free};
+use xpute_guest::sched::frame_budget::FrameBudget;
 
 use crate::control::camera::controller::units_per_px_at;
-use crate::kernel::kernel;
+use crate::kernel;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::Store;
+use crate::layer::Layer;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::draws_as_held;
 use crate::world::chunk::decor::build::{decor_gone_px, decor_sprite_px, variant_extent, DecorBuild, DecorHide, Ground};
@@ -34,12 +35,11 @@ use crate::world::chunk::mesh_slot::OCCUPANCY;
 use crate::world::chunk::source::{objects_met, Met};
 use crate::world::chunk::table::Scheduler;
 use crate::world::chunk::Chunk;
-use crate::world::pyramid::Layer;
 use crate::world::view::observation::{eye, observation};
 use pxl_render::mesh::run::APRON;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::zoom::{index, Zoom};
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 struct Block {
     at: u32,
@@ -121,7 +121,7 @@ fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
         }
     });
     Some(Sources {
-        read_from: Terrain::pyramid().residency().read(chunk.node(), chunk.cell_zoom()).value()?.from.zoom,
+        read_from: Terrain::residency().read(chunk.node(), chunk.cell_zoom()).value()?.from.zoom,
         objects: objects_met(&kernel().objects, chunk),
         shown: settings_store().decor,
         hide,
@@ -129,7 +129,7 @@ fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
 }
 
 fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
-    let terrain = Terrain::pyramid().residency();
+    let terrain = Terrain::residency();
     // The tile the terrain draws the chunk from, read over the chunk whose
     // side is that many of its cells; past the leaves, the chunk over it as wide.
     let src = terrain.read(chunk.node(), chunk.cell_zoom()).value()?.from;

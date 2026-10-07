@@ -4,7 +4,7 @@ use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 
 use crate::control::sensor::store::device_location_store;
-use xpute_runtime::global::Global;
+use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MapNavigation {

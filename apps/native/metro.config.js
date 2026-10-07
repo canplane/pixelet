@@ -16,8 +16,8 @@ const web = path.join(root, "apps/web/src");
 /** An import-map prefix and the directory it names. */
 const PREFIXES = [
   ["@/", web + "/"],
-  ["@xpute/core/", path.join(root, "xpute/packages/core/src/")],
-  ["@xpute/runtime/", path.join(root, "xpute/packages/runtime/src/")],
+  ["@xpute/core/", path.join(root, "xpute/ts/core/src/")],
+  ["@xpute/host/", path.join(root, "xpute/ts/host/src/")],
 ];
 
 /** Packages there may be only one of in an app: React Native and React are

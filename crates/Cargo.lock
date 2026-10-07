@@ -1631,7 +1631,7 @@ dependencies = [
  "pxl-render",
  "pxl-spec",
  "xpute-core",
- "xpute-runtime",
+ "xpute-guest",
 ]
 
 [[package]]
@@ -1645,7 +1645,7 @@ dependencies = [
  "pxl-render",
  "wgpu",
  "xpute-core",
- "xpute-runtime",
+ "xpute-guest",
 ]
 
 [[package]]
@@ -1660,7 +1660,7 @@ dependencies = [
  "pxl-spec",
  "wgpu",
  "xpute-core",
- "xpute-runtime",
+ "xpute-guest",
 ]
 
 [[package]]
@@ -1709,6 +1709,7 @@ version = "0.0.0"
 dependencies = [
  "pxl-kernel",
  "xpute-core",
+ "xpute-guest",
 ]
 
 [[package]]
@@ -2905,7 +2906,7 @@ name = "xpute-core"
 version = "0.0.0"
 
 [[package]]
-name = "xpute-runtime"
+name = "xpute-guest"
 version = "0.0.0"
 dependencies = [
  "indexmap",
