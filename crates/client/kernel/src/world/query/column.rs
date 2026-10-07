@@ -2,6 +2,7 @@
 
 //! What stands in a ground cell's column: the surface, bores, decks and piers, and what is placed there.
 
+use crate::layer::Query;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::deck::Occupies;
 use pxl_spec::bake::fold::majority;
@@ -107,7 +108,9 @@ impl<'a> Access<'a> {
     /// Whether a voxel entry, air included, takes the cell.
     pub(super) fn taken(&self, [ix, iy]: [i64; 2], cz: i64) -> bool {
         let mut taken = false;
-        self.objects.each_in(GROUND.cell(), [ix, iy, cz], &mut |e| taken |= !object_value_is_decor(e.state));
+        if let Some(c) = self.objects.read((GROUND.cell(), [ix, iy, cz]), GROUND.cell()).value() {
+            c.entries(&mut |e| taken |= !object_value_is_decor(e.state));
+        }
         taken
     }
 }

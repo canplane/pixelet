@@ -12,7 +12,6 @@ use crate::layer::Query;
 
 use crate::world::chunk::Chunk as PyramidChunk;
 use pxl_spec::space::coord::zoom::{count, units, Zoom};
-use pxl_spec::space::hierarchy::tree::first_descendant_of;
 
 /// The zoom a chunk's runs are written at: the records its cells fold
 /// (`GROUND`'s fold finer) where anything is held finer than its cells, else its
@@ -29,15 +28,6 @@ pub(super) fn runs_zoom(c: PyramidChunk, finest: Zoom) -> Zoom {
 pub fn runs_of(store: &Store, c: PyramidChunk) -> Zoom {
     let finest = store.bounds(c.column(), c.cell_zoom()).value().flatten().map(|b| b.finest);
     runs_zoom(c, finest.map_or(GROUND.cell(), |z| z.max(GROUND.cell())))
-}
-
-/// The runs' cells, X and Y, a chunk's objects are folded over: its own and
-/// one of apron, which a fold reads (`tiers_draw`).
-pub fn folded_cells(c: PyramidChunk, runs: Zoom) -> ([i64; 2], [i64; 2]) {
-    let (zoom, at) = c.node();
-    let [x, y, _] = first_descendant_of(at, u32::from(runs - zoom));
-    let n = i64::from(count(runs, zoom));
-    ([x - 1, y - 1], [x + n + 1, y + n + 1])
 }
 
 /// The world's units a run's cell is tall: a leaf cell's, or past the
