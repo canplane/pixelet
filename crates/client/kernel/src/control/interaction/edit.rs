@@ -3,6 +3,7 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the objects' query and written to the store.
 
+use crate::chunk::source::RenderEdits;
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
@@ -127,24 +128,8 @@ pub fn remove(at: EntryAt) {
     });
 }
 
-/// What the eraser's preview changes in the drawn build only: the pick and
-/// the cell queries still see what it hides, or hover would clear, the hide
-/// lift and the pick hit it again, forever. No revision moves, so saves do
-/// not see the hover.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RenderEdits {
-    /// The placed object hidden, and whether it is drawn in tiers, decor, or
-    /// (already gone) either.
-    pub hide: Option<EntryAt>,
-    pub hide_in: (bool, bool),
-    /// An AIR entry over bare terrain, which has no leaf to hide.
-    pub carve: Option<EntryAt>,
-    /// The scattered decor hidden, by the cell it stands in.
-    pub scattered: Option<[i64; 3]>,
-}
-
 /// The edit the pointer would make, decided once a turn: the cursor's ghost
-/// shows it and the drawn build leaves out what it removes.
+/// shows it, and what it removes the chunks are handed to leave out.
 #[derive(Clone, Copy, Default)]
 pub struct Pending {
     pub object: Option<Entry>,
@@ -152,18 +137,12 @@ pub struct Pending {
     pub digging: bool,
     /// The same check as the commit, so preview and placement cannot disagree.
     pub blocked: bool,
-    pub edits: RenderEdits,
 }
 
 static PENDING: Global<Pending> = Global::new();
 
 pub fn pending() -> Pending {
     *PENDING.get(Pending::default)
-}
-
-/// Compared as part of a chunk's sources, so an unchanged one rebuilds nothing.
-pub fn render_edits() -> RenderEdits {
-    pending().edits
 }
 
 pub fn pending_step() {
@@ -199,15 +178,8 @@ pub fn pending_step() {
         carve: hovered.filter(|_| digging).map(|h| carve_entry(&h, size)),
         scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).and_then(|s| s.grown_in()),
     };
-    let p = PENDING.get(Pending::default);
-    if p.edits != edits {
+    if crate::chunk::source::preview(edits) {
         request_world_tick();
     }
-    *p = Pending {
-        object,
-        size,
-        digging,
-        blocked,
-        edits,
-    };
+    *PENDING.get(Pending::default) = Pending { object, size, digging, blocked };
 }

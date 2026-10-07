@@ -12,7 +12,6 @@ use std::collections::HashMap;
 
 use crate::chunk::build::runs_of;
 use crate::chunk::Chunk as PyramidChunk;
-use crate::control::interaction::edit::{render_edits, RenderEdits};
 use crate::layer::object::store::Store;
 use crate::with_parts;
 use pxl_spec::space::coord::world::nearest_box;
@@ -22,19 +21,47 @@ use xpute_guest::global::Global;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
 
-/// The edits' previews as the chunks last compared them.
-static EDITS_SEEN: Global<RenderEdits> = Global::new();
+/// What the eraser's preview changes in the drawn build only: the pick and
+/// the cell queries still see what it hides, or hover would clear, the hide
+/// lift and the pick hit it again, forever. No revision moves, so saves do
+/// not see the hover.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RenderEdits {
+    /// The placed object hidden, and whether it is drawn in tiers, decor, or
+    /// (already gone) either.
+    pub hide: Option<EntryAt>,
+    pub hide_in: (bool, bool),
+    /// An AIR entry over bare terrain, which has no leaf to hide.
+    pub carve: Option<EntryAt>,
+    /// The scattered decor hidden, by the cell it stands in.
+    pub scattered: Option<[i64; 3]>,
+}
+
+/// The preview the pointer's edit hands the chunks, the one copy of it.
+static PREVIEW: Global<RenderEdits> = Global::new();
+
+/// The pointer's edit hands its preview here once a turn; whether it changed,
+/// in which case the chunks compare their sources at their next turn.
+pub fn preview(edits: RenderEdits) -> bool {
+    let changed = core::mem::replace(PREVIEW.get(RenderEdits::default), edits) != edits;
+    if changed {
+        chunk_sources_changed();
+    }
+    changed
+}
+
+/// What the drawn build leaves out now.
+pub fn previewed() -> RenderEdits {
+    *PREVIEW.get(RenderEdits::default)
+}
 
 /// The table compares every chunk's sources at its next turn (`sources_step`).
 pub fn chunk_sources_changed() {
     *SOURCES_CHANGED.get(|| false) = true;
 }
 
-/// A change of the edits' previews is read here, not told.
 pub fn chunk_sources_step() {
-    let edits = render_edits();
-    let previewed = core::mem::replace(EDITS_SEEN.get(RenderEdits::default), edits) != edits;
-    if core::mem::take(SOURCES_CHANGED.get(|| false)) | previewed {
+    if core::mem::take(SOURCES_CHANGED.get(|| false)) {
         with_parts(|_, sched, _| sched.sources_step());
     }
 }
