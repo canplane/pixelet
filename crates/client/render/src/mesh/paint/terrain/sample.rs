@@ -110,6 +110,26 @@ pub struct TileSource<'a> {
     pub n: u32,
 }
 
+impl TileSource<'_> {
+    /// A cell's look and height as a chunk draws it: the look of the source
+    /// cell it lies in, the source surface's height at its own center, so a
+    /// coarser tile invents nothing. `at` is in the drawn tile's cells.
+    pub fn cell_at(&self, at: [i64; 2]) -> (GroundCell, i32) {
+        let last = TILE_CELLS as i32 - 1;
+        let (tile, n) = (&self.tile, self.n);
+        let (x, y) = (self.origin[0] + at[0], self.origin[1] + at[1]);
+        let (tx, ty) = (x.div_euclid(n as i64) as i32, y.div_euclid(n as i64) as i32);
+        // Only the elevation is padded past the tile. An apron cell off it keeps its
+        // height, all the face mask reads, and the base look nothing draws.
+        let on_tile = (0..=last).contains(&tx) && (0..=last).contains(&ty);
+        let cell = if on_tile { tile.cells[GROUND.cell_index(tx as u32, ty as u32) as usize] } else { ground::BASE };
+        // An apron cell off the tile has no look and takes the raw height.
+        let lanes = on_tile.then_some(GroundLanes { cells: tile.cells });
+        let center = |v: i64| (v as f64 + 0.5) / n as f64;
+        (cell, ground_ele_at(tile.ele, lanes, center(x), center(y)) as i32)
+    }
+}
+
 pub struct Around<'a> {
     pub own: TileSource<'a>,
     /// None where the apron does not reach or nothing is drawn; those cells are
@@ -181,13 +201,11 @@ impl Default for ChunkSample {
 }
 
 impl ChunkSample {
-    /// Each cell takes the material of the source cell it lies in and the source
-    /// surface's height at its own center, so a coarser tile invents nothing.
-    /// `span` columns a row, the apron's among them.
+    /// Each cell as its source draws it (`TileSource::cell_at`). `span`
+    /// columns a row, the apron's among them.
     pub fn read(&mut self, around: &Around, first: [i64; 2], span: u32) -> Result<(), Refused> {
         let tables = &*MATERIALS;
         (self.span, self.scale) = (span, 1);
-        let last = TILE_CELLS as i32 - 1;
         for py in 0..span {
             for px in 0..span {
                 let i = (py * span + px) as usize;
@@ -200,20 +218,9 @@ impl ChunkSample {
                         None => (&around.own, [x, y]),
                     },
                 };
-                let (tile, n) = (&source.tile, source.n);
-                let (x, y) = (source.origin[0] + x, source.origin[1] + y);
-                let (tx, ty) = (x.div_euclid(n as i64) as i32, y.div_euclid(n as i64) as i32);
-                // Only the elevation is padded past the tile. An apron cell off it keeps its
-                // height, all the face mask reads, and the base look nothing draws.
-                let on_tile = (0..=last).contains(&tx) && (0..=last).contains(&ty);
-                let cell = if on_tile { tile.cells[GROUND.cell_index(tx as u32, ty as u32) as usize] } else { ground::BASE };
+                let (cell, ele) = source.cell_at([x, y]);
                 self.look[i] = cell;
                 (self.material[i], self.layer_idx[i]) = tables.drawn(cell);
-
-                // An apron cell off the tile has no look and takes the raw height.
-                let lanes = on_tile.then_some(GroundLanes { cells: tile.cells });
-                let center = |v: i64| (v as f64 + 0.5) / n as f64;
-                let ele = ground_ele_at(tile.ele, lanes, center(x), center(y)) as i32;
                 self.ele[i] = ele;
             }
         }
