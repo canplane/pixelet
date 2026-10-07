@@ -70,14 +70,14 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 interactive: p.interactive,
                 credits: p.credits,
             });
-            crate::door::host::set_wall_now(p.unix_ms);
+            crate::io::host::set_wall_now(p.unix_ms);
             Ok(Some(0))
         }
         Command::WORLD_BOOT => {
             let p = abi::WorldBoot::read(packet(pkt)?)?;
             super::host_attached(s);
-            crate::door::host::set_development(p.development);
-            crate::door::host::set_handheld(p.handheld);
+            crate::io::host::set_development(p.development);
+            crate::io::host::set_handheld(p.handheld);
             crate::turn::set_world_platform(crate::turn::Platform {
                 geolocation: p.geolocation,
                 orientation: device_orientation::OrientationPlatform {
@@ -117,7 +117,11 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             match p.phase {
                 abi::PointerPhase::Down => camera_pointer_down(p.kind, p.id, p.button, p.x, p.y),
                 abi::PointerPhase::Move => camera_pointer_move(p.kind, p.id, p.x, p.y),
-                abi::PointerPhase::Up => camera_pointer_up(p.kind, p.id),
+                abi::PointerPhase::Up => {
+                    if let Some([x, y]) = camera_pointer_up(p.kind, p.id) {
+                        tap_at(x, y);
+                    }
+                }
                 abi::PointerPhase::Out => camera_pointer_out(),
             }
             Ok(Some(0))
@@ -244,7 +248,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::IMAGE_DECODED => {
             let p = abi::ImageDecoded::read(packet(pkt)?)?;
-            crate::io::load::image_decoded(p.image, crate::door::host::answered(p.res));
+            crate::io::load::image_decoded(p.image, crate::io::host::answered(p.res));
             Ok(Some(0))
         }
         Command::GPU_READY => {
@@ -393,3 +397,14 @@ fn profiler_take(s: &mut State) -> u32 {
 #[cfg(test)]
 #[path = "apply.test.rs"]
 mod test;
+
+/// A badge takes a tap before the ground under it, with the pointer tool only.
+fn tap_at(x: f64, y: f64) {
+    use crate::chunk::place::Went;
+    use crate::control::navigation::destination::{go_into_place, go_to_place};
+    match crate::control::interaction::taps_badges().then(|| crate::chunk::place::tap(x, y)).flatten() {
+        Some(Went::To(at)) => go_to_place(at),
+        Some(Went::Into(at)) => go_into_place(at),
+        None => crate::control::interaction::tap(x, y),
+    }
+}

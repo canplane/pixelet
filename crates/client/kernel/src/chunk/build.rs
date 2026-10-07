@@ -225,7 +225,7 @@ impl Builder {
         self.stat.starved += 1;
         self.abort_work_of(id);
         self.leave_runs(id);
-        let releases = crate::door::host::heap_stat().releases;
+        let releases = crate::io::host::heap_stat().releases;
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
         }
@@ -281,7 +281,7 @@ impl Builder {
         if !c.want {
             return Progress::Done;
         }
-        if c.refused.is_some_and(|r| r == crate::door::host::heap_stat().releases) {
+        if c.refused.is_some_and(|r| r == crate::io::host::heap_stat().releases) {
             return Progress::Blocked;
         }
         if self.runs_of(id).is_none() {
