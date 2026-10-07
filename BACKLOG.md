@@ -62,6 +62,17 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   screen. The billboard kind joins the cell catalog and the badges take its
   records from whichever layer answers them, when a signpost is wanted.
 
+- **Terrain's lanes are one record, which keeps it from being a quadtree.**
+  A tile is its ground, elevation, decks and index together
+  (`crates/spec/src/bake/format.rs` `Terrain`), each with its own lattice and
+  fold (majority, average, union), so a child is left out only when all four
+  are its parent's again, and elevation almost never is: every land leaf is
+  stored. Each lane its own layer, pruned where its parent says it whole,
+  would make the sea one case of that rule. First measured: how many leaves
+  each lane alone, and all together, could leave out, against the requests
+  more layers would cost under the Worker's daily cap
+  ([decision/20260816-deployment-hosting.md](./decision/20260816-deployment-hosting.md)).
+
 ## Parked, with the reason on file
 
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
