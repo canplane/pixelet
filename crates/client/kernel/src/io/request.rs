@@ -15,7 +15,7 @@
 use core::cmp::Ordering;
 
 use crate::io::demand::{Ask, Category, Phases};
-use crate::io::failure::{Failure, Outcome};
+use crate::io::failure::{Ended, Outcome};
 use crate::io::load::LOADS;
 use crate::io::policy::Policy;
 use crate::profiler::record::profiler_record;
@@ -274,7 +274,7 @@ impl<S: Serve> RequestScheduler<S> {
     fn stop(&mut self, slot: usize, at: f64) {
         self.stops.push(key_of(slot, self.generation[slot]));
         let a = self.end(slot);
-        record(&a, at, Outcome::aborted, None, Failure::default());
+        record(&a, at, Ended::Aborted, None);
     }
 
     pub fn take_started(&mut self, mut each: impl FnMut(Credit, Category, u64)) {
@@ -295,9 +295,10 @@ impl<S: Serve> RequestScheduler<S> {
     }
 
     /// An answer ends the want; a failure holds it back.
-    pub fn settle(&mut self, key: u64, outcome: Outcome, phases: Option<Phases>, fail: Failure, at: f64) {
+    pub fn settle(&mut self, key: u64, ended: Ended, phases: Option<Phases>, at: f64) {
         let Some(slot) = self.slot_of(key) else { return };
         let a = self.end(slot);
+        let outcome = ended.outcome();
         if let Some(i) = self.find(a.category, a.subject) {
             if outcome == Outcome::ok {
                 self.desired[i] = None;
@@ -305,7 +306,7 @@ impl<S: Serve> RequestScheduler<S> {
                 w.until_ms = at + wait;
             }
         }
-        record(&a, at, outcome, phases, fail);
+        record(&a, at, ended, phases);
     }
 
     /// The module is being reset under a host that will not answer what it was told to run.
@@ -321,7 +322,7 @@ impl<S: Serve> RequestScheduler<S> {
     }
 }
 
-fn record(a: &Attempt, at: f64, outcome: Outcome, phases: Option<Phases>, fail: Failure) {
+fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
     profiler_record(|| {
         let mut row = TaskRow {
             category: a.category as u32 as f64,
@@ -330,12 +331,17 @@ fn record(a: &Attempt, at: f64, outcome: Outcome, phases: Option<Phases>, fail: 
             enqueue_ms: a.enqueue_ms,
             start_ms: a.start_ms,
             end_ms: at,
-            outcome: outcome as u32 as f64,
-            fail: f64::from(fail.errno as i32),
-            detail: fail.detail as f64,
+            outcome: ended.outcome() as u32 as f64,
             ..TaskRow::default()
         };
-        if let Some(at) = fail.at {
+        if let Ended::Failed(fail) = ended {
+            row.fail = f64::from(fail.errno as i32);
+            row.detail = fail.detail as f64;
+        }
+        if let Some(at) = match ended {
+            Ended::Failed(fail) => fail.at,
+            Ended::Ok | Ended::Aborted => None,
+        } {
             row.at_file = off_of_slice(file_in_memory(at.file()).as_bytes()) as f64;
             row.at_file_bytes = at.file().len() as f64;
             row.at_line = at.line() as f64;
@@ -405,8 +411,8 @@ pub fn attempt_of(key: u64) -> Option<(Category, u64)> {
     sched().attempt_of(key)
 }
 
-pub fn settle(key: u64, outcome: Outcome, phases: Option<Phases>, fail: Failure) {
-    sched().settle(key, outcome, phases, fail, now());
+pub fn settle(key: u64, ended: Ended, phases: Option<Phases>) {
+    sched().settle(key, ended, phases, now());
 }
 
 pub fn reset() {

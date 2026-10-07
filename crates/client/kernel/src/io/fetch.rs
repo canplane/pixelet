@@ -16,7 +16,7 @@ use xpute_guest::mem::heap::{alloc, free, Block};
 use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 use crate::io::demand::{Category, Phases, TaskPhaseName};
-use crate::io::failure::{Failure, Outcome};
+use crate::io::failure::{Ended, Failure};
 use crate::io::file::{self, Opened, Owner};
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::sched::edge::{request_world_tick, world_edge};
@@ -54,7 +54,7 @@ pub fn cancel(key: u64) -> bool {
         return false;
     };
     file::close(fd);
-    settle(key, Outcome::aborted, None, Failure::default());
+    settle(key, Ended::Aborted, None);
     true
 }
 
@@ -110,11 +110,7 @@ pub fn next_answered(of: &[Category]) -> Option<Answered> {
 
 /// An answer's fetch settles once its owner has taken it in, or refused it.
 pub fn answer_settled(key: u64, result: Result<(), Failure>, phases: Phases) {
-    let (outcome, fail) = match result {
-        Ok(()) => (Outcome::ok, Failure::default()),
-        Err(fail) => (Outcome::error, fail),
-    };
-    settle(key, outcome, Some(phases), fail);
+    settle(key, Ended::from(result), Some(phases));
 }
 static ARRIVALS: Global<Notify> = Global::new();
 
@@ -131,11 +127,7 @@ fn arrivals() -> &'static mut Notify {
 pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     let got = match opened {
         Opened::Absent => Got::Absent,
-        Opened::Failed { errno, detail } => Got::Failed(Failure {
-            errno,
-            detail: detail as u16,
-            at: None,
-        }),
+        failed @ Opened::Failed { .. } => Got::Failed(failed.failure()),
         Opened::Bytes(0) => {
             file::close(fd);
             Got::Read(None)
@@ -188,7 +180,7 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     if let Some((_, bytes)) = block {
         phases.push(TaskPhaseName::bytes, bytes as f64);
     }
-    let (outcome, fail) = match got {
+    let fail = match got {
         // Taken by its owner, which settles it; and a turn asked, so one takes it.
         Got::Absent | Got::Read(Some(_)) => {
             // An asset loads through io/load, never a fetch: nothing would take its answer.
@@ -204,8 +196,8 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
             return;
         }
         // Only an absence says there is none; an empty read is not an object.
-        Got::Read(None) => (Outcome::error, Failure::from(Errno::EBADMSG)),
-        Got::Failed(fail) => (Outcome::error, fail),
+        Got::Read(None) => Failure::from(Errno::EBADMSG),
+        Got::Failed(fail) => fail,
     };
-    settle(key, outcome, Some(phases), fail);
+    settle(key, Ended::Failed(fail), Some(phases));
 }

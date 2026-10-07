@@ -17,7 +17,7 @@ use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 use crate::abi::host::root;
 use crate::door::host::decode_image;
 use crate::io::demand::Ask;
-use crate::io::failure::{Failure, Outcome};
+use crate::io::failure::Ended;
 use crate::io::file::{self, Opened, Owner};
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::sched::edge::{request_world_tick, world_edge};
@@ -143,9 +143,9 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
 }
 
 /// The credit ends when the host reports; parsing afterwards does not hold it.
-fn ended(key: u64, outcome: Outcome) -> Option<(LoadKind, Load)> {
+fn ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
     let what = attempt_of(key).and_then(|(_, subject)| of_subject(subject));
-    settle(key, outcome, None, Failure::default());
+    settle(key, ended, None);
     what
 }
 
@@ -181,7 +181,7 @@ pub fn cancel_asset(key: u64) -> bool {
         return false;
     };
     file::close(fd);
-    load_rejected(key);
+    load_rejected(key, Ended::Aborted);
     true
 }
 
@@ -190,10 +190,10 @@ static IMAGES: Global<Slots<()>> = Global::new();
 /// The file is closed in the same turn: the host takes its bytes when it runs the decode.
 pub fn image_opened(fd: u32, key: u64, opened: Opened) {
     let Opened::Bytes(_) = opened else {
-        load_rejected(key);
+        load_rejected(key, Ended::Failed(opened.failure()));
         return;
     };
-    let Some((_, load)) = ended(key, Outcome::ok) else {
+    let Some((_, load)) = ended(key, Ended::Ok) else {
         file::close(fd);
         return;
     };
@@ -228,10 +228,10 @@ pub fn image_decoded(image: u32, decoded: Result<u32, Errno>) {
 
 pub fn model_opened(fd: u32, key: u64, opened: Opened) {
     let Opened::Bytes(n) = opened else {
-        load_rejected(key);
+        load_rejected(key, Ended::Failed(opened.failure()));
         return;
     };
-    let Some((_, load)) = ended(key, Outcome::ok) else {
+    let Some((_, load)) = ended(key, Ended::Ok) else {
         file::close(fd);
         return;
     };
@@ -276,8 +276,8 @@ pub async fn gltf_task() {
 
 /// The transport failed, not the asset: it is wanted again, and the request scheduler
 /// decides the wait.
-pub fn load_rejected(key: u64) {
-    let Some((kind, load)) = ended(key, Outcome::error) else { return };
+pub fn load_rejected(key: u64, how: Ended) {
+    let Some((kind, load)) = ended(key, how) else { return };
     let l = loader();
     let n = load.number() as usize;
     match kind {

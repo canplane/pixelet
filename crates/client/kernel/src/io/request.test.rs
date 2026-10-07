@@ -8,7 +8,7 @@ use crate::io::demand::Why;
 use xpute_core::status::errno::Errno;
 
 use crate::io::demand::Order;
-use crate::io::failure::{Failure, Outcome};
+use crate::io::failure::{Ended, Failure, Outcome};
 
 struct ByWhy;
 
@@ -67,15 +67,16 @@ fn stopped<S: Serve>(l: &mut RequestScheduler<S>) -> Vec<u64> {
 }
 
 fn ok<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
-    l.settle(key, Outcome::ok, None, Failure::default(), at);
+    l.settle(key, Ended::Ok, None, at);
 }
 
 fn failed<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
     let fail = Failure {
         errno: Errno::ENETUNREACH,
-        ..Failure::default()
+        detail: 0,
+        at: None,
     };
-    l.settle(key, Outcome::error, None, fail, at);
+    l.settle(key, Ended::Failed(fail), None, at);
 }
 
 #[test]

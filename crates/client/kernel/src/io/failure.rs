@@ -20,17 +20,6 @@ pub struct Failure {
     pub at: Option<&'static Location<'static>>,
 }
 
-/// No failure: what a run that ended well records.
-impl Default for Failure {
-    fn default() -> Failure {
-        Failure {
-            errno: Errno::OK,
-            detail: 0,
-            at: None,
-        }
-    }
-}
-
 impl From<Errno> for Failure {
     #[track_caller]
     fn from(errno: Errno) -> Failure {
@@ -54,10 +43,37 @@ impl From<MarshalError> for Failure {
 
 impl fmt::Display for Failure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match (self.errno, self.detail) {
-            (Errno::OK, _) => Ok(()),
-            (errno, 0) => write!(f, "errno {}", errno as i32),
-            (errno, detail) => write!(f, "errno {} {detail}", errno as i32),
+        match self.detail {
+            0 => write!(f, "errno {}", self.errno as i32),
+            detail => write!(f, "errno {} {detail}", self.errno as i32),
+        }
+    }
+}
+
+/// How a run ended: one value, so a run that ended well carries no failure
+/// and a failed one always does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ended {
+    Ok,
+    Aborted,
+    Failed(Failure),
+}
+
+impl Ended {
+    pub fn outcome(&self) -> Outcome {
+        match self {
+            Ended::Ok => Outcome::ok,
+            Ended::Aborted => Outcome::aborted,
+            Ended::Failed(_) => Outcome::error,
+        }
+    }
+}
+
+impl From<Result<(), Failure>> for Ended {
+    fn from(result: Result<(), Failure>) -> Ended {
+        match result {
+            Ok(()) => Ended::Ok,
+            Err(fail) => Ended::Failed(fail),
         }
     }
 }

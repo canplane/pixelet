@@ -12,6 +12,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::abi::host::{root, OBJECTS_PATH, SETTINGS_PATH};
 use crate::door::host::{answered, heap_stat, sys, turn};
+use crate::io::failure::Failure;
 use crate::io::load::LOADS;
 use crate::io::request::Credit;
 use crate::mem::spec::MIN_HEAP_BYTES;
@@ -197,6 +198,22 @@ pub enum Opened {
     Absent,
     /// Every other failure; the descriptor is closed.
     Failed { errno: Errno, detail: u32 },
+}
+
+impl Opened {
+    /// An open that came to no bytes, as its run's failure.
+    #[track_caller]
+    pub fn failure(self) -> Failure {
+        match self {
+            Opened::Failed { errno, detail } => Failure {
+                errno,
+                detail: detail as u16,
+                at: None,
+            },
+            Opened::Absent => Failure::from(Errno::ENOENT),
+            Opened::Bytes(_) => Failure::from(Errno::ENOTRECOVERABLE),
+        }
+    }
 }
 
 /// `res` is the file's size, or a negative errno. A file larger than the heap
