@@ -31,7 +31,10 @@ dev server through `deno task build:wasm`. main is not built by CI.
 
 **Never `down -v` the geo database** (`pixelet-db-geo`): the volume is a
 multi-gigabyte PostGIS dataset. Ingestion and operations are
-[infra/README.md](./infra/README.md), not improvised SQL.
+[infra/README.md](./infra/README.md), not improvised SQL. **A table is filled
+beside itself and swapped in, never emptied first**, a change of shape
+included (§2 there): a table dropped or truncated by hand leaves its readers
+nothing for the hours a re-ingest takes.
 
 ## Boundaries
 
