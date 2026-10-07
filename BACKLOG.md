@@ -37,6 +37,16 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   (`pxl-geo-spec overture/properties.rs`), where Carto's `amenity-points.mss`
   gives each tag an icon and a color.
 
+## P2
+
+- **An Overture feature is stored once a shard it reaches.** A shard is
+  whole or absent because it holds its own copy of every feature its apron
+  meets, so a sea polygon sits in twenty shards and every reader pays per copy
+  unless it dedups first (`crates/server/geo-bake/src/terrain/repository.rs`
+  `read_once`). A feature stored once, with which shards hold it beside it,
+  ends the copies; it changes the schema every reader uses and makes "whole
+  or absent" a rule over two tables.
+
 ## Parked, with the reason on file
 
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
