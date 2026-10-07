@@ -1,6 +1,6 @@
-// pxl-render/asset/atlas.rs
+// pxl-render/gpu/sheet/pack.rs
 
-//! Every billboard's bitmap in one texture, so all badges draw in one instanced
+//! Where each billboard's bitmap lies in the sheet, one texture, so all badges draw in one instanced
 //! call. Shelf-packed with bucketed sizes so a freed slot is reusable; growth
 //! doubles the sheet and replays each entry's `DrawSpec`. Only dirty rectangles
 //! are uploaded: re-uploading the whole 4096 sheet cost a phone ~100 ms per frame.
@@ -18,7 +18,7 @@ pub enum DrawSpec {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct AtlasStats {
+pub struct SheetStats {
     /// Device pixels; the sheet is square.
     pub size: u32,
     pub entries: u32,
@@ -103,7 +103,7 @@ pub struct Flush {
 }
 
 #[derive(Default)]
-pub struct BillboardAtlas {
+pub struct Sheet {
     size: u32,
 
     shelves: Shelves,
@@ -130,9 +130,9 @@ pub struct BillboardAtlas {
     is_dirty: Vec<bool>,
 }
 
-impl BillboardAtlas {
-    pub fn new() -> BillboardAtlas {
-        BillboardAtlas {
+impl Sheet {
+    pub fn new() -> Sheet {
+        Sheet {
             size: INITIAL_SIZE,
             ..Default::default()
         }
@@ -237,8 +237,8 @@ impl BillboardAtlas {
         self.generation
     }
 
-    pub fn stats(&self) -> AtlasStats {
-        AtlasStats {
+    pub fn stats(&self) -> SheetStats {
+        SheetStats {
             size: self.size,
             entries: self.live,
             shelves: self.shelves.h.len() as u32,

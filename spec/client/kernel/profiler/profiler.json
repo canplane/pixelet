@@ -342,10 +342,10 @@
       "built_runs": 1,
       "built_bakes": 1,
       "built_starved": 1,
-      "atlas_repacks": 1,
-      "atlas_uploads": 1
+      "sheet_repacks": 1,
+      "sheet_uploads": 1
     },
-    "atlas": {
+    "sheet": {
       "size": 1,
       "entries": 1,
       "shelves": 1,

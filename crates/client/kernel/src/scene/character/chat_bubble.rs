@@ -3,8 +3,8 @@
 //! A billboarded speech bubble over the companion's head, showing the most
 //! recent line of the (dev-only) map chat for a while.
 
-use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::BUBBLE_FONT;
+use pxl_render::gpu::sheet::pack::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::sheet::SHEET_SCALE;
 
 use crate::billboard::field::billboard_instance;

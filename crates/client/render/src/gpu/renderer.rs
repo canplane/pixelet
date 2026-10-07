@@ -12,7 +12,6 @@ use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
-use crate::asset::atlas::BillboardAtlas;
 use crate::frame::draw::{
     uniform_of, Lists, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
     PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
@@ -35,6 +34,7 @@ use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::shadow::Shadow;
+use crate::gpu::sheet::pack::Sheet;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
@@ -97,7 +97,7 @@ pub struct FrameInput<'a> {
     pub moon: fn() -> Option<u32>,
     pub earth: fn() -> Option<u32>,
     pub earth_tiles: EarthTiles<'a>,
-    pub atlas: &'a mut BillboardAtlas,
+    pub billboards: &'a mut Sheet,
     pub text: TextOf,
     /// A phone gets a smaller shadow map.
     pub handheld: bool,
@@ -913,7 +913,7 @@ impl Renderer {
         self.atmosphere.earth_step(g, &self.mips, input.earth);
         let tiles = input.earth_tiles;
         self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload);
-        self.badges.sync_sheet(g, &self.mips, input.atlas, input.text);
+        self.badges.sync_sheet(g, &self.mips, input.billboards, input.text);
         let (records, uniforms) = take_lists(Some(g), input.lists);
 
         targets(g, world);

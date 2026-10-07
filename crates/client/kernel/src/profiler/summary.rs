@@ -11,7 +11,7 @@ use crate::io::request::{counts, credits};
 use crate::layer::Layer as _;
 use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
-use crate::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::profiler::block::{FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::profiler::frame::FrameSample;
 use crate::profiler::frame::{missed, overran};
 use crate::profiler::log::window_baseline;
@@ -192,16 +192,16 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
 fn side(out: &mut [f64]) {
     put(out, SUMMARY::counters::AT, &counters().minus(&window_baseline()));
 
-    let atlas = billboard_sheet().stats();
+    let sheet = billboard_sheet().stats();
     put(
         out,
-        SUMMARY::atlas::AT,
-        &AtlasBlock {
-            size: atlas.size as f64,
-            entries: atlas.entries as f64,
-            shelves: atlas.shelves as f64,
-            used_px: atlas.used_px as f64,
-            initial: pxl_render::asset::atlas::INITIAL_SIZE as f64,
+        SUMMARY::sheet::AT,
+        &SheetBlock {
+            size: sheet.size as f64,
+            entries: sheet.entries as f64,
+            shelves: sheet.shelves as f64,
+            used_px: sheet.used_px as f64,
+            initial: pxl_render::gpu::sheet::pack::INITIAL_SIZE as f64,
         },
     );
 
@@ -310,7 +310,7 @@ pub fn counters() -> CountersBlock {
     let k = kernel();
     let st = k.sched.builder.stat;
     let c = k.sched.builder.bake_context().counters;
-    let atlas = billboard_sheet().stats();
+    let sheet = billboard_sheet().stats();
     CountersBlock {
         faces_kept: c.faces_kept as f64,
         faces_possible: c.faces_possible as f64,
@@ -321,7 +321,7 @@ pub fn counters() -> CountersBlock {
         built_runs: st.runs as f64,
         built_bakes: st.bakes as f64,
         built_starved: st.starved as f64,
-        atlas_repacks: atlas.repacks as f64,
-        atlas_uploads: atlas.uploads as f64,
+        sheet_repacks: sheet.repacks as f64,
+        sheet_uploads: sheet.uploads as f64,
     }
 }

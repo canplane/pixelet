@@ -8,8 +8,8 @@ use pxl_spec::space::layer::tile::Tile;
 
 use crate::billboard::sheet::billboard_sheet;
 use crate::io::text::text_width;
-use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
+use pxl_render::gpu::sheet::pack::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::sheet::SHEET_SCALE;
 use xpute_guest::global::Global;
 

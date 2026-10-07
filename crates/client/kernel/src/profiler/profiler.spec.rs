@@ -381,8 +381,8 @@ pub mod SUMMARY {
         pub const built_runs: u32 = 6;
         pub const built_bakes: u32 = 7;
         pub const built_starved: u32 = 8;
-        pub const atlas_repacks: u32 = 9;
-        pub const atlas_uploads: u32 = 10;
+        pub const sheet_repacks: u32 = 9;
+        pub const sheet_uploads: u32 = 10;
         pub const WORDS: u32 = 11;
         pub const KEYS: &[&str] = &[
             "AT",
@@ -395,12 +395,12 @@ pub mod SUMMARY {
             "built_runs",
             "built_bakes",
             "built_starved",
-            "atlas_repacks",
-            "atlas_uploads",
+            "sheet_repacks",
+            "sheet_uploads",
             "WORDS",
         ];
     }
-    pub mod atlas {
+    pub mod sheet {
         pub const AT: u32 = 424;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
@@ -542,7 +542,7 @@ pub mod SUMMARY {
         ];
     }
     pub const WORDS: u32 = 642;
-    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "heap", "view", "WORDS"];
+    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "sheet", "held", "fetch", "peak", "steps", "quality", "heap", "view", "WORDS"];
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count.

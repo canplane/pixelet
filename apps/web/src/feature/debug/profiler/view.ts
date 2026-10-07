@@ -120,7 +120,7 @@ export interface ProfilerReport {
   t: f64;
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
-  sections: Record<"counters" | "atlas" | "held" | "fetch" | "quality" | "view", Record<string, f64>>;
+  sections: Record<"counters" | "sheet" | "held" | "fetch" | "quality" | "view", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   peak: Record<string, f64> | null;
   tasks: TaskSummary[];
@@ -218,7 +218,7 @@ export interface Gauge {
   frames: FrameSummary | null;
   tasks: TaskSummary[];
   counters: Record<string, f64>;
-  atlas: { size: u32; entries: u32; shelves: u32; used_px: u32; initial: u32 };
+  sheet: { size: u32; entries: u32; shelves: u32; used_px: u32; initial: u32 };
   quality: Record<string, f64>;
   view: Record<string, f64>;
   longs: LongFrame[];
@@ -241,7 +241,7 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
     frames: frameSummary(s),
     tasks: taskSummaries(s),
     counters: section(s, SUMMARY.counters),
-    atlas: section(s, SUMMARY.atlas) as Gauge["atlas"],
+    sheet: section(s, SUMMARY.sheet) as Gauge["sheet"],
     quality: section(s, SUMMARY.quality),
     view: section(s, SUMMARY.view),
     longs: longFramesSince(performance.now() - windowMs),
@@ -269,7 +269,7 @@ export function profilerReportRead(): ProfilerReport {
     frames: frameSummary(s),
     sections: {
       counters: section(s, SUMMARY.counters),
-      atlas: section(s, SUMMARY.atlas),
+      sheet: section(s, SUMMARY.sheet),
       held: section(s, SUMMARY.held),
       fetch: section(s, SUMMARY.fetch),
       quality: section(s, SUMMARY.quality),

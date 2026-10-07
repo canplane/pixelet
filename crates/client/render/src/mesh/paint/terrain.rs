@@ -2,5 +2,5 @@
 
 //! A terrain tile as the render pipeline reads it.
 
-pub mod sample;
 pub mod elevation;
+pub mod sample;

@@ -119,7 +119,7 @@ pub fn stage_render() {
             upload: &mut earth_upload,
         },
         text: text_raster,
-        atlas: billboard_sheet(),
+        billboards: billboard_sheet(),
         handheld: handheld(),
     });
     if out.redraw {

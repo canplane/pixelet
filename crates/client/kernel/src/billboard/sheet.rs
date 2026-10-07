@@ -4,16 +4,16 @@
 //! every set shares one pipeline and binding; and the sets themselves.
 
 use crate::laid;
-use pxl_render::asset::atlas::BillboardAtlas;
+use pxl_render::gpu::sheet::pack::Sheet;
 use pxl_spec::space::coord::v3::V3;
 
 use crate::kernel;
 use xpute_guest::global::Global;
 
-static SHEET: Global<BillboardAtlas> = Global::new();
+static SHEET: Global<Sheet> = Global::new();
 
-pub fn billboard_sheet() -> &'static mut BillboardAtlas {
-    SHEET.get(BillboardAtlas::new)
+pub fn billboard_sheet() -> &'static mut Sheet {
+    SHEET.get(Sheet::new)
 }
 
 pub fn new_billboard_set(order: BillboardOrder) -> u32 {

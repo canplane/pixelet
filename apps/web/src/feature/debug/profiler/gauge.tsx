@@ -102,7 +102,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
   if (g === null) return <Note>no window open</Note>;
 
   const f = g.frames;
-  const atlasPct = pct(g.atlas.used_px, g.atlas.size * g.atlas.size);
+  const sheetPct = pct(g.sheet.used_px, g.sheet.size * g.sheet.size);
   const [kept, possible] = [g.counters.faces_kept, g.counters.faces_possible];
   const heaviest = <T,>(rows: T[], by: (r: T) => number, n: number) => [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) => by(r) > 0);
   const worstLong = g.longs.reduce<LongFrame | null>((w, l) => (!w || l.durationMs > w.durationMs ? l : w), null);
@@ -214,7 +214,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           <Row k="kernel memory" v={`${round(kernel_memory().byteLength / 1048576)} MB`} />
           <Row k="buffers/arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}/${valueText("_mb", f.last.arena_mb)}`} />
           <Row k="depth/shadow/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_shadow_mb}/${f.last.tex_layers_mb} MB`} />
-          {g.atlas.entries > 0 && <Row k="atlas" v={`${g.atlas.size}px ${g.atlas.entries} ${atlasPct}%`} warn={g.atlas.size > g.atlas.initial && atlasPct < ATLAS_SPARSE_PCT} />}
+          {g.sheet.entries > 0 && <Row k="sheet" v={`${g.sheet.size}px ${g.sheet.entries} ${sheetPct}%`} warn={g.sheet.size > g.sheet.initial && sheetPct < ATLAS_SPARSE_PCT} />}
         </>
       )}
     </>

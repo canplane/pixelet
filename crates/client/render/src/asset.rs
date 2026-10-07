@@ -1,6 +1,5 @@
 // pxl-render/asset.rs
 
-//! Shipped assets read into device form: glTF models and the billboard atlas.
+//! Shipped assets read into device form: glTF models.
 
-pub mod atlas;
 pub mod gltf;

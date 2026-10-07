@@ -234,11 +234,11 @@ export const SUMMARY = {
     built_runs: 6 as number,
     built_bakes: 7 as number,
     built_starved: 8 as number,
-    atlas_repacks: 9 as number,
-    atlas_uploads: 10 as number,
+    sheet_repacks: 9 as number,
+    sheet_uploads: 10 as number,
     WORDS: 11 as number,
   },
-  atlas: {
+  sheet: {
     AT: 424 as number,
     size: 0 as number,
     entries: 1 as number,
