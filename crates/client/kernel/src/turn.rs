@@ -190,7 +190,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, follow, follow_mode_step());
     effect!(worst, destination, crate::control::navigation::destination::destination_step());
     // After every writer of the focus, before anything observes the view.
-    effect!(worst, view, crate::view::frame::pose::view_compose());
+    effect!(worst, view, crate::view::frame::pose::view_compose(crate::control::camera::controller::pose()));
     effect!(worst, geocode, geocode_fetcher_step(crate::control::camera::controller::focus().map(|c| group_of(&c))));
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, objects, crate::layer::object::repository::step());

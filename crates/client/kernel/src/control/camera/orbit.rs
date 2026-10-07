@@ -169,6 +169,6 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
         set_eye_world(&add3(&center, &e));
     }
-    view_compose();
+    view_compose(crate::control::camera::controller::pose());
     Some(moving)
 }

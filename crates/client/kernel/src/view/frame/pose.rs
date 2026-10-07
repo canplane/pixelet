@@ -11,8 +11,8 @@ use pxl_spec::space::coord::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
-use crate::control::camera::controller::pose;
-use crate::control::navigation::bootstrap::FALLBACK_G4326;
+use crate::param::FALLBACK_G4326;
+use crate::param::FOV;
 use crate::view::reach::{far_clip_at, near_clip_at};
 use pxl_spec::space::coord::globe::Globe;
 use xpute_guest::global::Global;
@@ -84,6 +84,12 @@ impl View {
 
 static VIEW: Global<View> = Global::new();
 
+/// The units a logical pixel spans at `dist` from the eye: what a drag at
+/// that distance moves, and what a thing there is worth on the screen.
+pub fn units_per_px_at(dist: f64) -> f64 {
+    2.0 * dist * libm::tan(FOV * core::f64::consts::PI / 360.0) / view().height
+}
+
 pub fn view() -> &'static mut View {
     VIEW.get(View::new)
 }
@@ -126,13 +132,17 @@ pub fn view_resize(width: f64, height: f64) {
     }
     v.width = width.max(1.0);
     v.height = height.max(1.0);
-    view_compose();
+    compose();
 }
 
-/// Composes the pose and the matrices.
-pub fn view_compose() {
+/// Takes the pose the controllers hold and composes the matrices from it.
+pub fn view_compose(pose: Option<ObserverPose>) {
+    view().pose = pose;
+    compose();
+}
+
+fn compose() {
     let v = view();
-    v.pose = pose();
     let at = v.at();
     let e = at.eye;
     let mut to_eye = mat4();

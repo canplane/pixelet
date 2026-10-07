@@ -79,7 +79,6 @@ impl GroupLanes {
     pub const fn flags(self) -> usize {
         self.first + 5 * self.count
     }
-
 }
 
 /// Each group's first lane word and count, from the block's header.

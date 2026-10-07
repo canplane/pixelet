@@ -15,7 +15,6 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
 use xpute_guest::global::Global;
 
-use crate::control::camera::controller::units_per_px_at;
 use crate::io::demand::Category;
 use crate::io::fetch::{answer_settled, body, next_answered, release, Answered};
 use crate::io::request::attempt_of;
@@ -23,6 +22,7 @@ use crate::layer::earth::{self, Earth};
 use crate::layer::poi::MAJOR_UNITS_PER_PX;
 use crate::layer::Layer;
 use crate::sched::edge::world_edge;
+use crate::view::frame::pose::units_per_px_at;
 use xpute_core::status::errno::Errno;
 use xpute_guest::mem::heap::Block;
 
