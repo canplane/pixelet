@@ -1,4 +1,4 @@
-// pxl-render/look/globe.rs
+// pxl-spec/space/coord/globe.rs
 
 //! The flat map laid back on the planet about the map center. Mercator is
 //! stretched and flat far from its center, so the ground stopped meeting the
@@ -7,9 +7,9 @@
 //! globe does). Near-latitude differences use half-angle sines or expm1,
 //! never a difference of cosines, so a unit keeps its unit.
 
-use pxl_spec::space::coord::adapter::epsg4326;
-use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world::ROUND;
+use crate::space::coord::adapter::epsg4326;
+use crate::space::coord::v3::V3;
+use crate::space::coord::world::ROUND;
 
 pub const MERCATOR_RADIUS_KM: f64 = epsg4326::EARTH_RADIUS_M / 1000.0;
 pub const MERCATOR_RADIUS_U: f64 = ROUND / core::f64::consts::TAU;

@@ -5,4 +5,3 @@
 pub mod atmosphere;
 pub mod color;
 pub mod environment;
-pub mod globe;

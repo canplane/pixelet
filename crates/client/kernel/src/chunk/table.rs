@@ -22,8 +22,8 @@ use mount::*;
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch};
-use pxl_render::look::globe::Globe;
 use pxl_render::mesh::chunk_mesher::Heights;
+use pxl_spec::space::coord::globe::Globe;
 
 use crate::profiler::frame::ZOOMS;
 use pxl_spec::space::camera::eye::Frustum;

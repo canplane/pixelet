@@ -39,7 +39,7 @@ use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
-use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
+use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 

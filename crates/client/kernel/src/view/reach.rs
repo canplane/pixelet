@@ -3,7 +3,7 @@
 //! How far the view reaches — the end of the ground it can see — and the clip
 //! planes set from it.
 
-use pxl_render::look::globe::MERCATOR_RADIUS_KM;
+use pxl_spec::space::coord::globe::MERCATOR_RADIUS_KM;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 

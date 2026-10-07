@@ -1,7 +1,7 @@
-// pxl-render/look/globe.test.rs
+// pxl-spec/space/coord/globe.test.rs
 
 use super::*;
-use pxl_spec::space::coord::v3::sub3;
+use crate::space::coord::v3::sub3;
 use xpute_core::math::rng::{u32_to_unit, SplitMix64};
 
 const SEOUL: f64 = 37.5665 * core::f64::consts::PI / 180.0;
@@ -61,14 +61,14 @@ fn unplace_takes_a_placed_point_back_to_the_map() {
 #[test]
 fn the_sphere_is_one_whichever_point_it_is_laid_about() {
     let a = Globe::at(SEOUL);
-    let meters_a = a.cos_lat / pxl_spec::space::coord::adapter::epsg3857::u_per_m(0.0);
+    let meters_a = a.cos_lat / crate::space::coord::adapter::epsg3857::u_per_m(0.0);
     let mut rng = SplitMix64::new(0x2545_f491_4f6c_dd1d);
     let mut unit = move || u32_to_unit(rng.next_u32()) - 0.5;
     for _ in 0..200 {
         let off = [unit() * 1.0e5, unit() * 1.0e5];
         let e = a.e0 * libm::exp(off[1] / MERCATOR_RADIUS_U);
         let b = Globe::at(2.0 * libm::atan(e) - core::f64::consts::FRAC_PI_2);
-        let meters_b = b.cos_lat / pxl_spec::space::coord::adapter::epsg3857::u_per_m(0.0);
+        let meters_b = b.cos_lat / crate::space::coord::adapter::epsg3857::u_per_m(0.0);
         for _ in 0..8 {
             let span = 3.0e5;
             let pts: [V3; 4] = core::array::from_fn(|_| [unit() * span, unit() * span, (unit() + 0.5) * 2.0e3]);
