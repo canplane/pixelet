@@ -11,7 +11,7 @@ use crate::control::navigation::off_center::off_center;
 use crate::control::sensor::reading::{device_location_store, DevicePoseStatus};
 use xpute_guest::global::Global;
 
-/// Where the view starts with no fix: Seoul City Hall. Also lights the first
+/// Where the focus starts with no fix: Seoul City Hall. Also lights the first
 /// frames and decides day or night before `focus` exists.
 pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 

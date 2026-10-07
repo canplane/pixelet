@@ -175,7 +175,7 @@ impl Figure {
             }
             // A release fixes the destination at once: a pan begun inside the settle
             // delay holds the target moving, so waiting would plan nothing. The settle
-            // tracker covers every other way the view moves.
+            // tracker covers every other way the focus moves.
             let destination = if released {
                 self.settle = SettleTracker::new(target, now);
                 Some(target)
@@ -197,7 +197,7 @@ impl Figure {
                     });
                 }
             }
-            // A plan in flight finishes even once the view moves again: dropping it
+            // A plan in flight finishes even once the focus moves again: dropping it
             // stalled the figure during gestures and a run of quick pans ended in one jump.
             let (step, heading) = self.walk_plan.as_ref().map_or((self.at, None), |plan| plan.at(now));
             if heading.is_none() {

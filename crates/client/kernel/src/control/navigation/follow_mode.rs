@@ -21,7 +21,7 @@ const HEADING_SMOOTH_ALPHA: f64 = 0.25;
 const SENSOR_GRACE_MS: f64 = 12000.0;
 
 struct Follow {
-    /// Whether the view follows the device: the controls turn it on and off,
+    /// Whether the camera follows the device: the controls turn it on and off,
     /// and a dead location gives it up.
     on: bool,
     smoothed_azimuth: Option<f64>,
@@ -61,7 +61,7 @@ pub fn follow_mode_step() {
     let heading = device_orientation_store().orientation.and_then(|o| o.heading);
     let device_coord = off_center().device_coord;
 
-    // Follow needs the location READY; a heading only turns the view where there
+    // Follow needs the location READY; a heading only turns the camera where there
     // is one, so a device without a compass still follows where it is. A blip
     // must not drop it (it read as the mode switching itself off), but a dead
     // location must eventually, or the camera freezes behind a disabled button.
