@@ -172,14 +172,14 @@ impl Node {
 /// `WORDS` where the last ends; a section inside is a packed table given its
 /// `AT`. A width is a number or a product of terms (`"2 * CENSUS_TAGS"`), a
 /// term a number, a list or a packed table above it in the file (its length,
-/// its `WORDS`) or a number in one (`LIMITS.ZOOMS`). So a lane grown moves
-/// everything after it.
-pub fn laid_out(node: Node) -> Result<Node, String> {
+/// its `WORDS`) or a number in one (`LIMITS.ZOOMS`), else one in a file it
+/// uses (`used`). So a lane grown moves everything after it.
+pub fn laid_out(node: Node, used: &[(String, Node)]) -> Result<Node, String> {
     let Node::Obj(entries) = node else { return Ok(node) };
     let mut above: Vec<(String, Node)> = Vec::with_capacity(entries.len());
     for (k, v) in entries {
         let v = match v {
-            Node::Obj(ref t) if t.iter().any(|(f, x)| f == "$packed" && *x == Node::Bool(true)) => Node::Obj(lay(t.clone(), &above).map_err(|e| format!("{k}.{e}"))?),
+            Node::Obj(ref t) if t.iter().any(|(f, x)| f == "$packed" && *x == Node::Bool(true)) => Node::Obj(lay(t.clone(), &above, used).map_err(|e| format!("{k}.{e}"))?),
             v => v,
         };
         above.push((k, v));
@@ -187,7 +187,7 @@ pub fn laid_out(node: Node) -> Result<Node, String> {
     Ok(Node::Obj(above))
 }
 
-fn lay(entries: Vec<(String, Node)>, above: &[(String, Node)]) -> Result<Vec<(String, Node)>, String> {
+fn lay(entries: Vec<(String, Node)>, above: &[(String, Node)], used: &[(String, Node)]) -> Result<Vec<(String, Node)>, String> {
     let mut at = 0.0;
     let mut out = Vec::with_capacity(entries.len() + 1);
     for (k, v) in entries {
@@ -200,7 +200,7 @@ fn lay(entries: Vec<(String, Node)>, above: &[(String, Node)]) -> Result<Vec<(St
         }
         match v {
             Node::Obj(section) => {
-                let mut section = lay(section, above).map_err(|e| format!("{k}.{e}"))?;
+                let mut section = lay(section, above, used).map_err(|e| format!("{k}.{e}"))?;
                 let words = words_of(&section).unwrap_or(0.0);
                 let first = section.iter().take_while(|(f, _)| f.starts_with('$')).count();
                 section.insert(first, ("AT".into(), Node::Num(at)));
@@ -208,7 +208,7 @@ fn lay(entries: Vec<(String, Node)>, above: &[(String, Node)]) -> Result<Vec<(St
                 out.push((k, Node::Obj(section)));
             }
             v => {
-                let width = width(&v, above).map_err(|e| format!("{k}: {e}"))?;
+                let width = width(&v, above, used).map_err(|e| format!("{k}: {e}"))?;
                 out.push((k, Node::Num(at)));
                 at += width;
             }
@@ -222,8 +222,8 @@ fn words_of(table: &[(String, Node)]) -> Option<f64> {
     table.iter().find(|(f, _)| f == "WORDS").and_then(|(_, w)| w.num())
 }
 
-fn width(v: &Node, above: &[(String, Node)]) -> Result<f64, String> {
-    let named = |name: &str| above.iter().find(|(k, _)| k == name).map(|(_, n)| n);
+fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<f64, String> {
+    let named = |name: &str| above.iter().chain(used).find(|(k, _)| k == name).map(|(_, n)| n);
     let term = |t: &str| -> Result<f64, String> {
         let t = t.trim();
         if let Ok(n) = t.parse::<f64>() {

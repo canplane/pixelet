@@ -11,26 +11,10 @@ import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { td } from "@xpute/core/codec/encoding.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
+import { CATEGORY_NAMES, OUTCOME_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/demand.spec.ts";
 import { kernel_call, kernel_memory } from "@/kernel/shell.ts";
 
-import {
-  CATEGORY_NAMES,
-  CENSUS_TAGS,
-  FRAME,
-  GPU_SPAN_NAMES,
-  LOG,
-  OUTCOME_NAMES,
-  PHASE_NAMES,
-  READ,
-  SPREAD,
-  STEP,
-  STEP_NAMES,
-  SUMMARY,
-  TASK,
-  TASK_PHASE_NAMES,
-  TASK_SUMMARY,
-  WORST,
-} from "./profiler.spec.ts";
+import { CENSUS_TAGS, FRAME, GPU_SPAN_NAMES, LOG, PHASE_NAMES, READ, SPREAD, STEP, STEP_NAMES, SUMMARY, TASK, TASK_SUMMARY, WORST } from "./profiler.spec.ts";
 import { type Frame, frameAt } from "./lane.ts";
 import { type LongFrame, longFramesSince } from "./long-frame.ts";
 

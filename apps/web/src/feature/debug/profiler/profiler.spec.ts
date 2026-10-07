@@ -4,20 +4,15 @@
 //
 // The profiler's records and blocks as the kernel lays them out and the shell reads
 // them in place (profiler/record.rs, apps/web/src/feature/debug/profiler/view.ts):
-// word offsets, eight bytes a word, and the names the numbers index. A packed table
-// gives each field's width and the generator lays the offsets out. Nothing is built
+// word offsets, eight bytes a word, and the names the numbers index, a task's
+// io's (spec/client/kernel/io/demand.json). A packed table gives each field's
+// width and the generator lays the offsets out. Nothing is built
 // for a read: the kernel writes numbers where they stay, and the words for them are
 // the shell's.
 
 export const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"] as const;
 
 export const PHASE_NAMES = ["interaction", "visible", "content", "cosmetic", "report"] as const;
-
-export const CATEGORY_NAMES = ["terrain", "poi", "geocode", "geocode_dict", "asset", "earth"] as const;
-
-export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
-
-export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms", "adopt_ms"] as const;
 
 export const STEP_NAMES = ["controller", "input", "camera", "environment", "companion", "preview", "sight", "goal", "demand", "chunks", "debug_gizmos", "profiler"] as const;
 

@@ -4,8 +4,9 @@
 //
 // The profiler's records and blocks as the kernel lays them out and the shell reads
 // them in place (profiler/record.rs, apps/web/src/feature/debug/profiler/view.ts):
-// word offsets, eight bytes a word, and the names the numbers index. A packed table
-// gives each field's width and the generator lays the offsets out. Nothing is built
+// word offsets, eight bytes a word, and the names the numbers index, a task's
+// io's (spec/client/kernel/io/demand.json). A packed table gives each field's
+// width and the generator lays the offsets out. Nothing is built
 // for a read: the kernel writes numbers where they stay, and the words for them are
 // the shell's.
 
@@ -20,77 +21,6 @@
 pub const CENSUS_TAGS: &[&str] = &["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"];
 
 pub const PHASE_NAMES: &[&str] = &["interaction", "visible", "content", "cosmetic", "report"];
-
-pub const CATEGORY_NAMES: &[&str] = &["terrain", "poi", "geocode", "geocode_dict", "asset", "earth"];
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum CategoryName {
-    terrain = 0,
-    poi = 1,
-    geocode = 2,
-    geocode_dict = 3,
-    asset = 4,
-    earth = 5,
-}
-
-impl CategoryName {
-    /// Every member, in the JSON's own order.
-    pub const ALL: [CategoryName; 6] = [
-        CategoryName::terrain,
-        CategoryName::poi,
-        CategoryName::geocode,
-        CategoryName::geocode_dict,
-        CategoryName::asset,
-        CategoryName::earth,
-    ];
-
-    /// The member a number names, or none for a number the set does not
-    /// give out.
-    pub fn of(value: u8) -> Option<CategoryName> {
-        CategoryName::ALL.into_iter().find(|member| *member as u8 == value)
-    }
-}
-
-pub const OUTCOME_NAMES: &[&str] = &["ok", "aborted", "error"];
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum OutcomeName {
-    ok = 0,
-    aborted = 1,
-    error = 2,
-}
-
-impl OutcomeName {
-    /// Every member, in the JSON's own order.
-    pub const ALL: [OutcomeName; 3] = [OutcomeName::ok, OutcomeName::aborted, OutcomeName::error];
-
-    /// The member a number names, or none for a number the set does not
-    /// give out.
-    pub fn of(value: u8) -> Option<OutcomeName> {
-        OutcomeName::ALL.into_iter().find(|member| *member as u8 == value)
-    }
-}
-
-pub const TASK_PHASE_NAMES: &[&str] = &["net_ms", "bytes", "decode_ms", "adopt_ms"];
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum TaskPhaseName {
-    net_ms = 0,
-    bytes = 1,
-    decode_ms = 2,
-    adopt_ms = 3,
-}
-
-impl TaskPhaseName {
-    /// Every member, in the JSON's own order.
-    pub const ALL: [TaskPhaseName; 4] = [TaskPhaseName::net_ms, TaskPhaseName::bytes, TaskPhaseName::decode_ms, TaskPhaseName::adopt_ms];
-
-    /// The member a number names, or none for a number the set does not
-    /// give out.
-    pub fn of(value: u8) -> Option<TaskPhaseName> {
-        TaskPhaseName::ALL.into_iter().find(|member| *member as u8 == value)
-    }
-}
 
 pub const STEP_NAMES: &[&str] = &[
     "controller",

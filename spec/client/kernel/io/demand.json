@@ -1,0 +1,26 @@
+{
+  "$doc": [
+    "A request's vocabulary, the kernel's and the shell's: what stream it is in, how",
+    "its run came to an end, and the phases a run reports its time in. The profiler",
+    "records and reports them by these names (spec/client/kernel/profiler/profiler.json)."
+  ],
+  "CATEGORY_NAMES": [
+    "terrain",
+    "poi",
+    "geocode",
+    "geocode_dict",
+    "asset",
+    "earth"
+  ],
+  "OUTCOME_NAMES": [
+    "ok",
+    "aborted",
+    "error"
+  ],
+  "TASK_PHASE_NAMES": [
+    "net_ms",
+    "bytes",
+    "decode_ms",
+    "adopt_ms"
+  ]
+}

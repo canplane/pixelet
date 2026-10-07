@@ -10,4 +10,6 @@ pub mod file;
 pub mod load;
 pub mod policy;
 pub mod sched;
+#[path = "io/demand.spec.rs"]
+pub mod spec;
 pub mod text;
