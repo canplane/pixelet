@@ -80,7 +80,7 @@ pub fn preview_step(ctx: &mut TickContext) {
     }
     // Under the sea below the eye, out of sight and near it, where the f32 of
     // its draw resolves a unit-tall model.
-    let mut at = crate::world::view::frame::pose::sea_under_eye();
+    let mut at = crate::view::frame::pose::sea_under_eye();
     at[2] -= CASE_DEPTH_U;
     for case in &mut c.cases {
         if case.model.is_none() {

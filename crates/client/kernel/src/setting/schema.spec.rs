@@ -111,7 +111,7 @@ impl AoMode {
 ///   auto  — the device's, at most two, lowered while the frames run over
 ///           their budget — the display's interval, no tighter than a
 ///           sixtieth of a second — and raised again once they have room
-///           (crates/client/kernel/src/world/view/frame/resolution.rs).
+///           (crates/client/kernel/src/view/frame/resolution.rs).
 ///   fixed — the device's, at most two, whatever the frames cost.
 ///   low   — one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

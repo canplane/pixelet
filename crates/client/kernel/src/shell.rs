@@ -3,7 +3,7 @@
 //! What the page's UI reads of the kernel (a Snapshot packet, handed over
 //! only when changed) and the commands it applies to the stores.
 
-use crate::world::pyramid::Observed as _;
+use crate::view::demand::Observed as _;
 use pxl_spec::bake::place_tile::leaf_slot;
 use pxl_spec::cell::object::{decor_num_id, placeable_cube_num_id};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
@@ -82,9 +82,9 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         map: MapState {
             // Loaded once ground is drawn, or every tile the view needs has answered,
             // which over a source's void leaves nothing to draw.
-            status: match crate::world::view::observation::eye() {
+            status: match crate::view::observation::eye() {
                 None => MapStatus::Idle,
-                Some(_) if crate::kernel().sched.shows_ground() || Terrain::pyramid().answered() => MapStatus::Success,
+                Some(_) if crate::kernel().sched.shows_ground() || Terrain::demand().answered() => MapStatus::Success,
                 Some(_) => MapStatus::Loading,
             },
             is_off_center: map_navigation().is_off_center,
@@ -208,5 +208,5 @@ fn m_per_px() -> f64 {
 /// The source has nothing under `at`: the ground cell there, as the finest
 /// tile held over it gives it, is void.
 fn void_under(at: &Pvf3) -> bool {
-    crate::world::query::Access::now().at(at, LEAF_ZOOM).value().is_some_and(|g| g.top().is_none())
+    crate::query::World::now().at(at, LEAF_ZOOM).value().is_some_and(|g| g.top().is_none())
 }

@@ -5,7 +5,7 @@
 //! drawn"): straight down, at 45° and along the ground at street level.
 //!
 //! A cast's cost is pixels times steps. The pixels are the screen's; the
-//! steps are the query's own (world/query.rs `first_hit`): the regions read
+//! steps are the query's own (query.rs `first_hit`): the regions read
 //! and the cells walked. Both are counted here on the CPU over real terrain,
 //! which says before any shader is written how many steps a pixel would pay,
 //! and how far a grazing view's spread runs past a view from above. What a
@@ -33,7 +33,7 @@ use std::process::Command;
 use pxl_kernel::layer::object::store::Store;
 use pxl_kernel::layer::residency::{Candidate, Residency, Victim};
 use pxl_kernel::layer::Answer;
-use pxl_kernel::world::query::{Access, Detail, Ray};
+use pxl_kernel::query::{Detail, Ray, World};
 use pxl_spec::bake::format::{decode_terrain, Terrain};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg4326;
@@ -170,7 +170,7 @@ fn cast(tiles: &Tiles, store: &Store, rays: &[Ray]) -> (Tally, Vec<Tile>) {
     let mut lacked = Vec::new();
     for ray in rays {
         let visits = Cell::new(0);
-        let answer = Access::new(&tiles.residency, store).counting(&visits).first_hit(ray, Detail::Distance(Tau::FINEST));
+        let answer = World::new(&tiles.residency, store).counting(&visits).first_hit(ray, Detail::Distance(Tau::FINEST));
         t.steps.push(visits.get());
         match answer {
             Answer::Exact(h) => {
@@ -242,7 +242,7 @@ fn main() {
         }
         p = p.parent();
     }
-    let ground = Access::new(&tiles.residency, &store).at(&point(x, y), LEAF_ZOOM).value().and_then(|g| g.top()).unwrap_or(0.0);
+    let ground = World::new(&tiles.residency, &store).at(&point(x, y), LEAF_ZOOM).value().and_then(|g| g.top()).unwrap_or(0.0);
     println!("at {lon}, {lat}: ground {ground:.1} u, tiles from {}", tiles.server);
 
     for view in VIEWS {

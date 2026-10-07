@@ -20,7 +20,7 @@ use crate::profiler::spec::{LIMITS, SUMMARY};
 use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
 use crate::sched::tick::tick_step_stats;
-use crate::{kernel, with_world};
+use crate::{kernel, with_parts};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pack;
@@ -205,8 +205,8 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let held = with_world(|_, sched, _| sched.held()).unwrap_or_default();
-    let (decor_blocks, decor_instances) = crate::world::chunk::decor::cell::counts();
+    let held = with_parts(|_, sched, _| sched.held()).unwrap_or_default();
+    let (decor_blocks, decor_instances) = crate::chunk::decor::cell::counts();
     put(
         out,
         SUMMARY::held::AT,
@@ -216,7 +216,7 @@ fn side(out: &mut [f64]) {
             tiers: held.tiers as f64,
             decor_blocks: decor_blocks as f64,
             decor_instances: decor_instances as f64,
-            decor_bytes: crate::world::chunk::decor::cell::bytes() as f64,
+            decor_bytes: crate::chunk::decor::cell::bytes() as f64,
         },
     );
 
@@ -231,7 +231,7 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let [step, star] = crate::world::chunk::quality::reading();
+    let [step, star] = crate::chunk::quality::reading();
     let residency = Terrain::residency();
     let [admitted, evicted] = residency.churn();
     let [refined, changes_peak] = kernel().sched.pace();
@@ -264,7 +264,7 @@ fn side(out: &mut [f64]) {
     let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
     let [center_lon, center_lat, center_z] = controller::map_center().map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
     let (chunk_zoom, tier_zoom, read_zoom) = hover
-        .and_then(|p| with_world(|_, sched, _| sched.drawn_at(&p)).flatten())
+        .and_then(|p| with_parts(|_, sched, _| sched.drawn_at(&p)).flatten())
         .map_or((None, None, None), |(c, t, r)| (Some(c), t, r));
     let zoom = |z: Option<i32>| z.map_or(f64::NAN, f64::from);
     put(
@@ -274,7 +274,7 @@ fn side(out: &mut [f64]) {
             dist: controller::dist(),
             polar: controller::polar(),
             azimuth: controller::azimuth(),
-            tau: crate::world::chunk::domain::current().map_or(f64::NAN, |d| d.tau().scale()),
+            tau: crate::chunk::domain::current().map_or(f64::NAN, |d| d.tau().scale()),
             center_lon,
             center_lat,
             center_z,

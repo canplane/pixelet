@@ -9,6 +9,7 @@ use xpute_core::math::scalar::round;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
+use crate::chunk::table::Census;
 use crate::io::request::pending_count;
 use crate::kernel;
 use crate::layer::{Layer, Query};
@@ -17,7 +18,6 @@ use crate::profiler::frame::{CapSample, CoverSample, DeviceSample, FrameSample, 
 use crate::profiler::record::{profiler_record_frame, profiler_recording, profiler_take_rings};
 use crate::scene::stage::visible_pass;
 use crate::sched::tick::TickContext;
-use crate::world::chunk::table::Census;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HostFrameStat {
@@ -109,7 +109,7 @@ pub fn report_step(ctx: &mut TickContext) {
     let rings = profiler_take_rings();
     let work = work_sample(c, &census);
     let record_refused = Terrain::residency().take_refusals() as f64;
-    let [rays, visits] = crate::world::chunk::domain::take_work();
+    let [rays, visits] = crate::chunk::domain::take_work();
     if !profiler_recording() {
         return;
     }
@@ -166,7 +166,7 @@ pub fn report_step(ctx: &mut TickContext) {
         },
         turn: TurnSample::default(),
         cover: {
-            let domain = crate::world::chunk::domain::current();
+            let domain = crate::chunk::domain::current();
             // NaN: step 0 is past the arena
             let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
             // The goal's pieces a resident tile draws.

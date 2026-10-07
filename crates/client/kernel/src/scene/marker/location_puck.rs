@@ -14,11 +14,11 @@ use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
+use crate::chunk::table::Frame;
 use crate::kernel;
+use crate::query::World;
 use crate::sched::edge::request_world_tick;
-use crate::world::chunk::table::Frame;
-use crate::world::query::Access;
-use crate::world::view::reach::view_reach;
+use crate::view::reach::view_reach;
 use xpute_guest::global::Global;
 
 // A world-space footprint (4u), whatever the ground's cell; the .707 is a
@@ -96,9 +96,9 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         return clear(p);
     };
 
-    let pos = crate::world::view::frame::coord::to_world(&device);
+    let pos = crate::view::frame::coord::to_world(&device);
     // The fix names a place and not how high.
-    if let Some(z) = Access::now().surface_support(&device).value().flatten() {
+    if let Some(z) = World::now().surface_support(&device).value().flatten() {
         p.last_known_center_z = Some(z);
     }
     let Some(center_z) = p.last_known_center_z else {
@@ -114,7 +114,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         let coord = world::point(v[0], v[1], v[2]);
         // An unloaded neighbor tile falls back to the center's height; 0 would sink
         // or launch that instance.
-        let delta_ele = Access::now().surface_support(&coord).value().flatten().unwrap_or(center_pos[2]) - center_pos[2];
+        let delta_ele = World::now().surface_support(&coord).value().flatten().unwrap_or(center_pos[2]) - center_pos[2];
         let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
         let v = center3(&lifted, units(GROUND.cell()));
         lane.extend([

@@ -21,7 +21,7 @@ use crate::param::DOLLY_GAIN;
 use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
 use crate::param::{MAX_DIST, MIN_DIST};
 use crate::setting::store::{settings_store, OrbitObstacleMode};
-use crate::world::view::frame::pose::view_compose;
+use crate::view::frame::pose::view_compose;
 use terrain_gate::{allowed_view, climb_polar, ViewTriple};
 use xpute_guest::global::Global;
 

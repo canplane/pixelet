@@ -9,8 +9,8 @@ use pxl_spec::space::coord::mat4::mat4_transform_point;
 use pxl_spec::space::coord::v3::{add3, dot3, sub3};
 
 use crate::billboard::batch::BillboardBatch;
-use crate::world::view::frame::pose::globe;
-use crate::world::view::frame::pose::{ndc_to_px, sea_under_eye, view};
+use crate::view::frame::pose::globe;
+use crate::view::frame::pose::{ndc_to_px, sea_under_eye, view};
 
 /// A fraction of the distance, since the badge holds a constant screen size.
 /// Generous: one badge too many costs a sprite.

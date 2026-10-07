@@ -17,8 +17,8 @@ use crate::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
 use crate::sched::edge::request_world_tick;
 use crate::sched::tick::TickContext;
 use crate::setting::store::{settings_store, CameraMode};
-use crate::world::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
-use crate::world::view::frame::pose::{view, view_compose, ObserverPose};
+use crate::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
+use crate::view::frame::pose::{view, view_compose, ObserverPose};
 use xpute_core::math::scalar::wrap;
 use xpute_guest::global::Global;
 

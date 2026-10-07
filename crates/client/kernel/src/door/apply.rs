@@ -271,7 +271,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let p = abi::SurfaceResize::read(packet(pkt)?)?;
             refuse_unless(p.device_pixel_ratio > 0.0, Errno::EINVAL)?;
             let role = pxl_render::gpu::surface::surface(p.surface).map_or(0, |s| s.role);
-            let ratio = crate::world::view::frame::resolution::surface_ratio(role, [p.width, p.height], p.device_pixel_ratio);
+            let ratio = crate::view::frame::resolution::surface_ratio(role, [p.width, p.height], p.device_pixel_ratio);
             refuse_unless(pxl_render::gpu::surface::surface_resize(p.surface, p.width, p.height, p.device_pixel_ratio, ratio), Errno::EBADF)?;
             request_world_tick();
             Ok(Some(0))
@@ -288,7 +288,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             refuse_unless(changed.is_some(), Errno::EINVAL)?;
             if changed == Some(true) {
                 if p.key.sources_chunks() {
-                    crate::world::chunk::source::chunk_sources_changed();
+                    crate::chunk::source::chunk_sources_changed();
                 }
                 if p.key == SettingKey::debug_overlay {
                     profiler_follow(p.value == 1, crate::profiler::summary::counters());

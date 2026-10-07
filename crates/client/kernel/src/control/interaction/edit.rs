@@ -3,12 +3,12 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the objects' query and written to the store.
 
+use crate::chunk::source::chunk_sources_changed;
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::EntryKind;
 use crate::sched::edge::request_world_tick;
-use crate::world::chunk::source::chunk_sources_changed;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::cell::object::{decor_num_id, object_value_is_air, placeable_cube_num_id, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
@@ -22,12 +22,12 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
 
+use crate::chunk::decor::build::{scatters_at, Draw};
 use crate::kernel;
 use crate::layer::object::repository;
 use crate::layer::object::store::{apply, Cells, Entry, EntryAt, Write, VOID};
 use crate::layer::Query;
-use crate::world::chunk::decor::build::{scatters_at, Draw};
-use crate::world::query::Access;
+use crate::query::World;
 
 /// The objects' cells at a node read whole; all resident, so always answered.
 fn cells(node: Node<3>) -> Cells<'static> {
@@ -89,7 +89,7 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
     }
     let PlaceableCube::Ground(look) = cube else { return false };
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
-    let Some(ground) = Access::now().at(at, LEAF_ZOOM).exact() else { return false };
+    let Some(ground) = World::now().at(at, LEAF_ZOOM).exact() else { return false };
     if ground.cell != look as u8 {
         return false;
     }

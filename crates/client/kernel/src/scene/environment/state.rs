@@ -6,13 +6,13 @@
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3::len3;
 
+use crate::chunk::table::Frame;
 use crate::door::host::wall_now;
 use crate::kernel;
 use crate::scene::environment::celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use crate::sched::edge::wake_at;
-use crate::world::chunk::table::Frame;
-use crate::world::view::frame::pose::{anchor, globe, km_per_u};
-use crate::world::view::reach::eye_ground;
+use crate::view::frame::pose::{anchor, globe, km_per_u};
+use crate::view::reach::eye_ground;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 

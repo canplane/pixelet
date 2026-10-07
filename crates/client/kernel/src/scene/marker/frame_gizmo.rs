@@ -12,9 +12,9 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::control::camera::controller::{azimuth, dist};
 use crate::kernel;
+use crate::query::World;
 use crate::sched::edge::request_world_tick;
-use crate::world::query::Access;
-use crate::world::view::frame::coord::to_world;
+use crate::view::frame::coord::to_world;
 use xpute_guest::global::Global;
 
 const BLACK: [f64; 3] = [0.0, 0.0, 0.0];
@@ -76,7 +76,7 @@ impl Sketch {
 fn sketch(map_center: &Pvf3) -> Sketch {
     let center = to_world(map_center);
     let mut s = Sketch { about: center, lines: Vec::new() };
-    let ground = Access::now().floor_under(map_center).value().flatten();
+    let ground = World::now().floor_under(map_center).value().flatten();
     let cell = floor3(&[center[0], center[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
     s.cube(cell, units(GROUND.cell()));
     s.point(center, BLACK);
@@ -101,7 +101,7 @@ fn sketch(map_center: &Pvf3) -> Sketch {
 static GIZMOS: Global<Option<(V3, Vec<f32>)>> = Global::new();
 
 fn set_lines(at: V3, vertices: &[f32]) {
-    let Some((_, _, scene, draw)) = kernel().world() else { return };
+    let Some((_, _, scene, draw)) = kernel().parts() else { return };
     scene.debug.set(draw, at, vertices);
 }
 

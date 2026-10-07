@@ -1,7 +1,7 @@
 // pxl-kernel/layer/poi.rs
 
 //! Places as a layer of the pyramid: a tile counts the places in each of
-//! its cells, drawn as badges (`world/chunk/place.rs`).
+//! its cells, drawn as badges (`chunk/place.rs`).
 
 use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
 use pxl_spec::bake::poi_tile::{self, PoiTile, POI_LATTICE};

@@ -88,7 +88,7 @@ struct Arrival {
 static ARRIVED: Global<Vec<Arrival>> = Global::new();
 
 /// A pyramid tile's answer, kept for the view to admit: which tile it evicts
-/// is the view's (`world/pyramid.rs` `admit_arrived`).
+/// is the view's (`view/demand.rs` `admit_arrived`).
 pub struct TileArrival {
     pub key: u64,
     pub category: Category,

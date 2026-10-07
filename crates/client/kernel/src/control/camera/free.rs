@@ -14,8 +14,8 @@ use crate::control::camera::controller::{camera, eye_world, map_center, set_eye_
 use crate::control::camera::store::camera_store;
 use crate::control::navigation::support::target;
 use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
-use crate::world::query::{Access, Detail, Ray};
-use crate::world::view::frame::pose::{view, view_compose};
+use crate::query::{Detail, Ray, World};
+use crate::view::frame::pose::{view, view_compose};
 use xpute_guest::global::Global;
 
 /// The first resident thing it meets, else the sea, else `fallback` along it.
@@ -25,7 +25,7 @@ pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
         direction: forward,
         reach: view().far,
     };
-    let t = match Access::now().first_hit(&ray, Detail::Distance(Tau::FINEST)).value().flatten() {
+    let t = match World::now().first_hit(&ray, Detail::Distance(Tau::FINEST)).value().flatten() {
         Some(hit) => hit.t,
         // The sea is z = 0.
         None if forward[2] < -1e-9 && ray.origin[2] > 0.0 => -ray.origin[2] / forward[2],

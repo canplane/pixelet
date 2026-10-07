@@ -1,10 +1,10 @@
 // pxl-kernel/control/camera/controller.test.rs
 
 use super::*;
+use crate::fixture::place;
 use crate::serial;
 use crate::setting::store::OrbitObstacleMode;
-use crate::world::fixture::place;
-use crate::world::view::frame::coord::to_world;
+use crate::view::frame::coord::to_world;
 
 struct Rng(u64);
 

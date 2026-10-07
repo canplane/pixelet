@@ -4,11 +4,11 @@
 //! the settings, and everything the renderer is handed, since it reads
 //! nothing of the kernel on its own.
 
+use crate::chunk::decor::build::DecorHide;
+use crate::chunk::table::Frame;
 use crate::laid;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
-use crate::world::chunk::decor::build::DecorHide;
-use crate::world::chunk::table::Frame;
-use crate::world::view::frame::pose::{globe, view_resize};
+use crate::view::frame::pose::{globe, view_resize};
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
@@ -24,6 +24,7 @@ use pxl_spec::asset::ingested::Asset;
 use xpute_core::math::scalar::round;
 
 use crate::billboard::sheet::billboard_sheet;
+use crate::chunk::decor::kind_assets::kind_assets;
 use crate::door::host::handheld;
 use crate::io::load::{load_image, Load};
 use crate::io::text::text_raster;
@@ -34,15 +35,14 @@ use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::{settings_store, AoMode};
-use crate::world::chunk::decor::asset_store::kind_assets;
-use crate::world::pyramid::Observed as _;
-use crate::world::view::frame::resolution::resolution_observe;
+use crate::view::demand::Observed as _;
+use crate::view::frame::resolution::resolution_observe;
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
 /// season, as Google Earth and Cesium keep one mosaic.
 const EARTH: Asset = Asset::sky_earth_07_webp;
 
-use crate::world::view::frame::pose::{sea_under_eye, view};
+use crate::view::frame::pose::{sea_under_eye, view};
 
 const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");
 
@@ -64,7 +64,7 @@ pub fn stage_write() {
     s[STAGE_AT::FAR] = v.far;
     // Largest drawn cell per unit of distance, for the badge occlusion test:
     // a cell is drawn from its split distance on.
-    s[STAGE_AT::LOD_CELL] = crate::world::view::observer::cell_angle(crate::world::chunk::quality::effective().tau());
+    s[STAGE_AT::LOD_CELL] = crate::view::sight::cell_angle(crate::chunk::quality::effective().tau());
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
@@ -103,7 +103,7 @@ pub fn stage_render() {
         *slot = row;
         case_cnt += 1;
     }
-    let (window, layers) = earth_window(Earth::pyramid().floor());
+    let (window, layers) = earth_window(Earth::demand().floor());
     let out = render_frame(FrameInput {
         lists,
         environment: &kernel().scene.environment.out,
@@ -188,10 +188,10 @@ pub fn visible_step(ctx: &mut TickContext) {
     let t0 = now();
     // The chunks plan first; what animates and every layer but the chunks list
     // before the chunks draw.
-    crate::world::chunk::source::chunk_sources_step();
+    crate::chunk::source::chunk_sources_step();
     let draw = laid().is_some_and(|k| {
         let moving = k.sched.tick(frame, &now);
-        if let Some(d) = crate::world::chunk::domain::current() {
+        if let Some(d) = crate::chunk::domain::current() {
             k.scene.coverage.step(&mut k.draw, settings_store().gizmos, d.pieces(), k.sched.drawn());
         }
         let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
@@ -204,9 +204,9 @@ pub fn visible_step(ctx: &mut TickContext) {
         let k = kernel();
         let edits = crate::control::interaction::edit::render_edits();
         let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
-        crate::world::chunk::decor::cell::step(&crate::world::chunk::decor::kind::KINDS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
+        crate::chunk::decor::cell::step(&crate::chunk::decor::kind::KINDS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
     }
-    crate::world::chunk::place::step(ctx);
+    crate::chunk::place::step(ctx);
     let k = kernel();
     let actors = &k.scene.actors;
     k.billboards.draw(&mut k.draw, &|id| actors.actor_ref(id).filter(|a| a.visible).map(|a| a.at), frame.eye);

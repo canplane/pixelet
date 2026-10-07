@@ -12,9 +12,9 @@ use crate::control::camera::orbit::orbit_eye_offset;
 use crate::control::navigation::support::{in_cell, passage, Passage};
 use crate::layer::Answer;
 use crate::param::EYE_CLEARANCE_U;
+use crate::query::World;
 use crate::setting::store::{settings_store, OrbitObstacleMode};
-use crate::world::query::Access;
-use crate::world::view::frame::coord::world_to_canonical;
+use crate::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::zoom::index_of;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -47,7 +47,7 @@ pub fn pose(view: ViewTriple) -> Option<ViewPose> {
 /// floor counts where the eye is in the cave.
 fn required_rise(at: &ViewPose) -> Option<f64> {
     let (_, eye) = eye(at);
-    let ground = Access::now().floor_under(&eye).value().flatten()?;
+    let ground = World::now().floor_under(&eye).value().flatten()?;
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
@@ -55,7 +55,7 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
 fn climb_rise(at: &ViewPose) -> Option<f64> {
     let (local, eye) = eye(at);
     let center = world_to_canonical(&at.target);
-    let access = Access::now();
+    let access = World::now();
     let ground = match passage(&center, [local[0] - at.target[0], local[1] - at.target[1]], index_of(GROUND.cell(), &eye)[2]) {
         Passage::Open(cz) => access.floor_under(&in_cell(&eye, cz)),
         Passage::Unknown => access.floor_under(&eye),
@@ -129,7 +129,7 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
 
 fn in_solid(at: &ViewPose) -> bool {
     let (world, eye) = eye(at);
-    Access::now().floor_under(&eye).value().flatten().is_some_and(|top| top > world[2])
+    World::now().floor_under(&eye).value().flatten().is_some_and(|top| top > world[2])
 }
 
 /// What lies between the eye and the map center is not asked: that hides the

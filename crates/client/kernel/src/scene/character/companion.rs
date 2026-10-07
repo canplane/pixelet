@@ -15,6 +15,7 @@ use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
 use crate::param::COMPANION_STEP_CELLS;
+use crate::query::World;
 use crate::scene::character::chat_bubble::chat_bubble_step;
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
@@ -22,8 +23,7 @@ use crate::scene::character::variant_spec::IDLE_CLIP;
 use crate::sched::edge::wake_at;
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
-use crate::world::query::Access;
-use crate::world::view::frame::coord::world_to_canonical;
+use crate::view::frame::coord::world_to_canonical;
 use xpute_guest::global::Global;
 
 pub const ACTORS_MAX: usize = Group::ALL.len();
@@ -323,7 +323,7 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
 /// None inside where a wall holds it; None outside where no tile is resident.
 fn step_from([x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
     let at = world_to_canonical(&[x, y, over(stands)]);
-    Access::now().support(&at, COMPANION_STEP_CELLS).value()
+    World::now().support(&at, COMPANION_STEP_CELLS).value()
 }
 
 /// Whether the companion's models have loaded: a live, unpersisted signal

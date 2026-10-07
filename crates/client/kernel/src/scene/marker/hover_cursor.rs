@@ -15,19 +15,19 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
+use crate::chunk::decor::build::user_decor_pick;
+use crate::chunk::decor::instance::NO_ENTRY;
+use crate::chunk::decor::kind::kind_for;
+use crate::chunk::decor::kind_assets::decor_assets_for;
 use crate::control::interaction::edit::{pending, restores_scattered, Pending};
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::kernel;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryKind;
+use crate::query::World;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::settings_store;
-use crate::world::chunk::decor::asset_store::decor_assets_for;
-use crate::world::chunk::decor::build::user_decor_pick;
-use crate::world::chunk::decor::instance::NO_ENTRY;
-use crate::world::chunk::decor::kind::kind_for;
-use crate::world::query::Access;
-use crate::World;
+use crate::Build;
 
 enum Ghost {
     None,
@@ -55,7 +55,7 @@ pub fn hover_cursor_step() {
 
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let cell = Access::now().at(h, LEAF_ZOOM).value().map_or(0, |g| g.cell);
+            let cell = World::now().at(h, LEAF_ZOOM).value().map_or(0, |g| g.cell);
             placeable_cube_of(u32::from(cell))
         }
         _ => None,
@@ -118,7 +118,7 @@ pub fn hover_cursor_step() {
     let ghost = match (scattered_ghost, hovered, blocked) {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {
-            let [x, y, z] = crate::world::view::frame::coord::to_world(&h);
+            let [x, y, z] = crate::view::frame::coord::to_world(&h);
             match (decor_kind, decor_pick) {
                 (Some(kind), Some((variant, rotation, scale))) if is_decor_ghost => Ghost::Decor {
                     at: [x + preview_size / 2.0, y + preview_size / 2.0, z],
@@ -140,7 +140,7 @@ pub fn hover_cursor_step() {
         }
         _ => Ghost::None,
     };
-    let changed = kernel().world().map(|(mut world, _, scene, draw)| match ghost {
+    let changed = kernel().parts().map(|(mut world, _, scene, draw)| match ghost {
         Ghost::None => scene.ghost.clear(draw),
         Ghost::Decor { at, group, rotation, scale } => scene.ghost.set_decor(draw, at, group, rotation as f32, scale as f32),
         Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(&mut world, draw, at, size, value, rgb, coplanar),
@@ -177,7 +177,7 @@ impl GhostDraw {
     /// Painted as `state` paints, or as untextured `rgb` where it paints
     /// nothing. Whether what is drawn changed.
     #[allow(clippy::too_many_arguments)]
-    pub fn set_box(&mut self, world: &mut World, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) -> bool {
+    pub fn set_box(&mut self, world: &mut Build, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) -> bool {
         let (rgb, layer) = match world.painter.material_of(state) {
             Some((m, l)) => ([(m >> 16) as u8, (m >> 8) as u8, m as u8], l),
             None => ([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8),
