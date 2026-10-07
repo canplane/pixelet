@@ -12,18 +12,17 @@ it is made of.
 | **terrain** | the ground, water and buildings | trees and vehicles placed on it |
 | **object**  | blocks you placed               | decor you placed                |
 
-| en        | ko       | means                                                                                     |
-| --------- | -------- | ----------------------------------------------------------------------------------------- |
-| world     | 세계     | the space that is drawn and built in, all of it                                           |
-| map       | 지도     | moving and being somewhere, and the data the world is made from: the map center, map data |
-| terrain   | 지형     | what came from the map data                                                               |
-| object    | 오브젝트 | what a user placed, blocks or decor                                                       |
-| block     | 블록     | the voxel both are made of; a block, not a cube, since a block need not stay a cube       |
-| decor     | 데코     | a model drawn from a glTF, on the terrain or placed                                       |
-| character | 캐릭터   | the person and the pet                                                                    |
-| ground    | 땅       | the surface something stands on, as a plain word                                          |
+| en        | ko       | means                                                                               |
+| --------- | -------- | ----------------------------------------------------------------------------------- |
+| world     | 세계     | the space that is drawn and built in, all of it                                     |
+| terrain   | 지형     | what came from the real world's data                                                |
+| object    | 오브젝트 | what a user placed, blocks or decor                                                 |
+| block     | 블록     | the voxel both are made of; a block, not a cube, since a block need not stay a cube |
+| decor     | 데코     | a model drawn from a glTF, on the terrain or placed                                 |
+| character | 캐릭터   | the person and the pet                                                              |
+| ground    | 땅       | the surface something stands on, as a plain word                                    |
 
-Not used: cube, voxel, pixel, and world for anything but the world above or
+Not used: map, cube, voxel, pixel, and world for anything but the world above or
 the real one ("현실 세계"). A setting's cost is said in words a user has —
 light on performance, the most demanding option — not in operations per
 pixel.

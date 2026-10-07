@@ -27,11 +27,11 @@ struct Frame {
   _p3: f32,
   other_color: vec3f,
   _p4: f32,
-  // The focus in the root frame, planet radius (0 for none), center ground
+  // The sea under the eye in the root frame, planet radius (0 for none), center ground
   // height; then the center's Mercator exponential, sin and cos of latitude, Mercator radius.
   planet: vec4f,
   globe: vec4f,
-  // Away from the planet's center, which lies under the focus, at the eye.
+  // Away from the planet's center, which lies under the eye, at the eye.
   up: vec3f,
   // The camera grid's cell angle, radians.
   cell: f32,

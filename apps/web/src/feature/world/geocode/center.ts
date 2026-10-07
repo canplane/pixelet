@@ -9,7 +9,7 @@ import { PLACE_RANK } from "./place.spec.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 import { assembleLabel, primaryLanguage } from "./label.ts";
 
-/** The map center's place, assembled per snapshot, so a language switch needs no refetch. */
+/** The focus's place, assembled per snapshot, so a language switch needs no refetch. */
 export function usePlaceLabel(): string | null {
   const { i18n } = useTranslation();
   return useKernel((s) => {
