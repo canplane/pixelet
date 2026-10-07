@@ -13,7 +13,7 @@ pub struct Row {
     pub extent: Option<[f64; 3]>,
 }
 
-pub struct Sheet {
+pub struct Pack {
     pub key: String,
     pub bytes: u64,
     pub cell: u32,
@@ -97,7 +97,7 @@ pub fn ident(path: &str) -> String {
     path.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' }).collect()
 }
 
-pub fn render_ts(rows: &[Row], sheet: &Sheet) -> String {
+pub fn render_ts(rows: &[Row], pack: &Pack) -> String {
     let mut out = String::with_capacity(rows.len() * 160);
     out.push_str(
         r#"// @pxl/web/catalog/asset/ingested.spec.ts
@@ -128,30 +128,30 @@ export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
     out.push_str(
         r#"};
 
-/** The texture pack as one sheet: `columns` tiles of `cell` pixels per
+/** The texture pack as one image: `columns` tiles of `cell` pixels per
  * row, tile n at column n % columns and row n / columns, `tiles` the asset
  * path each holds, and `faces` the cube face — channel, type, face — each
  * tile is. */
-export const SHEET = {
+export const PACK = {
 "#,
     );
-    let _ = writeln!(out, "  key: \"{}\",", sheet.key);
-    let _ = writeln!(out, "  bytes: {},", sheet.bytes);
-    let _ = writeln!(out, "  cell: {},", sheet.cell);
-    let _ = writeln!(out, "  columns: {},", sheet.columns);
+    let _ = writeln!(out, "  key: \"{}\",", pack.key);
+    let _ = writeln!(out, "  bytes: {},", pack.bytes);
+    let _ = writeln!(out, "  cell: {},", pack.cell);
+    let _ = writeln!(out, "  columns: {},", pack.columns);
     out.push_str("  tiles: [\n");
-    for t in &sheet.tiles {
+    for t in &pack.tiles {
         let _ = writeln!(out, "    \"{t}\",");
     }
     out.push_str("  ],\n  faces: [\n");
-    for f in &sheet.faces {
+    for f in &pack.faces {
         let _ = writeln!(out, "    [\"{}\", \"{}\", \"{}\", {}],", f.channel, f.ty, f.face.name(), f.tile);
     }
     out.push_str("  ],\n} as const;\n");
     out
 }
 
-pub fn render_rs(rows: &[Row], sheet: &Sheet) -> String {
+pub fn render_rs(rows: &[Row], pack: &Pack) -> String {
     let mut out = String::with_capacity(rows.len() * 160);
     out.push_str(
         r##"// pxl-spec/asset/ingested.spec.rs
@@ -226,10 +226,10 @@ pub enum CubeFace {
     Bottom,
 }
 
-/// The texture pack as one sheet: `columns` tiles of `cell` pixels per
+/// The texture pack as one image: `columns` tiles of `cell` pixels per
 /// row, tile n at column n % columns and row n / columns, and `tiles` the
 /// cube face each tile is.
-pub struct Sheet {
+pub struct Pack {
     pub bytes: u64,
     pub cell: u32,
     pub columns: u32,
@@ -242,21 +242,21 @@ pub struct Sheet {
     pub means: &'static [[u8; 3]],
 }
 
-pub const SHEET: Sheet = Sheet {
+pub const PACK: Pack = Pack {
 "##,
     );
-    let _ = writeln!(out, "    bytes: {},", sheet.bytes);
-    let _ = writeln!(out, "    cell: {},", sheet.cell);
-    let _ = writeln!(out, "    columns: {},", sheet.columns);
+    let _ = writeln!(out, "    bytes: {},", pack.bytes);
+    let _ = writeln!(out, "    cell: {},", pack.cell);
+    let _ = writeln!(out, "    columns: {},", pack.columns);
     out.push_str("    tiles: &[\n");
-    for f in &sheet.faces {
+    for f in &pack.faces {
         // A placed color is a block; every other tile is a look of the ground.
         let variant = if f.channel == "block" { "Block" } else { "Ground" };
         let face = f.face.member();
         let _ = writeln!(out, "        (PlaceableCube::{variant}(cube_types::{variant}::{}), CubeFace::{face}, {}),", f.ty, f.tile);
     }
     out.push_str("    ],\n    means: &[\n");
-    for m in &sheet.means {
+    for m in &pack.means {
         let _ = writeln!(out, "        [{}, {}, {}],", m[0], m[1], m[2]);
     }
     out.push_str("    ],\n};\n");

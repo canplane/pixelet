@@ -89,7 +89,7 @@ a SwiftUI switch there missed quick taps. Which technology draws each
 
 ## One spatial model
 
-Everything placed on the map sits in one hierarchy, the **pyramid**, of
+Everything placed in the world sits in one hierarchy, the **pyramid**, of
 tiles from the leaves at z15 to z5, where it stops for now and not by any
 limit. **Every size is a zoom**: the X lane is one world of 2^24 units, so a
 thing the world over 2^z wide is at zoom z, and a bigger zoom is finer
@@ -101,6 +101,12 @@ of cells a side, the same at every zoom (`Lattice`), so terrain's z24 cells
 make z15 tiles.
 Where several zooms meet, a name says whose it is (`cell_zoom`). A web map's
 zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
+**The pyramid is planar and never leaves Pvf3** (`pxl-spec space/coord/pvf3.rs`),
+which follows 3857 and leaves the poles out (`space/coord/adapter/4326.rs`
+`CLAMP_LAT`). The planet is its superset, a sphere: where the pyramid holds
+no tile, the sphere answers (the Earth's global picture, `pxl-kernel
+layer/earth.rs` `earth_window`). A plane and a sphere are two domains, not
+two copies of one fact, and no fold carries the pyramid onto the sphere.
 
 - **The view keeps only what an observer can tell apart.** The world is
   stored in each layer's shape; what the view holds and does is bounded by
@@ -121,19 +127,19 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   layer that shifts by a zoom's exponent (`shamt`), or numbers a tile's cells
   by its width, is a second owner; `check:rules` refuses it outside `space/`.
 - **A layer is a payload and a one-zoom fold, and nothing else.** Which
-  tiles are wanted is the observation's demand (`world/pyramid.rs`
+  tiles are wanted is the observation's demand (`view/demand.rs`
   `observe`), which are held residency's (`layer/residency.rs`), when they are
-  fetched the scheduler's (`io/sched.rs`), and a tile is folded only by the
+  fetched the scheduler's (`io/request.rs`), and a tile is folded only by the
   bake's `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not
   data — terrain folds by majority and average, POI by sum.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
-  and x, y, z (`world/chunk.rs`); a cube that holds nothing is no
+  and x, y, z (`chunk.rs`); a cube that holds nothing is no
   chunk. Terrain and POI are tiles, a 2D heightfield and a 2D count; placed
   objects are resident in their store, a sparse tree a z8 column. Each layer,
   and the world composed of them, is read through one query
   (`layer/query.rs` `Query`): what a node holds and its records, at a cell
   zoom the asker states; a point or a ray is asked of the world's
-  (`world/query.rs`). Nothing outside a layer reads its records in the
+  (`query.rs`). Nothing outside a layer reads its records in the
   layer's shape, and which of a layer's tiles holds a chunk's cells is the
   layer's lattice's (`pxl-spec space/layer/lattice.rs` `read_tile`). A placed object lives in the chunks its cube is in — built,
   remade and drawn with it — and shares the lattice and the fold rule
@@ -145,7 +151,7 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   behaves exactly as the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`Cell::center`), at the height of the
   surface drawn there: one thing's at the leaf cell it stands in, many at
-  their cell's middle (`pxl-kernel world/chunk/place.rs`).
+  their cell's middle (`pxl-kernel chunk/place.rs`).
 - **The camera grid is the resolution; a layer folds what is in a cell.**
   The grid's cell is the distance's (`pxl-spec space/camera/grid.rs` `Tau::cell_at`,
   `SPLIT` its one knob, one factor τ), and one cell of it is one thing
@@ -157,7 +163,7 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   wide. A chunk draws a cell from what is composed there one zoom finer
   (`space/layer/lattice.rs` `Lattice::fold`, the ground's `GROUND`) as its
   surfaces' mean color and its fill's volume (`pxl-render
-  mesh/chunk_mesher.rs`); past a layer's data it draws its finest. What is folded is a summary, so nothing
+  mesh/chunk.rs`); past a layer's data it draws its finest. What is folded is a summary, so nothing
   in a folded cell is struck, hidden or cut by a preview.
 - **Dev is guarded like terrain.** The tile server answers no tile more than
   `--folds` zooms over the leaves, the whole guard for every layer. A source declares the
@@ -216,7 +222,7 @@ conversion in two places, or two computations of one quantity meeting at a
 seam is not finished.
 
 **Every source file opens with a comment naming its logical path** — the
-import-map path (`// @pxl/web/feature/map/ui/view.tsx`), for Rust the package
+import-map path (`// @pxl/web/feature/world/ui/view.tsx`), for Rust the package
 as Cargo.toml spells it and the path under `src/` (`// pxl-spec/space/coord/zoom.rs`),
 for C++ the path from its repository's root (`// cpp/guest/ipc/ring.cpp`); an executable
 script opens on its interpreter. `check:rules` holds every file to it.

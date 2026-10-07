@@ -14,6 +14,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::layer::lattice::GROUND;
 
 pub use crate::abi::cmd::ActiveTool;
+use crate::chunk::decor::hit::{raycast_decor, DecorStruck, Scattered};
 use crate::control::interaction::collision::{anchor_center, object_aabb};
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::edit::{get_placed_object, place, place_air, place_decor, remove};
@@ -21,9 +22,8 @@ use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adja
 use crate::control::navigation::support::stand;
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::{Entry, EntryAt};
-use crate::world::chunk::decor::hit::{raycast_decor, DecorStruck, Scattered};
-use crate::world::query::Hit;
-use crate::world::view::frame::pose::view_ray;
+use crate::query::Hit;
+use crate::view::frame::pose::view_ray;
 use pxl_spec::space::coord::zoom::{base_of, of_side, units};
 use xpute_guest::global::Global;
 
@@ -54,7 +54,7 @@ pub struct Hover {
     pub object_at: Option<EntryAt>,
     /// A scattered decor has no entry.
     pub scattered: Option<Scattered>,
-    /// Where the map center sent there starts from.
+    /// Where the focus sent there starts from.
     pub approach: Option<Pvf3>,
 }
 
@@ -175,15 +175,15 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
 /// has cells coarser than the box struck.
 fn folded_at(hit: &Hit) -> bool {
     let [x, y, z] = hit.cube.center();
-    let at = crate::world::view::frame::coord::world_to_canonical(&[x, y, z]);
+    let at = crate::view::frame::coord::world_to_canonical(&[x, y, z]);
     let held = of_side(hit.cube.extent()[0]);
-    crate::with_world(|_, sched, _| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
+    crate::with_parts(|_, sched, _| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
 }
 
 /// A tap at `ndc_x`, `ndc_y` with the tool held.
 pub(crate) fn tap(ndc_x: f64, ndc_y: f64) {
     // A badge takes the tap before the ground under it, with the pointer tool only.
-    if interaction().holding.active_tool == ActiveTool::Pointer && crate::world::chunk::place::tap(ndc_x, ndc_y) {
+    if interaction().holding.active_tool == ActiveTool::Pointer && crate::chunk::place::tap(ndc_x, ndc_y) {
         return;
     }
     hover_at(ndc_x, ndc_y);

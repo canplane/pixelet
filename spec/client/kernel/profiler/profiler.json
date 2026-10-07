@@ -22,16 +22,8 @@
     "badge",
     "debug"
   ],
-  "PHASE_NAMES": [
-    "interaction",
-    "visible",
-    "content",
-    "cosmetic",
-    "report"
-  ],
   "LIMITS": {
     "$type": "u32",
-    "PHASES_MAX": 6,
     "REASONS": 4,
     "STEP_SLOTS": 32,
     "ZOOMS": 24,
@@ -49,7 +41,7 @@
     "settled": 1,
     "sched_ms": 1,
     "budget_ms": 1,
-    "phases": "PHASE_NAMES",
+    "phases": "PHASES",
     "chunks_ms": 1,
     "task_ms": 1,
     "gpu_ms": 1,
@@ -240,8 +232,8 @@
     "at_file_bytes": 1,
     "at_line": 1,
     "phase_count": 1,
-    "phase_ids": "LIMITS.PHASES_MAX",
-    "phase_values": "LIMITS.PHASES_MAX"
+    "phase_ids": "TASK_PHASES_MAX",
+    "phase_values": "TASK_PHASES_MAX"
   },
   "WORST": {
     "$type": "u32",
@@ -314,7 +306,7 @@
       "gpu": "SPREAD",
       "sched": "SPREAD",
       "chunks": "SPREAD",
-      "phases": "PHASE_NAMES * SPREAD",
+      "phases": "PHASES * SPREAD",
       "gpu_spans": "GPU_SPAN_NAMES * SPREAD",
       "per_s_runs": 1,
       "per_s_bakes": 1,
@@ -342,10 +334,10 @@
       "built_runs": 1,
       "built_bakes": 1,
       "built_starved": 1,
-      "atlas_repacks": 1,
-      "atlas_uploads": 1
+      "sheet_repacks": 1,
+      "sheet_uploads": 1
     },
-    "atlas": {
+    "sheet": {
       "size": 1,
       "entries": 1,
       "shelves": 1,

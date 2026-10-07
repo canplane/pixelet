@@ -52,3 +52,10 @@ fn a_point_no_fine_polygon_covers_is_named_by_the_nearest_point() {
     assert_eq!(parts.last().map(|(d, approx)| (d.name.as_str(), *approx)), Some(("정자동", true)));
     assert_eq!(within(&[]), None, "with no polygon, the radius bounds the search");
 }
+
+#[test]
+fn a_point_names_the_shard_it_lies_in() {
+    // EPSG:3857 metres inside 01033210, the shard a containing division's copy is read from.
+    assert_eq!(shard_of(14_135_000.0, 4_510_000.0), "01033210");
+    assert_eq!(shard_of(14_172_500.0, 4_547_500.0), "01033212");
+}

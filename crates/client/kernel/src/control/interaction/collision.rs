@@ -4,11 +4,11 @@ use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::hierarchy::tree::share;
 use pxl_spec::space::layer::lattice::GROUND;
 
+use crate::chunk::decor::build::scatters_at;
+use crate::chunk::decor::kind::KINDS;
 use crate::control::interaction::edit::{holds_entry, objects_at};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{Entry, EntryKind};
-use crate::world::chunk::decor::build::scatters_at;
-use crate::world::chunk::decor::kind::KINDS;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{base_of, index_of, of_side, units};
 
@@ -48,7 +48,7 @@ pub fn anchor_center(anchor: &Pvf3) -> Pvf3 {
 
 /// In the world's doubles, the space the pick works in.
 pub fn object_aabb(obj: &Entry) -> Aabb {
-    let min = crate::world::view::frame::coord::to_world(&obj.corner());
+    let min = crate::view::frame::coord::to_world(&obj.corner());
     let max = min.map(|v| v + obj.size());
     Aabb { min, max }
 }

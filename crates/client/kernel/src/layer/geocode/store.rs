@@ -1,7 +1,7 @@
 // pxl-kernel/layer/geocode/store.rs
 
 //! The reverse-geocode bake's two packets, resident: the dictionary, and the
-//! one group the map center is in. A group spans sixteen tiles a side, so
+//! one group the focus is in. A group spans sixteen tiles a side, so
 //! holding more buys little. Each is a view over the heap block the shell
 //! fetched into, so names are never decoded into strings.
 //!

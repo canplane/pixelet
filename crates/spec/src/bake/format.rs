@@ -96,6 +96,10 @@ pub struct Index {
 /// one is full.
 pub const SNAPSHOT_KEY: &str = "_snapshot";
 
+/// The code a version's tiles were baked by and the shards they cover,
+/// beside its tiles: a region is baked only over a version of the same code.
+pub const BUILT_KEY: &str = "_built";
+
 /// How far past the lane's facts the client draws a cell, down and up: the
 /// ground's shift and a bore's floor. Every read of the lane widens by it.
 pub const DRAWN_PAST: [i16; 2] = {

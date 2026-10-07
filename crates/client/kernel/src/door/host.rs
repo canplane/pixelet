@@ -84,6 +84,15 @@ pub fn host_fall() {
 /// A broken invariant: published at once as the turn's only record, dropping
 /// the rest, since the kernel stops here. Also told to the bracket
 /// (`last_words`) where the process dies before a host could run it.
+/// A host's answer as one value: a count, or the errno it refused with. A code
+/// no errno names is the host breaking the protocol.
+pub fn answered(res: i32) -> Result<u32, Errno> {
+    match u32::try_from(res) {
+        Ok(n) => Ok(n),
+        Err(_) => Err(Errno::of(res).unwrap_or(Errno::EPROTO)),
+    }
+}
+
 pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
     STOPPED.set(true);
     last_words(Stop::Bug { errno, at, a, b });

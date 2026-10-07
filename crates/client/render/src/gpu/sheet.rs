@@ -4,11 +4,13 @@
 //! copied into its rectangle. Sketches are in logical pixels, drawn at the
 //! sheet's scale.
 
-use crate::asset::atlas::PAD;
+pub mod shelf;
+
 use crate::frame::shader::record::PIPELINE_SHEET;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, room, texture_usage, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::sheet::shelf::PAD;
 use crate::gpu::text::{Font, Raster, TextOf};
 use xpute_core::math::scalar::round;
 

@@ -4,4 +4,4 @@
 
 pub mod device_orientation;
 pub mod geolocation;
-pub mod store;
+pub mod reading;

@@ -14,10 +14,7 @@
 
 export const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"] as const;
 
-export const PHASE_NAMES = ["interaction", "visible", "content", "cosmetic", "report"] as const;
-
 export const LIMITS = {
-  PHASES_MAX: 6 as number,
   REASONS: 4 as number,
   STEP_SLOTS: 32 as number,
   ZOOMS: 24 as number,
@@ -234,11 +231,11 @@ export const SUMMARY = {
     built_runs: 6 as number,
     built_bakes: 7 as number,
     built_starved: 8 as number,
-    atlas_repacks: 9 as number,
-    atlas_uploads: 10 as number,
+    sheet_repacks: 9 as number,
+    sheet_uploads: 10 as number,
     WORDS: 11 as number,
   },
-  atlas: {
+  sheet: {
     AT: 424 as number,
     size: 0 as number,
     entries: 1 as number,

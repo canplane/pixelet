@@ -9,8 +9,9 @@ use core::mem::{offset_of, size_of};
 
 use crate::io::spec::{CATEGORY_NAMES, TASK_PHASE_NAMES};
 use crate::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS, ZOOMS};
-use crate::profiler::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUMMARY, TASK_SUMMARY};
+use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY};
 use crate::profiler::word::{words, Words};
+use xpute_guest::sched::tick::PHASES;
 
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
@@ -58,7 +59,7 @@ pub struct FramesBlock {
     pub gpu: Spread,
     pub sched: Spread,
     pub chunks: Spread,
-    pub phases: [Spread; PHASE_NAMES.len()],
+    pub phases: [Spread; PHASES.len()],
     pub gpu_spans: [Spread; GPU_SPANS],
     pub per_s_runs: f64,
     pub per_s_bakes: f64,
@@ -133,8 +134,8 @@ pub struct CountersBlock {
     pub built_runs: f64,
     pub built_bakes: f64,
     pub built_starved: f64,
-    pub atlas_repacks: f64,
-    pub atlas_uploads: f64,
+    pub sheet_repacks: f64,
+    pub sheet_uploads: f64,
 }
 
 impl CountersBlock {
@@ -161,13 +162,13 @@ words!(CountersBlock, SUMMARY::counters::WORDS,
     coarse_boxes => SUMMARY::counters::coarse_boxes, coarse_low_fill => SUMMARY::counters::coarse_low_fill,
     built_runs => SUMMARY::counters::built_runs,
     built_bakes => SUMMARY::counters::built_bakes, built_starved => SUMMARY::counters::built_starved,
-    atlas_repacks => SUMMARY::counters::atlas_repacks,
-    atlas_uploads => SUMMARY::counters::atlas_uploads,
+    sheet_repacks => SUMMARY::counters::sheet_repacks,
+    sheet_uploads => SUMMARY::counters::sheet_uploads,
 );
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct AtlasBlock {
+pub struct SheetBlock {
     pub size: f64,
     pub entries: f64,
     pub shelves: f64,
@@ -175,9 +176,9 @@ pub struct AtlasBlock {
     pub initial: f64,
 }
 
-words!(AtlasBlock, SUMMARY::atlas::WORDS,
-    size => SUMMARY::atlas::size, entries => SUMMARY::atlas::entries,
-    shelves => SUMMARY::atlas::shelves, used_px => SUMMARY::atlas::used_px, initial => SUMMARY::atlas::initial,
+words!(SheetBlock, SUMMARY::sheet::WORDS,
+    size => SUMMARY::sheet::size, entries => SUMMARY::sheet::entries,
+    shelves => SUMMARY::sheet::shelves, used_px => SUMMARY::sheet::used_px, initial => SUMMARY::sheet::initial,
 );
 
 #[repr(C)]
@@ -268,7 +269,7 @@ words!(QualityBlock, SUMMARY::quality::WORDS,
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StepBlock {
-    /// Indices into PHASE_NAMES and STEP_NAMES.
+    /// Indices into PHASES and STEP_NAMES.
     pub phase: f64,
     pub name: f64,
     pub ms: f64,

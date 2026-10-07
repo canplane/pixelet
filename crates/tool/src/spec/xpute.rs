@@ -62,6 +62,22 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     }
     flush(&mut run, &mut rs);
     rs.extend(["}".to_string(), String::new()]);
+    // A code from across the ring, read once: a number no member has is the sender's error.
+    rs.extend(
+        [
+            "impl Errno {",
+            "    /// The member `code` is, None for a number no member has.",
+            "    pub const fn of(code: i32) -> Option<Errno> {",
+            "        match code {",
+        ]
+        .map(String::from),
+    );
+    for e in &spec.entries {
+        if let ErrnoEntry::Member(m) = e {
+            rs.push(format!("            {} => Some(Errno::{}),", m.value, m.name));
+        }
+    }
+    rs.extend(["            _ => None,", "        }", "    }", "}", ""].map(String::from));
     ts.extend(["}".to_string(), String::new()]);
 
     let tail_doc = [
@@ -111,6 +127,16 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
         }
     }
     ts.push("};".into());
+    ts.extend(
+        [
+            "",
+            "/** The member `code` is, null for a number no member has. */",
+            "export function errno_of(code: number): Errno | null {",
+            "  return Object.hasOwn(STRERROR, code) ? (code as Errno) : null;",
+            "}",
+        ]
+        .map(String::from),
+    );
     // Lower case, as std::errc: EINVAL may be a <cerrno> macro already included.
     let mut cpp = vec!["// cpp/core/status/errno.spec.hpp".to_string()];
     cpp.extend(head.iter().cloned());
@@ -154,6 +180,23 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
         [
             "    }",
             "    return \"errno\";",
+            "}",
+            "",
+            "// The member `code` is, none for a number no member has.",
+            "constexpr std::optional<Errno> errno_of(std::int32_t code) noexcept {",
+            "    switch (code) {",
+        ]
+        .map(String::from),
+    );
+    for e in &spec.entries {
+        if let ErrnoEntry::Member(m) = e {
+            cpp.push(format!("    case {}: return Errno::{};", m.value, m.name.to_lowercase()));
+        }
+    }
+    cpp.extend(
+        [
+            "    }",
+            "    return std::nullopt;",
             "}",
             "",
             "// A result as a pair, as Rust's ErrnoResult is: the errno, and the value",

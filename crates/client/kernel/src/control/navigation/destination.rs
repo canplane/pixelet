@@ -31,7 +31,7 @@ pub fn go_to(at: Pvf3, motion: Motion) {
     put_center(at, motion);
 }
 
-/// The user put the map center by hand; reaching the destination after would
+/// The user put the focus by hand; reaching the destination after would
 /// undo it. Turning or zooming leaves it.
 pub fn cancel() {
     *destination() = None;

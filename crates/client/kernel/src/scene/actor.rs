@@ -11,7 +11,7 @@ use xpute_guest::abi::handle::Slots;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
-use crate::model::store::{blend, Models};
+use crate::model::registry::{blend, Models};
 
 #[derive(Clone, Copy)]
 struct Playing {

@@ -22,9 +22,19 @@ use crate::util::{pack, unpack, write_atomic, Level};
 pub const READS: [&str; 2] = ["FROM overture_transportation", "FROM overture_base_water"];
 
 const SEGMENTS_SQL: &str = concat!(
-    "SELECT DISTINCT ON (t.gers_id) ",
+    "WITH env AS (SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e) SELECT ",
     crate::segment_columns!(),
-    " FROM overture_transportation t WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)"
+    " FROM ",
+    crate::read_once!("overture_transportation"),
+    " t"
+);
+
+/// The waterways a deck clears, lines alone: a water area, a sea's 444,741
+/// points among them, clears nothing.
+const WATER_SQL: &str = concat!(
+    "WITH env AS (SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e) SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FROM ",
+    crate::read_once!("overture_base_water"),
+    " w WHERE ST_Dimension(geom) = 1"
 );
 
 /// One tile's rows, as a tile's other rows are read: whatever overlaps it.
@@ -61,10 +71,7 @@ fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: IVec) -> Resul
     let env: [&(dyn ToSql + Sync); 4] = [&min[0], &min[1], &max[0], &max[1]];
     let read = |client: &mut Client, sql: &str| client.query(sql, &env).map_err(|e| e.to_string());
     let ways = read(client, SEGMENTS_SQL)?;
-    let water = read(
-        client,
-        "SELECT DISTINCT ON (gers_id) subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_water WHERE subtype <> 'ocean' AND geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)",
-    )?;
+    let water = read(client, WATER_SQL)?;
     // the paint of its ways is no matter to the ground's height, so none is drawn
     let (surface, _) = fetch_surface(repo, client, tile, &[])?;
     Ok(TileRows {

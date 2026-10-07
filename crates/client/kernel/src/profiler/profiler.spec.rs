@@ -22,14 +22,11 @@
 
 pub const CENSUS_TAGS: &[&str] = &["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"];
 
-pub const PHASE_NAMES: &[&str] = &["interaction", "visible", "content", "cosmetic", "report"];
-
 pub mod LIMITS {
-    pub const PHASES_MAX: u32 = 6;
     pub const REASONS: u32 = 4;
     pub const STEP_SLOTS: u32 = 32;
     pub const ZOOMS: u32 = 24;
-    pub const KEYS: &[&str] = &["PHASES_MAX", "REASONS", "STEP_SLOTS", "ZOOMS"];
+    pub const KEYS: &[&str] = &["REASONS", "STEP_SLOTS", "ZOOMS"];
 }
 
 /// One rendered frame (profiler/frame.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z.
@@ -381,8 +378,8 @@ pub mod SUMMARY {
         pub const built_runs: u32 = 6;
         pub const built_bakes: u32 = 7;
         pub const built_starved: u32 = 8;
-        pub const atlas_repacks: u32 = 9;
-        pub const atlas_uploads: u32 = 10;
+        pub const sheet_repacks: u32 = 9;
+        pub const sheet_uploads: u32 = 10;
         pub const WORDS: u32 = 11;
         pub const KEYS: &[&str] = &[
             "AT",
@@ -395,12 +392,12 @@ pub mod SUMMARY {
             "built_runs",
             "built_bakes",
             "built_starved",
-            "atlas_repacks",
-            "atlas_uploads",
+            "sheet_repacks",
+            "sheet_uploads",
             "WORDS",
         ];
     }
-    pub mod atlas {
+    pub mod sheet {
         pub const AT: u32 = 424;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
@@ -542,7 +539,7 @@ pub mod SUMMARY {
         ];
     }
     pub const WORDS: u32 = 642;
-    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "heap", "view", "WORDS"];
+    pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "sheet", "held", "fetch", "peak", "steps", "quality", "heap", "view", "WORDS"];
 }
 
 /// What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count.

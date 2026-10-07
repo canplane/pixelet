@@ -11,10 +11,15 @@ pub mod layout;
 
 use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
 use crate::door::host::HeapStat;
+use crate::io::demand::Category;
 use crate::kernel;
+use crate::layer::earth::Earth;
+use crate::layer::residency::Residency;
 use crate::mem::fixed::Range;
 use crate::mem::section;
 use layout::DOOR_LAYOUT;
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::poi_tile::PoiTile;
 use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
 use xpute_guest::global::Global;
@@ -84,7 +89,7 @@ fn close_surface(handle: u32) {
 }
 
 fn host_attached(s: &mut State) {
-    crate::io::sched::reset();
+    crate::io::request::reset();
     let open: Vec<u32> = pxl_render::gpu::surface::surfaces().map(|surface| surface.handle).collect();
     for handle in open {
         close_surface(handle);
@@ -139,6 +144,13 @@ fn lay_out(b: &Bracket) -> u32 {
     // The map first: the kernel's first use makes the chunk table, which lives in `.fixed`.
     section::set_map(section::lay_out(b.given, b.data_end));
     kernel().laid_out = true;
+    // A layer asks for no more tiles than its residency frames.
+    crate::io::request::open(|c| match c {
+        Category::terrain => Residency::<Terrain>::FRAMES,
+        Category::poi => Residency::<PoiTile>::FRAMES,
+        Category::earth => Residency::<Earth>::FRAMES,
+        _ => 0,
+    });
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {
@@ -187,7 +199,7 @@ static SNAPSHOT: Global<Vec<u8>> = Global::new();
 fn post_shell(s: &mut State) {
     use crate::control::sensor::device_orientation::{take_orientation_commands, OrientationCommand};
     use crate::control::sensor::geolocation::{take_geolocation_commands, GeolocationCommand};
-    use crate::io::sched::{take_started, take_stops};
+    use crate::io::request::{take_started, take_stops};
 
     let sensor = |cmd: Command, sensor: Sensor| raise(cmd, SensorStartSignal::FIELDS, |w| SensorStartSignal { sensor }.write(w));
     for c in take_geolocation_commands() {

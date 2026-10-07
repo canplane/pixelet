@@ -1,10 +1,10 @@
 // pxl-kernel/control/camera/controller.test.rs
 
 use super::*;
+use crate::fixture::place;
 use crate::serial;
 use crate::setting::store::OrbitObstacleMode;
-use crate::world::fixture::place;
-use crate::world::view::frame::coord::to_world;
+use crate::view::frame::coord::to_world;
 
 struct Rng(u64);
 
@@ -29,7 +29,7 @@ fn third_person() {
 
 /// The orbit's distance third person, none first.
 #[test]
-fn the_map_center_is_the_eye_pushed_the_radius_along_the_look() {
+fn the_focus_is_the_eye_pushed_the_radius_along_the_look() {
     let _g = serial();
     third_person();
     let mut rng = Rng(0x5eed);
@@ -37,17 +37,17 @@ fn the_map_center_is_the_eye_pushed_the_radius_along_the_look() {
         let center = [rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 2_000.0 - 1_000.0, rng.unit() * 40.0];
         let (dist, polar, azimuth) = (crate::param::MIN_DIST + rng.unit() * 2_000.0, rng.unit() * core::f64::consts::PI, rng.unit() * 6.0 - 3.0);
         place(center, dist, polar, azimuth);
-        assert!(near(center_world().unwrap(), center, 1e-9), "{n}: third person");
+        assert!(near(focus_world().unwrap(), center, 1e-9), "{n}: third person");
         controllers().base = CameraMode::free;
-        assert!(near(center_world().unwrap(), eye_world().unwrap(), 1e-12), "{n}: first person");
+        assert!(near(focus_world().unwrap(), eye_world().unwrap(), 1e-12), "{n}: first person");
         controllers().base = CameraMode::orbit;
     }
 }
 
-/// A change of person moves the camera about the map center, never the
+/// A change of person moves the camera about the focus, never the
 /// center; under a tracker it waits until the tracker lets go.
 #[test]
-fn a_change_of_person_leaves_the_map_center() {
+fn a_change_of_person_leaves_the_focus() {
     let _g = serial();
     third_person();
     // A canonical point keeps 256ths of a unit: the first change lands within
@@ -61,7 +61,7 @@ fn a_change_of_person_leaves_the_map_center() {
         let mut first: Option<V3> = None;
         for mode in [CameraMode::free, CameraMode::orbit, CameraMode::free, CameraMode::orbit] {
             assert!(take_mode(mode), "{n}: the change to {mode:?} taken");
-            let got = center_world().unwrap();
+            let got = focus_world().unwrap();
             assert!(near(got, center, 2.0 / 256.0), "{n}: moved by the change to {mode:?}: {got:?} vs {center:?}");
             let first = *first.get_or_insert(got);
             assert!(near(got, first, 1e-6), "{n}: drifted by the change to {mode:?}: {got:?} vs {first:?}");
@@ -95,16 +95,16 @@ fn a_pinch_keeps_no_debt() {
     let collision = settings_store().orbit_obstacle;
     settings_store().orbit_obstacle = OrbitObstacleMode::through;
     place([0.0, 0.0, 10.0], 300.0, 0.9, 0.4);
-    let from = camera_store().intent.dist;
+    let from = camera_state().intent.dist;
     pinch_begin(100.0);
     for span in [80.0, 120.0, 100.0] {
         pinch(span);
     }
-    assert_eq!(camera_store().intent.dist, from, "brought back, the pinch did not ask where it began");
+    assert_eq!(camera_state().intent.dist, from, "brought back, the pinch did not ask where it began");
     pinch(1.0e-3);
-    assert_eq!(camera_store().intent.dist, crate::param::MAX_DIST, "past the farthest");
+    assert_eq!(camera_state().intent.dist, crate::param::MAX_DIST, "past the farthest");
     pinch(2.0e-3);
-    assert_eq!(camera_store().intent.dist, crate::param::MAX_DIST / 2.0, "the closing went to the refused share");
+    assert_eq!(camera_state().intent.dist, crate::param::MAX_DIST / 2.0, "the closing went to the refused share");
     settings_store().orbit_obstacle = collision;
     third_person();
 }

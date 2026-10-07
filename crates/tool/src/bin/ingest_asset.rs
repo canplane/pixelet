@@ -11,8 +11,8 @@ use std::process::ExitCode;
 
 use sha2::{Digest, Sha256};
 
-use pxl_tool::asset::table::{Row, Sheet};
-use pxl_tool::asset::{glb, pack, sheet, table};
+use pxl_tool::asset::table::{Pack, Row};
+use pxl_tool::asset::{glb, pack, table};
 use pxl_tool::fmt::formatted;
 use pxl_tool::root;
 
@@ -118,31 +118,31 @@ fn run() -> Result<(), String> {
         return Err(format!("{} names {}, which is not under asset/cube", i.label, i.file));
     }
     let faces = table::faces(&tile_slots, &pxl_tool::spec::cell::catalog()?)?;
-    let composed = sheet::compose(&asset_dir, &tiles)?;
-    let sheet_name = named("cube/pack.webp", &hex(&composed.bytes));
-    let at = out_dir.join(&sheet_name);
+    let composed = pack::compose(&asset_dir, &tiles)?;
+    let image_name = named("cube/pack.webp", &hex(&composed.bytes));
+    let at = out_dir.join(&image_name);
     std::fs::create_dir_all(at.parent().ok_or("the pack has a parent")?).map_err(|e| e.to_string())?;
     std::fs::write(&at, &composed.bytes).map_err(|e| e.to_string())?;
 
-    let sheet = Sheet {
-        key: format!("{KEY_PREFIX}{sheet_name}"),
+    let laid = Pack {
+        key: format!("{KEY_PREFIX}{image_name}"),
         bytes: composed.bytes.len() as u64,
-        cell: sheet::CELL,
-        columns: sheet::COLUMNS,
+        cell: pack::TILE_SIZE,
+        columns: pack::COLUMNS,
         tiles: composed.tiles,
         means: composed.means,
         faces,
     };
 
-    write_formatted(&root.join("apps/web/src/catalog/asset/ingested.spec.ts"), &table::render_ts(&rows, &sheet))?;
-    write_formatted(&root.join("crates/spec/src/asset/ingested.spec.rs"), &table::render_rs(&rows, &sheet))?;
+    write_formatted(&root.join("apps/web/src/catalog/asset/ingested.spec.ts"), &table::render_ts(&rows, &laid))?;
+    write_formatted(&root.join("crates/spec/src/asset/ingested.spec.rs"), &table::render_rs(&rows, &laid))?;
 
     println!(
-        "[ingest] {} assets, {:.1} MiB, sheet {} tiles {:.0} KiB -> out/asset/{{glb,png,webp}}, tables written",
+        "[ingest] {} assets, {:.1} MiB, pack {} tiles {:.0} KiB -> out/asset/{{glb,png,webp}}, tables written",
         rows.len(),
         total as f64 / 1024.0 / 1024.0,
-        sheet.tiles.len(),
-        sheet.bytes as f64 / 1024.0
+        laid.tiles.len(),
+        laid.bytes as f64 / 1024.0
     );
     Ok(())
 }

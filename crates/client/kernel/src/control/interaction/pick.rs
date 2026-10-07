@@ -12,8 +12,8 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::control::interaction::edit::get_placed_object;
 use crate::layer::object::store::Entry;
-use crate::world::query::{Access, Detail, Hit, Ray, Struck};
-use crate::world::view::frame::coord::world_to_canonical;
+use crate::query::{Detail, Hit, Ray, Struck, World};
+use crate::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::aabb::Aabb;
 
 /// A product number: what can be edited is a sphere about the observer.
@@ -96,7 +96,7 @@ pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
         reach: PICK_REACH_U,
     };
     // A coarser tile's answer is a summary, not what is held.
-    let hit = Access::now().first_hit(&ray, Detail::Zoom(LEAF_ZOOM)).exact().flatten()?;
+    let hit = World::now().first_hit(&ray, Detail::Zoom(LEAF_ZOOM)).exact().flatten()?;
     Some(PickResult { hit })
 }
 

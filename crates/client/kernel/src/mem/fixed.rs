@@ -23,11 +23,11 @@ use pxl_render::gpu::renderer::{block_slots, blocks_bytes};
 
 use crate::abi::host::stream as host_stream;
 
+use crate::chunk::build::BAKE_BYTES;
+use crate::chunk::table::MOUNTS_BYTES;
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
 use crate::mem::section::{map, PAGE_BYTES};
 use crate::profiler::record::PROFILER_BYTES;
-use crate::world::chunk::build::BAKE_BYTES;
-use crate::world::chunk::table::MOUNTS_BYTES;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Range {
@@ -57,7 +57,7 @@ impl Range {
 }
 
 /// None is let go.
-pub const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::world::chunk::decor::asset_store::MODELS_MAX;
+pub const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::chunk::decor::kind_assets::MODELS_MAX;
 
 pub const ACTORS_MAX: usize = crate::scene::character::companion::ACTORS_MAX + crate::scene::character::preview::CASES_MAX;
 
@@ -65,7 +65,7 @@ const SINGLE_BLOCKS: usize = 3;
 
 /// Each owner's bound summed, so the table cannot fill. The renderer frees
 /// a list's blocks before taking its uploads, so it never holds more.
-pub const MAX_LIVE_BLOCKS: usize = crate::world::chunk::decor::cell::BLOCKS_MAX + MODELS_MAX + ACTORS_MAX + crate::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
+pub const MAX_LIVE_BLOCKS: usize = crate::chunk::decor::cell::BLOCKS_MAX + MODELS_MAX + ACTORS_MAX + crate::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
 
 pub const BLOCK_SLOTS: usize = block_slots(MAX_LIVE_BLOCKS);
 

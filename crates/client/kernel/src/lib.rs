@@ -6,6 +6,7 @@
 
 pub mod abi;
 pub mod billboard;
+pub mod chunk;
 pub mod control;
 pub mod door;
 pub mod io;
@@ -14,21 +15,22 @@ pub mod mem;
 pub mod model;
 pub mod param;
 pub mod profiler;
+pub mod query;
 pub mod scene;
 pub mod sched;
 pub mod setting;
 pub mod shell;
 pub mod turn;
-pub mod world;
+pub mod view;
 
 use crate::billboard::field::Billboards;
-use crate::model::store::Models;
+use crate::model::registry::Models;
 use pxl_render::frame::draw::DrawList;
 use pxl_render::mesh::paint::object::Painter;
 
+use crate::chunk::table::Scheduler;
 use crate::layer::object::store::Store;
 use crate::scene::Scene;
-use crate::world::chunk::table::Scheduler;
 use xpute_guest::global::Global;
 
 pub struct Kernel {
@@ -72,15 +74,15 @@ pub fn laid() -> Option<&'static mut Kernel> {
 }
 
 /// The objects and the painter, borrowed together for a turn's build.
-pub struct World<'a> {
+pub struct Build<'a> {
     pub store: &'a crate::layer::object::store::Store,
     pub painter: &'a mut pxl_render::mesh::paint::object::Painter,
 }
 
 impl Kernel {
-    /// Split into fields so the world and the table borrow at once. None before
+    /// Split into fields so the build and the table borrow at once. None before
     /// the memory map is laid.
-    pub fn world(&mut self) -> Option<(World<'_>, &mut Scheduler, &mut Scene, &mut DrawList)> {
+    pub fn parts(&mut self) -> Option<(Build<'_>, &mut Scheduler, &mut Scene, &mut DrawList)> {
         let Kernel {
             laid_out,
             objects,
@@ -93,13 +95,13 @@ impl Kernel {
         if !*laid_out {
             return None;
         }
-        Some((World { store: objects, painter }, sched, scene, draw))
+        Some((Build { store: objects, painter }, sched, scene, draw))
     }
 }
 
-pub fn with_world<R>(f: impl FnOnce(&mut World, &mut Scheduler, &mut Scene) -> R) -> Option<R> {
-    let (mut world, sched, scene, _) = kernel().world()?;
-    Some(f(&mut world, sched, scene))
+pub fn with_parts<R>(f: impl FnOnce(&mut Build, &mut Scheduler, &mut Scene) -> R) -> Option<R> {
+    let (mut build, sched, scene, _) = kernel().parts()?;
+    Some(f(&mut build, sched, scene))
 }
 
 /// Native tests run on several threads, and a `Global` is for one.
@@ -112,3 +114,7 @@ pub fn serial() -> std::sync::MutexGuard<'static, ()> {
 #[cfg(test)]
 #[path = "allocations.test.rs"]
 pub mod allocations;
+
+#[cfg(test)]
+#[path = "fixture.test.rs"]
+pub(crate) mod fixture;

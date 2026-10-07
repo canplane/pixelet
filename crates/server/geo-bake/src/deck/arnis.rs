@@ -296,7 +296,7 @@ impl Source {
             if !self.water_seen.insert(wkb.clone()) {
                 continue;
             }
-            for g in wkb_to_geometries(wkb).into_iter().filter(|g| !g.is_polygon_source && g.points.len() >= 2) {
+            for g in wkb_to_geometries(wkb).into_iter().filter(|g| g.points.len() >= 2) {
                 self.water.push((class.clone(), subtype.clone(), g.points.iter().map(|p| [p[0], p[1]]).collect()));
             }
         }

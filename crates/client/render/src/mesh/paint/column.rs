@@ -9,7 +9,7 @@ use crate::mesh::{grow, Refused};
 use std::collections::HashMap;
 
 use crate::mesh::paint::object::Painter;
-use crate::mesh::paint::terrain::adapter::ChunkSample;
+use crate::mesh::paint::terrain::sample::ChunkSample;
 use crate::mesh::run::{RunWriter, APRON};
 
 /// Bottom to top exclusive: a folded object, air, or a deck's span.

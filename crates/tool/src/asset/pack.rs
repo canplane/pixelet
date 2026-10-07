@@ -1,15 +1,18 @@
 // pxl-tool/asset/pack.rs
 
-//! The texture pack's manifest. Originals are cached under
+//! The texture pack: its manifest, and the one image it ships as. Originals are cached under
 //! `asset/cube/original/` and re-fetched only when an entry's URL changes.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use image::RgbaImage;
 use serde::Deserialize;
 
 /// One size for every layer of the shared array texture.
 pub const TILE_SIZE: u32 = 256;
+/// Tiles a row of the laid-out image.
+pub const COLUMNS: u32 = 8;
 
 /// Painted sources are far above 256² and need a smoothing resample; legacy
 /// pixel art keeps nearest-neighbor, the default.
@@ -198,4 +201,68 @@ pub fn flatten_alpha(data: &mut [u8], palette_hex: Option<&str>) {
         }
         px[3] = 255;
     }
+}
+
+const QUALITY: f32 = 92.0;
+
+/// The pack laid out as one lossy WebP (q92): about 400 KB against several MB
+/// lossless, downloaded on every cold start.
+pub struct Image {
+    pub bytes: Vec<u8>,
+    pub tiles: Vec<String>,
+    /// Each tile's mean color, averaged in linear light; a mean of sRGB bytes
+    /// reads darker than the tile.
+    pub means: Vec<[u8; 3]>,
+}
+
+fn mean_of(img: &RgbaImage) -> [u8; 3] {
+    let mut sum = [0.0f64; 3];
+    for px in img.pixels() {
+        for (s, c) in sum.iter_mut().zip(px.0) {
+            *s += srgb_to_linear(c);
+        }
+    }
+    let n = (img.width() * img.height()) as f64;
+    core::array::from_fn(|k| linear_to_srgb(sum[k] / n))
+}
+
+fn srgb_to_linear(v: u8) -> f64 {
+    let c = v as f64 / 255.0;
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        libm::pow((c + 0.055) / 1.055, 2.4)
+    }
+}
+
+fn linear_to_srgb(c: f64) -> u8 {
+    let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * libm::pow(c, 1.0 / 2.4) - 0.055 };
+    (s * 255.0).round_ties_even().clamp(0.0, 255.0) as u8
+}
+
+/// Every tile must be exactly `TILE_SIZE` square; a wrong size is an upstream mistake
+/// and is refused rather than resized.
+pub fn compose(root: &std::path::Path, tiles: &[String]) -> Result<Image, String> {
+    let rows = tiles.len().div_ceil(COLUMNS as usize) as u32;
+    // Opaque black, so an uncovered cell is visible rather than blended.
+    let mut laid = RgbaImage::from_pixel(COLUMNS * TILE_SIZE, rows.max(1) * TILE_SIZE, image::Rgba([0, 0, 0, 255]));
+    let mut means = Vec::with_capacity(tiles.len());
+
+    for (n, tile) in tiles.iter().enumerate() {
+        let path = root.join(tile);
+        let img = image::open(&path).map_err(|e| format!("{tile}: {e}"))?.to_rgba8();
+        if img.width() != TILE_SIZE || img.height() != TILE_SIZE {
+            return Err(format!("{tile} is {}x{}, not {TILE_SIZE} square", img.width(), img.height()));
+        }
+        let (x, y) = ((n as u32 % COLUMNS) * TILE_SIZE, (n as u32 / COLUMNS) * TILE_SIZE);
+        means.push(mean_of(&img));
+        image::imageops::replace(&mut laid, &img, x as i64, y as i64);
+    }
+
+    let encoded = webp::Encoder::from_rgba(laid.as_raw(), laid.width(), laid.height()).encode(QUALITY);
+    Ok(Image {
+        bytes: encoded.to_vec(),
+        tiles: tiles.to_vec(),
+        means,
+    })
 }

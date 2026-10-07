@@ -29,7 +29,7 @@ fn every_shader_compiles() {
 
 #[test]
 fn the_face_bits_are_the_meshers() {
-    use crate::mesh::chunk_mesher as m;
+    use crate::mesh::chunk as m;
     let (module, _) = compile(SHADER_CHUNK);
     let value = |name: &str| -> u32 {
         let (_, c) = module

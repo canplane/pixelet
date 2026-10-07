@@ -5,13 +5,13 @@
 //! filter without a dark fringe; without mips a badge minified slightly against
 //! the supersampled sheet crawls with every camera micro-movement.
 
-use crate::asset::atlas::{BillboardAtlas, DrawSpec};
 use crate::frame::draw::{uniform_of, PIPELINE_BADGE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{Blocks, Draws};
+use crate::gpu::sheet::shelf::{DrawSpec, Sheet};
 use crate::gpu::sheet::{Align, SheetPainter, Sketch};
 use crate::gpu::text::{Font, TextOf};
 
@@ -165,8 +165,8 @@ impl BadgePass {
     }
 
     /// An entry whose text is not drawn yet is left for a later frame.
-    pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, atlas: &mut BillboardAtlas, text: TextOf) {
-        let flush = atlas.flush(self.generation, &mut self.dirty);
+    pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, sheet: &mut Sheet, text: TextOf) {
+        let flush = sheet.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;
         let live;
         let slots: &[u32] = if flush.whole {
@@ -195,7 +195,7 @@ impl BadgePass {
                 self.built.layouts[2],
                 &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0],
             );
-            live = atlas.live();
+            live = sheet.live();
             &live
         } else {
             &self.dirty
@@ -208,17 +208,17 @@ impl BadgePass {
         let mut made = Vec::new();
         let mut drawn = false;
         for &slot in slots {
-            let Some(spec) = atlas.slot_draw(slot) else { continue };
+            let Some(spec) = sheet.slot_draw(slot) else { continue };
             let mut p = Sketch::default();
             match spec {
                 DrawSpec::Cluster { label, logical_w } => cluster(&mut p, label, *logical_w as f32),
                 DrawSpec::Place { name, icon, color, logical_w } => place(&mut p, name, icon, *color, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w, box_h } => bubble(&mut p, lines, *box_w as f32, *box_h as f32),
             }
-            if self.painter.paint(g, encoder, self.sheet, atlas.slot_rect(slot), &p, text, &mut made) {
+            if self.painter.paint(g, encoder, self.sheet, sheet.slot_rect(slot), &p, text, &mut made) {
                 drawn = true;
             } else {
-                atlas.mark_dirty(slot);
+                sheet.mark_dirty(slot);
             }
         }
         g.submit(encoder);

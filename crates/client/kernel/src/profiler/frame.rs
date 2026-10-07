@@ -7,7 +7,7 @@ use core::mem::{offset_of, size_of};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use xpute_guest::sched::tick::PHASES;
 
-use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, PHASE_NAMES, SUMMARY, WORST};
+use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, SUMMARY, WORST};
 use crate::profiler::word::{words, Words};
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 
@@ -270,8 +270,6 @@ words!(FramePeak, SUMMARY::peak::WORDS,
     oldest_visible_ms => SUMMARY::peak::oldest_visible_ms, fine_peak => SUMMARY::peak::fine_peak,
     coarse_peak => SUMMARY::peak::coarse_peak,
 );
-
-const _: () = assert!(PHASE_NAMES.len() == PHASES.len(), "profiler.json names the tick's phases");
 
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
 pub const ZOOMS: usize = LIMITS::ZOOMS as usize;

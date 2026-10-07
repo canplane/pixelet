@@ -37,17 +37,15 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   (`pxl-geo-spec overture/properties.rs`), where Carto's `amenity-points.mss`
   gives each tag an icon and a color.
 
-- **A tile's key does not name the code that baked it.** A region bake
-  links its `--base` whole and rebakes only the region
-  (`crates/server/geo-bake/src/bin/bake_tiles.rs`); nothing compares the
-  base's bake code, which the manifest records only as a `git_sha`, so a
-  region baked after a change to the drawn surface or the decks sits beside
-  tiles from the old code with no error. The dev cache already keys by the
-  bake binary and the holdings (`crates/server/geo-bake/src/demand.rs`
-  `source_id`); that identity in every manifest, and a region bake refusing
-  a base that differs in anything but holdings, closes it. Which leaves a
-  coverage grow rebakes is the operator's `--region` list, where the
-  coverage could say it.
+## P2
+
+- **An Overture feature is stored once a shard it reaches.** A shard is
+  whole or absent because it holds its own copy of every feature its apron
+  meets, so a sea polygon sits in twenty shards and every reader pays per copy
+  unless it dedups first (`crates/server/geo-bake/src/terrain/repository.rs`
+  `read_once`). A feature stored once, with which shards hold it beside it,
+  ends the copies; it changes the schema every reader uses and makes "whole
+  or absent" a rule over two tables.
 
 ## Parked, with the reason on file
 

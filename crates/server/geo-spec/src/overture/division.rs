@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 
 use pxl_spec::place::{PlacePart, PlaceRank};
 use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, u_from_mer, u_per_m};
+use pxl_spec::space::coord::zoom::{units, SHARD_ZOOM};
+use pxl_spec::space::hierarchy::morton;
 
 /// The three sub-city subtypes share a rung because Overture does not
 /// guarantee they nest.
@@ -65,31 +67,42 @@ pub fn reach_at(y: f64) -> f64 {
     mer_from_u(NEAREST_REACH_M * u_per_m(u_from_mer(y)))
 }
 
+/// The shard a point lies in, by name. A division is a row in every shard
+/// its apron meets, so one containing the point is a row in the point's
+/// shard: that copy alone is read, not each of a region's dozens.
+/// A point outside every ingested shard names nothing: an apron holds only
+/// what reaches into it, so what it would answer there is partial.
+pub fn shard_of(x: f64, y: f64) -> String {
+    let at = [x, y].map(|m| (u_from_mer(m) / units(SHARD_ZOOM)).floor() as i64);
+    morton::name::<2>(morton::key_of(SHARD_ZOOM, at))
+}
+
 /// Every division containing each of a batch of points: `$1`/`$2` are
-/// EPSG:3857 metres, `idx` counts the points from 1.
+/// EPSG:3857 metres, `$3` each point's shard ([`shard_of`]), `idx` counts the
+/// points from 1.
 pub const CONTAINING_SQL: &str = concat!(
-    "SELECT DISTINCT ON (p.idx, d.gers_id) p.idx, d.gers_id, d.subtype, d.name, ",
+    "SELECT p.idx, d.gers_id, d.subtype, d.name, ",
     division_names!("d"),
     " AS names_common
-FROM unnest($1::float8[], $2::float8[]) WITH ORDINALITY AS p(x, y, idx)
-JOIN overture_divisions d ON ST_Contains(d.geom, ST_SetSRID(ST_MakePoint(p.x, p.y), 3857))
+FROM unnest($1::float8[], $2::float8[], $3::text[]) WITH ORDINALITY AS p(x, y, node, idx)
+JOIN overture_divisions d ON d.node = p.node AND ST_Contains(d.geom, ST_SetSRID(ST_MakePoint(p.x, p.y), 3857))
 WHERE d.name IS NOT NULL AND d.subtype IN ",
     division_areas!()
 );
 
 /// The nearest division point to each point, inside `$3`'s polygon (from
-/// [`within`]) so it cannot cross a boundary, or within `$4` ([`reach_at`])
-/// where no polygon covers it. Most Korean localities have a point and no
+/// [`within`], its copy in `$5`, the point's shard) so it cannot cross a
+/// boundary, or within `$4` ([`reach_at`]) where no polygon covers it. Most Korean localities have a point and no
 /// polygon.
 pub const NEAREST_POINT_SQL: &str = concat!(
     "SELECT p.idx, q.gers_id, q.subtype, q.name, q.names_common
-FROM unnest($1::float8[], $2::float8[], $3::text[], $4::float8[]) WITH ORDINALITY AS p(x, y, within, reach, idx)
+FROM unnest($1::float8[], $2::float8[], $3::text[], $4::float8[], $5::text[]) WITH ORDINALITY AS p(x, y, within, reach, node, idx)
 CROSS JOIN LATERAL (
   (SELECT q.gers_id, q.subtype, q.name, ",
     division_names!("q"),
     " AS names_common
    FROM overture_divisions d JOIN overture_division_points q ON ST_Contains(d.geom, q.geom)
-   WHERE d.gers_id = p.within AND q.name IS NOT NULL AND q.subtype IN ",
+   WHERE d.gers_id = p.within AND d.node = p.node AND q.name IS NOT NULL AND q.subtype IN ",
     division_points!(),
     "
    ORDER BY q.geom <-> ST_SetSRID(ST_MakePoint(p.x, p.y), 3857) LIMIT 1)

@@ -140,11 +140,11 @@ export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
   "sky/moon.png": { key: "asset/sky/moon-e6977d49922c.png", bytes: 165698 },
 };
 
-/** The texture pack as one sheet: `columns` tiles of `cell` pixels per
+/** The texture pack as one image: `columns` tiles of `cell` pixels per
  * row, tile n at column n % columns and row n / columns, `tiles` the asset
  * path each holds, and `faces` the cube face — channel, type, face — each
  * tile is. */
-export const SHEET = {
+export const PACK = {
   key: "asset/cube/pack-e635f1451247.webp",
   bytes: 391170,
   cell: 256,

@@ -5,7 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { bootstrapApp } from "@/app/bootstrap.ts";
 import { AppLayout } from "@/app/layout.tsx";
-import MapPage from "@/page/map.tsx";
+import WorldPage from "@/page/world.tsx";
 
 bootstrapApp();
 
@@ -14,7 +14,7 @@ export function App() {
     <StrictMode>
       <SafeAreaProvider>
         <AppLayout>
-          <MapPage />
+          <WorldPage />
         </AppLayout>
       </SafeAreaProvider>
     </StrictMode>

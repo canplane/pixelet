@@ -102,6 +102,20 @@ pub fn fmt_dur(ms: f64) -> String {
     }
 }
 
+/// The code a bake runs, named by its binary: what a baked object is made
+/// by, whichever commit or tree that was built from.
+pub fn code_id() -> Result<String, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let binary = std::fs::read(&exe).map_err(|e| format!("{}: {e}", exe.display()))?;
+    Ok(format!("{:016x}", fnv1a(&binary)))
+}
+
+/// What baked objects are a function of: the code that made them and what
+/// the DB held for their reads (`coverage.rs` `holdings`).
+pub fn source_id(code: &str, holdings: &serde_json::Value) -> String {
+    format!("{:016x}", fnv1a(format!("{code} {holdings}").as_bytes()))
+}
+
 /// HEAD, and where the working tree differs, `+` its tree (untracked files
 /// too): a bake from uncommitted code names that code. Read when a bake
 /// starts, which is when its binary was built: commits made while it runs

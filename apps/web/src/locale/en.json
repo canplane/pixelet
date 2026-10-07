@@ -98,11 +98,15 @@
       "section_caption": "Diagnostics for the view and the scheduler",
       "debug_overlay": {
         "label": "Debug Overlay",
-        "description": "Shows camera and map state, frame timing, GPU, memory, and request activity."
+        "description": "Shows camera and view state, frame timing, GPU, memory, and request activity."
       },
       "gizmos": {
         "label": "Gizmos",
-        "description": "Draws the map center, its cell and the axis rings in the world, for debugging."
+        "description": "Draws the view center, its cell and the axis rings in the world, for debugging."
+      },
+      "camera_gizmo": {
+        "label": "Camera gizmo",
+        "description": "Overlays the camera grid's cells, each colored by how the detail drawn there fits it: green on the grid, blue finer, red coarser, grey at the data's finest, magenta where nothing is drawn."
       }
     },
     "disclaimer": {
@@ -121,8 +125,8 @@
       "tagline": "Turn the real world into a canvas and build with blocks."
     },
     "navigation": {
-      "section_title": "Map movement",
-      "section_caption": "How the map moves when you drag it"
+      "section_title": "View movement",
+      "section_caption": "How the view moves when you drag it"
     }
   },
   "cubes": {
@@ -275,11 +279,11 @@
   "toast": {
     "location_checking": "Checking your location…",
     "world_ready": "Area loaded.",
-    "map_loading": "Loading area…",
+    "world_loading": "Loading area…",
     "companion_loading": "Preparing your companion…",
     "outside": "Outside the service area."
   },
-  "map": {
+  "world": {
     "dock": {
       "pointer": "Pointer",
       "eraser": "Eraser",
@@ -310,7 +314,7 @@
       "no_results": "No results found",
       "section_areas": "Areas",
       "section_places": "Places",
-      "map_center": "Current location"
+      "focus": "Current location"
     }
   },
   "unsupported": {

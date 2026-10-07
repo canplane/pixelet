@@ -6,7 +6,7 @@
 //! pack ships nothing for takes none and reads as the box's color.
 //! Without the mip chain the far ground crawls as the camera moves.
 
-use pxl_spec::asset::ingested::{CubeFace, SHEET};
+use pxl_spec::asset::ingested::{CubeFace, PACK};
 use pxl_spec::asset::{shipped_texture_tile, TileOrigin};
 
 use crate::frame::shader::record::PIPELINE_MIPS;
@@ -15,7 +15,7 @@ use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, re
 use crate::gpu::pipeline::Pipelines;
 use crate::mesh::paint::palette::{palette, LAYERS};
 
-pub const LAYER_TEX_SZ: u32 = SHEET.cell;
+pub const LAYER_TEX_SZ: u32 = PACK.cell;
 
 pub fn mip_levels(width: u32, height: u32) -> u32 {
     32 - width.max(height).max(1).leading_zeros()
@@ -119,7 +119,7 @@ pub struct Layers {
 }
 
 impl Layers {
-    /// Nothing is drawn until the sheet arrives: a flat color is the box's own,
+    /// Nothing is drawn until the pack arrives: a flat color is the box's own,
     /// which the shader already has. Until then every face reads NO_SLOT.
     pub fn new(g: &Gpu) -> Layers {
         let (tiles, _) = plan();
@@ -152,11 +152,11 @@ impl Layers {
         }
     }
 
-    pub fn step(&mut self, g: &Gpu, mips: &Mips, sheet: fn() -> Option<u32>) {
+    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<u32>) {
         if self.loaded {
             return;
         }
-        let Some(image) = sheet() else { return };
+        let Some(image) = pack() else { return };
         let (tiles, table) = plan();
         let texture = object();
         g.image_texture(texture, image);

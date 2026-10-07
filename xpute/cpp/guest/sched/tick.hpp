@@ -18,16 +18,10 @@
 #include "../../core/status/bug.hpp"
 #include "../clock.hpp"
 #include "frame_budget.hpp"
+#include "tick.spec.hpp"
 
 namespace xpute {
 
-using Phase = std::size_t;
-inline constexpr Phase INTERACTION = 0;
-inline constexpr Phase VISIBLE = 1;
-inline constexpr Phase CONTENT = 2;
-inline constexpr Phase COSMETIC = 3;
-inline constexpr Phase REPORT = 4;
-inline constexpr std::array<std::string_view, 5> PHASES{"interaction", "visible", "content", "cosmetic", "report"};
 
 struct TickPolicy {
     // Hard ceiling over what is left, so a step that costs time and reports
@@ -44,7 +38,7 @@ template <class S> class TickContext {
     S &state;
     double delta;
     FrameBudget budget;
-    std::array<double, 5> phase_ms{};
+    std::array<double, PHASES.size()> phase_ms{};
 
     // The guest is strobed only when asked, so a step that animates asks here.
     void invalidate() noexcept { invalidated_ = true; }
@@ -67,7 +61,7 @@ template <class S> using TickStep = void (*)(TickContext<S> &);
 
 // Two registrations under one name in one phase add into one row.
 struct StepStats {
-    Phase phase = 0;
+    Phase phase = Phase::interaction;
     std::uint32_t name = 0;
     double ms = 0;
     std::uint32_t count = 0;
@@ -78,7 +72,7 @@ struct StepStats {
 
 struct TickReport {
     double budget_ms = 0;
-    std::array<double, 5> phase_ms{};
+    std::array<double, PHASES.size()> phase_ms{};
     double total_ms = 0;
     bool invalidated = false;
 
@@ -109,11 +103,11 @@ template <class S, std::size_t N> class Tick {
     TickReport run(S &state, double delta, double quota_ms, double t0) noexcept {
         double start = now();
         TickContext<S> ctx(state, delta, FrameBudget(quota_ms, t0, policy_.hard_slack_ms));
-        run_phase(INTERACTION, ctx);
+        run_phase(Phase::interaction, ctx);
         ctx.budget.reserve_ms = ctx.budget.total_ms * policy_.content_share;
-        run_phase(VISIBLE, ctx);
+        run_phase(Phase::visible, ctx);
         ctx.budget.reserve_ms = 0;
-        for (Phase phase : {CONTENT, COSMETIC, REPORT}) run_phase(phase, ctx);
+        for (Phase phase : {Phase::content, Phase::cosmetic, Phase::report}) run_phase(phase, ctx);
         last_report_ = TickReport{ctx.budget.total_ms, ctx.phase_ms, now() - start, ctx.invalidated_};
         return last_report_;
     }
@@ -170,7 +164,7 @@ template <class S, std::size_t N> class Tick {
             }
             ctx.off_len_ = 0;
         }
-        ctx.phase_ms[phase] = now() - start;
+        ctx.phase_ms[static_cast<std::size_t>(phase)] = now() - start;
     }
 
     TickPolicy policy_;

@@ -17,9 +17,9 @@ use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 use crate::abi::host::root;
 use crate::door::host::decode_image;
 use crate::io::demand::Ask;
-use crate::io::failure::{Failure, Outcome};
-use crate::io::file::{self, Owner};
-use crate::io::sched::{attempt_of, settle, Credit};
+use crate::io::failure::Ended;
+use crate::io::file::{self, Opened, Owner};
+use crate::io::request::{attempt_of, settle, Credit};
 use crate::sched::edge::{request_world_tick, world_edge};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -32,24 +32,24 @@ pub enum LoadKind {
     Image = 1,
 }
 
-/// The texture pack's sheet is written beside the asset table, not as a row of it.
+/// The texture pack's image is written beside the asset table, not as a row of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Load {
     Asset(Asset),
-    Sheet,
+    Pack,
 }
 
 impl Load {
     pub fn number(self) -> u32 {
         match self {
             Load::Asset(a) => a as u32,
-            Load::Sheet => Asset::ALL.len() as u32,
+            Load::Pack => Asset::ALL.len() as u32,
         }
     }
 
     pub fn of(number: u32) -> Option<Load> {
         if number == Asset::ALL.len() as u32 {
-            return Some(Load::Sheet);
+            return Some(Load::Pack);
         }
         u16::try_from(number).ok().and_then(Asset::of).map(Load::Asset)
     }
@@ -143,9 +143,9 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
 }
 
 /// The credit ends when the host reports; parsing afterwards does not hold it.
-fn ended(key: u64, outcome: Outcome) -> Option<(LoadKind, Load)> {
+fn ended(key: u64, ended: Ended) -> Option<(LoadKind, Load)> {
     let what = attempt_of(key).and_then(|(_, subject)| of_subject(subject));
-    settle(key, outcome, None, Failure::default());
+    settle(key, ended, None);
     what
 }
 
@@ -181,20 +181,19 @@ pub fn cancel_asset(key: u64) -> bool {
         return false;
     };
     file::close(fd);
-    load_rejected(key);
+    load_rejected(key, Ended::Aborted);
     true
 }
 
 static IMAGES: Global<Slots<()>> = Global::new();
 
 /// The file is closed in the same turn: the host takes its bytes when it runs the decode.
-pub fn image_opened(fd: u32, key: u64, res: i32) {
-    if res < 0 {
-        file::close(fd);
-        load_rejected(key);
+pub fn image_opened(fd: u32, key: u64, opened: Opened) {
+    let Opened::Bytes(_) = opened else {
+        load_rejected(key, Ended::Failed(opened.failure()));
         return;
-    }
-    let Some((_, load)) = ended(key, Outcome::ok) else {
+    };
+    let Some((_, load)) = ended(key, Ended::Ok) else {
         file::close(fd);
         return;
     };
@@ -217,27 +216,26 @@ pub fn images_lost() {
 }
 
 /// A file the device cannot decode is the asset's own failure, so it is final.
-pub fn image_decoded(image: u32, res: i32) {
+pub fn image_decoded(image: u32, decoded: Result<u32, Errno>) {
     let l = loader();
     let Some(n) = (0..LOADS).find(|&n| matches!(l.image[n], Some(Entry::Arrived(h, _)) if h == image)) else {
         return;
     };
-    l.image[n] = Some(if res == 0 { Entry::Ready(image) } else { Entry::Failed });
+    l.image[n] = Some(if decoded.is_ok() { Entry::Ready(image) } else { Entry::Failed });
     settled();
     request_world_tick();
 }
 
-pub fn model_opened(fd: u32, key: u64, res: i32) {
-    if res < 0 {
-        file::close(fd);
-        load_rejected(key);
+pub fn model_opened(fd: u32, key: u64, opened: Opened) {
+    let Opened::Bytes(n) = opened else {
+        load_rejected(key, Ended::Failed(opened.failure()));
         return;
-    }
-    let Some((_, load)) = ended(key, Outcome::ok) else {
+    };
+    let Some((_, load)) = ended(key, Ended::Ok) else {
         file::close(fd);
         return;
     };
-    loader().gltf[load.number() as usize] = Some(Entry::Arrived(fd, res as u32));
+    loader().gltf[load.number() as usize] = Some(Entry::Arrived(fd, n));
     arrivals().notify();
 }
 
@@ -278,8 +276,8 @@ pub async fn gltf_task() {
 
 /// The transport failed, not the asset: it is wanted again, and the request scheduler
 /// decides the wait.
-pub fn load_rejected(key: u64) {
-    let Some((kind, load)) = ended(key, Outcome::error) else { return };
+pub fn load_rejected(key: u64, how: Ended) {
+    let Some((kind, load)) = ended(key, how) else { return };
     let l = loader();
     let n = load.number() as usize;
     match kind {

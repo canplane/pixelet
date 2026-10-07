@@ -4,10 +4,10 @@ use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::controller::Motion;
-use crate::control::camera::store::{camera_store, IntentPatch};
+use crate::control::camera::state::IntentPatch;
 use crate::control::navigation::destination::go_to_ground;
-use crate::control::navigation::store::map_navigation;
-use crate::control::sensor::store::{device_location_store, device_orientation_store, DevicePoseStatus};
+use crate::control::navigation::off_center::off_center;
+use crate::control::sensor::reading::{device_location_store, device_orientation_store, DevicePoseStatus};
 use crate::sched::edge::wake_at;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -21,6 +21,9 @@ const HEADING_SMOOTH_ALPHA: f64 = 0.25;
 const SENSOR_GRACE_MS: f64 = 12000.0;
 
 struct Follow {
+    /// Whether the camera follows the device: the controls turn it on and off,
+    /// and a dead location gives it up.
+    on: bool,
     smoothed_azimuth: Option<f64>,
     was_following: bool,
     last_device: Option<Pvf3>,
@@ -32,21 +35,33 @@ struct Follow {
 
 static FOLLOW: Global<Follow> = Global::new();
 
-pub fn follow_mode_step() {
-    let f = FOLLOW.get(|| Follow {
+fn follow() -> &'static mut Follow {
+    FOLLOW.get(|| Follow {
+        on: false,
         smoothed_azimuth: None,
         was_following: false,
         last_device: None,
         last_heading: None,
         grace_due: None,
         grace_for: None,
-    });
-    let camera = camera_store();
-    let is_follow_mode = camera.is_follow_mode;
-    let heading = device_orientation_store().orientation.and_then(|o| o.heading);
-    let device_coord = map_navigation().device_coord;
+    })
+}
 
-    // Follow needs the location READY; a heading only turns the map where there
+pub fn following() -> bool {
+    follow().on
+}
+
+pub fn set_following(on: bool) {
+    follow().on = on;
+}
+
+pub fn follow_mode_step() {
+    let f = follow();
+    let is_follow_mode = f.on;
+    let heading = device_orientation_store().orientation.and_then(|o| o.heading);
+    let device_coord = off_center().device_coord;
+
+    // Follow needs the location READY; a heading only turns the camera where there
     // is one, so a device without a compass still follows where it is. A blip
     // must not drop it (it read as the mode switching itself off), but a dead
     // location must eventually, or the camera freezes behind a disabled button.
@@ -63,7 +78,7 @@ pub fn follow_mode_step() {
             Some(due) if now() >= due => {
                 f.grace_due = None;
                 f.grace_for = None;
-                camera.is_follow_mode = false;
+                f.on = false;
             }
             Some(due) => wake_at(due),
             None => {}

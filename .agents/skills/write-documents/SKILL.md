@@ -222,7 +222,7 @@ cited under paths that stayed after the functions were renamed.
 
 So a derived fact goes where a check already reaches it: a value from
 `spec/` is generated, a path and a name cited right after it
-(`world/query.rs` `first_hit`) are held by `check:rules`, and a size is
+(`query.rs` `first_hit`) are held by `check:rules`, and a size is
 said by what it is derived from, never copied as a number into a document.
 Before adding a table of numbers
 or a citation, ask whether an existing check can hold it, and cite in the

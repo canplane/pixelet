@@ -13,12 +13,13 @@ use crate::param::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_PX_PER_S, MIN_ROTATE_RADIUS_P
 pub use crate::abi::cmd::PointerKind;
 use crate::control::camera::controller::{active, Active};
 use crate::control::camera::gesture::{linear, Anchor};
-use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
+use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
 use crate::control::interaction::{clear_hover, clear_hover_coord, hover_at, tap};
 use crate::control::navigation::destination::cancel as cancel_destination;
+use crate::control::navigation::follow_mode::set_following;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::settings_store;
-use crate::world::view::frame::pose::view;
+use crate::view::frame::pose::view;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_guest::clock::now;
@@ -150,7 +151,7 @@ fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
     s.pointer_y = -((client_y - rect.top) / rect.height) * 2.0 + 1.0;
 }
 
-/// A pan puts the map center by hand, so a pending destination is canceled.
+/// A pan puts the focus by hand, so a pending destination is canceled.
 fn do_pan(dx: f64, dy: f64) {
     if active() != Active::Tracked {
         cancel_destination();
@@ -194,7 +195,7 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
         return;
     }
     let angle = libm::atan2(dyc, dx);
-    let turn = s.rotate_turn.get_or_insert(Anchor::new(camera_store().intent.azimuth, angle));
+    let turn = s.rotate_turn.get_or_insert(Anchor::new(camera_state().intent.azimuth, angle));
     let azimuth = turn.ask(angle, linear(-1.0));
     let took = crate::control::camera::controller::set_intent(IntentPatch {
         azimuth: Some(azimuth),
@@ -213,7 +214,7 @@ fn begin_pinch(s: &mut Input) {
     let Some((p0, p1)) = pointer_pair(s) else { return };
     s.pinch_start_dist = libm::hypot(p1.x - p0.x, p1.y - p0.y);
     crate::control::camera::controller::pinch_begin(s.pinch_start_dist);
-    let camera = camera_store();
+    let camera = camera_state();
     s.pinch_tilt = Anchor::new(camera.intent.polar, (p0.y + p1.y) / 2.0);
     s.pinch_twist = None;
     s.drag_mode = DragMode::Pinch;
@@ -230,7 +231,7 @@ fn update_pinch(s: &mut Input) {
     let midpoint_y = (p0.y + p1.y) / 2.0;
     crate::control::camera::controller::pinch(dist);
 
-    let intent = camera_store().intent;
+    let intent = camera_state().intent;
     // An unmoved control is not asked, so a zoom-only pinch writes no tilt.
     let polar = s.pinch_tilt.ask(midpoint_y, linear(tilt_gain()));
     let polar = (!settings_store().tilt_lock && polar != intent.polar).then_some(polar);
@@ -254,12 +255,12 @@ fn update_pinch(s: &mut Input) {
 
 pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, client_x: f64, client_y: f64) {
     let s = input();
-    let camera = camera_store();
+    let camera = camera_state();
     if kind == PointerKind::Touch {
         s.hovering = false;
         s.active_pointers.insert(pointer_id, PointerPos { x: client_x, y: client_y });
         camera.camera_status = CameraStatus::Drag;
-        camera.is_follow_mode = false;
+        set_following(false);
         match s.active_pointers.len() {
             1 => {
                 s.drag_mode = DragMode::Pan;
@@ -296,7 +297,7 @@ pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, clie
     }
     update_pointer(s, client_x, client_y);
     camera.camera_status = CameraStatus::Drag;
-    camera.is_follow_mode = false;
+    set_following(false);
 }
 
 pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, client_y: f64) {
@@ -352,7 +353,7 @@ fn tap_if_still(s: &Input, mode: DragMode) {
 /// A pointer went up, or was canceled.
 pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) {
     let s = input();
-    let camera = camera_store();
+    let camera = camera_state();
     if kind == PointerKind::Touch {
         s.active_pointers.remove(&pointer_id);
         match s.active_pointers.len() {

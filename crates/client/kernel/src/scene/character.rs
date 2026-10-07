@@ -1,6 +1,6 @@
 // pxl-kernel/scene/character.rs
 
-//! The companion at the map's center and the picker's display cases.
+//! The companion at the focus and the picker's display cases.
 
 pub mod chat_bubble;
 pub mod companion;

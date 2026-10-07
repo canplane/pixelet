@@ -4,22 +4,22 @@ use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
 use pxl_spec::space::coord::pvf3::core::FRAC_W;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 
-use crate::control::camera::controller::map_center;
+use crate::control::camera::controller::focus;
 use crate::control::camera::controller::Motion;
 use crate::control::navigation::destination::go_to_ground;
-use crate::control::navigation::store::map_navigation;
-use crate::control::sensor::store::{device_location_store, DevicePoseStatus};
+use crate::control::navigation::off_center::off_center;
+use crate::control::sensor::reading::{device_location_store, DevicePoseStatus};
 use xpute_guest::global::Global;
 
-/// Where the map starts with no fix: Seoul City Hall. Also lights the first
-/// frames and decides day or night before `map_center` exists.
+/// Where the focus starts with no fix: Seoul City Hall. Also lights the first
+/// frames and decides day or night before `focus` exists.
 pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
 fn fallback_seed() -> Pvf3 {
     epsg4326::project(&FALLBACK_G4326)
 }
 
-/// Within a cell: the map center comes back through the camera's floats, not
+/// Within a cell: the focus comes back through the camera's floats, not
 /// to the bit.
 fn is_at(a: &Pvf3, b: &Pvf3) -> bool {
     let cell = 1i64 << FRAC_W;
@@ -33,7 +33,7 @@ struct Bootstrap {
 static BOOTSTRAP: Global<Bootstrap> = Global::new();
 
 pub fn map_bootstrap_step() {
-    let device_coord = map_navigation().device_coord;
+    let device_coord = off_center().device_coord;
     let location_status = device_location_store().pose.status();
     let b = BOOTSTRAP.get(|| Bootstrap { last: None });
     if b.last == Some((device_coord, location_status)) {
@@ -43,7 +43,7 @@ pub fn map_bootstrap_step() {
     // The fallback only once GPS has given up (Error) and the camera was never
     // placed; a later dropout leaves the camera where it was.
     let fallback = fallback_seed();
-    let center = map_center();
+    let center = focus();
     let seed = match device_coord {
         Some(device) => device,
         None if center.is_none() && location_status == DevicePoseStatus::Error => fallback,

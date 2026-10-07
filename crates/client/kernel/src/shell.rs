@@ -3,7 +3,7 @@
 //! What the page's UI reads of the kernel (a Snapshot packet, handed over
 //! only when changed) and the commands it applies to the stores.
 
-use crate::world::pyramid::Observed as _;
+use crate::view::demand::Observed as _;
 use pxl_spec::bake::place_tile::leaf_slot;
 use pxl_spec::cell::object::{decor_num_id, placeable_cube_num_id};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
@@ -12,15 +12,16 @@ use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
-use crate::abi::cmd::{CompanionState, HoldingState, LocationState, LonLat, MapState, MapStatus, OrientationState, PlaceName, PlacePart, Snapshot};
-use crate::control::camera::controller::{dist, map_center, units_per_px_at, Motion};
-use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
+use crate::abi::cmd::{CompanionState, FocusState, GroundStatus, HoldingState, LocationState, LonLat, OrientationState, PlaceName, PlacePart, Snapshot};
+use crate::control::camera::controller::{dist, focus, units_per_px_at, Motion};
+use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
 use crate::control::interaction::holding;
 use crate::control::navigation::destination::go_to_ground;
-use crate::control::navigation::store::map_navigation;
+use crate::control::navigation::follow_mode::{following, set_following};
+use crate::control::navigation::off_center::off_center;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
-use crate::control::sensor::store::{device_location_store, device_orientation_store};
+use crate::control::sensor::reading::{device_location_store, device_orientation_store};
 use crate::layer::geocode::fetcher::group_of;
 use crate::layer::geocode::store as geocode_store;
 use crate::scene::character::companion::companion_load_store;
@@ -35,7 +36,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 /// switching language re-reads rather than refetches.
 fn place_parts(tile: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
     let parts = tile
-        .zip(crate::control::camera::controller::map_center().map(|c| group_of(&c)))
+        .zip(crate::control::camera::controller::focus().map(|c| group_of(&c)))
         .zip(geocode_store::dict())
         .and_then(|((tile, group), dict)| {
             let group = geocode_store::group_of(group)?;
@@ -61,10 +62,10 @@ fn place_parts(tile: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
 pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let location = device_location_store();
     let orientation = device_orientation_store();
-    let camera = camera_store();
+    let camera = camera_state();
     let settings = settings_store();
     let companion = companion_load_store();
-    let at = crate::control::camera::controller::map_center();
+    let at = crate::control::camera::controller::focus();
     let tile = at.map(|c| idx(LEAF_ZOOM, c.i));
     let center = at.map(|c| {
         let g = epsg4326::unproject(c.i, c.f);
@@ -79,15 +80,15 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         preview_cnt += 1;
     }
     let snapshot = Snapshot {
-        map: MapState {
+        focus: FocusState {
             // Loaded once ground is drawn, or every tile the view needs has answered,
             // which over a source's void leaves nothing to draw.
-            status: match crate::world::view::observation::eye() {
-                None => MapStatus::Idle,
-                Some(_) if crate::kernel().sched.shows_ground() || Terrain::pyramid().answered() => MapStatus::Success,
-                Some(_) => MapStatus::Loading,
+            status: match crate::view::observation::eye() {
+                None => GroundStatus::Idle,
+                Some(_) if crate::kernel().sched.shows_ground() || Terrain::demand().answered() => GroundStatus::Success,
+                Some(_) => GroundStatus::Loading,
             },
-            is_off_center: map_navigation().is_off_center,
+            is_off_center: off_center().is_off_center,
             center,
             outside: at.is_some_and(|c| void_under(&c)),
         },
@@ -111,7 +112,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             error: orientation.pose.error(),
         },
         azimuth: camera.intent.azimuth,
-        is_follow_mode: camera.is_follow_mode,
+        is_follow_mode: following(),
         camera_busy: camera.camera_status != CameraStatus::Idle,
         zooming: crate::control::camera::controller::zooming(),
         settings: &values,
@@ -127,24 +128,23 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
 /// The shell decides which of the three from the state it drew the button
 /// in, so the press means what the user saw.
 pub fn tracking_action(tracking: Tracking) {
-    let camera = camera_store();
     match tracking {
         Tracking::Recenter => {
-            // A fix's Z is altitude, absent on most and never the map's ground height.
-            if let Some(device) = map_navigation().device_coord {
+            // A fix's Z is altitude, absent on most and never the ground's height.
+            if let Some(device) = off_center().device_coord {
                 go_to_ground(device, Motion::Snap);
             }
-            camera.is_follow_mode = false;
+            set_following(false);
             crate::control::camera::controller::come_in_to_default();
         }
         Tracking::Follow => {
-            // The heading is asked for, and the map turns with it once it comes;
+            // The heading is asked for, and the view turns with it once it comes;
             // where there is none, following is where one is alone.
             request_orientation(world_platform().orientation);
-            camera.is_follow_mode = true;
+            set_following(true);
         }
         Tracking::Unfollow => {
-            camera.is_follow_mode = false;
+            set_following(false);
             crate::control::camera::controller::reset_azimuth();
         }
     }
@@ -153,7 +153,7 @@ pub fn tracking_action(tracking: Tracking) {
 /// A badge's height is its zoom's, coarser than where the center stands, so
 /// the center goes on the surface once it is known exactly.
 fn go_on_ground(target: Pvf3, motion: Motion) {
-    camera_store().is_follow_mode = false;
+    set_following(false);
     go_to_ground(target, motion);
 }
 
@@ -198,15 +198,15 @@ pub fn sensors_close() {
     orientation_close();
 }
 
-/// The view's scale at the map center, as the meters a logical pixel spans;
+/// The view's scale at the focus, as the meters a logical pixel spans;
 /// 0 where the camera stands at the center: no distance, no scale.
 fn m_per_px() -> f64 {
-    let y_u = map_center().map_or(0.0, |c| pvf3::to_real(pvf3::Y(&c)));
+    let y_u = focus().map_or(0.0, |c| pvf3::to_real(pvf3::Y(&c)));
     units_per_px_at(dist()) / epsg3857::u_per_m(y_u)
 }
 
 /// The source has nothing under `at`: the ground cell there, as the finest
 /// tile held over it gives it, is void.
 fn void_under(at: &Pvf3) -> bool {
-    crate::world::query::Access::now().at(at, LEAF_ZOOM).value().is_some_and(|g| g.top().is_none())
+    crate::query::World::now().at(at, LEAF_ZOOM).value().is_some_and(|g| g.top().is_none())
 }

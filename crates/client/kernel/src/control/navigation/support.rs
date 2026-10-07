@@ -1,6 +1,6 @@
 // pxl-kernel/control/navigation/support.rs
 
-//! The map center standing on the ground, and where every camera's pan
+//! The focus standing on the ground, and where every camera's pan
 //! puts it. The center's Z is half a cell over the floor the character
 //! stands on, as a cell's center stands over its ground. Only a leaf gives
 //! that floor; a center put over coarser ground keeps its Z unknown and
@@ -13,9 +13,9 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::layer::Answer;
+use crate::query::{Detail, Ray, World};
 use crate::setting::store::settings_store;
-use crate::world::query::{Access, Detail, Ray};
-use crate::world::view::frame::coord::{to_world, world_to_canonical};
+use crate::view::frame::coord::{to_world, world_to_canonical};
 use pxl_spec::space::coord::zoom::{index_of, units};
 
 /// The Z lane's floor, under any ground.
@@ -36,7 +36,7 @@ pub fn is_unknown(at: &Pvf3) -> bool {
 /// A tap names the surface it struck: the center stands in the cell across
 /// that face, on the floor under it.
 pub fn stand(at: &Pvf3) -> Pvf3 {
-    match Access::now().floor_under(at) {
+    match World::now().floor_under(at) {
         Answer::Exact(Some(top)) => stand_over(at, top),
         // Nothing to stand on: the point keeps its height.
         Answer::Exact(None) => *at,
@@ -64,7 +64,7 @@ fn standing(at: &Pvf3) -> Answer<Option<Pvf3>> {
     if !is_unknown(at) {
         return Answer::Exact(Some(*at));
     }
-    Access::now().surface_support(at).map(|top| top.map(|top| stand_over(at, top)))
+    World::now().surface_support(at).map(|top| top.map(|top| stand_over(at, top)))
 }
 
 /// Where `at` is drawn; at `held`'s height where nothing is known.
@@ -114,7 +114,7 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) ->
         Passage::Unknown => {}
         Passage::Blocked => return *from,
     }
-    match Access::now().floor_under(&at) {
+    match World::now().floor_under(&at) {
         Answer::Exact(Some(top)) => stand_over(&at, top),
         Answer::Exact(None) => at,
         _ => unknown_z(&at),
@@ -135,7 +135,7 @@ pub enum Passage {
 
 /// Lowest open cell height from `start` along `way`: over each blocker, under `from`'s ceiling.
 pub fn passage(from: &Pvf3, way: [f64; 2], start: i64) -> Passage {
-    let access = Access::now();
+    let access = World::now();
     let Some(ceiling) = access.ceiling_over(from).exact() else { return Passage::Blocked };
     let length = libm::hypot(way[0], way[1]);
     let side = units(GROUND.cell());

@@ -49,8 +49,9 @@ pub fn fold_ground(children: [&Ground; 4], zoom: Zoom) -> Ground {
 /// The elevation folded: `around[neighbor_index(qx, qy)]` is the padded grid of
 /// the child at (qx, qy), qx, qy in −1..=2. A parent's padding reaches four
 /// child samples past the block, so it is read from the neighbors' inner
-/// samples. A missing tile is ocean (0); a missing ring tile falls back to the
-/// block's own padding, which changes only the outermost padding sample.
+/// samples. A ring tile not baked yet lends nothing: the block's own
+/// children's padding stands in, its edge repeated past it, until the
+/// neighbor is baked and this tile folded again.
 pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     let inner = TILE_ELE_SPAN as i64;
     let (pad, padded) = (ELE_PAD as i64, ELE_PADDED_SPAN as usize);

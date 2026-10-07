@@ -26,7 +26,7 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 17] = [
+const DATA_SPECS: [DataSpec; 18] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
@@ -40,7 +40,7 @@ const DATA_SPECS: [DataSpec; 17] = [
     DataSpec {
         json: "spec/spec/place.json",
         uses: &[],
-        ts: Some("apps/web/src/feature/map/geocode/place.spec.ts"),
+        ts: Some("apps/web/src/feature/world/geocode/place.spec.ts"),
         rs: Some("crates/spec/src/place.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
@@ -96,6 +96,16 @@ const DATA_SPECS: [DataSpec; 17] = [
         enums: Enums::None,
         ts_names: None,
         cpp: Some(("xpute/cpp/guest/ipc/sys.spec.hpp", "xpute::sys")),
+    },
+    DataSpec {
+        json: "xpute/spec/sched/tick.json",
+        uses: &[],
+        ts: Some("xpute/ts/host/src/sched/tick.spec.ts"),
+        rs: Some("xpute/rust/guest/src/sched/tick.spec.rs"),
+        module: Some("spec"),
+        enums: Enums::Named(&["PHASES"]),
+        ts_names: None,
+        cpp: Some(("xpute/cpp/guest/sched/tick.spec.hpp", "xpute")),
     },
     DataSpec {
         json: "spec/client/kernel/abi/directory.json",
@@ -179,7 +189,12 @@ const DATA_SPECS: [DataSpec; 17] = [
     },
     DataSpec {
         json: "spec/client/kernel/profiler/profiler.json",
-        uses: &["spec/client/kernel/io/demand.json", "spec/client/kernel/turn/step.json", "spec/client/render/gpu/span.json"],
+        uses: &[
+            "xpute/spec/sched/tick.json",
+            "spec/client/kernel/io/demand.json",
+            "spec/client/kernel/turn/step.json",
+            "spec/client/render/gpu/span.json",
+        ],
         ts: Some("apps/web/src/feature/debug/profiler/profiler.spec.ts"),
         rs: Some("crates/client/kernel/src/profiler/profiler.spec.rs"),
         module: Some("spec"),
@@ -547,16 +562,22 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 cpp.push("//".into());
                 cpp.extend(line_comments(doc, ""));
             }
-            cpp.extend([
-                String::new(),
-                "#pragma once".into(),
-                String::new(),
-                "#include <cstdint>".into(),
-                String::new(),
-                format!("namespace {namespace} {{"),
-            ]);
+            let lists = names.iter().any(|k| matches!(spec.get(k), Some(Node::Arr(_))));
+            cpp.extend([String::new(), "#pragma once".into(), String::new()]);
+            if lists {
+                cpp.push("#include <array>".into());
+            }
+            cpp.push("#include <cstdint>".into());
+            if lists {
+                cpp.push("#include <string_view>".into());
+            }
+            cpp.extend([String::new(), format!("namespace {namespace} {{")]);
+            let enums: &[&str] = match d.enums {
+                Enums::Named(list) => list,
+                _ => &[],
+            };
             for name in &names {
-                cpp_items(name, spec.get(name).ok_or("a name it listed")?, "f64", &mut cpp)?;
+                cpp_items(name, spec.get(name).ok_or("a name it listed")?, "f64", enums.contains(&&**name), &mut cpp)?;
             }
             cpp.extend([String::new(), format!("}} // namespace {namespace}")]);
             outputs.push(Output::new(cpp_path, file(&cpp)));
@@ -565,8 +586,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     Ok(outputs)
 }
 
-/// Non-numbers are refused: no C++ header carries one yet.
-fn cpp_items(name: &str, n: &Node, ty: &str, out: &mut Vec<String>) -> Result<(), String> {
+/// A list of names is a `string_view` array, and with `numbered` also an
+/// enum class of them numbered by place; any other non-number is refused.
+fn cpp_items(name: &str, n: &Node, ty: &str, numbered: bool, out: &mut Vec<String>) -> Result<(), String> {
     let doc = if n.is_obj() { n.lines_at("$doc") } else { None };
     out.push(String::new());
     if let Some(doc) = doc {
@@ -576,9 +598,20 @@ fn cpp_items(name: &str, n: &Node, ty: &str, out: &mut Vec<String>) -> Result<()
         let t = type_of(n, ty);
         out.push(format!("namespace {name} {{"));
         for (k, v) in n.named() {
-            cpp_items(k, v, t, out)?;
+            cpp_items(k, v, t, false, out)?;
         }
         out.push(format!("}} // namespace {name}"));
+        return Ok(());
+    }
+    if let Node::Arr(list) = n {
+        let names = list.iter().map(|v| v.str().ok_or(format!("{name}: a C++ list takes names only"))).collect::<Result<Vec<_>, _>>()?;
+        if numbered {
+            out.push(format!("enum class {} : std::uint8_t {{", enum_name(name)));
+            out.extend(names.iter().enumerate().map(|(k, v)| format!("    {v} = {k},")));
+            out.extend(["};".to_string(), String::new()]);
+        }
+        let quoted: Vec<String> = names.iter().map(|v| json_str(v)).collect();
+        out.push(format!("inline constexpr std::array<std::string_view, {}> {name}{{{}}};", names.len(), quoted.join(", ")));
         return Ok(());
     }
     let (value, t) = if n.is_wrapper() { (n.value(), type_of(n, ty)) } else { (n, ty) };

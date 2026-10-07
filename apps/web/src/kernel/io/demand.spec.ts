@@ -6,8 +6,13 @@
 // its run came to an end, and the phases a run reports its time in. The profiler
 // records and reports them by these names (spec/client/kernel/profiler/profiler.json).
 
+import type { u32 } from "@xpute/core/abi/word.ts";
+
 export const CATEGORY_NAMES = ["terrain", "poi", "geocode", "geocode_dict", "asset", "earth"] as const;
 
 export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
 
 export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms", "adopt_ms"] as const;
+
+/** Timings a run reports at most; past it one is left out. */
+export const TASK_PHASES_MAX: u32 = 6 as number;

@@ -1,20 +1,21 @@
 // pxl-kernel/scene/character/companion.rs
 
-//! A companion (person + pet) at map_center. When map_center comes to rest it
+//! A companion (person + pet) at focus. When focus comes to rest it
 //! makes a fixed-duration catch-up walk there; in follow mode, where
-//! map_center is a ~1 Hz GPS stream that never rests, it instead glides at
+//! focus is a ~1 Hz GPS stream that never rests, it instead glides at
 //! the world-scroll rate so the two cancel and it holds at screen center.
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::control::camera::approach::damp_alpha;
 use crate::control::camera::input::steering;
-use crate::control::camera::store::{camera_store, CameraStatus};
+use crate::control::camera::state::{camera_state, CameraStatus};
 use crate::control::navigation::support::over;
 use crate::io::load::{load_image, Load};
 use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
 use crate::param::COMPANION_STEP_CELLS;
+use crate::query::World;
 use crate::scene::character::chat_bubble::chat_bubble_step;
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
@@ -22,8 +23,7 @@ use crate::scene::character::variant_spec::IDLE_CLIP;
 use crate::sched::edge::wake_at;
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
-use crate::world::query::Access;
-use crate::world::view::frame::coord::world_to_canonical;
+use crate::view::frame::coord::world_to_canonical;
 use xpute_guest::global::Global;
 
 pub const ACTORS_MAX: usize = Group::ALL.len();
@@ -140,7 +140,7 @@ impl Figure {
         // Wall seconds: the tick's elapsed is clamped per delta, which stretches
         // these spans across a gap where the world did not tick.
         let now = xpute_guest::clock::now() / 1000.0;
-        let dragging = camera_store().camera_status == CameraStatus::Drag;
+        let dragging = camera_state().camera_status == CameraStatus::Drag;
         let released = self.was_dragging && !dragging;
         let gap = |a: [f64; 2], b: [f64; 2]| libm::hypot(a[0] - b[0], a[1] - b[1]);
         let (mut at, is_walking);
@@ -175,7 +175,7 @@ impl Figure {
             }
             // A release fixes the destination at once: a pan begun inside the settle
             // delay holds the target moving, so waiting would plan nothing. The settle
-            // tracker covers every other way the map moves.
+            // tracker covers every other way the focus moves.
             let destination = if released {
                 self.settle = SettleTracker::new(target, now);
                 Some(target)
@@ -197,7 +197,7 @@ impl Figure {
                     });
                 }
             }
-            // A plan in flight finishes even once the map moves again: dropping it
+            // A plan in flight finishes even once the focus moves again: dropping it
             // stalled the figure during gestures and a run of quick pans ended in one jump.
             let (step, heading) = self.walk_plan.as_ref().map_or((self.at, None), |plan| plan.at(now));
             if heading.is_none() {
@@ -270,7 +270,7 @@ fn companion() -> &'static mut Companion {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompanionProps {
     pub center: [f64; 2],
-    /// The top of the floor under the map center.
+    /// The top of the floor under the focus.
     pub floor: f64,
 }
 
@@ -300,7 +300,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     };
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);
     let steered = steering();
-    let follows = camera_store().is_follow_mode || steered;
+    let follows = crate::control::navigation::follow_mode::following() || steered;
 
     let person_target = p.center;
     let person = figure_for(&mut c.person, person_variant, person_target);
@@ -323,11 +323,11 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
 /// None inside where a wall holds it; None outside where no tile is resident.
 fn step_from([x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
     let at = world_to_canonical(&[x, y, over(stands)]);
-    Access::now().support(&at, COMPANION_STEP_CELLS).value()
+    World::now().support(&at, COMPANION_STEP_CELLS).value()
 }
 
 /// Whether the companion's models have loaded: a live, unpersisted signal
-/// for the map toast. A fresh figure always starts unloaded.
+/// for the loading toast. A fresh figure always starts unloaded.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CompanionLoadStore {
     pub person_ready: bool,

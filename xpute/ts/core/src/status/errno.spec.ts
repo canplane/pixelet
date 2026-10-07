@@ -161,3 +161,8 @@ const STRERROR: Record<number, string> = {
   [-125]: "ECANCELED: Operation canceled",
   [-131]: "ENOTRECOVERABLE: State not recoverable: an invariant the code stands on does not hold",
 };
+
+/** The member `code` is, null for a number no member has. */
+export function errno_of(code: number): Errno | null {
+  return Object.hasOwn(STRERROR, code) ? (code as Errno) : null;
+}

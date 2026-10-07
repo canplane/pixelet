@@ -33,7 +33,7 @@ export const SETTINGS = {
    *
    * It sources the chunks: the shader samples a leaf's layer or does not,
    * but a tier over it carries one color and no layer to sample, so which
-   * color that is was baked in (mesh/chunk_mesher.rs). */
+   * color that is was baked in (mesh/chunk.rs). */
   textures: {
     key: 0 as number,
     kind: "toggle",
@@ -60,16 +60,16 @@ export const SETTINGS = {
     dev: true,
     cost: "med",
   },
-  /** The places' badges over the map, from the published POI tiles. */
+  /** The places' badges over the world, from the published POI tiles. */
   poi: {
     key: 2 as number,
     kind: "toggle",
     default: false,
-    section: "map",
+    section: "world",
     cost: "low",
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
-   * Off by default: the tilt is the one control a map view is expected to
+   * Off by default: the tilt is the one control a view from above is expected to
    * have, and locking it reads as the app being stuck. */
   tilt_lock: {
     key: 3 as number,
@@ -78,17 +78,17 @@ export const SETTINGS = {
     section: "camera",
   },
   /** Which controller makes the camera's pose; CAMERA_MODES says each. To
-   * first person the person stands at the map center, the eye at its
-   * height over the ground; to third the map center is laid on the ground
+   * first person the person stands at the focus, the eye at its
+   * height over the ground; to third the focus is laid on the ground
    * and the eye steps back by the radius. */
   camera_mode: {
     key: 4 as number,
     kind: "choice",
     default: "orbit",
     options: ["orbit", "free"],
-    section: "map",
+    section: "world",
   },
-  /** The map center stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck. */
+  /** The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck. */
   surface_follow: {
     key: 5 as number,
     kind: "toggle",
@@ -159,21 +159,28 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs). */
+  /** Markers for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs). */
   gizmos: {
     key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  person: {
+  /** A HUD of the camera grid's cells about the eye, each marked by how wide the drawn chunk's cell where its center ray lands spans against the grid's (scene/marker/camera_gizmo.rs). */
+  camera_gizmo: {
     key: 14 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
+  person: {
+    key: 15 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 15 as number,
+    key: 16 as number,
     kind: "index",
     default: 5 as number,
     section: "character",
@@ -182,16 +189,16 @@ export const SETTINGS = {
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */
 export const SETTINGS_SHIPPED = {
-  /** The places' badges over the map, from the published POI tiles. */
+  /** The places' badges over the world, from the published POI tiles. */
   poi: {
     key: 2 as number,
     kind: "toggle",
     default: false,
-    section: "map",
+    section: "world",
     cost: "low",
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
-   * Off by default: the tilt is the one control a map view is expected to
+   * Off by default: the tilt is the one control a view from above is expected to
    * have, and locking it reads as the app being stuck. */
   tilt_lock: {
     key: 3 as number,
@@ -200,15 +207,15 @@ export const SETTINGS_SHIPPED = {
     section: "camera",
   },
   /** Which controller makes the camera's pose; CAMERA_MODES says each. To
-   * first person the person stands at the map center, the eye at its
-   * height over the ground; to third the map center is laid on the ground
+   * first person the person stands at the focus, the eye at its
+   * height over the ground; to third the focus is laid on the ground
    * and the eye steps back by the radius. */
   camera_mode: {
     key: 4 as number,
     kind: "choice",
     default: "orbit",
     options: ["orbit", "free"],
-    section: "map",
+    section: "world",
   },
   /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. */
   orbit_obstacle: {
@@ -273,21 +280,28 @@ export const SETTINGS_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** Markers for the map center and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs). */
+  /** Markers for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs). */
   gizmos: {
     key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  person: {
+  /** A HUD of the camera grid's cells about the eye, each marked by how wide the drawn chunk's cell where its center ray lands spans against the grid's (scene/marker/camera_gizmo.rs). */
+  camera_gizmo: {
     key: 14 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
+  person: {
+    key: 15 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 15 as number,
+    key: 16 as number,
     kind: "index",
     default: 5 as number,
     section: "character",
