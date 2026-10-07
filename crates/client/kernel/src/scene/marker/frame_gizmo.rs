@@ -12,7 +12,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::control::camera::controller::{azimuth, dist};
 use crate::kernel;
-use crate::world::change::request_world_tick;
+use crate::sched::edge::request_world_tick;
 use crate::world::query::Access;
 use crate::world::view::frame::coord::to_world;
 use xpute_guest::global::Global;

@@ -81,10 +81,10 @@ Between the world and the screen are seven concerns, each with its own bound and
 | Concern         | Asks                                           | Bounded by                           | Where                                                |
 | --------------- | ---------------------------------------------- | ------------------------------------ | ---------------------------------------------------- |
 | Storage         | a layer's records, in the layer's own shape    | nothing of the view                  | a layer; the bucket                                  |
-| Query           | what is known at a point, or first along a ray | —; it holds nothing                  | `world/query.rs`                                    |
+| Query           | what is known at a point, or first along a ray | —; it holds nothing                  | `world/query.rs`                                     |
 | Demand          | which records an observation requires          | 3 × 3 tiles a zoom (`REACH_TILES`)   | `pxl-spec space/layer/demand.rs`, `world/pyramid.rs` |
 | Residency       | which records are held, and why                | its frames, asserted at compile time | `layer/residency.rs`                                 |
-| Materialization | what is drawn from what is held                | the arena                            | `world/chunk/domain.rs`, `world/chunk/frontier.rs` |
+| Materialization | what is drawn from what is held                | the arena                            | `world/chunk/domain.rs`, `world/chunk/frontier.rs`   |
 | Scheduling      | which waiting work runs now                    | the turn's quota and the credits     | `io/sched.rs`, `io/policy.rs`                        |
 
 **Storage** keeps each layer as its data is: terrain a heightfield in a 2D pyramid of tiles, placed objects one sparse octree. A tile carries, in its own lanes, the lowest and highest anything under it stands and which of its children exist — its **index** — so it is read the moment it is resident, with nothing over it required.
@@ -260,7 +260,7 @@ The commands are `spec/client/kernel/abi/cmd.json`'s, numbered from `0x10` past 
 
 The kernel also posts messages nobody asked for: a fetch to start or cancel, a model or image to decode, a sensor to watch, a console line, a new snapshot. Those are its signals.
 
-The world's revisions (`world/change.rs`) say what is stored has changed: one for the objects, and one per chunk, which a write to a cube it draws moves (`world/chunk/source.rs` `written`), so a chunk reads one revision rather than summing what it draws. They move on a write and on nothing else: the eraser's previews are a chunk's sources, not a change to the store. A reader compares a revision with the one it last read; nothing is called when one moves.
+What the objects' store wrote is the regions it wrote, which the turn takes once (`layer/object/store.rs` `take_written`) and hands down to what draws them and what is worked out from them; the store calls nothing above it. A region moves on a write and on nothing else: the eraser's previews are a chunk's sources, not a change to the store.
 
 ## The memory map
 

@@ -15,7 +15,7 @@ use crate::control::sensor::device_orientation::{orientation_watchdog_step, Orie
 use crate::control::sensor::geolocation::geolocation_step;
 use crate::io::sched::{pump, set_credits};
 use crate::io::text::text_rise;
-use crate::layer::geocode::fetcher::geocode_fetcher_step;
+use crate::layer::geocode::fetcher::{geocode_fetcher_step, group_of};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
 
@@ -25,10 +25,10 @@ use crate::scene::environment::state::map_environment_step;
 use crate::scene::marker::frame_gizmo::debug_gizmos_step;
 use crate::scene::marker::hover_cursor::hover_cursor_step;
 use crate::scene::marker::location_puck::location_puck_step;
+use crate::sched::edge::{request_world_tick, world_edge};
 use crate::sched::profiler::spec::EffectName;
 use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickState};
 use crate::shell::setting::store::settings_store;
-use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::decor::asset_store::decor_assets_wanted;
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
@@ -84,7 +84,7 @@ fn goal_tick(ctx: &mut TickContext) {
 fn demand_tick(_: &mut TickContext) {
     Terrain::pyramid().step(crate::control::navigation::destination::tile());
     // Nothing is fetched while places are hidden.
-    match crate::layer::poi::enabled() {
+    match crate::shell::setting::store::settings_store().poi {
         true => PoiTile::pyramid().step(None),
         false => PoiTile::pyramid().idle(),
     }
@@ -128,7 +128,7 @@ enum TaskPriority {
     Background,
 }
 
-/// No more than change.rs's TASKS; a refusal means the executor holds fewer, and aborts.
+/// No more than edge.rs's TASKS; a refusal means the executor holds fewer, and aborts.
 fn world_tasks() {
     use xpute_guest::sched::task::spawn;
     use TaskPriority::*;
@@ -178,7 +178,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, destination, crate::control::navigation::destination::destination_step());
     // After every writer of the map center, before anything observes the view.
     effect!(worst, view, crate::world::view::frame::pose::view_compose());
-    effect!(worst, geocode, geocode_fetcher_step());
+    effect!(worst, geocode, geocode_fetcher_step(crate::control::camera::controller::map_center().map(|c| group_of(&c))));
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, objects, crate::layer::object::repository::step());
     effect!(worst, written, written_step());

@@ -151,7 +151,7 @@ impl<L: Observed> Pyramid<L> {
     }
 
     /// The floor's tiles as last observed.
-    pub fn floor(&self) -> impl Iterator<Item = Tile> + '_ {
+    pub fn floor(&self) -> impl Iterator<Item = Tile> + Clone + '_ {
         self.last.iter().flat_map(|seen| seen.floor.iter().flatten().copied())
     }
 

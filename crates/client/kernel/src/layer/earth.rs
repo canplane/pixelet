@@ -99,20 +99,19 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
     }
 }
 
-/// The floor's tiles at the top as a window, its south-west tile first, and
+/// The floor's tiles (`floor`, the view's) at the top as a window, its south-west tile first, and
 /// per tile row by row its layer plus one, zero where the global picture
 /// answers: residency as the GPU reads it, kept nowhere.
-pub fn earth_window() -> ([i32; 2], [u32; REACH_TILES as usize]) {
+pub fn earth_window(floor: impl Iterator<Item = Tile> + Clone) -> ([i32; 2], [u32; REACH_TILES as usize]) {
     let mut layers = [0; REACH_TILES as usize];
-    let pyramid = Earth::pyramid();
     let at = |p: Tile| [ivec::X(p.tile), ivec::Y(p.tile)];
-    let Some([first, _]) = pyramid.floor().next().map(at) else { return ([0; 2], layers) };
+    let Some([first, _]) = floor.clone().next().map(at) else { return ([0; 2], layers) };
     // X wraps: the window's west tile is the one fewest tiles east of the first.
     let around = around(EARTH_ZOOM);
     let east = |x: i64| wrap_index(EARTH_ZOOM, x - first);
-    let x0 = first + pyramid.floor().map(|p| east(at(p)[0])).min().unwrap_or(0);
-    let y0 = pyramid.floor().map(|p| at(p)[1]).min().unwrap_or(0);
-    for p in pyramid.floor() {
+    let x0 = first + floor.clone().map(|p| east(at(p)[0])).min().unwrap_or(0);
+    let y0 = floor.clone().map(|p| at(p)[1]).min().unwrap_or(0);
+    for p in floor {
         let Some(record) = Earth::residency().frame(p) else { continue };
         if uploads()[record as usize].is_none() {
             let [x, y] = at(p);

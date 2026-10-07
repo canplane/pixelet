@@ -4,7 +4,7 @@
 //! pender only records that work is queued: poll is never called from it,
 //! which the executor forbids, and `pending` tells the falling edge.
 
-use crate::world::change::TASKS;
+use crate::sched::edge::TASKS;
 use embassy_executor::raw::Executor as Raw;
 use xpute_guest::global::Global;
 use xpute_guest::sched::task::{set_executor, Executor, Priority, Task};

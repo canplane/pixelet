@@ -8,7 +8,7 @@ use crate::control::camera::store::{camera_store, IntentPatch};
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, device_orientation_store, DevicePoseStatus};
-use crate::world::change::wake_at;
+use crate::sched::edge::wake_at;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 

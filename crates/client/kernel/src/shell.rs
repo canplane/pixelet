@@ -23,7 +23,7 @@ use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::store::{device_location_store, device_orientation_store};
-use crate::layer::geocode::fetcher::center_group;
+use crate::layer::geocode::fetcher::group_of;
 use crate::layer::geocode::store as geocode_store;
 use crate::scene::character::companion::companion_load_store;
 use crate::scene::character::preview::{preview_rows, CASES_MAX};
@@ -37,7 +37,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 /// switching language re-reads rather than refetches.
 fn place_parts(tile: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
     let parts = tile
-        .zip(center_group())
+        .zip(crate::control::camera::controller::map_center().map(|c| group_of(&c)))
         .zip(geocode_store::dict())
         .and_then(|((tile, group), dict)| {
             let group = geocode_store::group_of(group)?;

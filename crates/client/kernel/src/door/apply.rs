@@ -36,7 +36,7 @@ fn bearing(deg: Option<f64>) -> bool {
 /// A UI command: asks for a turn and raises what it asks of the host before
 /// returning, so a sensor close sent after the strobe stopped is still heard.
 fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
-    crate::world::change::request_world_tick();
+    crate::sched::edge::request_world_tick();
     post_shell(s);
     Ok(Some(0))
 }
@@ -47,11 +47,11 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     use crate::control::camera::input::{camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel, Rect};
     use crate::control::interaction::{hold, holding};
     use crate::control::sensor::{device_orientation, geolocation};
+    use crate::sched::edge::request_world_tick;
     use crate::sched::profiler::log::{profiler_set_logging, profiler_window_start, profiler_window_stop};
     use crate::sched::turn::world_platform;
     use crate::shell as ui;
     use crate::shell::setting::store::{settings_load, settings_store};
-    use crate::world::change::request_world_tick;
 
     if let Some(cmd) = xpute_cmd::Command::of(number) {
         return apply_xpute(cmd, pkt);

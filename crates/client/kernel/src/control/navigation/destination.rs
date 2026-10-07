@@ -22,7 +22,7 @@ fn destination() -> &'static mut Option<(Pvf3, Motion)> {
 /// A later destination or a `go_to` replaces it.
 pub fn go_to_ground(at: Pvf3, motion: Motion) {
     *destination() = Some((unknown_z(&at), motion));
-    crate::world::change::request_world_tick();
+    crate::sched::edge::request_world_tick();
 }
 
 /// A pending destination is dropped: this was asked last.

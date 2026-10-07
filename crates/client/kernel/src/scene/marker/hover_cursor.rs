@@ -20,9 +20,9 @@ use crate::control::interaction::edit::{carve_entry, get_placed_object, restores
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::{EntryAt, EntryKind};
+use crate::sched::edge::request_world_tick;
 use crate::shell::setting::store::settings_store;
 use crate::with_world;
-use crate::world::change::request_world_tick;
 use crate::world::chunk::decor::asset_store::decor_assets_for;
 use crate::world::chunk::decor::build::user_decor_pick;
 use crate::world::chunk::decor::instance::NO_ENTRY;

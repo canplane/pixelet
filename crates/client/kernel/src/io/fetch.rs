@@ -21,7 +21,7 @@ use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle, Credit};
 use crate::layer::earth::{self, Earth};
 use crate::layer::geocode::store as geocode_store;
-use crate::world::change::world_edge;
+use crate::sched::edge::world_edge;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::place_tile::{group_key, DICT_OBJECT};
 use pxl_spec::bake::poi_tile::PoiTile;

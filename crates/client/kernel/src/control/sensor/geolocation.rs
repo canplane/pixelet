@@ -6,7 +6,7 @@
 pub use crate::abi::cmd::GeolocationErrorCode;
 use crate::abi::cmd::Message;
 use crate::control::sensor::store::{device_location_store, Pose};
-use crate::world::change::wake_at;
+use crate::sched::edge::wake_at;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 

@@ -14,7 +14,7 @@ use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
 use crate::scene::environment::fog::view_reach;
-use crate::world::change::request_world_tick;
+use crate::sched::edge::request_world_tick;
 use crate::world::chunk::table::Frame;
 use crate::world::query::Access;
 use crate::{kernel, with_world};

@@ -19,14 +19,15 @@ use crate::door::host::handheld;
 use crate::io::load::{load_image, Load};
 use crate::io::text::text_raster;
 use crate::kernel;
-use crate::layer::earth::{earth_upload, earth_window, EARTH_FRAMES};
+use crate::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
 use crate::scene::billboard::sheet::billboard_sheet;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
+use crate::sched::edge::request_world_tick;
 use crate::shell::setting::store::{settings_store, AoMode};
-use crate::world::change::request_world_tick;
 use crate::world::chunk::decor::asset_store::kind_assets;
 use crate::world::chunk::stage::set_host_frame_stat;
+use crate::world::pyramid::Observed as _;
 use crate::world::view::frame::resolution::resolution_observe;
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
@@ -94,7 +95,7 @@ pub fn stage_render() {
         *slot = row;
         case_cnt += 1;
     }
-    let (window, layers) = earth_window();
+    let (window, layers) = earth_window(Earth::pyramid().floor());
     let out = render_frame(FrameInput {
         lists,
         environment: &kernel().scene.environment.out,

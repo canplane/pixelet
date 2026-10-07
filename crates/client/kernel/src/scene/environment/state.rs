@@ -14,7 +14,7 @@ use crate::door::host::wall_now;
 use crate::kernel;
 use crate::scene::environment::celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
 use crate::scene::environment::fog::eye_ground;
-use crate::world::change::wake_at;
+use crate::sched::edge::wake_at;
 use crate::world::chunk::table::Frame;
 use crate::world::view::frame::pose::globe_anchor;
 use xpute_guest::clock::now;
