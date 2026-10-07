@@ -26,8 +26,7 @@ use crate::world::view::reach::{eye_height, reach_at};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 
 pub fn eye() -> Option<V3> {
-    crate::control::camera::controller::camera().eye?;
-    Some(view().pose.eye)
+    Some(view().pose?.eye)
 }
 
 pub fn frustum_of_view() -> Frustum {
