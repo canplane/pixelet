@@ -23,8 +23,8 @@ fn cell_idx(x: i64, y: i64) -> usize {
     GROUND.cell_index(x as u32, y as u32) as usize
 }
 
-/// On a shore, landcover and water do not paint the sea: the cells the coast
-/// left water, fixed before any feature paints, since a salt pond paints water too.
+/// Landcover and water do not paint the sea: the cells the coast left water,
+/// fixed before any feature paints, since a salt pond paints water too.
 type Sea<'a> = Option<&'a [bool]>;
 
 /// A tile's land against the sea: none of it, all of it, or the land
@@ -46,7 +46,7 @@ pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
             }
         }
     }
-    let sea: Option<Vec<bool>> = matches!(coast, Coast::Shore(_)).then(|| cells.iter().map(|&c| c == ground::water).collect());
+    let sea: Option<Vec<bool>> = (!matches!(coast, Coast::Land)).then(|| cells.iter().map(|&c| c == ground::water).collect());
 
     let mut ordered: Vec<&Feature> = features.iter().collect();
     ordered.sort_by(|a, b| a.rank.cmp(&b.rank));

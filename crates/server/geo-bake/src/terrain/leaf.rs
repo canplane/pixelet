@@ -1,7 +1,7 @@
 // pxl-geo-bake/terrain/leaf.rs
 
 //! Which leaves exist and their bytes. A leaf exists where the elevation
-//! source covers it and land touches it; the offline bake and the dev server
+//! source covers it and land touches it, the coastline it is painted by; the offline bake and the dev server
 //! ask the same question, so both produce the same objects.
 
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -28,7 +28,7 @@ const HAS_GROUND_SQL: &str = "
   SELECT t.ord, CASE
     WHEN EXISTS (SELECT 1 FROM overture_buildings b WHERE ST_Intersects(b.geom, t.tile)) THEN true
     WHEN EXISTS (SELECT 1 FROM overture_transportation s WHERE ST_DWithin(s.geom, t.tile, $6) AND s.subtype <> 'water') THEN true
-    ELSE EXISTS (SELECT 1 FROM overture_base_land c WHERE ST_Intersects(c.geom, t.tile))
+    ELSE EXISTS (SELECT 1 FROM osm_land_polygons c WHERE ST_Intersects(c.geom, t.tile))
   END AS has_ground
   FROM (
     SELECT ord, ST_MakeEnvelope(minx, miny, maxx, maxy, 3857) AS tile

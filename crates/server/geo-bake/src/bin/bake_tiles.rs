@@ -45,6 +45,7 @@ use pxl_geo_bake::deck;
 use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::pyramid::{build, refold, write_manifest, TileSet};
 use pxl_geo_bake::terrain::absent::Absence;
+use pxl_geo_bake::terrain::coast;
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf, has_ground, land_tiles, write_land_tiles};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::tile::walk::{self, Done};
@@ -258,7 +259,7 @@ fn assemble_region(args: &Args, coverage: &Coverage, leaves: &TileSet, land: &[I
         changed.insert(at);
     }
     let leaves_changed = changed.len();
-    let folded = refold(&tiles, changed, &Absence::new(coverage.clone()))?;
+    let folded = refold(&tiles, changed, &Absence::new(coverage.clone(), coast::read(&TileSet::new(args.build.join("coast")), coverage)?))?;
     println!("[bake/region] {leaves_changed} leaves changed, {folded} tiles above folded again -> {}", tiles.root.display());
 
     // Uploaded, the version is its changes over one full version, never over
@@ -304,6 +305,7 @@ fn run() -> Result<(), String> {
     let code = code_id()?;
     let mut args = parse_args()?;
     let leaves = TileSet::new(args.build.join("leaf"));
+    let coast_set = TileSet::new(args.build.join("coast"));
     let coverage = Coverage::of_source()?;
     if args.grow {
         if !args.regions.is_empty() {
@@ -365,11 +367,14 @@ fn run() -> Result<(), String> {
         let leaf_json = args.build.join("leaf.json");
         let source_holdings = holdings(&mut client, &leaf::READS)?;
         let id = source_id(&code, &source_holdings);
-        if read_json(&leaf_json)["id"].as_str() != Some(id.as_str()) && leaves.root.exists() {
-            println!("[bake/leaf] {} holds another code's or source's leaves: removed", leaves.root.display());
-            fs::remove_dir_all(&leaves.root).map_err(|e| e.to_string())?;
+        if read_json(&leaf_json)["id"].as_str() != Some(id.as_str()) {
+            for set in [&leaves, &coast_set].into_iter().filter(|s| s.root.exists()) {
+                println!("[bake/leaf] {} holds another code's or source's tiles: removed", set.root.display());
+                fs::remove_dir_all(&set.root).map_err(|e| e.to_string())?;
+            }
         }
         fs::create_dir_all(&leaves.root).map_err(|e| e.to_string())?;
+        fs::create_dir_all(&coast_set.root).map_err(|e| e.to_string())?;
         let leaf_record = |done: bool| {
             serde_json::json!({
                 "code": code,
@@ -382,6 +387,9 @@ fn run() -> Result<(), String> {
             })
         };
         write_json(&leaf_json, &leaf_record(false))?;
+        let beyond = coverage.beyond();
+        let baked = coast::bake_missing(&mut client, &coast_set, &beyond)?;
+        println!("[bake/coast] {baked} of {} shards past the coverage baked -> {}", beyond.len(), coast_set.root.display());
         // Each worker walks its own band of rows, zigzag, so a tile's eight
         // around it were mostly read for the tile before.
         let mut rows: Vec<IVec> = targets.to_vec();
@@ -467,7 +475,7 @@ fn run() -> Result<(), String> {
             return Err(format!("{} tiles failed to assemble", t.failed));
         }
 
-        let top = build(&tiles, &Absence::new(coverage.clone()), args.concurrency)?;
+        let top = build(&tiles, &Absence::new(coverage.clone(), coast::read(&coast_set, &coverage)?), args.concurrency)?;
         write_built(&tiles, &code, &coverage.shards().map(|s| s.name()).collect())?;
         write_manifest(
             &tiles,

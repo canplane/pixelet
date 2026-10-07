@@ -11,7 +11,7 @@ use xpute_core::math::scalar::round;
 use crate::bake::deck::{slab_depth, Occupies, Over, STACKED_DECK_HEADROOM_M};
 use crate::bake::format::GroundCell;
 use crate::bake::way::half_cells;
-use crate::cell::cube_types::{sentinel, Ground};
+use crate::cell::cube_types::Ground;
 use crate::cell::Kind;
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::pvf3::ivec::gather;
@@ -178,7 +178,7 @@ pub fn pier_covers(frame: Frame, width: f64, a: [f64; 2], d: [f64; 2], near: [f6
 /// `place_pillar`, `support_blocked`), none where the terrain gives no surface
 /// to stand on; water stops none.
 pub fn pier_stands(pier: [i32; 2], cell: GroundCell, column: impl IntoIterator<Item = Over>, ground: i32, u_per_m: f64) -> Option<[i32; 2]> {
-    if cell == sentinel::void || Ground::of(cell).is_some_and(|g| g.kind() == Kind::Transport) {
+    if Ground::of(cell).is_none_or(|g| g.kind() == Kind::Transport) {
         return None;
     }
     let surface = pier[1] + slab_depth(u_per_m);

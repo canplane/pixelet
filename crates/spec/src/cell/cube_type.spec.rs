@@ -27,7 +27,7 @@ pub mod cube_types {
     pub mod sentinel {
         /// nothing painted: the ground before a bake writes it, and an object cell no leaf holds
         pub const void: u8 = 0x00;
-        /// a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown
+        /// land no source here describes, past the coverage, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface
         pub const unknown: u8 = 0xff;
     }
 

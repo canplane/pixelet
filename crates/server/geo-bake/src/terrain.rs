@@ -2,6 +2,7 @@
 
 pub mod absent;
 pub mod bake;
+pub mod coast;
 pub mod leaf;
 pub mod pipeline;
 pub mod repository;

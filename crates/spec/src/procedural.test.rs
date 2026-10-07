@@ -4,8 +4,9 @@ use super::*;
 
 #[test]
 fn a_pier_stands_on_the_ground_and_not_where_the_terrain_gives_none() {
-    use crate::cell::cube_types::ground;
+    use crate::cell::cube_types::{ground, sentinel};
     assert_eq!(pier_stands([0, 10], ground::grass, [], 0, 1.0), Some([0, 10]));
+    assert_eq!(pier_stands([0, 10], sentinel::unknown, [], 0, 1.0), None);
     assert_eq!(pier_stands([0, 10], sentinel::void, [], 0, 1.0), None);
 }
 
@@ -14,7 +15,7 @@ fn a_pier_stands_on_the_ground_and_not_where_the_terrain_gives_none() {
 /// draws and what a ray strikes are one set.
 #[test]
 fn a_region_scattered_at_the_leaves_is_its_cells_scattered_alone() {
-    for (tag, density) in [(0x7ee5_eed7_eec0_de1, 0.04), (0xb0a7_5eed_0002_dec0, 0.002), (0x0ca5_eed0_0003_dec0, 0.3)] {
+    for (tag, density) in [(0x07ee_5eed_7eec_0de1, 0.04), (0xb0a7_5eed_0002_dec0, 0.002), (0x0ca5_eed0_0003_dec0, 0.3)] {
         for min in [[0, 0], [-37, 91], [1 << 20, -(1 << 20) + 5]] {
             let max = [min[0] + 70, min[1] + 45];
             let mut region = Vec::new();
