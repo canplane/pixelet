@@ -6,6 +6,7 @@ use super::{align_star, casing_note, file, js_num, json_str, pascal, pretty, rea
 
 const CUBE_TYPE_JSON: &str = "spec/spec/cell/cube_type.json";
 const DECOR_JSON: &str = "spec/spec/cell/decor.json";
+const ID_JSON: &str = "spec/spec/cell/id.json";
 
 /// How the renderer draws a ground look, numbered as pxl-render's material classes.
 const KINDS: [&str; 4] = ["land", "water", "transport", "structure"];
@@ -181,9 +182,14 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
             return Err(format!("{CUBE_TYPE_JSON}, {DECOR_JSON}: {name} and {other} are both {value}"));
         }
     }
+    // An id is its class over its shape (id.json).
+    let id = read(ID_JSON)?;
+    let shape_bits = id.get("SHAPE_BITS").map(Node::value).and_then(Node::num).ok_or(format!("{ID_JSON}: no SHAPE_BITS"))? as u32;
+    let class = |name: &str| id.get("CLASS").and_then(|c| c.get(name)).and_then(Node::num).map(|n| n as u32).ok_or(format!("{ID_JSON}: no class {name}"));
+    let (cube_class, decor_class) = (class("cube")?, class("decor")?);
     for (name, value) in &decor {
-        if *value <= 255 || *value > u32::from(u16::MAX) {
-            return Err(format!("{DECOR_JSON}: {name} is {value}, not past a byte within a u16"));
+        if *value > u32::from(u16::MAX) || value >> shape_bits != decor_class {
+            return Err(format!("{DECOR_JSON}: {name} is {value}, not in the decor class within a u16"));
         }
     }
     for e in named(&ground) {
@@ -195,8 +201,8 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
         }
     }
     for e in named(&object) {
-        if e.value <= 255 || e.value > u16::MAX as u32 {
-            return Err(format!("{CUBE_TYPE_JSON}: object.{} is {}, not past a byte within a u16", e.name, e.value));
+        if e.value <= 255 || e.value >> shape_bits != cube_class {
+            return Err(format!("{CUBE_TYPE_JSON}: object.{} is {}, not past a byte within the cube class", e.name, e.value));
         }
     }
     for (group, values) in [("ground", &ground), ("object", &object)] {

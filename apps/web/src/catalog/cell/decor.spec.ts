@@ -4,8 +4,8 @@
 //
 // The decor kinds, the cube catalog's sibling: drawn as a model, not a meshed box.
 //
-// Numbered past the ground's byte and the object's own colors, so a placed
-// leaf's value says which catalog it is from: an object value is a u16.
+// Numbered in the decor class (id.json), so a placed leaf's value says it is
+// decor: an object value is a u16.
 //
 // Each kind is said here once: its number, its models, and how the ground
 // grows it on its own. A kind's `seed` names its scatter, so changing it
@@ -19,10 +19,10 @@
 // stands: which variant of its kind, its heading in radians and its scale. The
 // ground evaluates them from its cell; a placed one's are the placement's.
 export const decor_types = {
-  tree: 512,
-  boat: 513,
-  car: 514,
-  train: 515,
+  tree: 1024,
+  boat: 1025,
+  car: 1026,
+  train: 1027,
 } as const satisfies Record<string, number>;
 
 export type DecorId = keyof typeof decor_types;

@@ -4,8 +4,8 @@
 //
 // The decor kinds, the cube catalog's sibling: drawn as a model, not a meshed box.
 //
-// Numbered past the ground's byte and the object's own colors, so a placed
-// leaf's value says which catalog it is from: an object value is a u16.
+// Numbered in the decor class (id.json), so a placed leaf's value says it is
+// decor: an object value is a u16.
 //
 // Each kind is said here once: its number, its models, and how the ground
 // grows it on its own. A kind's `seed` names its scatter, so changing it
@@ -24,18 +24,18 @@
 // case them the way Rust would is to rename the protocol.
 #[allow(non_upper_case_globals, non_camel_case_types)]
 pub mod decor_types {
-    pub const tree: u16 = 512;
-    pub const boat: u16 = 513;
-    pub const car: u16 = 514;
-    pub const train: u16 = 515;
+    pub const tree: u16 = 1024;
+    pub const boat: u16 = 1025;
+    pub const car: u16 = 1026;
+    pub const train: u16 = 1027;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     #[repr(u16)]
     pub enum Decor {
-        tree = 512,
-        boat = 513,
-        car = 514,
-        train = 515,
+        tree = 1024,
+        boat = 1025,
+        car = 1026,
+        train = 1027,
     }
 
     impl Decor {

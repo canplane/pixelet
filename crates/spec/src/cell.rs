@@ -10,6 +10,8 @@ pub mod color;
 mod cube_type;
 #[path = "cell/decor.spec.rs"]
 pub mod decor;
+#[path = "cell/id.spec.rs"]
+pub mod id;
 pub mod object;
 
 pub use cube_type::{cube_types, Kind};

@@ -1,9 +1,10 @@
 // pxl-spec/cell/object.rs
 
-//! A cell as the object layer stores it: a `u16` whose byte range is the
-//! ground's palette, so a cube in a look stores the look's number, and whose
-//! range past a byte is what only an object is: air, a placed color, a decor
-//! kind (`cell/cube_type.json`, `cell/decor.json`).
+//! A cell as the object layer stores it: a `u16` id, its class over its shape
+//! (`cell/id.json`). In the cube class the byte range is the ground's palette,
+//! so a cube in a look stores the look's number, and past it is what only an
+//! object is: air and the placed colors (`cell/cube_type.json`); the decor
+//! class is the decor kinds (`cell/decor.json`).
 
 #![allow(non_upper_case_globals)]
 
@@ -11,6 +12,7 @@ use std::sync::LazyLock;
 
 use crate::cell::color;
 use crate::cell::cube_types::{object, Block, Ground};
+use crate::cell::id::{Class, SHAPE_BITS};
 use crate::cell::{decor_types, DecorId};
 
 /// Explicit air: retains the leaf and erases lower layers.
@@ -18,8 +20,13 @@ pub fn object_value_is_air(value: u32) -> bool {
     value == object::air as u32
 }
 
+/// The class an id is of; none past a u16 or for a class the layout does not give out.
+pub fn class_of(value: u32) -> Option<Class> {
+    u16::try_from(value).ok().and_then(|v| Class::of((v >> SHAPE_BITS) as u8))
+}
+
 pub fn object_value_is_decor(value: u32) -> bool {
-    u16::try_from(value).ok().and_then(decor_types::Decor::of).is_some()
+    class_of(value) == Some(Class::decor)
 }
 
 /// Whether a leaf is drawn as a voxel (a placeable cube or air) rather than
