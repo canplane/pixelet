@@ -7,7 +7,7 @@ The whole kernel is one chain, and every part below is a step of it. The eye ask
 ```text
   turn · door · shell   wire everything; nothing below names them
   ──────────────────────────────────────────────────────────────
-  control ──▶ view      the camera and the pointer feed the view
+  control ──▶ view      moves the eye; the turn hands on the rest
 
   asks                                                     answers
     │   scene  what this frame draws             scene/       ▲

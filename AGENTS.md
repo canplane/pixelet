@@ -313,8 +313,10 @@ transition — the same reduction at the size of one loader.
   when measured faster. How a thing is drawn is weighed as a whole, on the
   CPU or on the GPU, never one kind of it sent to the other side.
 - **Dependencies point one way:** turn, door and shell (the UI's way in)
-  wire everything from the top, and nothing below names them; control's
-  input feeds the view; scene → chunk → view → query → layer;
+  wire everything from the top, and nothing below names them; control,
+  which the door's events enter, moves the eye over the view and names
+  neither scene nor chunk, whose share of what it decides the turn hands
+  down; scene → chunk → view → query → layer;
   io and the turn's edge and phases below everyone, io as transport; leaves
   (settings, models, billboards) below what reads them. The profiler is a
   debug path beside the axis: it reads anything, and production reaches it
