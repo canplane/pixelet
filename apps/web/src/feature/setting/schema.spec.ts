@@ -166,7 +166,7 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** The camera grid's cells over the screen, equal steps of a cell's angle off the optical axis along each screen axis, to judge by eye whether the chunks' cells sit at its resolution (scene/marker/camera_gizmo.rs). */
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/marker/camera_gizmo.rs). */
   camera_gizmo: {
     key: 14 as number,
     kind: "toggle",
@@ -287,7 +287,7 @@ export const SETTINGS_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** The camera grid's cells over the screen, equal steps of a cell's angle off the optical axis along each screen axis, to judge by eye whether the chunks' cells sit at its resolution (scene/marker/camera_gizmo.rs). */
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/marker/camera_gizmo.rs). */
   camera_gizmo: {
     key: 14 as number,
     kind: "toggle",

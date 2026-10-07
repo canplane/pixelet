@@ -106,7 +106,7 @@
       },
       "camera_gizmo": {
         "label": "Camera gizmo",
-        "description": "Overlays the camera grid's cells on the screen, to compare with the detail the world is drawn at."
+        "description": "Overlays the camera grid as equal-area rings about the screen's center, and tints the world by how its drawn cells compare: green about one grid cell, blue finer, red coarser."
       }
     },
     "disclaimer": {
