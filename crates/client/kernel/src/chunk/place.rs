@@ -22,7 +22,7 @@ use crate::setting::store::settings_store;
 use crate::view::demand::Observed as _;
 use crate::view::frame::pose::ndc_to_px;
 use badge::Label;
-use pxl_render::gpu::sheet::pack::NO_SLOT;
+use pxl_render::gpu::sheet::shelf::NO_SLOT;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 use xpute_guest::global::Global;

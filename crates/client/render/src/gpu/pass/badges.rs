@@ -11,7 +11,7 @@ use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, re
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{Blocks, Draws};
-use crate::gpu::sheet::pack::{DrawSpec, Sheet};
+use crate::gpu::sheet::shelf::{DrawSpec, Sheet};
 use crate::gpu::sheet::{Align, SheetPainter, Sketch};
 use crate::gpu::text::{Font, TextOf};
 

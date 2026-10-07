@@ -34,7 +34,7 @@ use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::shadow::Shadow;
-use crate::gpu::sheet::pack::Sheet;
+use crate::gpu::sheet::shelf::Sheet;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;

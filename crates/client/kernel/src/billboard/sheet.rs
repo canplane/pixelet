@@ -4,7 +4,7 @@
 //! every set shares one pipeline and binding; and the sets themselves.
 
 use crate::laid;
-use pxl_render::gpu::sheet::pack::Sheet;
+use pxl_render::gpu::sheet::shelf::Sheet;
 use pxl_spec::space::coord::v3::V3;
 
 use crate::kernel;

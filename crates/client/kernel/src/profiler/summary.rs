@@ -201,7 +201,7 @@ fn side(out: &mut [f64]) {
             entries: sheet.entries as f64,
             shelves: sheet.shelves as f64,
             used_px: sheet.used_px as f64,
-            initial: pxl_render::gpu::sheet::pack::INITIAL_SIZE as f64,
+            initial: pxl_render::gpu::sheet::shelf::INITIAL_SIZE as f64,
         },
     );
 

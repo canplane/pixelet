@@ -1,4 +1,4 @@
-// pxl-render/gpu/sheet/pack.rs
+// pxl-render/gpu/sheet/shelf.rs
 
 //! Where each billboard's bitmap lies in the sheet, one texture, so all badges draw in one instanced
 //! call. Shelf-packed with bucketed sizes so a freed slot is reusable; growth
