@@ -14,7 +14,7 @@ use pxl_spec::space::hierarchy::tree::child_of;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Cell, LEAF_ZOOM};
 
-use pxl_spec::space::coord::zoom::{base_of, count, units};
+use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
 use xpute_core::math::scalar::round;
 
 use super::ground::*;
@@ -27,10 +27,12 @@ pub(super) struct Lines {
     pub(super) air: Option<[i64; 2]>,
 }
 
-/// A leaf column as the chunk paints its ground, in whole cells, for rays
-/// and footing alike.
+/// A column as the chunk paints its ground, at any zoom: its cell's
+/// footprint, and heights in whole leaf cells, for rays and footing alike.
 pub(super) struct Composed {
+    /// X and Y at `zoom`.
     pub(super) cell: [i64; 2],
+    pub(super) zoom: Zoom,
     /// The first cell over the surface; none where the column has none.
     pub(super) top: Option<i64>,
     pub(super) lines: Lines,
@@ -79,25 +81,27 @@ impl<'a> Access<'a> {
     pub(super) fn composed(&self, cell: [i64; 2]) -> Answer<Composed> {
         let leaf = GROUND.cell_of(LEAF_ZOOM, &base_of(GROUND.cell(), [cell[0], cell[1], 0]));
         match self.terrain.drawn(leaf.tile()) {
-            Some(d) => self.composed_in(cell, &d),
+            Some(d) => self.composed_in(cell, LEAF_ZOOM, &d),
             None => Answer::Nothing(leaf.tile()),
         }
     }
 
-    /// As `composed`, the leaf tile drawn as `d` says.
-    pub(super) fn composed_in(&self, cell: [i64; 2], d: &Drawn) -> Answer<Composed> {
-        let leaf = GROUND.cell_of(LEAF_ZOOM, &base_of(GROUND.cell(), [cell[0], cell[1], 0]));
+    /// The column of `cell` at `zoom`, its tile drawn as `d` says.
+    pub(super) fn composed_in(&self, cell: [i64; 2], zoom: Zoom, d: &Drawn) -> Answer<Composed> {
+        let at = GROUND.cell_of(zoom, &base_of(GROUND.cell_zoom(zoom), [cell[0], cell[1], 0]));
         let cell_u = units(GROUND.cell());
-        self.ground_in(leaf, d).map(|g| Composed {
+        self.ground_in(at, d).map(|g| Composed {
             cell,
+            zoom,
             top: g.top().map(|t| round(t / cell_u) as i64),
-            lines: self.lines_in(leaf, d, g.height),
+            lines: self.lines_in(at, d, g.height),
         })
     }
 
-    /// The ground fills `cz` and no object's voxel entry, air included, takes it.
+    /// The ground fills `cz` and, in a leaf column, no object's voxel entry,
+    /// air included, takes it: a folded cell is a summary nothing cuts.
     pub(super) fn holds(&self, c: &Composed, cz: i64) -> bool {
-        c.ground_at(cz) && !self.taken(c.cell, cz)
+        c.ground_at(cz) && (c.zoom < LEAF_ZOOM || !self.taken(c.cell, cz))
     }
 
     /// Decks and bore air over a cell, as the chunk paints them

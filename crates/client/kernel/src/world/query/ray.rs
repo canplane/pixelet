@@ -12,11 +12,11 @@ use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::Tile;
 
 use crate::layer::object::store::EntryAt;
 use pxl_spec::space::coord::world::node_near;
-use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{cube, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::child_cube;
 use pxl_spec::space::hierarchy::tree::Node;
 
@@ -295,11 +295,7 @@ impl<'a> Access<'a> {
         while from < t1 && inside(cell) {
             self.visit();
             let to = next_x.min(next_y).min(t1);
-            let hit = match (zoom == LEAF_ZOOM, &r.drawn) {
-                (_, None) => None,
-                (true, Some(d)) => self.column(ray, cell, from, to, d),
-                (false, Some(d)) => self.folded(ray, cell, from, to, zoom, d),
-            };
+            let hit = r.drawn.as_ref().and_then(|d| self.column(ray, cell, zoom, (from, to), d));
             if hit.is_some() {
                 return hit;
             }
@@ -315,31 +311,15 @@ impl<'a> Access<'a> {
         None
     }
 
-    pub(super) fn with_decks(&self, ray: &Ray, boxes: &[[f64; 2]], (corner, side): ([f64; 2], f64), (t0, t1): (f64, f64), ground: Option<Hit>) -> Option<Hit> {
-        let mut best = ground;
-        for &[lo, hi] in boxes {
-            let cube = Aabb {
-                min: [corner[0], corner[1], lo],
-                max: [corner[0] + side, corner[1] + side, hi],
-            };
-            let Some((t, normal)) = ray_box(ray, cube) else { continue };
-            if t < t0 || t > t1 || best.is_some_and(|b| b.t <= t) {
-                continue;
-            }
-            best = Some(hit(ray, t, normal, cube, Struck::Ground));
-        }
-        best
-    }
-
-    pub(super) fn column(&self, ray: &Ray, cell: [i64; 2], t0: f64, t1: f64, d: &Drawn) -> Option<Hit> {
-        let c = self.composed_in(cell, d).value()?;
+    pub(super) fn column(&self, ray: &Ray, cell: [i64; 2], zoom: Zoom, (t0, t1): (f64, f64), d: &Drawn) -> Option<Hit> {
+        let c = self.composed_in(cell, zoom, d).value()?;
         self.ground_column(ray, &c, t0, t1)
     }
 
-    /// Ground hit in a leaf column: the first cell the ground fills and no
-    /// voxel entry takes. Steps by cell only once under the column's ceiling.
+    /// Ground hit in a column: the first leaf-tall cell the ground holds
+    /// (`holds`). Steps by cell only once under the column's ceiling.
     pub(super) fn ground_column(&self, ray: &Ray, c: &Composed, t0: f64, t1: f64) -> Option<Hit> {
-        let side = units(GROUND.cell());
+        let (side, across) = (units(GROUND.cell()), units(GROUND.cell_zoom(c.zoom)));
         let ([ix, iy], top) = (c.cell, c.ceiling()? as f64 * side);
         let (za, zb) = (ray.at(t0)[2], ray.at(t1)[2]);
         let dz = ray.direction[2];
@@ -365,12 +345,13 @@ impl<'a> Access<'a> {
             if from > 0.0 && self.holds(c, cz) {
                 // Through the column's side on the entry cell, else through floor or ceiling.
                 let normal = if from == t0 {
-                    wall_normal(ray, from, side)
+                    wall_normal(ray, from, across)
                 } else {
                     [0.0, 0.0, if dz > 0.0 { -1.0 } else { 1.0 }]
                 };
-                let min = [ix as f64 * side, iy as f64 * side, cz as f64 * side];
-                return Some(hit(ray, from, normal, Aabb { min, max: min.map(|v| v + side) }, Struck::Ground));
+                let min = [ix as f64 * across, iy as f64 * across, cz as f64 * side];
+                let max = [min[0] + across, min[1] + across, min[2] + side];
+                return Some(hit(ray, from, normal, Aabb { min, max }, Struck::Ground));
             }
             if leave >= t1 {
                 return None;
@@ -378,33 +359,6 @@ impl<'a> Access<'a> {
             cz += if dz > 0.0 { 1 } else { -1 };
             from = leave;
         }
-    }
-
-    pub(super) fn folded(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64, zoom: Zoom, d: &Drawn) -> Option<Hit> {
-        let cell_zoom = GROUND.cell_zoom(zoom);
-        let side = units(cell_zoom);
-        let cell = GROUND.cell_of(zoom, &base_of(cell_zoom, [ix, iy, 0]));
-        let g = self.ground_in(cell, d).value()?;
-        let ground = g.top().and_then(|top| self.folded_ground(ray, [ix, iy], top, t0, t1, zoom));
-        let leaf = units(GROUND.cell());
-        let boxes: Vec<[f64; 2]> = self.lines_in(cell, d, g.height).boxes.iter().map(|b| b.map(|v| v as f64 * leaf)).collect();
-        self.with_decks(ray, &boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
-    }
-
-    pub(super) fn folded_ground(&self, ray: &Ray, [ix, iy]: [i64; 2], top: f64, t0: f64, t1: f64, zoom: Zoom) -> Option<Hit> {
-        let cell_zoom = GROUND.cell_zoom(zoom);
-        let side = units(cell_zoom);
-        let (za, zb) = (ray.at(t0)[2], ray.at(t1)[2]);
-        let (t, normal) = if za <= top {
-            (t0 > 0.0).then(|| (t0, wall_normal(ray, t0, side)))?
-        } else if zb <= top {
-            ((top - ray.origin[2]) / ray.direction[2], [0.0, 0.0, 1.0])
-        } else {
-            return None;
-        };
-        let cz = ((ray.at(t)[2] - normal[2] * NUDGE) / side).floor();
-        let min = [ix as f64 * side, iy as f64 * side, cz * side];
-        Some(hit(ray, t, normal, Aabb { min, max: min.map(|v| v + side) }, Struck::Ground))
     }
 
     /// First object the ray meets, in cells of `cell_zoom`, each read through the objects' query.
