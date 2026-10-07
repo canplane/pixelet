@@ -35,7 +35,7 @@ struct Frame {
   up: vec3f,
   // The camera grid's cell angle, radians.
   cell: f32,
-  // 1 while the camera gizmo is shown: chunks tint by their cells' share of a grid cell.
+  // 1 while the camera grid is listed, derived by the renderer: chunks tint by their cells' share of a grid cell.
   gizmo: f32,
   _p13: f32,
   _p14: vec2f,

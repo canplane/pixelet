@@ -415,8 +415,11 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   return vec4f(finish(cell_share(color, i), i.clip.xy), i.opacity);
 }
 
-// Under the camera gizmo: the face's cell seen from the eye, as a share of a
-// grid cell's solid angle. Within (1/4, 1] green, finer blue, coarser red.
+// Under the camera gizmo: the solid angle the face's cell shows the eye, as a
+// share of a grid cell's. The split rule weighs a cube's silhouette instead,
+// so a top seen at a grazing angle reads finer than the rule's threshold;
+// the shown area is what the view's bound by area would hold (BACKLOG).
+// Within (1/4, 1] green, finer blue, coarser red.
 fn cell_share(color: vec3f, i: VertexOut) -> vec3f {
   if (frame_gizmo() < 0.5) {
     return color;
