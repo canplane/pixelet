@@ -483,11 +483,16 @@ impl Cells<'_> {
 
 impl Query for Store {
     type Record<'a> = Cells<'a>;
+    type Cursor = ();
+
+    fn cursor<const D: usize>(&self, _: Node<D>, _: Zoom) {}
+
+    fn child<const D: usize>(&self, _: &(), _: Node<D>, _: Zoom) {}
 
     /// All resident, so every answer is exact. Read at `cell`: a node held
     /// finer than its cells is one cube and `finest` one past `cell`, so the
     /// cost is the asker's resolution — one find for a node read whole.
-    fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+    fn bound<const D: usize>(&self, _: &(), node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let mut out: Option<Bound> = None;
         let mut hold = |aabb: Aabb, finest: Zoom| {
             out = Some(out.map_or(Bound { aabb, finest }, |o| Bound {

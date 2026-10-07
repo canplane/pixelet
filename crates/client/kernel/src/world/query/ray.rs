@@ -2,6 +2,8 @@
 
 //! The first thing a ray meets: ground walked a region at a time, decks and placed objects, at the detail the distance or a zoom asks.
 
+use crate::layer::residency::Lines;
+use crate::layer::terrain::Drawn;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_voxel};
 use pxl_spec::space::camera::grid::Tau;
@@ -81,12 +83,14 @@ pub struct Hit {
 }
 
 /// A square across which neither the tile nor the index cell changes.
-pub(super) struct Region {
+pub(super) struct Region<'a> {
     pub(super) base: [f64; 2],
     pub(super) side: f64,
     pub(super) tile: Tile,
     /// Index bounds and whether read from the tile asked; none if nothing is resident.
     pub(super) terrain: Option<((f64, f64), bool)>,
+    /// What the tile is drawn from, which every cell walked in it reads.
+    pub(super) drawn: Option<Drawn<'a>>,
 }
 
 pub(super) fn exit(ray: &Ray, base: [f64; 2], side: f64) -> f64 {
@@ -169,13 +173,14 @@ impl<'a> Access<'a> {
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
         let mut lack: Option<Tile> = None;
         let mut answered = false;
+        let mut lines = Lines::default();
         let mut t = 0.0;
         while t < ray.reach {
             let (zoom, cells, until) = detail.at(t);
             let end = until.min(ray.reach);
             let objects = self.objects(ray, (t, end), cells);
             let limit = objects.map_or(end, |o| o.t);
-            let ground = self.ground_first(ray, (t, limit), zoom, &mut lack, &mut answered).filter(|g| g.t <= limit);
+            let ground = self.ground_first(ray, (t, limit), zoom, &mut lines, &mut lack, &mut answered).filter(|g| g.t <= limit);
             if let Some(hit) = ground.or(objects) {
                 return match lack {
                     Some(l) => Answer::Coarser(Some(hit), l),
@@ -191,16 +196,17 @@ impl<'a> Access<'a> {
         }
     }
 
-    pub(super) fn ground_first(&self, ray: &Ray, (t0, t1): (f64, f64), zoom: Zoom, lack: &mut Option<Tile>, answered: &mut bool) -> Option<Hit> {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn ground_first(&self, ray: &Ray, (t0, t1): (f64, f64), zoom: Zoom, lines: &mut Lines, lack: &mut Option<Tile>, answered: &mut bool) -> Option<Hit> {
         let mut t = t0;
         while t < t1 {
             self.visit();
-            if let Some(out) = self.clear(ray, t, zoom, t1) {
+            if let Some(out) = self.clear(ray, t, zoom, t1, lines) {
                 *answered = true;
                 t = out;
                 continue;
             }
-            let r = self.region(&ray.at(t + NUDGE), zoom);
+            let r = self.region(&ray.at(t + NUDGE), zoom, lines);
             let out = exit(ray, r.base, r.side).min(t1).max(t + NUDGE).min(ray.reach);
             let low = ray.at(t)[2].min(ray.at(out)[2]);
             let under = r.terrain.is_some_and(|((_, hi), _)| low <= hi);
@@ -227,13 +233,14 @@ impl<'a> Access<'a> {
 
     /// Far edge of the largest resident index cell coarser than `z` the ray
     /// passes over entirely, or none. Never past `until`, where another zoom applies.
-    pub(super) fn clear(&self, ray: &Ray, t: f64, zoom: Zoom, until: f64) -> Option<f64> {
+    pub(super) fn clear(&self, ray: &Ray, t: f64, zoom: Zoom, until: f64, lines: &mut Lines) -> Option<f64> {
         let from = ray.at(t + NUDGE);
         let at = on_ground(&from);
         (GROUND.top()..zoom).find_map(|coarser| {
-            let e = EXTENT.cell_of(coarser, &at);
+            let (e, cell) = (EXTENT.cell_of(coarser, &at), GROUND.grid_zoom(coarser));
+            let line = self.terrain.seek(lines, e.tile());
             // Only ground known exactly lets a ray pass over it.
-            let hi = match self.terrain.bounds(e.node(), GROUND.grid_zoom(coarser)) {
+            let hi = match self.terrain.bound(&line, e.node(), cell) {
                 Answer::Exact(b) => b.map_or(f64::NEG_INFINITY, |b| b.aabb.max[2]),
                 _ => return None,
             };
@@ -243,10 +250,11 @@ impl<'a> Access<'a> {
         })
     }
 
-    pub(super) fn region(&self, p: &V3, zoom: Zoom) -> Region {
+    pub(super) fn region(&self, p: &V3, zoom: Zoom, lines: &mut Lines) -> Region<'a> {
         // One index cell of the tile at `zoom`: one bound across it, the whole tile where none is known.
-        let e = EXTENT.cell_of(zoom, &on_ground(p));
-        let (cell_zoom, terrain) = match self.terrain.bounds(e.node(), GROUND.grid_zoom(zoom)) {
+        let (e, cell) = (EXTENT.cell_of(zoom, &on_ground(p)), GROUND.grid_zoom(zoom));
+        let line = self.terrain.seek(lines, e.tile());
+        let (cell_zoom, terrain) = match self.terrain.bound(&line, e.node(), cell) {
             Answer::Nothing(_) => (zoom, None),
             known => {
                 let exact = matches!(known, Answer::Exact(_));
@@ -259,6 +267,7 @@ impl<'a> Access<'a> {
             side: units(cell_zoom),
             tile: e.tile(),
             terrain,
+            drawn: self.terrain.drawn_of(&line),
         }
     }
 
@@ -286,10 +295,10 @@ impl<'a> Access<'a> {
         while from < t1 && inside(cell) {
             self.visit();
             let to = next_x.min(next_y).min(t1);
-            let hit = if zoom == LEAF_ZOOM {
-                self.column(ray, cell, from, to)
-            } else {
-                self.folded(ray, cell, from, to, zoom)
+            let hit = match (zoom == LEAF_ZOOM, &r.drawn) {
+                (_, None) => None,
+                (true, Some(d)) => self.column(ray, cell, from, to, d),
+                (false, Some(d)) => self.folded(ray, cell, from, to, zoom, d),
             };
             if hit.is_some() {
                 return hit;
@@ -322,9 +331,9 @@ impl<'a> Access<'a> {
         best
     }
 
-    pub(super) fn column(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64) -> Option<Hit> {
+    pub(super) fn column(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64, d: &Drawn) -> Option<Hit> {
         let side = units(GROUND.cell());
-        let c = self.composed([ix, iy]).value()?;
+        let c = self.composed_in([ix, iy], d).value()?;
         let ground = self.ground_column(ray, &c, t0, t1);
         self.with_decks(ray, &c.lines.boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
     }
@@ -373,13 +382,13 @@ impl<'a> Access<'a> {
         }
     }
 
-    pub(super) fn folded(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64, zoom: Zoom) -> Option<Hit> {
+    pub(super) fn folded(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64, zoom: Zoom, d: &Drawn) -> Option<Hit> {
         let cell_zoom = GROUND.cell_zoom(zoom);
         let side = units(cell_zoom);
         let cell = GROUND.cell_of(zoom, &base_of(cell_zoom, [ix, iy, 0]));
-        let g = self.ground(cell).value()?;
+        let g = self.ground_in(cell, d).value()?;
         let ground = g.top().and_then(|top| self.folded_ground(ray, [ix, iy], top, t0, t1, zoom));
-        let lines = self.lines_over(cell, g.height);
+        let lines = self.lines_in(cell, d, g.height);
         self.with_decks(ray, &lines.boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
     }
 

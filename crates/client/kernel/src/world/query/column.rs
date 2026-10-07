@@ -2,6 +2,7 @@
 
 //! What stands in a ground cell's column: the surface, bores, decks and piers, and what is placed there.
 
+use crate::layer::terrain::Drawn;
 use crate::layer::Query;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::deck::Occupies;
@@ -60,13 +61,20 @@ pub(super) fn filled_cell(filled: impl Fn([i64; 3]) -> bool) -> bool {
 
 impl<'a> Access<'a> {
     pub(super) fn composed(&self, cell: [i64; 2]) -> Answer<Composed> {
-        let [ix, iy] = cell;
-        let base = base_of(GROUND.cell(), [ix, iy, 0]);
-        let ground = self.ground(GROUND.cell_of(LEAF_ZOOM, &base));
-        ground.map(|g| Composed {
+        let leaf = GROUND.cell_of(LEAF_ZOOM, &base_of(GROUND.cell(), [cell[0], cell[1], 0]));
+        match self.terrain.drawn(leaf.tile()) {
+            Some(d) => self.composed_in(cell, &d),
+            None => Answer::Nothing(leaf.tile()),
+        }
+    }
+
+    /// As `composed`, the leaf tile drawn as `d` says.
+    pub(super) fn composed_in(&self, cell: [i64; 2], d: &Drawn) -> Answer<Composed> {
+        let leaf = GROUND.cell_of(LEAF_ZOOM, &base_of(GROUND.cell(), [cell[0], cell[1], 0]));
+        self.ground_in(leaf, d).map(|g| Composed {
             cell,
             top: g.top(),
-            lines: self.lines_over(GROUND.cell_of(LEAF_ZOOM, &base), g.height),
+            lines: self.lines_in(leaf, d, g.height),
         })
     }
 
@@ -77,10 +85,11 @@ impl<'a> Access<'a> {
         !c.lines.air.is_some_and(|[lo, hi]| z >= lo && z < hi) && !self.taken(c.cell, cz)
     }
 
-    /// Decks and bore air over a cell, as the chunk paints them (`Over::occupies`).
-    pub(super) fn lines_over(&self, cell: Cell, ground_height: f64) -> Lines {
+    /// Decks and bore air over a cell, as the chunk paints them
+    /// (`Over::occupies`), its tile drawn as `d` says.
+    pub(super) fn lines_in(&self, cell: Cell, d: &Drawn, ground_height: f64) -> Lines {
         let mut lines = Lines::default();
-        let Some((src, body)) = self.terrain.drawn(cell.tile()) else { return lines };
+        let (src, body) = (d.from, d.body);
         let (at, side) = (sample_in(cell, src), 1.0 / count(GROUND.cell_zoom(cell.tile_zoom()), GROUND.cell_zoom(src.zoom)) as f64);
         let cell_u = units(GROUND.cell());
         let ground = round(ground_height / cell_u) as i32;

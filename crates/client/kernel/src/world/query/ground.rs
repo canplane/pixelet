@@ -2,6 +2,7 @@
 
 //! The query's handle, and what it reads of the ground: the drawn surface and the index lane's bounds.
 
+use crate::layer::terrain::Drawn;
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -54,10 +55,18 @@ impl<'a> Access<'a> {
     /// `ChunkSample::read` samples a chunk drawn from a coarser tile.
     pub(super) fn ground(&self, cell: Cell) -> Answer<Ground> {
         let tile = cell.tile();
-        let Some((src, body)) = self.terrain.drawn(tile) else { return Answer::Nothing(tile) };
+        match self.terrain.drawn(tile) {
+            Some(d) => self.ground_in(cell, &d),
+            None => Answer::Nothing(tile),
+        }
+    }
+
+    /// As `ground`, the cell's tile drawn as `d` says.
+    pub(super) fn ground_in(&self, cell: Cell, d: &Drawn) -> Answer<Ground> {
+        let (src, body) = (d.from, d.body);
         let [tx, ty] = sample_in(cell, src);
         let cell = body.ground.cells[GROUND.cell_index(tx as u32, ty as u32) as usize];
         let height = ground_ele_at(&body.ele, Some(GroundLanes::of(&body.ground)), tx, ty) as f64 * units(GROUND.cell());
-        self.terrain.answer(tile, Ground { height, cell })
+        d.answer(Ground { height, cell })
     }
 }

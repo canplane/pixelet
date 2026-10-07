@@ -53,9 +53,14 @@ pub struct Places<'a> {
 
 impl Query for Residency<PoiTile> {
     type Record<'a> = Places<'a>;
+    type Cursor = ();
+
+    fn cursor<const D: usize>(&self, _: Node<D>, _: Zoom) {}
+
+    fn child<const D: usize>(&self, _: &(), _: Node<D>, _: Zoom) {}
 
     /// A place fills nothing: it stands on the surface drawn there.
-    fn bounds<const D: usize>(&self, _node: Node<D>, _cell: Zoom) -> Answer<Option<Bound>> {
+    fn bound<const D: usize>(&self, _: &(), _node: Node<D>, _cell: Zoom) -> Answer<Option<Bound>> {
         Answer::Exact(None)
     }
 

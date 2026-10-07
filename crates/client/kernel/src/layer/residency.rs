@@ -12,7 +12,7 @@
 
 pub mod floor;
 
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::bake::format::Occupancy;
 use std::collections::HashMap;
 
 use fnv::FnvBuildHasher;
@@ -136,9 +136,56 @@ impl<L: Layer> Default for Residency<L> {
     }
 }
 
-/// A tile and the ones over it to `top`.
-fn line(p: Tile, top: Zoom) -> impl Iterator<Item = Tile> {
-    std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent()))
+/// What a tile's line, it and the tiles over it to the layer's top, says of
+/// it; a child's is its parent's and its own entry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Line {
+    pub tile: Tile,
+    /// The finest resident tile on the line, which the tile is drawn from.
+    pub drawn: Option<Tile>,
+    /// The resident tile that says the tile's ground exactly.
+    pub source: Option<Tile>,
+    /// Some tile on the line is said.
+    pub settled: bool,
+    /// Answered for itself, or its parent holds no child there.
+    said: bool,
+    /// What says it if it is said: the resident tile over it, past said ones.
+    over: Option<Tile>,
+    /// What says it through the first said tile on its line.
+    says: Option<Tile>,
+    /// Its children as it holds them, where it is resident.
+    children: Option<Occupancy>,
+}
+
+/// The lines of a walk's last tile and the tiles over it, by zoom, so a walk
+/// to a tile beside it steps down only from where their lines part. Good
+/// while the residency it was walked over is unchanged.
+pub struct Lines {
+    at: [Option<Line>; LEAF_ZOOM as usize + 1],
+}
+
+impl Default for Lines {
+    fn default() -> Self {
+        Lines { at: [None; LEAF_ZOOM as usize + 1] }
+    }
+}
+
+impl Line {
+    /// Over the top: nothing.
+    const ABOVE: Line = Line {
+        tile: Tile { zoom: 0, tile: 0 },
+        drawn: None,
+        source: None,
+        settled: false,
+        said: false,
+        over: None,
+        says: None,
+        children: None,
+    };
+
+    pub fn resident(&self) -> bool {
+        self.children.is_some()
+    }
 }
 
 impl<L: Layer> Residency<L> {
@@ -197,44 +244,65 @@ impl<L: Layer> Residency<L> {
         out.sort_unstable();
     }
 
-    /// Answered for itself, the top too, or settled by the tile over it.
-    fn said(&self, q: Tile) -> bool {
-        if self.entry(q).is_some_and(|e| e.answered) {
-            return true;
+    /// What `p`'s line says of it, stepped down from the top a tile at a time.
+    pub fn line(&self, p: Tile) -> Line {
+        self.seek(&mut Lines::default(), p)
+    }
+
+    /// `p`'s line, stepped down from the deepest tile over it `lines` still
+    /// holds, which then holds `p`'s.
+    pub fn seek(&self, lines: &mut Lines, p: Tile) -> Line {
+        let held = |q: Tile| lines.at[q.zoom as usize].filter(|l| l.tile == q);
+        let line = match held(p) {
+            Some(l) => l,
+            None if p.zoom > L::LATTICE.top() => {
+                let over = self.seek(lines, p.parent());
+                self.step(&over, p)
+            }
+            None => self.step(&Line::ABOVE, p),
+        };
+        lines.at[p.zoom as usize] = Some(line);
+        line
+    }
+
+    /// `child`'s line from its parent's, reading only `child`'s own entry: a
+    /// descent pays one lookup a step and never walks back up.
+    pub fn step(&self, parent: &Line, child: Tile) -> Line {
+        let e = self.entry(child);
+        let held = e.and_then(|e| e.held.as_ref());
+        // Answered for itself, or its parent holds no child there.
+        let said = e.is_some_and(|e| e.answered) || parent.children.is_some_and(|o| !o.has_child(child.slot()));
+        let over = match parent.resident() {
+            true => Some(parent.tile),
+            false if parent.said => parent.over,
+            false => None,
+        };
+        let says = if said { over } else { parent.says };
+        Line {
+            tile: child,
+            drawn: if held.is_some() { Some(child) } else { parent.drawn },
+            source: if held.is_some() { Some(child) } else { says },
+            settled: said || parent.settled,
+            said,
+            over,
+            says,
+            children: held.map(|h| h.body.occupancy()),
         }
-        if q.zoom <= L::LATTICE.top() {
-            return false;
-        }
-        let over = q.parent();
-        self.held_as(over).is_some_and(|h| !h.body.occupancy().has_child(q.slot()))
     }
 
     pub fn settled(&self, p: Tile) -> bool {
-        line(p, L::LATTICE.top()).any(|q| self.said(q))
+        self.line(p).settled
     }
 
     /// The finest resident tile on `p`'s line: the miss's answer.
     pub fn drawn_from(&self, p: Tile) -> Option<Tile> {
-        line(p, L::LATTICE.top()).find(|&q| self.resident(q))
+        self.line(p).drawn
     }
 
     /// The resident tile that says `p`'s ground exactly; none where `p` is a
     /// miss. A resident tile above that does not say `p` only draws it coarser.
     pub fn source(&self, p: Tile) -> Option<Tile> {
-        if self.resident(p) {
-            return Some(p);
-        }
-        let mut none = line(p, L::LATTICE.top()).find(|&q| self.said(q))?;
-        loop {
-            let over = none.parent();
-            if self.resident(over) {
-                return Some(over);
-            }
-            if !self.said(over) {
-                return None;
-            }
-            none = over;
-        }
+        self.line(p).source
     }
 
     /// Empty tiles and tiles answered above are kept only while asked:

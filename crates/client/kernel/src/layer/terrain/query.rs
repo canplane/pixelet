@@ -12,7 +12,7 @@ use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 
-use crate::layer::residency::Residency;
+use crate::layer::residency::{Line, Residency};
 
 use crate::layer::{Answer, Bound, Query, Relief};
 
@@ -46,50 +46,87 @@ pub fn tile_view(tile: &Terrain) -> TileView<'_> {
     }
 }
 
-impl Residency<Terrain> {
-    /// The resident tile `tile` is drawn from, and its body.
-    pub(crate) fn drawn(&self, tile: Tile) -> Option<(Tile, &Terrain)> {
-        let src = self.drawn_from(tile)?;
-        Some((src, self.get(src)?))
-    }
+/// A tile as the resident tile it is drawn from answers it.
+#[derive(Clone, Copy)]
+pub(crate) struct Drawn<'a> {
+    tile: Tile,
+    pub from: Tile,
+    pub body: &'a Terrain,
+    exact: bool,
+}
 
-    /// Exact where a resident tile says `tile`'s ground, else coarser.
-    pub(crate) fn answer<T>(&self, tile: Tile, v: T) -> Answer<T> {
-        match self.source(tile) {
-            Some(_) => Answer::Exact(v),
-            None => Answer::Coarser(v, tile),
+impl Drawn<'_> {
+    /// Exact where a resident tile says the tile's ground, else coarser.
+    pub(crate) fn answer<T>(&self, v: T) -> Answer<T> {
+        match self.exact {
+            true => Answer::Exact(v),
+            false => Answer::Coarser(v, self.tile),
         }
     }
+}
 
-    /// Bound on the ground over a node of `tile`'s zoom and every zoom finer than
-    /// it, from one block of the index lane. For deciding descent, never for
-    /// what is drawn.
-    pub fn relief(&self, tile: Tile, (side, at): Node<2>) -> Answer<Relief> {
-        let Some((src, body)) = self.drawn(tile) else {
-            return Answer::Nothing(tile);
-        };
-        let index = EXTENT.cell_zoom(src.zoom);
-        let first = EXTENT.cell_of(src.zoom, &base_of(side, [at[0], at[1], 0]));
-        let across = if side < index { count(index, side) } else { 1 };
-        let b = body.index.over(first.in_tile(), across);
-        self.answer(
-            tile,
-            Relief {
-                extent: (f64::from(b.lo) * units(GROUND.cell()), f64::from(b.hi) * units(GROUND.cell())),
-            },
-        )
+impl Residency<Terrain> {
+    /// The resident tile `tile` is drawn from and its body, and whether it
+    /// says `tile` exactly: one walk of `tile`'s line.
+    pub(crate) fn drawn(&self, tile: Tile) -> Option<Drawn<'_>> {
+        self.drawn_of(&self.line(tile))
     }
+
+    /// As `drawn`, its tile's line already walked.
+    pub(crate) fn drawn_of(&self, line: &Line) -> Option<Drawn<'_>> {
+        let from = line.drawn?;
+        Some(Drawn {
+            tile: line.tile,
+            from,
+            body: self.get(from)?,
+            exact: line.source.is_some(),
+        })
+    }
+}
+
+/// The tile a node's bound is read from: its cells' tile, within the
+/// pyramid's zooms.
+fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
+    let read = GROUND.tile_zoom_of_grid(cell).clamp(i32::from(GROUND.top()), i32::from(LEAF_ZOOM)) as Zoom;
+    tile_at(read, ancestor_of([at[0], at[1]], u32::from(zoom - read)))
 }
 
 impl Query for Residency<Terrain> {
     type Record<'a> = Source<'a>;
 
-    fn bounds<const D: usize>(&self, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
-        let [x, y] = [at[0], at[1]];
-        let read = GROUND.tile_zoom_of_grid(cell).clamp(i32::from(GROUND.top()), i32::from(LEAF_ZOOM)) as Zoom;
-        let tile = tile_at(read, ancestor_of([x, y], u32::from(zoom - read)));
+    type Cursor = Line;
+
+    fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Line {
+        self.line(bound_tile(node, cell))
+    }
+
+    /// The tile a child reads is its parent's, or one of its children.
+    fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell: Zoom) -> Line {
+        match bound_tile(node, cell) {
+            tile if tile == parent.tile => *parent,
+            tile if tile.zoom == parent.tile.zoom + 1 && tile.parent() == parent.tile => self.step(parent, tile),
+            tile => self.line(tile),
+        }
+    }
+
+    /// From one block of the index lane of the tile it is drawn from. For
+    /// deciding descent, never for what is drawn.
+    fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+        let _ = cell;
+        let Some(d) = self.drawn_of(line) else {
+            return Answer::Nothing(line.tile);
+        };
+        let (src, body) = (d.from, d.body);
+        let index = EXTENT.cell_zoom(src.zoom);
+        let first = EXTENT.cell_of(src.zoom, &base_of(zoom, [at[0], at[1], 0]));
+        let across = if zoom < index { count(index, zoom) } else { 1 };
+        let b = body.index.over(first.in_tile(), across);
+        let r = Relief {
+            extent: (f64::from(b.lo) * units(GROUND.cell()), f64::from(b.hi) * units(GROUND.cell())),
+        };
+        let r = d.answer(r);
         let whole = region((zoom, at));
-        self.relief(tile, (zoom, [x, y])).map(|r| {
+        r.map(|r| {
             let (lo, hi) = (r.extent.0.max(whole.min[2]), r.extent.1.min(whole.max[2]));
             (lo <= hi).then(|| Bound {
                 aabb: pxl_spec::space::coord::aabb::Aabb {
@@ -103,16 +140,14 @@ impl Query for Residency<Terrain> {
 
     fn read(&self, (zoom, [x, y, _]): Node<3>, cell: Zoom) -> Answer<Source<'_>> {
         let p = GROUND.read_tile((zoom, [x, y]), cell);
-        let Some((src, tile)) = self.drawn(p) else { return Answer::Nothing(p) };
+        let Some(d) = self.drawn(p) else { return Answer::Nothing(p) };
+        let (src, tile) = (d.from, d.body);
         let corner = GROUND.cell_at(p, GROUND.cell_index(0, 0));
-        self.answer(
-            p,
-            Source {
-                tile,
-                from: src,
-                origin: corner.in_tile_above(p.zoom - src.zoom),
-                n: count(GROUND.cell_zoom(p.zoom), GROUND.cell_zoom(src.zoom)),
-            },
-        )
+        d.answer(Source {
+            tile,
+            from: src,
+            origin: corner.in_tile_above(p.zoom - src.zoom),
+            n: count(GROUND.cell_zoom(p.zoom), GROUND.cell_zoom(src.zoom)),
+        })
     }
 }

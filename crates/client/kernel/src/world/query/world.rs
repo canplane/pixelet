@@ -4,6 +4,7 @@
 //! place. Objects are all resident, so what the world knows is what the
 //! ground knows.
 
+use crate::layer::residency::Line;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 
@@ -41,9 +42,19 @@ impl Query for Access<'_> {
     where
         Self: 'b;
 
-    fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+    type Cursor = Line;
+
+    fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Line {
+        self.terrain.cursor(node, cell)
+    }
+
+    fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell: Zoom) -> Line {
+        self.terrain.child(parent, node, cell)
+    }
+
+    fn bound<const D: usize>(&self, at: &Line, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let objects = self.objects.bounds(node, cell).value().flatten();
-        self.terrain.bounds(node, cell).map(|ground| join(ground, objects))
+        self.terrain.bound(at, node, cell).map(|ground| join(ground, objects))
     }
 
     fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Cube<'_>> {

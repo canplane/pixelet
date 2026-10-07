@@ -55,8 +55,10 @@ struct Seen {
     to: u8,
 }
 
-struct Open {
+struct Open<C> {
     c: Chunk,
+    /// The query's cursor at `c`, carried down from its parent.
+    cursor: C,
     /// steps the parent splits at
     to: u8,
     from: Option<(u32, u32)>,
@@ -76,7 +78,7 @@ pub struct Domain<Q: Query = Access<'static>> {
     unanswered: u32,
     seen: HashMap<Chunk, Seen>,
     touching: Vec<u32>,
-    open: Vec<Open>,
+    open: Vec<Open<Q::Cursor>>,
     ladder: Vec<Tau>,
     /// finest step still counted
     tracked: usize,
@@ -156,7 +158,14 @@ impl<Q: Query> Domain<Q> {
         start.sort_unstable();
         let top = ladder.len() as u8;
         for &c in &start {
-            self.open.push(Open { c, to: top, from: None, parent: None });
+            let cursor = self.query.cursor(c.node(), c.cell_zoom());
+            self.open.push(Open {
+                c,
+                cursor,
+                to: top,
+                from: None,
+                parent: None,
+            });
         }
         self.start = start;
     }
@@ -195,12 +204,12 @@ impl<Q: Query> Domain<Q> {
         true
     }
 
-    fn visit(&mut self, open: Open, price: &dyn Price) {
-        let Open { c, to, from, parent } = open;
+    fn visit(&mut self, open: Open<Q::Cursor>, price: &dyn Price) {
+        let Open { c, cursor, to, from, parent } = open;
         if self.seen.contains_key(&c) {
             return;
         }
-        let held = self.bound(c).value().flatten();
+        let held = self.query.bound(&cursor, c.node(), c.cell_zoom()).value().flatten();
         let (bound, error) = match (held, parent) {
             // The chunk's cell, alike on every axis.
             (Some(b), _) => (b.aabb, [units(c.cell_zoom()); 3]),
@@ -231,10 +240,12 @@ impl<Q: Query> Domain<Q> {
         if splits_to as usize > self.tracked {
             let mut any = false;
             for child in c.children() {
-                if !matches!(self.bound(child), Answer::Exact(None) | Answer::Coarser(None, _)) {
+                let cursor = self.query.child(&cursor, child.node(), child.cell_zoom());
+                if !matches!(self.query.bound(&cursor, child.node(), child.cell_zoom()), Answer::Exact(None) | Answer::Coarser(None, _)) {
                     any = true;
                     self.open.push(Open {
                         c: child,
+                        cursor,
                         to: splits_to,
                         from: Some(touching),
                         parent: Some((bound, error)),
