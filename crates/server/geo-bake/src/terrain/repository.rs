@@ -33,6 +33,7 @@ WHERE t.geom && env.e"
 
 /// How far past a tile what is drawn on it can come from: half the widest line.
 pub const DRAWN_REACH_U: f64 = carto_u(WIDEST_LINE) / 2.0;
+const _: () = assert!(DRAWN_REACH_U <= crate::coverage::SHARD_APRON, "a tile's rows come from past its shard's apron");
 
 /// A tile's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
 /// is baked is still the tile's own cells.
