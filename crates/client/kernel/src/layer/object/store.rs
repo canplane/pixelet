@@ -19,7 +19,7 @@ use pxl_spec::cell::object::{decor_id_from_num, object_value_is_decor, object_va
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::world::{node_near, REACH};
+use pxl_spec::space::coord::world::{node_near, wrap_index, REACH};
 use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{child_cube, key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
@@ -194,10 +194,28 @@ impl Store {
     /// cube there, and its value if it is a leaf.
     fn descend(&self, about: f64, enter: &mut Enter) {
         for (&k, tree) in &self.columns {
-            let (_, col) = node_of::<3>(k);
-            for (s, slot) in tree.block(0).enumerate() {
-                self.walk(tree, slot, CUBE_ZOOM, child_cube(SHARD_ZOOM, col, s), about, enter);
+            self.walk_column(tree, node_of::<3>(k).1, about, enter);
+        }
+    }
+
+    /// As `descend`, over only the columns `region` meets, edges included:
+    /// what is read is as large as what is asked, not as the world's edits.
+    fn descend_in(&self, region: &Aabb, enter: &mut Enter) {
+        let side = units(SHARD_ZOOM);
+        let across = |k: usize| (region.min[k] / side).floor() as i64..=(region.max[k] / side).floor() as i64;
+        for y in across(1) {
+            for x in across(0) {
+                let col = [wrap_index(SHARD_ZOOM, x), y, 0];
+                if let Some(tree) = self.columns.get(&key(SHARD_ZOOM, col)) {
+                    self.walk_column(tree, col, about(region), enter);
+                }
             }
+        }
+    }
+
+    fn walk_column(&self, tree: &Tree, col: [i64; 3], about: f64, enter: &mut Enter) {
+        for (s, slot) in tree.block(0).enumerate() {
+            self.walk(tree, slot, CUBE_ZOOM, child_cube(SHARD_ZOOM, col, s), about, enter);
         }
     }
 
@@ -230,7 +248,7 @@ impl Store {
 
     /// Every leaf whose cube meets `query`, X in `query`'s frame.
     fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
-        self.descend(about(query), &mut |zoom, at, whole, leaf| {
+        self.descend_in(query, &mut |zoom, at, whole, leaf| {
             if whole.meet(*query).is_none() {
                 return false;
             }
@@ -307,7 +325,7 @@ impl Store {
             min: [from[0] as f64 * side, from[1] as f64 * side, REACH.min[2]],
             max: [to[0] as f64 * side, to[1] as f64 * side, REACH.max[2]],
         };
-        self.descend(about(&query), &mut |zoom, at, whole, leaf| {
+        self.descend_in(&query, &mut |zoom, at, whole, leaf| {
             if whole.meet(query).is_none() || refused.is_err() {
                 return false;
             }
