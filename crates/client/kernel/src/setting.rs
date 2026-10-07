@@ -1,4 +1,4 @@
-// pxl-kernel/shell/setting.rs
+// pxl-kernel/setting.rs
 
 //! Every setting, declared once in schema.json and held in one store.
 

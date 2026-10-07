@@ -1,4 +1,4 @@
-// pxl-kernel/shell/setting/store.rs
+// pxl-kernel/setting/store.rs
 
 //! The one settings store: schema.json's defaults with the user's choices
 //! over them. Storage keeps only what differs from the default, by name: a
@@ -9,9 +9,7 @@ use xpute_core::codec::json::{read_json, JsonKind};
 
 use crate::door::host::development;
 use crate::io::file::{self, Kept};
-use crate::profiler::log::profiler_follow;
-pub use crate::shell::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
-use crate::world::chunk::source::chunk_sources_changed;
+pub use crate::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use xpute_guest::global::Global;
 
 /// A dev-only setting outside a development build is not offered: storage
@@ -22,26 +20,21 @@ pub fn is_offered(key: SettingKey, value: u32) -> bool {
 }
 
 impl Settings {
-    /// False for a value the key may not hold or a setting not offered (see
-    /// `is_offered`); the current value is taken and changes nothing.
-    pub fn set_setting(&mut self, key: SettingKey, value: u32) -> bool {
+    /// Whether it changed; none for a value the key may not hold or a
+    /// setting not offered (see `is_offered`). What a change sets off is its
+    /// caller's.
+    pub fn set_setting(&mut self, key: SettingKey, value: u32) -> Option<bool> {
         if !is_offered(key, value) {
-            return false;
+            return None;
         }
         if self.get(key) == value {
-            return true;
+            return Some(false);
         }
         if !self.set(key, value) {
-            return false;
-        }
-        if key.sources_chunks() {
-            chunk_sources_changed();
-        }
-        if key == SettingKey::debug_overlay {
-            profiler_follow(value == 1, crate::profiler::summary::counters());
+            return None;
         }
         *UNKEPT.get(|| false) = true;
-        true
+        Some(true)
     }
 
     fn kept(&self) -> String {
@@ -81,7 +74,6 @@ pub fn settings_keep_step() {
 /// What is not offered, unknown or invalid stays at the default.
 pub fn settings_load(kept: &str) {
     SETTINGS_STORE.set(read_kept(kept));
-    profiler_follow(settings_store().debug_overlay, crate::profiler::summary::counters());
 }
 
 fn read_kept(kept: &str) -> Settings {

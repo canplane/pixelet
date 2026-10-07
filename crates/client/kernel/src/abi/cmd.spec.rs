@@ -1323,7 +1323,7 @@ impl PreviewClose {
 /// Command::SETTING_SET's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct SettingSet {
-    pub key: crate::shell::setting::schema_spec::SettingKey,
+    pub key: crate::setting::schema_spec::SettingKey,
     /// A toggle's 0 or 1, a choice's option by its index, or a number.
     pub value: u32,
 }
@@ -1332,7 +1332,7 @@ impl SettingSet {
     pub fn read(pkt: &[u8]) -> Result<SettingSet, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SettingSet {
-            key: crate::shell::setting::schema_spec::SettingKey::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            key: crate::setting::schema_spec::SettingKey::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
             value: integer::<u32>(f.at(1)?.get_number()?)?,
         })
     }

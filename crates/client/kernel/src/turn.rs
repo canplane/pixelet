@@ -30,7 +30,7 @@ use crate::scene::marker::location_puck::location_puck_step;
 use crate::scene::stage::{take_draw, visible_step};
 use crate::sched::edge::{request_world_tick, world_edge};
 use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickState};
-use crate::shell::setting::store::settings_store;
+use crate::setting::store::settings_store;
 use crate::world::chunk::decor::asset_store::decor_assets_wanted;
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::pyramid::Observed as _;
@@ -86,7 +86,7 @@ fn demand_tick(_: &mut TickContext) {
     crate::world::pyramid::admit_arrived();
     Terrain::pyramid().step(crate::control::navigation::destination::tile());
     // Nothing is fetched while places are hidden.
-    match crate::shell::setting::store::settings_store().poi {
+    match crate::setting::store::settings_store().poi {
         true => PoiTile::pyramid().step(None),
         false => PoiTile::pyramid().idle(),
     }
@@ -189,7 +189,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, hover, hover_cursor_step());
     // device_coord is not gated like map_center: the puck keeps its last coordinate across a transient none.
     effect!(worst, puck, location_puck_step(map_navigation().device_coord));
-    effect!(worst, settings, crate::shell::setting::store::settings_keep_step());
+    effect!(worst, settings, crate::setting::store::settings_keep_step());
     // After every producer has spoken, including assets asked for during the turn.
     effect!(worst, assets, crate::io::sched::declare(crate::io::demand::Category::asset, crate::io::load::load_wants()));
     effect!(worst, pump, pump());

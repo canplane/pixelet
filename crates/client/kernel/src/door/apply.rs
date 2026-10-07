@@ -47,10 +47,10 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     use crate::control::camera::input::{camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel, Rect};
     use crate::control::interaction::{hold, holding};
     use crate::control::sensor::{device_orientation, geolocation};
-    use crate::profiler::log::{profiler_set_logging, profiler_window_start, profiler_window_stop};
+    use crate::profiler::log::{profiler_follow, profiler_set_logging, profiler_window_start, profiler_window_stop};
     use crate::sched::edge::request_world_tick;
+    use crate::setting::store::{settings_load, settings_store, SettingKey};
     use crate::shell as ui;
-    use crate::shell::setting::store::{settings_load, settings_store};
     use crate::turn::world_platform;
 
     if let Some(cmd) = xpute_cmd::Command::of(number) {
@@ -87,6 +87,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 },
             });
             settings_load(p.settings);
+            profiler_follow(settings_store().debug_overlay, crate::profiler::summary::counters());
             crate::layer::object::repository::open();
             // The shell holds the kernel's state from its first render on.
             applied(s)
@@ -283,7 +284,16 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::SETTING_SET => {
             let p = abi::SettingSet::read(packet(pkt)?)?;
-            refuse_unless(settings_store().set_setting(p.key, p.value), Errno::EINVAL)?;
+            let changed = settings_store().set_setting(p.key, p.value);
+            refuse_unless(changed.is_some(), Errno::EINVAL)?;
+            if changed == Some(true) {
+                if p.key.sources_chunks() {
+                    crate::world::chunk::source::chunk_sources_changed();
+                }
+                if p.key == SettingKey::debug_overlay {
+                    profiler_follow(p.value == 1, crate::profiler::summary::counters());
+                }
+            }
             applied(s)
         }
         Command::CHAT_SEND => {

@@ -32,7 +32,7 @@
     },
     {
       "name": "SettingKey",
-      "rs": "crate::shell::setting::schema_spec::SettingKey",
+      "rs": "crate::setting::schema_spec::SettingKey",
       "doc": [
         "A setting by its place in schema.json's SETTINGS, its row's `key`."
       ]

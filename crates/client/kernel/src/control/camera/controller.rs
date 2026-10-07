@@ -16,7 +16,7 @@ use crate::param::FOV;
 use crate::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
 use crate::sched::edge::request_world_tick;
 use crate::sched::tick::TickContext;
-use crate::shell::setting::store::{settings_store, CameraMode};
+use crate::setting::store::{settings_store, CameraMode};
 use crate::world::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
 use crate::world::view::frame::pose::{view, view_compose, ObserverPose};
 use xpute_core::math::scalar::wrap;
@@ -105,7 +105,7 @@ pub fn polar() -> f64 {
 pub fn center_world() -> Option<V3> {
     camera().eye?;
     if active() == Active::Tracked {
-        return Some(view().pose.eye);
+        return Some(view().at().eye);
     }
     let (e, c) = (eye_world()?, camera());
     let (d, r) = (look_dir(c.polar, c.azimuth), dist());
@@ -198,24 +198,26 @@ pub fn active() -> Active {
     }
 }
 
-pub fn pose() -> ObserverPose {
+/// None before the camera stands anywhere.
+pub fn pose() -> Option<ObserverPose> {
+    camera().eye?;
     let c = controllers();
     match (&c.tracked, c.base) {
         (Some(t), _) => {
             let (mut camera_to_world, mut rotation, mut moved) = (mat4(), mat4(), [0.0; 3]);
             mat4_mul(&mut camera_to_world, &t.world_turn, &t.turn);
             mat4_transform_point(&mut moved, &t.world_turn, t.at[0], t.at[1], t.at[2]);
-            ObserverPose {
+            Some(ObserverPose {
                 eye: add3(&t.world_at, &moved),
                 rotation: *mat4_transpose(&mut rotation, &camera_to_world),
-            }
+            })
         }
         (None, _) => {
             let cam = camera();
-            ObserverPose {
-                eye: eye_world().unwrap_or_default(),
+            Some(ObserverPose {
+                eye: eye_world()?,
                 rotation: look_rotation(cam.polar, cam.azimuth),
-            }
+            })
         }
     }
 }
@@ -348,7 +350,7 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
     mat4_rotation_quat(&mut turn, q);
     let c = controllers();
     if c.tracked.is_none() {
-        let now = view().pose;
+        let now = view().at();
         let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) = (mat4(), mat4(), mat4(), [0.0; 3]);
         mat4_transpose(&mut camera_to_world, &now.rotation);
         mat4_mul(&mut world_turn, &camera_to_world, mat4_transpose(&mut turn_back, &turn));

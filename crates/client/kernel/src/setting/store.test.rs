@@ -1,4 +1,4 @@
-// pxl-kernel/shell/setting/store.test.rs
+// pxl-kernel/setting/store.test.rs
 
 use super::*;
 

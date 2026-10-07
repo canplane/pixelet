@@ -3,8 +3,6 @@
 //! What the page's UI reads of the kernel (a Snapshot packet, handed over
 //! only when changed) and the commands it applies to the stores.
 
-pub mod setting;
-
 use crate::world::pyramid::Observed as _;
 use pxl_spec::bake::place_tile::leaf_slot;
 use pxl_spec::cell::object::{decor_num_id, placeable_cube_num_id};
@@ -27,7 +25,7 @@ use crate::layer::geocode::fetcher::group_of;
 use crate::layer::geocode::store as geocode_store;
 use crate::scene::character::companion::companion_load_store;
 use crate::scene::character::preview::{preview_rows, CASES_MAX};
-use crate::shell::setting::store::{settings_store, SettingKey};
+use crate::setting::store::{settings_store, SettingKey};
 use crate::turn::world_platform;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::zoom::idx;

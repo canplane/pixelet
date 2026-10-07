@@ -16,7 +16,7 @@ use crate::layer::Layer;
 use crate::layer::{Answer, Query};
 use crate::param::POI_MAJOR_RANK;
 use crate::sched::tick::TickContext;
-use crate::shell::setting::store::settings_store;
+use crate::setting::store::settings_store;
 use crate::world::chunk::Chunk;
 use crate::world::pyramid::Observed as _;
 use crate::world::query::{Access, Detail, Ray};

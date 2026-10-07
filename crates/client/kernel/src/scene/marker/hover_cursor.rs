@@ -21,7 +21,7 @@ use crate::kernel;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryKind;
 use crate::sched::edge::request_world_tick;
-use crate::shell::setting::store::settings_store;
+use crate::setting::store::settings_store;
 use crate::world::chunk::decor::asset_store::decor_assets_for;
 use crate::world::chunk::decor::build::user_decor_pick;
 use crate::world::chunk::decor::instance::NO_ENTRY;

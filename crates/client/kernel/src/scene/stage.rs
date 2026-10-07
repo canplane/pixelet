@@ -33,7 +33,7 @@ use crate::profiler::report::set_host_frame_stat;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
 use crate::sched::edge::request_world_tick;
-use crate::shell::setting::store::{settings_store, AoMode};
+use crate::setting::store::{settings_store, AoMode};
 use crate::world::chunk::decor::asset_store::kind_assets;
 use crate::world::pyramid::Observed as _;
 use crate::world::view::frame::resolution::resolution_observe;
@@ -55,7 +55,7 @@ pub fn stage_write() {
     s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&camera);
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
     s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16].copy_from_slice(&view_proj);
-    s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.pose.eye);
+    s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&v.at().eye);
     s[STAGE_AT::GLOBE_ANCHOR..STAGE_AT::GLOBE_ANCHOR + 3].copy_from_slice(&sea_under_eye());
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
@@ -173,7 +173,7 @@ pub fn visible_step(ctx: &mut TickContext) {
     let v = view();
 
     let anchor = sea_under_eye();
-    let e = v.pose.eye;
+    let e = v.at().eye;
     let frame = Frame {
         anchor,
         eye: e,
