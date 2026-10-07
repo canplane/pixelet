@@ -4,7 +4,7 @@ use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::controller::Motion;
-use crate::control::camera::state::{camera_state, IntentPatch};
+use crate::control::camera::state::IntentPatch;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::off_center::map_navigation;
 use crate::control::sensor::reading::{device_location_store, device_orientation_store, DevicePoseStatus};
@@ -21,6 +21,9 @@ const HEADING_SMOOTH_ALPHA: f64 = 0.25;
 const SENSOR_GRACE_MS: f64 = 12000.0;
 
 struct Follow {
+    /// Whether the map follows the device: the controls turn it on and off,
+    /// and a dead location gives it up.
+    on: bool,
     smoothed_azimuth: Option<f64>,
     was_following: bool,
     last_device: Option<Pvf3>,
@@ -32,17 +35,29 @@ struct Follow {
 
 static FOLLOW: Global<Follow> = Global::new();
 
-pub fn follow_mode_step() {
-    let f = FOLLOW.get(|| Follow {
+fn follow() -> &'static mut Follow {
+    FOLLOW.get(|| Follow {
+        on: false,
         smoothed_azimuth: None,
         was_following: false,
         last_device: None,
         last_heading: None,
         grace_due: None,
         grace_for: None,
-    });
-    let camera = camera_state();
-    let is_follow_mode = camera.is_follow_mode;
+    })
+}
+
+pub fn following() -> bool {
+    follow().on
+}
+
+pub fn set_following(on: bool) {
+    follow().on = on;
+}
+
+pub fn follow_mode_step() {
+    let f = follow();
+    let is_follow_mode = f.on;
     let heading = device_orientation_store().orientation.and_then(|o| o.heading);
     let device_coord = map_navigation().device_coord;
 
@@ -63,7 +78,7 @@ pub fn follow_mode_step() {
             Some(due) if now() >= due => {
                 f.grace_due = None;
                 f.grace_for = None;
-                camera.is_follow_mode = false;
+                f.on = false;
             }
             Some(due) => wake_at(due),
             None => {}

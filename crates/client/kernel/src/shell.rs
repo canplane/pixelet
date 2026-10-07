@@ -17,6 +17,7 @@ use crate::control::camera::controller::{dist, map_center, units_per_px_at, Moti
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
 use crate::control::interaction::holding;
 use crate::control::navigation::destination::go_to_ground;
+use crate::control::navigation::follow_mode::{following, set_following};
 use crate::control::navigation::off_center::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
@@ -111,7 +112,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             error: orientation.pose.error(),
         },
         azimuth: camera.intent.azimuth,
-        is_follow_mode: camera.is_follow_mode,
+        is_follow_mode: following(),
         camera_busy: camera.camera_status != CameraStatus::Idle,
         zooming: crate::control::camera::controller::zooming(),
         settings: &values,
@@ -127,24 +128,23 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
 /// The shell decides which of the three from the state it drew the button
 /// in, so the press means what the user saw.
 pub fn tracking_action(tracking: Tracking) {
-    let camera = camera_state();
     match tracking {
         Tracking::Recenter => {
             // A fix's Z is altitude, absent on most and never the map's ground height.
             if let Some(device) = map_navigation().device_coord {
                 go_to_ground(device, Motion::Snap);
             }
-            camera.is_follow_mode = false;
+            set_following(false);
             crate::control::camera::controller::come_in_to_default();
         }
         Tracking::Follow => {
             // The heading is asked for, and the map turns with it once it comes;
             // where there is none, following is where one is alone.
             request_orientation(world_platform().orientation);
-            camera.is_follow_mode = true;
+            set_following(true);
         }
         Tracking::Unfollow => {
-            camera.is_follow_mode = false;
+            set_following(false);
             crate::control::camera::controller::reset_azimuth();
         }
     }
@@ -153,7 +153,7 @@ pub fn tracking_action(tracking: Tracking) {
 /// A badge's height is its zoom's, coarser than where the center stands, so
 /// the center goes on the surface once it is known exactly.
 fn go_on_ground(target: Pvf3, motion: Motion) {
-    camera_state().is_follow_mode = false;
+    set_following(false);
     go_to_ground(target, motion);
 }
 

@@ -46,7 +46,6 @@ pub struct IntentPatch {
 pub struct CameraState {
     pub camera_status: CameraStatus,
     pub intent: Intent,
-    pub is_follow_mode: bool,
 }
 
 impl CameraState {
@@ -58,7 +57,6 @@ impl CameraState {
                 azimuth: DEFAULT_AZIMUTH,
                 polar: DEFAULT_POLAR,
             },
-            is_follow_mode: false,
         }
     }
 

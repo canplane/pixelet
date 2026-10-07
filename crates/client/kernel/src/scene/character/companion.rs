@@ -300,7 +300,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     };
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);
     let steered = steering();
-    let follows = camera_state().is_follow_mode || steered;
+    let follows = crate::control::navigation::follow_mode::following() || steered;
 
     let person_target = p.center;
     let person = figure_for(&mut c.person, person_variant, person_target);
