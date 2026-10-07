@@ -98,11 +98,11 @@
       "section_caption": "화면과 스케줄러를 들여다보는 진단 도구입니다",
       "debug_overlay": {
         "label": "디버그 오버레이",
-        "description": "카메라와 초점 위치, 프레임·GPU·메모리·요청 상태를 보여줍니다."
+        "description": "카메라와 화면 중심 위치, 프레임·GPU·메모리·요청 상태를 보여줍니다."
       },
       "gizmos": {
         "label": "기즈모",
-        "description": "초점과 그 셀, 축 원을 월드 위에 그려 디버깅을 돕습니다."
+        "description": "화면 중심과 그 셀, 축 원을 월드 위에 그려 디버깅을 돕습니다."
       },
       "camera_gizmo": {
         "label": "카메라 기즈모",
@@ -125,8 +125,8 @@
       "tagline": "현실 세계를 캔버스 삼아 블록을 쌓습니다."
     },
     "navigation": {
-      "section_title": "시점 이동",
-      "section_caption": "화면을 끌어 시점을 옮길 때의 동작을 설정합니다."
+      "section_title": "화면 이동",
+      "section_caption": "화면을 끌어 중심을 옮길 때의 동작을 설정합니다."
     }
   },
   "drawer": {

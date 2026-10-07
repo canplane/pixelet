@@ -3,7 +3,7 @@
     "navigation": {
       "surface_follow": {
         "label": "Follow surfaces",
-        "description": "Dragging moves the focus along terrain and object surfaces. Turn it off to keep the current height and pass through obstacles."
+        "description": "Dragging moves the view center along terrain and object surfaces. Turn it off to keep the current height and pass through obstacles."
       }
     }
   },

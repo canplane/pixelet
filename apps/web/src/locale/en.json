@@ -98,11 +98,11 @@
       "section_caption": "Diagnostics for the view and the scheduler",
       "debug_overlay": {
         "label": "Debug Overlay",
-        "description": "Shows camera and focus state, frame timing, GPU, memory, and request activity."
+        "description": "Shows camera and view state, frame timing, GPU, memory, and request activity."
       },
       "gizmos": {
         "label": "Gizmos",
-        "description": "Draws the focus, its cell and the axis rings in the world, for debugging."
+        "description": "Draws the view center, its cell and the axis rings in the world, for debugging."
       },
       "camera_gizmo": {
         "label": "Camera gizmo",
@@ -125,7 +125,7 @@
       "tagline": "Turn the real world into a canvas and build with blocks."
     },
     "navigation": {
-      "section_title": "Moving the view",
+      "section_title": "View movement",
       "section_caption": "How the view moves when you drag it"
     }
   },

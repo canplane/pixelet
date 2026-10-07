@@ -89,7 +89,7 @@ a SwiftUI switch there missed quick taps. Which technology draws each
 
 ## One spatial model
 
-Everything placed on the map sits in one hierarchy, the **pyramid**, of
+Everything placed in the world sits in one hierarchy, the **pyramid**, of
 tiles from the leaves at z15 to z5, where it stops for now and not by any
 limit. **Every size is a zoom**: the X lane is one world of 2^24 units, so a
 thing the world over 2^z wide is at zoom z, and a bigger zoom is finer
