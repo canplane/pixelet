@@ -280,7 +280,11 @@ defer. A path a comment or document names must exist (`check:rules`);
 ## The main axis
 
 Every structural question is judged against one picture, and a change is
-wanted where it points the code further down it.
+wanted where it points the code further down it. Its small precedent is the
+bar under "Code conventions", [.agents/reference/calab-loader/](./.agents/reference/calab-loader/):
+a few roots everything is derived from, dependencies running one way from
+the shared mechanism to each policy, and every state owned by a
+transition — the same reduction at the size of one loader.
 
 - **The eye decides.** The view is a grid of angular cells about the eye; a
   cell's ray lands at a distance that fixes the resolution there, and a
