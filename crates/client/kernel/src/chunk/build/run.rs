@@ -12,7 +12,6 @@ use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
 use crate::chunk::source::draws;
-use crate::control::interaction::edit::render_edits;
 
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use xpute_core::status::bug::OrBug;
@@ -152,7 +151,7 @@ impl Builder {
             self.refuse(id);
             return Progress::Blocked;
         }
-        let edits = render_edits();
+        let edits = crate::chunk::source::previewed();
         self.folded.clear();
         let objects = build.store.read(c.at.node(), target).value().or_bug(Errno::ENOTRECOVERABLE);
         let (from, _) = objects.column_cells(i64::from(APRON));

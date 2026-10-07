@@ -18,7 +18,13 @@ use crate::model::registry::Models;
 /// How far past where it stands any decor reaches: the largest loaded
 /// model's bounding radius at the largest size a decor is drawn at.
 pub fn reach(models: &Models) -> f64 {
-    let radius = kind_assets().iter().flat_map(|e| e.models.iter().copied()).flatten().filter_map(|m| models.mesh(m)).map(|m| m.radius as f64 * m.scale as f64).fold(0.0, f64::max);
+    let radius = kind_assets()
+        .iter()
+        .flat_map(|e| e.models.iter().copied())
+        .flatten()
+        .filter_map(|m| models.mesh(m))
+        .map(|m| m.radius as f64 * m.scale as f64)
+        .fold(0.0, f64::max);
     radius * (1.0 + SCALE_JITTER).max(DECOR_SIZE)
 }
 

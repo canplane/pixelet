@@ -38,7 +38,7 @@ use crate::chunk::build::{draws_as_held, BuildEvent, Builder};
 use crate::chunk::frontier::{pool_of, Env, Frontier, Now, Slots};
 use crate::chunk::mesh_slot::{group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, OCCUPANCY};
 use crate::chunk::source::{draws, objects_drawn, Drawn};
-use crate::control::interaction::edit::{render_edits, RenderEdits};
+use crate::chunk::source::RenderEdits;
 use crate::kernel;
 use crate::layer::object::store::EntryAt;
 use crate::param;
@@ -421,7 +421,7 @@ impl Scheduler {
     fn add(&mut self, k: Chunk) {
         // The frontier starts no move without room, so running out of mounts is a bug.
         let id = self.mounts.pop().or_bug(Errno::ENOSPC);
-        let edits = render_edits();
+        let edits = crate::chunk::source::previewed();
         let sources = Sources::of(k, edits);
         self.builder.add(id, k);
         self.builder.source(id);
@@ -504,7 +504,7 @@ impl Scheduler {
     /// A tile that goes is not a change: a build finds no tile and waits, and
     /// what is drawn stays drawn.
     pub fn sources_step(&mut self) {
-        let edits = render_edits();
+        let edits = crate::chunk::source::previewed();
         for i in 0..self.slots.len() {
             let k = self.slots[i].chunk;
             let sources = Sources::of(k, edits);

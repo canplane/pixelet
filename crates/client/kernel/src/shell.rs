@@ -13,7 +13,7 @@ use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, FocusState, GroundStatus, HoldingState, LocationState, LonLat, OrientationState, PlaceName, PlacePart, Snapshot};
-use crate::control::camera::controller::{dist, focus, units_per_px_at, Motion};
+use crate::control::camera::controller::{dist, focus, Motion};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
 use crate::control::interaction::holding;
 use crate::control::navigation::destination::go_to_ground;
@@ -28,6 +28,7 @@ use crate::scene::character::companion::companion_load_store;
 use crate::scene::character::preview::{preview_rows, CASES_MAX};
 use crate::setting::store::{settings_store, SettingKey};
 use crate::turn::world_platform;
+use crate::view::frame::pose::units_per_px_at;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::zoom::idx;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;

@@ -1,6 +1,8 @@
 // pxl-kernel/control/navigation/bootstrap.rs
 
-use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
+use pxl_spec::space::coord::adapter::epsg4326;
+
+use crate::param::FALLBACK_G4326;
 use pxl_spec::space::coord::pvf3::core::FRAC_W;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 
@@ -10,10 +12,6 @@ use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::off_center::off_center;
 use crate::control::sensor::reading::{device_location_store, DevicePoseStatus};
 use xpute_guest::global::Global;
-
-/// Where the focus starts with no fix: Seoul City Hall. Also lights the first
-/// frames and decides day or night before `focus` exists.
-pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
 fn fallback_seed() -> Pvf3 {
     epsg4326::project(&FALLBACK_G4326)

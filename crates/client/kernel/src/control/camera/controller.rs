@@ -12,13 +12,12 @@ use pxl_spec::space::coord::v3::{add3, sub3, V3};
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::state::{camera_state, Intent, IntentPatch};
 use crate::control::navigation::support::{is_unknown, pan_to, unknown_z};
-use crate::param::FOV;
 use crate::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
 use crate::sched::edge::request_world_tick;
 use crate::sched::tick::TickContext;
 use crate::setting::store::{settings_store, CameraMode};
 use crate::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
-use crate::view::frame::pose::{view, view_compose, ObserverPose};
+use crate::view::frame::pose::{units_per_px_at, view, view_compose, ObserverPose};
 use xpute_core::math::scalar::wrap;
 use xpute_guest::global::Global;
 
@@ -47,12 +46,6 @@ pub fn look_rotation(polar: f64, azimuth: f64) -> Mat4 {
     let mut rotation: Mat4 = mat4();
     mat4_mul(&mut rotation, &about_x, &about_z);
     rotation
-}
-
-/// A drag that moves the ground this far a pixel keeps what is at `dist`
-/// under the finger.
-pub fn units_per_px_at(dist: f64) -> f64 {
-    2.0 * dist * libm::tan(FOV * core::f64::consts::PI / 360.0) / view().height
 }
 
 /// The eye is kept in the world's doubles: a canonical point's 1/256 rounding
@@ -134,7 +127,7 @@ pub fn put_center(target: Pvf3, motion: Motion) {
         Active::Orbit => crate::control::camera::orbit::put(target, snap),
         Active::Free => crate::control::camera::free::put(target, snap),
     }
-    view_compose();
+    view_compose(pose());
     request_world_tick();
 }
 
@@ -301,7 +294,7 @@ fn switch() -> bool {
     if !take_mode(settings_store().camera_mode) {
         return false;
     }
-    view_compose();
+    view_compose(pose());
     request_world_tick();
     true
 }
@@ -364,13 +357,13 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
     } else if let Some(t) = &mut c.tracked {
         (t.turn, t.at) = (turn, at);
     }
-    view_compose();
+    view_compose(pose());
     request_world_tick();
 }
 
 pub fn tracked_end() {
     if controllers().tracked.take().is_some() {
-        view_compose();
+        view_compose(pose());
         request_world_tick();
     }
 }

@@ -75,6 +75,6 @@ pub(crate) fn turn(delta: f64) -> bool {
     let (azimuth, m) = approach_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, LOOK_EPS);
     moving |= m;
     (cam.polar, cam.azimuth) = look_domain(polar, azimuth);
-    view_compose();
+    view_compose(crate::control::camera::controller::pose());
     moving
 }
