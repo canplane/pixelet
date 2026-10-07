@@ -30,7 +30,8 @@ pub const SHADER_IMPOSTOR: u32 = 21;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_CLOUD_COMPOSITE: u32 = 23;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 24;
-pub const SHADERS: u32 = 25;
+pub const SHADER_CAMERA_GRID: u32 = 25;
+pub const SHADERS: u32 = 26;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -118,6 +119,7 @@ pub fn source(kind: u32) -> &'static str {
             "sky"
         ),
         SHADER_DEBUG => wgsl!("frame", "globe", "encode", "debug"),
+        SHADER_CAMERA_GRID => wgsl!("frame", "globe", "encode", "sky_words", "camera_grid"),
         SHADER_MIPS => wgsl!("mips"),
         SHADER_SHEET => wgsl!("sheet"),
         SHADER_IMPOSTOR => wgsl!(
@@ -187,11 +189,11 @@ pub fn source(kind: u32) -> &'static str {
     }
 }
 
-pub const FRAME_FLOATS: usize = 88;
+pub const FRAME_FLOATS: usize = 92;
 /// Frame uniform field offsets in floats, in frame.wgsl's order; a test holds it to the struct.
-pub const FRAME_AT: [usize; 18] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84];
+pub const FRAME_AT: [usize; 20] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84, 87, 88];
 #[cfg(test)]
-const FRAME_FIELDS: [&str; 18] = [
+const FRAME_FIELDS: [&str; 20] = [
     "view_proj",
     "camera_pos",
     "edge_strength",
@@ -210,6 +212,8 @@ const FRAME_FIELDS: [&str; 18] = [
     "planet",
     "globe",
     "up",
+    "cell",
+    "gizmo",
 ];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
@@ -239,7 +243,7 @@ pub const PIPELINE_SHEET: u32 = 33;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 35;
 pub const PIPELINE_CLOUD_MARCH: u32 = 36;
 pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 37;
-pub const PIPELINES: u32 = 38;
+pub const PIPELINES: u32 = 39;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -248,8 +252,8 @@ pub const PIPELINES: u32 = 38;
 pub use crate::gpu::api_spec::record::*;
 
 use crate::frame::draw::{
-    PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
-    PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
+    PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
+    PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
 };
 use crate::mesh::chunk::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 
@@ -525,6 +529,15 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             },
             &[vec![56, PER_INSTANCE, 3, 0, 0, F32X3, 1, 12, F32X4, 2, 28, F32X3]],
             &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM]])],
+        ),
+        PIPELINE_CAMERA_GRID => record(
+            Head {
+                depth_compare: ALWAYS,
+                blend: ALPHA,
+                ..blended(SHADER_CAMERA_GRID, CULL_NONE, 0, 0.0)
+            },
+            &[],
+            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM]])],
         ),
         PIPELINE_CHUNK_DEPTH => record(depth_only(SHADER_CHUNK), &chunk_lanes(true), &chunk_groups()),
         PIPELINE_CHUNK_COARSE_DEPTH => record(at_coarse(depth_only(SHADER_CHUNK)), &chunk_lanes(false), &chunk_groups()),

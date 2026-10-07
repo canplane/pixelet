@@ -132,7 +132,6 @@ pub struct BadgePass {
     pub px_k: f32,
     pub near: f32,
     pub far: f32,
-    pub cell: f32,
 }
 
 impl BadgePass {
@@ -160,7 +159,6 @@ impl BadgePass {
             px_k: 1.0,
             near: 0.1,
             far: 1000.0,
-            cell: 0.01,
         }
     }
 
@@ -272,7 +270,7 @@ impl BadgePass {
             s[..16].copy_from_slice(&self.view);
             s[16..32].copy_from_slice(&self.proj);
             s[32..35].copy_from_slice(&uniform_of(uniforms, d)[..3]);
-            s[35..40].copy_from_slice(&[self.px_k, self.near, self.far, self.cell, 0.0]);
+            s[35..40].copy_from_slice(&[self.px_k, self.near, self.far, 0.0, 0.0]);
             g.write_buffer(set.uniform, 0, bytes(s));
             if pass == 0 {
                 pass = object();

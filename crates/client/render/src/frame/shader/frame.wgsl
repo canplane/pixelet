@@ -27,18 +27,23 @@ struct Frame {
   _p3: f32,
   other_color: vec3f,
   _p4: f32,
-  // Map center in the root frame, planet radius (0 for none), center ground
+  // The focus in the root frame, planet radius (0 for none), center ground
   // height; then the center's Mercator exponential, sin and cos of latitude, Mercator radius.
   planet: vec4f,
   globe: vec4f,
-  // Away from the planet's center, which lies under the map center, at the eye.
+  // Away from the planet's center, which lies under the focus, at the eye.
   up: vec3f,
-  _p9: f32,
+  // The camera grid's cell angle, radians.
+  cell: f32,
+  // 1 while the camera gizmo is shown: chunks tint by their cells' share of a grid cell.
+  gizmo: f32,
+  _p13: f32,
+  _p14: vec2f,
 };
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
 // Safari's WebGPU its GPU process.
-@group(0) @binding(0) var<uniform> frame_words: array<vec4f, 22>;
+@group(0) @binding(0) var<uniform> frame_words: array<vec4f, 23>;
 
 fn frame_view_proj() -> mat4x4f { return mat4x4f(frame_words[0], frame_words[1], frame_words[2], frame_words[3]); }
 fn frame_camera_pos() -> vec3f { return frame_words[4].xyz; }
@@ -60,6 +65,8 @@ fn frame_other_color() -> vec3f { return frame_words[18].xyz; }
 fn frame_planet() -> vec4f { return frame_words[19]; }
 fn frame_globe() -> vec4f { return frame_words[20]; }
 fn frame_up() -> vec3f { return frame_words[21].xyz; }
+fn frame_cell() -> f32 { return frame_words[21].w; }
+fn frame_gizmo() -> f32 { return frame_words[22].x; }
 
 fn on_globe(p: vec3f) -> vec3f {
   return on_globe_of(p, frame_planet(), frame_globe());
