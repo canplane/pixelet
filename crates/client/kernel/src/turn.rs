@@ -39,7 +39,7 @@ use crate::setting::store::settings_store;
 use crate::view::demand::Observed as _;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
-use xpute_guest::sched::tick::{TickReport, COSMETIC, INTERACTION, REPORT, VISIBLE};
+use xpute_guest::sched::tick::{Phase, TickReport};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Platform {
@@ -108,19 +108,19 @@ fn environment_tick(_: &mut TickContext) {
 /// Registers the tick's steps and spawns the tasks. Called from outside a
 /// frame, since the frame task waits for the host's first frame.
 pub fn boot() {
-    on_tick(INTERACTION, crate::control::camera::controller::controller_step, StepName::controller as u32);
-    on_tick(INTERACTION, camera_input_tick, StepName::input as u32);
-    on_tick(INTERACTION, crate::control::camera::controller::camera_step, StepName::camera as u32);
+    on_tick(Phase::interaction, crate::control::camera::controller::controller_step, StepName::controller as u32);
+    on_tick(Phase::interaction, camera_input_tick, StepName::input as u32);
+    on_tick(Phase::interaction, crate::control::camera::controller::camera_step, StepName::camera as u32);
     // After the view has moved, so the environment sees this tick's camera.
-    on_tick(INTERACTION, environment_tick, StepName::environment as u32);
-    on_tick(INTERACTION, companion_tick, StepName::companion as u32);
-    on_tick(INTERACTION, crate::scene::character::preview::preview_step, StepName::preview as u32);
-    on_tick(VISIBLE, sight_tick, StepName::sight as u32);
-    on_tick(VISIBLE, goal_tick, StepName::goal as u32);
-    on_tick(VISIBLE, demand_tick, StepName::demand as u32);
-    on_tick(VISIBLE, visible_step, StepName::chunks as u32);
-    on_tick(COSMETIC, debug_gizmos_tick, StepName::debug_gizmos as u32);
-    on_tick(REPORT, report_step, StepName::profiler as u32);
+    on_tick(Phase::interaction, environment_tick, StepName::environment as u32);
+    on_tick(Phase::interaction, companion_tick, StepName::companion as u32);
+    on_tick(Phase::interaction, crate::scene::character::preview::preview_step, StepName::preview as u32);
+    on_tick(Phase::visible, sight_tick, StepName::sight as u32);
+    on_tick(Phase::visible, goal_tick, StepName::goal as u32);
+    on_tick(Phase::visible, demand_tick, StepName::demand as u32);
+    on_tick(Phase::visible, visible_step, StepName::chunks as u32);
+    on_tick(Phase::cosmetic, debug_gizmos_tick, StepName::debug_gizmos as u32);
+    on_tick(Phase::report, report_step, StepName::profiler as u32);
     world_tasks();
 }
 

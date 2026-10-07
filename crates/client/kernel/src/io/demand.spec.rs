@@ -84,3 +84,6 @@ impl TaskPhaseName {
         TaskPhaseName::ALL.into_iter().find(|member| *member as u8 == value)
     }
 }
+
+/// Timings a run reports at most; past it one is left out.
+pub const TASK_PHASES_MAX: u32 = 6;

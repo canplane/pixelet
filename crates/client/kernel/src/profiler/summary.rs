@@ -294,7 +294,7 @@ fn side(out: &mut [f64]) {
     let mut steps = StepsBlock::default();
     for s in tick_step_stats().iter().filter(|s| s.count > 0).take(STEP_SLOTS) {
         steps.slots[steps.count as usize] = StepBlock {
-            phase: s.phase as f64,
+            phase: s.phase as u8 as f64,
             name: s.name as f64,
             ms: s.ms,
             count: s.count as f64,

@@ -5,10 +5,9 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::profiler::spec::{LIMITS, TASK};
+use crate::io::demand::PHASES_MAX;
+use crate::profiler::spec::TASK;
 use crate::profiler::word::{words, Words};
-
-pub const PHASES_MAX: usize = LIMITS::PHASES_MAX as usize;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

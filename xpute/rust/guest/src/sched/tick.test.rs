@@ -44,11 +44,11 @@ fn tick() -> Tick<Seen, 8> {
 #[test]
 fn tick_phases_run_in_their_fixed_order_whatever_order_they_registered_in() {
     let mut t = tick();
-    t.on_tick(REPORT, |c| c.state.order.push("report"), 0);
-    t.on_tick(COSMETIC, |c| c.state.order.push("cosmetic"), 0);
-    t.on_tick(CONTENT, |c| c.state.order.push("content"), 0);
-    t.on_tick(VISIBLE, |c| c.state.order.push("visible"), 0);
-    t.on_tick(INTERACTION, |c| c.state.order.push("interaction"), 0);
+    t.on_tick(Phase::report, |c| c.state.order.push("report"), 0);
+    t.on_tick(Phase::cosmetic, |c| c.state.order.push("cosmetic"), 0);
+    t.on_tick(Phase::content, |c| c.state.order.push("content"), 0);
+    t.on_tick(Phase::visible, |c| c.state.order.push("visible"), 0);
+    t.on_tick(Phase::interaction, |c| c.state.order.push("interaction"), 0);
     let mut s = Seen::default();
     t.run(&mut s, 0.016, QUOTA_MS, now());
     assert_eq!(s.order, PHASES);
@@ -57,9 +57,9 @@ fn tick_phases_run_in_their_fixed_order_whatever_order_they_registered_in() {
 #[test]
 fn tick_within_a_phase_steps_run_in_registration_order() {
     let mut t = tick();
-    t.on_tick(VISIBLE, |c| c.state.order.push("1"), 0);
-    t.on_tick(VISIBLE, |c| c.state.order.push("2"), 0);
-    t.on_tick(VISIBLE, |c| c.state.order.push("3"), 0);
+    t.on_tick(Phase::visible, |c| c.state.order.push("1"), 0);
+    t.on_tick(Phase::visible, |c| c.state.order.push("2"), 0);
+    t.on_tick(Phase::visible, |c| c.state.order.push("3"), 0);
     let mut s = Seen::default();
     t.run(&mut s, 0.016, QUOTA_MS, now());
     assert_eq!(s.order, ["1", "2", "3"]);
@@ -68,8 +68,8 @@ fn tick_within_a_phase_steps_run_in_registration_order() {
 #[test]
 fn tick_one_budget_is_shared_what_an_earlier_phase_spends_a_later_one_does_not_get() {
     let mut t = tick();
-    t.on_tick(VISIBLE, |c| burn(c.budget.total_ms * 0.75), 0);
-    t.on_tick(CONTENT, |c| c.state.a = c.budget.remaining(), 0);
+    t.on_tick(Phase::visible, |c| burn(c.budget.total_ms * 0.75), 0);
+    t.on_tick(Phase::content, |c| c.state.a = c.budget.remaining(), 0);
     let mut s = Seen { a: -1.0, ..Default::default() };
     let report = t.run(&mut s, 0.016, QUOTA_MS, now());
     assert!(s.a >= 0.0);
@@ -80,7 +80,7 @@ fn tick_one_budget_is_shared_what_an_earlier_phase_spends_a_later_one_does_not_g
 fn tick_the_visible_phase_cannot_take_the_content_share_and_content_sees_it() {
     let mut t = tick();
     t.on_tick(
-        VISIBLE,
+        Phase::visible,
         |c| {
             c.state.a = c.budget.remaining();
             c.budget.run(
@@ -94,7 +94,7 @@ fn tick_the_visible_phase_cannot_take_the_content_share_and_content_sees_it() {
         },
         0,
     );
-    t.on_tick(CONTENT, |c| c.state.b = c.budget.remaining(), 0);
+    t.on_tick(Phase::content, |c| c.state.b = c.budget.remaining(), 0);
     let mut s = Seen::default();
     let report = t.run(&mut s, 0.016, QUOTA_MS, now());
     assert!(s.a <= report.budget_ms * 0.8 + 0.01, "visible saw {} of {}", s.a, report.budget_ms);
@@ -105,7 +105,7 @@ fn tick_the_visible_phase_cannot_take_the_content_share_and_content_sees_it() {
 fn tick_a_step_that_unregisters_itself_mid_tick_is_not_run_again() {
     let mut t = tick();
     let id = t.on_tick(
-        COSMETIC,
+        Phase::cosmetic,
         |c| {
             c.state.runs += 1;
             let id = c.state.id;
@@ -122,9 +122,9 @@ fn tick_a_step_that_unregisters_itself_mid_tick_is_not_run_again() {
 #[test]
 fn tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_skip_the_step_after_it() {
     let mut t = tick();
-    let first = t.on_tick(VISIBLE, |c| c.state.order.push("first"), 0);
+    let first = t.on_tick(Phase::visible, |c| c.state.order.push("first"), 0);
     t.on_tick(
-        VISIBLE,
+        Phase::visible,
         |c| {
             c.state.order.push("second");
             let id = c.state.id;
@@ -132,7 +132,7 @@ fn tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_skip_the_s
         },
         0,
     );
-    t.on_tick(VISIBLE, |c| c.state.order.push("third"), 0);
+    t.on_tick(Phase::visible, |c| c.state.order.push("third"), 0);
     let mut s = Seen { id: first, ..Default::default() };
     t.run(&mut s, 0.016, QUOTA_MS, now());
     assert_eq!(s.order, ["first", "second", "third"]);
@@ -141,12 +141,12 @@ fn tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_skip_the_s
 #[test]
 fn tick_the_report_phase_sees_every_phase_before_it() {
     let mut t = tick();
-    t.on_tick(VISIBLE, |_| burn(2.0), 0);
+    t.on_tick(Phase::visible, |_| burn(2.0), 0);
     t.on_tick(
-        REPORT,
+        Phase::report,
         |c| {
-            c.state.a = c.phase_ms[VISIBLE];
-            c.state.b = c.phase_ms[REPORT];
+            c.state.a = c.phase_ms[Phase::visible as usize];
+            c.state.b = c.phase_ms[Phase::report as usize];
         },
         0,
     );
@@ -173,7 +173,7 @@ const COST: f64 = 0.3;
 fn tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_one_step() {
     let mut t = tick();
     t.on_tick(
-        VISIBLE,
+        Phase::visible,
         |c| {
             c.state.runs = c
                 .budget
@@ -194,9 +194,9 @@ fn tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_one_step(
     assert!(s.runs >= 1, "forward progress");
     assert!(s.runs < 2000, "the storm was cut short");
     assert!(
-        report.phase_ms[VISIBLE] <= report.budget_ms + COST,
+        report.phase_ms[Phase::visible as usize] <= report.budget_ms + COST,
         "visible {} over budget {}",
-        report.phase_ms[VISIBLE],
+        report.phase_ms[Phase::visible as usize],
         report.budget_ms
     );
 }
@@ -205,7 +205,7 @@ fn tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_one_step(
 fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ceiling() {
     let mut t = tick();
     t.on_tick(
-        VISIBLE,
+        Phase::visible,
         |c| {
             c.budget.run(
                 0..2000,
@@ -221,9 +221,9 @@ fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ce
     let mut s = Seen::default();
     let report = t.run(&mut s, 0.016, QUOTA_MS, now());
     assert!(
-        report.phase_ms[VISIBLE] <= report.budget_ms + POLICY.hard_slack_ms + COST,
+        report.phase_ms[Phase::visible as usize] <= report.budget_ms + POLICY.hard_slack_ms + COST,
         "visible {} over budget {}",
-        report.phase_ms[VISIBLE],
+        report.phase_ms[Phase::visible as usize],
         report.budget_ms
     );
 }
@@ -231,7 +231,7 @@ fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ce
 #[test]
 fn tick_what_the_turn_spent_before_the_tick_comes_off_the_budget() {
     let mut t = tick();
-    t.on_tick(VISIBLE, |c| c.state.a = c.budget.remaining(), 0);
+    t.on_tick(Phase::visible, |c| c.state.a = c.budget.remaining(), 0);
     let edge = now();
     burn(2.0);
     let mut s = Seen::default();
@@ -243,14 +243,14 @@ fn tick_what_the_turn_spent_before_the_tick_comes_off_the_budget() {
 fn tick_what_the_interaction_phase_spends_comes_off_the_budget() {
     let mut t = tick();
     t.on_tick(
-        INTERACTION,
+        Phase::interaction,
         |_| {
             burn(1.5);
         },
         0,
     );
     t.on_tick(
-        VISIBLE,
+        Phase::visible,
         |c| {
             c.state.a = c.budget.remaining();
             c.state.b = c.budget.total_ms;

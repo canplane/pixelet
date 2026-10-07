@@ -233,6 +233,7 @@ fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<
             Some((table, field)) => named(table).and_then(|n| n.get(field)).and_then(Node::num),
             None => named(t).and_then(|n| match n {
                 Node::Arr(a) => Some(a.len() as f64),
+                Node::Obj(_) if n.is_wrapper() => n.value().num(),
                 Node::Obj(o) => words_of(o),
                 _ => n.num(),
             }),

@@ -22,14 +22,11 @@
 
 pub const CENSUS_TAGS: &[&str] = &["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"];
 
-pub const PHASE_NAMES: &[&str] = &["interaction", "visible", "content", "cosmetic", "report"];
-
 pub mod LIMITS {
-    pub const PHASES_MAX: u32 = 6;
     pub const REASONS: u32 = 4;
     pub const STEP_SLOTS: u32 = 32;
     pub const ZOOMS: u32 = 24;
-    pub const KEYS: &[&str] = &["PHASES_MAX", "REASONS", "STEP_SLOTS", "ZOOMS"];
+    pub const KEYS: &[&str] = &["REASONS", "STEP_SLOTS", "ZOOMS"];
 }
 
 /// One rendered frame (profiler/frame.rs FrameSample). `settled` is 0 or 1; `census` pairs draws and triangles in CENSUS_TAGS' order, and `zoom_tris` and `zoom_tiles` hold zoom z in slot z. A lane's name says its unit: `_ms`, `_mb`, and `_zooms` for a set of zooms as bits, bit z for zoom z.

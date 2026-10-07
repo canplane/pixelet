@@ -11,7 +11,7 @@ use core::cmp::Ordering;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::aabb::Aabb;
 
-pub const PHASES_MAX: usize = 6;
+pub const PHASES_MAX: usize = crate::io::spec::TASK_PHASES_MAX as usize;
 
 /// Sub-timings a run reports (e.g. network vs decode), named by the run.
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -10,14 +10,11 @@ use crate::clock::now;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-pub type Phase = usize;
-pub const INTERACTION: Phase = 0;
-pub const VISIBLE: Phase = 1;
-pub const CONTENT: Phase = 2;
-pub const COSMETIC: Phase = 3;
-pub const REPORT: Phase = 4;
-pub const PHASES: [&str; PHASE_COUNT] = ["interaction", "visible", "content", "cosmetic", "report"];
-const PHASE_COUNT: usize = REPORT + 1;
+#[path = "tick.spec.rs"]
+mod spec;
+pub use spec::{Phase, PHASES};
+
+const PHASE_COUNT: usize = Phase::ALL.len();
 
 /// Steps unregistered from inside one step.
 const OFFS_MAX: usize = 8;
@@ -56,13 +53,25 @@ impl<S> TickContext<'_, S> {
 pub type TickStep<S> = fn(&mut TickContext<S>);
 
 /// Cumulative until reset; registrations sharing a phase and name share a row.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StepStats {
     pub phase: Phase,
     pub name: u32,
     pub ms: f64,
     pub count: u32,
     pub max_ms: f64,
+}
+
+impl StepStats {
+    const fn new(phase: Phase, name: u32) -> StepStats {
+        StepStats {
+            phase,
+            name,
+            ms: 0.0,
+            count: 0,
+            max_ms: 0.0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -106,7 +115,8 @@ impl<S, const N: usize> Tick<S, N> {
             registry: [None; N],
             len: 0,
             next_id: 1,
-            stats: [StepStats::default(); N],
+            // Past `stats_len` a row is room, not a step.
+            stats: [StepStats::new(Phase::interaction, 0); N],
             stats_len: 0,
             step_timing: false,
             last_report: TickReport::default(),
@@ -157,7 +167,7 @@ impl<S, const N: usize> Tick<S, N> {
         let at = match (0..self.stats_len).find(|&k| self.stats[k].phase == phase && self.stats[k].name == name) {
             Some(k) => k,
             None if self.stats_len < N => {
-                self.stats[self.stats_len] = StepStats { phase, name, ..Default::default() };
+                self.stats[self.stats_len] = StepStats::new(phase, name);
                 self.stats_len += 1;
                 self.stats_len - 1
             }
@@ -194,7 +204,7 @@ impl<S, const N: usize> Tick<S, N> {
             }
             ctx.off_len = 0;
         }
-        ctx.phase_ms[phase] = now() - start;
+        ctx.phase_ms[phase as usize] = now() - start;
     }
 
     pub fn run(&mut self, state: &mut S, delta: f64, quota_ms: f64, t0: f64) -> TickReport {
@@ -209,11 +219,11 @@ impl<S, const N: usize> Tick<S, N> {
             off_len: 0,
         };
 
-        self.run_phase(INTERACTION, &mut ctx);
+        self.run_phase(Phase::interaction, &mut ctx);
         ctx.budget.reserve_ms = ctx.budget.total_ms * self.policy.content_share;
-        self.run_phase(VISIBLE, &mut ctx);
+        self.run_phase(Phase::visible, &mut ctx);
         ctx.budget.reserve_ms = 0.0;
-        for phase in [CONTENT, COSMETIC, REPORT] {
+        for phase in [Phase::content, Phase::cosmetic, Phase::report] {
             self.run_phase(phase, &mut ctx);
         }
 

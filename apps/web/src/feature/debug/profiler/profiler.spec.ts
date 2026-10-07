@@ -14,10 +14,7 @@
 
 export const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"] as const;
 
-export const PHASE_NAMES = ["interaction", "visible", "content", "cosmetic", "report"] as const;
-
 export const LIMITS = {
-  PHASES_MAX: 6 as number,
   REASONS: 4 as number,
   STEP_SLOTS: 32 as number,
   ZOOMS: 24 as number,

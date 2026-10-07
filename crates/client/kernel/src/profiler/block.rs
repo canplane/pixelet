@@ -9,8 +9,9 @@ use core::mem::{offset_of, size_of};
 
 use crate::io::spec::{CATEGORY_NAMES, TASK_PHASE_NAMES};
 use crate::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS, ZOOMS};
-use crate::profiler::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUMMARY, TASK_SUMMARY};
+use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY};
 use crate::profiler::word::{words, Words};
+use xpute_guest::sched::tick::PHASES;
 
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
@@ -58,7 +59,7 @@ pub struct FramesBlock {
     pub gpu: Spread,
     pub sched: Spread,
     pub chunks: Spread,
-    pub phases: [Spread; PHASE_NAMES.len()],
+    pub phases: [Spread; PHASES.len()],
     pub gpu_spans: [Spread; GPU_SPANS],
     pub per_s_runs: f64,
     pub per_s_bakes: f64,
@@ -268,7 +269,7 @@ words!(QualityBlock, SUMMARY::quality::WORDS,
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StepBlock {
-    /// Indices into PHASE_NAMES and STEP_NAMES.
+    /// Indices into PHASES and STEP_NAMES.
     pub phase: f64,
     pub name: f64,
     pub ms: f64,

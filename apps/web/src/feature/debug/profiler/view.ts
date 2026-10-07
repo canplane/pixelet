@@ -14,7 +14,8 @@ import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
 import { CATEGORY_NAMES, OUTCOME_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/demand.spec.ts";
 import { kernel_call, kernel_memory } from "@/kernel/shell.ts";
 
-import { CENSUS_TAGS, FRAME, LOG, PHASE_NAMES, READ, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WORST } from "./profiler.spec.ts";
+import { PHASES } from "@xpute/host/sched/tick.spec.ts";
+import { CENSUS_TAGS, FRAME, LOG, READ, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WORST } from "./profiler.spec.ts";
 import { STEP_NAMES } from "@/kernel/turn/step.spec.ts";
 import { GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
 import { type Frame, frameAt } from "./lane.ts";
@@ -148,7 +149,7 @@ function frameSummary(s: F64Array): FrameSummary | null {
     gpu: spreadAt(s, a + F.gpu),
     sched: spreadAt(s, a + F.sched),
     chunks: spreadAt(s, a + F.chunks),
-    phases: PHASE_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.phases + k * SPREAD.WORDS) })),
+    phases: PHASES.map((name, k) => ({ name, spread: spreadAt(s, a + F.phases + k * SPREAD.WORDS) })),
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.gpu_spans + k * SPREAD.WORDS) })),
     perS: [s[a + F.per_s_runs], s[a + F.per_s_bakes]],
     backlog_s: s[a + F.backlog_s],
@@ -255,7 +256,7 @@ export function profilerReportRead(): ProfilerReport {
   const steps = Array.from({ length: s[stepsAt + SUMMARY.steps.count] }, (_, i) => {
     const w = stepsAt + SUMMARY.steps.slots + i * STEP.WORDS;
     return {
-      phase: PHASE_NAMES[s[w + STEP.phase]] ?? "?",
+      phase: PHASES[s[w + STEP.phase]] ?? "?",
       name: STEP_NAMES[s[w + STEP.name]] ?? "?",
       ms: s[w + STEP.ms],
       count: s[w + STEP.count],
