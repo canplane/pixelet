@@ -1,4 +1,4 @@
-// pxl-kernel/io/sched.test.rs
+// pxl-kernel/io/request.test.rs
 //
 // What the request scheduler keeps whatever its policy. The policy here orders by why
 // then distance and waits 2 s after a failure.
@@ -30,8 +30,11 @@ impl Serve for ByWhy {
     }
 }
 
+/// Room for every test's wants in each category.
+const BOUNDS: Bounds = [64; Category::ALL.len()];
+
 fn scheduler() -> RequestScheduler<ByWhy> {
-    let mut l = RequestScheduler::new(ByWhy);
+    let mut l = RequestScheduler::new(ByWhy, BOUNDS);
     l.set_credits(2);
     l
 }
@@ -180,7 +183,7 @@ impl Serve for Restless {
 
 #[test]
 fn every_want_is_served_at_rest() {
-    let mut l = RequestScheduler::new(Restless);
+    let mut l = RequestScheduler::new(Restless, BOUNDS);
     l.set_credits(2);
     let mut wanted: Vec<(u64, Ask)> = (0..12).map(|k| (k, ask(Why::Demand, (k * 7 % 12) as f64))).collect();
     let mut out: Vec<u64> = Vec::new();

@@ -16,7 +16,7 @@ use xpute_guest::global::Global;
 
 use crate::control::camera::controller::units_per_px_at;
 use crate::io::demand::Category;
-use crate::io::fetch::{body, next_tile, release, tile_settled, TileArrival};
+use crate::io::fetch::{answer_settled, body, next_answered, release, Answered};
 use crate::io::request::attempt_of;
 use crate::layer::earth::{self, Earth};
 use crate::layer::poi::MAJOR_UNITS_PER_PX;
@@ -368,17 +368,18 @@ impl<L: Observed> Demand<L> {
 pub fn admit_arrived() {
     let mut first = true;
     while first || !world_edge().spent() {
-        let Some(TileArrival {
+        let Some(Answered {
             key,
             category,
-            tile,
+            subject,
             block,
             mut phases,
-        }) = next_tile()
+        }) = next_answered(&[Category::terrain, Category::poi, Category::earth])
         else {
             return;
         };
         first = false;
+        let tile = Tile::of_subject(subject);
         // A key the request scheduler no longer holds is one a reset forgot.
         if attempt_of(key).is_none() {
             release(block);
@@ -404,7 +405,7 @@ pub fn admit_arrived() {
                 Err(Errno::ENOTRECOVERABLE.into())
             }
         };
-        tile_settled(key, result, phases);
+        answer_settled(key, result, phases);
     }
 }
 

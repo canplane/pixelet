@@ -7,7 +7,6 @@
 
 use base64::Engine;
 use pxl_spec::space::hierarchy::morton::key_of;
-use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
@@ -15,22 +14,21 @@ use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::sched::edge::{notified, Notify};
 
-use crate::door::host::turn;
-use crate::io::file::{self, Kept, Owner};
+use crate::io::file::{self, Kept, KeptFile};
 use crate::kernel;
 use crate::layer::object::store::{apply, written, Write};
 use crate::sched::edge::wake_at;
 
 struct State {
     save_due_ms: Option<f64>,
-    /// The saved blob and the turn it was asked on: read on a later one.
-    loading: Option<(Vec<u8>, u64)>,
+    /// The saved world is in: until then nothing is written over it.
+    loaded: bool,
 }
 
 static STATE: Global<State> = Global::new();
 
 fn store_state() -> &'static mut State {
-    STATE.get(|| State { save_due_ms: None, loading: None })
+    STATE.get(|| State { save_due_ms: None, loaded: false })
 }
 
 // Kept as one blob of every leaf as the write that made it, `<key, id>`:
@@ -75,38 +73,29 @@ fn decode(blob: &str) -> Result<(), MarshalError> {
 
 /// Asks for every tile.
 pub fn open() {
-    file::open_kept(Kept::Objects, Owner::Objects);
-}
-
-/// A failed open means no blob was kept: the world starts empty.
-pub fn opened(fd: u32, res: i32) {
-    if res < 0 {
-        file::close(fd);
-        return;
-    }
-    // A blob the heap cannot hold starts the world empty, as a missing one does.
-    let mut blob = Vec::new();
-    if blob.try_reserve_exact(res as usize).is_err() {
-        file::close(fd);
-        return;
-    }
-    blob.resize(res as usize, 0);
-    file::read(fd, &mut blob);
-    file::close(fd);
-    store_state().loading = Some((blob, turn()));
+    file::open_kept(Kept::Objects);
 }
 
 fn keep(blob: String) {
     file::write_kept(Kept::Objects, blob.into_bytes());
 }
 
-/// An unreadable blob starts the world empty, as a missing one does.
+/// A missing blob starts the world empty; an unreadable one too. One too
+/// large to read leaves the world unsaved, so it is never written over.
 fn loaded() {
     let st = store_state();
-    if !st.loading.as_ref().is_some_and(|(_, asked)| turn() > *asked) {
+    if st.loaded {
         return;
     }
-    let (blob, _) = st.loading.take().or_bug(Errno::ENOTRECOVERABLE);
+    let blob = match file::take_kept(Kept::Objects) {
+        None | Some(KeptFile::TooLarge) => return,
+        Some(KeptFile::None) => {
+            st.loaded = true;
+            return;
+        }
+        Some(KeptFile::Bytes(blob)) => blob,
+    };
+    st.loaded = true;
     if core::str::from_utf8(&blob).map_or(true, |raw| decode(raw).is_err()) {
         // what decoded before the failure was already read
         let regions = kernel().objects.clear();
@@ -136,6 +125,9 @@ fn saves() -> &'static mut Notify {
 
 pub fn step() {
     loaded();
+    if !store_state().loaded {
+        return;
+    }
     match store_state().save_due_ms {
         Some(due) if now() >= due => saves().notify(),
         Some(due) => wake_at(due),
@@ -158,7 +150,7 @@ pub async fn task() {
 
 /// Keeps what is pending now, as the page hides.
 pub fn flush() {
-    if store_state().save_due_ms.take().is_none() {
+    if !store_state().loaded || store_state().save_due_ms.take().is_none() {
         return;
     }
     if let Ok(blob) = encode() {

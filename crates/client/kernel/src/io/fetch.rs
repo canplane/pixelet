@@ -19,7 +19,6 @@ use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::failure::{Failure, Outcome};
 use crate::io::file::{self, Owner};
 use crate::io::request::{attempt_of, settle, Credit};
-use crate::layer::geocode::store as geocode_store;
 use crate::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::bake::place_tile::{group_key, DICT_OBJECT};
 use pxl_spec::space::hierarchy::morton::write_name;
@@ -87,26 +86,30 @@ struct Arrival {
 
 static ARRIVED: Global<Vec<Arrival>> = Global::new();
 
-/// A pyramid tile's answer, kept for the view to admit: which tile it evicts
-/// is the view's (`view/demand.rs` `admit_arrived`).
-pub struct TileArrival {
+/// An answer, a body or the source's absence, kept for its owner to take:
+/// what it does with it (admits a tile, opens a group) is the owner's. The
+/// fetch stays out until the owner settles it.
+pub struct Answered {
     pub key: u64,
     pub category: Category,
-    pub tile: Tile,
+    pub subject: u64,
     /// None where the source has no object for it.
     pub block: Option<Block>,
     pub phases: Phases,
 }
 
-static TILES: Global<VecDeque<TileArrival>> = Global::new();
+static ANSWERED: Global<VecDeque<Answered>> = Global::new();
 
-/// The oldest tile arrived and not yet admitted.
-pub fn next_tile() -> Option<TileArrival> {
-    TILES.get(VecDeque::new).pop_front()
+/// The oldest answer of one of `of`, not yet taken. No more are kept than
+/// fetches are out, so the scan is short.
+pub fn next_answered(of: &[Category]) -> Option<Answered> {
+    let all = ANSWERED.get(VecDeque::new);
+    let at = all.iter().position(|a| of.contains(&a.category))?;
+    all.remove(at)
 }
 
-/// A tile's fetch settles once it is admitted, or refused.
-pub fn tile_settled(key: u64, result: Result<(), Failure>, phases: Phases) {
+/// An answer's fetch settles once its owner has taken it in, or refused it.
+pub fn answer_settled(key: u64, result: Result<(), Failure>, phases: Phases) {
     let (outcome, fail) = match result {
         Ok(()) => (Outcome::ok, Failure::default()),
         Err(fail) => (Outcome::error, fail),
@@ -187,50 +190,22 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     if let Some((_, bytes)) = block {
         phases.push(TaskPhaseName::bytes, bytes as f64);
     }
-    let pyramid = matches!(category, Category::terrain | Category::poi | Category::earth);
-    let tile = matches!(got, Got::Absent) || block.is_some();
-    if pyramid && tile {
-        let tile = Tile::of_subject(subject);
-        TILES.get(VecDeque::new).push_back(TileArrival { key, category, tile, block, phases });
-        request_world_tick();
-        return;
-    }
     let (outcome, fail) = match got {
-        Got::Read(_) => match adopt(category, subject, block, &mut phases) {
-            Ok(()) => (Outcome::ok, Failure::default()),
-            Err(fail) => (Outcome::error, fail),
-        },
-        Got::Absent => match absent(category, subject) {
-            Ok(()) => (Outcome::ok, Failure::default()),
-            Err(fail) => (Outcome::error, fail.into()),
-        },
+        // Taken by its owner, which settles it; and a turn asked, so one takes it.
+        Got::Absent | Got::Read(Some(_)) => {
+            ANSWERED.get(VecDeque::new).push_back(Answered {
+                key,
+                category,
+                subject,
+                block,
+                phases,
+            });
+            request_world_tick();
+            return;
+        }
+        // Only an absence says there is none; an empty read is not an object.
+        Got::Read(None) => (Outcome::error, Failure::from(Errno::EBADMSG)),
         Got::Failed(fail) => (Outcome::error, fail),
     };
     settle(key, outcome, Some(phases), fail);
-}
-
-/// The tile over it for a pyramid tile, no label for a geocode group.
-fn absent(category: Category, subject: u64) -> Result<(), Errno> {
-    match category {
-        Category::geocode => geocode_store::absent_group(subject),
-        // A bake with no dictionary names nothing: an answer, so not asked again.
-        Category::geocode_dict => geocode_store::absent_dict(),
-        // A pyramid tile's absence is admitted by the view.
-        Category::terrain | Category::poi | Category::earth | Category::asset => return Err(Errno::ENOTRECOVERABLE),
-    };
-    Ok(())
-}
-
-/// The block is released here unless the tile keeps it.
-fn adopt(category: Category, subject: u64, block: Option<Block>, _phases: &mut Phases) -> Result<(), Failure> {
-    // Only `absent` says there is none; an empty read is not an object.
-    let Some(b) = block else { return Err(Errno::EBADMSG.into()) };
-    match category {
-        // SAFETY (both): the heap block given for this body alone; the store
-        // keeps it, or frees it if it does not open.
-        Category::geocode => unsafe { geocode_store::adopt_group(subject, b) }.map_err(Into::into),
-        Category::geocode_dict => unsafe { geocode_store::adopt_dict(b) }.map_err(Into::into),
-        // A pyramid tile is admitted by the view.
-        Category::terrain | Category::poi | Category::earth | Category::asset => Err(Errno::ENOTRECOVERABLE.into()),
-    }
 }

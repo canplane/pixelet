@@ -11,10 +11,11 @@ use pxl_spec::bake::place_tile::DICT_OBJECT;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::abi::host::{root, OBJECTS_PATH, SETTINGS_PATH};
-use crate::door::host::sys;
+use crate::door::host::{heap_stat, sys, turn};
 use crate::io::load::LOADS;
 use crate::io::request::Credit;
 use crate::mem::spec::MIN_HEAP_BYTES;
+use crate::sched::edge::request_world_tick;
 use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
 
@@ -57,7 +58,7 @@ pub enum Owner {
     Fetch { key: u64, at_ms: f64 },
     Model { key: u64 },
     Image { key: u64 },
-    Objects,
+    Kept(Kept),
     Write,
 }
 
@@ -72,8 +73,102 @@ pub fn open(_: Credit, root: u32, path: &str, owner: Owner) -> Option<Fd> {
     Some(files().open(sys()?, root, named(path), owner))
 }
 
-pub fn open_kept(kept: Kept, owner: Owner) -> Option<Fd> {
-    Some(files().open(sys()?, root::STORAGE, kept.path(), owner))
+/// Opens a kept file to be read whole; what it held is taken with `take_kept`.
+pub fn open_kept(kept: Kept) -> Option<Fd> {
+    Some(files().open(sys()?, root::STORAGE, kept.path(), Owner::Kept(kept)))
+}
+
+/// What a kept file held.
+pub enum KeptFile {
+    /// None was kept, or it was empty.
+    None,
+    Bytes(Vec<u8>),
+    /// Larger than any heap a device is given: it cannot be read here, and
+    /// must not be written over either.
+    TooLarge,
+}
+
+enum KeptRead {
+    /// The heap refused its room: read again after the heap gives some back,
+    /// never taken for a file that held nothing.
+    Refused {
+        fd: Fd,
+        bytes: usize,
+        releases: u32,
+    },
+    /// Filled from the turn after `asked`.
+    Reading {
+        bytes: Vec<u8>,
+        asked: u64,
+    },
+    Read(KeptFile),
+}
+
+static KEPT: Global<Vec<(Kept, KeptRead)>> = Global::new();
+
+fn kept_read(kept: Kept, read: KeptRead) {
+    let all = KEPT.get(Vec::new);
+    all.retain(|(k, _)| *k != kept);
+    all.push((kept, read));
+    request_world_tick();
+}
+
+fn read_kept(kept: Kept, fd: Fd, bytes: usize) {
+    let mut held = Vec::new();
+    if held.try_reserve_exact(bytes).is_err() {
+        kept_read(
+            kept,
+            KeptRead::Refused {
+                fd,
+                bytes,
+                releases: heap_stat().releases,
+            },
+        );
+        return;
+    }
+    held.resize(bytes, 0);
+    read(fd, &mut held);
+    close(fd);
+    kept_read(kept, KeptRead::Reading { bytes: held, asked: turn() });
+}
+
+fn kept_opened(kept: Kept, fd: Fd, res: i32) {
+    match res {
+        0 => {
+            close(fd);
+            kept_read(kept, KeptRead::Read(KeptFile::None));
+        }
+        r if r > 0 => read_kept(kept, fd, r as usize),
+        r if r == -(Errno::EFBIG as i32) => {
+            close(fd);
+            kept_read(kept, KeptRead::Read(KeptFile::TooLarge));
+        }
+        _ => {
+            close(fd);
+            kept_read(kept, KeptRead::Read(KeptFile::None));
+        }
+    }
+}
+
+/// What a kept file held, once it is read whole; None until then.
+pub fn take_kept(kept: Kept) -> Option<KeptFile> {
+    let all = KEPT.get(Vec::new);
+    let at = all.iter().position(|(k, _)| *k == kept)?;
+    match &all[at].1 {
+        &KeptRead::Refused { fd, bytes, releases } => {
+            if heap_stat().releases != releases {
+                all.remove(at);
+                read_kept(kept, fd, bytes);
+            }
+            None
+        }
+        KeptRead::Reading { asked, .. } if turn() <= *asked => None,
+        _ => match all.remove(at).1 {
+            KeptRead::Reading { bytes, .. } => Some(KeptFile::Bytes(bytes)),
+            KeptRead::Read(file) => Some(file),
+            KeptRead::Refused { .. } => None,
+        },
+    }
 }
 
 /// `dst` is filled from the next turn on.
@@ -114,7 +209,7 @@ pub fn opened(fd: Fd, res: i32, detail: u32) {
         Owner::Fetch { key, at_ms } => crate::io::fetch::opened(fd, key, at_ms, res, detail),
         Owner::Model { key } => crate::io::load::model_opened(fd, key, res),
         Owner::Image { key } => crate::io::load::image_opened(fd, key, res),
-        Owner::Objects => crate::layer::object::repository::opened(fd, res),
+        Owner::Kept(kept) => kept_opened(kept, fd, res),
         Owner::Write => {}
     }
 }

@@ -18,12 +18,8 @@ use crate::io::demand::{Ask, Category, Phases};
 use crate::io::failure::{Failure, Outcome};
 use crate::io::load::LOADS;
 use crate::io::policy::Policy;
-use crate::layer::earth::Earth;
-use crate::layer::residency::Residency;
 use crate::profiler::record::profiler_record;
-use crate::profiler::task::{TaskRow, PHASES_MAX};
-use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::poi_tile::PoiTile;
+use crate::profiler::task::TaskRow;
 use std::collections::HashMap;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -50,26 +46,18 @@ pub trait Serve {
     fn retry_after(&self, outcome: Outcome) -> Option<f64>;
 }
 
-/// A layer's tiles: at most its frames, since it asks only for what it can
-/// hold. An asset: as a model and as an image. Streams of one: one.
-const fn bound(category: Category) -> usize {
-    match category {
-        Category::terrain => Residency::<Terrain>::FRAMES as usize,
-        Category::poi => Residency::<PoiTile>::FRAMES as usize,
-        Category::earth => Residency::<Earth>::FRAMES as usize,
+/// How many of a category's wants are held at once. A layer's tiles: at most
+/// its residency's frames, since it asks only for what it can hold, which the
+/// layer says (`open`). An asset: as a model and as an image. Streams of one: one.
+pub type Bounds = [usize; Category::ALL.len()];
+
+fn bounds_of(frames: impl Fn(Category) -> u32) -> Bounds {
+    Category::ALL.map(|c| match c {
         Category::asset => 2 * LOADS,
         Category::geocode | Category::geocode_dict => 1,
-    }
+        Category::terrain | Category::poi | Category::earth => frames(c) as usize,
+    })
 }
-
-const DESIRED: usize = {
-    let (mut n, mut k) = (0, 0);
-    while k < Category::ALL.len() {
-        n += bound(Category::ALL[k]);
-        k += 1;
-    }
-    n
-};
 
 #[derive(Clone, Copy, Debug)]
 struct Wanted {
@@ -110,6 +98,7 @@ impl Placed {
 }
 
 pub struct RequestScheduler<S> {
+    bounds: Bounds,
     serve: S,
     desired: Box<[Option<Wanted>]>,
     /// A slot's index and generation are the key the host holds; a key is valid
@@ -139,16 +128,18 @@ const fn key_of(slot: usize, generation: u32) -> u64 {
 }
 
 impl<S: Serve> RequestScheduler<S> {
-    pub fn new(serve: S) -> RequestScheduler<S> {
+    pub fn new(serve: S, bounds: Bounds) -> RequestScheduler<S> {
+        let desired: usize = bounds.iter().sum();
         RequestScheduler {
+            bounds,
             serve,
-            desired: vec![None; DESIRED].into_boxed_slice(),
+            desired: vec![None; desired].into_boxed_slice(),
             attempt: [None; MAX_CREDITS as usize],
             generation: [0; MAX_CREDITS as usize],
             credits: 0,
             started: Vec::new(),
             stops: Vec::new(),
-            ready: Vec::with_capacity(DESIRED),
+            ready: Vec::with_capacity(desired),
         }
     }
 
@@ -184,7 +175,7 @@ impl<S: Serve> RequestScheduler<S> {
             if self.find(category, subject).is_some() {
                 continue;
             }
-            xpute_core::ensure!(held < bound(category), ENOTRECOVERABLE, category as u32);
+            xpute_core::ensure!(held < self.bounds[category as usize], ENOTRECOVERABLE, category as u32);
             held += 1;
             let free = self.desired.iter().position(Option::is_none).or_bug(Errno::ENOTRECOVERABLE);
             self.desired[free] = Some(Wanted {
@@ -358,8 +349,6 @@ fn record(a: &Attempt, at: f64, outcome: Outcome, phases: Option<Phases>, fail: 
     });
 }
 
-const _: () = assert!(PHASES_MAX == crate::io::demand::PHASES_MAX, "a task row holds every phase a run can report");
-
 static FILES: Global<HashMap<usize, Box<str>>> = Global::new();
 
 /// A location's file name lies outside kernel memory on a device, so rows
@@ -370,8 +359,14 @@ fn file_in_memory(file: &'static str) -> &'static str {
 
 static SCHED: Global<RequestScheduler<Policy>> = Global::new();
 
+/// Opened once the kernel is laid out, with each layer's frames.
+pub fn open(frames: impl Fn(Category) -> u32) {
+    SCHED.set(RequestScheduler::new(Policy::standard(), bounds_of(frames)));
+}
+
 fn sched() -> &'static mut RequestScheduler<Policy> {
-    SCHED.get(|| RequestScheduler::new(Policy::standard()))
+    // Asked before `open` is the roof wired wrong, never a state to wait out.
+    SCHED.get(|| None.or_bug(Errno::ENOTRECOVERABLE))
 }
 
 pub fn declare(category: Category, wanted: &[(u64, Ask)]) {
@@ -419,5 +414,5 @@ pub fn reset() {
 }
 
 #[cfg(test)]
-#[path = "sched.test.rs"]
+#[path = "request.test.rs"]
 mod test;
