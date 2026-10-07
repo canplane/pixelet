@@ -150,30 +150,9 @@ pub fn tracking_action(tracking: Tracking) {
     }
 }
 
-/// A badge's height is its zoom's, coarser than where the center stands, so
-/// the center goes on the surface once it is known exactly.
-fn go_on_ground(target: Pvf3, motion: Motion) {
-    set_following(false);
-    go_to_ground(target, motion);
-}
-
-/// A place, as the location button goes to one: a view far out comes in.
-pub fn go_to(target: Pvf3) {
-    go_on_ground(target, Motion::Smooth);
-    crate::control::camera::controller::come_in_to_default();
-}
-
-/// Nearer where the camera has a nearer to be: the orbit halves its distance.
-pub fn go_into(target: Pvf3) {
-    go_on_ground(target, Motion::Smooth);
-    if crate::control::camera::controller::active() == crate::control::camera::controller::Active::Orbit {
-        crate::control::camera::orbit::zoom_by(0.5);
-    }
-}
-
 /// A search's place, as the location button goes to one.
 pub fn go_to_degrees(lon: f64, lat: f64) {
-    go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
+    crate::control::navigation::destination::go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
     crate::control::camera::controller::come_in_to_default();
 }
 

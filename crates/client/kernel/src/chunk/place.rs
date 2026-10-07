@@ -5,10 +5,11 @@
 //! standing at a leaf cell's center on the surface a ray down meets first.
 
 pub mod badge;
+mod selection;
+use selection::select_visible_billboards;
 
 use crate::billboard::batch::BillboardBatch;
 use crate::billboard::field::billboard_instance;
-use crate::billboard::selection::select_visible_billboards;
 use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::chunk::Chunk;
 use crate::control::camera::controller::units_per_px_at;
@@ -235,17 +236,20 @@ pub fn step(ctx: &mut TickContext) {
     (p.labeled, p.instances) = (labeled, instances);
 }
 
-/// `ndc` in [−1, 1], y up. A count is also zoomed into, so it comes apart
-/// into its places. Whether a badge took the tap.
-pub fn tap(ndc_x: f64, ndc_y: f64) -> bool {
+/// Where a badge's tap goes: to its place, or into a count, so it comes
+/// apart into its places.
+pub enum Went {
+    To(Pvf3),
+    Into(Pvf3),
+}
+
+/// `ndc` in [−1, 1], y up. The badge that took the tap, if any.
+pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
     let [x, y] = ndc_to_px([ndc_x, ndc_y]);
     let hits = &PLACEMENT.get(Placement::default).hits;
-    let Some(&(_, label, stands)) = hits.iter().find(|(r, _, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y)) else {
-        return false;
-    };
-    match label {
-        Label::Count(..) => crate::shell::go_into(stands),
-        _ => crate::shell::go_to(stands),
-    }
-    true
+    let &(_, label, stands) = hits.iter().find(|(r, _, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y))?;
+    Some(match label {
+        Label::Count(..) => Went::Into(stands),
+        _ => Went::To(stands),
+    })
 }
