@@ -6,8 +6,9 @@
 //! Asks are the observation's demand, as the estimator names it, merged with
 //! the fallback's tiles and a destination's, the best reason per tile.
 //! Nothing drawn enters them but what the turn hands in: the goal the chunks
-//! last published and the quality's τ, decided first. Where a tile marks a child as no tile (`Layer::occupancy`), its
-//! ground is the tile's and the child is never asked for.
+//! last published and the quality's τ, decided first. Where a tile marks a
+//! child as no tile (`Layer::occupancy`), its ground is the tile's and the
+//! child is never asked for.
 
 use pxl_spec::bake::earth_tile::EARTH_REACH;
 use pxl_spec::bake::format::Terrain;
@@ -108,6 +109,7 @@ impl Victim for Farthest<'_> {
 
 /// The goal materialization last published, which demand follows: what it
 /// was observed from, the footprints its rays met and the tiles they lacked.
+#[derive(Clone, Copy)]
 pub struct Published<'a> {
     pub observation: &'a Observation,
     pub footprints: &'a [Footprint],
