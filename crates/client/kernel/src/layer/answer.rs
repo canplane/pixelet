@@ -3,7 +3,7 @@
 //! What a query answers: a value, exact or coarser with the tile it lacked.
 
 use pxl_spec::bake::format::GroundCell;
-use pxl_spec::cell::cube_types::sentinel;
+use pxl_spec::cell::cube_types;
 use pxl_spec::space::layer::tile::Tile;
 
 /// A coarser answer carries the tile it lacked, so none passes for exact.
@@ -61,8 +61,8 @@ pub struct Ground {
 }
 
 impl Ground {
-    /// None where the terrain gives no surface, a void cell.
+    /// None where the terrain gives no surface, a cell that is no look.
     pub fn top(&self) -> Option<f64> {
-        (self.cell != sentinel::void).then_some(self.height)
+        cube_types::Ground::of(self.cell).is_some().then_some(self.height)
     }
 }
