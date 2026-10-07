@@ -24,7 +24,6 @@ use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, unit
 use pxl_spec::space::hierarchy::morton::{child_cube, key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
 use pxl_spec::space::hierarchy::tree::{first_descendant_of, region, Node};
-use pxl_spec::space::layer::lattice::GROUND;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -259,25 +258,6 @@ impl Store {
         });
     }
 
-    /// A box holding every entry inside `query`, cut to it, never none where
-    /// there is some.
-    pub fn bound_in(&self, query: &Aabb) -> Option<Aabb> {
-        let mut out: Option<Aabb> = None;
-        self.entries_in(query, &mut |e| {
-            if let Some(b) = e.cube().meet(*query) {
-                out = Some(out.map_or(b, |o| o.join(b)));
-            }
-        });
-        out
-    }
-
-    /// The finest zoom any entry inside `query` is held at.
-    pub fn finest_in(&self, query: &Aabb) -> Option<Zoom> {
-        let mut out: Option<Zoom> = None;
-        self.entries_in(query, &mut |e| out = Some(out.map_or(e.zoom, |f| f.max(e.zoom))));
-        out
-    }
-
     /// Every leaf meeting the cube at `zoom`, X in the cube's frame.
     fn each_in(&self, zoom: Zoom, at: [i64; 3], visit: &mut dyn FnMut(&Entry)) {
         let Some(f) = self.find(zoom, at) else { return };
@@ -301,16 +281,6 @@ impl Store {
     /// Whether anything, air included, is held in the cube at `zoom`.
     fn holds(&self, zoom: Zoom, at: [i64; 3]) -> bool {
         self.find(zoom, at).is_some_and(|f| f.slot != Slot::Leaf(EMPTY))
-    }
-
-    /// The cell over the highest entry in the column of ground cell `[x, y]`.
-    pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
-        let side = units(GROUND.cell());
-        let column = Aabb {
-            min: [x as f64 * side, y as f64 * side, REACH.min[2]],
-            max: [(x + 1) as f64 * side, (y + 1) as f64 * side, REACH.max[2]],
-        };
-        self.bound_in(&column).map(|b| (b.max[2] / side).ceil() as i64)
     }
 
     /// What the objects fold to in the cells `from..to` of `target`, at every
@@ -381,11 +351,6 @@ impl Store {
                 true,
             ),
         }
-    }
-
-    /// VOID where nothing; a leaf's value as it is.
-    pub fn folded_value(&self, zoom: Zoom, at: [i64; 3]) -> u16 {
-        self.find(zoom, at).map_or(EMPTY, |f| self.fold(f.tree, f.slot, f.zoom, at.map(|c| c >> (zoom - f.zoom)), None))
     }
 
     /// The value placed at exactly this node, if one is.

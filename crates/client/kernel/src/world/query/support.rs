@@ -2,6 +2,7 @@
 
 //! Where something stands: the support, floor and ceiling over a point, climbing as a walker would.
 
+use crate::layer::object::store::VOID;
 use crate::layer::Query;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_voxel};
@@ -88,7 +89,8 @@ impl<'a> Access<'a> {
                     return made((cz as f64 + 0.5) * side);
                 }
                 filled_cell(|[x, y, z]| {
-                    let v = u32::from(self.objects.folded_value(OBJECT_FINEST, [ix * n + x, iy * n + y, cz * n + z]));
+                    let node = (OBJECT_FINEST, [ix * n + x, iy * n + y, cz * n + z]);
+                    let v = self.objects.read(node, OBJECT_FINEST).value().map_or(VOID, |c| c.node().0.state);
                     match object_value_is_voxel(v) {
                         true => !object_value_is_air(v),
                         false => made(((cz * n + z) as f64 + 0.5) * fine),
@@ -96,7 +98,9 @@ impl<'a> Access<'a> {
                 })
             };
             let lines_top = c.lines.boxes.iter().map(|b| (b[1] / side).ceil() as i64).max().unwrap_or(i64::MIN);
-            let ceiling = top.unwrap_or(i64::MIN).max(lines_top).max(self.objects.ceiling([ix, iy]).unwrap_or(i64::MIN));
+            let held = self.objects.bounds((GROUND.cell(), [ix, iy]), GROUND.cell()).value().flatten();
+            let objects_top = held.map_or(i64::MIN, |b| (b.aabb.max[2] / side).ceil() as i64);
+            let ceiling = top.unwrap_or(i64::MIN).max(lines_top).max(objects_top);
             f(top, ceiling, &solid)
         })
     }
