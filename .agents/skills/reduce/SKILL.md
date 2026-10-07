@@ -58,6 +58,11 @@ written.
 - Keep behaviour, or say in the commit what it trades. Where the change
   could cost, measure against the commit before and explain any difference
   by its mechanism.
+- Where the output is deterministic, prove the change by what it produces:
+  old against new, hashed per unit (a leaf, a shard), over real data, before
+  landing. Equality is the cheapest proof and what makes a fold safe.
+- Find a cost by narrowing on real data: each statement, then each part of
+  the slow one, then the rows it touches, rather than by reading the code.
 - Confirm behaviour by running the app before running the tests; a test in
   the structure's way is rewritten against the new interface or deleted.
 - Read every file's diff before committing it. A path commits whole, so
