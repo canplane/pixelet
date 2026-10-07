@@ -85,7 +85,7 @@ fn work_sample(c: &mut Report, census: &Census) -> WorkSample {
 /// complements. `run` and `slot` are unrounded because their difference is
 /// smaller than rounding would hide.
 fn heap_sample() -> HeapSample {
-    let h = crate::door::host::heap_stat();
+    let h = crate::io::host::heap_stat();
     HeapSample {
         used_mb: round(h.used as f64 / MB),
         live_mb: round(h.live as f64 / MB),

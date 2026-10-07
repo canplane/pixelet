@@ -10,7 +10,7 @@ use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3::len3;
 
 use crate::chunk::table::Frame;
-use crate::door::host::wall_now;
+use crate::io::host::wall_now;
 use crate::kernel;
 use crate::sched::edge::wake_at;
 use crate::view::frame::pose::{anchor, globe, km_per_u};

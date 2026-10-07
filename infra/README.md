@@ -41,6 +41,15 @@ Seventeen tables from Overture, GEDTM30 and OSM, and the ingests that write them
 are [infra/geo/README.md](./geo/README.md) — the sources, what each pipeline
 drops before it writes, how to run one and how to check it afterward.
 
+**A table is replaced, never emptied.** A whole ingest fills the table beside
+the one being read (`<table>_next`), holding no lock on it, and swaps it in
+with one short transaction, a bounded `lock_timeout` retried, that drops the
+old table, renames the new one and writes its catalog rows; a partial ingest
+adds to the live table. A table's identity is its release and the ingest's
+code, so a change of shape is a change of identity and a whole ingest like
+any other: nothing is dropped or truncated by hand first, and readers see the
+old table until the swap. Filling takes room for both tables at once.
+
 ## 3. Production (Hetzner Cloud)
 
 Forward search is the only feature that needs a live server. Everything
@@ -105,12 +114,13 @@ are unrelated to this project.
 
 Production's db-geo is a copy, and a deploy does not carry it. `deploy-server`
 rebuilds the servers from the commit (§5); the three tables stay as they were
-last copied. So a re-ingest reaches production only by this copy, and an
-ingest that changes a table's shape must be copied **before** the deploy that
-ships a server reading the new shape — the order §5 keeps for the servers and
-the client, one step further back. On 2026-10-04 the servers went out reading
-`properties` from tables still in the old per-type shape, and search answered
-500 until the copy below was made.
+last copied, so a re-ingest reaches production only by this copy. When the
+copy changes a table's shape, the old server cannot read the new tables and
+the new server misreads the old ones, so the two go out as **one step**: stop
+`api` (`docker compose stop api`), restore the copy below, then deploy the
+server that reads it. The restart is the only gap. On 2026-10-04 the servers
+went out reading `properties` from tables still in the old per-type shape, and
+search answered 500 until the copy below was made.
 
 The dump comes from the **local db-geo container's** own `pg_dump`: a
 host-installed one several major versions ahead writes a custom-format dump

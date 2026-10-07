@@ -88,13 +88,20 @@ fn goal_tick(ctx: &mut TickContext) {
 fn demand_tick(_: &mut TickContext) {
     crate::view::demand::admit_arrived();
     changes_step();
-    Terrain::demand().step(crate::control::navigation::destination::tile());
+    // Demand follows the goal the chunks published, at the quality decided first.
+    let published = crate::chunk::domain::current().map(|d| crate::view::demand::Published {
+        observation: d.observation(),
+        footprints: d.footprints(),
+        lacks: d.lacks(),
+    });
+    let tau = crate::chunk::quality::effective().tau();
+    Terrain::demand().step(crate::control::navigation::destination::tile(), published, tau);
     // Nothing is fetched while places are hidden.
     match crate::setting::store::settings_store().poi {
-        true => PoiTile::demand().step(None),
+        true => PoiTile::demand().step(None, published, tau),
         false => PoiTile::demand().idle(),
     }
-    Earth::demand().step(None);
+    Earth::demand().step(None, published, tau);
 }
 
 fn camera_input_tick(_: &mut TickContext) {

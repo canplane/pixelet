@@ -180,12 +180,13 @@ fn folded_at(hit: &Hit) -> bool {
     crate::with_parts(|_, sched, _| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
 }
 
-/// A tap at `ndc_x`, `ndc_y` with the tool held.
-pub(crate) fn tap(ndc_x: f64, ndc_y: f64) {
-    // A badge takes the tap before the ground under it, with the pointer tool only.
-    if interaction().holding.active_tool == ActiveTool::Pointer && crate::chunk::place::tap(ndc_x, ndc_y) {
-        return;
-    }
+/// Whether a tap may be a badge's: the pointer tool's only.
+pub fn taps_badges() -> bool {
+    interaction().holding.active_tool == ActiveTool::Pointer
+}
+
+/// A tap at `ndc_x`, `ndc_y` with the tool held, on the world.
+pub fn tap(ndc_x: f64, ndc_y: f64) {
     hover_at(ndc_x, ndc_y);
     let Some(hovered) = interaction().hover.coord else { return };
     let ui = interaction().holding;

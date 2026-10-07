@@ -1,14 +1,16 @@
 // pxl-kernel/door/layout.rs
 
-//! The front of memory, below GLOBAL_BASE: the rings' descriptors, their
-//! slot payloads and the directory's page, at fixed addresses from mem.json.
+//! The memory's layout. Its front, below GLOBAL_BASE: the rings'
+//! descriptors, their slot payloads and the directory's page, at fixed
+//! addresses from mem.json. And `.fixed`: which ranges it holds, each sized
+//! by its owner, and the heap after them.
 
 use xpute_guest::ipc::door::{DoorLayout, RingLayout};
 use xpute_guest::ipc::ring::{ring_bytes, slots_bytes};
 
-use crate::mem::section::page_up;
+use crate::mem::section::{fixed_at, map, page_up, MIN_HEAP_BYTES, PHONE_BYTES, REGION_BYTES};
 use crate::mem::spec::{COMPLETION_CAPACITY, DIRECTORY_AT, GLOBAL_BASE, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES, SUBMISSION_CAPACITY};
-use xpute_guest::mem::section::PAGE_BYTES;
+use xpute_guest::mem::section::{Section, PAGE_BYTES};
 
 /// A packet is at most a page; anything larger crosses by address. A page
 /// is also the buddy's smallest block.
@@ -48,3 +50,66 @@ const _: () = assert!(
     DIRECTORY_AT.is_multiple_of(PAGE_BYTES) && DIRECTORY_AT + PAGE_BYTES <= GLOBAL_BASE,
     "the directory is a page under the bracket's data"
 );
+
+/// The ranges of `.fixed`, in address order: the resident terrain, the one
+/// open bake's mesh, the chunk table's lanes, the renderer's block table, the
+/// GPU call stream, the kernel's other host calls, the profiler's rings.
+#[derive(Clone, Copy)]
+pub enum Fixed {
+    Terrain,
+    Bake,
+    Mounts,
+    Blocks,
+    Gpu,
+    Host,
+    Profiler,
+}
+
+/// None is let go.
+const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::chunk::decor::kind_assets::MODELS_MAX;
+
+const SINGLE_BLOCKS: usize = 3;
+
+/// Each owner's bound summed, so the table cannot fill: every bound is a
+/// count the structure fixes (a catalog's length, the chunk table's slots,
+/// the surfaces), so overflowing the renderer's table is a bug, not a load.
+/// The renderer frees a list's blocks before taking its uploads, so it never
+/// holds more.
+const MAX_LIVE_BLOCKS: usize = crate::chunk::decor::cell::BLOCKS_MAX + MODELS_MAX + crate::scene::actor::ACTORS_MAX + crate::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
+
+pub const BLOCK_SLOTS: usize = pxl_render::gpu::renderer::block_slots(MAX_LIVE_BLOCKS);
+
+const FIXED: [u32; 7] = [
+    crate::layer::terrain::fixed::TERRAIN_BYTES,
+    crate::chunk::build::BAKE_BYTES,
+    crate::chunk::table::MOUNTS_BYTES,
+    pxl_render::gpu::renderer::blocks_bytes(BLOCK_SLOTS),
+    pxl_render::gpu::api_spec::stream::BYTES,
+    crate::abi::host::stream::BYTES,
+    crate::profiler::record::PROFILER_BYTES,
+];
+
+pub const FIXED_BYTES: u32 = xpute_guest::mem::section::span_of(&FIXED, PAGE_BYTES);
+
+const _: () = assert!(
+    REGION_BYTES.is_multiple_of(PAGE_BYTES) && GLOBAL_BASE.is_multiple_of(PAGE_BYTES) && FIXED_BYTES.is_multiple_of(PAGE_BYTES),
+    "a section begins on a page, so every block in it begins on one"
+);
+
+/// The lowest the heap could begin: the linker's data cannot end before `--global-base`.
+const _: () = assert!(
+    GLOBAL_BASE + FIXED_BYTES + MIN_HEAP_BYTES <= PHONE_BYTES,
+    "the phone's memory does not hold the module's front, the fixed ranges and the heap they are budgeted against"
+);
+
+/// A pure function of the linker's answer: the global allocator asks for
+/// its first block before anything has laid the memory out.
+pub fn heap_at(data_end: u32) -> u32 {
+    fixed_at(data_end) + FIXED_BYTES
+}
+
+/// Asking before boot lays out memory is a bug.
+pub fn range(f: Fixed) -> Section {
+    use xpute_core::status::bug::OrBug;
+    map().or_bug(xpute_core::status::errno::Errno::ENOTRECOVERABLE).fixed.nth(&FIXED, PAGE_BYTES, f as usize)
+}

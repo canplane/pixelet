@@ -33,6 +33,9 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_guest::sched::edge::{notified, yield_if_spent};
 
+/// `.fixed.bake`, handed in at boot.
+pub static BAKE_RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BuildEvent {
     /// All slots for a tier are asked for at once, before any is written. If
@@ -225,7 +228,7 @@ impl Builder {
         self.stat.starved += 1;
         self.abort_work_of(id);
         self.leave_runs(id);
-        let releases = crate::door::host::heap_stat().releases;
+        let releases = crate::io::host::heap_stat().releases;
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
         }
@@ -281,7 +284,7 @@ impl Builder {
         if !c.want {
             return Progress::Done;
         }
-        if c.refused.is_some_and(|r| r == crate::door::host::heap_stat().releases) {
+        if c.refused.is_some_and(|r| r == crate::io::host::heap_stat().releases) {
             return Progress::Blocked;
         }
         if self.runs_of(id).is_none() {

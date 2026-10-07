@@ -4,5 +4,4 @@
 
 pub mod batch;
 pub mod field;
-pub mod selection;
 pub mod sheet;

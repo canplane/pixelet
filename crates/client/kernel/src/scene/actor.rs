@@ -13,6 +13,9 @@ use xpute_guest::mem::heap::{alloc, free};
 
 use crate::model::registry::{blend, Models};
 
+/// The companion's and the display cases'.
+pub const ACTORS_MAX: usize = crate::scene::character::companion::ACTORS_MAX + crate::scene::character::preview::CASES_MAX;
+
 #[derive(Clone, Copy)]
 struct Playing {
     clip: u32,
@@ -44,7 +47,7 @@ pub struct Actors {
 
 impl Actors {
     pub fn new_actor(&mut self, draw: &mut DrawList, models: &Models, model: u32) -> Option<u32> {
-        xpute_core::ensure!(self.actors.iter().count() < crate::mem::fixed::ACTORS_MAX, ENOTRECOVERABLE);
+        xpute_core::ensure!(self.actors.iter().count() < ACTORS_MAX, ENOTRECOVERABLE);
         let joints = models.get(model)?.joints();
         let palette_bytes = word_bytes(joints.max(1) * 16);
         let (palette_at, palette_bytes) = alloc(palette_bytes)?;

@@ -11,10 +11,13 @@ use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::mem::section::span_of;
 
-use crate::mem::fixed::{lane, range, Range};
+use crate::mem::fixed::{lane, Held};
 use crate::profiler::frame::{FramePeak, FrameSample, RingSample, WorstFrame};
 use crate::profiler::log::PENDING;
 use crate::profiler::task::TaskRow;
+
+/// `.fixed.profiler`, handed in at boot.
+pub static RANGE: Held = Held::new();
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
 /// display or a heavy minute fills a lane early, which drops its oldest and
@@ -83,7 +86,7 @@ pub const PROFILER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
 pub(crate) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
     // SAFETY: the lane's own bytes, held only by its ring, zeroed when laid;
     // zero is a valid record.
-    unsafe { lane(range(Range::Profiler).nth(&LANES, LANE_ALIGN, which as usize), 0, cap) }
+    unsafe { lane(RANGE.get().nth(&LANES, LANE_ALIGN, which as usize), 0, cap) }
 }
 
 #[derive(Clone, Copy, Default)]

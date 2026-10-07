@@ -6,16 +6,14 @@
 
 mod apply;
 mod executor;
-pub mod host;
 pub mod layout;
 
 use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
-use crate::door::host::HeapStat;
 use crate::io::demand::Category;
+use crate::io::host::HeapStat;
 use crate::kernel;
 use crate::layer::earth::Earth;
 use crate::layer::residency::Residency;
-use crate::mem::fixed::Range;
 use crate::mem::section;
 use layout::DOOR_LAYOUT;
 use pxl_spec::bake::format::Terrain;
@@ -37,7 +35,7 @@ pub struct Bracket {
     /// Where a bracket whose process dies with the kernel reports why: no host
     /// is left to run the record, and a panic's text is not in its numbers.
     /// None where the host outlives the kernel (a page).
-    pub last_words: Option<crate::door::host::LastWords>,
+    pub last_words: Option<crate::io::host::LastWords>,
 }
 
 struct State {
@@ -102,18 +100,18 @@ fn host_attached(s: &mut State) {
 /// First turn: lays out memory and writes the directory at DIRECTORY_AT.
 fn boot(b: &Bracket) {
     xpute_guest::clock::set_clock(b.clock);
-    crate::door::host::set_heap_stat(b.heap_stat);
-    crate::door::host::set_last_words(b.last_words);
+    crate::io::host::set_heap_stat(b.heap_stat);
+    crate::io::host::set_last_words(b.last_words);
     executor::install();
     // Named invariants report through `bug!`; a core panic reports only its location.
-    xpute_core::status::bug::set_report(crate::door::host::host_bug);
+    xpute_core::status::bug::set_report(crate::io::host::host_bug);
     std::panic::set_hook(Box::new(|info| {
-        if crate::door::host::stopped() {
+        if crate::io::host::stopped() {
             return;
         }
-        crate::door::host::last_words(crate::door::host::Stop::Panic(info));
+        crate::io::host::last_words(crate::io::host::Stop::Panic(info));
         if let Some(at) = info.location() {
-            crate::door::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
+            crate::io::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
         }
     }));
     let gpu_stream = lay_out(b);
@@ -125,7 +123,7 @@ fn boot(b: &Bracket) {
         margin,
         batch,
         settle,
-        (key::SYS, fixed_at(Range::Host)),
+        (key::SYS, fixed_at(layout::Fixed::Host)),
         (crate::abi::directory::key::GPU_STREAM, gpu_stream),
     ];
     // SAFETY: the page at DIRECTORY_AT, kept clear of the rings and the
@@ -134,15 +132,20 @@ fn boot(b: &Bracket) {
     write_directory(words, &entries);
 }
 
-fn fixed_at(r: Range) -> u32 {
-    crate::mem::fixed::range(r).offset
+fn fixed_at(f: layout::Fixed) -> u32 {
+    layout::range(f).offset
 }
 
 /// Lays the memory map. Returns where GPU calls are
 /// recorded for the host, 0 where the kernel makes them itself.
 fn lay_out(b: &Bracket) -> u32 {
     // The map first: the kernel's first use makes the chunk table, which lives in `.fixed`.
-    section::set_map(section::lay_out(b.given, b.data_end));
+    section::set_map(section::lay_out(b.given, b.data_end, layout::FIXED_BYTES));
+    // Each range to its owner.
+    crate::layer::terrain::fixed::RANGE.set(layout::range(layout::Fixed::Terrain));
+    crate::chunk::build::BAKE_RANGE.set(layout::range(layout::Fixed::Bake));
+    crate::chunk::table::MOUNTS_RANGE.set(layout::range(layout::Fixed::Mounts));
+    crate::profiler::record::RANGE.set(layout::range(layout::Fixed::Profiler));
     kernel().laid_out = true;
     // A layer asks for no more tiles than its residency frames.
     crate::io::request::open(|c| match c {
@@ -154,9 +157,9 @@ fn lay_out(b: &Bracket) -> u32 {
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {
-        crate::door::host::set_host_stream(fixed_at(Range::Host));
-        pxl_render::gpu::renderer::set_blocks(fixed_at(Range::Blocks), crate::mem::fixed::BLOCK_SLOTS);
-        pxl_render::gpu::api::install(fixed_at(Range::Gpu))
+        crate::io::host::set_host_stream(fixed_at(layout::Fixed::Host));
+        pxl_render::gpu::renderer::set_blocks(fixed_at(layout::Fixed::Blocks), layout::BLOCK_SLOTS);
+        pxl_render::gpu::api::install(fixed_at(layout::Fixed::Gpu))
     }
 }
 
@@ -172,7 +175,7 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
     if core::mem::take(&mut s.profiler_taken) {
         crate::profiler::log::profiler_log_clear();
     }
-    crate::door::host::host_rise();
+    crate::io::host::host_rise();
     crate::sched::edge::world_edge().rise(quota_ms);
     door().drain(|number, pkt| apply::apply(s, number, pkt));
     if quota_ms > 0.0 || world_frame_waiting() {
@@ -182,7 +185,7 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
         post_shell(s);
     }
     pxl_render::gpu::api::gpu_publish();
-    crate::door::host::host_fall();
+    crate::io::host::host_fall();
     let wake = crate::sched::edge::world_fall();
     // What the completion ring had no room for is still in the submission ring.
     if door().pending() {

@@ -15,10 +15,10 @@ use pxl_spec::asset::ingested::Asset;
 use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 use crate::abi::host::root;
-use crate::door::host::decode_image;
 use crate::io::demand::Ask;
 use crate::io::failure::Ended;
 use crate::io::file::{self, Opened, Owner};
+use crate::io::host::decode_image;
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::sched::edge::{request_world_tick, world_edge};
 use xpute_core::status::bug::OrBug;

@@ -12,7 +12,7 @@ use pxl_render::gpu::text::{raster_box, Font, Raster};
 use xpute_guest::mem::base::off_of_slice;
 
 use crate::abi::host::op;
-use crate::door::host::{host_offer, turn};
+use crate::io::host::{host_offer, turn};
 use xpute_guest::global::Global;
 
 /// (weight, px bits, max width bits; 0 for one line, text).

@@ -1,4 +1,4 @@
-// pxl-kernel/door/host.rs
+// pxl-kernel/io/host.rs
 //
 // What the kernel asks of the host, as xpute system calls recorded during a
 // turn and run by the host after it returns, so they are done before the

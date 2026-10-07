@@ -249,7 +249,7 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let h = crate::door::host::heap_stat();
+    let h = crate::io::host::heap_stat();
     put(
         out,
         SUMMARY::heap::AT,

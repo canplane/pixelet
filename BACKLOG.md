@@ -54,13 +54,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P2
 
-- **An Overture feature is stored once a shard it reaches.** A shard is
-  whole or absent because it holds its own copy of every feature its apron
-  meets, so a sea polygon sits in twenty shards and every reader pays per copy
-  unless it dedups first (`crates/server/geo-bake/src/terrain/repository.rs`
-  `read_once`). A feature stored once, with which shards hold it beside it,
-  ends the copies; it changes the schema every reader uses and makes "whole
-  or absent" a rule over two tables.
+- **Badges are drawn by kind, not by the POI layer.** What is drawn and
+  struck splits by render kind (cube, decor, billboard) and what is stored by
+  where it comes from (the geodata's layers, the objects); decor is moving to
+  that shape. A billboard today is drawn from the POI layer alone, so a
+  user's signpost, an object whose id is a billboard kind, has no way on
+  screen. The billboard kind joins the cell catalog and the badges take its
+  records from whichever layer answers them, when a signpost is wanted.
 
 ## Parked, with the reason on file
 

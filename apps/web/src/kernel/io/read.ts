@@ -53,8 +53,8 @@ export async function read_object(bake: u32, name: string, signal: AbortSignal):
 const KEYS: readonly string[] = Object.values(INGESTED).map((a) => a.key);
 
 /** A load number: an asset's index in the ingest's table, or one past it for the texture pack. */
-export async function read_asset(load: u32, signal: AbortSignal): Promise<U8Array> {
+export function read_asset(load: u32, signal: AbortSignal): Promise<U8Array> {
   const key = load === KEYS.length ? PACK.key : KEYS[load];
-  if (key === undefined) throw new FileError(Errno.ENOENT);
+  if (key === undefined) return Promise.reject(new FileError(Errno.ENOENT));
   return get(assetUrl(key), key, signal);
 }

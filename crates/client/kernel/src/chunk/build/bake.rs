@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::Block;
 
+use crate::chunk::build::BAKE_RANGE;
 use crate::layer::object::store::AIR;
-use crate::mem::fixed::{at, Range};
 use crate::setting::store::settings_store;
 
 use crate::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES};
@@ -127,7 +127,7 @@ impl Builder {
                     return Progress::Busy;
                 }
                 let block = boxes.min(room_a_slot) * words_a_box;
-                let Some(mesh_at) = at(Range::Bake, 0, block * 4) else {
+                let Some(mesh_at) = BAKE_RANGE.get().at(0, block * 4) else {
                     self.abort_bake();
                     self.refuse(id);
                     return Progress::Blocked;

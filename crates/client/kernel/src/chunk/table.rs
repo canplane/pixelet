@@ -55,6 +55,9 @@ use crate::io::demand::Order;
 use crate::layer::Layer as _;
 use pxl_spec::bake::format::Terrain;
 
+/// `.fixed.mounts`, handed in at boot.
+pub static MOUNTS_RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Role {
     Drawn,

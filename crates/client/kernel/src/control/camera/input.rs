@@ -14,7 +14,7 @@ pub use crate::abi::cmd::PointerKind;
 use crate::control::camera::controller::{active, Active};
 use crate::control::camera::gesture::{linear, Anchor};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
-use crate::control::interaction::{clear_hover, clear_hover_coord, hover_at, tap};
+use crate::control::interaction::{clear_hover, clear_hover_coord, hover_at};
 use crate::control::navigation::destination::cancel as cancel_destination;
 use crate::control::navigation::follow_mode::set_following;
 use crate::sched::edge::request_world_tick;
@@ -344,14 +344,13 @@ pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, cl
     s.drag_pending = true;
 }
 
-fn tap_if_still(s: &Input, mode: DragMode) {
-    if !s.did_drag && mode == DragMode::Pan {
-        tap(s.pointer_x, s.pointer_y);
-    }
+/// Where a still pointer let go, the tap's `ndc`.
+fn tap_if_still(s: &Input, mode: DragMode) -> Option<[f64; 2]> {
+    (!s.did_drag && mode == DragMode::Pan).then_some([s.pointer_x, s.pointer_y])
 }
 
-/// A pointer went up, or was canceled.
-pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) {
+/// A pointer went up, or was canceled; where it tapped, if it was a tap.
+pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) -> Option<[f64; 2]> {
     let s = input();
     let camera = camera_state();
     if kind == PointerKind::Touch {
@@ -363,7 +362,7 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) {
                 camera.camera_status = CameraStatus::Idle;
                 request_world_tick();
                 if mode != DragMode::None {
-                    tap_if_still(s, mode);
+                    return tap_if_still(s, mode);
                 }
             }
             1 => {
@@ -376,10 +375,10 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) {
             }
             _ => begin_pinch(s),
         }
-        return;
+        return None;
     }
     if s.drag_mode == DragMode::None {
-        return;
+        return None;
     }
     let mode = s.drag_mode;
     s.drag_mode = DragMode::None;
@@ -387,7 +386,7 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) {
     // A pan moves nothing once the pointer is up, so the companion would not see
     // the release until something else asked for a turn.
     request_world_tick();
-    tap_if_still(s, mode);
+    tap_if_still(s, mode)
 }
 
 pub fn camera_pointer_out() {

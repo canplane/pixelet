@@ -3,7 +3,6 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the objects' query and written to the store.
 
-use crate::chunk::source::chunk_sources_changed;
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
@@ -201,7 +200,6 @@ pub fn pending_step() {
     };
     let p = PENDING.get(Pending::default);
     if p.edits != edits {
-        chunk_sources_changed();
         request_world_tick();
     }
     *p = Pending {

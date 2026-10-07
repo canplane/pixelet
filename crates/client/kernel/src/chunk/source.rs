@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use crate::chunk::build::runs_of;
 use crate::chunk::Chunk as PyramidChunk;
 use crate::layer::object::store::Store;
+use crate::control::interaction::edit::{render_edits, RenderEdits};
 use crate::with_parts;
 use pxl_spec::space::coord::world::nearest_box;
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
@@ -21,13 +22,19 @@ use xpute_guest::global::Global;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
 
+/// The edits' previews as the chunks last compared them.
+static EDITS_SEEN: Global<RenderEdits> = Global::new();
+
 /// The table compares every chunk's sources at its next turn (`sources_step`).
 pub fn chunk_sources_changed() {
     *SOURCES_CHANGED.get(|| false) = true;
 }
 
+/// A change of the edits' previews is read here, not told.
 pub fn chunk_sources_step() {
-    if core::mem::take(SOURCES_CHANGED.get(|| false)) {
+    let edits = render_edits();
+    let previewed = core::mem::replace(EDITS_SEEN.get(RenderEdits::default), edits) != edits;
+    if core::mem::take(SOURCES_CHANGED.get(|| false)) | previewed {
         with_parts(|_, sched, _| sched.sources_step());
     }
 }

@@ -22,19 +22,6 @@ pub const fn page_up(n: u32) -> u32 {
     align_up(n, PAGE_BYTES)
 }
 
-pub use crate::mem::fixed::BYTES as FIXED_BYTES;
-
-const _: () = assert!(
-    REGION_BYTES.is_multiple_of(PAGE_BYTES) && GLOBAL_BASE.is_multiple_of(PAGE_BYTES) && FIXED_BYTES.is_multiple_of(PAGE_BYTES),
-    "a section begins on a page, so every block in it begins on one"
-);
-
-/// The lowest the heap could begin: the linker's data cannot end before `--global-base`.
-const _: () = assert!(
-    GLOBAL_BASE + FIXED_BYTES + MIN_HEAP_BYTES <= PHONE_BYTES,
-    "the phone's memory does not hold the module's front, the fixed ranges and the heap they are budgeted against"
-);
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Map {
     pub fixed: Section,
@@ -45,20 +32,15 @@ pub fn fixed_at(data_end: u32) -> u32 {
     page_up(data_end)
 }
 
-/// A pure function of the linker's answer: the global allocator asks for
-/// its first block before anything has laid the memory out.
-pub fn heap_at(data_end: u32) -> u32 {
-    fixed_at(data_end) + FIXED_BYTES
-}
-
-pub fn lay_out(bytes: u32, data_end: u32) -> Map {
+/// `fixed_bytes` is the roof's (door/layout.rs `FIXED_BYTES`).
+pub fn lay_out(bytes: u32, data_end: u32, fixed_bytes: u32) -> Map {
     let regions = bytes / REGION_BYTES;
-    let heap = heap_at(data_end);
+    let heap = fixed_at(data_end) + fixed_bytes;
     xpute_core::ensure!(heap + MIN_HEAP_BYTES <= regions * REGION_BYTES, ENOMEM, heap, bytes);
     Map {
         fixed: Section {
             offset: fixed_at(data_end),
-            bytes: FIXED_BYTES,
+            bytes: fixed_bytes,
             align: PAGE_BYTES,
         },
         heap: Section {

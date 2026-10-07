@@ -1,4 +1,4 @@
-// pxl-kernel/billboard/selection.rs
+// pxl-kernel/chunk/place/selection.rs
 
 //! Visibility of world-anchored billboards: in the frustum as a sphere about
 //! the anchor (a point test dropped the nearest badges first at an oblique
