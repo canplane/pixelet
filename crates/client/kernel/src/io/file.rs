@@ -124,14 +124,17 @@ fn read_kept(kept: Kept, fd: Fd, bytes: usize) {
     kept_read(kept, KeptRead::Reading { bytes: held, asked: turn() });
 }
 
-fn kept_opened(kept: Kept, fd: Fd, res: i32) {
-    if res > 0 {
-        read_kept(kept, fd, res as usize);
-        return;
-    }
-    close(fd);
-    // Only its absence says nothing was kept.
-    let file = if res == 0 || res == Errno::ENOENT as i32 { KeptFile::None } else { KeptFile::Unreadable };
+fn kept_opened(kept: Kept, fd: Fd, opened: Opened) {
+    let file = match opened {
+        Opened::Bytes(0) => {
+            close(fd);
+            KeptFile::None
+        }
+        Opened::Bytes(n) => return read_kept(kept, fd, n as usize),
+        // Only its absence says nothing was kept.
+        Opened::Absent => KeptFile::None,
+        Opened::Failed { .. } => KeptFile::Unreadable,
+    };
     kept_read(kept, KeptRead::Read(file));
 }
 
@@ -184,17 +187,37 @@ pub fn write_kept(kept: Kept, bytes: Vec<u8>) {
     }
 }
 
+/// What an open came to, read once from the host's answer, so no owner
+/// compares a raw result.
+#[derive(Clone, Copy, Debug)]
+pub enum Opened {
+    /// The file's size; the descriptor is the owner's to read and close.
+    Bytes(u32),
+    /// No such file; the descriptor is closed.
+    Absent,
+    /// Every other failure, as the host's negative errno; the descriptor is closed.
+    Failed { errno: i32, detail: u32 },
+}
+
 /// `res` is the file's size, or a negative errno. A file larger than the heap
 /// every device is given cannot be held anywhere: it is the host's answer
 /// refused, and the owner hears EFBIG.
 pub fn opened(fd: Fd, res: i32, detail: u32) {
     let Some(&owner) = files().owner(fd) else { return };
-    let res = if res > 0 && res as u32 > MIN_HEAP_BYTES { Errno::EFBIG as i32 } else { res };
+    let opened = match res {
+        n if n >= 0 && n as u32 > MIN_HEAP_BYTES => Opened::Failed { errno: Errno::EFBIG as i32, detail },
+        n if n >= 0 => Opened::Bytes(n as u32),
+        n if n == Errno::ENOENT as i32 => Opened::Absent,
+        errno => Opened::Failed { errno, detail },
+    };
+    if !matches!(opened, Opened::Bytes(_)) {
+        close(fd);
+    }
     match owner {
-        Owner::Fetch { key, at_ms } => crate::io::fetch::opened(fd, key, at_ms, res, detail),
-        Owner::Model { key } => crate::io::load::model_opened(fd, key, res),
-        Owner::Image { key } => crate::io::load::image_opened(fd, key, res),
-        Owner::Kept(kept) => kept_opened(kept, fd, res),
+        Owner::Fetch { key, at_ms } => crate::io::fetch::opened(fd, key, at_ms, opened),
+        Owner::Model { key } => crate::io::load::model_opened(fd, key, opened),
+        Owner::Image { key } => crate::io::load::image_opened(fd, key, opened),
+        Owner::Kept(kept) => kept_opened(kept, fd, opened),
         Owner::Write => {}
     }
 }

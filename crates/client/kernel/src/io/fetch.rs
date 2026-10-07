@@ -17,7 +17,7 @@ use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::failure::{Failure, Outcome};
-use crate::io::file::{self, Owner};
+use crate::io::file::{self, Opened, Owner};
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::bake::place_tile::{group_key, DICT_OBJECT};
@@ -128,35 +128,33 @@ fn arrivals() -> &'static mut Notify {
 
 /// `detail` is only printed by the profiler; nothing branches on it, which
 /// keeps the protocol out of here.
-pub fn opened(fd: Fd, key: u64, at_ms: f64, res: i32, detail: u32) {
-    let got = if res < 0 {
-        file::close(fd);
-        failure(res, detail)
-    } else if res == 0 {
-        file::close(fd);
-        Got::Read(None)
-    } else if let Some(block) = alloc(res as u32) {
-        // SAFETY: a block just acquired, `res` long, and no one else's.
-        file::read(fd, unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(block.0), res as usize) });
-        file::close(fd);
-        Got::Read(Some(block))
-    } else {
-        file::close(fd);
-        Got::Failed(Errno::ENOMEM.into())
+pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
+    let got = match opened {
+        Opened::Absent => Got::Absent,
+        Opened::Failed { errno, detail } => Got::Failed(Failure {
+            errno,
+            detail: detail as u16,
+            at: None,
+        }),
+        Opened::Bytes(0) => {
+            file::close(fd);
+            Got::Read(None)
+        }
+        Opened::Bytes(n) => {
+            let got = match alloc(n) {
+                Some(block) => {
+                    // SAFETY: a block just acquired, `n` long, and no one else's.
+                    file::read(fd, unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(block.0), n as usize) });
+                    Got::Read(Some(block))
+                }
+                None => Got::Failed(Errno::ENOMEM.into()),
+            };
+            file::close(fd);
+            got
+        }
     };
     arrived().push(Arrival { key, got, net_ms: now() - at_ms });
     arrivals().notify();
-}
-
-fn failure(res: i32, detail: u32) -> Got {
-    if res == Errno::ENOENT as i32 {
-        return Got::Absent;
-    }
-    Got::Failed(Failure {
-        errno: res,
-        detail: detail as u16,
-        at: None,
-    })
 }
 
 /// Arrivals are decoded on a later turn, once their bytes are in, as many

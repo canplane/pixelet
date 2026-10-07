@@ -18,7 +18,7 @@ use crate::abi::host::root;
 use crate::door::host::decode_image;
 use crate::io::demand::Ask;
 use crate::io::failure::{Failure, Outcome};
-use crate::io::file::{self, Owner};
+use crate::io::file::{self, Opened, Owner};
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::sched::edge::{request_world_tick, world_edge};
 use xpute_core::status::bug::OrBug;
@@ -188,12 +188,11 @@ pub fn cancel_asset(key: u64) -> bool {
 static IMAGES: Global<Slots<()>> = Global::new();
 
 /// The file is closed in the same turn: the host takes its bytes when it runs the decode.
-pub fn image_opened(fd: u32, key: u64, res: i32) {
-    if res < 0 {
-        file::close(fd);
+pub fn image_opened(fd: u32, key: u64, opened: Opened) {
+    let Opened::Bytes(_) = opened else {
         load_rejected(key);
         return;
-    }
+    };
     let Some((_, load)) = ended(key, Outcome::ok) else {
         file::close(fd);
         return;
@@ -227,17 +226,16 @@ pub fn image_decoded(image: u32, res: i32) {
     request_world_tick();
 }
 
-pub fn model_opened(fd: u32, key: u64, res: i32) {
-    if res < 0 {
-        file::close(fd);
+pub fn model_opened(fd: u32, key: u64, opened: Opened) {
+    let Opened::Bytes(n) = opened else {
         load_rejected(key);
         return;
-    }
+    };
     let Some((_, load)) = ended(key, Outcome::ok) else {
         file::close(fd);
         return;
     };
-    loader().gltf[load.number() as usize] = Some(Entry::Arrived(fd, res as u32));
+    loader().gltf[load.number() as usize] = Some(Entry::Arrived(fd, n));
     arrivals().notify();
 }
 
