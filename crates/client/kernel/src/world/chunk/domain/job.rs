@@ -8,11 +8,10 @@ use pxl_spec::space::coord::world::nearest_box;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::layer::tile::Tile;
 
 use crate::layer::residency::floor;
 use crate::world::query::Access;
-use crate::world::view::observation::{ground_known, observation};
+use crate::world::view::observation::observation;
 use crate::world::view::observer::{EdgeRays, Sight};
 use xpute_guest::global::Global;
 
@@ -30,15 +29,11 @@ struct Made {
     job: Option<Domain>,
     spare: Option<Domain>,
     /// What the goal was started from: the observation, the finest step and
-    /// the source's top, the ground's tiles known, and each chunk's mesh slots
-    /// where more than one.
+    /// the source's top, and each chunk's mesh slots where more than one.
     key: Option<(Observation, Tau, Zoom)>,
-    terrain: Vec<(Tile, bool)>,
     priced: Vec<(Chunk, u32)>,
-    /// The ground's tiles known this turn; kept so a turn allocates nothing.
-    now: Vec<(Tile, bool)>,
-    /// Where objects were written since the goal was started.
-    written: Vec<Aabb>,
+    /// Where the ground or the objects moved since the goal was started.
+    moved_in: Vec<Aabb>,
     /// The squares recast, kept so a start allocates nothing.
     moved: Vec<(f64, f64, f64)>,
     sight: Sight,
@@ -58,8 +53,7 @@ pub fn start(ladder: &[Tau], priced: &[(Chunk, u32)]) {
     }
     let (Some(o), Some(top)) = (observation(), floor::top()) else { return };
     let key = (o, ladder[0], top);
-    ground_known(&mut made.now);
-    if made.key == Some(key) && made.now == made.terrain && made.written.is_empty() && made.priced == priced && made.published.is_some() {
+    if made.key == Some(key) && made.moved_in.is_empty() && made.priced == priced && made.published.is_some() {
         return;
     }
     // a new target recasts every patch; moved tiles and written objects the patches over them
@@ -71,10 +65,9 @@ pub fn start(ladder: &[Tau], priced: &[(Chunk, u32)]) {
     };
     let mut moved = core::mem::take(&mut made.moved);
     moved.clear();
-    moved.extend(changed(&made.terrain, &made.now).map(|p| p.region()).chain(made.written.drain(..)).map(|r| near(&r)));
+    moved.extend(made.moved_in.drain(..).map(|r| near(&r)));
     made.work[0] += made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), everything, &moved);
     made.moved = moved;
-    core::mem::swap(&mut made.terrain, &mut made.now);
     made.priced.clear();
     made.priced.extend_from_slice(priced);
     let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Access::now()));
@@ -95,41 +88,10 @@ pub fn advance(at: usize, price: &dyn Price, stop: &dyn Fn() -> bool) -> bool {
     true
 }
 
-/// The tiles whose state differs between two sorted lists of what is known.
-fn changed<'a>(was: &'a [(Tile, bool)], now: &'a [(Tile, bool)]) -> impl Iterator<Item = &'a Tile> {
-    let (mut i, mut j) = (0, 0);
-    std::iter::from_fn(move || loop {
-        match (was.get(i), now.get(j)) {
-            (None, None) => return None,
-            (Some(a), None) => {
-                i += 1;
-                return Some(&a.0);
-            }
-            (None, Some(b)) => {
-                j += 1;
-                return Some(&b.0);
-            }
-            (Some(a), Some(b)) if a.0 < b.0 => {
-                i += 1;
-                return Some(&a.0);
-            }
-            (Some(a), Some(b)) if b.0 < a.0 => {
-                j += 1;
-                return Some(&b.0);
-            }
-            (Some(a), Some(b)) => {
-                (i, j) = (i + 1, j + 1);
-                if a.1 != b.1 {
-                    return Some(&a.0);
-                }
-            }
-        }
-    })
-}
-
 /// Objects changed in `regions`: the next goal recasts the patches over them.
-pub fn objects_written(regions: &[Aabb]) {
-    MADE.get(Made::default).written.extend_from_slice(regions);
+/// Where the ground or the objects moved: the next goal recasts the patches over it.
+pub fn moved(regions: impl IntoIterator<Item = Aabb>) {
+    MADE.get(Made::default).moved_in.extend(regions);
 }
 
 pub fn take_work() -> [u32; 2] {

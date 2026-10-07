@@ -5,7 +5,6 @@
 
 use crate::io::demand::Order;
 
-use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::camera::eye::{Frustum, Observation};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -16,7 +15,6 @@ use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 
 use crate::layer::residency::floor;
-use crate::layer::Layer as _;
 use crate::layer::{Answer, Query};
 use crate::world::query::Access;
 use crate::world::view::frame::pose::globe;
@@ -112,11 +110,6 @@ impl ByFootprints<'_> {
             }
         }
     }
-}
-
-/// What the heights read of the ground: the terrain tiles known.
-pub fn ground_known(out: &mut Vec<(Tile, bool)>) {
-    Terrain::residency().known(out);
 }
 
 /// A layer's tile's order, read in the grid's cells its own fold into: all

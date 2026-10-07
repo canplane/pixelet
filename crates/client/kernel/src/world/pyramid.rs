@@ -39,7 +39,7 @@ use crate::io::sched::declare;
 use crate::layer::residency::floor::{self, Fallback, Floor};
 use crate::layer::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
 use crate::world::chunk::quality;
-use crate::world::view::observation::{ground_known, observation, ByFootprints};
+use crate::world::view::observation::{observation, ByFootprints};
 use crate::world::view::observer::Footprint;
 use pxl_spec::space::coord::zoom::Zoom;
 
@@ -92,9 +92,6 @@ struct Seen {
     floor: [Option<Tile>; Floor::TILES as usize],
     destination: Option<Tile>,
     tau: Tau,
-    /// The layer's own tiles known, and the ground's.
-    own: Vec<(Tile, bool)>,
-    terrain: Vec<(Tile, bool)>,
     /// The published goal's.
     footprints: Vec<Footprint>,
     lacks: Vec<Tile>,
@@ -118,8 +115,8 @@ pub struct Pyramid<L: Observed> {
     last: Option<Seen>,
     /// What this turn reads, kept so a turn allocates nothing.
     now: Option<Seen>,
-    /// Objects were written since it last observed.
-    objects_written: bool,
+    /// What it reads moved since it last observed.
+    moved: bool,
     /// Reused across observations so observing stops allocating once warm.
     asks: HashMap<Tile, Ask>,
 }
@@ -133,7 +130,7 @@ impl<L: Observed> Default for Pyramid<L> {
             wants: Vec::new(),
             last: None,
             now: None,
-            objects_written: false,
+            moved: false,
             asks: HashMap::with_capacity(Residency::<L>::FRAMES as usize),
         }
     }
@@ -321,19 +318,15 @@ impl<L: Observed> Pyramid<L> {
             floor: [None; Floor::TILES as usize],
             destination: None,
             tau,
-            own: Vec::new(),
-            terrain: Vec::new(),
             footprints: Vec::new(),
             lacks: Vec::new(),
         });
         (now.o, now.floor, now.destination, now.tau) = (o, floor_now, destination, tau);
-        L::residency().known(&mut now.own);
-        ground_known(&mut now.terrain);
         now.footprints.clear();
         now.footprints.extend_from_slice(published.map_or(&[], |d| d.footprints()));
         now.lacks.clear();
         now.lacks.extend_from_slice(published.map_or(&[], |d| d.lacks()));
-        if core::mem::take(&mut self.objects_written) | (self.last.as_ref() != Some(&now)) {
+        if core::mem::take(&mut self.moved) | (self.last.as_ref() != Some(&now)) {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent())));
             self.observe(
                 o.as_ref(),
@@ -348,9 +341,6 @@ impl<L: Observed> Pyramid<L> {
                 },
                 top,
             );
-            // Observing can let tiles go: record what is known after it.
-            L::residency().known(&mut now.own);
-            ground_known(&mut now.terrain);
             self.now = self.last.replace(now);
         } else {
             self.now = Some(now);
@@ -358,8 +348,9 @@ impl<L: Observed> Pyramid<L> {
         declare(L::CATEGORY, &self.wants);
     }
 
-    pub fn objects_written(&mut self) {
-        self.objects_written = true;
+    /// What it reads moved: its own tiles', the ground's, or the objects'.
+    pub fn moved(&mut self) {
+        self.moved = true;
     }
 
     /// A layer the view does not show keeps what it holds and asks for nothing.

@@ -24,7 +24,7 @@ use pxl_spec::space::camera::grid::Tau;
 use crate::world::chunk::mesh_slot::POOLS;
 use crate::world::chunk::Chunk;
 
-pub use job::{advance, current, objects_written, put, start, take_work, walking};
+pub use job::{advance, current, moved, put, start, take_work, walking};
 pub use walk::Domain;
 
 /// Mesh slots per pool.

@@ -27,7 +27,7 @@ pub fn chunk_sources_changed() {
 }
 
 pub fn chunk_sources_step() {
-    if core::mem::take(SOURCES_CHANGED.get(|| false)) | crate::layer::terrain::tile::take_changed() {
+    if core::mem::take(SOURCES_CHANGED.get(|| false)) {
         with_world(|_, sched, _| sched.sources_step());
     }
 }

@@ -78,6 +78,10 @@ pub struct Residency<L: Layer> {
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
     going: Vec<Tile>,
+    /// Tiles whose answer moved since `take_moved`: held or let go, answered
+    /// from above or no longer. A tile's content is fixed by its identity, so
+    /// this is all that changes.
+    moved: Vec<Tile>,
     refused: u32,
     admitted: u32,
     evicted: u32,
@@ -129,6 +133,7 @@ impl<L: Layer> Default for Residency<L> {
             // Lowest first, as the frames are taken.
             free: (0..Self::FRAMES).rev().collect(),
             going: Vec::with_capacity(Self::ENTRIES as usize),
+            moved: Vec::new(),
             refused: 0,
             admitted: 0,
             evicted: 0,
@@ -232,18 +237,6 @@ impl<L: Layer> Residency<L> {
         Self::FRAMES - self.free.len() as u32
     }
 
-    /// What is known of each tile it knows, sorted: held, or answered by the
-    /// tile over it. What reads the layer compares this, not a count of changes.
-    pub fn known(&self, out: &mut Vec<(Tile, bool)>) {
-        out.clear();
-        out.extend(self.tiles.iter().filter_map(|(&p, e)| match (&e.held, e.answered) {
-            (Some(_), _) => Some((p, true)),
-            (None, true) => Some((p, false)),
-            (None, false) => None,
-        }));
-        out.sort_unstable();
-    }
-
     /// What `p`'s line says of it, stepped down from the top a tile at a time.
     pub fn line(&self, p: Tile) -> Line {
         self.seek(&mut Lines::default(), p)
@@ -310,10 +303,10 @@ impl<L: Layer> Residency<L> {
     /// left to normal turnover.
     pub fn ask(&mut self, asks: &HashMap<Tile, Ask>) {
         xpute_core::ensure!(asks.len() <= Self::FRAMES as usize, ENOTRECOVERABLE, asks.len());
-        for (p, e) in &mut self.tiles {
-            e.ask = asks.get(p).copied();
-            if e.ask.is_none() {
-                e.answered = false;
+        for (&p, e) in &mut self.tiles {
+            e.ask = asks.get(&p).copied();
+            if e.ask.is_none() && core::mem::take(&mut e.answered) {
+                self.moved.push(p);
             }
         }
         let mut going = core::mem::take(&mut self.going);
@@ -420,12 +413,20 @@ impl<L: Layer> Residency<L> {
         if self.asked(p).is_none() {
             return;
         }
-        self.entry_mut(p).answered = true;
+        if !core::mem::replace(&mut self.entry_mut(p).answered, true) {
+            self.moved.push(p);
+        }
+    }
+
+    /// The tiles whose answer moved since last taken, into `out`.
+    pub fn take_moved(&mut self, out: &mut Vec<Tile>) {
+        out.clear();
+        core::mem::swap(out, &mut self.moved);
     }
 
     fn put(&mut self, p: Tile, body: L, frame: Option<u32>) {
         self.entry_mut(p).held = Some(Held { body, frame });
-        L::changed(p, true);
+        self.moved.push(p);
     }
 
     /// Returns the frame `p` was in, if any, for the caller to fill or free.
@@ -435,7 +436,7 @@ impl<L: Layer> Residency<L> {
         if e.get().idle() {
             e.remove();
         }
-        L::changed(p, false);
+        self.moved.push(p);
         held.frame
     }
 }

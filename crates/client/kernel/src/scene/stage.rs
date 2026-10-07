@@ -188,6 +188,7 @@ pub fn visible_step(ctx: &mut TickContext) {
     let t0 = now();
     // The chunks plan first; what animates and every layer but the chunks list
     // before the chunks draw.
+    crate::world::chunk::source::chunk_sources_step();
     let draw = laid().is_some_and(|k| {
         let moving = k.sched.tick(frame, &now);
         if let Some(d) = crate::world::chunk::domain::current() {
