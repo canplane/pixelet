@@ -5,8 +5,8 @@
 //!
 //! Asks are the observation's demand, as the estimator names it, merged with
 //! the fallback's tiles and a destination's, the best reason per tile.
-//! Nothing drawn enters them except the shared quality, which is decided
-//! first. Where a tile marks a child as no tile (`Layer::occupancy`), its
+//! Nothing drawn enters them but what the turn hands in: the goal the chunks
+//! last published and the quality's τ, decided first. Where a tile marks a child as no tile (`Layer::occupancy`), its
 //! ground is the tile's and the child is never asked for.
 
 use pxl_spec::bake::earth_tile::EARTH_REACH;
@@ -32,7 +32,6 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::chunk::quality;
 use crate::io::demand::Order;
 use crate::io::demand::{Ask, Phases, Why};
 use crate::io::failure::Failure;
@@ -105,6 +104,14 @@ impl Victim for Farthest<'_> {
         let order = |c: &Candidate| self.0.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, self.1, c.tile));
         (0..candidates.len()).max_by_key(|&i| order(&candidates[i]))
     }
+}
+
+/// The goal materialization last published, which demand follows: what it
+/// was observed from, the footprints its rays met and the tiles they lacked.
+pub struct Published<'a> {
+    pub observation: &'a Observation,
+    pub footprints: &'a [Footprint],
+    pub lacks: &'a [Tile],
 }
 
 pub struct Demand<L: Observed> {
@@ -279,11 +286,9 @@ impl<L: Observed> Demand<L> {
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground. `far` cuts the
     /// observation where the layer stops being drawn.
-    pub fn step(&mut self, destination: Option<Tile>) {
+    pub fn step(&mut self, destination: Option<Tile>, published: Option<Published>, tau: Tau) {
         // Nothing coarser than the layer's own top is drawn, whatever the source holds.
         let Some(top) = L::TOP.or(floor::top()).map(|t| t.max(L::LATTICE.top())) else { return };
-        // demand follows the published goal
-        let published = crate::chunk::domain::current();
         let own = |o: Observation| match L::TOP {
             Some(_) => Observation {
                 reach: L::reach(),
@@ -293,7 +298,7 @@ impl<L: Observed> Demand<L> {
             None => o,
         };
         let live = observation().map(own);
-        let seen_from = live.map(|live| published.map_or(live, |d| own(*d.observation())));
+        let seen_from = live.map(|live| published.as_ref().map_or(live, |d| own(*d.observation)));
         // the floor follows the live eye, so a jump asks for it at once
         let mut floor_now = [None; Floor::TILES as usize];
         if let Some(l) = &live {
@@ -309,7 +314,7 @@ impl<L: Observed> Demand<L> {
             return;
         }
         let tau = match seen_from {
-            Some(_) => quality::effective().tau(),
+            Some(_) => tau,
             None => Tau::FINEST,
         };
         let o = seen_from.map(|o| Observation { reach: o.reach.min(L::reach()), ..o });
@@ -323,9 +328,9 @@ impl<L: Observed> Demand<L> {
         });
         (now.o, now.floor, now.destination, now.tau) = (o, floor_now, destination, tau);
         now.footprints.clear();
-        now.footprints.extend_from_slice(published.map_or(&[], |d| d.footprints()));
+        now.footprints.extend_from_slice(published.as_ref().map_or(&[], |d| d.footprints));
         now.lacks.clear();
-        now.lacks.extend_from_slice(published.map_or(&[], |d| d.lacks()));
+        now.lacks.extend_from_slice(published.as_ref().map_or(&[], |d| d.lacks));
         if core::mem::take(&mut self.moved) | (self.last.as_ref() != Some(&now)) {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent())));
             self.observe(
@@ -336,8 +341,8 @@ impl<L: Observed> Demand<L> {
                     tau,
                     lattice: L::LATTICE,
                     top,
-                    footprints: published.map_or(&[], |d| d.footprints()),
-                    lacks: published.map_or(&[], |d| d.lacks()),
+                    footprints: published.as_ref().map_or(&[], |d| d.footprints),
+                    lacks: published.as_ref().map_or(&[], |d| d.lacks),
                 },
                 top,
             );
