@@ -13,7 +13,6 @@ use crate::layer::residency::Residency;
 use crate::layer::Layer;
 use crate::layer::{Answer, Bound, Query};
 use crate::param::{POI_ALL_ZOOM, POI_MAJOR_ZOOM};
-use crate::shell::setting::store::settings_store;
 use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857::cell_zoom_of;
 use pxl_spec::space::coord::zoom::units;
@@ -74,10 +73,6 @@ impl Query for Residency<PoiTile> {
 /// The units a logical pixel spans where the view is at each zoom.
 pub const ALL_UNITS_PER_PX: f64 = units(cell_zoom_of(POI_ALL_ZOOM));
 pub const MAJOR_UNITS_PER_PX: f64 = units(cell_zoom_of(POI_MAJOR_ZOOM));
-
-pub fn enabled() -> bool {
-    settings_store().poi
-}
 
 /// Lower is more prominent. The reader's choice, so a change needs no bake:
 /// OpenMapTiles' `poi_class_rank` (layers/poi/class.sql) for the class its

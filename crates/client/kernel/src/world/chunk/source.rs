@@ -3,6 +3,8 @@
 //! Which written cubes a chunk draws, and what of the objects it draws: the
 //! catalog numbers it reads, so a chunk is remade only where they differ.
 
+use crate::layer::Query;
+use pxl_render::mesh::run::APRON;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::aabb::Aabb;
 
@@ -10,7 +12,7 @@ use std::collections::HashMap;
 
 use crate::layer::object::store::Store;
 use crate::with_world;
-use crate::world::chunk::build::{folded_cells, runs_of};
+use crate::world::chunk::build::runs_of;
 use crate::world::chunk::Chunk as PyramidChunk;
 use pxl_spec::space::coord::world::nearest_box;
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
@@ -47,7 +49,7 @@ pub fn draws(k: PyramidChunk, e: EntryAt) -> bool {
 }
 
 /// What a chunk's runs draw of the objects: the catalog number at every
-/// place of their grid (`folded_cells`), VOID where none is listed. A place
+/// place of their grid (`Cells::column_cells`), VOID where none is listed. A place
 /// and its number are one word, sorted; none where the heap refused it.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Drawn {
@@ -65,11 +67,12 @@ impl Drawn {
 pub fn objects_drawn(store: &Store, k: PyramidChunk) -> Option<Drawn> {
     let runs = runs_of(store, k);
     let mut cells = Vec::new();
-    let (from, to) = folded_cells(k, runs);
+    let objects = store.read(k.node(), runs).value()?;
+    let (from, _) = objects.column_cells(i64::from(APRON));
     let mut folded = HashMap::new();
-    store.fold_at(runs, from, to, None, &mut folded).ok()?;
+    objects.fold(i64::from(APRON), None, &mut folded).ok()?;
     cells.try_reserve_exact(folded.len()).ok()?;
-    // X and Y within the grid fit a byte each (`folded_cells`); Z is the lane's.
+    // X and Y within the grid fit a byte each (`Cells::column_cells`); Z is the lane's.
     cells.extend(
         folded
             .into_iter()
@@ -93,7 +96,7 @@ pub fn objects_met(store: &Store, k: PyramidChunk) -> Option<Vec<Met>> {
     let (zoom, corner) = k.node();
     let mut out: Vec<Met> = Vec::new();
     let mut refused = false;
-    store.entries_in(&k.region(), &mut |e| {
+    store.read(k.node(), k.cell_zoom()).value()?.entries(&mut |e| {
         let from = if e.zoom >= zoom {
             first_descendant_of(corner, u32::from(e.zoom - zoom))
         } else {

@@ -1,4 +1,4 @@
-// pxl-kernel/scene/billboard.rs
+// pxl-kernel/billboard.rs
 
 //! Labels and bubbles drawn flat to the camera over the world.
 

@@ -15,7 +15,7 @@ use crate::control::sensor::device_orientation::{orientation_watchdog_step, Orie
 use crate::control::sensor::geolocation::geolocation_step;
 use crate::io::sched::{pump, set_credits};
 use crate::io::text::text_rise;
-use crate::layer::geocode::fetcher::geocode_fetcher_step;
+use crate::layer::geocode::fetcher::{geocode_fetcher_step, group_of};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
 
@@ -25,13 +25,14 @@ use crate::scene::environment::state::map_environment_step;
 use crate::scene::marker::frame_gizmo::debug_gizmos_step;
 use crate::scene::marker::hover_cursor::hover_cursor_step;
 use crate::scene::marker::location_puck::location_puck_step;
+use crate::scene::stage::{take_draw, visible_step};
+use crate::sched::edge::{request_world_tick, world_edge};
+use crate::sched::profiler::report::{report_step, set_host_task_ms, set_turn_timing};
 use crate::sched::profiler::spec::EffectName;
 use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickState};
 use crate::shell::setting::store::settings_store;
-use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::decor::asset_store::decor_assets_wanted;
 use crate::world::chunk::source::chunk_sources_step;
-use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
 use crate::world::pyramid::Observed as _;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -82,9 +83,10 @@ fn goal_tick(ctx: &mut TickContext) {
 
 /// Each pyramid layer's tiles, from the published goal.
 fn demand_tick(_: &mut TickContext) {
+    crate::world::pyramid::admit_arrived();
     Terrain::pyramid().step(crate::control::navigation::destination::tile());
     // Nothing is fetched while places are hidden.
-    match crate::layer::poi::enabled() {
+    match crate::shell::setting::store::settings_store().poi {
         true => PoiTile::pyramid().step(None),
         false => PoiTile::pyramid().idle(),
     }
@@ -112,9 +114,9 @@ pub fn boot() {
     on_tick(VISIBLE, sight_tick, StepName::sight);
     on_tick(VISIBLE, goal_tick, StepName::goal);
     on_tick(VISIBLE, demand_tick, StepName::demand);
-    on_tick(VISIBLE, core_tick_visible_step, StepName::chunks);
+    on_tick(VISIBLE, visible_step, StepName::chunks);
     on_tick(COSMETIC, debug_gizmos_tick, StepName::debug_gizmos);
-    on_tick(REPORT, core_tick_report_step, StepName::profiler);
+    on_tick(REPORT, report_step, StepName::profiler);
     world_tasks();
 }
 
@@ -128,14 +130,14 @@ enum TaskPriority {
     Background,
 }
 
-/// No more than change.rs's TASKS; a refusal means the executor holds fewer, and aborts.
+/// No more than edge.rs's TASKS; a refusal means the executor holds fewer, and aborts.
 fn world_tasks() {
     use xpute_guest::sched::task::spawn;
     use TaskPriority::*;
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
         && spawn(crate::io::load::gltf_task(), Arrival as u8)
-        && spawn(crate::world::chunk::stage::build_task(), Build as u8)
+        && spawn(crate::world::chunk::build::build_task(), Build as u8)
         && spawn(crate::world::chunk::decor::asset_store::decor_asset_task(), Background as u8)
         && spawn(crate::layer::object::repository::task(), Background as u8);
     if !spawned {
@@ -178,11 +180,12 @@ pub fn world_turn() -> f64 {
     effect!(worst, destination, crate::control::navigation::destination::destination_step());
     // After every writer of the map center, before anything observes the view.
     effect!(worst, view, crate::world::view::frame::pose::view_compose());
-    effect!(worst, geocode, geocode_fetcher_step());
+    effect!(worst, geocode, geocode_fetcher_step(crate::control::camera::controller::map_center().map(|c| group_of(&c))));
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, objects, crate::layer::object::repository::step());
     effect!(worst, written, written_step());
     effect!(worst, chunk_sources, chunk_sources_step());
+    effect!(worst, edit, crate::control::interaction::edit::pending_step());
     effect!(worst, hover, hover_cursor_step());
     // device_coord is not gated like map_center: the puck keeps its last coordinate across a transient none.
     effect!(worst, puck, location_puck_step(map_navigation().device_coord));

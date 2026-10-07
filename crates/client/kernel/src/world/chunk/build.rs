@@ -10,7 +10,7 @@ mod shape;
 
 pub use bake::BAKE_BYTES;
 pub(crate) use read::{ground_of, leaf_of};
-pub use shape::{draws_as_held, folded_cells, runs_of};
+pub use shape::{draws_as_held, runs_of};
 
 use bake::{carve_into, BakeJob};
 use run::{RunHold, RunsJob, RUN_SETS};
@@ -24,10 +24,14 @@ use std::collections::HashMap;
 
 use crate::World;
 
+use crate::sched::edge::{request_world_tick, world_edge};
+use crate::with_world;
 use crate::world::chunk::mesh_slot::OCCUPANCY;
+use crate::world::chunk::table::builds;
 use crate::world::chunk::Chunk as PyramidChunk;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_guest::sched::edge::{notified, yield_if_spent};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BuildEvent {
@@ -286,5 +290,22 @@ impl Builder {
         // Another chunk of the column made the runs; this one bakes its cut too.
         self.run_set_for(id);
         self.advance_bake(id, emit)
+    }
+}
+
+/// Advances the builds on what the quota leaves after the tick, at least one
+/// step a turn, and waits for the next tick once a step does nothing.
+pub async fn build_task() {
+    loop {
+        notified(builds).await;
+        loop {
+            yield_if_spent(world_edge).await;
+            let budget = world_edge().remaining();
+            let worked = with_world(|world, sched, _| sched.build_step(world, budget)).unwrap_or(false);
+            if !worked {
+                break;
+            }
+            request_world_tick();
+        }
     }
 }

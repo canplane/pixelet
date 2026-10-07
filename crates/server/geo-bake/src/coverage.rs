@@ -20,6 +20,11 @@ const METADATA: &str = include_str!("../../../../infra/geo/elevation/metadata.js
 /// A shard, by its index at `SHARD_ZOOM`.
 pub type Shard = [i64; 2];
 
+/// How far past its edges a shard holds, in units: a leaf, as far as any
+/// read past a leaf's own reaches (a structure's 3×3, the drawn reach, the
+/// elevation's padding), so a shard's leaves bake from the shard alone.
+pub const SHARD_APRON: f64 = units(LEAF_ZOOM);
+
 /// A node of the hierarchy at or above the shards: its zoom and index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Node {
@@ -41,6 +46,12 @@ impl Node {
     pub fn rect(self) -> [f64; 4] {
         let ([x, y], side) = (self.base().map(|v| v as f64), units(self.zoom));
         [x, y, x + side, y + side]
+    }
+
+    /// What a shard holds: its rect grown by `SHARD_APRON`.
+    pub fn held(self) -> [f64; 4] {
+        let [x0, y0, x1, y1] = self.rect();
+        [x0 - SHARD_APRON, y0 - SHARD_APRON, x1 + SHARD_APRON, y1 + SHARD_APRON]
     }
 }
 
@@ -129,15 +140,10 @@ impl Coverage {
         self.shards.iter().map(|&at| Node { zoom: SHARD_ZOOM, at })
     }
 
-    /// The shards held that a leaf's bake can read: its own and those around
-    /// it, since every read past a leaf, a structure's included, is shorter than a shard.
+    /// The shard a leaf's bake reads: its own, which holds its apron.
     pub fn around(&self, leaf: IVec) -> BTreeSet<Node> {
-        let [x, y] = Self::shard_of(LEAF_ZOOM, leaf);
-        (-1..=1)
-            .flat_map(|dy| (-1..=1).map(move |dx| [x + dx, y + dy]))
-            .filter(|s| self.shards.contains(s))
-            .map(|at| Node { zoom: SHARD_ZOOM, at })
-            .collect()
+        let at = Self::shard_of(LEAF_ZOOM, leaf);
+        self.shards.contains(&at).then_some(Node { zoom: SHARD_ZOOM, at }).into_iter().collect()
     }
 }
 

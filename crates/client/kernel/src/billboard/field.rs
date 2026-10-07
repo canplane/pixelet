@@ -1,4 +1,4 @@
-// pxl-kernel/scene/billboard/field.rs
+// pxl-kernel/billboard/field.rs
 
 //! Billboards: labels and bubbles drawn flat to the camera, as sets of
 //! instances. A set stands at an origin, or a height above an actor (a chat
@@ -9,8 +9,7 @@ use pxl_render::gpu::api::bytes;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::abi::handle::Slots;
 
-use crate::scene::billboard::sheet::billboard_sheet;
-use crate::scene::model::store::Models;
+use crate::billboard::sheet::billboard_sheet;
 
 /// Anchor relative to the set's (3), logical size in pixels (2), sheet
 /// rectangle (4), anchor's place down the sprite, 0 top 1 bottom (1).
@@ -80,8 +79,8 @@ impl Billboards {
         }
     }
 
-    /// A set on an actor that is gone or hidden shows nothing.
-    pub fn draw(&self, draw: &mut DrawList, models: &Models, eye: V3) {
+    /// A set on an actor that is gone or hidden (`actor_at` none) shows nothing.
+    pub fn draw(&self, draw: &mut DrawList, actor_at: &dyn Fn(u32) -> Option<V3>, eye: V3) {
         // A pass per order over the few there are, so no list is sorted per frame.
         let orders = || self.sets.iter().map(|(_, s)| s.order);
         let mut next = orders().min();
@@ -92,9 +91,9 @@ impl Billboards {
                 }
                 let at = match s.anchor {
                     Anchor::At(at) => at,
-                    Anchor::On(actor, lift) => match models.actor_ref(actor) {
-                        Some(a) if a.visible => [a.at[0], a.at[1], a.at[2] + lift],
-                        _ => continue,
+                    Anchor::On(actor, lift) => match actor_at(actor) {
+                        Some(at) => [at[0], at[1], at[2] + lift],
+                        None => continue,
                     },
                 };
                 draw.draw_as(PIPELINE_BADGE, s.held.handle, s.count, 0, DrawList::translation(at, eye), 0.0, 1.0);

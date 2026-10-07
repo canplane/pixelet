@@ -38,7 +38,7 @@ use crate::world::chunk::Chunk;
 use crate::world::view::observation::{eye, observation};
 use pxl_render::mesh::run::APRON;
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::coord::zoom::{index, Zoom};
+use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::global::Global;
 
 struct Block {
@@ -151,9 +151,8 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
     // Interaction reads what is drawn as it is held, never a fold of it.
     let own = draws_as_held(chunk, GROUND.cell());
     let target = GROUND.cell_zoom(zoom);
-    let (cx, cy, span) = (index(target, x0), index(target, y0), i64::from(side));
     match target < GROUND.cell() && sources.shown {
-        true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
+        true => store.read(over.node(), target).value()?.fold(0, sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
         false => c.folded.clear(),
     }
     let ground = Ground {
@@ -168,17 +167,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
         folded: (target < GROUND.cell()).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
-    let built = DecorBuild::build(
-        scratch,
-        kinds,
-        Some(&ground),
-        own,
-        sources.hide.filter(|_| own),
-        store,
-        chunk.cell_zoom(),
-        sources.shown,
-        chunk.region(),
-    )?;
+    let built = DecorBuild::build(scratch, kinds, Some(&ground), own, sources.hide.filter(|_| own), store, sources.shown, chunk)?;
     let index = built.bytes();
     let heights = built.heights();
     let instances = built.instances() as u32;

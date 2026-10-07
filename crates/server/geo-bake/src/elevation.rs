@@ -18,6 +18,9 @@ use xpute_core::math::scalar::round;
 
 const HELD: usize = 512;
 
+// The padded samples and the resample's two strides past them stay in a leaf.
+const _: () = assert!(ELE_PAD + 2 <= TILE_ELE_SPAN, "a tile's elevation reads past its shard's apron");
+
 /// A tile's padded grid, `ST_MakeEmptyRaster` at the stride: its top-left
 /// corner, `ELE_PAD` samples out from the tile's, and the stride.
 fn grid_of([min, max]: BBox3857) -> ([f64; 2], f64) {

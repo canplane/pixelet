@@ -8,9 +8,9 @@ use pxl_spec::asset::ingested::Asset;
 use xpute_guest::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::door::host::heap_stat;
-use crate::io::load::{load_failed, load_gltf, load_image, Load};
-use crate::scene::model::asset::register_model;
-use crate::world::change::{request_world_tick, world_edge};
+use crate::io::load::{load_failed, load_gltf, load_image, take_settled, Load};
+use crate::model::asset::register_model;
+use crate::sched::edge::{request_world_tick, world_edge};
 use crate::world::chunk::decor::kind::{Kind, KINDS};
 use xpute_guest::global::Global;
 
@@ -72,12 +72,11 @@ fn wanted() -> &'static mut Notify {
     WANTED.get(Notify::new)
 }
 
-pub fn decor_assets_arrived() {
-    wanted().notify();
-}
-
 pub fn decor_assets_wanted() {
     let s = store();
+    if take_settled() {
+        wanted().notify();
+    }
     if s.refused.is_some_and(|r| r != heap_stat().releases) {
         s.refused = None;
         wanted().notify();

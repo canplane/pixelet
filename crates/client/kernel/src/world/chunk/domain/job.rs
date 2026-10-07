@@ -11,7 +11,6 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::layer::residency::floor;
-use crate::layer::Query;
 use crate::world::query::Access;
 use crate::world::view::observation::{ground_known, observation};
 use crate::world::view::observer::{EdgeRays, Sight};
@@ -78,7 +77,7 @@ pub fn start(ladder: &[Tau], priced: &[(Chunk, u32)]) {
     core::mem::swap(&mut made.terrain, &mut made.now);
     made.priced.clear();
     made.priced.extend_from_slice(priced);
-    let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Box::new(|node, cell| Access::now().bounds(node, cell))));
+    let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Access::now()));
     job.begin(o, top, ladder, made.sight.footprints(), made.sight.lacks());
     made.job = Some(job);
 }

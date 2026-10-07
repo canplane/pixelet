@@ -12,7 +12,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::control::camera::controller::{azimuth, dist};
 use crate::kernel;
-use crate::world::change::request_world_tick;
+use crate::sched::edge::request_world_tick;
 use crate::world::query::Access;
 use crate::world::view::frame::coord::to_world;
 use xpute_guest::global::Global;
@@ -101,8 +101,8 @@ fn sketch(map_center: &Pvf3) -> Sketch {
 static GIZMOS: Global<Option<(V3, Vec<f32>)>> = Global::new();
 
 fn set_lines(at: V3, vertices: &[f32]) {
-    let Some((_, _, sched)) = kernel().world() else { return };
-    sched.debug.set(&mut sched.draw, at, vertices);
+    let Some((_, _, scene, draw)) = kernel().world() else { return };
+    scene.debug.set(draw, at, vertices);
 }
 
 pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>) {

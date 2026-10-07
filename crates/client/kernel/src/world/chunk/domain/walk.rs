@@ -9,14 +9,14 @@ use std::collections::HashMap;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::cubes_meeting;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::io::demand::Order;
-use crate::layer::{Answer, Bound};
+use crate::layer::{Answer, Bound, Query};
 use crate::world::chunk::mesh_slot::POOLS;
+use crate::world::query::Access;
 use crate::world::view::observer::{cell_angle, Footprint, Lens};
 
 use crate::world::chunk::Chunk;
@@ -64,13 +64,13 @@ struct Open {
     parent: Option<(Aabb, [f64; 3])>,
 }
 
-pub struct Domain {
+pub struct Domain<Q: Query = Access<'static>> {
     o: Observation,
     lens: Option<Lens>,
     footprints: Vec<Footprint>,
     lacks: Vec<Tile>,
-    /// The world's bound of a node at a cell zoom, as the query answers it.
-    bounds: Box<dyn Fn(Node<3>, Zoom) -> Answer<Option<Bound>>>,
+    /// What the walk descends: the world, as the query answers it.
+    query: Q,
     /// What the walk starts from, kept to be reused.
     start: Vec<Chunk>,
     unanswered: u32,
@@ -86,31 +86,14 @@ pub struct Domain {
     at: usize,
 }
 
-impl Domain {
-    #[cfg(test)]
-    pub fn priced<'a>(
-        o: Observation,
-        top: Zoom,
-        ladder: &[Tau],
-        at: usize,
-        bounds: Box<dyn Fn(Node<3>, Zoom) -> Answer<Option<Bound>>>,
-        footprints: impl IntoIterator<Item = &'a Footprint>,
-        price: &dyn Price,
-    ) -> Domain {
-        let mut d = Domain::empty(o, bounds);
-        d.begin(o, top, ladder, footprints, core::iter::empty());
-        d.run(price, &|| false, &mut 0);
-        d.put(at);
-        d
-    }
-
-    pub(super) fn empty(o: Observation, bounds: Box<dyn Fn(Node<3>, Zoom) -> Answer<Option<Bound>>>) -> Domain {
+impl<Q: Query> Domain<Q> {
+    pub(crate) fn empty(o: Observation, query: Q) -> Domain<Q> {
         Domain {
             o,
             lens: None,
             footprints: Vec::new(),
             lacks: Vec::new(),
-            bounds,
+            query,
             start: Vec::new(),
             unanswered: 0,
             seen: HashMap::new(),
@@ -126,7 +109,7 @@ impl Domain {
     }
 
     /// `top`: the coarsest zoom the ground's source supplies whole.
-    pub(super) fn begin<'a, 'b>(&mut self, o: Observation, top: Zoom, ladder: &[Tau], footprints: impl IntoIterator<Item = &'a Footprint>, lacks: impl IntoIterator<Item = &'b Tile>) {
+    pub(crate) fn begin<'a, 'b>(&mut self, o: Observation, top: Zoom, ladder: &[Tau], footprints: impl IntoIterator<Item = &'a Footprint>, lacks: impl IntoIterator<Item = &'b Tile>) {
         xpute_core::ensure!(!ladder.is_empty() && ladder.len() < u8::MAX as usize, EINVAL);
         self.o = o;
         self.lens = Lens::of(&o);
@@ -195,7 +178,7 @@ impl Domain {
     }
 
     /// Whether done; counts what it takes off the stack into `n`.
-    pub(super) fn run(&mut self, price: &dyn Price, stop: &dyn Fn() -> bool, n: &mut u32) -> bool {
+    pub(crate) fn run(&mut self, price: &dyn Price, stop: &dyn Fn() -> bool, n: &mut u32) -> bool {
         // at least a slice a turn
         const SLICE: u32 = 32;
         let mut k = 0;
@@ -347,9 +330,9 @@ impl Domain {
     }
 }
 
-impl Domain {
+impl<Q: Query> Domain<Q> {
     fn bound(&self, c: Chunk) -> Answer<Option<Bound>> {
-        (self.bounds)(c.node(), c.cell_zoom())
+        self.query.bounds(c.node(), c.cell_zoom())
     }
 
     /// Measured from where in `c` anything stands: a bound, not the drawn

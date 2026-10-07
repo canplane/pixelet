@@ -12,7 +12,7 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use crate::layer::{Answer, Bound};
+use crate::layer::{Answer, Bound, Query};
 use crate::world::chunk::domain::{Domain, Price};
 use crate::world::view::observer::{Footprint, Grid, Met, Observer, OnPatch, Sight};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -103,6 +103,22 @@ impl World {
     }
 }
 
+/// The walk asks cubes alone, and reads nothing.
+impl Query for World {
+    type Record<'a> = ();
+
+    fn bounds<const D: usize>(&self, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+        match <[i64; 3]>::try_from(&at[..]) {
+            Ok(at) => World::bounds(self, (zoom, at), cell),
+            Err(_) => Answer::Nothing(Tile::new(LEAF_ZOOM, 0)),
+        }
+    }
+
+    fn read(&self, _: Node<3>, _: Zoom) -> Answer<()> {
+        Answer::Nothing(Tile::new(LEAF_ZOOM, 0))
+    }
+}
+
 impl Observer for World {
     fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnPatch) -> u32 {
         if !self.answered {
@@ -119,23 +135,16 @@ pub fn footprints(o: &Observation, world: &World) -> Vec<Footprint> {
     sight.footprints().cloned().collect()
 }
 
-pub fn domain(o: Observation, ladder: &[Tau], world: &World) -> Domain {
+pub fn domain(o: Observation, ladder: &[Tau], world: &World) -> Domain<World> {
     domain_priced(o, ladder, world, &Free)
 }
 
-pub fn domain_priced(o: Observation, ladder: &[Tau], world: &World, price: &dyn Price) -> Domain {
-    Domain::priced(
-        o,
-        GROUND.top(),
-        ladder,
-        0,
-        {
-            let w = world.clone();
-            Box::new(move |n, c| w.bounds(n, c))
-        },
-        &footprints(&o, world),
-        price,
-    )
+pub fn domain_priced(o: Observation, ladder: &[Tau], world: &World, price: &dyn Price) -> Domain<World> {
+    let mut d = Domain::empty(o, world.clone());
+    d.begin(o, GROUND.top(), ladder, &footprints(&o, world), core::iter::empty());
+    d.run(price, &|| false, &mut 0);
+    d.put(0);
+    d
 }
 
 fn unit(v: V3) -> V3 {

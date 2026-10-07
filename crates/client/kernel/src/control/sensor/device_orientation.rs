@@ -7,7 +7,7 @@
 use crate::abi::cmd::Message;
 
 use crate::control::sensor::store::{device_orientation_store, PermissionAnswer, Pose};
-use crate::world::change::wake_at;
+use crate::sched::edge::wake_at;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 

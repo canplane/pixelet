@@ -20,8 +20,7 @@ use crate::io::demand::Ask;
 use crate::io::failure::{Failure, Outcome};
 use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle, Credit};
-use crate::world::change::{request_world_tick, world_edge};
-use crate::world::chunk::decor::asset_store::decor_assets_arrived;
+use crate::sched::edge::{request_world_tick, world_edge};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_guest::abi::handle::Slots;
@@ -152,6 +151,18 @@ fn ended(key: u64, outcome: Outcome) -> Option<(LoadKind, Load)> {
 
 static ARRIVALS: Global<Notify> = Global::new();
 
+static SETTLED: Global<bool> = Global::new();
+
+/// Whether a load settled, arrived or failed, since last taken: what waits on
+/// assets takes it on its turn rather than being called from here.
+pub fn take_settled() -> bool {
+    core::mem::take(SETTLED.get(|| false))
+}
+
+fn settled() {
+    *SETTLED.get(|| false) = true;
+}
+
 fn arrivals() -> &'static mut Notify {
     ARRIVALS.get(Notify::new)
 }
@@ -212,7 +223,7 @@ pub fn image_decoded(image: u32, res: i32) {
         return;
     };
     l.image[n] = Some(if res == 0 { Entry::Ready(image) } else { Entry::Failed });
-    decor_assets_arrived();
+    settled();
     request_world_tick();
 }
 
@@ -259,7 +270,7 @@ pub async fn gltf_task() {
                 Err(_) => Entry::Failed,
             };
             loader().gltf[n] = Some(entry);
-            decor_assets_arrived();
+            settled();
             request_world_tick();
         }
     }
@@ -275,5 +286,5 @@ pub fn load_rejected(key: u64) {
         LoadKind::Gltf => l.gltf[n] = None,
         LoadKind::Image => l.image[n] = None,
     }
-    decor_assets_arrived();
+    settled();
 }

@@ -14,7 +14,7 @@ serde_json = "1"
 ---
 
 //! Every Overture type into db-geo, a shard at a time: a table a type, a row
-//! a feature, in the shard holding its bbox's lower corner, with its properties as the release holds
+//! a feature, in each shard whose apron it meets, with its properties as the release holds
 //! them and its geometry. A shard is a tile at `SHARD_ZOOM`, the coverage's
 //! (`pxl-geo-bake coverage.rs`); what it holds depends on it alone, so shards
 //! ingested one by one are the shards ingested together. The official
@@ -229,9 +229,9 @@ fn ingest(tx: &mut Transaction, ty: &Type, shards: &[Shard], names: &[String], e
     Ok(counts.values().sum())
 }
 
-/// A shard as a feature is tested against: its edges in EPSG:3857 meters, each
-/// rounded half to even, `[left, bottom, right, top]`, the right and top
-/// edges the next shard's; and the same in degrees, for the CLI.
+/// A shard as a feature is tested against: what it holds (`Node::held`, its
+/// apron included) in EPSG:3857 meters, each rounded half to even,
+/// `[left, bottom, right, top]`; and the same in degrees, for the CLI.
 struct Shard {
     name: String,
     m: [f64; 4],
@@ -240,7 +240,7 @@ struct Shard {
 
 impl Shard {
     fn of(node: Node) -> Shard {
-        let m = node.rect().map(|u| round(epsg3857::mer_from_u(u)));
+        let m = node.held().map(|u| round(epsg3857::mer_from_u(u)));
         let [w, s, _] = epsg4326::from_mercator(&[m[0], m[1], 0.0]);
         let [e, n, _] = epsg4326::from_mercator(&[m[2], m[3], 0.0]);
         // The east edge at the seam reads back as -180.

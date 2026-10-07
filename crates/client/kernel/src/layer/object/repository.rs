@@ -19,7 +19,7 @@ use crate::door::host::turn;
 use crate::io::file::{self, Kept, Owner};
 use crate::kernel;
 use crate::layer::object::store::{apply, written, Write};
-use crate::world::change::wake_at;
+use crate::sched::edge::wake_at;
 
 struct State {
     save_due_ms: Option<f64>,

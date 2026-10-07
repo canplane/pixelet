@@ -4,6 +4,8 @@
 //! and a fixed seed, and a cell holding a placed object filters its
 //! candidate out at build time.
 
+use crate::layer::Query;
+use crate::world::chunk::Chunk as PyramidChunk;
 use pxl_render::gpu::api::word_bytes;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, TileView};
 use pxl_render::mesh::run::apron_col;
@@ -156,11 +158,13 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let kind = KINDS.iter().find(|k| k.decor_value() == Some(value))?;
     let leaf = GROUND.cell_of(LEAF_ZOOM, at);
-    let tile = Terrain::residency().get(leaf.tile())?;
+    // The leaf tile's own cells, as the terrain answers them: the leaf scatter reads no coarser.
+    let (zoom, [x, y]) = leaf.tile().node();
+    let tile = Terrain::residency().read((zoom, [x, y, 0]), GROUND.grid_zoom(zoom)).exact()?.view().tile;
     let ground = Access::now().at(at, LEAF_ZOOM).exact()?;
     let [ix, iy, iz] = index_of(GROUND.cell(), at);
     let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;
-    (ground.top().map(|top| round(top / units(GROUND.cell())) as i64) == Some(iz)).then(|| draw(kind, candidate, &tile.ground.cells, &tile.decks, leaf.in_tile()))?
+    (ground.top().map(|top| round(top / units(GROUND.cell())) as i64) == Some(iz)).then(|| draw(kind, candidate, tile.cells, tile.decks, leaf.in_tile()))?
 }
 
 impl<'s> DecorBuild<'s> {
@@ -175,10 +179,10 @@ impl<'s> DecorBuild<'s> {
         hittable: bool,
         hide: Option<DecorHide>,
         store: &Store,
-        cell_zoom: Zoom,
         decor: bool,
-        chunk: Aabb,
+        at: PyramidChunk,
     ) -> Option<DecorBuild<'s>> {
+        let (cell_zoom, chunk) = (at.cell_zoom(), at.region());
         scratch.clear();
         for kind in kinds {
             if kind.variant_count() == 0 {
@@ -193,7 +197,7 @@ impl<'s> DecorBuild<'s> {
             if !decor_shown(kind.extent(), cell_zoom) {
                 continue;
             }
-            Self::placed(scratch, kind, first, hittable, hide.and_then(DecorHide::placed), store, chunk).ok()?;
+            Self::placed(scratch, kind, first, hittable, hide.and_then(DecorHide::placed), store, at).ok()?;
             if let Some(ground) = ground.filter(|_| decor) {
                 Self::scatter(scratch, kind, first, ground, hide, store, chunk).ok()?;
             }
@@ -202,10 +206,12 @@ impl<'s> DecorBuild<'s> {
     }
 
     /// Only what stands in `chunk`: a placed decor stands at its cube's bottom middle.
-    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, hittable: bool, hide: Option<EntryAt>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
+    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, hittable: bool, hide: Option<EntryAt>, store: &Store, at: PyramidChunk) -> Result<(), TryReserveError> {
+        let chunk = at.region();
         let Some(value) = kind.decor_value() else { return Ok(()) };
+        let Some(objects) = store.read(at.node(), at.cell_zoom()).value() else { return Ok(()) };
         let mut refused = Ok(());
-        store.entries_in(&chunk, &mut |e| {
+        objects.entries(&mut |e| {
             let c = e.cube();
             let (x, y) = ((c.min[0] + c.max[0]) / 2.0, (c.min[1] + c.max[1]) / 2.0);
             let stands = (chunk.min[0]..chunk.max[0]).contains(&x) && (chunk.min[1]..chunk.max[1]).contains(&y) && (chunk.min[2]..chunk.max[2]).contains(&c.min[2]);
@@ -257,7 +263,7 @@ impl<'s> DecorBuild<'s> {
             // A leaf in the cell overrides the scatter: a cube or air hides it, the leaf gone brings it back.
             // Folded, only a fill does.
             let hides = match ground.folded {
-                None => store.holds(GROUND.cell(), [gx, gy, i64::from(ele)]),
+                None => store.read((GROUND.cell(), [gx, gy, i64::from(ele)]), GROUND.cell()).value().is_some_and(|c| c.holds()),
                 Some(f) => f.get(&[lx0 + dx as i64, ly0 + dy as i64, index(own, ele as i64)]).is_some_and(|&s| s != AIR),
             };
             if hides {

@@ -4,11 +4,11 @@
 //! place by the panel and the report so both agree. Sections go only through
 //! `put`; indexing lanes by hand let sections drift out of order (2026-09-23).
 
+use crate::billboard::sheet::billboard_sheet;
 use crate::control::camera::controller;
 use crate::io::failure::Outcome;
 use crate::io::sched::{counts, credits};
 use crate::layer::Layer as _;
-use crate::scene::billboard::sheet::billboard_sheet;
 use crate::sched::profiler::block::TASK_PHASES;
 use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::sched::profiler::frame::FrameSample;

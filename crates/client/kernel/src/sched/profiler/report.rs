@@ -1,32 +1,23 @@
-// pxl-kernel/world/chunk/stage.rs
+// pxl-kernel/sched/profiler/report.rs
 
-//! The world's part of the tick: in the visible phase it composes the frame
-//! and runs the table's pass; in the report phase it hands the frame's
-//! numbers to the profiler.
+//! A turn's frame record: what the host measured, the chunks' census and the
+//! layers' residency, taken after every other phase.
 
-use crate::layer::Query;
-use pxl_spec::space::coord::v3::sub3;
-use xpute_core::math::scalar::round;
-use xpute_guest::sched::edge::{notified, yield_if_spent};
-
-use crate::io::sched::pending_count;
-use crate::layer::Layer;
-use crate::mem::MB;
-use crate::scene::environment::state::globe;
-use crate::sched::profiler::frame::{CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample, TurnSample, ViewSample, WorkSample};
-use crate::sched::profiler::record::{profiler_record_frame, profiler_recording, profiler_take_rings};
-use crate::sched::tick::{TickContext, HARD_SLACK_MS};
-use crate::world::change::{request_world_tick, world_edge};
-use crate::world::chunk::decor::build::DecorHide;
-use crate::world::chunk::table::{builds, Census, Frame};
-use crate::world::view::frame::pose::{sea_under_eye, view, view_resize};
-use crate::{kernel, with_world};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
+use xpute_core::math::scalar::round;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-const BOX_TRIANGLES: f64 = 12.0;
+use crate::io::sched::pending_count;
+use crate::kernel;
+use crate::layer::{Layer, Query};
+use crate::mem::MB;
+use crate::scene::stage::visible_pass;
+use crate::sched::profiler::frame::{CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample, TurnSample, ViewSample, WorkSample};
+use crate::sched::profiler::record::{profiler_record_frame, profiler_recording, profiler_take_rings};
+use crate::sched::tick::TickContext;
+use crate::world::chunk::table::Census;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HostFrameStat {
@@ -35,31 +26,29 @@ pub struct HostFrameStat {
     pub device: DeviceSample,
 }
 
-struct CoreTick {
-    visible_pass: Option<f64>,
+const BOX_TRIANGLES: f64 = 12.0;
+
+struct Report {
     last_work: (u32, u32),
     host: HostFrameStat,
-    draw: bool,
 }
 
-static CORE_TICK: Global<CoreTick> = Global::new();
+static REPORT: Global<Report> = Global::new();
 
-fn core_tick() -> &'static mut CoreTick {
-    CORE_TICK.get(|| CoreTick {
-        visible_pass: None,
+fn report() -> &'static mut Report {
+    REPORT.get(|| Report {
         last_work: (0, 0),
         host: HostFrameStat::default(),
-        draw: false,
     })
 }
 
 pub fn set_host_frame_stat(gpu: GpuSample, device: DeviceSample) {
-    let host = &mut core_tick().host;
+    let host = &mut report().host;
     (host.gpu, host.device) = (gpu, device);
 }
 
 pub fn set_host_task_ms(task_ms: f64) {
-    core_tick().host.task_ms = task_ms;
+    report().host.task_ms = task_ms;
     // Known only after the turn, when its frame is already recorded.
     if let Some(frame) = crate::sched::profiler::record::profiler_open_frame() {
         frame.task_ms = task_ms;
@@ -79,11 +68,7 @@ pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
     };
 }
 
-pub fn take_draw() -> bool {
-    core::mem::take(&mut core_tick().draw)
-}
-
-fn work_sample(c: &mut CoreTick, census: &Census) -> WorkSample {
+fn work_sample(c: &mut Report, census: &Census) -> WorkSample {
     let st = kernel().sched.builder.stat;
     let runs = st.runs;
     let sample = WorkSample {
@@ -112,66 +97,11 @@ fn heap_sample() -> HeapSample {
     }
 }
 
-pub fn core_tick_visible_step(ctx: &mut TickContext) {
-    let c = core_tick();
-    c.visible_pass = None;
-    view_resize(ctx.state.width, ctx.state.height);
-    let v = view();
-
-    let anchor = sea_under_eye();
-    let e = v.pose.eye;
-    let frame = Frame {
-        anchor,
-        eye: e,
-        frustum: v.frustum.about(anchor),
-        camera: sub3(&e, &anchor),
-        delta_s: ctx.delta,
-        remaining_ms: ctx.budget.remaining(),
-        hard_slack_ms: HARD_SLACK_MS,
-        globe: Some(globe()),
-    };
-
-    let t0 = now();
-    let draw = with_world(|_, sched, scene| sched.tick(frame, &now, scene)).unwrap_or(false);
-    // Decor lists after the chunks have listed theirs.
-    {
-        let k = kernel();
-        let edits = crate::scene::marker::hover_cursor::render_edits();
-        let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
-        crate::world::chunk::decor::cell::step(&crate::world::chunk::decor::kind::KINDS, &k.objects, &k.sched, &mut k.scene.draw, hide, frame.eye, &ctx.budget);
-    }
-    crate::world::chunk::place::step(ctx);
-    let scene = &mut kernel().scene;
-    scene.billboards.draw(&mut scene.draw, &scene.models, frame.eye);
-    if draw {
-        c.draw = true;
-        ctx.invalidate();
-    }
-    c.visible_pass = Some(now() - t0);
-}
-
-/// Advances the builds on what the quota leaves after the tick, at least one
-/// step a turn, and waits for the next tick once a step does nothing.
-pub async fn build_task() {
-    loop {
-        notified(builds).await;
-        loop {
-            yield_if_spent(world_edge).await;
-            let budget = world_edge().remaining();
-            let worked = with_world(|world, sched, _| sched.build_step(world, budget)).unwrap_or(false);
-            if !worked {
-                break;
-            }
-            request_world_tick();
-        }
-    }
-}
-
 /// Runs after every other phase, so `sched_ms` covers them all.
-pub fn core_tick_report_step(ctx: &mut TickContext) {
-    let c = core_tick();
+pub fn report_step(ctx: &mut TickContext) {
+    let c = report();
     // No chunks this frame: a search jump empties the stage for a moment.
-    let Some(chunks_ms) = c.visible_pass else { return };
+    let Some(chunks_ms) = visible_pass() else { return };
     let frame_t0 = ctx.budget.t0;
     let census = kernel().sched.census(profiler_recording(), frame_t0);
     // Taken whether or not recording, so a recording starts from now.

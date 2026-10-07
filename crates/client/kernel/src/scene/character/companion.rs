@@ -11,18 +11,19 @@ use crate::control::camera::input::steering;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::control::navigation::support::over;
 use crate::io::load::{load_image, Load};
+use crate::kernel;
+use crate::laid;
+use crate::model::asset::ModelHandle;
 use crate::param::COMPANION_STEP_CELLS;
 use crate::scene::character::chat_bubble::chat_bubble_step;
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::scene::character::variant_spec::IDLE_CLIP;
-use crate::scene::model::asset::ModelHandle;
+use crate::sched::edge::wake_at;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
-use crate::world::change::wake_at;
 use crate::world::query::Access;
 use crate::world::view::frame::coord::world_to_canonical;
-use crate::{kernel, with_world};
 use xpute_guest::global::Global;
 
 pub const ACTORS_MAX: usize = Group::ALL.len();
@@ -111,7 +112,7 @@ impl Figure {
         let (Some(model), Some(skin)) = (model_of(variant.model, variant.height_u), load_image(Load::Asset(variant.skin))) else {
             return;
         };
-        let Some(Some(actor)) = with_world(|_, _, scene| scene.models.new_actor(&mut scene.draw, model.model)) else {
+        let Some(Some(actor)) = laid().map(|k| k.scene.actors.new_actor(&mut k.draw, &k.models, model.model)) else {
             return;
         };
         self.held = Some(Held { actor, model, skin });
@@ -121,7 +122,9 @@ impl Figure {
 
     fn release(&mut self) {
         if let Some(held) = self.held.take() {
-            with_world(|_, _, scene| scene.models.remove_actor(&mut scene.draw, held.actor));
+            if let Some(k) = laid() {
+                k.scene.actors.remove_actor(&mut k.draw, held.actor);
+            }
         }
         self.set_ready(false);
     }
@@ -237,7 +240,7 @@ impl Figure {
 
         let Some(held) = &self.held else { return };
         let sched = &mut kernel().scene;
-        if let Some(a) = sched.models.actor(held.actor) {
+        if let Some(a) = sched.actors.actor(held.actor) {
             a.at = [at[0], at[1], *stands];
             a.rotation_z = self.heading as f32;
             a.visible = true;
@@ -245,7 +248,7 @@ impl Figure {
         let clip = if is_walking { variant.move_clip } else { IDLE_CLIP };
         if self.actor_clip != Some(clip) {
             if clip < held.model.clip_count {
-                sched.models.play(held.actor, clip, if self.actor_clip.is_none() { 0.0 } else { 0.2 });
+                sched.actors.play(held.actor, clip, if self.actor_clip.is_none() { 0.0 } else { 0.2 });
             }
             self.actor_clip = Some(clip);
         }

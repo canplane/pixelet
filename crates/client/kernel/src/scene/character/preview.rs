@@ -6,12 +6,13 @@
 //! silhouettes, not scale.
 
 use crate::io::load::{load_image, Load};
+use crate::kernel;
+use crate::laid;
+use crate::model::asset::ModelHandle;
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::scene::character::variant_spec::IDLE_CLIP;
-use crate::scene::model::asset::ModelHandle;
+use crate::sched::edge::request_world_tick;
 use crate::sched::tick::TickContext;
-use crate::world::change::request_world_tick;
-use crate::{kernel, with_world};
 use xpute_guest::global::Global;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
@@ -64,7 +65,9 @@ pub fn preview_close(id: u32) -> bool {
     let Some(pos) = c.cases.iter().position(|case| case.id == id) else { return false };
     let case = c.cases.remove(pos);
     if let Some(actor) = case.actor {
-        with_world(|_, _, scene| scene.models.remove_actor(&mut scene.draw, actor));
+        if let Some(k) = laid() {
+            k.scene.actors.remove_actor(&mut k.draw, actor);
+        }
     }
     true
 }
@@ -89,15 +92,15 @@ pub fn preview_step(ctx: &mut TickContext) {
         if case.actor.is_none() {
             if let (Some(model), Some(_)) = (&case.model, case.skin) {
                 let id = model.model;
-                case.actor = with_world(|_, _, scene| scene.models.new_actor(&mut scene.draw, id)).flatten();
+                case.actor = laid().and_then(|k| k.scene.actors.new_actor(&mut k.draw, &k.models, id));
                 if let (Some(actor), true) = (case.actor, IDLE_CLIP < model.clip_count) {
-                    kernel().scene.models.play(actor, IDLE_CLIP, 0.0);
+                    kernel().scene.actors.play(actor, IDLE_CLIP, 0.0);
                 }
             }
         }
         let Some(actor) = case.actor else { continue };
         case.spin += SPIN_RATE_RAD_S * ctx.delta;
-        if let Some(a) = kernel().scene.models.actor(actor) {
+        if let Some(a) = kernel().scene.actors.actor(actor) {
             a.at = at;
             a.rotation_z = case.spin as f32;
             a.visible = true;

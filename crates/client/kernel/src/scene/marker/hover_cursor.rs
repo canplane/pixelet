@@ -15,22 +15,19 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
-use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
-use crate::control::interaction::edit::{carve_entry, get_placed_object, restores_scattered};
+use crate::control::interaction::edit::{pending, restores_scattered, Pending};
 use crate::control::interaction::{holding, hover, ActiveTool};
-use crate::layer::object::size::{object_size_of, DECOR_SIZE};
-use crate::layer::object::store::{EntryAt, EntryKind};
+use crate::kernel;
+use crate::layer::object::size::DECOR_SIZE;
+use crate::layer::object::store::EntryKind;
+use crate::sched::edge::request_world_tick;
 use crate::shell::setting::store::settings_store;
-use crate::with_world;
-use crate::world::change::request_world_tick;
 use crate::world::chunk::decor::asset_store::decor_assets_for;
 use crate::world::chunk::decor::build::user_decor_pick;
 use crate::world::chunk::decor::instance::NO_ENTRY;
 use crate::world::chunk::decor::kind::kind_for;
-use crate::world::chunk::source::chunk_sources_changed;
 use crate::world::query::Access;
 use crate::World;
-use xpute_guest::global::Global;
 
 enum Ghost {
     None,
@@ -38,85 +35,23 @@ enum Ghost {
     Box { at: V3, size: f64, value: u32, rgb: u32, coplanar: bool },
 }
 
-/// What the eraser's preview changes in the drawn build only: the pick and
-/// the cell queries still see what it hides, or hover would clear, the hide
-/// lift and the pick hit it again, forever. No revision moves, so saves do
-/// not see the hover.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RenderEdits {
-    /// The placed object hidden, and whether it is drawn in tiers, decor, or
-    /// (already gone) either.
-    pub hide: Option<EntryAt>,
-    pub hide_in: (bool, bool),
-    /// An AIR entry over bare terrain, which has no leaf to hide.
-    pub carve: Option<EntryAt>,
-    /// The scattered decor hidden, by the cell it stands in.
-    pub scattered: Option<[i64; 3]>,
-}
-
-#[derive(Default)]
-struct Cursor {
-    edits: RenderEdits,
-}
-
-/// Compared as part of a chunk's sources, so an unchanged one rebuilds nothing.
-pub fn render_edits() -> RenderEdits {
-    CURSOR.get(Cursor::default).edits
-}
-
-static CURSOR: Global<Cursor> = Global::new();
-
 pub fn hover_cursor_step() {
-    let c = CURSOR.get(Cursor::default);
     let hover = hover();
     let ui = holding();
     let settings = settings_store();
     let hovered = hover.coord;
     let active_tool = ui.active_tool;
-
-    let hovered_object = hover.object_at.and_then(get_placed_object);
-
-    let scattered = hover.scattered.is_some();
-    let digging_terrain = active_tool == ActiveTool::Eraser && hovered_object.is_none() && !scattered;
+    let Pending {
+        object: hovered_object,
+        size: preview_size,
+        digging: digging_terrain,
+        blocked,
+        ..
+    } = pending();
     let textures = settings.textures;
 
     let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Eraser) || hovered_object.is_some();
-
-    // A terrain carve is a whole cell: the scan emits nothing for a zero
-    // material whatever its sub-cell bytes, so the cell goes whole anyway.
-    let preview_size = match (&hovered_object, active_tool) {
-        (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
-        (_, ActiveTool::Decor) => DECOR_SIZE,
-        _ if digging_terrain || scattered => units(GROUND.cell()),
-        _ => object_size_of(ui.object_tier),
-    };
-
     let current_scale = if use_object_style { preview_size } else { units(GROUND.cell()) };
-    // The same check as the commit, so preview and placement cannot disagree.
-    let blocked = match (&hovered, active_tool) {
-        (None, _) => false,
-        (Some(h), ActiveTool::Object | ActiveTool::Decor) => {
-            let tool = if active_tool == ActiveTool::Object { PlacementTool::Object } else { PlacementTool::Decor };
-            is_placement_blocked(tool, h, object_size_of(ui.object_tier))
-        }
-        _ => false,
-    };
-
-    // The real object's hide lands a tick or more after the ghost, accepted.
-    let hidden = hovered_object.filter(|_| active_tool == ActiveTool::Eraser);
-    let kind = hidden.map(|o| o.kind());
-    let edits = RenderEdits {
-        hide: hidden.map(|o| o.id()),
-        hide_in: (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. }))),
-        // What is one voxel below shows through the ghost.
-        carve: hovered.filter(|_| digging_terrain).map(|h| carve_entry(&h, preview_size)),
-        scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).map(|s| s.cell),
-    };
-    if c.edits != edits {
-        c.edits = edits;
-        chunk_sources_changed();
-        request_world_tick();
-    }
 
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
@@ -205,10 +140,10 @@ pub fn hover_cursor_step() {
         }
         _ => Ghost::None,
     };
-    let changed = with_world(|world, _, sched| match ghost {
-        Ghost::None => sched.ghost.clear(&mut sched.draw),
-        Ghost::Decor { at, group, rotation, scale } => sched.ghost.set_decor(&mut sched.draw, at, group, rotation as f32, scale as f32),
-        Ghost::Box { at, size, value, rgb, coplanar } => sched.ghost.set_box(world, &mut sched.draw, at, size, value, rgb, coplanar),
+    let changed = kernel().world().map(|(mut world, _, scene, draw)| match ghost {
+        Ghost::None => scene.ghost.clear(draw),
+        Ghost::Decor { at, group, rotation, scale } => scene.ghost.set_decor(draw, at, group, rotation as f32, scale as f32),
+        Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(&mut world, draw, at, size, value, rgb, coplanar),
     });
     if changed == Some(true) {
         request_world_tick();

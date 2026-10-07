@@ -2,6 +2,7 @@
 
 //! A column of chunks shares its runs: written once into a heap block, held while any chunk over it bakes.
 
+use crate::layer::Query;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::param::BAKE_ROWS_PER_STEP;
@@ -10,7 +11,7 @@ use pxl_render::mesh::run::{RunSet, APRON};
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
-use crate::scene::marker::hover_cursor::render_edits;
+use crate::control::interaction::edit::render_edits;
 use crate::world::chunk::source::draws;
 
 use pxl_spec::space::coord::zoom::{units, Zoom};
@@ -153,9 +154,10 @@ impl Builder {
         }
         let edits = render_edits();
         self.folded.clear();
-        let (from, to) = folded_cells(c.at, target);
-        let (cx, cy) = (from[0] + 1, from[1] + 1);
-        if world.store.fold_at(target, from, to, edits.hide.filter(|&e| draws_as_held(c.at, e.zoom())), &mut self.folded).is_err() {
+        let objects = world.store.read(c.at.node(), target).value().or_bug(Errno::ENOTRECOVERABLE);
+        let (from, _) = objects.column_cells(i64::from(APRON));
+        let (cx, cy) = (from[0] + i64::from(APRON), from[1] + i64::from(APRON));
+        if objects.fold(i64::from(APRON), edits.hide.filter(|&e| draws_as_held(c.at, e.zoom())), &mut self.folded).is_err() {
             self.refuse(id);
             return Progress::Blocked;
         }

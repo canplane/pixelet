@@ -1,4 +1,4 @@
-// pxl-kernel/world/change.rs
+// pxl-kernel/sched/edge.rs
 
 //! The world's turn edge: when its tasks run, and a frame asked for, since
 //! the canvas renders on demand.

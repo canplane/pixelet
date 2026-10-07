@@ -161,7 +161,7 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
         crate::sched::profiler::log::profiler_log_clear();
     }
     crate::door::host::host_rise();
-    crate::world::change::world_edge().rise(quota_ms);
+    crate::sched::edge::world_edge().rise(quota_ms);
     door().drain(|number, pkt| apply::apply(s, number, pkt));
     if quota_ms > 0.0 || world_frame_waiting() {
         xpute_guest::sched::task::poll();
@@ -171,7 +171,7 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
     }
     pxl_render::gpu::api::gpu_publish();
     crate::door::host::host_fall();
-    let wake = crate::world::change::world_fall();
+    let wake = crate::sched::edge::world_fall();
     // What the completion ring had no room for is still in the submission ring.
     if door().pending() {
         0.0

@@ -3,6 +3,12 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the objects' query and written to the store.
 
+use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
+use crate::control::interaction::{holding, hover, ActiveTool};
+use crate::layer::object::size::{object_size_of, DECOR_SIZE};
+use crate::layer::object::store::EntryKind;
+use crate::sched::edge::request_world_tick;
+use crate::world::chunk::source::chunk_sources_changed;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::cell::object::{decor_num_id, object_value_is_air, placeable_cube_num_id, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
@@ -14,6 +20,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_guest::global::Global;
 
 use crate::kernel;
 use crate::layer::object::repository;
@@ -118,4 +125,90 @@ pub fn remove(at: EntryAt) {
         key: key_of::<3>(at.zoom(), at.at()),
         id: VOID,
     });
+}
+
+/// What the eraser's preview changes in the drawn build only: the pick and
+/// the cell queries still see what it hides, or hover would clear, the hide
+/// lift and the pick hit it again, forever. No revision moves, so saves do
+/// not see the hover.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RenderEdits {
+    /// The placed object hidden, and whether it is drawn in tiers, decor, or
+    /// (already gone) either.
+    pub hide: Option<EntryAt>,
+    pub hide_in: (bool, bool),
+    /// An AIR entry over bare terrain, which has no leaf to hide.
+    pub carve: Option<EntryAt>,
+    /// The scattered decor hidden, by the cell it stands in.
+    pub scattered: Option<[i64; 3]>,
+}
+
+/// The edit the pointer would make, decided once a turn: the cursor's ghost
+/// shows it and the drawn build leaves out what it removes.
+#[derive(Clone, Copy, Default)]
+pub struct Pending {
+    pub object: Option<Entry>,
+    pub size: f64,
+    pub digging: bool,
+    /// The same check as the commit, so preview and placement cannot disagree.
+    pub blocked: bool,
+    pub edits: RenderEdits,
+}
+
+static PENDING: Global<Pending> = Global::new();
+
+pub fn pending() -> Pending {
+    *PENDING.get(Pending::default)
+}
+
+/// Compared as part of a chunk's sources, so an unchanged one rebuilds nothing.
+pub fn render_edits() -> RenderEdits {
+    pending().edits
+}
+
+pub fn pending_step() {
+    let hover = hover();
+    let ui = holding();
+    let hovered = hover.coord;
+    let active_tool = ui.active_tool;
+    let object = hover.object_at.and_then(get_placed_object);
+    let scattered = hover.scattered.is_some();
+    let digging = active_tool == ActiveTool::Eraser && object.is_none() && !scattered;
+    // A terrain carve is a whole cell: the scan emits nothing for a zero
+    // material whatever its sub-cell bytes, so the cell goes whole anyway.
+    let size = match (&object, active_tool) {
+        (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
+        (_, ActiveTool::Decor) => DECOR_SIZE,
+        _ if digging || scattered => units(GROUND.cell()),
+        _ => object_size_of(ui.object_tier),
+    };
+    let blocked = match (&hovered, active_tool) {
+        (Some(h), ActiveTool::Object | ActiveTool::Decor) => {
+            let tool = if active_tool == ActiveTool::Object { PlacementTool::Object } else { PlacementTool::Decor };
+            is_placement_blocked(tool, h, object_size_of(ui.object_tier))
+        }
+        _ => false,
+    };
+    // The real object's hide lands a tick or more after the ghost, accepted.
+    let hidden = object.filter(|_| active_tool == ActiveTool::Eraser);
+    let kind = hidden.map(|o| o.kind());
+    let edits = RenderEdits {
+        hide: hidden.map(|o| o.id()),
+        hide_in: (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. }))),
+        // What is one voxel below shows through the ghost.
+        carve: hovered.filter(|_| digging).map(|h| carve_entry(&h, size)),
+        scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).map(|s| s.cell),
+    };
+    let p = PENDING.get(Pending::default);
+    if p.edits != edits {
+        chunk_sources_changed();
+        request_world_tick();
+    }
+    *p = Pending {
+        object,
+        size,
+        digging,
+        blocked,
+        edits,
+    };
 }

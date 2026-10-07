@@ -30,7 +30,7 @@ use xpute_core::status::errno::Errno;
 
 use crate::kernel;
 use crate::layer::{Answer, Bound, Query};
-use crate::world::change::request_world_tick;
+use crate::sched::edge::request_world_tick;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EntryKind {
@@ -229,7 +229,7 @@ impl Store {
     }
 
     /// Every leaf whose cube meets `query`, X in `query`'s frame.
-    pub fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
+    fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
         self.descend(about(query), &mut |zoom, at, whole, leaf| {
             if whole.meet(*query).is_none() {
                 return false;
@@ -261,7 +261,7 @@ impl Store {
     }
 
     /// Every leaf meeting the cube at `zoom`, X in the cube's frame.
-    pub fn each_in(&self, zoom: Zoom, at: [i64; 3], visit: &mut dyn FnMut(&Entry)) {
+    fn each_in(&self, zoom: Zoom, at: [i64; 3], visit: &mut dyn FnMut(&Entry)) {
         let Some(f) = self.find(zoom, at) else { return };
         let about = about(&cube(zoom, at));
         match f.slot {
@@ -281,7 +281,7 @@ impl Store {
     }
 
     /// Whether anything, air included, is held in the cube at `zoom`.
-    pub fn holds(&self, zoom: Zoom, at: [i64; 3]) -> bool {
+    fn holds(&self, zoom: Zoom, at: [i64; 3]) -> bool {
         self.find(zoom, at).is_some_and(|f| f.slot != Slot::Leaf(EMPTY))
     }
 
@@ -297,7 +297,7 @@ impl Store {
 
     /// What the objects fold to in the cells `from..to` of `target`, at every
     /// height, with `hide` left out.
-    pub fn fold_at(&self, target: Zoom, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
+    fn fold_at(&self, target: Zoom, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
         out.clear();
         let mut refused = Ok(());
         let hide = hide.map(|h| key(h.zoom(), h.at()));
@@ -433,8 +433,19 @@ pub struct Cells<'a> {
 }
 
 impl Cells<'_> {
-    /// What the objects fold to in the cells `from..to` at the asked zoom, with `hide` left out.
-    pub fn fold(&self, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
+    /// The cells, X and Y at the asked zoom, of the node's column and `apron`
+    /// more on each side.
+    pub fn column_cells(&self, apron: i64) -> ([i64; 2], [i64; 2]) {
+        let (zoom, at) = self.node;
+        let [x, y, _] = first_descendant_of(at, u32::from(self.cell - zoom));
+        let n = i64::from(count(self.cell, zoom));
+        ([x - apron, y - apron], [x + n + apron, y + n + apron])
+    }
+
+    /// What the objects fold to over the node's column and `apron` more cells
+    /// on each side, at the asked zoom, with `hide` left out.
+    pub fn fold(&self, apron: i64, hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
+        let (from, to) = self.column_cells(apron);
         self.store.fold_at(self.cell, from, to, hide, out)
     }
 
@@ -443,9 +454,25 @@ impl Cells<'_> {
         self.store.node(self.node.0, self.node.1)
     }
 
-    /// Every leaf in the node, or the one over it.
+    /// Every leaf inside the node, or the one over it.
     pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
-        self.store.each_in(self.node.0, self.node.1, visit);
+        let (zoom, at) = self.node;
+        if zoom >= SHARD_ZOOM {
+            return self.store.each_in(zoom, at, visit);
+        }
+        // Over a tree's root: the leaves of every column under it, those
+        // only touching its faces left out.
+        let whole = cube(zoom, at);
+        self.store.entries_in(&whole, &mut |e| {
+            if e.cube().meet(whole).is_some_and(|m| (0..3).all(|k| m.min[k] < m.max[k])) {
+                visit(e);
+            }
+        });
+    }
+
+    /// Whether anything, air included, is held at the node.
+    pub fn holds(&self) -> bool {
+        self.store.holds(self.node.0, self.node.1)
     }
 
     /// The value placed at exactly the node, if one is.

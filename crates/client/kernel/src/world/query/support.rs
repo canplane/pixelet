@@ -2,6 +2,7 @@
 
 //! Where something stands: the support, floor and ceiling over a point, climbing as a walker would.
 
+use crate::layer::Query;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::cell::object::{object_value_is_air, object_value_is_voxel};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
@@ -83,7 +84,7 @@ impl<'a> Access<'a> {
             let n = i64::from(count(OBJECT_FINEST, GROUND.cell()));
             let fine = units(OBJECT_FINEST);
             let solid = |cz: i64| {
-                if !self.objects.holds(GROUND.cell(), [ix, iy, cz]) {
+                if !self.objects.read((GROUND.cell(), [ix, iy, cz]), GROUND.cell()).value().is_some_and(|c| c.holds()) {
                     return made((cz as f64 + 0.5) * side);
                 }
                 filled_cell(|[x, y, z]| {

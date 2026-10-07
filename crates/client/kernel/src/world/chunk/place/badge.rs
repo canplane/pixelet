@@ -6,8 +6,8 @@ use pxl_spec::bake::poi_tile::{kind_color, kind_icon, Place, PoiTile, POI_LATTIC
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::tile::Tile;
 
+use crate::billboard::sheet::billboard_sheet;
 use crate::io::text::text_width;
-use crate::scene::billboard::sheet::billboard_sheet;
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
 use pxl_render::gpu::sheet::SHEET_SCALE;

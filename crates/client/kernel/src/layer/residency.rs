@@ -15,6 +15,8 @@ pub mod floor;
 use pxl_spec::space::coord::zoom::Zoom;
 use std::collections::HashMap;
 
+use fnv::FnvBuildHasher;
+
 use pxl_spec::space::layer::demand::REACH_TILES;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
@@ -72,7 +74,7 @@ impl<L> Entry<L> {
 }
 
 pub struct Residency<L: Layer> {
-    tiles: HashMap<Tile, Entry<L>>,
+    tiles: HashMap<Tile, Entry<L>, FnvBuildHasher>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
     going: Vec<Tile>,
@@ -123,7 +125,7 @@ impl<L: Layer> Default for Residency<L> {
     fn default() -> Self {
         let () = Self::SAFE;
         Residency {
-            tiles: HashMap::with_capacity(Self::ENTRIES as usize),
+            tiles: HashMap::with_capacity_and_hasher(Self::ENTRIES as usize, FnvBuildHasher::default()),
             // Lowest first, as the frames are taken.
             free: (0..Self::FRAMES).rev().collect(),
             going: Vec::with_capacity(Self::ENTRIES as usize),
