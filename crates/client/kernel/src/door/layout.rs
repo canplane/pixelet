@@ -70,8 +70,11 @@ const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::
 
 const SINGLE_BLOCKS: usize = 3;
 
-/// Each owner's bound summed, so the table cannot fill. The renderer frees
-/// a list's blocks before taking its uploads, so it never holds more.
+/// Each owner's bound summed, so the table cannot fill: every bound is a
+/// count the structure fixes (a catalog's length, the chunk table's slots,
+/// the surfaces), so overflowing the renderer's table is a bug, not a load.
+/// The renderer frees a list's blocks before taking its uploads, so it never
+/// holds more.
 const MAX_LIVE_BLOCKS: usize = crate::chunk::decor::cell::BLOCKS_MAX + MODELS_MAX + crate::scene::actor::ACTORS_MAX + crate::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
 
 pub const BLOCK_SLOTS: usize = pxl_render::gpu::renderer::block_slots(MAX_LIVE_BLOCKS);
