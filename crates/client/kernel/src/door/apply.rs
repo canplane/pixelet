@@ -47,11 +47,11 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
     use crate::control::camera::input::{camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel, Rect};
     use crate::control::interaction::{hold, holding};
     use crate::control::sensor::{device_orientation, geolocation};
+    use crate::profiler::log::{profiler_follow, profiler_set_logging, profiler_window_start, profiler_window_stop};
     use crate::sched::edge::request_world_tick;
-    use crate::sched::profiler::log::{profiler_set_logging, profiler_window_start, profiler_window_stop};
-    use crate::sched::turn::world_platform;
+    use crate::setting::store::{settings_load, settings_store, SettingKey};
     use crate::shell as ui;
-    use crate::shell::setting::store::{settings_load, settings_store};
+    use crate::turn::world_platform;
 
     if let Some(cmd) = xpute_cmd::Command::of(number) {
         return apply_xpute(cmd, pkt);
@@ -61,7 +61,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::WORLD_FRAME => {
             let p = abi::WorldFrame::read(packet(pkt)?)?;
             refuse_unless(p.dpr > 0.0 && p.delta_s >= 0.0 && p.frame_ms >= 0.0, Errno::EINVAL)?;
-            crate::sched::turn::world_frame_asked(crate::sched::turn::HostFrame {
+            crate::turn::world_frame_asked(crate::turn::HostFrame {
                 width: p.width,
                 height: p.height,
                 dpr: p.dpr,
@@ -78,7 +78,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             super::host_attached(s);
             crate::door::host::set_development(p.development);
             crate::door::host::set_handheld(p.handheld);
-            crate::sched::turn::set_world_platform(crate::sched::turn::Platform {
+            crate::turn::set_world_platform(crate::turn::Platform {
                 geolocation: p.geolocation,
                 orientation: device_orientation::OrientationPlatform {
                     supported: p.orientation,
@@ -87,6 +87,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 },
             });
             settings_load(p.settings);
+            profiler_follow(settings_store().debug_overlay, crate::profiler::summary::counters());
             crate::layer::object::repository::open();
             // The shell holds the kernel's state from its first render on.
             applied(s)
@@ -283,7 +284,16 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::SETTING_SET => {
             let p = abi::SettingSet::read(packet(pkt)?)?;
-            refuse_unless(settings_store().set_setting(p.key, p.value), Errno::EINVAL)?;
+            let changed = settings_store().set_setting(p.key, p.value);
+            refuse_unless(changed.is_some(), Errno::EINVAL)?;
+            if changed == Some(true) {
+                if p.key.sources_chunks() {
+                    crate::world::chunk::source::chunk_sources_changed();
+                }
+                if p.key == SettingKey::debug_overlay {
+                    profiler_follow(p.value == 1, crate::profiler::summary::counters());
+                }
+            }
             applied(s)
         }
         Command::CHAT_SEND => {
@@ -304,7 +314,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // panel off would record with nothing to show or stop it.
         Command::PROFILER_START => {
             refuse_unless(settings_store().debug_overlay, Errno::EPERM)?;
-            profiler_window_start();
+            profiler_window_start(crate::profiler::summary::counters());
             applied(s)
         }
         Command::PROFILER_STOP => {
@@ -345,12 +355,12 @@ fn apply_xpute(cmd: xpute_cmd::Command, pkt: &Option<&[u8]>) -> Result<Option<i3
 /// `window_ms` and the three rings. Read in place rather than posted:
 /// `Door::post` asserts on a full completion ring, and reading allocates
 /// nothing in the heap being measured. Valid until the next turn.
-fn profiler_read(window_ms: f64) -> u32 {
-    use crate::sched::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
-    use crate::sched::profiler::spec::READ;
+fn profiler_read(window_ms: Option<f64>) -> u32 {
+    use crate::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
+    use crate::profiler::spec::READ;
     // On the heap, not a static: a native build's statics are outside the shell-readable memory.
     static WORDS: xpute_guest::global::Global<Box<[u32; READ::WORDS as usize]>> = xpute_guest::global::Global::new();
-    let summary = crate::sched::profiler::summary::profiler_summarize(window_ms);
+    let summary = crate::profiler::summary::profiler_summarize(window_ms);
     let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
     w[READ::summary_at as usize] = off_of_slice(&raw const *summary) as u32;
@@ -367,10 +377,10 @@ fn profiler_read(window_ms: f64) -> u32 {
 /// The address of LOG's words: rows the live stream kept since the last
 /// take, let go next turn.
 fn profiler_take(s: &mut State) -> u32 {
-    use crate::sched::profiler::spec::LOG;
+    use crate::profiler::spec::LOG;
     // On the heap, as READ's words are.
     static WORDS: xpute_guest::global::Global<Box<[u32; LOG::WORDS as usize]>> = xpute_guest::global::Global::new();
-    let (tasks, frames) = crate::sched::profiler::log::profiler_log_rows();
+    let (tasks, frames) = crate::profiler::log::profiler_log_rows();
     let w = WORDS.get(|| Box::new([0; LOG::WORDS as usize]));
     w[LOG::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
     w[LOG::tasks_count as usize] = tasks.len() as u32;

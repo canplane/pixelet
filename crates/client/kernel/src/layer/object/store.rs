@@ -19,12 +19,11 @@ use pxl_spec::cell::object::{decor_id_from_num, object_value_is_decor, object_va
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::world::{node_near, REACH};
+use pxl_spec::space::coord::world::{node_near, wrap_index, REACH};
 use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{child_cube, key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
 use pxl_spec::space::hierarchy::tree::{first_descendant_of, region, Node};
-use pxl_spec::space::layer::lattice::GROUND;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -194,10 +193,28 @@ impl Store {
     /// cube there, and its value if it is a leaf.
     fn descend(&self, about: f64, enter: &mut Enter) {
         for (&k, tree) in &self.columns {
-            let (_, col) = node_of::<3>(k);
-            for (s, slot) in tree.block(0).enumerate() {
-                self.walk(tree, slot, CUBE_ZOOM, child_cube(SHARD_ZOOM, col, s), about, enter);
+            self.walk_column(tree, node_of::<3>(k).1, about, enter);
+        }
+    }
+
+    /// As `descend`, over only the columns `region` meets, edges included:
+    /// what is read is as large as what is asked, not as the world's edits.
+    fn descend_in(&self, region: &Aabb, enter: &mut Enter) {
+        let side = units(SHARD_ZOOM);
+        let across = |k: usize| (region.min[k] / side).floor() as i64..=(region.max[k] / side).floor() as i64;
+        for y in across(1) {
+            for x in across(0) {
+                let col = [wrap_index(SHARD_ZOOM, x), y, 0];
+                if let Some(tree) = self.columns.get(&key(SHARD_ZOOM, col)) {
+                    self.walk_column(tree, col, about(region), enter);
+                }
             }
+        }
+    }
+
+    fn walk_column(&self, tree: &Tree, col: [i64; 3], about: f64, enter: &mut Enter) {
+        for (s, slot) in tree.block(0).enumerate() {
+            self.walk(tree, slot, CUBE_ZOOM, child_cube(SHARD_ZOOM, col, s), about, enter);
         }
     }
 
@@ -230,7 +247,7 @@ impl Store {
 
     /// Every leaf whose cube meets `query`, X in `query`'s frame.
     fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
-        self.descend(about(query), &mut |zoom, at, whole, leaf| {
+        self.descend_in(query, &mut |zoom, at, whole, leaf| {
             if whole.meet(*query).is_none() {
                 return false;
             }
@@ -239,25 +256,6 @@ impl Store {
             }
             true
         });
-    }
-
-    /// A box holding every entry inside `query`, cut to it, never none where
-    /// there is some.
-    pub fn bound_in(&self, query: &Aabb) -> Option<Aabb> {
-        let mut out: Option<Aabb> = None;
-        self.entries_in(query, &mut |e| {
-            if let Some(b) = e.cube().meet(*query) {
-                out = Some(out.map_or(b, |o| o.join(b)));
-            }
-        });
-        out
-    }
-
-    /// The finest zoom any entry inside `query` is held at.
-    pub fn finest_in(&self, query: &Aabb) -> Option<Zoom> {
-        let mut out: Option<Zoom> = None;
-        self.entries_in(query, &mut |e| out = Some(out.map_or(e.zoom, |f| f.max(e.zoom))));
-        out
     }
 
     /// Every leaf meeting the cube at `zoom`, X in the cube's frame.
@@ -285,16 +283,6 @@ impl Store {
         self.find(zoom, at).is_some_and(|f| f.slot != Slot::Leaf(EMPTY))
     }
 
-    /// The cell over the highest entry in the column of ground cell `[x, y]`.
-    pub fn ceiling(&self, [x, y]: [i64; 2]) -> Option<i64> {
-        let side = units(GROUND.cell());
-        let column = Aabb {
-            min: [x as f64 * side, y as f64 * side, REACH.min[2]],
-            max: [(x + 1) as f64 * side, (y + 1) as f64 * side, REACH.max[2]],
-        };
-        self.bound_in(&column).map(|b| (b.max[2] / side).ceil() as i64)
-    }
-
     /// What the objects fold to in the cells `from..to` of `target`, at every
     /// height, with `hide` left out.
     fn fold_at(&self, target: Zoom, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
@@ -307,7 +295,7 @@ impl Store {
             min: [from[0] as f64 * side, from[1] as f64 * side, REACH.min[2]],
             max: [to[0] as f64 * side, to[1] as f64 * side, REACH.max[2]],
         };
-        self.descend(about(&query), &mut |zoom, at, whole, leaf| {
+        self.descend_in(&query, &mut |zoom, at, whole, leaf| {
             if whole.meet(query).is_none() || refused.is_err() {
                 return false;
             }
@@ -363,11 +351,6 @@ impl Store {
                 true,
             ),
         }
-    }
-
-    /// VOID where nothing; a leaf's value as it is.
-    pub fn folded_value(&self, zoom: Zoom, at: [i64; 3]) -> u16 {
-        self.find(zoom, at).map_or(EMPTY, |f| self.fold(f.tree, f.slot, f.zoom, at.map(|c| c >> (zoom - f.zoom)), None))
     }
 
     /// The value placed at exactly this node, if one is.
@@ -483,11 +466,16 @@ impl Cells<'_> {
 
 impl Query for Store {
     type Record<'a> = Cells<'a>;
+    type Cursor = ();
+
+    fn cursor<const D: usize>(&self, _: Node<D>, _: Zoom) {}
+
+    fn child<const D: usize>(&self, _: &(), _: Node<D>, _: Zoom) {}
 
     /// All resident, so every answer is exact. Read at `cell`: a node held
     /// finer than its cells is one cube and `finest` one past `cell`, so the
     /// cost is the asker's resolution — one find for a node read whole.
-    fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+    fn bound<const D: usize>(&self, _: &(), node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let mut out: Option<Bound> = None;
         let mut hold = |aabb: Aabb, finest: Zoom| {
             out = Some(out.map_or(Bound { aabb, finest }, |o| Bound {

@@ -14,7 +14,7 @@ use xpute_guest::mem::heap::Block;
 
 use crate::layer::object::store::AIR;
 use crate::mem::fixed::{at, Range};
-use crate::shell::setting::store::settings_store;
+use crate::setting::store::settings_store;
 
 use crate::world::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES};
 use pxl_spec::space::coord::world::around;

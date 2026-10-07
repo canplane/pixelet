@@ -9,7 +9,7 @@
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::deck::{MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::GroundCell;
-use pxl_spec::bake::format::{Extent, COARSE_LANE};
+use pxl_spec::bake::format::COARSE_LANE;
 use pxl_spec::space::layer::lattice::{EXTENT, TILE_CELLS};
 
 use crate::layer::residency::Residency;
@@ -54,12 +54,14 @@ pub const ELE_LANE_BYTES: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN * 2;
 
 pub const ELE_PLANE_BYTES: u32 = FRAMES * ELE_LANE_BYTES;
 
-/// Two i16 a cell of the index lattice.
-pub const EXTENT_LANE_BYTES: u32 = EXTENT.tile_cells() * EXTENT.tile_cells() * 4;
+/// A cell's extent, as the index lane and its coarser cells both hold it.
+const EXTENT_BYTES: u32 = core::mem::size_of::<[i16; 2]>() as u32;
+
+pub const EXTENT_LANE_BYTES: u32 = EXTENT.tile_cells() * EXTENT.tile_cells() * EXTENT_BYTES;
 
 pub const EXTENT_PLANE_BYTES: u32 = FRAMES * EXTENT_LANE_BYTES;
 
-pub const COARSE_LANE_BYTES: u32 = COARSE_LANE as u32 * core::mem::size_of::<Extent>() as u32;
+pub const COARSE_LANE_BYTES: u32 = COARSE_LANE as u32 * EXTENT_BYTES;
 
 pub const COARSE_PLANE_BYTES: u32 = FRAMES * COARSE_LANE_BYTES;
 

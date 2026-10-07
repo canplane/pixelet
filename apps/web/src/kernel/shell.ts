@@ -2,6 +2,8 @@
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
+import { FaultError } from "@xpute/core/status/error.ts";
+import type { Errno } from "@xpute/core/status/errno.spec.ts";
 import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
 import { ring_now, send_input } from "@/kernel/sched.ts";
@@ -40,5 +42,9 @@ export function kernel_memory(): ArrayBuffer {
 
 /** A command answered inside the call: the address of its reply in `kernel_memory()`. */
 export function kernel_call(cmd: Command, pkt: U8Array | null = null): u32 {
-  return CORE_DOORBELL.call(cmd, pkt, (at) => at >>> 0);
+  return CORE_DOORBELL.call(cmd, pkt, (at) => {
+    // A refusal is -errno, never an address.
+    if (at < 0) throw new FaultError(-at as Errno);
+    return at >>> 0;
+  });
 }

@@ -25,7 +25,7 @@ use crate::abi::host::stream as host_stream;
 
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
 use crate::mem::section::{map, PAGE_BYTES};
-use crate::sched::profiler::record::PROFILER_BYTES;
+use crate::profiler::record::PROFILER_BYTES;
 use crate::world::chunk::build::BAKE_BYTES;
 use crate::world::chunk::table::MOUNTS_BYTES;
 

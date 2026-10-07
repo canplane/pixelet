@@ -94,7 +94,7 @@ impl CoverageGizmo {
         let height = observation().map_or(0.0, |o| o.eye[2] - o.ground).max(1.0);
         let zoom = within(height).clamp(i32::from(GROUND.top()), i32::from(LEAF_ZOOM)) as Zoom;
         let span = units(zoom);
-        let about = v.pose.eye.map(|c| (c / span).floor() * span);
+        let about = v.at().eye.map(|c| (c / span).floor() * span);
         let about = [about[0], about[1], 0.0];
         let residency = Terrain::residency();
         let top = floor::top().unwrap_or(LEAF_ZOOM);

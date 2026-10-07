@@ -617,7 +617,8 @@ pub enum Command {
     /// The console stream on or off.
     PROFILER_LOG = 0x1903,
     /// The profiler where it lies: the reply is the address of READ's words (profiler.json) over the
-    /// last `window_ms`, an infinite window being the whole recording, good until the next turn.
+    /// last `window_ms`, the whole recording where it is absent, good until the next turn. A number
+    /// past the door is finite, so no window is infinite.
     PROFILER_READ = 0x1904,
     /// The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn.
     PROFILER_TAKE = 0x1905,
@@ -1322,7 +1323,7 @@ impl PreviewClose {
 /// Command::SETTING_SET's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct SettingSet {
-    pub key: crate::shell::setting::schema_spec::SettingKey,
+    pub key: crate::setting::schema_spec::SettingKey,
     /// A toggle's 0 or 1, a choice's option by its index, or a number.
     pub value: u32,
 }
@@ -1331,7 +1332,7 @@ impl SettingSet {
     pub fn read(pkt: &[u8]) -> Result<SettingSet, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SettingSet {
-            key: crate::shell::setting::schema_spec::SettingKey::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+            key: crate::setting::schema_spec::SettingKey::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
             value: integer::<u32>(f.at(1)?.get_number()?)?,
         })
     }
@@ -1448,14 +1449,17 @@ impl ProfilerLog {
 /// Command::PROFILER_READ's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct ProfilerRead {
-    pub window_ms: f64,
+    pub window_ms: Option<f64>,
 }
 
 impl ProfilerRead {
     pub fn read(pkt: &[u8]) -> Result<ProfilerRead, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(ProfilerRead {
-            window_ms: finite(f.at(0)?.get_number()?)?,
+            window_ms: match f.at(0)?.opt() {
+                Some(c) => Some(finite(c.get_number()?)?),
+                None => None,
+            },
         })
     }
 }

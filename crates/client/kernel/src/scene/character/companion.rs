@@ -21,7 +21,7 @@ use crate::scene::character::variant::{character_variant, model_of, CharacterVar
 use crate::scene::character::variant_spec::IDLE_CLIP;
 use crate::sched::edge::wake_at;
 use crate::sched::tick::TickContext;
-use crate::shell::setting::store::settings_store;
+use crate::setting::store::settings_store;
 use crate::world::query::Access;
 use crate::world::view::frame::coord::world_to_canonical;
 use xpute_guest::global::Global;

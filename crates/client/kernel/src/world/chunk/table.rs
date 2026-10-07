@@ -25,7 +25,7 @@ use pxl_render::gpu::arena::{arena_configure, arena_epoch};
 use pxl_render::look::globe::Globe;
 use pxl_render::mesh::chunk_mesher::Heights;
 
-use crate::sched::profiler::frame::ZOOMS;
+use crate::profiler::frame::ZOOMS;
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
@@ -38,7 +38,7 @@ use crate::control::interaction::edit::{render_edits, RenderEdits};
 use crate::kernel;
 use crate::layer::object::store::EntryAt;
 use crate::param;
-use crate::shell::setting::store::settings_store;
+use crate::setting::store::settings_store;
 use crate::world::chunk::build::{draws_as_held, BuildEvent, Builder};
 use crate::world::chunk::frontier::{pool_of, Env, Frontier, Now, Slots};
 use crate::world::chunk::mesh_slot::{group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, OCCUPANCY};

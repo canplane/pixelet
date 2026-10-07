@@ -41,8 +41,7 @@ Golden records under `spec/golden/` hold the languages to each other wherever by
 
 ```text
 rust/core  ·  ts/core  ·  cpp/core                the same kit, in each language
-rust/guest  ·  ts/host                            the guest end · the host end
-cpp/runtime                                       the guest end once more, in C++
+rust/guest  ·  cpp/guest  ·  ts/host               the guest end, in each language · the host end
 rust/conformance  ·  cpp/conformance              a guest in each, and the contract's traces
 ts/conformance                                    the host that runs the traces against them
 spec                                              numbers all of them are generated from

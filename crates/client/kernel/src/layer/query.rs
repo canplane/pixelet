@@ -9,8 +9,11 @@
 //! answer is exact, coarser with the tile it lacked, or nothing and that tile.
 //!
 //! The decision's two forms are these two methods' readers: the first hit
-//! along a direction is a descent over `bounds`, and a value at a point is
-//! `read` of the cell there. No third query is written beside them.
+//! along a direction is a descent over `bound`, and a value at a point is
+//! `read` of the cell there. No third query is written beside them. A
+//! descent carries a cursor from each node to its children, so a step reads
+//! only what is new there; a node asked alone is the same descent folded to
+//! it (`bounds`).
 
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -37,11 +40,24 @@ pub trait Query {
     where
         Self: 'a;
 
-    /// Where anything stands in the node, as its cells at `cell` are read:
-    /// none where nothing does. What is not known is the answer's, not a
-    /// bound's: no third state.
+    /// What a descent carries from a node to its children.
+    type Cursor: Copy;
+
+    /// `node`'s cursor asked alone: the layer's descent folded to it.
+    fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Self::Cursor;
+
+    /// A child's cursor from its parent's; `node` is the child.
+    fn child<const D: usize>(&self, parent: &Self::Cursor, node: Node<D>, cell: Zoom) -> Self::Cursor;
+
+    /// Where anything stands in the node, as its cells at `cell` are read,
+    /// off its cursor: none where nothing does. What is not known is the
+    /// answer's, not a bound's: no third state.
     /// A node in fewer than three axes is the column over the rest.
-    fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>>;
+    fn bound<const D: usize>(&self, at: &Self::Cursor, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>>;
+
+    fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+        self.bound(&self.cursor(node, cell), node, cell)
+    }
 
     /// The node's cells at `cell`, no coarser than the node.
     fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Self::Record<'_>>;

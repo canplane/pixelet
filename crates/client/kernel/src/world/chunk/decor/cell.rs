@@ -25,7 +25,7 @@ use crate::kernel;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::Store;
 use crate::layer::Layer;
-use crate::shell::setting::store::settings_store;
+use crate::setting::store::settings_store;
 use crate::world::chunk::build::draws_as_held;
 use crate::world::chunk::decor::build::{decor_gone_px, decor_sprite_px, variant_extent, DecorBuild, DecorHide, Ground};
 use crate::world::chunk::decor::instance::{decor_groups, DecorScratch, GroupLanes};

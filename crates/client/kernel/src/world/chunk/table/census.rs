@@ -3,7 +3,7 @@
 //! What the table counts for the profiler: chunks by state, and what is held.
 
 use crate::mem::MB;
-use crate::sched::profiler::frame::ZOOMS;
+use crate::profiler::frame::ZOOMS;
 
 use xpute_core::math::scalar::round;
 

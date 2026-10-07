@@ -19,7 +19,7 @@ const ANCHOR_REACH: f64 = 0.08;
 /// Indices into `batch`, in the root frame.
 pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>) {
     let v = view();
-    let eye = v.pose.eye;
+    let eye = v.at().eye;
     let anchor = sea_under_eye();
 
     let mut n = 0usize;

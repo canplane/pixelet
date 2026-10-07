@@ -13,9 +13,12 @@ pub mod layer;
 pub mod mem;
 pub mod model;
 pub mod param;
+pub mod profiler;
 pub mod scene;
 pub mod sched;
+pub mod setting;
 pub mod shell;
+pub mod turn;
 pub mod world;
 
 use crate::billboard::field::Billboards;

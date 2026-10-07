@@ -328,7 +328,8 @@ export const enum Command {
   /** The console stream on or off. */
   PROFILER_LOG = 0x1903,
   /** The profiler where it lies: the reply is the address of READ's words (profiler.json) over the
-   * last `window_ms`, an infinite window being the whole recording, good until the next turn. */
+   * last `window_ms`, the whole recording where it is absent, good until the next turn. A number
+   * past the door is finite, so no window is infinite. */
   PROFILER_READ = 0x1904,
   /** The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn. */
   PROFILER_TAKE = 0x1905,
@@ -805,7 +806,7 @@ export function encode_profiler_log(p: ProfilerLog): U8Array {
 
 /** Command.PROFILER_READ's packet. */
 export interface ProfilerRead {
-  window_ms: f64;
+  window_ms: f64 | null;
 }
 
 export function encode_profiler_read(p: ProfilerRead): U8Array {

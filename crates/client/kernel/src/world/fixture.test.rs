@@ -106,8 +106,13 @@ impl World {
 /// The walk asks cubes alone, and reads nothing.
 impl Query for World {
     type Record<'a> = ();
+    type Cursor = ();
 
-    fn bounds<const D: usize>(&self, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+    fn cursor<const D: usize>(&self, _: Node<D>, _: Zoom) {}
+
+    fn child<const D: usize>(&self, _: &(), _: Node<D>, _: Zoom) {}
+
+    fn bound<const D: usize>(&self, _: &(), (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         match <[i64; 3]>::try_from(&at[..]) {
             Ok(at) => World::bounds(self, (zoom, at), cell),
             Err(_) => Answer::Nothing(Tile::new(LEAF_ZOOM, 0)),

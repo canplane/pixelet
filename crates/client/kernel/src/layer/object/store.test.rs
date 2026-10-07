@@ -59,6 +59,13 @@ impl Rng {
     }
 }
 
+/// A node from a unit to a kilometer wide, within `reach` units of the origin.
+fn some_node(rng: &mut Rng, reach: f64) -> Node<3> {
+    let zoom: Zoom = rng.pick(&[24, 21, 18, 16, 14]);
+    let at = [0, 1, 2].map(|_| ((rng.next() % (2 * reach as u64)) as f64 - reach).div_euclid(units(zoom)) as i64);
+    (zoom, at)
+}
+
 /// Whole cells from a corner, and what the store keeps folded at `zoom`'s
 /// cells, with the corner in that zoom's cells.
 fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
@@ -139,11 +146,10 @@ fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
         cube_at(&mut store, at, rng.pick(&[red, red, AIR, VOID]));
         let boxes = entry_boxes(&store);
         for _ in 0..20 {
-            let side = rng.pick(&[1.0, 7.5, 64.0, 150.0, 1000.0]);
-            let min = [0, 1, 2].map(|_| (rng.next() % 500) as f64 - 250.0);
-            let query = Aabb { min, max: min.map(|v| v + side) };
+            let node = some_node(&mut rng, 250.0);
+            let query = region(node);
             let truth = boxes.iter().filter_map(|b| b.meet(query)).reduce(Aabb::join);
-            let given = store.bound_in(&query);
+            let given = store.bounds(node, node.0).value().flatten().map(|b| b.aabb);
             met += truth.is_some() as u32;
             match (truth, given) {
                 (Some(t), Some(g)) => assert!(g.contains(t) && query.contains(g), "step {step}: {t:?} in {g:?} in {query:?}"),
@@ -173,12 +179,11 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         cube_at(&mut stores[1], turn(at), state);
         cube_at(&mut stores[2], turn(turn(at)), state);
     }
+    let bound = |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).value().flatten().map(|b| b.aabb);
     for _ in 0..500 {
-        let side = rng.pick(&[3.0, 64.0, 100.0, 400.0]);
-        let min = [0, 1, 2].map(|_| (rng.next() % 400) as f64 - 200.0);
-        let query = Aabb { min, max: min.map(|v| v + side) };
-        let given = stores[0].bound_in(&query);
-        assert_eq!(stores[1].bound_in(&turn_box(query)), given.map(turn_box), "{query:?}");
-        assert_eq!(stores[2].bound_in(&turn_box(turn_box(query))), given.map(|b| turn_box(turn_box(b))), "{query:?}");
+        let (zoom, at) = some_node(&mut rng, 200.0);
+        let given = bound(&stores[0], (zoom, at));
+        assert_eq!(bound(&stores[1], (zoom, turn(at))), given.map(turn_box), "{at:?} at z{zoom}");
+        assert_eq!(bound(&stores[2], (zoom, turn(turn(at)))), given.map(|b| turn_box(turn_box(b))), "{at:?} at z{zoom}");
     }
 }

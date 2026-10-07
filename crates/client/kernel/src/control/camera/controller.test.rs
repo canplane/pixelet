@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::serial;
-use crate::shell::setting::store::OrbitObstacleMode;
+use crate::setting::store::OrbitObstacleMode;
 use crate::world::fixture::place;
 use crate::world::view::frame::coord::to_world;
 

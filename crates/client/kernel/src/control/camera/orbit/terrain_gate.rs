@@ -12,7 +12,7 @@ use crate::control::camera::orbit::orbit_eye_offset;
 use crate::control::navigation::support::{in_cell, passage, Passage};
 use crate::layer::Answer;
 use crate::param::EYE_CLEARANCE_U;
-use crate::shell::setting::store::{settings_store, OrbitObstacleMode};
+use crate::setting::store::{settings_store, OrbitObstacleMode};
 use crate::world::query::Access;
 use crate::world::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::zoom::index_of;

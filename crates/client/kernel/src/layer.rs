@@ -7,7 +7,6 @@ mod answer;
 use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Lattice;
-use pxl_spec::space::layer::tile::Tile;
 
 use crate::io::demand::{Category, Phases};
 use crate::io::failure::Failure;
@@ -52,6 +51,4 @@ pub trait Layer: Clone + 'static {
     fn empty() -> Option<Self> {
         None
     }
-
-    fn changed(_p: Tile, _present: bool) {}
 }

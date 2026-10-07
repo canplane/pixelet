@@ -16,12 +16,11 @@ use crate::layer::Layer;
 use crate::layer::{Answer, Query};
 use crate::param::POI_MAJOR_RANK;
 use crate::sched::tick::TickContext;
-use crate::shell::setting::store::settings_store;
+use crate::setting::store::settings_store;
 use crate::world::chunk::Chunk;
 use crate::world::pyramid::Observed as _;
 use crate::world::query::{Access, Detail, Ray};
 use crate::world::view::frame::pose::ndc_to_px;
-use crate::world::view::observation::ground_known;
 use badge::Label;
 use pxl_render::asset::atlas::NO_SLOT;
 use pxl_spec::space::coord::v3::V3;
@@ -35,7 +34,7 @@ use pxl_spec::space::coord::v3::len3;
 use pxl_spec::space::coord::world::REACH;
 use pxl_spec::space::coord::zoom::{count, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{Cell, Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{Cell, LEAF_ZOOM};
 use std::collections::HashSet;
 
 #[derive(Default)]
@@ -49,13 +48,13 @@ struct Placement {
     /// Kept so a settled turn asks the heap for nothing. Each with the scale
     /// it shows at and where in its POI cell that scale is read.
     found: Vec<(Cell, Label, Cell, f64, Shown, V3)>,
-    /// The drawn chunks, the tiles and the heights `found` was read from: an
-    /// eye move that changes none of them casts no ray.
+    /// The drawn chunks `found` was read from: an eye move that changes them
+    /// not, and nothing it reads moved, casts no ray.
     found_for: Option<Found>,
     /// The same, read this turn.
     now: Found,
-    /// Objects were written since `found` was read.
-    objects_written: bool,
+    /// Places, ground or objects moved since `found` was read.
+    moved: bool,
     mounted: Vec<(Chunk, bool, bool)>,
     labeled: Vec<(Label, Pvf3)>,
     instances: Vec<f32>,
@@ -65,12 +64,10 @@ static PLACEMENT: Global<Placement> = Global::new();
 #[derive(Default, PartialEq)]
 struct Found {
     drawn: Vec<Chunk>,
-    tiles: Vec<(Tile, bool)>,
-    terrain: Vec<(Tile, bool)>,
 }
 
-pub fn objects_written() {
-    PLACEMENT.get(Placement::default).objects_written = true;
+pub fn moved() {
+    PLACEMENT.get(Placement::default).moved = true;
 }
 
 /// Every place, or only the prominent: what a cell shows by the units a
@@ -124,9 +121,7 @@ pub fn step(ctx: &mut TickContext) {
     p.now.drawn.clear();
     p.now.drawn.extend(p.mounted.iter().filter(|m| m.1).map(|m| m.0));
     p.now.drawn.sort_unstable();
-    PoiTile::residency().known(&mut p.now.tiles);
-    ground_known(&mut p.now.terrain);
-    let stale = core::mem::take(&mut p.objects_written) | (p.found_for.as_ref() != Some(&p.now));
+    let stale = core::mem::take(&mut p.moved) | (p.found_for.as_ref() != Some(&p.now));
     if stale {
         let now = core::mem::take(&mut p.now);
         p.now = p.found_for.replace(now).unwrap_or_default();

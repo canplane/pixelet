@@ -7,7 +7,7 @@
 
 use crate::param;
 use crate::sched::tick::TickState;
-use crate::shell::setting::store::{settings_store, ResolutionMode};
+use crate::setting::store::{settings_store, ResolutionMode};
 use pxl_render::gpu::api_spec::surface_role;
 use pxl_render::gpu::surface::surfaces;
 use xpute_guest::global::Global;

@@ -11,26 +11,12 @@ import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { td } from "@xpute/core/codec/encoding.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
+import { CATEGORY_NAMES, OUTCOME_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/demand.spec.ts";
 import { kernel_call, kernel_memory } from "@/kernel/shell.ts";
 
-import {
-  CATEGORY_NAMES,
-  CENSUS_TAGS,
-  FRAME,
-  GPU_SPAN_NAMES,
-  LOG,
-  OUTCOME_NAMES,
-  PHASE_NAMES,
-  READ,
-  SPREAD,
-  STEP,
-  STEP_NAMES,
-  SUMMARY,
-  TASK,
-  TASK_PHASE_NAMES,
-  TASK_SUMMARY,
-  WORST,
-} from "./profiler.spec.ts";
+import { CENSUS_TAGS, FRAME, LOG, PHASE_NAMES, READ, SPREAD, STEP, SUMMARY, TASK, TASK_SUMMARY, WORST } from "./profiler.spec.ts";
+import { STEP_NAMES } from "@/kernel/turn/step.spec.ts";
+import { GPU_SPAN_NAMES } from "@/kernel/render/gpu/span.spec.ts";
 import { type Frame, frameAt } from "./lane.ts";
 import { type LongFrame, longFramesSince } from "./long-frame.ts";
 
@@ -216,7 +202,8 @@ interface Read {
   worst: [u32, u32];
 }
 
-function read(windowMs: f64): Read {
+/** Over the last `windowMs`, or the whole recording at null. */
+function read(windowMs: f64 | null): Read {
   const r = u32s(kernel_call(Command.PROFILER_READ, encode_profiler_read({ window_ms: windowMs })), READ.WORDS);
   return {
     summary: words(r[READ.summary_at], r[READ.summary_words]),
@@ -262,7 +249,7 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
 }
 
 export function profilerReportRead(): ProfilerReport {
-  const { summary: s, tasks, worst } = read(Infinity);
+  const { summary: s, tasks, worst } = read(null);
   const peak = section(s, SUMMARY.peak);
   const stepsAt = SUMMARY.steps.AT;
   const steps = Array.from({ length: s[stepsAt + SUMMARY.steps.count] }, (_, i) => {

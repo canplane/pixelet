@@ -8,7 +8,7 @@ use core::panic::Location;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 
-pub use crate::sched::profiler::spec::OutcomeName as Outcome;
+pub use crate::io::spec::OutcomeName as Outcome;
 
 /// Why a task failed, as numbers the summary can count by. A kernel-made
 /// failure carries its source location: EBADMSG alone does not say which

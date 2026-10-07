@@ -87,18 +87,8 @@ impl Occupancy {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Index {
     extent: Cow<'static, [[i16; 2]]>, // lo, hi for each `EXTENT` cell, over this zoom and all finer: a ray above hi misses them
-    coarse: Cow<'static, [Extent]>,   // `extent` joined over each coarser cell: rebuilt from it, never on the wire
+    coarse: Cow<'static, [[i16; 2]]>, // `extent` joined over each coarser cell: rebuilt from it, never on the wire
     pub occupancy: Occupancy,         // which children are tiles: none is asked for that is not
-}
-
-/// A cell's lowest and highest extent and widest single-cell span, of the
-/// index lane's cells or a coarser one's, which is exactly its four quarters' join.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[repr(C)]
-pub struct Extent {
-    pub lo: i16,
-    pub hi: i16,
-    pub span: u16,
 }
 
 /// A partial version's list, beside its tiles: the full version it overlays
@@ -118,29 +108,14 @@ pub fn drawn([lo, hi]: [i16; 2]) -> [i16; 2] {
     [lo.saturating_add(DRAWN_PAST[0]), hi.saturating_add(DRAWN_PAST[1])]
 }
 
-impl Extent {
-    /// One index cell's: its bound widened by `drawn`, its span as the lane holds it.
-    pub fn of(cell: [i16; 2]) -> Extent {
-        let [lo, hi] = drawn(cell);
-        Extent {
-            lo,
-            hi,
-            span: (i32::from(cell[1]) - i32::from(cell[0])).max(0) as u16,
-        }
-    }
-
-    fn join(self, o: Extent) -> Extent {
-        Extent {
-            lo: self.lo.min(o.lo),
-            hi: self.hi.max(o.hi),
-            span: self.span.max(o.span),
-        }
-    }
+/// Two extents as one: the lower of the lows, the higher of the highs.
+pub fn join([lo, hi]: [i16; 2], [o_lo, o_hi]: [i16; 2]) -> [i16; 2] {
+    [lo.min(o_lo), hi.max(o_hi)]
 }
 
 impl Index {
     pub fn new(extent: Vec<[i16; 2]>, occupancy: Occupancy) -> Index {
-        let mut coarse = vec![Extent::default(); COARSE_LANE];
+        let mut coarse = vec![[0; 2]; COARSE_LANE];
         coarse_of(&extent, &mut coarse);
         Index {
             extent: extent.into(),
@@ -153,17 +128,18 @@ impl Index {
         &self.extent
     }
 
-    /// The cell of `across` × `across` index cells at (x, y); `across` a power of two and (x, y) a multiple of it.
-    pub fn over(&self, [x, y]: [u32; 2], across: u32) -> Extent {
-        match across.trailing_zeros() {
-            0 => Extent::of(self.extent[EXTENT.cell_index(x, y) as usize]),
+    /// What is drawn over the cell of `across` × `across` index cells at
+    /// (x, y), widened by `drawn`; `across` a power of two and (x, y) a multiple of it.
+    pub fn over(&self, [x, y]: [u32; 2], across: u32) -> [i16; 2] {
+        drawn(match across.trailing_zeros() {
+            0 => self.extent[EXTENT.cell_index(x, y) as usize],
             j => self.coarse[EXTENT.coarse_index(j, x, y) as usize],
-        }
+        })
     }
 }
 
 /// Each coarser cell from the four under it.
-fn coarse_of(lane: &[[i16; 2]], coarse: &mut [Extent]) {
+fn coarse_of(lane: &[[i16; 2]], coarse: &mut [[i16; 2]]) {
     xpute_core::ensure!(lane.len() == EXTENT_LANE && coarse.len() == COARSE_LANE, ENOTRECOVERABLE);
     let n = EXTENT.tile_cells();
     for j in 1..=n.trailing_zeros() {
@@ -172,10 +148,10 @@ fn coarse_of(lane: &[[i16; 2]], coarse: &mut [Extent]) {
             for bx in (0..n).step_by(side as usize) {
                 let half = side / 2;
                 let quarter = |dx: u32, dy: u32| match j {
-                    1 => Extent::of(lane[EXTENT.cell_index(bx + dx, by + dy) as usize]),
+                    1 => lane[EXTENT.cell_index(bx + dx, by + dy) as usize],
                     _ => coarse[EXTENT.coarse_index(j - 1, bx + dx, by + dy) as usize],
                 };
-                let b = quarter(0, 0).join(quarter(half, 0)).join(quarter(0, half)).join(quarter(half, half));
+                let b = join(join(quarter(0, 0), quarter(half, 0)), join(quarter(0, half), quarter(half, half)));
                 coarse[EXTENT.coarse_index(j, bx, by) as usize] = b;
             }
         }
@@ -241,7 +217,7 @@ pub struct TileRoom {
     pub cells: &'static mut [GroundCell],
     pub ele: &'static mut [i16],
     pub extent: &'static mut [[i16; 2]],
-    pub coarse: &'static mut [Extent],
+    pub coarse: &'static mut [[i16; 2]],
     pub decks: deck::Room,
 }
 

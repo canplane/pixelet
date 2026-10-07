@@ -9,7 +9,7 @@ import { round } from "@xpute/core/math/scalar.ts";
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { EFFECT_NAMES } from "./profiler.spec.ts";
+import { EFFECT_NAMES } from "@/kernel/turn/step.spec.ts";
 import { n1, pct, STARVED_MS, tris, valueText, zoomName, zoomsText } from "./lane.ts";
 import { BOUND, failText } from "./report.ts";
 import type { FrameSummary, Gauge, Spread } from "./view.ts";

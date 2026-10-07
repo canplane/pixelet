@@ -21,7 +21,7 @@ pub fn canonical_to_world(p: &Pvf3, near_x: f64) -> V3 {
 
 /// A canonical point in the world's doubles, on the lap nearest the eye.
 pub fn to_world(p: &Pvf3) -> V3 {
-    canonical_to_world(p, view().pose.eye[0])
+    canonical_to_world(p, view().at().eye[0])
 }
 
 /// Through `project`, the one door into PVF3: X goes round, Y and Z stop at

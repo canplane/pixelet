@@ -48,7 +48,7 @@ fn door() -> &'static Door {
     DOOR.get(|| {
         // SAFETY: the module's memory, which never moves and outlives the door;
         // the ranges are the layout's alone.
-        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, crate::param::MOST_SIGNALS, crate::sched::profiler::record::profiler_note_rings) }
+        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, crate::param::MOST_SIGNALS, crate::profiler::record::profiler_note_rings) }
     })
 }
 
@@ -112,7 +112,7 @@ fn boot(b: &Bracket) {
         }
     }));
     let gpu_stream = lay_out(b);
-    crate::sched::turn::boot();
+    crate::turn::boot();
     let [margin, batch, settle] = quantum_entries(&crate::sched::tick::QUANTUM);
     let entries: [Entry; DIRECTORY_ENTRIES] = [
         (key::SUBMISSION, ring_address(door().submission())),
@@ -152,13 +152,13 @@ fn lay_out(b: &Bracket) -> u32 {
 /// returns when to wake next, in ms (0 for the next frame, NO_WAKE for
 /// none). The first turn boots.
 pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
-    use crate::sched::turn::{take_world_drawn, world_frame_waiting};
+    use crate::turn::{take_world_drawn, world_frame_waiting};
     if section::map().is_none() {
         boot(&bracket());
     }
     let s = state();
     if core::mem::take(&mut s.profiler_taken) {
-        crate::sched::profiler::log::profiler_log_clear();
+        crate::profiler::log::profiler_log_clear();
     }
     crate::door::host::host_rise();
     crate::sched::edge::world_edge().rise(quota_ms);

@@ -14,6 +14,9 @@ pub enum Enums {
 
 struct DataSpec {
     json: &'static str,
+    /// The specs whose names its expressions may read, each name owned by
+    /// one file in scope.
+    uses: &'static [&'static str],
     ts: Option<&'static str>,
     rs: Option<&'static str>,
     module: Option<&'static str>,
@@ -23,9 +26,10 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 14] = [
+const DATA_SPECS: [DataSpec; 17] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
+        uses: &[],
         ts: Some("apps/web/src/config/earth.spec.ts"),
         rs: Some("crates/spec/src/space/coord/earth.spec.rs"),
         module: Some("spec"),
@@ -35,6 +39,7 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "spec/spec/place.json",
+        uses: &[],
         ts: Some("apps/web/src/feature/map/geocode/place.spec.ts"),
         rs: Some("crates/spec/src/place.spec.rs"),
         module: Some("spec"),
@@ -44,6 +49,7 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "xpute/spec/conformance/guest.json",
+        uses: &[],
         ts: Some("xpute/ts/conformance/src/guest.spec.ts"),
         rs: Some("xpute/rust/conformance/src/guest.spec.rs"),
         module: Some("spec"),
@@ -53,42 +59,47 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "xpute/spec/ipc/directory.json",
+        uses: &[],
         ts: Some("xpute/ts/host/src/ipc/directory.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/directory.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: Some(("xpute/cpp/runtime/ipc/directory.spec.hpp", "xpute::directory")),
+        cpp: Some(("xpute/cpp/guest/ipc/directory.spec.hpp", "xpute::directory")),
     },
     DataSpec {
         json: "xpute/spec/ipc/frame.json",
+        uses: &[],
         ts: Some("xpute/ts/host/src/ipc/frame.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/frame.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: Some(("xpute/cpp/runtime/ipc/frame.spec.hpp", "xpute::frame")),
+        cpp: Some(("xpute/cpp/guest/ipc/frame.spec.hpp", "xpute::frame")),
     },
     DataSpec {
         json: "xpute/spec/ipc/ring.json",
+        uses: &[],
         ts: Some("xpute/ts/host/src/ipc/ring.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/ring.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: Some(("xpute/cpp/runtime/ipc/ring.spec.hpp", "xpute::ring")),
+        cpp: Some(("xpute/cpp/guest/ipc/ring.spec.hpp", "xpute::ring")),
     },
     DataSpec {
         json: "xpute/spec/ipc/sys.json",
+        uses: &[],
         ts: Some("xpute/ts/host/src/ipc/sys.spec.ts"),
         rs: Some("xpute/rust/guest/src/ipc/sys.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
-        cpp: Some(("xpute/cpp/runtime/ipc/sys.spec.hpp", "xpute::sys")),
+        cpp: Some(("xpute/cpp/guest/ipc/sys.spec.hpp", "xpute::sys")),
     },
     DataSpec {
         json: "spec/client/kernel/abi/directory.json",
+        uses: &[],
         ts: Some("apps/web/src/kernel/abi/directory.spec.ts"),
         rs: Some("crates/client/kernel/src/abi/directory.spec.rs"),
         module: Some("directory"),
@@ -98,6 +109,7 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "spec/spec/bake/poi_badge.json",
+        uses: &[],
         ts: Some("apps/web/src/feature/search/poi_badge.spec.ts"),
         rs: None,
         module: None,
@@ -107,6 +119,7 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "spec/client/kernel/scene/character/variant.json",
+        uses: &[],
         ts: Some("apps/web/src/feature/character/variant.spec.ts"),
         rs: Some("crates/client/kernel/src/scene/character/variant.spec.rs"),
         module: Some("variant_spec"),
@@ -116,6 +129,7 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "spec/client/render/gpu/api.json",
+        uses: &[],
         ts: Some("apps/web/src/kernel/render/gpu/api.spec.ts"),
         rs: Some("crates/client/render/src/gpu/api.spec.rs"),
         module: Some("api_spec"),
@@ -125,6 +139,7 @@ const DATA_SPECS: [DataSpec; 14] = [
     },
     DataSpec {
         json: "spec/client/kernel/abi/host.json",
+        uses: &[],
         ts: Some("apps/web/src/kernel/abi/host.spec.ts"),
         rs: Some("crates/client/kernel/src/abi/host.spec.rs"),
         module: Some("host"),
@@ -133,16 +148,48 @@ const DATA_SPECS: [DataSpec; 14] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/client/kernel/sched/profiler/profiler.json",
-        ts: Some("apps/web/src/feature/debug/profiler/profiler.spec.ts"),
-        rs: Some("crates/client/kernel/src/sched/profiler/profiler.spec.rs"),
+        json: "spec/client/kernel/io/demand.json",
+        uses: &[],
+        ts: Some("apps/web/src/kernel/io/demand.spec.ts"),
+        rs: Some("crates/client/kernel/src/io/demand.spec.rs"),
         module: Some("spec"),
-        enums: Enums::Named(&["CATEGORY_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES", "STEP_NAMES", "EFFECT_NAMES"]),
+        enums: Enums::Named(&["CATEGORY_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
+        ts_names: None,
+        cpp: None,
+    },
+    DataSpec {
+        json: "spec/client/kernel/turn/step.json",
+        uses: &[],
+        ts: Some("apps/web/src/kernel/turn/step.spec.ts"),
+        rs: Some("crates/client/kernel/src/turn/step.spec.rs"),
+        module: Some("spec"),
+        enums: Enums::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
+        ts_names: None,
+        cpp: None,
+    },
+    DataSpec {
+        json: "spec/client/render/gpu/span.json",
+        uses: &[],
+        ts: Some("apps/web/src/kernel/render/gpu/span.spec.ts"),
+        rs: Some("crates/client/render/src/gpu/span.spec.rs"),
+        module: Some("span_spec"),
+        enums: Enums::Named(&["GPU_SPAN_NAMES"]),
+        ts_names: None,
+        cpp: None,
+    },
+    DataSpec {
+        json: "spec/client/kernel/profiler/profiler.json",
+        uses: &["spec/client/kernel/io/demand.json", "spec/client/kernel/turn/step.json", "spec/client/render/gpu/span.json"],
+        ts: Some("apps/web/src/feature/debug/profiler/profiler.spec.ts"),
+        rs: Some("crates/client/kernel/src/profiler/profiler.spec.rs"),
+        module: Some("spec"),
+        enums: Enums::None,
         ts_names: None,
         cpp: None,
     },
     DataSpec {
         json: "spec/client/kernel/mem/mem.json",
+        uses: &[],
         ts: Some("apps/web/src/kernel/mem/mem.spec.ts"),
         rs: Some("crates/client/kernel/src/mem/mem.spec.rs"),
         module: Some("spec"),
@@ -346,10 +393,39 @@ fn rs_leaf(name: &str, v: &Node, ty: &str, indent: &str, out: &mut Vec<String>, 
     Ok(())
 }
 
+/// The names `json` may read past its own, from the specs it uses: each
+/// laid out over its own uses, a name owned by one file, no use circular.
+fn used(json: &str, path: &mut Vec<&'static str>) -> Result<Vec<(String, Node)>, String> {
+    let d = DATA_SPECS.iter().find(|d| d.json == json).ok_or(format!("{json}: uses a spec that is not listed"))?;
+    if path.contains(&d.json) {
+        return Err(format!("{}: uses itself through {}", d.json, path.join(" → ")));
+    }
+    path.push(d.json);
+    let mut names: Vec<(String, Node)> = Vec::new();
+    for &u in d.uses {
+        let below = used(u, path)?;
+        let Node::Obj(entries) = laid_out(read(u)?, &below)? else {
+            return Err(format!("{u}: not a table"));
+        };
+        for (k, v) in entries.into_iter().filter(|(k, _)| !k.starts_with('$')) {
+            if names.iter().any(|(n, _)| *n == k) {
+                return Err(format!("{}: `{k}` is named in two of the specs it uses", d.json));
+            }
+            names.push((k, v));
+        }
+    }
+    path.pop();
+    Ok(names)
+}
+
 pub fn outputs() -> Result<Vec<Output>, String> {
     let mut outputs = Vec::new();
     for d in &DATA_SPECS {
-        let spec = laid_out(read(d.json)?)?;
+        let uses = used(d.json, &mut Vec::new())?;
+        let spec = laid_out(read(d.json)?, &uses)?;
+        if let Some(k) = spec.named().map(|(k, _)| k).find(|k| uses.iter().any(|(u, _)| u == k)) {
+            return Err(format!("{}: `{k}` is named here and in a spec it uses", d.json));
+        }
         let base = d.json.rsplit('/').next().unwrap_or(d.json);
         let names: Vec<&str> = spec.named().map(|(k, _)| k).collect();
         let head_doc = spec.lines_at("$doc");

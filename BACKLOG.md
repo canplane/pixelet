@@ -13,16 +13,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **How the samples are drawn.** On the iPhone 13 mini, four shapes over the
   same tiles and views: today's boxes, the same as masked faces, a ray a
   pixel, and a bounded observation a cell — what the rule asks for, a cell
-  being an angular footprint and not a sample point. The steps a cast pays
+  being an angular footprint and not a sample point. Each shape is built
+  whole on the CPU and whole on the GPU, one representation either way:
+  CPU or GPU is a question of the whole drawing, never of one kind of
+  thing sent to the other side. The steps a cast pays
   are measured already, and where on the screen they lie
   ([20260928-what-is-drawn-is-what-the-screen-covers.md](./decision/20260928-what-is-drawn-is-what-the-screen-covers.md),
   "the steps, measured").
-  A fifth, from the 0405 checkpoint (0405 entropy): the ground as instanced
-  columns placed on the GPU from a folded tile's heights, no CPU mesh, with
-  the run mesher kept for decks, bores and objects. Counted at 53733c1ca,
-  tests out: 0405's render/terrain and modules/world/terrain about 850
-  lines, world/chunk and the render mesh's chunk_mesher, run and terrain
-  adapter about 5,500.
 
 ## P1
 
@@ -39,6 +36,18 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   its kind's label are still Overture's taxonomy as the search list names it
   (`pxl-geo-spec overture/properties.rs`), where Carto's `amenity-points.mss`
   gives each tag an icon and a color.
+
+- **A tile's key does not name the code that baked it.** A region bake
+  links its `--base` whole and rebakes only the region
+  (`crates/server/geo-bake/src/bin/bake_tiles.rs`); nothing compares the
+  base's bake code, which the manifest records only as a `git_sha`, so a
+  region baked after a change to the drawn surface or the decks sits beside
+  tiles from the old code with no error. The dev cache already keys by the
+  bake binary and the holdings (`crates/server/geo-bake/src/demand.rs`
+  `source_id`); that identity in every manifest, and a region bake refusing
+  a base that differs in anything but holdings, closes it. Which leaves a
+  coverage grow rebakes is the operator's `--region` list, where the
+  coverage could say it.
 
 ## Parked, with the reason on file
 

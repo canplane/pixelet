@@ -45,7 +45,7 @@ fn room() -> TileRoom {
         cells: vec![0; GROUND_LANE].leak(),
         ele: vec![0; ELE_LANE].leak(),
         extent: vec![[0; 2]; EXTENT_LANE].leak(),
-        coarse: vec![Extent::default(); COARSE_LANE].leak(),
+        coarse: vec![[0; 2]; COARSE_LANE].leak(),
         decks: deck::Room {
             starts: vec![0; deck::MAX_DECKS + 1].leak(),
             points: vec![[0; 2]; deck::MAX_POINTS].leak(),
@@ -100,9 +100,8 @@ fn a_block_says_what_its_cells_say() {
                     let lane = index.extent();
                     let cells = (y..y + side).flat_map(|cy| (x..x + side).map(move |cx| lane[EXTENT.cell_index(cx, cy) as usize]));
                     let lo = cells.clone().map(|c| drawn(c)[0]).min().unwrap();
-                    let hi = cells.clone().map(|c| drawn(c)[1]).max().unwrap();
-                    let span = cells.map(|[l, h]| (i32::from(h) - i32::from(l)) as u16).max().unwrap();
-                    assert_eq!(index.over([x, y], side), Extent { lo, hi, span }, "{side} from ({x}, {y})");
+                    let hi = cells.map(|c| drawn(c)[1]).max().unwrap();
+                    assert_eq!(index.over([x, y], side), [lo, hi], "{side} from ({x}, {y})");
                 }
             }
         }

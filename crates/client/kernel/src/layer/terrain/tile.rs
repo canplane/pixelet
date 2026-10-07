@@ -7,9 +7,8 @@
 
 use crate::layer::residency::Residency;
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
-use pxl_spec::bake::format::{decode_terrain_into, Extent, GroundCell, Terrain, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
+use pxl_spec::bake::format::{decode_terrain_into, GroundCell, Terrain, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::tile::Tile;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_guest::mem::base::ptr_at;
@@ -53,12 +52,6 @@ impl Layer for Terrain {
         phases.push(TaskPhaseName::decode_ms, now() - t0);
         Ok(terrain)
     }
-
-    /// The ground under whatever this tile is the finest resident one over
-    /// changes, so chunks compare their sources next turn (`take_changed`).
-    fn changed(_p: Tile, _present: bool) {
-        *CHANGED.get(|| false) = true;
-    }
 }
 
 /// # Safety
@@ -81,7 +74,7 @@ unsafe fn room_of(record: u32) -> TileRoom {
             cells: core::slice::from_raw_parts_mut(ptr_at::<GroundCell>(cells), GROUND_LANE),
             ele: core::slice::from_raw_parts_mut(ptr_at::<i16>(ele), ELE_LANE),
             extent: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(extent), EXTENT_LANE),
-            coarse: core::slice::from_raw_parts_mut(ptr_at::<Extent>(coarse), COARSE_LANE),
+            coarse: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(coarse), COARSE_LANE),
             decks: deck::Room {
                 starts: core::slice::from_raw_parts_mut(ptr_at::<u32>(deck_lane(0)), MAX_DECKS + 1),
                 points: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(deck_lane(1)), MAX_POINTS),
@@ -94,11 +87,4 @@ unsafe fn room_of(record: u32) -> TileRoom {
             },
         }
     }
-}
-
-static CHANGED: Global<bool> = Global::new();
-
-/// Whether the ground anything is drawn from changed since last asked.
-pub fn take_changed() -> bool {
-    core::mem::take(CHANGED.get(|| false))
 }
