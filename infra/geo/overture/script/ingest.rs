@@ -156,15 +156,18 @@ fn run() -> Result<(), String> {
     // row is made by, the projection, `meets`, the columns, makes every table
     // whole, and the extract is cached, so that costs the DB time alone.
     let code = code_id()?;
-    client.batch_execute(CATALOG_SQL).map_err(|e| e.to_string())?;
+    client.batch_execute(&format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{CATALOG_SQL}")).map_err(|e| e.to_string())?;
     if !keyed(&mut client, "overture_catalog", &["node", "file_name"])? {
         return Err("overture_catalog is keyed otherwise than by (node, file_name)".into());
     }
 
     for ty in TYPES {
-        client.batch_execute(&schema(ty, ty.table)).map_err(|e| e.to_string())?;
-        // A table of an older shape is one more identity this run is not.
+        // A table of an older shape, or none, is one more identity this run is
+        // not; DDL on it would build indexes on a table about to be replaced.
         let reshaped = !keyed(&mut client, ty.table, &["gers_id"])?;
+        if !reshaped {
+            client.batch_execute(&indexes(ty, ty.table)).map_err(|e| e.to_string())?;
+        }
         let held = client
             .query("SELECT node, data_date = $2 AND code IS NOT DISTINCT FROM $3 FROM overture_catalog WHERE file_name = $1", &[&ty.table, &release, &code])
             .map_err(|e| e.to_string())?;
@@ -559,11 +562,6 @@ CREATE TABLE IF NOT EXISTS overture_catalog (
 );
 ALTER TABLE overture_catalog ADD COLUMN IF NOT EXISTS code TEXT;
 ";
-
-/// A type's table and its indexes, as the live table is kept.
-fn schema(ty: &Type, t: &str) -> String {
-    format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{}{}", table(ty, t), indexes(ty, t))
-}
 
 fn table(ty: &Type, t: &str) -> String {
     let mut sql = format!("CREATE TABLE IF NOT EXISTS {t} (\n  gers_id TEXT NOT NULL PRIMARY KEY,\n  properties JSONB NOT NULL,\n");
