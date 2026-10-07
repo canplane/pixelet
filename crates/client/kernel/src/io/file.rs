@@ -131,7 +131,7 @@ fn kept_opened(kept: Kept, fd: Fd, res: i32) {
     }
     close(fd);
     // Only its absence says nothing was kept.
-    let file = if res == 0 || res == -(Errno::ENOENT as i32) { KeptFile::None } else { KeptFile::Unreadable };
+    let file = if res == 0 || res == Errno::ENOENT as i32 { KeptFile::None } else { KeptFile::Unreadable };
     kept_read(kept, KeptRead::Read(file));
 }
 
@@ -189,7 +189,7 @@ pub fn write_kept(kept: Kept, bytes: Vec<u8>) {
 /// refused, and the owner hears EFBIG.
 pub fn opened(fd: Fd, res: i32, detail: u32) {
     let Some(&owner) = files().owner(fd) else { return };
-    let res = if res > 0 && res as u32 > MIN_HEAP_BYTES { -(Errno::EFBIG as i32) } else { res };
+    let res = if res > 0 && res as u32 > MIN_HEAP_BYTES { Errno::EFBIG as i32 } else { res };
     match owner {
         Owner::Fetch { key, at_ms } => crate::io::fetch::opened(fd, key, at_ms, res, detail),
         Owner::Model { key } => crate::io::load::model_opened(fd, key, res),
