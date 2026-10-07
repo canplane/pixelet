@@ -83,17 +83,15 @@ pub enum KeptFile {
     /// None was kept, or it was empty.
     None,
     Bytes(Vec<u8>),
-    /// Larger than any heap a device is given: it cannot be read here, and
-    /// must not be written over either.
-    TooLarge,
+    /// There, and not readable here: larger than any heap a device is given,
+    /// or an error other than its absence. It must not be written over.
+    Unreadable,
 }
 
 enum KeptRead {
-    /// The heap refused its room: read again after the heap gives some back,
-    /// never taken for a file that held nothing.
+    /// The heap refused its room: opened again after the heap gives some
+    /// back, never taken for a file that held nothing. No descriptor is kept.
     Refused {
-        fd: Fd,
-        bytes: usize,
         releases: u32,
     },
     /// Filled from the turn after `asked`.
@@ -116,14 +114,8 @@ fn kept_read(kept: Kept, read: KeptRead) {
 fn read_kept(kept: Kept, fd: Fd, bytes: usize) {
     let mut held = Vec::new();
     if held.try_reserve_exact(bytes).is_err() {
-        kept_read(
-            kept,
-            KeptRead::Refused {
-                fd,
-                bytes,
-                releases: heap_stat().releases,
-            },
-        );
+        close(fd);
+        kept_read(kept, KeptRead::Refused { releases: heap_stat().releases });
         return;
     }
     held.resize(bytes, 0);
@@ -133,21 +125,14 @@ fn read_kept(kept: Kept, fd: Fd, bytes: usize) {
 }
 
 fn kept_opened(kept: Kept, fd: Fd, res: i32) {
-    match res {
-        0 => {
-            close(fd);
-            kept_read(kept, KeptRead::Read(KeptFile::None));
-        }
-        r if r > 0 => read_kept(kept, fd, r as usize),
-        r if r == -(Errno::EFBIG as i32) => {
-            close(fd);
-            kept_read(kept, KeptRead::Read(KeptFile::TooLarge));
-        }
-        _ => {
-            close(fd);
-            kept_read(kept, KeptRead::Read(KeptFile::None));
-        }
+    if res > 0 {
+        read_kept(kept, fd, res as usize);
+        return;
     }
+    close(fd);
+    // Only its absence says nothing was kept.
+    let file = if res == 0 || res == -(Errno::ENOENT as i32) { KeptFile::None } else { KeptFile::Unreadable };
+    kept_read(kept, KeptRead::Read(file));
 }
 
 /// What a kept file held, once it is read whole; None until then.
@@ -155,10 +140,10 @@ pub fn take_kept(kept: Kept) -> Option<KeptFile> {
     let all = KEPT.get(Vec::new);
     let at = all.iter().position(|(k, _)| *k == kept)?;
     match &all[at].1 {
-        &KeptRead::Refused { fd, bytes, releases } => {
+        &KeptRead::Refused { releases } => {
             if heap_stat().releases != releases {
                 all.remove(at);
-                read_kept(kept, fd, bytes);
+                open_kept(kept);
             }
             None
         }

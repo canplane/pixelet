@@ -80,29 +80,31 @@ fn keep(blob: String) {
     file::write_kept(Kept::Objects, blob.into_bytes());
 }
 
-/// A missing blob starts the world empty; an unreadable one too. One too
-/// large to read leaves the world unsaved, so it is never written over.
+/// A missing blob starts the world empty. One that cannot be read or decoded
+/// here — too large, an error, a layout this build does not know — leaves the
+/// world unsaved this session, so it is never written over.
 fn loaded() {
     let st = store_state();
     if st.loaded {
         return;
     }
     let blob = match file::take_kept(Kept::Objects) {
-        None | Some(KeptFile::TooLarge) => return,
+        None | Some(KeptFile::Unreadable) => return,
         Some(KeptFile::None) => {
             st.loaded = true;
             return;
         }
         Some(KeptFile::Bytes(blob)) => blob,
     };
-    st.loaded = true;
     if core::str::from_utf8(&blob).map_or(true, |raw| decode(raw).is_err()) {
-        // what decoded before the failure was already read
+        // What decoded before the failure was already read; the blob stays unsaved over.
         let regions = kernel().objects.clear();
         if !regions.is_empty() {
             written(&regions);
         }
+        return;
     }
+    st.loaded = true;
 }
 
 /// A save encodes the whole store, so it is put off to merge a burst of
