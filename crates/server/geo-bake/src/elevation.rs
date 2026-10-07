@@ -235,7 +235,8 @@ impl Raster {
             for c in 0..span {
                 let dist = col0 + c as f64;
                 let (px, py) = (s0.0 + dx * dist, s0.1 + dy * dist);
-                // PostgreSQL rounds half to even; no data is 0.
+                // PostgreSQL rounds half to even. No data is 0, the source's
+                // sea: a shard's apron covers every pad, so none lacks a shard.
                 if let Some(v) = source.sample(px, py) {
                     grid[ele_index(c as u32, (span - 1 - r) as u32)] = round(f64::from(v) * cell_per_m) as i16;
                 }

@@ -22,6 +22,7 @@ fn window(t: f64) -> (i32, f64) {
 }
 
 /// A sample index on the padded grid: past its edge, the edge sample stands.
+/// It picks which sample is read; `bicubic`'s clamp is of the value.
 fn held(i: i32) -> u32 {
     i.clamp(0, ELE_PADDED_SPAN as i32 - 1) as u32
 }
