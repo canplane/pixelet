@@ -1,6 +1,7 @@
-// pxl-kernel/control/camera/approach.rs
+// pxl-kernel/approach.rs
 
-//! One exponential approach for every channel a camera eases. Within `eps`
+//! One exponential approach for everything that eases, the camera's
+//! channels and the companion alike. Within `eps`
 //! it takes the target whole, so it ends rather than asking for frames
 //! forever on a remainder no screen shows.
 

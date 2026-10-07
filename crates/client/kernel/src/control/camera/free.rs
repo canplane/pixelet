@@ -8,7 +8,7 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
 
-use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
+use crate::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::controller::look_domain;
 use crate::control::camera::controller::{camera, eye_world, focus, set_eye_world};
 use crate::control::camera::state::camera_state;

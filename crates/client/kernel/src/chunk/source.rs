@@ -12,6 +12,7 @@ use std::collections::HashMap;
 
 use crate::chunk::build::runs_of;
 use crate::chunk::Chunk as PyramidChunk;
+use crate::layer::object::preview::RenderEdits;
 use crate::layer::object::store::Store;
 use crate::with_parts;
 use pxl_spec::space::coord::world::nearest_box;
@@ -20,22 +21,6 @@ use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use xpute_guest::global::Global;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
-
-/// What the eraser's preview changes in the drawn build only: the pick and
-/// the cell queries still see what it hides, or hover would clear, the hide
-/// lift and the pick hit it again, forever. No revision moves, so saves do
-/// not see the hover.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RenderEdits {
-    /// The placed object hidden, and whether it is drawn in tiers, decor, or
-    /// (already gone) either.
-    pub hide: Option<EntryAt>,
-    pub hide_in: (bool, bool),
-    /// An AIR entry over bare terrain, which has no leaf to hide.
-    pub carve: Option<EntryAt>,
-    /// The scattered decor hidden, by the cell it stands in.
-    pub scattered: Option<[i64; 3]>,
-}
 
 /// The preview the pointer's edit hands the chunks, the one copy of it.
 static PREVIEW: Global<RenderEdits> = Global::new();

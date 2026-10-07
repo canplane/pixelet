@@ -4,6 +4,7 @@
 //! index, since a placement must ask what is already there.
 
 pub mod meta;
+pub mod preview;
 pub mod repository;
 pub mod size;
 pub mod store;

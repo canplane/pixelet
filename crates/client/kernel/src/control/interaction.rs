@@ -5,6 +5,7 @@
 
 pub mod collision;
 pub mod edit;
+pub mod ghost;
 pub mod pick;
 
 use pxl_spec::cell::object::PlaceableCube;

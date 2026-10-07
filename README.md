@@ -213,14 +213,14 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat. The kernel's are named as the chain is:
 
-| Where on the chain | `pxl-kernel` modules                          |
-| ------------------ | --------------------------------------------- |
-| the top            | `turn` `door` `shell`                         |
-| feeding the view   | `control`                                     |
-| the chain          | `scene` `chunk` `view` `query` `layer`        |
-| under everyone     | `io` `sched` `mem` `abi`                      |
-| leaves             | `setting` `model` `decor` `billboard` `param` |
-| beside             | `profiler`                                    |
+| Where on the chain | `pxl-kernel` modules                                     |
+| ------------------ | -------------------------------------------------------- |
+| the top            | `turn` `door` `shell`                                    |
+| over the view      | `control`                                                |
+| the chain          | `scene` `chunk` `view` `query` `layer`                   |
+| under everyone     | `io` `sched` `mem` `abi`                                 |
+| leaves             | `setting` `model` `decor` `billboard` `param` `approach` |
+| beside             | `profiler`                                               |
 
 Two gitignored trees hold what the tree makes, each for one reader: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and `cache/` is what `dev:local` bakes on demand and `decode_tile` writes, deleted at no cost. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 

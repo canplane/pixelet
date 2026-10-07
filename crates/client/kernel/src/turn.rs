@@ -25,12 +25,12 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
 
 use crate::decor::assets::decor_assets_wanted;
+use crate::kernel;
 use crate::layer::earth::Earth;
 use crate::profiler::report::{report_step, set_host_task_ms, set_turn_timing};
 use crate::scene::character::companion::{companion_step, CompanionProps};
 use crate::scene::environment::environment_step;
 use crate::scene::marker::frame_gizmo::frame_gizmo_step;
-use crate::scene::marker::hover_cursor::hover_cursor_step;
 use crate::scene::marker::location_puck::location_puck_step;
 use crate::scene::stage::{take_draw, visible_step};
 use crate::sched::edge::{request_world_tick, world_edge};
@@ -57,7 +57,24 @@ fn companion_props() -> Option<CompanionProps> {
     Some(CompanionProps {
         center: [center[0], center[1]],
         floor: crate::control::navigation::support::floor_of(&focus),
+        azimuth: crate::control::camera::controller::azimuth(),
+        dragging: crate::control::camera::state::camera_state().camera_status == crate::control::camera::state::CameraStatus::Drag,
+        steered: crate::control::camera::input::steering(),
+        following: crate::control::navigation::follow_mode::following(),
     })
+}
+
+/// The tool's ghost, drawn by the scene.
+fn ghost_step() {
+    use crate::control::interaction::ghost::{ghost, Ghost};
+    let changed = kernel().parts().map(|(mut build, _, scene, draw)| match ghost() {
+        Ghost::None => scene.ghost.clear(draw),
+        Ghost::Decor { at, group, rotation, scale } => scene.ghost.set_decor(draw, at, group, rotation as f32, scale as f32),
+        Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(&mut build, draw, at, size, value, rgb, coplanar),
+    });
+    if changed == Some(true) {
+        request_world_tick();
+    }
 }
 
 fn companion_tick(ctx: &mut TickContext) {
@@ -67,7 +84,8 @@ fn companion_tick(ctx: &mut TickContext) {
 fn world_gizmo_tick(_: &mut TickContext) {
     let focus = crate::control::camera::controller::focus();
     let show = settings_store().world_gizmo && focus.is_some();
-    frame_gizmo_step(show, focus);
+    let third_person = crate::control::camera::controller::dist() != 0.0;
+    frame_gizmo_step(show, focus, third_person.then(crate::control::camera::controller::azimuth));
 }
 
 /// The rays a new goal starts from.
@@ -194,8 +212,12 @@ pub fn world_turn() -> f64 {
     effect!(worst, geocode, geocode_fetcher_step(crate::control::camera::controller::focus().map(|c| group_of(&c))));
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, objects, crate::layer::object::repository::step());
-    effect!(worst, edit, crate::control::interaction::edit::pending_step());
-    effect!(worst, hover, hover_cursor_step());
+    effect!(worst, edit, {
+        if crate::chunk::source::preview(crate::control::interaction::edit::pending_step()) {
+            request_world_tick();
+        }
+    });
+    effect!(worst, hover, ghost_step());
     // device_coord is not gated like focus: the puck keeps its last coordinate across a transient none.
     effect!(worst, puck, location_puck_step(off_center().device_coord));
     effect!(worst, settings, crate::setting::store::settings_keep_step());
