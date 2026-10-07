@@ -110,7 +110,7 @@ pub fn stage_render() {
         decor: &decor,
         skins: &skins[..skin_cnt],
         cases: &cases[..case_cnt],
-        sheet: || load_image(Load::Sheet),
+        pack: || load_image(Load::Pack),
         moon: || load_image(Load::Asset(Asset::sky_moon_png)),
         earth: || load_image(Load::Asset(EARTH)),
         earth_tiles: EarthTiles {

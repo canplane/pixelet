@@ -119,7 +119,7 @@ pub struct Layers {
 }
 
 impl Layers {
-    /// Nothing is drawn until the sheet arrives: a flat color is the box's own,
+    /// Nothing is drawn until the pack arrives: a flat color is the box's own,
     /// which the shader already has. Until then every face reads NO_SLOT.
     pub fn new(g: &Gpu) -> Layers {
         let (tiles, _) = plan();
@@ -152,11 +152,11 @@ impl Layers {
         }
     }
 
-    pub fn step(&mut self, g: &Gpu, mips: &Mips, sheet: fn() -> Option<u32>) {
+    pub fn step(&mut self, g: &Gpu, mips: &Mips, pack: fn() -> Option<u32>) {
         if self.loaded {
             return;
         }
-        let Some(image) = sheet() else { return };
+        let Some(image) = pack() else { return };
         let (tiles, table) = plan();
         let texture = object();
         g.image_texture(texture, image);

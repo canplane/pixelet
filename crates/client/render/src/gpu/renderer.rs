@@ -93,7 +93,8 @@ pub struct FrameInput<'a> {
     pub decor: &'a [(u32, Option<u32>, Extent)],
     pub skins: &'a [(u32, u32)],
     pub cases: &'a [(u32, u32, u32)],
-    pub sheet: fn() -> Option<u32>,
+    /// The texture pack's image; none while it loads.
+    pub pack: fn() -> Option<u32>,
     pub moon: fn() -> Option<u32>,
     pub earth: fn() -> Option<u32>,
     pub earth_tiles: EarthTiles<'a>,
@@ -908,7 +909,7 @@ impl Renderer {
         for &(model, image) in input.skins {
             self.skinned.set_skin(g, model, image);
         }
-        self.layers.step(g, &self.mips, input.sheet);
+        self.layers.step(g, &self.mips, input.pack);
         self.moon.step(g, &self.mips, input.moon);
         self.atmosphere.earth_step(g, &self.mips, input.earth);
         let tiles = input.earth_tiles;

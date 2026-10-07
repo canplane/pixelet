@@ -32,24 +32,24 @@ pub enum LoadKind {
     Image = 1,
 }
 
-/// The texture pack's sheet is written beside the asset table, not as a row of it.
+/// The texture pack's image (the ingest's `SHEET`) is written beside the asset table, not as a row of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Load {
     Asset(Asset),
-    Sheet,
+    Pack,
 }
 
 impl Load {
     pub fn number(self) -> u32 {
         match self {
             Load::Asset(a) => a as u32,
-            Load::Sheet => Asset::ALL.len() as u32,
+            Load::Pack => Asset::ALL.len() as u32,
         }
     }
 
     pub fn of(number: u32) -> Option<Load> {
         if number == Asset::ALL.len() as u32 {
-            return Some(Load::Sheet);
+            return Some(Load::Pack);
         }
         u16::try_from(number).ok().and_then(Asset::of).map(Load::Asset)
     }
