@@ -18,7 +18,7 @@ use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::failure::{Failure, Outcome};
 use crate::io::file::{self, Owner};
-use crate::io::sched::{attempt_of, settle, Credit};
+use crate::io::request::{attempt_of, settle, Credit};
 use crate::layer::geocode::store as geocode_store;
 use crate::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::bake::place_tile::{group_key, DICT_OBJECT};

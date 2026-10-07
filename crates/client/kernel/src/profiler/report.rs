@@ -9,7 +9,7 @@ use xpute_core::math::scalar::round;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-use crate::io::sched::pending_count;
+use crate::io::request::pending_count;
 use crate::kernel;
 use crate::layer::{Layer, Query};
 use crate::mem::MB;

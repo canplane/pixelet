@@ -1,4 +1,4 @@
-// pxl-kernel/io/sched.rs
+// pxl-kernel/io/request.rs
 
 //! The kernel's request scheduler: what is wanted (`desired`, replaced whole per
 //! category each turn) and what is out (`attempt`). Ordering, intake and

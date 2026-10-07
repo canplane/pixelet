@@ -1,7 +1,7 @@
 // pxl-kernel/profiler/task.rs
 
 //! A task's row in the profiler's lanes: what ran, when, and what it came
-//! to. The work that ran writes it (io/sched.rs `record`).
+//! to. The work that ran writes it (io/request.rs `record`).
 
 use core::mem::{offset_of, size_of};
 

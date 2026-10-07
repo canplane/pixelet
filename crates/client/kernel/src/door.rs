@@ -84,7 +84,7 @@ fn close_surface(handle: u32) {
 }
 
 fn host_attached(s: &mut State) {
-    crate::io::sched::reset();
+    crate::io::request::reset();
     let open: Vec<u32> = pxl_render::gpu::surface::surfaces().map(|surface| surface.handle).collect();
     for handle in open {
         close_surface(handle);
@@ -187,7 +187,7 @@ static SNAPSHOT: Global<Vec<u8>> = Global::new();
 fn post_shell(s: &mut State) {
     use crate::control::sensor::device_orientation::{take_orientation_commands, OrientationCommand};
     use crate::control::sensor::geolocation::{take_geolocation_commands, GeolocationCommand};
-    use crate::io::sched::{take_started, take_stops};
+    use crate::io::request::{take_started, take_stops};
 
     let sensor = |cmd: Command, sensor: Sensor| raise(cmd, SensorStartSignal::FIELDS, |w| SensorStartSignal { sensor }.write(w));
     for c in take_geolocation_commands() {

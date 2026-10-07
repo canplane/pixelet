@@ -19,7 +19,7 @@ use crate::door::host::decode_image;
 use crate::io::demand::Ask;
 use crate::io::failure::{Failure, Outcome};
 use crate::io::file::{self, Owner};
-use crate::io::sched::{attempt_of, settle, Credit};
+use crate::io::request::{attempt_of, settle, Credit};
 use crate::sched::edge::{request_world_tick, world_edge};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;

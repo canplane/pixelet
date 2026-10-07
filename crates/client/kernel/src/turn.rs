@@ -18,7 +18,7 @@ use crate::control::navigation::follow_mode::follow_mode_step;
 use crate::control::navigation::store::{map_navigation, map_navigation_step};
 use crate::control::sensor::device_orientation::{orientation_watchdog_step, OrientationPlatform};
 use crate::control::sensor::geolocation::geolocation_step;
-use crate::io::sched::{pump, set_credits};
+use crate::io::request::{pump, set_credits};
 use crate::io::text::text_rise;
 use crate::layer::geocode::fetcher::{geocode_fetcher_step, group_of};
 use pxl_spec::bake::format::Terrain;
@@ -193,7 +193,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, puck, location_puck_step(map_navigation().device_coord));
     effect!(worst, settings, crate::setting::store::settings_keep_step());
     // After every producer has spoken, including assets asked for during the turn.
-    effect!(worst, assets, crate::io::sched::declare(crate::io::demand::Category::asset, crate::io::load::load_wants()));
+    effect!(worst, assets, crate::io::request::declare(crate::io::demand::Category::asset, crate::io::load::load_wants()));
     effect!(worst, pump, pump());
     *WORST_EFFECT.get(|| (0.0, None)) = worst;
     now() - at

@@ -123,7 +123,7 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
 - **A layer is a payload and a one-zoom fold, and nothing else.** Which
   tiles are wanted is the observation's demand (`world/pyramid.rs`
   `observe`), which are held residency's (`layer/residency.rs`), when they are
-  fetched the scheduler's (`io/sched.rs`), and a tile is folded only by the
+  fetched the scheduler's (`io/request.rs`), and a tile is folded only by the
   bake's `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not
   data — terrain folds by majority and average, POI by sum.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
