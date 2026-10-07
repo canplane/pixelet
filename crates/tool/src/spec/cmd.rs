@@ -834,7 +834,7 @@ const TARGETS: [Target; 2] = [
         rs_dir: "xpute/rust/guest/src/abi",
         rs_logical: "xpute-guest/abi",
         number: "crate::abi::number",
-        cpp: Some(("xpute/cpp/runtime/abi/cmd.spec.hpp", "xpute::abi")),
+        cpp: Some(("xpute/cpp/guest/abi/cmd.spec.hpp", "xpute::abi")),
     },
     Target {
         json: "spec/client/kernel/abi/cmd.json",

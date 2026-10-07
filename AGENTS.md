@@ -218,7 +218,7 @@ seam is not finished.
 **Every source file opens with a comment naming its logical path** — the
 import-map path (`// @pxl/web/feature/map/ui/view.tsx`), for Rust the package
 as Cargo.toml spells it and the path under `src/` (`// pxl-spec/space/coord/zoom.rs`),
-for C++ the path from its repository's root (`// cpp/runtime/ipc/ring.cpp`); an executable
+for C++ the path from its repository's root (`// cpp/guest/ipc/ring.cpp`); an executable
 script opens on its interpreter. `check:rules` holds every file to it.
 
 **A name's case follows its side.** `PascalCase` for types,

@@ -1,5 +1,5 @@
 {
-  "description": "A kit and a runtime for a guest program inside a host.",
+  "description": "A kit, and a guest and a host end over it, for a program run inside another.",
 
   "workspace": ["ts/core", "ts/host", "ts/conformance"],
   "nodeModulesDir": "auto",
