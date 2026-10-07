@@ -153,6 +153,73 @@ constexpr std::string_view errno_name(Errno e) noexcept {
     return "errno";
 }
 
+// The member `code` is, none for a number no member has.
+constexpr std::optional<Errno> errno_of(std::int32_t code) noexcept {
+    switch (code) {
+    case 0: return Errno::ok;
+    case -1: return Errno::eperm;
+    case -2: return Errno::enoent;
+    case -3: return Errno::esrch;
+    case -4: return Errno::eintr;
+    case -5: return Errno::eio;
+    case -6: return Errno::enxio;
+    case -7: return Errno::e2big;
+    case -8: return Errno::enoexec;
+    case -9: return Errno::ebadf;
+    case -10: return Errno::echild;
+    case -11: return Errno::eagain;
+    case -12: return Errno::enomem;
+    case -13: return Errno::eacces;
+    case -14: return Errno::efault;
+    case -16: return Errno::ebusy;
+    case -17: return Errno::eexist;
+    case -18: return Errno::exdev;
+    case -19: return Errno::enodev;
+    case -20: return Errno::enotdir;
+    case -21: return Errno::eisdir;
+    case -22: return Errno::einval;
+    case -23: return Errno::enfile;
+    case -24: return Errno::emfile;
+    case -25: return Errno::enotty;
+    case -27: return Errno::efbig;
+    case -28: return Errno::enospc;
+    case -29: return Errno::espipe;
+    case -30: return Errno::erofs;
+    case -31: return Errno::emlink;
+    case -32: return Errno::epipe;
+    case -33: return Errno::edom;
+    case -34: return Errno::erange;
+    case -38: return Errno::enosys;
+    case -71: return Errno::eproto;
+    case -74: return Errno::ebadmsg;
+    case -75: return Errno::eoverflow;
+    case -90: return Errno::emsgsize;
+    case -95: return Errno::enotsup;
+    case -84: return Errno::eilseq;
+    case -98: return Errno::eaddrinuse;
+    case -99: return Errno::eaddrnotavail;
+    case -100: return Errno::enetdown;
+    case -101: return Errno::enetunreach;
+    case -102: return Errno::enetreset;
+    case -103: return Errno::econnaborted;
+    case -104: return Errno::econnreset;
+    case -105: return Errno::enobufs;
+    case -106: return Errno::eisconn;
+    case -107: return Errno::enotconn;
+    case -108: return Errno::eshutdown;
+    case -109: return Errno::etoomanyrefs;
+    case -110: return Errno::etimedout;
+    case -111: return Errno::econnrefused;
+    case -112: return Errno::ehostdown;
+    case -113: return Errno::ehostunreach;
+    case -114: return Errno::ealready;
+    case -115: return Errno::einprogress;
+    case -125: return Errno::ecanceled;
+    case -131: return Errno::enotrecoverable;
+    }
+    return std::nullopt;
+}
+
 // A result as a pair, as Rust's ErrnoResult is: the errno, and the value
 // where there is one.
 template <class T> using ErrnoResult = std::pair<Errno, std::optional<T>>;

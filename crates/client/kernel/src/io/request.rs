@@ -331,7 +331,7 @@ fn record(a: &Attempt, at: f64, outcome: Outcome, phases: Option<Phases>, fail: 
             start_ms: a.start_ms,
             end_ms: at,
             outcome: outcome as u32 as f64,
-            fail: fail.errno as f64,
+            fail: f64::from(fail.errno as i32),
             detail: fail.detail as f64,
             ..TaskRow::default()
         };

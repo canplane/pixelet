@@ -79,6 +79,75 @@ pub enum Errno {
     ENOTRECOVERABLE = -131, // State not recoverable: an invariant the code stands on does not hold
 }
 
+impl Errno {
+    /// The member `code` is, None for a number no member has.
+    pub const fn of(code: i32) -> Option<Errno> {
+        match code {
+            0 => Some(Errno::OK),
+            -1 => Some(Errno::EPERM),
+            -2 => Some(Errno::ENOENT),
+            -3 => Some(Errno::ESRCH),
+            -4 => Some(Errno::EINTR),
+            -5 => Some(Errno::EIO),
+            -6 => Some(Errno::ENXIO),
+            -7 => Some(Errno::E2BIG),
+            -8 => Some(Errno::ENOEXEC),
+            -9 => Some(Errno::EBADF),
+            -10 => Some(Errno::ECHILD),
+            -11 => Some(Errno::EAGAIN),
+            -12 => Some(Errno::ENOMEM),
+            -13 => Some(Errno::EACCES),
+            -14 => Some(Errno::EFAULT),
+            -16 => Some(Errno::EBUSY),
+            -17 => Some(Errno::EEXIST),
+            -18 => Some(Errno::EXDEV),
+            -19 => Some(Errno::ENODEV),
+            -20 => Some(Errno::ENOTDIR),
+            -21 => Some(Errno::EISDIR),
+            -22 => Some(Errno::EINVAL),
+            -23 => Some(Errno::ENFILE),
+            -24 => Some(Errno::EMFILE),
+            -25 => Some(Errno::ENOTTY),
+            -27 => Some(Errno::EFBIG),
+            -28 => Some(Errno::ENOSPC),
+            -29 => Some(Errno::ESPIPE),
+            -30 => Some(Errno::EROFS),
+            -31 => Some(Errno::EMLINK),
+            -32 => Some(Errno::EPIPE),
+            -33 => Some(Errno::EDOM),
+            -34 => Some(Errno::ERANGE),
+            -38 => Some(Errno::ENOSYS),
+            -71 => Some(Errno::EPROTO),
+            -74 => Some(Errno::EBADMSG),
+            -75 => Some(Errno::EOVERFLOW),
+            -90 => Some(Errno::EMSGSIZE),
+            -95 => Some(Errno::ENOTSUP),
+            -84 => Some(Errno::EILSEQ),
+            -98 => Some(Errno::EADDRINUSE),
+            -99 => Some(Errno::EADDRNOTAVAIL),
+            -100 => Some(Errno::ENETDOWN),
+            -101 => Some(Errno::ENETUNREACH),
+            -102 => Some(Errno::ENETRESET),
+            -103 => Some(Errno::ECONNABORTED),
+            -104 => Some(Errno::ECONNRESET),
+            -105 => Some(Errno::ENOBUFS),
+            -106 => Some(Errno::EISCONN),
+            -107 => Some(Errno::ENOTCONN),
+            -108 => Some(Errno::ESHUTDOWN),
+            -109 => Some(Errno::ETOOMANYREFS),
+            -110 => Some(Errno::ETIMEDOUT),
+            -111 => Some(Errno::ECONNREFUSED),
+            -112 => Some(Errno::EHOSTDOWN),
+            -113 => Some(Errno::EHOSTUNREACH),
+            -114 => Some(Errno::EALREADY),
+            -115 => Some(Errno::EINPROGRESS),
+            -125 => Some(Errno::ECANCELED),
+            -131 => Some(Errno::ENOTRECOVERABLE),
+            _ => None,
+        }
+    }
+}
+
 // Result pair: (errno, data)
 //
 // Conventions:

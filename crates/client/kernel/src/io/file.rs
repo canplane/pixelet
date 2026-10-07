@@ -11,7 +11,7 @@ use pxl_spec::bake::place_tile::DICT_OBJECT;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::abi::host::{root, OBJECTS_PATH, SETTINGS_PATH};
-use crate::door::host::{heap_stat, sys, turn};
+use crate::door::host::{answered, heap_stat, sys, turn};
 use crate::io::load::LOADS;
 use crate::io::request::Credit;
 use crate::mem::spec::MIN_HEAP_BYTES;
@@ -195,8 +195,8 @@ pub enum Opened {
     Bytes(u32),
     /// No such file; the descriptor is closed.
     Absent,
-    /// Every other failure, as the host's negative errno; the descriptor is closed.
-    Failed { errno: i32, detail: u32 },
+    /// Every other failure; the descriptor is closed.
+    Failed { errno: Errno, detail: u32 },
 }
 
 /// `res` is the file's size, or a negative errno. A file larger than the heap
@@ -204,11 +204,11 @@ pub enum Opened {
 /// refused, and the owner hears EFBIG.
 pub fn opened(fd: Fd, res: i32, detail: u32) {
     let Some(&owner) = files().owner(fd) else { return };
-    let opened = match res {
-        n if n >= 0 && n as u32 > MIN_HEAP_BYTES => Opened::Failed { errno: Errno::EFBIG as i32, detail },
-        n if n >= 0 => Opened::Bytes(n as u32),
-        n if n == Errno::ENOENT as i32 => Opened::Absent,
-        errno => Opened::Failed { errno, detail },
+    let opened = match answered(res) {
+        Ok(n) if n > MIN_HEAP_BYTES => Opened::Failed { errno: Errno::EFBIG, detail },
+        Ok(n) => Opened::Bytes(n),
+        Err(Errno::ENOENT) => Opened::Absent,
+        Err(errno) => Opened::Failed { errno, detail },
     };
     if !matches!(opened, Opened::Bytes(_)) {
         close(fd);

@@ -244,7 +244,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::IMAGE_DECODED => {
             let p = abi::ImageDecoded::read(packet(pkt)?)?;
-            crate::io::load::image_decoded(p.image, p.res);
+            crate::io::load::image_decoded(p.image, crate::door::host::answered(p.res));
             Ok(Some(0))
         }
         Command::GPU_READY => {

@@ -216,12 +216,12 @@ pub fn images_lost() {
 }
 
 /// A file the device cannot decode is the asset's own failure, so it is final.
-pub fn image_decoded(image: u32, res: i32) {
+pub fn image_decoded(image: u32, decoded: Result<u32, Errno>) {
     let l = loader();
     let Some(n) = (0..LOADS).find(|&n| matches!(l.image[n], Some(Entry::Arrived(h, _)) if h == image)) else {
         return;
     };
-    l.image[n] = Some(if res == 0 { Entry::Ready(image) } else { Entry::Failed });
+    l.image[n] = Some(if decoded.is_ok() { Entry::Ready(image) } else { Entry::Failed });
     settled();
     request_world_tick();
 }

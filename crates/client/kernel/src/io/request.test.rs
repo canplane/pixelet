@@ -72,7 +72,7 @@ fn ok<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
 
 fn failed<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
     let fail = Failure {
-        errno: Errno::ENETUNREACH as i32,
+        errno: Errno::ENETUNREACH,
         ..Failure::default()
     };
     l.settle(key, Outcome::error, None, fail, at);

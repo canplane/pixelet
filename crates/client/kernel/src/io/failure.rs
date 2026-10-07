@@ -13,18 +13,29 @@ pub use crate::io::spec::OutcomeName as Outcome;
 /// Why a task failed, as numbers the summary can count by. A kernel-made
 /// failure carries its source location: EBADMSG alone does not say which
 /// rule a body broke.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Failure {
-    pub errno: i32,
+    pub errno: Errno,
     pub detail: u16,
     pub at: Option<&'static Location<'static>>,
+}
+
+/// No failure: what a run that ended well records.
+impl Default for Failure {
+    fn default() -> Failure {
+        Failure {
+            errno: Errno::OK,
+            detail: 0,
+            at: None,
+        }
+    }
 }
 
 impl From<Errno> for Failure {
     #[track_caller]
     fn from(errno: Errno) -> Failure {
         Failure {
-            errno: errno as i32,
+            errno,
             detail: 0,
             at: Some(Location::caller()),
         }
@@ -34,7 +45,7 @@ impl From<Errno> for Failure {
 impl From<MarshalError> for Failure {
     fn from(err: MarshalError) -> Failure {
         Failure {
-            errno: err.errno as i32,
+            errno: err.errno,
             detail: 0,
             at: Some(err.at),
         }
@@ -44,9 +55,9 @@ impl From<MarshalError> for Failure {
 impl fmt::Display for Failure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match (self.errno, self.detail) {
-            (0, _) => Ok(()),
-            (errno, 0) => write!(f, "errno {errno}"),
-            (errno, detail) => write!(f, "errno {errno} {detail}"),
+            (Errno::OK, _) => Ok(()),
+            (errno, 0) => write!(f, "errno {}", errno as i32),
+            (errno, detail) => write!(f, "errno {} {detail}", errno as i32),
         }
     }
 }
