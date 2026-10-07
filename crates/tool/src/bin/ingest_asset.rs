@@ -6,6 +6,7 @@
 //!
 //!   deno task ingest:asset
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -77,10 +78,26 @@ fn run() -> Result<(), String> {
     walk(&asset_dir, &asset_dir, &mut files)?;
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
+    // A look's top ships drawn toward its Carto color; a side, a bottom and a block are not looks.
+    let slots = pack::load(&asset_dir.join("cube"))?;
+    let carto = pxl_tool::spec::cell::ground_colors()?;
+    let toward: BTreeMap<String, u32> = slots
+        .iter()
+        .filter_map(|i| match &i.slot {
+            pack::Slot::Top { channel, ty } if channel != "block" => carto.get(ty).map(|&c| (format!("cube/{}", i.file), c)),
+            _ => None,
+        })
+        .collect();
+
     let mut rows: Vec<Row> = Vec::with_capacity(files.len());
+    let mut shipped: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     let mut total: u64 = 0;
     for (rel, path) in &files {
-        let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let read = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let bytes = match toward.get(rel) {
+            Some(&color) => pack::toward_carto_png(&read, color).map_err(|e| format!("{rel}: {e}"))?,
+            None => read,
+        };
         let is_model = rel.ends_with(".glb");
         let name = named(rel, &hex(&bytes));
         let extent = if is_model { Some(glb::extent(&bytes).map_err(|e| format!("{rel}: {e}"))?) } else { None };
@@ -96,6 +113,9 @@ fn run() -> Result<(), String> {
             bytes: bytes.len() as u64,
             extent,
         });
+        if rel.starts_with("cube/") {
+            shipped.insert(rel.clone(), bytes);
+        }
     }
 
     let tiles: Vec<String> = rows
@@ -103,7 +123,6 @@ fn run() -> Result<(), String> {
         .filter(|r| r.path.ends_with(".png") && (r.path.starts_with("cube/terrain/") || r.path.starts_with("cube/block/")))
         .map(|r| r.path.clone())
         .collect();
-    let slots = pack::load(&asset_dir.join("cube"))?;
     let tile_slots = tiles
         .iter()
         .map(|t| {
@@ -118,16 +137,7 @@ fn run() -> Result<(), String> {
         return Err(format!("{} names {}, which is not under asset/cube", i.label, i.file));
     }
     let faces = table::faces(&tile_slots, &pxl_tool::spec::cell::catalog()?)?;
-    // A look's top is drawn toward its Carto color; a side, a bottom and a block are not looks.
-    let carto = pxl_tool::spec::cell::ground_colors()?;
-    let toward: Vec<Option<u32>> = tile_slots
-        .iter()
-        .map(|slot| match slot {
-            pack::Slot::Top { channel, ty } if channel != "block" => carto.get(ty).copied(),
-            _ => None,
-        })
-        .collect();
-    let composed = pack::compose(&asset_dir, &tiles, &toward)?;
+    let composed = pack::compose(&tiles.iter().map(|t| (t.clone(), shipped[t].as_slice())).collect::<Vec<_>>())?;
     let image_name = named("cube/pack.webp", &hex(&composed.bytes));
     let at = out_dir.join(&image_name);
     std::fs::create_dir_all(at.parent().ok_or("the pack has a parent")?).map_err(|e| e.to_string())?;
