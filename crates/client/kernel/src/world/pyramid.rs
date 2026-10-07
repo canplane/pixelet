@@ -17,6 +17,7 @@ use xpute_guest::global::Global;
 use crate::control::camera::controller::units_per_px_at;
 use crate::io::demand::Category;
 use crate::io::fetch::{body, next_tile, release, tile_settled, TileArrival};
+use crate::io::sched::attempt_of;
 use crate::layer::earth::{self, Earth};
 use crate::layer::poi::MAJOR_UNITS_PER_PX;
 use crate::layer::Layer;
@@ -387,6 +388,11 @@ pub fn admit_arrived() {
             return;
         };
         first = false;
+        // A key the request scheduler no longer holds is one a reset forgot.
+        if attempt_of(key).is_none() {
+            release(block);
+            continue;
+        }
         let result = match (category, block) {
             (Category::terrain, block) => arrived::<Terrain>(tile, block, &mut phases),
             (Category::poi, block) => arrived::<PoiTile>(tile, block, &mut phases),
