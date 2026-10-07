@@ -74,9 +74,12 @@ the release changes; the ingest then puts each feature in its shard.
 ### GEDTM30 v1.2 (OpenGeoHub / OpenLandMap)
 
 One global Cloud-Optimized GeoTIFF, each shard warped straight out of the
-remote file over HTTP range requests onto one grid: the shard's own edges and
-the stride the bake samples elevation at (z20, `TILE_ELE_SPAN` to a leaf), so
-the shards meet without a seam and a bake's sample is a pixel. There is no
+remote file over HTTP range requests onto one grid: the shard's edges grown by
+its apron, out to whole blocks of the grid (`BLOCK`, `pxl-geo-bake
+elevation.rs`), and the stride the bake samples elevation at (z20,
+`TILE_ELE_SPAN` to a leaf), so the shards meet without a seam and a bake's
+sample is a pixel. A block is stored once, by its place on the grid: where two
+aprons cover it, both warps give the same samples. There is no
 raw-file staging step and no portal page to click through.
 
 It is a bare-earth DTM: ground elevation carries no building or canopy height.
@@ -194,13 +197,15 @@ Bash, `envsubst` and GDAL, driven by `metadata.json`:
 1. **Schema.** `init/01_elevation_schema.sql`, which creates the raster and
    catalog tables if they are missing.
 2. **The shards.** `elevation_shards` (pxl-geo-bake) prints each published
-   shard: its name, its EPSG:3857 edges and the bake's stride.
+   shard: its name, its EPSG:3857 edges with its apron, the bake's stride and
+   the block.
 3. **Crop and reproject.** `gdalwarp` inside the GDAL image reads the remote
-   COG through `/vsicurl/` and writes the shard's edges at that stride, in
+   COG through `/vsicurl/` and writes those edges at that stride, in
    EPSG:3857 with DEFLATE, to `warped/<shard>.tif`.
-4. **Ingest.** `raster2pgsql -a -F -t 256x256` piped into `psql`: the shard's
-   raster in 256×256 tiles, each carrying its file's name, then its catalog
-   row.
+4. **Ingest.** `raster2pgsql -a -t` at the block, into `elevation_stage`, then
+   each block onto the grid by its place, written over where it already is,
+   then the shard's catalog row. Nothing is deleted: a neighbour may read a
+   block a shard's apron shares.
 
 ## 7. Backup
 

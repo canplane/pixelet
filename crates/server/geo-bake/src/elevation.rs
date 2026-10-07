@@ -18,6 +18,11 @@ use xpute_core::math::scalar::round;
 
 const HELD: usize = 512;
 
+/// A side of the raster's blocks, in samples: the ingest cuts its warps into
+/// them (`raster2pgsql -t`), and one global grid of them is what the bake
+/// finds a sample's block by.
+pub const BLOCK: u32 = 256;
+
 // The padded samples and the resample's two strides past them stay in a leaf.
 const _: () = assert!(ELE_PAD + 2 <= TILE_ELE_SPAN, "a tile's elevation reads past its shard's apron");
 
