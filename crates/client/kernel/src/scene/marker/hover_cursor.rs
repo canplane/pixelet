@@ -15,19 +15,20 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
-use crate::chunk::decor::build::user_decor_pick;
-use crate::chunk::decor::instance::NO_ENTRY;
-use crate::chunk::decor::kind::kind_for;
-use crate::chunk::decor::kind_assets::decor_assets_for;
 use crate::control::interaction::edit::{pending, restores_scattered, Pending};
 use crate::control::interaction::{holding, hover, ActiveTool};
+use crate::decor::assets::decor_assets_for;
 use crate::kernel;
+use crate::layer::instance::Meta;
+use crate::layer::object::meta::user_decor_pick;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryKind;
 use crate::query::World;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::settings_store;
 use crate::Build;
+use pxl_spec::cell::decor::DecorKind;
+use pxl_spec::cell::DecorId;
 
 enum Ghost {
     None,
@@ -73,7 +74,7 @@ pub fn hover_cursor_step() {
         (_, Some(EntryKind::Decor { decor_id })) => Some(decor_id),
         _ => None,
     };
-    let decor_kind = decor_id.and_then(kind_for);
+    let decor_kind = decor_id.map(DecorKind::of);
     let decor_assets = decor_kind.and_then(decor_assets_for);
 
     let decor_pick_i = match (active_tool, &hovered_object) {
@@ -88,7 +89,10 @@ pub fn hover_cursor_step() {
         _ => None,
     };
     let decor_pick = match (decor_kind, decor_pick_i, restored) {
-        (Some(_), _, Some(d)) => Some((d.variant, d.rotation, d.scale)),
+        (Some(_), _, Some(d)) => {
+            let Meta::Decor(m) = d.meta;
+            Some((m.variant, m.rotation, m.scale))
+        }
         (Some(b), Some(i), None) => {
             let (variant, rotation) = user_decor_pick(i, b.variant_count());
             Some((variant, rotation, 1.0))
@@ -109,11 +113,14 @@ pub fn hover_cursor_step() {
     // while the cursor is on it.
     let coplanar_with_terrain = !use_object_style;
 
-    let scattered_ghost = hover.scattered.filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser)).map(|s| Ghost::Decor {
-        at: s.at,
-        group: s.group,
-        rotation: s.rotation,
-        scale: s.scale,
+    let scattered_ghost = hover.scattered.filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser)).and_then(|s| {
+        let (Meta::Decor(m), kind) = (s.meta, DecorKind::of(DecorId::of(s.id)?));
+        Some(Ghost::Decor {
+            at: s.at,
+            group: kind.first_group() + m.variant,
+            rotation: m.rotation,
+            scale: m.scale,
+        })
     });
     let ghost = match (scattered_ghost, hovered, blocked) {
         (Some(g), _, _) => g,
@@ -212,12 +219,12 @@ impl GhostDraw {
         if self.held.as_ref().is_some_and(|h| h.shape == shape) {
             return moved;
         }
-        // One group of one: five float lanes, flags, band, pos, and the index list.
-        let bytes = 9 * 4;
+        // One group of one: five float lanes, its flags, and the index list.
+        let bytes = 7 * 4;
         let Some(block) = self.replace(draw, shape, bytes) else { return true };
         // SAFETY: as for the box.
-        let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), 9) };
-        m.copy_from_slice(&[0f32.to_bits(), 0f32.to_bits(), 0f32.to_bits(), rotation.to_bits(), scale.to_bits(), 0, NO_ENTRY, 0, 0]);
+        let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), 7) };
+        m.copy_from_slice(&[0f32.to_bits(), 0f32.to_bits(), 0f32.to_bits(), rotation.to_bits(), scale.to_bits(), 0, 0]);
         self.upload(draw, 0, 0);
         true
     }
@@ -259,7 +266,7 @@ impl GhostDraw {
                 let unit = f64::from_bits(size_bits) as f32;
                 draw.draw_in(pipeline, h.handle, 1, 0, t, GHOST_OPACITY, unit, h.heights.step as f32);
             }
-            Shape::Decor { group, .. } => draw.draw_instances(PIPELINE_GHOST_DECOR, h.handle, group, 1, [0, 1, 8], t, GHOST_OPACITY),
+            Shape::Decor { group, .. } => draw.draw_instances(PIPELINE_GHOST_DECOR, h.handle, group, 1, [0, 1, 6], t, GHOST_OPACITY),
         }
     }
 }

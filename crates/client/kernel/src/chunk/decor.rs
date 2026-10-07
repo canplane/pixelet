@@ -4,8 +4,4 @@
 
 pub mod build;
 pub mod cell;
-pub mod hit;
 pub mod instance;
-pub mod kind;
-pub mod kind_assets;
-pub mod scatter;

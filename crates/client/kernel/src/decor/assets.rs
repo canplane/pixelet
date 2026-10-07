@@ -1,22 +1,22 @@
-// pxl-kernel/chunk/decor/kind_assets.rs
+// pxl-kernel/decor/assets.rs
 
 //! Every decor kind's loaded models. A model is registered with the scheduler
-//! as it arrives, so the eraser's hit test and the renderer read the same
-//! lanes. A skin is the load cache's (`load_image`), asked of it where read.
+//! as it arrives, so the pick (`decor/strike.rs`) and the renderer read the
+//! same mesh. A skin is the load cache's (`load_image`), asked of it where read.
 
 use pxl_spec::asset::ingested::Asset;
 use xpute_guest::sched::edge::{notified, yield_if_spent, Notify};
 
-use crate::chunk::decor::kind::{Kind, KINDS};
 use crate::io::host::heap_stat;
 use crate::io::load::{load_failed, load_gltf, load_image, take_settled, Load};
 use crate::model::asset::register_model;
 use crate::sched::edge::{request_world_tick, world_edge};
+use pxl_spec::cell::decor::{DecorKind, KINDS};
 use xpute_guest::global::Global;
 
 #[derive(Clone)]
 pub struct KindAssets {
-    pub kind: &'static Kind,
+    pub kind: &'static DecorKind,
     /// None while it loads.
     pub models: Vec<Option<u32>>,
 }
@@ -55,7 +55,7 @@ fn settle(entries: &mut [KindAssets], asset: Asset, model: u32) {
 
 fn store() -> &'static mut Store {
     STORE.get(|| {
-        let entry = |kind: &&'static Kind| KindAssets {
+        let entry = |kind: &'static DecorKind| KindAssets {
             kind,
             models: vec![None; kind.variants.len()],
         };
@@ -115,6 +115,6 @@ pub fn kind_assets() -> &'static [KindAssets] {
     &store().entries
 }
 
-pub fn decor_assets_for(kind: &Kind) -> Option<&'static KindAssets> {
-    kind_assets().iter().find(|entry| entry.kind.seed.tag == kind.seed.tag)
+pub fn decor_assets_for(kind: &DecorKind) -> Option<&'static KindAssets> {
+    kind_assets().iter().find(|entry| entry.kind.decor == kind.decor)
 }

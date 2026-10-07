@@ -13,14 +13,16 @@ use xpute_core::status::errno::Errno;
 
 use crate::layer::object::store::Cells;
 
+use super::decor::Decor;
 use crate::kernel;
-use crate::layer::object::store::Store;
+use crate::layer::object::store::{Store, AIR};
 use crate::layer::residency::Residency;
 use crate::layer::terrain::Source;
 use crate::layer::Answer;
 use crate::layer::Layer as _;
 use crate::layer::{Bound, Query};
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::camera::grid::Tau;
 
 /// The world's query: the resident ground and the placed objects, read
 /// as one.
@@ -28,6 +30,8 @@ use pxl_spec::bake::format::Terrain;
 pub struct World<'a> {
     pub(super) terrain: &'a Residency<Terrain>,
     pub(super) objects: &'a Store,
+    /// How decor is struck; none, and a ray passes through decor.
+    pub(super) decor: Option<Decor<'a>>,
     pub(super) visits: Option<&'a std::cell::Cell<u64>>,
 }
 
@@ -36,11 +40,23 @@ impl World<'static> {
         let objects: &'static Store = &kernel().objects;
         World::new(Terrain::residency(), objects)
     }
+
+    /// As `now`, and decor is struck too, where the chunks drawing at `tau`
+    /// hold it: the pointer's pick, which alone asks what a decor thing is.
+    pub fn striking_decor(self, tau: Tau) -> World<'static> {
+        let decor = Decor { models: &kernel().models, tau };
+        World { decor: Some(decor), ..self }
+    }
 }
 
 impl<'a> World<'a> {
     pub fn new(terrain: &'a Residency<Terrain>, objects: &'a Store) -> World<'a> {
-        World { terrain, objects, visits: None }
+        World {
+            terrain,
+            objects,
+            decor: None,
+            visits: None,
+        }
     }
 
     pub fn counting(self, visits: &'a std::cell::Cell<u64>) -> World<'a> {
@@ -100,5 +116,23 @@ impl Query for World<'_> {
             // Objects are all resident: their answer is always exact.
             objects: objects.or_bug(Errno::ENOTRECOVERABLE),
         })
+    }
+}
+
+/// What the objects hold over a ground cell, as the composer reads them: at
+/// a leaf's cells whether anything is held, over a fold what it folds to.
+pub enum Over {
+    Leaf { held: bool },
+    Folded(Option<u32>),
+}
+
+/// Whether the objects over a ground cell cover what the ground grows there,
+/// so it is neither drawn nor struck: at a leaf's cells anything held does,
+/// air included, so erasing a grown tree is placing air over it; over a fold
+/// only a fill does.
+pub fn covers(over: Over) -> bool {
+    match over {
+        Over::Leaf { held } => held,
+        Over::Folded(state) => state.is_some_and(|s| s != AIR),
     }
 }

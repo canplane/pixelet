@@ -4,7 +4,9 @@
 //! is what is on the screen about the eye; and what a hit means for a
 //! placement or an erase.
 
+use crate::layer::instance::{Instance, Source};
 use pxl_spec::bake::constant::OBJECT_FINEST;
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
@@ -75,11 +77,11 @@ pub fn world_struck_corner(hit: &Hit, size: f64) -> Pvf3 {
     world_to_canonical(&out)
 }
 
-/// Decor is never resolved here; it paints no voxel and has its own hit test.
+/// The placed object struck: a cube, or a decor someone placed.
 pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
     match hit.struck {
-        Struck::Object(at) => get_placed_object(at),
-        Struck::Ground | Struck::Objects => None,
+        Struck::Object(at) | Struck::Decor(Instance { source: Source::Object(at), .. }) => get_placed_object(at),
+        Struck::Ground | Struck::Objects | Struck::Decor(_) => None,
     }
 }
 
@@ -89,14 +91,15 @@ pub struct PickResult {
 }
 
 /// In the root frame, from the eye.
-pub fn ray_pick(origin: V3, direction: V3) -> Option<PickResult> {
+/// Decor is struck where the chunks drawing at `drawn` hold it.
+pub fn ray_pick(origin: V3, direction: V3, drawn: Tau) -> Option<PickResult> {
     let ray = Ray {
         origin,
         direction,
         reach: PICK_REACH_U,
     };
     // A coarser tile's answer is a summary, not what is held.
-    let hit = World::now().first_hit(&ray, Detail::Zoom(LEAF_ZOOM)).exact().flatten()?;
+    let hit = World::now().striking_decor(drawn).first_hit(&ray, Detail::Zoom(LEAF_ZOOM)).exact().flatten()?;
     Some(PickResult { hit })
 }
 

@@ -12,8 +12,8 @@ use std::collections::HashMap;
 
 use crate::chunk::build::runs_of;
 use crate::chunk::Chunk as PyramidChunk;
-use crate::layer::object::store::Store;
 use crate::control::interaction::edit::{render_edits, RenderEdits};
+use crate::layer::object::store::Store;
 use crate::with_parts;
 use pxl_spec::space::coord::world::nearest_box;
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};

@@ -48,4 +48,4 @@ export const SETTINGS_PATH = "settings";
 /** The placed objects' file below STORAGE. It carries the encoding's version: a blob of
  * an older one is not read, so bump it whenever a change makes an older entry mean
  * something other than it meant when it was written (layer/object/store.rs). */
-export const OBJECTS_PATH = "object/v13";
+export const OBJECTS_PATH = "object/v14";

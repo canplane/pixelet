@@ -10,6 +10,7 @@
 //! lane's bounds instead, since a coarse drawn surface can sit below a peak.
 
 mod column;
+mod decor;
 mod ground;
 mod ray;
 mod support;
@@ -17,7 +18,7 @@ mod world;
 
 pub use ray::{Detail, Hit, Ray, Struck};
 pub use world::Cube;
-pub use world::World;
+pub use world::{covers, Over, World};
 
 #[cfg(test)]
 #[path = "query.test.rs"]

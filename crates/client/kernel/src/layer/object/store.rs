@@ -246,7 +246,7 @@ impl Store {
     }
 
     /// Every leaf whose cube meets `query`, X in `query`'s frame.
-    fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
+    pub fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
         self.descend_in(query, &mut |zoom, at, whole, leaf| {
             if whole.meet(*query).is_none() {
                 return false;

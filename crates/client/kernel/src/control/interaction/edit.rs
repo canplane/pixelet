@@ -21,12 +21,13 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
 
-use crate::chunk::decor::build::{scatters_at, Draw};
 use crate::kernel;
+use crate::layer::instance::Instance;
 use crate::layer::object::repository;
 use crate::layer::object::store::{apply, Cells, Entry, EntryAt, Write, VOID};
 use crate::layer::Query;
 use crate::query::World;
+use pxl_spec::cell::decor::DecorKind;
 
 /// The objects' cells at a node read whole; all resident, so always answered.
 fn cells(node: Node<3>) -> Cells<'static> {
@@ -108,9 +109,9 @@ pub fn place_decor(at: &Pvf3, size: f64, decor_id: DecorId) {
     write_object_value(at, size, value);
 }
 
-/// The scattered instance `place_decor` would bring back, for its preview.
-pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Draw> {
-    (size >= units(GROUND.cell()) && object_value_is_air(read_state(at))).then(|| scatters_at(decor_num_id(decor_id), at))?
+/// The decor the ground grows that `place_decor` would bring back, for its preview.
+pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Instance> {
+    (size >= units(GROUND.cell()) && object_value_is_air(read_state(at))).then(|| World::now().grown(DecorKind::of(decor_id), at))?
 }
 
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
@@ -196,7 +197,7 @@ pub fn pending_step() {
         hide_in: (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. }))),
         // What is one voxel below shows through the ghost.
         carve: hovered.filter(|_| digging).map(|h| carve_entry(&h, size)),
-        scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).map(|s| s.cell),
+        scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).and_then(|s| s.grown_in()),
     };
     let p = PENDING.get(Pending::default);
     if p.edits != edits {

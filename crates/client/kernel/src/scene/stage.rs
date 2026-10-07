@@ -24,7 +24,7 @@ use pxl_spec::asset::ingested::Asset;
 use xpute_core::math::scalar::round;
 
 use crate::billboard::sheet::billboard_sheet;
-use crate::chunk::decor::kind_assets::kind_assets;
+use crate::decor::assets::kind_assets;
 use crate::io::host::handheld;
 use crate::io::load::{load_image, Load};
 use crate::io::text::text_raster;
@@ -205,7 +205,7 @@ pub fn visible_step(ctx: &mut TickContext) {
         let k = kernel();
         let edits = crate::control::interaction::edit::render_edits();
         let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
-        crate::chunk::decor::cell::step(&crate::chunk::decor::kind::KINDS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
+        crate::chunk::decor::cell::step(&pxl_spec::cell::decor::KINDS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
     }
     crate::chunk::place::step(ctx);
     let k = kernel();

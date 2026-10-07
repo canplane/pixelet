@@ -24,7 +24,7 @@ use crate::layer::geocode::fetcher::{geocode_fetcher_step, group_of};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
 
-use crate::chunk::decor::kind_assets::decor_assets_wanted;
+use crate::decor::assets::decor_assets_wanted;
 use crate::layer::earth::Earth;
 use crate::profiler::report::{report_step, set_host_task_ms, set_turn_timing};
 use crate::scene::character::companion::{companion_step, CompanionProps};
@@ -105,7 +105,7 @@ fn demand_tick(_: &mut TickContext) {
 }
 
 fn camera_input_tick(_: &mut TickContext) {
-    camera_input_step();
+    camera_input_step(crate::chunk::quality::effective().tau());
 }
 
 fn environment_tick(_: &mut TickContext) {
@@ -149,7 +149,7 @@ fn world_tasks() {
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
         && spawn(crate::io::load::gltf_task(), Arrival as u8)
         && spawn(crate::chunk::build::build_task(), Build as u8)
-        && spawn(crate::chunk::decor::kind_assets::decor_asset_task(), Background as u8)
+        && spawn(crate::decor::assets::decor_asset_task(), Background as u8)
         && spawn(crate::layer::object::repository::task(), Background as u8);
     if !spawned {
         std::process::abort();

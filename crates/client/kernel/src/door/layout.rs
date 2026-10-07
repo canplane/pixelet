@@ -66,7 +66,7 @@ pub enum Fixed {
 }
 
 /// None is let go.
-const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::chunk::decor::kind_assets::MODELS_MAX;
+const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::decor::assets::MODELS_MAX;
 
 const SINGLE_BLOCKS: usize = 3;
 
