@@ -1347,12 +1347,14 @@
           "value": 6404,
           "doc": [
             "The profiler where it lies: the reply is the address of READ's words (profiler.json) over the",
-            "last `window_ms`, an infinite window being the whole recording, good until the next turn."
+            "last `window_ms`, the whole recording where it is absent, good until the next turn. A number",
+            "past the door is finite, so no window is infinite."
           ],
           "packet": [
             {
               "name": "window_ms",
-              "type": "f64"
+              "type": "f64",
+              "optional": true
             }
           ]
         },

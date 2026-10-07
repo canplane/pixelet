@@ -216,7 +216,8 @@ interface Read {
   worst: [u32, u32];
 }
 
-function read(windowMs: f64): Read {
+/** Over the last `windowMs`, or the whole recording at null. */
+function read(windowMs: f64 | null): Read {
   const r = u32s(kernel_call(Command.PROFILER_READ, encode_profiler_read({ window_ms: windowMs })), READ.WORDS);
   return {
     summary: words(r[READ.summary_at], r[READ.summary_words]),
@@ -262,7 +263,7 @@ export function profilerGaugeRead(windowMs: f64): Gauge {
 }
 
 export function profilerReportRead(): ProfilerReport {
-  const { summary: s, tasks, worst } = read(Infinity);
+  const { summary: s, tasks, worst } = read(null);
   const peak = section(s, SUMMARY.peak);
   const stepsAt = SUMMARY.steps.AT;
   const steps = Array.from({ length: s[stepsAt + SUMMARY.steps.count] }, (_, i) => {
