@@ -10,16 +10,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-- **How the samples are drawn.** On the iPhone 13 mini, four shapes over the
-  same tiles and views: today's boxes, the same as masked faces, a ray a
-  pixel, and a bounded observation a cell — what the rule asks for, a cell
-  being an angular footprint and not a sample point. Each shape is built
-  whole on the CPU and whole on the GPU, one representation either way:
-  CPU or GPU is a question of the whole drawing, never of one kind of
-  thing sent to the other side. The steps a cast pays
-  are measured already, and where on the screen they lie
-  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./decision/20260928-what-is-drawn-is-what-the-screen-covers.md),
-  "the steps, measured").
+Nothing now.
 
 ## P1
 
@@ -54,14 +45,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P2
 
-- **Badges are drawn by kind, not by the POI layer.** What is drawn and
-  struck splits by render kind (cube, decor, billboard) and what is stored by
-  where it comes from (the geodata's layers, the objects); decor is moving to
-  that shape. A billboard today is drawn from the POI layer alone, so a
-  user's signpost, an object whose id is a billboard kind, has no way on
-  screen. The billboard kind joins the cell catalog and the badges take its
-  records from whichever layer answers them, when a signpost is wanted.
-
 - **Terrain's lanes are one record, which keeps it from being a quadtree.**
   A tile is its ground, elevation, decks and index together
   (`crates/spec/src/bake/format.rs` `Terrain`), each with its own lattice and
@@ -72,9 +55,31 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   each lane alone, and all together, could leave out, against the requests
   more layers would cost under the Worker's daily cap
   ([decision/20260816-deployment-hosting.md](./decision/20260816-deployment-hosting.md)).
+- **A bake is kept a shard at a time, as the ingest is.** The catalog says
+  which shards the database holds, but a terrain bake keeps its state for
+  the whole coverage: one land list (`land_tiles.json`), one `leaf.json` of
+  what built the leaves, and a region named by tiles, `--grow` deriving the
+  shards each run (`crates/server/geo-bake/src/bin/bake_tiles.rs`). Each
+  shard's land list, leaves, coast and source identity its own would make a
+  shard one unit from ingest to version: a shard ingested again is baked
+  again alone, and `--region` and `--grow` become one question, which shards.
 
 ## Parked, with the reason on file
 
+- **Publishing**: a push to `deploy`, any upload to the bucket (terrain, POI,
+  geocode) and the copy into production's db-geo, held until the user says
+  the time is right, since the bake side has refactoring ahead. Meanwhile a
+  bake is looked at through `dev:baked` and `preview:baked`.
+- **How the samples are drawn**, held until the user says the time is
+  right. On the iPhone 13 mini, four shapes over the same tiles and views: today's boxes, the same as masked faces, a ray a
+  pixel, and a bounded observation a cell — what the rule asks for, a cell
+  being an angular footprint and not a sample point. Each shape is built
+  whole on the CPU and whole on the GPU, one representation either way:
+  CPU or GPU is a question of the whole drawing, never of one kind of
+  thing sent to the other side. The steps a cast pays
+  are measured already, and where on the screen they lie
+  ([20260928-what-is-drawn-is-what-the-screen-covers.md](./decision/20260928-what-is-drawn-is-what-the-screen-covers.md),
+  "the steps, measured").
 - **WASI, as a subsystem over the contract.** An adapter that offers a WASI
   program WASI's calls translated into the contract's requests, which is what
   would let an existing program in. Not without one to build it against;
