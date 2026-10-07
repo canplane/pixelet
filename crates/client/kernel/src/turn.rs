@@ -4,9 +4,6 @@
 //! then the tick's phases under one budget, then the draw. The other tasks
 //! wait on what they work on.
 
-pub mod report;
-pub mod summary;
-
 use pxl_spec::space::coord::aabb::Aabb;
 use xpute_guest::sched::edge::{notified, Notify};
 
@@ -23,6 +20,8 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
 
 use crate::layer::earth::Earth;
+use crate::profiler::report::{report_step, set_host_task_ms, set_turn_timing};
+use crate::profiler::spec::EffectName;
 use crate::scene::character::companion::{companion_step, CompanionProps};
 use crate::scene::environment::state::map_environment_step;
 use crate::scene::marker::frame_gizmo::debug_gizmos_step;
@@ -30,10 +29,8 @@ use crate::scene::marker::hover_cursor::hover_cursor_step;
 use crate::scene::marker::location_puck::location_puck_step;
 use crate::scene::stage::{take_draw, visible_step};
 use crate::sched::edge::{request_world_tick, world_edge};
-use crate::sched::profiler::spec::EffectName;
 use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickState};
 use crate::shell::setting::store::settings_store;
-use crate::turn::report::{report_step, set_host_task_ms, set_turn_timing};
 use crate::world::chunk::decor::asset_store::decor_assets_wanted;
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::pyramid::Observed as _;

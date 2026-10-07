@@ -152,7 +152,7 @@ export const SETTINGS = {
     options: ["auto", "fixed", "low"],
     section: "display",
   },
-  /** The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
+  /** The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
   debug_overlay: {
     key: 12 as number,
     kind: "toggle",
@@ -266,7 +266,7 @@ export const SETTINGS_SHIPPED = {
     options: ["auto", "fixed", "low"],
     section: "display",
   },
-  /** The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
+  /** The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
   debug_overlay: {
     key: 12 as number,
     kind: "toggle",

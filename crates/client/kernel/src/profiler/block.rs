@@ -1,4 +1,4 @@
-// pxl-kernel/sched/profiler/block.rs
+// pxl-kernel/profiler/block.rs
 
 //! Every summary section as a record held to profiler.json by `words!`.
 //! Written word by word, sections had shifted lanes, mirrored structures and
@@ -7,14 +7,14 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::sched::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS, ZOOMS};
-use crate::sched::profiler::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUMMARY, TASK_PHASE_NAMES, TASK_SUMMARY};
-use crate::sched::profiler::word::{words, Words};
+use crate::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS, ZOOMS};
+use crate::profiler::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUMMARY, TASK_PHASE_NAMES, TASK_SUMMARY};
+use crate::profiler::word::{words, Words};
 
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 pub const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
-const CATEGORIES: usize = crate::sched::profiler::spec::CATEGORY_NAMES.len();
+const CATEGORIES: usize = crate::profiler::spec::CATEGORY_NAMES.len();
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

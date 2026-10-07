@@ -7,7 +7,7 @@ use xpute_guest::sched::quantum::QuantumPolicy;
 use xpute_guest::sched::tick::{Phase, StepStats, Tick, TickPolicy, TickReport};
 
 use crate::param;
-pub use crate::sched::profiler::spec::StepName;
+pub use crate::profiler::spec::StepName;
 use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, Default)]

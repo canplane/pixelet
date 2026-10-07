@@ -133,9 +133,9 @@ const DATA_SPECS: [DataSpec; 14] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/client/kernel/sched/profiler/profiler.json",
+        json: "spec/client/kernel/profiler/profiler.json",
         ts: Some("apps/web/src/feature/debug/profiler/profiler.spec.ts"),
-        rs: Some("crates/client/kernel/src/sched/profiler/profiler.spec.rs"),
+        rs: Some("crates/client/kernel/src/profiler/profiler.spec.rs"),
         module: Some("spec"),
         enums: Enums::Named(&["CATEGORY_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES", "STEP_NAMES", "EFFECT_NAMES"]),
         ts_names: None,

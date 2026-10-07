@@ -1,4 +1,4 @@
-// pxl-kernel/sched/profiler/record.rs
+// pxl-kernel/profiler/record.rs
 
 //! Read-only instrument: records where time and work go. Never read back
 //! into a scheduling decision. Records are laid out word for word as
@@ -12,9 +12,9 @@ use xpute_guest::global::Global;
 use xpute_guest::mem::section::span_of;
 
 use crate::mem::fixed::{lane, range, Range};
-use crate::sched::profiler::frame::{FramePeak, FrameSample, RingSample, WorstFrame};
-use crate::sched::profiler::log::PENDING;
-use crate::sched::profiler::task::TaskRow;
+use crate::profiler::frame::{FramePeak, FrameSample, RingSample, WorstFrame};
+use crate::profiler::log::PENDING;
+use crate::profiler::task::TaskRow;
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
 /// display or a heavy minute fills a lane early, which drops its oldest and

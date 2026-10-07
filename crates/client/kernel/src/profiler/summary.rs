@@ -1,4 +1,4 @@
-// pxl-kernel/turn/summary.rs
+// pxl-kernel/profiler/summary.rs
 
 //! The profiler window reduced into profiler.json's SUMMARY block, read in
 //! place by the panel and the report so both agree. Sections go only through
@@ -9,16 +9,16 @@ use crate::control::camera::controller;
 use crate::io::failure::Outcome;
 use crate::io::sched::{counts, credits};
 use crate::layer::Layer as _;
-use crate::sched::profiler::block::CountersBlock;
-use crate::sched::profiler::block::TASK_PHASES;
-use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
-use crate::sched::profiler::frame::FrameSample;
-use crate::sched::profiler::frame::{missed, overran};
-use crate::sched::profiler::log::window_baseline;
-use crate::sched::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
-use crate::sched::profiler::spec::{LIMITS, SUMMARY};
-use crate::sched::profiler::task::TaskRow;
-use crate::sched::profiler::word::put;
+use crate::profiler::block::CountersBlock;
+use crate::profiler::block::TASK_PHASES;
+use crate::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::profiler::frame::FrameSample;
+use crate::profiler::frame::{missed, overran};
+use crate::profiler::log::window_baseline;
+use crate::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
+use crate::profiler::spec::{LIMITS, SUMMARY};
+use crate::profiler::task::TaskRow;
+use crate::profiler::word::put;
 use crate::sched::tick::tick_step_stats;
 use crate::{kernel, with_world};
 use pxl_spec::bake::format::Terrain;

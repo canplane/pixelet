@@ -9,7 +9,7 @@ use xpute_core::codec::json::{read_json, JsonKind};
 
 use crate::door::host::development;
 use crate::io::file::{self, Kept};
-use crate::sched::profiler::log::profiler_follow;
+use crate::profiler::log::profiler_follow;
 pub use crate::shell::setting::schema_spec::{AoMode, CameraMode, OrbitObstacleMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
 use xpute_guest::global::Global;
@@ -38,7 +38,7 @@ impl Settings {
             chunk_sources_changed();
         }
         if key == SettingKey::debug_overlay {
-            profiler_follow(value == 1, crate::turn::summary::counters());
+            profiler_follow(value == 1, crate::profiler::summary::counters());
         }
         *UNKEPT.get(|| false) = true;
         true
@@ -81,7 +81,7 @@ pub fn settings_keep_step() {
 /// What is not offered, unknown or invalid stays at the default.
 pub fn settings_load(kept: &str) {
     SETTINGS_STORE.set(read_kept(kept));
-    profiler_follow(settings_store().debug_overlay, crate::turn::summary::counters());
+    profiler_follow(settings_store().debug_overlay, crate::profiler::summary::counters());
 }
 
 fn read_kept(kept: &str) -> Settings {

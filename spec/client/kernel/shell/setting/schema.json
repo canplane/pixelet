@@ -226,7 +226,7 @@
       "section": "display"
     },
     "debug_overlay": {
-      "$doc": ["The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`)."],
+      "$doc": ["The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"

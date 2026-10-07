@@ -1,4 +1,4 @@
-// pxl-kernel/sched/profiler/log.rs
+// pxl-kernel/profiler/log.rs
 
 //! The profiler's live stream: task rows and slow frames, kept in the
 //! profiler's own lanes for the shell to take (`PROFILER_TAKE`). Not on the
@@ -6,11 +6,11 @@
 //! take the module down during the very fetch burst it was turned on to
 //! watch. Only frames that missed a vsync while moving or overran are kept.
 
-use crate::sched::profiler::block::CountersBlock;
-use crate::sched::profiler::frame::FrameSample;
-use crate::sched::profiler::frame::{missed, overran};
-use crate::sched::profiler::record::{drop_front, fixed_lane, profiler_recording_start, profiler_recording_stop, profiler_set_sink, Lane, ProfilerSink};
-use crate::sched::profiler::task::TaskRow;
+use crate::profiler::block::CountersBlock;
+use crate::profiler::frame::FrameSample;
+use crate::profiler::frame::{missed, overran};
+use crate::profiler::record::{drop_front, fixed_lane, profiler_recording_start, profiler_recording_stop, profiler_set_sink, Lane, ProfilerSink};
+use crate::profiler::task::TaskRow;
 use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
 use xpute_guest::global::Global;
 

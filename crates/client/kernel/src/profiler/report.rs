@@ -1,4 +1,4 @@
-// pxl-kernel/turn/report.rs
+// pxl-kernel/profiler/report.rs
 
 //! A turn's frame record: what the host measured, the chunks' census and the
 //! layers' residency, taken after every other phase.
@@ -13,9 +13,9 @@ use crate::io::sched::pending_count;
 use crate::kernel;
 use crate::layer::{Layer, Query};
 use crate::mem::MB;
+use crate::profiler::frame::{CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample, TurnSample, ViewSample, WorkSample};
+use crate::profiler::record::{profiler_record_frame, profiler_recording, profiler_take_rings};
 use crate::scene::stage::visible_pass;
-use crate::sched::profiler::frame::{CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample, TurnSample, ViewSample, WorkSample};
-use crate::sched::profiler::record::{profiler_record_frame, profiler_recording, profiler_take_rings};
 use crate::sched::tick::TickContext;
 use crate::world::chunk::table::Census;
 
@@ -50,7 +50,7 @@ pub fn set_host_frame_stat(gpu: GpuSample, device: DeviceSample) {
 pub fn set_host_task_ms(task_ms: f64) {
     report().host.task_ms = task_ms;
     // Known only after the turn, when its frame is already recorded.
-    if let Some(frame) = crate::sched::profiler::record::profiler_open_frame() {
+    if let Some(frame) = crate::profiler::record::profiler_open_frame() {
         frame.task_ms = task_ms;
     }
 }
@@ -58,7 +58,7 @@ pub fn set_host_task_ms(task_ms: f64) {
 /// Written onto the open frame like `set_host_task_ms`, so the parts of
 /// `task_ms` add up and unmeasured time shows as the difference.
 pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
-    let Some(frame) = crate::sched::profiler::record::profiler_open_frame() else { return };
+    let Some(frame) = crate::profiler::record::profiler_open_frame() else { return };
     let (step_ms, step_name) = crate::turn::worst_effect();
     frame.turn = TurnSample {
         effects_ms,

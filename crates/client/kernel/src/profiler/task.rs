@@ -1,12 +1,12 @@
-// pxl-kernel/sched/profiler/task.rs
+// pxl-kernel/profiler/task.rs
 
 //! A task's row in the profiler's lanes: what ran, when, and what it came
 //! to. The work that ran writes it (io/sched.rs `record`).
 
 use core::mem::{offset_of, size_of};
 
-use crate::sched::profiler::spec::{LIMITS, TASK};
-use crate::sched::profiler::word::{words, Words};
+use crate::profiler::spec::{LIMITS, TASK};
+use crate::profiler::word::{words, Words};
 
 pub const PHASES_MAX: usize = LIMITS::PHASES_MAX as usize;
 

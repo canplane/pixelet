@@ -5,7 +5,7 @@
 
 use pxl_spec::bake::published::BakeKind;
 
-pub use crate::sched::profiler::spec::TaskPhaseName;
+pub use crate::profiler::spec::TaskPhaseName;
 use core::cmp::Ordering;
 
 use pxl_spec::space::camera::eye::Observation;
@@ -49,7 +49,7 @@ impl Phases {
 
 /// A stream of demands; the profiler's CATEGORY_NAMES. An asset shares the
 /// tiles' credits but is never withdrawn: it is wanted until it arrives.
-pub use crate::sched::profiler::spec::CategoryName as Category;
+pub use crate::profiler::spec::CategoryName as Category;
 
 impl Category {
     /// An asset belongs to no bake and is asked for by its own command.

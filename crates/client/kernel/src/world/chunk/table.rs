@@ -25,7 +25,7 @@ use pxl_render::gpu::arena::{arena_configure, arena_epoch};
 use pxl_render::look::globe::Globe;
 use pxl_render::mesh::chunk_mesher::Heights;
 
-use crate::sched::profiler::frame::ZOOMS;
+use crate::profiler::frame::ZOOMS;
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;

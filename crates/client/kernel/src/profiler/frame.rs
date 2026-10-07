@@ -1,4 +1,4 @@
-// pxl-kernel/sched/profiler/frame.rs
+// pxl-kernel/profiler/frame.rs
 
 //! A frame's record, the worst ones kept, and the peaks since recording began.
 
@@ -7,8 +7,8 @@ use core::mem::{offset_of, size_of};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use xpute_guest::sched::tick::PHASES;
 
-use crate::sched::profiler::spec::{CENSUS_TAGS, FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, WORST};
-use crate::sched::profiler::word::{words, Words};
+use crate::profiler::spec::{CENSUS_TAGS, FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, WORST};
+use crate::profiler::word::{words, Words};
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
 

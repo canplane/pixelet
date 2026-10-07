@@ -48,7 +48,7 @@ fn door() -> &'static Door {
     DOOR.get(|| {
         // SAFETY: the module's memory, which never moves and outlives the door;
         // the ranges are the layout's alone.
-        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, crate::param::MOST_SIGNALS, crate::sched::profiler::record::profiler_note_rings) }
+        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, crate::param::MOST_SIGNALS, crate::profiler::record::profiler_note_rings) }
     })
 }
 
@@ -158,7 +158,7 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
     }
     let s = state();
     if core::mem::take(&mut s.profiler_taken) {
-        crate::sched::profiler::log::profiler_log_clear();
+        crate::profiler::log::profiler_log_clear();
     }
     crate::door::host::host_rise();
     crate::sched::edge::world_edge().rise(quota_ms);

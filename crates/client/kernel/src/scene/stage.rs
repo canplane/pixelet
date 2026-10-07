@@ -19,7 +19,7 @@ use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
 use crate::mem::MB;
-use crate::sched::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
+use crate::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use pxl_spec::asset::ingested::Asset;
 use xpute_core::math::scalar::round;
 
@@ -29,11 +29,11 @@ use crate::io::load::{load_image, Load};
 use crate::io::text::text_raster;
 use crate::kernel;
 use crate::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
+use crate::profiler::report::set_host_frame_stat;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
 use crate::sched::edge::request_world_tick;
 use crate::shell::setting::store::{settings_store, AoMode};
-use crate::turn::report::set_host_frame_stat;
 use crate::world::chunk::decor::asset_store::kind_assets;
 use crate::world::pyramid::Observed as _;
 use crate::world::view::frame::resolution::resolution_observe;

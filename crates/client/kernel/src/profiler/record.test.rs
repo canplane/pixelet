@@ -1,6 +1,6 @@
-// pxl-kernel/sched/profiler/record.test.rs
+// pxl-kernel/profiler/record.test.rs
 
-use crate::sched::profiler::spec::GPU_SPAN_NAMES;
+use crate::profiler::spec::GPU_SPAN_NAMES;
 
 #[test]
 fn the_profiler_names_the_renderers_spans_in_its_order() {

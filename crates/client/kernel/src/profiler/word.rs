@@ -1,4 +1,4 @@
-// pxl-kernel/sched/profiler/word.rs
+// pxl-kernel/profiler/word.rs
 
 //! A record as profiler.json lays it out, word for word, checked at compile time.
 
