@@ -87,16 +87,7 @@ pub struct Domain<Q: Query = Access<'static>> {
 }
 
 impl<Q: Query> Domain<Q> {
-    #[cfg(test)]
-    pub fn priced<'a>(o: Observation, top: Zoom, ladder: &[Tau], at: usize, query: Q, footprints: impl IntoIterator<Item = &'a Footprint>, price: &dyn Price) -> Domain<Q> {
-        let mut d = Domain::empty(o, query);
-        d.begin(o, top, ladder, footprints, core::iter::empty());
-        d.run(price, &|| false, &mut 0);
-        d.put(at);
-        d
-    }
-
-    pub(super) fn empty(o: Observation, query: Q) -> Domain<Q> {
+    pub(crate) fn empty(o: Observation, query: Q) -> Domain<Q> {
         Domain {
             o,
             lens: None,
@@ -118,7 +109,7 @@ impl<Q: Query> Domain<Q> {
     }
 
     /// `top`: the coarsest zoom the ground's source supplies whole.
-    pub(super) fn begin<'a, 'b>(&mut self, o: Observation, top: Zoom, ladder: &[Tau], footprints: impl IntoIterator<Item = &'a Footprint>, lacks: impl IntoIterator<Item = &'b Tile>) {
+    pub(crate) fn begin<'a, 'b>(&mut self, o: Observation, top: Zoom, ladder: &[Tau], footprints: impl IntoIterator<Item = &'a Footprint>, lacks: impl IntoIterator<Item = &'b Tile>) {
         xpute_core::ensure!(!ladder.is_empty() && ladder.len() < u8::MAX as usize, EINVAL);
         self.o = o;
         self.lens = Lens::of(&o);
@@ -187,7 +178,7 @@ impl<Q: Query> Domain<Q> {
     }
 
     /// Whether done; counts what it takes off the stack into `n`.
-    pub(super) fn run(&mut self, price: &dyn Price, stop: &dyn Fn() -> bool, n: &mut u32) -> bool {
+    pub(crate) fn run(&mut self, price: &dyn Price, stop: &dyn Fn() -> bool, n: &mut u32) -> bool {
         // at least a slice a turn
         const SLICE: u32 = 32;
         let mut k = 0;

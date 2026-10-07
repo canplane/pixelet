@@ -140,7 +140,11 @@ pub fn domain(o: Observation, ladder: &[Tau], world: &World) -> Domain<World> {
 }
 
 pub fn domain_priced(o: Observation, ladder: &[Tau], world: &World, price: &dyn Price) -> Domain<World> {
-    Domain::priced(o, GROUND.top(), ladder, 0, world.clone(), &footprints(&o, world), price)
+    let mut d = Domain::empty(o, world.clone());
+    d.begin(o, GROUND.top(), ladder, &footprints(&o, world), core::iter::empty());
+    d.run(price, &|| false, &mut 0);
+    d.put(0);
+    d
 }
 
 fn unit(v: V3) -> V3 {
