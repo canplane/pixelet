@@ -5,6 +5,7 @@
 //! code runs under `cargo test` and in the client's module.
 
 pub mod abi;
+pub mod approach;
 pub mod billboard;
 pub mod chunk;
 pub mod control;

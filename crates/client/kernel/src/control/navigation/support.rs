@@ -6,6 +6,7 @@
 //! that floor; a center put over coarser ground keeps its Z unknown and
 //! stands on the finest ground known there until the leaves' is.
 
+use crate::query::over;
 use pxl_spec::space::coord::pvf3::core::{FRAC_W, IVEC_Z_W};
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::coord::v3::V3;
@@ -42,11 +43,6 @@ pub fn stand(at: &Pvf3) -> Pvf3 {
         Answer::Exact(None) => *at,
         Answer::Coarser(..) | Answer::Nothing(_) => unknown_z(at),
     }
-}
-
-/// The center's height over a floor whose top is `top`.
-pub fn over(top: f64) -> f64 {
-    top + units(GROUND.cell()) / 2.0
 }
 
 /// The top of the floor `center` stands over.

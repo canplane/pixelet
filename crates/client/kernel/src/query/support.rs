@@ -16,6 +16,12 @@ use pxl_spec::space::coord::zoom::{count, index_of, units, Zoom};
 use super::column::*;
 use crate::layer::*;
 
+/// The center's height over a floor whose top is `top`: half a cell up, as a
+/// cell's center stands over its ground.
+pub fn over(top: f64) -> f64 {
+    top + units(GROUND.cell()) / 2.0
+}
+
 impl<'a> World<'a> {
     pub fn at(&self, at: &Pvf3, zoom: Zoom) -> Answer<Ground> {
         self.ground(GROUND.cell_of(zoom, at))

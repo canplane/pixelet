@@ -6,15 +6,13 @@
 //! the world-scroll rate so the two cancel and it holds at screen center.
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
-use crate::control::camera::approach::damp_alpha;
-use crate::control::camera::input::steering;
-use crate::control::camera::state::{camera_state, CameraStatus};
-use crate::control::navigation::support::over;
+use crate::approach::damp_alpha;
 use crate::io::load::{load_image, Load};
 use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
 use crate::param::COMPANION_STEP_CELLS;
+use crate::query::over;
 use crate::query::World;
 use crate::scene::character::chat_bubble::chat_bubble_step;
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
@@ -44,8 +42,8 @@ const FOLLOW_LERP_K: f64 = crate::param::POS_DAMP;
 const FOLLOW_FACING: f64 = core::f64::consts::PI;
 
 /// Turned against the azimuth, which is the screen's up laid on the ground.
-fn back_to_camera() -> f64 {
-    FOLLOW_FACING - crate::control::camera::controller::azimuth()
+fn back_to_camera(azimuth: f64) -> f64 {
+    FOLLOW_FACING - azimuth
 }
 
 // Under one GPS fix's travel at a walking pace (~0.5u), over the near-zero gap
@@ -131,7 +129,8 @@ impl Figure {
 
     /// `follows`: the target is followed as it moves, by a fix or by the keys,
     /// rather than walked to once it settles; a steered one faces its way.
-    fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_z: f64, follows: bool, steered: bool) {
+    fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_z: f64, p: &CompanionProps) {
+        let (follows, steered) = (p.following || p.steered, p.steered);
         let variant = self.variant;
         self.acquire(target);
         if self.held.is_none() {
@@ -140,7 +139,7 @@ impl Figure {
         // Wall seconds: the tick's elapsed is clamped per delta, which stretches
         // these spans across a gap where the world did not tick.
         let now = xpute_guest::clock::now() / 1000.0;
-        let dragging = camera_state().camera_status == CameraStatus::Drag;
+        let dragging = p.dragging;
         let released = self.was_dragging && !dragging;
         let gap = |a: [f64; 2], b: [f64; 2]| libm::hypot(a[0] - b[0], a[1] - b[1]);
         let (mut at, is_walking);
@@ -153,7 +152,7 @@ impl Figure {
                 target
             };
             if !steered {
-                self.heading = back_to_camera();
+                self.heading = back_to_camera(p.azimuth);
             } else if gap(target, self.at) > WALK_EPS {
                 self.heading = heading_to(self.at, target) + core::f64::consts::PI / 2.0;
             }
@@ -210,7 +209,7 @@ impl Figure {
             if let Some(heading) = heading {
                 self.heading = heading + core::f64::consts::PI / 2.0;
             } else if !self.initial_facing_done {
-                self.heading = back_to_camera();
+                self.heading = back_to_camera(p.azimuth);
                 self.initial_facing_done = true;
             }
         }
@@ -272,6 +271,13 @@ pub struct CompanionProps {
     pub center: [f64; 2],
     /// The top of the floor under the focus.
     pub floor: f64,
+    /// The camera's heading, which the companion turns its back to.
+    pub azimuth: f64,
+    /// Whether the camera is being dragged, whose release ends a catch-up.
+    pub dragging: bool,
+    /// Whether the keys steer it, and whether the map follows the device.
+    pub steered: bool,
+    pub following: bool,
 }
 
 fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: [f64; 2]) -> &'a mut Figure {
@@ -299,19 +305,16 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         return;
     };
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);
-    let steered = steering();
-    let follows = crate::control::navigation::follow_mode::following() || steered;
-
     let person_target = p.center;
     let person = figure_for(&mut c.person, person_variant, person_target);
-    person.step(ctx, person_target, p.floor, follows, steered);
+    person.step(ctx, person_target, p.floor, &p);
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
     let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
     // Its own floor beside the person, stepped to from the person's height.
     let pet_z = step_from(pet_target, p.floor).flatten().unwrap_or(p.floor);
-    pet.step(ctx, pet_target, pet_z, follows, steered);
+    pet.step(ctx, pet_target, pet_z, &p);
 }
 
 /// (model, image handle) for the shell's skinned pass.

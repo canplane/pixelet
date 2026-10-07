@@ -17,6 +17,7 @@ mod support;
 mod world;
 
 pub use ray::{Detail, Hit, Ray, Struck};
+pub use support::over;
 pub use world::Cube;
 pub use world::{covers, Over, World};
 

@@ -3,12 +3,11 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the objects' query and written to the store.
 
-use crate::chunk::source::RenderEdits;
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
+use crate::layer::object::preview::RenderEdits;
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::EntryKind;
-use crate::sched::edge::request_world_tick;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::cell::object::{decor_num_id, object_value_is_air, placeable_cube_num_id, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
@@ -129,7 +128,7 @@ pub fn remove(at: EntryAt) {
 }
 
 /// The edit the pointer would make, decided once a turn: the cursor's ghost
-/// shows it, and what it removes the chunks are handed to leave out.
+/// shows it, and what it removes is handed to the chunks to leave out.
 #[derive(Clone, Copy, Default)]
 pub struct Pending {
     pub object: Option<Entry>,
@@ -145,7 +144,8 @@ pub fn pending() -> Pending {
     *PENDING.get(Pending::default)
 }
 
-pub fn pending_step() {
+/// Returns what the edit leaves out of what is drawn.
+pub fn pending_step() -> RenderEdits {
     let hover = hover();
     let ui = holding();
     let hovered = hover.coord;
@@ -178,8 +178,6 @@ pub fn pending_step() {
         carve: hovered.filter(|_| digging).map(|h| carve_entry(&h, size)),
         scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).and_then(|s| s.grown_in()),
     };
-    if crate::chunk::source::preview(edits) {
-        request_world_tick();
-    }
     *PENDING.get(Pending::default) = Pending { object, size, digging, blocked };
+    edits
 }

@@ -10,7 +10,6 @@ use pxl_spec::space::coord::v3::{floor3, V3};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::control::camera::controller::{azimuth, dist};
 use crate::kernel;
 use crate::query::World;
 use crate::sched::edge::request_world_tick;
@@ -73,7 +72,7 @@ impl Sketch {
     }
 }
 
-fn sketch(focus: &Pvf3) -> Sketch {
+fn sketch(focus: &Pvf3, heading: Option<f64>) -> Sketch {
     let center = to_world(focus);
     let mut s = Sketch { about: center, lines: Vec::new() };
     let ground = World::now().floor_under(focus).value().flatten();
@@ -81,10 +80,8 @@ fn sketch(focus: &Pvf3) -> Sketch {
     s.cube(cell, units(GROUND.cell()));
     s.point(center, BLACK);
     // First person the eye is the focus, and nothing about it is seen.
-    if dist() == 0.0 {
-        return s;
-    }
-    let (sin, cos) = libm::sincos(azimuth());
+    let Some(azimuth) = heading else { return s };
+    let (sin, cos) = libm::sincos(azimuth);
     let (east, north, up) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
     let (right, forward) = ([cos, -sin, 0.0], [sin, cos, 0.0]);
     let tip = |d: V3| -> V3 { core::array::from_fn(|k| center[k] + d[k] * RING_RADIUS) };
@@ -105,7 +102,8 @@ fn set_lines(at: V3, vertices: &[f32]) {
     scene.debug.set(draw, at, vertices);
 }
 
-pub fn frame_gizmo_step(show: bool, focus: Option<Pvf3>) {
+/// `heading` is the camera's azimuth third person, none first person.
+pub fn frame_gizmo_step(show: bool, focus: Option<Pvf3>, heading: Option<f64>) {
     let drawn = GIZMOS.get(|| None);
     let Some(center) = focus.filter(|_| show) else {
         if drawn.take().is_some() {
@@ -113,7 +111,7 @@ pub fn frame_gizmo_step(show: bool, focus: Option<Pvf3>) {
         }
         return;
     };
-    let s = sketch(&center);
+    let s = sketch(&center, heading);
     if drawn.as_ref().is_some_and(|(about, lines)| *about == s.about && *lines == s.lines) {
         return;
     }
