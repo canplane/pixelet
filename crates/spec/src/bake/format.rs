@@ -91,14 +91,13 @@ pub struct Index {
     pub occupancy: Occupancy,         // which children are tiles: none is asked for that is not
 }
 
-/// A cell's lowest and highest extent and widest single-cell span, of the
-/// index lane's cells or a coarser one's, which is exactly its four quarters' join.
+/// A cell's lowest and highest extent, of the index lane's cells or a coarser
+/// one's, which is exactly its four quarters' join.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(C)]
 pub struct Extent {
     pub lo: i16,
     pub hi: i16,
-    pub span: u16,
 }
 
 /// A partial version's list, beside its tiles: the full version it overlays
@@ -119,21 +118,16 @@ pub fn drawn([lo, hi]: [i16; 2]) -> [i16; 2] {
 }
 
 impl Extent {
-    /// One index cell's: its bound widened by `drawn`, its span as the lane holds it.
+    /// One index cell's: its bound widened by `drawn`.
     pub fn of(cell: [i16; 2]) -> Extent {
         let [lo, hi] = drawn(cell);
-        Extent {
-            lo,
-            hi,
-            span: (i32::from(cell[1]) - i32::from(cell[0])).max(0) as u16,
-        }
+        Extent { lo, hi }
     }
 
     fn join(self, o: Extent) -> Extent {
         Extent {
             lo: self.lo.min(o.lo),
             hi: self.hi.max(o.hi),
-            span: self.span.max(o.span),
         }
     }
 }

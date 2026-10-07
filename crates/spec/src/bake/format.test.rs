@@ -100,9 +100,8 @@ fn a_block_says_what_its_cells_say() {
                     let lane = index.extent();
                     let cells = (y..y + side).flat_map(|cy| (x..x + side).map(move |cx| lane[EXTENT.cell_index(cx, cy) as usize]));
                     let lo = cells.clone().map(|c| drawn(c)[0]).min().unwrap();
-                    let hi = cells.clone().map(|c| drawn(c)[1]).max().unwrap();
-                    let span = cells.map(|[l, h]| (i32::from(h) - i32::from(l)) as u16).max().unwrap();
-                    assert_eq!(index.over([x, y], side), Extent { lo, hi, span }, "{side} from ({x}, {y})");
+                    let hi = cells.map(|c| drawn(c)[1]).max().unwrap();
+                    assert_eq!(index.over([x, y], side), Extent { lo, hi }, "{side} from ({x}, {y})");
                 }
             }
         }
