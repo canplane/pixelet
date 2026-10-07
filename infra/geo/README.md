@@ -15,12 +15,14 @@ database that is expensive to rebuild.
 > bbox, its vertices' extremes in meters, meets the shard grown by a leaf
 > tile, its apron (`SHARD_APRON`, `pxl-geo-bake coverage.rs`): as far as any
 > read past a leaf reaches, so a shard's leaves bake from the shard alone,
-> the coverage's edge included. A feature near an edge is a row in each
-> shard, so a reader keeps one row a `gers_id`. The coast is no shard's: OSM's land polygons are taken whole,
+> the coverage's edge included. A table holds each feature once, keyed by
+> `gers_id`, however many shards it meets; which shards are in is the
+> catalog's alone. The coast is no shard's: OSM's land polygons are taken whole,
 > worldwide (`coastline/`). What a shard holds depends on the shard alone, so shards ingested one by one
-> are the shards ingested together. Each ingest replaces a shard's rows before
-> it writes them, and writes the shard's catalog row last; a run stopped
-> partway resumes at the first shard without one.
+> are the shards ingested together. A run writes its shards' features and
+> catalog rows in one transaction, so a run stopped partway leaves them absent
+> and the next one does them. A new release, a changed script or a table of
+> an older shape makes a run whole ([infra/README.md](../README.md) §2).
 
 ```
 infra/geo/
@@ -58,7 +60,9 @@ when no `overture_base_land` row or building touches its bbox and no way
 (not a ferry) comes within `DRAWN_REACH_U` of it.
 
 Each catalog keeps one row per shard: `overture_catalog` a row per table and
-shard, `elevation_catalog` a row per shard, each with its release.
+shard, with its release, the ingest's code and the count of features the
+shard meets (a feature two shards meet counts in both, so a table's counts sum
+past its rows); `elevation_catalog` a row per shard, with its release.
 `read_source_catalogs()` (`bake_tiles.rs`) copies them into every baked
 version's `manifest.json`, which is how a published set says what data it was
 made from.
@@ -67,9 +71,11 @@ made from.
 
 A public S3 release — no key, no portal step. The ingest reaches it through
 Overture's official `overturemaps` CLI, installed on first use into
-`infra/geo/overture/.venv`: it downloads a type's GeoParquet over every shard at once, a little wider
-since its bbox test is strict, to `overture/raw/<type>.parquet`, kept until
-the release changes; the ingest then puts each feature in its shard.
+`infra/geo/overture/.venv` at the version the script pins: it downloads a
+type's GeoParquet a rectangle of the shards to do a call (a full coverage is
+one), a little wider since its bbox test is strict, to
+`overture/raw/<type>.<release>.<bbox hash>.parquet`, kept until the release or
+the shards change; the ingest then puts each feature in the shards it meets.
 
 ### GEDTM30 v1.2 (OpenGeoHub / OpenLandMap)
 

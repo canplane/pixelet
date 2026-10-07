@@ -31,7 +31,7 @@ impl crate::pyramid::Layer for PoiTile {
     }
 }
 
-const PLACES_SQL: &str = "SELECT DISTINCT ON (gers_id) ST_X(geom), ST_Y(geom), name, {category}, gers_id FROM overture_places";
+const PLACES_SQL: &str = "SELECT ST_X(geom), ST_Y(geom), name, {category}, gers_id FROM overture_places";
 
 /// Every statement the POI bake runs, for the catalog check.
 pub const READS: [&str; 2] = [PLACES_SQL, CATEGORY_SQL];
