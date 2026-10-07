@@ -1,4 +1,4 @@
-// pxl-kernel/scene/billboard/selection.rs
+// pxl-kernel/billboard/selection.rs
 
 //! Visibility of world-anchored billboards: in the frustum as a sphere about
 //! the anchor (a point test dropped the nearest badges first at an oblique
@@ -8,7 +8,7 @@
 use pxl_spec::space::coord::mat4::mat4_transform_point;
 use pxl_spec::space::coord::v3::{add3, dot3, sub3};
 
-use crate::scene::billboard::batch::BillboardBatch;
+use crate::billboard::batch::BillboardBatch;
 use crate::world::view::frame::pose::globe;
 use crate::world::view::frame::pose::{ndc_to_px, sea_under_eye, view};
 

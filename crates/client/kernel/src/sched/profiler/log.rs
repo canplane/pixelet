@@ -6,8 +6,8 @@
 //! take the module down during the very fetch burst it was turned on to
 //! watch. Only frames that missed a vsync while moving or overran are kept.
 
+use crate::billboard::sheet::billboard_sheet;
 use crate::kernel;
-use crate::scene::billboard::sheet::billboard_sheet;
 use crate::sched::profiler::block::CountersBlock;
 use crate::sched::profiler::frame::FrameSample;
 use crate::sched::profiler::record::{drop_front, fixed_lane, profiler_recording_start, profiler_recording_stop, profiler_set_sink, Lane, ProfilerSink};

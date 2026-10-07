@@ -4,7 +4,6 @@
 //! into the kernel's draw list as the chunks' table is (`world/chunk/table.rs`).
 
 pub mod actor;
-pub mod billboard;
 pub mod character;
 pub mod environment;
 pub mod marker;
@@ -15,7 +14,6 @@ use pxl_spec::space::coord::v3::V3;
 
 use crate::model::store::Models;
 use crate::scene::actor::Actors;
-use crate::scene::billboard::field::Billboards;
 use crate::scene::environment::state::EnvironmentDraw;
 use crate::scene::marker::coverage_gizmo::CoverageGizmo;
 use crate::scene::marker::debug_lines::DebugLines;
@@ -28,7 +26,6 @@ pub struct Scene {
     pub ghost: GhostDraw,
     pub actors: Actors,
     pub markers: Markers,
-    pub billboards: Billboards,
     pub environment: EnvironmentDraw,
     pub debug: DebugLines,
     pub coverage: CoverageGizmo,

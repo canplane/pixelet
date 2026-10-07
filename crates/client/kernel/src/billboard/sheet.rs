@@ -1,4 +1,4 @@
-// pxl-kernel/scene/billboard/sheet.rs
+// pxl-kernel/billboard/sheet.rs
 
 //! The one sheet every billboard draws into, mirrored by the renderer, so
 //! every set shares one pipeline and binding; and the sets themselves.
@@ -17,25 +17,25 @@ pub fn billboard_sheet() -> &'static mut BillboardAtlas {
 }
 
 pub fn new_billboard_set(order: BillboardOrder) -> u32 {
-    kernel().scene.billboards.new_set(order as u32)
+    kernel().billboards.new_set(order as u32)
 }
 
 pub fn place_billboard_set(set: u32, origin: V3) {
-    kernel().scene.billboards.place(set, origin);
+    kernel().billboards.place(set, origin);
 }
 
 pub fn follow_billboard_set(set: u32, actor: u32, lift: f64) {
-    kernel().scene.billboards.follow(set, actor, lift);
+    kernel().billboards.follow(set, actor, lift);
 }
 
 pub fn write_billboard_set(set: u32, lane: &[f32]) {
     let Some(k) = laid() else { return };
-    k.scene.billboards.write(&mut k.draw, set, lane);
+    k.billboards.write(&mut k.draw, set, lane);
 }
 
 pub fn remove_billboard_set(set: u32) {
     let k = kernel();
-    k.scene.billboards.remove(&mut k.draw, set);
+    k.billboards.remove(&mut k.draw, set);
 }
 
 /// Draw order among billboard sets, only for ties on the same pixels at the

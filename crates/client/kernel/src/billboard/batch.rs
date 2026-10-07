@@ -1,4 +1,4 @@
-// pxl-kernel/scene/billboard/batch.rs
+// pxl-kernel/billboard/batch.rs
 
 //! One frame's billboard candidates, as lanes.
 

@@ -23,12 +23,12 @@ use crate::sched::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_
 use pxl_spec::asset::ingested::Asset;
 use xpute_core::math::scalar::round;
 
+use crate::billboard::sheet::billboard_sheet;
 use crate::door::host::handheld;
 use crate::io::load::{load_image, Load};
 use crate::io::text::text_raster;
 use crate::kernel;
 use crate::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
-use crate::scene::billboard::sheet::billboard_sheet;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
 use crate::sched::edge::request_world_tick;
@@ -207,7 +207,8 @@ pub fn visible_step(ctx: &mut TickContext) {
     }
     crate::world::chunk::place::step(ctx);
     let k = kernel();
-    k.scene.billboards.draw(&mut k.draw, &k.scene.actors, frame.eye);
+    let actors = &k.scene.actors;
+    k.billboards.draw(&mut k.draw, &|id| actors.actor_ref(id).filter(|a| a.visible).map(|a| a.at), frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();

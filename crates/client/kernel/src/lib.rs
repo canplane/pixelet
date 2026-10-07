@@ -5,6 +5,7 @@
 //! code runs under `cargo test` and in the client's module.
 
 pub mod abi;
+pub mod billboard;
 pub mod control;
 pub mod door;
 pub mod io;
@@ -17,6 +18,7 @@ pub mod sched;
 pub mod shell;
 pub mod world;
 
+use crate::billboard::field::Billboards;
 use crate::model::store::Models;
 use pxl_render::frame::draw::DrawList;
 use pxl_render::mesh::paint::object::Painter;
@@ -36,6 +38,7 @@ pub struct Kernel {
     /// What the renderer is handed: every layer lists into it.
     pub draw: DrawList,
     pub models: Models,
+    pub billboards: Billboards,
 }
 
 impl Kernel {
@@ -48,6 +51,7 @@ impl Kernel {
             scene: Scene::default(),
             draw: DrawList::default(),
             models: Models::default(),
+            billboards: Billboards::default(),
         }
     }
 }

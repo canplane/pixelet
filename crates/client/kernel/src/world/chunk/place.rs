@@ -6,15 +6,15 @@
 
 pub mod badge;
 
+use crate::billboard::batch::BillboardBatch;
+use crate::billboard::field::billboard_instance;
+use crate::billboard::selection::select_visible_billboards;
+use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::control::camera::controller::units_per_px_at;
 use crate::layer::poi::{rank_of, Places, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
 use crate::layer::Layer;
 use crate::layer::{Answer, Query};
 use crate::param::POI_MAJOR_RANK;
-use crate::scene::billboard::batch::BillboardBatch;
-use crate::scene::billboard::field::billboard_instance;
-use crate::scene::billboard::selection::select_visible_billboards;
-use crate::scene::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::Chunk;

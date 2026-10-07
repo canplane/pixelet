@@ -7,9 +7,9 @@ use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::BUBBLE_FONT;
 use pxl_render::gpu::sheet::SHEET_SCALE;
 
+use crate::billboard::field::billboard_instance;
+use crate::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::io::text::text_lines;
-use crate::scene::billboard::field::billboard_instance;
-use crate::scene::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
