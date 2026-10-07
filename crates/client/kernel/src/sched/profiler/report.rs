@@ -13,10 +13,10 @@ use crate::io::sched::pending_count;
 use crate::kernel;
 use crate::layer::{Layer, Query};
 use crate::mem::MB;
+use crate::scene::stage::visible_pass;
 use crate::sched::profiler::frame::{CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample, TurnSample, ViewSample, WorkSample};
 use crate::sched::profiler::record::{profiler_record_frame, profiler_recording, profiler_take_rings};
 use crate::sched::tick::TickContext;
-use crate::world::chunk::stage::visible_pass;
 use crate::world::chunk::table::Census;
 
 #[derive(Clone, Debug, Default, PartialEq)]

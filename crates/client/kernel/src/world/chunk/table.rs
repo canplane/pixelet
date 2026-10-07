@@ -38,7 +38,6 @@ use crate::control::interaction::edit::{render_edits, RenderEdits};
 use crate::kernel;
 use crate::layer::object::store::EntryAt;
 use crate::param;
-use crate::scene::Scene;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{draws_as_held, BuildEvent, Builder};
 use crate::world::chunk::frontier::{pool_of, Env, Frontier, Now, Slots};
@@ -559,7 +558,7 @@ impl Scheduler {
         free
     }
 
-    fn materialize(&mut self, sc: &mut Scratch, scene: &mut Scene) {
+    fn materialize(&mut self, sc: &mut Scratch) {
         let Some(d) = domain::current() else { return };
         sc.drawn.clear();
         sc.building.clear();
@@ -579,7 +578,6 @@ impl Scheduler {
             free: self.free(),
         };
         let plan = sc.frontier.plan(&now, &Pieces { d, table: self });
-        scene.coverage.step(&mut scene.draw, settings_store().gizmos, d.pieces(), &sc.drawn);
         self.moves = (plan.refused, plan.waiting + plan.held);
         self.refined = self.refined.wrapping_add(plan.refined);
         self.changes_peak = self.changes_peak.max(self.changes);
@@ -622,8 +620,9 @@ impl Scheduler {
         self.view_dirty = true;
     }
 
-    /// One frame. Returns whether the canvas has something new to draw.
-    pub fn tick(&mut self, frame: Frame, now: &impl Fn() -> f64, scene: &mut Scene) -> bool {
+    /// One frame's plan, before anything is drawn. Returns whether the
+    /// chunks have something new to draw.
+    pub fn tick(&mut self, frame: Frame, now: &impl Fn() -> f64) -> bool {
         let t0 = now();
         let deadline = t0 + frame.remaining_ms;
         let hard = deadline + frame.hard_slack_ms;
@@ -655,7 +654,7 @@ impl Scheduler {
             self.view_dirty = false;
         }
 
-        self.materialize(&mut sc, scene);
+        self.materialize(&mut sc);
         self.order(&mut sc.order, &mut sc.keys);
 
         sc.pending.clear();
@@ -675,18 +674,19 @@ impl Scheduler {
         committed += core::mem::take(&mut self.build_committed);
 
         self.scratch = sc;
-        let animating = scene.tick(&frame);
-        scene.begin(frame.eye);
-        self.draw_frame(&frame, &mut scene.draw);
-
         self.commit_left = commit_left;
         let moving = self.moves.1 > 0 || self.slots.iter().any(|s| s.role == Role::Building && s.layout.is_some());
-        committed > 0 || pending_total > committed || moving || self.view_dirty || animating
+        committed > 0 || pending_total > committed || moving || self.view_dirty
+    }
+
+    /// The chunks drawn as this turn's plan found them.
+    pub fn drawn(&self) -> &[Chunk] {
+        &self.scratch.drawn
     }
 
     /// Chunks built for a move are not drawn until the move is made; the piece
     /// they replace covers their ground until then.
-    fn draw_frame(&mut self, frame: &Frame, draw: &mut DrawList) {
+    pub fn draw(&mut self, frame: &Frame, draw: &mut DrawList) {
         self.zoom_boxes = [0; ZOOMS];
         let holder = &self.meshes.holder;
         for s in &self.slots {

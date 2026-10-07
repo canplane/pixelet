@@ -15,7 +15,6 @@ pub mod mesh_slot;
 pub mod place;
 pub mod quality;
 pub mod source;
-pub mod stage;
 pub mod table;
 
 use pxl_spec::space::camera::grid::CHUNK_STEPS;

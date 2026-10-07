@@ -25,6 +25,7 @@ use crate::scene::environment::state::map_environment_step;
 use crate::scene::marker::frame_gizmo::debug_gizmos_step;
 use crate::scene::marker::hover_cursor::hover_cursor_step;
 use crate::scene::marker::location_puck::location_puck_step;
+use crate::scene::stage::{take_draw, visible_step};
 use crate::sched::edge::{request_world_tick, world_edge};
 use crate::sched::profiler::report::{report_step, set_host_task_ms, set_turn_timing};
 use crate::sched::profiler::spec::EffectName;
@@ -32,7 +33,6 @@ use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickState};
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::decor::asset_store::decor_assets_wanted;
 use crate::world::chunk::source::chunk_sources_step;
-use crate::world::chunk::stage::{core_tick_visible_step, take_draw};
 use crate::world::pyramid::Observed as _;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -114,7 +114,7 @@ pub fn boot() {
     on_tick(VISIBLE, sight_tick, StepName::sight);
     on_tick(VISIBLE, goal_tick, StepName::goal);
     on_tick(VISIBLE, demand_tick, StepName::demand);
-    on_tick(VISIBLE, core_tick_visible_step, StepName::chunks);
+    on_tick(VISIBLE, visible_step, StepName::chunks);
     on_tick(COSMETIC, debug_gizmos_tick, StepName::debug_gizmos);
     on_tick(REPORT, report_step, StepName::profiler);
     world_tasks();
@@ -137,7 +137,7 @@ fn world_tasks() {
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
         && spawn(crate::io::load::gltf_task(), Arrival as u8)
-        && spawn(crate::world::chunk::stage::build_task(), Build as u8)
+        && spawn(crate::world::chunk::build::build_task(), Build as u8)
         && spawn(crate::world::chunk::decor::asset_store::decor_asset_task(), Background as u8)
         && spawn(crate::layer::object::repository::task(), Background as u8);
     if !spawned {

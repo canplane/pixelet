@@ -4,11 +4,19 @@
 //! the settings, and everything the renderer is handed, since it reads
 //! nothing of the kernel on its own.
 
+use crate::sched::tick::{TickContext, HARD_SLACK_MS};
+use crate::with_world;
+use crate::world::chunk::decor::build::DecorHide;
+use crate::world::chunk::table::Frame;
+use crate::world::view::frame::pose::{globe, view_resize};
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
+use pxl_spec::space::coord::v3::sub3;
+use xpute_guest::clock::now;
+use xpute_guest::global::Global;
 
 use crate::mem::MB;
 use crate::sched::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
@@ -141,4 +149,74 @@ pub fn stage_render() {
             layers_mb: stat.layers_mb,
         },
     );
+}
+
+struct Pass {
+    visible_pass: Option<f64>,
+    draw: bool,
+}
+
+static PASS: Global<Pass> = Global::new();
+
+fn pass() -> &'static mut Pass {
+    PASS.get(|| Pass { visible_pass: None, draw: false })
+}
+
+pub fn take_draw() -> bool {
+    core::mem::take(&mut pass().draw)
+}
+
+pub fn visible_step(ctx: &mut TickContext) {
+    let c = pass();
+    c.visible_pass = None;
+    view_resize(ctx.state.width, ctx.state.height);
+    let v = view();
+
+    let anchor = sea_under_eye();
+    let e = v.pose.eye;
+    let frame = Frame {
+        anchor,
+        eye: e,
+        frustum: v.frustum.about(anchor),
+        camera: sub3(&e, &anchor),
+        delta_s: ctx.delta,
+        remaining_ms: ctx.budget.remaining(),
+        hard_slack_ms: HARD_SLACK_MS,
+        globe: Some(globe()),
+    };
+
+    let t0 = now();
+    // The chunks plan first; what animates and every layer but the chunks list
+    // before the chunks draw.
+    let draw = with_world(|_, sched, scene| {
+        let moving = sched.tick(frame, &now);
+        if let Some(d) = crate::world::chunk::domain::current() {
+            scene.coverage.step(&mut scene.draw, settings_store().gizmos, d.pieces(), sched.drawn());
+        }
+        let animating = scene.tick(&frame);
+        scene.begin(frame.eye);
+        sched.draw(&frame, &mut scene.draw);
+        moving || animating
+    })
+    .unwrap_or(false);
+    // Decor lists after the chunks have listed theirs.
+    {
+        let k = kernel();
+        let edits = crate::control::interaction::edit::render_edits();
+        let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
+        crate::world::chunk::decor::cell::step(&crate::world::chunk::decor::kind::KINDS, &k.objects, &k.sched, &mut k.scene.draw, hide, frame.eye, &ctx.budget);
+    }
+    crate::world::chunk::place::step(ctx);
+    let scene = &mut kernel().scene;
+    scene.billboards.draw(&mut scene.draw, &scene.models, frame.eye);
+    if draw {
+        c.draw = true;
+        ctx.invalidate();
+    }
+    c.visible_pass = Some(now() - t0);
+}
+
+/// How long this turn's chunks took; none where the stage was empty.
+pub fn visible_pass() -> Option<f64> {
+    pass().visible_pass
 }
