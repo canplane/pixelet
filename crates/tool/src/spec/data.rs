@@ -189,7 +189,12 @@ const DATA_SPECS: [DataSpec; 18] = [
     },
     DataSpec {
         json: "spec/client/kernel/profiler/profiler.json",
-        uses: &["xpute/spec/sched/tick.json", "spec/client/kernel/io/demand.json", "spec/client/kernel/turn/step.json", "spec/client/render/gpu/span.json"],
+        uses: &[
+            "xpute/spec/sched/tick.json",
+            "spec/client/kernel/io/demand.json",
+            "spec/client/kernel/turn/step.json",
+            "spec/client/render/gpu/span.json",
+        ],
         ts: Some("apps/web/src/feature/debug/profiler/profiler.spec.ts"),
         rs: Some("crates/client/kernel/src/profiler/profiler.spec.rs"),
         module: Some("spec"),
