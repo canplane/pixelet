@@ -24,9 +24,9 @@ use crate::scene::billboard::sheet::billboard_sheet;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
 use crate::sched::edge::request_world_tick;
+use crate::sched::profiler::report::set_host_frame_stat;
 use crate::shell::setting::store::{settings_store, AoMode};
 use crate::world::chunk::decor::asset_store::kind_assets;
-use crate::world::chunk::stage::set_host_frame_stat;
 use crate::world::pyramid::Observed as _;
 use crate::world::view::frame::resolution::resolution_observe;
 

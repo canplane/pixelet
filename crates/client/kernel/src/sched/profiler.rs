@@ -6,6 +6,7 @@ pub mod block;
 pub mod frame;
 pub mod log;
 pub mod record;
+pub mod report;
 #[path = "profiler/profiler.spec.rs"]
 pub mod spec;
 pub mod summary;
