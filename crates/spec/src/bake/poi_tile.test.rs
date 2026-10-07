@@ -177,6 +177,7 @@ fn a_tile_that_names_no_place_or_splits_a_character_is_refused() {
     assert!(encode(&swapped).is_err());
     // A name past the bound, and a place run past its cell, are refused on read.
     let long = "a".repeat(NAME_CHARS + 1);
+    assert!(decode(&lanes(&[1], &[1], &[0, 1], &[0], &[""], &["a"])).is_ok(), "the lanes themselves are read");
     assert!(decode(&lanes(&[1], &[1], &[0, 1], &[0], &[""], &[&long])).is_err());
     assert!(decode(&lanes(&[1], &[1], &[0, 2], &[0], &[""], &["a"])).is_err());
 }
@@ -185,14 +186,20 @@ fn a_tile_that_names_no_place_or_splits_a_character_is_refused() {
 fn lanes(cells: &[u32], counts: &[u32], starts: &[u32], shown: &[u32], kinds: &[&str], names: &[&str]) -> Vec<u8> {
     let (partial, at) = (vec![0u8; cells.len()], vec![0u16; 2 * shown.len()]);
     let ids: Vec<&str> = names.iter().map(|_| "x").collect();
-    let named = NameLanes::of(names.iter().map(|&n| (n, [])));
-    let mut t: TreeView<'_> = TreeView::new();
-    t.branch(Some(&mut |b| {
-        b.u32_array(Some(cells)).u32_array(Some(counts)).u8_array(Some(&partial)).u32_array(Some(starts));
-        b.u32_array(Some(shown)).u16_array(Some(&at)).strs(Some(kinds)).strs(Some(&ids));
-        named.write(b);
-    }));
-    encoder().encode(&t, TreeEncoderOptions::default()).unwrap()
+    let names = NameLanes::of(names.iter().map(|&n| (n, [])));
+    write(&Lanes {
+        cells,
+        counts,
+        partial: &partial,
+        starts,
+        occupancy: 0,
+        shown,
+        at: &at,
+        kinds,
+        ids: &ids,
+        names: &names,
+    })
+    .unwrap()
 }
 
 /// A source's id, a kind this table does not know and names by language
