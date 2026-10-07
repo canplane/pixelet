@@ -7,7 +7,8 @@ use core::mem::size_of;
 use xpute_guest::mem::section::span_of;
 
 use crate::chunk::mesh_slot::OCCUPANCY;
-use crate::mem::fixed::{lane, range, Range};
+use crate::chunk::table::MOUNTS_RANGE;
+use crate::mem::fixed::lane;
 
 use crate::chunk::Chunk;
 
@@ -97,5 +98,5 @@ pub const MOUNTS_BYTES: u32 = span_of(&MOUNT_LANES, MOUNT_ALIGN);
 /// # Safety
 /// Each lane is taken once, by the table alone; zero is valid for every entry.
 pub(super) unsafe fn mount_lane<T>(k: usize) -> &'static mut [T] {
-    unsafe { lane(range(Range::Mounts).nth(&MOUNT_LANES, MOUNT_ALIGN, k), 0, OCCUPANCY) }
+    unsafe { lane(MOUNTS_RANGE.get().nth(&MOUNT_LANES, MOUNT_ALIGN, k), 0, OCCUPANCY) }
 }

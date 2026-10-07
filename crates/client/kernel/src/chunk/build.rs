@@ -33,6 +33,9 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_guest::sched::edge::{notified, yield_if_spent};
 
+/// `.fixed.bake`, handed in at boot.
+pub static BAKE_RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BuildEvent {
     /// All slots for a tier are asked for at once, before any is written. If

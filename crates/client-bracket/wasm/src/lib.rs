@@ -11,8 +11,8 @@
 //! given, the allocator over it, the clock — and `interrupt`, the export the
 //! shell rings.
 
+use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::door::Bracket;
-use pxl_kernel::mem::section;
 use xpute_guest::mem::heap::{Bounds, Heap, HeapStat};
 use xpute_guest::module::{data_end, given, now};
 
@@ -30,7 +30,7 @@ struct ModuleBounds;
 
 impl Bounds for ModuleBounds {
     fn base() -> usize {
-        section::heap_at(data_end()) as usize
+        heap_at(data_end()) as usize
     }
     fn end() -> usize {
         given() as usize

@@ -15,6 +15,9 @@ use pxl_spec::space::layer::lattice::{EXTENT, TILE_CELLS};
 use crate::layer::residency::Residency;
 use pxl_spec::bake::format::Terrain;
 
+/// `.fixed.terrain`, handed in at boot.
+pub static RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
+
 const FRAMES: u32 = Residency::<Terrain>::FRAMES;
 
 /// One tile's ground: a `GroundCell` a cell, no stride and no padding.

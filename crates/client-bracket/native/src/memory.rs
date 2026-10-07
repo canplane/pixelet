@@ -27,7 +27,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use xpute_guest::mem::heap::{heap_stat, Bounds, Heap, HeapStat};
 
 use crate::thread::on_kernel_thread;
-use pxl_kernel::mem::section;
+use pxl_kernel::door::layout::heap_at;
 use pxl_kernel::mem::spec::{GLOBAL_BASE, PHONE_BYTES};
 
 /// The memory the kernel is given: a phone's reservation, mem.json's, as a
@@ -102,7 +102,7 @@ struct RegionBounds;
 
 impl Bounds for RegionBounds {
     fn base() -> usize {
-        region() + section::heap_at(DATA_END) as usize
+        region() + heap_at(DATA_END) as usize
     }
     fn end() -> usize {
         region() + GIVEN as usize

@@ -1,96 +1,39 @@
 // pxl-kernel/mem/fixed.rs
 
-//! The ranges of `.fixed`: placed once at boot, never freed, sized at
-//! compile time. Only the kernel's own formats belong here; external ones
-//! (glTF, PNG) have no predictable bound and stay in the heap. Ranges are
-//! reached only through `range`, `at` or `lane`, which check the range's end.
-//!
-//!   .fixed.terrain   resident terrain, one record per framed page
-//!   .fixed.bake      the one open bake's mesh, before it goes to its slot
-//!   .fixed.mounts    the chunk table's lanes
-//!   .fixed.blocks    the renderer's block table
-//!   .fixed.gpu       the GPU call stream to the host
-//!   .fixed.host      the kernel's other host calls
-//!   .fixed.profiler  the profiler's rings, read in place by the shell
+//! What `.fixed` is to whoever holds a range of it: placed once at boot,
+//! never freed, sized at compile time. Only the kernel's own formats belong
+//! here; external ones (glTF, PNG) have no predictable bound and stay in the
+//! heap. Which ranges there are and how large is the roof's
+//! (door/layout.rs), which hands each owner its own at boot; a range is read
+//! only through `lane` and `Section::at`, which check its end.
 
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
-use xpute_guest::mem::section::{span_of, Section};
+use xpute_guest::mem::section::Section;
 
-use pxl_render::gpu::api_spec::stream;
-use pxl_render::gpu::renderer::{block_slots, blocks_bytes};
+/// One owner's range, handed in once at boot; asking before is a bug.
+pub struct Held(Global<Option<Section>>);
 
-use crate::abi::host::stream as host_stream;
-
-use crate::chunk::build::BAKE_BYTES;
-use crate::chunk::table::MOUNTS_BYTES;
-use crate::layer::terrain::fixed::TERRAIN_BYTES;
-use crate::mem::section::{map, PAGE_BYTES};
-use crate::profiler::record::PROFILER_BYTES;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Range {
-    Terrain,
-    Bake,
-    Mounts,
-    Blocks,
-    Gpu,
-    Host,
-    Profiler,
-}
-
-const COUNT: usize = 7;
-
-impl Range {
-    const fn index(self) -> usize {
-        match self {
-            Range::Terrain => 0,
-            Range::Bake => 1,
-            Range::Mounts => 2,
-            Range::Blocks => 3,
-            Range::Gpu => 4,
-            Range::Host => 5,
-            Range::Profiler => 6,
-        }
+impl Default for Held {
+    fn default() -> Held {
+        Held::new()
     }
 }
 
-/// None is let go.
-pub const MODELS_MAX: usize = crate::scene::character::variant::MODELS_MAX + crate::chunk::decor::kind_assets::MODELS_MAX;
+impl Held {
+    pub const fn new() -> Held {
+        Held(Global::new())
+    }
 
-pub const ACTORS_MAX: usize = crate::scene::character::companion::ACTORS_MAX + crate::scene::character::preview::CASES_MAX;
+    pub fn set(&self, s: Section) {
+        self.0.set(Some(s));
+    }
 
-const SINGLE_BLOCKS: usize = 3;
-
-/// Each owner's bound summed, so the table cannot fill. The renderer frees
-/// a list's blocks before taking its uploads, so it never holds more.
-pub const MAX_LIVE_BLOCKS: usize = crate::chunk::decor::cell::BLOCKS_MAX + MODELS_MAX + ACTORS_MAX + crate::billboard::sheet::SETS_MAX + SINGLE_BLOCKS;
-
-pub const BLOCK_SLOTS: usize = block_slots(MAX_LIVE_BLOCKS);
-
-const RANGES: [u32; COUNT] = {
-    let mut r = [0; COUNT];
-    r[Range::Terrain.index()] = TERRAIN_BYTES;
-    r[Range::Bake.index()] = BAKE_BYTES;
-    r[Range::Mounts.index()] = MOUNTS_BYTES;
-    r[Range::Blocks.index()] = blocks_bytes(BLOCK_SLOTS);
-    r[Range::Gpu.index()] = stream::BYTES;
-    r[Range::Host.index()] = host_stream::BYTES;
-    r[Range::Profiler.index()] = PROFILER_BYTES;
-    r
-};
-
-pub const BYTES: u32 = span_of(&RANGES, PAGE_BYTES);
-
-/// Asking before boot lays out memory is a bug.
-pub fn range(r: Range) -> Section {
-    map().or_bug(Errno::ENOTRECOVERABLE).fixed.nth(&RANGES, PAGE_BYTES, r.index())
-}
-
-/// None where the bytes would run past the range's end.
-pub fn at(r: Range, off: u32, bytes: u32) -> Option<u32> {
-    range(r).at(off, bytes)
+    pub fn get(&self) -> Section {
+        self.0.get(|| None).or_bug(Errno::ENOTRECOVERABLE)
+    }
 }
 
 /// `n` of `T` from `off` into `s`. Sizes are fixed at compile time, so out

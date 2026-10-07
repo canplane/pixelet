@@ -14,7 +14,6 @@ use crate::io::host::HeapStat;
 use crate::kernel;
 use crate::layer::earth::Earth;
 use crate::layer::residency::Residency;
-use crate::mem::fixed::Range;
 use crate::mem::section;
 use layout::DOOR_LAYOUT;
 use pxl_spec::bake::format::Terrain;
@@ -124,7 +123,7 @@ fn boot(b: &Bracket) {
         margin,
         batch,
         settle,
-        (key::SYS, fixed_at(Range::Host)),
+        (key::SYS, fixed_at(layout::Fixed::Host)),
         (crate::abi::directory::key::GPU_STREAM, gpu_stream),
     ];
     // SAFETY: the page at DIRECTORY_AT, kept clear of the rings and the
@@ -133,15 +132,20 @@ fn boot(b: &Bracket) {
     write_directory(words, &entries);
 }
 
-fn fixed_at(r: Range) -> u32 {
-    crate::mem::fixed::range(r).offset
+fn fixed_at(f: layout::Fixed) -> u32 {
+    layout::range(f).offset
 }
 
 /// Lays the memory map. Returns where GPU calls are
 /// recorded for the host, 0 where the kernel makes them itself.
 fn lay_out(b: &Bracket) -> u32 {
     // The map first: the kernel's first use makes the chunk table, which lives in `.fixed`.
-    section::set_map(section::lay_out(b.given, b.data_end));
+    section::set_map(section::lay_out(b.given, b.data_end, layout::FIXED_BYTES));
+    // Each range to its owner.
+    crate::layer::terrain::fixed::RANGE.set(layout::range(layout::Fixed::Terrain));
+    crate::chunk::build::BAKE_RANGE.set(layout::range(layout::Fixed::Bake));
+    crate::chunk::table::MOUNTS_RANGE.set(layout::range(layout::Fixed::Mounts));
+    crate::profiler::record::RANGE.set(layout::range(layout::Fixed::Profiler));
     kernel().laid_out = true;
     // A layer asks for no more tiles than its residency frames.
     crate::io::request::open(|c| match c {
@@ -153,9 +157,9 @@ fn lay_out(b: &Bracket) -> u32 {
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the
     // renderer's or the host's alone.
     unsafe {
-        crate::io::host::set_host_stream(fixed_at(Range::Host));
-        pxl_render::gpu::renderer::set_blocks(fixed_at(Range::Blocks), crate::mem::fixed::BLOCK_SLOTS);
-        pxl_render::gpu::api::install(fixed_at(Range::Gpu))
+        crate::io::host::set_host_stream(fixed_at(layout::Fixed::Host));
+        pxl_render::gpu::renderer::set_blocks(fixed_at(layout::Fixed::Blocks), layout::BLOCK_SLOTS);
+        pxl_render::gpu::api::install(fixed_at(layout::Fixed::Gpu))
     }
 }
 

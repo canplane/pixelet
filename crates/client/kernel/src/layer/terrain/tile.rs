@@ -16,9 +16,9 @@ use xpute_guest::mem::base::ptr_at;
 use crate::io::failure::Failure;
 
 use crate::io::demand::{Category, Phases, TaskPhaseName};
+use crate::layer::terrain::fixed::RANGE;
 use crate::layer::terrain::fixed::{coarse_off, deck_off, ele_off, extent_off, ground_off, COARSE_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::layer::Layer;
-use crate::mem::fixed::{at, Range};
 use pxl_spec::bake::format::Occupancy;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -59,7 +59,7 @@ impl Layer for Terrain {
 /// from now until another tile takes the record.
 unsafe fn room_of(record: u32) -> TileRoom {
     // Inside the range by the layout, so past its end is a bug.
-    let lane = |off, bytes| at(Range::Terrain, off, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
+    let lane = |off, bytes| RANGE.get().at(off, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
     let (cells, ele, extent, coarse) = (
         lane(ground_off(record), GROUND_LANE_BYTES),
         lane(ele_off(record), ELE_LANE_BYTES),
