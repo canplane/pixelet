@@ -11,24 +11,39 @@ use crate::segment::Segment;
 use crate::terrain::pipeline::overture::policy::{INFRASTRUCTURE, WIDEST_LINE};
 use crate::terrain::pipeline::overture::width::carto_u;
 
+/// A table's rows in the tile's envelope, each feature once. A feature is
+/// stored in every shard whose apron it reaches, identical, and the work
+/// after this would otherwise be paid for each copy: up to twenty of a sea
+/// polygon's 444,741 points. Reads `env`, the statement's envelope.
+#[macro_export]
+macro_rules! read_once {
+    ($table:literal) => {
+        concat!("(SELECT DISTINCT ON (gers_id) t.* FROM ", $table, " t, env WHERE t.geom && env.e)")
+    };
+}
+
 // Buildings and roads are not clipped: a naive bbox clip broke ring closure.
 // Water and coast are clipped, since their rows reach hundreds of thousands of points.
-const OVERTURE_BUILDINGS_SQL: &str = "WITH env AS (
+const OVERTURE_BUILDINGS_SQL: &str = concat!(
+    "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT DISTINCT ON (gers_id) gers_id, class, subtype, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb
-FROM overture_buildings, env
-WHERE geom && env.e";
+SELECT gers_id, class, subtype, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb
+FROM ",
+    read_once!("overture_buildings"),
+    " b"
+);
 
 const OVERTURE_TRANSPORTATION_SQL: &str = concat!(
     "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT DISTINCT ON (t.gers_id) ",
+SELECT ",
     crate::segment_columns!(),
     "
-FROM overture_transportation t, env
-WHERE t.geom && env.e"
+FROM ",
+    read_once!("overture_transportation"),
+    " t"
 );
 
 /// How far past a tile what is drawn on it can come from: half the widest line.
@@ -43,21 +58,29 @@ pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
 }
 
 /// Four tables, one row shape; `source` says whose vocabulary a row uses.
-const OVERTURE_BASE_SQL: &str = "WITH env AS (
+const OVERTURE_BASE_SQL: &str = concat!(
+    "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT DISTINCT ON (gers_id) 'land_use' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land_use, env WHERE geom && env.e
+SELECT 'land_use' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM ",
+    read_once!("overture_base_land_use"),
+    " r
 UNION ALL
--- Some water rows are country-scale (up to 444,626 points); clip to the tile envelope first. ST_IsEmpty guards && 's bbox-only false positives.
+-- Some water rows are country-scale; clip to the tile envelope first. ST_IsEmpty guards && 's bbox-only false positives.
 SELECT 'water' AS source, gers_id, subtype, class, way_area, ST_AsBinary(clipped) AS geom_wkb FROM (
-  SELECT DISTINCT ON (gers_id) gers_id, subtype, class, ST_Area(geom) AS way_area, ST_Intersection(geom, env.e) AS clipped
-  FROM overture_base_water, env
-  WHERE geom && env.e
+  SELECT gers_id, subtype, class, ST_Area(geom) AS way_area, ST_Intersection(geom, env.e) AS clipped FROM ",
+    read_once!("overture_base_water"),
+    " r, env
 ) w WHERE NOT ST_IsEmpty(clipped)
 UNION ALL
-SELECT DISTINCT ON (gers_id) 'land' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land, env WHERE geom && env.e
+SELECT 'land' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM ",
+    read_once!("overture_base_land"),
+    " r
 UNION ALL
-SELECT DISTINCT ON (gers_id) 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class = ANY($5)";
+SELECT 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM ",
+    read_once!("overture_base_infrastructure"),
+    " r WHERE class = ANY($5)"
+);
 
 /// The tile's land from OSM's land polygons (`infra/geo/coastline`), taken
 /// whole: empty means pure ocean, the whole envelope means all land, both dropped.
