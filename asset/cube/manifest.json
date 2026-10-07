@@ -5,45 +5,24 @@
     "tileSize": 256,
     "format": "PNG",
     "filesAreIndividual": true,
-    "activeAssetCount": 73,
-    "cutePaintedActiveCount": 73,
+    "activeAssetCount": 62,
+    "cutePaintedActiveCount": 62,
     "legacyActiveCount": 0,
     "allActiveAssetsUseCutePaintedStyle": true,
     "sourcePalette": {
       "terrain": "pixelet terrain/carto.json",
       "objects": "pixelet objects/default.json"
     },
-    "note": "Download each active source image as an individual file and normalize it to exactly 256x256 opaque RGBA PNG. For these hand-painted assets, use high-quality Lanczos or bicubic downsampling when the source is larger than 256x256; do not use nearest-neighbor on the painted set because it can reintroduce visible pixelation. Do not make a sprite sheet. The cute-painted set covers all 17 land/water top materials, all 5 structure tops, all 10 transport tops, all 13 terrain sides, and the 13 terrain bottoms. The SEA, LAKE, RIVER, and WETLAND water entries were refreshed with a calmer pastel-painted water treatment: broad soft tonal drift, restrained contrast, and no strong repeated ripple pattern. The RAIL_MAIN and RAIL_SUBWAY transport entries were refreshed with an isotropic rail-ballast treatment with no directional lines, since a single stamped tile cannot be rotated to match each way's real bearing. All 15 object block textures now use the shared generic-painted-plaster-stucco-v1 material. The existing filenames are retained only for code compatibility; none of the active block textures represent wool or fiber. Each color keeps its existing paletteHex and has its own individual PNG (73 cute-painted, 0 legacy = 73 active assets total). Preserve distinct-per-type mappings and do not collapse types. The old sourceCreation 28 exposed-soil image is intentionally excluded and must not be assigned to any terrain type.",
+    "note": "Download each active source image as an individual file and normalize it to exactly 256x256 opaque RGBA PNG, with high-quality Lanczos or bicubic downsampling for the painted set; never a sprite sheet. 27 terrain tops (by the Carto look each is keyed by), 10 terrain sides and 10 bottoms, and 15 object blocks. A look with no top draws as its Carto colour; `land` has none until one is painted for Carto's bare background. A tile is stamped regardless of a way's bearing, so a texture has no direction. When the pack is composed, each top's mean colour is drawn toward its look's Carto colour (color.json) to within a set distance, so the painted look stays and a map still reads as Carto from afar.",
     "conversion": {
       "status": "complete",
-      "cutePaintedGroups": [
-        "terrain.top.land",
-        "terrain.top.water",
-        "terrain.top.structure",
-        "terrain.top.transport",
-        "terrain.side",
-        "terrain.bottom",
-        "objects.block"
-      ],
-      "legacyGroups": [],
-      "cutePaintedAssetCount": 73,
-      "legacyAssetCount": 0,
-      "remainingForCutePaintedConversion": 0,
-      "fullPackComplete": true,
-      "note": "The pack is now fully converted to the active painted style. All 17 land/water top materials, 5 structure tops, 10 transport tops, 13 terrain sides, 13 terrain bottoms, and 15 object blocks are active. The 15 object blocks share the generic-painted-plaster-stucco-v1 architectural surface rule and differ only by palette color. The existing filenames remain unchanged for compatibility. The calm-water variants remain active, and the old sourceCreation 28 exposed-soil image remains excluded."
+      "note": "Every active entry uses the cute-painted-fantasy-v1 style."
     },
     "bottomNote": "A terrain bottom is the type's ground material under its surface, as Minecraft's grass block wears dirt on its bottom face and the blocks under it are dirt: the face under the box, and every side cell below the one at the surface. It repeats no top lip. A type with a side has a bottom; a type with neither is the same image on every face."
   },
   "terrain": {
     "top": {
       "land": {
-        "land": {
-          "sourceCreationId": "3fa1408f-bec7-4064-a1e5-7503bb9f0b75",
-          "url": "https://image-assets.jianhua.art/public/1788239899203_f274ni.png",
-          "file": "terrain/land_land.png",
-          "paletteHex": null,
-          "style": "cute-painted-fantasy-v1"
-        },
         "forest": {
           "sourceCreationId": "1ba7d0e2-86eb-4ec7-ae43-cb4e1a072c51",
           "url": "https://image-assets.jianhua.art/public/1788240099279_h5nu3k.png",
@@ -113,6 +92,24 @@
           "file": "terrain/land_parking.png",
           "paletteHex": "#eeeeee",
           "style": "cute-painted-fantasy-v1"
+        },
+        "grass": {
+          "url": "https://image-assets.jianhua.art/public/1788239899203_f274ni.png",
+          "file": "terrain/land_grass.png",
+          "paletteHex": "#cdebb0",
+          "style": "cute-painted-fantasy-v1"
+        },
+        "leisure": {
+          "url": "https://image-assets.jianhua.art/public/1788243529671_2s6yxd.png",
+          "file": "terrain/land_leisure.png",
+          "paletteHex": "#dffce2",
+          "style": "cute-painted-fantasy-v1"
+        },
+        "farmyard": {
+          "url": "https://image-assets.jianhua.art/public/1788243667574_xf60cs.png",
+          "file": "terrain/land_farmyard.png",
+          "paletteHex": "#f5dcba",
+          "style": "cute-painted-fantasy-v1"
         }
       },
       "water": {
@@ -137,6 +134,12 @@
           "url": "https://image-assets.jianhua.art/public/1788245867189_c0fr2q.png",
           "file": "terrain/structure_building_major.png",
           "paletteHex": "#c4b6ab",
+          "style": "cute-painted-fantasy-v1"
+        },
+        "dam": {
+          "url": "https://image-assets.jianhua.art/public/1788310653403_9hmltm.png",
+          "file": "terrain/structure_dam.png",
+          "paletteHex": "#adadad",
           "style": "cute-painted-fantasy-v1"
         }
       },
@@ -195,6 +198,18 @@
           "url": "https://image-assets.jianhua.art/public/1788310653403_9hmltm.png",
           "file": "terrain/transport_aeroway.png",
           "paletteHex": "#bbbbcc",
+          "style": "cute-painted-fantasy-v1"
+        },
+        "living_street": {
+          "url": "https://image-assets.jianhua.art/public/1788243532608_irhpxc.png",
+          "file": "terrain/transport_living_street.png",
+          "paletteHex": "#ededed",
+          "style": "cute-painted-fantasy-v1"
+        },
+        "platform": {
+          "url": "https://image-assets.jianhua.art/public/1788245867189_c0fr2q.png",
+          "file": "terrain/transport_platform.png",
+          "paletteHex": "#bbbbbb",
           "style": "cute-painted-fantasy-v1"
         }
       }

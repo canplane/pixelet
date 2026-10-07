@@ -62,6 +62,17 @@ pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
     Ok(groups)
 }
 
+/// Each ground look's color by name, packed `0xRRGGBB`, as color.json gives it.
+pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String> {
+    let spec = read("spec/spec/cell/color.json")?;
+    let ground = spec.get("ground").ok_or("color.json has no ground")?;
+    ground
+        .entries()
+        .iter()
+        .map(|(n, e)| Ok((n.clone(), super::packed(e.str_at("hex").ok_or(format!("color.json: ground.{n} has no hex"))?)?)))
+        .collect()
+}
+
 pub fn color_outputs() -> Result<Vec<Output>, String> {
     let spec = read("spec/spec/cell/color.json")?;
     let head: Vec<String> = [

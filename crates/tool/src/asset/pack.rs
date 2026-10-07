@@ -205,6 +205,49 @@ pub fn flatten_alpha(data: &mut [u8], palette_hex: Option<&str>) {
 
 const QUALITY: f32 = 92.0;
 
+/// How far a top's mean may stay from its look's Carto color, in CIE76 ΔE:
+/// the painted look kept up close, the map still Carto's from afar, where a
+/// textured look is drawn as its tile's mean (pxl-render mesh/paint/palette.rs).
+pub const TOWARD_CARTO: f64 = 20.0;
+
+/// sRGB bytes to CIE L*a*b* (D65), through linear light.
+fn lab_of(rgb: [u8; 3]) -> [f64; 3] {
+    let [r, g, b] = rgb.map(srgb_to_linear);
+    let x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.950_47;
+    let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    let z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.088_83;
+    let f = |t: f64| if t > 0.008_856 { libm::cbrt(t) } else { 7.787 * t + 16.0 / 116.0 };
+    [116.0 * f(y) - 16.0, 500.0 * (f(x) - f(y)), 200.0 * (f(y) - f(z))]
+}
+
+fn rgb_of([l, a, b]: [f64; 3]) -> [u8; 3] {
+    let fy = (l + 16.0) / 116.0;
+    let (fx, fz) = (fy + a / 500.0, fy - b / 200.0);
+    let g = |t: f64| if t * t * t > 0.008_856 { t * t * t } else { (t - 16.0 / 116.0) / 7.787 };
+    let (x, y, z) = (g(fx) * 0.950_47, g(fy), g(fz) * 1.088_83);
+    [3.2406 * x - 1.5372 * y - 0.4986 * z, -0.9689 * x + 1.8758 * y + 0.0415 * z, 0.0557 * x - 0.2040 * y + 1.0570 * z].map(|c| linear_to_srgb(c.clamp(0.0, 1.0)))
+}
+
+/// Moves a tile's colors, every pixel by one offset in L*a*b*, so its mean is
+/// no farther than `TOWARD_CARTO` from `carto`: its pattern, the pixels'
+/// differences, is left as painted. A tile already that close is left alone.
+pub fn toward_carto(img: &mut RgbaImage, carto: u32) {
+    let labs: Vec<[f64; 3]> = img.pixels().map(|p| lab_of([p.0[0], p.0[1], p.0[2]])).collect();
+    let n = labs.len() as f64;
+    let mean: [f64; 3] = core::array::from_fn(|k| labs.iter().map(|p| p[k]).sum::<f64>() / n);
+    let target = lab_of([(carto >> 16) as u8, (carto >> 8) as u8, carto as u8]);
+    let d = libm::sqrt((0..3).map(|k| (target[k] - mean[k]) * (target[k] - mean[k])).sum());
+    if d <= TOWARD_CARTO {
+        return;
+    }
+    let t = (d - TOWARD_CARTO) / d;
+    let offset: [f64; 3] = core::array::from_fn(|k| (target[k] - mean[k]) * t);
+    for (px, lab) in img.pixels_mut().zip(labs) {
+        let [r, g, b] = rgb_of(core::array::from_fn(|k| lab[k] + offset[k]));
+        px.0 = [r, g, b, px.0[3]];
+    }
+}
+
 /// The pack laid out as one lossy WebP (q92): about 400 KB against several MB
 /// lossless, downloaded on every cold start.
 pub struct Image {
@@ -241,8 +284,9 @@ fn linear_to_srgb(c: f64) -> u8 {
 }
 
 /// Every tile must be exactly `TILE_SIZE` square; a wrong size is an upstream mistake
-/// and is refused rather than resized.
-pub fn compose(root: &std::path::Path, tiles: &[String]) -> Result<Image, String> {
+/// and is refused rather than resized. A tile with a Carto color in `carto` is
+/// drawn toward it first.
+pub fn compose(root: &std::path::Path, tiles: &[String], carto: &[Option<u32>]) -> Result<Image, String> {
     let rows = tiles.len().div_ceil(COLUMNS as usize) as u32;
     // Opaque black, so an uncovered cell is visible rather than blended.
     let mut laid = RgbaImage::from_pixel(COLUMNS * TILE_SIZE, rows.max(1) * TILE_SIZE, image::Rgba([0, 0, 0, 255]));
@@ -250,9 +294,12 @@ pub fn compose(root: &std::path::Path, tiles: &[String]) -> Result<Image, String
 
     for (n, tile) in tiles.iter().enumerate() {
         let path = root.join(tile);
-        let img = image::open(&path).map_err(|e| format!("{tile}: {e}"))?.to_rgba8();
+        let mut img = image::open(&path).map_err(|e| format!("{tile}: {e}"))?.to_rgba8();
         if img.width() != TILE_SIZE || img.height() != TILE_SIZE {
             return Err(format!("{tile} is {}x{}, not {TILE_SIZE} square", img.width(), img.height()));
+        }
+        if let Some(&Some(color)) = carto.get(n) {
+            toward_carto(&mut img, color);
         }
         let (x, y) = ((n as u32 % COLUMNS) * TILE_SIZE, (n as u32 / COLUMNS) * TILE_SIZE);
         means.push(mean_of(&img));
