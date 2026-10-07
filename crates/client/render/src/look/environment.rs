@@ -9,7 +9,7 @@ use pxl_spec::space::coord::v3::{dot3, norm3, V3};
 
 use crate::look::atmosphere::{light_at, moon_phase_light, white, MOON_LIGHT, NIGHT_COLOR};
 
-/// Lighting run (24), stars' fade, clock and the map center's longitude (4),
+/// Lighting run (24), stars' fade, clock and the anchor's longitude (4),
 /// air (4), second light (8), sun direction (4), stars' frame (12), moon
 /// direction and sky brightness (4).
 pub const ENV_FLOATS: usize = 60;

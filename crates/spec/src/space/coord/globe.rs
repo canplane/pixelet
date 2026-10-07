@@ -1,6 +1,6 @@
 // pxl-spec/space/coord/globe.rs
 
-//! The flat map laid back on the planet about the map center. Mercator is
+//! The flat map laid back on the planet about the sea under the eye. Mercator is
 //! stretched and flat far from its center, so the ground stopped meeting the
 //! horizon and slid when zooming out. Each point is set on the sphere in the
 //! center's east-north-up frame, the identity near the center (as Mapbox's

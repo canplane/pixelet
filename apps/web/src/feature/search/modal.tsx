@@ -105,7 +105,7 @@ function LocateCard() {
   );
 }
 
-/** Where the search looks from: the map center, which is not the device's location. */
+/** Where the search looks from: the focus, which is not the device's location. */
 function MapCenter() {
   const { t } = useTranslation();
   const place = usePlaceLabel();

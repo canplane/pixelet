@@ -126,7 +126,7 @@ fn air_along(dir: vec3f) -> Air {
 /* the Earth past the terrain */
 
 // Reflectance, and in alpha its lights' square root, where `n` is the ground's up
-// in the map center's east, north and up. The global picture is read at the
+// in the east, north and up of the sea under the eye. The global picture is read at the
 // point's latitude and longitude, a held tile at the globe's inverse of it.
 fn earth_face(n: vec3f, octaves: f32) -> vec4f {
   let sin_lat = frame_globe().y;
