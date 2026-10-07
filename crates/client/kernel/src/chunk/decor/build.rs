@@ -15,12 +15,12 @@ use pxl_spec::space::layer::lattice::GROUND;
 use std::collections::{HashMap, TryReserveError};
 
 use crate::chunk::decor::instance::{DecorScratch, GroupLanes, DECOR_GROUPS, HIDDEN_FLAG};
-use crate::layer::instance::{Instance, Meta, Source};
-use crate::layer::object::meta::user_decor_pick;
+use crate::layer::instance::{Meta, Source};
+use crate::layer::object::meta::placed;
 use crate::layer::object::store::{EntryAt, Store};
 use crate::layer::terrain::scatter::grow;
 use crate::query::{covers, Over};
-use pxl_spec::cell::decor::{DecorKind, DecorMeta};
+use pxl_spec::cell::decor::DecorKind;
 use pxl_spec::space::coord::zoom::{index, units, Zoom};
 
 /// A kind is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
@@ -82,15 +82,7 @@ impl<'s> DecorBuild<'s> {
     #[allow(clippy::too_many_arguments)]
     /// Only what stands in `chunk`, the region of the chunk drawing it; the
     /// ground may be a coarser chunk's over it.
-    pub fn build(
-        scratch: &'s mut DecorScratch,
-        kinds: &[DecorKind],
-        ground: Option<&Ground>,
-        hide: Option<DecorHide>,
-        store: &Store,
-        decor: bool,
-        at: PyramidChunk,
-    ) -> Option<DecorBuild<'s>> {
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[DecorKind], ground: Option<&Ground>, hide: Option<DecorHide>, store: &Store, decor: bool, at: PyramidChunk) -> Option<DecorBuild<'s>> {
         let (cell_zoom, chunk) = (at.cell_zoom(), at.region());
         scratch.clear();
         for kind in kinds {
@@ -118,30 +110,18 @@ impl<'s> DecorBuild<'s> {
         })
     }
 
-    /// Only what stands in `chunk`: a placed decor stands at its cube's bottom middle.
+    /// Only what stands in `chunk`.
     fn placed(scratch: &mut DecorScratch, kind: &DecorKind, first: usize, store: &Store, at: PyramidChunk) -> Result<(), TryReserveError> {
         let chunk = at.region();
-        let value = u32::from(kind.value());
         let Some(objects) = store.read(at.node(), at.cell_zoom()).value() else { return Ok(()) };
         let mut refused = Ok(());
         objects.entries(&mut |e| {
-            let c = e.cube();
-            let (x, y) = ((c.min[0] + c.max[0]) / 2.0, (c.min[1] + c.max[1]) / 2.0);
-            let stands = (chunk.min[0]..chunk.max[0]).contains(&x) && (chunk.min[1]..chunk.max[1]).contains(&y) && (chunk.min[2]..chunk.max[2]).contains(&c.min[2]);
-            if e.state != value || !stands || refused.is_err() {
-                return;
+            let Some(i) = placed(e).filter(|i| i.id == kind.value()) else { return };
+            let stands = (0..3).all(|k| (chunk.min[k]..chunk.max[k]).contains(&i.at[k]));
+            let Meta::Decor(m) = i.meta;
+            if stands && refused.is_ok() {
+                refused = scratch.push(first + m.variant as usize, i);
             }
-            // Turned and varied by position, as the placing ghost predicted.
-            let (variant, rotation) = user_decor_pick(e.corner().i, kind.variant_count());
-            refused = scratch.push(
-                first + variant as usize,
-                Instance {
-                    id: kind.value(),
-                    at: [x, y, c.min[2]],
-                    source: Source::Object(e.id()),
-                    meta: Meta::Decor(DecorMeta { variant, rotation, scale: 1.0 }),
-                },
-            );
         });
         refused
     }

@@ -405,6 +405,6 @@ fn tap_at(x: f64, y: f64) {
     match crate::control::interaction::taps_badges().then(|| crate::chunk::place::tap(x, y)).flatten() {
         Some(Went::To(at)) => go_to_place(at),
         Some(Went::Into(at)) => go_into_place(at),
-        None => crate::control::interaction::tap(x, y),
+        None => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
     }
 }

@@ -22,12 +22,12 @@ use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
 
 use crate::kernel;
+use crate::layer::instance::Instance;
 use crate::layer::object::repository;
 use crate::layer::object::store::{apply, Cells, Entry, EntryAt, Write, VOID};
-use crate::layer::instance::Instance;
-use pxl_spec::cell::decor::DecorKind;
 use crate::layer::Query;
 use crate::query::World;
+use pxl_spec::cell::decor::DecorKind;
 
 /// The objects' cells at a node read whole; all resident, so always answered.
 fn cells(node: Node<3>) -> Cells<'static> {

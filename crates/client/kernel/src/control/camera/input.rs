@@ -6,6 +6,7 @@
 //! What the pointer holds comes with each event; when it changes under a
 //! still pointer, the shell resends the move to re-resolve hover.
 
+use pxl_spec::space::camera::grid::Tau;
 use std::collections::BTreeMap;
 
 use crate::param::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_PX_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
@@ -419,7 +420,8 @@ pub fn camera_keys(x: i32, y: i32) {
     request_world_tick();
 }
 
-pub fn camera_input_step() {
+/// `drawn` is the τ the chunks draw at, which the hover strikes decor by.
+pub fn camera_input_step(drawn: Tau) {
     let s = input();
     if s.keys != [0.0; 2] {
         let at = now();
@@ -432,7 +434,7 @@ pub fn camera_input_step() {
     if s.hover_pending {
         s.hover_pending = false;
         if s.drag_mode == DragMode::None {
-            hover_at(s.pointer_x, s.pointer_y);
+            hover_at(s.pointer_x, s.pointer_y, drawn);
         }
     }
     if s.drag_pending {

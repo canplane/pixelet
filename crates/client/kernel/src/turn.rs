@@ -105,7 +105,7 @@ fn demand_tick(_: &mut TickContext) {
 }
 
 fn camera_input_tick(_: &mut TickContext) {
-    camera_input_step();
+    camera_input_step(crate::chunk::quality::effective().tau());
 }
 
 fn environment_tick(_: &mut TickContext) {

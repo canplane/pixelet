@@ -2,8 +2,9 @@
 
 //! The first thing a ray meets: ground walked a region at a time, decks and placed objects, at the detail the distance or a zoom asks.
 
-use crate::layer::instance::{Instance, Source};
+use super::decor::Strike;
 use super::world::World;
+use crate::layer::instance::{Instance, Source};
 use crate::layer::residency::Lines;
 use crate::layer::terrain::Drawn;
 use pxl_spec::bake::constant::OBJECT_FINEST;
@@ -15,6 +16,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
 use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::layer::object::store::EntryAt;
 use pxl_spec::space::coord::world::node_near;
@@ -142,6 +144,15 @@ pub(super) fn cell_hit(ray: &Ray, cell: [i64; 3], cell_zoom: Zoom, from: f64) ->
     Some(hit(ray, t, normal, cube, Struck::Objects))
 }
 
+/// A decor struck, at its base cell's box: a decor is stood on nowhere.
+fn decor_hit(ray: &Ray, t: f64, i: Instance) -> Hit {
+    let base = match i.source {
+        Source::Ground(cell) => cube(GROUND.cell(), cell),
+        Source::Object(e) => cube(e.zoom(), e.at()),
+    };
+    hit(ray, t, ray.direction.map(|v| -v), base, Struck::Decor(i))
+}
+
 pub(super) fn hit(ray: &Ray, t: f64, normal: V3, cube: Aabb, struck: Struck) -> Hit {
     Hit {
         t,
@@ -175,40 +186,33 @@ impl<'a> World<'a> {
     /// the ray may enter is the lack. Resident coarser tiles are tried first
     /// (`clear`) so far-off ground is skipped in one test per zoom.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
-        let cubes = self.cubes_first(ray, detail);
-        let limit = cubes.value().flatten().map_or(ray.reach, |h| h.t);
-        match self.decor_first(ray, limit) {
-            // Struck at its base cell's box: a decor is stood on nowhere.
-            Some((t, i)) => {
-                let base = match i.source {
-                    Source::Ground(cell) => cube(GROUND.cell(), cell),
-                    Source::Object(e) => cube(e.zoom(), e.at()),
-                };
-                cubes.map(|_| Some(hit(ray, t, ray.direction.map(|v| -v), base, Struck::Decor(i))))
-            }
-            None => cubes,
-        }
-    }
-
-    /// The first cube `ray` meets, ground or object, at `detail`.
-    fn cubes_first(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
+        let mut strike = self.strike(ray);
         let mut lack: Option<Tile> = None;
         let mut answered = false;
         let mut lines = Lines::default();
         let mut t = 0.0;
-        while t < ray.reach {
+        // Nothing past a decor struck already is wanted.
+        while t < strike.as_ref().and_then(|s| s.best).map_or(ray.reach, |b| b.0) {
             let (zoom, cells, until) = detail.at(t);
             let end = until.min(ray.reach);
             let objects = self.objects(ray, (t, end), cells);
             let limit = objects.map_or(end, |o| o.t);
-            let ground = self.ground_first(ray, (t, limit), zoom, &mut lines, &mut lack, &mut answered).filter(|g| g.t <= limit);
-            if let Some(hit) = ground.or(objects) {
+            let ground = self.ground_first(ray, (t, limit), zoom, &mut lines, &mut lack, &mut answered, &mut strike).filter(|g| g.t <= limit);
+            let decor = strike.as_ref().and_then(|s| s.best).filter(|&(d, _)| ground.or(objects).is_none_or(|h| d < h.t));
+            if let Some(hit) = decor.map(|(d, i)| decor_hit(ray, d, i)).or(ground).or(objects) {
                 return match lack {
                     Some(l) => Answer::Coarser(Some(hit), l),
                     None => Answer::Exact(Some(hit)),
                 };
             }
             t = end;
+        }
+        if let Some((d, i)) = strike.and_then(|s| s.best) {
+            let hit = decor_hit(ray, d, i);
+            return match lack {
+                Some(l) => Answer::Coarser(Some(hit), l),
+                None => Answer::Exact(Some(hit)),
+            };
         }
         match (lack, answered) {
             (None, _) => Answer::Exact(None),
@@ -218,11 +222,13 @@ impl<'a> World<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn ground_first(&self, ray: &Ray, (t0, t1): (f64, f64), zoom: Zoom, lines: &mut Lines, lack: &mut Option<Tile>, answered: &mut bool) -> Option<Hit> {
+    pub(super) fn ground_first(&self, ray: &Ray, (t0, t1): (f64, f64), zoom: Zoom, lines: &mut Lines, lack: &mut Option<Tile>, answered: &mut bool, strike: &mut Option<Strike<'a>>) -> Option<Hit> {
         let mut t = t0;
         while t < t1 {
             self.visit();
-            if let Some(out) = self.clear(ray, t, zoom, t1, lines) {
+            // Where decor is struck, ground is passed over only above its reach.
+            let pad = strike.as_ref().filter(|s| t < s.held && zoom == LEAF_ZOOM).map_or(0.0, |s| s.reach);
+            if let Some(out) = self.clear(ray, t, zoom, t1, lines, pad) {
                 *answered = true;
                 t = out;
                 continue;
@@ -230,7 +236,7 @@ impl<'a> World<'a> {
             let r = self.region(&ray.at(t + NUDGE), zoom, lines);
             let out = exit(ray, r.base, r.side).min(t1).max(t + NUDGE).min(ray.reach);
             let low = ray.at(t)[2].min(ray.at(out)[2]);
-            let under = r.terrain.is_some_and(|((_, hi), _)| low <= hi);
+            let under = r.terrain.is_some_and(|((_, hi), _)| low <= hi + pad);
             match r.terrain {
                 Some((_, exact)) => {
                     *answered = true;
@@ -243,7 +249,7 @@ impl<'a> World<'a> {
                 }
             }
             if under {
-                if let Some(hit) = self.walk(ray, &r, t, out, zoom) {
+                if let Some(hit) = self.walk(ray, &r, t, out, zoom, strike) {
                     return Some(hit);
                 }
             }
@@ -254,7 +260,7 @@ impl<'a> World<'a> {
 
     /// Far edge of the largest resident index cell coarser than `z` the ray
     /// passes over entirely, or none. Never past `until`, where another zoom applies.
-    pub(super) fn clear(&self, ray: &Ray, t: f64, zoom: Zoom, until: f64, lines: &mut Lines) -> Option<f64> {
+    pub(super) fn clear(&self, ray: &Ray, t: f64, zoom: Zoom, until: f64, lines: &mut Lines, pad: f64) -> Option<f64> {
         let from = ray.at(t + NUDGE);
         let at = on_ground(&from);
         (GROUND.top()..zoom).find_map(|coarser| {
@@ -267,7 +273,7 @@ impl<'a> World<'a> {
             };
             let out = exit(ray, corner(e.zoom(), &from), units(e.zoom())).min(until).max(t + NUDGE);
             let (za, zb) = (ray.at(t)[2], ray.at(out)[2]);
-            (za.min(zb) > hi).then_some(out)
+            (za.min(zb) > hi + pad).then_some(out)
         })
     }
 
@@ -295,7 +301,7 @@ impl<'a> World<'a> {
     /// Walks cell columns at `z` inside `r` (Amanatides–Woo). Stops on the
     /// region's cells, not on `t1`: the two distances round differently, and a
     /// column past the edge would be read as this region's.
-    pub(super) fn walk(&self, ray: &Ray, r: &Region, t0: f64, t1: f64, zoom: Zoom) -> Option<Hit> {
+    pub(super) fn walk(&self, ray: &Ray, r: &Region, t0: f64, t1: f64, zoom: Zoom, strike: &mut Option<Strike<'a>>) -> Option<Hit> {
         let side = units(GROUND.cell_zoom(zoom));
         let across = (r.side / side) as i64;
         let first = r.base.map(|v| (v / side).floor() as i64);
@@ -316,6 +322,9 @@ impl<'a> World<'a> {
         while from < t1 && inside(cell) {
             self.visit();
             let to = next_x.min(next_y).min(t1);
+            if let Some(s) = strike.as_mut().filter(|s| from < s.held && zoom == LEAF_ZOOM) {
+                self.strike_near(s, ray, cell);
+            }
             let hit = r.drawn.as_ref().and_then(|d| self.column(ray, cell, zoom, (from, to), d));
             if hit.is_some() {
                 return hit;

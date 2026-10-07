@@ -4,10 +4,10 @@ use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::hierarchy::tree::share;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::query::World;
 use crate::control::interaction::edit::{holds_entry, objects_at};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{Entry, EntryKind};
+use crate::query::World;
 use pxl_spec::cell::decor::KINDS;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{base_of, index_of, of_side, units};

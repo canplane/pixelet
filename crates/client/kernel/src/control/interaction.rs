@@ -9,16 +9,17 @@ pub mod pick;
 
 use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::cell::{cube_types, DecorId};
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::layer::lattice::GROUND;
 
 pub use crate::abi::cmd::ActiveTool;
-use crate::layer::instance::Instance;
 use crate::control::interaction::collision::{anchor_center, object_aabb};
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::edit::{place, place_air, place_decor, remove};
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
+use crate::layer::instance::Instance;
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::{Entry, EntryAt};
 use crate::query::Hit;
@@ -118,13 +119,13 @@ fn resolve_hit_target(hit: &Hit) -> Option<Entry> {
 }
 
 /// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.
-pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
+pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     let mut origin = [0.0; 3];
     let mut direction = [0.0; 3];
     view_ray(ndc_x, ndc_y, &mut origin, &mut direction);
 
     let ui = interaction().holding;
-    let Some(pick) = ray_pick(origin, direction) else {
+    let Some(pick) = ray_pick(origin, direction, drawn) else {
         return clear_hover();
     };
     let hit = pick.hit;
@@ -182,9 +183,9 @@ pub fn taps_badges() -> bool {
     interaction().holding.active_tool == ActiveTool::Pointer
 }
 
-/// A tap at `ndc_x`, `ndc_y` with the tool held, on the world.
-pub fn tap(ndc_x: f64, ndc_y: f64) {
-    hover_at(ndc_x, ndc_y);
+/// A tap at `ndc_x`, `ndc_y` with the tool held, on the world drawn at `drawn`.
+pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
+    hover_at(ndc_x, ndc_y, drawn);
     let Some(hovered) = interaction().hover.coord else { return };
     let ui = interaction().holding;
     let hover = interaction().hover;

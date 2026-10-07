@@ -2,130 +2,137 @@
 
 //! Decor as the world answers it: what the ground grows, evaluated cell by
 //! cell as the chunks grow it (`grown_at`), and what objects place, each
-//! struck by its model. It is met only where it is drawn as held, at the
-//! leaf cells: a fold strikes none of it.
+//! struck by its model. A ray strikes it as the ground walk passes, only
+//! where the chunks draw it as held, at the leaf cells: a fold strikes none of
+//! it. The walk follows the detail rule, not the chunk the view chose, which
+//! may differ at a chunk's edge.
 
 use pxl_spec::cell::decor::{DecorKind, KINDS};
-use pxl_spec::cell::object::{decor_id_from_num, object_value_is_decor};
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::zoom::{base_of, index_of};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use super::ray::{Detail, Ray};
 use super::world::{covers, Over, World};
 use crate::decor::strike::{reach, strike};
-use crate::layer::instance::{Instance, Meta, Source};
-use crate::layer::object::meta::user_decor_pick;
+use crate::layer::instance::{Instance, Source};
+use crate::layer::object::meta::placed;
 use crate::layer::terrain::scatter::grown_at;
+use crate::layer::terrain::Source as TerrainSource;
 use crate::layer::Query;
-use pxl_spec::cell::decor::DecorMeta;
-use pxl_spec::space::camera::grid::Tau;
+use crate::model::registry::Models;
 
-/// A ray's decor is gathered over squares this many leaf cells a side along
-/// it, each widened by the decor's reach.
-const STRIDE: f64 = 8.0;
+/// How decor is struck: against its models, where the chunks drawing at `tau` hold it.
+#[derive(Clone, Copy)]
+pub(super) struct Decor<'a> {
+    pub(super) models: &'a Models,
+    pub(super) tau: Tau,
+}
 
-impl World<'_> {
+/// One ray's decor strike, carried along its ground walk.
+pub(super) struct Strike<'a> {
+    models: &'a Models,
+    /// How far any decor reaches from where it stands, and in leaf cells.
+    pub(super) reach: f64,
+    around: i64,
+    /// How far along the ray decor is drawn as held.
+    pub(super) held: f64,
+    /// The column met last, whose neighbors are struck already.
+    last: Option<[i64; 2]>,
+    /// The leaf tile read last, which the next cell most likely lies in.
+    tile: Option<(Tile, TerrainSource<'a>)>,
+    pub(super) best: Option<(f64, Instance)>,
+}
+
+impl<'a> World<'a> {
     /// What the ground grows of `kind` standing in the leaf cell `at` lies
     /// in; none where it grows nothing there or its leaf tile is not resident.
     pub fn grown(&self, kind: &DecorKind, at: &Pvf3) -> Option<Instance> {
         let [x, y, z] = index_of(GROUND.cell(), at);
-        self.grown_in(kind, [x, y]).filter(|i| matches!(i.source, Source::Ground([_, _, e]) if e == z))
+        let (source, place) = self.leaf_source([x, y])?;
+        grown_at(kind, &source.view(), [x, y], place).filter(|i| i.grown_in().is_some_and(|c| c[2] == z))
     }
 
-    fn grown_in(&self, kind: &DecorKind, [x, y]: [i64; 2]) -> Option<Instance> {
+    /// The leaf tile holding the leaf cell `cell`, and the cell's place in it.
+    fn leaf_source(&self, [x, y]: [i64; 2]) -> Option<(TerrainSource<'a>, [u32; 2])> {
         let leaf = GROUND.cell_of(LEAF_ZOOM, &base_of(GROUND.cell(), [x, y, 0]));
         let (zoom, [tx, ty]) = leaf.tile().node();
-        let source = self.terrain.read((zoom, [tx, ty, 0]), GROUND.grid_zoom(zoom)).exact()?.view();
-        grown_at(kind, &source, [x, y], leaf.in_tile())
+        Some((self.terrain.read((zoom, [tx, ty, 0]), GROUND.grid_zoom(zoom)).exact()?, leaf.in_tile()))
     }
 
-    /// The decor `ray` strikes first, nearer than `limit`, and where along it.
-    pub(super) fn decor_first(&self, ray: &Ray, limit: f64) -> Option<(f64, Instance)> {
-        let models = self.models?;
-        // Held at leaf cells only: as far as the view draws them so at its finest.
-        let held = held_until(Detail::Distance(Tau::FINEST), limit);
-        if held <= 0.0 {
-            return None;
-        }
+    /// The strike a ray carries, where decor is struck at all.
+    pub(super) fn strike(&self, ray: &Ray) -> Option<Strike<'a>> {
+        let Decor { models, tau } = self.decor?;
+        let held = match Detail::Distance(tau).at(0.0) {
+            (LEAF_ZOOM, _, until) => until.min(ray.reach),
+            _ => return None,
+        };
         let reach = reach(models);
-        let (mut cells, mut placed) = (Vec::new(), Vec::new());
-        let mut t = 0.0;
-        while t < held {
-            let end = (t + STRIDE).min(held);
-            let (a, b) = (ray.at(t), ray.at(end));
-            let around = Aabb {
-                min: std::array::from_fn(|k| a[k].min(b[k]) - reach),
-                max: std::array::from_fn(|k| a[k].max(b[k]) + reach),
-            };
-            for y in around.min[1].floor() as i64..=around.max[1].floor() as i64 {
-                for x in around.min[0].floor() as i64..=around.max[0].floor() as i64 {
-                    cells.push([x, y]);
+        Some(Strike {
+            models,
+            reach,
+            around: reach.ceil() as i64,
+            held,
+            last: None,
+            tile: None,
+            best: None,
+        })
+    }
+
+    /// Strikes the decor standing near the leaf column `cell` the walk is in:
+    /// those not near the column met before it, since a walk only moves on.
+    pub(super) fn strike_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i64; 2]) {
+        let (r, last) = (s.around, s.last.replace(cell));
+        let near = |a: [i64; 2], b: [i64; 2]| (a[0] - b[0]).abs() <= r && (a[1] - b[1]).abs() <= r;
+        // Placed decor stands where the ray's height over the held span, widened by the reach, can meet it.
+        let (za, zb) = (ray.at(0.0)[2], ray.at(s.held)[2]);
+        let (z0, z1) = (za.min(zb) - s.reach, za.max(zb) + s.reach);
+        for y in cell[1] - r..=cell[1] + r {
+            for x in cell[0] - r..=cell[0] + r {
+                if last.is_some_and(|l| near([x, y], l)) {
+                    continue;
                 }
+                self.grown_near(s, ray, [x, y]);
+                let column = Aabb {
+                    min: [x as f64, y as f64, z0],
+                    max: [(x + 1) as f64, (y + 1) as f64, z1],
+                };
+                self.objects.entries_in(&column, &mut |e| {
+                    if let Some(i) = placed(e).filter(|i| column.holds(i.at)) {
+                        meet(s, ray, i);
+                    }
+                });
             }
-            self.objects.entries_in(&around, &mut |e| {
-                if object_value_is_decor(e.state) {
-                    placed.push(*e);
-                }
-            });
-            t = end;
         }
-        cells.sort_unstable();
-        cells.dedup();
-        placed.sort_unstable_by_key(|e| (e.zoom, e.at));
-        placed.dedup_by_key(|e| (e.zoom, e.at));
-        let mut best: Option<(f64, Instance)> = None;
-        let mut meet = |i: Instance| {
-            if let Some(t) = strike(models, &i, ray.origin, ray.direction, best.map_or(held, |b| b.0)) {
-                best = Some((t, i));
+    }
+
+    fn grown_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i64; 2]) {
+        let leaf = GROUND.cell_of(LEAF_ZOOM, &base_of(GROUND.cell(), [cell[0], cell[1], 0]));
+        let source = match s.tile {
+            Some((t, source)) if t == leaf.tile() => source,
+            _ => {
+                let Some((source, _)) = self.leaf_source(cell) else { return };
+                s.tile = Some((leaf.tile(), source));
+                source
             }
         };
-        for &cell in &cells {
-            for kind in &KINDS {
-                let Some(i) = self.grown_in(kind, cell) else { continue };
-                let Source::Ground(at) = i.source else { continue };
-                let held = self.objects.read((GROUND.cell(), at), GROUND.cell()).value().is_some_and(|c| c.holds());
-                if !covers(Over::Leaf { held }) {
-                    meet(i);
-                }
+        let view = source.view();
+        for kind in &KINDS {
+            let Some(i) = grown_at(kind, &view, cell, leaf.in_tile()) else { continue };
+            let Source::Ground(at) = i.source else { continue };
+            let held = self.objects.read((GROUND.cell(), at), GROUND.cell()).value().is_some_and(|c| c.holds());
+            if !covers(Over::Leaf { held }) {
+                meet(s, ray, i);
             }
         }
-        for e in &placed {
-            // It stands at its cube's bottom middle, turned and varied by where it is.
-            let c = e.cube();
-            let kind = DecorKind::of(decor_id_from_num(e.state));
-            let (variant, rotation) = user_decor_pick(e.corner().i, kind.variant_count());
-            meet(Instance {
-                id: kind.value(),
-                at: [(c.min[0] + c.max[0]) / 2.0, (c.min[1] + c.max[1]) / 2.0, c.min[2]],
-                source: Source::Object(e.id()),
-                meta: Meta::Decor(DecorMeta { variant, rotation, scale: 1.0 }),
-            });
-        }
-        best
     }
 }
 
-/// How far along a ray, up to `limit`, its cells are drawn held, at the leaf
-/// cells: the cell a distance draws grows with it, so the edge is found by halving.
-fn held_until(detail: Detail, limit: f64) -> f64 {
-    let held = |t: f64| detail.at(t).1 >= GROUND.cell();
-    if held(limit) {
-        return limit;
+fn meet(s: &mut Strike, ray: &Ray, i: Instance) {
+    if let Some(t) = strike(s.models, &i, ray.origin, ray.direction, s.best.map_or(s.held, |b| b.0)) {
+        s.best = Some((t, i));
     }
-    let (mut lo, mut hi) = (0.0, limit);
-    if !held(lo) {
-        return 0.0;
-    }
-    for _ in 0..48 {
-        let mid = (lo + hi) / 2.0;
-        if held(mid) {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
-    }
-    lo
 }
