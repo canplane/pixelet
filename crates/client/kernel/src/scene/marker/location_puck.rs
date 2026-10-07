@@ -13,10 +13,10 @@ use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
-use crate::scene::environment::fog::view_reach;
 use crate::sched::edge::request_world_tick;
 use crate::world::chunk::table::Frame;
 use crate::world::query::Access;
+use crate::world::view::reach::view_reach;
 use crate::{kernel, with_world};
 use xpute_guest::global::Global;
 

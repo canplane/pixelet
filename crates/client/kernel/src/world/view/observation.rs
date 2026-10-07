@@ -18,11 +18,11 @@ use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 use crate::layer::residency::floor;
 use crate::layer::Layer as _;
 use crate::layer::{Answer, Query};
-use crate::scene::environment::fog::{eye_height, reach_at};
-use crate::scene::environment::state::globe;
 use crate::world::query::Access;
+use crate::world::view::frame::pose::globe;
 use crate::world::view::frame::pose::view;
 use crate::world::view::observer::Footprint;
+use crate::world::view::reach::{eye_height, reach_at};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 
 pub fn eye() -> Option<V3> {

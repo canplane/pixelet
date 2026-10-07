@@ -12,7 +12,9 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
 use crate::control::camera::controller::pose;
-use crate::scene::environment::fog::{far_clip_at, near_clip_at};
+use crate::control::navigation::bootstrap::FALLBACK_G4326;
+use crate::world::view::reach::{far_clip_at, near_clip_at};
+use pxl_render::look::globe::Globe;
 use xpute_guest::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
@@ -91,6 +93,23 @@ pub fn globe_anchor() -> Option<G4326> {
     crate::control::camera::controller::camera().eye?;
     let [x, y, _] = sea_under_eye();
     Some(epsg4326::from_mercator(&[epsg3857::mer_from_u(nearest(x, 0.0)), epsg3857::mer_from_u(y), 0.0]))
+}
+
+/// Where the world is laid on the planet: the anchor, or before the camera
+/// stands anywhere the place it starts from.
+pub fn anchor() -> G4326 {
+    globe_anchor().unwrap_or(FALLBACK_G4326)
+}
+
+/// The planet the world is laid on, tangent at the anchor.
+pub fn globe() -> Globe {
+    Globe::at(anchor()[1].to_radians())
+}
+
+/// Mercator stretches by the secant of the latitude, heights alike; at the
+/// equator it is `u_per_m(0)`.
+pub fn km_per_u() -> f64 {
+    libm::cos(anchor()[1].to_radians()) / epsg3857::u_per_m(0.0) / 1000.0
 }
 
 pub fn view_resize(width: f64, height: f64) {

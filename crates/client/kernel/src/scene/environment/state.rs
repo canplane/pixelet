@@ -4,19 +4,15 @@
 //! and moon placed, and the light and sky they give.
 
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
-use pxl_render::look::globe::Globe;
-use pxl_spec::space::coord::adapter::epsg3857;
-use pxl_spec::space::coord::adapter::epsg4326::G4326;
 use pxl_spec::space::coord::v3::len3;
 
-use crate::control::navigation::bootstrap::FALLBACK_G4326;
 use crate::door::host::wall_now;
 use crate::kernel;
 use crate::scene::environment::celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
-use crate::scene::environment::fog::eye_ground;
 use crate::sched::edge::wake_at;
 use crate::world::chunk::table::Frame;
-use crate::world::view::frame::pose::globe_anchor;
+use crate::world::view::frame::pose::{anchor, globe, km_per_u};
+use crate::world::view::reach::eye_ground;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
@@ -25,31 +21,13 @@ use xpute_guest::global::Global;
 const ENV_CLOCK_FRAME_MS: f64 = 2000.0;
 
 struct Environment {
-    observed_center: Option<G4326>,
-    observed_lat: f64,
-    observed_lon: f64,
     clock_frame_at: f64,
 }
 
 static ENVIRONMENT: Global<Environment> = Global::new();
 
 fn environment() -> &'static mut Environment {
-    ENVIRONMENT.get(|| Environment {
-        observed_center: None,
-        observed_lat: FALLBACK_G4326[1],
-        observed_lon: FALLBACK_G4326[0],
-        clock_frame_at: 0.0,
-    })
-}
-
-/// Mercator stretches by the secant of the latitude, heights alike; at the
-/// equator it is `u_per_m(0)`.
-pub fn km_per_u() -> f64 {
-    libm::cos(environment().observed_lat.to_radians()) / epsg3857::u_per_m(0.0) / 1000.0
-}
-
-pub fn globe() -> Globe {
-    Globe::at(environment().observed_lat.to_radians())
+    ENVIRONMENT.get(|| Environment { clock_frame_at: 0.0 })
 }
 
 /// Runs before the chunks' step.
@@ -57,15 +35,6 @@ pub fn map_environment_step() {
     let e = environment();
     let sched = &mut kernel().scene;
 
-    // Observed from the globe's anchor, which the world is laid on the planet about.
-    let center = globe_anchor();
-    if center != e.observed_center {
-        e.observed_center = center;
-        if let Some(g) = center {
-            e.observed_lon = g[0];
-            e.observed_lat = g[1];
-        }
-    }
     let unix_ms = wall_now();
     sched.environment.observe(unix_ms);
 
@@ -128,7 +97,8 @@ impl EnvironmentDraw {
         if self.first_ms.is_none() {
             return false;
         }
-        let (lat, lon) = (environment().observed_lat, environment().observed_lon);
+        // Observed from the anchor, which the world is laid on the planet about.
+        let [lon, lat, _] = anchor();
         let sun = sun_position(self.days, lat, lon);
         let moon = moon_position(self.days, lat, lon);
         let a = if self.started { (frame.delta_s * EASE_RATE).clamp(0.0, 1.0) } else { 1.0 };

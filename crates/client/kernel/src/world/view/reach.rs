@@ -1,4 +1,4 @@
-// pxl-kernel/scene/environment/fog.rs
+// pxl-kernel/world/view/reach.rs
 
 //! How far the view reaches — the end of the ground it can see — and the clip
 //! planes set from it.
@@ -7,8 +7,8 @@ use pxl_render::look::globe::MERCATOR_RADIUS_KM;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 
-use crate::scene::environment::state::globe;
 use crate::world::query::Access;
+use crate::world::view::frame::pose::globe;
 use crate::world::view::observation::eye;
 
 /// The highest ground any source holds, Everest's 8,849 m, against the

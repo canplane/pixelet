@@ -9,7 +9,7 @@ use pxl_spec::space::coord::mat4::mat4_transform_point;
 use pxl_spec::space::coord::v3::{add3, dot3, sub3};
 
 use crate::scene::billboard::batch::BillboardBatch;
-use crate::scene::environment::state::globe;
+use crate::world::view::frame::pose::globe;
 use crate::world::view::frame::pose::{ndc_to_px, sea_under_eye, view};
 
 /// A fraction of the distance, since the badge holds a constant screen size.
