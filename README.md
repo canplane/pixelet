@@ -10,7 +10,7 @@ _Started on December 15, 2025._
 
 <img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.png" height="480">
 
-The planet is too large to load or draw at once, so pixelet follows one rule: **draw what the eye can tell apart, and nothing else.** A city, a mountain range or a tower behind a ridge costs the cells it covers on the screen, not what it holds.
+The planet is too large to load or draw at once, so pixelet follows one rule: **draw what the eye can tell apart, and nothing else.** A city or a mountain range costs the cells it covers on the screen, not what it holds.
 
 ```text
 asks                                      answers
@@ -115,7 +115,7 @@ To measure the client, use `preview` (`localhost:4173`). It is the bundle as the
 
 ## What runs where
 
-The client is a small operating system. A Rust **kernel** holds the world, schedules its own work and draws; a TypeScript **shell** drives it the way a driver drives a device, and decides nothing about the world. In a browser tab the kernel is one WebAssembly module drawing through the page's WebGPU; on a device it is linked into a React Native app and draws through wgpu. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./xpute/ARCHITECTURE.md), which knows nothing of any of this.
+The client is a Rust **kernel** and the TypeScript around it. The kernel holds the world, schedules its own work and draws; its **host** gives it memory, I/O and the device, and its **shell** is the UI, which decides nothing about the world. In a browser tab the kernel is one WebAssembly module drawing through the page's WebGPU; on a device it is linked into a React Native app and draws through wgpu. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./xpute/ARCHITECTURE.md), which knows nothing of any of this.
 
 Almost nothing is computed at request time. Tiles and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a tile under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked. [ARCHITECTURE.md](./ARCHITECTURE.md) follows the chain above, part by part.
 
