@@ -14,20 +14,22 @@
 
 use core::cmp::Ordering;
 
-use crate::io::demand::{Ask, Category, DemandKey, Phases};
+use crate::io::demand::{Ask, Category, Phases};
 use crate::io::failure::{Failure, Outcome};
 use crate::io::load::LOADS;
 use crate::io::policy::Policy;
 use crate::layer::earth::Earth;
 use crate::layer::residency::Residency;
 use crate::sched::profiler::record::profiler_record;
-use crate::sched::profiler::task::TaskRecord;
+use crate::sched::profiler::task::{TaskRow, PHASES_MAX};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_tile::PoiTile;
+use std::collections::HashMap;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
+use xpute_guest::mem::base::off_of_slice;
 
 use crate::param::MAX_CREDITS;
 
@@ -329,16 +331,41 @@ impl<S: Serve> RequestScheduler<S> {
 }
 
 fn record(a: &Attempt, at: f64, outcome: Outcome, phases: Option<Phases>, fail: Failure) {
-    profiler_record(TaskRecord {
-        key: DemandKey::new(a.category, a.subject),
-        priority: a.rank.class as f64 + a.rank.distance,
-        enqueue_ms: a.enqueue_ms,
-        start_ms: Some(a.start_ms),
-        end_ms: at,
-        phases,
-        outcome,
-        fail,
+    profiler_record(|| {
+        let mut row = TaskRow {
+            category: a.category as u32 as f64,
+            subject: a.subject,
+            priority: a.rank.class as f64 + a.rank.distance,
+            enqueue_ms: a.enqueue_ms,
+            start_ms: a.start_ms,
+            end_ms: at,
+            outcome: outcome as u32 as f64,
+            fail: fail.errno as f64,
+            detail: fail.detail as f64,
+            ..TaskRow::default()
+        };
+        if let Some(at) = fail.at {
+            row.at_file = off_of_slice(file_in_memory(at.file()).as_bytes()) as f64;
+            row.at_file_bytes = at.file().len() as f64;
+            row.at_line = at.line() as f64;
+        }
+        for (k, (name, value)) in phases.iter().flat_map(|p| p.iter()).enumerate() {
+            row.phase_ids[k] = name as u32 as f64;
+            row.phase_values[k] = value;
+            row.phase_count = (k + 1) as f64;
+        }
+        row
     });
+}
+
+const _: () = assert!(PHASES_MAX == crate::io::demand::PHASES_MAX, "a task row holds every phase a run can report");
+
+static FILES: Global<HashMap<usize, Box<str>>> = Global::new();
+
+/// A location's file name lies outside kernel memory on a device, so rows
+/// name a heap copy; the names are few and kept for good.
+fn file_in_memory(file: &'static str) -> &'static str {
+    FILES.get(HashMap::new).entry(file.as_ptr().addr()).or_insert_with(|| file.into())
 }
 
 static SCHED: Global<RequestScheduler<Policy>> = Global::new();

@@ -14,7 +14,7 @@ use xpute_guest::mem::section::span_of;
 use crate::mem::fixed::{lane, range, Range};
 use crate::sched::profiler::frame::{FramePeak, FrameSample, RingSample, WorstFrame};
 use crate::sched::profiler::log::PENDING;
-use crate::sched::profiler::task::{TaskRecord, TaskRow};
+use crate::sched::profiler::task::TaskRow;
 
 /// The rings keep the last minute. At 60 Hz that is 3,600 frames; a faster
 /// display or a heavy minute fills a lane early, which drops its oldest and
@@ -186,12 +186,13 @@ pub fn profiler_recording_stop() {
     l.stopped_at = Some(now());
 }
 
-pub fn profiler_record(rec: TaskRecord) {
+/// `row` is made only while recording.
+pub fn profiler_record(row: impl FnOnce() -> TaskRow) {
     let l = profiler();
     if !l.recording {
         return;
     }
-    let row = TaskRow::of(&rec);
+    let row = row();
     if let Some(task) = l.sink.task {
         task(&row);
     }
