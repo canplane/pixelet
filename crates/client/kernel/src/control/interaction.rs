@@ -17,7 +17,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 pub use crate::abi::cmd::ActiveTool;
 use crate::control::interaction::collision::{anchor_center, object_aabb};
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
-use crate::control::interaction::edit::{place, place_air, place_decor, remove};
+use crate::control::interaction::edit::{place, place_air, place_billboard, place_decor, remove};
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;
@@ -136,11 +136,11 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         return clear_hover();
     }
 
-    if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor) {
+    if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Billboard) {
         hover.object_at = None;
         hover.scattered = None;
         hover.approach = None;
-        let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { object_size_of(ui.object_tier) };
+        let placement_size = if ui.active_tool == ActiveTool::Object { object_size_of(ui.object_tier) } else { DECOR_SIZE };
         // A decor met in front of the pick is what the new cube goes flush against.
         let precise_box = resolve_hit_target(&hit).map(|o| object_aabb(&o));
         hover.coord = Some(world_adjacent_corner(&hit, placement_size, precise_box.as_ref()));
@@ -179,11 +179,6 @@ fn folded_at(hit: &Hit) -> bool {
     crate::with_parts(|_, sched, _| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
 }
 
-/// Whether a tap may be a badge's: the pointer tool's only.
-pub fn taps_badges() -> bool {
-    interaction().holding.active_tool == ActiveTool::Pointer
-}
-
 /// A tap at `ndc_x`, `ndc_y` with the tool held, on the world drawn at `drawn`.
 pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     hover_at(ndc_x, ndc_y, drawn);
@@ -213,13 +208,19 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
                 (None, None) => place_air(&hovered, units(GROUND.cell())),
             }
         }
-        ActiveTool::Decor | ActiveTool::Object => {
-            // The slot may have filled since the last hover update.
-            if ui.active_tool == ActiveTool::Decor {
-                if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size) {
-                    place_decor(&hovered, DECOR_SIZE, ui.decor_id);
-                }
-            } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size) {
+        // The slot may have filled since the last hover update.
+        ActiveTool::Decor => {
+            if !is_placement_blocked(PlacementTool::Instance, &hovered, object_size) {
+                place_decor(&hovered, DECOR_SIZE, ui.decor_id);
+            }
+        }
+        ActiveTool::Billboard => {
+            if !is_placement_blocked(PlacementTool::Instance, &hovered, object_size) {
+                place_billboard(&hovered, DECOR_SIZE);
+            }
+        }
+        ActiveTool::Object => {
+            if !is_placement_blocked(PlacementTool::Object, &hovered, object_size) {
                 place(&hovered, object_size, ui.object_cube);
             }
         }

@@ -4,7 +4,7 @@
 //! (`cell/id.json`). In the cube class the byte range is the ground's palette,
 //! so a cube in a look stores the look's number, and past it is what only an
 //! object is: air and the placed colors (`cell/cube_type.json`); the decor
-//! class is the decor kinds (`cell/decor.json`).
+//! class is the decor kinds (`cell/decor.json`), and the billboard class a label.
 
 #![allow(non_upper_case_globals)]
 
@@ -27,6 +27,14 @@ pub fn class_of(value: u32) -> Option<Class> {
 
 pub fn object_value_is_decor(value: u32) -> bool {
     class_of(value) == Some(Class::decor)
+}
+
+/// The one billboard a placement stands: a label, which its shape does not
+/// tell apart from another's.
+pub const BILLBOARD: u32 = (Class::billboard as u32) << SHAPE_BITS;
+
+pub fn object_value_is_billboard(value: u32) -> bool {
+    class_of(value) == Some(Class::billboard)
 }
 
 /// Whether a leaf is drawn as a voxel (a placeable cube or air) rather than

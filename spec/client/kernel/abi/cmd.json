@@ -419,6 +419,10 @@
         {
           "name": "Eraser",
           "value": 3
+        },
+        {
+          "name": "Billboard",
+          "value": 4
         }
       ]
     },

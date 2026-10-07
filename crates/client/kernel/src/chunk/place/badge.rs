@@ -1,5 +1,6 @@
 // pxl-kernel/chunk/place/badge.rs
 
+use pxl_spec::bake::constant::EntryAt;
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::poi_tile::{kind_color, kind_icon, Place, PoiTile, POI_LATTICE};
@@ -29,6 +30,8 @@ pub enum Label {
         tile: Tile,
         place: u32,
     },
+    /// A billboard someone placed, by its entry.
+    Sign(EntryAt),
 }
 
 impl Label {
@@ -45,6 +48,8 @@ impl Label {
     pub fn text(self) -> String {
         match self {
             Label::Count(n, partial) => format!("{n}{}", if partial { "+" } else { "" }),
+            // Its words are not kept yet: every sign says the same.
+            Label::Sign(_) => String::from("foo"),
             Label::Place { tile, place } => {
                 let full = Label::place(tile, place).name;
                 let mut shown: String = full.chars().take(SHOWN_CHARS).collect();
@@ -107,7 +112,7 @@ pub fn slot(label: Label) -> i32 {
             b.width * SHEET_SCALE,
             HEIGHT * SHEET_SCALE,
             match label {
-                Label::Count(..) => DrawSpec::Cluster {
+                Label::Count(..) | Label::Sign(_) => DrawSpec::Pill {
                     label: label.text(),
                     logical_w: b.width,
                 },

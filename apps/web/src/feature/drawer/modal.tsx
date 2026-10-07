@@ -7,7 +7,8 @@ import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react
 import type { f64, u8 } from "@xpute/core/abi/word.ts";
 import { decorKinds, decorSection, type PlaceableCube, placeableCubeId, placeableCubes, placeableCubeSection } from "@/catalog/cell/mod.ts";
 
-import { useInHand, useUiStore } from "@/app/store/ui.ts";
+import { holdTool, useInHand, useUiStore } from "@/app/store/ui.ts";
+import { useKernel } from "@/kernel/snapshot.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { Panel } from "@platform/panel.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
@@ -139,6 +140,20 @@ function DecorItem({ kind, cell, onPick }: { kind: u8; cell: f64; onPick: (kind:
   );
 }
 
+/** A temporary way in: one billboard, its words not kept yet. */
+function BillboardItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
+  const { t } = useTranslation();
+  const active = useKernel(({ holding: h }) => h.tool === ActiveTool.Billboard);
+
+  return (
+    <Item label={t("drawer.billboard")} active={active} cell={cell} onPress={onPick}>
+      <View style={[styles.decor, { width: itemOf(cell), height: itemOf(cell) }, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
+        <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
+      </View>
+    </Item>
+  );
+}
+
 const enum DrawerTab {
   Cube = 0,
   Decor = 1,
@@ -182,6 +197,11 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
+  function pickBillboard(): void {
+    holdTool(ActiveTool.Billboard);
+    onClose();
+  }
+
   return (
     <Panel label={t("drawer.title")} onClose={onClose} half>
       <View ref={sheet} style={styles.sheet} onLayout={(e: LayoutChangeEvent) => setSheetHeight(e.nativeEvent.layout.height)}>
@@ -215,6 +235,11 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                     {(cell) => kinds.map((kind) => <DecorItem key={kind} kind={kind} cell={cell} onPick={pickDecor} />)}
                   </Grid>
                 ))}
+              {tab === DrawerTab.Decor && (
+                <Grid head={<SectionTitle>{t("drawer.billboards")}</SectionTitle>}>
+                  {(cell) => <BillboardItem cell={cell} onPick={pickBillboard} />}
+                </Grid>
+              )}
 
               {tab === DrawerTab.Character && <CharacterPicker />}
             </PanelScroll>

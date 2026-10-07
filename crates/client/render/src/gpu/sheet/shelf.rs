@@ -12,7 +12,8 @@ pub const NO_SLOT: i32 = -1;
 /// What an entry paints, in logical pixels before the render scale.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DrawSpec {
-    Cluster { label: String, logical_w: f64 },
+    /// A label alone on a pill: a count, or a placed billboard's words.
+    Pill { label: String, logical_w: f64 },
     Place { name: String, icon: &'static str, color: u32, logical_w: f64 },
     Bubble { lines: Vec<String>, box_w: f64, box_h: f64 },
 }

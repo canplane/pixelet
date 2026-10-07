@@ -331,10 +331,11 @@ pub enum ActiveTool {
     Object = 1,
     Decor = 2,
     Eraser = 3,
+    Billboard = 4,
 }
 
 impl ActiveTool {
-    pub const ALL: [ActiveTool; 4] = [ActiveTool::Pointer, ActiveTool::Object, ActiveTool::Decor, ActiveTool::Eraser];
+    pub const ALL: [ActiveTool; 5] = [ActiveTool::Pointer, ActiveTool::Object, ActiveTool::Decor, ActiveTool::Eraser, ActiveTool::Billboard];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<ActiveTool> {

@@ -46,7 +46,7 @@ pub fn ghost() -> Ghost {
     } = pending();
     let textures = settings.textures;
 
-    let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Eraser) || hovered_object.is_some();
+    let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Billboard | ActiveTool::Eraser) || hovered_object.is_some();
     let current_scale = if use_object_style { preview_size } else { units(GROUND.cell()) };
 
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
