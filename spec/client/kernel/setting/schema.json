@@ -231,7 +231,7 @@
       "default": false,
       "section": "debug"
     },
-    "gizmos": {
+    "world_gizmo": {
       "$doc": [
         "Markers for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs)."
       ],
@@ -241,7 +241,7 @@
     },
     "camera_gizmo": {
       "$doc": [
-        "A HUD of the camera grid's cells about the eye, each marked by how wide the drawn chunk's cell where its center ray lands spans against the grid's (scene/marker/camera_gizmo.rs)."
+        "The camera grid's cells over the screen, equal steps of a cell's angle off the optical axis along each screen axis, to judge by eye whether the chunks' cells sit at its resolution (scene/marker/camera_gizmo.rs)."
       ],
       "kind": "toggle",
       "default": false,

@@ -1,6 +1,6 @@
 // pxl-kernel/scene/marker/coverage_gizmo.rs
 
-//! The coverage gizmo (the `gizmos` setting), as translucent debug lines: the
+//! The coverage gizmo (the `world_gizmo` setting), as translucent debug lines: the
 //! drawn pieces, the goal's pieces nothing drawn covers and the drawn pieces'
 //! tiles, each colored as its `Mark` says.
 //! Every line is cut at each edge's ends on it, and each stretch drawn once in

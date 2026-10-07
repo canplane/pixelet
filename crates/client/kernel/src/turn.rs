@@ -29,7 +29,7 @@ use crate::layer::earth::Earth;
 use crate::profiler::report::{report_step, set_host_task_ms, set_turn_timing};
 use crate::scene::character::companion::{companion_step, CompanionProps};
 use crate::scene::environment::environment_step;
-use crate::scene::marker::frame_gizmo::debug_gizmos_step;
+use crate::scene::marker::frame_gizmo::frame_gizmo_step;
 use crate::scene::marker::hover_cursor::hover_cursor_step;
 use crate::scene::marker::location_puck::location_puck_step;
 use crate::scene::stage::{take_draw, visible_step};
@@ -64,10 +64,10 @@ fn companion_tick(ctx: &mut TickContext) {
     companion_step(ctx, companion_props());
 }
 
-fn debug_gizmos_tick(_: &mut TickContext) {
+fn world_gizmo_tick(_: &mut TickContext) {
     let focus = crate::control::camera::controller::focus();
-    let show = settings_store().gizmos && focus.is_some();
-    debug_gizmos_step(show, focus);
+    let show = settings_store().world_gizmo && focus.is_some();
+    frame_gizmo_step(show, focus);
 }
 
 /// The rays a new goal starts from.
@@ -119,7 +119,7 @@ pub fn boot() {
     on_tick(Phase::visible, goal_tick, StepName::goal as u32);
     on_tick(Phase::visible, demand_tick, StepName::demand as u32);
     on_tick(Phase::visible, visible_step, StepName::chunks as u32);
-    on_tick(Phase::cosmetic, debug_gizmos_tick, StepName::debug_gizmos as u32);
+    on_tick(Phase::cosmetic, world_gizmo_tick, StepName::world_gizmo as u32);
     on_tick(Phase::report, report_step, StepName::profiler as u32);
     world_tasks();
 }

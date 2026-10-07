@@ -1,6 +1,6 @@
 // pxl-kernel/scene/marker/frame_gizmo.rs
 
-//! The debug gizmos (the `gizmos` setting), as debug lines: the focus and
+//! The frame gizmo (the `world_gizmo` setting), as debug lines: the focus and
 //! its cell, and about it a level ring, an upright ring facing the screen and
 //! one through north. The view's forward, its up and north are told apart by
 //! color; nothing is labeled.
@@ -105,7 +105,7 @@ fn set_lines(at: V3, vertices: &[f32]) {
     scene.debug.set(draw, at, vertices);
 }
 
-pub fn debug_gizmos_step(show: bool, focus: Option<Pvf3>) {
+pub fn frame_gizmo_step(show: bool, focus: Option<Pvf3>) {
     let drawn = GIZMOS.get(|| None);
     let Some(center) = focus.filter(|_| show) else {
         if drawn.take().is_some() {

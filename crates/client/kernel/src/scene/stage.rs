@@ -62,8 +62,8 @@ pub fn stage_write() {
     s[STAGE_AT::FOV] = v.fov;
     s[STAGE_AT::NEAR] = v.near;
     s[STAGE_AT::FAR] = v.far;
-    // Largest drawn cell per unit of distance, for the badge occlusion test:
-    // a cell is drawn from its split distance on.
+    // The camera grid's cell angle: the largest drawn cell per unit of
+    // distance, since a cell is drawn from its split distance on.
     s[STAGE_AT::LOD_CELL] = crate::view::sight::cell_angle(crate::chunk::quality::effective().tau());
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
@@ -192,10 +192,11 @@ pub fn visible_step(ctx: &mut TickContext) {
     let draw = laid().is_some_and(|k| {
         let moving = k.sched.tick(frame, &now);
         if let Some(d) = crate::chunk::domain::current() {
-            k.scene.coverage.step(&mut k.draw, settings_store().gizmos, d.pieces(), k.sched.drawn());
+            k.scene.coverage.step(&mut k.draw, settings_store().world_gizmo, d.pieces(), k.sched.drawn());
         }
         let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
         k.scene.begin(&mut k.draw, &k.models, frame.eye);
+        crate::scene::marker::camera_gizmo::draw(&mut k.draw, settings_store().camera_gizmo);
         k.sched.draw(&frame, &mut k.draw);
         moving || animating
     });
