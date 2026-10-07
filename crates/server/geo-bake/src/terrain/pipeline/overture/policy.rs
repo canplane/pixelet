@@ -122,22 +122,27 @@ fn golf_paint(class: &str) -> Option<Paint> {
 
 /// `natural`, as Overture's land classes carry it; Carto fills a wetland by
 /// its `wetland` tag, which Overture drops, and one without it not at all.
-fn land_paint(class: &str) -> Option<Paint> {
+/// The only land classes read: the rest, an island's coast of 585,169 points
+/// among them, paint nothing.
+pub const LAND: &[(&str, Paint)] = {
     use Layer::Landcover as L;
-    Some(match class {
-        "wood" => (g::forest, L, "natural_wood"),
-        "forest" => (g::forest, L, "landuse_forest"),
-        "bare_rock" => (g::bare_ground, L, "natural_bare_rock"),
-        "scree" => (g::bare_ground, L, "natural_scree"),
-        "shingle" => (g::bare_ground, L, "natural_shingle"),
-        "sand" => (g::sand, L, "natural_sand"),
-        "beach" => (g::beach, L, "natural_beach"),
-        "heath" => (g::heath, L, "natural_heath"),
-        "scrub" => (g::scrub, L, "natural_scrub"),
-        "grassland" => (g::grass, L, "natural_grassland"),
-        "glacier" => (g::glacier, Layer::Water, "natural_glacier"),
-        _ => return None,
-    })
+    &[
+        ("wood", (g::forest, L, "natural_wood")),
+        ("forest", (g::forest, L, "landuse_forest")),
+        ("bare_rock", (g::bare_ground, L, "natural_bare_rock")),
+        ("scree", (g::bare_ground, L, "natural_scree")),
+        ("shingle", (g::bare_ground, L, "natural_shingle")),
+        ("sand", (g::sand, L, "natural_sand")),
+        ("beach", (g::beach, L, "natural_beach")),
+        ("heath", (g::heath, L, "natural_heath")),
+        ("scrub", (g::scrub, L, "natural_scrub")),
+        ("grassland", (g::grass, L, "natural_grassland")),
+        ("glacier", (g::glacier, Layer::Water, "natural_glacier")),
+    ]
+};
+
+fn land_paint(class: &str) -> Option<Paint> {
+    LAND.iter().find(|(c, _)| *c == class).map(|&(_, paint)| paint)
 }
 
 /// `water-lines`' waterways, each its fill's width at z16 (`water.mss`: a

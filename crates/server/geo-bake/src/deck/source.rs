@@ -29,10 +29,12 @@ const SEGMENTS_SQL: &str = concat!(
     " t"
 );
 
+/// The waterways a deck clears, lines alone: a water area, a sea's 444,741
+/// points among them, clears nothing.
 const WATER_SQL: &str = concat!(
     "WITH env AS (SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e) SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FROM ",
     crate::read_once!("overture_base_water"),
-    " w WHERE subtype <> 'ocean'"
+    " w WHERE ST_Dimension(geom) = 1"
 );
 
 /// One tile's rows, as a tile's other rows are read: whatever overlaps it.

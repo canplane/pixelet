@@ -8,7 +8,7 @@ use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, BBox3857};
 
 use crate::elevation::Raster;
 use crate::segment::Segment;
-use crate::terrain::pipeline::overture::policy::{INFRASTRUCTURE, WIDEST_LINE};
+use crate::terrain::pipeline::overture::policy::{INFRASTRUCTURE, LAND, WIDEST_LINE};
 use crate::terrain::pipeline::overture::width::carto_u;
 
 /// A table's rows in the tile's envelope, each feature once. A feature is
@@ -58,6 +58,7 @@ pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
 }
 
 /// Four tables, one row shape; `source` says whose vocabulary a row uses.
+/// Land and infrastructure are read only in the classes the policy paints.
 const OVERTURE_BASE_SQL: &str = concat!(
     "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
@@ -75,7 +76,7 @@ SELECT 'water' AS source, gers_id, subtype, class, way_area, ST_AsBinary(clipped
 UNION ALL
 SELECT 'land' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM ",
     read_once!("overture_base_land"),
-    " r
+    " r WHERE class = ANY($6)
 UNION ALL
 SELECT 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM ",
     read_once!("overture_base_infrastructure"),
@@ -146,8 +147,9 @@ pub struct TerrainRepository {
     segments: Statement,
     base: Statement,
     coast: Statement,
-    /// The base query's `$5`.
+    /// The base query's `$5` and `$6`: the classes the policy paints.
     infrastructure: Vec<&'static str>,
+    land: Vec<&'static str>,
 }
 
 impl TerrainRepository {
@@ -160,6 +162,7 @@ impl TerrainRepository {
             base: base?,
             coast: coast?,
             infrastructure: INFRASTRUCTURE.iter().map(|(class, _)| *class).collect(),
+            land: LAND.iter().map(|(class, _)| *class).collect(),
         })
     }
 
@@ -182,7 +185,7 @@ impl TerrainRepository {
                 .collect(),
             segment_rows: client.query(&self.segments, &bbox)?.iter().flat_map(Segment::of).collect(),
             base_rows: client
-                .query(&self.base, &[bbox[0], bbox[1], bbox[2], bbox[3], &self.infrastructure])?
+                .query(&self.base, &[bbox[0], bbox[1], bbox[2], bbox[3], &self.infrastructure, &self.land])?
                 .iter()
                 .map(|row| BaseRow {
                     source: row.get("source"),
