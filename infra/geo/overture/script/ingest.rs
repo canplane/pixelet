@@ -162,18 +162,19 @@ fn run() -> Result<(), String> {
     }
 
     for ty in TYPES {
-        // A table of an older shape, or none, is one more identity this run is
-        // not; DDL on it would build indexes on a table about to be replaced.
+        // A table of an older shape, or none, is one more identity this run is not.
         let reshaped = !keyed(&mut client, ty.table, &["gers_id"])?;
-        if !reshaped {
-            client.batch_execute(&indexes(ty, ty.table)).map_err(|e| e.to_string())?;
-        }
         let held = client
             .query("SELECT node, data_date = $2 AND code IS NOT DISTINCT FROM $3 FROM overture_catalog WHERE file_name = $1", &[&ty.table, &release, &code])
             .map_err(|e| e.to_string())?;
         // Another identity anywhere in the table makes the run whole, so a table never mixes two.
         let whole = reshaped || held.is_empty() || held.iter().any(|r| !r.get::<_, bool>(1));
         let done: Vec<String> = if whole { Vec::new() } else { held.iter().map(|r| r.get(0)).collect() };
+        // Only the table a partial run adds to is kept; DDL on one a whole run
+        // replaces would build indexes on a table about to be dropped.
+        if !whole {
+            client.batch_execute(&indexes(ty, ty.table)).map_err(|e| e.to_string())?;
+        }
         let to_do: Vec<&Shard> = shards.iter().filter(|s| !done.contains(&s.name)).collect();
         if to_do.is_empty() {
             println!("[ingest/{}] every shard already release {release} of this code", ty.table);
@@ -185,7 +186,7 @@ fn run() -> Result<(), String> {
         stage(&mut client, ty, &extracts)?;
         let rows = if whole { build_and_swap(&mut client, ty, &to_do, &release, &code)? } else { add(&mut client, ty, &to_do, &release, &code)? };
         client.batch_execute(&format!("DROP TABLE {}; ANALYZE {}", staging(ty), ty.table)).map_err(|e| e.to_string())?;
-        if reshaped {
+        if reshaped && !held.is_empty() {
             println!("[ingest/{}] now in this script's shape: restart the servers reading it onto this code", ty.table);
         }
         println!(
