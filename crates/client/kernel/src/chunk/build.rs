@@ -18,7 +18,7 @@ use shape::*;
 
 use pxl_render::mesh::chunk_mesher::{BakeContext, Heights};
 use pxl_render::mesh::paint::column::Stands;
-use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
+use pxl_render::mesh::paint::terrain::sample::ChunkSample;
 use pxl_render::mesh::run::RunWriter;
 use std::collections::HashMap;
 

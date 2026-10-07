@@ -7,7 +7,7 @@
 use crate::chunk::Chunk as PyramidChunk;
 use crate::layer::Query;
 use pxl_render::gpu::api::word_bytes;
-use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, TileView};
+use pxl_render::mesh::paint::terrain::sample::{ChunkSample, TileView};
 use pxl_render::mesh::run::apron_col;
 use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
 use pxl_spec::space::camera::grid::target_cell_px;

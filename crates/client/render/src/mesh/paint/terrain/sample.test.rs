@@ -1,4 +1,4 @@
-// pxl-render/mesh/paint/terrain/adapter.test.rs
+// pxl-render/mesh/paint/terrain/sample.test.rs
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};

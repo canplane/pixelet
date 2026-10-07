@@ -1,4 +1,4 @@
-// pxl-render/mesh/paint/terrain/adapter.rs
+// pxl-render/mesh/paint/terrain/sample.rs
 
 //! A terrain tile's chunk as the render pipeline reads it: per cell one
 //! material, its look's, and one top, painted as a column
@@ -424,5 +424,5 @@ impl ChunkSample {
 }
 
 #[cfg(test)]
-#[path = "adapter.test.rs"]
+#[path = "sample.test.rs"]
 mod test;

@@ -9,7 +9,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::offset_in;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around};
+use pxl_render::mesh::paint::terrain::sample::{beside_index, Around};
 use pxl_render::mesh::run::APRON;
 
 use crate::chunk::Chunk as PyramidChunk;

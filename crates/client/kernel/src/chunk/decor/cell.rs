@@ -10,7 +10,7 @@ use crate::layer::Query;
 use std::collections::HashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
-use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample};
+use pxl_render::mesh::paint::terrain::sample::{Around, ChunkSample};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::v3::{len3, sub3, V3};
 use pxl_spec::space::coord::world::{nearest, nearest_box};
