@@ -82,6 +82,7 @@ fn goal_tick(ctx: &mut TickContext) {
 
 /// Each pyramid layer's tiles, from the published goal.
 fn demand_tick(_: &mut TickContext) {
+    crate::world::pyramid::admit_arrived();
     Terrain::pyramid().step(crate::control::navigation::destination::tile());
     // Nothing is fetched while places are hidden.
     match crate::shell::setting::store::settings_store().poi {

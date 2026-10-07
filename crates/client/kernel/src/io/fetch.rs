@@ -6,8 +6,8 @@
 //! Every body is a heap block released in the command that decodes it,
 //! unless a store keeps it.
 
-use crate::world::pyramid::Observed as _;
 use core::fmt;
+use std::collections::VecDeque;
 
 use xpute_core::status::errno::Errno;
 use xpute_guest::ipc::sys::Fd;
@@ -19,12 +19,9 @@ use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::failure::{Failure, Outcome};
 use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle, Credit};
-use crate::layer::earth::{self, Earth};
 use crate::layer::geocode::store as geocode_store;
-use crate::sched::edge::world_edge;
-use pxl_spec::bake::format::Terrain;
+use crate::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::bake::place_tile::{group_key, DICT_OBJECT};
-use pxl_spec::bake::poi_tile::PoiTile;
 use pxl_spec::space::hierarchy::morton::write_name;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::clock::now;
@@ -62,14 +59,14 @@ pub fn cancel(key: u64) -> bool {
     true
 }
 
-fn release(block: Option<Block>) {
+pub fn release(block: Option<Block>) {
     if let Some(block) = block {
         // SAFETY: a body's block, acquired by `opened` and released once.
         unsafe { free(block) };
     }
 }
 
-fn view<'a>((at, bytes): Block) -> &'a [u8] {
+pub fn body<'a>((at, bytes): Block) -> &'a [u8] {
     // SAFETY: the block `opened` acquired for this body alone, `bytes` long,
     // not released while the view is read.
     unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at), bytes as usize) }
@@ -89,6 +86,33 @@ struct Arrival {
 }
 
 static ARRIVED: Global<Vec<Arrival>> = Global::new();
+
+/// A pyramid tile's answer, kept for the view to admit: which tile it evicts
+/// is the view's (`world/pyramid.rs` `admit_arrived`).
+pub struct TileArrival {
+    pub key: u64,
+    pub category: Category,
+    pub tile: Tile,
+    /// None where the source has no object for it.
+    pub block: Option<Block>,
+    pub phases: Phases,
+}
+
+static TILES: Global<VecDeque<TileArrival>> = Global::new();
+
+/// The oldest tile arrived and not yet admitted.
+pub fn next_tile() -> Option<TileArrival> {
+    TILES.get(VecDeque::new).pop_front()
+}
+
+/// A tile's fetch settles once it is admitted, or refused.
+pub fn tile_settled(key: u64, result: Result<(), Failure>, phases: Phases) {
+    let (outcome, fail) = match result {
+        Ok(()) => (Outcome::ok, Failure::default()),
+        Err(fail) => (Outcome::error, fail),
+    };
+    settle(key, outcome, Some(phases), fail);
+}
 static ARRIVALS: Global<Notify> = Global::new();
 
 fn arrived() -> &'static mut Vec<Arrival> {
@@ -163,6 +187,14 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     if let Some((_, bytes)) = block {
         phases.push(TaskPhaseName::bytes, bytes as f64);
     }
+    let pyramid = matches!(category, Category::terrain | Category::poi | Category::earth);
+    let tile = matches!(got, Got::Absent) || block.is_some();
+    if pyramid && tile {
+        let tile = Tile::of_subject(subject);
+        TILES.get(VecDeque::new).push_back(TileArrival { key, category, tile, block, phases });
+        request_world_tick();
+        return;
+    }
     let (outcome, fail) = match got {
         Got::Read(_) => match adopt(category, subject, block, &mut phases) {
             Ok(()) => (Outcome::ok, Failure::default()),
@@ -180,38 +212,25 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
 /// The tile over it for a pyramid tile, no label for a geocode group.
 fn absent(category: Category, subject: u64) -> Result<(), Errno> {
     match category {
-        Category::terrain => Terrain::pyramid().absent(Tile::of_subject(subject)),
-        Category::poi => PoiTile::pyramid().absent(Tile::of_subject(subject)),
-        Category::earth => Earth::pyramid().absent(Tile::of_subject(subject)),
         Category::geocode => geocode_store::absent_group(subject),
         // A bake with no dictionary names nothing: an answer, so not asked again.
         Category::geocode_dict => geocode_store::absent_dict(),
-        Category::asset => return Err(Errno::ENOTRECOVERABLE),
+        // A pyramid tile's absence is admitted by the view.
+        Category::terrain | Category::poi | Category::earth | Category::asset => return Err(Errno::ENOTRECOVERABLE),
     };
     Ok(())
 }
 
 /// The block is released here unless the tile keeps it.
-fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Phases) -> Result<(), Failure> {
+fn adopt(category: Category, subject: u64, block: Option<Block>, _phases: &mut Phases) -> Result<(), Failure> {
     // Only `absent` says there is none; an empty read is not an object.
     let Some(b) = block else { return Err(Errno::EBADMSG.into()) };
     match category {
-        Category::terrain => {
-            let result = Terrain::pyramid().adopt(Tile::of_subject(subject), view(b), phases);
-            release(block);
-            result
-        }
-        Category::poi => {
-            let result = PoiTile::pyramid().adopt(Tile::of_subject(subject), view(b), phases);
-            release(block);
-            result
-        }
-        // The texels are kept until the GPU has them.
-        Category::earth => earth::adopt(Tile::of_subject(subject), b, phases),
         // SAFETY (both): the heap block given for this body alone; the store
         // keeps it, or frees it if it does not open.
         Category::geocode => unsafe { geocode_store::adopt_group(subject, b) }.map_err(Into::into),
         Category::geocode_dict => unsafe { geocode_store::adopt_dict(b) }.map_err(Into::into),
-        Category::asset => Err(Errno::ENOTRECOVERABLE.into()),
+        // A pyramid tile is admitted by the view.
+        Category::terrain | Category::poi | Category::earth | Category::asset => Err(Errno::ENOTRECOVERABLE.into()),
     }
 }

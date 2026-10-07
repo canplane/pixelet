@@ -5,7 +5,6 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
-use crate::world::pyramid::Observed as _;
 use pxl_spec::bake::earth_tile::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::world::{around, wrap_index};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
@@ -71,19 +70,13 @@ fn release(block: Option<Block>) {
     }
 }
 
-/// The packet is kept until its texels are uploaded, or freed if no frame takes it.
-pub fn adopt(p: Tile, block: Block, phases: &mut Phases) -> Result<(), Failure> {
-    let mut framed = None;
-    let result = Earth::pyramid().admit(p, |record| {
-        let tile = Earth::receive(record, view(block), phases)?;
-        framed = Some(record);
-        Ok(tile)
-    });
-    match framed {
+/// The packet is kept until its texels are uploaded in the frame `record`
+/// took it into, or freed where no frame took it.
+pub fn keep(record: Option<u32>, block: Block) {
+    match record {
         Some(record) => release(uploads()[record as usize].replace(block)),
         None => release(Some(block)),
     }
-    result
 }
 
 /// Each waiting packet's texels to `write`, into its frame's layer, while it

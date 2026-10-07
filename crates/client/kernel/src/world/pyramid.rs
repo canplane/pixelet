@@ -15,9 +15,14 @@ use pxl_spec::bake::poi_tile::PoiTile;
 use xpute_guest::global::Global;
 
 use crate::control::camera::controller::units_per_px_at;
-use crate::layer::earth::Earth;
+use crate::io::demand::Category;
+use crate::io::fetch::{body, next_tile, release, tile_settled, TileArrival};
+use crate::layer::earth::{self, Earth};
 use crate::layer::poi::MAJOR_UNITS_PER_PX;
 use crate::layer::Layer;
+use crate::sched::edge::world_edge;
+use xpute_core::status::errno::Errno;
+use xpute_guest::mem::heap::Block;
 
 use std::collections::HashMap;
 
@@ -162,10 +167,6 @@ impl<L: Observed> Pyramid<L> {
     /// Whether every tile the view needs has its answer.
     pub fn answered(&self) -> bool {
         self.asks.keys().all(|&p| L::residency().has_answer(p))
-    }
-
-    pub fn adopt(&mut self, p: Tile, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
-        self.admit(p, |record| L::receive(record, pkt, phases))
     }
 
     /// No object for `p`: the tile over it says its ground; at the source's top, `Layer::empty`.
@@ -368,4 +369,55 @@ impl<L: Observed> Pyramid<L> {
         declare(L::CATEGORY, &[]);
         self.last = None;
     }
+}
+
+/// The pyramid tiles arrived, admitted against the view as many as the
+/// turn's quota allows and at least one; each fetch settles here.
+pub fn admit_arrived() {
+    let mut first = true;
+    while first || !world_edge().spent() {
+        let Some(TileArrival {
+            key,
+            category,
+            tile,
+            block,
+            mut phases,
+        }) = next_tile()
+        else {
+            return;
+        };
+        first = false;
+        let result = match (category, block) {
+            (Category::terrain, block) => arrived::<Terrain>(tile, block, &mut phases),
+            (Category::poi, block) => arrived::<PoiTile>(tile, block, &mut phases),
+            (Category::earth, None) => arrived::<Earth>(tile, None, &mut phases),
+            (Category::earth, Some(b)) => {
+                let mut framed = None;
+                let result = Earth::pyramid().admit(tile, |record| {
+                    let earth = Earth::receive(record, body(b), &mut phases)?;
+                    framed = Some(record);
+                    Ok(earth)
+                });
+                // The texels are kept until the GPU has them.
+                earth::keep(framed, b);
+                result
+            }
+            (_, block) => {
+                release(block);
+                Err(Errno::ENOTRECOVERABLE.into())
+            }
+        };
+        tile_settled(key, result, phases);
+    }
+}
+
+/// None is no object for `p`.
+fn arrived<L: Observed>(p: Tile, block: Option<Block>, phases: &mut Phases) -> Result<(), Failure> {
+    let Some(b) = block else {
+        L::pyramid().absent(p);
+        return Ok(());
+    };
+    let result = L::pyramid().admit(p, |record| L::receive(record, body(b), phases));
+    release(Some(b));
+    result
 }
