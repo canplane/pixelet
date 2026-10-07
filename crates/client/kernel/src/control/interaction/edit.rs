@@ -21,7 +21,8 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
 
-use crate::chunk::decor::build::{scatters_at, Draw};
+use crate::chunk::decor::build::scatters_at;
+use crate::layer::terrain::scatter::Draw;
 use crate::kernel;
 use crate::layer::object::repository;
 use crate::layer::object::store::{apply, Cells, Entry, EntryAt, Write, VOID};

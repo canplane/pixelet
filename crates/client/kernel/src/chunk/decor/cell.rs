@@ -21,10 +21,10 @@ use xpute_guest::mem::heap::{alloc, free};
 use xpute_guest::sched::frame_budget::FrameBudget;
 
 use crate::chunk::build::draws_as_held;
-use crate::chunk::decor::build::{decor_gone_px, decor_sprite_px, variant_extent, DecorBuild, DecorHide, Ground};
+use crate::chunk::decor::build::{decor_gone_px, decor_sprite_px, DecorBuild, DecorHide, Ground};
 use crate::chunk::decor::instance::{decor_groups, DecorScratch, GroupLanes};
-use crate::chunk::decor::kind::{Kind, KINDS};
-use crate::chunk::decor::scatter::SCALE_JITTER;
+use crate::layer::terrain::scatter::SCALE_JITTER;
+use pxl_spec::cell::decor::{DecorKind, Variant, KINDS};
 use crate::chunk::mesh_slot::OCCUPANCY;
 use crate::chunk::source::{objects_met, Met};
 use crate::chunk::table::Scheduler;
@@ -93,7 +93,7 @@ fn cells() -> &'static mut Cells {
 pub const BLOCKS_MAX: usize = OCCUPANCY;
 
 /// What a chunk is admitted by before its block says what it holds.
-fn largest_possible(kinds: &[&Kind]) -> f64 {
+fn largest_possible(kinds: &[DecorKind]) -> f64 {
     let extent = kinds.iter().map(|k| k.extent()).fold(0.0, f64::max);
     extent * (1.0f64 + SCALE_JITTER).max(DECOR_SIZE)
 }
@@ -128,7 +128,7 @@ fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
     })
 }
 
-fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
+fn build(c: &mut Cells, chunk: Chunk, kinds: &[DecorKind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
     let terrain = Terrain::residency();
     // The tile the terrain draws the chunk from, read over the chunk whose
     // side is that many of its cells; past the leaves, the chunk over it as wide.
@@ -195,7 +195,7 @@ fn release(block: Block, draw: &mut DrawList) {
 /// Builds the decor of the chunks the terrain has mounted, within what is
 /// left of the turn as the chunks' builds are, and lets go of what an
 /// unmounted chunk held.
-pub fn step(kinds: &[&Kind], store: &Store, sched: &Scheduler, draw: &mut DrawList, hide: Option<DecorHide>, frame_eye: V3, budget: &FrameBudget) {
+pub fn step(kinds: &[DecorKind], store: &Store, sched: &Scheduler, draw: &mut DrawList, hide: Option<DecorHide>, frame_eye: V3, budget: &FrameBudget) {
     let c = cells();
     let mut mounted = core::mem::take(&mut c.mounted);
     sched.mounted(&mut mounted);
@@ -257,7 +257,7 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
         // SAFETY: the chunk's block, `bytes` long, its own to write past `index`.
         let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
         let (lanes_of, list) = words.split_at_mut(block.index as usize / 4);
-        let mut extents = KINDS.iter().flat_map(|k| k.variants.iter().map(variant_extent));
+        let mut extents = KINDS.iter().flat_map(|k| k.variants.iter().map(Variant::extent));
         let (mut at, mut changed) = (0usize, false);
         for (group, (offset, count)) in decor_groups(lanes_of).enumerate() {
             let extent = extents.next().unwrap_or(0.0);

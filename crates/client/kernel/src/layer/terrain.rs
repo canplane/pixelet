@@ -4,6 +4,7 @@
 
 pub mod fixed;
 mod query;
+pub mod scatter;
 pub mod tile;
 
 pub(crate) use query::Drawn;

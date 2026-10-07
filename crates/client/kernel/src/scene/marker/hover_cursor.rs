@@ -15,9 +15,9 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
-use crate::chunk::decor::build::user_decor_pick;
+use crate::layer::object::meta::user_decor_pick;
 use crate::chunk::decor::instance::NO_ENTRY;
-use crate::chunk::decor::kind::kind_for;
+use pxl_spec::cell::decor::DecorKind;
 use crate::chunk::decor::kind_assets::decor_assets_for;
 use crate::control::interaction::edit::{pending, restores_scattered, Pending};
 use crate::control::interaction::{holding, hover, ActiveTool};
@@ -73,7 +73,7 @@ pub fn hover_cursor_step() {
         (_, Some(EntryKind::Decor { decor_id })) => Some(decor_id),
         _ => None,
     };
-    let decor_kind = decor_id.and_then(kind_for);
+    let decor_kind = decor_id.map(DecorKind::of);
     let decor_assets = decor_kind.and_then(decor_assets_for);
 
     let decor_pick_i = match (active_tool, &hovered_object) {

@@ -9,25 +9,22 @@ use crate::layer::Query;
 use pxl_render::gpu::api::word_bytes;
 use pxl_render::mesh::paint::terrain::sample::{ChunkSample, TileView};
 use pxl_render::mesh::run::apron_col;
-use pxl_spec::procedural::{scatter, scatter_at, Candidate, MASTER_SEED};
+use pxl_spec::procedural::{scatter, scatter_at};
 use pxl_spec::space::camera::grid::target_cell_px;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use std::collections::{HashMap, TryReserveError};
 
 use crate::chunk::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
-use crate::chunk::decor::kind::{Kind, KINDS};
-use crate::chunk::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
+use crate::layer::object::meta::user_decor_pick;
+use crate::layer::terrain::scatter::{draw, Draw};
+use pxl_spec::cell::decor::{DecorKind, KINDS};
 use crate::layer::object::store::{EntryAt, Store, AIR};
 use crate::layer::Layer as _;
 use crate::query::World;
-use pxl_spec::asset::ingested::Asset;
-use pxl_spec::bake::deck::Decks;
-use pxl_spec::bake::format::{GroundCell, Terrain};
+use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::zoom::{count, index, index_of, units, Zoom};
 use xpute_core::math::scalar::round;
@@ -46,44 +43,6 @@ pub fn decor_sprite_px() -> f64 {
 /// `cell_zoom` is drawn: its cell is `target_cell_px` where it begins.
 fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
     extent_u / units(cell_zoom) * target_cell_px() >= decor_sprite_px()
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct DecorVariantAsset {
-    pub model: Asset,
-    /// A kind's variants may come from different packs with different colormaps.
-    pub skin: Asset,
-}
-
-/// NaN is kept rather than dropped.
-pub fn largest(values: impl Iterator<Item = f64>) -> f64 {
-    values.fold(0.0, |a: f64, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) })
-}
-
-pub fn variant_extent(v: &DecorVariantAsset) -> f64 {
-    largest(v.model.ingested().extent.unwrap_or([0.0; 3]).into_iter())
-}
-
-/// Seeded only by the placed object's position, its one stable identity, so
-/// the hover ghost predicts exactly the variant and heading a placement gets.
-pub fn user_decor_pick(i: IVec, variant_count: u32) -> (u32, f64) {
-    let mut stream = SplitMix64::new(derive_seed_u64(MASTER_SEED, i));
-    let mut rng = || stream.next_u32();
-    let variant = ((u32_to_unit(rng()) * variant_count as f64).floor() as u32).min(variant_count - 1);
-    let rotation = u32_to_unit(rng()) * core::f64::consts::PI * 2.0;
-    (variant, rotation)
-}
-
-struct Rng(SplitMix64);
-
-impl Rng {
-    fn new(seed: u64) -> Rng {
-        Rng(SplitMix64::new(seed))
-    }
-
-    fn unit(&mut self) -> f64 {
-        u32_to_unit(self.0.next_u32())
-    }
 }
 
 pub struct DecorBuild<'s> {
@@ -122,48 +81,17 @@ impl DecorHide {
     }
 }
 
-pub struct Draw {
-    pub gx: i64,
-    pub gy: i64,
-    pub variant: u32,
-    pub rotation: f64,
-    pub scale: f64,
-}
-
-/// What `candidate` draws in the tile's cell `tile_at`: none off the kind's
-/// ground or under a line.
-pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Decks, tile_at: [u32; 2]) -> Option<Draw> {
-    let [cell_x, cell_y] = tile_at;
-    if !kind.rules.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
-        return None;
-    }
-    let mut rng = Rng::new(candidate.seed);
-    let variant = ((rng.unit() * kind.variant_count() as f64).floor() as u32).min(kind.variant_count() - 1);
-    let rotation = if kind.align_transport() {
-        let flip = rng.unit() < 0.5;
-        transport_aligned_rotation(cells, cell_x, cell_y, flip)
-    } else {
-        rng.unit() * core::f64::consts::PI * 2.0
-    };
-    let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
-    if lines.over_point(None, [f64::from(cell_x) + 0.5, f64::from(cell_y) + 0.5], 1.0).next().is_some() {
-        return None;
-    }
-    let [gx, gy] = candidate.cell;
-    Some(Draw { gx, gy, variant, rotation, scale })
-}
-
 /// What the leaf scatter stands of `value` in the cell `at` lies in, with
 /// nothing written there. None where the tile is not resident.
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
-    let kind = KINDS.iter().find(|k| k.decor_value() == Some(value))?;
+    let kind = KINDS.iter().find(|k| u32::from(k.value()) == value)?;
     let leaf = GROUND.cell_of(LEAF_ZOOM, at);
     // The leaf tile's own cells, as the terrain answers them: the leaf scatter reads no coarser.
     let (zoom, [x, y]) = leaf.tile().node();
     let tile = Terrain::residency().read((zoom, [x, y, 0]), GROUND.grid_zoom(zoom)).exact()?.view().tile;
     let ground = World::now().at(at, LEAF_ZOOM).exact()?;
     let [ix, iy, iz] = index_of(GROUND.cell(), at);
-    let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;
+    let candidate = scatter_at(kind.seed, kind.density, [ix, iy])?;
     (ground.top().map(|top| round(top / units(GROUND.cell())) as i64) == Some(iz)).then(|| draw(kind, candidate, tile.cells, tile.decks, leaf.in_tile()))?
 }
 
@@ -174,7 +102,7 @@ impl<'s> DecorBuild<'s> {
     /// ground may be a coarser chunk's over it.
     pub fn build(
         scratch: &'s mut DecorScratch,
-        kinds: &[&Kind],
+        kinds: &[DecorKind],
         ground: Option<&Ground>,
         hittable: bool,
         hide: Option<DecorHide>,
@@ -206,9 +134,9 @@ impl<'s> DecorBuild<'s> {
     }
 
     /// Only what stands in `chunk`: a placed decor stands at its cube's bottom middle.
-    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, hittable: bool, hide: Option<EntryAt>, store: &Store, at: PyramidChunk) -> Result<(), TryReserveError> {
+    fn placed(scratch: &mut DecorScratch, kind: &DecorKind, first: usize, hittable: bool, hide: Option<EntryAt>, store: &Store, at: PyramidChunk) -> Result<(), TryReserveError> {
         let chunk = at.region();
-        let Some(value) = kind.decor_value() else { return Ok(()) };
+        let value = u32::from(kind.value());
         let Some(objects) = store.read(at.node(), at.cell_zoom()).value() else { return Ok(()) };
         let mut refused = Ok(());
         objects.entries(&mut |e| {
@@ -240,14 +168,14 @@ impl<'s> DecorBuild<'s> {
     /// Whether a kind may stand on a cell, and its transport alignment, are read
     /// off the zoom's own cells: a tree coarser than a leaf's stands on the grass the view
     /// sees, not on leaf cells it cannot.
-    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
+    fn scatter(scratch: &mut DecorScratch, kind: &DecorKind, first: usize, ground: &Ground, hide: Option<DecorHide>, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
         let (cells, lines) = (ground.tile.cells, ground.tile.decks);
         let (own, atom) = (GROUND.cell_zoom(ground.zoom), GROUND.cell_zoom(LEAF_ZOOM));
         let (lx0, ly0) = (index(own, ground.x0), index(own, ground.y0));
         let per = i64::from(count(atom, own));
         let min = [index(atom, ground.x0), index(atom, ground.y0)];
         let span = i64::from(ground.side) * per;
-        scatter(kind.seed.tag, kind.seed.density, ground.zoom, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
+        scatter(kind.seed, kind.density, ground.zoom, [min, [min[0] + span, min[1] + span]], &mut scratch.candidates)?;
         for i in 0..scratch.candidates.len() {
             let candidate = scratch.candidates[i];
             let (dx, dy) = ((candidate.cell[0] - min[0]).div_euclid(per) as u32, (candidate.cell[1] - min[1]).div_euclid(per) as u32);
