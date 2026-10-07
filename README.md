@@ -10,7 +10,7 @@ _Started on December 15, 2025._
 
 <img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.png" height="480">
 
-The planet is too large to load or draw at once, so pixelet follows one rule: **draw what the eye can tell apart, and nothing else.** A city or a mountain range costs the cells it covers on the screen, not what it holds.
+The planet is too large to load or draw at once, so pixelet follows one rule: **draw what the eye can tell apart, and nothing else.** A city, a mountain range or a tower behind a ridge costs the cells it covers on the screen, not what it holds.
 
 ```text
 asks                                      answers
@@ -37,7 +37,7 @@ tiles ────────────────────────�
 
 ## The eye decides
 
-The world has its own fixed lattice. The eye lays a second grid over it, cells of one angle each, so they grow with distance. Where the eye can tell more apart, chunks split; where it cannot, they fold into one thing drawn.
+The world has its own fixed lattice. The eye lays a second grid over it, cells of equal solid angle, so they grow with distance. Where the eye can tell more apart, chunks split; where it cannot, they fold into one thing drawn.
 
 ---
 
