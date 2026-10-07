@@ -12,7 +12,7 @@ use pxl_spec::bake::format::GroundCell;
 use pxl_spec::cell::cube_types::Ground;
 use pxl_spec::cell::decor::{DecorKind, DecorMeta, Orientation};
 use pxl_spec::cell::Kind;
-use pxl_spec::procedural::{scatter, Candidate};
+use pxl_spec::procedural::{scatter, scatter_at, Candidate};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{count, index, units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -110,7 +110,6 @@ pub fn grow<E: From<TryReserveError>>(
     candidates: &mut Vec<Candidate>,
     mut sink: impl FnMut(Instance) -> Result<(), E>,
 ) -> Result<(), E> {
-    let tile = &source.tile;
     let (own, atom) = (GROUND.cell_zoom(zoom), GROUND.cell_zoom(LEAF_ZOOM));
     let per = i64::from(count(atom, own));
     let min = [index(atom, origin[0]), index(atom, origin[1])];
@@ -118,22 +117,33 @@ pub fn grow<E: From<TryReserveError>>(
     scatter(kind.seed, kind.density, zoom, [min, [min[0] + span, min[1] + span]], candidates)?;
     for &candidate in candidates.iter() {
         let (dx, dy) = ((candidate.cell[0] - min[0]).div_euclid(per) as u32, (candidate.cell[1] - min[1]).div_euclid(per) as u32);
-        let at = [first[0] + dx, first[1] + dy];
-        let Some(Draw { gx, gy, variant, rotation, scale }) = draw(kind, candidate, tile.cells, tile.decks, at) else {
-            continue;
-        };
-        let (_, ele) = source.cell_at(at.map(i64::from));
-        let stands = [(gx as f64 + 0.5) * units(atom), (gy as f64 + 0.5) * units(atom), f64::from(ele)];
+        let Some(i) = stand(kind, source, candidate, [first[0] + dx, first[1] + dy]) else { continue };
         // In the region holding the cell it stands on.
-        if !((0..2).all(|k| (region.min[k]..region.max[k]).contains(&stands[k])) && region.min[2] < stands[2] && stands[2] <= region.max[2]) {
-            continue;
+        if (0..2).all(|k| (region.min[k]..region.max[k]).contains(&i.at[k])) && region.min[2] < i.at[2] && i.at[2] <= region.max[2] {
+            sink(i)?;
         }
-        sink(Instance {
-            id: kind.value(),
-            at: stands,
-            source: Source::Ground([gx, gy, i64::from(ele)]),
-            meta: Meta::Decor(DecorMeta { variant, rotation, scale }),
-        })?;
     }
     Ok(())
+}
+
+/// What the ground grows of `kind` in the leaf `cell`, read off the leaf
+/// tile `source` at its cell `at`: the leaf scatter, cell by cell, which a
+/// region grows the same (pxl-spec procedural.test.rs).
+pub fn grown_at(kind: &DecorKind, source: &TileSource, cell: [i64; 2], at: [u32; 2]) -> Option<Instance> {
+    stand(kind, source, scatter_at(kind.seed, kind.density, cell)?, at)
+}
+
+/// A candidate on the source's cell `at`: none off the kind's ground or under
+/// a deck; else at the height the chunk draws there.
+fn stand(kind: &DecorKind, source: &TileSource, candidate: Candidate, at: [u32; 2]) -> Option<Instance> {
+    let tile = &source.tile;
+    let Draw { gx, gy, variant, rotation, scale } = draw(kind, candidate, tile.cells, tile.decks, at)?;
+    let (_, ele) = source.cell_at(at.map(i64::from));
+    let atom = units(GROUND.cell_zoom(LEAF_ZOOM));
+    Some(Instance {
+        id: kind.value(),
+        at: [(gx as f64 + 0.5) * atom, (gy as f64 + 0.5) * atom, f64::from(ele)],
+        source: Source::Ground([gx, gy, i64::from(ele)]),
+        meta: Meta::Decor(DecorMeta { variant, rotation, scale }),
+    })
 }
