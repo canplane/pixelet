@@ -124,14 +124,14 @@ impl Builder {
     /// A chunk's runs from its tile's ground and the objects folded to its
     /// runs' cells (mesh/paint/column.rs): the sources at once, then a few rows
     /// a step. One chunk's at a time.
-    pub(super) fn advance_runs(&mut self, world: &mut Build, id: u32) -> Progress {
+    pub(super) fn advance_runs(&mut self, build: &mut Build, id: u32) -> Progress {
         match &self.runs_job {
             Some(j) if j.id != id => return Progress::Blocked,
             Some(_) => return self.write_runs(id),
             None => {}
         }
         let c = self.chunks[&id];
-        let target = runs_of(world.store, c.at);
+        let target = runs_of(build.store, c.at);
         let Some(read) = c.read(target) else {
             return Progress::Blocked;
         };
@@ -154,7 +154,7 @@ impl Builder {
         }
         let edits = render_edits();
         self.folded.clear();
-        let objects = world.store.read(c.at.node(), target).value().or_bug(Errno::ENOTRECOVERABLE);
+        let objects = build.store.read(c.at.node(), target).value().or_bug(Errno::ENOTRECOVERABLE);
         let (from, _) = objects.column_cells(i64::from(APRON));
         let (cx, cy) = (from[0] + i64::from(APRON), from[1] + i64::from(APRON));
         if objects.fold(i64::from(APRON), edits.hide.filter(|&e| draws_as_held(c.at, e.zoom())), &mut self.folded).is_err() {
@@ -165,7 +165,7 @@ impl Builder {
             carve_into(&mut self.folded, carve, target, from[0]);
         }
         let step = (units(target) / z_unit(target)) as u32;
-        if stands_of(&self.sample, world.painter, &self.folded, (cx, cy), step, &mut self.stands).is_err() {
+        if stands_of(&self.sample, build.painter, &self.folded, (cx, cy), step, &mut self.stands).is_err() {
             self.refuse(id);
             return Progress::Blocked;
         }

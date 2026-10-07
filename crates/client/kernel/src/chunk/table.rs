@@ -513,10 +513,10 @@ impl Scheduler {
     }
 
     /// The build task's step. Returns whether any build did work.
-    pub fn build_step(&mut self, world: &mut Build, budget_ms: f64) -> bool {
+    pub fn build_step(&mut self, build: &mut Build, budget_ms: f64) -> bool {
         let (slots, place, meshes, landed) = (&mut self.slots, &*self.place, &mut self.meshes, &mut self.landed);
         landed.clear();
-        let worked = self.builder.tick(world, &self.builds, budget_ms, &xpute_guest::clock::now, &mut |e| match e {
+        let worked = self.builder.tick(build, &self.builds, budget_ms, &xpute_guest::clock::now, &mut |e| match e {
             BuildEvent::Reserve { .. } => reserve(slots, place, meshes, e),
             BuildEvent::Part { .. } => {
                 part(slots, place, meshes, e);

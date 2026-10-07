@@ -242,7 +242,7 @@ impl Builder {
     /// is taken. A heap refusal ends the tick: the heap will not change within
     /// it, and a refusal is not free (direct runs are written before their
     /// block is asked for).
-    pub fn tick(&mut self, world: &mut Build, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent) -> bool) -> bool {
+    pub fn tick(&mut self, build: &mut Build, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent) -> bool) -> bool {
         let t0 = now();
         let starved = self.stat.starved;
         let mut stepped = false;
@@ -260,7 +260,7 @@ impl Builder {
                 if stepped && now() - t0 >= budget_ms {
                     return worked;
                 }
-                let progress = self.advance(world, id, emit);
+                let progress = self.advance(build, id, emit);
                 if self.stat.starved != starved {
                     return worked;
                 }
@@ -276,7 +276,7 @@ impl Builder {
         worked
     }
 
-    fn advance(&mut self, world: &mut Build, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
+    fn advance(&mut self, build: &mut Build, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
         let Some(c) = self.chunks.get(&id) else { return Progress::Done };
         if !c.want {
             return Progress::Done;
@@ -285,7 +285,7 @@ impl Builder {
             return Progress::Blocked;
         }
         if self.runs_of(id).is_none() {
-            return self.advance_runs(world, id);
+            return self.advance_runs(build, id);
         }
         // Another chunk of the column made the runs; this one bakes its cut too.
         self.run_set_for(id);
@@ -301,7 +301,7 @@ pub async fn build_task() {
         loop {
             yield_if_spent(world_edge).await;
             let budget = world_edge().remaining();
-            let worked = with_parts(|world, sched, _| sched.build_step(world, budget)).unwrap_or(false);
+            let worked = with_parts(|build, sched, _| sched.build_step(build, budget)).unwrap_or(false);
             if !worked {
                 break;
             }

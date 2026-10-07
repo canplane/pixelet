@@ -80,7 +80,7 @@ pub struct Build<'a> {
 }
 
 impl Kernel {
-    /// Split into fields so the world and the table borrow at once. None before
+    /// Split into fields so the build and the table borrow at once. None before
     /// the memory map is laid.
     pub fn parts(&mut self) -> Option<(Build<'_>, &mut Scheduler, &mut Scene, &mut DrawList)> {
         let Kernel {
@@ -100,8 +100,8 @@ impl Kernel {
 }
 
 pub fn with_parts<R>(f: impl FnOnce(&mut Build, &mut Scheduler, &mut Scene) -> R) -> Option<R> {
-    let (mut world, sched, scene, _) = kernel().parts()?;
-    Some(f(&mut world, sched, scene))
+    let (mut build, sched, scene, _) = kernel().parts()?;
+    Some(f(&mut build, sched, scene))
 }
 
 /// Native tests run on several threads, and a `Global` is for one.

@@ -140,10 +140,10 @@ pub fn hover_cursor_step() {
         }
         _ => Ghost::None,
     };
-    let changed = kernel().parts().map(|(mut world, _, scene, draw)| match ghost {
+    let changed = kernel().parts().map(|(mut build, _, scene, draw)| match ghost {
         Ghost::None => scene.ghost.clear(draw),
         Ghost::Decor { at, group, rotation, scale } => scene.ghost.set_decor(draw, at, group, rotation as f32, scale as f32),
-        Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(&mut world, draw, at, size, value, rgb, coplanar),
+        Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(&mut build, draw, at, size, value, rgb, coplanar),
     });
     if changed == Some(true) {
         request_world_tick();
@@ -177,8 +177,8 @@ impl GhostDraw {
     /// Painted as `state` paints, or as untextured `rgb` where it paints
     /// nothing. Whether what is drawn changed.
     #[allow(clippy::too_many_arguments)]
-    pub fn set_box(&mut self, world: &mut Build, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) -> bool {
-        let (rgb, layer) = match world.painter.material_of(state) {
+    pub fn set_box(&mut self, build: &mut Build, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) -> bool {
+        let (rgb, layer) = match build.painter.material_of(state) {
             Some((m, l)) => ([(m >> 16) as u8, (m >> 8) as u8, m as u8], l),
             None => ([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8),
         };
