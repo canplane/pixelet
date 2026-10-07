@@ -331,18 +331,16 @@ impl<'a> Access<'a> {
         best
     }
 
-    pub(super) fn column(&self, ray: &Ray, [ix, iy]: [i64; 2], t0: f64, t1: f64, d: &Drawn) -> Option<Hit> {
-        let side = units(GROUND.cell());
-        let c = self.composed_in([ix, iy], d).value()?;
-        let ground = self.ground_column(ray, &c, t0, t1);
-        self.with_decks(ray, &c.lines.boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
+    pub(super) fn column(&self, ray: &Ray, cell: [i64; 2], t0: f64, t1: f64, d: &Drawn) -> Option<Hit> {
+        let c = self.composed_in(cell, d).value()?;
+        self.ground_column(ray, &c, t0, t1)
     }
 
-    /// Ground hit in a leaf column: a cell under the top not taken by a voxel
-    /// entry and not in bore air. Steps by cell only once under the top.
+    /// Ground hit in a leaf column: the first cell the ground fills and no
+    /// voxel entry takes. Steps by cell only once under the column's ceiling.
     pub(super) fn ground_column(&self, ray: &Ray, c: &Composed, t0: f64, t1: f64) -> Option<Hit> {
-        let ([ix, iy], top) = (c.cell, c.top?);
         let side = units(GROUND.cell());
+        let ([ix, iy], top) = (c.cell, c.ceiling()? as f64 * side);
         let (za, zb) = (ray.at(t0)[2], ray.at(t1)[2]);
         let dz = ray.direction[2];
         let at_z = |z: f64| (z - ray.origin[2]) / dz;
@@ -364,7 +362,7 @@ impl<'a> Access<'a> {
                 let face = if dz > 0.0 { (cz + 1) as f64 * side } else { cz as f64 * side };
                 at_z(face).min(t1)
             };
-            if (cz as f64) * side < top && from > 0.0 && self.holds(c, cz) {
+            if from > 0.0 && self.holds(c, cz) {
                 // Through the column's side on the entry cell, else through floor or ceiling.
                 let normal = if from == t0 {
                     wall_normal(ray, from, side)
@@ -388,8 +386,9 @@ impl<'a> Access<'a> {
         let cell = GROUND.cell_of(zoom, &base_of(cell_zoom, [ix, iy, 0]));
         let g = self.ground_in(cell, d).value()?;
         let ground = g.top().and_then(|top| self.folded_ground(ray, [ix, iy], top, t0, t1, zoom));
-        let lines = self.lines_in(cell, d, g.height);
-        self.with_decks(ray, &lines.boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
+        let leaf = units(GROUND.cell());
+        let boxes: Vec<[f64; 2]> = self.lines_in(cell, d, g.height).boxes.iter().map(|b| b.map(|v| v as f64 * leaf)).collect();
+        self.with_decks(ray, &boxes, ([ix as f64 * side, iy as f64 * side], side), (t0, t1), ground)
     }
 
     pub(super) fn folded_ground(&self, ray: &Ray, [ix, iy]: [i64; 2], top: f64, t0: f64, t1: f64, zoom: Zoom) -> Option<Hit> {

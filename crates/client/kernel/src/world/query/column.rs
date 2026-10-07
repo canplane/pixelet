@@ -20,18 +20,34 @@ use xpute_core::math::scalar::round;
 use super::ground::*;
 use crate::layer::*;
 
+/// Decks and a bore over a cell, in whole leaf cells, each `lo..hi`.
 #[derive(Default)]
 pub(super) struct Lines {
-    pub(super) boxes: Vec<[f64; 2]>,
-    pub(super) air: Option<[f64; 2]>,
+    pub(super) boxes: Vec<[i64; 2]>,
+    pub(super) air: Option<[i64; 2]>,
 }
 
-/// A leaf column as composed for both rays and footing, so ground, bores and
-/// decks are combined in one place.
+/// A leaf column as the chunk paints its ground, in whole cells, for rays
+/// and footing alike.
 pub(super) struct Composed {
     pub(super) cell: [i64; 2],
-    pub(super) top: Option<f64>,
+    /// The first cell over the surface; none where the column has none.
+    pub(super) top: Option<i64>,
     pub(super) lines: Lines,
+}
+
+impl Composed {
+    /// The ground fills `cz`: under the surface and out of a bore's air, or
+    /// in a deck's slab or pier.
+    pub(super) fn ground_at(&self, cz: i64) -> bool {
+        let inside = |[lo, hi]: [i64; 2]| (lo..hi).contains(&cz);
+        (self.top.is_some_and(|t| cz < t) && !self.lines.air.is_some_and(inside)) || self.lines.boxes.iter().copied().any(inside)
+    }
+
+    /// The first cell over all the ground fills.
+    pub(super) fn ceiling(&self) -> Option<i64> {
+        self.top.into_iter().chain(self.lines.boxes.iter().map(|b| b[1])).max()
+    }
 }
 
 /// Folds sub-cell fill to the cell by majority, a zoom at a time, with the
@@ -71,18 +87,17 @@ impl<'a> Access<'a> {
     /// As `composed`, the leaf tile drawn as `d` says.
     pub(super) fn composed_in(&self, cell: [i64; 2], d: &Drawn) -> Answer<Composed> {
         let leaf = GROUND.cell_of(LEAF_ZOOM, &base_of(GROUND.cell(), [cell[0], cell[1], 0]));
+        let cell_u = units(GROUND.cell());
         self.ground_in(leaf, d).map(|g| Composed {
             cell,
-            top: g.top(),
+            top: g.top().map(|t| round(t / cell_u) as i64),
             lines: self.lines_in(leaf, d, g.height),
         })
     }
 
-    /// Whether ground is there where it reaches: not bore air, and not taken by
-    /// an object's voxel entry (air entries included).
+    /// The ground fills `cz` and no object's voxel entry, air included, takes it.
     pub(super) fn holds(&self, c: &Composed, cz: i64) -> bool {
-        let z = cz as f64 * units(GROUND.cell());
-        !c.lines.air.is_some_and(|[lo, hi]| z >= lo && z < hi) && !self.taken(c.cell, cz)
+        c.ground_at(cz) && !self.taken(c.cell, cz)
     }
 
     /// Decks and bore air over a cell, as the chunk paints them
@@ -93,7 +108,7 @@ impl<'a> Access<'a> {
         let (at, side) = (sample_in(cell, src), 1.0 / count(GROUND.cell_zoom(cell.tile_zoom()), GROUND.cell_zoom(src.zoom)) as f64);
         let cell_u = units(GROUND.cell());
         let ground = round(ground_height / cell_u) as i32;
-        let height_u = |[lo, hi]: [i32; 2]| [f64::from(lo) * cell_u, f64::from(hi) * cell_u];
+        let cells = |[lo, hi]: [i32; 2]| [i64::from(lo), i64::from(hi)];
         let tile = Frame::of(src);
         let frame = Some(tile);
         let cell_per_m = u_per_m(tile.corner[1]) / cell_u;
@@ -103,12 +118,12 @@ impl<'a> Access<'a> {
             match o.occupies(ground, cell_per_m) {
                 Occupies::Grade => {}
                 Occupies::Above { slab, pier } => {
-                    lines.boxes.push(height_u(slab));
+                    lines.boxes.push(cells(slab));
                     if let Some(pier) = pier.and_then(|p| pier_stands(p, look, body.decks.over_point(frame, at, side), ground, cell_per_m)) {
-                        lines.boxes.push(height_u(pier));
+                        lines.boxes.push(cells(pier));
                     }
                 }
-                Occupies::Through { air } => lines.air = Some(height_u(air)),
+                Occupies::Through { air } => lines.air = Some(cells(air)),
             }
         }
         lines

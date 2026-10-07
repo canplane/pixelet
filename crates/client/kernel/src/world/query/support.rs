@@ -11,7 +11,6 @@ use pxl_spec::space::coord::world::REACH;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use pxl_spec::space::coord::zoom::{count, index_of, units, Zoom};
-use xpute_core::math::scalar::round;
 
 use super::{column::*, ground::*};
 use crate::layer::*;
@@ -77,30 +76,24 @@ impl<'a> Access<'a> {
     pub(super) fn cells<R>(&self, [ix, iy]: [i64; 2], f: impl FnOnce(Option<i64>, i64, &dyn Fn(i64) -> bool) -> R) -> Answer<R> {
         self.composed([ix, iy]).map(|c| {
             let side = units(GROUND.cell());
-            let top = c.top.map(|t| round(t / side) as i64);
-            let made = |z: f64| {
-                let inside = |[lo, hi]: [f64; 2]| z >= lo && z < hi;
-                (top.is_some_and(|t| z < t as f64 * side) && !c.lines.air.is_some_and(inside)) || c.lines.boxes.iter().any(|&b| inside(b))
-            };
             let n = i64::from(count(OBJECT_FINEST, GROUND.cell()));
-            let fine = units(OBJECT_FINEST);
             let solid = |cz: i64| {
                 if !self.objects.read((GROUND.cell(), [ix, iy, cz]), GROUND.cell()).value().is_some_and(|c| c.holds()) {
-                    return made((cz as f64 + 0.5) * side);
+                    return c.ground_at(cz);
                 }
                 filled_cell(|[x, y, z]| {
                     let node = (OBJECT_FINEST, [ix * n + x, iy * n + y, cz * n + z]);
                     let v = self.objects.read(node, OBJECT_FINEST).value().map_or(VOID, |c| c.node().0.state);
                     match object_value_is_voxel(v) {
                         true => !object_value_is_air(v),
-                        false => made(((cz * n + z) as f64 + 0.5) * fine),
+                        false => c.ground_at(cz),
                     }
                 })
             };
-            let lines_top = c.lines.boxes.iter().map(|b| (b[1] / side).ceil() as i64).max().unwrap_or(i64::MIN);
             let held = self.objects.bounds((GROUND.cell(), [ix, iy]), GROUND.cell()).value().flatten();
-            let objects_top = held.map_or(i64::MIN, |b| (b.aabb.max[2] / side).ceil() as i64);
-            let ceiling = top.unwrap_or(i64::MIN).max(lines_top).max(objects_top);
+            let objects_top = held.map(|b| (b.aabb.max[2] / side).ceil() as i64);
+            let ceiling = c.ceiling().max(objects_top).unwrap_or(i64::MIN);
+            let top = c.top;
             f(top, ceiling, &solid)
         })
     }
