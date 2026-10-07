@@ -158,11 +158,13 @@ pub fn draw(kind: &Kind, candidate: Candidate, cells: &[GroundCell], lines: &Dec
 pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let kind = KINDS.iter().find(|k| k.decor_value() == Some(value))?;
     let leaf = GROUND.cell_of(LEAF_ZOOM, at);
-    let tile = Terrain::residency().get(leaf.tile())?;
+    // The leaf tile's own cells, as the terrain answers them: the leaf scatter reads no coarser.
+    let (zoom, [x, y]) = leaf.tile().node();
+    let tile = Terrain::residency().read((zoom, [x, y, 0]), GROUND.grid_zoom(zoom)).exact()?.view().tile;
     let ground = Access::now().at(at, LEAF_ZOOM).exact()?;
     let [ix, iy, iz] = index_of(GROUND.cell(), at);
     let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;
-    (ground.top().map(|top| round(top / units(GROUND.cell())) as i64) == Some(iz)).then(|| draw(kind, candidate, &tile.ground.cells, &tile.decks, leaf.in_tile()))?
+    (ground.top().map(|top| round(top / units(GROUND.cell())) as i64) == Some(iz)).then(|| draw(kind, candidate, tile.cells, tile.decks, leaf.in_tile()))?
 }
 
 impl<'s> DecorBuild<'s> {
