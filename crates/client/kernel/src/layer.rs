@@ -14,6 +14,7 @@ use residency::Residency;
 
 pub mod earth;
 pub mod geocode;
+pub mod instance;
 pub mod object;
 pub mod poi;
 mod query;

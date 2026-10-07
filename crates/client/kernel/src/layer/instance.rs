@@ -1,0 +1,33 @@
+// pxl-kernel/layer/instance.rs
+
+//! A thing drawn as one instance of its shape, whichever layer answers it:
+//! its id is its shape (the cell catalog's), and `meta` is what that shape's
+//! class carries. The ground grows its own; an object's is the placement's.
+
+use pxl_spec::cell::decor::DecorMeta;
+use pxl_spec::space::coord::v3::V3;
+
+use crate::layer::object::store::EntryAt;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Instance {
+    pub id: u16,
+    /// Where it stands: its footprint's middle, at the height of its base.
+    pub at: V3,
+    pub source: Source,
+    pub meta: Meta,
+}
+
+/// Which layer's record it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Source {
+    /// Grown by the ground, in the leaf cell it stands on.
+    Ground([i64; 3]),
+    /// Placed, at its entry.
+    Object(EntryAt),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Meta {
+    Decor(DecorMeta),
+}

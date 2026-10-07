@@ -11,24 +11,13 @@ use std::collections::TryReserveError;
 pub const NO_ENTRY: u32 = u32::MAX;
 pub const HIDDEN_FLAG: u8 = 1;
 
-#[derive(Clone, Copy)]
-pub(crate) struct Instance {
-    pub(crate) x: f32,
-    pub(crate) y: f32,
-    pub(crate) z: f32,
-    pub(crate) rotation: f32,
-    pub(crate) scale: f32,
-    pub(crate) flags: u8,
-    pub(crate) entry: u32,
-}
-
 pub use pxl_render::gpu::pass::decor::GROUPS as DECOR_GROUPS;
 
 /// Grows rather than being a `.fixed` range: placed instances are unbounded,
 /// and a fixed workspace would drop what someone placed. Where the heap
 /// refuses, the cell is not built.
 pub struct DecorScratch {
-    pub(crate) instances: Vec<Instance>,
+    pub(crate) instances: Vec<crate::layer::instance::Instance>,
     pub(crate) candidates: Vec<pxl_spec::procedural::Candidate>,
     pub(crate) groups: Vec<u16>,
     pub(crate) counts: [u32; DECOR_GROUPS],
@@ -60,7 +49,7 @@ impl DecorScratch {
     }
 
     /// Doubles when full, so a build that fits earlier growth asks for nothing.
-    pub(crate) fn push(&mut self, group: usize, instance: Instance) -> Result<(), TryReserveError> {
+    pub(crate) fn push(&mut self, group: usize, instance: crate::layer::instance::Instance) -> Result<(), TryReserveError> {
         if self.instances.len() == self.instances.capacity() || self.groups.len() == self.groups.capacity() {
             let more = self.instances.len().max(MIN_GROWTH);
             self.instances.try_reserve(more)?;

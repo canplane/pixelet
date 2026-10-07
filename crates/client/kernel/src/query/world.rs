@@ -14,7 +14,7 @@ use xpute_core::status::errno::Errno;
 use crate::layer::object::store::Cells;
 
 use crate::kernel;
-use crate::layer::object::store::Store;
+use crate::layer::object::store::{Store, AIR};
 use crate::layer::residency::Residency;
 use crate::layer::terrain::Source;
 use crate::layer::Answer;
@@ -100,5 +100,23 @@ impl Query for World<'_> {
             // Objects are all resident: their answer is always exact.
             objects: objects.or_bug(Errno::ENOTRECOVERABLE),
         })
+    }
+}
+
+/// What the objects hold over a ground cell, as the composer reads them: at
+/// a leaf's cells whether anything is held, over a fold what it folds to.
+pub enum Over {
+    Leaf { held: bool },
+    Folded(Option<u32>),
+}
+
+/// Whether the objects over a ground cell cover what the ground grows there,
+/// so it is neither drawn nor struck: at a leaf's cells anything held does,
+/// air included, so erasing a grown tree is placing air over it; over a fold
+/// only a fill does.
+pub fn covers(over: Over) -> bool {
+    match over {
+        Over::Leaf { held } => held,
+        Over::Folded(state) => state.is_some_and(|s| s != AIR),
     }
 }

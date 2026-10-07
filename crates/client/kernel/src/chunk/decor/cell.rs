@@ -10,7 +10,6 @@ use crate::layer::Query;
 use std::collections::HashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
-use pxl_render::mesh::paint::terrain::sample::{Around, ChunkSample};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::v3::{len3, sub3, V3};
 use pxl_spec::space::coord::world::{nearest, nearest_box};
@@ -23,8 +22,6 @@ use xpute_guest::sched::frame_budget::FrameBudget;
 use crate::chunk::build::draws_as_held;
 use crate::chunk::decor::build::{decor_gone_px, decor_sprite_px, DecorBuild, DecorHide, Ground};
 use crate::chunk::decor::instance::{decor_groups, DecorScratch, GroupLanes};
-use crate::layer::terrain::scatter::SCALE_JITTER;
-use pxl_spec::cell::decor::{DecorKind, Variant, KINDS};
 use crate::chunk::mesh_slot::OCCUPANCY;
 use crate::chunk::source::{objects_met, Met};
 use crate::chunk::table::Scheduler;
@@ -33,11 +30,12 @@ use crate::control::camera::controller::units_per_px_at;
 use crate::kernel;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::Store;
+use crate::layer::terrain::scatter::SCALE_JITTER;
 use crate::layer::Layer;
 use crate::setting::store::settings_store;
 use crate::view::observation::{eye, observation};
-use pxl_render::mesh::run::APRON;
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::cell::decor::{DecorKind, Variant, KINDS};
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::global::Global;
 
@@ -75,7 +73,6 @@ struct Sources {
 struct Cells {
     blocks: HashMap<Chunk, Block>,
     scratch: Option<DecorScratch>,
-    sample: ChunkSample,
     folded: HashMap<[i64; 3], u32>,
     /// Kept so a settled turn asks the heap for nothing.
     mounted: Vec<(Chunk, bool, bool)>,
@@ -142,12 +139,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[DecorKind], store: &Store, draw: 
     let (x0, y0) = (x0 as i64, y0 as i64);
     let (tx0, ty0) = GROUND.read_at(over.column(), over.cell_zoom());
     // Read over `over`, whose tile is `src` itself.
-    let own = terrain.read(over.node(), over.cell_zoom()).value()?;
-    let view = own.view().tile;
-    if sources.shown {
-        let around = Around { own: own.view(), beside: [None; 8] };
-        c.sample.read(&around, [tx0 as i64, ty0 as i64], side + 2 * APRON).ok()?;
-    }
+    let own_view = terrain.read(over.node(), over.cell_zoom()).value()?.view();
     // Interaction reads what is drawn as it is held, never a fold of it.
     let own = draws_as_held(chunk, GROUND.cell());
     let target = GROUND.cell_zoom(zoom);
@@ -156,8 +148,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[DecorKind], store: &Store, draw: 
         false => c.folded.clear(),
     }
     let ground = Ground {
-        tile: &view,
-        sample: &c.sample,
+        source: own_view,
         zoom,
         x0,
         y0,

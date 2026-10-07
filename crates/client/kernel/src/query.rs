@@ -17,7 +17,7 @@ mod world;
 
 pub use ray::{Detail, Hit, Ray, Struck};
 pub use world::Cube;
-pub use world::World;
+pub use world::{covers, Over, World};
 
 #[cfg(test)]
 #[path = "query.test.rs"]

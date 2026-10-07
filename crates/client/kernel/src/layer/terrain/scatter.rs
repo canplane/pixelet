@@ -4,14 +4,22 @@
 //! the terrain's record and each kind's seed (the catalog's,
 //! spec/spec/cell/decor.json), so a cell grows the same wherever it is read.
 
+use std::collections::TryReserveError;
+
+use pxl_render::mesh::paint::terrain::sample::TileSource;
 use pxl_spec::bake::deck::Decks;
 use pxl_spec::bake::format::GroundCell;
-use pxl_spec::cell::decor::{DecorKind, Orientation};
 use pxl_spec::cell::cube_types::Ground;
+use pxl_spec::cell::decor::{DecorKind, DecorMeta, Orientation};
 use pxl_spec::cell::Kind;
-use pxl_spec::procedural::Candidate;
+use pxl_spec::procedural::{scatter, Candidate};
+use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::zoom::{count, index, units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_core::math::rng::{u32_to_unit, SplitMix64};
+
+use crate::layer::instance::{Instance, Meta, Source};
 
 // Variety between instances without any reading as the wrong size.
 pub const SCALE_JITTER: f64 = 0.18;
@@ -82,4 +90,50 @@ pub fn draw(kind: &DecorKind, candidate: Candidate, cells: &[GroundCell], lines:
     }
     let [gx, gy] = candidate.cell;
     Some(Draw { gx, gy, variant, rotation, scale })
+}
+
+/// What the ground grows of `kind` in `region`, read off `source`'s cells at
+/// `zoom` from its cell `first`, `side` of them a side, whose first lies at
+/// `origin`: each candidate stands on its own cell's look and decks and at the
+/// height the chunk draws there (`TileSource::cell_at`), so what is grown is
+/// what is drawn. A tree coarser than a leaf's stands on the grass the view
+/// sees, not on leaf cells it cannot. `candidates` is the caller's room.
+#[allow(clippy::too_many_arguments)]
+pub fn grow<E: From<TryReserveError>>(
+    kind: &DecorKind,
+    source: &TileSource,
+    zoom: Zoom,
+    origin: [i64; 2],
+    first: [u32; 2],
+    side: u32,
+    region: Aabb,
+    candidates: &mut Vec<Candidate>,
+    mut sink: impl FnMut(Instance) -> Result<(), E>,
+) -> Result<(), E> {
+    let tile = &source.tile;
+    let (own, atom) = (GROUND.cell_zoom(zoom), GROUND.cell_zoom(LEAF_ZOOM));
+    let per = i64::from(count(atom, own));
+    let min = [index(atom, origin[0]), index(atom, origin[1])];
+    let span = i64::from(side) * per;
+    scatter(kind.seed, kind.density, zoom, [min, [min[0] + span, min[1] + span]], candidates)?;
+    for &candidate in candidates.iter() {
+        let (dx, dy) = ((candidate.cell[0] - min[0]).div_euclid(per) as u32, (candidate.cell[1] - min[1]).div_euclid(per) as u32);
+        let at = [first[0] + dx, first[1] + dy];
+        let Some(Draw { gx, gy, variant, rotation, scale }) = draw(kind, candidate, tile.cells, tile.decks, at) else {
+            continue;
+        };
+        let (_, ele) = source.cell_at(at.map(i64::from));
+        let stands = [(gx as f64 + 0.5) * units(atom), (gy as f64 + 0.5) * units(atom), f64::from(ele)];
+        // In the region holding the cell it stands on.
+        if !((0..2).all(|k| (region.min[k]..region.max[k]).contains(&stands[k])) && region.min[2] < stands[2] && stands[2] <= region.max[2]) {
+            continue;
+        }
+        sink(Instance {
+            id: kind.value(),
+            at: stands,
+            source: Source::Ground([gx, gy, i64::from(ele)]),
+            meta: Meta::Decor(DecorMeta { variant, rotation, scale }),
+        })?;
+    }
+    Ok(())
 }
