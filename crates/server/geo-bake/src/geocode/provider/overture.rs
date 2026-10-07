@@ -72,10 +72,11 @@ impl GeocodeProvider {
                 ((bb[0][0] + bb[1][0]) / 2.0, (bb[0][1] + bb[1][1]) / 2.0)
             })
             .unzip();
-        let areas = division::by_point(leaves.len(), client.query(&self.containing, &[&xs, &ys])?.iter().map(division_of));
+        let nodes: Vec<String> = xs.iter().zip(&ys).map(|(&x, &y)| division::shard_of(x, y)).collect();
+        let areas = division::by_point(leaves.len(), client.query(&self.containing, &[&xs, &ys, &nodes])?.iter().map(division_of));
         let within: Vec<Option<String>> = areas.iter().map(|a| division::within(a)).collect();
         let reach: Vec<f64> = ys.iter().map(|&y| division::reach_at(y)).collect();
-        let points = division::by_point(leaves.len(), client.query(&self.nearest, &[&xs, &ys, &within, &reach])?.iter().map(division_of));
+        let points = division::by_point(leaves.len(), client.query(&self.nearest, &[&xs, &ys, &within, &reach, &nodes])?.iter().map(division_of));
         Ok(areas
             .iter()
             .zip(&points)
