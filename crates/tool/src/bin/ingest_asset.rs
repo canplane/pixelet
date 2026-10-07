@@ -118,7 +118,16 @@ fn run() -> Result<(), String> {
         return Err(format!("{} names {}, which is not under asset/cube", i.label, i.file));
     }
     let faces = table::faces(&tile_slots, &pxl_tool::spec::cell::catalog()?)?;
-    let composed = pack::compose(&asset_dir, &tiles)?;
+    // A look's top is drawn toward its Carto color; a side, a bottom and a block are not looks.
+    let carto = pxl_tool::spec::cell::ground_colors()?;
+    let toward: Vec<Option<u32>> = tile_slots
+        .iter()
+        .map(|slot| match slot {
+            pack::Slot::Top { channel, ty } if channel != "block" => carto.get(ty).copied(),
+            _ => None,
+        })
+        .collect();
+    let composed = pack::compose(&asset_dir, &tiles, &toward)?;
     let image_name = named("cube/pack.webp", &hex(&composed.bytes));
     let at = out_dir.join(&image_name);
     std::fs::create_dir_all(at.parent().ok_or("the pack has a parent")?).map_err(|e| e.to_string())?;
