@@ -9,7 +9,7 @@ use xpute_guest::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::door::host::heap_stat;
 use crate::io::load::{load_failed, load_gltf, load_image, take_settled, Load};
-use crate::scene::model::asset::register_model;
+use crate::model::asset::register_model;
 use crate::sched::edge::{request_world_tick, world_edge};
 use crate::world::chunk::decor::kind::{Kind, KINDS};
 use xpute_guest::global::Global;

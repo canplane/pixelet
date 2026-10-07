@@ -1,17 +1,13 @@
-// pxl-kernel/scene/model/store.rs
+// pxl-kernel/model/store.rs
 
-//! Models and the actors that play them. A model's mesh is one heap block
-//! read lane by lane (positions, normals, UVs, joints, weights, indices),
-//! in glTF's Y-up scaled to its registered height; an actor turns it Z-up.
-//! Each tick advances every actor's clips, cross-fades as three's mixer did,
-//! and writes the joint palette into the actor's block.
+//! The registered models. A model's mesh is one heap block read lane by lane
+//! (positions, normals, UVs, joints, weights, indices), in glTF's Y-up scaled
+//! to its registered height; what draws it turns it Z-up. A model poses its
+//! joints at a clip's time and writes their palette for whatever plays it.
 
-use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
-use pxl_render::gpu::api::word_bytes;
-use pxl_spec::space::coord::v3::V3;
-use xpute_guest::abi::handle::Slots;
+use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS};
 use xpute_guest::mem::base::ptr_at;
-use xpute_guest::mem::heap::{alloc, free};
+use xpute_guest::mem::heap::alloc;
 
 /// Translation, rotation; anything else is scale.
 const T: u8 = 0;
@@ -62,35 +58,10 @@ pub struct Model {
     radius: f32,
 }
 
-#[derive(Clone, Copy)]
-struct Playing {
-    clip: u32,
-    time: f32,
-}
-
-pub struct Actor {
-    model: u32,
-    /// In units, and its turn about Z.
-    pub at: V3,
-    pub rotation_z: f32,
-    pub visible: bool,
-    current: Option<Playing>,
-    previous: Option<Playing>,
-    fade: f32,
-    fade_len: f32,
-    palette_at: usize,
-    palette_bytes: u32,
-    palette_handle: u32,
-    local: Vec<[f32; 10]>,
-    global: Vec<[f32; 16]>,
-}
-
 #[derive(Default)]
 pub struct Models {
     /// Never let go: a model is a build asset and stays while the build runs.
     models: Vec<Model>,
-    actors: Slots<Actor>,
-    from: Vec<[f32; 10]>,
 }
 
 fn mat_mul(a: &[f32; 16], b: &[f32; 16]) -> [f32; 16] {
@@ -198,7 +169,8 @@ fn sample(ch: &Channel, time: f32, out: &mut [f32; 10]) {
     }
 }
 
-fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
+/// One local transform eased toward another, rotations along the sphere.
+pub fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
     let mut o = [0.0; 10];
     for i in 0..3 {
         o[i] = a[i] + (b[i] - a[i]) * w;
@@ -309,148 +281,51 @@ impl Models {
         })
     }
 
-    pub fn new_actor(&mut self, draw: &mut DrawList, model: u32) -> Option<u32> {
-        xpute_core::ensure!(self.actors.iter().count() < crate::mem::fixed::ACTORS_MAX, ENOTRECOVERABLE);
-        let joints = self.models.get(model as usize)?.parent.len();
-        let palette_bytes = word_bytes(joints.max(1) * 16);
-        let (palette_at, palette_bytes) = alloc(palette_bytes)?;
-        // SAFETY: the block just acquired; identity joints until the first tick.
-        unsafe {
-            let p = core::slice::from_raw_parts_mut(ptr_at::<f32>(palette_at), palette_bytes as usize / 4);
-            p.fill(0.0);
-            for j in 0..joints.max(1) {
-                for d in 0..4 {
-                    p[j * 16 + d * 5] = 1.0;
-                }
+    pub fn get(&self, model: u32) -> Option<&Model> {
+        self.models.get(model as usize)
+    }
+}
+
+impl Model {
+    pub fn joints(&self) -> usize {
+        self.parent.len()
+    }
+
+    pub fn handle(&self) -> u32 {
+        self.handle
+    }
+
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+
+    /// A clip's length, where it has one.
+    pub fn duration(&self, clip: u32) -> Option<f32> {
+        self.clips.get(clip as usize).map(|c| c.duration)
+    }
+
+    /// The joints' local transforms at a clip's time, or at rest.
+    pub fn pose(&self, at: Option<(u32, f32)>, out: &mut [[f32; 10]]) {
+        out.copy_from_slice(&self.rest);
+        let Some(c) = at.and_then(|(clip, _)| self.clips.get(clip as usize)) else { return };
+        let time = at.map_or(0.0, |(_, t)| t);
+        for ch in &c.channels {
+            if let Some(slot) = out.get_mut(ch.joint as usize) {
+                sample(ch, time, slot);
             }
-        }
-        let palette_handle = draw.upload(palette_at as u32, palette_bytes, 0, 0);
-        let actor = Actor {
-            model,
-            at: [0.0; 3],
-            rotation_z: 0.0,
-            visible: false,
-            current: None,
-            previous: None,
-            fade: 0.0,
-            fade_len: 0.0,
-            palette_at,
-            palette_bytes,
-            palette_handle,
-            local: vec![[0.0; 10]; joints],
-            global: vec![[0.0; 16]; joints],
-        };
-        Some(self.actors.insert(actor))
-    }
-
-    pub fn actor(&mut self, id: u32) -> Option<&mut Actor> {
-        self.actors.get_mut(id)
-    }
-
-    pub fn actor_ref(&self, id: u32) -> Option<&Actor> {
-        self.actors.get(id)
-    }
-
-    /// A clip already playing is left alone.
-    pub fn play(&mut self, id: u32, clip: u32, fade_s: f32) {
-        let Some(a) = self.actor(id) else { return };
-        if a.current.is_some_and(|c| c.clip == clip) {
-            return;
-        }
-        a.previous = a.current;
-        a.current = Some(Playing { clip, time: 0.0 });
-        a.fade = 0.0;
-        a.fade_len = if a.previous.is_some() { fade_s.max(0.0) } else { 0.0 };
-    }
-
-    pub fn remove_actor(&mut self, draw: &mut DrawList, id: u32) {
-        if let Some(a) = self.actors.remove(id) {
-            draw.free(a.palette_handle);
-            // SAFETY: the block this asset took and has not given back.
-            unsafe { free((a.palette_at, a.palette_bytes)) };
         }
     }
 
-    /// Whether any actor plays a clip of some length: the only thing that asks
-    /// for the next frame.
-    pub fn tick(&mut self, draw: &mut DrawList, dt: f32) -> bool {
-        let mut animating = false;
-        let Models { models, actors, from } = self;
-        for a in actors.values_mut() {
-            let Some(m) = models.get(a.model as usize) else { continue };
-            animating |= a.current.is_some_and(|p| m.clips.get(p.clip as usize).is_some_and(|c| c.duration > 0.0));
-            let wrap = |p: &mut Playing| {
-                p.time += dt;
-                if let Some(c) = m.clips.get(p.clip as usize) {
-                    if c.duration > 0.0 {
-                        p.time %= c.duration;
-                    }
-                }
-            };
-            if let Some(p) = a.current.as_mut() {
-                wrap(p);
-            }
-            if let Some(p) = a.previous.as_mut() {
-                wrap(p);
-            }
-            if a.previous.is_some() {
-                a.fade += dt;
-                if a.fade >= a.fade_len {
-                    a.previous = None;
-                }
-            }
-            let joints = m.parent.len();
-            if joints == 0 {
-                continue;
-            }
-            let pose = |p: Option<Playing>, out: &mut [[f32; 10]]| {
-                out.copy_from_slice(&m.rest);
-                if let Some(p) = p {
-                    if let Some(c) = m.clips.get(p.clip as usize) {
-                        for ch in &c.channels {
-                            if let Some(slot) = out.get_mut(ch.joint as usize) {
-                                sample(ch, p.time, slot);
-                            }
-                        }
-                    }
-                }
-            };
-            pose(a.current, &mut a.local);
-            if let Some(prev) = a.previous {
-                from.resize(joints, [0.0; 10]);
-                pose(Some(prev), from);
-                let w = if a.fade_len > 0.0 { (a.fade / a.fade_len).clamp(0.0, 1.0) } else { 1.0 };
-                for (to, from) in a.local.iter_mut().zip(from.iter()) {
-                    *to = blend(from, to, w);
-                }
-            }
-            for &j in &m.order {
-                let j = j as usize;
-                let local = mat_trs(&a.local[j]);
-                let p = m.parent[j];
-                a.global[j] = if p < 0 { mat_mul(&m.root_pre[j], &local) } else { mat_mul(&a.global[p as usize], &local) };
-            }
-            // SAFETY: the actor's own palette block, one mat4 a joint.
-            let palette = unsafe { core::slice::from_raw_parts_mut(ptr_at::<f32>(a.palette_at), joints * 16) };
-            for j in 0..joints {
-                palette[j * 16..j * 16 + 16].copy_from_slice(&mat_mul(&a.global[j], &m.inverse_bind[j]));
-            }
-            draw.rewrite(a.palette_handle, a.palette_at as u32, a.palette_bytes);
+    /// The joint palette from local transforms, parents first: one mat4 a joint.
+    pub fn palette(&self, local: &[[f32; 10]], global: &mut [[f32; 16]], palette: &mut [f32]) {
+        for &j in &self.order {
+            let j = j as usize;
+            let l = mat_trs(&local[j]);
+            let p = self.parent[j];
+            global[j] = if p < 0 { mat_mul(&self.root_pre[j], &l) } else { mat_mul(&global[p as usize], &l) };
         }
-        animating
-    }
-
-    pub fn draw(&self, draw: &mut DrawList, eye: V3) {
-        for (_, a) in self.actors.iter() {
-            if !a.visible {
-                continue;
-            }
-            let Some(m) = self.models.get(a.model as usize) else { continue };
-            if m.handle == 0 {
-                continue;
-            }
-            let t = DrawList::translation(a.at, eye);
-            draw.draw_scaled(PIPELINE_SKINNED, m.handle, a.palette_handle, a.model, t, a.rotation_z, 1.0, m.scale);
+        for j in 0..self.joints() {
+            palette[j * 16..j * 16 + 16].copy_from_slice(&mat_mul(&global[j], &self.inverse_bind[j]));
         }
     }
 }

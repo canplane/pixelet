@@ -9,8 +9,8 @@ use pxl_render::gpu::api::bytes;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::abi::handle::Slots;
 
+use crate::scene::actor::Actors;
 use crate::scene::billboard::sheet::billboard_sheet;
-use crate::scene::model::store::Models;
 
 /// Anchor relative to the set's (3), logical size in pixels (2), sheet
 /// rectangle (4), anchor's place down the sprite, 0 top 1 bottom (1).
@@ -81,7 +81,7 @@ impl Billboards {
     }
 
     /// A set on an actor that is gone or hidden shows nothing.
-    pub fn draw(&self, draw: &mut DrawList, models: &Models, eye: V3) {
+    pub fn draw(&self, draw: &mut DrawList, actors: &Actors, eye: V3) {
         // A pass per order over the few there are, so no list is sorted per frame.
         let orders = || self.sets.iter().map(|(_, s)| s.order);
         let mut next = orders().min();
@@ -92,7 +92,7 @@ impl Billboards {
                 }
                 let at = match s.anchor {
                     Anchor::At(at) => at,
-                    Anchor::On(actor, lift) => match models.actor_ref(actor) {
+                    Anchor::On(actor, lift) => match actors.actor_ref(actor) {
                         Some(a) if a.visible => [a.at[0], a.at[1], a.at[2] + lift],
                         _ => continue,
                     },

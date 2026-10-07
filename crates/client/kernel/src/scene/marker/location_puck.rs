@@ -3,6 +3,7 @@
 //! The device's location puck: a zone of cells about the fix, each on the
 //! ground under it, and a beacon above that eases, spins and bobs.
 
+use crate::laid;
 use pxl_render::frame::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
@@ -13,11 +14,11 @@ use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
+use crate::kernel;
 use crate::sched::edge::request_world_tick;
 use crate::world::chunk::table::Frame;
 use crate::world::query::Access;
 use crate::world::view::reach::view_reach;
-use crate::{kernel, with_world};
 use xpute_guest::global::Global;
 
 // A world-space footprint (4u), whatever the ground's cell; the .707 is a
@@ -127,7 +128,9 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         ]);
     }
     if p.drawn.as_ref().is_none_or(|(c, l)| *c != center_pos || *l != lane) {
-        with_world(|_, _, scene| scene.markers.set_zone(&mut scene.draw, center_pos, &lane, ZONE_RADIUS_CELL * units(GROUND.cell())));
+        if let Some(k) = laid() {
+            k.scene.markers.set_zone(&mut k.draw, center_pos, &lane, ZONE_RADIUS_CELL * units(GROUND.cell()));
+        }
         let old = p.drawn.replace((center_pos, lane)).map(|(_, l)| l);
         lane = old.unwrap_or_default();
         p.shown = true;
@@ -150,7 +153,9 @@ fn clear(p: &mut Puck) {
     }
     p.shown = false;
     p.drawn = None;
-    with_world(|_, _, scene| scene.markers.clear(&mut scene.draw));
+    if let Some(k) = laid() {
+        k.scene.markers.clear(&mut k.draw);
+    }
     request_world_tick();
 }
 

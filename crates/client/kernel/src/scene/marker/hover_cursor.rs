@@ -17,11 +17,11 @@ use xpute_guest::mem::heap::{alloc, free};
 
 use crate::control::interaction::edit::{pending, restores_scattered, Pending};
 use crate::control::interaction::{holding, hover, ActiveTool};
+use crate::kernel;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryKind;
 use crate::sched::edge::request_world_tick;
 use crate::shell::setting::store::settings_store;
-use crate::with_world;
 use crate::world::chunk::decor::asset_store::decor_assets_for;
 use crate::world::chunk::decor::build::user_decor_pick;
 use crate::world::chunk::decor::instance::NO_ENTRY;
@@ -140,10 +140,10 @@ pub fn hover_cursor_step() {
         }
         _ => Ghost::None,
     };
-    let changed = with_world(|world, _, sched| match ghost {
-        Ghost::None => sched.ghost.clear(&mut sched.draw),
-        Ghost::Decor { at, group, rotation, scale } => sched.ghost.set_decor(&mut sched.draw, at, group, rotation as f32, scale as f32),
-        Ghost::Box { at, size, value, rgb, coplanar } => sched.ghost.set_box(world, &mut sched.draw, at, size, value, rgb, coplanar),
+    let changed = kernel().world().map(|(mut world, _, scene, draw)| match ghost {
+        Ghost::None => scene.ghost.clear(draw),
+        Ghost::Decor { at, group, rotation, scale } => scene.ghost.set_decor(draw, at, group, rotation as f32, scale as f32),
+        Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(&mut world, draw, at, size, value, rgb, coplanar),
     });
     if changed == Some(true) {
         request_world_tick();

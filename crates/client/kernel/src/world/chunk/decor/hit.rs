@@ -4,15 +4,15 @@
 //! decor of chunks drawing it as held: decor paints no voxel, so the access's
 //! ray passes through it. A placed instance resolves to its entry; a scattered one to its cell.
 
+use crate::laid;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::{cross3, dot3, sub3, V3};
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::mem::base::ptr_at;
 
-use crate::kernel;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
-use crate::scene::model::store::Models;
+use crate::model::store::Models;
 use crate::world::chunk::build::draws_as_held;
 use crate::world::chunk::decor::asset_store::kind_assets;
 use crate::world::chunk::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
@@ -38,8 +38,7 @@ pub struct Scattered {
 /// The ray is in the world's doubles. A decor wins only
 /// strictly nearer than `max_dist`, the world's hit, as a depth test decides.
 pub fn raycast_decor(origin: V3, direction: V3, max_dist: f64) -> Option<DecorStruck> {
-    let (_, _, scene) = kernel().world()?;
-    let hit = hit_decor(&scene.models, origin, direction, max_dist)?;
+    let hit = hit_decor(&laid()?.models, origin, direction, max_dist)?;
     if hit.entry == NO_ENTRY {
         return Some(DecorStruck::Scattered(Scattered {
             cell: index_of(GROUND.cell(), &crate::world::view::frame::coord::world_to_canonical(&hit.at)),

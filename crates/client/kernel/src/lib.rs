@@ -10,12 +10,15 @@ pub mod door;
 pub mod io;
 pub mod layer;
 pub mod mem;
+pub mod model;
 pub mod param;
 pub mod scene;
 pub mod sched;
 pub mod shell;
 pub mod world;
 
+use crate::model::store::Models;
+use pxl_render::frame::draw::DrawList;
 use pxl_render::mesh::paint::object::Painter;
 
 use crate::layer::object::store::Store;
@@ -30,6 +33,9 @@ pub struct Kernel {
     pub painter: Painter,
     pub sched: Scheduler,
     pub scene: Scene,
+    /// What the renderer is handed: every layer lists into it.
+    pub draw: DrawList,
+    pub models: Models,
 }
 
 impl Kernel {
@@ -40,6 +46,8 @@ impl Kernel {
             painter: Painter::new(),
             sched: Scheduler::new(),
             scene: Scene::default(),
+            draw: DrawList::default(),
+            models: Models::default(),
         }
     }
 }
@@ -48,6 +56,12 @@ static KERNEL: Global<Kernel> = Global::new();
 
 pub fn kernel() -> &'static mut Kernel {
     KERNEL.get(Kernel::new)
+}
+
+/// None before the memory map is laid, when nothing may take the heap.
+pub fn laid() -> Option<&'static mut Kernel> {
+    let k = kernel();
+    k.laid_out.then_some(k)
 }
 
 /// The objects and the painter, borrowed together for a turn's build.
@@ -59,23 +73,25 @@ pub struct World<'a> {
 impl Kernel {
     /// Split into fields so the world and the table borrow at once. None before
     /// the memory map is laid.
-    pub fn world(&mut self) -> Option<(World<'_>, &mut Scheduler, &mut Scene)> {
+    pub fn world(&mut self) -> Option<(World<'_>, &mut Scheduler, &mut Scene, &mut DrawList)> {
         let Kernel {
             laid_out,
             objects,
             painter,
             sched,
             scene,
+            draw,
+            ..
         } = self;
         if !*laid_out {
             return None;
         }
-        Some((World { store: objects, painter }, sched, scene))
+        Some((World { store: objects, painter }, sched, scene, draw))
     }
 }
 
 pub fn with_world<R>(f: impl FnOnce(&mut World, &mut Scheduler, &mut Scene) -> R) -> Option<R> {
-    let (mut world, sched, scene) = kernel().world()?;
+    let (mut world, sched, scene, _) = kernel().world()?;
     Some(f(&mut world, sched, scene))
 }
 

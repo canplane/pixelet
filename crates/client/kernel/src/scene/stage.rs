@@ -4,8 +4,8 @@
 //! the settings, and everything the renderer is handed, since it reads
 //! nothing of the kernel on its own.
 
+use crate::laid;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
-use crate::with_world;
 use crate::world::chunk::decor::build::DecorHide;
 use crate::world::chunk::table::Frame;
 use crate::world::view::frame::pose::{globe, view_resize};
@@ -79,8 +79,8 @@ pub fn stage_render() {
     if load_image(Load::Asset(EARTH)).is_none() {
         return;
     }
-    let lists = kernel().scene.draw.take();
-    let models = &kernel().scene.models;
+    let lists = kernel().draw.take();
+    let models = &kernel().models;
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
     let variants = kind_assets().iter().flat_map(|entry| {
         (0..entry.models.len()).map(move |v| {
@@ -188,27 +188,26 @@ pub fn visible_step(ctx: &mut TickContext) {
     let t0 = now();
     // The chunks plan first; what animates and every layer but the chunks list
     // before the chunks draw.
-    let draw = with_world(|_, sched, scene| {
-        let moving = sched.tick(frame, &now);
+    let draw = laid().is_some_and(|k| {
+        let moving = k.sched.tick(frame, &now);
         if let Some(d) = crate::world::chunk::domain::current() {
-            scene.coverage.step(&mut scene.draw, settings_store().gizmos, d.pieces(), sched.drawn());
+            k.scene.coverage.step(&mut k.draw, settings_store().gizmos, d.pieces(), k.sched.drawn());
         }
-        let animating = scene.tick(&frame);
-        scene.begin(frame.eye);
-        sched.draw(&frame, &mut scene.draw);
+        let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
+        k.scene.begin(&mut k.draw, &k.models, frame.eye);
+        k.sched.draw(&frame, &mut k.draw);
         moving || animating
-    })
-    .unwrap_or(false);
+    });
     // Decor lists after the chunks have listed theirs.
     {
         let k = kernel();
         let edits = crate::control::interaction::edit::render_edits();
         let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
-        crate::world::chunk::decor::cell::step(&crate::world::chunk::decor::kind::KINDS, &k.objects, &k.sched, &mut k.scene.draw, hide, frame.eye, &ctx.budget);
+        crate::world::chunk::decor::cell::step(&crate::world::chunk::decor::kind::KINDS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
     }
     crate::world::chunk::place::step(ctx);
-    let scene = &mut kernel().scene;
-    scene.billboards.draw(&mut scene.draw, &scene.models, frame.eye);
+    let k = kernel();
+    k.scene.billboards.draw(&mut k.draw, &k.scene.actors, frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();

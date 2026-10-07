@@ -3,6 +3,7 @@
 //! The one sheet every billboard draws into, mirrored by the renderer, so
 //! every set shares one pipeline and binding; and the sets themselves.
 
+use crate::laid;
 use pxl_render::asset::atlas::BillboardAtlas;
 use pxl_spec::space::coord::v3::V3;
 
@@ -28,13 +29,13 @@ pub fn follow_billboard_set(set: u32, actor: u32, lift: f64) {
 }
 
 pub fn write_billboard_set(set: u32, lane: &[f32]) {
-    let Some((_, _, sched)) = kernel().world() else { return };
-    sched.billboards.write(&mut sched.draw, set, lane);
+    let Some(k) = laid() else { return };
+    k.scene.billboards.write(&mut k.draw, set, lane);
 }
 
 pub fn remove_billboard_set(set: u32) {
-    let scene = &mut kernel().scene;
-    scene.billboards.remove(&mut scene.draw, set);
+    let k = kernel();
+    k.scene.billboards.remove(&mut k.draw, set);
 }
 
 /// Draw order among billboard sets, only for ties on the same pixels at the
