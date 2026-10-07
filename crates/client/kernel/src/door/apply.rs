@@ -163,7 +163,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::INPUT_COMPASS_RESET => {
             // Following the heading would turn it straight back.
-            if !crate::control::camera::store::camera_store().is_follow_mode {
+            if !crate::control::camera::state::camera_state().is_follow_mode {
                 crate::control::camera::controller::reset_azimuth();
             }
             applied(s)

@@ -8,4 +8,4 @@ pub mod free;
 pub mod gesture;
 pub mod input;
 pub mod orbit;
-pub mod store;
+pub mod state;

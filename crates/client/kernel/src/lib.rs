@@ -24,7 +24,7 @@ pub mod turn;
 pub mod view;
 
 use crate::billboard::field::Billboards;
-use crate::model::store::Models;
+use crate::model::registry::Models;
 use pxl_render::frame::draw::DrawList;
 use pxl_render::mesh::paint::object::Painter;
 

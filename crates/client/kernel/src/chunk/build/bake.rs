@@ -6,7 +6,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
-use pxl_render::mesh::chunk_mesher::{box_words, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
+use pxl_render::mesh::chunk::{box_words, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_spec::bake::constant::EntryAt;
 use std::collections::HashMap;
 use xpute_guest::mem::base::ptr_at;

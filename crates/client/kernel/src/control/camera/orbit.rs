@@ -15,7 +15,7 @@ use xpute_core::math::scalar::clamp;
 use crate::control::camera::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::controller::{camera, center_world, look_dir, look_domain, map_center, set_eye_world};
 use crate::control::camera::gesture::{spread, Anchor};
-use crate::control::camera::store::{camera_store, Intent, IntentPatch};
+use crate::control::camera::state::{camera_state, Intent, IntentPatch};
 use crate::control::navigation::support::target;
 use crate::param::DOLLY_GAIN;
 use crate::param::{CAM_DAMP, POS_DAMP, ROT_DAMP};
@@ -62,7 +62,7 @@ const CLIMB_RELAX_DAMP: f64 = 5.0;
 /// once. `climb` limits only a tilt asked: a zoom it answers by pitching the
 /// drawn look, which would stick if written into the controls.
 pub fn ask(partial: IntentPatch) -> Intent {
-    let c = camera_store();
+    let c = camera_state();
     let mut asked = c.merged(partial);
     if partial.polar.is_some() && settings_store().orbit_obstacle == OrbitObstacleMode::climb {
         asked.polar = climb_polar(asked.dist, asked.polar, asked.azimuth);
@@ -86,7 +86,7 @@ fn gate(from: Intent, to: Intent) -> Intent {
 }
 
 pub fn zoom_settling() -> bool {
-    (camera_store().intent.dist - orbit().dist).abs() > DIST_EPS
+    (camera_state().intent.dist - orbit().dist).abs() > DIST_EPS
 }
 
 /// `delta_y` in CSS pixels.
@@ -96,11 +96,11 @@ pub fn wheel(delta_y: f64) {
 
 /// Under one zooms closer.
 pub fn zoom_by(factor: f64) {
-    zoom_to(camera_store().intent.dist * factor);
+    zoom_to(camera_state().intent.dist * factor);
 }
 
 pub fn pinch_begin(span: f64) {
-    orbit().pinch_from = Anchor::new(camera_store().intent.dist, span);
+    orbit().pinch_from = Anchor::new(camera_state().intent.dist, span);
 }
 
 /// Spreading the fingers zooms in.
@@ -136,7 +136,7 @@ pub(crate) fn put(at: Pvf3, snap: bool) {
 /// Whether still moving; None where the camera stands nowhere.
 pub(crate) fn turn(delta: f64) -> Option<bool> {
     let drawn_center = center_world()?;
-    let vs = camera_store().intent;
+    let vs = camera_state().intent;
     let (o, cam) = (orbit(), camera());
     let was = (drawn_center, o.dist, cam.polar, cam.azimuth);
 

@@ -1,9 +1,9 @@
-// pxl-kernel/control/navigation/store.rs
+// pxl-kernel/control/navigation/off_center.rs
 
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 
-use crate::control::sensor::store::device_location_store;
+use crate::control::sensor::reading::device_location_store;
 use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

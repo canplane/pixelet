@@ -15,7 +15,7 @@ use crate::chunk::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
 use crate::chunk::decor::kind_assets::kind_assets;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryAt;
-use crate::model::store::Models;
+use crate::model::registry::Models;
 use pxl_spec::space::coord::zoom::{index_of, units, Zoom};
 
 #[derive(Clone, Copy, Debug, PartialEq)]

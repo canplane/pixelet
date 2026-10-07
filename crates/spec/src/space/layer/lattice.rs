@@ -214,7 +214,7 @@ impl Lattice {
 /// The ground's tile is 512 cells a side, its one knob: every length the
 /// ground keeps in cells follows it. A grid cell is drawn from the ground's
 /// records a zoom finer: their surfaces' mean and their fill (pxl-render
-/// mesh/chunk_mesher.rs).
+/// mesh/chunk.rs).
 pub const GROUND: Lattice = Lattice::new(LEAF_ZOOM + 9).folding(1);
 
 /// The index lane's lattice (bake/format.rs `Index`).

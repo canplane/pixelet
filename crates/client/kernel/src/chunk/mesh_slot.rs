@@ -10,7 +10,7 @@
 //! slot, which left steep ground missing (2026-09-26), nor baked coarser to
 //! fit, which was a second quality policy.
 
-use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
+use pxl_render::mesh::chunk::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::layer::lattice::GROUND;
 

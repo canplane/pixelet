@@ -1,4 +1,4 @@
-// pxl-render/mesh/chunk_mesher.rs
+// pxl-render/mesh/chunk.rs
 
 //! A chunk's column runs to one mesh: face masks, a greedy merge, then the
 //! emit, each resumable under a frame budget. A coarse tier first summarizes
@@ -1173,5 +1173,5 @@ fn pack_inset(linear: f64) -> (u8, u8) {
 }
 
 #[cfg(test)]
-#[path = "chunk_mesher.test.rs"]
+#[path = "chunk.test.rs"]
 mod test;

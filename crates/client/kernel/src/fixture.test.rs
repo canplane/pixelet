@@ -199,11 +199,11 @@ pub fn eye(eye: V3, forward: Option<V3>, far: f64, ground: f64) -> Observation {
 pub fn place(center: V3, dist: f64, polar: f64, azimuth: f64) {
     use crate::control::camera::controller::{camera, set_eye_world};
     use crate::control::camera::orbit::{orbit, orbit_eye_offset};
-    use crate::control::camera::store::{camera_store, Intent};
+    use crate::control::camera::state::{camera_state, Intent};
     orbit().dist = dist;
     let cam = camera();
     (cam.polar, cam.azimuth) = (polar, azimuth);
-    camera_store().intent = Intent { dist, azimuth, polar };
+    camera_state().intent = Intent { dist, azimuth, polar };
     let e = orbit_eye_offset(dist, polar, azimuth);
     set_eye_world(&add3(&center, &e));
 }

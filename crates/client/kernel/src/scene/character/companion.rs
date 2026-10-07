@@ -8,7 +8,7 @@
 
 use crate::control::camera::approach::damp_alpha;
 use crate::control::camera::input::steering;
-use crate::control::camera::store::{camera_store, CameraStatus};
+use crate::control::camera::state::{camera_state, CameraStatus};
 use crate::control::navigation::support::over;
 use crate::io::load::{load_image, Load};
 use crate::kernel;
@@ -140,7 +140,7 @@ impl Figure {
         // Wall seconds: the tick's elapsed is clamped per delta, which stretches
         // these spans across a gap where the world did not tick.
         let now = xpute_guest::clock::now() / 1000.0;
-        let dragging = camera_store().camera_status == CameraStatus::Drag;
+        let dragging = camera_state().camera_status == CameraStatus::Drag;
         let released = self.was_dragging && !dragging;
         let gap = |a: [f64; 2], b: [f64; 2]| libm::hypot(a[0] - b[0], a[1] - b[1]);
         let (mut at, is_walking);
@@ -300,7 +300,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     };
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);
     let steered = steering();
-    let follows = camera_store().is_follow_mode || steered;
+    let follows = camera_state().is_follow_mode || steered;
 
     let person_target = p.center;
     let person = figure_for(&mut c.person, person_variant, person_target);

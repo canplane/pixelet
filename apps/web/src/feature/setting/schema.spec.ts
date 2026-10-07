@@ -33,7 +33,7 @@ export const SETTINGS = {
    *
    * It sources the chunks: the shader samples a leaf's layer or does not,
    * but a tier over it carries one color and no layer to sample, so which
-   * color that is was baked in (mesh/chunk_mesher.rs). */
+   * color that is was baked in (mesh/chunk.rs). */
   textures: {
     key: 0 as number,
     kind: "toggle",

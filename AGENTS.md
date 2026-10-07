@@ -157,7 +157,7 @@ zoom is the 3857 adapter's alone (`web_zoom_of`), for comparing with one.
   wide. A chunk draws a cell from what is composed there one zoom finer
   (`space/layer/lattice.rs` `Lattice::fold`, the ground's `GROUND`) as its
   surfaces' mean color and its fill's volume (`pxl-render
-  mesh/chunk_mesher.rs`); past a layer's data it draws its finest. What is folded is a summary, so nothing
+  mesh/chunk.rs`); past a layer's data it draws its finest. What is folded is a summary, so nothing
   in a folded cell is struck, hidden or cut by a preview.
 - **Dev is guarded like terrain.** The tile server answers no tile more than
   `--folds` zooms over the leaves, the whole guard for every layer. A source declares the

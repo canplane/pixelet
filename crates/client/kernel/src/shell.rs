@@ -14,13 +14,13 @@ use xpute_core::wire::xtp::PacketWriter;
 pub use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, HoldingState, LocationState, LonLat, MapState, MapStatus, OrientationState, PlaceName, PlacePart, Snapshot};
 use crate::control::camera::controller::{dist, map_center, units_per_px_at, Motion};
-use crate::control::camera::store::{camera_store, CameraStatus, IntentPatch};
+use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
 use crate::control::interaction::holding;
 use crate::control::navigation::destination::go_to_ground;
-use crate::control::navigation::store::map_navigation;
+use crate::control::navigation::off_center::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
-use crate::control::sensor::store::{device_location_store, device_orientation_store};
+use crate::control::sensor::reading::{device_location_store, device_orientation_store};
 use crate::layer::geocode::fetcher::group_of;
 use crate::layer::geocode::store as geocode_store;
 use crate::scene::character::companion::companion_load_store;
@@ -61,7 +61,7 @@ fn place_parts(tile: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
 pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let location = device_location_store();
     let orientation = device_orientation_store();
-    let camera = camera_store();
+    let camera = camera_state();
     let settings = settings_store();
     let companion = companion_load_store();
     let at = crate::control::camera::controller::map_center();
@@ -127,7 +127,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
 /// The shell decides which of the three from the state it drew the button
 /// in, so the press means what the user saw.
 pub fn tracking_action(tracking: Tracking) {
-    let camera = camera_store();
+    let camera = camera_state();
     match tracking {
         Tracking::Recenter => {
             // A fix's Z is altitude, absent on most and never the map's ground height.
@@ -153,7 +153,7 @@ pub fn tracking_action(tracking: Tracking) {
 /// A badge's height is its zoom's, coarser than where the center stands, so
 /// the center goes on the surface once it is known exactly.
 fn go_on_ground(target: Pvf3, motion: Motion) {
-    camera_store().is_follow_mode = false;
+    camera_state().is_follow_mode = false;
     go_to_ground(target, motion);
 }
 

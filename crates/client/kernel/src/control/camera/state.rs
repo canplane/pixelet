@@ -1,4 +1,4 @@
-// pxl-kernel/control/camera/store.rs
+// pxl-kernel/control/camera/state.rs
 
 use xpute_core::math::scalar::clamp;
 
@@ -43,15 +43,15 @@ pub struct IntentPatch {
     pub polar: Option<f64>,
 }
 
-pub struct CameraStore {
+pub struct CameraState {
     pub camera_status: CameraStatus,
     pub intent: Intent,
     pub is_follow_mode: bool,
 }
 
-impl CameraStore {
-    fn new() -> CameraStore {
-        CameraStore {
+impl CameraState {
+    fn new() -> CameraState {
+        CameraState {
             camera_status: CameraStatus::Idle,
             intent: Intent {
                 dist: DEFAULT_DIST,
@@ -82,12 +82,12 @@ impl CameraStore {
     }
 }
 
-static CAMERA_STORE: Global<CameraStore> = Global::new();
+static CAMERA_STATE: Global<CameraState> = Global::new();
 
-pub fn camera_store() -> &'static mut CameraStore {
-    CAMERA_STORE.get(CameraStore::new)
+pub fn camera_state() -> &'static mut CameraState {
+    CAMERA_STATE.get(CameraState::new)
 }
 
 #[cfg(test)]
-#[path = "store.test.rs"]
+#[path = "state.test.rs"]
 mod test;

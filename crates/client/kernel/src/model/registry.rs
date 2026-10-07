@@ -1,4 +1,4 @@
-// pxl-kernel/model/store.rs
+// pxl-kernel/model/registry.rs
 
 //! The registered models. A model's mesh is one heap block read lane by lane
 //! (positions, normals, UVs, joints, weights, indices), in glTF's Y-up scaled

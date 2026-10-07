@@ -10,7 +10,7 @@ use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::{add3, sub3, V3};
 
 use crate::control::camera::orbit::orbit;
-use crate::control::camera::store::{camera_store, Intent, IntentPatch};
+use crate::control::camera::state::{camera_state, Intent, IntentPatch};
 use crate::control::navigation::support::{is_unknown, pan_to, unknown_z};
 use crate::param::FOV;
 use crate::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR};
@@ -151,7 +151,7 @@ fn target_center() -> Option<Pvf3> {
 pub fn pan(dx: f64, dy: f64) {
     let Some(from) = target_center() else { return };
     let across = match active() {
-        Active::Orbit => camera_store().intent.dist,
+        Active::Orbit => camera_state().intent.dist,
         Active::Free | Active::Tracked => DEFAULT_DIST,
     };
     let (azimuth, upp) = (camera().azimuth, units_per_px_at(across));
@@ -227,7 +227,7 @@ pub fn set_intent(partial: IntentPatch) -> Intent {
     match active() {
         Active::Orbit => crate::control::camera::orbit::ask(partial),
         Active::Free | Active::Tracked => {
-            let c = camera_store();
+            let c = camera_state();
             c.commit_intent(c.merged(partial));
             c.intent
         }
@@ -254,7 +254,7 @@ pub fn reset_dist() {
 /// nearer stays, as map apps do.
 pub fn come_in_to_default() {
     let default = crate::param::DEFAULT_DIST;
-    if camera_store().intent.dist > default {
+    if camera_state().intent.dist > default {
         reset_dist();
     }
 }
@@ -328,7 +328,7 @@ fn take_mode(want: CameraMode) -> bool {
     c.base = want;
     let cam = camera();
     if want == CameraMode::orbit {
-        camera_store().commit_intent(Intent {
+        camera_state().commit_intent(Intent {
             dist: orbit().dist,
             azimuth: cam.azimuth,
             polar: cam.polar,

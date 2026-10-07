@@ -3,7 +3,7 @@
 //! The mesh slots' chains: a tier holds its slots at once, is written a part at a time, and lands whole or not at all.
 
 use pxl_render::gpu::arena::{arena_epoch, arena_write};
-use pxl_render::mesh::chunk_mesher::box_bounds;
+use pxl_render::mesh::chunk::box_bounds;
 
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::layer::lattice::GROUND;

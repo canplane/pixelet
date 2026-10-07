@@ -16,7 +16,7 @@ use bake::{carve_into, BakeJob};
 use run::{RunHold, RunsJob, RUN_SETS};
 use shape::*;
 
-use pxl_render::mesh::chunk_mesher::{BakeContext, Heights};
+use pxl_render::mesh::chunk::{BakeContext, Heights};
 use pxl_render::mesh::paint::column::Stands;
 use pxl_render::mesh::paint::terrain::sample::ChunkSample;
 use pxl_render::mesh::run::RunWriter;

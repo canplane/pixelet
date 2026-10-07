@@ -1,4 +1,4 @@
-// pxl-render/mesh/chunk_mesher.test.rs
+// pxl-render/mesh/chunk.test.rs
 
 use super::*;
 

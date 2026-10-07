@@ -4,10 +4,10 @@ use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::controller::Motion;
-use crate::control::camera::store::{camera_store, IntentPatch};
+use crate::control::camera::state::{camera_state, IntentPatch};
 use crate::control::navigation::destination::go_to_ground;
-use crate::control::navigation::store::map_navigation;
-use crate::control::sensor::store::{device_location_store, device_orientation_store, DevicePoseStatus};
+use crate::control::navigation::off_center::map_navigation;
+use crate::control::sensor::reading::{device_location_store, device_orientation_store, DevicePoseStatus};
 use crate::sched::edge::wake_at;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -41,7 +41,7 @@ pub fn follow_mode_step() {
         grace_due: None,
         grace_for: None,
     });
-    let camera = camera_store();
+    let camera = camera_state();
     let is_follow_mode = camera.is_follow_mode;
     let heading = device_orientation_store().orientation.and_then(|o| o.heading);
     let device_coord = map_navigation().device_coord;

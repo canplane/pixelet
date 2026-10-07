@@ -13,9 +13,9 @@ use pxl_render::frame::draw::DrawList;
 use pxl_spec::space::coord::v3::V3;
 
 use crate::chunk::table::Frame;
-use crate::model::store::Models;
+use crate::model::registry::Models;
 use crate::scene::actor::Actors;
-use crate::scene::environment::state::EnvironmentDraw;
+use crate::scene::environment::EnvironmentDraw;
 use crate::scene::marker::coverage_gizmo::CoverageGizmo;
 use crate::scene::marker::debug_lines::DebugLines;
 use crate::scene::marker::hover_cursor::GhostDraw;

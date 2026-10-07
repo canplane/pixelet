@@ -4,4 +4,4 @@
 //! clips: the scene's actors play them and decor stands them in chunks.
 
 pub mod asset;
-pub mod store;
+pub mod registry;

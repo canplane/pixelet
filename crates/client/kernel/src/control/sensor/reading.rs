@@ -1,4 +1,4 @@
-// pxl-kernel/control/sensor/store.rs
+// pxl-kernel/control/sensor/reading.rs
 
 //! The device's GPS and compass readings, and which changes are significant
 //! enough to keep.

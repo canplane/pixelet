@@ -7,8 +7,8 @@ use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use crate::control::camera::controller::map_center;
 use crate::control::camera::controller::Motion;
 use crate::control::navigation::destination::go_to_ground;
-use crate::control::navigation::store::map_navigation;
-use crate::control::sensor::store::{device_location_store, DevicePoseStatus};
+use crate::control::navigation::off_center::map_navigation;
+use crate::control::sensor::reading::{device_location_store, DevicePoseStatus};
 use xpute_guest::global::Global;
 
 /// Where the map starts with no fix: Seoul City Hall. Also lights the first
