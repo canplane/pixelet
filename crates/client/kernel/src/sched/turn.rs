@@ -184,6 +184,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, objects, crate::layer::object::repository::step());
     effect!(worst, written, written_step());
     effect!(worst, chunk_sources, chunk_sources_step());
+    effect!(worst, edit, crate::control::interaction::edit::pending_step());
     effect!(worst, hover, hover_cursor_step());
     // device_coord is not gated like map_center: the puck keeps its last coordinate across a transient none.
     effect!(worst, puck, location_puck_step(map_navigation().device_coord));

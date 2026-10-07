@@ -34,6 +34,7 @@ export const EFFECT_NAMES = [
   "objects",
   "written",
   "chunk_sources",
+  "edit",
   "hover",
   "puck",
   "settings",

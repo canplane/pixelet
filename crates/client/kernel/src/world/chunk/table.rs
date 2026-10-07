@@ -34,10 +34,10 @@ use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::sched::edge::Notify;
 use xpute_guest::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
+use crate::control::interaction::edit::{render_edits, RenderEdits};
 use crate::kernel;
 use crate::layer::object::store::EntryAt;
 use crate::param;
-use crate::scene::marker::hover_cursor::{render_edits, RenderEdits};
 use crate::scene::Scene;
 use crate::shell::setting::store::settings_store;
 use crate::world::chunk::build::{draws_as_held, BuildEvent, Builder};
