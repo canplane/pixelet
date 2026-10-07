@@ -2,6 +2,7 @@
 
 //! The first thing a ray meets: ground walked a region at a time, decks and placed objects, at the detail the distance or a zoom asks.
 
+use crate::layer::instance::{Instance, Source};
 use super::world::World;
 use crate::layer::residency::Lines;
 use crate::layer::terrain::Drawn;
@@ -65,12 +66,14 @@ impl Ray {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Struck {
     Ground,
     Object(EntryAt),
     /// Objects folded into a cell above the leaves; no single object is met.
     Objects,
+    /// A decor thing, struck by its model: grown by the ground or placed.
+    Decor(Instance),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -172,6 +175,23 @@ impl<'a> World<'a> {
     /// the ray may enter is the lack. Resident coarser tiles are tried first
     /// (`clear`) so far-off ground is skipped in one test per zoom.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
+        let cubes = self.cubes_first(ray, detail);
+        let limit = cubes.value().flatten().map_or(ray.reach, |h| h.t);
+        match self.decor_first(ray, limit) {
+            // Struck at its base cell's box: a decor is stood on nowhere.
+            Some((t, i)) => {
+                let base = match i.source {
+                    Source::Ground(cell) => cube(GROUND.cell(), cell),
+                    Source::Object(e) => cube(e.zoom(), e.at()),
+                };
+                cubes.map(|_| Some(hit(ray, t, ray.direction.map(|v| -v), base, Struck::Decor(i))))
+            }
+            None => cubes,
+        }
+    }
+
+    /// The first cube `ray` meets, ground or object, at `detail`.
+    fn cubes_first(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
         let mut lack: Option<Tile> = None;
         let mut answered = false;
         let mut lines = Lines::default();

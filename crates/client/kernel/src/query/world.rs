@@ -14,6 +14,7 @@ use xpute_core::status::errno::Errno;
 use crate::layer::object::store::Cells;
 
 use crate::kernel;
+use crate::model::registry::Models;
 use crate::layer::object::store::{Store, AIR};
 use crate::layer::residency::Residency;
 use crate::layer::terrain::Source;
@@ -28,6 +29,8 @@ use pxl_spec::bake::format::Terrain;
 pub struct World<'a> {
     pub(super) terrain: &'a Residency<Terrain>,
     pub(super) objects: &'a Store,
+    /// The models decor is struck against; none, and a ray passes through decor.
+    pub(super) models: Option<&'a Models>,
     pub(super) visits: Option<&'a std::cell::Cell<u64>>,
 }
 
@@ -36,11 +39,17 @@ impl World<'static> {
         let objects: &'static Store = &kernel().objects;
         World::new(Terrain::residency(), objects)
     }
+
+    /// As `now`, and decor is struck too, against its models: the pointer's
+    /// pick, which alone asks what a decor thing is.
+    pub fn striking_decor(self) -> World<'static> {
+        World { models: Some(&kernel().models), ..self }
+    }
 }
 
 impl<'a> World<'a> {
     pub fn new(terrain: &'a Residency<Terrain>, objects: &'a Store) -> World<'a> {
-        World { terrain, objects, visits: None }
+        World { terrain, objects, models: None, visits: None }
     }
 
     pub fn counting(self, visits: &'a std::cell::Cell<u64>) -> World<'a> {

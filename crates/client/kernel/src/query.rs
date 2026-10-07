@@ -10,6 +10,7 @@
 //! lane's bounds instead, since a coarse drawn surface can sit below a peak.
 
 mod column;
+mod decor;
 mod ground;
 mod ray;
 mod support;

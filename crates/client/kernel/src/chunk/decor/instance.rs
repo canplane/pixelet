@@ -1,14 +1,10 @@
 // pxl-kernel/chunk/decor/instance.rs
 
-//! A chunk's decor instances as lanes, and the block they are laid into. A
-//! placed instance carries its entry's zoom, the cube it stands at the bottom
-//! middle of; `hidden` is a flag so the hit test keeps seeing what the
-//! presentation leaves out.
+//! A chunk's decor instances as lanes, and the block they are laid into.
+//! `hidden` is a flag, so what the eraser is over stays in its block.
 
 use std::collections::TryReserveError;
 
-/// No zoom: a scattered instance, or one drawn where its entry is not held.
-pub const NO_ENTRY: u32 = u32::MAX;
 pub const HIDDEN_FLAG: u8 = 1;
 
 pub use pxl_render::gpu::pass::decor::GROUPS as DECOR_GROUPS;
@@ -63,8 +59,7 @@ impl DecorScratch {
 }
 
 /// A block: group count, each group's instance count, then each group's
-/// lanes: five f32 lanes (x, y, z, spin, scale), byte flags padded to a
-/// word, the entry's zoom.
+/// lanes: five f32 lanes (x, y, z, spin, scale) and byte flags padded to a word.
 #[derive(Clone, Copy)]
 pub struct GroupLanes {
     pub first: usize,
@@ -73,7 +68,7 @@ pub struct GroupLanes {
 
 impl GroupLanes {
     pub const fn words(count: usize) -> usize {
-        6 * count + count.div_ceil(4)
+        5 * count + count.div_ceil(4)
     }
 
     /// Lanes: 0 x, 1 y, 2 z, 3 spin, 4 scale.
@@ -85,9 +80,6 @@ impl GroupLanes {
         self.first + 5 * self.count
     }
 
-    pub const fn entry_at(self, i: usize) -> usize {
-        self.flags() + self.count.div_ceil(4) + i
-    }
 }
 
 /// Each group's first lane word and count, from the block's header.

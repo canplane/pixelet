@@ -31,7 +31,7 @@ const ALIGN_NEIGHBOR_RADIUS: i64 = 3;
 /// A plurality vote of transport cells along each axis: PI/2 if horizontal
 /// wins, else 0 (a tie or isolated cell has no real answer). `flip` adds PI,
 /// as two-way traffic faces both ways.
-pub fn transport_aligned_rotation(cells: &[GroundCell], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
+fn transport_aligned_rotation(cells: &[GroundCell], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
     let span = 0..TILE_CELLS as i64;
     let (x, y) = (cell_x as i64, cell_y as i64);
     let way = |cell: GroundCell| Ground::of(cell).is_some_and(|g| g.kind() == Kind::Transport);
@@ -61,17 +61,17 @@ impl Rng {
     }
 }
 
-pub struct Draw {
-    pub gx: i64,
-    pub gy: i64,
-    pub variant: u32,
-    pub rotation: f64,
-    pub scale: f64,
+struct Draw {
+    gx: i64,
+    gy: i64,
+    variant: u32,
+    rotation: f64,
+    scale: f64,
 }
 
 /// What `candidate` draws in the tile's cell `tile_at`: none off the kind's
 /// ground or under a line.
-pub fn draw(kind: &DecorKind, candidate: Candidate, cells: &[GroundCell], lines: &Decks, tile_at: [u32; 2]) -> Option<Draw> {
+fn draw(kind: &DecorKind, candidate: Candidate, cells: &[GroundCell], lines: &Decks, tile_at: [u32; 2]) -> Option<Draw> {
     let [cell_x, cell_y] = tile_at;
     if !kind.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
         return None;

@@ -27,6 +27,16 @@ pub enum Source {
     Object(EntryAt),
 }
 
+impl Instance {
+    /// The leaf cell the ground grew it in; none for a placed one.
+    pub fn grown_in(&self) -> Option<[i64; 3]> {
+        match self.source {
+            Source::Ground(cell) => Some(cell),
+            Source::Object(_) => None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Meta {
     Decor(DecorMeta),

@@ -8,6 +8,7 @@ pub mod abi;
 pub mod billboard;
 pub mod chunk;
 pub mod control;
+pub mod decor;
 pub mod door;
 pub mod io;
 pub mod layer;

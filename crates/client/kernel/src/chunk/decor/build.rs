@@ -8,27 +8,20 @@ use crate::chunk::Chunk as PyramidChunk;
 use crate::layer::Query;
 use pxl_render::gpu::api::word_bytes;
 use pxl_render::mesh::paint::terrain::sample::TileSource;
-use pxl_spec::procedural::scatter_at;
 use pxl_spec::space::camera::grid::target_cell_px;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use std::collections::{HashMap, TryReserveError};
 
-use crate::chunk::decor::instance::{DecorScratch, GroupLanes, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
+use crate::chunk::decor::instance::{DecorScratch, GroupLanes, DECOR_GROUPS, HIDDEN_FLAG};
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::meta::user_decor_pick;
 use crate::layer::object::store::{EntryAt, Store};
-use crate::layer::terrain::scatter::{draw, grow, Draw};
-use crate::layer::Layer as _;
-use crate::query::World;
+use crate::layer::terrain::scatter::grow;
 use crate::query::{covers, Over};
-use pxl_spec::bake::format::Terrain;
-use pxl_spec::cell::decor::{DecorKind, DecorMeta, KINDS};
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::zoom::{index, index_of, units, Zoom};
-use xpute_core::math::scalar::round;
+use pxl_spec::cell::decor::{DecorKind, DecorMeta};
+use pxl_spec::space::coord::zoom::{index, units, Zoom};
 
 /// A kind is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
 /// down to `DECOR_SPRITE_PX`. No fade: the edge is per instance, so it staggers.
@@ -51,8 +44,6 @@ pub struct DecorBuild<'s> {
     /// The chunk's corner, which its lanes are laid about.
     corner: [f64; 2],
     hide: Option<DecorHide>,
-    /// Whether a placed one carries its entry, for the pick.
-    hittable: bool,
 }
 
 pub struct Ground<'a> {
@@ -70,8 +61,7 @@ pub struct Ground<'a> {
     pub folded: Option<&'a HashMap<[i64; 3], u32>>,
 }
 
-/// Hidden rather than left out, so the hit that put the eraser there still
-/// meets it.
+/// What the eraser is over, hidden in its block while it is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecorHide {
     Placed(EntryAt),
@@ -87,20 +77,6 @@ impl DecorHide {
     }
 }
 
-/// What the leaf scatter stands of `value` in the cell `at` lies in, with
-/// nothing written there. None where the tile is not resident.
-pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
-    let kind = KINDS.iter().find(|k| u32::from(k.value()) == value)?;
-    let leaf = GROUND.cell_of(LEAF_ZOOM, at);
-    // The leaf tile's own cells, as the terrain answers them: the leaf scatter reads no coarser.
-    let (zoom, [x, y]) = leaf.tile().node();
-    let tile = Terrain::residency().read((zoom, [x, y, 0]), GROUND.grid_zoom(zoom)).exact()?.view().tile;
-    let ground = World::now().at(at, LEAF_ZOOM).exact()?;
-    let [ix, iy, iz] = index_of(GROUND.cell(), at);
-    let candidate = scatter_at(kind.seed, kind.density, [ix, iy])?;
-    (ground.top().map(|top| round(top / units(GROUND.cell())) as i64) == Some(iz)).then(|| draw(kind, candidate, tile.cells, tile.decks, leaf.in_tile()))?
-}
-
 impl<'s> DecorBuild<'s> {
     /// None where the heap refused scratch room, and the cell is not built.
     #[allow(clippy::too_many_arguments)]
@@ -110,7 +86,6 @@ impl<'s> DecorBuild<'s> {
         scratch: &'s mut DecorScratch,
         kinds: &[DecorKind],
         ground: Option<&Ground>,
-        hittable: bool,
         hide: Option<DecorHide>,
         store: &Store,
         decor: bool,
@@ -140,7 +115,6 @@ impl<'s> DecorBuild<'s> {
             scratch,
             corner: [chunk.min[0], chunk.min[1]],
             hide,
-            hittable,
         })
     }
 
@@ -255,10 +229,6 @@ impl<'s> DecorBuild<'s> {
                 _ => false,
             };
             *at.add(lane.flags() * 4 + r) = if hidden { HIDDEN_FLAG } else { 0 };
-            *words.add(lane.entry_at(r)) = match i.source {
-                Source::Object(e) if self.hittable => u32::from(e.zoom()),
-                _ => NO_ENTRY,
-            };
             rank[g as usize] += 1;
         }
     }

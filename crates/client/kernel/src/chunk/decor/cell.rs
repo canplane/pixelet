@@ -158,7 +158,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[DecorKind], store: &Store, draw: 
         folded: (target < GROUND.cell()).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
-    let built = DecorBuild::build(scratch, kinds, Some(&ground), own, sources.hide.filter(|_| own), store, sources.shown, chunk)?;
+    let built = DecorBuild::build(scratch, kinds, Some(&ground), sources.hide.filter(|_| own), store, sources.shown, chunk)?;
     let index = built.bytes();
     let heights = built.heights();
     let instances = built.instances() as u32;

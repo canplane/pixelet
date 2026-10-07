@@ -10,14 +10,13 @@ pub mod pick;
 use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::layer::lattice::GROUND;
 
 pub use crate::abi::cmd::ActiveTool;
-use crate::chunk::decor::hit::{raycast_decor, DecorStruck, Scattered};
+use crate::layer::instance::Instance;
 use crate::control::interaction::collision::{anchor_center, object_aabb};
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
-use crate::control::interaction::edit::{get_placed_object, place, place_air, place_decor, remove};
+use crate::control::interaction::edit::{place, place_air, place_decor, remove};
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
@@ -52,8 +51,8 @@ impl Default for Holding {
 pub struct Hover {
     pub coord: Option<Pvf3>,
     pub object_at: Option<EntryAt>,
-    /// A scattered decor has no entry.
-    pub scattered: Option<Scattered>,
+    /// A decor the ground grew, which has no entry.
+    pub scattered: Option<Instance>,
     /// Where the focus sent there starts from.
     pub approach: Option<Pvf3>,
 }
@@ -95,26 +94,24 @@ pub(crate) fn clear_hover_coord() {
 
 enum Struck {
     Object(Entry),
-    Scattered(Scattered),
+    /// Grown by the ground, in its leaf cell.
+    Grown([i64; 3], Instance),
 }
 
-/// The decor mesh hit wins only if closer than `hit.t`.
-fn resolve_struck(hit: &Hit, origin: V3, direction: V3) -> Option<Struck> {
-    match raycast_decor(origin, direction, hit.t) {
-        Some(DecorStruck::Placed(at)) => {
-            if let Some(o) = get_placed_object(at) {
-                return Some(Struck::Object(o));
-            }
-        }
-        Some(DecorStruck::Scattered(s)) => return Some(Struck::Scattered(s)),
-        None => {}
+/// What the pick struck, as a tool reads it: a placed object, or a decor the ground grew.
+fn resolve_struck(hit: &Hit) -> Option<Struck> {
+    match hit.struck {
+        crate::query::Struck::Decor(i) => match i.grown_in() {
+            Some(cell) => Some(Struck::Grown(cell, i)),
+            None => resolve_hit_object(hit).map(Struck::Object),
+        },
+        _ => resolve_hit_object(hit).map(Struck::Object),
     }
-    resolve_hit_object(hit).map(Struck::Object)
 }
 
 /// A scattered instance is not an entry, so a placement lands as on the ground.
-fn resolve_hit_target(hit: &Hit, origin: V3, direction: V3) -> Option<Entry> {
-    match resolve_struck(hit, origin, direction) {
+fn resolve_hit_target(hit: &Hit) -> Option<Entry> {
+    match resolve_struck(hit) {
         Some(Struck::Object(o)) => Some(o),
         _ => resolve_hit_object(hit),
     }
@@ -143,29 +140,29 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
         hover.approach = None;
         let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { object_size_of(ui.object_tier) };
         // A decor met in front of the pick is what the new cube goes flush against.
-        let precise_box = resolve_hit_target(&hit, origin, direction).map(|o| object_aabb(&o));
+        let precise_box = resolve_hit_target(&hit).map(|o| object_aabb(&o));
         hover.coord = Some(world_adjacent_corner(&hit, placement_size, precise_box.as_ref()));
         return;
     }
 
-    let struck = resolve_struck(&hit, origin, direction);
+    let struck = resolve_struck(&hit);
     hover.object_at = match &struck {
         Some(Struck::Object(o)) => Some(o.id()),
         _ => None,
     };
     hover.scattered = match struck {
-        Some(Struck::Scattered(s)) => Some(s),
+        Some(Struck::Grown(_, s)) => Some(s),
         _ => None,
     };
     // A scattered decor is passed through.
     hover.approach = Some(match &struck {
         Some(Struck::Object(o)) => world_adjacent_corner(&hit, units(GROUND.cell()), Some(&object_aabb(o))),
-        Some(Struck::Scattered(s)) => base_of(GROUND.cell(), s.cell),
+        Some(Struck::Grown(cell, _)) => base_of(GROUND.cell(), *cell),
         None => world_adjacent_corner(&hit, units(GROUND.cell()), None),
     });
     hover.coord = Some(match struck {
         Some(Struck::Object(o)) => o.corner(),
-        Some(Struck::Scattered(s)) => base_of(GROUND.cell(), s.cell),
+        Some(Struck::Grown(cell, _)) => base_of(GROUND.cell(), cell),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
         None => world_struck_corner(&hit, units(GROUND.cell())),
     });
@@ -203,7 +200,11 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
         ActiveTool::Eraser => {
             match (hover.object_at, hover.scattered) {
                 (Some(at), _) => remove(at),
-                (None, Some(s)) => place_air(&base_of(GROUND.cell(), s.cell), units(GROUND.cell())),
+                (None, Some(s)) => {
+                    if let Some(cell) = s.grown_in() {
+                        place_air(&base_of(GROUND.cell(), cell), units(GROUND.cell()));
+                    }
+                }
                 // AIR, not VOID: terrain has no leaf to delete. A whole cell, never the
                 // size tier: the scan emits nothing for a zero material whatever its
                 // sub-cell bytes, so a smaller leaf would save a bite nobody took.

@@ -24,7 +24,7 @@ use pxl_spec::asset::ingested::Asset;
 use xpute_core::math::scalar::round;
 
 use crate::billboard::sheet::billboard_sheet;
-use crate::chunk::decor::kind_assets::kind_assets;
+use crate::decor::assets::kind_assets;
 use crate::io::host::handheld;
 use crate::io::load::{load_image, Load};
 use crate::io::text::text_raster;
