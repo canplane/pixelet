@@ -3,9 +3,9 @@
 //! What the eye observes, for the domain: the observation's cell and what
 //! the screen's patches touch.
 //!
-//! The cell is an angle, `τ / SPLIT` radians a side, in the eye's own frame;
-//! inside it nothing is promised. Refinement only stops an error, projected,
-//! from crossing a cell (`Lens::error`). A piece contributes where a patch's
+//! The cell is a solid angle, `τ / SPLIT` radians a side; inside it nothing
+//! is promised. Refinement only stops an error from showing the eye more than
+//! a cell's area (`Lens::error`). A piece contributes where a patch's
 //! footprint touches it. Patches are the estimator's resolution, not cells, and
 //! do not depend on quality, so one cast serves every step. Footprints are
 //! reused across small moves (`Sight`) as an acceleration only.
@@ -49,22 +49,33 @@ impl Lens {
         tan.iter().all(|t| t.is_finite() && *t > 0.0).then_some(Lens { eye: o.eye, forward, right, up, tan })
     }
 
-    /// The angle the error box at `at` spans across and up. Each screen axis is
-    /// taken square to the direction to `at` (clamped to the screen's edge), so
-    /// a flat piece at a grazing angle projects its depth small.
+    /// The width the error box at `at` shows the eye: the square root of the
+    /// solid angle its silhouette covers, seen along `at`'s direction clamped
+    /// to the screen's edge. A flat box seen at a grazing angle covers little.
     ///
-    /// An overestimate: the extent is divided by the nearest depth the box
-    /// allows, `r` less its diagonal. Unbounded where the box reaches the eye.
-    pub fn error(&self, at: V3, error: V3) -> [f64; 2] {
+    /// An overestimate: the silhouette is taken at the nearest distance the box
+    /// allows, its diagonal nearer. Unbounded where the box reaches the eye.
+    pub fn error(&self, at: V3, error: V3) -> f64 {
         let d = sub3(&at, &self.eye);
-        let r = len3(&d);
-        let depth = r - len3(&error);
+        let depth = len3(&d) - len3(&error);
         if depth < INSIDE {
-            return [f64::INFINITY; 2];
+            return f64::INFINITY;
         }
-        let f = dot3(&d, &self.forward);
+        let [tx, ty] = self.toward(&d);
+        let q = unit(std::array::from_fn(|k| self.forward[k] + tx * self.right[k] + ty * self.up[k])).unwrap_or(self.forward);
+        // A box's silhouette: each face's area as the directions to it meet it,
+        // which turn from `q` by up to its diagonal over its nearest distance.
+        let turn = len3(&error) / depth;
+        let meet = |k: usize| (q[k].abs() + turn).min(1.0);
+        let area = error[1] * error[2] * meet(0) + error[0] * error[2] * meet(1) + error[0] * error[1] * meet(2);
+        area.sqrt() / depth
+    }
+
+    /// The screen's tangents toward `d` from the eye, clamped to its edge.
+    fn toward(&self, d: &V3) -> [f64; 2] {
+        let f = dot3(d, &self.forward);
         let on = |axis: V3, k: usize| {
-            let t = dot3(&d, &axis);
+            let t = dot3(d, &axis);
             let t = if f > INSIDE { t / f } else { t.signum() * f64::INFINITY };
             if t.is_nan() {
                 0.0
@@ -72,13 +83,7 @@ impl Lens {
                 t.clamp(-self.tan[k], self.tan[k])
             }
         };
-        let (tx, ty) = (on(self.right, 0), on(self.up, 1));
-        let d = unit(std::array::from_fn(|k| self.forward[k] + tx * self.right[k] + ty * self.up[k])).unwrap_or(self.forward);
-        [self.right, self.up].map(|a| {
-            let square = sub3(&a, &scale3(&d, dot3(&a, &d)));
-            let Some(a) = unit(square) else { return f64::INFINITY };
-            (0..3).map(|k| error[k] * a[k].abs()).sum::<f64>() / depth
-        })
+        [on(self.right, 0), on(self.up, 1)]
     }
 }
 

@@ -13,6 +13,13 @@ pub const OBSERVED_PATCH: f64 = 1.0 / 6.0;
 /// is cast again.
 pub const REUSE_SHIFT: f64 = 0.25;
 
+// ---- the camera grid ----
+
+/// The most camera grid cells a screen holds: past it a cell grows, so a
+/// bigger screen asks no more observation or demand than this. About a
+/// 1000 × 1100 window at twelve-pixel cells; a phone holds a fifth of it.
+pub const GRID_CELLS_MAX: f64 = 10_000.0;
+
 // ---- the drawn resolution ----
 
 /// Device pixels per CSS pixel the world is drawn at: one at least, and no

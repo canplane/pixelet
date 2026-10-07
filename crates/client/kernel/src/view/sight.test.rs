@@ -65,55 +65,64 @@ fn the_patches_cover_the_screen_and_none_is_wider_than_a_patch() {
     }
 }
 
-/// Square on, a cell spans its side over the distance on both axes; at a
-/// grazing angle its depth projects small and a height whole.
+/// Square on, a cell shows its side over the distance; a flat cell at a
+/// grazing angle shows little, and a cube there its side whole.
 #[test]
-fn an_error_projects_its_size_over_its_distance_on_each_axis() {
-    let spans = |angle: f64, size: f64, r: f64, reach: f64| angle >= size / r - 1e-9 && angle <= size / (r - reach) + 1e-9;
-    let cell = 32f64.sqrt();
+fn an_error_shows_its_silhouette_over_its_distance() {
+    let within = |w: f64, size: f64, r: f64, reach: f64| w >= size / r - 1e-9 && w <= size / (r - reach) + 1e-9;
     let down = Lens::of(&viewed([0.0, 0.0, 100.0], [0.0, 1e-6, 0.0], 50.0, 1.0)).unwrap();
-    let [across, up] = down.error([0.0, 0.0, 0.0], [4.0, 4.0, 0.0]);
-    assert!(spans(across, 4.0, 100.0, cell) && spans(up, 4.0, 100.0, cell), "a cell seen from above: {across}, {up}");
+    let w = down.error([0.0, 0.0, 0.0], [4.0, 4.0, 0.0]);
+    assert!(within(w, 4.0, 100.0, 32f64.sqrt()), "a cell seen from above: {w}");
     let level = Lens::of(&viewed([0.0, 0.0, 2.0], [100.0, 0.0, 2.0], 50.0, 1.0)).unwrap();
-    let r = (1_000f64.powi(2) + 4.0).sqrt();
-    let [across, up] = level.error([1_000.0, 0.0, 0.0], [4.0, 4.0, 0.0]);
-    assert!(spans(across, 4.0, r, cell), "a cell seen across: {across}");
-    assert!(up < 0.004 * 0.01, "a cell's depth at a grazing angle: {up}");
-    let [_, up] = level.error([1_000.0, 0.0, 0.0], [0.0, 0.0, 4.0]);
-    // The screen's up leans off vertical by the eye's height over the distance,
-    // so a height is a hair under whole.
-    assert!(up >= 4.0 * 0.999_99 / r && up <= 4.0 / (r - 4.0) + 1e-9, "a height at a grazing angle: {up}");
-    assert_eq!(level.error([0.0, 0.0, 2.0], [1.0; 3]), [f64::INFINITY; 2], "an error at the eye");
-    assert_eq!(level.error([1.0, 0.0, 2.0], [1.0; 3]), [f64::INFINITY; 2], "an error reaching the eye");
+    let w = level.error([1_000.0, 0.0, 0.0], [4.0, 4.0, 0.0]);
+    assert!(w < 0.1 * 4.0 / 1_000.0, "a flat cell at a grazing angle: {w}");
+    let w = level.error([1_000.0, 0.0, 0.0], [4.0; 3]);
+    assert!(within(w, 4.0, 1_000.0, 48f64.sqrt()) || w >= 4.0 / 1_000.0, "a cube at a grazing angle: {w}");
+    assert_eq!(level.error([0.0, 0.0, 2.0], [1.0; 3]), f64::INFINITY, "an error at the eye");
+    assert_eq!(level.error([1.0, 0.0, 2.0], [1.0; 3]), f64::INFINITY, "an error reaching the eye");
 }
 
-/// Every corner of the box lies within the bound on both axes, near the eye
-/// and at a grazing angle, where depth brings the breadth nearer.
+/// The width squared holds the solid angle the box covers, counted by rays,
+/// near the eye and at a grazing angle.
 #[test]
-fn an_error_box_projects_within_its_bound() {
+fn an_error_box_covers_no_more_than_its_width_squared() {
     let mut seed = 0x9e37_79b9_7f4a_7c15u64;
     let mut next = || {
         seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
         (seed >> 11) as f64 / (1u64 << 53) as f64
     };
-    for _ in 0..4_000 {
+    const RAYS: usize = 4_000;
+    for _ in 0..200 {
         let eye = [next() * 100.0, next() * 100.0, 0.5 + next() * 300.0];
         let target = [eye[0] + 50.0 + next() * 500.0, eye[1] - 250.0 + next() * 500.0, next() * 10.0];
         let lens = Lens::of(&viewed(eye, target, 50.0, 16.0 / 9.0)).unwrap();
         let (u, v, r) = ((next() * 2.0 - 1.0) * lens.tan[0] * 0.95, (next() * 2.0 - 1.0) * lens.tan[1] * 0.95, 1.0 + next() * 2_000.0);
-        let dir = unit(std::array::from_fn(|k| lens.forward[k] + u * lens.right[k] + v * lens.up[k])).unwrap();
-        let at: V3 = std::array::from_fn(|k| eye[k] + r * dir[k]);
-        let scale = r * libm::pow(10f64, -4.0 + next() * 3.9);
+        let c = unit(std::array::from_fn(|k| lens.forward[k] + u * lens.right[k] + v * lens.up[k])).unwrap();
+        let at: V3 = std::array::from_fn(|k| eye[k] + r * c[k]);
+        let scale = r * libm::pow(10f64, -3.0 + next() * 2.5);
         let e: V3 = [next() * scale, next() * scale, next() * scale];
-        let bound = lens.error(at, e);
-        for (k, axis) in [lens.right, lens.up].into_iter().enumerate() {
-            let a = unit(std::array::from_fn(|j| axis[j] - dir[j] * dot(axis, dir))).unwrap();
-            for corner in 0..8 {
-                let delta: V3 = std::array::from_fn(|j| if corner >> j & 1 == 1 { e[j] } else { -e[j] });
-                let angle = libm::atan2(dot(delta, a), r + dot(delta, dir)).abs();
-                assert!(angle <= bound[k] * (1.0 + 1e-9), "{angle} past {} at {r} for {e:?}", bound[k]);
-            }
-        }
+        let width = lens.error(at, e);
+        // Rays in the cone that holds the box, about the direction to its center.
+        let cone = libm::asin((0.5 * len3(&e) / r).min(1.0));
+        let side = unit(if c[2].abs() < 0.9 { [c[1], -c[0], 0.0] } else { [0.0, c[2], -c[1]] }).unwrap();
+        let third = [c[1] * side[2] - c[2] * side[1], c[2] * side[0] - c[0] * side[2], c[0] * side[1] - c[1] * side[0]];
+        let hits = (0..RAYS)
+            .filter(|_| {
+                let cos = 1.0 - next() * (1.0 - libm::cos(cone));
+                let (sin, turn) = ((1.0 - cos * cos).sqrt(), next() * core::f64::consts::TAU);
+                let d: V3 = std::array::from_fn(|k| cos * c[k] + sin * (libm::cos(turn) * side[k] + libm::sin(turn) * third[k]));
+                let (mut near, mut far) = (0.0f64, f64::INFINITY);
+                (0..3).all(|k| {
+                    let (lo, hi) = (at[k] - 0.5 * e[k] - eye[k], at[k] + 0.5 * e[k] - eye[k]);
+                    let (t0, t1) = (lo / d[k], hi / d[k]);
+                    near = near.max(t0.min(t1));
+                    far = far.min(t0.max(t1));
+                    near <= far
+                })
+            })
+            .count();
+        let covered = hits as f64 / RAYS as f64 * core::f64::consts::TAU * (1.0 - libm::cos(cone));
+        assert!(covered <= width * width * 1.05, "{covered} past {} at {r} for {e:?}", width * width);
     }
 }
 

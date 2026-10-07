@@ -110,10 +110,10 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
 
 - **The view keeps only what an observer can tell apart.** The world is
   stored in each layer's shape; what the view holds and does is bounded by
-  the screen. The eye's view is quantized into cells, each an angle about the
-  eye — a screen only calibrates how many pixels one spans — and inside a
-  cell nothing is promised: a piece refines only where its projected error
-  crosses a cell's edge on either axis. Storage, query, demand, residency,
+  the screen. The eye's view is quantized into cells, each a solid angle on
+  the sphere about the eye — a screen only calibrates how many pixels one
+  spans — and inside a cell nothing is promised: a piece refines only where
+  its error shows the eye more than a cell's area. Storage, query, demand, residency,
   prefetch, materialization and scheduling are separate concerns, each with
   its own bound; ARCHITECTURE.md's "The view" states them — read it before
   changing one.
