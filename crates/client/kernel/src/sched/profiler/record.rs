@@ -58,7 +58,7 @@ pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum Lane {
+pub(crate) enum Lane {
     Tasks,
     Frames,
     Worst,
@@ -80,7 +80,7 @@ const LANE_ALIGN: u32 = 64;
 
 pub const PROFILER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
 
-pub(super) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
+pub(crate) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
     // SAFETY: the lane's own bytes, held only by its ring, zeroed when laid;
     // zero is a valid record.
     unsafe { lane(range(Range::Profiler).nth(&LANES, LANE_ALIGN, which as usize), 0, cap) }

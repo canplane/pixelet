@@ -38,7 +38,7 @@ impl Settings {
             chunk_sources_changed();
         }
         if key == SettingKey::debug_overlay {
-            profiler_follow(value == 1);
+            profiler_follow(value == 1, crate::turn::summary::counters());
         }
         *UNKEPT.get(|| false) = true;
         true
@@ -81,7 +81,7 @@ pub fn settings_keep_step() {
 /// What is not offered, unknown or invalid stays at the default.
 pub fn settings_load(kept: &str) {
     SETTINGS_STORE.set(read_kept(kept));
-    profiler_follow(settings_store().debug_overlay);
+    profiler_follow(settings_store().debug_overlay, crate::turn::summary::counters());
 }
 
 fn read_kept(kept: &str) -> Settings {

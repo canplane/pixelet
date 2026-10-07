@@ -6,35 +6,13 @@
 //! take the module down during the very fetch burst it was turned on to
 //! watch. Only frames that missed a vsync while moving or overran are kept.
 
-use crate::billboard::sheet::billboard_sheet;
-use crate::kernel;
 use crate::sched::profiler::block::CountersBlock;
 use crate::sched::profiler::frame::FrameSample;
+use crate::sched::profiler::frame::{missed, overran};
 use crate::sched::profiler::record::{drop_front, fixed_lane, profiler_recording_start, profiler_recording_stop, profiler_set_sink, Lane, ProfilerSink};
-use crate::sched::profiler::summary::{missed, overran};
 use crate::sched::profiler::task::TaskRow;
 use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
 use xpute_guest::global::Global;
-
-fn counters() -> CountersBlock {
-    let k = kernel();
-    let st = k.sched.builder.stat;
-    let c = k.sched.builder.bake_context().counters;
-    let atlas = billboard_sheet().stats();
-    CountersBlock {
-        faces_kept: c.faces_kept as f64,
-        faces_possible: c.faces_possible as f64,
-        runs_culled: c.culled as f64,
-        runs_total: c.total_runs as f64,
-        coarse_boxes: c.coarse_total as f64,
-        coarse_low_fill: c.coarse_low_fill as f64,
-        built_runs: st.runs as f64,
-        built_bakes: st.bakes as f64,
-        built_starved: st.starved as f64,
-        atlas_repacks: atlas.repacks as f64,
-        atlas_uploads: atlas.uploads as f64,
-    }
-}
 
 /// Capped, oldest dropped, so a reader that stops cannot grow the heap being measured.
 pub(super) const PENDING: usize = 512;
@@ -52,7 +30,7 @@ static LOG: Global<Log> = Global::new();
 
 fn log() -> &'static mut Log {
     LOG.get(|| Log {
-        baseline: counters(),
+        baseline: CountersBlock::default(),
         logging: false,
         tasks: &mut [],
         tasks_len: 0,
@@ -61,15 +39,16 @@ fn log() -> &'static mut Log {
     })
 }
 
-pub fn window_counters() -> CountersBlock {
-    counters().minus(&log().baseline)
+/// The counters as the window began, which its own are counted from.
+pub fn window_baseline() -> CountersBlock {
+    log().baseline
 }
 
 /// Called at WORLD_BOOT with the stored setting, before the first turn, so
 /// a profiler left on has the boot in its window.
-pub fn profiler_follow(on: bool) {
+pub fn profiler_follow(on: bool, counters: CountersBlock) {
     if on {
-        profiler_window_start();
+        profiler_window_start(counters);
     } else {
         profiler_set_logging(false);
         profiler_window_stop();
@@ -78,11 +57,12 @@ pub fn profiler_follow(on: bool) {
 
 /// Step timing starts here, not at boot: it is a clock read around every
 /// step of every tick, and only the report reads it.
-pub fn profiler_window_start() {
+/// `counters` as they stand, the window's baseline.
+pub fn profiler_window_start(counters: CountersBlock) {
     profiler_recording_start();
     tick_step_stats_reset();
     set_step_timing(true);
-    log().baseline = counters();
+    log().baseline = counters;
 }
 
 pub fn profiler_window_stop() {

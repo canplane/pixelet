@@ -1,4 +1,4 @@
-// pxl-kernel/sched/profiler/summary.rs
+// pxl-kernel/turn/summary.rs
 
 //! The profiler window reduced into profiler.json's SUMMARY block, read in
 //! place by the panel and the report so both agree. Sections go only through
@@ -9,34 +9,23 @@ use crate::control::camera::controller;
 use crate::io::failure::Outcome;
 use crate::io::sched::{counts, credits};
 use crate::layer::Layer as _;
+use crate::sched::profiler::block::CountersBlock;
 use crate::sched::profiler::block::TASK_PHASES;
 use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::sched::profiler::frame::FrameSample;
-use crate::sched::profiler::log::window_counters;
+use crate::sched::profiler::frame::{missed, overran};
+use crate::sched::profiler::log::window_baseline;
 use crate::sched::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, Lane, SPREAD_LIMIT};
 use crate::sched::profiler::spec::{LIMITS, SUMMARY};
 use crate::sched::profiler::task::TaskRow;
 use crate::sched::profiler::word::put;
-use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
+use crate::sched::tick::tick_step_stats;
 use crate::{kernel, with_world};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pack;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
-
-const MISSED_INTERVALS: f64 = 1.5;
-
-/// A frame that dropped a vsync while moving. Still frames take a larger
-/// budget on purpose, and a repeated image is no visible stutter.
-pub fn missed(f: &FrameSample) -> bool {
-    f.settled == 0.0 && f.dt_ms > f.frame_ms * MISSED_INTERVALS
-}
-
-/// Past even the hard ceiling: one step too big for the forward-progress waiver.
-pub fn overran(f: &FrameSample) -> bool {
-    f.sched_ms > f.budget_ms + HARD_SLACK_MS
-}
 
 const WORDS: usize = SUMMARY::WORDS as usize;
 const REASONS: usize = LIMITS::REASONS as usize;
@@ -73,15 +62,15 @@ fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
     }
 }
 
-/// An infinite window is the whole recording.
-pub fn profiler_summarize(window_ms: f64) -> &'static [f64] {
+/// No window is the whole recording.
+pub fn profiler_summarize(window_ms: Option<f64>) -> &'static [f64] {
     let b = block();
     if b.scratch.is_empty() {
         b.scratch = fixed_lane(Lane::Scratch, SPREAD_LIMIT);
     }
     let (out, scratch) = (&mut b.words[..], &mut *b.scratch);
     out.fill(0.0);
-    let since = now() - window_ms;
+    let since = window_ms.map_or(f64::NEG_INFINITY, |w| now() - w);
 
     let rec = profiler_recording_state();
     put(
@@ -201,7 +190,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
 }
 
 fn side(out: &mut [f64]) {
-    put(out, SUMMARY::counters::AT, &window_counters());
+    put(out, SUMMARY::counters::AT, &counters().minus(&window_baseline()));
 
     let atlas = billboard_sheet().stats();
     put(
@@ -314,4 +303,25 @@ fn side(out: &mut [f64]) {
         steps.count += 1.0;
     }
     put(out, SUMMARY::steps::AT, &steps);
+}
+
+/// The counters as they stand, from the builds and the billboard sheet.
+pub fn counters() -> CountersBlock {
+    let k = kernel();
+    let st = k.sched.builder.stat;
+    let c = k.sched.builder.bake_context().counters;
+    let atlas = billboard_sheet().stats();
+    CountersBlock {
+        faces_kept: c.faces_kept as f64,
+        faces_possible: c.faces_possible as f64,
+        runs_culled: c.culled as f64,
+        runs_total: c.total_runs as f64,
+        coarse_boxes: c.coarse_total as f64,
+        coarse_low_fill: c.coarse_low_fill as f64,
+        built_runs: st.runs as f64,
+        built_bakes: st.bakes as f64,
+        built_starved: st.starved as f64,
+        atlas_repacks: atlas.repacks as f64,
+        atlas_uploads: atlas.uploads as f64,
+    }
 }

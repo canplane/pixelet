@@ -1,4 +1,4 @@
-// pxl-kernel/sched/profiler/report.rs
+// pxl-kernel/turn/report.rs
 
 //! A turn's frame record: what the host measured, the chunks' census and the
 //! layers' residency, taken after every other phase.
@@ -59,7 +59,7 @@ pub fn set_host_task_ms(task_ms: f64) {
 /// `task_ms` add up and unmeasured time shows as the difference.
 pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
     let Some(frame) = crate::sched::profiler::record::profiler_open_frame() else { return };
-    let (step_ms, step_name) = crate::sched::turn::worst_effect();
+    let (step_ms, step_name) = crate::turn::worst_effect();
     frame.turn = TurnSample {
         effects_ms,
         stage_ms,

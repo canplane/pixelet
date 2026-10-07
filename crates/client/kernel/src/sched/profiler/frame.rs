@@ -281,3 +281,16 @@ const _: () = assert!(
     pxl_spec::space::layer::lattice::GROUND.tile_zoom(OBJECT_FINEST) < ZOOMS as i32,
     "a zoom slot for every cell drawn, the finest object tier to the pyramid's top"
 );
+
+const MISSED_INTERVALS: f64 = 1.5;
+
+/// A frame that dropped a vsync while moving. Still frames take a larger
+/// budget on purpose, and a repeated image is no visible stutter.
+pub fn missed(f: &FrameSample) -> bool {
+    f.settled == 0.0 && f.dt_ms > f.frame_ms * MISSED_INTERVALS
+}
+
+/// Past even the hard ceiling: one step too big for the forward-progress waiver.
+pub fn overran(f: &FrameSample) -> bool {
+    f.sched_ms > f.budget_ms + crate::sched::tick::HARD_SLACK_MS
+}

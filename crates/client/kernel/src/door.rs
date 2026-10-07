@@ -112,7 +112,7 @@ fn boot(b: &Bracket) {
         }
     }));
     let gpu_stream = lay_out(b);
-    crate::sched::turn::boot();
+    crate::turn::boot();
     let [margin, batch, settle] = quantum_entries(&crate::sched::tick::QUANTUM);
     let entries: [Entry; DIRECTORY_ENTRIES] = [
         (key::SUBMISSION, ring_address(door().submission())),
@@ -152,7 +152,7 @@ fn lay_out(b: &Bracket) -> u32 {
 /// returns when to wake next, in ms (0 for the next frame, NO_WAKE for
 /// none). The first turn boots.
 pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
-    use crate::sched::turn::{take_world_drawn, world_frame_waiting};
+    use crate::turn::{take_world_drawn, world_frame_waiting};
     if section::map().is_none() {
         boot(&bracket());
     }
