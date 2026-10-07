@@ -120,9 +120,9 @@ impl Query for Residency<Terrain> {
         let index = EXTENT.cell_zoom(src.zoom);
         let first = EXTENT.cell_of(src.zoom, &base_of(zoom, [at[0], at[1], 0]));
         let across = if zoom < index { count(index, zoom) } else { 1 };
-        let b = body.index.over(first.in_tile(), across);
+        let [lo, hi] = body.index.over(first.in_tile(), across);
         let r = Relief {
-            extent: (f64::from(b.lo) * units(GROUND.cell()), f64::from(b.hi) * units(GROUND.cell())),
+            extent: (f64::from(lo) * units(GROUND.cell()), f64::from(hi) * units(GROUND.cell())),
         };
         let r = d.answer(r);
         let whole = region((zoom, at));

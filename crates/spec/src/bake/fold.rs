@@ -13,7 +13,7 @@ use xpute_core::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use super::deck::fold_decks;
-use super::format::{Ground, Index, Occupancy, Terrain};
+use super::format::{join, Ground, Index, Occupancy, Terrain};
 use super::surface::extent_of;
 use crate::space::coord::zoom::Zoom;
 
@@ -89,7 +89,7 @@ pub fn fold_index(children: [&Index; 4], own: Vec<[i16; 2]>) -> Index {
         .map(|(index, [lo, hi])| {
             let (q, block) = EXTENT.child_cells(index as u32);
             let four = block.map(|i| children[q].extent()[i as usize]);
-            four.iter().fold([lo, hi], |[lo, hi], &[clo, chi]| [lo.min(clo), hi.max(chi)])
+            four.into_iter().fold([lo, hi], join)
         })
         .collect::<Vec<_>>();
     Index::new(extent, Occupancy::of_children(children.map(|c| c.occupancy)))
