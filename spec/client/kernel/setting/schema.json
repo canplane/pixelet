@@ -231,7 +231,7 @@
       "default": false,
       "section": "debug"
     },
-    "gizmos": {
+    "world_gizmo": {
       "$doc": [
         "Markers for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs)."
       ],
@@ -241,11 +241,12 @@
     },
     "camera_gizmo": {
       "$doc": [
-        "A HUD of the camera grid's cells about the eye, each marked by how wide the drawn chunk's cell where its center ray lands spans against the grid's (scene/marker/camera_gizmo.rs)."
+        "The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/marker/camera_gizmo.rs)."
       ],
       "kind": "toggle",
       "default": false,
-      "section": "debug"
+      "section": "debug",
+      "dev": true
     },
     "person": { "kind": "index", "default": { "$value": 1, "$type": "u8", "$doc": ["female-2, by its number in variant.json's person keys."] }, "section": "character" },
     "pet": { "kind": "index", "default": { "$value": 5, "$type": "u8", "$doc": ["chick, by its number in variant.json's pet keys."] }, "section": "character" }

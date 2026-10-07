@@ -15,7 +15,7 @@
     "goal",
     "demand",
     "chunks",
-    "debug_gizmos",
+    "world_gizmo",
     "profiler"
   ],
   "EFFECT_NAMES": [

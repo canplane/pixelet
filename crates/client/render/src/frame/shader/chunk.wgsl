@@ -111,6 +111,7 @@ struct VertexOut {
   @location(11) @interpolate(flat) fill: vec3f,
   @location(12) @interpolate(flat) sun: vec3f,
   @location(13) @interpolate(flat) other: vec3f,
+  @location(14) @interpolate(flat) cell: f32,
 };
 
 // The draw record's index rides on vertex_index (first vertex = record index
@@ -191,6 +192,7 @@ fn chunk_vertex(v: u32, words: BoxWords, fine: bool) -> VertexOut {
   o.normal = normal;
   o.faces = b.faces;
   o.opacity = d.measure.x;
+  o.cell = d.measure.y;
   o.world_pos = c.world;
   let seen = seen_from_eye(c.world);
   o.through = seen.through;
@@ -410,5 +412,21 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let k = frame_ao_strength() * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
   let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
   let color = shade(base, n, i.world_pos, sun_lit(i.world_pos, n), open * screen_open(i.clip.xy), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
-  return vec4f(finish(color, i.clip.xy), i.opacity);
+  return vec4f(finish(cell_share(color, i), i.clip.xy), i.opacity);
+}
+
+// Under the camera gizmo: the solid angle the face's cell shows the eye, as a
+// share of a grid cell's. The split rule weighs a cube's silhouette instead,
+// so a top seen at a grazing angle reads finer than the rule's threshold;
+// the shown area is what the view's bound by area would hold (BACKLOG).
+// Within (1/4, 1] green, finer blue, coarser red.
+fn cell_share(color: vec3f, i: VertexOut) -> vec3f {
+  if (frame_gizmo() < 0.5) {
+    return color;
+  }
+  let r = length(i.world_pos);
+  let seen = i.cell * i.cell * abs(dot(i.normal, i.world_pos / r)) / (r * r);
+  let steps = log2(seen / (frame_cell() * frame_cell()));
+  let tint = select(select(vec3f(0.1, 0.9, 0.2), vec3f(0.1, 0.3, 1.0), steps <= -2.0), vec3f(1.0, 0.15, 0.1), steps > 0.0);
+  return mix(color, tint * 0.6, 0.45);
 }

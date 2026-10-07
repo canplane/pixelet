@@ -42,8 +42,13 @@ const _: () = assert!(
 /// span `2 · atan(n / 2 / that)`.
 pub fn target() -> Tau {
     let v = view();
-    let half = target_cell_px() * libm::tan(v.fov.to_radians() / 2.0) / v.height;
-    Tau::of((2.0 * libm::atan(half) * SPLIT).max(1.0))
+    let tan_up = libm::tan(v.fov.to_radians() / 2.0);
+    let half = target_cell_px() * tan_up / v.height;
+    // The screen's solid angle, a rectangle of half-angles across and up.
+    let across = libm::atan(tan_up * v.width / v.height);
+    let screen = 4.0 * libm::asin(libm::sin(across) * libm::sin(libm::atan(tan_up)));
+    let cell = (2.0 * libm::atan(half)).max(libm::sqrt(screen / param::GRID_CELLS_MAX));
+    Tau::of((cell * SPLIT).max(1.0))
 }
 
 pub fn ladder() -> [Tau; param::TAU_STEPS + 1] {

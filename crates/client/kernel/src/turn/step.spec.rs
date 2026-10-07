@@ -25,7 +25,7 @@ pub const STEP_NAMES: &[&str] = &[
     "goal",
     "demand",
     "chunks",
-    "debug_gizmos",
+    "world_gizmo",
     "profiler",
 ];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -41,7 +41,7 @@ pub enum StepName {
     goal = 7,
     demand = 8,
     chunks = 9,
-    debug_gizmos = 10,
+    world_gizmo = 10,
     profiler = 11,
 }
 
@@ -58,7 +58,7 @@ impl StepName {
         StepName::goal,
         StepName::demand,
         StepName::chunks,
-        StepName::debug_gizmos,
+        StepName::world_gizmo,
         StepName::profiler,
     ];
 

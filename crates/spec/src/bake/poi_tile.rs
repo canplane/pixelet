@@ -337,15 +337,44 @@ pub fn encode(tile: &PoiTile) -> Result<Vec<u8>, MarshalError> {
     let kinds: Vec<&str> = places.kinds.iter().map(|&k| k.checked_sub(1).map_or("", |k| KIND_CATEGORIES[k as usize])).collect();
     let ids: Vec<&str> = (0..places.len()).map(|i| places.ids.get(i)).collect();
     let names = NameLanes::of((0..places.len()).map(|i| (places.names.get(i), places.get(i).langs.iter())));
+    write(&Lanes {
+        cells: &cells,
+        counts: &counts,
+        partial: &partial,
+        starts: &starts,
+        occupancy: tile.occupancy.bits(),
+        shown: &shown,
+        at: &at,
+        kinds: &kinds,
+        ids: &ids,
+        names: &names,
+    })
+}
+
+/// A tile as it lies on the wire, lane by lane, in the order `decode` reads.
+struct Lanes<'a> {
+    cells: &'a [u32],
+    counts: &'a [u32],
+    partial: &'a [u8],
+    starts: &'a [u32],
+    occupancy: u8,
+    shown: &'a [u32],
+    at: &'a [u16],
+    kinds: &'a [&'a str],
+    ids: &'a [&'a str],
+    names: &'a NameLanes<'a>,
+}
+
+fn write(l: &Lanes) -> Result<Vec<u8>, MarshalError> {
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
-        b.u32_array(Some(&cells))
-            .u32_array(Some(&counts))
-            .u8_array(Some(&partial))
-            .u32_array(Some(&starts))
-            .u8(Some(tile.occupancy.bits()));
-        b.u32_array(Some(&shown)).u16_array(Some(&at)).strs(Some(&kinds)).strs(Some(&ids));
-        names.write(b);
+        b.u32_array(Some(l.cells))
+            .u32_array(Some(l.counts))
+            .u8_array(Some(l.partial))
+            .u32_array(Some(l.starts))
+            .u8(Some(l.occupancy));
+        b.u32_array(Some(l.shown)).u16_array(Some(l.at)).strs(Some(l.kinds)).strs(Some(l.ids));
+        l.names.write(b);
     }));
     encoder().encode(&t, TreeEncoderOptions::default())
 }

@@ -18,8 +18,8 @@ struct Badge {
   px_k: f32,
   near: f32,
   far: f32,
-  cell: f32,
-  _p: f32,
+  _p0: f32,
+  _p1: f32,
 };
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
@@ -32,7 +32,6 @@ fn badge_translation() -> vec3f { return badge_words[8].xyz; }
 fn badge_px_k() -> f32 { return badge_words[8].w; }
 fn badge_near() -> f32 { return badge_words[9].x; }
 fn badge_far() -> f32 { return badge_words[9].y; }
-fn badge_cell() -> f32 { return badge_words[9].z; }
 
 @group(1) @binding(1) var<storage, read> instances: array<f32>;
 @group(2) @binding(0) var sheet: texture_2d<f32>;
@@ -64,7 +63,7 @@ fn behind_world(clip: vec4f) -> bool {
   let dims = vec2f(textureDimensions(world_depth));
   let world = view_distance(textureLoad(world_depth, vec2i(uv * dims), 0));
   let point = view_distance(ndc.z);
-  return world < point - DEPTH_BIAS_U - point * badge_cell() * DEPTH_BIAS_CELLS;
+  return world < point - DEPTH_BIAS_U - point * frame_cell() * DEPTH_BIAS_CELLS;
 }
 
 @vertex
@@ -102,7 +101,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   o.hidden = select(0u, 1u, hidden >= DEPTH_HIDE_AT);
 
   let world_up_view = normalize((badge_view() * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
-  let push = DEPTH_BIAS_U + max(0.0, -center_view.z) * badge_cell() * DEPTH_BIAS_CELLS;
+  let push = DEPTH_BIAS_U + max(0.0, -center_view.z) * frame_cell() * DEPTH_BIAS_CELLS;
   let upright = badge_proj() * vec4f(center_view + vec3f(corner.x, 0.0, push) + world_up_view * corner.y, 1.0);
   o.upright_z = clamp(upright.z / upright.w, 0.0, 1.0);
   return o;

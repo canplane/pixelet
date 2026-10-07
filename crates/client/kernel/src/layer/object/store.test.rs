@@ -148,7 +148,8 @@ fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
         for _ in 0..20 {
             let node = some_node(&mut rng, 250.0);
             let query = region(node);
-            let truth = boxes.iter().filter_map(|b| b.meet(query)).reduce(Aabb::join);
+            // A node is half-open: a cube that only touches it is not in it.
+            let truth = boxes.iter().filter_map(|b| b.meet(query)).filter(|m| (0..3).all(|k| m.min[k] < m.max[k])).reduce(Aabb::join);
             let given = store.bounds(node, node.0).value().flatten().map(|b| b.aabb);
             met += truth.is_some() as u32;
             match (truth, given) {

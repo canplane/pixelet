@@ -227,7 +227,7 @@ impl<Q: Query> Domain<Q> {
         }
         let touching = (start, self.touching.len() as u32 - start);
         let nearest = nearest_box(&bound, self.o.eye[0]).nearest(self.o.eye);
-        let error_angle = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
+        let error_angle = self.lens.map_or(0.0, |l| l.error(nearest, error));
         let order = Order::of(&self.o, &bound);
         // Drawn as finely as anything under it is held, there is nothing to refine.
         let finer_held = held.is_some_and(|b| c.cell_zoom() < b.finest);

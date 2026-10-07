@@ -201,8 +201,8 @@ pub enum SettingKey {
     /// The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
     debug_overlay = 12,
     /// Markers for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs).
-    gizmos = 13,
-    /// A HUD of the camera grid's cells about the eye, each marked by how wide the drawn chunk's cell where its center ray lands spans against the grid's (scene/marker/camera_gizmo.rs).
+    world_gizmo = 13,
+    /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/marker/camera_gizmo.rs).
     camera_gizmo = 14,
     person = 15,
     pet = 16,
@@ -223,7 +223,7 @@ impl SettingKey {
         SettingKey::shadows,
         SettingKey::resolution,
         SettingKey::debug_overlay,
-        SettingKey::gizmos,
+        SettingKey::world_gizmo,
         SettingKey::camera_gizmo,
         SettingKey::person,
         SettingKey::pet,
@@ -249,7 +249,7 @@ impl SettingKey {
             SettingKey::shadows => SettingKind::Toggle,
             SettingKey::resolution => SettingKind::Choice,
             SettingKey::debug_overlay => SettingKind::Toggle,
-            SettingKey::gizmos => SettingKind::Toggle,
+            SettingKey::world_gizmo => SettingKind::Toggle,
             SettingKey::camera_gizmo => SettingKind::Toggle,
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
@@ -272,7 +272,7 @@ impl SettingKey {
             SettingKey::shadows => "shadows",
             SettingKey::resolution => "resolution",
             SettingKey::debug_overlay => "debug_overlay",
-            SettingKey::gizmos => "gizmos",
+            SettingKey::world_gizmo => "world_gizmo",
             SettingKey::camera_gizmo => "camera_gizmo",
             SettingKey::person => "person",
             SettingKey::pet => "pet",
@@ -292,7 +292,7 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::surface_follow)
+        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::surface_follow | SettingKey::camera_gizmo)
     }
 
     /// A choice's option a development build only offers.
@@ -325,7 +325,7 @@ pub struct Settings {
     pub shadows: bool,
     pub resolution: ResolutionMode,
     pub debug_overlay: bool,
-    pub gizmos: bool,
+    pub world_gizmo: bool,
     pub camera_gizmo: bool,
     pub person: u8,
     pub pet: u8,
@@ -347,7 +347,7 @@ impl Settings {
         shadows: false,
         resolution: ResolutionMode::auto,
         debug_overlay: false,
-        gizmos: false,
+        world_gizmo: false,
         camera_gizmo: false,
         person: 1,
         pet: 5,
@@ -370,7 +370,7 @@ impl Settings {
             SettingKey::shadows => self.shadows as u32,
             SettingKey::resolution => self.resolution as u32,
             SettingKey::debug_overlay => self.debug_overlay as u32,
-            SettingKey::gizmos => self.gizmos as u32,
+            SettingKey::world_gizmo => self.world_gizmo as u32,
             SettingKey::camera_gizmo => self.camera_gizmo as u32,
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
@@ -406,7 +406,7 @@ impl Settings {
                 None => return false,
             },
             SettingKey::debug_overlay if value <= 1 => self.debug_overlay = value == 1,
-            SettingKey::gizmos if value <= 1 => self.gizmos = value == 1,
+            SettingKey::world_gizmo if value <= 1 => self.world_gizmo = value == 1,
             SettingKey::camera_gizmo if value <= 1 => self.camera_gizmo = value == 1,
             SettingKey::person => match u8::try_from(value) {
                 Ok(n) => self.person = n,

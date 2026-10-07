@@ -100,13 +100,9 @@
         "label": "Debug Overlay",
         "description": "Shows camera and view state, frame timing, GPU, memory, and request activity."
       },
-      "gizmos": {
-        "label": "Gizmos",
+      "world_gizmo": {
+        "label": "World Gizmo",
         "description": "Draws the view center, its cell and the axis rings in the world, for debugging."
-      },
-      "camera_gizmo": {
-        "label": "Camera gizmo",
-        "description": "Overlays the camera grid's cells, each colored by how the detail drawn there fits it: green on the grid, blue finer, red coarser, grey at the data's finest, magenta where nothing is drawn."
       }
     },
     "disclaimer": {

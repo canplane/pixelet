@@ -23,6 +23,21 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
+- **Close the view's bound by area, and let the eye's rays measure it.**
+  The cell is a solid angle (4b1fd556f) and a screen holds at most
+  `GRID_CELLS_MAX`, but drawn cells are not yet held to a quarter of one:
+  the error box is a cube judged from a chunk's nearest point, so ground
+  seen at a grazing angle is drawn four and more times finer than its cell
+  (the camera gizmo's blue, the far half of a 60° view). Decide in one
+  design: the bound in the form it must hold (visible cells ≤ 4 × the
+  grid's), what measures a cell's shown area — the rays of the camera grid,
+  a cell's footprint on what it meets, cast on the CPU or read back from a
+  GPU feedback pass as virtual texturing does (the decision of 20260928
+  already names "the GPU's feedback" as a better estimator) — and how the
+  choice stays on the main axis, the grid deciding the chunk, the chunk
+  asking the query, nothing beside the hierarchy. Near "How the samples are
+  drawn" above.
+
 - **POI and reverse geocode are off.** The client leaves their roots
   unbound (`apps/web/src/kernel/boot.ts` `OFF`) while the terrain moves to
   Carto, Arnis and the zooms, one problem at a time; their tiles'
