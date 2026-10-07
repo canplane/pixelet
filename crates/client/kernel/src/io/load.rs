@@ -151,17 +151,16 @@ fn ended(key: u64, outcome: Outcome) -> Option<(LoadKind, Load)> {
 
 static ARRIVALS: Global<Notify> = Global::new();
 
-static SETTLED: Global<u32> = Global::new();
+static SETTLED: Global<bool> = Global::new();
 
-/// Moves whenever a load settled, arrived or failed: what waits on assets
-/// compares it on its turn rather than being called from here.
-pub fn loads_settled() -> u32 {
-    *SETTLED.get(|| 0)
+/// Whether a load settled, arrived or failed, since last taken: what waits on
+/// assets takes it on its turn rather than being called from here.
+pub fn take_settled() -> bool {
+    core::mem::take(SETTLED.get(|| false))
 }
 
 fn settled() {
-    let n = SETTLED.get(|| 0);
-    *n = n.wrapping_add(1);
+    *SETTLED.get(|| false) = true;
 }
 
 fn arrivals() -> &'static mut Notify {
