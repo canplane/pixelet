@@ -4,7 +4,7 @@
 //! would stand or bring back, the box it would fill or carve, or what the
 //! eraser is over.
 
-use pxl_render::look::color::marker;
+use pxl_render::look::color::indicator;
 use pxl_spec::cell::decor::DecorKind;
 use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_of, placeable_cube_rgb, PlaceableCube};
 use pxl_spec::cell::DecorId;
@@ -46,7 +46,7 @@ pub fn ghost() -> Ghost {
     } = pending();
     let textures = settings.textures;
 
-    let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Eraser) || hovered_object.is_some();
+    let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser) || hovered_object.is_some();
     let current_scale = if use_object_style { preview_size } else { units(GROUND.cell()) };
 
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
@@ -102,7 +102,7 @@ pub fn ghost() -> Ghost {
     };
 
     let swatch = cube.and_then(placeable_cube_rgb);
-    let fallback = if active_tool == ActiveTool::Eraser { marker::ERASE } else { marker::ACTION };
+    let fallback = if active_tool == ActiveTool::Eraser { indicator::ERASE } else { indicator::ACTION };
 
     // A carve no longer needs the coplanar bias: its voxel is gone from the mesh
     // while the cursor is on it.

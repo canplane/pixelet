@@ -72,6 +72,6 @@
       "an older one is not read, so bump it whenever a change makes an older entry mean",
       "something other than it meant when it was written (layer/object/store.rs)."
     ],
-    "$value": "object/v14"
+    "$value": "object/v15"
   }
 }

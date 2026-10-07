@@ -1,4 +1,4 @@
-// pxl-kernel/scene/marker/debug_lines.rs
+// pxl-kernel/scene/indicator/debug_lines.rs
 
 //! Line segments drawn over everything, for the dev gizmos. A module built
 //! without the gizmos holds none.

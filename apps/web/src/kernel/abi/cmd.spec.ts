@@ -66,6 +66,9 @@ export const enum InputMinor {
   POSE = 0x09,
   POSE_END = 0x0a,
   HOLD = 0x0b,
+  MARKER_WORDS = 0x0c,
+  MARKER_CANCEL = 0x0d,
+  MARKER_PUT = 0x0e,
 }
 
 /** The device sensors' verbs. */
@@ -131,6 +134,8 @@ export const enum PointerPhase {
   Move = 1,
   Up = 2,
   Out = 3,
+  /** The pointer's gesture ends with no tap: the platform took it, or the shell spent it on something of its own. */
+  Cancel = 4,
 }
 
 /** What the pointer is, as the browser's `pointerType` says. */
@@ -146,6 +151,7 @@ export const enum ActiveTool {
   Object = 1,
   Decor = 2,
   Eraser = 3,
+  Marker = 4,
 }
 
 /** What the tracking button did, as the button showed it. */
@@ -274,6 +280,12 @@ export const enum Command {
   INPUT_POINTER = 0x1102,
   /** What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer. */
   INPUT_HOLD = 0x110b,
+  /** The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut. */
+  INPUT_MARKER_WORDS = 0x110c,
+  /** The marker the tool left waiting is let go, nothing put up. */
+  INPUT_MARKER_CANCEL = 0x110d,
+  /** The waiting marker is put up with its words, if its place is still free or still a marker, and nothing waits after. */
+  INPUT_MARKER_PUT = 0x110e,
   INPUT_WHEEL = 0x1103,
   /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
   INPUT_KEYS = 0x1106,
@@ -433,17 +445,21 @@ export function read_companion_state(b: BranchCursor): CompanionState {
   return { person_ready: b.at(0).get<boolean>(), pet_ready: b.at(1).get<boolean>() };
 }
 
-/** What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held. */
+/** What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held; and a marker the tool left waiting for its words. */
 export interface HoldingState {
   tool: ActiveTool;
   /** The held cube, by its number in the catalog's one value space. */
   cube: u32;
   decor: u32;
   tier: u32;
+  /** Whether a marker the tool left waits for its words, which INPUT_MARKER_PUT or INPUT_MARKER_CANCEL ends. */
+  marker: boolean;
+  /** The waiting marker's words, which the shell takes up when it starts waiting: the marker's own where one stands there, none where it is new. */
+  words: string;
 }
 
 export function read_holding_state(b: BranchCursor): HoldingState {
-  return { tool: b.at(0).get<ActiveTool>(), cube: b.at(1).get<u32>(), decor: b.at(2).get<u32>(), tier: b.at(3).get<u32>() };
+  return { tool: b.at(0).get<ActiveTool>(), cube: b.at(1).get<u32>(), decor: b.at(2).get<u32>(), tier: b.at(3).get<u32>(), marker: b.at(4).get<boolean>(), words: b.at(5).get<string>() };
 }
 
 export interface OrientationState {
@@ -555,7 +571,7 @@ export interface WorldBoot {
    * reports a failure itself (SENSOR_ORIENTATION_LOST). */
   orientation_silence_is_loss: boolean;
   /** What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
-   * (host.json's STORAGE_KEYS), handed over unread as a process is handed its environment,
+   * (host.json's SETTINGS_PATH), handed over unread as a process is handed its environment,
    * which the kernel reads and from then on writes itself. */
   settings: string;
 }
@@ -649,6 +665,15 @@ export interface InputHold {
 
 export function encode_input_hold(p: InputHold): U8Array {
   return packet((b) => b.u32(p.tool).u32(p.value).u32(p.tier));
+}
+
+/** Command.INPUT_MARKER_WORDS's packet. */
+export interface InputMarkerWords {
+  text: string;
+}
+
+export function encode_input_marker_words(p: InputMarkerWords): U8Array {
+  return packet((b) => b.str(p.text));
 }
 
 /** Command.INPUT_WHEEL's packet. */

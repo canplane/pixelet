@@ -5,14 +5,14 @@
 
 use pxl_spec::asset::ingested::CubeFace;
 use pxl_spec::asset::shipped_tile_mean;
-use pxl_spec::cell::cube_types::{Block, Ground};
+use pxl_spec::cell::cube_types::{Ground, Object};
 use pxl_spec::cell::object::placeable_cube_rgb;
 use pxl_spec::cell::object::{placeable_cubes, PlaceableCube};
 use std::sync::LazyLock;
 
 /// The texture array's layers, one a placeable cube in the catalog's order, so
 /// a cube of a look is drawn as its ground is.
-pub const LAYERS: usize = Block::ALL.len() + Ground::ALL.len();
+pub const LAYERS: usize = Object::ALL.len() + Ground::ALL.len();
 
 pub fn palette() -> impl Iterator<Item = PlaceableCube> {
     placeable_cubes.iter().copied()

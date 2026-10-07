@@ -12,7 +12,8 @@ pub const NO_SLOT: i32 = -1;
 /// What an entry paints, in logical pixels before the render scale.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DrawSpec {
-    Cluster { label: String, logical_w: f64 },
+    /// A label alone on a pill: a count, or a placed billboard's words.
+    Pill { label: String, logical_w: f64 },
     Place { name: String, icon: &'static str, color: u32, logical_w: f64 },
     Bubble { lines: Vec<String>, box_w: f64, box_h: f64 },
 }
@@ -158,6 +159,13 @@ impl Sheet {
     pub fn slot_rect(&self, slot: u32) -> [u32; 4] {
         let s = slot as usize;
         [self.x[s], self.y[s], self.w[s], self.h[s]]
+    }
+
+    /// Whether a live slot holds its drawing, which one added or marked
+    /// dirty lacks until a sync paints it.
+    pub fn painted(&self, slot: u32) -> bool {
+        let s = slot as usize;
+        self.state.get(s) == Some(&LIVE) && !self.is_dirty.get(s).copied().unwrap_or(false)
     }
 
     pub fn slot_draw(&self, slot: u32) -> Option<&DrawSpec> {

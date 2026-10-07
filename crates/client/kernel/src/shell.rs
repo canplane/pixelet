@@ -74,6 +74,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     });
     let values = SettingKey::ALL.map(|key| settings.get(key));
     let held = holding();
+    let (waiting, words) = crate::control::interaction::edit::marker_waiting();
     let mut previews = [0u32; CASES_MAX];
     let mut preview_cnt = 0;
     for (slot, (surface, _, _)) in previews.iter_mut().zip(preview_rows()) {
@@ -107,6 +108,8 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             cube: placeable_cube_num_id(held.object_cube),
             decor: decor_num_id(held.decor_id),
             tier: held.object_tier,
+            marker: waiting,
+            words: &words,
         },
         orientation: OrientationState {
             status: orientation.pose.status(),

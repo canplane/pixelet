@@ -23,19 +23,20 @@ pub fn find_overlapping_object(corner: &Pvf3, size: f64) -> Option<Entry> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlacementTool {
     Object,
-    Decor,
+    /// A decor or a marker: one cell, and nothing stands on it.
+    Instance,
 }
 
 /// The shared check for the placement commit and its hover preview.
 pub fn is_placement_blocked(tool: PlacementTool, corner: &Pvf3, object_size: f64) -> bool {
-    let size = if tool == PlacementTool::Decor { DECOR_SIZE } else { object_size };
-    find_overlapping_object(corner, size).is_some() || tool == PlacementTool::Decor && decor_under(corner)
+    let size = if tool == PlacementTool::Instance { DECOR_SIZE } else { object_size };
+    find_overlapping_object(corner, size).is_some() || tool == PlacementTool::Instance && instance_under(corner)
 }
 
-/// Placed or scattered. Decor is stood on nowhere, so nothing is placed on it.
-fn decor_under(corner: &Pvf3) -> bool {
+/// Placed or scattered. An instance is stood on nowhere, so nothing is placed on it.
+fn instance_under(corner: &Pvf3) -> bool {
     let under = pvf3::add(corner, &base_of(GROUND.cell(), [0, 0, -1]));
-    let placed = objects_at(&under).iter().any(|o| matches!(o.kind(), EntryKind::Decor { .. }));
+    let placed = objects_at(&under).iter().any(|o| matches!(o.kind(), EntryKind::Decor { .. } | EntryKind::Marker));
     placed || !holds_entry(&under) && KINDS.iter().any(|k| World::now().grown(k, &under).is_some())
 }
 

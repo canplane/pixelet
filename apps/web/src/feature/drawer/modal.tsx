@@ -8,6 +8,7 @@ import type { f64, u8 } from "@xpute/core/abi/word.ts";
 import { decorKinds, decorSection, type PlaceableCube, placeableCubeId, placeableCubes, placeableCubeSection } from "@/catalog/cell/mod.ts";
 
 import { useInHand, useUiStore } from "@/app/store/ui.ts";
+import { useKernel } from "@/kernel/snapshot.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { Panel } from "@platform/panel.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
@@ -139,13 +140,28 @@ function DecorItem({ kind, cell, onPick }: { kind: u8; cell: f64; onPick: (kind:
   );
 }
 
+/** A temporary way in: one marker, its words not kept yet. */
+function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
+  const { t } = useTranslation();
+  const active = useKernel(({ holding: h }) => h.tool === ActiveTool.Marker);
+
+  return (
+    <Item label={t("blocks.marker")} active={active} cell={cell} onPress={onPick}>
+      <View style={[styles.decor, { width: itemOf(cell), height: itemOf(cell) }, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
+        <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
+      </View>
+    </Item>
+  );
+}
+
 const enum DrawerTab {
   Cube = 0,
   Decor = 1,
-  Character = 2,
+  Marker = 2,
+  Character = 3,
 }
 
-/** Cube and decor picks close the sheet; character picks apply at once and leave it open. */
+/** Cube, decor and marker picks close the sheet; character picks apply at once and leave it open. */
 export function DrawerModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<DrawerTab>(DrawerTab.Cube);
@@ -182,6 +198,11 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
+  function pickMarker(): void {
+    useUiStore.getState().selectMarker();
+    onClose();
+  }
+
   return (
     <Panel label={t("drawer.title")} onClose={onClose} half>
       <View ref={sheet} style={styles.sheet} onLayout={(e: LayoutChangeEvent) => setSheetHeight(e.nativeEvent.layout.height)}>
@@ -195,6 +216,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                   segments={[
                     { value: DrawerTab.Cube, label: t("drawer.tabs.cube") },
                     { value: DrawerTab.Decor, label: t("drawer.tabs.decor") },
+                    { value: DrawerTab.Marker, label: t("drawer.tabs.marker") },
                     { value: DrawerTab.Character, label: t("drawer.tabs.character") },
                   ]}
                 />
@@ -204,17 +226,22 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
             <PanelScroll key={tab}>
               {tab === DrawerTab.Cube &&
                 [...SECTIONS].map(([section, cubes]) => (
-                  <Grid key={section} head={<SectionTitle>{t(`drawer.sections.${section}`)}</SectionTitle>}>
+                  <Grid key={section} head={<SectionTitle>{t(`drawer.sections.cube.${section}`)}</SectionTitle>}>
                     {(cell) => cubes.map((cube) => <CubeItem key={placeableCubeId(cube)} cube={cube} cell={cell} onPick={pickCube} />)}
                   </Grid>
                 ))}
 
               {tab === DrawerTab.Decor &&
                 [...DECOR_SECTIONS].map(([section, kinds]) => (
-                  <Grid key={section} head={<SectionTitle>{t(`drawer.decor_sections.${section}`)}</SectionTitle>}>
+                  <Grid key={section} head={<SectionTitle>{t(`drawer.sections.decor.${section}`)}</SectionTitle>}>
                     {(cell) => kinds.map((kind) => <DecorItem key={kind} kind={kind} cell={cell} onPick={pickDecor} />)}
                   </Grid>
                 ))}
+              {tab === DrawerTab.Marker && (
+                <Grid head={<SectionTitle>{t("drawer.sections.marker")}</SectionTitle>}>
+                  {(cell) => <MarkerItem cell={cell} onPick={pickMarker} />}
+                </Grid>
+              )}
 
               {tab === DrawerTab.Character && <CharacterPicker />}
             </PanelScroll>

@@ -8,9 +8,10 @@
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { INGESTED, PACK } from "./ingested.spec.ts";
 
-const TOP_TILE = new Map<string, u32>(PACK.faces.filter(([, , face]) => face === "top").map(([channel, type, , n]) => [`${channel}/${type}`, n]));
+/** By a cube's id, its group and type (`ground.land`). */
+const TOP_TILE = new Map<string, u32>(PACK.faces.filter(([, , face]) => face === "top").map(([group, type, , n]) => [`${group}.${type}`, n]));
 
-export function shippedTopTextureKey(channel: string, typeName: string): string | null {
-  const n = TOP_TILE.get(`${channel}/${typeName.toLowerCase()}`);
+export function shippedTopTextureKey(cubeId: string): string | null {
+  const n = TOP_TILE.get(cubeId);
   return n === undefined ? null : INGESTED[PACK.tiles[n]]?.key ?? null;
 }

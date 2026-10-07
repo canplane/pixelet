@@ -1,5 +1,7 @@
 // pxl-kernel/chunk/place/badge.rs
 
+use crate::layer::object::preview::words_at;
+use pxl_spec::bake::constant::EntryAt;
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::poi_tile::{kind_color, kind_icon, Place, PoiTile, POI_LATTICE};
@@ -29,6 +31,9 @@ pub enum Label {
         tile: Tile,
         place: u32,
     },
+    /// A marker someone put up, or one waiting for its words, by its entry,
+    /// and its words by their hash.
+    Marker { at: EntryAt, words: u64 },
 }
 
 impl Label {
@@ -42,18 +47,23 @@ impl Label {
         }
     }
 
+    /// A marker's words, the waiting one's as they are so far, empty once
+    /// it has gone.
+    fn words(at: EntryAt) -> String {
+        words_at(at).unwrap_or_default().to_string()
+    }
+
     pub fn text(self) -> String {
-        match self {
-            Label::Count(n, partial) => format!("{n}{}", if partial { "+" } else { "" }),
-            Label::Place { tile, place } => {
-                let full = Label::place(tile, place).name;
-                let mut shown: String = full.chars().take(SHOWN_CHARS).collect();
-                if full.chars().count() > SHOWN_CHARS {
-                    shown.push('…');
-                }
-                shown
-            }
+        let full = match self {
+            Label::Count(n, partial) => return format!("{n}{}", if partial { "+" } else { "" }),
+            Label::Marker { at, .. } => Label::words(at),
+            Label::Place { tile, place } => Label::place(tile, place).name.to_string(),
+        };
+        let mut shown: String = full.chars().take(SHOWN_CHARS).collect();
+        if full.chars().count() > SHOWN_CHARS {
+            shown.push('…');
         }
+        shown
     }
 }
 
@@ -99,6 +109,14 @@ pub fn width(label: Label) -> Option<f64> {
     Some(width)
 }
 
+/// Whether the label is laid out and painted, so drawing it shows its words.
+pub fn ready(label: Label) -> bool {
+    width(label).is_some() && {
+        let slot = slot(label);
+        slot != NO_SLOT && billboard_sheet().painted(slot as u32)
+    }
+}
+
 /// Its label was measured first.
 pub fn slot(label: Label) -> i32 {
     let b = badges().get_mut(&label).or_bug(Errno::ENOTRECOVERABLE);
@@ -107,7 +125,7 @@ pub fn slot(label: Label) -> i32 {
             b.width * SHEET_SCALE,
             HEIGHT * SHEET_SCALE,
             match label {
-                Label::Count(..) => DrawSpec::Cluster {
+                Label::Count(..) | Label::Marker { .. } => DrawSpec::Pill {
                     label: label.text(),
                     logical_w: b.width,
                 },

@@ -1,4 +1,4 @@
-// pxl-kernel/scene/marker.rs
+// pxl-kernel/scene/indicator.rs
 
 //! What marks where something is: the location puck, the hover ghost, debug gizmos.
 
