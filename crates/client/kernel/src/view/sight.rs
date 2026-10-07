@@ -13,7 +13,7 @@
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{Tau, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::v3::{dot3, len3, scale3, sub3, V3};
+use pxl_spec::space::coord::v3::{dot3, len3, sub3, V3};
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::param;
@@ -51,7 +51,8 @@ impl Lens {
 
     /// The width the error box at `at` shows the eye: the square root of the
     /// solid angle its silhouette covers, seen along `at`'s direction clamped
-    /// to the screen's edge. A flat box seen at a grazing angle covers little.
+    /// to the screen's edge. By area the box may span 2^¼ of the width on one
+    /// axis, as a cube does seen along a face's diagonal.
     ///
     /// An overestimate: the silhouette is taken at the nearest distance the box
     /// allows, its diagonal nearer. Unbounded where the box reaches the eye.

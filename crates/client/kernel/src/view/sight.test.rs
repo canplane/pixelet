@@ -77,7 +77,7 @@ fn an_error_shows_its_silhouette_over_its_distance() {
     let w = level.error([1_000.0, 0.0, 0.0], [4.0, 4.0, 0.0]);
     assert!(w < 0.1 * 4.0 / 1_000.0, "a flat cell at a grazing angle: {w}");
     let w = level.error([1_000.0, 0.0, 0.0], [4.0; 3]);
-    assert!(within(w, 4.0, 1_000.0, 48f64.sqrt()) || w >= 4.0 / 1_000.0, "a cube at a grazing angle: {w}");
+    assert!(w >= 4.0 / 1_000.0 && w <= 3f64.sqrt() * 4.0 / (1_000.0 - 48f64.sqrt()), "a cube at a grazing angle: {w}");
     assert_eq!(level.error([0.0, 0.0, 2.0], [1.0; 3]), f64::INFINITY, "an error at the eye");
     assert_eq!(level.error([1.0, 0.0, 2.0], [1.0; 3]), f64::INFINITY, "an error reaching the eye");
 }

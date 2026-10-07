@@ -15,9 +15,10 @@ pub const REUSE_SHIFT: f64 = 0.25;
 
 // ---- the camera grid ----
 
-/// The most camera grid cells a screen holds: past it a cell grows, so a
-/// bigger screen asks no more observation or demand than this. About a
-/// 1000 × 1100 window at twelve-pixel cells; a phone holds a fifth of it.
+/// The most camera grid cells a screen holds: past it a cell grows. It bounds
+/// what a screen draws (chunks, triangles) up front, where the arena would
+/// coarsen only once its slots ran short. About a 1780 × 1110 window at
+/// twelve-pixel cells; a phone holds a fifth of it.
 pub const GRID_CELLS_MAX: f64 = 10_000.0;
 
 // ---- the drawn resolution ----
