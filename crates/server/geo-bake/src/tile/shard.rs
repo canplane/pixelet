@@ -249,7 +249,7 @@ impl Run {
             return Err(format!("unknown stage: {s}"));
         }
         if let Some(n) = named.iter().find(|n| !coverage.shards().any(|s| s.name() == **n)) {
-            return Err(format!("{n}: no shard of the coverage (infra/geo/elevation/metadata.json)"));
+            return Err(format!("{n}: no shard of the coverage (infra/geo/coverage.json)"));
         }
         let all = stages.is_empty();
         let has = |s: &str| stages.iter().any(|t| t == s);
