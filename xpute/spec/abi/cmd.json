@@ -1,6 +1,6 @@
 {
   "doc": [
-    "Every program's commands, by number (core abi/cmd: `major << 8 | minor`), and the",
+    "Every program's commands, by number (kit abi/cmd: `major << 8 | minor`), and the",
     "packet each carries — an XTP branch whose children are its fields, in order. A",
     "command with no fields carries no packet. The majors below PROGRAM_MAJOR are xpute's;",
     "a program numbers its own from there, in a table of its own that names this one as",

@@ -1,6 +1,6 @@
 // @pxl/web/kernel/render/surface.ts
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { Command, encode_surface_close, encode_surface_open, encode_surface_resize } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { send_next } from "@/kernel/sched.ts";

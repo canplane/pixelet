@@ -1,8 +1,8 @@
 // @pxl/web/feature/debug/profiler/report.ts
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { round } from "@xpute/core/math/scalar.ts";
-import { type Errno, strerror } from "@xpute/core/status/errno.spec.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import { round } from "@xpute/kit/math/scalar.ts";
+import { type Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
 import { copyText } from "@platform/save.ts";
 
 import { fieldText, type Frame, GROUPS, groupText, n1, offthreadMs, pct, phaseText, STARVED_MS, tris, zoomName } from "./lane.ts";

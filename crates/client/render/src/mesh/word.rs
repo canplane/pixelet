@@ -3,7 +3,7 @@
 //! What a run's cell carries, packed: its material and class, its texture
 //! layers, and the box inside it a summary shrinks a sparse cell to.
 
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 pub const NO_LAYER: u32 = 255;
 

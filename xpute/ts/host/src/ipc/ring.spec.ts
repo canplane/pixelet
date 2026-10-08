@@ -8,7 +8,7 @@
 // frame and slot n modulo the capacity, so a slot is free exactly when its frame is.
 // Positions only grow, and each side writes only its own word, so no lock is needed.
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 
 /** How many frames, a power of two. */
 export const CAPACITY: u32 = 0 as number;

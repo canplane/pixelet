@@ -6,8 +6,8 @@
  * layer arrives after mount. The world's view is also the app's input driver.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { round } from "@xpute/core/math/scalar.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
+import { round } from "@xpute/kit/math/scalar.ts";
 import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { AppState, type GestureResponderEvent, type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, StyleSheet, type ViewProps } from "react-native";

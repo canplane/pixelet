@@ -16,8 +16,8 @@ use std::sync::Mutex;
 use jni_sys::{jbyteArray, jclass, jdouble, jint, jintArray, jobject, JNIEnv, JNINativeInterface_};
 use ndk_sys::{ANativeWindow, ANativeWindow_fromSurface, ANativeWindow_release};
 use wgpu::rwh::{AndroidDisplayHandle, AndroidNdkWindowHandle, RawDisplayHandle, RawWindowHandle};
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 /// The native window each bound surface draws through, by the kernel's
 /// handle: acquired when a view's surface is bound and released once it is

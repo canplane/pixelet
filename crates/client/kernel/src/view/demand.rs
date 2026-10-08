@@ -22,8 +22,8 @@ use crate::layer::earth::{self, Earth};
 use crate::layer::{Asks, Layer};
 use crate::sched::edge::world_edge;
 use pxl_spec::bake::division_tile::DivisionTile;
-use xpute_core::status::errno::Errno;
 use xpute_guest::mem::heap::Block;
+use xpute_kit::status::errno::Errno;
 
 use std::collections::HashMap;
 
@@ -241,7 +241,7 @@ impl<L: Observed> Demand<L> {
             for p in asks.keys() {
                 read[p.zoom as usize] += 1;
             }
-            xpute_core::ensure!(read.iter().all(|&n| n <= Residency::<L>::ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
+            xpute_kit::ensure!(read.iter().all(|&n| n <= Residency::<L>::ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
             if !matches!(L::ASKS, Asks::Line) {
                 let mut floor = 0u32;
                 let f = floor_at.unwrap_or(o);
@@ -249,7 +249,7 @@ impl<L: Observed> Demand<L> {
                     floor += 1;
                     ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
                 });
-                xpute_core::ensure!(floor <= Floor::TILES, ENOTRECOVERABLE, floor);
+                xpute_kit::ensure!(floor <= Floor::TILES, ENOTRECOVERABLE, floor);
             }
         }
         // The whole line, not only the finest tile: which one says the ground is
@@ -267,7 +267,7 @@ impl<L: Observed> Demand<L> {
                 },
             );
         }
-        xpute_core::ensure!(named <= if matches!(L::ASKS, Asks::Floor) { 0 } else { Residency::<L>::DESTINATION_TILES }, ENOTRECOVERABLE, named);
+        xpute_kit::ensure!(named <= if matches!(L::ASKS, Asks::Floor) { 0 } else { Residency::<L>::DESTINATION_TILES }, ENOTRECOVERABLE, named);
 
         self.wants.clear();
         self.wants.extend(

@@ -16,7 +16,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Cell, LEAF_ZOOM};
 
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use super::ground::*;
 use crate::layer::*;

@@ -21,10 +21,10 @@ use crate::control::navigation::follow_mode::set_following;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::view;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DragMode {

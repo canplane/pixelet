@@ -5,7 +5,7 @@
  * place from the summary block the report is built from. Read-only.
  */
 
-import { round } from "@xpute/core/math/scalar.ts";
+import { round } from "@xpute/kit/math/scalar.ts";
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 

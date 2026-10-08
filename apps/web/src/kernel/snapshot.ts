@@ -2,8 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 
-import type { U8Array } from "@xpute/core/abi/array.ts";
-import { TreeReader } from "@xpute/core/wire/xtp/mod.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import { ActiveTool, DevicePoseStatus, GroundStatus, read_snapshot, type Snapshot } from "@/kernel/abi/cmd.spec.ts";
 
 const INITIAL: Snapshot = {

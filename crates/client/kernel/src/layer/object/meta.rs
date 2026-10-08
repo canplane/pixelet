@@ -7,7 +7,7 @@ use pxl_spec::cell::decor::{DecorKind, DecorMeta};
 use pxl_spec::cell::object::{decor_id_from_num, object_value_is_decor};
 use pxl_spec::procedural::MASTER_SEED;
 use pxl_spec::space::coord::pvf3::ivec::IVec;
-use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
+use xpute_kit::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::store::Entry;

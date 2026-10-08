@@ -13,7 +13,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::PAD;
 use crate::gpu::text::{Font, Raster, TextOf};
 use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 const SHAPE_FLOATS: usize = 20;
 

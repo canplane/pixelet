@@ -110,7 +110,7 @@ impl<T: Copy> Held<T> {
     }
 
     pub(super) fn push(&mut self, t: T) {
-        xpute_core::ensure!(self.len < HELD, ENOTRECOVERABLE, self.len);
+        xpute_kit::ensure!(self.len < HELD, ENOTRECOVERABLE, self.len);
         self.items[self.len] = Some(t);
         self.len += 1;
     }
@@ -231,7 +231,7 @@ pub(super) fn part(slots: &[Slot], place: &[Nth], meshes: &mut Meshes, e: BuildE
     let head = slot_at(l.first);
     let n = first / head.capacity;
     let Some(slot) = chained(meshes, l.first, n).map(slot_at) else { return };
-    xpute_core::ensure!(first % head.capacity == 0 && box_cnt <= slot.capacity, ENOTRECOVERABLE, first, box_cnt);
+    xpute_kit::ensure!(first % head.capacity == 0 && box_cnt <= slot.capacity, ENOTRECOVERABLE, first, box_cnt);
     let box_words = group_box_words(slot.group);
     let asked = if slot.capacity == FINE_BOXES { &mut meshes.fine_peak } else { &mut meshes.coarse_peak };
     *asked = (*asked).max(first + box_cnt);

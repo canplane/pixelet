@@ -1,9 +1,9 @@
 // pxl-spec/bake/format.test.rs
 
-use xpute_core::golden::Golden;
+use xpute_kit::golden::Golden;
 
 use super::*;
-use xpute_core::math::rng::SplitMix64;
+use xpute_kit::math::rng::SplitMix64;
 
 const GOLDEN: &str = include_str!("../../golden/bake/format.tsv");
 

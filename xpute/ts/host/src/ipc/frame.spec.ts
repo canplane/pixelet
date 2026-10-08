@@ -9,7 +9,7 @@
 // Reserved for later, so taking them moves no word: the tag's high bits (a sender id for
 // routing), flag bits 2 and up, and the result word on a submission.
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 
 /** The submitter's, echoed on the reply; a signal's subject. */
 export const TAG: u32 = 0 as number;

@@ -27,8 +27,8 @@ use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, unit
 use pxl_spec::space::hierarchy::morton::{child_cube, key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
 use pxl_spec::space::hierarchy::tree::{first_descendant_of, region, Node};
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::kernel;
 use crate::layer::object::ext::{Ext, Pools, NONE};
@@ -398,10 +398,10 @@ impl Store {
         let mut changed = Vec::new();
         for Write { key: k, id, ext } in writes {
             let (zoom, at) = node_of::<3>(k);
-            xpute_core::ensure!((CUBE_ZOOM..=OBJECT_FINEST).contains(&zoom), ENOTRECOVERABLE, zoom);
+            xpute_kit::ensure!((CUBE_ZOOM..=OBJECT_FINEST).contains(&zoom), ENOTRECOVERABLE, zoom);
             let id16 = u16::try_from(id).or_bug(Errno::EOVERFLOW);
             // A record is the shape its id's subclass names, or none.
-            xpute_core::ensure!(ext.as_ref().map(Ext::subclass) == ext.as_ref().and(subclass_of(id)), EINVAL, id);
+            xpute_kit::ensure!(ext.as_ref().map(Ext::subclass) == ext.as_ref().and(subclass_of(id)), EINVAL, id);
             self.release(zoom, at);
             let handle = match ext {
                 Some(ext) => match self.ext.keep(ext) {
@@ -433,7 +433,7 @@ impl Store {
         let mut freed = Vec::new();
         if let Some(f) = self.find(zoom, at) {
             if let Slot::Leaf(v) = f.slot {
-                xpute_core::ensure!(f.zoom == zoom || v.ext == NONE, ENOTRECOVERABLE, f.zoom);
+                xpute_kit::ensure!(f.zoom == zoom || v.ext == NONE, ENOTRECOVERABLE, f.zoom);
             }
         }
         self.each_in(zoom, at, &mut |e| {

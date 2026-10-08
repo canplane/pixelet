@@ -4,9 +4,9 @@
 
 import { assertEquals } from "@std/assert";
 
-import type { U8Array } from "@xpute/core/abi/array.ts";
-import { Golden } from "@xpute/core/golden.ts";
-import { Errno } from "@xpute/core/status/errno.spec.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import { Golden } from "@xpute/kit/golden.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { END } from "./stream.ts";
 import { FileError, Sys, type SysHost } from "./sys.ts";
 import { flag, HEAD, op } from "./sys.spec.ts";

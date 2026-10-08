@@ -2,7 +2,7 @@
 
 /** A message's four words, laid out by spec/ipc/frame.json. */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 import { FLAG_SHIFT } from "./frame.spec.ts";
 
 export * from "./frame.spec.ts";

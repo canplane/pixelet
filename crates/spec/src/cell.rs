@@ -67,8 +67,8 @@ impl decor::DecorKind {
 
     /// The generator writes one a decor, so every decor has its kind.
     pub fn of(decor: DecorId) -> &'static decor::DecorKind {
-        use xpute_core::status::bug::OrBug;
-        decor::KINDS.iter().find(|k| k.decor == decor).or_bug(xpute_core::status::errno::Errno::ENOTRECOVERABLE)
+        use xpute_kit::status::bug::OrBug;
+        decor::KINDS.iter().find(|k| k.decor == decor).or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE)
     }
 }
 

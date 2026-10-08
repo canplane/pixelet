@@ -19,8 +19,8 @@ use crate::space::coord::pvf3::pvf3::Pvf3;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{Lattice, GROUND};
 use crate::space::layer::tile::{Cell, Tile, LEAF_ZOOM};
-use xpute_core::status::error::MarshalError;
-use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_kit::status::error::MarshalError;
+use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::bake::malformed;
 

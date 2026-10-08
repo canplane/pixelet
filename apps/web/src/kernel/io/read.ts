@@ -6,9 +6,9 @@
  * out, ENOENT; 404 names nothing, a failure like any other.
  */
 
-import type { U8Array } from "@xpute/core/abi/array.ts";
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { Errno } from "@xpute/core/status/errno.spec.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 import { INGESTED, PACK } from "@/catalog/asset/ingested.spec.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";

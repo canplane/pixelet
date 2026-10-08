@@ -21,11 +21,11 @@ use crate::io::policy::Policy;
 use crate::profiler::record::profiler_record;
 use crate::profiler::task::TaskRow;
 use std::collections::HashMap;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::off_of_slice;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::param::MAX_CREDITS;
 
@@ -174,7 +174,7 @@ impl<S: Serve> RequestScheduler<S> {
             if self.find(category, subject).is_some() {
                 continue;
             }
-            xpute_core::ensure!(held < self.bounds[category as usize], ENOTRECOVERABLE, category as u32);
+            xpute_kit::ensure!(held < self.bounds[category as usize], ENOTRECOVERABLE, category as u32);
             held += 1;
             let free = self.desired.iter().position(Option::is_none).or_bug(Errno::ENOTRECOVERABLE);
             self.desired[free] = Some(Wanted {

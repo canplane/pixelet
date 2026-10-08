@@ -28,9 +28,9 @@ use pxl_render::gpu::sheet::shelf::NO_SLOT;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::cell::object::{object_value_is_marker, MARKER_LATTICE};
 use pxl_spec::space::coord::v3::V3;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use pxl_spec::bake::place_tile::{stands, PlaceTile, PLACE_FIRST, PLACE_LATTICE};
 use pxl_spec::space::coord::pvf3::pack;

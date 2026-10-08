@@ -5,8 +5,8 @@
  * its box, pointer, wheel, keys and the tab's visibility.
  */
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { round } from "@xpute/core/math/scalar.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import { round } from "@xpute/kit/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
 import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";

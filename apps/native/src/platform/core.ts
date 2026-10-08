@@ -2,7 +2,7 @@
 
 /** The Rust core linked into the app, reached through the native module: a memory buffer and a doorbell, as a page gets. */
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { Core } from "@/kernel/module.ts";
 import { PLATFORM } from "./module.ts";
 

@@ -7,8 +7,8 @@
 #[path = "ring.spec.rs"]
 mod spec;
 
-use xpute_core::status::errno::Errno;
-use xpute_core::status::error::MarshalError;
+use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::MarshalError;
 
 use super::frame::{self, cmd_of, cmd_word, flags_of};
 use spec::{CAPACITY, HEAD, HEADER_WORDS, SLOT_BASE, SLOT_BYTES, TAIL};
@@ -55,7 +55,7 @@ impl Ring {
         let head = unsafe { core::slice::from_raw_parts(at_of::<u32>(mem, at as usize), HEADER_WORDS as usize) };
         let capacity = head[CAPACITY as usize];
         if !capacity.is_power_of_two() {
-            xpute_core::bug!(EINVAL, capacity, at);
+            xpute_kit::bug!(EINVAL, capacity, at);
         }
         Ring {
             mem,
@@ -84,10 +84,10 @@ impl Ring {
     /// As `new`.
     pub unsafe fn init(mem: *mut u8, at: u32, capacity: u32, slot_base: u32, slot_bytes: u32) -> Ring {
         if !capacity.is_power_of_two() {
-            xpute_core::bug!(EINVAL, capacity);
+            xpute_kit::bug!(EINVAL, capacity);
         }
         if !slot_bytes.is_power_of_two() || !slot_bytes.is_multiple_of(8) {
-            xpute_core::bug!(EINVAL, slot_bytes);
+            xpute_kit::bug!(EINVAL, slot_bytes);
         }
         // SAFETY: the caller's memory, as `new` requires.
         unsafe {
@@ -222,7 +222,7 @@ impl Ring {
 
     pub fn advance(&self) {
         if self.is_empty() {
-            xpute_core::bug!(ENOTRECOVERABLE);
+            xpute_kit::bug!(ENOTRECOVERABLE);
         }
         self.words()[HEAD as usize] = self.head().wrapping_add(1);
     }

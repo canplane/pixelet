@@ -7,7 +7,7 @@ use crate::view::demand::Observed as _;
 use pxl_spec::cell::object::{decor_num_id, placeable_cube_num_id};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
-use xpute_core::wire::xtp::PacketWriter;
+use xpute_kit::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
 use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, OrientationState, Snapshot};

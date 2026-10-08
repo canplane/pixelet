@@ -308,10 +308,10 @@ fn ts(spec: &Spec, t: &Target) -> Result<String, String> {
     let cursors: Vec<&str> = ["BranchCursor", "NodeCursor"].into_iter().filter(|c| reads(&tail, c)).collect();
     out.push(String::new());
     if !cursors.is_empty() {
-        out.push(format!("import type {{ {} }} from \"@xpute/core/wire/xtp/mod.ts\";", cursors.join(", ")));
+        out.push(format!("import type {{ {} }} from \"@xpute/kit/wire/xtp/mod.ts\";", cursors.join(", ")));
     }
-    out.push(format!("import type {{ {} }} from \"@xpute/core/abi/array.ts\";", uses.arrays.join(", ")));
-    out.push(format!("import type {{ {} }} from \"@xpute/core/abi/word.ts\";", uses.words.join(", ")));
+    out.push(format!("import type {{ {} }} from \"@xpute/kit/abi/array.ts\";", uses.arrays.join(", ")));
+    out.push(format!("import type {{ {} }} from \"@xpute/kit/abi/word.ts\";", uses.words.join(", ")));
     out.push("import { packet } from \"@xpute/host/ipc/doorbell.ts\";".into());
     for e in &spec.enums {
         out.push(String::new());
@@ -401,11 +401,11 @@ fn cpp(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, S
             "#include <span>",
             "#include <string_view>",
             "",
-            "#include \"../../core/abi/cmd.hpp\"",
-            "#include \"../../core/math/scalar.hpp\"",
-            "#include \"../../core/status/error.hpp\"",
-            "#include \"../../core/wire/xtp/cursor.hpp\"",
-            "#include \"../../core/wire/xtp/encode.hpp\"",
+            "#include \"../../kit/abi/cmd.hpp\"",
+            "#include \"../../kit/math/scalar.hpp\"",
+            "#include \"../../kit/status/error.hpp\"",
+            "#include \"../../kit/wire/xtp/cursor.hpp\"",
+            "#include \"../../kit/wire/xtp/encode.hpp\"",
             "",
             &format!("namespace {namespace} {{"),
         ]
@@ -667,8 +667,8 @@ fn rs(spec: &Spec, t: &Target) -> Result<String, String> {
             "",
             "use core::fmt::Display;",
             "",
-            "use xpute_core::status::error::MarshalError;",
-            "use xpute_core::wire::xtp::{PacketWriter, TreeReader};",
+            "use xpute_kit::status::error::MarshalError;",
+            "use xpute_kit::wire::xtp::{PacketWriter, TreeReader};",
         ]
         .map(String::from),
     );

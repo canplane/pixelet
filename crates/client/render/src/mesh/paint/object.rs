@@ -11,8 +11,8 @@ use crate::mesh::paint::palette::LAYER_IDX;
 use crate::mesh::word::NO_LAYER;
 use crate::mesh::word::{pack_material, MaterialClasses};
 use pxl_spec::cell::object::{placeable_cube_rgb, PlaceableCube};
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 const AIR: u32 = cube_types::object::air as u32;
 

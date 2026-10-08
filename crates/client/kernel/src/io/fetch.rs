@@ -9,11 +9,11 @@
 use core::fmt;
 use std::collections::VecDeque;
 
-use xpute_core::status::errno::Errno;
 use xpute_guest::ipc::sys::Fd;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free, Block};
 use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
+use xpute_kit::status::errno::Errno;
 
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::failure::{Ended, Failure};
@@ -181,7 +181,7 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         // Taken by its owner, which settles it; and a turn asked, so one takes it.
         Got::Absent | Got::Read(Some(_)) => {
             // An asset loads through io/load, never a fetch: nothing would take its answer.
-            xpute_core::ensure!(category != Category::asset, ENOTRECOVERABLE);
+            xpute_kit::ensure!(category != Category::asset, ENOTRECOVERABLE);
             ANSWERED.get(VecDeque::new).push_back(Answered {
                 key,
                 category,

@@ -8,7 +8,7 @@
 #[path = "directory.spec.rs"]
 pub mod spec;
 
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use crate::sched::quantum::QuantumPolicy;
 
@@ -22,9 +22,9 @@ pub const fn directory_words(entries: usize) -> usize {
 
 /// A key may appear once, so no two readers can pick different values.
 pub fn write_directory(words: &mut [u32], entries: &[Entry]) {
-    xpute_core::ensure!(directory_words(entries.len()) <= words.len(), ENOSPC, entries.len());
+    xpute_kit::ensure!(directory_words(entries.len()) <= words.len(), ENOSPC, entries.len());
     for (i, (key, _)) in entries.iter().enumerate() {
-        xpute_core::ensure!(entries[..i].iter().all(|(k, _)| k != key), EINVAL, *key);
+        xpute_kit::ensure!(entries[..i].iter().all(|(k, _)| k != key), EINVAL, *key);
     }
     words[..spec::HEAD as usize].copy_from_slice(&[spec::MAGIC, spec::VERSION, entries.len() as u32, 0]);
     for (i, (key, value)) in entries.iter().enumerate() {

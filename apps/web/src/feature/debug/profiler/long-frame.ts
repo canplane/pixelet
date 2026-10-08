@@ -3,7 +3,7 @@
 // Long-frame observers (LoAF, Chromium-only, and `longtask` everywhere)
 // feeding one ring, placed beside the kernel's frames by `performance.now()`.
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 
 export interface LongFrame {
   source: string;

@@ -210,7 +210,7 @@ impl<L: Layer> Residency<L> {
     fn entry_mut(&mut self, p: Tile) -> &mut Entry<L> {
         let full = self.tiles.len() >= Self::ENTRIES as usize;
         self.tiles.entry(p).or_insert_with(|| {
-            xpute_core::ensure!(!full, ENOTRECOVERABLE, p.zoom);
+            xpute_kit::ensure!(!full, ENOTRECOVERABLE, p.zoom);
             Entry::NONE
         })
     }
@@ -310,7 +310,7 @@ impl<L: Layer> Residency<L> {
     /// they cost no frame, so nothing would ever evict them. Framed tiles are
     /// left to normal turnover.
     pub fn ask(&mut self, asks: &HashMap<Tile, Ask>) {
-        xpute_core::ensure!(asks.len() <= Self::FRAMES as usize, ENOTRECOVERABLE, asks.len());
+        xpute_kit::ensure!(asks.len() <= Self::FRAMES as usize, ENOTRECOVERABLE, asks.len());
         for (&p, e) in &mut self.tiles {
             e.ask = asks.get(&p).copied();
             if e.ask.is_none() && core::mem::take(&mut e.answered) {
@@ -368,7 +368,7 @@ impl<L: Layer> Residency<L> {
         // Sorted, so the policy sees the same list for the same state.
         candidates.sort_unstable_by_key(|c| c.tile);
         let Some(at) = victim.victim(&candidates) else {
-            xpute_core::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
+            xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
             self.refused += 1;
             return None;
         };

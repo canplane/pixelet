@@ -5,8 +5,8 @@
  * gap and I/O credits, then rings with a quota.
  */
 
-import type { U8Array } from "@xpute/core/abi/array.ts";
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { Strobe } from "@xpute/host/sched/strobe.ts";
 import { Command, encode_world_frame } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";

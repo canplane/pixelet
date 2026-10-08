@@ -14,7 +14,7 @@
 //   crates/client-bracket/wasm/build.rs               the linker flags for the module
 //   apps/web/src/kernel/mem.ts                 the reservation the shell makes
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 
 /** Messages the submission ring holds, and so payloads: one a slot
  * (decision/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which

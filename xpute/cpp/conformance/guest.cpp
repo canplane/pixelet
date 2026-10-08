@@ -9,11 +9,11 @@
 #include <optional>
 #include <span>
 
-#include "../core/alloc/slab.hpp"
-#include "../core/math/scalar.hpp"
-#include "../core/status/bug.hpp"
-#include "../core/status/errno.spec.hpp"
-#include "../core/wire/xtp/cursor.hpp"
+#include "../kit/alloc/slab.hpp"
+#include "../kit/math/scalar.hpp"
+#include "../kit/status/bug.hpp"
+#include "../kit/status/errno.spec.hpp"
+#include "../kit/wire/xtp/cursor.hpp"
 #include "../guest/abi/cmd.spec.hpp"
 #include "../guest/abi/handle.hpp"
 #include "../guest/ipc/directory.hpp"

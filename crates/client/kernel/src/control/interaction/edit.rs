@@ -20,9 +20,9 @@ use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::kernel;
 use crate::layer::instance::Instance;

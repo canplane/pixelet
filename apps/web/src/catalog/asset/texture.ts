@@ -5,7 +5,7 @@
  * type without one draws as its color.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 import { INGESTED, PACK } from "./ingested.spec.ts";
 
 /** By a cube's id, its group and type (`ground.land`). */

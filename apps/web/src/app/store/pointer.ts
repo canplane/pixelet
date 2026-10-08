@@ -10,7 +10,7 @@
 
 import { Keyboard } from "react-native";
 
-import type { f64, i32 } from "@xpute/core/abi/word.ts";
+import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_pointer } from "@/kernel/control/input.ts";
 import { DockMode, useUiStore } from "@/app/store/ui.ts";

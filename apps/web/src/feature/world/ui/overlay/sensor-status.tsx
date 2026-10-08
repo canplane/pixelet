@@ -2,7 +2,7 @@
 
 import { StyleSheet, View } from "react-native";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 
 import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";

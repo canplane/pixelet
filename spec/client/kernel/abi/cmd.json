@@ -1,6 +1,6 @@
 {
   "doc": [
-    "The kernel's commands, by number (@xpute/core/abi/cmd.ts: `major << 8 | minor`),",
+    "The kernel's commands, by number (@xpute/kit/abi/cmd.ts: `major << 8 | minor`),",
     "and the packet each carries — an XTP branch whose children are its fields, in",
     "order. A command with no fields carries no packet. The kernel is the process; the",
     "JavaScript around it is two things to it, its host, which holds the devices and",

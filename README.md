@@ -185,7 +185,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 ├── spec/                     # JSON every language is generated from (pxl-tool),
 │                             #   grouped as crates/ is: spec/, client/
 ├── xpute/                    # The system under it, its own repository's root and workspaces:
-│                             #   rust/, ts/ and cpp/ by language: core, guest, host; spec/ the contract
+│                             #   rust/, ts/ and cpp/ by language: kit, guest, host; spec/ the contract
 ├── asset/                    # Shipped models, texture pack and sky, imported by nothing
 ├── script/                   # the tree's checks, the deployment smoke, the usage report
 ├── infra/                    # local and production compose files, and what fills db-geo

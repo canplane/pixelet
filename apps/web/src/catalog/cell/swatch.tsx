@@ -2,7 +2,7 @@
 
 import { Image, type StyleProp, View, type ViewStyle } from "react-native";
 
-import type { u8 } from "@xpute/core/abi/word.ts";
+import type { u8 } from "@xpute/kit/abi/word.ts";
 import type { DecorId } from "@/catalog/cell/decor.spec.ts";
 import { decorName, type PlaceableCube, placeableCubeHex, placeableCubeId } from "@/catalog/cell/mod.ts";
 import { shippedTopTextureKey } from "@/catalog/asset/texture.ts";

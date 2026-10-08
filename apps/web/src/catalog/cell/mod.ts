@@ -5,7 +5,7 @@
  * kernel's numbers; names are looked up only for display.
  */
 
-import type { u16 } from "@xpute/core/abi/word.ts";
+import type { u16 } from "@xpute/kit/abi/word.ts";
 import palette from "./color.spec.ts";
 import { cube_section, cube_types, type CubeSection } from "./cube_type.spec.ts";
 import { decor_types, type DecorId } from "./decor.spec.ts";

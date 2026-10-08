@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::io::demand::Why;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::errno::Errno;
 
 use crate::io::demand::Order;
 use crate::io::failure::{Ended, Failure, Outcome};

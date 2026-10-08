@@ -8,7 +8,7 @@ use super::*;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::cell::object::{placeable_cube_num_id, PlaceableCube};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use xpute_core::math::rng::SplitMix64;
+use xpute_kit::math::rng::SplitMix64;
 
 fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
     Pvf3 { i: ivec::gather(x, y, z), f: 0 }

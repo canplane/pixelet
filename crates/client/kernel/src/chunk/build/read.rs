@@ -16,8 +16,8 @@ use crate::chunk::Chunk as PyramidChunk;
 use crate::layer::terrain::Source;
 use crate::layer::Layer as _;
 use crate::layer::{Answer, Query};
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use super::*;
 

@@ -1,9 +1,9 @@
 // @pxl/web/kernel/shell.ts
 
-import type { U8Array } from "@xpute/core/abi/array.ts";
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { FaultError } from "@xpute/core/status/error.ts";
-import type { Errno } from "@xpute/core/status/errno.spec.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
+import { FaultError } from "@xpute/kit/status/error.ts";
+import type { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
 import { ring_now, send_input } from "@/kernel/sched.ts";

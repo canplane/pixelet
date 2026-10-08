@@ -5,8 +5,8 @@ import { useTranslation } from "react-i18next";
 import { Keyboard, PanResponder, PixelRatio, Pressable, ScrollView, StyleSheet, type TextInput, View } from "react-native";
 import { PAN_X } from "@platform/gesture.ts";
 
-import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
-import { round } from "@xpute/core/math/scalar.ts";
+import type { f64, u32, u8 } from "@xpute/kit/abi/word.ts";
+import { round } from "@xpute/kit/math/scalar.ts";
 import { Backing } from "@platform/backing.tsx";
 import type { GlyphName } from "@platform/icon.tsx";
 import { BackingPlace } from "@/shared/ui/backing.ts";

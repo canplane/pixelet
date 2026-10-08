@@ -8,8 +8,8 @@ use crate::mesh::{grow, try_push, Refused};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::zoom::count;
 use pxl_spec::space::layer::lattice::GROUND_FOLD;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 /// The ring of neighbor columns a run set carries. Without it the face mask
 /// read every chunk seam as open air, losing occlusion, creases and culling
@@ -69,7 +69,7 @@ impl RunWriter {
         if self.open {
             return false;
         }
-        xpute_core::ensure!(span <= COL_SPAN, EINVAL, span);
+        xpute_kit::ensure!(span <= COL_SPAN, EINVAL, span);
         self.runs.clear();
         self.open = true;
         self.span = span;
@@ -80,7 +80,7 @@ impl RunWriter {
 
     pub fn column(&mut self, col: u32) {
         let next = self.next_col.or_bug(Errno::ENOTRECOVERABLE);
-        xpute_core::ensure!(col < self.span * self.span, ENOSPC);
+        xpute_kit::ensure!(col < self.span * self.span, ENOSPC);
         for c in next..=col {
             self.starts[c as usize] = self.runs.len() as u32;
         }
@@ -88,7 +88,7 @@ impl RunWriter {
     }
 
     pub fn run(&mut self, z0: i32, z1: i32, material: u32, layer_idx: u8) -> Result<(), Refused> {
-        xpute_core::ensure!(self.next_col.is_some_and(|n| n > 0), ENOTRECOVERABLE);
+        xpute_kit::ensure!(self.next_col.is_some_and(|n| n > 0), ENOTRECOVERABLE);
         try_push(&mut self.runs, run_of(z0, z1, material, layer_idx))
     }
 
@@ -108,9 +108,9 @@ impl RunWriter {
     /// `ptr` must address at least the bytes asked for, 4-aligned, and be
     /// the caller's to write.
     pub unsafe fn provide_set(&mut self, ptr: *mut u8, bytes: u32) {
-        xpute_core::ensure!(self.open && self.next_col.is_none() && !self.packed, ENOTRECOVERABLE);
+        xpute_kit::ensure!(self.open && self.next_col.is_none() && !self.packed, ENOTRECOVERABLE);
         let need = self.set_bytes();
-        xpute_core::ensure!(bytes >= need, ENOTRECOVERABLE, bytes, need);
+        xpute_kit::ensure!(bytes >= need, ENOTRECOVERABLE, bytes, need);
         let n = self.runs.len();
         let mut at = ptr;
         let mut words = |len: usize| {
@@ -145,7 +145,7 @@ impl RunWriter {
     }
 
     pub fn finish(&mut self) -> u32 {
-        xpute_core::ensure!(self.open && self.packed, ENOTRECOVERABLE);
+        xpute_kit::ensure!(self.open && self.packed, ENOTRECOVERABLE);
         self.open = false;
         self.runs.len() as u32
     }
@@ -202,8 +202,8 @@ impl<'a> RunSet<'a> {
     /// Alignment and length are checked, so a wrong block panics rather than misreads.
     pub fn carve(bytes: &'a [u8], count: u32, span: u32, apron: u32) -> RunSet<'a> {
         let need = run_set_bytes(count, span) as usize;
-        xpute_core::ensure!(bytes.len() >= need, EINVAL, bytes.len(), need);
-        xpute_core::ensure!((bytes.as_ptr() as usize).is_multiple_of(4), EINVAL);
+        xpute_kit::ensure!(bytes.len() >= need, EINVAL, bytes.len(), need);
+        xpute_kit::ensure!((bytes.as_ptr() as usize).is_multiple_of(4), EINVAL);
         let base = bytes.as_ptr();
         let n = count as usize;
         let cols = (span * span + 1) as usize;

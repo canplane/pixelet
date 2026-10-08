@@ -4,7 +4,7 @@
 //! tile. The interpolant lives here because the index lane's bound is true
 //! only of the function that draws it.
 
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, EXTENT_CELL, TILE_ELE_SPAN};
 use super::separation::Separation;

@@ -63,7 +63,7 @@ impl Pipelines {
         if let Some(&(_, id)) = self.layouts[..self.layout_len].iter().find(|(k, _)| *k == key) {
             return id;
         }
-        xpute_core::ensure!(self.layout_len < LAYOUTS, ENOSPC, LAYOUTS);
+        xpute_kit::ensure!(self.layout_len < LAYOUTS, ENOSPC, LAYOUTS);
         let id = object();
         g.layout(id, entries);
         self.layouts[self.layout_len] = (key, id);
@@ -77,7 +77,7 @@ impl Pipelines {
             return b;
         }
         let words = record_of(id);
-        xpute_core::ensure!(!words.is_empty(), ENOTRECOVERABLE, id);
+        xpute_kit::ensure!(!words.is_empty(), ENOTRECOVERABLE, id);
         let module = self.module(g, words[0]);
         let mut b = Built::default();
         let mut at = HEAD as usize;
@@ -96,7 +96,7 @@ impl Pipelines {
         }
         b.pipeline = object();
         g.pipeline(b.pipeline, &words, &b.layouts[..groups], module, format);
-        xpute_core::ensure!(self.built_len < BUILT, ENOSPC, BUILT);
+        xpute_kit::ensure!(self.built_len < BUILT, ENOSPC, BUILT);
         self.built[self.built_len] = (key, b);
         self.built_len += 1;
         b

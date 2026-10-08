@@ -19,13 +19,13 @@ use layout::DOOR_LAYOUT;
 use pxl_spec::bake::division_tile::DivisionTile;
 use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::bake::place_tile::PlaceTile;
-use xpute_core::status::errno::Errno;
-use xpute_core::wire::xtp::PacketWriter;
 use xpute_guest::global::Global;
 use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_guest::ipc::door::Door;
 use xpute_guest::ipc::ring::Ring;
 use xpute_guest::mem::base::{off_of, off_of_slice, ptr_at};
+use xpute_kit::status::errno::Errno;
+use xpute_kit::wire::xtp::PacketWriter;
 
 pub struct Bracket {
     pub given: u32,
@@ -105,7 +105,7 @@ fn boot(b: &Bracket) {
     crate::io::host::set_last_words(b.last_words);
     executor::install();
     // Named invariants report through `bug!`; a core panic reports only its location.
-    xpute_core::status::bug::set_report(crate::io::host::host_bug);
+    xpute_kit::status::bug::set_report(crate::io::host::host_bug);
     std::panic::set_hook(Box::new(|info| {
         if crate::io::host::stopped() {
             return;

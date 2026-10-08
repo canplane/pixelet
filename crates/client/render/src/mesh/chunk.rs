@@ -6,7 +6,7 @@
 //! blocks of any size (`Step::NeedMesh`, `Step::Full`).
 
 use pxl_spec::space::coord::v3::V3;
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use crate::look::color::{linear, srgb};
 use crate::mesh::paint::palette::layer_mean;
@@ -14,8 +14,8 @@ use crate::mesh::run::{OwnedRunSet, RunSet, COL_SPAN};
 use crate::mesh::word::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, MaterialClasses, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::{grow, Refused};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 const LOW_FILL_THRESHOLD: f64 = 0.25;
 
@@ -296,7 +296,7 @@ impl BakeContext {
     /// chunk's heights, and every step reads the cut set. One bake at a time.
     #[allow(clippy::too_many_arguments)]
     pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, (rows, boxes): (u32, u32), clip: Option<(i32, i32)>) -> Result<(), Refused> {
-        xpute_core::ensure!(self.open.is_none(), ENOTRECOVERABLE);
+        xpute_kit::ensure!(self.open.is_none(), ENOTRECOVERABLE);
         (self.rows, self.boxes) = (rows, boxes);
         self.refused = false;
         match clip {
@@ -314,7 +314,7 @@ impl BakeContext {
             (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, z_unit) } else { Heights::default() })
         };
         self.textured = textured;
-        xpute_core::ensure!(span <= COL_SPAN, ENOSPC, span, COL_SPAN);
+        xpute_kit::ensure!(span <= COL_SPAN, ENOSPC, span, COL_SPAN);
         // Reserved up front: doubling on a dense chunk held the old block and the new together.
         self.surviving.reserve((count as usize) * 6);
         self.done = false;
@@ -328,7 +328,7 @@ impl BakeContext {
         } else {
             let scale = round(unit / z_unit) as u32;
             let inner = span - 2 * apron;
-            xpute_core::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), EINVAL, lod_step, inner);
+            xpute_kit::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), EINVAL, lod_step, inner);
             Open::Coarse(CoarseBake {
                 lod_step,
                 scale,
@@ -395,9 +395,9 @@ impl BakeContext {
     /// `ptr` must address `words` words, 4-aligned, and stay valid and
     /// otherwise untouched until the block is full, or `finish` or `abort`.
     pub unsafe fn provide_mesh(&mut self, ptr: *mut u32, words: u32) {
-        xpute_core::ensure!(self.mesh_words > 0 && (self.mesh.is_none() || self.full()), ENOTRECOVERABLE);
+        xpute_kit::ensure!(self.mesh_words > 0 && (self.mesh.is_none() || self.full()), ENOTRECOVERABLE);
         let left = self.left_words();
-        xpute_core::ensure!(words >= self.box_words.min(left) && words <= left, ENOTRECOVERABLE, words, left);
+        xpute_kit::ensure!(words >= self.box_words.min(left) && words <= left, ENOTRECOVERABLE, words, left);
         let words = words - words % self.box_words;
         self.mesh = Some(MeshTarget {
             ptr,
@@ -407,7 +407,7 @@ impl BakeContext {
     }
 
     pub fn finish(&mut self) -> Mesh {
-        xpute_core::ensure!(self.done && self.open.is_some(), ENOTRECOVERABLE);
+        xpute_kit::ensure!(self.done && self.open.is_some(), ENOTRECOVERABLE);
         self.open = None;
         self.mesh = None;
         self.surviving.clear();
@@ -873,7 +873,7 @@ impl BakeContext {
 const LONE_BOX_FACES: u32 = ALL_FACES | ALL_CREASES;
 /// The hover ghost's box, written as a bake writes one so it is lit as a placed cube is.
 pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) -> Heights {
-    xpute_core::ensure!(m.len() == FINE_BOX_WORDS as usize, ENOTRECOVERABLE);
+    xpute_kit::ensure!(m.len() == FINE_BOX_WORDS as usize, ENOTRECOVERABLE);
     let heights = Heights { floor: 0.0, step: size / Z_STEPS };
     write_box(m, [0.0; 3], [size; 3], rgb, taps_of(layer), LONE_BOX_FACES, size, heights);
     heights

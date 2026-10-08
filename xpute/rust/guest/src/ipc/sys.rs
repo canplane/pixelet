@@ -7,7 +7,7 @@
 
 use core::panic::Location;
 
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::errno::Errno;
 
 use crate::ipc::stream::{record_bytes, Stream};
 use crate::mem::base::off_of_slice;
@@ -78,7 +78,7 @@ impl Sys {
 
     /// `op` carries the PROGRAM bit.
     pub fn call(&mut self, op: u32, args: &[u32], bytes: &[u8]) {
-        xpute_core::ensure!(op & spec::op::PROGRAM != 0, EINVAL, op);
+        xpute_kit::ensure!(op & spec::op::PROGRAM != 0, EINVAL, op);
         self.stream.record(op, args, &[], Some(bytes));
     }
 

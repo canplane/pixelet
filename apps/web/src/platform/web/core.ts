@@ -7,7 +7,7 @@
  * an `application/wasm` response, which a `file:` URL under Deno lacks.
  */
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { reserve_memory } from "@xpute/host/mem/reserve.ts";
 import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem/mem.spec.ts";
 import { key } from "@/kernel/abi/directory.spec.ts";

@@ -5,7 +5,7 @@
  * kernel's alone; the shell holds addresses the kernel handed out.
  */
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Doorbell } from "@xpute/host/ipc/doorbell.ts";
 import { openCore } from "@platform/core.ts";
 import { key } from "@xpute/host/ipc/directory.spec.ts";

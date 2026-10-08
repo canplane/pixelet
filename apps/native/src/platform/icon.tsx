@@ -3,7 +3,7 @@
 import { SymbolView, type SymbolViewProps } from "expo-symbols";
 import { ActivityIndicator, View } from "react-native";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { GlyphName, IconProps } from "../../../web/src/platform/web/icon.tsx";
 
 export type { GlyphName, IconProps };

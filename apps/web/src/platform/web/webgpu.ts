@@ -6,8 +6,8 @@
  * module reaches WebGPU no other way.
  */
 
-import type { U32Array } from "@xpute/core/abi/array.ts";
-import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
+import type { U32Array } from "@xpute/kit/abi/array.ts";
+import type { f32, f64, u32 } from "@xpute/kit/abi/word.ts";
 import { handle_slot } from "@xpute/host/abi/handle.ts";
 import { bytes_of, each_record, text_of } from "@xpute/host/ipc/stream.ts";
 

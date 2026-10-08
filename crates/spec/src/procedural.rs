@@ -5,8 +5,8 @@
 
 use std::collections::TryReserveError;
 
-use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
-use xpute_core::math::scalar::round;
+use xpute_kit::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
+use xpute_kit::math::scalar::round;
 
 use crate::bake::format::GroundCell;
 use crate::bake::separation::{slab_depth, Crossing, Occupies, STACKED_DECK_HEADROOM_M};

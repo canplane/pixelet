@@ -4,7 +4,7 @@ import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
 
-import type { f64, u8 } from "@xpute/core/abi/word.ts";
+import type { f64, u8 } from "@xpute/kit/abi/word.ts";
 import { decorKinds, decorSection, type PlaceableCube, placeableCubeId, placeableCubes, placeableCubeSection } from "@/catalog/cell/mod.ts";
 
 import { useInHand, useUiStore } from "@/app/store/ui.ts";

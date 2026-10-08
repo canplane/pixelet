@@ -62,7 +62,7 @@ pub fn decor_num_id(id: DecorId) -> u32 {
 pub fn decor_id_from_num(num_id: u32) -> DecorId {
     match u16::try_from(num_id).ok().and_then(decor_types::Decor::of) {
         Some(id) => id,
-        None => xpute_core::bug!(ENOTRECOVERABLE, num_id),
+        None => xpute_kit::bug!(ENOTRECOVERABLE, num_id),
     }
 }
 

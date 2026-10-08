@@ -9,8 +9,8 @@
 
 use std::collections::HashMap;
 
-use xpute_core::status::error::MarshalError;
-use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_kit::status::error::MarshalError;
+use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::bake::fold::majority;
 use crate::bake::format::{occupancy_of, Occupancy};
@@ -130,7 +130,7 @@ fn check(cells: &[u32], parents: &[u32]) -> Result<(), MarshalError> {
 struct DivisionTileView<'a> {
     cells: &'a [u32],
     pub occupancy: Occupancy,
-    ids: xpute_core::wire::xtp::Strs<'a>,
+    ids: xpute_kit::wire::xtp::Strs<'a>,
     subtypes: &'a [u8],
     parents: &'a [u32],
     prominence: &'a [u8],

@@ -2,8 +2,8 @@
 
 /** Decoded by the core off the JS thread. */
 
-import type { U8Array } from "@xpute/core/abi/array.ts";
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 import { PLATFORM } from "./module.ts";
 
 /** False for a file the core does not decode. Top row first, no color conversion, not premultiplied. */

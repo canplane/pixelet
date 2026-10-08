@@ -5,7 +5,7 @@
 //! stored default would be a decision nobody made, and changing it in source
 //! would then reach only people with empty storage.
 
-use xpute_core::codec::json::{read_json, JsonKind};
+use xpute_kit::codec::json::{read_json, JsonKind};
 
 use crate::io::file::{self, Kept};
 use crate::io::host::development;

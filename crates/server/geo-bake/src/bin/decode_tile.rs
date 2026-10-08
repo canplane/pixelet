@@ -34,8 +34,8 @@ use pxl_spec::cell::cube_types::{ground, sentinel, Ground};
 use pxl_spec::space::coord::zoom::idx;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{Tile as Placed, LEAF_ZOOM};
-use xpute_core::math::scalar::round;
-use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
+use xpute_kit::math::scalar::round;
+use xpute_kit::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
 

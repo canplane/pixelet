@@ -43,16 +43,16 @@ The tree is grouped by where a thing runs (`xpute/`, `crates/{spec,client,server
 README.md has the map. Three lines erode by accident:
 
 - **xpute holds no domain.** No coordinates, terrain, tiles or Overture in
-  `xpute-core` or `@xpute/core`; those are `pxl-spec`'s. The view
+  `xpute-kit` or `@xpute/kit`; those are `pxl-spec`'s. The view
   (`pxl-render`) knows the model and nothing of the kernel (`pxl-kernel`).
-- **`core` is taken as it is; `guest` and `host` ask you to run their way**
+- **`kit` is taken as it is; `guest` and `host` ask you to run their way**
   — a turn on a doorbell, a quota from the frame, I/O asked of the host.
-  Both depend on `core`, never the reverse. `core` is symmetric across every
+  Both depend on `kit`, never the reverse. `kit` is symmetric across every
   language xpute is written in, held to it by the golden records under
   `xpute/spec/golden/`. `guest` and `host` are the two ends of one
   arrangement, named by role, not language: a module missing on one side is
   no gap, only the format must agree, and the guests in different languages
-  are symmetric as `core` is, each in its own language's shape. Never number the languages, hosts or
+  are symmetric as `kit` is, each in its own language's shape. Never number the languages, hosts or
   guests: the count is stale the day one more arrives.
 - **`pxl-spec` is the one model and has no TypeScript twin.** The shell reads
   a tile through the kernel, never by decoding one; what it holds — the cell
@@ -287,7 +287,7 @@ for a millisecond or coordinate; `u64` for a key; `i32` for what can be
 platform's, which `crates/clippy.toml` refuses.
 
 **`pxl` is for code, `pixelet` for infrastructure.** Import paths and storage
-keys abbreviate (`@xpute/core`, `pxl:lang`); provisioned resources spell it
+keys abbreviate (`@xpute/kit`, `pxl:lang`); provisioned resources spell it
 out (`pixelet-db-geo`, `pixelet-tiles`).
 
 **Comments are few and short**: a few words at the line they explain, saying

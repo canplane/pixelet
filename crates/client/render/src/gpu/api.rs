@@ -20,9 +20,9 @@ use xpute_guest::abi::handle::HandleTable;
 
 use crate::gpu::api_spec::resource;
 
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 pub mod buffer_usage {
     pub const COPY_SRC: u32 = 0x0004;

@@ -6,9 +6,9 @@
  * host still reads a newer guest.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { Errno } from "@xpute/core/status/errno.spec.ts";
-import { MarshalError } from "@xpute/core/status/error.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { MarshalError } from "@xpute/kit/status/error.ts";
 import type { QuantumPolicy } from "../sched/quantum.ts";
 import { HEAD, key, MAGIC, QUANTUM_SCALE, VERSION } from "./directory.spec.ts";
 

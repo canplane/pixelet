@@ -6,9 +6,9 @@
  * only until the next turn, so each read copies into plain objects.
  */
 
-import type { F64Array } from "@xpute/core/abi/array.ts";
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { td } from "@xpute/core/codec/encoding.ts";
+import type { F64Array } from "@xpute/kit/abi/array.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import { td } from "@xpute/kit/codec/encoding.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
 import { CATEGORY_NAMES, OUTCOME_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/demand.spec.ts";

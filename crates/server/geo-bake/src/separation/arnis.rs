@@ -35,7 +35,7 @@ use pxl_spec::bake::separation::{footprint as line_reach, Form, STACKED_DECK_HEA
 use pxl_spec::bake::way::half_cells;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer, u_per_m};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId, Segment};
 use crate::separation::elevation::{sample_cells, tile_of};

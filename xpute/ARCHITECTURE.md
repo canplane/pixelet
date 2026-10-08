@@ -4,7 +4,7 @@
 
 That split is an exokernel's with its library operating system more than an operating system's with a process: the outer side grants concrete resources, a real region and a real quota, and their management lives with the program. Nothing is virtualized, and the guest knows exactly what it was given. Unlike an exokernel, the split is not a protection boundary for a guest that is not trusted, and nothing enforces the grant: a guest can spend a whole quota inside one function, and the host cannot take the turn back until it returns.
 
-xpute is that arrangement, in two layers. `core` is generic code — collections, codecs, a wire format, an errno table, scalar math — that any program can link and call, host or no host. `guest` and `host` are the arrangement itself, one end each: the memory, the messages, the turn. They are written against `core`, and `core` knows nothing of them. `core` exists in every language xpute has, and each end in the languages that end is built in; what that means for each of them is the last section, once the pieces have names.
+xpute is that arrangement, in two layers. `kit` is generic code — collections, codecs, a wire format, an errno table, scalar math — that any program can link and call, host or no host. `guest` and `host` are the arrangement itself, one end each: the memory, the messages, the turn. They are written against `kit`, and `kit` knows nothing of them. `kit` exists in every language xpute has, and each end in the languages that end is built in; what that means for each of them is the last section, once the pieces have names.
 
 Neither layer knows what a guest computes. No domain type of any kind reaches them, which is what lets the arrangement carry from the program it was written for to the next one.
 
@@ -20,7 +20,7 @@ What goes in the memory is the guest's business; placing it is the guest end's. 
 
 The memory need not begin at address zero. A WebAssembly module's linear memory does; a guest linked into a native program is given one region instead, wherever the system put it. So every address a guest names — a heap block, a range, a ring, what a record hands its host — is an offset from the memory's base and never a pointer (`mem/base`): a number means the same to the host however the guest is built, and it fits the `u32` a record carries however wide the machine's pointers are. A pointer becomes an offset in one place (`off_of`), and one outside the memory is refused rather than passed on, since a static or a read-only constant lies where the linker put it and not in the region. An empty slice names nothing and is offset 0, since its pointer is only its alignment.
 
-The last range is the heap, and blocks come out of it through a single call (`mem/heap`). What answers that call is the guest's choice. `core` offers two allocators that fit together. The lower one is a buddy allocator, which hands out fixed pages over a given span (`alloc/buddy_tree.rs`, ported from evanw/buddy-malloc). Above it sits a slab allocator holding size classes (`alloc/slab.rs`), so that a small request takes a slot of its own class instead of a whole page. The slab keeps its bookkeeping inside the blocks it has not handed out, so what it costs does not grow with the span it covers.
+The last range is the heap, and blocks come out of it through a single call (`mem/heap`). What answers that call is the guest's choice. `kit` offers two allocators that fit together. The lower one is a buddy allocator, which hands out fixed pages over a given span (`alloc/buddy_tree.rs`, ported from evanw/buddy-malloc). Above it sits a slab allocator holding size classes (`alloc/slab.rs`), so that a small request takes a slot of its own class instead of a whole page. The slab keeps its bookkeeping inside the blocks it has not handed out, so what it costs does not grow with the span it covers.
 
 The buddy is not ours: it was written for this same situation, a module handed one heap with no system allocator beneath it.
 
@@ -30,7 +30,7 @@ Where anything lies is the guest's choice, so the host has to be told. The guest
 
 ## The message, and the rings that carry it
 
-Sharing a memory does not say what a request looks like. Every request and every answer in xpute is the same four words (`ipc/frame`): who asked (`tag`), what is asked (`cmd` in the low 16 bits, flags in the high 16), what came back (`result`, a value or `-errno`), and where the packet is. An errno is one table's (`spec/status/errno.json`), and every language reads a code back into its member — `Errno::of` in Rust, `errno_of` in the others — or into none where the table names no such code. A command number is two bytes, `major << 8 | minor` (`core abi/cmd`). The majors below `0x10` are xpute's, every program's commands — the rings' own test and the answer to a file's open (`guest`'s and `host`'s `abi/cmd`) — and a program numbers its own from `0x10` in a table that names xpute's as its base, so no number is given out twice.
+Sharing a memory does not say what a request looks like. Every request and every answer in xpute is the same four words (`ipc/frame`): who asked (`tag`), what is asked (`cmd` in the low 16 bits, flags in the high 16), what came back (`result`, a value or `-errno`), and where the packet is. An errno is one table's (`spec/status/errno.json`), and every language reads a code back into its member — `Errno::of` in Rust, `errno_of` in the others — or into none where the table names no such code. A command number is two bytes, `major << 8 | minor` (`kit abi/cmd`). The majors below `0x10` are xpute's, every program's commands — the rings' own test and the answer to a file's open (`guest`'s and `host`'s `abi/cmd`) — and a program numbers its own from `0x10` in a table that names xpute's as its base, so no number is given out twice.
 
 Two of the flags in that high half decide what a message means. `ACKREQ` is set by whoever submits, and asks for an answer. `RES` is set by whoever completes, and says the message is an answer — to a call that asked for one, or to a call that failed. A completion without `RES` answers nothing: the guest raised it on its own, and whoever cares about it listens for it.
 
@@ -84,7 +84,7 @@ These are a service the boundary carries, not rules of the boundary, so their tr
 
 ## The packet
 
-The address in a message points at a packet, and every packet on the rings has the same shape. That shape is **XTP**, the Xpute Tree Packet (`core wire/xtp`), and one decision explains the rest of it: nothing inside a packet records where the packet is. Every offset is counted from the branch that holds it, so the same bytes mean the same thing at any address.
+The address in a message points at a packet, and every packet on the rings has the same shape. That shape is **XTP**, the Xpute Tree Packet (`kit wire/xtp`), and one decision explains the rest of it: nothing inside a packet records where the packet is. Every offset is counted from the branch that holds it, so the same bytes mean the same thing at any address.
 
 ```text
 one branch at byte 0, three children. Each offset is measured from that
@@ -109,9 +109,9 @@ Three things follow. A payload in a ring slot is read where it lies instead of b
 
 The rest is layout. A tree of scalar leaves, typed-array sequences and branch nodes, little-endian, its tables and headers on 8-byte words, with two words of packet header first — the magic, then the root's size and type. A branch entry carries its child's type whether or not the child is there, so an optional node that is absent still says what it would have been.
 
-The format in full, and the API that writes it, is [the note beside the TypeScript implementation](./ts/core/src/wire/xtp/README.md), which the other languages mirror.
+The format in full, and the API that writes it, is [the note beside the TypeScript implementation](./ts/kit/src/wire/xtp/README.md), which the other languages mirror.
 
-**TLV** (`core wire/tlv`) is the other format: a forward-only sequence of typed values, each tag naming its payload's type and length, closed by END. Where XTP is a structured value kept and walked where it lies, a TLV is read once, in order, and nothing it has passed is kept — an argument list as much as values arriving over time. Its reader says how a sequence stopped, at END or where the input ran out between two values, and what either means is the user's: a message may require END, and a journal cut short by its writer is a readable prefix. Both live in `core`, because neither knows anything about the program using it.
+**TLV** (`kit wire/tlv`) is the other format: a forward-only sequence of typed values, each tag naming its payload's type and length, closed by END. Where XTP is a structured value kept and walked where it lies, a TLV is read once, in order, and nothing it has passed is kept — an argument list as much as values arriving over time. Its reader says how a sequence stopped, at END or where the input ran out between two values, and what either means is the user's: a message may require END, and a journal cut short by its writer is a readable prefix. Both live in `kit`, because neither knows anything about the program using it.
 
 ---
 
@@ -183,7 +183,7 @@ one 32-bit handle
 
 A table is fixed at N slots and never grows; one over values a side keeps (`Slots`) grows as they come, and gives a removed value's handle to nothing. Slot 0 is never handed out, so 0 is never a valid handle and can be used for "none". A guest's file descriptors are handles of its file table (`ipc/file`), which is why an answer for one already closed finds nothing.
 
-Handles are in `guest` and `host` rather than `core` because a handle is one side of a boundary, not a container.
+Handles are in `guest` and `host` rather than `kit` because a handle is one side of a boundary, not a container.
 
 ---
 
@@ -210,24 +210,24 @@ The unit the contract describes is one host and one guest. Several guests under 
 
 Everything above is implemented in more than one language, and the implementations do not all stand in the same relation.
 
-`core` is symmetric. Each language implements the same kit, and the golden records hold them to each other wherever they must produce identical bytes. `guest` and `host` have two relations. A host end and a guest end are the two ends of one arrangement, any host facing any guest, and a module with nothing facing it across the boundary is not a gap waiting to be filled: what the two ends must agree on is not their module lists but the contract above, and the formats it travels in — the directory, the message's four words, the ring's layout, the stream's records. Its guest ends in different languages are the same end, any of them plugged into any host, so they are symmetric as `core` is: what one guest gives a program, every other gives too, in its own language's shape; and so are host ends, should there be more than one.
+`kit` is symmetric. Each language implements the same kit, and the golden records hold them to each other wherever they must produce identical bytes. `guest` and `host` have two relations. A host end and a guest end are the two ends of one arrangement, any host facing any guest, and a module with nothing facing it across the boundary is not a gap waiting to be filled: what the two ends must agree on is not their module lists but the contract above, and the formats it travels in — the directory, the message's four words, the ring's layout, the stream's records. Its guest ends in different languages are the same end, any of them plugged into any host, so they are symmetric as `kit` is: what one guest gives a program, every other gives too, in its own language's shape; and so are host ends, should there be more than one.
 
 **Rust** (`rust/`)
 
-- `core`: `abi` words and the command number · `alloc` slab and buddy · `codec` JSON · `collection` arena, deque, heap · `math` scalar, rng · `status` errno, error, bug · `wire` XTP, TLV · `golden` the record reader.
+- `kit`: `abi` words and the command number · `alloc` slab and buddy · `codec` JSON · `collection` arena, deque, heap · `math` scalar, rng · `status` errno, error, bug · `wire` XTP, TLV · `golden` the record reader.
 - `guest`: `mem` sections, the base, the heap door and a heap to install between bounds the guest gives · `module` what a WebAssembly guest reads of its module: where the linker stopped, the memory given, the host's clock · `ipc` directory, frame, ring, stream, sys and the file table, the guest's door · `sched` quantum, tick, pass, task, edge · `abi` commands, handles · `clock` · `global`.
 
 **TypeScript** (`ts/`)
 
-- `core`: `abi` `codec` `collection` `math` `status` `wire` `golden` as the Rust, plus `kit` (comparators, iterators, types) and `env` (feature detection); no `alloc`, since a TypeScript program has no linear heap of its own, and no `bug`, since a thrown error carries its stack.
+- `kit`: `abi` `codec` `collection` `math` `status` `wire` `golden` as the Rust, plus `lang` (comparators, iterators, types) and `env` (feature detection); no `alloc`, since a TypeScript program has no linear heap of its own, and no `bug`, since a thrown error carries its stack.
 - `host`: `mem` the reservation · `ipc` directory, frame, ring, stream, sys, the host's doorbell · `sched` quantum, **strobe** · `abi` commands, handles.
 
 **C++** (`cpp/`)
 
-- `core`: `abi` `alloc` `codec` `collection` `math` `status` `wire` `golden` as the Rust, and `codec` hex, base64url and FNV, which the Rust takes as crates.
+- `kit`: `abi` `alloc` `codec` `collection` `math` `status` `wire` `golden` as the Rust, and `codec` hex, base64url and FNV, which the Rust takes as crates.
 - `guest`: `mem` the memory, sections and the heap door · `ipc` directory, frame, ring, stream, sys and the file table, the guest's door · `sched` quantum, tick, pass, task, edge · `abi` commands, handles · `clock`.
 
-The two layers differ in what they ask of a program. `core` asks nothing: link it and call it. `guest` and `host` ask a program to run xpute's way — memory granted once, work in turns, I/O by asking.
+The two layers differ in what they ask of a program. `kit` asks nothing: link it and call it. `guest` and `host` ask a program to run xpute's way — memory granted once, work in turns, I/O by asking.
 
 C++ is an implementation beside the Rust, not a part of it: written from the contract and the formats rather than from the Rust, built by the platform's compiler (`script/cpp.ts`) rather than through Cargo, and held by the same records and the same traces. That is the point of it — what the guests agree on is what the boundary shows, and not what one was copied from. Where it differs, the language is why: it writes the codecs the standard library lacks; its XTP reads a packet without allocating, handing back views of it, and loads an element where it lies rather than viewing it in place; a task is a C++20 coroutine where Rust's is a future, woken through the executor it runs on; and the memory is a value a call names rather than one base per module, so a native host may run several guests in one process. It has no `global`, the one value per module Rust needs a type for and C++ has as a plain static. It is C++ where that says something C would not — RAII, a template, a `Result` where exceptions would be — and plain where it does not, with no exceptions, no RTTI and none of the standard library's heavier surface. Its numbers — the errno table, the directory's keys, a frame's and a ring header's words — come from `spec/` as the other languages' do; how it reads and writes them is its own.
 
@@ -235,7 +235,7 @@ C++ is an implementation beside the Rust, not a part of it: written from the con
 
 ## The golden records
 
-Under `spec/golden/` are lines of `path<TAB>value`, produced once, checked once, and frozen. They are read by splitting each line and nothing more (`core golden`), so the records cannot drift because a parser changed.
+Under `spec/golden/` are lines of `path<TAB>value`, produced once, checked once, and frozen. They are read by splitting each line and nothing more (`kit golden`), so the records cannot drift because a parser changed.
 
 There are two kinds, and the difference decides whether a record may ever be re-recorded.
 

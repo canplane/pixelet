@@ -2,7 +2,7 @@
 
 /** The host as an interrupt source: drivers translate their events into these. */
 
-import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
+import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import {
   type ActiveTool,
   Command,

@@ -6,8 +6,8 @@
  * as a file, since the clipboard handles that size badly.
  */
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { round } from "@xpute/core/math/scalar.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import { round } from "@xpute/kit/math/scalar.ts";
 
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { saveFile } from "@platform/save.ts";

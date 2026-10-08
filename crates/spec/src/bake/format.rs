@@ -2,8 +2,8 @@
 
 //! A baked terrain tile and its wire: `[ele, ground, extent, occupancy, separation]`.
 
-use xpute_core::status::error::MarshalError;
-use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_kit::status::error::MarshalError;
+use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use std::borrow::Cow;
 
@@ -131,7 +131,7 @@ impl Index {
 
 /// Each coarser cell from the four under it.
 fn coarse_of(lane: &[[i16; 2]], coarse: &mut [[i16; 2]]) {
-    xpute_core::ensure!(lane.len() == EXTENT_LANE && coarse.len() == COARSE_LANE, ENOTRECOVERABLE);
+    xpute_kit::ensure!(lane.len() == EXTENT_LANE && coarse.len() == COARSE_LANE, ENOTRECOVERABLE);
     let n = EXTENT.tile_cells();
     for j in 1..=n.trailing_zeros() {
         let side = 1u32 << j;

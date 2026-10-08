@@ -5,9 +5,9 @@
  * everything. Nothing is decided here.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
-import type { BranchCursor } from "@xpute/core/wire/xtp/mod.ts";
-import { strerror } from "@xpute/core/status/errno.spec.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
+import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { Command, encode_world_boot, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/kernel/abi/cmd.spec.ts";
 import {
   geolocationStart,

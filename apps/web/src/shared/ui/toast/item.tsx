@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { type GestureResponderHandlers, PixelRatio, StyleSheet, Text, View } from "react-native";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Spinner } from "@platform/icon.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL, STATUS } from "@platform/palette.ts";

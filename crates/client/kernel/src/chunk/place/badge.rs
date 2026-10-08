@@ -21,8 +21,8 @@ use pxl_render::gpu::sheet::SHEET_SCALE;
 use pxl_spec::cell::marker::MARKER_SHOWN_FROM;
 use xpute_guest::global::Global;
 
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 /// A marker's pill and where it stands, down from its top.
 const MARKER_HEIGHT: f64 = 37.0;

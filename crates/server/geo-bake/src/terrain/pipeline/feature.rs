@@ -5,7 +5,7 @@
 use crate::terrain::CELL_U;
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, G3857};
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use crate::wkb::WkbGeometry;
 

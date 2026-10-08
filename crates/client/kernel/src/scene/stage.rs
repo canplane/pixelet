@@ -21,7 +21,7 @@ use xpute_guest::global::Global;
 use crate::mem::MB;
 use crate::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use pxl_spec::asset::ingested::Asset;
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use crate::billboard::sheet::billboard_sheet;
 use crate::decor::assets::kind_assets;

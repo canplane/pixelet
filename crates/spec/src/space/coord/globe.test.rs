@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::space::coord::v3::sub3;
-use xpute_core::math::rng::{u32_to_unit, SplitMix64};
+use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
 
 const SEOUL: f64 = 37.5665 * core::f64::consts::PI / 180.0;
 

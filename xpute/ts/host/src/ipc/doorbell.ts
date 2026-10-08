@@ -6,14 +6,14 @@
  * so a listener must not ring the guest while the completion ring is read.
  */
 
-import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
-import type { U8Array } from "@xpute/core/abi/array.ts";
-import { Errno } from "@xpute/core/status/errno.spec.ts";
-import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/wire/xtp/mod.ts";
+import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 import { NO_WAKE } from "../sched/quantum.ts";
 import * as frame from "./frame.ts";
 import { Ring } from "./ring.ts";
-import { InvariantError } from "@xpute/core/status/error.ts";
+import { InvariantError } from "@xpute/kit/status/error.ts";
 
 export function packet(fill: (b: BranchView) => void): U8Array {
   return encoder.encode(new TreeView().branch(fill));

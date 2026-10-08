@@ -17,7 +17,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{count, index, units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use xpute_core::math::rng::{u32_to_unit, SplitMix64};
+use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
 
 use crate::layer::instance::{Instance, Meta, Source};
 

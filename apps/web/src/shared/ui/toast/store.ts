@@ -1,6 +1,6 @@
 // @pxl/web/shared/ui/toast/store.ts
 
-import type { i32, u32 } from "@xpute/core/abi/word.ts";
+import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { create } from "zustand";
 
 export const enum ToastTone {

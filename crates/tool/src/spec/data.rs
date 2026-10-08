@@ -524,7 +524,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             }
             if !words.is_empty() {
                 words.sort();
-                ts.extend([String::new(), format!("import type {{ {} }} from \"@xpute/core/abi/word.ts\";", words.join(", "))]);
+                ts.extend([String::new(), format!("import type {{ {} }} from \"@xpute/kit/abi/word.ts\";", words.join(", "))]);
             }
             ts.extend(body);
             outputs.push(Output::new(ts_path, file(&ts)));

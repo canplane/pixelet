@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 
-import type { i32, u16, u32 } from "@xpute/core/abi/word.ts";
+import type { i32, u16, u32 } from "@xpute/kit/abi/word.ts";
 import { cube_types } from "@/catalog/cell/cube_type.spec.ts";
 import { decorKinds, type PlaceableCube, placeableCubes } from "@/catalog/cell/mod.ts";
 import { ActiveTool, Command, encode_chat_send, encode_input_marker_words } from "@/kernel/abi/cmd.spec.ts";

@@ -36,7 +36,7 @@ pub fn fixed_at(data_end: u32) -> u32 {
 pub fn lay_out(bytes: u32, data_end: u32, fixed_bytes: u32) -> Map {
     let regions = bytes / REGION_BYTES;
     let heap = fixed_at(data_end) + fixed_bytes;
-    xpute_core::ensure!(heap + MIN_HEAP_BYTES <= regions * REGION_BYTES, ENOMEM, heap, bytes);
+    xpute_kit::ensure!(heap + MIN_HEAP_BYTES <= regions * REGION_BYTES, ENOMEM, heap, bytes);
     Map {
         fixed: Section {
             offset: fixed_at(data_end),

@@ -9,9 +9,9 @@ use crate::layer::residency::Residency;
 use pxl_spec::bake::format::{decode_terrain_into, GroundCell, TerrainTile, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::bake::separation::{self, MAX_BOXES, MAX_LINES, MAX_POINTS};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::mem::base::ptr_at;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::io::failure::Failure;
 

@@ -9,7 +9,7 @@
  * Keys are named by `code`, the key's place, so any layout works the same.
  */
 
-import type { i32 } from "@xpute/core/abi/word.ts";
+import type { i32 } from "@xpute/kit/abi/word.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_keys } from "@/kernel/shell.ts";
 import { closeModal, modalOpen, openModal } from "@/app/modal.tsx";

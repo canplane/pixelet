@@ -8,12 +8,12 @@ publish.workspace = true
 crate-type = ["cdylib"]
 path = "src/lib.rs"
 # The module links against an imported memory and the shell's imports; it has
-# no native test binary. The core's tests are pxl-kernel's and xpute-core's.
+# no native test binary. The core's tests are pxl-kernel's and xpute-kit's.
 test = false
 doctest = false
 
 [dependencies]
-xpute-core = { path = "../../../xpute/rust/core" }
+xpute-kit = { path = "../../../xpute/rust/kit" }
 xpute-guest = { path = "../../../xpute/rust/guest" }
 pxl-kernel = { path = "../../client/kernel", default-features = false }
 

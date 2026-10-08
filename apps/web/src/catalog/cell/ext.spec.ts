@@ -7,7 +7,7 @@
 // extensions in a pool of its own; a leaf names its record by its place there,
 // or none. Which subclass an id is of is the catalog's (pxl-spec cell/ext.rs).
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 
 /** The most a marker's words may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most. */
 export const MARKER_TEXT_CHARS: u32 = 40 as number;
