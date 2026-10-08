@@ -12,8 +12,10 @@
 //! - `fold` folds again what the whole shards change, reading the set as it
 //!   will be, and stages the parents that changed, then `fold.done`, those
 //!   that folded to none;
-//! - `commit`, only once folded, moves what is staged into the set and
-//!   takes away what each `.done` lists, the `.done` last.
+//! - `commit`, only once folded, turns `fold.done` into `commit.done`, moves
+//!   what is staged into the set and takes away what each `.done` lists,
+//!   each `.done` last. A commit begun is finished before a leaf or a fold
+//!   runs, which would otherwise fold from a set half moved.
 
 use std::collections::HashSet;
 use std::fs;
@@ -29,8 +31,10 @@ use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{top_over, Tile};
 
-/// The fold's unit in the stage; no shard is named so.
+/// The fold's unit in the stage, and the same once its commit has begun; no
+/// shard is named so.
 const FOLD: &str = "fold";
+const COMMIT: &str = "commit";
 
 pub struct Stage {
     pub set: TileSet,
@@ -105,6 +109,7 @@ impl Stage {
     pub fn leaf<L: Layer>(&self, shard: Node, fill: impl FnOnce(&TileSet) -> Result<(), String>) -> Result<(), String> {
         let at = shard_tile(shard);
         fs::create_dir_all(&self.stage.root).map_err(|e| io(&self.stage.root, e))?;
+        self.finish_commit::<L>()?;
         self.remove_done(&shard.name())?;
         self.clear_fold(L::LEAF)?;
         let under = |set: &TileSet| -> Result<Vec<Tile>, String> { Ok(set.by_zoom()?.remove(&L::LEAF).unwrap_or_default().into_iter().filter(|&p| ancestor(p, SHARD_ZOOM) == at).collect()) };
@@ -119,6 +124,7 @@ impl Stage {
 
     /// Folds again what the whole shards change.
     pub fn fold<L: Layer>(&self, absent: &impl Absent<L>, workers: usize) -> Result<(), String> {
+        self.finish_commit::<L>()?;
         self.clear_fold(L::LEAF)?;
         let whole = self.whole()?;
         let tiles: HashSet<Tile> = whole.iter().copied().map(shard_tile).collect();
@@ -150,8 +156,19 @@ impl Stage {
     /// lists, each `.done` last; only once folded, else the set would hold
     /// leaves under parents not folded from them.
     pub fn commit<L: Layer>(&self) -> Result<(), String> {
-        if !self.done(FOLD).exists() {
-            return Err(format!("{}: nothing folded; run --stage fold first", self.stage.root.display()));
+        if !self.done(COMMIT).exists() {
+            if !self.done(FOLD).exists() {
+                return Err(format!("{}: nothing folded; run --stage fold first", self.stage.root.display()));
+            }
+            fs::rename(self.done(FOLD), self.done(COMMIT)).map_err(|e| io(&self.done(FOLD), e))?;
+        }
+        self.finish_commit::<L>()
+    }
+
+    /// The commit begun, carried to its end; nothing where none was begun.
+    fn finish_commit<L: Layer>(&self) -> Result<(), String> {
+        if !self.done(COMMIT).exists() {
+            return Ok(());
         }
         fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
         let staged = self.stage.by_zoom()?;
@@ -169,10 +186,10 @@ impl Stage {
         for &p in staged.iter().filter(|(z, _)| **z != L::LEAF).flat_map(|(_, v)| v) {
             put(p)?;
         }
-        for p in self.read_done(FOLD)? {
+        for p in self.read_done(COMMIT)? {
             self.set.remove(p)?;
         }
-        self.remove_done(FOLD)
+        self.remove_done(COMMIT)
     }
 
     /// The set as a version is uploaded, into `to`, made empty first: every
