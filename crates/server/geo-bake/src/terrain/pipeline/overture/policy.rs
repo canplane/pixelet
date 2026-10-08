@@ -11,8 +11,8 @@ use pxl_spec::bake::format::GroundCell;
 use pxl_spec::cell::cube_types::ground as g;
 use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
-use crate::deck::Drawn;
 use crate::segment::Segment;
+use crate::separation::Drawn;
 use crate::terrain::pipeline::feature::{closes, Feature, Layer, Rank};
 use crate::terrain::pipeline::overture::between::{merged, uncovered, Line};
 use crate::terrain::pipeline::overture::role::Role;

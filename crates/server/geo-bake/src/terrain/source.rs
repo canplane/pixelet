@@ -9,7 +9,7 @@ use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-use crate::deck::Drawn;
+use crate::separation::Drawn;
 use crate::terrain::bake::bake_surface;
 use crate::terrain::bake::Surface;
 use crate::terrain::repository::TerrainRepository;

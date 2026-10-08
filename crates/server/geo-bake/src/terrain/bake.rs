@@ -2,13 +2,13 @@
 
 //! One tile's source rows baked into its surface, which with its lines is the tile.
 
-use pxl_spec::bake::deck::Decks;
 use pxl_spec::bake::format::{Ground, TerrainTile};
+use pxl_spec::bake::separation::Separation;
 use pxl_spec::space::coord::adapter::epsg3857::{self, G3857};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-use crate::deck::Drawn;
+use crate::separation::Drawn;
 use crate::terrain::pipeline::feature::{local, Feature};
 use crate::terrain::pipeline::ground::{bake_ground, Coast};
 use crate::terrain::pipeline::overture::policy::{bases, buildings, ways};
@@ -20,7 +20,7 @@ pub struct Surface {
     pub ground: Ground,
 }
 
-pub fn assemble(surface: Surface, lines: Decks) -> TerrainTile {
+pub fn assemble(surface: Surface, lines: Separation) -> TerrainTile {
     TerrainTile::leaf(surface.ele, surface.ground, lines)
 }
 

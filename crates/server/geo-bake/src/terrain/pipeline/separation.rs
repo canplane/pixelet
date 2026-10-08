@@ -1,22 +1,22 @@
-// pxl-geo-bake/terrain/pipeline/deck.rs
+// pxl-geo-bake/terrain/pipeline/separation.rs
 
-//! A tile's decks from the solve's rows. A tile keeps whole segments within
-//! the deck footprint (pxl-spec bake/deck.rs `footprint`), so tiles sharing a
-//! deck agree point for point.
+//! A tile's separation from the solve's rows. A tile keeps whole segments within
+//! a line's footprint (pxl-spec bake/separation.rs `footprint`), so tiles sharing a
+//! line agree point for point.
 
 use crate::terrain::CELL_U;
-use pxl_spec::bake::deck::{self, Builder, Decks, POINT_SCALE};
+use pxl_spec::bake::separation::{self, Builder, Separation, POINT_SCALE};
 use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, G3857};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use xpute_core::math::scalar::round;
 
-use crate::deck::Line;
+use crate::separation::Line;
 use crate::terrain::pipeline::overture::policy::segment_type;
 
 /// None where they do not fit a record: refused rather than cut, since a
-/// missing deck is a gap in a road.
-pub fn bake_decks(lines: &[Line], tile_min: G3857) -> Option<Decks> {
-    let mut decks = Builder::default();
+/// missing line is a gap in a road.
+pub fn bake_separation(lines: &[Line], tile_min: G3857) -> Option<Separation> {
+    let mut separation = Builder::default();
     for row in lines {
         let kind = segment_type(&row.subtype, row.class.as_deref());
         let width = row.width_u / CELL_U;
@@ -29,11 +29,11 @@ pub fn bake_decks(lines: &[Line], tile_min: G3857) -> Option<Decks> {
                 (at, round(p[2]) as i16)
             })
             .collect();
-        for [a, b] in runs_within(&local, deck::footprint(width)) {
-            decks.push(local[a..=b].iter().copied(), width_code, kind, row.form, row.clear);
+        for [a, b] in runs_within(&local, separation::footprint(width)) {
+            separation.push(local[a..=b].iter().copied(), width_code, kind, row.form, row.clear);
         }
     }
-    decks.fits().then(|| decks.finish())
+    separation.fits().then(|| separation.finish())
 }
 
 fn runs_within(points: &[([f64; 2], i16)], reach: f64) -> Vec<[usize; 2]> {

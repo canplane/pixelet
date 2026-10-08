@@ -8,8 +8,8 @@ use std::collections::TryReserveError;
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 use xpute_core::math::scalar::round;
 
-use crate::bake::deck::{slab_depth, Occupies, Over, STACKED_DECK_HEADROOM_M};
 use crate::bake::format::GroundCell;
+use crate::bake::separation::{slab_depth, Crossing, Occupies, STACKED_DECK_HEADROOM_M};
 use crate::bake::way::half_cells;
 use crate::cell::cube_types::Ground;
 use crate::cell::Kind;
@@ -177,7 +177,7 @@ pub fn pier_covers(frame: Frame, width: f64, a: [f64; 2], d: [f64; 2], near: [f6
 /// grade or over a deck `LOWER_DECK_GAP_M` or more under its own (Arnis
 /// `place_pillar`, `support_blocked`), none where the terrain gives no surface
 /// to stand on; water stops none.
-pub fn pier_stands(pier: [i32; 2], cell: GroundCell, column: impl IntoIterator<Item = Over>, ground: i32, u_per_m: f64) -> Option<[i32; 2]> {
+pub fn pier_stands(pier: [i32; 2], cell: GroundCell, column: impl IntoIterator<Item = Crossing>, ground: i32, u_per_m: f64) -> Option<[i32; 2]> {
     if Ground::of(cell).is_none_or(|g| g.kind() == Kind::Transport) {
         return None;
     }
@@ -188,7 +188,7 @@ pub fn pier_stands(pier: [i32; 2], cell: GroundCell, column: impl IntoIterator<I
     let gap = round(LOWER_DECK_GAP_M * u_per_m) as i32;
     let lower = column
         .into_iter()
-        .any(|o| matches!(o.occupies(ground, u_per_m), Occupies::Above { slab, .. } if slab[1] <= surface - gap));
+        .any(|o| matches!(o.occupies(ground, u_per_m), Occupies::Over { slab, .. } if slab[1] <= surface - gap));
     (!lower).then_some(pier)
 }
 

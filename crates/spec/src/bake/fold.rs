@@ -12,8 +12,8 @@ use crate::space::layer::tile::{neighbor_index, CHILDREN};
 use xpute_core::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
-use super::deck::fold_decks;
 use super::format::{join, Ground, Index, Occupancy, TerrainTile};
+use super::separation::fold_separation;
 use super::surface::extent_of;
 use crate::space::coord::zoom::Zoom;
 
@@ -105,11 +105,11 @@ pub fn fold_terrain(around: [Option<&TerrainTile>; 16], zoom: Zoom) -> Option<Te
     let ground = fold_ground(children.map(|t| &t.ground), zoom);
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
-    let decks = fold_decks(children.map(|t| &t.decks), zoom);
-    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &decks));
+    let separation = fold_separation(children.map(|t| &t.separation), zoom);
+    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &separation));
     Some(TerrainTile {
         ground,
-        decks,
+        separation,
         ele: ele.into(),
         index,
     })

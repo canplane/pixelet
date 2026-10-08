@@ -13,7 +13,7 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
 
-/// The ground cell's side: what the raster, the deck lines and a height count in.
+/// The ground cell's side: what the raster, the separation's lines and a height count in.
 pub const CELL_U: f64 = units(GROUND.cell());
 
 impl crate::pyramid::Layer for TerrainTile {

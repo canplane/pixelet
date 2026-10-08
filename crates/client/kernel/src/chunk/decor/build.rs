@@ -19,7 +19,7 @@ use crate::layer::instance::{Meta, Source};
 use crate::layer::object::meta::placed;
 use crate::layer::object::store::{EntryAt, Store};
 use crate::layer::terrain::scatter::grow;
-use crate::query::{covers, Over};
+use crate::query::{covers, Held};
 use pxl_spec::cell::decor::DecorKind;
 use pxl_spec::space::coord::zoom::{index, units, Zoom};
 
@@ -141,13 +141,13 @@ impl<'s> DecorBuild<'s> {
             &mut candidates,
             |i| {
                 let (Source::Ground(cell), Meta::Decor(m)) = (i.source, i.meta) else { return Ok(()) };
-                let over = match ground.folded {
-                    None => Over::Leaf {
-                        held: store.read((GROUND.cell(), cell), GROUND.cell()).value().is_some_and(|c| c.holds()),
+                let held = match ground.folded {
+                    None => Held::Leaf {
+                        any: store.read((GROUND.cell(), cell), GROUND.cell()).value().is_some_and(|c| c.holds()),
                     },
-                    Some(f) => Over::Folded(f.get(&cell.map(|c| index(own, c))).copied()),
+                    Some(f) => Held::Folded(f.get(&cell.map(|c| index(own, c))).copied()),
                 };
-                if covers(over) {
+                if covers(held) {
                     return Ok(());
                 }
                 scratch.push(first + m.variant as usize, i)

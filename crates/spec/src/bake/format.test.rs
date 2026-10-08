@@ -27,34 +27,34 @@ fn tile(seed: u64) -> TerrainTile {
             [a.min(b), a.max(b)]
         })
         .collect();
-    let mut decks = deck::Builder::default();
+    let mut separation = separation::Builder::default();
     for _ in 0..3 {
         let points: Vec<([f64; 2], i16)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16)).collect();
-        decks.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, deck::Form::of((rng.next() % 3) as u8), rng.next() as u8);
+        separation.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, separation::Form::of((rng.next() % 3) as u8), rng.next() as u8);
     }
     TerrainTile {
         ele: ele.into(),
         ground: Ground { cells: cells.into() },
-        decks: decks.finish(),
+        separation: separation.finish(),
         index: Index::new(extent, Occupancy::of_bits(0b10101).unwrap()),
     }
 }
 
 fn room() -> TileRoom {
     TileRoom {
-        cells: vec![0; GROUND_LANE].leak(),
+        ground: vec![0; GROUND_LANE].leak(),
         ele: vec![0; ELE_LANE].leak(),
         extent: vec![[0; 2]; EXTENT_LANE].leak(),
         coarse: vec![[0; 2]; COARSE_LANE].leak(),
-        decks: deck::Room {
-            starts: vec![0; deck::MAX_DECKS + 1].leak(),
-            points: vec![[0; 2]; deck::MAX_POINTS].leak(),
-            tops: vec![0; deck::MAX_POINTS].leak(),
-            width: vec![0; deck::MAX_DECKS].leak(),
-            kind: vec![0; deck::MAX_DECKS].leak(),
-            form: vec![0; deck::MAX_DECKS].leak(),
-            clear: vec![0; deck::MAX_DECKS].leak(),
-            boxes: vec![[0; 4]; deck::MAX_BOXES].leak(),
+        separation: separation::Room {
+            starts: vec![0; separation::MAX_LINES + 1].leak(),
+            points: vec![[0; 2]; separation::MAX_POINTS].leak(),
+            tops: vec![0; separation::MAX_POINTS].leak(),
+            width: vec![0; separation::MAX_LINES].leak(),
+            kind: vec![0; separation::MAX_LINES].leak(),
+            form: vec![0; separation::MAX_LINES].leak(),
+            clear: vec![0; separation::MAX_LINES].leak(),
+            boxes: vec![[0; 4]; separation::MAX_BOXES].leak(),
         },
     }
 }

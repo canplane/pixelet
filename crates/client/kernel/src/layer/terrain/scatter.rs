@@ -7,8 +7,8 @@
 use std::collections::TryReserveError;
 
 use pxl_render::mesh::paint::terrain::sample::TileSource;
-use pxl_spec::bake::deck::Decks;
 use pxl_spec::bake::format::GroundCell;
+use pxl_spec::bake::separation::Separation;
 use pxl_spec::cell::cube_types::Ground;
 use pxl_spec::cell::decor::{DecorKind, DecorMeta, Orientation};
 use pxl_spec::cell::Kind;
@@ -71,7 +71,7 @@ struct Draw {
 
 /// What `candidate` draws in the tile's cell `tile_at`: none off the kind's
 /// ground or under a line.
-fn draw(kind: &DecorKind, candidate: Candidate, cells: &[GroundCell], lines: &Decks, tile_at: [u32; 2]) -> Option<Draw> {
+fn draw(kind: &DecorKind, candidate: Candidate, cells: &[GroundCell], lines: &Separation, tile_at: [u32; 2]) -> Option<Draw> {
     let [cell_x, cell_y] = tile_at;
     if !kind.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
         return None;
@@ -85,7 +85,7 @@ fn draw(kind: &DecorKind, candidate: Candidate, cells: &[GroundCell], lines: &De
         rng.unit() * core::f64::consts::PI * 2.0
     };
     let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
-    if lines.over_point(None, [f64::from(cell_x) + 0.5, f64::from(cell_y) + 0.5], 1.0).next().is_some() {
+    if lines.crossing_point(None, [f64::from(cell_x) + 0.5, f64::from(cell_y) + 0.5], 1.0).next().is_some() {
         return None;
     }
     let [gx, gy] = candidate.cell;
@@ -94,7 +94,7 @@ fn draw(kind: &DecorKind, candidate: Candidate, cells: &[GroundCell], lines: &De
 
 /// What the ground grows of `kind` in `region`, read off `source`'s cells at
 /// `zoom` from its cell `first`, `side` of them a side, whose first lies at
-/// `origin`: each candidate stands on its own cell's look and decks and at the
+/// `origin`: each candidate stands on its own cell's look and lines and at the
 /// height the chunk draws there (`TileSource::cell_at`), so what is grown is
 /// what is drawn. A tree coarser than a leaf's stands on the grass the view
 /// sees, not on leaf cells it cannot. `candidates` is the caller's room.
@@ -137,7 +137,7 @@ pub fn grown_at(kind: &DecorKind, source: &TileSource, cell: [i64; 2], at: [u32;
 /// a deck; else at the height the chunk draws there.
 fn stand(kind: &DecorKind, source: &TileSource, candidate: Candidate, at: [u32; 2]) -> Option<Instance> {
     let tile = &source.tile;
-    let Draw { gx, gy, variant, rotation, scale } = draw(kind, candidate, tile.cells, tile.decks, at)?;
+    let Draw { gx, gy, variant, rotation, scale } = draw(kind, candidate, tile.cells, tile.separation, at)?;
     let (_, ele) = source.cell_at(at.map(i64::from));
     let atom = units(GROUND.cell_zoom(LEAF_ZOOM));
     Some(Instance {

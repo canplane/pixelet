@@ -106,9 +106,9 @@ grep '^\[bake' /tmp/bake.log | tail -2
 ## Terrain
 
 A leaf is each tile exactly as the dev server bakes it on demand
-(`geo-bake terrain/leaf.rs` `bake_leaf`): its deck solve (`deck.rs`) — every
+(`geo-bake terrain/leaf.rs` `bake_leaf`): its separation solve (`separation.rs`) — every
 structure reaching the tile or the eight around it, solved whole wherever it
-runs — and from that one result its lines (decks, bores and the grades at
+runs — and from that one result its lines (bridges, tunnels and the approaches at
 their ends) and its surface (ground and elevation), which paints a way only
 where no line draws it.
 
@@ -117,57 +117,25 @@ deno task bake:terrain --shard 01033210 --stage leaf
 deno task bake:terrain --stage assemble
 ```
 
-Every tile it writes is what a full bake of the same code writes; the tiles
-outside the region keep the base's, so **the base must be of this code**: a
-version names the binary that baked it in its `_built`, and a region bake
-refuses a base of other code. A change to what a tile is made of is a full
-bake. `_built` also lists the shards the version covers, so when the
-coverage grows, `--grow` bakes exactly the shards it gained over the base and
-refuses a base holding a shard the coverage dropped. And **the region must
-hold everything the change reaches**: a structure solved again that runs out of the region meets
-the base's solve of it at the edge. Choosing the region is the caller's job.
-The manifest records the base and the region's release, which may differ.
-
-The new version is complete on disk, and also a **partial snapshot**: its
-`_snapshot` lists the full version it overlays and the tiles it writes or
-removes over it, so the bucket holds only those
-([20261004-a-snapshot-of-a-subtree.md](../../../decision/20261004-a-snapshot-of-a-subtree.md)).
-A region baked over a partial version lists its changes over that one's
-full base, earlier partial's included.
-
-What it produces, beside `leaf/` under `--build` with a `leaf.json` of what
-built it — one code and one source a directory: the leaf stage removes
-another's leaves rather than resume over them, and assemble refuses leaves
-not all of its own code:
-
-- `z15/`, one packed object per tile anything is drawn in — land, or a way,
-  building, deck or bore — the leaves
-- `z14/`, `z13/`, … each zoom folded from the one below it until a zoom is a
-  single tile or `z5`, refolded whole on every run (they are a function of the leaves,
-  so a resumed run never leaves a stale pyramid over them)
-- `manifest.json` and `land_tiles.json` in the directory above the version's
-
-Open-ocean tiles are deliberately not baked. Roughly two thirds of the
-coverage bbox is open sea, and a tile with no object is drawn from the one
-over it. The fold reads a tile it has no object for as open sea inside the
-coverage and, past it, as unknown, a cell with no surface, sea or land, so
-the planet's picture is seen under it; and a coarser one as the fold of
-those under it (`terrain/absent.rs`). A tile counts as open ocean only when nothing is drawn in it:
-a bridge or an undersea tunnel over open water makes its tiles leaves. The
-classification is cached in `land_tiles.json`, keyed by the tile size, the
-coverage, the release and the rule that classified it (`terrain/leaf.rs`
-`land_tiles`); a list made under any other is refused and made again.
+A shard's leaves are its tiles anything is drawn in — land, or a way,
+building, bridge or tunnel (`terrain/leaf.rs` `has_ground`) — found again each
+time the shard is baked. Open-ocean tiles are deliberately not baked:
+roughly two thirds of the coverage is open sea, and a tile with no object is
+drawn from the one over it. The fold reads a tile it has no object for as
+open sea inside the coverage and, past it, as unknown, a cell with no
+surface, sea or land, so the planet's picture is seen under it; and a
+coarser one as the fold of those under it (`terrain/absent.rs`).
 
 **A tile is baked from more than its own bbox, and cropped to it.** What is
 drawn in a tile can come from past its edge, so every read reaches as far as
 that, worked back from how far each thing draws:
 
-- **Rows** (ways, buildings, decks, bores, water) are read from the tile's
+- **Rows** (ways, buildings, bridges, tunnels, water) are read from the tile's
   bbox grown by `DRAWN_REACH_U` (terrain/repository.rs `drawn_from`): a way
-  drawn its widest, `WIDEST` cells (the width a deck's byte holds, and the
+  drawn its widest, `WIDEST` cells (the width a line's byte holds, and the
   ground draws no wider), plus the corridor gap one way paves to another.
   The tile keeps only its own cells, and its lines' runs within their
-  footprint (pxl-spec bake/deck.rs `footprint`).
+  footprint (pxl-spec bake/separation.rs `footprint`).
 - **Elevation** is sampled `ELE_PAD` samples past the tile, what a bicubic
   window at the tile's edge reads. The published shards
   (`infra/geo/elevation/metadata.json`) are warped each to its own edges, so
