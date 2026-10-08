@@ -55,6 +55,13 @@ Nothing now.
   checked against the release the ingest records. openstreetmap-carto is
   CC0, the cartographic design and `symbols/` included; its name and
   OpenStreetMap's are trademarks, kept out of ours.
+  The words follow the schema, renamed in the same change: what is now
+  `poi` (`layer/poi.rs`, `poi_tile.rs`, `bake:poi`, `/tile/poi/`) and
+  `place` meaning a venue (`chunk/place.rs`) are `places`, and `place`
+  meaning a named area (`place.json`, `place_tile.rs`, geocode's
+  dictionary) is `divisions`, so `place` stops naming two things;
+  `geocode` stays the name of the question a division answers. The bucket
+  paths move with it, so the next publish uploads under the new ones.
 
 ## P2
 
