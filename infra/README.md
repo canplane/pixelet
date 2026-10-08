@@ -41,14 +41,15 @@ Seventeen tables from Overture, GEDTM30 and OSM, and the ingests that write them
 are [infra/geo/README.md](./geo/README.md) — the sources, what each pipeline
 drops before it writes, how to run one and how to check it afterward.
 
-**A table is replaced, never emptied.** A whole ingest fills the table beside
-the one being read (`<table>_next`), holding no lock on it, and swaps it in
-with one short transaction, a bounded `lock_timeout` retried, that drops the
-old table, renames the new one and writes its catalog rows; a partial ingest
-adds to the live table. A table's identity is its release and the ingest's
-code, so a change of shape is a change of identity and a whole ingest like
-any other: nothing is dropped or truncated by hand first, and readers see the
-old table until the swap. Filling takes room for both tables at once.
+**A table is replaced, never emptied.** A whole ingest (`--whole`) fills the
+table beside the one being read (`<table>_next`), holding no lock on it, and
+swaps it in with one short transaction, a bounded `lock_timeout` retried,
+that drops the old table, renames the new one and writes its catalog rows;
+an ingest of some shards (`--shard`) adds them to the live table, leaving a
+feature it holds already. Which to run, and when, is the operator's to say:
+the catalog records each shard's release and when it was ingested, and
+decides nothing. Nothing is dropped or truncated by hand first, and readers
+see the old table until the swap. Filling takes room for both tables at once.
 
 ## 3. Production (Hetzner Cloud)
 
@@ -58,8 +59,8 @@ Postgres instances and Caddy in one compose stack — `./prod/`: `api` is pxl-ge
 on `/geo/*`, `app` is pxl-api on `/api/*`, and Caddy is what sends each root to
 its own container. Neither server has a published host port; only Caddy does.
 
-Production's db-geo holds **only** `overture_places`, `overture_divisions`
-and `overture_division_points`, and their rows of `overture_catalog`.
+Production's db-geo holds **only** `overture_places`, `overture_division_areas`
+and `overture_divisions`, and their rows of `overture_catalog`.
 Terrain's ingestion tables and the elevation raster are several GB, baked
 offline, and never queried here.
 The `tiger`/`topology` schemas that ship with the `postgis/postgis` image
@@ -132,7 +133,7 @@ ingested (infra/geo/README.md §4):
 set -a; . ./.env; set +a
 docker exec pixelet-db-geo pg_dump --format=custom --no-owner \
   -U "$DB_GEO_USER" -d "$DB_GEO_NAME" \
-  -t overture_places -t overture_divisions -t overture_division_points \
+  -t overture_places -t overture_division_areas -t overture_divisions \
   -t overture_catalog > overture.dump
 
 scp overture.dump root@$(hcloud server ip pixelet-prod):
@@ -150,7 +151,7 @@ sql psql -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS postgis; CREATE E
 # one transaction: the old tables stay unless every new one is in
 sql pg_restore --no-owner --no-privileges --clean --if-exists --single-transaction < ~/overture.dump
 # the catalog keeps the rows of the tables that came with it, and the planner its statistics
-sql psql -v ON_ERROR_STOP=1 -c "DELETE FROM overture_catalog WHERE file_name NOT IN ('overture_places', 'overture_divisions', 'overture_division_points'); ANALYZE overture_places; ANALYZE overture_divisions; ANALYZE overture_division_points;"
+sql psql -v ON_ERROR_STOP=1 -c "DELETE FROM overture_catalog WHERE file_name NOT IN ('overture_places', 'overture_division_areas', 'overture_divisions'); ANALYZE overture_places; ANALYZE overture_division_areas; ANALYZE overture_divisions;"
 rm ~/overture.dump
 ```
 

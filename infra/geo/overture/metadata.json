@@ -1,0 +1,12 @@
+{
+  "provider": {
+    "name": "Overture Maps Foundation",
+    "url": "https://overturemaps.org",
+    "page": "https://docs.overturemaps.org/attribution/",
+    "license": "per theme, as the attribution page lists"
+  },
+  "pin": {
+    "$doc": "The release every table is ingested from. A newer one is taken by changing this, not by a run that happens to find it latest; a change of it is a purge of every bake.",
+    "release": "2026-09-23.1"
+  }
+}

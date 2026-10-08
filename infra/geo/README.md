@@ -1,8 +1,8 @@
 # Filling db-geo
 
 `db-geo` is the spatial database: seventeen tables from three sources, one
-PostGIS instance. Everything the client sees of the world — terrain, POI, reverse
-geocode — is baked from these tables offline and published to a bucket; only
+PostGIS instance. Everything the client sees of the world — terrain, places, reverse
+divisions — is baked from these tables offline and published to a bucket; only
 forward search reads them at request time.
 
 This directory holds what fills them. Nothing here is deployed, and nothing
@@ -12,10 +12,11 @@ database that is expensive to rebuild.
 > **The database is filled a shard at a time, and a shard is whole or absent.**
 > A shard is a z8 tile (`SHARD_ZOOM`), named by its Morton key, its edges in
 > EPSG:3857 meters rounded half to even. A shard holds every feature whose
-> bbox, its vertices' extremes in meters, meets the shard grown by a leaf
-> tile, its apron (`SHARD_APRON`, `pxl-geo-bake coverage.rs`): as far as any
-> read past a leaf reaches, so a shard's leaves bake from the shard alone,
-> the coverage's edge included. A table holds each feature once, keyed by
+> bbox, its vertices' extremes in meters, meets the shard grown by a z13
+> tile and a ground cell, its apron (`SHARD_APRON`, `pxl-geo-bake
+> coverage.rs`): the reach no bake reads past a leaf beyond (`BAKE_REACH`), and a
+> cell for what rounding moves an edge by, so a shard's leaves bake from the
+> shard alone, the coverage's edge included. A table holds each feature once, keyed by
 > `gers_id`, however many shards it meets; which shards are in is the
 > catalog's alone. The coast is no shard's: OSM's land polygons are taken whole,
 > worldwide (`coastline/`). What a shard holds depends on the shard alone, so shards ingested one by one
@@ -40,15 +41,15 @@ infra/geo/
 
 **Which shards.** `metadata.json` names the shards the bakes publish, and
 the ingests take exactly those (`pxl-geo-bake coverage.rs`). A bake refuses
-to run unless every table it reads holds exactly them, all of one release,
-and the elevation exactly them.
+to run unless every table it reads holds exactly them, and the elevation
+exactly them; each baked shard records the release it was ingested from.
 
 ## 1. The tables
 
 | Source                                                                           | Tables                                                                                                                                                         | Catalog             | Fills them                            |
 | :------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :------------------------------------ |
 | **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure`         | `overture_catalog`  | `overture/script/ingest.rs`           |
-| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                            | `overture_catalog`  | `overture/script/ingest.rs`           |
+| **Overture — Places, Divisions**<br>places, reverse geocoding, forward search    | `overture_places`, `overture_division_areas`, `overture_divisions`                                                                                             | `overture_catalog`  | `overture/script/ingest.rs`           |
 | **Overture — the other types**<br>taken whole, read by nothing yet               | `overture_addresses`, `overture_building_parts`, `overture_connectors`, `overture_division_boundaries`, `overture_base_land_cover`, `overture_base_bathymetry` | `overture_catalog`  | `overture/script/ingest.rs`           |
 | **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                             | `elevation_catalog` | `elevation/script/setup-elevation.sh` |
 | **OSM land polygons**<br>coastline                                               | `osm_land_polygons`                                                                                                                                            | none                | `coastline/script/setup-coastline.sh` |
@@ -60,10 +61,10 @@ when no `overture_base_land` row or building touches its bbox and no way
 (not a ferry) comes within `DRAWN_REACH_U` of it.
 
 Each catalog keeps one row per shard: `overture_catalog` a row per table and
-shard, with its release, the ingest's code and the count of features the
-shard meets (a feature two shards meet counts in both, so a table's counts sum
-past its rows); `elevation_catalog` a row per shard, with its release.
-`read_source_catalogs()` (`bake_tiles.rs`) copies them into every baked
+shard, with its release, the code its type's rows are made by and the count
+of features the shard meets (a feature two shards meet counts in both, so a
+table's counts sum past its rows); `elevation_catalog` a row per shard, with its release.
+`read_source_catalogs()` (`bake_terrain.rs`) copies them into every baked
 version's `manifest.json`, which is how a published set says what data it was
 made from.
 
@@ -95,7 +96,12 @@ It is a bare-earth DTM: ground elevation carries no building or canopy height.
 The coast as OSM's land, split into small polygons and already in EPSG:3857,
 one zip for the world (about 1 GB), ODbL. A coast is never taken in part, so
 the table holds the world's, whatever shards are ingested. The zip is kept in
-`coastline/raw/` and fetched again only when osmdata publishes a newer one.
+`coastline/raw/`. The zip is pinned, as an Overture release is: its hash and
+day are `coastline/metadata.json`'s `pin`, and a newer one is taken by
+changing the pin, never by a run that happens to fetch it. osmdata serves
+only its latest, so the kept zip is the pinned one's only copy. The table's
+identity is that hash, its comment: the same zip is not imported again, and
+a new one is filled beside the table and swapped in.
 
 ## 2. Prerequisites (macOS)
 
@@ -169,8 +175,8 @@ UNION ALL SELECT 'overture_base_land_use', count(*) FROM overture_base_land_use
 UNION ALL SELECT 'overture_base_water', count(*) FROM overture_base_water
 UNION ALL SELECT 'overture_base_infrastructure', count(*) FROM overture_base_infrastructure
 UNION ALL SELECT 'overture_places', count(*) FROM overture_places
+UNION ALL SELECT 'overture_division_areas', count(*) FROM overture_division_areas
 UNION ALL SELECT 'overture_divisions', count(*) FROM overture_divisions
-UNION ALL SELECT 'overture_division_points', count(*) FROM overture_division_points
 UNION ALL SELECT 'overture_division_boundaries', count(*) FROM overture_division_boundaries
 UNION ALL SELECT 'overture_building_parts', count(*) FROM overture_building_parts
 UNION ALL SELECT 'overture_connectors', count(*) FROM overture_connectors
@@ -182,7 +188,8 @@ SELECT count(*), min(ST_ScaleX(rast)), max(ST_ScaleX(rast)) FROM elevation_raste
 ```
 
 The catalog is the other half of the check, and the faster one: every table
-should carry a row for each of the coverage's shards, all of one release.
+should carry a row for each of the coverage's shards, with the release it
+was ingested from.
 
 ```sql
 SELECT file_name, count(*) AS shards, min(data_date), max(data_date), sum(total_count)
