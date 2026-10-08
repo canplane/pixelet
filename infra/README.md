@@ -45,9 +45,10 @@ drops before it writes, how to run one and how to check it afterward.
 the one being read (`<table>_next`), holding no lock on it, and swaps it in
 with one short transaction, a bounded `lock_timeout` retried, that drops the
 old table, renames the new one and writes its catalog rows; a partial ingest
-adds to the live table. A table's identity is its release and the ingest's
-code, so a change of shape is a change of identity and a whole ingest like
-any other: nothing is dropped or truncated by hand first, and readers see the
+adds to the live table. A table's identity is its release and the code its
+type's rows are made by (`ingest.rs` `code_of`), so a change of shape is a
+change of identity and a whole ingest like any other, and a change to one
+type's rules makes its table whole and no other: nothing is dropped or truncated by hand first, and readers see the
 old table until the swap. Filling takes room for both tables at once.
 
 ## 3. Production (Hetzner Cloud)

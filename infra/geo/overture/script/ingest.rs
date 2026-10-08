@@ -25,9 +25,9 @@ serde_json = "1"
 //! fetches only itself and the ground between shards is never fetched. The extract is
 //! read once into a staging table, each row with its shard, and the run is
 //! written from it in one transaction, its catalog rows with it, so it is
-//! whole or absent. A table holds one identity, the release and this
-//! script's code: a run of another is whole, built beside the table and
-//! swapped in. A column a reader filters on is generated from `properties`.
+//! whole or absent. A table holds one identity, the release and the code
+//! its type's rows are made by (`code_of`): a run of another is whole, built
+//! beside the table and swapped in. A column a reader filters on is generated from `properties`.
 //! A division names its parent, which may stand past every shard: the
 //! divisions are taken with their ancestors, each fetched by its id, so a
 //! name's chain never breaks at the coverage's edge.
@@ -46,13 +46,14 @@ use postgres::binary_copy::BinaryCopyInWriter;
 use postgres::types::Type as Pg;
 use postgres::{Client, NoTls, Transaction};
 use pxl_geo_bake::coverage::{Coverage, Node};
-use pxl_geo_bake::util::{code_id, fnv1a};
+use pxl_geo_bake::util::fnv1a;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::world::REACH;
 use serde_json::{Map, Number, Value};
 use xpute_core::math::scalar::round;
 
 /// An Overture type, its table, its generated columns, its indexes past the geometry's.
+#[derive(Debug)]
 struct Type {
     overture: &'static str,
     table: &'static str,
@@ -64,6 +65,7 @@ const SUBTYPE: (&str, &str) = ("subtype", "TEXT GENERATED ALWAYS AS (properties-
 const CLASS: (&str, &str) = ("class", "TEXT GENERATED ALWAYS AS (properties->>'class') STORED");
 const NAME: (&str, &str) = ("name", "TEXT GENERATED ALWAYS AS (properties->'names'->>'primary') STORED");
 
+// own: types {
 const TYPES: &[Type] = &[
     Type { overture: "address", table: "overture_addresses", columns: &[], indexes: &[] },
     Type { overture: "bathymetry", table: "overture_base_bathymetry", columns: &[SUBTYPE, CLASS], indexes: &[] },
@@ -111,6 +113,7 @@ const TYPES: &[Type] = &[
     Type { overture: "land_use", table: "overture_base_land_use", columns: &[SUBTYPE, CLASS], indexes: &["class"] },
     Type { overture: "water", table: "overture_base_water", columns: &[SUBTYPE, CLASS], indexes: &["class"] },
 ];
+// } own
 
 /// The official CLI, a tool regenerable under `cache/`, and what it downloads,
 /// the source, kept beside this script.
@@ -136,11 +139,13 @@ const EPS_M: f64 = 1.0;
 /// id, properties, geometry, shard.
 type Row = (String, String, Vec<u8>, String);
 
+// own: division {
 /// The type closed under a parent, and the property naming it.
 const PARENT: (&str, &str) = ("division", "parent_division_id");
 
 /// The shard an ancestor is staged under: none, so the catalog counts it in none.
 const ANCESTOR: &str = "";
+// } own
 
 fn main() -> ExitCode {
     match run() {
@@ -161,16 +166,13 @@ fn run() -> Result<(), String> {
     let cli = ensure_cli()?;
     let release = release(&cli)?;
     println!("[ingest] release {release}, {} shards", shards.len());
-    // The whole binary, not a constant bumped by hand: a change to anything a
-    // row is made by, the projection, `meets`, the columns, makes every table
-    // whole, and the extract is cached, so that costs the DB time alone.
-    let code = code_id()?;
     client.batch_execute(&format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{CATALOG_SQL}")).map_err(|e| e.to_string())?;
     if !keyed(&mut client, "overture_catalog", &["node", "file_name"])? {
         return Err("overture_catalog is keyed otherwise than by (node, file_name)".into());
     }
 
     for ty in TYPES {
+        let code = code_of(SOURCE, ty, &shards);
         // A table of an older shape, or none, is one more identity this run is not.
         let reshaped = !keyed(&mut client, ty.table, &["gers_id"])?;
         let held = client
@@ -211,6 +213,35 @@ fn run() -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+/// This script, which a table's identity is read from.
+const SOURCE: &str = include_str!("ingest.rs");
+
+/// What a type's rows are made by, so a change to one type's rules makes
+/// that table whole and no other: this script but for the regions one type
+/// owns (marked `// own: <type> {` … `// } own`), the type itself, the regions
+/// it owns, and what the script reads from its dependencies, the shards'
+/// rectangles and the projection. A change outside every region is anyone's,
+/// so a helper a type alone uses but left unmarked rebuilds every table
+/// rather than none. The tests are owned by no type, so they rebuild none.
+fn code_of(source: &str, ty: &Type, shards: &[Shard]) -> String {
+    let (mut shared, mut own) = (String::new(), String::new());
+    let mut owner: Option<&str> = None;
+    for line in source.lines() {
+        match (line.trim().strip_prefix("// own: ").and_then(|t| t.strip_suffix(" {")), line.trim() == "// } own") {
+            (Some(tag), _) => owner = Some(tag),
+            (_, true) => owner = None,
+            _ => match owner {
+                None => shared.extend([line, "\n"]),
+                Some(tag) if tag == ty.overture => own.extend([line, "\n"]),
+                Some(_) => {}
+            },
+        }
+    }
+    let rectangles: Vec<_> = shards.iter().map(|s| (s.m, s.deg)).collect();
+    let read = format!("{shared}{own}{ty:?}{rectangles:?}{}", projected("wkb"));
+    format!("{:016x}", fnv1a(read.as_bytes()))
 }
 
 /// Whether a table is keyed as this script keys it.
@@ -328,6 +359,7 @@ fn copy_extracts<'a>(client: &mut Client, t: &str, extracts: impl Iterator<Item 
     Ok(())
 }
 
+// own: division {
 /// The parents the staged divisions name and neither the staging table nor,
 /// for a partial run, the live one holds, fetched by id with the CLI's
 /// `gers` and staged under no shard, until every parent is held. A feature
@@ -382,6 +414,7 @@ fn ancestors(cli: &Path, client: &mut Client, ty: &Type, release: &str, live: bo
     }
     Ok(kept.len())
 }
+// } own
 
 /// Each feature of the staging table once, in key order, made into a row.
 fn features(ty: &Type, into: &str) -> String {
@@ -730,3 +763,37 @@ fn db_geo_url() -> Result<String, String> {
     out.push_str(rest);
     Ok(out)
 }
+
+// own: tests {
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn codes(source: &str) -> Vec<String> {
+        let shards: Vec<Shard> = Coverage::of_source().expect("the coverage").shards().map(Shard::of).collect();
+        TYPES.iter().map(|ty| code_of(source, ty, &shards)).collect()
+    }
+
+    /// `line` put just inside the region `tag` owns, or before every region.
+    fn with(line: &str, tag: Option<&str>) -> String {
+        match tag {
+            Some(tag) => SOURCE.replacen(&format!("// own: {tag} {{\n"), &format!("// own: {tag} {{\n{line}\n"), 1),
+            None => format!("{line}\n{SOURCE}"),
+        }
+    }
+
+    #[test]
+    fn a_change_to_one_types_rules_is_that_tables_alone() {
+        let (before, after) = (codes(SOURCE), codes(&with("// a division rule", Some(PARENT.0))));
+        for (ty, (b, a)) in TYPES.iter().zip(before.iter().zip(&after)) {
+            assert_eq!(b != a, ty.overture == PARENT.0, "{}", ty.table);
+        }
+    }
+
+    #[test]
+    fn a_change_outside_every_region_is_every_tables() {
+        let (before, after) = (codes(SOURCE), codes(&with("// a shared rule", None)));
+        assert!(before.iter().zip(&after).all(|(b, a)| b != a));
+    }
+}
+// } own

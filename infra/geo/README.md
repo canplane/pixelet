@@ -60,9 +60,9 @@ when no `overture_base_land` row or building touches its bbox and no way
 (not a ferry) comes within `DRAWN_REACH_U` of it.
 
 Each catalog keeps one row per shard: `overture_catalog` a row per table and
-shard, with its release, the ingest's code and the count of features the
-shard meets (a feature two shards meet counts in both, so a table's counts sum
-past its rows); `elevation_catalog` a row per shard, with its release.
+shard, with its release, the code its type's rows are made by and the count
+of features the shard meets (a feature two shards meet counts in both, so a
+table's counts sum past its rows); `elevation_catalog` a row per shard, with its release.
 `read_source_catalogs()` (`bake_tiles.rs`) copies them into every baked
 version's `manifest.json`, which is how a published set says what data it was
 made from.
