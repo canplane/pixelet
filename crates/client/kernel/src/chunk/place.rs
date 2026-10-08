@@ -1,6 +1,6 @@
 // pxl-kernel/chunk/place.rs
 
-//! Where the POI counts are drawn: one badge per POI-lattice cell under each
+//! Where the places counts are drawn: one badge per place-lattice cell under each
 //! drawn chunk, read from the tile that settles that ground,
 //! standing at a leaf cell's center on the surface a ray down meets first.
 
@@ -13,13 +13,10 @@ use crate::billboard::field::billboard_instance;
 use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::chunk::Chunk;
 use crate::layer::object::preview::draft;
-use core::hash::Hasher;
-use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::cell::object::object_value_is_marker;
-use crate::layer::poi::{rank_of, Places, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
+use crate::layer::place::{rank_of, Places, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
 use crate::layer::Layer;
 use crate::layer::{Answer, Query};
-use crate::param::POI_MAJOR_RANK;
+use crate::param::PLACE_MAJOR_RANK;
 use crate::query::{Detail, Ray, World};
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
@@ -27,12 +24,15 @@ use crate::view::demand::Observed as _;
 use crate::view::frame::pose::ndc_to_px;
 use crate::view::frame::pose::units_per_px_at;
 use badge::Label;
+use core::hash::Hasher;
 use pxl_render::gpu::sheet::shelf::NO_SLOT;
+use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::cell::object::object_value_is_marker;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 use xpute_guest::global::Global;
 
-use pxl_spec::bake::poi_tile::{PoiTile, POI_LATTICE};
+use pxl_spec::bake::place_tile::{PlaceTile, PLACE_LATTICE};
 use pxl_spec::space::coord::pvf3::pack;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::len3;
@@ -51,7 +51,7 @@ struct Placement {
     /// Nearest the eye first: screen box, label, and where it stands.
     hits: Vec<([f64; 4], Label, Pvf3)>,
     /// Kept so a settled turn asks the heap for nothing. Each with the scale
-    /// it shows at and where in its POI cell that scale is read.
+    /// it shows at and where in its places cell that scale is read.
     found: Vec<(Cell, Label, Cell, f64, Shown, V3)>,
     /// The drawn chunks `found` was read from: an eye move that changes them
     /// not, and nothing it reads moved, casts no ray.
@@ -124,7 +124,7 @@ fn marker_at(at: EntryAt, words: &str, read_zoom: Zoom) -> (Cell, Label, Cell, f
     let mut h = fnv::FnvHasher::default();
     h.write(words.as_bytes());
     let label = Label::Marker { at, words: h.finish() };
-    (POI_LATTICE.cell_of(read_zoom, &ground.mid()), label, ground, base[2], Shown::All, base)
+    (PLACE_LATTICE.cell_of(read_zoom, &ground.mid()), label, ground, base[2], Shown::All, base)
 }
 
 /// None where nothing over it is known.
@@ -151,7 +151,7 @@ pub fn step(ctx: &mut TickContext) {
         badge::retain(&HashSet::new());
         return;
     }
-    let _tiles = PoiTile::demand();
+    let _tiles = PlaceTile::demand();
     if crate::chunk::domain::current().is_none() {
         return;
     }
@@ -161,7 +161,7 @@ pub fn step(ctx: &mut TickContext) {
     p.now.drawn.extend(p.mounted.iter().filter(|m| m.1).map(|m| m.0));
     p.now.drawn.sort_unstable();
     // Places are a setting; what someone placed is always shown.
-    p.now.places = settings_store().poi;
+    p.now.places = settings_store().place;
     let places = p.now.places;
     let stale = core::mem::take(&mut p.moved) | (p.found_for.as_ref() != Some(&p.now));
     if stale {
@@ -174,35 +174,35 @@ pub fn step(ctx: &mut TickContext) {
     }
     let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
-        let read_zoom = POI_LATTICE.read_zoom(chunk.cell_zoom());
+        let read_zoom = PLACE_LATTICE.read_zoom(chunk.cell_zoom());
         markers(chunk, read_zoom, &mut found);
         if !places {
             continue;
         }
-        let Answer::Exact(Places { tile: poi, from: src }) = PoiTile::residency().read(chunk.node(), chunk.cell_zoom()) else {
+        let Answer::Exact(Places { tile, from: src }) = PlaceTile::residency().read(chunk.node(), chunk.cell_zoom()) else {
             continue;
         };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.
-        let (side, cell) = (chunk.column().0, POI_LATTICE.cell_zoom(src.zoom));
+        let (side, cell) = (chunk.column().0, PLACE_LATTICE.cell_zoom(src.zoom));
         let m = if cell >= side { count(cell, side) } else { 0 };
-        let [x0, y0] = POI_LATTICE.cell_of(src.zoom, &Pvf3 { i: chunk.corner(), f: 0 }).in_tile();
+        let [x0, y0] = PLACE_LATTICE.cell_of(src.zoom, &Pvf3 { i: chunk.corner(), f: 0 }).in_tile();
         let (h0, h1) = chunk.z_range();
         for ty in y0..y0 + m.max(1) {
-            let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + m.max(1), ty));
-            let from = poi.cells.partition_point(|c| c.cell < lo);
-            for c in poi.cells[from..].iter().take_while(|c| c.cell < hi) {
-                let cell = POI_LATTICE.cell_at(src, c.cell);
+            let (lo, hi) = (PLACE_LATTICE.cell_index(x0, ty), PLACE_LATTICE.cell_index(x0 + m.max(1), ty));
+            let from = tile.cells.partition_point(|c| c.cell < lo);
+            for c in tile.cells[from..].iter().take_while(|c| c.cell < hi) {
+                let cell = PLACE_LATTICE.cell_at(src, c.cell);
                 // Near, a place or a count; farther, only a prominent enough place.
                 // A count stands at its cell's middle.
-                let all = match (c.count, poi.shown(c).next()) {
+                let all = match (c.count, tile.shown(c).next()) {
                     (1, Some((place, _, at))) => (Label::Place { tile: src, place }, cell.inner_at(GROUND, LEAF_ZOOM, at)),
                     _ => (Label::Count(c.count, c.partial), GROUND.cell_of(LEAF_ZOOM, &cell.mid())),
                 };
-                let major = poi
+                let major = tile
                     .shown(c)
                     .map(|(i, p, at)| (i, rank_of(p.kind), at))
-                    .filter(|s| s.1 <= POI_MAJOR_RANK)
+                    .filter(|s| s.1 <= PLACE_MAJOR_RANK)
                     .min_by_key(|s| s.1)
                     .map(|(place, _, at)| (Label::Place { tile: src, place }, cell.inner_at(GROUND, LEAF_ZOOM, at)));
                 let mid = cell.mid();
@@ -217,7 +217,7 @@ pub fn step(ctx: &mut TickContext) {
                     if top - 1.0 < h0 || top - 1.0 >= h1 {
                         continue;
                     }
-                    found.push((POI_LATTICE.cell_of(read_zoom, &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
+                    found.push((PLACE_LATTICE.cell_of(read_zoom, &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
                 }
             }
         }
@@ -294,7 +294,7 @@ pub fn step(ctx: &mut TickContext) {
         ));
     }
     if p.set.is_some() || !instances.is_empty() {
-        let set = *p.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Poi));
+        let set = *p.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Place));
         place_billboard_set(set, about);
         write_billboard_set(set, &instances);
         ctx.invalidate();

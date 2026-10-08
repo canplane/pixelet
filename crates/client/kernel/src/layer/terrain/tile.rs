@@ -7,7 +7,7 @@
 
 use crate::layer::residency::Residency;
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
-use pxl_spec::bake::format::{decode_terrain_into, GroundCell, Terrain, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
+use pxl_spec::bake::format::{decode_terrain_into, GroundCell, TerrainTile, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -23,9 +23,9 @@ use pxl_spec::bake::format::Occupancy;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-static TERRAIN: Global<Residency<Terrain>> = Global::new();
+static TERRAIN: Global<Residency<TerrainTile>> = Global::new();
 
-impl Layer for Terrain {
+impl Layer for TerrainTile {
     const CATEGORY: Category = Category::terrain;
     const LATTICE: Lattice = GROUND;
 
@@ -35,17 +35,17 @@ impl Layer for Terrain {
     // The leaves carry the terrain topic; the zooms above are read through the
     // chunks that draw them.
 
-    fn residency() -> &'static mut Residency<Terrain> {
+    fn residency() -> &'static mut Residency<TerrainTile> {
         TERRAIN.get(Residency::default)
     }
 
-    fn empty() -> Option<Terrain> {
-        Some(Terrain::void())
+    fn empty() -> Option<TerrainTile> {
+        Some(TerrainTile::void())
     }
 
     /// One pass from the packet: nothing tile-sized stands between arrival and
     /// drawing.
-    fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Terrain, Failure> {
+    fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<TerrainTile, Failure> {
         let t0 = now();
         // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
         let terrain = decode_terrain_into(pkt, unsafe { room_of(record) })?;

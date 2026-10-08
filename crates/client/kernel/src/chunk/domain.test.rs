@@ -40,4 +40,3 @@ fn a_far_pole_inside_a_cell_is_not_refined_and_not_a_hole() {
     let top = [at[0] + 0.25, at[1] + 0.25, GROUND + 2.5];
     assert_eq!(pieces_at(thin.pieces(), top).len(), 1, "the pole is a hole or under two pieces");
 }
-

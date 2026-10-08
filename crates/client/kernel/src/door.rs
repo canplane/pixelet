@@ -16,8 +16,9 @@ use crate::layer::earth::Earth;
 use crate::layer::residency::Residency;
 use crate::mem::section;
 use layout::DOOR_LAYOUT;
-use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::poi_tile::PoiTile;
+use pxl_spec::bake::division_tile::DivisionTile;
+use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::place_tile::PlaceTile;
 use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
 use xpute_guest::global::Global;
@@ -149,9 +150,10 @@ fn lay_out(b: &Bracket) -> u32 {
     kernel().laid_out = true;
     // A layer asks for no more tiles than its residency frames.
     crate::io::request::open(|c| match c {
-        Category::terrain => Residency::<Terrain>::FRAMES,
-        Category::poi => Residency::<PoiTile>::FRAMES,
+        Category::terrain => Residency::<TerrainTile>::FRAMES,
+        Category::place => Residency::<PlaceTile>::FRAMES,
         Category::earth => Residency::<Earth>::FRAMES,
+        Category::division => Residency::<DivisionTile>::FRAMES,
         _ => 0,
     });
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the

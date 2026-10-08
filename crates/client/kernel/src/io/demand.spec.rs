@@ -14,28 +14,20 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
-pub const CATEGORY_NAMES: &[&str] = &["terrain", "poi", "geocode", "geocode_dict", "asset", "earth"];
+pub const CATEGORY_NAMES: &[&str] = &["terrain", "place", "division", "asset", "earth"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CategoryName {
     terrain = 0,
-    poi = 1,
-    geocode = 2,
-    geocode_dict = 3,
-    asset = 4,
-    earth = 5,
+    place = 1,
+    division = 2,
+    asset = 3,
+    earth = 4,
 }
 
 impl CategoryName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [CategoryName; 6] = [
-        CategoryName::terrain,
-        CategoryName::poi,
-        CategoryName::geocode,
-        CategoryName::geocode_dict,
-        CategoryName::asset,
-        CategoryName::earth,
-    ];
+    pub const ALL: [CategoryName; 5] = [CategoryName::terrain, CategoryName::place, CategoryName::division, CategoryName::asset, CategoryName::earth];
 
     /// The member a number names, or none for a number the set does not
     /// give out.

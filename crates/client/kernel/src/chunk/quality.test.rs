@@ -37,4 +37,3 @@ fn one_instant_is_one_step() {
     assert_eq!(s.follow(0, 0, 1_000.0, 1_000.0), 2);
     assert_eq!(s.follow(0, 0, 1_000.0, 1_000.0), 2);
 }
-

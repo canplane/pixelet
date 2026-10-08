@@ -167,8 +167,8 @@ pub enum SettingKey {
     /// would being decided and not built. The badge is an ordering, and this is
     /// the one to reach for before any shading term.
     decor = 1,
-    /// The places' badges over the world, from the published POI tiles.
-    poi = 2,
+    /// The places' badges over the world, from the published places tiles.
+    place = 2,
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
     /// Off by default: the tilt is the one control a view from above is expected to
     /// have, and locking it reads as the app being stuck.
@@ -212,7 +212,7 @@ impl SettingKey {
     pub const ALL: [SettingKey; 17] = [
         SettingKey::textures,
         SettingKey::decor,
-        SettingKey::poi,
+        SettingKey::place,
         SettingKey::tilt_lock,
         SettingKey::camera_mode,
         SettingKey::surface_follow,
@@ -238,7 +238,7 @@ impl SettingKey {
         match self {
             SettingKey::textures => SettingKind::Toggle,
             SettingKey::decor => SettingKind::Toggle,
-            SettingKey::poi => SettingKind::Toggle,
+            SettingKey::place => SettingKind::Toggle,
             SettingKey::tilt_lock => SettingKind::Toggle,
             SettingKey::camera_mode => SettingKind::Choice,
             SettingKey::surface_follow => SettingKind::Toggle,
@@ -261,7 +261,7 @@ impl SettingKey {
         match self {
             SettingKey::textures => "textures",
             SettingKey::decor => "decor",
-            SettingKey::poi => "poi",
+            SettingKey::place => "place",
             SettingKey::tilt_lock => "tilt_lock",
             SettingKey::camera_mode => "camera_mode",
             SettingKey::surface_follow => "surface_follow",
@@ -314,7 +314,7 @@ impl SettingKey {
 pub struct Settings {
     pub textures: bool,
     pub decor: bool,
-    pub poi: bool,
+    pub place: bool,
     pub tilt_lock: bool,
     pub camera_mode: CameraMode,
     pub surface_follow: bool,
@@ -336,7 +336,7 @@ impl Settings {
     pub const DEFAULT: Settings = Settings {
         textures: true,
         decor: true,
-        poi: false,
+        place: false,
         tilt_lock: false,
         camera_mode: CameraMode::orbit,
         surface_follow: true,
@@ -359,7 +359,7 @@ impl Settings {
         match key {
             SettingKey::textures => self.textures as u32,
             SettingKey::decor => self.decor as u32,
-            SettingKey::poi => self.poi as u32,
+            SettingKey::place => self.place as u32,
             SettingKey::tilt_lock => self.tilt_lock as u32,
             SettingKey::camera_mode => self.camera_mode as u32,
             SettingKey::surface_follow => self.surface_follow as u32,
@@ -383,7 +383,7 @@ impl Settings {
         match key {
             SettingKey::textures if value <= 1 => self.textures = value == 1,
             SettingKey::decor if value <= 1 => self.decor = value == 1,
-            SettingKey::poi if value <= 1 => self.poi = value == 1,
+            SettingKey::place if value <= 1 => self.place = value == 1,
             SettingKey::tilt_lock if value <= 1 => self.tilt_lock = value == 1,
             SettingKey::camera_mode => match CameraMode::of(value) {
                 Some(o) => self.camera_mode = o,

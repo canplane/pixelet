@@ -3,8 +3,8 @@
 //! A turn's frame record: what the host measured, the chunks' census and the
 //! layers' residency, taken after every other phase.
 
-use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::poi_tile::PoiTile;
+use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::place_tile::PlaceTile;
 use xpute_core::math::scalar::round;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -108,18 +108,18 @@ pub fn report_step(ctx: &mut TickContext) {
     let counts = kernel().sched.take_counts();
     let rings = profiler_take_rings();
     let work = work_sample(c, &census);
-    let record_refused = Terrain::residency().take_refusals() as f64;
+    let record_refused = TerrainTile::residency().take_refusals() as f64;
     let [rays, visits] = crate::chunk::domain::take_work();
     if !profiler_recording() {
         return;
     }
     let host = c.host.clone();
     let mut tiles = TileSample::default();
-    for (p, _) in Terrain::residency().held() {
+    for (p, _) in TerrainTile::residency().held() {
         tiles.by_zoom[p.zoom as usize] += 1.0;
     }
     tiles.total = tiles.by_zoom.iter().sum();
-    tiles.poi = PoiTile::residency().held().count() as f64;
+    tiles.place = PlaceTile::residency().held().count() as f64;
     let mut gpu = host.gpu;
     for (tris, boxes) in gpu.zoom_tris.iter_mut().zip(census.zoom_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;
@@ -154,8 +154,8 @@ pub fn report_step(ctx: &mut TickContext) {
         heap: heap_sample(),
         rings,
         work,
-        q_terrain: pending_count(Terrain::CATEGORY) as f64,
-        q_poi: pending_count(PoiTile::CATEGORY) as f64,
+        q_terrain: pending_count(TerrainTile::CATEGORY) as f64,
+        q_place: pending_count(PlaceTile::CATEGORY) as f64,
         stale: StaleSample {
             hidden: census.ready_waiting as f64,
             slot_waits: census.slot_waits as f64,
@@ -170,7 +170,7 @@ pub fn report_step(ctx: &mut TickContext) {
             // NaN: step 0 is past the arena
             let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
             // The goal's pieces a resident tile draws.
-            let residency = Terrain::residency();
+            let residency = TerrainTile::residency();
             let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.read(c.node(), c.cell_zoom()).value().is_some()).count());
             CoverSample {
                 rule,

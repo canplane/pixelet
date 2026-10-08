@@ -43,7 +43,7 @@ pub fn remove_billboard_set(set: u32) {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum BillboardOrder {
-    Poi = 0,
+    Place = 0,
     Chat = 1,
 }
 

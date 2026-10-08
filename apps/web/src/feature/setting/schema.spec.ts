@@ -60,8 +60,8 @@ export const SETTINGS = {
     dev: true,
     cost: "med",
   },
-  /** The places' badges over the world, from the published POI tiles. */
-  poi: {
+  /** The places' badges over the world, from the published places tiles. */
+  place: {
     key: 2 as number,
     kind: "toggle",
     default: false,
@@ -190,8 +190,8 @@ export const SETTINGS = {
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */
 export const SETTINGS_SHIPPED = {
-  /** The places' badges over the world, from the published POI tiles. */
-  poi: {
+  /** The places' badges over the world, from the published places tiles. */
+  place: {
     key: 2 as number,
     kind: "toggle",
     default: false,

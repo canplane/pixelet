@@ -25,7 +25,7 @@ use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_SUN};
 
 /// One past the last field: the device rounds the struct up to a 16-byte row.
 pub const ATMOS_FLOATS: usize = 60;
-/// Offsets in floats; record.test.rs holds them to the struct.
+/// Offsets in floats into the struct.
 pub(crate) const RAYLEIGH_SCATTERING: usize = 0;
 pub(crate) const BOTTOM_RADIUS: usize = 3;
 pub(crate) const OZONE_ABSORPTION: usize = 4;

@@ -18,7 +18,13 @@ fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
 fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
     let mut store = Store::default();
     for at in [[8, 16, 24], [-3, 5, -7]] {
-        assert!(!store.write([Write { key: key(OBJECT_COARSEST, at), id: 3, ext: None }]).is_empty());
+        assert!(!store
+            .write([Write {
+                key: key(OBJECT_COARSEST, at),
+                id: 3,
+                ext: None
+            }])
+            .is_empty());
         assert_eq!(
             store.node(OBJECT_FINEST, first_descendant_of(at, u32::from(OBJECT_FINEST - OBJECT_COARSEST))).0.state,
             3,
@@ -26,7 +32,15 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
         );
         let mut met = Vec::new();
         store.each_in(OBJECT_COARSEST, at, &mut |e| met.push(*e));
-        assert_eq!(met, vec![Entry { zoom: OBJECT_COARSEST, at, state: 3, ext: 0 }]);
+        assert_eq!(
+            met,
+            vec![Entry {
+                zoom: OBJECT_COARSEST,
+                at,
+                state: 3,
+                ext: 0
+            }]
+        );
         store.write([Write {
             key: key(OBJECT_COARSEST, at),
             id: VOID,
@@ -157,13 +171,25 @@ fn a_leaf_keeps_its_words_and_an_erase_frees_them() {
     use pxl_spec::cell::object::MARKER;
     let mut store = Store::default();
     let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
-    store.write([Write { key: key(zoom, at), id: MARKER, ext: words("cafe") }]);
+    store.write([Write {
+        key: key(zoom, at),
+        id: MARKER,
+        ext: words("cafe"),
+    }]);
     let e = store.placed(zoom, at).expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
-    store.write([Write { key: key(zoom, at), id: VOID, ext: None }]);
+    store.write([Write {
+        key: key(zoom, at),
+        id: VOID,
+        ext: None,
+    }]);
     assert!(store.placed(zoom, at).is_none());
     // The freed slot is the next one kept: nothing outlived its leaf.
-    store.write([Write { key: key(zoom, at), id: MARKER, ext: words("bar") }]);
+    store.write([Write {
+        key: key(zoom, at),
+        id: MARKER,
+        ext: words("bar"),
+    }]);
     let e = store.placed(zoom, at).expect("placed again");
     assert_eq!(e.ext, 1);
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
@@ -175,7 +201,11 @@ fn eight_markers_filling_a_cell_stay_eight() {
     let mut store = Store::default();
     let parent = [4, 4, 2];
     let writes: Vec<Write> = (0..8)
-        .map(|k| Write { key: key(OBJECT_COARSEST + 1, child_cube(OBJECT_COARSEST, parent, k)), id: MARKER, ext: words(&format!("m{k}")) })
+        .map(|k| Write {
+            key: key(OBJECT_COARSEST + 1, child_cube(OBJECT_COARSEST, parent, k)),
+            id: MARKER,
+            ext: words(&format!("m{k}")),
+        })
         .collect();
     store.write(writes);
     let mut met = 0;
@@ -190,7 +220,11 @@ fn eight_markers_filling_a_cell_stay_eight() {
 fn a_column_read_whole_meets_its_leaves() {
     let mut store = Store::default();
     let at = [5, 7, 2];
-    store.write([Write { key: key(OBJECT_COARSEST, at), id: 3, ext: None }]);
+    store.write([Write {
+        key: key(OBJECT_COARSEST, at),
+        id: 3,
+        ext: None,
+    }]);
     // The node of a whole column: its tree's root, read through the region.
     let col = [at[0] >> (OBJECT_COARSEST - SHARD_ZOOM), at[1] >> (OBJECT_COARSEST - SHARD_ZOOM), 0];
     let mut met = 0;

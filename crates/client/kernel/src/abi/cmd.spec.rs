@@ -714,7 +714,7 @@ pub struct Snapshot<'a> {
     /// The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it.
     pub m_per_px: f64,
     /// The division the focus is in and every one above it, broad to narrow; empty
-    /// where the center is in none or the packets it is read out of have not arrived.
+    /// where the focus is in none or the tile it is read out of has not arrived.
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
@@ -870,11 +870,14 @@ pub struct DivisionPart<'a> {
     pub subtype: u8,
     pub name: &'a dyn Display,
     pub names: &'a dyn Fn(&mut dyn FnMut(&LangName<'_>)),
+    /// Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the
+    /// subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java).
+    pub prominence: u8,
 }
 
 impl DivisionPart<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 3;
+    pub const FIELDS: u32 = 4;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u8(Some(self.subtype));
@@ -886,6 +889,7 @@ impl DivisionPart<'_> {
                 w.branch(LangName::FIELDS, |w| item.write(w));
             })
         });
+        w.u8(Some(self.prominence));
     }
 }
 

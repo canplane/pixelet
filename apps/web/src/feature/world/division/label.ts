@@ -1,4 +1,4 @@
-// @pxl/web/feature/world/geocode/label.ts
+// @pxl/web/feature/world/division/label.ts
 
 /** `name` is the provider's own, `names` the same by language tag where it has one. */
 export interface DivisionPart {

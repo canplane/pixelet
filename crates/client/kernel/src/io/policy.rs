@@ -27,8 +27,8 @@ use pxl_spec::space::layer::tile::Tile;
 const SHELLS: u8 = 2;
 const TERRAIN: u8 = 0;
 const ASSET: u8 = TERRAIN + SHELLS;
-const PLACES: u8 = ASSET + 1;
-const ASIDE: u8 = PLACES + SHELLS;
+const PLACE: u8 = ASSET + 1;
+const ASIDE: u8 = PLACE + SHELLS;
 
 pub struct Policy {
     pub retry_ms: f64,
@@ -52,7 +52,7 @@ fn tile(layer: Category, subject: u64, ask: Ask) -> Rank {
             detail: 0,
         };
     }
-    let base = if layer == Category::terrain { TERRAIN } else { PLACES };
+    let base = if layer == Category::terrain { TERRAIN } else { PLACE };
     Rank {
         class: base + !ask.order.seen as u8,
         distance: ask.order.near,
@@ -63,14 +63,13 @@ fn tile(layer: Category, subject: u64, ask: Ask) -> Rank {
 impl Serve for Policy {
     fn rank(&self, category: Category, subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         match category {
-            Category::terrain | Category::poi | Category::earth => tile(category, subject, ask),
+            Category::terrain | Category::place | Category::earth => tile(category, subject, ask),
             Category::asset => Rank {
                 class: ASSET,
                 distance: 0.0,
                 detail: 0,
             },
-            // Neither blocks the other: the label renders on the turn both are there.
-            Category::geocode | Category::geocode_dict => Rank {
+            Category::division => Rank {
                 class: ASIDE,
                 distance: 0.0,
                 detail: 0,

@@ -20,7 +20,6 @@ use crate::io::failure::{Ended, Failure};
 use crate::io::file::{self, Opened, Owner};
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::sched::edge::{request_world_tick, world_edge};
-use pxl_spec::bake::division_tile::{group_key, DICT_OBJECT};
 use pxl_spec::space::hierarchy::morton::write_name;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::clock::now;
@@ -32,9 +31,7 @@ impl fmt::Display for DemandName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let key = self;
         match key.0 {
-            Category::terrain | Category::poi | Category::earth => write_name::<2>(f, Tile::of_subject(key.1).key()),
-            Category::geocode => write_name::<2>(f, group_key(key.1)),
-            Category::geocode_dict => f.write_str(DICT_OBJECT),
+            Category::terrain | Category::place | Category::earth | Category::division => write_name::<2>(f, Tile::of_subject(key.1).key()),
             // Assets are opened below the assets' root (io/load.rs), never here.
             Category::asset => Ok(()),
         }

@@ -13,7 +13,7 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 
 use super::*;
 use crate::layer::Answer;
-use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
@@ -43,7 +43,7 @@ fn top() -> Tile {
     Tile::new(LEAF_ZOOM - 1, ivec::gather(40, -20, 0))
 }
 
-fn resident(held: &[(Tile, Terrain)]) -> Residency<Terrain> {
+fn resident(held: &[(Tile, TerrainTile)]) -> Residency<TerrainTile> {
     let mut residency = Residency::default();
     for (p, tile) in held {
         residency.admit(*p, &Keep, |_| Ok::<_, ()>(tile.clone())).unwrap();
@@ -76,7 +76,7 @@ fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
 fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
     let _g = serial();
     let leaf = top().children()[0];
-    let void = Terrain::leaf(
+    let void = TerrainTile::leaf(
         vec![0; PADDED * PADDED],
         Ground {
             cells: vec![sentinel::void; SPAN * SPAN].into(),
@@ -111,7 +111,7 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
     let leaf = top().children()[0];
     let mut decks = Builder::default();
     decks.push([([0.0, 10.5], 10), ([40.0, 10.5], 10)], 4 * POINT_SCALE as u8, ground::residential_road, Form::Bridge, 0);
-    let void = Terrain::leaf(
+    let void = TerrainTile::leaf(
         vec![0; PADDED * PADDED],
         Ground {
             cells: vec![sentinel::void; SPAN * SPAN].into(),
@@ -136,7 +136,7 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let n = pxl_spec::space::coord::world::around(LEAF_ZOOM);
     let flat = || {
         let cells = vec![ground::land; SPAN * SPAN];
-        Terrain::leaf(vec![5; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
+        TerrainTile::leaf(vec![5; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
     };
     let tile = |x: i64| pxl_spec::space::layer::tile::tile_at(LEAF_ZOOM, [x, 0]);
     let residency = resident(&[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())]);

@@ -66,7 +66,7 @@ pub mod FRAME {
     pub const mounts_layouts: u32 = 84;
     pub const tiles_total: u32 = 85;
     pub const zoom_tiles: u32 = 86;
-    pub const tiles_poi: u32 = 110;
+    pub const tiles_place: u32 = 110;
     pub const heap_used_mb: u32 = 111;
     pub const heap_live_mb: u32 = 112;
     pub const heap_run_mb: u32 = 113;
@@ -81,7 +81,7 @@ pub mod FRAME {
     pub const work_fine_peak: u32 = 122;
     pub const work_coarse_peak: u32 = 123;
     pub const q_terrain: u32 = 124;
-    pub const q_poi: u32 = 125;
+    pub const q_place: u32 = 125;
     pub const stale_hidden: u32 = 126;
     pub const stale_uncovered: u32 = 127;
     pub const stale_unready: u32 = 128;
@@ -138,7 +138,7 @@ pub mod FRAME {
         "mounts_layouts",
         "tiles_total",
         "zoom_tiles",
-        "tiles_poi",
+        "tiles_place",
         "heap_used_mb",
         "heap_live_mb",
         "heap_run_mb",
@@ -153,7 +153,7 @@ pub mod FRAME {
         "work_fine_peak",
         "work_coarse_peak",
         "q_terrain",
-        "q_poi",
+        "q_place",
         "stale_hidden",
         "stale_uncovered",
         "stale_unready",
@@ -196,8 +196,8 @@ pub mod FRAME_GROUPS {
     pub const slot: &[&str] = &["slot_waits", "slot_wait_zooms", "slot_chained"];
     pub const cap: &[&str] = &["cap_commit_left", "cap_mount_left", "cap_mount_full", "cap_record_refused"];
     pub const work: &[&str] = &["work_runs", "work_bakes", "work_fine_peak", "work_coarse_peak"];
-    pub const q: &[&str] = &["q_terrain", "q_poi"];
-    pub const tiles: &[&str] = &["tiles_total", "zoom_tiles", "tiles_poi"];
+    pub const q: &[&str] = &["q_terrain", "q_place"];
+    pub const tiles: &[&str] = &["tiles_total", "zoom_tiles", "tiles_place"];
     pub const cover: &[&str] = &["cover_rule", "cover_drawn", "cover_gaps"];
     pub const view: &[&str] = &["view_rays", "view_visits"];
     pub const device: &[&str] = &["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"];
@@ -364,11 +364,11 @@ pub mod SUMMARY {
     pub mod tasks {
         pub const AT: u32 = 263;
         pub const slots: u32 = 0;
-        pub const WORDS: u32 = 150;
+        pub const WORDS: u32 = 125;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 413;
+        pub const AT: u32 = 388;
         pub const faces_kept: u32 = 0;
         pub const faces_possible: u32 = 1;
         pub const runs_culled: u32 = 2;
@@ -398,7 +398,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod sheet {
-        pub const AT: u32 = 424;
+        pub const AT: u32 = 399;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -408,7 +408,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
     pub mod held {
-        pub const AT: u32 = 429;
+        pub const AT: u32 = 404;
         pub const run_sets: u32 = 0;
         pub const run_set_mb: u32 = 1;
         pub const tiers: u32 = 2;
@@ -419,7 +419,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "run_sets", "run_set_mb", "tiers", "decor_blocks", "decor_instances", "decor_bytes", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 435;
+        pub const AT: u32 = 410;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -427,7 +427,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 438;
+        pub const AT: u32 = 413;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -436,7 +436,7 @@ pub mod SUMMARY {
         pub const draw_calls: u32 = 5;
         pub const triangles: u32 = 6;
         pub const q_terrain: u32 = 7;
-        pub const q_poi: u32 = 8;
+        pub const q_place: u32 = 8;
         pub const chunks: u32 = 9;
         pub const in_frustum: u32 = 10;
         pub const pending: u32 = 11;
@@ -457,7 +457,7 @@ pub mod SUMMARY {
             "draw_calls",
             "triangles",
             "q_terrain",
-            "q_poi",
+            "q_place",
             "chunks",
             "in_frustum",
             "pending",
@@ -471,14 +471,14 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 456;
+        pub const AT: u32 = 431;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 617;
+        pub const AT: u32 = 592;
         pub const step: u32 = 0;
         pub const star: u32 = 1;
         pub const frames_held: u32 = 2;
@@ -491,7 +491,7 @@ pub mod SUMMARY {
     }
     /// The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for.
     pub mod heap {
-        pub const AT: u32 = 624;
+        pub const AT: u32 = 599;
         pub const used_mb: u32 = 0;
         pub const requests: u32 = 1;
         pub const WORDS: u32 = 2;
@@ -499,7 +499,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from.
     pub mod view {
-        pub const AT: u32 = 626;
+        pub const AT: u32 = 601;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -538,7 +538,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 642;
+    pub const WORDS: u32 = 617;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "sheet", "held", "fetch", "peak", "steps", "quality", "heap", "view", "WORDS"];
 }
 

@@ -18,7 +18,7 @@ use std::collections::TryReserveError;
 pub use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::fold::majority;
-use pxl_spec::cell::object::{decor_id_from_num, object_value_is_marker, object_value_is_decor, object_value_is_voxel, placeable_cube_of, PlaceableCube};
+use pxl_spec::cell::object::{decor_id_from_num, object_value_is_decor, object_value_is_marker, object_value_is_voxel, placeable_cube_of, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
@@ -32,9 +32,9 @@ use xpute_core::status::errno::Errno;
 
 use crate::kernel;
 use crate::layer::object::ext::{Ext, Pools, NONE};
-use pxl_spec::cell::ext::subclass_of;
 use crate::layer::{Answer, Bound, Query};
 use crate::sched::edge::request_world_tick;
+use pxl_spec::cell::ext::subclass_of;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EntryKind {
@@ -191,11 +191,7 @@ impl Store {
         let tree = self.columns.get(&key(SHARD_ZOOM, column(zoom, at)))?;
         // The column itself is its tree's root, whose children are the first block.
         if zoom == SHARD_ZOOM {
-            return Some(Found {
-                tree,
-                zoom,
-                slot: Slot::Branch(0),
-            });
+            return Some(Found { tree, zoom, slot: Slot::Branch(0) });
         }
         let (depth, slot) = tree.get(u32::from(zoom - SHARD_ZOOM), at);
         Some(Found {

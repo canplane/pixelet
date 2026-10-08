@@ -34,7 +34,7 @@ use pxl_kernel::layer::object::store::Store;
 use pxl_kernel::layer::residency::{Candidate, Residency, Victim};
 use pxl_kernel::layer::Answer;
 use pxl_kernel::query::{Detail, Ray, World};
-use pxl_spec::bake::format::{decode_terrain, Terrain};
+use pxl_spec::bake::format::{decode_terrain, TerrainTile};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
@@ -98,7 +98,7 @@ impl Victim for Keep {
 /// The tiles a run has asked the server for and what came of it.
 struct Tiles {
     server: String,
-    residency: Residency<Terrain>,
+    residency: Residency<TerrainTile>,
     tried: HashSet<Tile>,
 }
 

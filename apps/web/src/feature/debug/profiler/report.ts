@@ -20,7 +20,7 @@ export function failText(fail: u32, detail: u32): string {
 }
 
 /** Set once from profiling, never fed back into scheduling. */
-export const BOUND: Record<string, string> = { terrain: "network", geocode: "network" };
+export const BOUND: Record<string, string> = { terrain: "network", division: "network" };
 
 const phasesText = (p: [string, f64][]) => p.length === 0 ? "" : `  [${p.map(phaseText).join(" ")}]`;
 

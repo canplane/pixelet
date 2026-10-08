@@ -379,7 +379,7 @@ export interface Snapshot {
   /** The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it. */
   m_per_px: f64;
   /** The division the focus is in and every one above it, broad to narrow; empty
-   * where the center is in none or the packets it is read out of have not arrived. */
+   * where the focus is in none or the tile it is read out of has not arrived. */
   division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
@@ -480,10 +480,13 @@ export interface DivisionPart {
   subtype: u8;
   name: string;
   names: LangName[];
+  /** Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the
+   * subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java). */
+  prominence: u8;
 }
 
 export function read_division_part(b: BranchCursor): DivisionPart {
-  return { subtype: b.at(0).get<u8>(), name: b.at(1).get<string>(), names: list(b.at_branch(2), read_lang_name) };
+  return { subtype: b.at(0).get<u8>(), name: b.at(1).get<string>(), names: list(b.at_branch(2), read_lang_name), prominence: b.at(3).get<u8>() };
 }
 
 export interface LangName {

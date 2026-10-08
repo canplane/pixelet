@@ -20,7 +20,7 @@ export const BUILD_ID: string = buildId;
 /** `#<n>`, or `#<n>-<id>` for a build after it that CI did not number. */
 export const BUILD_NUMBER: string = buildNumber;
 
-/** Also decides whether a 404 means never baked (a page drawn from the one over it) or a failure. */
+/** Pages from the published bucket, through the Worker, rather than the dev tile server. */
 export const PUBLISHED_TILES: boolean = __PUBLISHED_TILES__;
 
 export const DEV_SOURCE: string = __DEV_SOURCE__;
