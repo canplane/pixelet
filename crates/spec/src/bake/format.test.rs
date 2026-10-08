@@ -20,7 +20,7 @@ impl Rng {
 fn tile(seed: u64) -> TerrainTile {
     let mut rng = Rng(SplitMix64::new(seed));
     let ele: Vec<i16> = (0..ELE_LANE).map(|_| rng.next() as i16).collect();
-    let cells: Vec<GroundCell> = (0..GROUND_LANE).map(|_| rng.next() as GroundCell).collect();
+    let cells: Vec<GroundId> = (0..GROUND_LANE).map(|_| rng.next() as GroundId).collect();
     let extent: Vec<[i16; 2]> = (0..EXTENT_LANE)
         .map(|_| {
             let (a, b) = (rng.next() as i16, rng.next() as i16);

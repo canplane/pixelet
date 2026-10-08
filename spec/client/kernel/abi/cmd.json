@@ -395,7 +395,7 @@
       ]
     },
     {
-      "name": "PointerKind",
+      "name": "PointerType",
       "$doc": [
         "What the pointer is, as the browser's `pointerType` says."
       ],
@@ -991,8 +991,8 @@
               "type": "PointerPhase"
             },
             {
-              "name": "kind",
-              "type": "PointerKind"
+              "name": "pointer_type",
+              "type": "PointerType"
             },
             {
               "name": "id",

@@ -12,7 +12,7 @@ import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { AppState, type GestureResponderEvent, type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, StyleSheet, type ViewProps } from "react-native";
 
-import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
+import { PointerPhase, PointerType } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_open, kernel_rect, kernel_visible } from "@/kernel/control/input.ts";
 import { worldPointer } from "@/app/store/pointer.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
@@ -88,7 +88,7 @@ export function WorldSurface() {
   };
 
   const touches = (phase: PointerPhase) => (e: GestureResponderEvent) => {
-    for (const t of e.nativeEvent.changedTouches) worldPointer(phase, PointerKind.Touch, Number(t.identifier), 0, t.locationX, t.locationY);
+    for (const t of e.nativeEvent.changedTouches) worldPointer(phase, PointerType.Touch, Number(t.identifier), 0, t.locationX, t.locationY);
   };
 
   return (

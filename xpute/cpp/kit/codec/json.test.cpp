@@ -25,14 +25,14 @@ static std::string decoded(JsonStr s) {
 
 XPUTE_TEST(json_read_in_place_walks_what_the_text_holds_and_refuses_what_is_not_json) {
     std::optional<JsonValue> doc = read_json(R"( {"a": [1, -2.5e1, true, null, "x\"y"], "b": {"k": "\uD83D\uDE00 \u00e9\n"}, "a": "last"} )");
-    XPUTE_CHECK(doc && doc->kind() == JsonKind::object);
+    XPUTE_CHECK(doc && doc->type_of() == JsonType::object);
     XPUTE_CHECK(doc->get("a")->as_str()->eq_str("last"));
     JsonFields fields = doc->fields();
     JsonValue first = fields.next()->second;
-    std::vector<JsonKind> kinds;
+    std::vector<JsonType> kinds;
     JsonItems items = first.items();
-    while (auto item = items.next()) kinds.push_back(item->kind());
-    XPUTE_CHECK((kinds == std::vector<JsonKind>{JsonKind::number, JsonKind::number, JsonKind::boolean, JsonKind::null, JsonKind::string}));
+    while (auto item = items.next()) kinds.push_back(item->type_of());
+    XPUTE_CHECK((kinds == std::vector<JsonType>{JsonType::number, JsonType::number, JsonType::boolean, JsonType::null, JsonType::string}));
     XPUTE_CHECK_EQ(*first.at(1)->as_f64(), -25.0, "a number reads as the host reads it");
     XPUTE_CHECK_EQ(*first.at(2)->as_bool(), true, "true");
     XPUTE_CHECK(first.at(3)->is_null());

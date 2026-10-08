@@ -11,7 +11,7 @@
 import { Keyboard } from "react-native";
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
-import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
+import { PointerPhase, PointerType } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_pointer } from "@/kernel/control/input.ts";
 import { DockMode, useUiStore } from "@/app/store/ui.ts";
 
@@ -21,10 +21,10 @@ const spent = new Set<i32>();
 const pressed = new Set<i32>();
 
 useUiStore.subscribe((state, before) => {
-  if (state.dockMode === DockMode.Message && before.dockMode !== DockMode.Message) kernel_pointer(PointerPhase.Out, PointerKind.Mouse, 0, 0, 0, 0);
+  if (state.dockMode === DockMode.Message && before.dockMode !== DockMode.Message) kernel_pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
 });
 
-export function worldPointer(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void {
+export function worldPointer(phase: PointerPhase, pointerType: PointerType, id: i32, button: i32, x: f64, y: f64): void {
   const { dockMode, setDockMode } = useUiStore.getState();
   const typing = dockMode === DockMode.Message;
   switch (phase) {
@@ -45,5 +45,5 @@ export function worldPointer(phase: PointerPhase, kind: PointerKind, id: i32, bu
       if (spent.delete(id)) phase = PointerPhase.Cancel;
       break;
   }
-  kernel_pointer(phase, kind, id, button, x, y);
+  kernel_pointer(phase, pointerType, id, button, x, y);
 }

@@ -19,14 +19,15 @@ pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 pub const EXTENT_LANE: usize = (EXTENT.tile_cells() * EXTENT.tile_cells()) as usize;
 pub const COARSE_LANE: usize = EXTENT.coarse_cells() as usize;
 
-/// A ground cell: one look of the Carto palette, a byte (`block/cube.json`).
-pub type GroundCell = u8;
+/// What a ground cell holds: the id of a cube of the ground's palette, a
+/// Carto look, which fits a byte (`block/cube.json`).
+pub type GroundId = u8;
 
 /// A tile's ground: one look a cell, the same shape from the bake through the
 /// wire to the client.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ground {
-    pub cells: Cow<'static, [GroundCell]>,
+    pub cells: Cow<'static, [GroundId]>,
 }
 
 impl Ground {
@@ -161,7 +162,7 @@ pub struct TerrainTile {
 
 // Made on first use: a constant array of zeros would ship in the module's data.
 static VOID_ELE: std::sync::LazyLock<Vec<i16>> = std::sync::LazyLock::new(|| vec![0; ELE_LANE]);
-static VOID_CELLS: std::sync::LazyLock<Vec<GroundCell>> = std::sync::LazyLock::new(|| vec![crate::block::cube::sentinel::void; GROUND_LANE]);
+static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> = std::sync::LazyLock::new(|| vec![crate::block::cube::sentinel::void; GROUND_LANE]);
 
 impl TerrainTile {
     /// Where the source has nothing at all: void cells, which give no surface,
@@ -205,7 +206,7 @@ pub fn encode_terrain(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
 
 /// The record's lanes in `.fixed.terrain` a tile is decoded into.
 pub struct TileRoom {
-    pub ground: &'static mut [GroundCell],
+    pub ground: &'static mut [GroundId],
     pub ele: &'static mut [i16],
     pub extent: &'static mut [[i16; 2]],
     pub coarse: &'static mut [[i16; 2]],
@@ -214,7 +215,7 @@ pub struct TileRoom {
 
 struct Lanes<'a> {
     ele: &'a [i16],
-    ground: &'a [GroundCell],
+    ground: &'a [GroundId],
     extent: &'a [[i16; 2]],
     occupancy: Occupancy,
     separation: separation::Lanes<'a>,
@@ -224,7 +225,7 @@ struct Lanes<'a> {
 fn read_tile(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
     let root = TreeReader::new(pkt)?.read_branch()?;
     let ele = root.at(0)?.get_array::<i16>()?;
-    let ground = root.at(1)?.get_array::<GroundCell>()?;
+    let ground = root.at(1)?.get_array::<GroundId>()?;
     let extent = pairs(root.at(2)?.get_array::<i16>()?)?;
     let occupancy = occupancy_of(root.at(3)?.get_number()?)?;
     let separation = separation::read_branch(root.at_branch(4)?)?;

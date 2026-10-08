@@ -12,7 +12,7 @@ import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/host/ipc/sys.ts";
 import { INGESTED, PACK } from "@/catalog/asset/ingested.spec.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
-import { BAKE_KINDS } from "@/config/published.spec.ts";
+import { BASE_LAYERS } from "@/config/published.spec.ts";
 import { assetUrl, tileUrl } from "@/config/route.ts";
 import { originGet } from "@platform/origin.ts";
 
@@ -42,7 +42,7 @@ function packed(body: U8Array): boolean {
 }
 
 export async function read_object(bake: u32, name: string, signal: AbortSignal): Promise<U8Array> {
-  const body = await get(tileUrl(BAKE_KINDS[bake], name, PUBLISHED_TILES), name, signal);
+  const body = await get(tileUrl(BASE_LAYERS[bake], name, PUBLISHED_TILES), name, signal);
   if (body.byteLength > 0 && packed(body)) {
     // Fail here: handing it on would fail in the kernel's decoder, far from the cause.
     console.warn(`[read] ${name}: the body arrived still packed, with no encoding to undo it`);

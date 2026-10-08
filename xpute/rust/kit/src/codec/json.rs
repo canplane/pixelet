@@ -115,7 +115,7 @@ fn skip_number(s: &[u8], mut at: usize) -> Option<usize> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum JsonKind {
+pub enum JsonType {
     Null,
     Bool,
     Number,
@@ -137,19 +137,19 @@ pub fn read_json(text: &str) -> Option<JsonValue<'_>> {
 }
 
 impl<'a> JsonValue<'a> {
-    pub fn kind(&self) -> JsonKind {
+    pub fn type_of(&self) -> JsonType {
         match self.s.as_bytes()[0] {
-            b'n' => JsonKind::Null,
-            b't' | b'f' => JsonKind::Bool,
-            b'"' => JsonKind::String,
-            b'[' => JsonKind::Array,
-            b'{' => JsonKind::Object,
-            _ => JsonKind::Number,
+            b'n' => JsonType::Null,
+            b't' | b'f' => JsonType::Bool,
+            b'"' => JsonType::String,
+            b'[' => JsonType::Array,
+            b'{' => JsonType::Object,
+            _ => JsonType::Number,
         }
     }
 
     pub fn is_null(&self) -> bool {
-        self.kind() == JsonKind::Null
+        self.type_of() == JsonType::Null
     }
 
     pub fn as_bool(&self) -> Option<bool> {
@@ -161,15 +161,15 @@ impl<'a> JsonValue<'a> {
     }
 
     pub fn as_f64(&self) -> Option<f64> {
-        (self.kind() == JsonKind::Number).then(|| self.s.parse().ok()).flatten()
+        (self.type_of() == JsonType::Number).then(|| self.s.parse().ok()).flatten()
     }
 
     pub fn as_str(&self) -> Option<JsonStr<'a>> {
-        (self.kind() == JsonKind::String).then(|| JsonStr { raw: &self.s[1..self.s.len() - 1] })
+        (self.type_of() == JsonType::String).then(|| JsonStr { raw: &self.s[1..self.s.len() - 1] })
     }
 
     pub fn items(&self) -> JsonItems<'a> {
-        let open = self.kind() == JsonKind::Array;
+        let open = self.type_of() == JsonType::Array;
         JsonItems {
             s: self.s,
             at: if open { 1 } else { self.s.len() },
@@ -178,7 +178,7 @@ impl<'a> JsonValue<'a> {
 
     /// A key given twice is given twice.
     pub fn fields(&self) -> JsonFields<'a> {
-        let open = self.kind() == JsonKind::Object;
+        let open = self.type_of() == JsonType::Object;
         JsonFields {
             s: self.s,
             at: if open { 1 } else { self.s.len() },

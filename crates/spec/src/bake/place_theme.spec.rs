@@ -20,7 +20,7 @@
 // draws no point for, so it is neither carried in a tile nor drawn
 // (decision/20261009-places-follow-carto.md).
 
-/// Each kind's Overture category, kind k at `CATEGORIES[k - 1]`.
+/// Each category's Overture name, category k at `CATEGORIES[k - 1]`.
 pub const CATEGORIES: [&str; 256] = [
     "academy",
     "adult_entertainment_venue",
@@ -280,7 +280,7 @@ pub const CATEGORIES: [&str; 256] = [
     "zoo",
 ];
 
-/// The zoom from which Carto draws a kind as a dot, 0 for never, kind k at `DOT_ZOOM[k - 1]`.
+/// The zoom from which Carto draws a category as a dot, 0 for never, category k at `DOT_ZOOM[k - 1]`.
 pub const DOT_ZOOM: [u8; 256] = [
     0, 0, 0, 0, 0, 17, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 18, 17, 17, 0, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 17, 18,
     0, 0, 0, 17, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 17, 0, 0, 0, 17, 17, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 18, 18, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -289,7 +289,7 @@ pub const DOT_ZOOM: [u8; 256] = [
     17, 0, 0, 17, 0, 0, 0, 17, 0, 0, 0,
 ];
 
-/// The zoom from which Carto draws a kind's icon, 0 for never, kind k at `ICON_ZOOM[k - 1]`.
+/// The zoom from which Carto draws a category's icon, 0 for never, category k at `ICON_ZOOM[k - 1]`.
 pub const ICON_ZOOM: [u8; 256] = [
     0, 0, 0, 12, 0, 18, 0, 0, 0, 0, 0, 18, 0, 17, 17, 0, 0, 0, 0, 18, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 18, 0, 17, 17, 18, 0, 0, 16, 0, 0, 0, 18, 16, 0, 0, 17, 15, 18, 0, 16, 17, 0, 18, 0, 0, 0, 17, 0,
     0, 18, 0, 16, 17, 17, 18, 16, 0, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 17, 15, 17, 0, 17, 0, 0, 0, 0, 0, 17, 18, 18, 0, 16, 17, 0, 0, 0, 0, 17, 0, 18, 0, 16, 17, 0, 0, 17, 0, 15, 0, 0, 17, 18, 0, 0, 16,
@@ -298,7 +298,7 @@ pub const ICON_ZOOM: [u8; 256] = [
     17, 0, 0, 0, 16, 0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 17, 17, 18, 16, 0, 0, 18, 0, 0, 0,
 ];
 
-/// The zoom from which Carto names a kind, 0 for never, kind k at `LABEL_ZOOM[k - 1]`.
+/// The zoom from which Carto names a category, 0 for never, category k at `LABEL_ZOOM[k - 1]`.
 pub const LABEL_ZOOM: [u8; 256] = [
     0, 0, 0, 13, 0, 18, 0, 0, 18, 0, 0, 18, 0, 17, 17, 0, 0, 18, 0, 0, 18, 18, 18, 0, 0, 0, 0, 0, 0, 17, 18, 0, 18, 17, 18, 0, 0, 17, 0, 0, 0, 18, 17, 0, 0, 17, 16, 18, 0, 17, 17, 0, 18, 0, 0, 0, 17,
     0, 0, 18, 18, 17, 17, 17, 17, 18, 0, 0, 18, 0, 17, 0, 0, 0, 0, 18, 0, 17, 16, 17, 0, 0, 0, 0, 0, 0, 0, 17, 18, 18, 0, 17, 17, 18, 18, 0, 0, 17, 0, 18, 0, 16, 17, 0, 0, 17, 0, 15, 18, 18, 17, 18,
@@ -307,7 +307,7 @@ pub const LABEL_ZOOM: [u8; 256] = [
     0, 17, 18, 18, 0, 0, 17, 0, 0, 0, 17, 0, 17, 18, 0, 0, 18, 0, 18, 18, 18, 17, 17, 18, 16, 0, 0, 18, 0, 0, 0,
 ];
 
-/// A kind's icon or dot fill as `0xRRGGBBAA`, kind k at `FILL[k - 1]`.
+/// A category's icon or dot fill as `0xRRGGBBAA`, category k at `FILL[k - 1]`.
 pub const FILL: [u32; 256] = [
     0, 0, 0, 0x8461c4ff, 0, 0xc77400ff, 0, 0, 0xac39acff, 0, 0, 0x0092daff, 0, 0x0c8416ff, 0x734a08ff, 0, 0, 0xac39acff, 0, 0x734a08ff, 0x4863a0ff, 0xac39acff, 0xac39acff, 0, 0, 0, 0, 0, 0,
     0x734a08ff, 0xc77400ff, 0, 0x0092daff, 0xbf0000ff, 0xac39acff, 0, 0, 0x000000ff, 0, 0, 0, 0xc77400ff, 0x0092daff, 0, 0, 0x734a08ff, 0x734a08ff, 0xc77400ff, 0, 0x000000ff, 0x734a08ff, 0,
@@ -321,7 +321,7 @@ pub const FILL: [u32; 256] = [
     0xac39acff, 0, 0, 0xac39acff, 0, 0xac39acff, 0xac39acff, 0xac39acff, 0xbf0000ff, 0xbf0000ff, 0xac39acff, 0x4d80b3ff, 0, 0, 0xac39acff, 0, 0, 0,
 ];
 
-/// A kind's label fill as `0xRRGGBBAA`, kind k at `TEXT[k - 1]`.
+/// A category's label fill as `0xRRGGBBAA`, category k at `TEXT[k - 1]`.
 pub const TEXT: [u32; 256] = [
     0, 0, 0, 0x5e3b9eff, 0, 0xae6500ff, 0, 0, 0x993399ff, 0, 0, 0x0066ffff, 0, 0x0c8416ff, 0x734a08ff, 0, 0, 0x993399ff, 0, 0, 0x4863a0ff, 0x993399ff, 0x993399ff, 0, 0, 0, 0, 0, 0, 0x734a08ff,
     0xae6500ff, 0, 0x0066ffff, 0xbf0000ff, 0x993399ff, 0, 0, 0x000033ff, 0, 0, 0, 0xae6500ff, 0x0066ffff, 0, 0, 0x734a08ff, 0x734a08ff, 0xae6500ff, 0, 0x000033ff, 0x734a08ff, 0, 0xae6500ff, 0, 0, 0,
@@ -335,7 +335,7 @@ pub const TEXT: [u32; 256] = [
     0, 0x993399ff, 0x993399ff, 0x993399ff, 0xbf0000ff, 0xbf0000ff, 0x993399ff, 0x4d80b3ff, 0, 0, 0x993399ff, 0, 0, 0,
 ];
 
-/// A kind's icon under Carto's `symbols/`, "" for none, kind k at `SYMBOL[k - 1]`.
+/// A category's icon under Carto's `symbols/`, "" for none, category k at `SYMBOL[k - 1]`.
 pub const SYMBOL: [&str; 256] = [
     "",
     "",

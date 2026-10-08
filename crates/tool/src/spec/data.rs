@@ -193,7 +193,7 @@ const DATA_SPECS: [DataSpec; 21] = [
         ts: Some("apps/web/src/kernel/io/demand.spec.ts"),
         rs: Some("crates/client/kernel/src/io/demand.spec.rs"),
         module: Some("spec"),
-        enums: Enums::Named(&["CATEGORY_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
+        enums: Enums::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
         ts_names: None,
         cpp: None,
     },

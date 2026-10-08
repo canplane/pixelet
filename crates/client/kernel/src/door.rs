@@ -9,7 +9,7 @@ mod executor;
 pub mod layout;
 
 use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
-use crate::io::demand::Category;
+use crate::io::demand::Stream;
 use crate::io::host::HeapStat;
 use crate::kernel;
 use crate::layer::earth::Earth;
@@ -150,10 +150,10 @@ fn lay_out(b: &Bracket) -> u32 {
     kernel().laid_out = true;
     // A layer asks for no more tiles than its residency frames.
     crate::io::request::open(|c| match c {
-        Category::terrain => Residency::<TerrainTile>::FRAMES,
-        Category::place => Residency::<PlaceTile>::FRAMES,
-        Category::earth => Residency::<Earth>::FRAMES,
-        Category::division => Residency::<DivisionTile>::FRAMES,
+        Stream::terrain => Residency::<TerrainTile>::FRAMES,
+        Stream::place => Residency::<PlaceTile>::FRAMES,
+        Stream::earth => Residency::<Earth>::FRAMES,
+        Stream::division => Residency::<DivisionTile>::FRAMES,
         _ => 0,
     });
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the
@@ -239,8 +239,8 @@ fn post_shell(s: &mut State) {
         raise(Command::WORLD_SNAPSHOT, WorldSnapshotSignal::FIELDS, |w| signal.write(w));
     }
     // The key is an opaque handle to the shell.
-    take_started(|credit, category, subject| match category.bake() {
-        Some(_) => crate::io::fetch::start(credit, category, subject),
+    take_started(|credit, stream, subject| match stream.bake() {
+        Some(_) => crate::io::fetch::start(credit, stream, subject),
         None => {
             if let Some((kind, load)) = crate::io::load::of_subject(subject) {
                 crate::io::load::open_asset(credit, kind, load);

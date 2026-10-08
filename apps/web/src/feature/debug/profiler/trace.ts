@@ -66,14 +66,14 @@ function profilerTraceJson(): string {
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
-  // ---- task spans, one thread per category ----
+  // ---- task spans, one thread per stream ----
   const catTid = new Map<string, u32>();
   for (const r of tasks) {
-    let tid = catTid.get(r.category);
+    let tid = catTid.get(r.stream);
     if (tid === undefined) {
       tid = TID_TASK_BASE + catTid.size;
-      catTid.set(r.category, tid);
-      events.push(threadName(tid, `task: ${r.category}`));
+      catTid.set(r.stream, tid);
+      events.push(threadName(tid, `task: ${r.stream}`));
     }
     const args: Args = {
       outcome: r.outcome,
@@ -87,7 +87,7 @@ function profilerTraceJson(): string {
       if (r.at !== null) args.at = r.at;
     }
     for (const [k, v] of r.phases) args[k] = v;
-    events.push(event(`${r.category}:${r.subject}`, `task,${r.outcome}`, "X", us(r.enqueue_ms), us(Math.max(0, r.end_ms - r.enqueue_ms)), tid, args));
+    events.push(event(`${r.stream}:${r.subject}`, `task,${r.outcome}`, "X", us(r.enqueue_ms), us(Math.max(0, r.end_ms - r.enqueue_ms)), tid, args));
   }
 
   // ---- per-frame counters (Perfetto graphs these) ----

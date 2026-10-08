@@ -158,14 +158,14 @@ std::optional<JsonValue> read_json(std::string_view text) noexcept {
     return JsonValue(text.substr(start, *end - start));
 }
 
-JsonKind JsonValue::kind() const noexcept {
+JsonType JsonValue::type_of() const noexcept {
     switch (s_[0]) {
-    case 'n': return JsonKind::null;
-    case 't': case 'f': return JsonKind::boolean;
-    case '"': return JsonKind::string;
-    case '[': return JsonKind::array;
-    case '{': return JsonKind::object;
-    default: return JsonKind::number;
+    case 'n': return JsonType::null;
+    case 't': case 'f': return JsonType::boolean;
+    case '"': return JsonType::string;
+    case '[': return JsonType::array;
+    case '{': return JsonType::object;
+    default: return JsonType::number;
     }
 }
 
@@ -176,7 +176,7 @@ std::optional<bool> JsonValue::as_bool() const noexcept {
 }
 
 std::optional<double> JsonValue::as_f64() const noexcept {
-    if (kind() != JsonKind::number) return std::nullopt;
+    if (type_of() != JsonType::number) return std::nullopt;
     std::string_view t = s_;
     double v = 0;
     auto [end, ec] = std::from_chars(t.data(), t.data() + t.size(), v);
@@ -185,16 +185,16 @@ std::optional<double> JsonValue::as_f64() const noexcept {
 }
 
 std::optional<JsonStr> JsonValue::as_str() const noexcept {
-    if (kind() != JsonKind::string) return std::nullopt;
+    if (type_of() != JsonType::string) return std::nullopt;
     return JsonStr(s_.substr(1, s_.size() - 2));
 }
 
 JsonItems JsonValue::items() const noexcept {
-    return JsonItems(s_, kind() == JsonKind::array ? 1 : s_.size());
+    return JsonItems(s_, type_of() == JsonType::array ? 1 : s_.size());
 }
 
 JsonFields JsonValue::fields() const noexcept {
-    return JsonFields(s_, kind() == JsonKind::object ? 1 : s_.size());
+    return JsonFields(s_, type_of() == JsonType::object ? 1 : s_.size());
 }
 
 std::optional<JsonValue> JsonValue::get(std::string_view key) const noexcept {

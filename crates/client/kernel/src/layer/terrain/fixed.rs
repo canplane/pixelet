@@ -8,7 +8,7 @@
 //! second tile's lanes.
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::format::GroundCell;
+use pxl_spec::bake::format::GroundId;
 use pxl_spec::bake::format::COARSE_LANE;
 use pxl_spec::bake::separation::{MAX_BOXES, MAX_LINES, MAX_POINTS};
 use pxl_spec::space::layer::lattice::{EXTENT, TILE_CELLS};
@@ -21,8 +21,8 @@ pub static RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
 
 const FRAMES: u32 = Residency::<TerrainTile>::FRAMES;
 
-/// One tile's ground: a `GroundCell` a cell, no stride and no padding.
-pub const GROUND_LANE_BYTES: u32 = TILE_CELLS * TILE_CELLS * core::mem::size_of::<GroundCell>() as u32;
+/// One tile's ground: a `GroundId` a cell, no stride and no padding.
+pub const GROUND_LANE_BYTES: u32 = TILE_CELLS * TILE_CELLS * core::mem::size_of::<GroundId>() as u32;
 
 pub const GROUND_BYTES: u32 = FRAMES * GROUND_LANE_BYTES;
 

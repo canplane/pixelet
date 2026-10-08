@@ -19,7 +19,7 @@ void push_utf8(std::uint32_t c, char *out, std::size_t &n) noexcept;
 
 } // namespace json_detail
 
-enum class JsonKind : std::uint8_t { null, boolean, number, string, array, object };
+enum class JsonType : std::uint8_t { null, boolean, number, string, array, object };
 
 // A lone surrogate reads as U+FFFD.
 class JsonChars {
@@ -59,8 +59,8 @@ class JsonFields;
 
 class JsonValue {
   public:
-    JsonKind kind() const noexcept;
-    bool is_null() const noexcept { return kind() == JsonKind::null; }
+    JsonType type_of() const noexcept;
+    bool is_null() const noexcept { return type_of() == JsonType::null; }
     std::optional<bool> as_bool() const noexcept;
     std::optional<double> as_f64() const noexcept;
     std::optional<JsonStr> as_str() const noexcept;

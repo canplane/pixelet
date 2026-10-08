@@ -315,18 +315,18 @@ impl PointerPhase {
 /// What the pointer is, as the browser's `pointerType` says.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum PointerKind {
+pub enum PointerType {
     Mouse = 0,
     Touch = 1,
     Pen = 2,
 }
 
-impl PointerKind {
-    pub const ALL: [PointerKind; 3] = [PointerKind::Mouse, PointerKind::Touch, PointerKind::Pen];
+impl PointerType {
+    pub const ALL: [PointerType; 3] = [PointerType::Mouse, PointerType::Touch, PointerType::Pen];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<PointerKind> {
-        PointerKind::ALL.into_iter().find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<PointerType> {
+        PointerType::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -1171,7 +1171,7 @@ impl InputRect {
 #[derive(Clone, Copy, Debug)]
 pub struct InputPointer {
     pub phase: PointerPhase,
-    pub kind: PointerKind,
+    pub pointer_type: PointerType,
     pub id: i32,
     pub button: i32,
     pub x: f64,
@@ -1183,7 +1183,7 @@ impl InputPointer {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputPointer {
             phase: PointerPhase::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
-            kind: PointerKind::of(integer::<u32>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
+            pointer_type: PointerType::of(integer::<u32>(f.at(1)?.get_number()?)?).ok_or_else(|| unknown())?,
             id: integer::<i32>(f.at(2)?.get_number()?)?,
             button: integer::<i32>(f.at(3)?.get_number()?)?,
             x: finite(f.at(4)?.get_number()?)?,

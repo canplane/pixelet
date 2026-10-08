@@ -5,7 +5,7 @@
 //! `u32`.
 
 use crate::terrain::CELL_U;
-use pxl_spec::bake::format::{Ground, GroundCell};
+use pxl_spec::bake::format::{Ground, GroundId};
 use pxl_spec::bake::way;
 use pxl_spec::block::cube::ground;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -119,7 +119,7 @@ pub(crate) fn render_polygon<T: Copy>(points: &[P], value: T, cells: &mut [T], h
 
 /// Every cell whose center lies within the way's half width of a segment;
 /// segment distance rounds the ends, so bends need no cap.
-fn render_linear_feat(points: &[P], value: GroundCell, cells: &mut [GroundCell], width_cell: f64, cut: [bool; 2], mask: Sea) {
+fn render_linear_feat(points: &[P], value: GroundId, cells: &mut [GroundId], width_cell: f64, cut: [bool; 2], mask: Sea) {
     let reach = way::reach(width_cell);
     let last = points.len().saturating_sub(2);
     for (s, w) in points.windows(2).enumerate() {

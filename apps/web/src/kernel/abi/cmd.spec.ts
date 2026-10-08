@@ -139,7 +139,7 @@ export const enum PointerPhase {
 }
 
 /** What the pointer is, as the browser's `pointerType` says. */
-export const enum PointerKind {
+export const enum PointerType {
   Mouse = 0,
   Touch = 1,
   Pen = 2,
@@ -646,7 +646,7 @@ export function encode_input_rect(p: InputRect): U8Array {
 /** Command.INPUT_POINTER's packet. */
 export interface InputPointer {
   phase: PointerPhase;
-  kind: PointerKind;
+  pointer_type: PointerType;
   id: i32;
   button: i32;
   x: f64;
@@ -654,7 +654,7 @@ export interface InputPointer {
 }
 
 export function encode_input_pointer(p: InputPointer): U8Array {
-  return packet((b) => b.u32(p.phase).u32(p.kind).i32(p.id).i32(p.button).f64(p.x).f64(p.y));
+  return packet((b) => b.u32(p.phase).u32(p.pointer_type).i32(p.id).i32(p.button).f64(p.x).f64(p.y));
 }
 
 /** Command.INPUT_HOLD's packet. */

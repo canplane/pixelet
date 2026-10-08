@@ -115,16 +115,16 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::INPUT_POINTER => {
             let p = abi::InputPointer::read(packet(pkt)?)?;
             match p.phase {
-                abi::PointerPhase::Down => camera_pointer_down(p.kind, p.id, p.button, p.x, p.y),
-                abi::PointerPhase::Move => camera_pointer_move(p.kind, p.id, p.x, p.y),
+                abi::PointerPhase::Down => camera_pointer_down(p.pointer_type, p.id, p.button, p.x, p.y),
+                abi::PointerPhase::Move => camera_pointer_move(p.pointer_type, p.id, p.x, p.y),
                 abi::PointerPhase::Up => {
-                    if let Some([x, y]) = camera_pointer_up(p.kind, p.id) {
+                    if let Some([x, y]) = camera_pointer_up(p.pointer_type, p.id) {
                         tap_at(x, y);
                     }
                 }
                 abi::PointerPhase::Out => camera_pointer_out(),
                 abi::PointerPhase::Cancel => {
-                    camera_pointer_up(p.kind, p.id);
+                    camera_pointer_up(p.pointer_type, p.id);
                 }
             }
             Ok(Some(0))

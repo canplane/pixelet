@@ -154,8 +154,8 @@ pub fn report_step(ctx: &mut TickContext) {
         heap: heap_sample(),
         rings,
         work,
-        q_terrain: pending_count(TerrainTile::CATEGORY) as f64,
-        q_place: pending_count(PlaceTile::CATEGORY) as f64,
+        q_terrain: pending_count(TerrainTile::STREAM) as f64,
+        q_place: pending_count(PlaceTile::STREAM) as f64,
         stale: StaleSample {
             hidden: census.ready_waiting as f64,
             slot_waits: census.slot_waits as f64,

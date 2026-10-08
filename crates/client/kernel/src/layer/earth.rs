@@ -17,7 +17,7 @@ use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{free, Block};
 
-use crate::io::demand::{Category, Phases};
+use crate::io::demand::{Phases, Stream};
 use crate::io::failure::Failure;
 use crate::layer::residency::Residency;
 use crate::layer::{Asks, Base};
@@ -30,7 +30,7 @@ pub struct Earth;
 static EARTH: Global<Residency<Earth>> = Global::new();
 
 impl Base for Earth {
-    const CATEGORY: Category = Category::earth;
+    const STREAM: Stream = Stream::earth;
     const LATTICE: Lattice = GROUND;
     const ASKS: Asks = Asks::Floor;
     const TOP: Option<Zoom> = Some(EARTH_ZOOM);

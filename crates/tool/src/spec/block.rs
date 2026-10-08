@@ -534,7 +534,7 @@ fn decor_table(spec: &Node, looks: &[String]) -> Result<Vec<String>, String> {
         "    pub seed: u64,",
         "    pub density: f64,",
         "    pub orientation: Orientation,",
-        "    pub on: &'static [crate::bake::format::GroundCell],",
+        "    pub on: &'static [crate::bake::format::GroundId],",
         "    pub variants: &'static [Variant],",
         "}",
         "",

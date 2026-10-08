@@ -53,9 +53,8 @@ pub fn badge_width(text_w: f64) -> f64 {
 
 // A place as OpenStreetMap Carto draws one (style/amenity-points.mss): a dot
 // four pixels wide, or its symbol in its square of 14, with the name under it
-// set `text-dy` 10 down, with @standard-line-spacing-size (−1.5) between
-// lines, haloed white at 0.6 a pixel round (style/style.mss). A kind with no
-// symbol is a disc of its fill. The name is in a marker's font, not Carto's
+// set `text-dy` 10 down, haloed white at 0.6 a pixel round (style/style.mss).
+// A category with no symbol is a disc of its fill. The name is in a marker's font, not Carto's
 // 10 pixels: one text in the world.
 
 pub const POINT_FONT: Font = BADGE_FONT;
@@ -69,8 +68,11 @@ const POINT_HALO: f32 = 1.0;
 const POINT_HALO_FILL: u32 = 0xffffff99;
 /// A line, the font's size and its halo above and below.
 const POINT_LINE: f32 = POINT_FONT.px + 2.0 * POINT_HALO;
-/// From one line to the next.
-const POINT_PITCH: f32 = POINT_LINE - 1.5;
+/// From one line to the next, as Mapnik sets it (text_line.cpp): the face's
+/// own line height plus Carto's @standard-line-spacing-size, −0.15 em. The
+/// face is the system's, whose metrics the sheet does not read; 1.2 em is
+/// CSS's `line-height: normal` at its high end (CSS 2.1 §10.8.1).
+const POINT_PITCH: f32 = (1.2 - 0.15) * POINT_FONT.px;
 
 /// A point's sprite for a name laid out in `lines` as wide as `text_w`, or
 /// none: its width, height and where the place is, down from its top.

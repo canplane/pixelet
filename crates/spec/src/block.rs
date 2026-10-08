@@ -50,7 +50,7 @@ impl decor::Decor {
     }
 
     /// Whether the ground grows it on a cell of `look`.
-    pub fn allows(&self, look: crate::bake::format::GroundCell) -> bool {
+    pub fn allows(&self, look: crate::bake::format::GroundId) -> bool {
         self.on.contains(&look)
     }
 

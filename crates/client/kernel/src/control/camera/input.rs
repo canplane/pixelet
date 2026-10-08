@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use crate::param::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_PX_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
 
-pub use crate::abi::cmd::PointerKind;
+pub use crate::abi::cmd::PointerType;
 use crate::control::camera::controller::{active, Active};
 use crate::control::camera::gesture::{linear, Anchor};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
@@ -254,10 +254,10 @@ fn update_pinch(s: &mut Input) {
     }
 }
 
-pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, client_x: f64, client_y: f64) {
+pub fn camera_pointer_down(pointer_type: PointerType, pointer_id: i32, button: i32, client_x: f64, client_y: f64) {
     let s = input();
     let camera = camera_state();
-    if kind == PointerKind::Touch {
+    if pointer_type == PointerType::Touch {
         s.hovering = false;
         s.active_pointers.insert(pointer_id, PointerPos { x: client_x, y: client_y });
         camera.camera_status = CameraStatus::Drag;
@@ -301,9 +301,9 @@ pub fn camera_pointer_down(kind: PointerKind, pointer_id: i32, button: i32, clie
     set_following(false);
 }
 
-pub fn camera_pointer_move(kind: PointerKind, pointer_id: i32, client_x: f64, client_y: f64) {
+pub fn camera_pointer_move(pointer_type: PointerType, pointer_id: i32, client_x: f64, client_y: f64) {
     let s = input();
-    if kind == PointerKind::Touch {
+    if pointer_type == PointerType::Touch {
         if let Some(pt) = s.active_pointers.get_mut(&pointer_id) {
             *pt = PointerPos { x: client_x, y: client_y };
         }
@@ -351,10 +351,10 @@ fn tap_if_still(s: &Input, mode: DragMode) -> Option<[f64; 2]> {
 }
 
 /// A pointer went up or was canceled; where it tapped, if it was a tap.
-pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) -> Option<[f64; 2]> {
+pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[f64; 2]> {
     let s = input();
     let camera = camera_state();
-    if kind == PointerKind::Touch {
+    if pointer_type == PointerType::Touch {
         s.active_pointers.remove(&pointer_id);
         match s.active_pointers.len() {
             0 => {

@@ -12,15 +12,15 @@ import {
   encode_input_rect,
   encode_input_wheel,
   encode_world_visibility,
-  type PointerKind,
   type PointerPhase,
+  type PointerType,
 } from "@/kernel/abi/cmd.spec.ts";
 import { permissionFollow } from "@platform/sensor.ts";
 import { GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame, ring_now, send_input, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
 
-export function kernel_pointer(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void {
-  send_input(Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y }));
+export function kernel_pointer(phase: PointerPhase, pointer_type: PointerType, id: i32, button: i32, x: f64, y: f64): void {
+  send_input(Command.INPUT_POINTER, encode_input_pointer({ phase, pointer_type, id, button, x, y }));
 }
 
 export function kernel_wheel(delta_y: f64): void {

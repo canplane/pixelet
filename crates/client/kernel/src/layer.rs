@@ -9,7 +9,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-use crate::io::demand::{Category, Phases};
+use crate::io::demand::{Phases, Stream};
 use crate::io::failure::Failure;
 use residency::Residency;
 
@@ -37,7 +37,7 @@ pub enum Asks {
 }
 
 pub trait Base: Clone + 'static {
-    const CATEGORY: Category;
+    const STREAM: Stream;
 
     /// Which of its children are tiles of their own, as the bake wrote it.
     fn occupancy(&self) -> Occupancy;

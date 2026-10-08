@@ -24,7 +24,7 @@ use pxl_geo_bake::coverage::Coverage;
 use pxl_geo_bake::util::{is_packed, unpack};
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::format::decode_terrain;
-use pxl_spec::bake::format::{GroundCell, Occupancy};
+use pxl_spec::bake::format::{GroundId, Occupancy};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::separation::{Form, Separation};
 use pxl_spec::bake::surface::bicubic;
@@ -51,7 +51,7 @@ fn read_tile(path: &Path) -> Result<Vec<u8>, String> {
 
 struct Tile {
     ele: Vec<i16>,
-    cells: Vec<GroundCell>,
+    cells: Vec<GroundId>,
     extent: Vec<[i16; 2]>,
     occupancy: Occupancy,
     separation: Separation,
@@ -75,7 +75,7 @@ fn decode(pkt: &[u8]) -> Result<Tile, String> {
     })
 }
 
-fn name_of(cell: GroundCell) -> &'static str {
+fn name_of(cell: GroundId) -> &'static str {
     ground::ENTRIES.iter().find(|(_, n)| *n == cell).map_or("?", |(name, _)| name)
 }
 
@@ -85,7 +85,7 @@ struct Summary {
     mean: f64,
     extent: [i16; 2],
     occupancy: Occupancy,
-    counts: BTreeMap<GroundCell, u32>,
+    counts: BTreeMap<GroundId, u32>,
     faults: Vec<String>,
 }
 
@@ -205,7 +205,7 @@ fn heights_png(tile: &Tile, s: &Summary) -> Vec<u8> {
     png(ELE_PADDED_SPAN, ELE_PADDED_SPAN, 1, &gray)
 }
 
-fn rgb_of(cell: GroundCell) -> u32 {
+fn rgb_of(cell: GroundId) -> u32 {
     color::ground(cell).map_or(MAGENTA, |s| s.rgb)
 }
 

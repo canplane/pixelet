@@ -1,20 +1,20 @@
 // pxl-kernel/io/request.rs
 
 //! The kernel's request scheduler: what is wanted (`desired`, replaced whole per
-//! category each turn) and what is out (`attempt`). Ordering, intake and
+//! stream each turn) and what is out (`attempt`). Ordering, intake and
 //! retry waits are the `Serve` policy's.
 //!
 //! An answer ends its want; a failure ends only its attempt and waits on the
 //! want. A running attempt is never preempted.
 //!
-//! Invariants: no more attempts than credits and no want past its category's
-//! bound; ties broken by category then subject so the order is total; a free
+//! Invariants: no more attempts than credits and no want past its stream's
+//! bound; ties broken by stream then subject so the order is total; a free
 //! credit and a ready want never both outlast a pump; an attempt stops only
 //! when nobody wants it any more.
 
 use core::cmp::Ordering;
 
-use crate::io::demand::{Ask, Category, Phases};
+use crate::io::demand::{Ask, Phases, Stream};
 use crate::io::failure::{Ended, Outcome};
 use crate::io::load::LOADS;
 use crate::io::policy::Policy;
@@ -39,28 +39,28 @@ pub struct Rank {
 
 pub trait Serve {
     /// Asked again every pump: the order is the view's now.
-    fn rank(&self, category: Category, subject: u64, ask: Ask, enqueue_ms: f64) -> Rank;
+    fn rank(&self, stream: Stream, subject: u64, ask: Ask, enqueue_ms: f64) -> Rank;
 
     fn intake(&self) -> u32;
 
     fn retry_after(&self, outcome: Outcome) -> Option<f64>;
 }
 
-/// How many of a category's wants are held at once. A layer's tiles: at most
+/// How many of a stream's wants are held at once. A layer's tiles: at most
 /// its residency's frames, since it asks only for what it can hold, which the
 /// layer says (`open`). An asset: as a model and as an image.
-pub type Bounds = [usize; Category::ALL.len()];
+pub type Bounds = [usize; Stream::ALL.len()];
 
-fn bounds_of(frames: impl Fn(Category) -> u32) -> Bounds {
-    Category::ALL.map(|c| match c {
-        Category::asset => 2 * LOADS,
-        Category::terrain | Category::place | Category::earth | Category::division => frames(c) as usize,
+fn bounds_of(frames: impl Fn(Stream) -> u32) -> Bounds {
+    Stream::ALL.map(|c| match c {
+        Stream::asset => 2 * LOADS,
+        Stream::terrain | Stream::place | Stream::earth | Stream::division => frames(c) as usize,
     })
 }
 
 #[derive(Clone, Copy, Debug)]
 struct Wanted {
-    category: Category,
+    stream: Stream,
     subject: u64,
     ask: Ask,
     /// First wanted, kept across re-declarations so the profiler measures the real wait.
@@ -70,7 +70,7 @@ struct Wanted {
 
 #[derive(Clone, Copy, Debug)]
 struct Attempt {
-    category: Category,
+    stream: Stream,
     subject: u64,
     rank: Rank,
     enqueue_ms: f64,
@@ -80,7 +80,7 @@ struct Attempt {
 #[derive(Clone, Copy)]
 struct Placed {
     rank: Rank,
-    category: Category,
+    stream: Stream,
     subject: u64,
 }
 
@@ -92,7 +92,7 @@ impl Placed {
             .then(self.rank.distance.total_cmp(&other.rank.distance))
             .then(other.rank.detail.cmp(&self.rank.detail))
             // Meaningless tie-break, so two runs of the same turn start the same work.
-            .then((self.category as u8, self.subject).cmp(&(other.category as u8, other.subject)))
+            .then((self.stream as u8, self.subject).cmp(&(other.stream as u8, other.subject)))
     }
 }
 
@@ -105,7 +105,7 @@ pub struct RequestScheduler<S> {
     attempt: [Option<Attempt>; MAX_CREDITS as usize],
     generation: [u32; MAX_CREDITS as usize],
     credits: u32,
-    started: Vec<(u64, Category, u64)>,
+    started: Vec<(u64, Stream, u64)>,
     stops: Vec<u64>,
     ready: Vec<(Placed, usize)>,
 }
@@ -142,8 +142,8 @@ impl<S: Serve> RequestScheduler<S> {
         }
     }
 
-    fn find(&self, category: Category, subject: u64) -> Option<usize> {
-        self.desired.iter().position(|w| w.is_some_and(|w| w.category == category && w.subject == subject))
+    fn find(&self, stream: Stream, subject: u64) -> Option<usize> {
+        self.desired.iter().position(|w| w.is_some_and(|w| w.stream == stream && w.subject == subject))
     }
 
     fn slot_of(&self, key: u64) -> Option<usize> {
@@ -151,17 +151,17 @@ impl<S: Serve> RequestScheduler<S> {
         (self.generation.get(slot) == Some(&generation) && self.attempt.get(slot).is_some_and(Option::is_some)).then_some(slot)
     }
 
-    fn attempting(&self, category: Category, subject: u64) -> bool {
-        self.attempt.iter().flatten().any(|a| a.category == category && a.subject == subject)
+    fn attempting(&self, stream: Stream, subject: u64) -> bool {
+        self.attempt.iter().flatten().any(|a| a.stream == stream && a.subject == subject)
     }
 
-    /// Replaces one category's wants. Re-declaring the same set changes
+    /// Replaces one stream's wants. Re-declaring the same set changes
     /// nothing, so producers say everything every turn. A kept subject keeps its
     /// enqueue time and retry wait; a repeated subject is one want, the later ask.
-    pub fn declare(&mut self, category: Category, wanted: &[(u64, Ask)], at: f64) {
+    pub fn declare(&mut self, stream: Stream, wanted: &[(u64, Ask)], at: f64) {
         for entry in self.desired.iter_mut() {
             let Some(w) = entry else { continue };
-            if w.category != category {
+            if w.stream != stream {
                 continue;
             }
             match wanted.iter().rev().find(|(k, _)| *k == w.subject) {
@@ -169,16 +169,16 @@ impl<S: Serve> RequestScheduler<S> {
                 None => *entry = None,
             }
         }
-        let mut held = self.desired.iter().flatten().filter(|w| w.category == category).count();
+        let mut held = self.desired.iter().flatten().filter(|w| w.stream == stream).count();
         for &(subject, ask) in wanted {
-            if self.find(category, subject).is_some() {
+            if self.find(stream, subject).is_some() {
                 continue;
             }
-            xpute_kit::ensure!(held < self.bounds[category as usize], ENOTRECOVERABLE, category as u32);
+            xpute_kit::ensure!(held < self.bounds[stream as usize], ENOTRECOVERABLE, stream as u32);
             held += 1;
             let free = self.desired.iter().position(Option::is_none).or_bug(Errno::ENOTRECOVERABLE);
             self.desired[free] = Some(Wanted {
-                category,
+                stream,
                 subject,
                 ask,
                 enqueue_ms: at,
@@ -197,21 +197,21 @@ impl<S: Serve> RequestScheduler<S> {
 
     pub fn counts(&self) -> (u32, u32) {
         let out = self.attempt.iter().flatten().count() as u32;
-        let waiting = self.desired.iter().flatten().filter(|w| !self.attempting(w.category, w.subject)).count() as u32;
+        let waiting = self.desired.iter().flatten().filter(|w| !self.attempting(w.stream, w.subject)).count() as u32;
         (waiting, out)
     }
 
     /// For a report only, never for deciding what to want.
-    pub fn pending_count(&self, category: Category) -> u32 {
-        let wanted = self.desired.iter().flatten().filter(|w| w.category == category).count();
-        let out = self.attempt.iter().flatten().filter(|a| a.category == category && self.find(a.category, a.subject).is_none()).count();
+    pub fn pending_count(&self, stream: Stream) -> u32 {
+        let wanted = self.desired.iter().flatten().filter(|w| w.stream == stream).count();
+        let out = self.attempt.iter().flatten().filter(|a| a.stream == stream && self.find(a.stream, a.subject).is_none()).count();
         (wanted + out) as u32
     }
 
     fn placed(&self, w: &Wanted) -> Placed {
         Placed {
-            rank: self.serve.rank(w.category, w.subject, w.ask, w.enqueue_ms),
-            category: w.category,
+            rank: self.serve.rank(w.stream, w.subject, w.ask, w.enqueue_ms),
+            stream: w.stream,
             subject: w.subject,
         }
     }
@@ -223,7 +223,7 @@ impl<S: Serve> RequestScheduler<S> {
         // Stop abandoned work in the turn it is abandoned: after a zoom out and
         // back in, credits must not sit on the zoom passed through.
         for slot in 0..self.attempt.len() {
-            if self.attempt[slot].is_some_and(|a| self.find(a.category, a.subject).is_none()) {
+            if self.attempt[slot].is_some_and(|a| self.find(a.stream, a.subject).is_none()) {
                 self.stop(slot, at);
             }
         }
@@ -232,7 +232,7 @@ impl<S: Serve> RequestScheduler<S> {
         ready.clear();
         for (i, w) in self.desired.iter().enumerate() {
             let Some(w) = w else { continue };
-            if at >= w.until_ms && !self.attempting(w.category, w.subject) {
+            if at >= w.until_ms && !self.attempting(w.stream, w.subject) {
                 ready.push((self.placed(w), i));
             }
         }
@@ -253,13 +253,13 @@ impl<S: Serve> RequestScheduler<S> {
 
     fn start(&mut self, slot: usize, w: Wanted, rank: Rank, at: f64) {
         self.attempt[slot] = Some(Attempt {
-            category: w.category,
+            stream: w.stream,
             subject: w.subject,
             rank,
             enqueue_ms: w.enqueue_ms,
             start_ms: at,
         });
-        self.started.push((key_of(slot, self.generation[slot]), w.category, w.subject));
+        self.started.push((key_of(slot, self.generation[slot]), w.stream, w.subject));
     }
 
     /// Ends the slot's attempt; its key is spent, so whatever the host still
@@ -276,9 +276,9 @@ impl<S: Serve> RequestScheduler<S> {
         record(&a, at, Ended::Aborted, None);
     }
 
-    pub fn take_started(&mut self, mut each: impl FnMut(Credit, Category, u64)) {
-        for (key, category, subject) in self.started.drain(..) {
-            each(Credit { key }, category, subject);
+    pub fn take_started(&mut self, mut each: impl FnMut(Credit, Stream, u64)) {
+        for (key, stream, subject) in self.started.drain(..) {
+            each(Credit { key }, stream, subject);
         }
     }
 
@@ -288,9 +288,9 @@ impl<S: Serve> RequestScheduler<S> {
         }
     }
 
-    pub fn attempt_of(&self, key: u64) -> Option<(Category, u64)> {
+    pub fn attempt_of(&self, key: u64) -> Option<(Stream, u64)> {
         let slot = self.slot_of(key)?;
-        self.attempt[slot].map(|a| (a.category, a.subject))
+        self.attempt[slot].map(|a| (a.stream, a.subject))
     }
 
     /// An answer ends the want; a failure holds it back.
@@ -298,7 +298,7 @@ impl<S: Serve> RequestScheduler<S> {
         let Some(slot) = self.slot_of(key) else { return };
         let a = self.end(slot);
         let outcome = ended.outcome();
-        if let Some(i) = self.find(a.category, a.subject) {
+        if let Some(i) = self.find(a.stream, a.subject) {
             if outcome == Outcome::ok {
                 self.desired[i] = None;
             } else if let (Some(wait), Some(w)) = (self.serve.retry_after(outcome), &mut self.desired[i]) {
@@ -324,7 +324,7 @@ impl<S: Serve> RequestScheduler<S> {
 fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
     profiler_record(|| {
         let mut row = TaskRow {
-            category: a.category as u32 as f64,
+            stream: a.stream as u32 as f64,
             subject: a.subject,
             priority: a.rank.class as f64 + a.rank.distance,
             enqueue_ms: a.enqueue_ms,
@@ -365,7 +365,7 @@ fn file_in_memory(file: &'static str) -> &'static str {
 static SCHED: Global<RequestScheduler<Policy>> = Global::new();
 
 /// Opened once the kernel is laid out, with each layer's frames.
-pub fn open(frames: impl Fn(Category) -> u32) {
+pub fn open(frames: impl Fn(Stream) -> u32) {
     SCHED.set(RequestScheduler::new(Policy::standard(), bounds_of(frames)));
 }
 
@@ -374,8 +374,8 @@ fn sched() -> &'static mut RequestScheduler<Policy> {
     SCHED.get(|| None.or_bug(Errno::ENOTRECOVERABLE))
 }
 
-pub fn declare(category: Category, wanted: &[(u64, Ask)]) {
-    sched().declare(category, wanted, now());
+pub fn declare(stream: Stream, wanted: &[(u64, Ask)]) {
+    sched().declare(stream, wanted, now());
 }
 
 pub fn set_credits(credits: u32) {
@@ -390,15 +390,15 @@ pub fn counts() -> (u32, u32) {
     sched().counts()
 }
 
-pub fn pending_count(category: Category) -> u32 {
-    sched().pending_count(category)
+pub fn pending_count(stream: Stream) -> u32 {
+    sched().pending_count(stream)
 }
 
 pub fn pump() {
     sched().pump(now());
 }
 
-pub fn take_started(each: impl FnMut(Credit, Category, u64)) {
+pub fn take_started(each: impl FnMut(Credit, Stream, u64)) {
     sched().take_started(each);
 }
 
@@ -406,7 +406,7 @@ pub fn take_stops(each: impl FnMut(u64)) {
     sched().take_stops(each);
 }
 
-pub fn attempt_of(key: u64) -> Option<(Category, u64)> {
+pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {
     sched().attempt_of(key)
 }
 

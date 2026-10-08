@@ -15,7 +15,7 @@ use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::bake::place_tile::PlaceTile;
 use xpute_guest::global::Global;
 
-use crate::io::demand::Category;
+use crate::io::demand::Stream;
 use crate::io::fetch::{answer_settled, body, next_answered, release, Answered};
 use crate::io::request::attempt_of;
 use crate::layer::earth::{self, Earth};
@@ -356,7 +356,7 @@ impl<L: Observed> Demand<L> {
         } else {
             self.now = Some(now);
         }
-        declare(L::CATEGORY, &self.wants);
+        declare(L::STREAM, &self.wants);
     }
 
     /// What it reads moved: its own tiles', the ground's, or the objects'.
@@ -369,7 +369,7 @@ impl<L: Observed> Demand<L> {
         self.wants.clear();
         self.asks.clear();
         L::residency().ask(&self.asks);
-        declare(L::CATEGORY, &[]);
+        declare(L::STREAM, &[]);
         self.last = None;
     }
 }
@@ -381,11 +381,11 @@ pub fn admit_arrived() {
     while first || !world_edge().spent() {
         let Some(Answered {
             key,
-            category,
+            stream,
             subject,
             block,
             mut phases,
-        }) = next_answered(&[Category::terrain, Category::place, Category::earth, Category::division])
+        }) = next_answered(&[Stream::terrain, Stream::place, Stream::earth, Stream::division])
         else {
             return;
         };
@@ -396,12 +396,12 @@ pub fn admit_arrived() {
             release(block);
             continue;
         }
-        let result = match (category, block) {
-            (Category::terrain, block) => arrived::<TerrainTile>(tile, block, &mut phases),
-            (Category::place, block) => arrived::<PlaceTile>(tile, block, &mut phases),
-            (Category::division, block) => arrived::<DivisionTile>(tile, block, &mut phases),
-            (Category::earth, None) => arrived::<Earth>(tile, None, &mut phases),
-            (Category::earth, Some(b)) => {
+        let result = match (stream, block) {
+            (Stream::terrain, block) => arrived::<TerrainTile>(tile, block, &mut phases),
+            (Stream::place, block) => arrived::<PlaceTile>(tile, block, &mut phases),
+            (Stream::division, block) => arrived::<DivisionTile>(tile, block, &mut phases),
+            (Stream::earth, None) => arrived::<Earth>(tile, None, &mut phases),
+            (Stream::earth, Some(b)) => {
                 let mut framed = None;
                 let result = Earth::demand().admit(tile, |record| {
                     let earth = Earth::receive(record, body(b), &mut phases)?;

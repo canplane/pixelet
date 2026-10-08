@@ -7,7 +7,7 @@
 use std::collections::TryReserveError;
 
 use pxl_render::mesh::paint::terrain::sample::TileSource;
-use pxl_spec::bake::format::GroundCell;
+use pxl_spec::bake::format::GroundId;
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::block::cube::Ground;
 use pxl_spec::block::decor::{Decor, DecorMeta, Orientation};
@@ -30,10 +30,10 @@ const ALIGN_NEIGHBOR_RADIUS: i64 = 3;
 /// A plurality vote of transport cells along each axis: PI/2 if horizontal
 /// wins, else 0 (a tie or isolated cell has no real answer). `flip` adds PI,
 /// as two-way traffic faces both ways.
-fn transport_aligned_rotation(cells: &[GroundCell], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
+fn transport_aligned_rotation(cells: &[GroundId], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
     let span = 0..TILE_CELLS as i64;
     let (x, y) = (cell_x as i64, cell_y as i64);
-    let way = |cell: GroundCell| Ground::of(cell).is_some_and(Ground::transport);
+    let way = |cell: GroundId| Ground::of(cell).is_some_and(Ground::transport);
     let at = |x: i64, y: i64| span.contains(&x) && span.contains(&y) && way(cells[GROUND.cell_index(x as u32, y as u32) as usize]);
     let (mut horizontal_votes, mut vertical_votes) = (0, 0);
     for d in 1..=ALIGN_NEIGHBOR_RADIUS {
@@ -70,7 +70,7 @@ struct Draw {
 
 /// What `candidate` draws in the tile's cell `tile_at`: none off the decor's
 /// ground or under a line.
-fn draw(decor: &Decor, candidate: Candidate, cells: &[GroundCell], lines: &Separation, tile_at: [u32; 2]) -> Option<Draw> {
+fn draw(decor: &Decor, candidate: Candidate, cells: &[GroundId], lines: &Separation, tile_at: [u32; 2]) -> Option<Draw> {
     let [cell_x, cell_y] = tile_at;
     if !decor.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
         return None;

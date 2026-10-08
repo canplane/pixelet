@@ -8,7 +8,7 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
-export const CATEGORY_NAMES = ["terrain", "place", "division", "asset", "earth"] as const;
+export const STREAM_NAMES = ["terrain", "place", "division", "asset", "earth"] as const;
 
 export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
 
