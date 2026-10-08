@@ -28,6 +28,9 @@ serde_json = "1"
 //! whole or absent. A table holds one identity, the release and this
 //! script's code: a run of another is whole, built beside the table and
 //! swapped in. A column a reader filters on is generated from `properties`.
+//! A division names its parent, which may stand past every shard: the
+//! divisions are taken with their ancestors, each fetched by its id, so a
+//! name's chain never breaks at the coverage's edge.
 //!
 //!   ./infra/geo/overture/script/ingest.rs
 
@@ -133,6 +136,12 @@ const EPS_M: f64 = 1.0;
 /// id, properties, geometry, shard.
 type Row = (String, String, Vec<u8>, String);
 
+/// The type closed under a parent, and the property naming it.
+const PARENT: (&str, &str) = ("division", "parent_division_id");
+
+/// The shard an ancestor is staged under: none, so the catalog counts it in none.
+const ANCESTOR: &str = "";
+
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
@@ -184,6 +193,10 @@ fn run() -> Result<(), String> {
         let extracts = download(&cli, ty, &groups(&to_do), &release)?;
         let fetched = started.elapsed().as_secs_f64();
         stage(&mut client, ty, &extracts)?;
+        if ty.overture == PARENT.0 {
+            let fetched = ancestors(&cli, &mut client, ty, &release, !whole)?;
+            println!("[ingest/{}] {fetched} ancestors past the shards", ty.table);
+        }
         let rows = if whole { build_and_swap(&mut client, ty, &to_do, &release, &code)? } else { add(&mut client, ty, &to_do, &release, &code)? };
         client.batch_execute(&format!("DROP TABLE {}; ANALYZE {}", staging(ty), ty.table)).map_err(|e| e.to_string())?;
         if reshaped && !held.is_empty() {
@@ -294,6 +307,13 @@ fn stage(client: &mut Client, ty: &Type, extracts: &[(PathBuf, Vec<&Shard>)]) ->
     client
         .batch_execute(&format!("DROP TABLE IF EXISTS {t}; CREATE UNLOGGED TABLE {t} (node TEXT NOT NULL, gers_id TEXT NOT NULL, properties TEXT NOT NULL, wkb BYTEA NOT NULL)"))
         .map_err(|e| e.to_string())?;
+    copy_extracts(client, &t, extracts.iter().map(|(p, s)| (p.as_path(), Some(s.as_slice()))))?;
+    client.batch_execute(&format!("CREATE INDEX ON {t} (node); CREATE INDEX ON {t} (gers_id)")).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Extracts' rows into the staging table `t`, each under the shards it meets.
+fn copy_extracts<'a>(client: &mut Client, t: &str, extracts: impl Iterator<Item = (&'a Path, Option<&'a [&'a Shard]>)>) -> Result<(), String> {
     let mut copy = BinaryCopyInWriter::new(client.copy_in(&format!("COPY {t} (gers_id, properties, wkb, node) FROM STDIN (FORMAT binary)")).map_err(|e| e.to_string())?, &[Pg::TEXT, Pg::TEXT, Pg::BYTEA, Pg::TEXT]);
     for (extract, shards) in extracts {
         let file = std::fs::File::open(extract).map_err(|e| format!("{}: {e}", extract.display()))?;
@@ -305,8 +325,62 @@ fn stage(client: &mut Client, ty: &Type, extracts: &[(PathBuf, Vec<&Shard>)]) ->
         }
     }
     copy.finish().map_err(|e| e.to_string())?;
-    client.batch_execute(&format!("CREATE INDEX ON {t} (node)")).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// The parents the staged divisions name and neither the staging table nor,
+/// for a partial run, the live one holds, fetched by id with the CLI's
+/// `gers` and staged under no shard, until every parent is held. A feature
+/// the registry finds in another release than the run's fails the run. An
+/// ancestor's extract is named by its release and id, so a run fetches it
+/// once.
+fn ancestors(cli: &Path, client: &mut Client, ty: &Type, release: &str, live: bool) -> Result<usize, String> {
+    let t = staging(ty);
+    let held = if live { format!(" AND NOT EXISTS (SELECT 1 FROM {} l WHERE l.gers_id = p.id)", ty.table) } else { String::new() };
+    let missing_sql = format!(
+        "SELECT DISTINCT p.id FROM (SELECT properties::jsonb->>'{}' AS id FROM {t}) p WHERE p.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {t} s WHERE s.gers_id = p.id){held} ORDER BY p.id",
+        PARENT.1
+    );
+    let prefix = format!("{}-ancestor.", ty.overture);
+    let mut kept = Vec::new();
+    let mut asked = std::collections::HashSet::new();
+    loop {
+        let missing: Vec<String> = client.query(&missing_sql, &[]).map_err(|e| e.to_string())?.iter().map(|r| r.get(0)).collect();
+        if missing.is_empty() {
+            break;
+        }
+        // The registry answering another feature than the one asked would ask forever.
+        if let Some(id) = missing.iter().find(|id| !asked.insert((*id).clone())) {
+            return Err(format!("gers {id}: fetched, and still not held"));
+        }
+        let mut extracts = Vec::new();
+        for id in &missing {
+            let extract = Path::new(EXTRACTS).join(format!("{prefix}{release}.{id}.parquet"));
+            if !extract.exists() {
+                let part = extract.with_extension("parquet.part");
+                let out = Command::new(cli).args(["gers", id, "-f", "geoparquet", "-o", &part.to_string_lossy()]).output().map_err(|e| format!("{}: {e}", cli.display()))?;
+                let said = String::from_utf8_lossy(&out.stderr);
+                if !out.status.success() {
+                    return Err(format!("gers {id}: {}", said.trim()));
+                }
+                // The registry says the release it found the feature in, on stderr.
+                if !said.contains(&format!("in release {release}")) {
+                    return Err(format!("gers {id}: not found in release {release}: {}", said.trim()));
+                }
+                std::fs::rename(&part, &extract).map_err(|e| e.to_string())?;
+            }
+            extracts.push(extract);
+        }
+        copy_extracts(client, &t, extracts.iter().map(|p| (p.as_path(), None)))?;
+        kept.extend(extracts);
+    }
+    for entry in std::fs::read_dir(EXTRACTS).map_err(|e| e.to_string())?.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with(&prefix) && !name.starts_with(&format!("{prefix}{release}.")) {
+            std::fs::remove_file(entry.path()).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(kept.len())
 }
 
 /// Each feature of the staging table once, in key order, made into a row.
@@ -467,10 +541,11 @@ fn vertices(b: &[u8], at: &mut usize, each: &mut dyn FnMut(f64, f64)) -> Result<
     }
 }
 
-/// A row for each feature and each shard of `shards` it meets. The properties
+/// A row for each feature and each shard of `shards` it meets, or one under
+/// no shard where `shards` is none. The properties
 /// are every column but the id, the geometry and the bbox, a null one left
 /// out; the geometry is the release's WKB, its doubles as written.
-fn rows(group: &RecordBatch, shards: &[&Shard]) -> Result<Vec<Row>, String> {
+fn rows(group: &RecordBatch, shards: Option<&[&Shard]>) -> Result<Vec<Row>, String> {
     let id = cast(group.column_by_name("id").ok_or("no id column")?, &DataType::Utf8).map_err(|e| e.to_string())?;
     let id = id.as_string::<i32>();
     let geometry = cast(group.column_by_name("geometry").ok_or("no geometry column")?, &DataType::LargeBinary).map_err(|e| e.to_string())?;
@@ -483,7 +558,10 @@ fn rows(group: &RecordBatch, shards: &[&Shard]) -> Result<Vec<Row>, String> {
             return Err(format!("{}: a feature with no id or geometry", if id.is_null(i) { "?" } else { id.value(i) }));
         }
         let span = span_m(geometry.value(i)).map_err(|e| format!("{}: {e}", id.value(i)))?;
-        let nodes: Vec<&str> = shards.iter().filter(|s| s.meets(span)).map(|s| s.name.as_str()).collect();
+        let nodes: Vec<&str> = match shards {
+            Some(shards) => shards.iter().filter(|s| s.meets(span)).map(|s| s.name.as_str()).collect(),
+            None => vec![ANCESTOR],
+        };
         if nodes.is_empty() {
             continue;
         }
