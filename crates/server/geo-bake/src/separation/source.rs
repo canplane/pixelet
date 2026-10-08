@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use postgres::types::ToSql;
-use pxl_spec::bake::format::ELE_LANE;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 
@@ -64,7 +63,7 @@ fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: IVec) -> Resul
     Ok(TileRows {
         ways: ways.iter().flat_map(Segment::of).collect(),
         water: water.iter().map(|r| (r.get("subtype"), r.get("class"), r.get::<_, &[u8]>("geom_wkb").to_vec())).collect(),
-        ele: ele.unwrap_or_else(|| vec![0; ELE_LANE]),
+        ele,
     })
 }
 

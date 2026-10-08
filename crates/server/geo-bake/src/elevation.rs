@@ -157,7 +157,7 @@ impl Raster {
         Ok(raster_tile)
     }
 
-    pub fn tile_grid(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Option<Vec<i16>>, postgres::Error> {
+    pub fn tile_grid(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Vec<i16>, postgres::Error> {
         let [min, _] = tile_bbox;
         let span = ELE_PADDED_SPAN as usize;
         let ([ref_x, ref_y], stride) = grid_of(tile_bbox);
@@ -179,7 +179,8 @@ impl Raster {
                 reached.push(i);
             }
         }
-        let Some([mx0, my0, mx1, my1]) = hull else { return Ok(None) };
+        // raster2pgsql stores no block that is all no data.
+        let Some([mx0, my0, mx1, my1]) = hull else { return Ok(vec![0; span * span]) };
         let (mw, mh) = ((mx1 - mx0) as usize, (my1 - my0) as usize);
         let mut mosaic = vec![None; mw * mh];
         for i in reached {
@@ -247,7 +248,7 @@ impl Raster {
                 }
             }
         }
-        Ok(Some(grid))
+        Ok(grid)
     }
 }
 

@@ -60,10 +60,10 @@ pub fn has_ground(client: &mut Client, tiles: &[IVec]) -> Result<Vec<bool>, post
 }
 
 /// A leaf: its separation solved, its surface painted around its lines, the two
-/// one tile; and whether it lies off the elevation raster, so flat.
-pub fn bake_leaf(r: &mut separation::Reader<impl Store>, tile: IVec) -> Result<(TerrainTile, bool), String> {
+/// one tile.
+pub fn bake_leaf(r: &mut separation::Reader<impl Store>, tile: IVec) -> Result<TerrainTile, String> {
     let solved = separation::solve_tile(r, tile)?;
-    let (surface, flat) = fetch_surface(r.repo, r.client, tile, &solved.drawn)?;
+    let surface = fetch_surface(r.repo, r.client, tile, &solved.drawn)?;
     let lines = bake_separation(&solved.lines, epsg3857::get_tile_bbox(LEAF_ZOOM, tile)[0]).ok_or("a tile's separation overflow a record")?;
-    Ok((assemble(surface, lines), flat))
+    Ok(assemble(surface, lines))
 }

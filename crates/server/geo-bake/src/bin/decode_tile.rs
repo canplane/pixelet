@@ -5,12 +5,11 @@
 //! one is a fault unless it is the unknown past the coverage. Run `--all` after
 //! `deno task bake:terrain`; one tile also writes PNGs for the eye.
 //!
-//!   decode_tile 12720250262323200                # one leaf: summary + PNGs
-//!   decode_tile 3179787687624704 --z 14          # a tile at a coarser zoom
-//!   decode_tile 12720250262323200 --out /tmp/tile
-//!   decode_tile out/terrain/v8/z15/12720250262323200  # a path works too
-//!   decode_tile --all                            # every tile of every zoom, checked
-//!   decode_tile --all --version v7
+//!   decode_tile 010330210000113              # one tile by name: summary + PNGs
+//!   decode_tile 010330210000113 --out /tmp/tile
+//!   decode_tile out/terrain/0103302          # a path works too
+//!   decode_tile --all                        # every tile of the set, checked
+//!   decode_tile --all --set out/terrain.publish
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -21,11 +20,11 @@ use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
 use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::Coverage;
+use pxl_geo_bake::pyramid::TileSet;
 use pxl_geo_bake::util::{is_packed, unpack};
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::format::decode_terrain;
 use pxl_spec::bake::format::{GroundId, Occupancy};
-use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::separation::{Form, Separation};
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::surface::extent_of;
@@ -237,27 +236,17 @@ fn separation_png(tile: &Tile) -> Vec<u8> {
     png(TILE_CELLS, TILE_CELLS, 3, &px)
 }
 
-fn stored_tiles(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
-    for entry in std::fs::read_dir(dir)? {
-        let path = entry?.path();
-        if path.is_dir() {
-            stored_tiles(&path, out)?;
-        // A name led by `_` is a version's file about itself, no tile.
-        } else if !matches!(path.extension().and_then(|e| e.to_str()), Some("part" | "empty")) && !path.file_name().is_some_and(|n| n.to_string_lossy().starts_with('_')) {
-            out.push(path);
-        }
-    }
-    Ok(())
-}
-
 fn check_all(tiles: &Path) -> ExitCode {
-    let mut paths = Vec::new();
-    if let Err(e) = stored_tiles(tiles, &mut paths) {
-        eprintln!("[decode_tile] {}: {e} — bake first, or name the version", tiles.display());
-        return ExitCode::FAILURE;
-    }
+    let set = TileSet::new(tiles);
+    let paths: Vec<PathBuf> = match set.by_zoom() {
+        Ok(listed) => listed.into_values().flatten().map(|p| set.path(p)).collect(),
+        Err(e) => {
+            eprintln!("[decode_tile] {e} — bake first, or name the set");
+            return ExitCode::FAILURE;
+        }
+    };
     if paths.is_empty() {
-        eprintln!("[decode_tile] no tiles under {} — bake first, or name the version", tiles.display());
+        eprintln!("[decode_tile] no tiles under {} — bake first, or name the set", tiles.display());
         return ExitCode::FAILURE;
     }
     let mut bad = Vec::new();
@@ -308,14 +297,13 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
 }
 
 fn main() -> ExitCode {
-    const USAGE: &str = "usage: decode_tile <key | path> [--z n] [--version v6] [--out dir] | --all [--version v6]";
-    let (mut version, mut z, mut out, mut all, mut target) = (PUBLISHED_VERSION.terrain.to_string(), "16".to_string(), None, false, None);
+    const USAGE: &str = "usage: decode_tile <name | path> [--set dir] [--out dir] | --all [--set dir]";
+    let (mut set, mut out, mut all, mut target) = (PathBuf::from("out/terrain"), None, false, None);
     let mut flags = Flags::from_env();
     let read = (|| {
         while let Some(arg) = flags.arg() {
             match arg.as_str() {
-                "--version" => version = flags.value()?,
-                "--z" => z = flags.value()?,
+                "--set" => set = PathBuf::from(flags.value()?),
                 "--out" => out = Some(PathBuf::from(flags.value()?)),
                 "--all" => all = true,
                 _ if target.is_none() && !arg.starts_with("--") => target = Some(arg),
@@ -328,18 +316,16 @@ fn main() -> ExitCode {
         eprintln!("{e}\n{USAGE}");
         return ExitCode::from(2);
     }
-    let tiles = Path::new("out/terrain").join(&version);
     if all {
-        return check_all(&tiles);
+        return check_all(&set);
     }
     let Some(target) = target else {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     };
-    let path = if target.bytes().all(|b| b.is_ascii_digit()) {
-        tiles.join(format!("z{z}")).join(target)
-    } else {
-        PathBuf::from(target)
+    let path = match Placed::of_name(&target) {
+        Some(p) => TileSet::new(set).path(p),
+        None => PathBuf::from(target),
     };
     match one(&path, out) {
         Ok(true) => ExitCode::SUCCESS,
