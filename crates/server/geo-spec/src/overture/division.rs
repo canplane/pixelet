@@ -2,8 +2,8 @@
 
 //! Reverse geocoding over Overture's divisions, for the live search and the
 //! bake alike, read as Overture holds them: a division is a row of
-//! `overture_division_points`, its parent named by `parent_division_id`, and
-//! an area a polygon of one (`overture_divisions`, its `division_id`). The
+//! `overture_divisions`, its parent named by `parent_division_id`, and
+//! an area a polygon of one (`overture_division_areas`, its `division_id`). The
 //! caller runs the statements with its own client and hands the rows back
 //! here to be read into a name.
 
@@ -47,18 +47,18 @@ SELECT p.idx, COALESCE(c.id, a.id, n.id) AS division_id, a.id IS NULL OR c.id IS
 FROM unnest($1::float8[], $2::float8[], $3::float8[]) WITH ORDINALITY AS p(x, y, reach, idx)
 CROSS JOIN LATERAL (SELECT ST_SetSRID(ST_MakePoint(p.x, p.y), 3857) AS pt) g
 LEFT JOIN LATERAL (
-  SELECT d.gers_id AS id FROM overture_divisions s JOIN overture_division_points d ON d.gers_id = s.properties->>'division_id'
+  SELECT d.gers_id AS id FROM overture_division_areas s JOIN overture_divisions d ON d.gers_id = s.properties->>'division_id'
   WHERE ST_Contains(s.geom, g.pt)
   ORDER BY jsonb_array_length(d.properties->'hierarchies'->0) DESC, d.gers_id LIMIT 1
 ) a ON true
 LEFT JOIN LATERAL (
-  SELECT q.gers_id AS id FROM overture_division_points q
+  SELECT q.gers_id AS id FROM overture_divisions q
   WHERE a.id IS NOT NULL AND q.properties->>'parent_division_id' = a.id AND ST_DWithin(q.geom, g.pt, p.reach)
-    AND NOT EXISTS (SELECT 1 FROM overture_divisions qs WHERE qs.geom && q.geom AND qs.properties->>'division_id' = q.gers_id)
+    AND NOT EXISTS (SELECT 1 FROM overture_division_areas qs WHERE qs.geom && q.geom AND qs.properties->>'division_id' = q.gers_id)
   ORDER BY q.geom <-> g.pt LIMIT 1
 ) c ON true
 LEFT JOIN LATERAL (
-  SELECT q.gers_id AS id FROM overture_division_points q
+  SELECT q.gers_id AS id FROM overture_divisions q
   WHERE a.id IS NULL AND ST_DWithin(q.geom, g.pt, p.reach)
   ORDER BY q.geom <-> g.pt LIMIT 1
 ) n ON true
@@ -70,9 +70,9 @@ pub const LINEAGE_SQL: &str = concat!(
     "SELECT d.gers_id, d.subtype, d.name, ",
     division_names!("d"),
     " AS names_common, d.properties->>'parent_division_id' AS parent
-FROM overture_division_points d
+FROM overture_divisions d
 WHERE d.gers_id IN (
-  SELECT e->>'division_id' FROM overture_division_points f, jsonb_array_elements(f.properties->'hierarchies'->0) e WHERE f.gers_id = ANY($1)
+  SELECT e->>'division_id' FROM overture_divisions f, jsonb_array_elements(f.properties->'hierarchies'->0) e WHERE f.gers_id = ANY($1)
   UNION SELECT unnest($1::text[])
 )"
 );

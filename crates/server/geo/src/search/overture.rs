@@ -39,13 +39,13 @@ const SEARCH_NEAR_SQL: &str = concat!(
 LIMIT $2"
 );
 
-/// A division is a row of `overture_division_points`, once, whatever areas it has.
+/// A division is a row of `overture_divisions`, once, whatever areas it has.
 const DIVISION_SEARCH_SQL: &str = concat!(
     "SELECT gers_id, name, subtype, ",
-    pxl_geo_spec::division_names!("overture_division_points"),
+    pxl_geo_spec::division_names!("overture_divisions"),
     " AS names_common,
   ST_X(ST_Transform(geom, 4326)) AS lon, ST_Y(ST_Transform(geom, 4326)) AS lat
-FROM overture_division_points
+FROM overture_divisions
 WHERE name <> '' AND name ILIKE '%' || $1 || '%'
 ORDER BY similarity(name, $1) DESC, gers_id
 LIMIT $2"

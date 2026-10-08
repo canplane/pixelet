@@ -6,7 +6,7 @@
 # Postgres server: same env var shape, same mental model, and Postgres's
 # own idle footprint is small enough that two containers costs nothing
 # real on a 4GB box). db-geo only ever holds overture_places/
-# overture_divisions/overture_division_points — see
+# overture_division_areas/overture_divisions — see
 # decision/20260908-overture-poi-adoption.md and the geocode/search
 # provider files for why terrain's own ingestion tables (overture_buildings/
 # overture_transportation/overture_base_*/elevation_raster) never

@@ -81,8 +81,8 @@ const TYPES: &[Type] = &[
         indexes: &["class"],
     },
     Type { overture: "building_part", table: "overture_building_parts", columns: &[], indexes: &[] },
-    Type { overture: "division", table: "overture_division_points", columns: &[SUBTYPE, NAME], indexes: &["subtype"] },
-    Type { overture: "division_area", table: "overture_divisions", columns: &[SUBTYPE, NAME], indexes: &["subtype"] },
+    Type { overture: "division", table: "overture_divisions", columns: &[SUBTYPE, NAME], indexes: &["subtype"] },
+    Type { overture: "division_area", table: "overture_division_areas", columns: &[SUBTYPE, NAME], indexes: &["subtype"] },
     Type { overture: "division_boundary", table: "overture_division_boundaries", columns: &[], indexes: &[] },
     Type {
         overture: "place",
@@ -211,6 +211,27 @@ fn run() -> Result<(), String> {
             if whole { ", whole" } else { "" },
             started.elapsed().as_secs_f64()
         );
+    }
+    retire(&mut client)
+}
+
+/// A table the catalog names and no type does, left by a rename or a type
+/// taken out, dropped with its catalog rows: the change that retired it
+/// moved its readers off it, so nothing reads it now.
+fn retire(client: &mut Client) -> Result<(), String> {
+    let named: Vec<&str> = TYPES.iter().map(|t| t.table).collect();
+    let retired: Vec<String> = client
+        .query("SELECT DISTINCT file_name FROM overture_catalog WHERE NOT file_name = ANY($1)", &[&named])
+        .map_err(|e| e.to_string())?
+        .iter()
+        .map(|r| r.get(0))
+        .collect();
+    for t in retired {
+        let mut tx = client.transaction().map_err(|e| e.to_string())?;
+        tx.batch_execute(&format!("DROP TABLE IF EXISTS {t}")).map_err(|e| format!("{t}: {e}"))?;
+        tx.execute("DELETE FROM overture_catalog WHERE file_name = $1", &[&t]).map_err(|e| format!("{t}: {e}"))?;
+        tx.commit().map_err(|e| e.to_string())?;
+        println!("[ingest/{t}] no type's table: dropped");
     }
     Ok(())
 }

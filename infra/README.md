@@ -59,8 +59,8 @@ Postgres instances and Caddy in one compose stack — `./prod/`: `api` is pxl-ge
 on `/geo/*`, `app` is pxl-api on `/api/*`, and Caddy is what sends each root to
 its own container. Neither server has a published host port; only Caddy does.
 
-Production's db-geo holds **only** `overture_places`, `overture_divisions`
-and `overture_division_points`, and their rows of `overture_catalog`.
+Production's db-geo holds **only** `overture_places`, `overture_division_areas`
+and `overture_divisions`, and their rows of `overture_catalog`.
 Terrain's ingestion tables and the elevation raster are several GB, baked
 offline, and never queried here.
 The `tiger`/`topology` schemas that ship with the `postgis/postgis` image
@@ -133,7 +133,7 @@ ingested (infra/geo/README.md §4):
 set -a; . ./.env; set +a
 docker exec pixelet-db-geo pg_dump --format=custom --no-owner \
   -U "$DB_GEO_USER" -d "$DB_GEO_NAME" \
-  -t overture_places -t overture_divisions -t overture_division_points \
+  -t overture_places -t overture_division_areas -t overture_divisions \
   -t overture_catalog > overture.dump
 
 scp overture.dump root@$(hcloud server ip pixelet-prod):
@@ -151,7 +151,7 @@ sql psql -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS postgis; CREATE E
 # one transaction: the old tables stay unless every new one is in
 sql pg_restore --no-owner --no-privileges --clean --if-exists --single-transaction < ~/overture.dump
 # the catalog keeps the rows of the tables that came with it, and the planner its statistics
-sql psql -v ON_ERROR_STOP=1 -c "DELETE FROM overture_catalog WHERE file_name NOT IN ('overture_places', 'overture_divisions', 'overture_division_points'); ANALYZE overture_places; ANALYZE overture_divisions; ANALYZE overture_division_points;"
+sql psql -v ON_ERROR_STOP=1 -c "DELETE FROM overture_catalog WHERE file_name NOT IN ('overture_places', 'overture_division_areas', 'overture_divisions'); ANALYZE overture_places; ANALYZE overture_division_areas; ANALYZE overture_divisions;"
 rm ~/overture.dump
 ```
 

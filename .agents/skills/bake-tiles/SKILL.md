@@ -63,8 +63,8 @@ docker compose -f infra/local/docker-compose.yml --env-file .env up -d
 
 Terrain needs `overture_buildings`, `overture_transportation`,
 `overture_base_{land,land_use,water,infrastructure}` and `elevation_raster`;
-POI needs `overture_places`; geocode needs `overture_divisions` and
-`overture_division_points`. If a table is missing, that is an ingestion
+POI needs `overture_places`; geocode needs `overture_division_areas` and
+`overture_divisions`. If a table is missing, that is an ingestion
 job, not a bake job — [infra/geo/README.md](../../../infra/geo/README.md).
 Every bake reaches the DB only through `geo-bake coverage.rs` `Overture`,
 which takes the `overture_*` tables from the statements the bake runs and

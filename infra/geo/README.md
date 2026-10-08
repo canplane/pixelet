@@ -48,7 +48,7 @@ and the elevation exactly them.
 | Source                                                                           | Tables                                                                                                                                                         | Catalog             | Fills them                            |
 | :------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :------------------------------------ |
 | **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure`         | `overture_catalog`  | `overture/script/ingest.rs`           |
-| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                            | `overture_catalog`  | `overture/script/ingest.rs`           |
+| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_division_areas`, `overture_divisions`                                                                                             | `overture_catalog`  | `overture/script/ingest.rs`           |
 | **Overture — the other types**<br>taken whole, read by nothing yet               | `overture_addresses`, `overture_building_parts`, `overture_connectors`, `overture_division_boundaries`, `overture_base_land_cover`, `overture_base_bathymetry` | `overture_catalog`  | `overture/script/ingest.rs`           |
 | **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                             | `elevation_catalog` | `elevation/script/setup-elevation.sh` |
 | **OSM land polygons**<br>coastline                                               | `osm_land_polygons`                                                                                                                                            | none                | `coastline/script/setup-coastline.sh` |
@@ -169,8 +169,8 @@ UNION ALL SELECT 'overture_base_land_use', count(*) FROM overture_base_land_use
 UNION ALL SELECT 'overture_base_water', count(*) FROM overture_base_water
 UNION ALL SELECT 'overture_base_infrastructure', count(*) FROM overture_base_infrastructure
 UNION ALL SELECT 'overture_places', count(*) FROM overture_places
+UNION ALL SELECT 'overture_division_areas', count(*) FROM overture_division_areas
 UNION ALL SELECT 'overture_divisions', count(*) FROM overture_divisions
-UNION ALL SELECT 'overture_division_points', count(*) FROM overture_division_points
 UNION ALL SELECT 'overture_division_boundaries', count(*) FROM overture_division_boundaries
 UNION ALL SELECT 'overture_building_parts', count(*) FROM overture_building_parts
 UNION ALL SELECT 'overture_connectors', count(*) FROM overture_connectors

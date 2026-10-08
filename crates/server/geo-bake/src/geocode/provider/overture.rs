@@ -21,8 +21,8 @@ const DICTIONARY_SQL: &str = concat!(
     "SELECT d.gers_id, d.subtype, d.name, ",
     pxl_geo_spec::division_names!("d"),
     " AS names_common, d.properties->>'parent_division_id' AS parent
-FROM overture_division_points d
-WHERE d.gers_id IN (SELECT properties->>'division_id' FROM overture_divisions UNION SELECT properties->>'parent_division_id' FROM overture_division_points)
+FROM overture_divisions d
+WHERE d.gers_id IN (SELECT properties->>'division_id' FROM overture_division_areas UNION SELECT properties->>'parent_division_id' FROM overture_divisions)
 ORDER BY d.gers_id"
 );
 
