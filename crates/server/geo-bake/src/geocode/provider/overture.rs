@@ -82,8 +82,18 @@ impl GeocodeProvider {
         let rows = client.query(&self.finest, &[&xs, &ys, &reach]).map_err(db)?;
         let finest = division::by_point(leaves.len(), rows.iter().map(|r| (r.get("idx"), r.get("division_id"), r.get("approx"))));
         let own: Vec<String> = finest.iter().flatten().map(|(id, _)| id.clone()).filter(|id| dict.number(id).is_none()).collect();
-        let records: HashMap<String, Entry> =
-            if own.is_empty() { HashMap::new() } else { client.query(&self.lineage, &[&own]).map_err(db)?.iter().map(division_of).filter_map(entry).map(|e| (e.0.clone(), e)).collect() };
+        let records: HashMap<String, Entry> = if own.is_empty() {
+            HashMap::new()
+        } else {
+            client
+                .query(&self.lineage, &[&own])
+                .map_err(db)?
+                .iter()
+                .map(division_of)
+                .filter_map(entry)
+                .map(|e| (e.0.clone(), e))
+                .collect()
+        };
 
         let mut group = DivisionGroup {
             tiles: vec![NONE; GROUP_TILES],

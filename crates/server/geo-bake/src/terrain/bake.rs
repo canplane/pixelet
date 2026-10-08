@@ -13,7 +13,6 @@ use crate::terrain::pipeline::feature::{local, Feature};
 use crate::terrain::pipeline::ground::{bake_ground, Coast};
 use crate::terrain::pipeline::overture::policy::{bases, buildings, ways};
 use crate::terrain::repository::{CoastRow, TileSource};
-use crate::terrain::CELL_U;
 use crate::wkb::wkb_to_geometries;
 
 pub struct Surface {
@@ -35,14 +34,14 @@ pub fn bake_surface(tile_idx: IVec, ele: Vec<i16>, source: &TileSource, drawn: &
 
     Surface {
         ele,
-        ground: bake_ground(&features, &coast_of(&source.coast_rows, tile_min, CELL_U)),
+        ground: bake_ground(&features, &coast_of(&source.coast_rows, tile_min)),
     }
 }
 
-/// A tile's land against the sea, in cells `cell` units wide: no coast row is
-/// open sea; one whose land covers the tile is dropped, all land.
-pub fn coast_of(rows: &[CoastRow], tile_min: G3857, cell: f64) -> Coast {
-    let at = |p: G3857| local(p, tile_min).map(|v| v * CELL_U / cell);
+/// A tile's land against the sea: no coast row is open sea; one whose land
+/// covers the tile is dropped, all land.
+fn coast_of(rows: &[CoastRow], tile_min: G3857) -> Coast {
+    let at = |p: G3857| local(p, tile_min);
     let shore: Vec<_> = rows
         .iter()
         .filter(|row| !row.covers_tile)

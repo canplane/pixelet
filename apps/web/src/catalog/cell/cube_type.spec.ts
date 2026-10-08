@@ -13,7 +13,7 @@ export const cube_types = {
   sentinel: {
     /** nothing painted: the ground before a bake writes it, and an object cell no leaf holds */
     void: 0x00,
-    /** land no source here describes, past the coverage, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface */
+    /** the ground past the coverage, which no source here describes, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface */
     unknown: 0xff,
   },
   // The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in

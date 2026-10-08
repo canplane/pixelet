@@ -18,7 +18,7 @@
       "name": "unknown",
       "value": 255,
       "doc": [
-        "land no source here describes, past the coverage, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface"
+        "the ground past the coverage, which no source here describes, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface"
       ]
     }
   ],

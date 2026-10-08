@@ -164,10 +164,9 @@ not all of its own code:
 Open-ocean tiles are deliberately not baked. Roughly two thirds of the
 coverage bbox is open sea, and a tile with no object is drawn from the one
 over it. The fold reads a tile it has no object for as open sea inside the
-coverage and, past it, as the coast — each shard outside under a top tile
-the coverage meets, laid by the leaf stage from the coastline into `coast/`
-under `--build`, its land unknown, a cell with no surface — and a coarser one as the
-fold of those under it (`terrain/absent.rs`). A tile counts as open ocean only when nothing is drawn in it:
+coverage and, past it, as unknown, a cell with no surface, sea or land, so
+the planet's picture is seen under it; and a coarser one as the fold of
+those under it (`terrain/absent.rs`). A tile counts as open ocean only when nothing is drawn in it:
 a bridge or an undersea tunnel over open water makes its tiles leaves. The
 classification is cached in `land_tiles.json`, keyed by the tile size, the
 coverage, the release and the rule that classified it (`terrain/leaf.rs`
