@@ -43,7 +43,6 @@ use crate::deck::source::{ring, Store};
 use crate::deck::way::{Polyline, Way};
 use crate::deck::{Drawn, Line, Reader, Solved};
 use crate::segment::{End, PartId, Segment};
-use crate::terrain::bake::Surface;
 use crate::terrain::pipeline::overture::policy::waterway_width;
 use crate::terrain::pipeline::overture::width::width_u;
 use crate::wkb::wkb_to_geometries;
@@ -100,7 +99,7 @@ impl Units {
 struct Source {
     ring: BTreeSet<IVec>,
     loaded: BTreeSet<IVec>,
-    ground: HashMap<IVec, Surface>,
+    ground: HashMap<IVec, Vec<i16>>,
     ways: BTreeMap<PartId, Way>,
     water: Vec<(Option<String>, String, Vec<[f64; 2]>)>,
     water_seen: HashSet<Vec<u8>>,
@@ -281,7 +280,7 @@ impl Source {
         }
         self.loaded.insert(p);
         let rows = r.store.tile(r.client, r.repo, p)?;
-        self.ground.insert(p, rows.surface());
+        self.ground.insert(p, rows.elevation().to_vec());
         let step = mer_from_u(CELL_U);
         for s in rows.ways() {
             let key = s.id();

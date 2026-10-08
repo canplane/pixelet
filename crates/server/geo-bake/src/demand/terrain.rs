@@ -3,15 +3,11 @@
 use super::job;
 use crate::coverage::Coverage;
 use crate::terrain::absent::Absence;
-use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::tile::Tile;
 
 /// Each tile's rows the deck solve read and each structure it solved, kept
 /// beside the tiles of the source they came from.
 pub(super) const SOURCE: &str = ".source";
-
-/// The shards past the coverage, beside the tiles of the source they came from.
-const COAST: &str = ".coast";
 
 pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
     use crate::terrain::{leaf, repository::TerrainRepository};
@@ -35,20 +31,6 @@ pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, s
             };
             Ok(Some(leaf::bake_leaf(reader, p.tile)?.0))
         },
-        &absence(p, cache, seconds)?,
+        &Absence::new(Coverage::of_source()?),
     )
-}
-
-/// The coast a fold of `p` reads is baked first, once a source.
-fn absence(p: Tile, cache: &std::path::Path, seconds: u64) -> Result<Absence, String> {
-    use crate::pyramid::TileSet;
-    use crate::terrain::{coast, leaf};
-    let coverage = Coverage::of_source()?;
-    let set = TileSet::new(cache.join(COAST));
-    let beyond = coverage.beyond();
-    if p.zoom < SHARD_ZOOM && beyond.iter().any(|&s| !set.path(s).exists()) {
-        let (_, mut client) = job::connect(&leaf::READS, &coverage.shards().collect(), seconds)?;
-        coast::bake_missing(&mut client, &set, &beyond)?;
-    }
-    Ok(Absence::new(coverage.clone(), coast::read(&set, &coverage)?))
 }

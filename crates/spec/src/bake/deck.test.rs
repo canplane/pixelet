@@ -7,7 +7,7 @@ use crate::space::coord::adapter::epsg3857::u_per_m;
 
 fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Decks {
     let mut b = Builder::default();
-    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t)), (width_cells * POINT_SCALE) as u8, 3, Form::Deck, 0);
+    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t)), (width_cells * POINT_SCALE) as u8, 3, Form::Bridge, 0);
     b.finish()
 }
 
@@ -57,7 +57,7 @@ fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() 
     assert_eq!(pier_stands(pier, land, d.over_point(frame, at, 1.0), 5, 0.5), Some(pier));
     assert_eq!(pier_stands(pier, road, d.over_point(frame, at, 1.0), 5, 0.5), None);
     let mut under = Builder::default();
-    under.push([([0.0, 3.0], 10), ([40.0, 3.0], 10)], 4 * POINT_SCALE as u8, 3, Form::Deck, 0);
+    under.push([([0.0, 3.0], 10), ([40.0, 3.0], 10)], 4 * POINT_SCALE as u8, 3, Form::Bridge, 0);
     let under = under.finish();
     let column = d.over_point(frame, at, 1.0).chain(under.over_point(frame, at, 1.0));
     assert_eq!(pier_stands(pier, land, column, 5, 0.5), None);
@@ -133,63 +133,22 @@ fn each_form_is_drawn_from_its_surface() {
     };
     // Two cells a metre: a 2 m slab is 4 cells; a bore is clear its line's cells over its surface.
     let cpm = 2.0;
-    assert_eq!(over(Form::Deck, 30.0).occupies(10, cpm), Occupies::Above { slab: [26, 30], pier: None });
-    assert_eq!(over(Form::Bore, 10.0).occupies(40, cpm), Occupies::Through { air: [10, 13] });
+    assert_eq!(over(Form::Bridge, 30.0).occupies(10, cpm), Occupies::Above { slab: [26, 30], pier: None });
+    assert_eq!(over(Form::Tunnel, 10.0).occupies(40, cpm), Occupies::Through { air: [10, 13] });
     // a way on the ground moves the ground: filled up to it, cut down to it
     assert_eq!(over(Form::Grade, 14.0).occupies(10, cpm), Occupies::Above { slab: [10, 14], pier: None });
     assert_eq!(over(Form::Grade, 20.0).occupies(10, cpm), Occupies::Above { slab: [10, 20], pier: None });
     assert_eq!(over(Form::Grade, 10.0).occupies(14, cpm), Occupies::Through { air: [10, 14] });
     assert_eq!(over(Form::Grade, 10.0).occupies(10, cpm), Occupies::Grade);
     // a surface falling 8 cells across a column is solid over all of it, and a bore clear over all of it
-    let steep = Over { low: 22.0, ..over(Form::Deck, 30.0) };
-    assert_eq!(steep.occupies(10, cpm), Occupies::Above { slab: [18, 30], pier: None });
-    let steep = Over { low: 10.0, ..over(Form::Bore, 18.0) };
-    assert_eq!(steep.occupies(40, cpm), Occupies::Through { air: [10, 21] });
-}
-
-/// Every segment tried, in order: what the boxes must answer.
-fn scan(d: &Decks, frame: Option<Frame>, at: [f64; 2]) -> Vec<Over> {
-    d.iter()
-        .flat_map(|deck| (0..deck.points.len().saturating_sub(1)).filter_map(move |s| deck.over_segment(frame, s, at, 1.0)))
-        .collect()
-}
-
-#[test]
-fn the_boxes_answer_what_every_segment_does() {
-    let mut seed = 0x2545_f491_4f6c_dd1du64;
-    let mut rng = move || {
-        seed ^= seed << 13;
-        seed ^= seed >> 7;
-        seed ^= seed << 17;
-        (seed >> 11) as f64 / (1u64 << 53) as f64
+    let steep = Over {
+        low: 22.0,
+        ..over(Form::Bridge, 30.0)
     };
-    let frame = Some(Frame { corner: [0.0, 0.0], cell: 2.0 });
-    for round in 0..4 {
-        let mut b = Builder::default();
-        // Lines that wander past the tile's edge, long single segments across it,
-        // and every width up to the widest.
-        for line in 0..60 {
-            let n = 2 + (rng() * 30.0) as usize;
-            let mut p = [rng() * 600.0 - 44.0, rng() * 600.0 - 44.0];
-            let step = if line % 7 == 0 { 400.0 } else { 6.0 };
-            let points: Vec<([f64; 2], i16)> = (0..n)
-                .map(|_| {
-                    p = [p[0] + (rng() - 0.5) * step, p[1] + (rng() - 0.5) * step];
-                    (p, (rng() * 200.0) as i16)
-                })
-                .collect();
-            let width = if line % 5 == 0 { u8::MAX } else { 1 + (rng() * 64.0) as u8 };
-            b.push(points, width, 3, if line % 3 == 0 { Form::Bore } else { Form::Deck }, 3);
-        }
-        let d = b.finish();
-        for k in 0..2000 {
-            // A tenth on the edges of the tile and of the eighth points a leaf spans.
-            let at = if k % 10 == 0 {
-                [f64::from(k % 513), (rng() * 64.0).round() * 8.0]
-            } else {
-                [rng() * 520.0 - 4.0, rng() * 520.0 - 4.0]
-            };
-            assert_eq!(d.over_point(frame, at, 1.0).collect::<Vec<_>>(), scan(&d, frame, at), "round {round} at {at:?}");
-        }
-    }
+    assert_eq!(steep.occupies(10, cpm), Occupies::Above { slab: [18, 30], pier: None });
+    let steep = Over {
+        low: 10.0,
+        ..over(Form::Tunnel, 18.0)
+    };
+    assert_eq!(steep.occupies(40, cpm), Occupies::Through { air: [10, 21] });
 }

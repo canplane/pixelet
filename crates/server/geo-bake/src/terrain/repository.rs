@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use postgres::types::ToSql;
-use postgres::{Client, Statement, ToStatement};
+use postgres::{Client, Statement};
 use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, BBox3857};
 
 use crate::elevation::Raster;
@@ -60,7 +60,7 @@ SELECT 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way
 
 /// The tile's land from OSM's land polygons (`infra/geo/coastline`), taken
 /// whole: empty means pure ocean, the whole envelope means all land, both dropped.
-pub const COAST_SQL: &str = "WITH env AS (
+const COAST_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 ),
 land_union AS (
@@ -141,6 +141,11 @@ impl TerrainRepository {
         })
     }
 
+    /// A tile's elevation grid, none where the raster does not reach it.
+    pub fn elevation(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Option<Vec<i16>>, postgres::Error> {
+        self.raster.tile_grid(client, tile_bbox)
+    }
+
     pub fn fetch_tile_source(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<TileSource, postgres::Error> {
         let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(tile_bbox);
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
@@ -171,19 +176,14 @@ impl TerrainRepository {
                     geom_wkb: wkb(row),
                 })
                 .collect(),
-            coast_rows: coast(client, &self.coast, &bbox)?,
+            coast_rows: client
+                .query(&self.coast, &bbox)?
+                .iter()
+                .map(|row| CoastRow {
+                    geom_wkb: wkb(row),
+                    covers_tile: row.get("covers_tile"),
+                })
+                .collect(),
         })
     }
-}
-
-/// The coast's rows over an envelope, `[minx, miny, maxx, maxy]`.
-pub fn coast(client: &mut Client, statement: &(impl ToStatement + ?Sized), bbox: &[&(dyn ToSql + Sync); 4]) -> Result<Vec<CoastRow>, postgres::Error> {
-    Ok(client
-        .query(statement, bbox)?
-        .iter()
-        .map(|row| CoastRow {
-            geom_wkb: row.get::<_, &[u8]>("geom_wkb").into(),
-            covers_tile: row.get("covers_tile"),
-        })
-        .collect())
 }

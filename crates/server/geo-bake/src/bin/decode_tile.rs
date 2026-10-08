@@ -3,7 +3,7 @@
 //! A baked terrain tile read back the way the kernel reads it, checked
 //! against the bake's contract. A byte that is no look draws nothing, so
 //! one is a fault unless it is the unknown past the coverage. Run `--all` after
-//! `deno task bake:terrain`; one tile also writes PNGs for the eye.
+//! `deno task bake:tiles`; one tile also writes PNGs for the eye.
 //!
 //!   decode_tile 12720250262323200                # one leaf: summary + PNGs
 //!   decode_tile 3179787687624704 --z 14          # a tile at a coarser zoom

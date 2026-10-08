@@ -4,7 +4,7 @@
 
 use super::world::World;
 use crate::layer::terrain::Drawn;
-use pxl_render::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
+use pxl_render::mesh::paint::terrain::elevation::ground_ele_at;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Cell, Tile};
 
@@ -34,7 +34,7 @@ impl<'a> World<'a> {
         let (src, body) = (d.from, d.body);
         let [tx, ty] = sample_in(cell, src);
         let cell = body.ground.cells[GROUND.cell_index(tx as u32, ty as u32) as usize];
-        let height = ground_ele_at(&body.ele, Some(GroundLanes::of(&body.ground)), tx, ty) as f64 * units(GROUND.cell());
+        let height = ground_ele_at(&body.ele, tx, ty) as f64 * units(GROUND.cell());
         d.answer(Ground { height, cell })
     }
 }

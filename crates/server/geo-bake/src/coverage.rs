@@ -13,7 +13,6 @@ use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::coord::zoom::{count, shamt, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 const METADATA: &str = include_str!("../../../../infra/geo/elevation/metadata.json");
@@ -146,26 +145,6 @@ impl Coverage {
     /// Every leaf held.
     pub fn tiles(&self) -> Vec<IVec> {
         self.shards().flat_map(|s| s.tiles(LEAF_ZOOM)).collect()
-    }
-
-    /// The shards not held under a top tile that is: what the pyramid's
-    /// coarsest tiles show past the coverage.
-    pub fn beyond(&self) -> Vec<Tile> {
-        let up = u32::from(SHARD_ZOOM - GROUND.top());
-        let tops: BTreeSet<[i64; 2]> = self.shards.iter().map(|&s| ancestor_of(s, up)).collect();
-        let n = i64::from(count(SHARD_ZOOM, GROUND.top()));
-        let mut out = Vec::new();
-        for top in tops {
-            let [x0, y0] = first_descendant_of(top, up);
-            for y in y0..y0 + n {
-                for x in x0..x0 + n {
-                    if !self.shards.contains(&[x, y]) {
-                        out.push(Tile::new(SHARD_ZOOM, ivec::gather(x, y, 0)));
-                    }
-                }
-            }
-        }
-        out
     }
 
     pub fn shards(&self) -> impl Iterator<Item = Node> + '_ {

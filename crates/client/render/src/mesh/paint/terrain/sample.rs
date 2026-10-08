@@ -19,7 +19,7 @@ use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 
 use crate::mesh::paint::palette::rgb255;
 use crate::mesh::paint::palette::LAYER_IDX;
-use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
+use crate::mesh::paint::terrain::elevation::ground_ele_at;
 use crate::mesh::run::{APRON, COL_SPAN};
 use crate::mesh::word::{pack_material, MaterialClasses, NO_LAYER};
 use crate::mesh::{try_push, Refused};
@@ -123,10 +123,8 @@ impl TileSource<'_> {
         // height, all the face mask reads, and the base look nothing draws.
         let on_tile = (0..=last).contains(&tx) && (0..=last).contains(&ty);
         let cell = if on_tile { tile.cells[GROUND.cell_index(tx as u32, ty as u32) as usize] } else { ground::BASE };
-        // An apron cell off the tile has no look and takes the raw height.
-        let lanes = on_tile.then_some(GroundLanes { cells: tile.cells });
         let center = |v: i64| (v as f64 + 0.5) / n as f64;
-        (cell, ground_ele_at(tile.ele, lanes, center(x), center(y)) as i32)
+        (cell, ground_ele_at(tile.ele, center(x), center(y)) as i32)
     }
 }
 
