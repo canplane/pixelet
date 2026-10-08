@@ -138,7 +138,7 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
   and x, y, z (`chunk.rs`); a cube that holds nothing is no
   chunk. Terrain and places are tiles, a 2D heightfield and a 2D count; placed
-  objects are resident in their store, a sparse tree a z8 column. Each layer,
+  objects are resident in their store, a sparse tree a shard (`SHARD_ZOOM`). Each layer,
   and the world composed of them, is read through one query
   (`layer/query.rs` `Query`): what a node holds and its records, at a cell
   zoom the asker states; a point or a ray is asked of the world's

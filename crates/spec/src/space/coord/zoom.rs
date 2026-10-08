@@ -16,11 +16,14 @@ pub type Zoom = u8;
 /// A unit's: 1u is a z24 cell's side.
 pub const UNIT_ZOOM: Zoom = IVEC_X_W as Zoom;
 
-/// The coarsest cube that holds the whole Z lane: 3D begins here, and the
-/// world's data is ingested a tile of it, a shard, at a time.
+/// The coarsest cube: a tile here is as wide as the Z lane is tall, so the
+/// pyramid is alike on every axis from here finer, and 3D begins. A tile of
+/// it with the whole Z lane over it is a **shard**, the unit the world's data
+/// is ingested, baked and kept in; what is ingested of one is it and its
+/// apron.
 pub const SHARD_ZOOM: Zoom = UNIT_ZOOM - IVEC_Z_W as Zoom;
 
-/// Where Z takes its first digit: the cubes under a column, its 3D roots.
+/// Where Z takes its first digit: the cubes under a shard, its 3D roots.
 pub const CUBE_ZOOM: Zoom = SHARD_ZOOM + 1;
 
 /// The finest a point resolves: a fraction's step.
