@@ -280,7 +280,7 @@ impl Source {
         }
         self.loaded.insert(p);
         let rows = r.store.tile(r.client, r.repo, p)?;
-        self.ground.insert(p, rows.elevation().to_vec());
+        self.ground.insert(p, rows.ele().to_vec());
         let step = mer_from_u(CELL_U);
         for s in rows.ways() {
             let key = s.id();
