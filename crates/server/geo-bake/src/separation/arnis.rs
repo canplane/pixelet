@@ -1,4 +1,4 @@
-// pxl-geo-bake/deck/arnis.rs
+// pxl-geo-bake/separation/arnis.rs
 
 // Copyright (c) 2022-2026 Louis Erbkamm (louis-e)
 //
@@ -31,18 +31,18 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::terrain::CELL_U;
-use pxl_spec::bake::deck::{footprint as line_reach, Form, STACKED_DECK_HEADROOM_M};
+use pxl_spec::bake::separation::{footprint as line_reach, Form, STACKED_DECK_HEADROOM_M};
 use pxl_spec::bake::way::half_cells;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer, u_per_m};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use xpute_core::math::scalar::round;
 
-use crate::deck::elevation::{sample_cells, tile_of};
-use crate::deck::piece::{piece_of, Piece};
-use crate::deck::source::{ring, Store};
-use crate::deck::way::{Polyline, Way};
-use crate::deck::{Drawn, Line, Reader, Solved};
 use crate::segment::{End, PartId, Segment};
+use crate::separation::elevation::{sample_cells, tile_of};
+use crate::separation::piece::{piece_of, Piece};
+use crate::separation::source::{ring, Store};
+use crate::separation::way::{Polyline, Way};
+use crate::separation::{Drawn, Line, Reader, Solved};
 use crate::terrain::pipeline::overture::policy::waterway_width;
 use crate::terrain::pipeline::overture::width::width_u;
 use crate::wkb::wkb_to_geometries;
@@ -149,7 +149,7 @@ fn graded(way: &Way, points: Vec<[f64; 3]>) -> (Line, Drawn) {
             subtype: way.row.subtype.clone(),
             class: way.row.class.clone(),
             width_u: way_width(&way.row),
-            form: Form::Grade,
+            form: Form::Approach,
             points,
             clear: 0,
         },
@@ -223,7 +223,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<Solved, Stri
     for (q, ys) in &solved.ys {
         lines.push(part_of(&runs[*q], ys, [0, ys.len() - 1], 0));
     }
-    for (q, ys) in rail_bridges(&runs, &obstacles, &solved.decks, units) {
+    for (q, ys) in rail_bridges(&runs, &obstacles, &solved.separation, units) {
         lines.push(part_of(&runs[q], &ys, [0, ys.len() - 1], 0));
     }
     let ceiling = (units.c(TUNNEL_CEIL_OFFSET_M) - units.c(BLOCK_M)).clamp(0, 255) as u8;
@@ -543,11 +543,11 @@ fn dist_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
 // ---- road bridges (Arnis `BridgeStructureMap::build`) ----
 
 /// Decks resolved: by cell, the deck's height and layer.
-type Decks = HashMap<(i64, i64), (i32, i64)>;
+type Separation = HashMap<(i64, i64), (i32, i64)>;
 
 struct Bridges {
     ys: Vec<(usize, Vec<i32>)>,
-    decks: Decks,
+    separation: Separation,
     /// The ways a bridge's ramp took, kept from a tunnel's approach.
     ramp_ways: HashSet<PartId>,
 }
@@ -735,7 +735,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
             bridge_nodes.entry(e).or_default().push(q);
         }
     }
-    let mut decks: Decks = HashMap::new();
+    let mut separation: Separation = HashMap::new();
     let mut joints: HashMap<End, i32> = HashMap::new();
     let mut claimed: HashSet<PartId> = HashSet::new();
     let mut out = Vec::new();
@@ -849,7 +849,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                         need = need.max(ground + o.headroom);
                     }
                 }
-                if let Some(&(lower, lower_layer)) = decks.get(&cell_key(c)) {
+                if let Some(&(lower, lower_layer)) = separation.get(&cell_key(c)) {
                     if lower_layer < layer {
                         need = need.max(lower + units.c(STACKED_DECK_HEADROOM_M));
                     }
@@ -960,7 +960,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
                 let (x, z) = cell_key(c);
                 for dx in -half..=half {
                     for dz in -half..=half {
-                        let e = decks.entry((x + dx, z + dz)).or_insert((y, layer));
+                        let e = separation.entry((x + dx, z + dz)).or_insert((y, layer));
                         if y > e.0 {
                             *e = (y, layer);
                         }
@@ -970,12 +970,16 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
             out.push((q, std::mem::take(&mut ys[m])));
         }
     }
-    Bridges { ys: out, decks, ramp_ways: claimed }
+    Bridges {
+        ys: out,
+        separation,
+        ramp_ways: claimed,
+    }
 }
 
 // ---- rail bridges: on a road deck, or one level a viaduct with ramps at its free ends ----
 
-fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units) -> Vec<(usize, Vec<i32>)> {
+fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, units: Units) -> Vec<(usize, Vec<i32>)> {
     let rail: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Bridge && runs[q].rail()).collect();
     let mut out = Vec::new();
     let mut ends_count: HashMap<&End, usize> = HashMap::new();
@@ -998,7 +1002,7 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units
                 let mut best: Option<(i64, i32)> = None;
                 for dx in -reach..=reach {
                     for dz in -reach..=reach {
-                        if let Some(&(y, l)) = decks.get(&(x + dx, z + dz)) {
+                        if let Some(&(y, l)) = separation.get(&(x + dx, z + dz)) {
                             let d = dx.abs() + dz.abs();
                             if l == layer && best.is_none_or(|(bd, _)| d < bd) {
                                 best = Some((d, y));
@@ -1059,7 +1063,7 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, decks: &Decks, units: Units
                         floor = floor.max(ground + o.headroom);
                     }
                 }
-                if let Some(&(lower, lower_layer)) = decks.get(&cell_key(c)) {
+                if let Some(&(lower, lower_layer)) = separation.get(&cell_key(c)) {
                     if lower_layer < effective_layer(r) {
                         floor = floor.max(lower + units.c(STACKED_DECK_HEADROOM_M));
                     }

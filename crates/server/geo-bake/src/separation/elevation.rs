@@ -1,8 +1,8 @@
-// pxl-geo-bake/deck/elevation.rs
+// pxl-geo-bake/separation/elevation.rs
 
 //! The ground's height at points: the tile's elevation with the client's
-//! interpolation, so deck ends and bore floors meet the drawn surface. A
-//! look's shift is no part of it, so a deck stands on the elevation whatever
+//! interpolation, so bridge ends and tunnel floors meet the drawn surface. A
+//! look's shift is no part of it, so a line stands on the elevation whatever
 //! is painted under it.
 
 use std::collections::HashMap;

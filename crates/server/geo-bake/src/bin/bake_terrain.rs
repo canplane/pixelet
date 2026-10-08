@@ -22,8 +22,8 @@ use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use pxl_geo_bake::coverage::{Coverage, Overture};
-use pxl_geo_bake::deck;
 use pxl_geo_bake::elevation::Raster;
+use pxl_geo_bake::separation;
 use pxl_geo_bake::terrain::absent::Absence;
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf, has_ground};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
@@ -93,10 +93,10 @@ fn run() -> Result<(), String> {
                     bands.len(),
                     1000,
                     ivec::repr,
-                    || Ok((connect(&source, &raster)?, deck::source::Walk::default())),
+                    || Ok((connect(&source, &raster)?, separation::source::Walk::default())),
                     |(db, held), tile| {
                         held.keep_around(tile);
-                        let reader = &mut deck::Reader {
+                        let reader = &mut separation::Reader {
                             client: &mut db.client,
                             repo: &db.repo,
                             store: held,

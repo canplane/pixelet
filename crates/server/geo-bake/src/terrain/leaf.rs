@@ -12,9 +12,9 @@ use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg3857::{self, mer_from_u};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 
-use crate::deck::{self, source::Store};
+use crate::separation::{self, source::Store};
 use crate::terrain::bake::assemble;
-use crate::terrain::pipeline::deck::bake_decks;
+use crate::terrain::pipeline::separation::bake_separation;
 use crate::terrain::repository::{self, DRAWN_REACH_U};
 use crate::terrain::source::fetch_surface;
 
@@ -35,7 +35,7 @@ const HAS_GROUND_SQL: &str = "
 
 /// What classifying reads; with a tile's reads, all a terrain bake reads.
 pub const GROUND_READS: [&str; 1] = [HAS_GROUND_SQL];
-pub const READS: [&[&str]; 3] = [&GROUND_READS, &repository::READS, &deck::source::READS];
+pub const READS: [&[&str]; 3] = [&GROUND_READS, &repository::READS, &separation::source::READS];
 
 /// A tile nothing is drawn in is open water; a cheap check, not the carve.
 pub fn has_ground(client: &mut Client, tiles: &[IVec]) -> Result<Vec<bool>, postgres::Error> {
@@ -59,11 +59,11 @@ pub fn has_ground(client: &mut Client, tiles: &[IVec]) -> Result<Vec<bool>, post
     Ok(out)
 }
 
-/// A leaf: its decks solved, its surface painted around their lines, the two
+/// A leaf: its separation solved, its surface painted around its lines, the two
 /// one tile; and whether it lies off the elevation raster, so flat.
-pub fn bake_leaf(r: &mut deck::Reader<impl Store>, tile: IVec) -> Result<(TerrainTile, bool), String> {
-    let solved = deck::solve_tile(r, tile)?;
+pub fn bake_leaf(r: &mut separation::Reader<impl Store>, tile: IVec) -> Result<(TerrainTile, bool), String> {
+    let solved = separation::solve_tile(r, tile)?;
     let (surface, flat) = fetch_surface(r.repo, r.client, tile, &solved.drawn)?;
-    let lines = bake_decks(&solved.lines, epsg3857::get_tile_bbox(LEAF_ZOOM, tile)[0]).ok_or("a tile's decks overflow a record")?;
+    let lines = bake_separation(&solved.lines, epsg3857::get_tile_bbox(LEAF_ZOOM, tile)[0]).ok_or("a tile's separation overflow a record")?;
     Ok((assemble(surface, lines), flat))
 }

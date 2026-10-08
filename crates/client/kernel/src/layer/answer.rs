@@ -54,7 +54,7 @@ pub struct Relief {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ground {
-    /// The surface's height as drawn, which a deck is measured against
+    /// The surface's height as drawn, which a line is measured against
     /// whether or not the cell has ground.
     pub height: f64,
     pub cell: GroundCell,

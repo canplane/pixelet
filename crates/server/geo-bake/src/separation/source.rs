@@ -1,4 +1,4 @@
-// pxl-geo-bake/deck/source.rs
+// pxl-geo-bake/separation/source.rs
 
 //! What a tile's solve reads.
 

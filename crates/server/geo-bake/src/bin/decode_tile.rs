@@ -23,10 +23,10 @@ use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::Coverage;
 use pxl_geo_bake::util::{is_packed, unpack};
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::deck::{Decks, Form};
 use pxl_spec::bake::format::decode_terrain;
 use pxl_spec::bake::format::{GroundCell, Occupancy};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
+use pxl_spec::bake::separation::{Form, Separation};
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::surface::extent_of;
 use pxl_spec::cell::color;
@@ -54,19 +54,25 @@ struct Tile {
     cells: Vec<GroundCell>,
     extent: Vec<[i16; 2]>,
     occupancy: Occupancy,
-    decks: Decks,
+    separation: Separation,
 }
 
 fn decode(pkt: &[u8]) -> Result<Tile, String> {
     let t = decode_terrain(pkt).map_err(|e| format!("not a tile: {e:?}"))?;
-    let (ele, cells, extent, occupancy, decks) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent().to_vec(), t.index.occupancy, t.decks);
+    let (ele, cells, extent, occupancy, separation) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent().to_vec(), t.index.occupancy, t.separation);
     // Nothing may follow the tree: the decoder only checks the payload is there.
     let at = WORD_SZ as usize;
     let payload = u32::from_le_bytes(pkt[at..at + 4].try_into().expect("a header word")) as usize;
     if payload + HDR_SZ as usize != pkt.len() {
         return Err(format!("packet is {} bytes, header says {}", pkt.len(), payload + HDR_SZ as usize));
     }
-    Ok(Tile { ele, cells, extent, occupancy, decks })
+    Ok(Tile {
+        ele,
+        cells,
+        extent,
+        occupancy,
+        separation,
+    })
 }
 
 fn name_of(cell: GroundCell) -> &'static str {
@@ -107,7 +113,11 @@ fn summarize(tile: &Tile, at: Option<Placed>) -> Summary {
     if !past.is_empty() {
         faults.push(format!("byte(s) that are no look — {}", past.join(", ")));
     }
-    let short = extent_of(&tile.ele, &tile.decks).iter().zip(&tile.extent).filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi).count();
+    let short = extent_of(&tile.ele, &tile.separation)
+        .iter()
+        .zip(&tile.extent)
+        .filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi)
+        .count();
     if short > 0 {
         faults.push(format!("{short} index cell(s) narrower than the tile's own surface"));
     }
@@ -132,7 +142,7 @@ fn print_summary(name: &str, s: &Summary) {
 }
 
 fn print_tunnels(tile: &Tile) {
-    let tunnels: Vec<_> = tile.decks.iter().filter(|d| d.form == Form::Tunnel).collect();
+    let tunnels: Vec<_> = tile.separation.iter().filter(|d| d.form == Form::Tunnel).collect();
     if tunnels.is_empty() {
         return;
     }
@@ -149,11 +159,11 @@ fn print_tunnels(tile: &Tile) {
     println!("  tunnels   {}, {points} points, {under} under the surface", tunnels.len());
 }
 
-fn print_decks(decks: &Decks) {
-    let tops = decks.tops.iter().fold([i16::MAX, i16::MIN], |[lo, hi], &t| [lo.min(t), hi.max(t)]);
-    match decks.len() {
-        0 => println!("  decks     none"),
-        n => println!("  decks     {n}, {} points, tops {}..{}", decks.points.len(), tops[0], tops[1]),
+fn print_separation(separation: &Separation) {
+    let tops = separation.tops.iter().fold([i16::MAX, i16::MIN], |[lo, hi], &t| [lo.min(t), hi.max(t)]);
+    match separation.len() {
+        0 => println!("  separation     none"),
+        n => println!("  separation     {n}, {} points, tops {}..{}", separation.points.len(), tops[0], tops[1]),
     }
 }
 
@@ -211,11 +221,11 @@ fn ground_png(tile: &Tile) -> Vec<u8> {
     png(TILE_CELLS, TILE_CELLS, 3, &px)
 }
 
-fn decks_png(tile: &Tile) -> Vec<u8> {
+fn separation_png(tile: &Tile) -> Vec<u8> {
     let n = TILE_CELLS as i64;
     let mut top = vec![f64::NEG_INFINITY; (n * n) as usize];
     let mut px = vec![0u8; (n * n * 3) as usize];
-    tile.decks.over_grid(None, [0.0, 0.0], 1.0, [n, n], |x, y, _, over| {
+    tile.separation.crossing_grid(None, [0.0, 0.0], 1.0, [n, n], |x, y, _, over| {
         let i = (y * n + x) as usize;
         if over.top < top[i] {
             return;
@@ -282,7 +292,7 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     let s = summarize(&tile, path.file_name().and_then(|n| Placed::of_name(&n.to_string_lossy())));
     let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
     print_summary(&name, &s);
-    print_decks(&tile.decks);
+    print_separation(&tile.separation);
     print_tunnels(&tile);
     for line in &s.faults {
         eprintln!("[decode_tile] {line}");
@@ -291,9 +301,9 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     let write = |file: String, bytes: Vec<u8>| std::fs::write(dir.join(&file), bytes).map_err(|e| format!("{file}: {e}"));
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     write("heights.png".into(), heights_png(&tile, &s))?;
-    write("decks.png".into(), decks_png(&tile))?;
+    write("separation.png".into(), separation_png(&tile))?;
     write("ground.png".into(), ground_png(&tile))?;
-    println!("[decode_tile] wrote heights.png, ground.png and decks.png under {}", dir.display());
+    println!("[decode_tile] wrote heights.png, ground.png and separation.png under {}", dir.display());
     Ok(s.faults.is_empty())
 }
 

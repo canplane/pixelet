@@ -1,15 +1,15 @@
 // pxl-kernel/layer/terrain/fixed.rs
 
 //! `.fixed.terrain`: the room every resident terrain tile lies in, and where
-//! a record's bytes are. Planes in order: ground, seven deck lanes,
+//! a record's bytes are. Planes in order: ground, seven separation lanes,
 //! elevation, index lane, coarser index cells. The elevation is its own plane
 //! because its 2,592-byte record is 32 past a cache line; held with the
 //! ground it would misalign every second tile's lanes.
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::deck::{MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::bake::format::COARSE_LANE;
+use pxl_spec::bake::separation::{MAX_BOXES, MAX_LINES, MAX_POINTS};
 use pxl_spec::space::layer::lattice::{EXTENT, TILE_CELLS};
 
 use crate::layer::residency::Residency;
@@ -26,27 +26,27 @@ pub const GROUND_LANE_BYTES: u32 = TILE_CELLS * TILE_CELLS * core::mem::size_of:
 pub const GROUND_BYTES: u32 = FRAMES * GROUND_LANE_BYTES;
 
 /// Rounded up to a whole cache line.
-const fn deck_lane(count: usize, size: usize) -> u32 {
+const fn separation_lane(count: usize, size: usize) -> u32 {
     ((count * size).div_ceil(64) * 64) as u32
 }
 
-/// Plane order: deck starts, points, tops, width, kind, form, clear, boxes.
-pub const DECK_LANE_BYTES: [u32; 8] = [
-    deck_lane(MAX_DECKS + 1, 4),
-    deck_lane(MAX_POINTS, 4),
-    deck_lane(MAX_POINTS, 2),
-    deck_lane(MAX_DECKS, 1),
-    deck_lane(MAX_DECKS, 1),
-    deck_lane(MAX_DECKS, 1),
-    deck_lane(MAX_DECKS, 1),
-    deck_lane(MAX_BOXES, 8),
+/// Plane order: line starts, points, tops, width, kind, form, clear, boxes.
+pub const SEPARATION_LANE_BYTES: [u32; 8] = [
+    separation_lane(MAX_LINES + 1, 4),
+    separation_lane(MAX_POINTS, 4),
+    separation_lane(MAX_POINTS, 2),
+    separation_lane(MAX_LINES, 1),
+    separation_lane(MAX_LINES, 1),
+    separation_lane(MAX_LINES, 1),
+    separation_lane(MAX_LINES, 1),
+    separation_lane(MAX_BOXES, 8),
 ];
 
-pub const DECK_BYTES: u32 = FRAMES * {
+pub const SEPARATION_BYTES: u32 = FRAMES * {
     let mut sum = 0;
     let mut k = 0;
-    while k < DECK_LANE_BYTES.len() {
-        sum += DECK_LANE_BYTES[k];
+    while k < SEPARATION_LANE_BYTES.len() {
+        sum += SEPARATION_LANE_BYTES[k];
         k += 1;
     }
     sum
@@ -68,7 +68,7 @@ pub const COARSE_LANE_BYTES: u32 = COARSE_LANE as u32 * EXTENT_BYTES;
 
 pub const COARSE_PLANE_BYTES: u32 = FRAMES * COARSE_LANE_BYTES;
 
-pub const TERRAIN_BYTES: u32 = GROUND_BYTES + DECK_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES + COARSE_PLANE_BYTES;
+pub const TERRAIN_BYTES: u32 = GROUND_BYTES + SEPARATION_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES + COARSE_PLANE_BYTES;
 
 const _: () = assert!(
     GROUND_LANE_BYTES.is_multiple_of(64),
@@ -79,24 +79,24 @@ pub const fn ground_off(record: u32) -> u32 {
     record * GROUND_LANE_BYTES
 }
 
-pub const fn deck_off(record: u32, lane: usize) -> u32 {
+pub const fn separation_off(record: u32, lane: usize) -> u32 {
     let mut plane = GROUND_BYTES;
     let mut k = 0;
     while k < lane {
-        plane += FRAMES * DECK_LANE_BYTES[k];
+        plane += FRAMES * SEPARATION_LANE_BYTES[k];
         k += 1;
     }
-    plane + record * DECK_LANE_BYTES[lane]
+    plane + record * SEPARATION_LANE_BYTES[lane]
 }
 
 pub const fn ele_off(record: u32) -> u32 {
-    GROUND_BYTES + DECK_BYTES + record * ELE_LANE_BYTES
+    GROUND_BYTES + SEPARATION_BYTES + record * ELE_LANE_BYTES
 }
 
 pub const fn extent_off(record: u32) -> u32 {
-    GROUND_BYTES + DECK_BYTES + ELE_PLANE_BYTES + record * EXTENT_LANE_BYTES
+    GROUND_BYTES + SEPARATION_BYTES + ELE_PLANE_BYTES + record * EXTENT_LANE_BYTES
 }
 
 pub const fn coarse_off(record: u32) -> u32 {
-    GROUND_BYTES + DECK_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES + record * COARSE_LANE_BYTES
+    GROUND_BYTES + SEPARATION_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES + record * COARSE_LANE_BYTES
 }

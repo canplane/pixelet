@@ -23,7 +23,7 @@ pub struct Absence {
     unknown: TerrainTile,
 }
 
-/// A tile of one look at sea level: no decks, and no child under it.
+/// A tile of one look at sea level: no lines, and no child under it.
 fn uniform(look: u8) -> TerrainTile {
     let mut t = TerrainTile::leaf(
         vec![0; ELE_LANE],

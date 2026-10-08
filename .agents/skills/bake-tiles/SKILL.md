@@ -106,9 +106,9 @@ grep '^\[bake' /tmp/bake.log | tail -2
 ## Terrain
 
 A leaf is each tile exactly as the dev server bakes it on demand
-(`geo-bake terrain/leaf.rs` `bake_leaf`): its deck solve (`deck.rs`) — every
+(`geo-bake terrain/leaf.rs` `bake_leaf`): its separation solve (`separation.rs`) — every
 structure reaching the tile or the eight around it, solved whole wherever it
-runs — and from that one result its lines (decks, bores and the grades at
+runs — and from that one result its lines (bridges, tunnels and the approaches at
 their ends) and its surface (ground and elevation), which paints a way only
 where no line draws it.
 
@@ -118,7 +118,7 @@ deno task bake:terrain --stage assemble
 ```
 
 A shard's leaves are its tiles anything is drawn in — land, or a way,
-building, deck or bore (`terrain/leaf.rs` `has_ground`) — found again each
+building, bridge or tunnel (`terrain/leaf.rs` `has_ground`) — found again each
 time the shard is baked. Open-ocean tiles are deliberately not baked:
 roughly two thirds of the coverage is open sea, and a tile with no object is
 drawn from the one over it. The fold reads a tile it has no object for as
@@ -130,12 +130,12 @@ coarser one as the fold of those under it (`terrain/absent.rs`).
 drawn in a tile can come from past its edge, so every read reaches as far as
 that, worked back from how far each thing draws:
 
-- **Rows** (ways, buildings, decks, bores, water) are read from the tile's
+- **Rows** (ways, buildings, bridges, tunnels, water) are read from the tile's
   bbox grown by `DRAWN_REACH_U` (terrain/repository.rs `drawn_from`): a way
-  drawn its widest, `WIDEST` cells (the width a deck's byte holds, and the
+  drawn its widest, `WIDEST` cells (the width a line's byte holds, and the
   ground draws no wider), plus the corridor gap one way paves to another.
   The tile keeps only its own cells, and its lines' runs within their
-  footprint (pxl-spec bake/deck.rs `footprint`).
+  footprint (pxl-spec bake/separation.rs `footprint`).
 - **Elevation** is sampled `ELE_PAD` samples past the tile, what a bicubic
   window at the tile's edge reads. The published shards
   (`infra/geo/elevation/metadata.json`) are warped each to its own edges, so

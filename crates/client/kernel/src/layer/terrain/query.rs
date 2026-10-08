@@ -42,7 +42,7 @@ pub fn tile_view(tile: &TerrainTile) -> TileView<'_> {
     TileView {
         cells: &tile.ground.cells,
         ele: &tile.ele,
-        decks: &tile.decks,
+        separation: &tile.separation,
     }
 }
 
