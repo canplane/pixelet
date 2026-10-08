@@ -31,7 +31,7 @@ tiles ────────────────────────�
       fetched only when the view lacks them
 ```
 
-- **Real geography is baked ahead; what you build is live.** [Overture Maps](https://overturemaps.org/)' geometry, OpenStreetMap's coastline and [GEDTM30](https://doi.org/10.5281/zenodo.15689805)'s elevation are painted into tiles before anyone asks; what players place is kept as they place it, and the trees and cars the ground grows are worked out where they stand, never stored.
+- **Real geography is baked ahead; what you build is live.** [Overture Maps](https://overturemaps.org/)' geometry, OpenStreetMap's coastline and [GEDTM30](https://doi.org/10.5281/zenodo.18887460)'s elevation are painted into tiles before anyone asks; what players place is kept as they place it, and the trees and cars the ground grows are worked out where they stand, never stored.
 - **Cells express detail, chunks are drawn, tiles are fetched.** One cell of the eye's view is one thing drawn, a chunk is a cube of those cells, and a tile is what arrives when the view lacks it.
 - **The same world runs in a browser and on a device**, through one Rust kernel drawing with WebGPU.
 
