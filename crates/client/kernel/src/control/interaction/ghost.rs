@@ -2,7 +2,7 @@
 
 //! The ghost the tool held shows under the pointer: the decor a placement
 //! would stand or bring back, the box it would fill or carve, or what the
-//! eraser is over.
+//! eraser is over; none while a marker waits for its words.
 
 use pxl_render::look::color::indicator;
 use pxl_spec::cell::decor::DecorKind;
@@ -18,6 +18,7 @@ use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::decor::assets::decor_assets_for;
 use crate::layer::instance::Meta;
 use crate::layer::object::meta::user_decor_pick;
+use crate::layer::object::preview::draft;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::EntryKind;
 use crate::query::World;
@@ -32,6 +33,10 @@ pub enum Ghost {
 }
 
 pub fn ghost() -> Ghost {
+    // A marker waiting for its words shows where it goes itself.
+    if draft().is_some() {
+        return Ghost::None;
+    }
     let hover = hover();
     let ui = holding();
     let settings = settings_store();
