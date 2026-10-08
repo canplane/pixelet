@@ -107,7 +107,7 @@ pub struct CoastRow {
 }
 
 pub struct TileSource {
-    pub ele: Option<Vec<i16>>,
+    pub ele: Vec<i16>,
     pub building_rows: Vec<BuildingRow>,
     pub segment_rows: Vec<Segment>,
     pub base_rows: Vec<BaseRow>,
@@ -141,8 +141,8 @@ impl TerrainRepository {
         })
     }
 
-    /// A tile's elevation grid, none where the raster does not reach it.
-    pub fn ele(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Option<Vec<i16>>, postgres::Error> {
+    /// A tile's elevation grid.
+    pub fn ele(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Vec<i16>, postgres::Error> {
         self.raster.tile_grid(client, tile_bbox)
     }
 

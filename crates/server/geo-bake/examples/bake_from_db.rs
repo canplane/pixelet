@@ -24,7 +24,6 @@ fn main() {
     let raster = Arc::new(Raster::open(&mut client).expect("raster"));
     let repo = TerrainRepository::prepare(&mut client, raster).expect("prepare");
     let memo = std::env::temp_dir().join("pxl-source");
-    let mut flat = 0;
 
     for tile in tiles {
         let idx = tile.parse().expect("tile_idx");
@@ -34,13 +33,9 @@ fn main() {
             repo: &repo,
             store: &mut Disk(&memo),
         };
-        let (terrain, off_raster) = bake_leaf(reader, idx).expect("bake");
+        let terrain = bake_leaf(reader, idx).expect("bake");
         let bytes = encode_terrain(&terrain).expect("encode");
         fs::write(format!("{dir}/{tile}.db.tile"), &bytes).expect("write");
-        flat += usize::from(off_raster);
         println!("{tile}\t{}", bytes.len());
-    }
-    if flat > 0 {
-        eprintln!("[bake] no elevation on {flat} tile(s)");
     }
 }
