@@ -1,8 +1,8 @@
-// pxl-geo-bake/deck.rs
+// pxl-geo-bake/separation.rs
 
-//! Decks and bores: what a tile's bridges and tunnels are, read from the
+//! Bridges and tunnels: what a tile's bridges and tunnels are, read from the
 //! source, and the lines the bake stores for them, solved as Arnis solves
-//! them (`deck/arnis.rs`).
+//! them (`separation/arnis.rs`).
 
 pub mod arnis;
 pub mod elevation;
@@ -11,7 +11,7 @@ pub mod source;
 pub mod way;
 
 use postgres::Client;
-use pxl_spec::bake::deck::Form;
+use pxl_spec::bake::separation::Form;
 use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
 use crate::terrain::repository::TerrainRepository;

@@ -15,13 +15,13 @@ Data sources have their own obligations and their own place:
 `apps/web/src/feature/setting/section/attribution.tsx` is where the ones
 that must reach a user are shown.
 
-## louis-e/arnis — `crates/server/geo-bake/src/deck/arnis.rs`, `crates/spec/src/procedural.rs`
+## louis-e/arnis — `crates/server/geo-bake/src/separation/arnis.rs`, `crates/spec/src/procedural.rs`
 
 How bridges and tunnels stand is [louis-e/arnis][arnis] at `c96872e`
 (Apache-2.0), its [element processing][processing] for bridges,
 highways and railways without the blocks it places
 ([decision](./decision/20261006-bridges-and-tunnels-as-arnis-solves-them.md)):
-the bake's solve in `deck/arnis.rs`, whose head carries the license notice,
+the bake's solve in `separation/arnis.rs`, whose head carries the license notice,
 and the piers in `procedural.rs`, which reach the client and are marked
 where they begin. Both read Overture's fields for OSM's tags and take their
 widths from the ground. Arnis's `NOTICE` asks that this be kept with them:

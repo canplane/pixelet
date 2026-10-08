@@ -19,13 +19,13 @@ use crate::pyramid::{Absent, Layer};
 
 pub struct Absence {
     coverage: Coverage,
-    sea: Terrain,
-    unknown: Terrain,
+    sea: TerrainTile,
+    unknown: TerrainTile,
 }
 
-/// A tile of one look at sea level: no decks, and no child under it.
-fn uniform(look: u8) -> Terrain {
-    let mut t = Terrain::leaf(
+/// A tile of one look at sea level: no lines, and no child under it.
+fn uniform(look: u8) -> TerrainTile {
+    let mut t = TerrainTile::leaf(
         vec![0; ELE_LANE],
         Ground {
             cells: vec![look; (TILE_CELLS * TILE_CELLS) as usize].into(),

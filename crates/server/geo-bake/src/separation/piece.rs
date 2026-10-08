@@ -1,8 +1,8 @@
-// pxl-geo-bake/deck/piece.rs
+// pxl-geo-bake/separation/piece.rs
 
 //! A way's bridge or tunnel, as the solve takes it.
 
-use pxl_spec::bake::deck::Form;
+use pxl_spec::bake::separation::Form;
 
 use crate::segment::{PartId, Segment};
 use crate::terrain::pipeline::overture::width::width_u;

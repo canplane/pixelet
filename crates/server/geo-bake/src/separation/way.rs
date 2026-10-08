@@ -1,4 +1,4 @@
-// pxl-geo-bake/deck/way.rs
+// pxl-geo-bake/separation/way.rs
 
 //! A way as read, and the line it runs along.
 

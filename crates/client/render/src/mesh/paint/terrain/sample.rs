@@ -2,12 +2,12 @@
 
 //! A terrain tile's chunk as the render pipeline reads it: per cell one
 //! material, its look's, and one top, painted as a column
-//! from a floor shared by the chunk. Decks stand off the column as runs of
+//! from a floor shared by the chunk. Bridges and tunnels stand off the column as runs of
 //! their own; a bore or a cutting takes the air over its floor out of the
 //! column.
 
-use pxl_spec::bake::deck::{Decks, Occupies, Over};
 use pxl_spec::bake::format::GroundCell;
+use pxl_spec::bake::separation::{Crossing, Occupies, Separation};
 use pxl_spec::cell::color;
 use pxl_spec::cell::cube_types::{ground, sentinel, Ground};
 use pxl_spec::cell::object::PlaceableCube;
@@ -71,19 +71,19 @@ impl Materials {
     }
 }
 
-/// The decks over the columns `s` is read for, the apron's too: a column the
-/// apron reads without its deck stands at another height than the chunk beside
+/// The lines over the columns `s` is read for, the apron's too: a column the
+/// apron reads without its lines stands at another height than the chunk beside
 /// draws it, and the faces either side are shaded for a step that is not there.
 /// `s` is the tile at `quadrant` beside the chunk's own and is read for the
 /// columns `reads` says; `corner` is the apron's first column in the own tile's cells.
-fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &TileSource, corner: [i64; 2], quadrant: [i64; 2], span: u32, reads: impl Fn([i64; 2]) -> bool) -> Result<(), Refused> {
+fn collect_separation(crossing: &mut Vec<(usize, usize, Crossing)>, s: &TileSource, corner: [i64; 2], quadrant: [i64; 2], span: u32, reads: impl Fn([i64; 2]) -> bool) -> Result<(), Refused> {
     let n = f64::from(s.n);
     let origin = [0, 1].map(|k| (s.origin[k] + corner[k] - quadrant[k] * TILE_CELLS as i64) as f64 / n);
     let side = i64::from(span);
     let mut grown = Ok(());
-    s.tile.decks.over_grid(Some(s.frame), origin, 1.0 / n, [side, side], |cx, cy, d, o| {
+    s.tile.separation.crossing_grid(Some(s.frame), origin, 1.0 / n, [side, side], |cx, cy, d, o| {
         if grown.is_ok() && reads(ancestor_of([corner[0] + cx, corner[1] + cy], GROUND.tile_cell_shamt())) {
-            grown = try_push(over, ((cy * side + cx) as usize, d, o));
+            grown = try_push(crossing, ((cy * side + cx) as usize, d, o));
         }
     });
     grown
@@ -96,7 +96,7 @@ const PIER: GroundCell = ground::building;
 pub struct TileView<'a> {
     pub cells: &'a [GroundCell],
     pub ele: &'a [i16],
-    pub decks: &'a Decks,
+    pub separation: &'a Separation,
 }
 
 /// The tile drawn in place of this one (its own, or a coarser one whose cell
@@ -153,27 +153,27 @@ pub struct ChunkSample {
     pub span: u32,
     /// Its cells a leaf cell's side: past the leaves, a way's slab stays a leaf cell thick.
     scale: i32,
-    /// Column `i`'s spans are `spans[span_at[i]..span_at[i + 1]]`, lowest first,
-    /// none overlapping; the apron's have none.
-    pub span_at: Vec<u32>,
-    pub spans: Vec<Span>,
-    /// `[lo, hi)`, empty where none does.
-    pub bore: Vec<Bore>,
+    /// Column `i`'s runs over the ground are `over[over_at[i]..over_at[i + 1]]`,
+    /// lowest first, none overlapping; the apron's have none.
+    pub over_at: Vec<u32>,
+    pub over: Vec<Over>,
+    /// Each column's span under the ground, `[lo, hi)`, empty where none does.
+    pub under: Vec<Under>,
     /// Each column's look: where a pier stands is the data's, and a void one has no ground.
     look: Vec<GroundCell>,
-    over: Vec<(usize, usize, Over)>,
+    crossing: Vec<(usize, usize, Crossing)>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Bore {
-    pub air: [i32; 2],
+pub struct Under {
+    pub span: [i32; 2],
     pub material: u32,
     pub layer: u8,
 }
 
 /// `lo` up to `hi` exclusive, in cells.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Span {
+pub struct Over {
     pub lo: i32,
     pub hi: i32,
     pub material: u32,
@@ -189,11 +189,11 @@ impl Default for ChunkSample {
             floor: 0,
             span: COL_SPAN,
             scale: 1,
-            span_at: vec![0; COL_SPAN2 + 1],
-            spans: Vec::new(),
-            bore: vec![Bore::default(); COL_SPAN2],
-            look: vec![ground::BASE; COL_SPAN2],
+            over_at: vec![0; COL_SPAN2 + 1],
             over: Vec::new(),
+            under: vec![Under::default(); COL_SPAN2],
+            look: vec![ground::BASE; COL_SPAN2],
+            crossing: Vec::new(),
         }
     }
 }
@@ -222,7 +222,7 @@ impl ChunkSample {
                 self.ele[i] = ele;
             }
         }
-        self.read_decks(around, first)?;
+        self.read_separation(around, first)?;
         self.floor = self.floor_of();
         Ok(())
     }
@@ -238,9 +238,9 @@ impl ChunkSample {
                 if self.has_ground(i) {
                     lowest = lowest.min(self.ele[i]);
                 }
-                let b = self.bore[i];
-                if b.air[0] < b.air[1] {
-                    lowest = lowest.min(b.air[0] - self.scale);
+                let b = self.under[i];
+                if b.span[0] < b.span[1] {
+                    lowest = lowest.min(b.span[0] - self.scale);
                 }
             }
         }
@@ -250,50 +250,50 @@ impl ChunkSample {
         }
     }
 
-    /// Each column's decks from the tile its height is read from (`read`).
-    fn read_decks(&mut self, around: &Around, first: [i64; 2]) -> Result<(), Refused> {
-        let mut over = core::mem::take(&mut self.over);
-        over.clear();
+    /// Each column's lines from the tile its height is read from (`read`).
+    fn read_separation(&mut self, around: &Around, first: [i64; 2]) -> Result<(), Refused> {
+        let mut crossing = core::mem::take(&mut self.crossing);
+        crossing.clear();
         let per_m = u_per_m(around.own.frame.corner[1]);
         let corner = first.map(|v| v - APRON as i64);
         // A column with no tile beside is read from the chunk's own, as its height is.
         let beside = |[qx, qy]: [i64; 2]| if (qx, qy) == (0, 0) { None } else { around.beside[beside_index(qx, qy)].as_ref() };
         let span = self.span;
-        let mut built = collect_decks(&mut over, &around.own, corner, [0, 0], span, |q| beside(q).is_none());
+        let mut built = collect_separation(&mut crossing, &around.own, corner, [0, 0], span, |q| beside(q).is_none());
         for qy in -1..=1 {
             for qx in -1..=1 {
                 if let (Some(s), true) = (beside([qx, qy]), built.is_ok()) {
-                    built = collect_decks(&mut over, s, corner, [qx, qy], span, |q| q == [qx, qy]);
+                    built = collect_separation(&mut crossing, s, corner, [qx, qy], span, |q| q == [qx, qy]);
                 }
             }
         }
-        let built = built.and_then(|()| self.spans_of(&mut over, per_m));
-        self.over = over;
+        let built = built.and_then(|()| self.over_of(&mut crossing, per_m));
+        self.crossing = crossing;
         built
     }
 
-    fn spans_of(&mut self, over: &mut Vec<(usize, usize, Over)>, per_m: f64) -> Result<(), Refused> {
+    fn over_of(&mut self, crossing: &mut Vec<(usize, usize, Crossing)>, per_m: f64) -> Result<(), Refused> {
         let tables = &*MATERIALS;
         // A line over a column is all its segments sweep there; a station is one segment's,
         // so the pier is either's.
-        over.sort_by_key(|a| (a.0, a.1));
-        over.dedup_by(|b, a| {
+        crossing.sort_by_key(|a| (a.0, a.1));
+        crossing.dedup_by(|b, a| {
             let same = (a.0, a.1) == (b.0, b.1);
             if same {
                 (a.2.low, a.2.top, a.2.pier) = (a.2.low.min(b.2.low), a.2.top.max(b.2.top), a.2.pier || b.2.pier);
             }
             same
         });
-        self.spans.clear();
+        self.over.clear();
         let (mut col, columns) = (0, (self.span * self.span) as usize);
         let mut i = 0;
         while col < columns {
-            self.span_at[col] = self.spans.len() as u32;
-            self.bore[col] = Bore::default();
-            let from = self.spans.len();
+            self.over_at[col] = self.over.len() as u32;
+            self.under[col] = Under::default();
+            let from = self.over.len();
             let col_from = i;
-            while i < over.len() && over[i].0 == col {
-                let o = over[i].2;
+            while i < crossing.len() && crossing[i].0 == col {
+                let o = crossing[i].2;
                 i += 1;
                 let Some((slab, slab_layer)) = tables.of(o.kind) else { continue };
                 let ground = self.ele[col];
@@ -302,33 +302,33 @@ impl ChunkSample {
                         (self.material[col], self.layer_idx[col]) = (slab, slab_layer);
                         continue;
                     }
-                    Occupies::Through { air } => {
-                        if air[1] - air[0] > self.bore[col].air[1] - self.bore[col].air[0] {
-                            self.bore[col] = Bore {
-                                air,
+                    Occupies::Under { span } => {
+                        if span[1] - span[0] > self.under[col].span[1] - self.under[col].span[0] {
+                            self.under[col] = Under {
+                                span,
                                 material: slab,
                                 layer: slab_layer,
                             };
                         }
                         continue;
                     }
-                    Occupies::Above { slab, pier } => (slab, pier),
+                    Occupies::Over { slab, pier } => (slab, pier),
                 };
                 let [lo, hi] = slab_at;
                 try_push(
-                    &mut self.spans,
-                    Span {
+                    &mut self.over,
+                    Over {
                         lo,
                         hi,
                         material: slab,
                         layer: slab_layer,
                     },
                 )?;
-                let column = over[col_from..].iter().take_while(|c| c.0 == col).map(|c| c.2);
+                let column = crossing[col_from..].iter().take_while(|c| c.0 == col).map(|c| c.2);
                 if let (Some([lo, hi]), Some((pier, pier_layer))) = (pier_at.and_then(|p| pier_stands(p, self.look[col], column, ground, per_m)), tables.of(PIER)) {
                     try_push(
-                        &mut self.spans,
-                        Span {
+                        &mut self.over,
+                        Over {
                             lo,
                             hi,
                             material: pier,
@@ -338,22 +338,22 @@ impl ChunkSample {
                 }
             }
             // Lowest first; a higher span keeps what two share.
-            let column = &mut self.spans[from..];
+            let column = &mut self.over[from..];
             column.sort_by_key(|s| (s.lo, s.hi));
             for k in (1..column.len()).rev() {
                 column[k - 1].hi = column[k - 1].hi.min(column[k].lo);
             }
             let mut k = from;
-            for j in from..self.spans.len() {
-                if self.spans[j].hi > self.spans[j].lo {
-                    self.spans[k] = self.spans[j];
+            for j in from..self.over.len() {
+                if self.over[j].hi > self.over[j].lo {
+                    self.over[k] = self.over[j];
                     k += 1;
                 }
             }
-            self.spans.truncate(k);
+            self.over.truncate(k);
             col += 1;
         }
-        self.span_at[columns] = self.spans.len() as u32;
+        self.over_at[columns] = self.over.len() as u32;
         Ok(())
     }
 
@@ -365,7 +365,7 @@ impl ChunkSample {
         let scale = 1i32 << k;
         (self.span, self.scale) = (span, leaf.scale * scale);
         let in_leaf = |v: u32, p: u32| (i64::from(v) + i64::from(p) - i64::from(APRON)).div_euclid(i64::from(scale)) + i64::from(APRON);
-        self.spans.clear();
+        self.over.clear();
         for py in 0..span {
             for px in 0..span {
                 let i = (py * span + px) as usize;
@@ -374,13 +374,13 @@ impl ChunkSample {
                 self.layer_idx[i] = leaf.layer_idx[j];
                 self.look[i] = leaf.look[j];
                 self.ele[i] = leaf.ele[j] * scale;
-                let b = leaf.bore[j];
-                self.bore[i] = Bore { air: b.air.map(|v| v * scale), ..b };
-                self.span_at[i] = self.spans.len() as u32;
-                for s in &leaf.spans[leaf.span_at[j] as usize..leaf.span_at[j + 1] as usize] {
+                let b = leaf.under[j];
+                self.under[i] = Under { span: b.span.map(|v| v * scale), ..b };
+                self.over_at[i] = self.over.len() as u32;
+                for s in &leaf.over[leaf.over_at[j] as usize..leaf.over_at[j + 1] as usize] {
                     try_push(
-                        &mut self.spans,
-                        Span {
+                        &mut self.over,
+                        Over {
                             lo: s.lo * scale,
                             hi: s.hi * scale,
                             ..*s
@@ -389,7 +389,7 @@ impl ChunkSample {
                 }
             }
         }
-        self.span_at[(span * span) as usize] = self.spans.len() as u32;
+        self.over_at[(span * span) as usize] = self.over.len() as u32;
         self.floor = self.floor_of();
         Ok(())
     }
@@ -410,19 +410,19 @@ impl ChunkSample {
         let top = self.ele[i].min(to);
         let (m, l) = (self.material[i], self.layer_idx[i]);
         let mut part = |lo: i32, hi: i32, m: u32, l: u8| if lo.max(from) < hi { run(lo.max(from), hi - 1, m, l) } else { Ok(()) };
-        let b = self.bore[i];
-        if b.air[0] >= b.air[1] {
+        let b = self.under[i];
+        if b.span[0] >= b.span[1] {
             return part(from, top, m, l);
         }
-        let floor = b.air[0];
+        let floor = b.span[0];
         part(from, (floor - self.scale).min(top), m, l)?;
         part(floor - self.scale, floor.min(top), b.material, b.layer)?;
-        part(b.air[1], top, m, l)
+        part(b.span[1], top, m, l)
     }
 
     pub fn column_runs<E>(&self, i: usize, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
         self.ground_runs(i, self.floor, i32::MAX, &mut run)?;
-        for s in &self.spans[self.span_at[i] as usize..self.span_at[i + 1] as usize] {
+        for s in &self.over[self.over_at[i] as usize..self.over_at[i + 1] as usize] {
             run(s.lo, s.hi - 1, s.material, s.layer)?;
         }
         Ok(())

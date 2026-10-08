@@ -16,7 +16,7 @@ const TILE_AREA: usize = (TILE_CELLS * TILE_CELLS) as usize;
 const SPAN: i64 = TILE_CELLS as i64;
 
 /// A cell is painted by what covers its center, the same center elevation
-/// and decks are sampled at.
+/// and separation are sampled at.
 const PX_CENTER: f64 = 0.5;
 
 fn cell_idx(x: i64, y: i64) -> usize {

@@ -16,7 +16,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use super::ray::{Detail, Ray};
-use super::world::{covers, Over, World};
+use super::world::{covers, Held, World};
 use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Source};
 use crate::layer::object::meta::placed;
@@ -123,8 +123,8 @@ impl<'a> World<'a> {
         for kind in &KINDS {
             let Some(i) = grown_at(kind, &view, cell, leaf.in_tile()) else { continue };
             let Source::Ground(at) = i.source else { continue };
-            let held = self.objects.read((GROUND.cell(), at), GROUND.cell()).value().is_some_and(|c| c.holds());
-            if !covers(Over::Leaf { held }) {
+            let any = self.objects.read((GROUND.cell(), at), GROUND.cell()).value().is_some_and(|c| c.holds());
+            if !covers(Held::Leaf { any }) {
                 meet(s, ray, i);
             }
         }

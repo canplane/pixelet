@@ -1,6 +1,6 @@
 // pxl-geo-bake/terrain/pipeline/overture/width.rs
 
-//! A way's width, the same on the ground and on a deck: Carto's at z16
+//! A way's width, the same on the ground and on a bridge: Carto's at z16
 //! (`roads.mss`, gravitystorm/openstreetmap-carto 1cc4b89) in its pixels, its
 //! casing included. Carto reads no measured width, nor a way's lanes, and
 //! neither does the bake.

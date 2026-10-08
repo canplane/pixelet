@@ -12,10 +12,9 @@ use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg3857::{self, mer_from_u};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 
-use crate::coverage::{holdings, Coverage};
-use crate::deck::{self, source::Store};
+use crate::separation::{self, source::Store};
 use crate::terrain::bake::assemble;
-use crate::terrain::pipeline::deck::bake_decks;
+use crate::terrain::pipeline::separation::bake_separation;
 use crate::terrain::repository::{self, DRAWN_REACH_U};
 use crate::terrain::source::fetch_surface;
 
@@ -36,7 +35,7 @@ const HAS_GROUND_SQL: &str = "
 
 /// What classifying reads; with a tile's reads, all a terrain bake reads.
 pub const GROUND_READS: [&str; 1] = [HAS_GROUND_SQL];
-pub const READS: [&[&str]; 3] = [&GROUND_READS, &repository::READS, &deck::source::READS];
+pub const READS: [&[&str]; 3] = [&GROUND_READS, &repository::READS, &separation::source::READS];
 
 /// A tile nothing is drawn in is open water; a cheap check, not the carve.
 pub fn has_ground(client: &mut Client, tiles: &[IVec]) -> Result<Vec<bool>, postgres::Error> {
@@ -60,53 +59,11 @@ pub fn has_ground(client: &mut Client, tiles: &[IVec]) -> Result<Vec<bool>, post
     Ok(out)
 }
 
-/// A leaf: its decks solved, its surface painted around their lines, the two
+/// A leaf: its separation solved, its surface painted around its lines, the two
 /// one tile; and whether it lies off the elevation raster, so flat.
-pub fn bake_leaf(r: &mut deck::Reader<impl Store>, tile: IVec) -> Result<(TerrainTile, bool), String> {
-    let solved = deck::solve_tile(r, tile)?;
+pub fn bake_leaf(r: &mut separation::Reader<impl Store>, tile: IVec) -> Result<(TerrainTile, bool), String> {
+    let solved = separation::solve_tile(r, tile)?;
     let (surface, flat) = fetch_surface(r.repo, r.client, tile, &solved.drawn)?;
-    let lines = bake_decks(&solved.lines, epsg3857::get_tile_bbox(LEAF_ZOOM, tile)[0]).ok_or("a tile's decks overflow a record")?;
+    let lines = bake_separation(&solved.lines, epsg3857::get_tile_bbox(LEAF_ZOOM, tile)[0]).ok_or("a tile's separation overflow a record")?;
     Ok((assemble(surface, lines), flat))
-}
-
-/// What the land list is a function of: what `has_ground` reads of the DB,
-/// its tables, the coastline among them (`coverage.rs` `holdings`).
-pub fn ground_source(client: &mut Client) -> Result<serde_json::Value, String> {
-    holdings(client, &[&GROUND_READS])
-}
-
-/// The tiles `has_ground` found, kept for the geocode bake and later stages;
-/// refused unless made at this tile size, coverage and rule, and from
-/// `source` where it is given.
-pub fn land_tiles(path: &Path, coverage: &Coverage, source: Option<&serde_json::Value>) -> Result<Vec<IVec>, String> {
-    let reclassify = "run bake_tiles, which writes it as a side effect of its own classification (`--limit 0` does the classification and bakes nothing)";
-    let raw = std::fs::read_to_string(path).map_err(|_| format!("{} not found — {reclassify}.", path.display()))?;
-    let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-    let want = land_key(coverage, source.unwrap_or(&serde_json::Value::Null));
-    for (k, want) in want.as_object().into_iter().flatten() {
-        if (k != "source" || source.is_some()) && v.get(k) != Some(want) {
-            return Err(format!(
-                "{} was classified with {k} {}, and it is now {want} — {reclassify}.",
-                path.display(),
-                v.get(k).unwrap_or(&serde_json::Value::Null)
-            ));
-        }
-    }
-    let list = v.get("tiles").and_then(|p| p.as_array()).ok_or_else(|| format!("{} has no tile list", path.display()))?;
-    list.iter().map(|s| s.as_str().ok_or("a tile is not a string")?.parse::<IVec>().map_err(|e| e.to_string())).collect()
-}
-
-pub fn write_land_tiles(path: &Path, coverage: &Coverage, source: &serde_json::Value, land: &[IVec]) -> Result<(), String> {
-    let mut v = land_key(coverage, source);
-    v["tiles"] = land.iter().map(|p| p.to_string()).collect();
-    std::fs::write(path, serde_json::to_string(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
-}
-
-fn land_key(coverage: &Coverage, source: &serde_json::Value) -> serde_json::Value {
-    serde_json::json!({
-        "leaf_z": pxl_spec::space::layer::tile::LEAF_ZOOM,
-        "shards": coverage.shards().map(|s| s.name()).collect::<Vec<_>>(),
-        "ground": format!("{GROUND:016x}"),
-        "source": source,
-    })
 }

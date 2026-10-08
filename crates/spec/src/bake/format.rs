@@ -1,6 +1,6 @@
 // pxl-spec/bake/format.rs
 
-//! A baked terrain tile and its wire: `[ele, cells, extent, occupancy, decks]`.
+//! A baked terrain tile and its wire: `[ele, ground, extent, occupancy, separation]`.
 
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
@@ -8,8 +8,8 @@ use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, T
 use std::borrow::Cow;
 
 use super::constant::ELE_PADDED_SPAN;
-use super::deck::{self, Decks};
 use super::malformed;
+use super::separation::{self, Separation};
 use super::surface::extent_of;
 use crate::space::layer::lattice::{EXTENT, TILE_CELLS};
 
@@ -154,7 +154,7 @@ fn coarse_of(lane: &[[i16; 2]], coarse: &mut [[i16; 2]]) {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainTile {
     pub ground: Ground,           // a class a cell: the source rasterized
-    pub decks: Decks,             // ways off the ground: source lines, tops solved offline
+    pub separation: Separation,   // ways off the ground: source lines, tops solved offline
     pub ele: Cow<'static, [i16]>, // padded height samples, in leaf cells: from the raster
     pub index: Index,             // bounds over the tile and all under it: no one tile holds them
 }
@@ -172,18 +172,18 @@ impl TerrainTile {
             ground: Ground {
                 cells: Cow::Borrowed(&VOID_CELLS[..]),
             },
-            decks: Decks::default(),
+            separation: Separation::default(),
             ele: Cow::Borrowed(&VOID_ELE[..]),
             index: Index::new(vec![[0, 0]; EXTENT_LANE], Occupancy::ZERO),
         }
     }
 
-    /// A leaf, its index taken from its own surface and decks.
-    pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> TerrainTile {
-        let extent = extent_of(&ele, &decks);
+    /// A leaf, its index taken from its own surface and separation.
+    pub fn leaf(ele: Vec<i16>, ground: Ground, separation: Separation) -> TerrainTile {
+        let extent = extent_of(&ele, &separation);
         TerrainTile {
             ground,
-            decks,
+            separation,
             ele: ele.into(),
             index: Index::new(extent, Occupancy::LEAF),
         }
@@ -198,63 +198,75 @@ pub fn encode_terrain(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
             .u8_array(Some(&tile.ground.cells))
             .i16_array(Some(tile.index.extent.as_flattened()))
             .u8(Some(tile.index.occupancy.bits()));
-        deck::write_branch(&tile.decks, b);
+        separation::write_branch(&tile.separation, b);
     }));
     encoder().encode(&t, TreeEncoderOptions::default())
 }
 
 /// The record's lanes in `.fixed.terrain` a tile is decoded into.
 pub struct TileRoom {
-    pub cells: &'static mut [GroundCell],
+    pub ground: &'static mut [GroundCell],
     pub ele: &'static mut [i16],
     pub extent: &'static mut [[i16; 2]],
     pub coarse: &'static mut [[i16; 2]],
-    pub decks: deck::Room,
+    pub separation: separation::Room,
 }
 
 struct Lanes<'a> {
     ele: &'a [i16],
-    cells: &'a [GroundCell],
+    ground: &'a [GroundCell],
     extent: &'a [[i16; 2]],
     occupancy: Occupancy,
-    decks: deck::Lanes<'a>,
+    separation: separation::Lanes<'a>,
 }
 
 /// Refused unless every lane is a tile's length.
 fn read_tile(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
     let root = TreeReader::new(pkt)?.read_branch()?;
     let ele = root.at(0)?.get_array::<i16>()?;
-    let cells = root.at(1)?.get_array::<GroundCell>()?;
+    let ground = root.at(1)?.get_array::<GroundCell>()?;
     let extent = pairs(root.at(2)?.get_array::<i16>()?)?;
     let occupancy = occupancy_of(root.at(3)?.get_number()?)?;
-    let decks = deck::read_branch(root.at_branch(4)?)?;
-    if ele.len() != ELE_LANE || cells.len() != GROUND_LANE || extent.len() != EXTENT_LANE {
+    let separation = separation::read_branch(root.at_branch(4)?)?;
+    if ele.len() != ELE_LANE || ground.len() != GROUND_LANE || extent.len() != EXTENT_LANE {
         return Err(malformed());
     }
-    Ok(Lanes { ele, cells, extent, occupancy, decks })
+    Ok(Lanes {
+        ele,
+        ground,
+        extent,
+        occupancy,
+        separation,
+    })
 }
 
 /// Decode straight into the tile's resident room; the index's coarse are
 /// built there before the tile is returned.
 pub fn decode_terrain_into(pkt: &[u8], room: TileRoom) -> Result<TerrainTile, MarshalError> {
-    let Lanes { ele, cells, extent, occupancy, decks } = read_tile(pkt)?;
-    if room.ele.len() != ELE_LANE || room.cells.len() != GROUND_LANE || room.extent.len() != EXTENT_LANE {
+    let Lanes {
+        ele,
+        ground,
+        extent,
+        occupancy,
+        separation,
+    } = read_tile(pkt)?;
+    if room.ele.len() != ELE_LANE || room.ground.len() != GROUND_LANE || room.extent.len() != EXTENT_LANE {
         return Err(malformed());
     }
     room.ele.copy_from_slice(ele);
-    room.cells.copy_from_slice(cells);
+    room.ground.copy_from_slice(ground);
     room.extent.copy_from_slice(extent);
     coarse_of(room.extent, room.coarse);
     let TileRoom {
-        cells,
+        ground,
         ele,
         extent,
         coarse,
-        decks: deck_room,
+        separation: separation_room,
     } = room;
     Ok(TerrainTile {
-        ground: Ground { cells: (&*cells).into() },
-        decks: decks.into_room(deck_room),
+        ground: Ground { cells: (&*ground).into() },
+        separation: separation.into_room(separation_room),
         ele: (&*ele).into(),
         index: Index {
             extent: (&*extent).into(),
@@ -266,11 +278,17 @@ pub fn decode_terrain_into(pkt: &[u8], room: TileRoom) -> Result<TerrainTile, Ma
 
 // Copied out, for a tile that outlives its packet.
 pub fn decode_terrain(pkt: &[u8]) -> Result<TerrainTile, MarshalError> {
-    let Lanes { ele, cells, extent, occupancy, decks } = read_tile(pkt)?;
+    let Lanes {
+        ele,
+        ground,
+        extent,
+        occupancy,
+        separation,
+    } = read_tile(pkt)?;
     Ok(TerrainTile {
         ele: ele.to_vec().into(),
-        ground: Ground { cells: cells.to_vec().into() },
-        decks: decks.to_decks(),
+        ground: Ground { cells: ground.to_vec().into() },
+        separation: separation.to_separation(),
         index: Index::new(extent.to_vec(), occupancy),
     })
 }

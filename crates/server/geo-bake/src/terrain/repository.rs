@@ -142,7 +142,7 @@ impl TerrainRepository {
     }
 
     /// A tile's elevation grid, none where the raster does not reach it.
-    pub fn elevation(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Option<Vec<i16>>, postgres::Error> {
+    pub fn ele(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Option<Vec<i16>>, postgres::Error> {
         self.raster.tile_grid(client, tile_bbox)
     }
 

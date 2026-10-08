@@ -6,8 +6,8 @@
 //! open water; at the source's top, it is void.
 
 use crate::layer::residency::Residency;
-use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{decode_terrain_into, GroundCell, TerrainTile, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
+use pxl_spec::bake::separation::{self, MAX_BOXES, MAX_LINES, MAX_POINTS};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -17,7 +17,7 @@ use crate::io::failure::Failure;
 
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::layer::terrain::fixed::RANGE;
-use crate::layer::terrain::fixed::{coarse_off, deck_off, ele_off, extent_off, ground_off, COARSE_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
+use crate::layer::terrain::fixed::{coarse_off, ele_off, extent_off, ground_off, separation_off, COARSE_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES, SEPARATION_LANE_BYTES};
 use crate::layer::Layer;
 use pxl_spec::bake::format::Occupancy;
 use xpute_guest::clock::now;
@@ -60,30 +60,30 @@ impl Layer for TerrainTile {
 unsafe fn room_of(record: u32) -> TileRoom {
     // Inside the range by the layout, so past its end is a bug.
     let lane = |off, bytes| RANGE.get().at(off, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
-    let (cells, ele, extent, coarse) = (
+    let (ground, ele, extent, coarse) = (
         lane(ground_off(record), GROUND_LANE_BYTES),
         lane(ele_off(record), ELE_LANE_BYTES),
         lane(extent_off(record), EXTENT_LANE_BYTES),
         lane(coarse_off(record), COARSE_LANE_BYTES),
     );
-    let deck_lane = |k: usize| lane(deck_off(record, k), DECK_LANE_BYTES[k]);
+    let separation_lane = |k: usize| lane(separation_off(record, k), SEPARATION_LANE_BYTES[k]);
     // SAFETY: each lane is kernel memory at its own size, never freed, and the
     // caller's contract makes it this tile's alone.
     unsafe {
         TileRoom {
-            cells: core::slice::from_raw_parts_mut(ptr_at::<GroundCell>(cells), GROUND_LANE),
+            ground: core::slice::from_raw_parts_mut(ptr_at::<GroundCell>(ground), GROUND_LANE),
             ele: core::slice::from_raw_parts_mut(ptr_at::<i16>(ele), ELE_LANE),
             extent: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(extent), EXTENT_LANE),
             coarse: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(coarse), COARSE_LANE),
-            decks: deck::Room {
-                starts: core::slice::from_raw_parts_mut(ptr_at::<u32>(deck_lane(0)), MAX_DECKS + 1),
-                points: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(deck_lane(1)), MAX_POINTS),
-                tops: core::slice::from_raw_parts_mut(ptr_at::<i16>(deck_lane(2)), MAX_POINTS),
-                width: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(3)), MAX_DECKS),
-                kind: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(4)), MAX_DECKS),
-                form: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(5)), MAX_DECKS),
-                clear: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(6)), MAX_DECKS),
-                boxes: core::slice::from_raw_parts_mut(ptr_at::<[i16; 4]>(deck_lane(7)), MAX_BOXES),
+            separation: separation::Room {
+                starts: core::slice::from_raw_parts_mut(ptr_at::<u32>(separation_lane(0)), MAX_LINES + 1),
+                points: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(separation_lane(1)), MAX_POINTS),
+                tops: core::slice::from_raw_parts_mut(ptr_at::<i16>(separation_lane(2)), MAX_POINTS),
+                width: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(3)), MAX_LINES),
+                kind: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(4)), MAX_LINES),
+                form: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(5)), MAX_LINES),
+                clear: core::slice::from_raw_parts_mut(ptr_at::<u8>(separation_lane(6)), MAX_LINES),
+                boxes: core::slice::from_raw_parts_mut(ptr_at::<[i16; 4]>(separation_lane(7)), MAX_BOXES),
             },
         }
     }
