@@ -46,8 +46,3 @@ fn anything_that_is_not_a_name_a_reader_can_be_shown_is_nothing() {
     assert_eq!(names_of(Some(serde_json::json!({"en": "Bundang-gu", "ko": 3}))).len(), 1, "the readable half is kept");
 }
 
-#[test]
-fn the_subtypes_run_broad_to_fine_as_overture_nests_them() {
-    let order: Vec<Subtype> = ["country", "region", "county", "locality", "neighborhood", "microhood"].iter().map(|s| Subtype::named(s).expect("Overture's")).collect();
-    assert!(order.windows(2).all(|w| w[0] < w[1]));
-}

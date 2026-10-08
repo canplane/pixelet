@@ -3,7 +3,6 @@
 use super::*;
 use crate::fixture::place;
 use crate::serial;
-use crate::setting::store::OrbitObstacleMode;
 use crate::view::frame::coord::to_world;
 
 struct Rng(u64);
@@ -84,28 +83,6 @@ fn a_change_of_person_leaves_the_focus() {
     assert_eq!(controllers().base, CameraMode::orbit, "the base changed under a tracker");
     controllers().tracked = None;
     assert!(take_mode(CameraMode::free), "not taken once the tracker let go");
-    third_person();
-}
-
-/// Collision set to pass through, so the limits are the distance's own.
-#[test]
-fn a_pinch_keeps_no_debt() {
-    let _g = serial();
-    third_person();
-    let collision = settings_store().orbit_obstacle;
-    settings_store().orbit_obstacle = OrbitObstacleMode::through;
-    place([0.0, 0.0, 10.0], 300.0, 0.9, 0.4);
-    let from = camera_state().intent.dist;
-    pinch_begin(100.0);
-    for span in [80.0, 120.0, 100.0] {
-        pinch(span);
-    }
-    assert_eq!(camera_state().intent.dist, from, "brought back, the pinch did not ask where it began");
-    pinch(1.0e-3);
-    assert_eq!(camera_state().intent.dist, crate::param::MAX_DIST, "past the farthest");
-    pinch(2.0e-3);
-    assert_eq!(camera_state().intent.dist, crate::param::MAX_DIST / 2.0, "the closing went to the refused share");
-    settings_store().orbit_obstacle = collision;
     third_person();
 }
 

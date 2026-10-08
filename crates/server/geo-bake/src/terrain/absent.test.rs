@@ -2,13 +2,18 @@
 
 use super::*;
 use pxl_spec::space::coord::pvf3::ivec::gather;
+use pxl_spec::space::coord::zoom::SHARD_ZOOM;
+use pxl_spec::space::hierarchy::tree::first_descendant_of;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-/// One shard, and a leaf on either side of its west edge.
+/// The westmost shard's first leaf, and the leaf west of it, which no shard holds.
 fn absence() -> (Absence, Tile, Tile) {
-    let inside = Tile::new(LEAF_ZOOM, gather(11392, 3200, 0));
-    let west = Tile::new(LEAF_ZOOM, gather(11391, 3200, 0));
-    (Absence::new(Coverage::new([[89, 25]])), inside, west)
+    let coverage = Coverage::of_source().expect("the source's coverage");
+    let shard = coverage.shards().next().expect("a shard");
+    let [x, y] = first_descendant_of(shard.at, u32::from(LEAF_ZOOM - SHARD_ZOOM));
+    let inside = Tile::new(LEAF_ZOOM, gather(x, y, 0));
+    let west = Tile::new(LEAF_ZOOM, gather(x - 1, y, 0));
+    (Absence::new(coverage), inside, west)
 }
 
 #[test]

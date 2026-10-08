@@ -190,31 +190,8 @@ pub fn source(kind: u32) -> &'static str {
 }
 
 pub const FRAME_FLOATS: usize = 92;
-/// Frame uniform field offsets in floats, in frame.wgsl's order; a test holds it to the struct.
+/// Frame uniform field offsets in floats, in frame.wgsl's order.
 pub const FRAME_AT: [usize; 20] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84, 87, 88];
-#[cfg(test)]
-const FRAME_FIELDS: [&str; 20] = [
-    "view_proj",
-    "camera_pos",
-    "edge_strength",
-    "sun_dir",
-    "low_spec",
-    "edge_width",
-    "rim_intensity",
-    "viewport",
-    "shadow_strength",
-    "shadow_texel",
-    "vignette",
-    "ao_strength",
-    "screen_ao",
-    "light_view_proj",
-    "other_dir",
-    "planet",
-    "globe",
-    "up",
-    "cell",
-    "gizmo",
-];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_CHUNK_DEPTH: u32 = 10;
@@ -691,68 +668,3 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         _ => Vec::new(),
     }
 }
-
-#[cfg(test)]
-pub type Buffer = (u32, u32, Vec<(u32, u32, u32)>);
-
-#[cfg(test)]
-pub struct Record {
-    pub shader: u32,
-    pub fragment: bool,
-    pub topology: u32,
-    pub cull: u32,
-    pub depth_write: bool,
-    pub depth_compare: u32,
-    pub depth_bias: i32,
-    pub depth_bias_slope: f32,
-    pub blend: u32,
-    pub vertex: u32,
-    pub buffers: Vec<Buffer>,
-    pub groups: Vec<Vec<(u32, u32, u32)>>,
-}
-
-#[cfg(test)]
-impl Record {
-    pub fn read(words: &[u32]) -> Record {
-        let mut at = HEAD as usize;
-        let mut next = || {
-            at += 1;
-            words[at - 1]
-        };
-        let n = next();
-        let buffers = (0..n)
-            .map(|_| {
-                let stride = next();
-                let step = next();
-                let m = next();
-                (stride, step, (0..m).map(|_| (next(), next(), next())).collect())
-            })
-            .collect();
-        let g = next();
-        let groups = (0..g)
-            .map(|_| {
-                let e = next();
-                (0..e).map(|_| (next(), next(), next())).collect()
-            })
-            .collect();
-        xpute_core::ensure!(at == words.len(), ENOTRECOVERABLE);
-        Record {
-            shader: words[0],
-            fragment: words[1] != 0,
-            topology: words[2],
-            cull: words[3],
-            depth_write: words[4] != 0,
-            depth_compare: words[5],
-            depth_bias: words[6] as i32,
-            depth_bias_slope: f32::from_bits(words[7]),
-            blend: words[8],
-            vertex: words[9],
-            buffers,
-            groups,
-        }
-    }
-}
-
-#[cfg(test)]
-#[path = "record.test.rs"]
-mod test;

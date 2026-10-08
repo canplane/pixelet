@@ -21,7 +21,7 @@ use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
 use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::Coverage;
-use pxl_geo_bake::util::{encoding_of, unpack};
+use pxl_geo_bake::util::{is_packed, unpack};
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::deck::{Decks, Form};
 use pxl_spec::bake::format::decode_terrain;
@@ -42,9 +42,10 @@ const MAGENTA: u32 = 0xff00ff;
 /// Packed as a bake stores it, or identity from a deployment.
 fn read_tile(path: &Path) -> Result<Vec<u8>, String> {
     let raw = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    match encoding_of(&raw) {
-        Some(_) => unpack(&raw).map_err(|e| e.to_string()),
-        None => Ok(raw),
+    if is_packed(&raw) {
+        unpack(&raw).map_err(|e| e.to_string())
+    } else {
+        Ok(raw)
     }
 }
 

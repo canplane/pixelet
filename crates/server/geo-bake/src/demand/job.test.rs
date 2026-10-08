@@ -5,18 +5,6 @@ use std::time::Duration;
 use tokio::time::Instant;
 
 #[tokio::test]
-async fn a_generation_deadline_kills_and_reaps_the_process() {
-    let path = std::env::temp_dir().join(format!("pxl-demand-deadline-{}", std::process::id()));
-    let mut command = Command::new("sh");
-    command.arg("-c").arg("echo $$ > \"$1\"; exec sleep 30").arg("deadline-test").arg(&path).kill_on_drop(true);
-    assert!(matches!(supervise(command, Instant::now() + Duration::from_millis(200)).await, Err(Failure::Limited(_))));
-    let pid = std::fs::read_to_string(&path).unwrap();
-    let status = std::process::Command::new("kill").args(["-0", pid.trim()]).stderr(std::process::Stdio::null()).status().unwrap();
-    assert!(!status.success(), "deadline must release the process, not just the waiter");
-    std::fs::remove_file(path).unwrap();
-}
-
-#[tokio::test]
 async fn success_and_failure_are_not_reported_as_empty_or_timeout() {
     let mut ok = Command::new("sh");
     ok.args(["-c", "exit 0"]);

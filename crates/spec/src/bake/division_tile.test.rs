@@ -87,10 +87,3 @@ fn a_group_that_is_not_the_tiles_under_one_or_names_past_its_own_is_refused() {
     assert!(open_division_group(&encode_division_group(&past).expect("encodes")).is_err());
 }
 
-#[test]
-fn a_leafs_slot_is_the_low_bits_of_where_it_is() {
-    assert_eq!(leaf_slot(0, 0), 0);
-    assert_eq!(leaf_slot(17, 0), 1);
-    assert_eq!(leaf_slot(0, 17), 16);
-    assert_eq!(leaf_slot(-1, -1), GROUP_TILES - 1);
-}

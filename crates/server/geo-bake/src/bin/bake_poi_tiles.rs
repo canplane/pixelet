@@ -12,7 +12,7 @@ use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::coverage::{holdings, Coverage, Overture};
 use pxl_geo_bake::poi::{self, leaves};
 use pxl_geo_bake::pyramid::{build, prune, write_manifest, Layer, TileSet};
-use pxl_geo_bake::util::{git_sha, next_version, pack, refuse_mixed, Level};
+use pxl_geo_bake::util::{git_sha, next_version, pack, Level};
 use pxl_spec::bake::poi_tile::PoiTile;
 use pxl_spec::bake::published::FORMAT;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -33,7 +33,6 @@ fn run() -> Result<(), String> {
     let out = out.unwrap_or_else(|| next_version("./out/poi", FORMAT.poi));
     let set = TileSet::new(&out);
     if set.root.exists() {
-        refuse_mixed(&set.root)?;
         fs::remove_dir_all(&set.root).map_err(|e| e.to_string())?;
     }
     let tiles = leaves(&mut client, &Coverage::of_source()?, None)?;

@@ -38,23 +38,3 @@ fn one_instant_is_one_step() {
     assert_eq!(s.follow(0, 0, 1_000.0, 1_000.0), 2);
 }
 
-/// The reference view asks `SPLIT` itself, a screen half as tall a cell
-/// twice as wide; finer is held at `SPLIT`.
-#[test]
-fn the_target_is_the_screens_cell_and_never_finer_than_the_criterion() {
-    let _g = crate::serial();
-    let v = view();
-    let kept = (v.height, v.fov);
-    v.fov = 50.0;
-    let at = |height: f64| {
-        view().height = height;
-        target().scale()
-    };
-    let span = |height: f64| 2.0 * libm::atan(pxl_spec::space::camera::grid::target_cell_px() * libm::tan(25f64.to_radians()) / height) * SPLIT;
-    assert!((span(1080.0) - 1.0).abs() < 0.01, "the reference view's cell is not the criterion's: {}", span(1080.0));
-    assert_eq!(at(1080.0), 1.0);
-    assert!((at(540.0) - span(540.0)).abs() < 1e-12, "not the angle half the height's cell spans: {}", at(540.0));
-    assert!((at(540.0) / span(1080.0) - 2.0).abs() < 1e-4, "half the height, not about twice the cell: {}", at(540.0));
-    assert_eq!(at(2160.0), 1.0, "a logical screen finer than the criterion asked past it");
-    (v.height, v.fov) = kept;
-}

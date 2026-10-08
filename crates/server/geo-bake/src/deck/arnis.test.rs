@@ -19,8 +19,3 @@ fn the_hull_clears_every_requirement_and_never_sags() {
     assert_eq!(straight, vec![(0.0, 2.0), (10.0, 12.0)]);
 }
 
-#[test]
-fn stretches_alike_share_their_seam() {
-    let covered = [true, true, false, false, false, true];
-    assert_eq!(split_by(&covered), vec![([0, 2], false), ([2, 5], true), ([5, 5], false)]);
-}

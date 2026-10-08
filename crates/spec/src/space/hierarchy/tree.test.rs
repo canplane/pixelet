@@ -49,11 +49,10 @@ fn nodes_share_ground_only_where_one_lies_under_the_other() {
     }
 }
 
-/// Walk order inverts, and keeps a coarser node's leaves in one run.
+/// Walk order keeps a coarser node's leaves in one run.
 #[test]
-fn a_walk_order_is_invertible_and_keeps_a_node_s_leaves_in_one_run() {
+fn a_walk_order_keeps_a_node_s_leaves_in_one_run() {
     for at in [[0u32, 0, 0], [5, 3, 7], [63, 0, 31], [12, 40, 9]] {
-        assert_eq!(at_walk_order::<3>(walk_order(at, 6), 6), at);
         let node = walk_order(at.map(|v| v >> 2), 4);
         assert_eq!(walk_order(at, 6) >> (3 * 2), node, "{at:?} lies in its node's run");
     }

@@ -59,7 +59,7 @@
     // Pure-logic modules: none of them touches the DOM or the GPU, so plain
     // `deno test` works with no browser harness, over the module built for
     // it. What needs a canvas is verified live.
-    "test": { "command": "deno test -A src", "dependencies": ["build:wasm"] }
+    "test": "deno test -A src"
   },
 
   "compilerOptions": {

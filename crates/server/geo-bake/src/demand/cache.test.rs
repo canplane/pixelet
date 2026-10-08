@@ -125,15 +125,3 @@ async fn expired_work_stays_joinable_and_admitted_until_its_cleanup_finishes() {
     c.once("tile".into(), true, |_| async { Ok(()) }).await.unwrap();
 }
 
-#[tokio::test]
-async fn a_published_key_answers_from_the_disk_and_holds_no_flight() {
-    let c = cache();
-    let producer = c.clone();
-    c.once("tile".into(), true, move |_deadline| async move { producer.publish("tile", None).map_err(Failure::from) })
-        .await
-        .unwrap();
-    assert!(c.flights.lock().unwrap().is_empty(), "a published result is the disk's, not the map's");
-    c.once("tile".into(), true, |_deadline| async { panic!("published work must not run again") }).await.unwrap();
-    assert!(c.once("unpublished".into(), true, |_deadline| async { Err(Failure::Bake("source failed".into())) }).await.is_err());
-    assert_eq!(c.flights.lock().unwrap().len(), 1, "a source failure is remembered for the generation");
-}

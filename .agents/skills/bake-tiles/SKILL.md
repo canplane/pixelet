@@ -43,9 +43,7 @@ terrain bake on this machine, fetch the published copy from
 
 Every object is packed in the encoding `util.rs`'s `CONTENT_ENCODING` names —
 zstd — and each manifest says so in `content_encoding`, which is what the
-upload labels the objects with. A version baked before zstd (terrain v4,
-POI v5, geocode v2) is gzip, and a bake refuses to resume into it: one
-version holds one encoding.
+upload labels the objects with.
 
 Terrain and geocode are **resumable**: an object is written to `.part` and renamed,
 so an interrupted run leaves no truncated file, and a re-run skips what

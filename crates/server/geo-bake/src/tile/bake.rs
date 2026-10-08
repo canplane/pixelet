@@ -8,7 +8,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use crate::coverage::{holdings, Coverage, Overture};
 use crate::terrain::leaf::land_tiles;
 use crate::tile::walk::{self, Args, Target, Tile};
-use crate::util::{fmt_bytes, git_sha, measure_output, refuse_mixed, write_manifest};
+use crate::util::{fmt_bytes, git_sha, measure_output, write_manifest};
 
 pub struct Bake<'a> {
     pub kind: &'a str,
@@ -42,9 +42,6 @@ pub fn bake<T>(
     );
 
     std::fs::create_dir_all(&args.out).map_err(|e| e.to_string())?;
-    if !args.force {
-        refuse_mixed(&args.out)?;
-    }
     prelude(&args.out)?;
 
     let ground = crate::terrain::leaf::ground_source(&mut b.source.connect()?)?;
