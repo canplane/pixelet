@@ -3,7 +3,6 @@
 use std::path::Path;
 use std::process::Command;
 
-use pxl_spec::bake::published::version_name;
 use xpute_core::math::scalar::round;
 
 /// The `Content-Encoding` every baked tile is uploaded with, so the transport decodes it.
@@ -86,16 +85,6 @@ pub fn now_iso8601() -> String {
     let rem = secs % 86_400;
     let (h, m, s) = (rem / 3600, (rem % 3600) / 60, rem % 60);
     format!("{}T{h:02}:{m:02}:{s:02}.000Z", day_of(secs / 86_400))
-}
-
-/// A bake's next version under `dir`: today's UTC day, numbered past that
-/// day's folders of `format` already there.
-pub fn next_version(dir: &str, format: u32) -> std::path::PathBuf {
-    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("after the epoch").as_secs();
-    let day = day_of(secs / 86_400);
-    let at = |n: u32| Path::new(dir).join(version_name(format, &day, n));
-    let n = (1..).find(|&n| !at(n).exists()).expect("a free number");
-    at(n)
 }
 
 /// The civil date of a day count from the epoch, Howard Hinnant's algorithm.

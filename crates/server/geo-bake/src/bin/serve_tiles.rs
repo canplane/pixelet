@@ -91,7 +91,7 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
 /// The bucket's address, `<kind>/<version>/<name>`, as a production build
 /// asks for it; the shelf answers any version from the kind's set.
 async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name)): Path<(String, String, String)>) -> Response {
-    // `version_name`'s shape, v<format>.<day>.<n>: no other name reaches the disk
+    // A published name's shape, v<format>.<day>.<n>: no other name reaches the disk
     if !version
         .strip_prefix('v')
         .is_some_and(|n| n.bytes().next().is_some_and(|b| b.is_ascii_digit()) && n.bytes().all(|b| b.is_ascii_digit() || b == b'.' || b == b'-'))
