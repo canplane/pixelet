@@ -78,13 +78,13 @@ fn run() -> Result<(), String> {
     walk(&asset_dir, &asset_dir, &mut files)?;
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
-    // A look's top ships drawn toward its Carto color; a side, a bottom and a block are not looks.
+    // A look's top ships drawn toward its Carto color; a side, a bottom and a color are not looks.
     let slots = pack::load(&asset_dir.join("cube"))?;
     let carto = pxl_tool::spec::cell::ground_colors()?;
     let toward: BTreeMap<String, u32> = slots
         .iter()
         .filter_map(|i| match &i.slot {
-            pack::Slot::Top { channel, ty } if channel != "block" => carto.get(ty).map(|&c| (format!("cube/{}", i.file), c)),
+            pack::Slot::Top { group, ty } if group == "ground" => carto.get(ty).map(|&c| (format!("cube/{}", i.file), c)),
             _ => None,
         })
         .collect();

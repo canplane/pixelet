@@ -94,7 +94,7 @@ fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
     assert_eq!(access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).value().flatten(), None);
 
     let mut store = Store::default();
-    let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
+    let red = placeable_cube_num_id(PlaceableCube::Object(cube_types::Object::red));
     write(&mut store, [x0 + 10.0, y0 + 10.0, 5.0], OBJECT_COARSEST, red);
     let access = World::new(&residency, &store);
     assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(6.0)));
@@ -144,7 +144,7 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let top = World::new(&residency, &Store::default()).at(&point(-seam + 20.5, 100.5), LEAF_ZOOM).value().unwrap().top().unwrap();
 
     let mut store = Store::default();
-    let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
+    let red = placeable_cube_num_id(PlaceableCube::Object(cube_types::Object::red));
     write(&mut store, [-seam + 40.0, 100.0, top], OBJECT_COARSEST, red);
     let access = World::new(&residency, &store);
 

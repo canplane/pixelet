@@ -1,6 +1,6 @@
 // pxl-kernel/layer/object/store.test.rs
 
-use pxl_spec::cell::cube_types::Block;
+use pxl_spec::cell::cube_types::Object;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::GROUND;
 
@@ -87,7 +87,7 @@ fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (HashMap<[i64; 3], u32>
 }
 
 fn red() -> u32 {
-    placeable_cube_num_id(PlaceableCube::Block(Block::red))
+    placeable_cube_num_id(PlaceableCube::Object(Object::red))
 }
 
 #[test]
@@ -142,7 +142,7 @@ fn cube_at(store: &mut Store, [x, y, z]: [i64; 3], state: u32) {
 fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
     let mut rng = Rng(SplitMix64::new(0x5851_f42d_4c95_7f2d));
     let mut store = Store::default();
-    let red = placeable_cube_num_id(PlaceableCube::Block(Block::red));
+    let red = placeable_cube_num_id(PlaceableCube::Object(Object::red));
     let mut met = 0;
     for step in 0..200 {
         let at = [0, 1, 2].map(|_| (rng.next() % 400) as i64 - 200);
@@ -169,7 +169,7 @@ fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
 #[test]
 fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
     let mut rng = Rng(SplitMix64::new(0x2c1b_3c6d_a5b4_9f1e));
-    let red = placeable_cube_num_id(PlaceableCube::Block(Block::red));
+    let red = placeable_cube_num_id(PlaceableCube::Object(Object::red));
     let turn = |[x, y, z]: [i64; 3]| [y, z, x];
     let turn_box = |b: Aabb| Aabb {
         min: [b.min[1], b.min[2], b.min[0]],

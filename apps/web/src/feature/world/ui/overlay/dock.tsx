@@ -235,7 +235,7 @@ function MarkerButton() {
   const active = useInHand({ tool: ActiveTool.Marker });
 
   return (
-    <Pressable onPress={selectMarker} accessibilityRole="button" accessibilityLabel={t("drawer.marker")} style={styles.slot}>
+    <Pressable onPress={selectMarker} accessibilityRole="button" accessibilityLabel={t("blocks.marker")} style={styles.slot}>
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
         <View style={[styles.decorDisc, active ? styles.swatchSelected : styles.swatchIdle]}>
           <Glyph glyph="bubble.left" size={16} color={active ? STRIP.glyphOn : STRIP.glyph} />

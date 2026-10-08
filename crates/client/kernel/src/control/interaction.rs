@@ -42,7 +42,7 @@ impl Default for Holding {
     fn default() -> Holding {
         Holding {
             active_tool: ActiveTool::Pointer,
-            object_cube: PlaceableCube::Block(cube_types::Block::red),
+            object_cube: PlaceableCube::Object(cube_types::Object::red),
             object_tier: 0,
             decor_id: DecorId::tree,
         }

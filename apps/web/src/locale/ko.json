@@ -134,49 +134,26 @@
       "character": "캐릭터"
     },
     "sections": {
-      "block": "색",
-      "land": "땅",
-      "water": "물",
-      "structure": "건물",
-      "transport": "교통"
+      "cube": {
+        "colors": "색",
+        "landcover": "땅",
+        "water": "물",
+        "water_features": "물가 시설",
+        "buildings": "건물",
+        "roads": "도로",
+        "aeroways": "공항"
+      },
+      "decor": {
+        "nature": "자연",
+        "vehicle": "탈것"
+      },
+      "marker": "마커"
     },
-    "decor_sections": {
-      "nature": "자연",
-      "vehicle": "탈것"
-    },
-    "markers": "마커",
-    "marker": "마커",
     "character": {
       "person_label": "캐릭터",
       "female_label": "여성",
       "male_label": "남성",
-      "pet_label": "펫",
-      "pets": {
-        "beaver": "비버",
-        "bee": "꿀벌",
-        "bunny": "토끼",
-        "cat": "고양이",
-        "caterpillar": "애벌레",
-        "chick": "병아리",
-        "cow": "소",
-        "crab": "게",
-        "deer": "사슴",
-        "dog": "강아지",
-        "elephant": "코끼리",
-        "fish": "물고기",
-        "fox": "여우",
-        "giraffe": "기린",
-        "hog": "멧돼지",
-        "koala": "코알라",
-        "lion": "사자",
-        "monkey": "원숭이",
-        "panda": "판다",
-        "parrot": "앵무새",
-        "penguin": "펭귄",
-        "pig": "돼지",
-        "polar": "북극곰",
-        "tiger": "호랑이"
-      }
+      "pet_label": "펫"
     }
   },
   "device": {

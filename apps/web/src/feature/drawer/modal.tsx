@@ -146,7 +146,7 @@ function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
   const active = useKernel(({ holding: h }) => h.tool === ActiveTool.Marker);
 
   return (
-    <Item label={t("drawer.marker")} active={active} cell={cell} onPress={onPick}>
+    <Item label={t("blocks.marker")} active={active} cell={cell} onPress={onPick}>
       <View style={[styles.decor, { width: itemOf(cell), height: itemOf(cell) }, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
         <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
       </View>
@@ -226,19 +226,19 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
             <PanelScroll key={tab}>
               {tab === DrawerTab.Cube &&
                 [...SECTIONS].map(([section, cubes]) => (
-                  <Grid key={section} head={<SectionTitle>{t(`drawer.sections.${section}`)}</SectionTitle>}>
+                  <Grid key={section} head={<SectionTitle>{t(`drawer.sections.cube.${section}`)}</SectionTitle>}>
                     {(cell) => cubes.map((cube) => <CubeItem key={placeableCubeId(cube)} cube={cube} cell={cell} onPick={pickCube} />)}
                   </Grid>
                 ))}
 
               {tab === DrawerTab.Decor &&
                 [...DECOR_SECTIONS].map(([section, kinds]) => (
-                  <Grid key={section} head={<SectionTitle>{t(`drawer.decor_sections.${section}`)}</SectionTitle>}>
+                  <Grid key={section} head={<SectionTitle>{t(`drawer.sections.decor.${section}`)}</SectionTitle>}>
                     {(cell) => kinds.map((kind) => <DecorItem key={kind} kind={kind} cell={cell} onPick={pickDecor} />)}
                   </Grid>
                 ))}
               {tab === DrawerTab.Marker && (
-                <Grid head={<SectionTitle>{t("drawer.markers")}</SectionTitle>}>
+                <Grid head={<SectionTitle>{t("drawer.sections.marker")}</SectionTitle>}>
                   {(cell) => <MarkerItem cell={cell} onPick={pickMarker} />}
                 </Grid>
               )}

@@ -11,7 +11,7 @@
 use std::sync::LazyLock;
 
 use crate::cell::color;
-use crate::cell::cube_types::{object, Block, Ground};
+use crate::cell::cube_types::{object, Ground, Object};
 use crate::cell::id::{Class, SHAPE_BITS};
 use crate::cell::{decor_types, DecorId};
 
@@ -65,14 +65,14 @@ pub static decor_ids: LazyLock<Vec<DecorId>> = LazyLock::new(|| {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaceableCube {
     Ground(Ground),
-    Block(Block),
+    Object(Object),
 }
 
 /// The value a placement stores.
 pub fn placeable_cube_num_id(cube: PlaceableCube) -> u32 {
     match cube {
         PlaceableCube::Ground(g) => g as u32,
-        PlaceableCube::Block(b) => b as u32,
+        PlaceableCube::Object(b) => b as u32,
     }
 }
 
@@ -80,20 +80,20 @@ pub fn placeable_cube_num_id(cube: PlaceableCube) -> u32 {
 pub fn placeable_cube_of(num_id: u32) -> Option<PlaceableCube> {
     match u8::try_from(num_id) {
         Ok(byte) => Ground::of(byte).map(PlaceableCube::Ground),
-        Err(_) => u16::try_from(num_id).ok().and_then(Block::of).map(PlaceableCube::Block),
+        Err(_) => u16::try_from(num_id).ok().and_then(Object::of).map(PlaceableCube::Object),
     }
 }
 
 pub fn placeable_cube_rgb(cube: PlaceableCube) -> Option<u32> {
     match cube {
         PlaceableCube::Ground(g) => color::ground(g as u8),
-        PlaceableCube::Block(b) => color::object(b as u16),
+        PlaceableCube::Object(b) => color::object(b as u16),
     }
     .map(|s| s.rgb)
 }
 
 /// The placed colors first, then the palette in paint order.
-pub static placeable_cubes: LazyLock<Vec<PlaceableCube>> = LazyLock::new(|| Block::ALL.into_iter().map(PlaceableCube::Block).chain(Ground::ALL.into_iter().map(PlaceableCube::Ground)).collect());
+pub static placeable_cubes: LazyLock<Vec<PlaceableCube>> = LazyLock::new(|| Object::ALL.into_iter().map(PlaceableCube::Object).chain(Ground::ALL.into_iter().map(PlaceableCube::Ground)).collect());
 
 #[cfg(test)]
 #[path = "object.test.rs"]
