@@ -13,7 +13,6 @@
 //!   --concurrency <n>    parallel tiles, one connection each (default 8)
 
 use std::process::ExitCode;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use postgres::Client;
@@ -86,7 +85,6 @@ fn run() -> Result<(), String> {
                 let band = rows.len().div_ceil(run.concurrency.max(1)).max(1);
                 let walks: Vec<Vec<IVec>> = rows.chunks(band).map(zigzag).collect();
                 let bands: Vec<&[IVec]> = walks.iter().map(Vec::as_slice).collect();
-                let flat = AtomicU64::new(0);
                 let t = walk::over(
                     &format!("leaf/{}", shard.name()),
                     &bands,
@@ -101,8 +99,7 @@ fn run() -> Result<(), String> {
                             repo: &db.repo,
                             store: held,
                         };
-                        let (terrain, off_raster) = bake_leaf(reader, tile)?;
-                        flat.fetch_add(u64::from(off_raster), Ordering::Relaxed);
+                        let terrain = bake_leaf(reader, tile)?;
                         let packed = pack(&encode_terrain(&terrain).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
                         set.write(Tile::new(LEAF_ZOOM, tile), &packed)?;
                         Ok(Done::Wrote { bytes: packed.len() as u64, items: 0 })
@@ -110,14 +107,6 @@ fn run() -> Result<(), String> {
                 )?;
                 if t.failed > 0 {
                     return Err(format!("{}: {} tiles failed", shard.name(), t.failed));
-                }
-                // A degraded tile never shows up in `failed`, so report it here.
-                let flat = flat.into_inner();
-                if flat > 0 {
-                    eprintln!(
-                        "[bake/leaf/{}] WARNING: {flat} tiles are out of the elevation raster's reach and were baked FLAT (zero-filled elevation).",
-                        shard.name()
-                    );
                 }
                 Ok(())
             })?;

@@ -29,7 +29,7 @@ pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, s
                 repo: &repo,
                 store: &mut crate::separation::source::Disk(&memo),
             };
-            Ok(Some(leaf::bake_leaf(reader, p.tile)?.0))
+            Ok(Some(leaf::bake_leaf(reader, p.tile)?))
         },
         &Absence::new(Coverage::of_source()?),
     )

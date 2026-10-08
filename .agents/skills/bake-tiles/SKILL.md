@@ -146,15 +146,7 @@ that, worked back from how far each thing draws:
 1. **Zero failures.** Each stage's line reports `failed=`. Anything above
    zero in `surface` means tiles are missing; repeat the stage (it skips the
    successes). `commit` refuses to run before `fold`.
-2. **Check the flat-elevation warning.** A tile the elevation raster does not
-   reach is written successfully with a zero-filled grid — it bakes perfectly
-   flat and never appears in `failed`. The `leaf` stage prints a
-   `WARNING: N tiles ... baked FLAT` line for the tiles that run baked, and
-   nothing records it: a resumed run counts only its own. A tile whose
-   padded window only partly leaves the raster is not flat: its grid has the
-   ground where there is any. A large number means the coverage and the
-   raster disagree.
-3. **Spot-check tiles against the dev tile server, at more than one zoom.**
+2. **Spot-check tiles against the dev tile server, at more than one zoom.**
    The dev server bakes terrain on a miss with the same functions this tool
    runs (`terrain/leaf.rs` for a leaf, `pyramid.rs` for a tile above),
    so a tile it serves holds the packet this tool wrote. It packs at zstd's
