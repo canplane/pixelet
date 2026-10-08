@@ -1,4 +1,4 @@
-// pxl-geo/geocode.rs
+// pxl-geo/division.rs
 
 //! Which divisions name a point, broad to fine, resolved from coordinates.
 

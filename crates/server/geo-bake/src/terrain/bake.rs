@@ -3,7 +3,7 @@
 //! One tile's source rows baked into its surface, which with its lines is the tile.
 
 use pxl_spec::bake::deck::Decks;
-use pxl_spec::bake::format::{Ground, Terrain};
+use pxl_spec::bake::format::{Ground, TerrainTile};
 use pxl_spec::space::coord::adapter::epsg3857::{self, G3857};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -21,8 +21,8 @@ pub struct Surface {
     pub ground: Ground,
 }
 
-pub fn assemble(surface: Surface, lines: Decks) -> Terrain {
-    Terrain::leaf(surface.ele, surface.ground, lines)
+pub fn assemble(surface: Surface, lines: Decks) -> TerrainTile {
+    TerrainTile::leaf(surface.ele, surface.ground, lines)
 }
 
 /// `drawn`: the ranges of the tile's ways its lines draw.

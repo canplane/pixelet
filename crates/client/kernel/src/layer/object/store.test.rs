@@ -269,11 +269,11 @@ fn a_column_read_whole_meets_its_leaves() {
         id: 3,
         ext: None,
     }]);
-    // The node of a whole column: its tree's root, read through the region.
-    let col = [at[0] >> (OBJECT_COARSEST - SHARD_ZOOM), at[1] >> (OBJECT_COARSEST - SHARD_ZOOM), 0];
+    // The node of a whole shard: its tree's root, read through the region.
+    let shard = [at[0] >> (OBJECT_COARSEST - SHARD_ZOOM), at[1] >> (OBJECT_COARSEST - SHARD_ZOOM), 0];
     let mut met = 0;
-    store.read((SHARD_ZOOM, col), SHARD_ZOOM).value().expect("read").entries(&mut |_| met += 1);
+    store.read((SHARD_ZOOM, shard), SHARD_ZOOM).value().expect("read").entries(&mut |_| met += 1);
     assert_eq!(met, 1);
-    assert!(store.bounds::<3>((SHARD_ZOOM, col), SHARD_ZOOM).value().flatten().is_some());
-    assert!(store.holds(SHARD_ZOOM, col));
+    assert!(store.bounds::<3>((SHARD_ZOOM, shard), SHARD_ZOOM).value().flatten().is_some());
+    assert!(store.holds(SHARD_ZOOM, shard));
 }

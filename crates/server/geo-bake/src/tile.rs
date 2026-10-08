@@ -1,4 +1,4 @@
 // pxl-geo-bake/tile.rs
 
-pub mod bake;
+pub mod shard;
 pub mod walk;

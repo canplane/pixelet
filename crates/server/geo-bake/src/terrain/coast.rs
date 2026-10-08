@@ -54,6 +54,12 @@ pub fn read(set: &TileSet, coverage: &Coverage) -> Result<HashMap<Tile, Terrain>
     coverage
         .beyond()
         .into_iter()
-        .map(|p| Ok((p, set.read::<Terrain>(p)?.ok_or_else(|| format!("{}: the coast past the coverage is not baked: run --stage leaf", set.path(p).display()))?)))
+        .map(|p| {
+            Ok((
+                p,
+                set.read::<Terrain>(p)?
+                    .ok_or_else(|| format!("{}: the coast past the coverage is not baked: run --stage leaf", set.path(p).display()))?,
+            ))
+        })
         .collect()
 }

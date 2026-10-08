@@ -196,7 +196,7 @@ apps/web/.build_number
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk
 
-# dev:local's demand bakes and decode_tile's checks.
+# dev:oven's demand bakes and decode_tile's checks.
 cache/
 
 # A bake set kept beside the current one while the new one is made: `out` is

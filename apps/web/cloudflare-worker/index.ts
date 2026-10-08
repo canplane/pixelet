@@ -72,15 +72,13 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * - `terrain/<version>/<name>`, 5 to 15 digits, a page at every zoom of
  *   the pyramid from z15 up to the ground's top (`GROUND.top()`). A page
  *   with nothing drawn in it is no object.
- * - `poi/<version>/<name>`, 5 to 15 digits, a page at every zoom of the
+ * - `place/<version>/<name>`, 5 to 15 digits, a page at every zoom of the
  *   pyramid as terrain's are: how many places stand in each of its cells. A
  *   page with none is no object.
- * - `geocode/<version>/<name>`, 11 digits, because a reverse-geocode object
- *   covers a group of 16 pages a side (pxl-spec bake/division_tile.rs's
- *   `GROUP_SHAMT`). Plus the one `_dict` the whole set is read against, since
- *   a group names the divisions its pages are in by number into it. A missing
- *   group means "no page under it is in any division", which the kernel's
- *   layer/geocode/ reads as no label.
+ * - `division/<version>/<name>`, 5 to 12 digits, the divisions' pyramid,
+ *   whose leaves are z12 (pxl-spec bake/division_tile.rs `DIVISION_LEAF`):
+ *   per cell the division it is in. A page that says no more than its
+ *   parent is no object, and the kernel's layer/division/ reads the parent.
  * - `asset/<path>/<stem>-<12 hex>.<ext>` — a model or an image under the tree
  *   it lives in, with a hash of its bytes in the stem, the way a bundler names
  *   a chunk. pxl-tool's ingest_asset writes them and the catalogs name
@@ -112,7 +110,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
 const VERSION = String.raw`v\d{1,3}(?:\.\d{4}-\d{2}-\d{2}\.\d+)?`;
 const KEY_RE = new RegExp(
   String
-    .raw`^(?:terrain\/${VERSION}\/[0-3]{5,15}|poi\/${VERSION}\/[0-3]{5,15}|geocode\/${VERSION}\/(?:_dict|[0-3]{11})|earth\/${VERSION}\/[0-3]{5}|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$`,
+    .raw`^(?:terrain\/${VERSION}\/[0-3]{5,15}|place\/${VERSION}\/[0-3]{5,15}|division\/${VERSION}\/[0-3]{5,12}|earth\/${VERSION}\/[0-3]{5}|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$`,
 );
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
@@ -152,44 +150,13 @@ function serve(body: ArrayBuffer | ReadableStream | null, from: Headers): Respon
   return new Response(body, { headers, encodeBody: "manual" });
 }
 
-/**
- * A partial version is its changes over one full version: `_snapshot` beside
- * its pages names that version and the pages it writes or removes, and every
- * other page is the full version's. The list in the bucket decides; one read
- * is held, since a version never changes what it lists, but its absence is
- * not, so a list uploaded after a version was first asked for still counts.
- * A version with no list is full.
- */
-interface Snapshot {
-  base: string;
-  written: Set<string>;
-  removed: Set<string>;
+/** A page its version leaves out, as the tile servers answer an empty tile. */
+function left(): Response {
+  return new Response(null, { status: 204 });
 }
 
-const SNAPSHOT_KEY = "_snapshot";
-const BAKE_KEY = /^(terrain|poi|geocode)\/([^/]+)\/(.+)$/;
-const snapshots = new Map<string, Snapshot>();
-
-async function snapshotOf(version: string, env: Env): Promise<Snapshot | null> {
-  const held = snapshots.get(version);
-  if (held) return held;
-  const object = await env.TILES.get(`${version}/${SNAPSHOT_KEY}`);
-  if (object === null) return null;
-  const listed = JSON.parse(await object.text()) as { base: string; written: string[]; removed: string[] };
-  const snapshot = { base: listed.base, written: new Set(listed.written), removed: new Set(listed.removed) };
-  snapshots.set(version, snapshot);
-  return snapshot;
-}
-
-/** The key a page is read from, or null for a page its version removes. */
-async function resolve(key: string, env: Env): Promise<string | null> {
-  const match = BAKE_KEY.exec(key);
-  if (!match) return key;
-  const [, kind, version, name] = match;
-  const snapshot = await snapshotOf(`${kind}/${version}`, env);
-  if (snapshot === null || snapshot.written.has(name)) return key;
-  return snapshot.removed.has(name) ? null : `${kind}/${snapshot.base}/${name}`;
-}
+/** A baked page's key: a kind, a version and a page name. */
+const BAKE_KEY = /^(terrain|place|division)\/[^/]+\/.+$/;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -220,26 +187,22 @@ export default {
     }
 
     const key = bucket;
-    // Rejected before R2 is touched — see KEY_RE. Same 404 a real miss
-    // returns, deliberately: a distinct status would tell a prober which of
-    // its guesses were the right shape, and the client cannot act on the
-    // difference anyway (the kernel draws a missing terrain page from the one
-    // over it, and layer/poi.rs takes it as an empty page).
+    // Rejected before R2 is touched — see KEY_RE.
     if (!KEY_RE.test(key)) return new Response("not found", { status: 404 });
 
-    // A missing object is not an error here: open-ocean pages are never
-    // baked, and the client draws them from the page over them.
+    // A page a version holds no object for is one its bake leaves out — open
+    // sea, or a child its parent already says — and so is answered empty,
+    // never not found; 404 stays for what names nothing, an asset included.
+    const page = BAKE_KEY.test(key);
+    const missing = () => page ? left() : new Response(request.method === "HEAD" ? null : "not found", { status: 404 });
     const cache = caches.default;
     if (request.method === "GET") {
       const cached = await cache.match(request);
       if (cached) return serve(cached.body, cached.headers);
     }
-    const stored = await resolve(key, env);
-    if (stored === null) return new Response(request.method === "HEAD" ? null : "not found", { status: 404 });
-
     if (request.method === "HEAD") {
-      const meta = await env.TILES.head(stored);
-      if (meta === null) return new Response(null, { status: 404 });
+      const meta = await env.TILES.head(key);
+      if (meta === null) return missing();
       const headers = new Headers();
       meta.writeHttpMetadata(headers);
       headers.set("etag", meta.httpEtag);
@@ -267,8 +230,9 @@ export default {
     // So the encoding is kept where the cache cannot read it. `STORED_ENCODING`
     // holds it while the entry is stored, the body goes in as the opaque
     // octets it is, and both paths out put it back on the way to the client.
-    const object = await env.TILES.get(stored);
-    if (object === null) return new Response("not found", { status: 404 });
+    const object = await env.TILES.get(key);
+    // Not cached: a version asked for before it is uploaded would answer empty for good.
+    if (object === null) return missing();
 
     // writeHttpMetadata replays what was set at upload time — crucially the
     // `content-encoding` the object was packed in, since objects are stored

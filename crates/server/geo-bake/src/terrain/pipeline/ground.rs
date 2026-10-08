@@ -66,14 +66,15 @@ pub fn bake_ground(features: &[Feature], coast: &Coast) -> Ground {
 }
 
 #[inline]
-fn put(cells: &mut [GroundCell], mask: Sea, at: usize, value: GroundCell) {
+fn put<T: Copy>(cells: &mut [T], mask: Sea, at: usize, value: T) {
     if mask.is_some_and(|sea| sea[at]) {
         return;
     }
     cells[at] = value;
 }
 
-fn render_polygon(points: &[P], value: GroundCell, cells: &mut [GroundCell], holes: &[Vec<P>], mask: Sea) {
+/// Every cell of a tile of the ground's lattice whose center the polygon covers.
+pub(crate) fn render_polygon<T: Copy>(points: &[P], value: T, cells: &mut [T], holes: &[Vec<P>], mask: Sea) {
     if points.len() < 3 {
         return;
     }

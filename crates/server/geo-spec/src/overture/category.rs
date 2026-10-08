@@ -4,7 +4,7 @@ pub fn map(category: &str) -> Option<&'static str> {
     OVERTURE_CATEGORY_MAP.binary_search_by_key(&category, |(key, _)| *key).ok().map(|at| OVERTURE_CATEGORY_MAP[at].1)
 }
 
-// Overture's `taxonomy` categories to a key of spec/spec/bake/poi_badge.json,
+// Overture's `taxonomy` categories to a key of spec/spec/bake/place_badge.json,
 // sorted for binary search. A category under one of these takes it by its
 // hierarchy, so only the one a kind starts at is named. Each side must cover
 // the other (tested); an unknown target silently draws the default badge.

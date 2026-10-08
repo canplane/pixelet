@@ -29,13 +29,13 @@ Nothing now.
   asking the query, nothing beside the hierarchy. Near "How the samples are
   drawn" above.
 
-- **POI is off.** The client leaves its root unbound
+- **Places is off.** The client leaves its root unbound
   (`apps/web/src/kernel/boot.ts` `OFF`) until places are drawn as the next
-  item says; the reverse geocode is on again, read as divisions. Its demand
-  follows `POI_LATTICE`, not the ground's, and which children are tiles is
+  item says; the reverse geocoding is on again, read as divisions. Its demand
+  follows `PLACE_LATTICE`, not the ground's, and which children are tiles is
   the occupancy the bake writes, as terrain's is.
 - **Places: Overture's schema, Carto's look.** A place's kind is still this
-  tree's own 35 (`poi_badge.json`), shown by OpenMapTiles' class rank. What
+  tree's own 35 (`place_badge.json`), shown by OpenMapTiles' class rank. What
   a place is follows Overture's schema, as the divisions now do: its
   taxonomy and basic category, its names, confidence, sources and GERS id,
   since Overture was made to merge vendors' places and every vendor's tree
@@ -49,39 +49,17 @@ Nothing now.
   and OSM. The taxonomy changes between releases, so the table is checked
   against the release the ingest records. openstreetmap-carto is CC0, the
   cartographic design and `symbols/` included; its name and
-  OpenStreetMap's are trademarks, kept out of ours. The words follow the
-  schema in the same change: `poi` (`layer/poi.rs`, `poi_tile.rs`,
-  `bake:poi`, `/tile/poi/`) and `place` meaning a venue (`chunk/place.rs`)
-  are `places`, and the bucket paths move with them.
+  OpenStreetMap's are trademarks, kept out of ours. `place` meaning a venue
+  (`chunk/place.rs`) follows the schema's word in the same change.
 
 ## P2
 
-
-- **Terrain's lanes are one record, which keeps it from being a quadtree.**
-  A tile is its ground, elevation, decks and index together
-  (`crates/spec/src/bake/format.rs` `Terrain`), each with its own lattice and
-  fold (majority, average, union), so a child is left out only when all four
-  are its parent's again, and elevation almost never is: every land leaf is
-  stored. Each lane its own layer, pruned where its parent says it whole,
-  would make the sea one case of that rule. First measured: how many leaves
-  each lane alone, and all together, could leave out, against the requests
-  more layers would cost under the Worker's daily cap
-  ([decision/20260816-deployment-hosting.md](./decision/20260816-deployment-hosting.md)).
-- **A bake is kept a shard at a time, as the ingest is.** The catalog says
-  which shards the database holds, but a terrain bake keeps its state for
-  the whole coverage: one land list (`land_tiles.json`), one `leaf.json` of
-  what built the leaves, and a region named by tiles, `--grow` deriving the
-  shards each run (`crates/server/geo-bake/src/bin/bake_tiles.rs`). Each
-  shard's land list, leaves, coast and source identity its own would make a
-  shard one unit from ingest to version: a shard ingested again is baked
-  again alone, and `--region` and `--grow` become one question, which shards.
-
 ## Parked, with the reason on file
 
-- **Publishing**: a push to `deploy`, any upload to the bucket (terrain, POI,
-  geocode) and the copy into production's db-geo, held until the user says
+- **Publishing**: a push to `deploy`, any upload to the bucket (terrain, places,
+  divisions) and the copy into production's db-geo, held until the user says
   the time is right, since the bake side has refactoring ahead. Meanwhile a
-  bake is looked at through `dev:baked` and `preview:baked`.
+  bake is looked at through `dev:shelf` and `preview:shelf`.
 - **How the samples are drawn**, held until the user says the time is
   right. On the iPhone 13 mini, four shapes over the same tiles and views: today's boxes, the same as masked faces, a ray a
   pixel, and a bounded observation a cell — what the rule asks for, a cell

@@ -2,7 +2,7 @@
 
 //! Placed objects, kept as their one record: each leaf's catalog value at its
 //! node and the handle of what it carries beyond it (`ext.rs`), in one sparse
-//! tree a column (`space/hierarchy/sparse_tree.rs`). A write arrives as
+//! tree a shard (`space/hierarchy/sparse_tree.rs`). A write arrives as
 //! `<key, id, ext>` (`morton::key_of`). What a node at any zoom shows is read
 //! from the leaves over and under it, folding by the objects' majority, and
 //! never kept. A leaf that carries a record is never joined, its handle its
@@ -127,8 +127,8 @@ fn key(zoom: Zoom, at: [i64; 3]) -> u128 {
     key_of::<3>(zoom, at)
 }
 
-/// The column, a node at `SHARD_ZOOM`, a node is under.
-fn column(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
+/// The shard a node is under.
+fn shard(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
     [at[0] >> (zoom - SHARD_ZOOM), at[1] >> (zoom - SHARD_ZOOM), 0]
 }
 
@@ -165,11 +165,11 @@ impl Write {
     }
 }
 
-/// The placed objects: one tree of leaves a column, nothing kept of what a
+/// The placed objects: one tree of leaves a shard, nothing kept of what a
 /// branch holds.
 #[derive(Default)]
 pub struct Store {
-    columns: HashMap<u128, Tree, FnvBuildHasher>,
+    shards: HashMap<u128, Tree, FnvBuildHasher>,
     ext: Pools,
 }
 
@@ -179,7 +179,7 @@ type Tree = SparseTree<Leaf, 3>;
 /// its value if it is a leaf; whether to go under it.
 type Enter<'a> = dyn FnMut(Zoom, [i64; 3], &Aabb, Option<Leaf>) -> bool + 'a;
 
-/// Where a node stands in its column's tree: the node or the leaf over it.
+/// Where a node stands in its shard's tree: the node or the leaf over it.
 struct Found<'a> {
     tree: &'a Tree,
     zoom: Zoom,
@@ -188,8 +188,8 @@ struct Found<'a> {
 
 impl Store {
     fn find(&self, zoom: Zoom, at: [i64; 3]) -> Option<Found<'_>> {
-        let tree = self.columns.get(&key(SHARD_ZOOM, column(zoom, at)))?;
-        // The column itself is its tree's root, whose children are the first block.
+        let tree = self.shards.get(&key(SHARD_ZOOM, shard(zoom, at)))?;
+        // The shard itself is its tree's root, whose children are the first block.
         if zoom == SHARD_ZOOM {
             return Some(Found { tree, zoom, slot: Slot::Branch(0) });
         }
@@ -220,29 +220,29 @@ impl Store {
     /// frame, a node entered where `enter` says so: its zoom, its index and
     /// cube there, and its value if it is a leaf.
     fn descend(&self, about: f64, enter: &mut Enter) {
-        for (&k, tree) in &self.columns {
+        for (&k, tree) in &self.shards {
             self.walk_column(tree, node_of::<3>(k).1, about, enter);
         }
     }
 
-    /// As `descend`, over only the columns `region` meets, edges included:
+    /// As `descend`, over only the shards `region` meets, edges included:
     /// what is read is as large as what is asked, not as the world's edits.
     fn descend_in(&self, region: &Aabb, enter: &mut Enter) {
         let side = units(SHARD_ZOOM);
         let across = |k: usize| (region.min[k] / side).floor() as i64..=(region.max[k] / side).floor() as i64;
         for y in across(1) {
             for x in across(0) {
-                let col = [wrap_index(SHARD_ZOOM, x), y, 0];
-                if let Some(tree) = self.columns.get(&key(SHARD_ZOOM, col)) {
-                    self.walk_column(tree, col, about(region), enter);
+                let shard = [wrap_index(SHARD_ZOOM, x), y, 0];
+                if let Some(tree) = self.shards.get(&key(SHARD_ZOOM, shard)) {
+                    self.walk_column(tree, shard, about(region), enter);
                 }
             }
         }
     }
 
-    fn walk_column(&self, tree: &Tree, col: [i64; 3], about: f64, enter: &mut Enter) {
+    fn walk_column(&self, tree: &Tree, shard: [i64; 3], about: f64, enter: &mut Enter) {
         for (s, slot) in tree.block(0).enumerate() {
-            self.walk(tree, slot, CUBE_ZOOM, child_cube(SHARD_ZOOM, col, s), about, enter);
+            self.walk(tree, slot, CUBE_ZOOM, child_cube(SHARD_ZOOM, shard, s), about, enter);
         }
     }
 
@@ -411,17 +411,17 @@ impl Store {
                 None => NONE,
             };
             let value = Leaf { id: id16, ext: handle };
-            let col = key(SHARD_ZOOM, column(zoom, at));
-            let tree = match self.columns.get_mut(&col) {
+            let shard = key(SHARD_ZOOM, shard(zoom, at));
+            let tree = match self.shards.get_mut(&shard) {
                 Some(tree) => tree,
                 None if value == EMPTY => continue,
-                None => self.columns.entry(col).or_insert_with(|| Tree::new(EMPTY)),
+                None => self.shards.entry(shard).or_insert_with(|| Tree::new(EMPTY)),
             };
             if tree.set(u32::from(zoom - SHARD_ZOOM), at, value) {
                 changed.push(cube(zoom, at));
             }
             if tree.uniform() == Some(EMPTY) {
-                self.columns.remove(&col);
+                self.shards.remove(&shard);
             }
         }
         changed
@@ -452,7 +452,7 @@ impl Store {
     pub fn clear(&mut self) -> Vec<Aabb> {
         let mut held = Vec::new();
         self.each(&mut |e| held.push(e.cube()));
-        self.columns.clear();
+        self.shards.clear();
         self.ext.clear();
         held
     }
@@ -491,7 +491,7 @@ pub struct Cells<'a> {
 }
 
 impl Cells<'_> {
-    /// The cells, X and Y at the asked zoom, of the node's column and `apron`
+    /// The cells, X and Y at the asked zoom, of the node's shard and `apron`
     /// more on each side.
     pub fn column_cells(&self, apron: i64) -> ([i64; 2], [i64; 2]) {
         let (zoom, at) = self.node;
@@ -500,7 +500,7 @@ impl Cells<'_> {
         ([x - apron, y - apron], [x + n + apron, y + n + apron])
     }
 
-    /// What the objects fold to over the node's column and `apron` more cells
+    /// What the objects fold to over the node's shard and `apron` more cells
     /// on each side, at the asked zoom, with `hide` left out.
     pub fn fold(&self, apron: i64, hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
         let (from, to) = self.column_cells(apron);
@@ -518,7 +518,7 @@ impl Cells<'_> {
         if zoom >= SHARD_ZOOM {
             return self.store.each_in(zoom, at, visit);
         }
-        // Over a tree's root: the leaves of every column under it, those
+        // Over a tree's root: the leaves of every shard under it, those
         // only touching its faces left out.
         let whole = cube(zoom, at);
         self.store.entries_in(&whole, &mut |e| {
@@ -559,7 +559,7 @@ impl Query for Store {
             }))
         };
         let whole = region(node);
-        // One tree holds a cube under a column's root; else its columns' leaves.
+        // One tree holds a cube under a shard's root; else its shards' leaves.
         let Some(at) = (D == 3 && node.0 >= SHARD_ZOOM).then(|| [node.1[0], node.1[1], node.1[2]]) else {
             self.entries_in(&whole, &mut |e| {
                 if let Some(b) = e.cube().meet(whole) {
