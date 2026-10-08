@@ -37,19 +37,24 @@ Nothing now.
   demand now follows `POI_LATTICE`, not the ground's, and which children
   are tiles is the occupancy the bake writes, as terrain's is; the POI set
   is to be baked again in that format.
-- **POI and reverse geocode follow Carto.** The ground is Carto's looks
-  (decision/20261005-the-ground-is-a-carto-palette.md); a place's icon and
-  its kind's label are still this tree's own 35 kinds (`poi_badge.json`),
-  shown by OpenMapTiles' class rank, and a name's depth is its own ladder
-  (`spec/spec/place.json`). Carto is the default for both: a place's kind is
-  the Carto feature its OSM tag draws as, with Carto's minimum zoom, icon
-  group and color (`amenity-points.mss`), and a name's depth OSM's
-  `admin_level` and `place=*`. The theme is fixed there; the data is not.
-  Terrain's sources stay Overture and OSM, where POI and geocode take any
-  provider (Naver for Korea, say) through an adapter mapping its vocabulary
-  onto Carto's, as Overture's `category_of` does now. openstreetmap-carto is
-  CC0, the cartographic design and `symbols/` included, so nothing binds its
-  use; its name and OpenStreetMap's are trademarks, kept out of ours.
+- **POI and reverse geocode: Overture's schema, Carto's look.** A place's
+  kind is still this tree's own 35 (`poi_badge.json`), shown by OpenMapTiles'
+  class rank, and a name's depth its own ladder (`spec/spec/place.json`).
+  The data and the look part: what a place is follows Overture's schema,
+  its taxonomy and basic category, its names, confidence, sources and GERS
+  id, and a name's depth follows the divisions' subtype (country, region,
+  county, locality, neighborhood), since Overture was made to merge vendors'
+  places and every vendor's tree (Naver, Kakao, Google) maps onto it as
+  Overture's own sources do; OSM's tags are an editors' vocabulary, a kind
+  spread over several keys. How a place is drawn follows Carto (the ground
+  is its looks, decision/20261005-the-ground-is-a-carto-palette.md): one
+  table, the theme's, from an Overture kind to a Carto icon group, color
+  and minimum zoom (`amenity-points.mss`). A provider is an adapter onto the
+  schema, baked or asked live as its terms allow; terrain's sources stay
+  Overture and OSM. The taxonomy changes between releases, so the table is
+  checked against the release the ingest records. openstreetmap-carto is
+  CC0, the cartographic design and `symbols/` included; its name and
+  OpenStreetMap's are trademarks, kept out of ours.
 
 ## P2
 
