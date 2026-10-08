@@ -85,8 +85,8 @@ ingest works, on the shards it is told (`tile/shard.rs`):
 - `publish`, only when named, makes `out/<kind>.publish/` for an upload.
 
 Every stage can stop and run again. A shard not baked yet reads as sea. A
-change of source, code or coverage is a purge: delete `out/<kind>/` and
-bake every shard. Which shards to bake, and when, is the operator's to say;
+change of source, code or coverage is a purge: `deno task clear:shelf
+<kind>`, then bake every shard. Which shards to bake, and when, is the operator's to say;
 nothing tracks it.
 
 | Flag                | Meaning                                                                       |
@@ -160,7 +160,7 @@ that, worked back from how far each thing draws:
    runs (`terrain/leaf.rs` for a leaf, `pyramid.rs` for a tile above),
    so a tile it serves holds the packet this tool wrote. It packs at zstd's
    quick level where the bake packs at its stored one, so compare the packets,
-   not the objects. With `deno task dev:tiles` up — not `dev`, which proxies
+   not the objects. With `deno task dev:tile` up — not `dev`, which proxies
    every route to the live deployment:
 
    The dev server answers the bucket's addresses, so it takes the tile's name
@@ -261,4 +261,4 @@ asks for takes a worker before one a fold alone needs. Divisions' leaves are z12
 many zooms over them (`tile.rs` `top_over`).
 The common job limits apply to all of them.
 A tile is cached under `cache/tile/<kind>/` and kept across restarts. A
-re-ingest or a bake change is a purge by command: delete `cache/tile/`.
+re-ingest or a bake change is a purge by command: `deno task clear:oven`.
