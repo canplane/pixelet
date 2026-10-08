@@ -2,7 +2,7 @@
 
 /** The playable characters from variant.json. Persons are split by gender for the picker. */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import { SETTINGS } from "@/feature/setting/schema.ts";
 import { Group, groups, PERSON_GENDER_PREFIXES } from "./variant.spec.ts";

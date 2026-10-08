@@ -1,13 +1,14 @@
 // pxl-kernel/layer/terrain/fixed.rs
 
 //! `.fixed.terrain`: the room every resident terrain tile lies in, and where
-//! a record's bytes are. Planes in order: ground, seven separation lanes,
-//! elevation, index lane, coarser index cells. The elevation is its own plane
-//! because its 2,592-byte record is 32 past a cache line; held with the
-//! ground it would misalign every second tile's lanes.
+//! a record's bytes are. A plane is one lane of every frame end to end;
+//! planes in order: ground, the separation's eight, elevation, index, coarser
+//! index cells. The elevation is its own plane because its 2,592-byte record
+//! is 32 past a cache line; held with the ground it would misalign every
+//! second tile's lanes.
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::format::GroundCell;
+use pxl_spec::bake::format::GroundId;
 use pxl_spec::bake::format::COARSE_LANE;
 use pxl_spec::bake::separation::{MAX_BOXES, MAX_LINES, MAX_POINTS};
 use pxl_spec::space::layer::lattice::{EXTENT, TILE_CELLS};
@@ -20,8 +21,8 @@ pub static RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
 
 const FRAMES: u32 = Residency::<TerrainTile>::FRAMES;
 
-/// One tile's ground: a `GroundCell` a cell, no stride and no padding.
-pub const GROUND_LANE_BYTES: u32 = TILE_CELLS * TILE_CELLS * core::mem::size_of::<GroundCell>() as u32;
+/// One tile's ground: a `GroundId` a cell, no stride and no padding.
+pub const GROUND_LANE_BYTES: u32 = TILE_CELLS * TILE_CELLS * core::mem::size_of::<GroundId>() as u32;
 
 pub const GROUND_BYTES: u32 = FRAMES * GROUND_LANE_BYTES;
 
@@ -30,7 +31,8 @@ const fn separation_lane(count: usize, size: usize) -> u32 {
     ((count * size).div_ceil(64) * 64) as u32
 }
 
-/// Plane order: line starts, points, tops, width, kind, form, clear, boxes.
+/// The separation's lanes, a plane each in order: line starts, points, tops,
+/// width, kind, form, clear, boxes.
 pub const SEPARATION_LANE_BYTES: [u32; 8] = [
     separation_lane(MAX_LINES + 1, 4),
     separation_lane(MAX_POINTS, 4),

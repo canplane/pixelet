@@ -18,8 +18,8 @@ use crate::sched::tick::TickContext;
 use crate::setting::store::{settings_store, CameraMode};
 use crate::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
 use crate::view::frame::pose::{units_per_px_at, view, view_compose, ObserverPose};
-use xpute_core::math::scalar::wrap;
 use xpute_guest::global::Global;
+use xpute_kit::math::scalar::wrap;
 
 // A look in spherical coordinates about the world's Z, θ = polar and
 // φ = azimuth: θ from straight down, clamped to [0, π]; φ from north toward

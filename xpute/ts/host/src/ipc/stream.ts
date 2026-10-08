@@ -6,9 +6,9 @@
  * words past the head; a record is op, n, then n words.
  */
 
-import type { U32Array } from "@xpute/core/abi/array.ts";
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { td } from "@xpute/core/codec/encoding.ts";
+import type { U32Array } from "@xpute/kit/abi/array.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
+import { td } from "@xpute/kit/codec/encoding.ts";
 
 export const END = 0;
 

@@ -154,7 +154,7 @@ impl Lattice {
     }
 
     pub fn cell_at(self, tile: Tile, index: u32) -> Cell {
-        xpute_core::ensure!(index < self.tile_cells() * self.tile_cells(), ENOTRECOVERABLE);
+        xpute_kit::ensure!(index < self.tile_cells() * self.tile_cells(), ENOTRECOVERABLE);
         let (zoom, at) = tile.node();
         let [x0, y0] = first_descendant_of(at, self.tile_cell_shamt());
         let [tx, ty] = self.in_tile(index);

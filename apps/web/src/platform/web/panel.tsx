@@ -9,7 +9,7 @@
 import { useContext, useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, View } from "react-native";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Motion } from "@platform/motion.tsx";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { useWindowSize } from "@platform/viewport.ts";

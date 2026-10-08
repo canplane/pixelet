@@ -133,7 +133,7 @@ pub struct FrameSample {
     pub heap: HeapSample,
     pub rings: RingSample,
     pub work: WorkSample,
-    // Queued plus in-flight requests, per category.
+    // Queued plus in-flight requests, per stream.
     pub q_terrain: f64,
     pub q_place: f64,
     pub stale: StaleSample,

@@ -13,15 +13,15 @@ use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
 
-use crate::io::demand::{Category, Phases};
+use crate::io::demand::{Phases, Stream};
 use crate::io::failure::Failure;
 use crate::layer::residency::Residency;
-use crate::layer::{Asks, Layer};
+use crate::layer::{Asks, Base};
 
 static DIVISION: Global<Residency<DivisionTile>> = Global::new();
 
-impl Layer for DivisionTile {
-    const CATEGORY: Category = Category::division;
+impl Base for DivisionTile {
+    const STREAM: Stream = Stream::division;
     const LATTICE: Lattice = GROUND;
     const ASKS: Asks = Asks::Line;
     const LEAF: Zoom = DIVISION_LEAF;

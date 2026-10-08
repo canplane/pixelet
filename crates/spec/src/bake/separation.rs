@@ -7,15 +7,15 @@
 
 use std::borrow::Cow;
 
-use xpute_core::status::error::MarshalError;
-use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
+use xpute_kit::status::error::MarshalError;
+use xpute_kit::wire::xtp::{BranchCursor, BranchViewImpl, NodeView};
 
 use super::{malformed, way};
 use crate::procedural::{pier_covers, Frame};
 use crate::space::coord::zoom::Zoom;
 use crate::space::hierarchy::tree::child_of;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 /// Points are in eighths of the tile's cell, which an `i16` holds far past the tile's edge.
 pub const POINT_SCALE: f64 = 8.0;

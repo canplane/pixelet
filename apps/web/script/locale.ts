@@ -6,7 +6,7 @@
 
 import { dirname, join } from "@std/path";
 
-import { decorKinds, decorName, decorSection, placeableCubeId, placeableCubes, placeableCubeSection } from "../src/catalog/cell/mod.ts";
+import { allCubes, cubeId, cubeSection, decorIds, decorName, decorSection } from "../src/catalog/block/mod.ts";
 import { groups } from "../src/feature/character/variant.spec.ts";
 
 const web = dirname(dirname(new URL(import.meta.url).pathname));
@@ -31,9 +31,9 @@ function branch(locale: string, doc: Catalog, name: string, want: string[]): voi
   }
 }
 
-const cubeIds = placeableCubes.map(placeableCubeId);
-const sections = [...new Set(placeableCubes.map(placeableCubeSection))];
-const decorSections = [...new Set(decorKinds.map(decorSection))];
+const cubeIds = allCubes.map(cubeId);
+const sections = [...new Set(allCubes.map(cubeSection))];
+const decorSections = [...new Set(decorIds.map(decorSection))];
 
 const node = (doc: Catalog, name: string): Catalog => {
   const n = doc[name];
@@ -43,7 +43,7 @@ const node = (doc: Catalog, name: string): Catalog => {
 for (const locale of LOCALES) {
   const doc: Catalog = JSON.parse(await Deno.readTextFile(join(web, `src/locale/${locale}.json`)));
   const en = locale === "en";
-  branch(locale, doc, "blocks", en ? [...cubeIds.map((id) => `cube.${id}`), ...decorKinds.map((k) => `decor.${decorName(k)}`), "marker"] : []);
+  branch(locale, doc, "blocks", en ? [...cubeIds.map((id) => `cube.${id}`), ...decorIds.map((k) => `decor.${decorName(k)}`), "marker"] : []);
   branch(locale, doc, "pets", en ? Object.keys(groups.pet.keys) : []);
   const drawerSections = node(node(doc, "drawer"), "sections");
   branch(locale, drawerSections, "cube", sections);

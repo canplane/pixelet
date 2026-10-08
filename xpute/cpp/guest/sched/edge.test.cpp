@@ -8,7 +8,7 @@
 #include <coroutine>
 #include <vector>
 
-#include "../../core/test.hpp"
+#include "../../kit/test.hpp"
 
 using namespace xpute;
 

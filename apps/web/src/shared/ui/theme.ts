@@ -7,7 +7,7 @@
  */
 
 import { FAMILY, MONO } from "@platform/typeface.ts";
-import { round } from "@xpute/core/math/scalar.ts";
+import { round } from "@xpute/kit/math/scalar.ts";
 
 export function alpha(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16);

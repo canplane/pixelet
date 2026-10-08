@@ -5,7 +5,7 @@
 use crate::mem::MB;
 use crate::profiler::frame::ZOOMS;
 
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use super::*;
 

@@ -2,8 +2,8 @@
 
 //! Baked tile formats shared by the bake and the kernel, so the two cannot drift.
 
-use xpute_core::status::errno::Errno;
-use xpute_core::status::error::MarshalError;
+use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::MarshalError;
 
 pub mod constant;
 pub mod division_tile;

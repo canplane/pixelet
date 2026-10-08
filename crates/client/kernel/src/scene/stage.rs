@@ -21,10 +21,10 @@ use xpute_guest::global::Global;
 use crate::mem::MB;
 use crate::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use pxl_spec::asset::ingested::Asset;
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use crate::billboard::sheet::billboard_sheet;
-use crate::decor::assets::kind_assets;
+use crate::decor::assets::decor_assets;
 use crate::io::host::handheld;
 use crate::io::load::{load_image, Load};
 use crate::io::text::text_raster;
@@ -44,7 +44,7 @@ const EARTH: Asset = Asset::sky_earth_07_webp;
 
 use crate::view::frame::pose::{sea_under_eye, view};
 
-const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");
+const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the earth layer holds");
 
 pub fn stage_write() {
     let v = view();
@@ -82,9 +82,9 @@ pub fn stage_render() {
     let lists = kernel().draw.take();
     let models = &kernel().models;
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
-    let variants = kind_assets().iter().flat_map(|entry| {
+    let variants = decor_assets().iter().flat_map(|entry| {
         (0..entry.models.len()).map(move |v| {
-            let extent = entry.kind.variants.get(v).and_then(|a| a.model.ingested().extent).unwrap_or([0.0; 3]);
+            let extent = entry.decor.variants.get(v).and_then(|a| a.model.ingested().extent).unwrap_or([0.0; 3]);
             (entry.models[v], entry.skin(v), extent.map(|e| e as f32))
         })
     });
@@ -205,7 +205,7 @@ pub fn visible_step(ctx: &mut TickContext) {
         let k = kernel();
         let edits = crate::chunk::source::previewed();
         let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
-        crate::chunk::decor::cell::step(&pxl_spec::cell::decor::KINDS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
+        crate::chunk::decor::cell::step(&pxl_spec::block::decor::DECORS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
     }
     crate::chunk::place::step(ctx);
     let k = kernel();

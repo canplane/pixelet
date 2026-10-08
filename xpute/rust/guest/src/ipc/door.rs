@@ -4,9 +4,9 @@
 //! posted in place. The host reads the completion ring dry before it rings
 //! again, so overrunning it is a sizing bug, not a state to wait out.
 
-use xpute_core::status::errno::Errno;
-use xpute_core::status::error::MarshalError;
-use xpute_core::wire::xtp::PacketWriter;
+use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::MarshalError;
+use xpute_kit::wire::xtp::PacketWriter;
 
 use crate::ipc::frame;
 use crate::ipc::ring::Ring;
@@ -70,7 +70,7 @@ impl Door {
             None => self.cq.push(tag, cmd, flags, None, result),
         };
         (self.note)(self.cq.len(), 0);
-        xpute_core::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
+        xpute_kit::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
     pub fn raise(&self, cmd: u32, count: u32, f: impl Fn(&mut PacketWriter)) {

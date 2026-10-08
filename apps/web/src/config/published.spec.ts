@@ -20,16 +20,16 @@ export const PUBLISHED_VERSION = {
   earth: "v1.2026-10-05.1",
 } as const;
 
-export type BakeKind = keyof typeof PUBLISHED_VERSION;
+export type BaseLayer = keyof typeof PUBLISHED_VERSION;
 
-/** The kinds by the number the kernel names one by: the root a bake's objects are opened below (xpute's OPENAT). */
-export const BAKE_KINDS: readonly BakeKind[] = ["terrain", "place", "division", "earth"];
+/** The base layers by the number the kernel names one by: the root a bake's objects are opened below (xpute's OPENAT). */
+export const BASE_LAYERS: readonly BaseLayer[] = ["terrain", "place", "division", "earth"];
 
 /**
  * The format each bake writes now, which a published name begins with.
  * Bumped only by a change to how the client reads a tile.
  */
-export const FORMAT: Record<BakeKind, number> = {
+export const FORMAT: Record<BaseLayer, number> = {
   terrain: 8,
   place: 10,
   division: 7,

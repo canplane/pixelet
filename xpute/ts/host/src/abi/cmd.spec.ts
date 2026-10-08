@@ -3,7 +3,7 @@
 // GENERATED from spec/abi/cmd.json — do not edit.
 
 /**
- * Every program's commands, by number (core abi/cmd: `major << 8 | minor`), and the
+ * Every program's commands, by number (kit abi/cmd: `major << 8 | minor`), and the
  * packet each carries — an XTP branch whose children are its fields, in order. A
  * command with no fields carries no packet. The majors below PROGRAM_MAJOR are xpute's;
  * a program numbers its own from there, in a table of its own that names this one as
@@ -13,8 +13,8 @@
  * raises on the completion ring.
  */
 
-import type { U8Array } from "@xpute/core/abi/array.ts";
-import type { i32, u32 } from "@xpute/core/abi/word.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { packet } from "@xpute/host/ipc/doorbell.ts";
 
 /** What a command is about. */

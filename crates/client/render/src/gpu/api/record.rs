@@ -4,11 +4,11 @@
 //! after the turn. A record carries everything it names, bytes included, so
 //! the kernel reusing memory afterwards cannot reach what the page runs.
 
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
 use xpute_guest::ipc::stream::{Stream, WORD};
 use xpute_guest::mem::base::ptr_at;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::gpu::api_spec::{op, stream};
 
@@ -205,7 +205,7 @@ impl Gpu {
     /// Span `span`'s time in ms from the last frame read; past the last span, the whole frame.
     pub fn gpu_ms(&self, span: u32) -> f64 {
         let at = stream::GPU_MS as usize + 2 * span as usize;
-        xpute_core::ensure!(at + 2 <= HEAD, ENOSPC);
+        xpute_kit::ensure!(at + 2 <= HEAD, ENOSPC);
         let w = stream().head();
         f64::from_bits(w[at] as u64 | (w[at + 1] as u64) << 32)
     }

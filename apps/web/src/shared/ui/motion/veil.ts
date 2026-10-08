@@ -8,7 +8,7 @@
 
 import { createContext, useContext, useEffect, useRef } from "react";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { Pose } from "./pose.ts";
 import { DIM, type Transition } from "./transition.ts";
 

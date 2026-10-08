@@ -19,7 +19,7 @@
   // an existing record at the same name makes the deploy fail rather than
   // being silently replaced.
   //
-  // plei.me rather than one of the xpute domains, deliberately: @xpute/core
+  // plei.me rather than one of the xpute domains, deliberately: @xpute/kit
   // is a runtime kit that carries no pixelet knowledge and is meant to stay
   // portable (see AGENTS.md), so putting this app on xpute.* would spend that
   // name on one of the things built with it.

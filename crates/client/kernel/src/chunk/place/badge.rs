@@ -9,20 +9,20 @@ use pxl_spec::bake::constant::EntryAt;
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, LABEL_ZOOM, TEXT};
-use pxl_spec::bake::place_tile::{symbol_of, Held, PlaceTile};
+use pxl_spec::bake::place_tile::{symbol_of, PlaceTile, Placed};
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::billboard::sheet::billboard_sheet;
 use crate::io::text::{text_lines, text_width};
-use crate::layer::Layer;
+use crate::layer::Base;
 use pxl_render::gpu::pass::badges::{badge_width, point_size, BADGE_FONT, POINT_FONT, POINT_WRAP};
 use pxl_render::gpu::sheet::shelf::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::sheet::SHEET_SCALE;
-use pxl_spec::cell::marker::MARKER_SHOWN_FROM;
+use pxl_spec::block::marker::MARKER_SHOWN_FROM;
 use xpute_guest::global::Global;
 
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 /// A marker's pill and where it stands, down from its top.
 const MARKER_HEIGHT: f64 = 37.0;
@@ -46,21 +46,21 @@ pub enum Label {
 
 impl Label {
     /// Gone once that tile has: another tile's index names another place.
-    fn place(tile: Tile, place: u32) -> Option<Held<'static>> {
-        let held = PlaceTile::residency().get(tile)?;
-        (place < held.len()).then(|| held.get(place))
+    fn place(tile: Tile, place: u32) -> Option<Placed<'static>> {
+        let placed = PlaceTile::residency().get(tile)?;
+        (place < placed.len()).then(|| placed.get(place))
     }
 
     /// As it shows at Carto's `zoom` where it stands, if it does: a place
-    /// from the zoom it is shown from, as a dot or its icon by its kind's
-    /// zooms, named from its kind's label zoom; a marker from its own zoom
-    /// (`cell/marker.json`).
+    /// from the zoom it is shown from, as a dot or its icon by its category's
+    /// zooms, named from its category's label zoom; a marker from its own zoom
+    /// (`block/marker.json`).
     pub fn at(self, zoom: i32) -> Option<Label> {
         match self {
             Label::Marker { .. } => (zoom >= i32::from(MARKER_SHOWN_FROM)).then_some(self),
             Label::Place { tile, place, .. } => {
                 let h = Label::place(tile, place)?;
-                let k = usize::from(h.place.kind.checked_sub(1)?);
+                let k = usize::from(h.place.category.checked_sub(1)?);
                 let from = |z: u8| z != 0 && zoom >= i32::from(z);
                 let (icon, dot) = (from(ICON_ZOOM[k]), from(DOT_ZOOM[k]));
                 if zoom < i32::from(h.from) || !(icon || dot) {
@@ -174,12 +174,12 @@ pub fn slot(label: Label) -> i32 {
             match label {
                 Label::Marker { .. } => DrawSpec::Pill { label: label.text(), logical_w: w },
                 Label::Place { tile, place, look } => {
-                    let kind = Label::place(tile, place).map_or(0, |h| h.place.kind);
-                    let k = usize::from(kind.saturating_sub(1));
+                    let category = Label::place(tile, place).map_or(0, |h| h.place.category);
+                    let k = usize::from(category.saturating_sub(1));
                     DrawSpec::Point {
                         lines: b.lines.clone(),
                         icon: look.icon,
-                        symbol: symbol_of(kind),
+                        symbol: symbol_of(category),
                         fill: FILL[k],
                         text: TEXT[k],
                         logical_w: w,

@@ -2,8 +2,8 @@
 
 #include "directory.hpp"
 
-#include "../../core/math/scalar.hpp"
-#include "../../core/status/bug.hpp"
+#include "../../kit/math/scalar.hpp"
+#include "../../kit/status/bug.hpp"
 
 namespace xpute {
 

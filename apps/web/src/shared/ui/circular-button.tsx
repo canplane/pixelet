@@ -2,7 +2,7 @@
 
 import { Pressable, StyleSheet } from "react-native";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Backing, SYSTEM_BACKING } from "@platform/backing.tsx";
 import type { GlyphName } from "@platform/icon.tsx";
 import { LABEL } from "@platform/palette.ts";

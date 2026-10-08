@@ -15,7 +15,7 @@ serve = ["dep:axum", "dep:tokio", "dep:pxl-server"]
 libm.workspace = true
 pxl-geo-spec = { path = "../geo-spec" }
 pxl-spec = { path = "../../spec", features = ["serde"] }
-xpute-core = { path = "../../../xpute/rust/core" }
+xpute-kit = { path = "../../../xpute/rust/kit" }
 # Blocking: the pack and rasterize are `Rc`-backed, so a page is one non-`Send`
 # call, and each worker is a thread with its own connection.
 postgres = { version = "0.19", features = ["with-serde_json-1"] }

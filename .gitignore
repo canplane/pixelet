@@ -183,12 +183,12 @@ vite.config.ts.timestamp-*
 /target
 /crates/target
 
-# The core's module, built from crates/ by apps/web/script/build_wasm.ts
-apps/web/src/kernel/kernel.wasm
-apps/web/src/kernel/kernel.paths.json
+# The guest's module, built from crates/ by apps/web/script/build-wasm.ts
+apps/web/src/kernel/guest.wasm
+apps/web/src/kernel/guest.paths.json
 # A build's own staging files, gone when it finishes and left only by one
 # that failed part way (apps/web/script/build-wasm.ts).
-apps/web/src/kernel/kernel.*.wasm
+apps/web/src/kernel/guest.*.wasm
 
 # The last build number this checkout published (apps/web/script/deploy.ts)
 apps/web/.build_number

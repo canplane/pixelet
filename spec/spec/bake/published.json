@@ -1,5 +1,5 @@
 {
-  "doc": [
+  "$doc": [
     "What each bake is published as, read by the client for the path it",
     "requests: `v<format>.<date>.<n>`, the format the client reads it in, and",
     "the UTC day it was published with that day's count, 1 for the first. What it was",

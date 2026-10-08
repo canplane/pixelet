@@ -8,21 +8,21 @@ use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::ext::Ext;
 use crate::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
-use crate::layer::object::store::EntryKind;
+use crate::layer::object::store::Block;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
-use pxl_spec::cell::ext::MARKER_TEXT_CHARS;
-use pxl_spec::cell::object::{decor_num_id, object_value_is_air, placeable_cube_num_id, PlaceableCube};
-use pxl_spec::cell::object::{object_value_is_marker, MARKER};
-use pxl_spec::cell::{cube_types, DecorId};
+use pxl_spec::block::ext::MARKER_TEXT_CHARS;
+use pxl_spec::block::object::{cube_id, decor_num_id, object_value_is_air, Cube};
+use pxl_spec::block::object::{object_value_is_marker, MARKER};
+use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::zoom::{base_of, index_of, of_side, units};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::kernel;
 use crate::layer::instance::Instance;
@@ -30,7 +30,7 @@ use crate::layer::object::repository;
 use crate::layer::object::store::{apply, Cells, Entry, EntryAt, Write, VOID};
 use crate::layer::Query;
 use crate::query::World;
-use pxl_spec::cell::decor::DecorKind;
+use pxl_spec::block::decor::Decor;
 
 /// The objects' cells at a node read whole; all resident, so always answered.
 fn cells(node: Node<3>) -> Cells<'static> {
@@ -85,11 +85,11 @@ fn submit(write: Write) {
 /// show that look there, and the cell must already hold an AIR leaf (the look
 /// is per column, so without this every cube stacked on matching ground was
 /// dropped).
-fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
+fn place_value_is_redundant(at: &Pvf3, size: f64, cube: Cube) -> bool {
     if size < units(GROUND.cell()) {
         return false;
     }
-    let PlaceableCube::Ground(look) = cube else { return false };
+    let Cube::Ground(look) = cube else { return false };
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
     let Some(ground) = World::now().at(at, LEAF_ZOOM).exact() else { return false };
     if ground.cell != look as u8 {
@@ -99,8 +99,8 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
 }
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
-pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube) {
-    let val = if place_value_is_redundant(at, size, cube) { VOID } else { placeable_cube_num_id(cube) };
+pub fn place(at: &Pvf3, size: f64, cube: Cube) {
+    let val = if place_value_is_redundant(at, size, cube) { VOID } else { cube_id(cube) };
     write_object_value(at, size, val);
 }
 
@@ -113,7 +113,7 @@ pub fn place_decor(at: &Pvf3, size: f64, decor_id: DecorId) {
 
 /// The decor the ground grows that `place_decor` would bring back, for its preview.
 pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Instance> {
-    (size >= units(GROUND.cell()) && object_value_is_air(read_state(at))).then(|| World::now().grown(DecorKind::of(decor_id), at))?
+    (size >= units(GROUND.cell()) && object_value_is_air(read_state(at))).then(|| World::now().grown(Decor::of(decor_id), at))?
 }
 
 /// A marker tool's tap at `at`, a place free or holding a marker: the marker
@@ -174,7 +174,7 @@ pub fn put_marker() {
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
 /// baked terrain, which has no leaf of its own to delete.
 pub fn place_air(at: &Pvf3, size: f64) {
-    write_object_value(at, size, cube_types::object::air as u32);
+    write_object_value(at, size, cube::object::air as u32);
 }
 
 pub fn remove(at: EntryAt) {
@@ -228,10 +228,10 @@ pub fn pending_step() -> RenderEdits {
     };
     // The real object's hide lands a tick or more after the ghost, accepted.
     let hidden = object.filter(|_| active_tool == ActiveTool::Eraser);
-    let kind = hidden.map(|o| o.kind());
+    let block = hidden.map(|o| o.block());
     let edits = RenderEdits {
         hide: hidden.map(|o| o.id()),
-        hide_in: (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. }))),
+        hide_in: (!matches!(block, Some(Block::Decor { .. })), !matches!(block, Some(Block::Cube { .. }))),
         // What is one voxel below shows through the ghost.
         carve: hovered.filter(|_| digging).map(|h| carve_entry(&h, size)),
         scattered: hover.scattered.filter(|_| active_tool == ActiveTool::Eraser).and_then(|s| s.grown_in()),

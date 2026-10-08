@@ -9,7 +9,7 @@ use super::aabb::Aabb;
 use super::pvf3::core::{FRAC_W, IVEC_X_W, IVEC_Z_W};
 use super::pvf3::ivec::{self, IVec};
 use super::pvf3::pvf3::{self, Pvf3};
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 pub type Zoom = u8;
 

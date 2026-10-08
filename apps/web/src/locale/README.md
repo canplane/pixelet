@@ -1,7 +1,7 @@
 # What the strings call things
 
 The words a user reads, one meaning each, in every locale. The code has its
-own names — `cube_type`, `layer/object`, the pyramid's pages — and they are
+own names — `cube`, `layer/object`, the pyramid's pages — and they are
 not these; a string is written for someone who has never seen the code.
 
 What the world holds is named on two axes: where a thing came from, and what

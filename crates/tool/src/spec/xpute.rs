@@ -33,10 +33,10 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
     let mut head = vec!["//".to_string(), super::generated(JSON, JSON), "//".into()];
     head.extend(spec.doc.iter().map(|l| format!("// {l}")));
 
-    let mut ts = vec!["// @xpute/core/status/errno.spec.ts".to_string()];
+    let mut ts = vec!["// @xpute/kit/status/errno.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     ts.extend(["".to_string(), "export const enum Errno {".into()]);
-    let mut rs = vec!["// xpute-core/status/errno.spec.rs".to_string()];
+    let mut rs = vec!["// xpute-kit/status/errno.spec.rs".to_string()];
     rs.extend(head.iter().cloned());
     rs.extend(["", "#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]", "#[repr(i32)]", "pub enum Errno {"].map(String::from));
     let mut run: Vec<&ErrnoMember> = Vec::new();
@@ -138,7 +138,7 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
         .map(String::from),
     );
     // Lower case, as std::errc: EINVAL may be a <cerrno> macro already included.
-    let mut cpp = vec!["// cpp/core/status/errno.spec.hpp".to_string()];
+    let mut cpp = vec!["// cpp/kit/status/errno.spec.hpp".to_string()];
     cpp.extend(head.iter().cloned());
     cpp.extend(
         [
@@ -208,8 +208,8 @@ pub fn errno_outputs() -> Result<Vec<Output>, String> {
         .map(String::from),
     );
     Ok(vec![
-        Output::new("xpute/ts/core/src/status/errno.spec.ts", file(&ts)),
-        Output::new("xpute/rust/core/src/status/errno.spec.rs", file(&rs)),
-        Output::new("xpute/cpp/core/status/errno.spec.hpp", file(&cpp)),
+        Output::new("xpute/ts/kit/src/status/errno.spec.ts", file(&ts)),
+        Output::new("xpute/rust/kit/src/status/errno.spec.rs", file(&rs)),
+        Output::new("xpute/cpp/kit/status/errno.spec.hpp", file(&cpp)),
     ])
 }

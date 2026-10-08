@@ -8,7 +8,7 @@ use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::{self, Builder, Separation, POINT_SCALE};
 use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, G3857};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use crate::separation::Line;
 use crate::terrain::pipeline::overture::policy::segment_type;

@@ -13,7 +13,7 @@
 #include <optional>
 #include <utility>
 
-#include "../../core/status/bug.hpp"
+#include "../../kit/status/bug.hpp"
 #include "../clock.hpp"
 #include "quantum.hpp"
 #include "task.hpp"

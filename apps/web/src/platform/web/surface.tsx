@@ -5,11 +5,11 @@
  * its box, pointer, wheel, keys and the tab's visibility.
  */
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { round } from "@xpute/core/math/scalar.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import { round } from "@xpute/kit/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
-import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
+import { PointerPhase, PointerType } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_open, kernel_rect, kernel_visible, kernel_wheel } from "@/kernel/control/input.ts";
 import { worldPointer } from "@/app/store/pointer.ts";
 import { keyDown, keyUp, releaseKeys } from "@/app/store/keyboard.ts";
@@ -81,8 +81,8 @@ function inField(e: KeyboardEvent): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select") !== null);
 }
 
-function pointerKind(e: PointerEvent): PointerKind {
-  return e.pointerType === "touch" ? PointerKind.Touch : e.pointerType === "pen" ? PointerKind.Pen : PointerKind.Mouse;
+function pointerKind(e: PointerEvent): PointerType {
+  return e.pointerType === "touch" ? PointerType.Touch : e.pointerType === "pen" ? PointerType.Pen : PointerType.Mouse;
 }
 
 function drive(canvas: HTMLCanvasElement): () => void {

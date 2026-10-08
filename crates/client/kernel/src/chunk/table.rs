@@ -45,14 +45,14 @@ use crate::param;
 use crate::setting::store::settings_store;
 use crate::Build;
 use pxl_spec::space::coord::zoom::{units, Zoom};
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::chunk::domain::{self, Domain};
 use crate::chunk::Chunk;
 use crate::io::demand::Order;
-use crate::layer::Layer as _;
+use crate::layer::Base as _;
 use pxl_spec::bake::format::TerrainTile;
 
 /// `.fixed.mounts`, handed in at boot.
@@ -590,7 +590,7 @@ impl Scheduler {
             self.view_dirty = true;
         }
         for &k in &plan.start {
-            xpute_core::ensure!(self.find(&k).is_none(), ENOTRECOVERABLE);
+            xpute_kit::ensure!(self.find(&k).is_none(), ENOTRECOVERABLE);
             self.add(k);
             self.counts.added += 1;
         }
@@ -691,7 +691,7 @@ impl Scheduler {
             let Some(t) = s.tier(generation) else { continue };
             // Slots are recycled between chunks, so a chunk must draw only from a slot
             // it holds; otherwise it can draw another chunk's ground.
-            xpute_core::ensure!(holder[t.slot.index] == Nth::of(s.id as usize), ENOTRECOVERABLE);
+            xpute_kit::ensure!(holder[t.slot.index] == Nth::of(s.id as usize), ENOTRECOVERABLE);
             if t.box_cnt == 0 {
                 continue;
             }

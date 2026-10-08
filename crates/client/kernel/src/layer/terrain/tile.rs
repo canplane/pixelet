@@ -6,27 +6,27 @@
 //! open water; at the source's top, it is void.
 
 use crate::layer::residency::Residency;
-use pxl_spec::bake::format::{decode_terrain_into, GroundCell, TerrainTile, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
+use pxl_spec::bake::format::{decode_terrain_into, GroundId, TerrainTile, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::bake::separation::{self, MAX_BOXES, MAX_LINES, MAX_POINTS};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::mem::base::ptr_at;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::io::failure::Failure;
 
-use crate::io::demand::{Category, Phases, TaskPhaseName};
+use crate::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::layer::terrain::fixed::RANGE;
 use crate::layer::terrain::fixed::{coarse_off, ele_off, extent_off, ground_off, separation_off, COARSE_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES, SEPARATION_LANE_BYTES};
-use crate::layer::Layer;
+use crate::layer::Base;
 use pxl_spec::bake::format::Occupancy;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
 static TERRAIN: Global<Residency<TerrainTile>> = Global::new();
 
-impl Layer for TerrainTile {
-    const CATEGORY: Category = Category::terrain;
+impl Base for TerrainTile {
+    const STREAM: Stream = Stream::terrain;
     const LATTICE: Lattice = GROUND;
 
     fn occupancy(&self) -> Occupancy {
@@ -71,7 +71,7 @@ unsafe fn room_of(record: u32) -> TileRoom {
     // caller's contract makes it this tile's alone.
     unsafe {
         TileRoom {
-            ground: core::slice::from_raw_parts_mut(ptr_at::<GroundCell>(ground), GROUND_LANE),
+            ground: core::slice::from_raw_parts_mut(ptr_at::<GroundId>(ground), GROUND_LANE),
             ele: core::slice::from_raw_parts_mut(ptr_at::<i16>(ele), ELE_LANE),
             extent: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(extent), EXTENT_LANE),
             coarse: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(coarse), COARSE_LANE),

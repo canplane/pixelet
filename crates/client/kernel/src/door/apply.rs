@@ -5,10 +5,10 @@
 use super::{post_shell, State};
 use crate::abi::cmd::{self as abi, Command};
 use pxl_spec::space::coord::zoom::Zoom;
-use xpute_core::status::errno::Errno;
-use xpute_core::status::error::MarshalError;
 use xpute_guest::abi::cmd as xpute_cmd;
 use xpute_guest::mem::base::{off_of, off_of_slice};
+use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::MarshalError;
 
 fn packet<'a>(pkt: &Option<&'a [u8]>) -> Result<&'a [u8], MarshalError> {
     or_refuse(*pkt, Errno::EBADMSG)
@@ -115,30 +115,30 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::INPUT_POINTER => {
             let p = abi::InputPointer::read(packet(pkt)?)?;
             match p.phase {
-                abi::PointerPhase::Down => camera_pointer_down(p.kind, p.id, p.button, p.x, p.y),
-                abi::PointerPhase::Move => camera_pointer_move(p.kind, p.id, p.x, p.y),
+                abi::PointerPhase::Down => camera_pointer_down(p.pointer_type, p.id, p.button, p.x, p.y),
+                abi::PointerPhase::Move => camera_pointer_move(p.pointer_type, p.id, p.x, p.y),
                 abi::PointerPhase::Up => {
-                    if let Some([x, y]) = camera_pointer_up(p.kind, p.id) {
+                    if let Some([x, y]) = camera_pointer_up(p.pointer_type, p.id) {
                         tap_at(x, y);
                     }
                 }
                 abi::PointerPhase::Out => camera_pointer_out(),
                 abi::PointerPhase::Cancel => {
-                    camera_pointer_up(p.kind, p.id);
+                    camera_pointer_up(p.pointer_type, p.id);
                 }
             }
             Ok(Some(0))
         }
         Command::INPUT_HOLD => {
-            use pxl_spec::cell::object::placeable_cube_of;
-            use pxl_spec::cell::DecorId;
+            use pxl_spec::block::object::cube_of;
+            use pxl_spec::block::DecorId;
             let p = abi::InputHold::read(packet(pkt)?)?;
             let mut holding = holding();
             holding.active_tool = p.tool;
             holding.object_tier = p.tier;
             match p.tool {
                 abi::ActiveTool::Object => {
-                    holding.object_cube = or_refuse(placeable_cube_of(p.value), Errno::EINVAL)?;
+                    holding.object_cube = or_refuse(cube_of(p.value), Errno::EINVAL)?;
                 }
                 abi::ActiveTool::Decor => {
                     holding.decor_id = or_refuse(u16::try_from(p.value).ok().and_then(DecorId::of), Errno::EINVAL)?;

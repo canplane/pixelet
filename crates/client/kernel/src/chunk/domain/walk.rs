@@ -112,7 +112,7 @@ impl<Q: Query> Domain<Q> {
 
     /// `top`: the coarsest zoom the ground's source supplies whole.
     pub(crate) fn begin<'a, 'b>(&mut self, o: Observation, top: Zoom, ladder: &[Tau], footprints: impl IntoIterator<Item = &'a Footprint>, lacks: impl IntoIterator<Item = &'b Tile>) {
-        xpute_core::ensure!(!ladder.is_empty() && ladder.len() < u8::MAX as usize, EINVAL);
+        xpute_kit::ensure!(!ladder.is_empty() && ladder.len() < u8::MAX as usize, EINVAL);
         self.o = o;
         self.lens = Lens::of(&o);
         self.footprints.clear();
@@ -254,7 +254,7 @@ impl<Q: Query> Domain<Q> {
             }
             if any {
                 // Past the rule's reach the derivation, and the quality policy's count, are broken.
-                xpute_core::ensure!(order.near < split_reach(c, self.ladder[splits_to as usize - 1]), ENOTRECOVERABLE, c.zoom());
+                xpute_kit::ensure!(order.near < split_reach(c, self.ladder[splits_to as usize - 1]), ENOTRECOVERABLE, c.zoom());
             } else {
                 from_step = 0;
             }
@@ -304,7 +304,7 @@ impl<Q: Query> Domain<Q> {
     }
 
     pub fn put(&mut self, k: usize) {
-        xpute_core::ensure!(k < self.ladder.len(), EINVAL);
+        xpute_kit::ensure!(k < self.ladder.len(), EINVAL);
         let k = k.min(self.ladder.len() - 1).max(self.tracked);
         self.cut_at(k);
         self.at = k;

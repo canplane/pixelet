@@ -21,7 +21,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::chunk::Chunk;
 use crate::layer::residency::floor;
-use crate::layer::Layer as _;
+use crate::layer::Base as _;
 use crate::query::World;
 use crate::scene::indicator::debug_lines::DebugLines;
 use crate::view::frame::pose::view;

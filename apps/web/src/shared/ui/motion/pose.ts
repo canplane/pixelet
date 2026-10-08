@@ -8,7 +8,7 @@
 import type { ReactNode } from "react";
 import type { LayoutChangeEvent, StyleProp, ViewStyle } from "react-native";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { Transition } from "./transition.ts";
 
 /** A channel left out stands at rest: opaque, in place, at scale, upright. */

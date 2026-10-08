@@ -5,9 +5,9 @@
  * `memory.buffer` never detaches: views over it stay valid for the module's life.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { MarshalError } from "@xpute/core/status/error.ts";
-import { Errno } from "@xpute/core/status/errno.spec.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
+import { MarshalError } from "@xpute/kit/status/error.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 
 const WASM_PAGE_BYTES: u32 = 1 << 16;
 

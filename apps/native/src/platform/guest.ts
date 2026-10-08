@@ -1,0 +1,13 @@
+// @pxl/native/platform/guest.ts
+
+/** The guest linked into the app, reached through the native module: a memory buffer and a doorbell, as a page gets. */
+
+import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { Guest } from "@/kernel/module.ts";
+import { PLATFORM } from "./module.ts";
+
+export function openGuest(): Promise<Guest> {
+  const buffer = PLATFORM.memory();
+  PLATFORM.interrupt(0);
+  return Promise.resolve({ buffer, interrupt: (quotaMs: f64) => PLATFORM.interrupt(quotaMs) });
+}

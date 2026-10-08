@@ -259,7 +259,7 @@ const remoteOriginDefault = "https://plei.me";
 // anti-HMR. The shell's kernel glue is here too: its modules hold the one
 // kernel's memory and device, and a hot-swapped copy ran beside them — a
 // second device beside the renderer's objects on the first.
-const corePathIncludes = ["/xpute/ts/core/", "/xpute/ts/host/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
+const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
 function fullReloadOnCoreChange() {
   function isCoreFile(file: string): boolean {
     const p = file.replaceAll("\\", "/");
@@ -291,7 +291,7 @@ function fullReloadOnCoreChange() {
       if (isCoreFile(file)) {
         // Invalidate by hand, because Vite cannot make the connection
         // itself. The deno plugin resolves a core import to a virtual id —
-        // `\0deno::TypeScript::@xpute/core/...::/abs/path.ts` — and the
+        // `\0deno::TypeScript::@xpute/kit/...::/abs/path.ts` — and the
         // module graph is keyed by resolved id while onFileChange looks up
         // by file path, so a changed core file would leave its transform
         // cached under a name nothing matches, and the full-reload below

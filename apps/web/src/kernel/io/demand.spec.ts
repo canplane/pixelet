@@ -6,9 +6,9 @@
 // its run came to an end, and the phases a run reports its time in. The profiler
 // records and reports them by these names (spec/client/kernel/profiler/profiler.json).
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 
-export const CATEGORY_NAMES = ["terrain", "place", "division", "asset", "earth"] as const;
+export const STREAM_NAMES = ["terrain", "place", "division", "asset", "earth"] as const;
 
 export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
 

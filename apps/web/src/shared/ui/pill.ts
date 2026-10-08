@@ -9,7 +9,7 @@
 import type { ReactNode } from "react";
 import type { ColorValue, GestureResponderHandlers } from "react-native";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { Transition } from "@/shared/ui/motion/transition.ts";
 import type { BackingPlace } from "@/shared/ui/backing.ts";
 import { chrome } from "@/shared/ui/theme.ts";

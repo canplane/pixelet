@@ -1,10 +1,10 @@
 // @pxl/web/feature/search/modal.tsx
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Path, Svg } from "react-native-svg";
-import { round } from "@xpute/core/math/scalar.ts";
+import { round } from "@xpute/kit/math/scalar.ts";
 import { useTranslation } from "react-i18next";
 
 import { Panel } from "@platform/panel.tsx";

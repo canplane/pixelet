@@ -1,12 +1,12 @@
 ---
 name: bake-tiles
-description: Bake terrain, places and divisions tiles from the geo DB into each kind's set, out/<kind>/, and verify it before it is uploaded. Use when a bake pipeline or its source data changed, or a tile set needs (re)building. Uploading and deploying is the publish-bucket skill.
+description: Bake terrain, place and division tiles from the geo DB into each kind's set, out/<kind>/, and verify it before it is uploaded. Use when a bake pipeline or its source data changed, or a tile set needs (re)building. Uploading and deploying is the publish-bucket skill.
 ---
 
 # Baking tiles
 
-The deployed API answers forward search only. Terrain, places and
-divisions are static objects in the bucket, produced offline
+The deployed API answers forward search only. Terrain, place and
+division tiles are static objects in the bucket, produced offline
 by the tools in `crates/server/geo-bake` from the local geo database. This is
 how each set gets built and checked; getting it into the bucket is
 [publish-bucket](../publish-bucket/SKILL.md).
@@ -234,7 +234,7 @@ version is the set as it stands, every zoom folded from the leaves under it.
 Only a change to **how the client reads a tile** — its format in
 `pxl-spec bake/` — bumps the kind's `FORMAT`.
 
-The local tile server shares one demand path across terrain, places and divisions
+The local tile server shares one demand path across the terrain, place and division layers
 (`geo-bake/src/demand/`). `--cache` is the parent directory, default `cache/tile`;
 each kind owns a directory under it. Concurrent requests join the
 same job, packets are written atomically, and responses carry zstd encoding.
@@ -253,8 +253,8 @@ stays private until success. A deadline or admission refusal is retryable,
 never an empty tile. These are execution/time budgets,
 not a cap on process memory or total cached disk bytes.
 
-`--folds` (default 2, so z13) bounds the pyramid layers, terrain, places and
-divisions alike, in zooms over the leaves: a tile coarser is answered 503, since each
+`--folds` (default 2, so z13) bounds the pyramid layers, terrain, place and
+division alike, in zooms over the leaves: a tile coarser is answered 503, since each
 one folds the whole zoom under it on first request, and a tile a client
 asks for takes a worker before one a fold alone needs. Divisions' leaves are z12, so its top is as
 many zooms over them (`tile.rs` `top_over`).

@@ -2,11 +2,11 @@
 
 import { assert, assertEquals, assertThrows } from "@std/assert";
 
-import { Errno } from "@xpute/core/status/errno.spec.ts";
-import { encoder, TreeReader, TreeView } from "@xpute/core/wire/xtp/mod.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { encoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
 import * as frame from "./frame.ts";
-import { MarshalError } from "@xpute/core/status/error.ts";
+import { MarshalError } from "@xpute/kit/status/error.ts";
 
 function ring(capacity: number, slot: number): Ring {
   const slot_base = 8 + ring_bytes(capacity);

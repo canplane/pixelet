@@ -33,8 +33,8 @@ Nothing now.
 
 ## Parked, with the reason on file
 
-- **Publishing**: a push to `deploy`, any upload to the bucket (terrain, places,
-  divisions) and the copy into production's db-geo, held until the user says
+- **Publishing**: a push to `deploy`, any upload to the bucket (terrain, place,
+  division) and the copy into production's db-geo, held until the user says
   the time is right, since the bake side has refactoring ahead. Meanwhile a
   bake is looked at through `dev:shelf` and `preview:shelf`.
 - **How the samples are drawn**, held until the user says the time is

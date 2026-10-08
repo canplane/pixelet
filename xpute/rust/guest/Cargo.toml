@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 indexmap.workspace = true
-xpute-core = { path = "../core" }
+xpute-kit = { path = "../kit" }
 
 # An `as` cast to a pointer is an offset made a pointer; mem/base.rs is the
 # one way to do that.

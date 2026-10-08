@@ -9,7 +9,7 @@ use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::nearest;
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use crate::view::frame::pose::view;
 

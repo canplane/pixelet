@@ -105,7 +105,7 @@
   },
 
   "imports": {
-    "@xpute/core/": "./xpute/ts/core/src/",
+    "@xpute/kit/": "./xpute/ts/kit/src/",
     "@xpute/host/": "./xpute/ts/host/src/",
     "@xpute/conformance/": "./xpute/ts/conformance/src/",
 

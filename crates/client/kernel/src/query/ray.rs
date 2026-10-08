@@ -8,7 +8,7 @@ use crate::layer::instance::{Instance, Source};
 use crate::layer::residency::Lines;
 use crate::layer::terrain::Drawn;
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::cell::object::{object_value_is_air, object_value_is_voxel};
+use pxl_spec::block::object::{object_value_is_air, object_value_is_voxel};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;

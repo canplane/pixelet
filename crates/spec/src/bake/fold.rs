@@ -9,7 +9,7 @@
 
 use crate::space::layer::lattice::{EXTENT, GROUND, TILE_CELLS};
 use crate::space::layer::tile::{neighbor_index, CHILDREN};
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use super::format::{join, Ground, Index, Occupancy, TerrainTile};

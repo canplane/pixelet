@@ -2,7 +2,7 @@
 
 import { assertEquals, assertThrows } from "@std/assert";
 
-import { MarshalError } from "@xpute/core/status/error.ts";
+import { MarshalError } from "@xpute/kit/status/error.ts";
 import { Directory } from "./directory.ts";
 import { HEAD, key, MAGIC, VERSION } from "./directory.spec.ts";
 

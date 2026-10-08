@@ -7,7 +7,7 @@
 //   deno run -A script/smoke.ts https://plei.me
 //   deno run -A script/smoke.ts https://api.plei.me --origin
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 import { PUBLISHED_VERSION } from "../apps/web/src/config/published.spec.ts";
 import { INGESTED } from "../apps/web/src/catalog/asset/ingested.spec.ts";
 

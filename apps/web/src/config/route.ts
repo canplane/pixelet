@@ -1,14 +1,14 @@
 // @pxl/web/config/route.ts
 
 // By path, not alias: vite.config.ts imports this and its bundler knows no aliases.
-import { type BakeKind, PUBLISHED_VERSION } from "./published.spec.ts";
+import { type BaseLayer, PUBLISHED_VERSION } from "./published.spec.ts";
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
 
-/** `<tile>/<kind>[/<version>]/<name>`: the kernel names the object, the
+/** `<tile>/<layer>[/<version>]/<name>`: the kernel names the object, the
  * version is a deployment fact (a dev server bakes on demand, unversioned). */
-export function tileUrl(kind: BakeKind, name: string, published: boolean): string {
-  return published ? `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}/${name}` : `${TILE_ROOT}/${kind}/${name}`;
+export function tileUrl(layer: BaseLayer, name: string, published: boolean): string {
+  return published ? `${TILE_ROOT}/${layer}/${PUBLISHED_VERSION[layer]}/${name}` : `${TILE_ROOT}/${layer}/${name}`;
 }
 
 /** A dev tile server's declaration; a published one is in the bundle (`PUBLISHED_SOURCE`). */

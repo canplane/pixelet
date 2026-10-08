@@ -19,7 +19,7 @@ use xpute_guest::global::Global;
 static DECLARED: Global<Option<Zoom>> = Global::new();
 
 pub fn declare(top_z: Zoom) {
-    xpute_core::ensure!(top_z >= GROUND.top(), EINVAL, top_z);
+    xpute_kit::ensure!(top_z >= GROUND.top(), EINVAL, top_z);
     *DECLARED.get(Default::default) = Some(top_z);
 }
 

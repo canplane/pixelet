@@ -3,8 +3,8 @@
 import { StyleSheet, View } from "react-native";
 import { G, Path, Svg } from "react-native-svg";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
-import { round } from "@xpute/core/math/scalar.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
+import { round } from "@xpute/kit/math/scalar.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { Presence } from "@/shared/ui/motion/presence.tsx";

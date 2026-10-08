@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::io::demand::Why;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::errno::Errno;
 
 use crate::io::demand::Order;
 use crate::io::failure::{Ended, Failure, Outcome};
@@ -13,7 +13,7 @@ use crate::io::failure::{Ended, Failure, Outcome};
 struct ByWhy;
 
 impl Serve for ByWhy {
-    fn rank(&self, _category: Category, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
+    fn rank(&self, _category: Stream, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         Rank {
             class: ask.why as u8,
             distance: ask.order.near,
@@ -30,8 +30,8 @@ impl Serve for ByWhy {
     }
 }
 
-/// Room for every test's wants in each category.
-const BOUNDS: Bounds = [64; Category::ALL.len()];
+/// Room for every test's wants in each stream.
+const BOUNDS: Bounds = [64; Stream::ALL.len()];
 
 fn scheduler() -> RequestScheduler<ByWhy> {
     let mut l = RequestScheduler::new(ByWhy, BOUNDS);
@@ -83,11 +83,11 @@ fn failed<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
 fn saying_the_same_set_again_changes_nothing() {
     let mut l = scheduler();
     let want = [(1u64, ask(Why::Demand, 0.0))];
-    l.declare(Category::terrain, &want, 0.0);
+    l.declare(Stream::terrain, &want, 0.0);
     l.pump(0.0);
     assert_eq!(started(&mut l).len(), 1);
     for _ in 0..5 {
-        l.declare(Category::terrain, &want, 0.0);
+        l.declare(Stream::terrain, &want, 0.0);
         l.pump(0.0);
         assert!(started(&mut l).is_empty(), "already out, so nothing is started again");
     }
@@ -96,15 +96,15 @@ fn saying_the_same_set_again_changes_nothing() {
 #[test]
 fn an_answer_is_asked_once() {
     let mut l = scheduler();
-    l.declare(Category::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
+    l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
     ok(&mut l, key, 0.0);
     l.pump(0.0);
     assert!(started(&mut l).is_empty(), "an answered want was asked again");
     assert!(stopped(&mut l).is_empty());
-    assert_eq!(l.pending_count(Category::terrain), 0);
-    l.declare(Category::terrain, &[(1, ask(Why::Demand, 0.0))], 1.0);
+    assert_eq!(l.pending_count(Stream::terrain), 0);
+    l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 1.0);
     l.pump(1.0);
     assert_eq!(started(&mut l).len(), 1);
 }
@@ -112,13 +112,13 @@ fn an_answer_is_asked_once() {
 #[test]
 fn a_failure_waits_rather_than_asking_straight_back() {
     let mut l = scheduler();
-    l.declare(Category::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
+    l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
     l.pump(0.0);
     let key = started(&mut l)[0];
     failed(&mut l, key, 0.0);
     // A failure is not a withdrawal.
     for t in 0..5 {
-        l.declare(Category::terrain, &[(1, ask(Why::Demand, 0.0))], t as f64);
+        l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], t as f64);
         l.pump(t as f64);
         assert!(started(&mut l).is_empty(), "held back, not re-asked every turn");
     }
@@ -130,11 +130,11 @@ fn a_failure_waits_rather_than_asking_straight_back() {
 #[test]
 fn a_current_demand_is_said_whatever_old_work_is_draining() {
     let mut l = scheduler();
-    l.declare(Category::terrain, &[(1, unseen(0.0)), (2, unseen(1.0))], 0.0);
+    l.declare(Stream::terrain, &[(1, unseen(0.0)), (2, unseen(1.0))], 0.0);
     l.pump(0.0);
     let out = started(&mut l);
     assert_eq!(out.len(), 2);
-    l.declare(Category::terrain, &[(3, ask(Why::Demand, 0.0))], 0.0);
+    l.declare(Stream::terrain, &[(3, ask(Why::Demand, 0.0))], 0.0);
     assert_eq!(l.counts().0, 1, "the new want is representable with both credits spent");
     l.pump(0.0);
     // What the camera left is stopped the turn it leaves, and its credits
@@ -149,13 +149,13 @@ fn a_current_demand_is_said_whatever_old_work_is_draining() {
 fn a_running_attempt_is_never_stopped_for_a_better_want() {
     let mut l = scheduler();
     l.set_credits(1);
-    l.declare(Category::terrain, &[(1, unseen(5.0))], 0.0);
+    l.declare(Stream::terrain, &[(1, unseen(5.0))], 0.0);
     l.pump(0.0);
     let _ = started(&mut l);
-    l.declare(Category::terrain, &[(1, unseen(5.0)), (2, unseen(0.0))], 0.0);
+    l.declare(Stream::terrain, &[(1, unseen(5.0)), (2, unseen(0.0))], 0.0);
     l.pump(0.0);
     assert!(stopped(&mut l).is_empty(), "distance says which to start, not which to restart");
-    l.declare(Category::terrain, &[(1, unseen(5.0)), (3, ask(Why::Demand, 9.0))], 0.0);
+    l.declare(Stream::terrain, &[(1, unseen(5.0)), (3, ask(Why::Demand, 9.0))], 0.0);
     l.pump(0.0);
     assert!(stopped(&mut l).is_empty(), "a class better waits for a free credit");
     assert!(started(&mut l).is_empty(), "and starts nothing meanwhile");
@@ -165,7 +165,7 @@ fn a_running_attempt_is_never_stopped_for_a_better_want() {
 struct Restless;
 
 impl Serve for Restless {
-    fn rank(&self, _category: Category, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
+    fn rank(&self, _category: Stream, _subject: u64, ask: Ask, _enqueue_ms: f64) -> Rank {
         Rank {
             class: 0,
             distance: ask.order.near,
@@ -189,7 +189,7 @@ fn every_want_is_served_at_rest() {
     let mut wanted: Vec<(u64, Ask)> = (0..12).map(|k| (k, ask(Why::Demand, (k * 7 % 12) as f64))).collect();
     let mut out: Vec<u64> = Vec::new();
     for turn in 0..200 {
-        l.declare(Category::place, &wanted, turn as f64);
+        l.declare(Stream::place, &wanted, turn as f64);
         l.pump(turn as f64);
         let stops = stopped(&mut l);
         out.retain(|k| !stops.contains(k));
@@ -212,10 +212,10 @@ fn every_want_is_served_at_rest() {
 fn an_asset_shares_the_credits_and_is_never_withdrawn() {
     let mut l = scheduler();
     l.set_credits(1);
-    l.declare(Category::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
-    l.declare(Category::asset, &[(7, Ask::PLAIN)], 0.0);
+    l.declare(Stream::terrain, &[(1, ask(Why::Demand, 0.0))], 0.0);
+    l.declare(Stream::asset, &[(7, Ask::PLAIN)], 0.0);
     l.pump(0.0);
     assert_eq!(started(&mut l).len(), 1, "one credit, one read — an asset does not go beside the tiles");
-    assert_eq!(l.pending_count(Category::asset), 1);
+    assert_eq!(l.pending_count(Stream::asset), 1);
     assert_eq!(l.counts().0, 1, "and it is what is waiting");
 }

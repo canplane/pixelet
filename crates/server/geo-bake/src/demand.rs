@@ -12,7 +12,7 @@ use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::bake::place_tile::PlaceTile;
 use pxl_spec::space::layer::tile::Tile;
 
-use crate::pyramid::Layer;
+use crate::pyramid::Base;
 use std::path::PathBuf;
 
 use crate::coverage::Coverage;

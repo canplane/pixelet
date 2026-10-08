@@ -110,6 +110,6 @@ pub fn heap_at(data_end: u32) -> u32 {
 
 /// Asking before boot lays out memory is a bug.
 pub fn range(f: Fixed) -> Section {
-    use xpute_core::status::bug::OrBug;
-    map().or_bug(xpute_core::status::errno::Errno::ENOTRECOVERABLE).fixed.nth(&FIXED, PAGE_BYTES, f as usize)
+    use xpute_kit::status::bug::OrBug;
+    map().or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE).fixed.nth(&FIXED, PAGE_BYTES, f as usize)
 }

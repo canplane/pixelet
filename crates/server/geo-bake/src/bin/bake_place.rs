@@ -12,7 +12,7 @@
 
 use pxl_geo_bake::coverage::{Coverage, Overture};
 use pxl_geo_bake::place::{self, leaves};
-use pxl_geo_bake::pyramid::Layer;
+use pxl_geo_bake::pyramid::Base;
 use pxl_geo_bake::tile::shard::Run;
 use pxl_geo_bake::util::{pack, Level};
 use pxl_spec::bake::place_tile::PlaceTile;
