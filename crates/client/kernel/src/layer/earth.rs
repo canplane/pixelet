@@ -20,7 +20,7 @@ use xpute_guest::mem::heap::{free, Block};
 use crate::io::demand::{Category, Phases};
 use crate::io::failure::Failure;
 use crate::layer::residency::Residency;
-use crate::layer::Layer;
+use crate::layer::{Asks, Layer};
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// What a held tile is: its texels are in its frame's layer on the GPU.
@@ -32,7 +32,7 @@ static EARTH: Global<Residency<Earth>> = Global::new();
 impl Layer for Earth {
     const CATEGORY: Category = Category::earth;
     const LATTICE: Lattice = GROUND;
-    const DEMANDS: bool = false;
+    const ASKS: Asks = Asks::Floor;
     const TOP: Option<Zoom> = Some(EARTH_ZOOM);
 
     /// Only the top zoom is baked: no child is a tile.

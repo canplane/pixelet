@@ -56,9 +56,9 @@ impl Category {
     pub fn bake(self) -> Option<BakeKind> {
         match self {
             Category::terrain => Some(BakeKind::terrain),
-            Category::poi => Some(BakeKind::poi),
+            Category::place => Some(BakeKind::place),
             Category::earth => Some(BakeKind::earth),
-            Category::geocode | Category::geocode_dict => Some(BakeKind::geocode),
+            Category::division => Some(BakeKind::division),
             Category::asset => None,
         }
     }

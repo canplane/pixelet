@@ -1,5 +1,5 @@
 // The mesher's face mask bits; lateral bits come in fours (+X, -X, +Y, -Y)
-// from each base. record.test.rs holds them to the mesher's constants.
+// from each base, as the mesher's constants.
 const FACE_BASE: u32 = 1u;
 const RISES_BASE: u32 = 64u;
 const DIPS_BASE: u32 = 1024u;

@@ -13,7 +13,7 @@ use crate::view::demand::Observed as _;
 use std::collections::{HashMap, HashSet};
 
 use pxl_render::frame::draw::DrawList;
-use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -96,9 +96,9 @@ impl CoverageGizmo {
         let span = units(zoom);
         let about = v.at().eye.map(|c| (c / span).floor() * span);
         let about = [about[0], about[1], 0.0];
-        let residency = Terrain::residency();
+        let residency = TerrainTile::residency();
         let top = floor::top().unwrap_or(LEAF_ZOOM);
-        let lined: HashSet<Tile> = Terrain::demand().demand().iter().map(|&p| line_top(p, top)).collect();
+        let lined: HashSet<Tile> = TerrainTile::demand().demand().iter().map(|&p| line_top(p, top)).collect();
         let floor_only = |p: Tile| p.zoom <= top && !lined.contains(&p);
         let over: HashSet<Chunk> = drawn.iter().flat_map(|d| d.ancestors()).collect();
         let mut lines = Lines::default();

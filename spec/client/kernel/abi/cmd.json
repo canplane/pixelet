@@ -1497,16 +1497,16 @@
           "name": "m_per_px",
           "type": "f64",
           "doc": [
-            "The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it."
+            "The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it."
           ]
         },
         {
-          "name": "place",
-          "type": "PlacePart",
+          "name": "division",
+          "type": "DivisionPart",
           "list": true,
           "doc": [
-            "The place the focus is in, broad to narrow, every rung of it; empty where",
-            "the center is in none or the packets it is read out of have not arrived."
+            "The division the focus is in and every one above it, broad to narrow; empty",
+            "where the focus is in none or the tile it is read out of has not arrived."
           ]
         },
         {
@@ -1653,18 +1653,18 @@
       ]
     },
     {
-      "name": "PlacePart",
+      "name": "DivisionPart",
       "doc": [
-        "One rung of the place, in every language the provider had rather than one resolved",
+        "One division of the name, in every language the provider had rather than one resolved",
         "name: the reader's language is the page's, and switching it re-reads a label already",
         "sent."
       ],
       "fields": [
         {
-          "name": "rank",
+          "name": "subtype",
           "type": "u8",
           "doc": [
-            "Where the part sits, broadest first (spec/spec/place.json)."
+            "Overture's subtype, broadest first (spec/spec/division.json)."
           ]
         },
         {
@@ -1673,13 +1673,21 @@
         },
         {
           "name": "names",
-          "type": "PlaceName",
+          "type": "LangName",
           "list": true
+        },
+        {
+          "name": "prominence",
+          "type": "u8",
+          "doc": [
+            "Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the",
+            "subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java)."
+          ]
         }
       ]
     },
     {
-      "name": "PlaceName",
+      "name": "LangName",
       "fields": [
         {
           "name": "lang",

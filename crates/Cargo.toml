@@ -46,7 +46,7 @@ members = [
 # them, so a double is the same bits on the server, in the module and in a
 # test, whichever libm the platform has.
 libm = "=0.2.16"
-# FNV-1a, 64 bits: what a POI page keys a record by (id_hash) and the
+# FNV-1a, 64 bits: what a places page keys a record by (id_hash) and the
 # kernel keys a demand by. Over UTF-8 bytes, the same as pxl-tool/spec/data.rs's.
 fnv = "1"
 # base64url without padding: the blob a placement set is kept under in the

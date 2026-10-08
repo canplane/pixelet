@@ -1,147 +1,236 @@
 // pxl-spec/bake/place_tile.test.rs
 
 use super::*;
+use crate::space::coord::pvf3::ivec;
+use crate::space::layer::lattice::GROUND;
 
-fn named(rank: PlaceRank, name: &str, en: &str) -> Named {
-    Named {
-        rank,
-        name: name.to_string(),
-        names: vec![("en".to_string(), en.to_string())],
+fn leaf() -> Tile {
+    Tile::new(LEAF_ZOOM, ivec::gather(3, -2, 0))
+}
+
+/// The corner of places cell (tx, ty), then `dx`, `dy` leaf cells in.
+fn point(tx: u32, ty: u32, dx: u32, dy: u32) -> Pvf3 {
+    let base = PLACE_LATTICE.cell_at(leaf(), PLACE_LATTICE.cell_index(tx, ty)).base();
+    PLACE_LATTICE.cell_of(LEAF_ZOOM, &base).inner_at(GROUND, LEAF_ZOOM, [dx, dy]).mid()
+}
+
+fn called<'a>(name: &'a str, id: &'a str) -> Place<'a> {
+    Place { name, id, ..Place::default() }
+}
+
+/// A cell's count and its places as (name, where it stands).
+type Cell<'a> = (u32, Vec<(&'a str, [u32; 2])>);
+
+fn cells(tile: &PlaceTile) -> Vec<Cell<'_>> {
+    tile.cells.iter().map(|c| (c.count, tile.shown(c).map(|(_, p, at)| (p.name, at)).collect())).collect()
+}
+
+#[test]
+fn a_tile_and_its_places_come_back_as_they_went() {
+    let station = Place {
+        name: "Seoul Station",
+        kind: kind_of("subway"),
+        id: "7",
+        ..Place::default()
+    };
+    let tile = PlaceTile::of_places(
+        LEAF_ZOOM,
+        [
+            (point(1, 0, 1, 2), station),
+            (point(2, 0, 0, 0), called("서울역", "3")),
+            (point(2, 0, 3, 3), called("남대문", "9")),
+            (point(3, 0, 2, 0), called("", "4")),
+            (point(5, 1, 0, 3), station),
+            (
+                point(6, 1, 0, 0),
+                Place {
+                    name: "Seoul Station",
+                    kind: 0,
+                    id: "8",
+                    ..Place::default()
+                },
+            ),
+        ],
+        true,
+    );
+    assert_eq!(decode(&encode(&tile).unwrap()).unwrap(), tile);
+    // Held once across cells; least id per kind; nameless counted not held.
+    assert_eq!(tile.places.len(), 3);
+    assert_eq!(
+        cells(&tile),
+        [
+            (1, vec![("Seoul Station", [1, 2])]),
+            (2, vec![("서울역", [0, 0])]),
+            (1, vec![]),
+            (1, vec![("Seoul Station", [0, 3])]),
+            (1, vec![("Seoul Station", [0, 0])]),
+        ]
+    );
+}
+
+/// A lone place stays its cell's at every zoom, on the same leaf cell.
+#[test]
+fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
+    let at = point(5, 4, 3, 1);
+    let ground = GROUND.cell_of(LEAF_ZOOM, &at);
+    let empty = PlaceTile::default();
+    let tower = Place {
+        name: "Namsan Tower",
+        kind: kind_of("attraction"),
+        id: "11",
+        ..Place::default()
+    };
+    let mut below = (leaf(), PlaceTile::of_places(LEAF_ZOOM, [(at, tower)], true));
+    for zoom in (GROUND.top()..LEAF_ZOOM).rev() {
+        let p = Tile::over(zoom, below.0.tile);
+        let up = fold_place(p, p.children().map(|k| if k == below.0 { &below.1 } else { &empty }));
+        assert_eq!(up.cells.len(), 1);
+        let c = up.cells[0];
+        let (_, place, at) = up.shown(&c).next().unwrap();
+        assert_eq!(place, tower);
+        assert_eq!(PLACE_LATTICE.cell_at(p, c.cell).inner_at(GROUND, LEAF_ZOOM, at), ground, "z{zoom}");
+        below = (p, up);
     }
 }
 
-/// Dictionary places 경기도 → 성남시 → 수내동, and a group-local 백현동.
-fn dict() -> Vec<Named> {
-    vec![
-        named(PlaceRank::Region, "경기도", "Gyeonggi-do"),
-        named(PlaceRank::County, "성남시", "Seongnam-si"),
-        named(PlaceRank::Neighborhood, "수내동", "Sunae-dong"),
-    ]
-}
-
-fn group() -> PlaceGroup {
-    let mut tiles = vec![NO_LABEL; GROUP_TILES];
-    tiles[0] = 0;
-    tiles[GROUP_TILES - 1] = 1;
-    PlaceGroup {
-        labels: vec![vec![0, 1, 2], vec![0, 1, LOCAL | APPROX], vec![0, 1, LOCAL]],
-        tiles,
-        locals: vec![named(PlaceRank::Neighborhood, "백현동", "Baekhyeon-dong")],
-    }
-}
-
-fn names_at<'a>(g: &PlaceGroupView<'a>, slot: usize, dict: &PlacesView<'a>, lang: &str) -> Vec<&'a str> {
-    g.place_of(slot, dict).expect("a tile with a label").map(|p| p.in_language(lang)).collect()
-}
-
+/// Only a crowd comes apart a zoom finer.
 #[test]
-fn a_dictionary_survives_the_wire() {
-    let pkt = encode_place_dict(&dict()).expect("encodes");
-    let view = open_place_dict(&pkt).expect("opens");
-    assert_eq!(view.len(), 3);
-    let at = |i| view.at(i).expect("a place the dictionary has");
-    assert_eq!((at(0).rank, at(0).name), (PlaceRank::Region, "경기도"));
-    assert_eq!(at(1).in_language("en"), "Seongnam-si");
-    assert_eq!(at(2).rank, PlaceRank::Neighborhood);
-    assert!(view.at(3).is_none(), "and nothing past its end");
+fn a_tile_settles_every_child_but_one_under_a_crowd() {
+    let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
+    let [crowd, lone, empty, _] = p.children();
+    let at = |k: Tile, dx: u32| PLACE_LATTICE.cell_at(k, 0).inner_at(GROUND, LEAF_ZOOM, [dx, 0]).mid();
+    let leaves = [
+        (crowd, PlaceTile::of_places(LEAF_ZOOM, [(at(crowd, 0), called("A", "1")), (at(crowd, 1), called("B", "2"))], true)),
+        (lone, PlaceTile::of_places(LEAF_ZOOM, [(at(lone, 0), called("C", "3"))], true)),
+    ];
+    let none = PlaceTile::default();
+    let tile = fold_place(p, p.children().map(|k| leaves.iter().find(|(q, _)| *q == k).map_or(&none, |(_, tile)| tile)));
+    assert!(tile.occupancy.has_child(crowd.slot()));
+    assert!(!tile.occupancy.has_child(lone.slot()));
+    assert!(!tile.occupancy.has_child(empty.slot()));
 }
 
+/// Folded from the leaves, a crowd matches a tile built at that zoom.
 #[test]
-fn a_dictionary_of_nothing_survives_it_too() {
-    let pkt = encode_place_dict(&[]).expect("encodes");
-    assert!(open_place_dict(&pkt).expect("opens").is_empty());
+fn a_crowd_holds_one_place_of_each_kind() {
+    let station = Place {
+        name: "Gangnam",
+        kind: kind_of("subway"),
+        id: "50",
+        ..Place::default()
+    };
+    let cafe = Place {
+        name: "Cafe",
+        kind: kind_of("cafe"),
+        id: "20",
+        ..Place::default()
+    };
+    let places = [(point(0, 0, 0, 0), cafe), (point(0, 0, 2, 0), Place { id: "10", ..cafe }), (point(1, 0, 5, 0), station)];
+    let leaf_tile = PlaceTile::of_places(LEAF_ZOOM, places, true);
+    assert_eq!(cells(&leaf_tile), [(2, vec![("Cafe", [2, 0])]), (1, vec![("Gangnam", [5, 0])])]);
+    let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
+    let empty = PlaceTile::default();
+    let folded = fold_place(p, p.children().map(|k| if k == leaf() { &leaf_tile } else { &empty }));
+    assert_eq!(folded, PlaceTile::of_places(LEAF_ZOOM - 1, places, true));
+    let mut held: Vec<_> = folded.shown(&folded.cells[0]).map(|(_, p, at)| (p.kind, p.id, at)).collect();
+    held.sort_unstable();
+    assert_eq!(folded.cells[0].count, 3);
+    assert_eq!(held, {
+        let mut want = vec![(kind_of("cafe"), "10", [2, 0]), (kind_of("subway"), "50", [69, 0])];
+        want.sort_unstable();
+        want
+    });
 }
 
+/// What the wire cannot hold is refused.
 #[test]
-fn a_tile_reads_as_the_place_its_label_names() {
-    let (gp, dp) = (encode_place_group(&group()).expect("encodes"), encode_place_dict(&dict()).expect("encodes"));
-    let (g, d) = (open_place_group(&gp).expect("opens"), open_place_dict(&dp).expect("opens"));
-    assert_eq!(names_at(&g, 0, &d, "ko"), ["경기도", "성남시", "수내동"], "the provider's own name where the language has none");
-    assert_eq!(names_at(&g, 0, &d, "en"), ["Gyeonggi-do", "Seongnam-si", "Sunae-dong"]);
-    assert!(g.place_of(0, &d).expect("a tile with a label").all(|p| !p.approx));
+fn a_tile_that_names_no_place_or_splits_a_character_is_refused() {
+    let tile = PlaceTile::of_places(
+        LEAF_ZOOM,
+        [
+            (
+                point(3, 0, 0, 0),
+                Place {
+                    name: "A",
+                    kind: kind_of("cafe"),
+                    id: "1",
+                    ..Place::default()
+                },
+            ),
+            (
+                point(3, 0, 1, 1),
+                Place {
+                    name: "B",
+                    kind: kind_of("subway"),
+                    id: "2",
+                    ..Place::default()
+                },
+            ),
+        ],
+        true,
+    );
+    let mut past = tile.clone();
+    past.shown[0].place = 9;
+    assert!(encode(&past).is_err());
+    let mut swapped = tile.clone();
+    swapped.shown.swap(0, 1);
+    assert!(encode(&swapped).is_err());
+    // A name past the bound, and a place run past its cell, are refused on read.
+    let long = "a".repeat(NAME_CHARS + 1);
+    assert!(decode(&lanes(&[1], &[1], &[0, 1], &[0], &[""], &["a"])).is_ok(), "the lanes themselves are read");
+    assert!(decode(&lanes(&[1], &[1], &[0, 1], &[0], &[""], &[&long])).is_err());
+    assert!(decode(&lanes(&[1], &[1], &[0, 2], &[0], &[""], &["a"])).is_err());
 }
 
-#[test]
-fn a_part_a_nearby_place_named_comes_from_the_groups_own_and_says_it_is_one() {
-    let (gp, dp) = (encode_place_group(&group()).expect("encodes"), encode_place_dict(&dict()).expect("encodes"));
-    let (g, d) = (open_place_group(&gp).expect("opens"), open_place_dict(&dp).expect("opens"));
-    let parts: Vec<_> = g.place_of(GROUP_TILES - 1, &d).expect("a tile with a label").collect();
-    assert_eq!(parts.iter().map(|p| p.approx).collect::<Vec<_>>(), [false, false, true]);
-    // `LOCAL` 0 is the group's first place, not the dictionary's 경기도.
-    assert_eq!(parts[2].name, "백현동");
-    assert_eq!(parts[2].in_language("en"), "Baekhyeon-dong");
-}
-
-#[test]
-fn a_tile_outside_every_place_the_provider_knows_has_none() {
-    let (gp, dp) = (encode_place_group(&group()).expect("encodes"), encode_place_dict(&dict()).expect("encodes"));
-    let (g, d) = (open_place_group(&gp).expect("opens"), open_place_dict(&dp).expect("opens"));
-    assert!(g.place_of(1, &d).is_none());
-    assert!(g.place_of(GROUP_TILES, &d).is_none(), "and so does a slot no tile has");
-}
-
-#[test]
-fn a_leafs_slot_is_the_low_bits_of_where_it_is() {
-    assert_eq!(leaf_slot(0, 0), 0);
-    assert_eq!(leaf_slot(1, 0), 1);
-    assert_eq!(leaf_slot(0, 1), 1 << GROUP_SHAMT);
-    assert_eq!(leaf_slot(15, 15), GROUP_TILES - 1);
-    // A tile of the next group lands in the same slot as its own group's first.
-    assert_eq!(leaf_slot(16, 16), 0);
-    // A negative coordinate is a slot like any other, not a wrap.
-    assert_eq!(leaf_slot(-1, -1), GROUP_TILES - 1);
-}
-
-#[test]
-fn a_group_that_is_not_the_tiles_under_one_is_refused() {
-    let pkt = encode_place_group(&PlaceGroup {
-        labels: vec![vec![0]],
-        tiles: vec![0; GROUP_TILES - 1],
-        locals: vec![],
+/// A tile as the wire lays it, written lane by lane past `encode`'s checks.
+fn lanes(cells: &[u32], counts: &[u32], starts: &[u32], shown: &[u32], kinds: &[&str], names: &[&str]) -> Vec<u8> {
+    let (partial, at) = (vec![0u8; cells.len()], vec![0u16; 2 * shown.len()]);
+    let ids: Vec<&str> = names.iter().map(|_| "x").collect();
+    let names = NameLanes::of(names.iter().map(|&n| (n, [])));
+    write(&Lanes {
+        cells,
+        counts,
+        partial: &partial,
+        starts,
+        occupancy: 0,
+        shown,
+        at: &at,
+        kinds,
+        ids: &ids,
+        names: &names,
     })
-    .expect("encodes");
-    assert!(open_place_group(&pkt).is_err());
+    .unwrap()
 }
 
-/// A group's lanes written directly, since `encode_place_group` cannot make an inconsistent one.
-fn group_pkt(starts: &[u32], flat: &[u32], tiles: &[u16], locals: &[Named]) -> Vec<u8> {
-    let (ranks, names) = place_lanes(locals);
-    let mut t: TreeView<'_> = TreeView::new();
-    t.branch(Some(&mut |b| {
-        b.u32_array(Some(starts)).u32_array(Some(flat)).u16_array(Some(tiles));
-        write_places(b, &ranks, &names);
-    }));
-    encoder().encode(&t, TreeEncoderOptions::default()).expect("encodes")
-}
-
+/// A source's id, a kind this table does not know and names by language
+/// come back as the source gave them; the unknown kind reads as none.
 #[test]
-fn a_label_running_past_the_numbers_is_refused() {
-    // A truncated body is refused at open.
-    let pkt = group_pkt(&[0, 9], &[0], &[NO_LABEL; GROUP_TILES], &[]);
-    assert!(open_place_group(&pkt).is_err());
-    // A label whose numbers run backward would read as a negative length.
-    let pkt = group_pkt(&[0, 2, 1], &[0, 1], &[NO_LABEL; GROUP_TILES], &[]);
-    assert!(open_place_group(&pkt).is_err());
+fn what_any_source_gives_comes_back() {
+    let langs = Strings::of(["en", "Seoul Station", "ja", "ソウル駅"]);
+    let station = Place {
+        name: "서울역",
+        langs: Langs::all(&langs),
+        kind: kind_of("subway"),
+        id: "ChIJ3S-JXmauEmsRUcIaWtf4MzE",
+    };
+    let tile = PlaceTile::of_places(LEAF_ZOOM, [(point(1, 0, 0, 0), station)], true);
+    let back = decode(&encode(&tile).unwrap()).unwrap();
+    assert_eq!(back, tile);
+    assert_eq!(back.places.get(0), station);
+    assert_eq!(decode(&lanes(&[1], &[1], &[0, 1], &[0], &["a kind of tomorrow"], &["a"])).unwrap().places.get(0).kind, 0);
 }
 
+/// A partial count stays a floor at every zoom over it.
 #[test]
-fn a_run_of_places_whose_lanes_disagree_is_refused() {
-    // A rank with no name.
-    let named = [named(PlaceRank::Region, "경기도", "Gyeonggi-do")];
-    let (_, names) = place_lanes(&named);
-    let mut t: TreeView<'_> = TreeView::new();
-    t.branch(Some(&mut |b| write_places(b, &[PlaceRank::Region as u8, PlaceRank::County as u8], &names)));
-    let pkt = encoder().encode(&t, TreeEncoderOptions::default()).expect("encodes");
-    assert!(open_place_dict(&pkt).is_err());
-}
-
-/// A local place given as exact reads as exact.
-#[test]
-fn a_groups_own_place_is_not_an_approximation_unless_said() {
-    let mut g = group();
-    g.tiles[1] = 2;
-    let (gp, dp) = (encode_place_group(&g).expect("encodes"), encode_place_dict(&dict()).expect("encodes"));
-    let (g, d) = (open_place_group(&gp).expect("opens"), open_place_dict(&dp).expect("opens"));
-    let parts: Vec<_> = g.place_of(1, &d).expect("a tile with a label").collect();
-    assert_eq!(parts.iter().map(|p| (p.name, p.approx)).collect::<Vec<_>>(), [("경기도", false), ("성남시", false), ("백현동", false)]);
+fn a_floor_stays_a_floor_as_it_folds() {
+    let some = PlaceTile::of_places(LEAF_ZOOM, [(point(0, 0, 0, 0), called("A", "1"))], false);
+    let all = PlaceTile::of_places(LEAF_ZOOM, [(point(0, 0, 0, 0), called("A", "1"))], true);
+    assert_eq!(decode(&encode(&some).unwrap()).unwrap(), some);
+    let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
+    let empty = PlaceTile::default();
+    for (leaf_tile, partial) in [(&some, true), (&all, false)] {
+        let up = fold_place(p, p.children().map(|k| if k == leaf() { leaf_tile } else { &empty }));
+        assert_eq!(up.cells[0].partial, partial);
+        assert_eq!(up.occupancy.has_child(leaf().slot()), partial);
+    }
 }

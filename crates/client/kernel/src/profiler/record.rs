@@ -260,7 +260,7 @@ pub fn profiler_record_frame(s: FrameSample) {
     p.draw_calls = p.draw_calls.max(s.gpu.draw_calls);
     p.triangles = p.triangles.max(s.gpu.triangles);
     p.q_terrain = p.q_terrain.max(s.q_terrain);
-    p.q_poi = p.q_poi.max(s.q_poi);
+    p.q_place = p.q_place.max(s.q_place);
     p.chunks = p.chunks.max(s.lod.chunks);
     p.in_frustum = p.in_frustum.max(s.lod.in_frustum);
     p.pending = p.pending.max(s.lod.pending);

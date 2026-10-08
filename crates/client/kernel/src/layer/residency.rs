@@ -23,7 +23,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use floor::{Fallback, Floor};
 
 use crate::io::demand::{Ask, Why};
-use crate::layer::Layer;
+use crate::layer::{Asks, Layer};
 
 /// Only the eye. Another point observer would add its own misses.
 const OBSERVERS: u32 = 1;
@@ -88,23 +88,26 @@ pub struct Residency<L: Layer> {
 }
 
 /// What a layer's residency holds at once, from what it asks for. A layer
-/// that asks only for the floor (`Layer::DEMANDS` false) asks for no miss, no
-/// line over one and no destination.
+/// holds only what it asks for (`Layer::ASKS`).
 impl<L: Layer> Residency<L> {
     /// The zooms the layer's pyramid holds, its leaves to its lattice's top.
-    pub const ZOOMS: u32 = (LEAF_ZOOM - L::LATTICE.top() + 1) as u32;
+    pub const ZOOMS: u32 = (L::LEAF - L::LATTICE.top() + 1) as u32;
 
     /// A destination's line from its leaf to the top.
     pub const DESTINATION_TILES: u32 = Self::ZOOMS;
 
-    const DEMAND_TILES: u32 = if L::DEMANDS { OBSERVERS * ZOOM_DEMAND_TILES * Self::ZOOMS } else { 0 };
+    const DEMAND_TILES: u32 = if matches!(L::ASKS, Asks::View) { OBSERVERS * ZOOM_DEMAND_TILES * Self::ZOOMS } else { 0 };
 
     /// The lines over the misses, every zoom's but the finest.
-    const ANCESTOR_TILES: u32 = if L::DEMANDS { OBSERVERS * ZOOM_DEMAND_TILES * (Self::ZOOMS - 1) } else { 0 };
+    const ANCESTOR_TILES: u32 = if matches!(L::ASKS, Asks::View) { OBSERVERS * ZOOM_DEMAND_TILES * (Self::ZOOMS - 1) } else { 0 };
 
     /// Held hard apart from the view: the floor and a destination's line. A new
     /// consumer that cannot take a coarser answer would declare its tiles here.
-    const PINNED_TILES: u32 = Floor::TILES + if L::DEMANDS { Self::DESTINATION_TILES } else { 0 };
+    const PINNED_TILES: u32 = match L::ASKS {
+        Asks::Floor => Floor::TILES,
+        Asks::Line => Self::DESTINATION_TILES,
+        Asks::View => Floor::TILES + Self::DESTINATION_TILES,
+    };
 
     /// What is held hard at most.
     const HARD_TILES: u32 = Self::PINNED_TILES + Self::ANCESTOR_TILES;
@@ -112,7 +115,7 @@ impl<L: Layer> Residency<L> {
     /// A frame for a tile nothing holds hard to land in. The floor alone holds
     /// every tile it asks for hard, and asks for at most `Floor::TILES`, so a
     /// tile it asks for finds a frame free or held only as cache.
-    const WORKSPACE: u32 = L::DEMANDS as u32;
+    const WORKSPACE: u32 = matches!(L::ASKS, Asks::View) as u32;
 
     /// Convergence: the misses and their lines share each zoom's ring, so a tile
     /// the view reads never gives up another the view reads.

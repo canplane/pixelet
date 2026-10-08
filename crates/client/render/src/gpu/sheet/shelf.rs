@@ -13,9 +13,21 @@ pub const NO_SLOT: i32 = -1;
 #[derive(Clone, Debug, PartialEq)]
 pub enum DrawSpec {
     /// A label alone on a pill: a count, or a placed billboard's words.
-    Pill { label: String, logical_w: f64 },
-    Place { name: String, icon: &'static str, color: u32, logical_w: f64 },
-    Bubble { lines: Vec<String>, box_w: f64, box_h: f64 },
+    Pill {
+        label: String,
+        logical_w: f64,
+    },
+    Place {
+        name: String,
+        icon: &'static str,
+        color: u32,
+        logical_w: f64,
+    },
+    Bubble {
+        lines: Vec<String>,
+        box_w: f64,
+        box_h: f64,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -37,7 +49,7 @@ const HEIGHT_BUCKET: u32 = 16;
 pub const INITIAL_SIZE: u32 = 1024;
 
 /// 2048 px RGBA is 16 MiB plus mips. A screen holds a few dozen badges (one per
-/// POI cell); past the limit an entry waits unshown (`NO_SLOT`).
+/// places cell); past the limit an entry waits unshown (`NO_SLOT`).
 const MAX_SIZE: u32 = 2048;
 
 /// Transparent margin so a linear or mipmapped sample cannot reach a neighbor.

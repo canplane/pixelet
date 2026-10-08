@@ -17,9 +17,9 @@ use xpute_guest::sched::edge::{notified, Notify};
 use crate::io::file::{self, Kept, KeptFile};
 use crate::kernel;
 use crate::layer::object::ext::Ext;
-use pxl_spec::cell::ext::{subclass_of, Subclass};
 use crate::layer::object::store::{apply, written, Write};
 use crate::sched::edge::wake_at;
+use pxl_spec::cell::ext::{subclass_of, Subclass};
 
 struct State {
     save_due_ms: Option<f64>,

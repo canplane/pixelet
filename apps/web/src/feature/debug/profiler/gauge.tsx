@@ -177,7 +177,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
       )}
 
       <Head>requests</Head>
-      {f !== null && <Row k="queued terrain/poi" v={`${f.last.q_terrain}/${f.last.q_poi}`} warn={f.last.q_terrain + f.last.q_poi > 12} />}
+      {f !== null && <Row k="queued terrain/place" v={`${f.last.q_terrain}/${f.last.q_place}`} warn={f.last.q_terrain + f.last.q_place > 12} />}
       {f !== null && <Row k="ring answers/held peak" v={`${f.last.ring_cq_peak}/${f.last.ring_held_peak}`} warn={f.last.ring_held_peak > 0} />}
       {g.tasks.length === 0 && <Note>none in the window</Note>}
       {g.tasks.map((t) => (

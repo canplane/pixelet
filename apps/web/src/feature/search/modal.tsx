@@ -20,9 +20,9 @@ import { SYSTEM_CLEAR } from "@platform/text-field.ts";
 import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { CATEGORY_BADGE, DEFAULT_BADGE } from "./poi_badge.spec.ts";
-import { assembleLabel, localName, primaryLanguage } from "@/feature/world/geocode/label.ts";
-import { useCenterCoordinates, usePlaceLabel } from "@/feature/world/geocode/center.ts";
+import { CATEGORY_BADGE, DEFAULT_BADGE } from "./place_badge.spec.ts";
+import { assembleLabel, localName, primaryLanguage } from "@/feature/world/division/label.ts";
+import { useCenterCoordinates, useDivisionLabel } from "@/feature/world/division/center.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 
@@ -49,7 +49,7 @@ function formatDistance(m: f64): string {
 /** Where a result is comes from its coordinates, never a source's address text, which could name another city. */
 function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; lang: string; distance: string | null; onPress: () => void }) {
   const where = result.context.length > 0 ? assembleLabel(result.context, lang) : "";
-  const badge = result.kind === "poi" ? resolvePoiBadge(result.category) : null;
+  const badge = result.kind === "place" ? resolvePlaceBadge(result.category) : null;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={styles.row}>
       {badge && (
@@ -72,7 +72,7 @@ function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; 
 
 const SECTIONS = [
   { kind: "division", label: "world.search.section_areas" },
-  { kind: "poi", label: "world.search.section_places" },
+  { kind: "place", label: "world.search.section_places" },
 ] as const;
 
 function poseColor(status: DevicePoseStatus): string {
@@ -108,7 +108,7 @@ function LocateCard() {
 /** Where the search looks from: the focus, which is not the device's location. */
 function MapCenter() {
   const { t } = useTranslation();
-  const place = usePlaceLabel();
+  const place = useDivisionLabel();
   const coordinates = useCenterCoordinates();
   if (coordinates === null) return null;
   return (
@@ -266,11 +266,11 @@ const styles = StyleSheet.create({
  * (tried and reverted 2026-09-08).
  */
 
-interface PoiBadge {
+interface PlaceBadge {
   icon: string;
   color: string;
 }
 
-function resolvePoiBadge(category: string): PoiBadge {
-  return (CATEGORY_BADGE as Record<string, PoiBadge>)[category] ?? DEFAULT_BADGE;
+function resolvePlaceBadge(category: string): PlaceBadge {
+  return (CATEGORY_BADGE as Record<string, PlaceBadge>)[category] ?? DEFAULT_BADGE;
 }

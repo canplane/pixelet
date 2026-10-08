@@ -53,7 +53,7 @@ use crate::chunk::domain::{self, Domain};
 use crate::chunk::Chunk;
 use crate::io::demand::Order;
 use crate::layer::Layer as _;
-use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::format::TerrainTile;
 
 /// `.fixed.mounts`, handed in at boot.
 pub static MOUNTS_RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
@@ -273,7 +273,7 @@ impl Env for Pieces<'_> {
     }
 
     fn buildable(&self, c: Chunk) -> bool {
-        Terrain::residency().read(c.node(), c.cell_zoom()).value().is_some()
+        TerrainTile::residency().read(c.node(), c.cell_zoom()).value().is_some()
     }
 
     fn order(&self, c: Chunk) -> Order {

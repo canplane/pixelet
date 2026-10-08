@@ -4,7 +4,7 @@ use crate::layer::object::preview::words_at;
 use pxl_spec::bake::constant::EntryAt;
 use std::collections::{HashMap, HashSet};
 
-use pxl_spec::bake::poi_tile::{kind_color, kind_icon, Place, PoiTile, POI_LATTICE};
+use pxl_spec::bake::place_tile::{kind_color, kind_icon, Place, PlaceTile, PLACE_LATTICE};
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::tile::Tile;
 
@@ -33,7 +33,10 @@ pub enum Label {
     },
     /// A marker someone put up, or one waiting for its words, by its entry,
     /// and its words by their hash.
-    Marker { at: EntryAt, words: u64 },
+    Marker {
+        at: EntryAt,
+        words: u64,
+    },
 }
 
 impl Label {
@@ -41,7 +44,7 @@ impl Label {
     fn place(tile: Tile, place: u32) -> Place<'static> {
         // Read as the tile itself answers, at its own cells: another tile's place index names another place.
         let node = (tile.zoom, [ivec::X(tile.tile), ivec::Y(tile.tile), 0]);
-        match PoiTile::residency().read(node, POI_LATTICE.grid_zoom(tile.zoom)) {
+        match PlaceTile::residency().read(node, PLACE_LATTICE.grid_zoom(tile.zoom)) {
             Answer::Exact(p) if p.from == tile => p.tile.places.get(place),
             _ => Place::default(),
         }

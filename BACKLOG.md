@@ -29,19 +29,30 @@ Nothing now.
   asking the query, nothing beside the hierarchy. Near "How the samples are
   drawn" above.
 
-- **POI and reverse geocode are off.** The client leaves their roots
-  unbound (`apps/web/src/kernel/boot.ts` `OFF`) while the terrain moves to
-  Carto, Arnis and the zooms, one problem at a time; their tiles'
-  names did not change (decision/20261006-a-zoom-names-a-page-grid.md), so
-  turning them back on is checking them against the new terrain. Their
-  demand now follows `POI_LATTICE`, not the ground's, and which children
-  are tiles is the occupancy the bake writes, as terrain's is; the POI set
-  is to be baked again in that format.
-- **POI and reverse geocode follow Carto.** The ground is Carto's looks
-  (decision/20261005-the-ground-is-a-carto-palette.md); a place's icon and
-  its kind's label are still Overture's taxonomy as the search list names it
-  (`pxl-geo-spec overture/properties.rs`), where Carto's `amenity-points.mss`
-  gives each tag an icon and a color.
+- **POI is off.** The client leaves its root unbound
+  (`apps/web/src/kernel/boot.ts` `OFF`) until places are drawn as the next
+  item says; the reverse geocode is on again, read as divisions. Its demand
+  follows `POI_LATTICE`, not the ground's, and which children are tiles is
+  the occupancy the bake writes, as terrain's is.
+- **Places: Overture's schema, Carto's look.** A place's kind is still this
+  tree's own 35 (`poi_badge.json`), shown by OpenMapTiles' class rank. What
+  a place is follows Overture's schema, as the divisions now do: its
+  taxonomy and basic category, its names, confidence, sources and GERS id,
+  since Overture was made to merge vendors' places and every vendor's tree
+  (Naver, Kakao, Google) maps onto it as Overture's own sources do; OSM's
+  tags are an editors' vocabulary, a kind spread over several keys. How a
+  place is drawn follows Carto (the ground is its looks,
+  decision/20261005-the-ground-is-a-carto-palette.md): one table, the
+  theme's, from an Overture kind to a Carto icon group, color and minimum
+  zoom (`amenity-points.mss`). A provider is an adapter onto the schema,
+  baked or asked live as its terms allow; terrain's sources stay Overture
+  and OSM. The taxonomy changes between releases, so the table is checked
+  against the release the ingest records. openstreetmap-carto is CC0, the
+  cartographic design and `symbols/` included; its name and
+  OpenStreetMap's are trademarks, kept out of ours. The words follow the
+  schema in the same change: `poi` (`layer/poi.rs`, `poi_tile.rs`,
+  `bake:poi`, `/tile/poi/`) and `place` meaning a venue (`chunk/place.rs`)
+  are `places`, and the bucket paths move with them.
 
 ## P2
 

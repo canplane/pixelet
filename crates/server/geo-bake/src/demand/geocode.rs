@@ -3,10 +3,9 @@
 use super::job::{self, Job, Publication, Runner};
 use super::{Dataset, Failure};
 use crate::geocode::provider::overture::{GeocodeProvider, READS};
-use crate::geocode::PlaceDict;
+use crate::geocode::{DivisionDict, Entry};
 use crate::util::{pack, Level};
-use pxl_spec::bake::place_tile::{encode_place_group, Named, GROUP_TILES};
-use pxl_spec::bake::place_tile::{DICT_OBJECT, GROUP_SHAMT, GROUP_ZOOM};
+use pxl_spec::bake::division_tile::{encode_division_group, DICT_OBJECT, GROUP_SHAMT, GROUP_TILES, GROUP_ZOOM};
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::hierarchy::morton::{key_of_name, node_of};
 use std::path::Path;
@@ -59,24 +58,21 @@ pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, name: &str)
     Ok(if name == DICT_OBJECT { format!("{DICT_OBJECT}/packet") } else { name.into() })
 }
 
-/// The dictionary's places by id, in its order, for the jobs that number labels by it.
-type Dictionary = Vec<(String, Named)>;
-
 pub(super) fn dictionary(out: &Path, seconds: u64) -> Result<(), String> {
     let out = out.join("dictionary");
     std::fs::create_dir(&out).map_err(|e| e.to_string())?;
-    // The dictionary names every place, so it needs every shard.
+    // The dictionary holds every division a name walks through, so it needs every shard.
     let (_, mut client) = job::connect(&[&READS], &crate::coverage::Coverage::of_source()?.shards().collect(), seconds)?;
     let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
     let rows = provider.dictionary(&mut client).map_err(|e| e.to_string())?;
     std::fs::write(out.join("dictionary.json"), serde_json::to_vec(&rows).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    let packet = pack(&PlaceDict::of(rows).packet().map_err(|e| format!("{e:?}"))?, Level::Live).map_err(|e| e.to_string())?;
+    let packet = pack(&DivisionDict::of(rows).packet().map_err(|e| format!("{e:?}"))?, Level::Live).map_err(|e| e.to_string())?;
     job::write_packet(&out, Some(&packet))
 }
 
 pub(super) fn execute(group: u64, dictionary: &Path, out: &Path, seconds: u64) -> Result<(), String> {
-    let rows: Dictionary = serde_json::from_slice(&std::fs::read(dictionary).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    let dict = PlaceDict::of(rows);
+    let rows: Vec<Entry> = serde_json::from_slice(&std::fs::read(dictionary).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let dict = DivisionDict::of(rows);
     let base = ivec::sh(group, GROUP_SHAMT as i32);
     let side = 1i64 << GROUP_SHAMT;
     let coverage = crate::coverage::Coverage::of_source()?;
@@ -89,7 +85,7 @@ pub(super) fn execute(group: u64, dictionary: &Path, out: &Path, seconds: u64) -
     let packet = provider
         .group(&mut client, &dict, &leaves)?
         .map(|g| {
-            let raw = encode_place_group(&g).map_err(|e| format!("{e:?}"))?;
+            let raw = encode_division_group(&g).map_err(|e| format!("{e:?}"))?;
             pack(&raw, Level::Live).map_err(|e| e.to_string())
         })
         .transpose()?;

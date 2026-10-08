@@ -4,15 +4,13 @@
 //! only when changed) and the commands it applies to the stores.
 
 use crate::view::demand::Observed as _;
-use pxl_spec::bake::place_tile::leaf_slot;
 use pxl_spec::cell::object::{decor_num_id, placeable_cube_num_id};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
-use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
-use crate::abi::cmd::{CompanionState, FocusState, GroundStatus, HoldingState, LocationState, LonLat, OrientationState, PlaceName, PlacePart, Snapshot};
+use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, OrientationState, Snapshot};
 use crate::control::camera::controller::{dist, focus, Motion};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
 use crate::control::interaction::holding;
@@ -22,41 +20,32 @@ use crate::control::navigation::off_center::off_center;
 use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::reading::{device_location_store, device_orientation_store};
-use crate::layer::geocode::fetcher::group_of;
-use crate::layer::geocode::store as geocode_store;
+use crate::layer::division::named;
 use crate::scene::character::companion::companion_load_store;
 use crate::scene::character::preview::{preview_rows, CASES_MAX};
 use crate::setting::store::{settings_store, SettingKey};
 use crate::turn::world_platform;
 use crate::view::frame::pose::units_per_px_at;
-use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::coord::zoom::idx;
+use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-/// The center tile's place, broad to narrow. Every language is sent, so
-/// switching language re-reads rather than refetches.
-fn place_parts(tile: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
-    let parts = tile
-        .zip(crate::control::camera::controller::focus().map(|c| group_of(&c)))
-        .zip(geocode_store::dict())
-        .and_then(|((tile, group), dict)| {
-            let group = geocode_store::group_of(group)?;
-            group.view.place_of(leaf_slot(ivec::X(tile), ivec::Y(tile)), &dict.view)
-        })
-        .into_iter()
-        .flatten();
-    for part in parts {
-        let names = |each: &mut dyn FnMut(&PlaceName<'_>)| {
-            for (lang, name) in part.languages() {
-                each(&PlaceName { lang: &lang, name: &name });
+/// The focus's division and each above it, broad to narrow. Every language
+/// is sent, so switching language re-reads rather than refetches.
+fn division_parts(at: Option<Pvf3>, each: &mut dyn FnMut(&DivisionPart<'_>)) {
+    let Some(at) = at else { return };
+    named(&at, |part| {
+        let names = |each: &mut dyn FnMut(&LangName<'_>)| {
+            for (lang, name) in &part.names {
+                each(&LangName { lang, name });
             }
         };
-        each(&PlacePart {
-            rank: part.rank as u8,
+        each(&DivisionPart {
+            subtype: part.subtype as u8,
             name: &part.name,
             names: &names,
+            prominence: part.prominence,
         });
-    }
+    });
 }
 
 /// None where it does not fit.
@@ -67,7 +56,6 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let settings = settings_store();
     let companion = companion_load_store();
     let at = crate::control::camera::controller::focus();
-    let tile = at.map(|c| idx(LEAF_ZOOM, c.i));
     let center = at.map(|c| {
         let g = epsg4326::unproject(c.i, c.f);
         LonLat { lon: g[0], lat: g[1] }
@@ -87,7 +75,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             // which over a source's void leaves nothing to draw.
             status: match crate::view::observation::eye() {
                 None => GroundStatus::Idle,
-                Some(_) if crate::kernel().sched.shows_ground() || Terrain::demand().answered() => GroundStatus::Success,
+                Some(_) if crate::kernel().sched.shows_ground() || TerrainTile::demand().answered() => GroundStatus::Success,
                 Some(_) => GroundStatus::Loading,
             },
             is_off_center: off_center().is_off_center,
@@ -121,7 +109,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         zooming: crate::control::camera::controller::zooming(),
         settings: &values,
         m_per_px: m_per_px(),
-        place: &|each| place_parts(tile, each),
+        division: &|each| division_parts(at, each),
         previews: &previews[..preview_cnt],
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);

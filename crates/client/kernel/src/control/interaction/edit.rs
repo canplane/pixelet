@@ -3,16 +3,16 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the objects' query and written to the store.
 
-use crate::layer::object::ext::Ext;
-use pxl_spec::cell::ext::MARKER_TEXT_CHARS;
-use pxl_spec::cell::object::{object_value_is_marker, MARKER};
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
+use crate::layer::object::ext::Ext;
 use crate::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::EntryKind;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
+use pxl_spec::cell::ext::MARKER_TEXT_CHARS;
 use pxl_spec::cell::object::{decor_num_id, object_value_is_air, placeable_cube_num_id, PlaceableCube};
+use pxl_spec::cell::object::{object_value_is_marker, MARKER};
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::zoom::{base_of, index_of, of_side, units};
@@ -119,7 +119,10 @@ pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Ins
 /// A marker tool's tap at `at`, a place free or holding a marker: the marker
 /// waits there, with the marker's own words if one stands there.
 pub fn wait_at(at: EntryAt) {
-    *redraft() = Some(Draft { at, words: words_at(at).unwrap_or_default().to_string() });
+    *redraft() = Some(Draft {
+        at,
+        words: words_at(at).unwrap_or_default().to_string(),
+    });
 }
 
 /// A marker tool's tap on the free cell whose min corner is `corner`.

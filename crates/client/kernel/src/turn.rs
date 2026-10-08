@@ -20,9 +20,8 @@ use crate::control::sensor::device_orientation::{orientation_watchdog_step, Orie
 use crate::control::sensor::geolocation::geolocation_step;
 use crate::io::request::{pump, set_credits};
 use crate::io::text::text_rise;
-use crate::layer::geocode::fetcher::{geocode_fetcher_step, group_of};
-use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::poi_tile::PoiTile;
+use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::place_tile::PlaceTile;
 
 use crate::decor::assets::decor_assets_wanted;
 use crate::kernel;
@@ -37,6 +36,7 @@ use crate::sched::edge::{request_world_tick, world_edge};
 use crate::sched::tick::{on_tick, run_tick, TickContext, TickState};
 use crate::setting::store::settings_store;
 use crate::view::demand::Observed as _;
+use pxl_spec::bake::division_tile::DivisionTile;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::sched::tick::{Phase, TickReport};
@@ -113,13 +113,14 @@ fn demand_tick(_: &mut TickContext) {
         lacks: d.lacks(),
     });
     let tau = crate::chunk::quality::effective().tau();
-    Terrain::demand().step(crate::control::navigation::destination::tile(), published, tau);
+    TerrainTile::demand().step(crate::control::navigation::destination::tile(), published, tau);
     // Nothing is fetched while places are hidden.
-    match crate::setting::store::settings_store().poi {
-        true => PoiTile::demand().step(None, published, tau),
-        false => PoiTile::demand().idle(),
+    match crate::setting::store::settings_store().place {
+        true => PlaceTile::demand().step(None, published, tau),
+        false => PlaceTile::demand().idle(),
     }
     Earth::demand().step(None, published, tau);
+    DivisionTile::demand().step(crate::layer::division::line(crate::control::camera::controller::focus()), published, tau);
 }
 
 fn camera_input_tick(_: &mut TickContext) {
@@ -209,7 +210,6 @@ pub fn world_turn() -> f64 {
     effect!(worst, destination, crate::control::navigation::destination::destination_step());
     // After every writer of the focus, before anything observes the view.
     effect!(worst, view, crate::view::frame::pose::view_compose(crate::control::camera::controller::pose()));
-    effect!(worst, geocode, geocode_fetcher_step(crate::control::camera::controller::focus().map(|c| group_of(&c))));
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, objects, crate::layer::object::repository::step());
     effect!(worst, edit, {
@@ -346,25 +346,29 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
 /// objects were written. Taken after arrivals are admitted, before the
 /// layers observe and the chunks compare their sources.
 fn changes_step() {
-    static MOVED: Global<[Vec<pxl_spec::space::layer::tile::Tile>; 3]> = Global::new();
+    static MOVED: Global<[Vec<pxl_spec::space::layer::tile::Tile>; 4]> = Global::new();
     static WRITTEN: Global<Vec<Aabb>> = Global::new();
-    let [ground, places, earth] = MOVED.get(Default::default);
+    let [ground, places, earth, divisions] = MOVED.get(Default::default);
     let written = WRITTEN.get(Vec::new);
-    Terrain::residency().take_moved(ground);
-    PoiTile::residency().take_moved(places);
+    TerrainTile::residency().take_moved(ground);
+    PlaceTile::residency().take_moved(places);
     Earth::residency().take_moved(earth);
+    DivisionTile::residency().take_moved(divisions);
     crate::layer::object::store::take_written(written);
     let shared = !ground.is_empty() || !written.is_empty();
     if shared {
         crate::chunk::source::chunk_sources_changed();
         crate::chunk::domain::moved(ground.iter().map(|p| p.region()).chain(written.iter().copied()));
-        Terrain::demand().moved();
+        TerrainTile::demand().moved();
     }
     if shared || !places.is_empty() {
-        PoiTile::demand().moved();
+        PlaceTile::demand().moved();
         crate::chunk::place::moved();
     }
     if shared || !earth.is_empty() {
         Earth::demand().moved();
+    }
+    if !divisions.is_empty() {
+        DivisionTile::demand().moved();
     }
 }

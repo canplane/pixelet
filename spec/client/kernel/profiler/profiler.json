@@ -70,7 +70,7 @@
     "mounts_layouts": 1,
     "tiles_total": 1,
     "zoom_tiles": "LIMITS.ZOOMS",
-    "tiles_poi": 1,
+    "tiles_place": 1,
     "heap_used_mb": 1,
     "heap_live_mb": 1,
     "heap_run_mb": 1,
@@ -85,7 +85,7 @@
     "work_fine_peak": 1,
     "work_coarse_peak": 1,
     "q_terrain": 1,
-    "q_poi": 1,
+    "q_place": 1,
     "stale_hidden": 1,
     "stale_uncovered": 1,
     "stale_unready": 1,
@@ -175,12 +175,12 @@
     ],
     "q": [
       "q_terrain",
-      "q_poi"
+      "q_place"
     ],
     "tiles": [
       "tiles_total",
       "zoom_tiles",
-      "tiles_poi"
+      "tiles_place"
     ],
     "cover": [
       "cover_rule",
@@ -366,7 +366,7 @@
       "draw_calls": 1,
       "triangles": 1,
       "q_terrain": 1,
-      "q_poi": 1,
+      "q_place": 1,
       "chunks": 1,
       "in_frustum": 1,
       "pending": 1,

@@ -1,10 +1,10 @@
-// pxl-kernel/layer/poi.rs
+// pxl-kernel/layer/place.rs
 
 //! Places as a layer of the pyramid: a tile counts the places in each of
 //! its cells, drawn as badges (`chunk/place.rs`).
 
-use pxl_spec::bake::poi_badge::KIND_CATEGORIES;
-use pxl_spec::bake::poi_tile::{self, PoiTile, POI_LATTICE};
+use pxl_spec::bake::place_badge::KIND_CATEGORIES;
+use pxl_spec::bake::place_tile::{self, PlaceTile, PLACE_LATTICE};
 use pxl_spec::space::layer::lattice::Lattice;
 
 use crate::io::demand::{Category, Phases};
@@ -12,7 +12,7 @@ use crate::io::failure::Failure;
 use crate::layer::residency::Residency;
 use crate::layer::Layer;
 use crate::layer::{Answer, Bound, Query};
-use crate::param::{POI_ALL_ZOOM, POI_MAJOR_ZOOM};
+use crate::param::{PLACE_ALL_ZOOM, PLACE_MAJOR_ZOOM};
 use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857::cell_zoom_of;
 use pxl_spec::space::coord::zoom::units;
@@ -21,37 +21,37 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 
-static POI: Global<Residency<PoiTile>> = Global::new();
+static PLACE: Global<Residency<PlaceTile>> = Global::new();
 
-impl Layer for PoiTile {
-    const CATEGORY: Category = Category::poi;
-    const LATTICE: Lattice = POI_LATTICE;
+impl Layer for PlaceTile {
+    const CATEGORY: Category = Category::place;
+    const LATTICE: Lattice = PLACE_LATTICE;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy
     }
-    fn residency() -> &'static mut Residency<PoiTile> {
-        POI.get(Residency::default)
+    fn residency() -> &'static mut Residency<PlaceTile> {
+        PLACE.get(Residency::default)
     }
 
     /// Small, so held on the heap; the record is only a count slot.
-    fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PoiTile, Failure> {
-        Ok(poi_tile::decode(pkt)?)
+    fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PlaceTile, Failure> {
+        Ok(place_tile::decode(pkt)?)
     }
 
-    fn empty() -> Option<PoiTile> {
-        Some(PoiTile::default())
+    fn empty() -> Option<PlaceTile> {
+        Some(PlaceTile::default())
     }
 }
 
 /// A node's places: the tile that says them and that tile's name.
 #[derive(Clone, Copy)]
 pub struct Places<'a> {
-    pub tile: &'a PoiTile,
+    pub tile: &'a PlaceTile,
     pub from: Tile,
 }
 
-impl Query for Residency<PoiTile> {
+impl Query for Residency<PlaceTile> {
     type Record<'a> = Places<'a>;
     type Cursor = ();
 
@@ -67,7 +67,7 @@ impl Query for Residency<PoiTile> {
     /// From the resident tile that says the node's tile exactly, a parent
     /// settling it included; a miss is nothing, never a coarser count.
     fn read(&self, (zoom, [x, y, _]): Node<3>, cell: Zoom) -> Answer<Places<'_>> {
-        let p = POI_LATTICE.read_tile((zoom, [x, y]), cell);
+        let p = PLACE_LATTICE.read_tile((zoom, [x, y]), cell);
         match self.source(p).and_then(|src| Some(Places { tile: self.get(src)?, from: src })) {
             Some(places) => Answer::Exact(places),
             None => Answer::Nothing(p),
@@ -76,8 +76,8 @@ impl Query for Residency<PoiTile> {
 }
 
 /// The units a logical pixel spans where the view is at each zoom.
-pub const ALL_UNITS_PER_PX: f64 = units(cell_zoom_of(POI_ALL_ZOOM));
-pub const MAJOR_UNITS_PER_PX: f64 = units(cell_zoom_of(POI_MAJOR_ZOOM));
+pub const ALL_UNITS_PER_PX: f64 = units(cell_zoom_of(PLACE_ALL_ZOOM));
+pub const MAJOR_UNITS_PER_PX: f64 = units(cell_zoom_of(PLACE_MAJOR_ZOOM));
 
 /// Lower is more prominent. The reader's choice, so a change needs no bake:
 /// OpenMapTiles' `poi_class_rank` (layers/poi/class.sql) for the class its

@@ -13,12 +13,12 @@ use pxl_spec::bake::format::COARSE_LANE;
 use pxl_spec::space::layer::lattice::{EXTENT, TILE_CELLS};
 
 use crate::layer::residency::Residency;
-use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::format::TerrainTile;
 
 /// `.fixed.terrain`, handed in at boot.
 pub static RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
 
-const FRAMES: u32 = Residency::<Terrain>::FRAMES;
+const FRAMES: u32 = Residency::<TerrainTile>::FRAMES;
 
 /// One tile's ground: a `GroundCell` a cell, no stride and no padding.
 pub const GROUND_LANE_BYTES: u32 = TILE_CELLS * TILE_CELLS * core::mem::size_of::<GroundCell>() as u32;

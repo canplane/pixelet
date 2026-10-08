@@ -6,9 +6,9 @@
 pub mod asset;
 pub mod bake;
 pub mod cell;
-pub mod place;
-#[path = "place.spec.rs"]
-mod place_spec;
+pub mod division;
+#[path = "division.spec.rs"]
+mod division_spec;
 pub mod procedural;
 #[path = "route.spec.rs"]
 pub mod route;

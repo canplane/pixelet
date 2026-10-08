@@ -17,7 +17,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 pub use crate::abi::cmd::ActiveTool;
 use crate::control::interaction::collision::{anchor_center, object_aabb};
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
-use crate::control::interaction::edit::{place, place_air, wait_to_put, place_decor, remove};
+use crate::control::interaction::edit::{place, place_air, place_decor, remove, wait_to_put};
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;

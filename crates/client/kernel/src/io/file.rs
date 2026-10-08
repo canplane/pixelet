@@ -7,7 +7,6 @@
 use xpute_guest::ipc::file::Files;
 use xpute_guest::ipc::sys::Fd;
 
-use pxl_spec::bake::place_tile::DICT_OBJECT;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::abi::host::{root, OBJECTS_PATH, SETTINGS_PATH};
@@ -39,12 +38,12 @@ impl Kept {
     }
 }
 
-/// The longest name the kernel opens: a leaf's name, a digit a zoom, the dictionary's
-/// name, an asset's number or a kept file's path. A longer one is a bug, so
-/// the host stream's reserve can count on it.
+/// The longest name the kernel opens: a leaf's name, a digit a zoom, an
+/// asset's number or a kept file's path. A longer one is a bug, so the host
+/// stream's reserve can count on it.
 pub const PATH_BYTES: usize = {
     let mut most = LEAF_ZOOM as usize;
-    let names = [DICT_OBJECT.len(), LOADS.ilog10() as usize + 1];
+    let names = [LOADS.ilog10() as usize + 1];
     let mut i = 0;
     while i < names.len() + Kept::ALL.len() {
         let len = if i < names.len() { names[i] } else { Kept::ALL[i - names.len()].path().len() };

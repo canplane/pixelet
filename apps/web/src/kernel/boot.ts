@@ -53,7 +53,7 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
 
 /** Bakes turned off for now (BACKLOG.md): an unbound root answers ENOENT,
  * which the kernel takes as no page, so nothing is asked of the network. */
-const OFF: ReadonlySet<BakeKind> = new Set(["poi", "geocode"]);
+const OFF: ReadonlySet<BakeKind> = new Set(["place"]);
 
 /** Called once from app/bootstrap.ts, so boot order is explicit, not import order. */
 export async function boot_kernel(): Promise<void> {

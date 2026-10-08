@@ -4,8 +4,8 @@
 //! decides it, the chunks draw without it; and a marker waiting for its
 //! words, drawn with the words it has so far.
 
-use pxl_spec::bake::constant::EntryAt;
 use crate::sched::edge::request_world_tick;
+use pxl_spec::bake::constant::EntryAt;
 use xpute_guest::global::Global;
 
 /// What the eraser's preview changes in the drawn build only: the pick and
