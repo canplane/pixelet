@@ -29,14 +29,11 @@ Nothing now.
   asking the query, nothing beside the hierarchy. Near "How the samples are
   drawn" above.
 
-- **POI and reverse geocode are off.** The client leaves their roots
-  unbound (`apps/web/src/kernel/boot.ts` `OFF`) while the terrain moves to
-  Carto, Arnis and the zooms, one problem at a time; their tiles'
-  names did not change (decision/20261006-a-zoom-names-a-page-grid.md), so
-  turning them back on is checking them against the new terrain. Their
-  demand now follows `POI_LATTICE`, not the ground's, and which children
-  are tiles is the occupancy the bake writes, as terrain's is; the POI set
-  is to be baked again in that format.
+- **POI is off.** The client leaves its root unbound
+  (`apps/web/src/kernel/boot.ts` `OFF`) until places are drawn as the next
+  item says; the reverse geocode is on again, read as divisions. Its demand
+  follows `POI_LATTICE`, not the ground's, and which children are tiles is
+  the occupancy the bake writes, as terrain's is.
 - **Places: Overture's schema, Carto's look.** A place's kind is still this
   tree's own 35 (`poi_badge.json`), shown by OpenMapTiles' class rank. What
   a place is follows Overture's schema, as the divisions now do: its
