@@ -141,6 +141,11 @@ impl TerrainRepository {
         })
     }
 
+    /// A tile's elevation grid, none where the raster does not reach it.
+    pub fn elevation(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Option<Vec<i16>>, postgres::Error> {
+        self.raster.tile_grid(client, tile_bbox)
+    }
+
     pub fn fetch_tile_source(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<TileSource, postgres::Error> {
         let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(tile_bbox);
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
