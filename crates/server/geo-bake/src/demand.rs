@@ -1,20 +1,21 @@
 // pxl-geo-bake/demand.rs
 
 mod cache;
-mod geocode;
-mod poi;
+mod division;
+mod place;
 mod pyramid;
 mod terrain;
 
 use cache::Cache;
-use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::poi_tile::PoiTile;
+use pxl_spec::bake::division_tile::DivisionTile;
+use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::place_tile::PlaceTile;
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::pyramid::Layer;
 use std::path::PathBuf;
 
-use crate::coverage::{holdings, Coverage};
+use crate::coverage::Coverage;
 use pxl_spec::space::coord::zoom::Zoom;
 use std::sync::Arc;
 
@@ -24,32 +25,37 @@ use job::{Limits, Runner};
 #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Kind {
     Terrain,
-    Poi,
-    Geocode,
+    Place,
+    Division,
 }
 impl Kind {
     pub fn parse(name: &str) -> Option<Self> {
         match name {
             "terrain" => Some(Self::Terrain),
-            "poi" => Some(Self::Poi),
-            "geocode" => Some(Self::Geocode),
+            "place" => Some(Self::Place),
+            "division" => Some(Self::Division),
             _ => None,
         }
     }
-    /// What its bake reads of the geo DB.
-    fn reads(self) -> &'static [&'static [&'static str]] {
+    /// The zoom its tiles are made at.
+    fn leaf(self) -> Zoom {
         match self {
-            Self::Terrain => &crate::terrain::leaf::READS,
-            Self::Poi => &[&crate::poi::READS],
-            Self::Geocode => &[&crate::geocode::provider::overture::READS],
+            Self::Terrain => TerrainTile::LEAF,
+            Self::Place => PlaceTile::LEAF,
+            Self::Division => DivisionTile::LEAF,
         }
+    }
+
+    /// Its coarsest tile served, which the client reads from too.
+    fn top(self, top: Zoom) -> Zoom {
+        pxl_spec::space::layer::tile::top_over(self.leaf(), top)
     }
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Terrain => "terrain",
-            Self::Poi => "poi",
-            Self::Geocode => "geocode",
+            Self::Place => "place",
+            Self::Division => "division",
         }
     }
 }
@@ -67,48 +73,23 @@ impl From<String> for Failure {
     }
 }
 
+/// A kind's tiles: their cache, the coverage that gates them and the tiles a fold reads.
 struct Dataset {
     cache: Cache,
-    source: Source,
-}
-/// What a kind's tiles come from: a pyramid layer's coverage and the tiles a
-/// fold reads, or geocode's groups, which no coverage gates.
-enum Source {
-    Pyramid { coverage: crate::coverage::Coverage, sources: fn(Tile) -> Vec<Tile> },
-    Geocode,
-}
-impl Source {
-    fn holds(&self, p: Tile) -> bool {
-        match self {
-            Source::Pyramid { coverage, .. } => coverage.meets(p.zoom, p.tile),
-            Source::Geocode => true,
-        }
-    }
-
-    fn sources(&self, p: Tile) -> Vec<Tile> {
-        match self {
-            Source::Pyramid { sources, .. } => sources(p),
-            Source::Geocode => unreachable!("geocode is no pyramid"),
-        }
-    }
+    coverage: Coverage,
+    sources: fn(Tile) -> Vec<Tile>,
 }
 impl Dataset {
     fn open(base: &std::path::Path, kind: Kind, runner: &Runner) -> Result<Self, String> {
-        let data = Self {
+        Ok(Self {
             cache: Cache::new(base.join(kind.name()), runner.admission.clone(), std::time::Duration::from_secs(runner.limits.seconds))?,
-            source: match kind {
-                Kind::Terrain => Source::Pyramid {
-                    coverage: Coverage::of_source()?,
-                    sources: Terrain::sources,
-                },
-                Kind::Poi => Source::Pyramid {
-                    coverage: Coverage::of_source()?,
-                    sources: PoiTile::sources,
-                },
-                Kind::Geocode => Source::Geocode,
+            coverage: Coverage::of_source()?,
+            sources: match kind {
+                Kind::Terrain => TerrainTile::sources,
+                Kind::Place => PlaceTile::sources,
+                Kind::Division => DivisionTile::sources,
             },
-        };
-        Ok(data)
+        })
     }
 }
 
@@ -122,18 +103,8 @@ impl Server {
     pub fn open(workers: usize, base: PathBuf, top_z: Zoom, limits: Limits) -> Result<Self, String> {
         let owner = claim(&base)?;
         let runner = Arc::new(Runner::new(workers, limits)?);
-        let code = crate::util::code_id()?;
-        let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
-        let mut client = postgres::Client::connect(&url, postgres::NoTls).map_err(|e| e.to_string())?;
-        let datasets = [Kind::Terrain, Kind::Poi, Kind::Geocode].map(|k| {
-            let root = base.join(k.name());
-            let source = root.join(crate::util::source_id(&code, &holdings(&mut client, k.reads())?));
-            // Another source's cache is removed, never read.
-            for entry in std::fs::read_dir(&root).into_iter().flatten().flatten() {
-                if entry.path() != source {
-                    std::fs::remove_dir_all(entry.path()).or_else(|_| std::fs::remove_file(entry.path())).map_err(|e| e.to_string())?;
-                }
-            }
+        let datasets = [Kind::Terrain, Kind::Place, Kind::Division].map(|k| {
+            let source = base.join(k.name());
             prune(&source)?;
             Dataset::open(&source, k, &runner).map(Arc::new)
         });
@@ -149,10 +120,7 @@ impl Server {
     pub async fn get(&self, kind: Kind, name: &str) -> Result<Option<Vec<u8>>, Failure> {
         let data = self.datasets[kind as usize].clone();
         let runner = self.runner.clone();
-        let path = match kind {
-            Kind::Terrain | Kind::Poi => pyramid::resolve(data.clone(), runner, kind, name, self.top_z).await?,
-            Kind::Geocode => Some(geocode::resolve(data.clone(), runner, name).await?),
-        };
+        let path = pyramid::resolve(data.clone(), runner, kind, name, kind.top(self.top_z)).await?;
         let Some(path) = path else { return Ok(None) };
         data.cache.read(&path).await.map_err(Failure::Bake)
     }

@@ -1,12 +1,11 @@
 // pxl-geo-bake/bin/serve_tiles.rs
 
-//! Local demand bakes. --cache holds them under the source they were baked
-//! from, the bake's binary and the geo DB's catalogs, so a tile stays cached
-//! across restarts until either changes, and a change starts an empty one. The
+//! Local demand bakes. --cache holds them a kind a directory, across
+//! restarts; a re-ingest or a bake change is a purge by command. The
 //! Earth's picture is baked offline by pxl-tool, so it is served from that
 //! bake (`--out`), under the names the bucket holds, whichever way the rest is.
-//! `--shelf` serves each kind's last bake, the version its manifest names,
-//! so a bake is looked at before anything is published.
+//! `--shelf` serves each kind's set (tile/shard.rs), so a bake is looked at
+//! before anything is published.
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -29,12 +28,11 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-/// Where the tiles come from: the oven, baked on demand, or the shelf, the
-/// last bakes under a directory.
+/// Where the tiles come from: the oven, baked on demand, or the shelf, each
+/// kind's set under a directory.
 enum Tiles {
     Oven(Server),
-    /// The directory, and each kind's version in it.
-    Shelf(PathBuf, Vec<(Kind, String)>),
+    Shelf(PathBuf),
 }
 
 struct App {
@@ -75,16 +73,11 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
     let demand = match &app.tiles {
         Tiles::Oven(demand) => demand,
-        Tiles::Shelf(dir, versions) => {
-            return match versions.iter().find(|(k, _)| *k == kind) {
-                Some((_, version)) => from_shelf(dir, kind, version, &name).await,
-                None => StatusCode::NOT_FOUND.into_response(),
-            };
-        }
+        Tiles::Shelf(dir) => return from_shelf(dir, kind, &name).await,
     };
     match demand.get(kind, &name).await {
         Ok(Some(bytes)) => packed(bytes),
-        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Ok(None) => StatusCode::NO_CONTENT.into_response(),
         Err(Failure::BadName) => (StatusCode::BAD_REQUEST, "bad tile name").into_response(),
         Err(Failure::Unavailable) => (StatusCode::SERVICE_UNAVAILABLE, "past --folds").into_response(),
         Err(Failure::Limited(reason)) => (StatusCode::SERVICE_UNAVAILABLE, reason).into_response(),
@@ -95,26 +88,8 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
     }
 }
 
-/// Each kind's last bake under `dir`, by the manifest the bake writes beside its versions.
-fn last_bakes(dir: &std::path::Path) -> Vec<(Kind, String)> {
-    [Kind::Terrain, Kind::Poi, Kind::Geocode]
-        .into_iter()
-        .filter_map(|kind| {
-            let manifest = dir.join(kind.name()).join("manifest.json");
-            let version = std::fs::read_to_string(&manifest)
-                .ok()
-                .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
-                .and_then(|v| v["version"].as_str().map(String::from));
-            match &version {
-                Some(v) => println!("[tile] {}: {v}", kind.name()),
-                None => eprintln!("[tile] {}: no bake under {} — its tiles 404", kind.name(), manifest.display()),
-            }
-            Some((kind, version?))
-        })
-        .collect()
-}
-
-/// The bucket's address, `<kind>/<version>/<name>`, as a production build asks for it.
+/// The bucket's address, `<kind>/<version>/<name>`, as a production build
+/// asks for it; the shelf answers any version from the kind's set.
 async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name)): Path<(String, String, String)>) -> Response {
     // `version_name`'s shape, v<format>.<day>.<n>: no other name reaches the disk
     if !version
@@ -126,19 +101,22 @@ async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name))
     if kind == EARTH {
         return earth(&app, &version, &name).await;
     }
-    let (Tiles::Shelf(dir, _), Some(kind)) = (&app.tiles, Kind::parse(&kind)) else {
+    let (Tiles::Shelf(dir), Some(kind)) = (&app.tiles, Kind::parse(&kind)) else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    from_shelf(dir, kind, &version, &name).await
+    from_shelf(dir, kind, &name).await
 }
 
-async fn from_shelf(dir: &std::path::Path, kind: Kind, version: &str, name: &str) -> Response {
-    // On disk as in the bucket: a version's objects flat under their names.
-    if name.is_empty() || name.starts_with('.') || name.contains('/') {
+async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
+    // Only a tile's name reaches the disk; a set's tiles lie flat under them.
+    if Tile::of_name(name).is_none() {
         return StatusCode::NOT_FOUND.into_response();
     }
-    match tokio::fs::read(dir.join(kind.name()).join(version).join(name)).await {
+    let set = dir.join(kind.name());
+    match tokio::fs::read(set.join(name)).await {
         Ok(bytes) => packed(bytes),
+        // A page the set has no object for is empty, as the Worker answers it.
+        Err(_) if set.is_dir() => StatusCode::NO_CONTENT.into_response(),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
 }
@@ -211,10 +189,7 @@ fn run() -> Result<(), String> {
     }
 
     let (tiles, top_z) = match shelf {
-        Some(dir) => {
-            let versions = last_bakes(&dir);
-            (Tiles::Shelf(dir, versions), PUBLISHED_TOP_ZOOM)
-        }
+        Some(dir) => (Tiles::Shelf(dir), PUBLISHED_TOP_ZOOM),
         None => {
             let top_z = LEAF_ZOOM.checked_sub(folds).filter(|&z| z >= GROUND.top()).ok_or("--folds past the pyramid's top")?;
             (Tiles::Oven(Server::open(workers, cache, top_z, limits)?), top_z)

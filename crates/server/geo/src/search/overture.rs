@@ -1,6 +1,6 @@
 // pxl-geo/search/overture.rs
 
-//! Forward search over `overture_places` (POI) and Overture's divisions.
+//! Forward search over `overture_places` (places) and Overture's divisions.
 
 use deadpool_postgres::Pool;
 use serde::Serialize;
@@ -9,7 +9,7 @@ use tokio_postgres::Row;
 
 use pxl_spec::division::DivisionPart;
 
-use crate::geocode;
+use crate::division;
 use crate::search::endpoint::Near;
 use pxl_server::db::DbError;
 
@@ -57,7 +57,7 @@ pub struct SearchResult {
     pub kind: &'static str,
     pub name: String,
     pub category: String,
-    /// Null for a POI: Places' `names.common` is ~0% populated for Korean.
+    /// Null for a places: Places' `names.common` is ~0% populated for Korean.
     pub common: Option<serde_json::Value>,
     pub context: Vec<DivisionPart>,
     pub lon: f64,
@@ -113,7 +113,6 @@ impl DivisionRow {
 pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -> Result<Vec<SearchResult>, DbError> {
     let limit_i64 = limit as i64;
 
-
     let (places_sql, places_params): (&str, Vec<&(dyn ToSql + Sync)>) = match near {
         Some(near) => (SEARCH_NEAR_SQL, vec![&query, &limit_i64, &near.lon, &near.lat]),
         None => (SEARCH_SQL, vec![&query, &limit_i64]),
@@ -130,7 +129,7 @@ pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -
 
     let mut division_results: Vec<SearchResult> = Vec::with_capacity(division_rows.len());
     for r in division_rows {
-        let context = geocode::ancestors(pool, &r.gers_id).await?;
+        let context = division::ancestors(pool, &r.gers_id).await?;
         division_results.push(SearchResult {
             gers_id: r.gers_id,
             kind: "division",
@@ -147,12 +146,12 @@ pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -
     // "Seoul" sits in 용인, and the field's format varies by contributor.
     let xs: Vec<f64> = place_rows.iter().map(|r| r.x3857).collect();
     let ys: Vec<f64> = place_rows.iter().map(|r| r.y3857).collect();
-    let poi_context = geocode::name_points(pool, &xs, &ys).await?;
+    let place_context = division::name_points(pool, &xs, &ys).await?;
 
-    let poi_results = place_rows.into_iter().zip(poi_context).map(|(r, context)| SearchResult {
+    let place_results = place_rows.into_iter().zip(place_context).map(|(r, context)| SearchResult {
         gers_id: r.gers_id,
         name: r.name,
-        kind: "poi",
+        kind: "place",
         category: pxl_geo_spec::overture::properties::category_of(&r.properties),
         common: None,
         context,
@@ -160,5 +159,5 @@ pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -
         lat: r.lat,
     });
 
-    Ok(division_results.into_iter().chain(poi_results).take(limit as usize).collect())
+    Ok(division_results.into_iter().chain(place_results).take(limit as usize).collect())
 }

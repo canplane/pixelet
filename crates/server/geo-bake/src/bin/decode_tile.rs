@@ -3,7 +3,7 @@
 //! A baked terrain tile read back the way the kernel reads it, checked
 //! against the bake's contract. A byte that is no look draws nothing, so
 //! one is a fault unless it is the unknown past the coverage. Run `--all` after
-//! `deno task bake:tiles`; one tile also writes PNGs for the eye.
+//! `deno task bake:terrain`; one tile also writes PNGs for the eye.
 //!
 //!   decode_tile 12720250262323200                # one leaf: summary + PNGs
 //!   decode_tile 3179787687624704 --z 14          # a tile at a coarser zoom
@@ -131,13 +131,13 @@ fn print_summary(name: &str, s: &Summary) {
     println!("  ground    {}", list.join(", "));
 }
 
-fn print_bores(tile: &Tile) {
-    let bores: Vec<_> = tile.decks.iter().filter(|d| d.form == Form::Bore).collect();
-    if bores.is_empty() {
+fn print_tunnels(tile: &Tile) {
+    let tunnels: Vec<_> = tile.decks.iter().filter(|d| d.form == Form::Tunnel).collect();
+    if tunnels.is_empty() {
         return;
     }
     let (mut under, mut points) = (0, 0);
-    for d in &bores {
+    for d in &tunnels {
         for i in 0..d.points.len() {
             let [x, y] = d.point(i);
             points += 1;
@@ -146,7 +146,7 @@ fn print_bores(tile: &Tile) {
             }
         }
     }
-    println!("  bores     {}, {points} points, {under} under the surface", bores.len());
+    println!("  tunnels   {}, {points} points, {under} under the surface", tunnels.len());
 }
 
 fn print_decks(decks: &Decks) {
@@ -232,7 +232,7 @@ fn stored_tiles(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
         let path = entry?.path();
         if path.is_dir() {
             stored_tiles(&path, out)?;
-        // `_built`, `_snapshot`: a version's records about itself, no tile.
+        // A name led by `_` is a version's file about itself, no tile.
         } else if !matches!(path.extension().and_then(|e| e.to_str()), Some("part" | "empty")) && !path.file_name().is_some_and(|n| n.to_string_lossy().starts_with('_')) {
             out.push(path);
         }
@@ -283,7 +283,7 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
     print_summary(&name, &s);
     print_decks(&tile.decks);
-    print_bores(&tile);
+    print_tunnels(&tile);
     for line in &s.faults {
         eprintln!("[decode_tile] {line}");
     }

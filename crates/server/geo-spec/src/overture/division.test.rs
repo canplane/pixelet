@@ -18,7 +18,12 @@ fn lineage() -> HashMap<String, Division> {
 #[test]
 fn a_name_is_the_division_and_each_parent_broad_to_narrow() {
     let parts: Vec<(String, Subtype, bool)> = name("l", true, &lineage()).into_iter().map(|p| (p.name, p.subtype, p.approx)).collect();
-    let want = [("대한민국", Subtype::Country, false), ("경기도", Subtype::Region, false), ("성남시", Subtype::County, false), ("정자동", Subtype::Locality, true)];
+    let want = [
+        ("대한민국", Subtype::Country, false),
+        ("경기도", Subtype::Region, false),
+        ("성남시", Subtype::County, false),
+        ("정자동", Subtype::Locality, true),
+    ];
     assert_eq!(parts, want.map(|(n, s, a)| (n.to_string(), s, a)), "only the division found by nearness is approximate");
 }
 
@@ -45,4 +50,3 @@ fn anything_that_is_not_a_name_a_reader_can_be_shown_is_nothing() {
     assert!(names_of(Some(serde_json::json!([1, 2]))).is_empty());
     assert_eq!(names_of(Some(serde_json::json!({"en": "Bundang-gu", "ko": 3}))).len(), 1, "the readable half is kept");
 }
-

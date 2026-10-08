@@ -124,4 +124,3 @@ async fn expired_work_stays_joinable_and_admitted_until_its_cleanup_finishes() {
     assert_eq!(c.admission.available_permits(), 1);
     c.once("tile".into(), true, |_| async { Ok(()) }).await.unwrap();
 }
-

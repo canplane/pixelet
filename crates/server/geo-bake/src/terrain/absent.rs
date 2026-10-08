@@ -9,7 +9,7 @@
 
 use std::borrow::Cow;
 
-use pxl_spec::bake::format::{Ground, Occupancy, Terrain, ELE_LANE};
+use pxl_spec::bake::format::{Ground, Occupancy, TerrainTile, ELE_LANE};
 use pxl_spec::cell::cube_types::{ground, sentinel};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::tile::Tile;
@@ -19,13 +19,13 @@ use crate::pyramid::{Absent, Layer};
 
 pub struct Absence {
     coverage: Coverage,
-    sea: Terrain,
-    unknown: Terrain,
+    sea: TerrainTile,
+    unknown: TerrainTile,
 }
 
 /// A tile of one look at sea level: no decks, and no child under it.
-fn uniform(look: u8) -> Terrain {
-    let mut t = Terrain::leaf(
+fn uniform(look: u8) -> TerrainTile {
+    let mut t = TerrainTile::leaf(
         vec![0; ELE_LANE],
         Ground {
             cells: vec![look; (TILE_CELLS * TILE_CELLS) as usize].into(),
@@ -46,15 +46,15 @@ impl Absence {
     }
 }
 
-impl Absent<Terrain> for Absence {
-    fn at(&self, p: Tile) -> Cow<'_, Terrain> {
+impl Absent<TerrainTile> for Absence {
+    fn at(&self, p: Tile) -> Cow<'_, TerrainTile> {
         if self.coverage.holds(p.zoom, p.tile) {
             Cow::Borrowed(&self.sea)
         } else if !self.coverage.meets(p.zoom, p.tile) {
             Cow::Borrowed(&self.unknown)
         } else {
             let children = p.children().map(|c| self.at(c));
-            Cow::Owned(Terrain::fold_tile(p, |q| p.children().iter().position(|&c| c == q).map(|i| children[i].as_ref())).expect("four children fold"))
+            Cow::Owned(TerrainTile::fold_tile(p, |q| p.children().iter().position(|&c| c == q).map(|i| children[i].as_ref())).expect("four children fold"))
         }
     }
 }

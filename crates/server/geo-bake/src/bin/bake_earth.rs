@@ -301,7 +301,11 @@ fn run() -> Result<(), String> {
     }
     let objects = written.into_inner();
     println!("[earth] {objects} tiles -> {}", out.display());
-    write_manifest(&out, git_sha().as_deref(), serde_json::json!({ "objects": objects, "z": EARTH_ZOOM }))
+    write_manifest(
+        &out.join("../manifest.json"),
+        git_sha().as_deref(),
+        serde_json::json!({ "version": out.file_name().map(|n| n.to_string_lossy().to_string()), "objects": objects, "z": EARTH_ZOOM }),
+    )
 }
 
 fn main() -> ExitCode {

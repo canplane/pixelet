@@ -3,7 +3,7 @@
 //! Live forward search over Overture's Places and Divisions under `/geo/`;
 //! a free-text query has no tile key, so it cannot be baked.
 
-mod geocode;
+mod division;
 mod search;
 
 use std::process::ExitCode;

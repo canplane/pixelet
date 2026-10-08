@@ -1,18 +1,18 @@
-// pxl-geo-bake/demand/poi.rs
+// pxl-geo-bake/demand/place.rs
 
 use super::job;
-use pxl_spec::bake::poi_tile::PoiTile;
+use pxl_spec::bake::place_tile::PlaceTile;
 use pxl_spec::space::layer::tile::Tile;
 
 pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
-    super::pyramid::execute::<PoiTile>(
+    super::pyramid::execute::<PlaceTile>(
         p,
         cache,
         out,
         || {
             let coverage = crate::coverage::Coverage::of_source()?;
-            Ok(crate::poi::leaves(&mut job::connect(&[&crate::poi::READS], &coverage.around(p.tile), seconds)?.1, &coverage, Some(p.tile))?.remove(&p.tile))
+            Ok(crate::place::leaves(&mut job::connect(&[&crate::place::READS], &coverage.around(p.zoom, p.tile), seconds)?.1, &coverage, p)?.remove(&p.tile))
         },
-        &PoiTile::default(),
+        &PlaceTile::default(),
     )
 }
