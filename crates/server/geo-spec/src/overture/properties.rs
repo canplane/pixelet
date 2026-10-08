@@ -5,7 +5,7 @@ use crate::overture::category;
 /// The column [`category_named`] reads, for SQL that selects it.
 pub const CATEGORY_SQL: &str = "properties->'taxonomy'";
 
-/// The POI badge key; the search list and the map's badge must agree on it.
+/// The places badge key; the search list and the map's badge must agree on it.
 pub fn category_of(properties: &serde_json::Value) -> String {
     category_named(properties.get("taxonomy")).to_string()
 }

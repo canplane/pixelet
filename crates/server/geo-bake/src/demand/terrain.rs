@@ -15,13 +15,13 @@ const COAST: &str = ".coast";
 
 pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
     use crate::terrain::{leaf, repository::TerrainRepository};
-    use pxl_spec::bake::format::Terrain;
-    super::pyramid::execute::<Terrain>(
+    use pxl_spec::bake::format::TerrainTile;
+    super::pyramid::execute::<TerrainTile>(
         p,
         cache,
         out,
         || {
-            let (_, mut client) = job::connect(&leaf::READS, &Coverage::of_source()?.around(p.tile), seconds)?;
+            let (_, mut client) = job::connect(&leaf::READS, &Coverage::of_source()?.around(p.zoom, p.tile), seconds)?;
             if !leaf::has_ground(&mut client, &[p.tile]).map_err(|e| e.to_string())?[0] {
                 return Ok(None);
             }

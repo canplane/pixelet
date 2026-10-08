@@ -387,20 +387,21 @@ export default defineConfig(({ mode }) => {
   const tileBase = env.VITE_TILE_BASE_URL || tileBaseDefault;
   const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;
 
-  //   remote (default) — an already-published deployment, so no local API,
-  //                        database or Docker. `deno task dev`.
-  //   local             — the servers above, baking on demand.
-  //                        `deno task dev:local`.
-  //   baked             — the same, the tiles from finished bakes.
-  //                        `deno task dev:baked`.
-  const devSource = env.VITE_DEV_SOURCE || "remote";
-  const remote = devSource === "remote";
+  //   delivery (default) — an already-published deployment, so no local
+  //                          API, database or Docker. `deno task dev`, and
+  //                          what a deployed build is.
+  //   oven               — the servers above, baking on demand.
+  //                          `deno task dev:oven`.
+  //   shelf              — the same, the tiles from the last bakes under
+  //                          ./out. `deno task dev:shelf`.
+  const devSource = env.VITE_DEV_SOURCE || "delivery";
+  const delivery = devSource === "delivery";
 
   // Injected as __PUBLISHED_TILES__: route.ts builds every tile path from
   // it, config/deploy.ts reads it for what a 404 means.
-  const published = mode === "production" || remote;
+  const published = delivery;
 
-  const remoteOrigin = remote ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
+  const remoteOrigin = delivery ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
   // What the proxy hands the page is never stored. The objects behind it are
   // `immutable` for a year, which a deployment means; here a restart of this
   // server cuts a body in flight, and a browser kept the empty one as the
@@ -420,7 +421,7 @@ export default defineConfig(({ mode }) => {
   ]));
 
   return {
-    // Root `deno task dev:local` runs the three servers and this in one
+    // Root `deno task dev:oven` runs the three servers and this in one
     // terminal, and Vite's default clearScreen would wipe the whole of it —
     // the servers' output too — on every restart or error.
     clearScreen: false,
@@ -515,7 +516,7 @@ export default defineConfig(({ mode }) => {
     },
 
     // The production bundle served here, against the same routes: with
-    // `VITE_DEV_SOURCE=remote`, the deployment's data under the built
+    // `VITE_DEV_SOURCE=delivery`, the deployment's data under the built
     // client, which is what a measurement of the client alone wants —
     // the dev server's unbundled modules and hooks are not in it.
     preview: { proxy },

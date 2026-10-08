@@ -1,81 +1,13 @@
 // pxl-geo-bake/tile/walk.rs
 
-//! The reverse-geocode bake's walk over terrain's land tiles, one object per
-//! group, resumable. A missing object reads as empty, so there is no shared
-//! fallback.
+//! A bake's walk over its tiles, a band of them to a worker at a time, with
+//! a running count.
 
-use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::tile::tile_at;
-use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::Instant;
 
-use crate::cli::Flags;
-use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
-
-use crate::util::{fmt_bytes, fmt_dur, pack, write_atomic, Level};
-
-/// "Already asked, nothing here", for resume; never uploaded.
-pub const EMPTY_SUFFIX: &str = ".empty";
-
-pub struct Args {
-    pub out: PathBuf,
-    pub land_cache: PathBuf,
-    pub concurrency: usize,
-    pub limit: Option<usize>,
-    pub force: bool,
-}
-
-impl Args {
-    pub fn parse(default_out: PathBuf) -> Result<Args, String> {
-        let mut args = Args {
-            out: default_out,
-            land_cache: PathBuf::from("./out/terrain/land_tiles.json"),
-            concurrency: 8,
-            limit: None,
-            force: false,
-        };
-
-        let mut flags = Flags::from_env();
-        while let Some(flag) = flags.arg() {
-            match flag.as_str() {
-                "--out" => args.out = PathBuf::from(flags.value()?),
-                "--land-cache" => args.land_cache = PathBuf::from(flags.value()?),
-                "--concurrency" => args.concurrency = flags.parse()?,
-                "--limit" => args.limit = Some(flags.parse()?),
-                "--force" => args.force = true,
-                other => return Err(format!("unknown flag: {other}")),
-            }
-        }
-        Ok(args)
-    }
-}
-
-pub enum Tile {
-    Object { raw: Vec<u8>, items: u64 },
-    Empty,
-}
-
-pub struct Target {
-    pub idx: IVec,
-    pub leaves: Vec<IVec>,
-}
-
-pub fn targets_of(land: &[IVec], shamt: u32) -> Vec<Target> {
-    let mut out: Vec<Target> = Vec::new();
-    let mut at: HashMap<IVec, usize> = HashMap::new();
-    for &tile in land {
-        let idx = ivec::sh(tile, -(shamt as i32));
-        let i = *at.entry(idx).or_insert_with(|| {
-            out.push(Target { idx, leaves: Vec::new() });
-            out.len() - 1
-        });
-        out[i].leaves.push(tile);
-    }
-    out
-}
+use crate::util::{fmt_bytes, fmt_dur};
 
 #[derive(Default)]
 pub struct Tally {
@@ -164,41 +96,4 @@ pub fn over<T: Copy + Sync, W>(
         fmt_bytes(t.bytes as f64)
     );
     Ok(t)
-}
-
-/// One object a geocode group; resumable unless `--force`.
-pub fn walk<T>(
-    args: &Args,
-    tag: &str,
-    zoom: Zoom,
-    every: u64,
-    targets: &[Target],
-    connect: impl Fn() -> Result<T, String> + Sync,
-    one: impl Fn(&mut T, &Target) -> Result<Tile, String> + Sync,
-) -> Result<Tally, String> {
-    let items: Vec<&Target> = targets.iter().collect();
-    let bands: Vec<&[&Target]> = items.chunks(1).collect();
-    over(
-        tag,
-        &bands,
-        args.concurrency,
-        every,
-        |t| ivec::repr(t.idx),
-        connect,
-        |worker, target| {
-            let name = tile_at(zoom, [ivec::X(target.idx), ivec::Y(target.idx)]).name();
-            let (path, marker) = (args.out.join(&name), args.out.join(format!("{name}{EMPTY_SUFFIX}")));
-            if !args.force && (path.exists() || marker.exists()) {
-                return Ok(Done::Skipped);
-            }
-            match one(worker, target)? {
-                Tile::Empty => std::fs::write(&marker, "").map(|_| Done::Empty).map_err(|e| e.to_string()),
-                Tile::Object { raw, items } => {
-                    let packed = pack(&raw, Level::Stored).map_err(|e| e.to_string())?;
-                    write_atomic(&path, &packed).map_err(|e| e.to_string())?;
-                    Ok(Done::Wrote { bytes: packed.len() as u64, items })
-                }
-            }
-        },
-    )
 }

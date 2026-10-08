@@ -16,9 +16,10 @@ import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT }
 /** A land page in Bundang, the one infra/README's procedure names: the zoom-15 tile's name. */
 const PAGE = "010332102130223";
 
-/** PAGE's geocode group, four zooms coarser: its first eleven digits. Written
- * out, since computing it would copy pxl-spec's arithmetic into TypeScript. */
-const GEOCODE_GROUP = "01033210213";
+/** PAGE's divisions page at the pyramid's top, z5: its first five digits,
+ * the one a reader asks for first. Written out, since computing it would copy
+ * pxl-spec's arithmetic into TypeScript. */
+const DIVISION_TOP = "01033";
 
 const ASSET_KEY = Object.values(INGESTED)[0].key;
 
@@ -39,8 +40,7 @@ function edgeChecks(): Check[] {
     { path: "/", want: 200, why: "the app itself, from the Worker's static assets" },
     { path: `${SEARCH_URL}?q=${encodeURIComponent("강남")}`, want: 200, why: "pxl-geo, the one geo query with no page to bake" },
     { path: terrain, want: 200, why: "a terrain page, out of the bucket" },
-    { path: `${TILE_ROOT}/geocode/${PUBLISHED_VERSION.geocode}/${GEOCODE_GROUP}`, want: 200, why: "a reverse-geocode group" },
-    { path: `${TILE_ROOT}/geocode/${PUBLISHED_VERSION.geocode}/_dict`, want: 200, why: "the dictionary every group's numbers are read against" },
+    { path: `${TILE_ROOT}/division/${PUBLISHED_VERSION.division}/${DIVISION_TOP}`, want: 200, why: "the divisions' top page over PAGE" },
     { path: `/${ASSET_KEY}`, want: 200, why: "a content-addressed asset, its own root" },
     ...commonChecks(),
     { path: `${API_ROOT}/tiles/terrain/${PUBLISHED_VERSION.terrain}/${PAGE}`, want: 404, why: "the old tile address, which must be gone" },

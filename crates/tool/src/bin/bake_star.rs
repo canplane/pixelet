@@ -1,10 +1,10 @@
-// pxl-tool/bin/bake_stars.rs
+// pxl-tool/bin/bake_star.rs
 
 //! The night sky's stars from the Yale Bright Star Catalog (V/50, CDS), into
 //! the 8-byte records pxl-render's gpu/stars.rs reads, brightest first.
 //!
-//!   deno task bake:stars                  # fetch the catalog from CDS
-//!   deno task bake:stars catalog.gz       # or read one already here
+//!   deno task bake:star                  # fetch the catalog from CDS
+//!   deno task bake:star catalog.gz       # or read one already here
 
 use std::io::Read;
 use std::process::ExitCode;

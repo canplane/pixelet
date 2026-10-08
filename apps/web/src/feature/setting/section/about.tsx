@@ -13,10 +13,10 @@ import { LABEL } from "@platform/palette.ts";
 
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
 
-/** `dev`, or the task that served it: `dev:local`, `dev:baked`. */
+/** `dev`, or the task that served it: `dev:oven`, `dev:shelf`. */
 function envLabel(): string {
   const env = ENV_SHORT[APP_ENV] ?? APP_ENV;
-  return DEV_SOURCE === "remote" ? env : `${env}:${DEV_SOURCE}`;
+  return DEV_SOURCE === "delivery" ? env : `${env}:${DEV_SOURCE}`;
 }
 
 /** Each bake by the name it is published as, a line each, since each is baked on its own. */

@@ -65,43 +65,43 @@ ln -sfn ../.agents/skills .claude/skills
 
 A personal, uncommitted variant takes a `.local.` infix (`*.local.skill.md`, `.agents/skills/.local/`), which `.gitignore` keeps out.
 
-`dev` runs the client alone: every server route is proxied to the live deployment, so no Docker, database or server process is needed. That is the way in for most work, and the wrong way for bake work: a published tile prefix never changes, so the proxy would keep serving the tiles that are already live rather than the ones just baked. For that, start the databases and run the whole stack:
+The tiles come three ways, named as a bakery's bread is: delivered, from the oven, or off the shelf. `dev` has them delivered: every server route is proxied to the live deployment, so no Docker, database or server process is needed. That is the way in for most work, and the wrong way for bake work: a published tile prefix never changes, so the proxy would keep serving the tiles that are already live rather than the ones just baked. For that, start the databases and run the whole stack, which bakes each tile when it is first asked for:
 
 ```bash
 docker compose --env-file .env -f infra/local/docker-compose.yml up -d
-deno task dev:local
+deno task dev:oven
 ```
 
-`dev:baked` is the same stack with the tiles read from the finished bakes under `./out` and nothing baked on demand: what a publish of them would show, before it is uploaded. `preview:local` and `preview:baked` are the two over the production bundle.
+`dev:shelf` is the same stack with the tiles taken from the last bakes under `./out` and nothing baked on demand: what a publish of them would show, before it is uploaded. `preview:oven` and `preview:shelf` are the two over the production bundle.
 
-| Task                                 | Description                                                                             |
-| ------------------------------------ | --------------------------------------------------------------------------------------- |
-| `deno task dev`                      | The client alone, every route served by the live deployment                             |
-| `deno task dev:local`                | The client and the three servers it talks to, on this machine                           |
-| `deno task dev:web`                  | The client alone, against those servers                                                 |
-| `deno task dev:geo`                  | pxl-geo only (`/geo`)                                                                   |
-| `deno task dev:api`                  | pxl-api only (`/api`)                                                                   |
-| `deno task dev:baked`                | `dev:local`, with the tiles read from the bakes under `./out`                           |
-| `deno task dev:tiles`                | The dev tile server, baking each tile out of the source when missed                     |
-| `deno task preview`                  | The production bundle, served locally, data from the live deployment                    |
-| `deno task preview:{local,baked}`    | The production bundle over `dev:local`'s or `dev:baked`'s servers                       |
-| `deno task build:web`                | Build the client                                                                        |
-| `deno task build:wasm`               | Build the kernel module into `apps/web/src/kernel/kernel.wasm`                          |
-| `deno task dev:native`               | Metro, for the device app                                                               |
-| `deno task bake:{tiles,poi,geocode}` | db-geo into `./out/<kind>/<version>`                                                    |
-| `deno task bake:earth`               | The Earth's picture, its tiles into `./out/earth/<version>`                             |
-| `deno task ingest:asset`             | Hash `asset/` into `./out/asset`, compose the texture pack, regenerate the asset tables |
-| `deno task download:{pack,moon}`     | Normalize the texture pack's sources, or cut the Moon's near side                       |
-| `deno task bake:stars`               | The star catalog into the renderer's `bright-stars.bin`                                 |
-| `deno task render:brand`             | The favicon, app icons and link preview from `apps/web/brand/`                          |
-| `deno task spec`                     | Generate Rust and TypeScript from the JSON under `spec/`                                |
-| `deno task usage`                    | What the deployment has used of its free allowances, before a publish                   |
-| `deno task deploy`                   | Build the client and publish the Cloudflare Worker                                      |
-| `deno task smoke <url>`              | What a deployment must answer, against a running one                                    |
-| `deno task check`                    | The gate: format, types, clippy, the C++, the files made from `spec/`                   |
-| `deno task check:diff`               | The gate over only what changed                                                         |
-| `deno task test`                     | Every test, every workspace member                                                      |
-| `deno task lint` / `fmt`             | Lint / format                                                                           |
+| Task                                      | Description                                                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `deno task dev`                           | The client alone, every route delivered by the live deployment                              |
+| `deno task dev:oven`                      | The client and the three servers it talks to, each tile baked when first asked for          |
+| `deno task dev:geo`                       | pxl-geo only (`/geo`)                                                                       |
+| `deno task dev:api`                       | pxl-api only (`/api`)                                                                       |
+| `deno task dev:shelf`                     | `dev:oven`, with the tiles taken from the last bakes under `./out`                          |
+| `deno task dev:tile`                      | The dev tile server, baking each tile out of the source when missed                         |
+| `deno task preview`                       | The production bundle, served locally, data from the live deployment                        |
+| `deno task preview:{oven,shelf}`          | The production bundle over `dev:oven`'s or `dev:shelf`'s servers                            |
+| `deno task clear:oven`                    | Empty `dev:oven`'s cache, after a re-ingest or a bake change                                |
+| `deno task clear:shelf [kind…]`           | Delete the named kinds' sets under `./out` (all three when none), to bake them from nothing |
+| `deno task build:wasm`                    | Build the kernel module into `apps/web/src/kernel/kernel.wasm`                              |
+| `deno task dev:native`                    | Metro, for the device app                                                                   |
+| `deno task bake:{terrain,place,division}` | db-geo into each kind's set, `./out/<kind>/`                                                |
+| `deno task bake:earth`                    | The Earth's picture, its tiles into `./out/earth/<version>`                                 |
+| `deno task ingest:asset`                  | Hash `asset/` into `./out/asset`, compose the texture pack, regenerate the asset tables     |
+| `deno task download:{pack,moon}`          | Normalize the texture pack's sources, or cut the Moon's near side                           |
+| `deno task bake:star`                     | The star catalog into the renderer's `bright-stars.bin`                                     |
+| `deno task render:brand`                  | The favicon, app icons and link preview from `apps/web/brand/`                              |
+| `deno task spec`                          | Generate Rust and TypeScript from the JSON under `spec/`                                    |
+| `deno task usage`                         | What the deployment has used of its free allowances, before a publish                       |
+| `deno task deploy`                        | Build the client and publish the Cloudflare Worker                                          |
+| `deno task smoke <url>`                   | What a deployment must answer, against a running one                                        |
+| `deno task check`                         | The gate: format, types, clippy, the C++, the files made from `spec/`                       |
+| `deno task check:diff`                    | The gate over only what changed                                                             |
+| `deno task test`                          | Every test, every workspace member                                                          |
+| `deno task lint` / `fmt`                  | Lint / format                                                                               |
 
 db-geo is filled by the scripts under `infra/geo/**/script/`, run by path as [infra/geo/README.md](./infra/geo/README.md) §4 says: they make a database's state rather than a file the tree keeps.
 
@@ -208,7 +208,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                 |
 | `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                               |
 | `pxl-api`       | The application's server.                                                                                                                |
-| `pxl-geo-bake`  | The bakes — terrain, places, geocode, the Earth — and, behind a feature, the dev tile server.                                            |
+| `pxl-geo-bake`  | The bakes — terrain, places, divisions, the Earth — and, behind a feature, the dev tile server.                                          |
 | `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables; generates code from `spec/`; bakes the stars, the Moon, the brand.  |
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat. The kernel's are named as the chain is:
@@ -222,7 +222,7 @@ A crate's root holds its modules, the directories sorted by kind and the one-fil
 | leaves             | `setting` `model` `decor` `billboard` `param` `approach` |
 | beside             | `profiler`                                               |
 
-Two gitignored trees hold what the tree makes, each for one reader: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and `cache/` is what `dev:local` bakes on demand and `decode_tile` writes, deleted at no cost. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
+Two gitignored trees hold what the tree makes, each for one reader: `out/` is what the bakes and the asset ingest write, in the shape the bucket holds, and `cache/` is what `dev:oven` bakes on demand and `decode_tile` writes, deleted at no cost. What an ingest makes on its way into db-geo, the warped elevation, stays beside its script (`infra/geo/elevation/warped/`).
 
 The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's host (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
