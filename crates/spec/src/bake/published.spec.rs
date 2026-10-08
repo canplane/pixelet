@@ -36,7 +36,7 @@ pub struct Format {
 
 pub const FORMAT: Format = Format {
     terrain: 8,
-    place: 9,
+    place: 10,
     division: 7,
     earth: 1,
 };

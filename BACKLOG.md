@@ -29,29 +29,6 @@ Nothing now.
   asking the query, nothing beside the hierarchy. Near "How the samples are
   drawn" above.
 
-- **Places is off.** The client leaves its root unbound
-  (`apps/web/src/kernel/boot.ts` `OFF`) until places are drawn as the next
-  item says; the reverse geocoding is on again, read as divisions. Its demand
-  follows `PLACE_LATTICE`, not the ground's, and which children are tiles is
-  the occupancy the bake writes, as terrain's is.
-- **Places: Overture's schema, Carto's look.** A place's kind is still this
-  tree's own 35 (`place_badge.json`), shown by OpenMapTiles' class rank. What
-  a place is follows Overture's schema, as the divisions now do: its
-  taxonomy and basic category, its names, confidence, sources and GERS id,
-  since Overture was made to merge vendors' places and every vendor's tree
-  (Naver, Kakao, Google) maps onto it as Overture's own sources do; OSM's
-  tags are an editors' vocabulary, a kind spread over several keys. How a
-  place is drawn follows Carto (the ground is its looks,
-  decision/20261005-the-ground-is-a-carto-palette.md): one table, the
-  theme's, from an Overture kind to a Carto icon group, color and minimum
-  zoom (`amenity-points.mss`). A provider is an adapter onto the schema,
-  baked or asked live as its terms allow; terrain's sources stay Overture
-  and OSM. The taxonomy changes between releases, so the table is checked
-  against the release the ingest records. openstreetmap-carto is CC0, the
-  cartographic design and `symbols/` included; its name and
-  OpenStreetMap's are trademarks, kept out of ours. `place` meaning a venue
-  (`chunk/place.rs`) follows the schema's word in the same change.
-
 ## P2
 
 ## Parked, with the reason on file

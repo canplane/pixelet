@@ -16,7 +16,7 @@
       "its day. Bumped only by a change to how the client reads a tile."
     ],
     "terrain": 8,
-    "place": 9,
+    "place": 10,
     "division": 7,
     "earth": 1
   },

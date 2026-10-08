@@ -2,235 +2,86 @@
 
 use super::*;
 use crate::space::coord::pvf3::ivec;
-use crate::space::layer::lattice::GROUND;
 
 fn leaf() -> Tile {
-    Tile::new(LEAF_ZOOM, ivec::gather(3, -2, 0))
+    Tile::new(LEAF_ZOOM, ivec::gather(6, 4, 0))
 }
 
-/// The corner of places cell (tx, ty), then `dx`, `dy` leaf cells in.
-fn point(tx: u32, ty: u32, dx: u32, dy: u32) -> Pvf3 {
-    let base = PLACE_LATTICE.cell_at(leaf(), PLACE_LATTICE.cell_index(tx, ty)).base();
-    PLACE_LATTICE.cell_of(LEAF_ZOOM, &base).inner_at(GROUND, LEAF_ZOOM, [dx, dy]).mid()
+/// The middle of ground leaf cell (x, y) of `leaf()`.
+fn point(x: u32, y: u32) -> Pvf3 {
+    let first = GROUND.cell_at(leaf(), 0);
+    first.up(0).inner_at(GROUND, LEAF_ZOOM, [x, y]).mid()
 }
 
-fn called<'a>(name: &'a str, id: &'a str) -> Place<'a> {
-    Place { name, id, ..Place::default() }
+fn called<'a>(name: &'a str, category: &str, id: &'a str) -> Place<'a> {
+    Place { name, kind: kind_of(category), id }
 }
 
-/// A cell's count and its places as (name, where it stands).
-type Cell<'a> = (u32, Vec<(&'a str, [u32; 2])>);
-
-fn cells(tile: &PlaceTile) -> Vec<Cell<'_>> {
-    tile.cells.iter().map(|c| (c.count, tile.shown(c).map(|(_, p, at)| (p.name, at)).collect())).collect()
+fn shown_at(tile: &PlaceTile, zoom: Zoom) -> Vec<&str> {
+    tile.iter().filter(|(_, h)| h.from <= zoom).map(|(_, h)| h.place.name).collect()
 }
 
 #[test]
-fn a_tile_and_its_places_come_back_as_they_went() {
-    let station = Place {
-        name: "Seoul Station",
-        kind: kind_of("subway"),
-        id: "7",
-        ..Place::default()
-    };
-    let tile = PlaceTile::of_places(
-        LEAF_ZOOM,
+fn a_tile_comes_back_as_it_went() {
+    let tile = PlaceTile::leaf(
+        leaf(),
         [
-            (point(1, 0, 1, 2), station),
-            (point(2, 0, 0, 0), called("서울역", "3")),
-            (point(2, 0, 3, 3), called("남대문", "9")),
-            (point(3, 0, 2, 0), called("", "4")),
-            (point(5, 1, 0, 3), station),
-            (
-                point(6, 1, 0, 0),
-                Place {
-                    name: "Seoul Station",
-                    kind: 0,
-                    id: "8",
-                    ..Place::default()
-                },
-            ),
+            (point(1, 2), called("서울역", "train_station", "3")),
+            (point(40, 7), called("Cafe", "cafe", "9")),
+            (point(41, 7), called("", "hospital", "4")),
         ],
-        true,
     );
     assert_eq!(decode(&encode(&tile).unwrap()).unwrap(), tile);
-    // Held once across cells; least id per kind; nameless counted not held.
-    assert_eq!(tile.places.len(), 3);
-    assert_eq!(
-        cells(&tile),
-        [
-            (1, vec![("Seoul Station", [1, 2])]),
-            (2, vec![("서울역", [0, 0])]),
-            (1, vec![]),
-            (1, vec![("Seoul Station", [0, 3])]),
-            (1, vec![("Seoul Station", [0, 0])]),
-        ]
-    );
 }
 
-/// A lone place stays its cell's at every zoom, on the same leaf cell.
 #[test]
-fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
-    let at = point(5, 4, 3, 1);
-    let ground = GROUND.cell_of(LEAF_ZOOM, &at);
-    let empty = PlaceTile::default();
-    let tower = Place {
-        name: "Namsan Tower",
-        kind: kind_of("attraction"),
-        id: "11",
-        ..Place::default()
-    };
-    let mut below = (leaf(), PlaceTile::of_places(LEAF_ZOOM, [(at, tower)], true));
-    for zoom in (GROUND.top()..LEAF_ZOOM).rev() {
-        let p = Tile::over(zoom, below.0.tile);
-        let up = fold_place(p, p.children().map(|k| if k == below.0 { &below.1 } else { &empty }));
-        assert_eq!(up.cells.len(), 1);
-        let c = up.cells[0];
-        let (_, place, at) = up.shown(&c).next().unwrap();
-        assert_eq!(place, tower);
-        assert_eq!(PLACE_LATTICE.cell_at(p, c.cell).inner_at(GROUND, LEAF_ZOOM, at), ground, "z{zoom}");
-        below = (p, up);
+fn a_kind_carto_draws_no_point_for_is_not_held() {
+    let tile = PlaceTile::leaf(leaf(), [(point(1, 2), called("School", "elementary_school", "1"))]);
+    assert!(tile.is_empty());
+}
+
+#[test]
+fn a_cell_keeps_its_first_by_the_zoom_its_kind_shows_from_then_id() {
+    // Sixteen leaf cells apart: one place's cell through Carto's z17, apart from z18.
+    let tile = PlaceTile::leaf(leaf(), [(point(8, 10), called("Cafe", "cafe", "1")), (point(24, 10), called("Hospital", "hospital", "9"))]);
+    assert_eq!(shown_at(&tile, 15), ["Hospital"]);
+    // The cafe, shown from z17, never takes the hospital's room, though its id is less.
+    assert_eq!(shown_at(&tile, 17), ["Hospital"]);
+    assert_eq!(shown_at(&tile, 18), ["Cafe", "Hospital"]);
+}
+
+#[test]
+fn what_is_shown_only_grows_with_the_zoom() {
+    let places: Vec<_> = (0..60u32).map(|k| (point(k * 7 % 500, k * 13 % 500), k)).collect();
+    let ids: Vec<String> = places.iter().map(|(_, k)| format!("{k:03}")).collect();
+    let kinds = ["cafe", "hospital", "restaurant", "pharmacy_and_drug_store", "shopping"];
+    let tile = PlaceTile::leaf(leaf(), places.iter().map(|&(at, k)| (at, called("x", kinds[k as usize % kinds.len()], &ids[k as usize]))));
+    for zoom in PLACE_FIRST..PLACE_LAST {
+        let now: Vec<_> = tile.iter().filter(|(_, h)| h.from <= zoom).map(|(i, _)| i).collect();
+        let next: Vec<_> = tile.iter().filter(|(_, h)| h.from <= zoom + 1).map(|(i, _)| i).collect();
+        assert!(now.iter().all(|i| next.contains(i)), "z{zoom}");
     }
 }
 
-/// Only a crowd comes apart a zoom finer.
 #[test]
-fn a_tile_settles_every_child_but_one_under_a_crowd() {
-    let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
-    let [crowd, lone, empty, _] = p.children();
-    let at = |k: Tile, dx: u32| PLACE_LATTICE.cell_at(k, 0).inner_at(GROUND, LEAF_ZOOM, [dx, 0]).mid();
-    let leaves = [
-        (crowd, PlaceTile::of_places(LEAF_ZOOM, [(at(crowd, 0), called("A", "1")), (at(crowd, 1), called("B", "2"))], true)),
-        (lone, PlaceTile::of_places(LEAF_ZOOM, [(at(lone, 0), called("C", "3"))], true)),
-    ];
-    let none = PlaceTile::default();
-    let tile = fold_place(p, p.children().map(|k| leaves.iter().find(|(q, _)| *q == k).map_or(&none, |(_, tile)| tile)));
-    assert!(tile.occupancy.has_child(crowd.slot()));
-    assert!(!tile.occupancy.has_child(lone.slot()));
-    assert!(!tile.occupancy.has_child(empty.slot()));
-}
-
-/// Folded from the leaves, a crowd matches a tile built at that zoom.
-#[test]
-fn a_crowd_holds_one_place_of_each_kind() {
-    let station = Place {
-        name: "Gangnam",
-        kind: kind_of("subway"),
-        id: "50",
-        ..Place::default()
-    };
-    let cafe = Place {
-        name: "Cafe",
-        kind: kind_of("cafe"),
-        id: "20",
-        ..Place::default()
-    };
-    let places = [(point(0, 0, 0, 0), cafe), (point(0, 0, 2, 0), Place { id: "10", ..cafe }), (point(1, 0, 5, 0), station)];
-    let leaf_tile = PlaceTile::of_places(LEAF_ZOOM, places, true);
-    assert_eq!(cells(&leaf_tile), [(2, vec![("Cafe", [2, 0])]), (1, vec![("Gangnam", [5, 0])])]);
-    let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
+fn a_parent_is_what_its_children_show_from_its_zoom_on() {
+    let child = PlaceTile::leaf(leaf(), [(point(10, 10), called("Peak", "mountain", "1")), (point(300, 10), called("Cafe", "cafe", "2"))]);
     let empty = PlaceTile::default();
-    let folded = fold_place(p, p.children().map(|k| if k == leaf() { &leaf_tile } else { &empty }));
-    assert_eq!(folded, PlaceTile::of_places(LEAF_ZOOM - 1, places, true));
-    let mut held: Vec<_> = folded.shown(&folded.cells[0]).map(|(_, p, at)| (p.kind, p.id, at)).collect();
-    held.sort_unstable();
-    assert_eq!(folded.cells[0].count, 3);
-    assert_eq!(held, {
-        let mut want = vec![(kind_of("cafe"), "10", [2, 0]), (kind_of("subway"), "50", [69, 0])];
-        want.sort_unstable();
-        want
-    });
+    let p = leaf().parent();
+    let mut children = [&empty; 4];
+    children[leaf().slot()] = &child;
+    let parent = fold_place(p, children);
+    assert_eq!(shown_at(&parent, p.zoom), ["Peak"]);
+    // The cafe shows only deeper, so the leaf stays a tile under it.
+    assert!(parent.occupancy.has_child(leaf().slot()));
+    assert!(!parent.occupancy.has_child((leaf().slot() + 1) % 4));
 }
 
-/// What the wire cannot hold is refused.
 #[test]
-fn a_tile_that_names_no_place_or_splits_a_character_is_refused() {
-    let tile = PlaceTile::of_places(
-        LEAF_ZOOM,
-        [
-            (
-                point(3, 0, 0, 0),
-                Place {
-                    name: "A",
-                    kind: kind_of("cafe"),
-                    id: "1",
-                    ..Place::default()
-                },
-            ),
-            (
-                point(3, 0, 1, 1),
-                Place {
-                    name: "B",
-                    kind: kind_of("subway"),
-                    id: "2",
-                    ..Place::default()
-                },
-            ),
-        ],
-        true,
-    );
-    let mut past = tile.clone();
-    past.shown[0].place = 9;
-    assert!(encode(&past).is_err());
-    let mut swapped = tile.clone();
-    swapped.shown.swap(0, 1);
-    assert!(encode(&swapped).is_err());
-    // A name past the bound, and a place run past its cell, are refused on read.
-    let long = "a".repeat(NAME_CHARS + 1);
-    assert!(decode(&lanes(&[1], &[1], &[0, 1], &[0], &[""], &["a"])).is_ok(), "the lanes themselves are read");
-    assert!(decode(&lanes(&[1], &[1], &[0, 1], &[0], &[""], &[&long])).is_err());
-    assert!(decode(&lanes(&[1], &[1], &[0, 2], &[0], &[""], &["a"])).is_err());
-}
-
-/// A tile as the wire lays it, written lane by lane past `encode`'s checks.
-fn lanes(cells: &[u32], counts: &[u32], starts: &[u32], shown: &[u32], kinds: &[&str], names: &[&str]) -> Vec<u8> {
-    let (partial, at) = (vec![0u8; cells.len()], vec![0u16; 2 * shown.len()]);
-    let ids: Vec<&str> = names.iter().map(|_| "x").collect();
-    let names = NameLanes::of(names.iter().map(|&n| (n, [])));
-    write(&Lanes {
-        cells,
-        counts,
-        partial: &partial,
-        starts,
-        occupancy: 0,
-        shown,
-        at: &at,
-        kinds,
-        ids: &ids,
-        names: &names,
-    })
-    .unwrap()
-}
-
-/// A source's id, a kind this table does not know and names by language
-/// come back as the source gave them; the unknown kind reads as none.
-#[test]
-fn what_any_source_gives_comes_back() {
-    let langs = Strings::of(["en", "Seoul Station", "ja", "ソウル駅"]);
-    let station = Place {
-        name: "서울역",
-        langs: Langs::all(&langs),
-        kind: kind_of("subway"),
-        id: "ChIJ3S-JXmauEmsRUcIaWtf4MzE",
-    };
-    let tile = PlaceTile::of_places(LEAF_ZOOM, [(point(1, 0, 0, 0), station)], true);
-    let back = decode(&encode(&tile).unwrap()).unwrap();
-    assert_eq!(back, tile);
-    assert_eq!(back.places.get(0), station);
-    assert_eq!(decode(&lanes(&[1], &[1], &[0, 1], &[0], &["a kind of tomorrow"], &["a"])).unwrap().places.get(0).kind, 0);
-}
-
-/// A partial count stays a floor at every zoom over it.
-#[test]
-fn a_floor_stays_a_floor_as_it_folds() {
-    let some = PlaceTile::of_places(LEAF_ZOOM, [(point(0, 0, 0, 0), called("A", "1"))], false);
-    let all = PlaceTile::of_places(LEAF_ZOOM, [(point(0, 0, 0, 0), called("A", "1"))], true);
-    assert_eq!(decode(&encode(&some).unwrap()).unwrap(), some);
-    let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
-    let empty = PlaceTile::default();
-    for (leaf_tile, partial) in [(&some, true), (&all, false)] {
-        let up = fold_place(p, p.children().map(|k| if k == leaf() { leaf_tile } else { &empty }));
-        assert_eq!(up.cells[0].partial, partial);
-        assert_eq!(up.occupancy.has_child(leaf().slot()), partial);
+fn every_kind_carto_draws_an_icon_for_ships_its_symbol() {
+    for kind in 1..=CATEGORIES.len() as u16 {
+        if ICON_ZOOM[usize::from(kind - 1)] != 0 {
+            assert!(symbol_of(kind).is_some(), "{} has no symbol shipped", CATEGORIES[usize::from(kind - 1)]);
+        }
     }
 }

@@ -1,6 +1,6 @@
 // pxl-kernel/query/ray.rs
 
-//! The first thing a ray meets: ground walked a region at a time, decks and placed objects, at the detail the distance or a zoom asks.
+//! The first thing a ray meets: ground walked a region at a time, bridges, tunnels and placed objects, at the detail the distance or a zoom asks.
 
 use super::decor::Strike;
 use super::world::World;

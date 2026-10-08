@@ -122,8 +122,8 @@
     "lineWidth": 200,
     "proseWrap": "preserve",
 
-    // The tests read the golden records byte for byte.
-    "exclude": ["node_modules/", "dist/", "crates/**/golden/"]
+    // The tests read the golden records byte for byte; Carto's symbols stay as Carto ships them.
+    "exclude": ["node_modules/", "dist/", "crates/**/golden/", "asset/place/symbol/"]
   },
 
   "lint": {

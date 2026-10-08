@@ -1,10 +1,10 @@
 // pxl-spec/space/layer/lattice.rs
 
 //! A layer's lattice: how many cells its tile holds a side, the same at
-//! every zoom, and which of the camera grid's cells they fold into.
+//! every zoom, and its scale on the camera grid's cells.
 
 use super::tile::{tile_at, tile_rows, Cell, Tile, LEAF_ZOOM};
-use crate::bake::constant::{DECK_CELL, EXTENT_CELL};
+use crate::bake::constant::EXTENT_CELL;
 use crate::space::camera::grid::{split_distance, Tau, CHUNK_CELLS, CHUNK_STEPS};
 use crate::space::coord::pvf3::ivec;
 use crate::space::coord::pvf3::Pvf3;
@@ -12,12 +12,14 @@ use crate::space::coord::zoom::{count, index_of, Zoom, FINEST_ZOOM, SHARD_ZOOM};
 use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, slot_of};
 
 /// A layer's lattice: its cell is its tile's side over its own count of
-/// cells, the same at every zoom; held as the cell's zoom on a leaf. The
-/// camera grid's cell is drawn from its cells `fold` zooms finer.
+/// cells, the same at every zoom; held as the cell's zoom on a leaf. Its
+/// scale on the camera grid is `scale_steps` zooms: the grid's cell is that
+/// many zooms coarser than its own, so it folds that many of its cells a
+/// side, or where negative, finer, so its cell spans that many of the grid's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Lattice {
     cell: Zoom,
-    fold: Zoom,
+    scale_steps: i8,
 }
 
 impl Lattice {
@@ -26,22 +28,23 @@ impl Lattice {
         if cell >= FINEST_ZOOM || cell <= LEAF_ZOOM {
             panic!()
         }
-        Lattice { cell, fold: 0 }
+        Lattice { cell, scale_steps: 0 }
     }
 
-    /// Drawn in the camera grid's cells `fold` zooms coarser than its own.
-    pub const fn folding(self, fold: Zoom) -> Lattice {
-        Lattice { fold, ..self }
+    /// Drawn in the camera grid's cells `steps` zooms coarser than its own,
+    /// or where negative, finer.
+    pub const fn scaled(self, steps: i8) -> Lattice {
+        Lattice { scale_steps: steps, ..self }
     }
 
-    pub const fn fold(self) -> Zoom {
-        self.fold
+    pub const fn scale_steps(self) -> i8 {
+        self.scale_steps
     }
 
     /// The coarsest tile it is kept in: the one whose cells fold into the
     /// coarsest grid cell any chunk has, a 3D root's (`SHARD_ZOOM`) cells. The
     /// ground's lands on z5 exactly: z8's chunks have z13 cells, which the
-    /// ground's 512 a tile and one fold make a z5 tile's.
+    /// ground's 512 a tile and its one step of scale make a z5 tile's.
     pub const fn top(self) -> Zoom {
         self.tile_zoom_of_grid(SHARD_ZOOM + CHUNK_STEPS) as Zoom
     }
@@ -107,12 +110,12 @@ impl Lattice {
 
     /// The grid's cell a tile at `zoom` is drawn in.
     pub const fn grid_zoom(self, zoom: Zoom) -> Zoom {
-        self.cell_zoom(zoom) - self.fold
+        (self.cell_zoom(zoom) as i32 - self.scale_steps as i32) as Zoom
     }
 
     /// The tile whose cells fold into the grid's cell `cell`, past the pyramid's ends too.
     pub const fn tile_zoom_of_grid(self, cell: Zoom) -> i32 {
-        self.tile_zoom(cell) + self.fold as i32
+        self.tile_zoom(cell) + self.scale_steps as i32
     }
 
     /// Its cells' zoom on a tile at `z`.
@@ -215,14 +218,17 @@ impl Lattice {
 /// ground keeps in cells follows it. A grid cell is drawn from the ground's
 /// records a zoom finer: their surfaces' mean and their fill (pxl-render
 /// mesh/chunk.rs).
-pub const GROUND: Lattice = Lattice::new(LEAF_ZOOM + 9).folding(1);
+pub const GROUND: Lattice = Lattice::new(LEAF_ZOOM + 9).scaled(1);
+
+/// The zooms a grid cell folds of the ground's cells, which the chunk's runs
+/// and the mesher are laid out by: the ground's scale, never finer than the grid.
+pub const GROUND_FOLD: Zoom = GROUND.scale_steps() as Zoom;
+const _: () = assert!(GROUND.scale_steps() >= 0, "the ground's cells are finer than the grid's");
 
 /// The index lane's lattice (bake/format.rs `Index`).
 pub const EXTENT: Lattice = Lattice::new(EXTENT_CELL);
 
-pub const DECK: Lattice = Lattice::new(DECK_CELL);
-
 pub const TILE_CELLS: u32 = GROUND.tile_cells();
 
 /// Chunks a tile's side holds at the zoom whose cells fold it.
-pub const TILE_CHUNKS: u32 = TILE_CELLS / (CHUNK_CELLS << GROUND.fold());
+pub const TILE_CHUNKS: u32 = TILE_CELLS / (CHUNK_CELLS << GROUND_FOLD);

@@ -62,6 +62,9 @@ pub struct Hover {
 struct Interaction {
     holding: Holding,
     hover: Hover,
+    /// Where the pointer stands on the screen, in NDC, whatever it can strike:
+    /// the gauge casts its own ray there.
+    pointed: Option<[f64; 2]>,
 }
 
 static INTERACTION: Global<Interaction> = Global::new();
@@ -70,6 +73,7 @@ fn interaction() -> &'static mut Interaction {
     INTERACTION.get(|| Interaction {
         holding: Holding::default(),
         hover: Hover::default(),
+        pointed: None,
     })
 }
 
@@ -87,6 +91,12 @@ pub fn hover() -> Hover {
 
 pub(crate) fn clear_hover() {
     interaction().hover = Hover::default();
+    interaction().pointed = None;
+}
+
+/// Where the pointer stands on the screen, in NDC, while it is over it.
+pub fn pointed() -> Option<[f64; 2]> {
+    interaction().pointed
 }
 
 /// A gesture under way points at nothing to place.
@@ -126,14 +136,17 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     view_ray(ndc_x, ndc_y, &mut origin, &mut direction);
 
     let ui = interaction().holding;
+    interaction().pointed = Some([ndc_x, ndc_y]);
     let Some(pick) = ray_pick(origin, direction, drawn) else {
-        return clear_hover();
+        interaction().hover = Hover::default();
+        return;
     };
     let hit = pick.hit;
     let hover = &mut interaction().hover;
     // A folded cell is a summary, not what is held: nothing in it is struck.
     if folded_at(&hit) {
-        return clear_hover();
+        *hover = Hover::default();
+        return;
     }
 
     if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker) {

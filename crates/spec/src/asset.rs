@@ -5,6 +5,8 @@
 
 #[path = "asset/ingested.spec.rs"]
 pub mod ingested;
+#[path = "asset/symbol.spec.rs"]
+pub mod symbol;
 
 use crate::cell::object::PlaceableCube;
 use ingested::{CubeFace, PACK};

@@ -13,7 +13,7 @@ use std::process::ExitCode;
 use sha2::{Digest, Sha256};
 
 use pxl_tool::asset::table::{Pack, Row};
-use pxl_tool::asset::{glb, pack, table};
+use pxl_tool::asset::{glb, pack, symbol, table};
 use pxl_tool::fmt::formatted;
 use pxl_tool::root;
 
@@ -152,6 +152,13 @@ fn run() -> Result<(), String> {
         means: composed.means,
         faces,
     };
+
+    // Carto's symbols, which the client draws from its own binary rather than fetches.
+    let symbols = symbol::symbols(&asset_dir.join("place/symbol"))?;
+    let masks: Vec<u8> = symbols.iter().flat_map(|s| s.mask.iter().copied()).collect();
+    std::fs::write(root.join("crates/spec/src/asset/symbol.mask"), &masks).map_err(|e| e.to_string())?;
+    write_formatted(&root.join("crates/spec/src/asset/symbol.spec.rs"), &symbol::render_rs(&symbols))?;
+    write_formatted(&root.join("apps/web/src/feature/search/place-symbol.ts"), &symbol::render_ts(&symbols))?;
 
     write_formatted(&root.join("apps/web/src/catalog/asset/ingested.spec.ts"), &table::render_ts(&rows, &laid))?;
     write_formatted(&root.join("crates/spec/src/asset/ingested.spec.rs"), &table::render_rs(&rows, &laid))?;

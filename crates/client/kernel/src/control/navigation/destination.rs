@@ -62,11 +62,3 @@ pub fn go_to_place(target: Pvf3) {
     go_on_ground(target, Motion::Smooth);
     crate::control::camera::controller::come_in_to_default();
 }
-
-/// Nearer where the camera has a nearer to be: the orbit halves its distance.
-pub fn go_into_place(target: Pvf3) {
-    go_on_ground(target, Motion::Smooth);
-    if crate::control::camera::controller::active() == crate::control::camera::controller::Active::Orbit {
-        crate::control::camera::orbit::zoom_by(0.5);
-    }
-}

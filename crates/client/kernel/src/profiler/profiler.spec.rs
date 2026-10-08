@@ -497,7 +497,7 @@ pub mod SUMMARY {
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "used_mb", "requests", "WORDS"];
     }
-    /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from.
+    /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, as zooms: `cell_want` the camera grid's cell the view wants there, at the distance it is met at, and `cell_drawn` the cells of the chunk drawn there now, coarser while the finer is on its way.
     pub mod view {
         pub const AT: u32 = 601;
         pub const dist: u32 = 0;
@@ -513,10 +513,9 @@ pub mod SUMMARY {
         pub const hover_lon: u32 = 10;
         pub const hover_lat: u32 = 11;
         pub const hover_alt: u32 = 12;
-        pub const chunk_zoom: u32 = 13;
-        pub const tier_zoom: u32 = 14;
-        pub const read_zoom: u32 = 15;
-        pub const WORDS: u32 = 16;
+        pub const cell_want: u32 = 13;
+        pub const cell_drawn: u32 = 14;
+        pub const WORDS: u32 = 15;
         pub const KEYS: &[&str] = &[
             "AT",
             "dist",
@@ -532,13 +531,12 @@ pub mod SUMMARY {
             "hover_lon",
             "hover_lat",
             "hover_alt",
-            "chunk_zoom",
-            "tier_zoom",
-            "read_zoom",
+            "cell_want",
+            "cell_drawn",
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 617;
+    pub const WORDS: u32 = 616;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "sheet", "held", "fetch", "peak", "steps", "quality", "heap", "view", "WORDS"];
 }
 
