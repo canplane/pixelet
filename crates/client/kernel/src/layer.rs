@@ -1,7 +1,7 @@
 // pxl-kernel/layer.rs
 
-//! What is in the world, by kind. A layer owns its store and knows nothing
-//! of its neighbours.
+//! What is in the world, in layers. A layer owns its store and knows
+//! nothing of its neighbours.
 
 mod answer;
 use pxl_spec::bake::format::Occupancy;

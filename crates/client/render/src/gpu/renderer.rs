@@ -106,7 +106,7 @@ pub struct FrameInput<'a> {
     pub handheld: bool,
 }
 
-/// The Earth layer's tiles as the GPU reads them: the floor's window, its
+/// The earth layer's tiles as the GPU reads them: the floor's window, its
 /// south-west tile first, and per tile its layer plus one; `upload` hands each
 /// tile that has come to the writer while the writer takes it.
 pub struct EarthTiles<'a> {

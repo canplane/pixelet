@@ -97,7 +97,7 @@ tiles from the leaves at z15 to z5, where it stops for now and not by any
 limit. **Every size is a zoom**: the X lane is one world of 2^24 units, so a
 thing the world over 2^z wide is at zoom z, and a bigger zoom is finer
 (`pxl-spec space/coord/zoom.rs`). A cell, a chunk and a tile are each named by it:
-terrain's cell is z24, a unit, and objects' finest z27; a chunk is
+terrain's cell is z24, a unit, and the object layer's finest z27; a chunk is
 `CHUNK_STEPS` zooms coarser than the camera grid's cells it draws (32 a
 side, `space/camera/grid.rs`); a tile holds a layer's own count
 of cells a side, the same at every zoom (`Lattice`), so terrain's z24 cells
@@ -138,7 +138,7 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   the parent's zoom on.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
   and x, y, z (`chunk.rs`); a cube that holds nothing is no
-  chunk. Terrain and places are tiles, a 2D heightfield and the places shown; placed
+  chunk. The terrain and place layers are tiles, a 2D heightfield and the places shown; placed
   objects are resident in their store, a sparse tree a shard (`SHARD_ZOOM`). Each layer,
   and the world composed of them, is read through one query
   (`layer/query.rs` `Query`): what a node holds and its records, at a cell
@@ -150,7 +150,7 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   (`majority`, `pxl-spec bake/fold.rs`).
 - **2.5D is how ground is stored, not how anything behaves.** What the view
   selects, orders, budgets, occludes and draws is 3D, height no different
-  from the rest, for terrain, places and objects alike. A 2.5D shortcut (a
+  from the rest, for the terrain, place and object layers alike. A 2.5D shortcut (a
   height read off the raster, `ground_ele_at`) is an optimization where it
   behaves exactly as the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`Cell::center`), at the height of the
@@ -163,7 +163,7 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   sees an error cross a cell, alike on every axis, and something under it
   is held finer. What lies inside a cell is its layer's to fold into one,
   never a second rule outside it: terrain's by majority and average in the
-  bake, objects' by `majority`, places' to a cell an icon wide at Carto's
+  bake, the object layer's by `majority`, the place layer's to a cell an icon wide at Carto's
   zoom, one place a cell (decision/20261009-places-follow-carto.md). A chunk draws a cell from what is composed there one zoom finer
   (`space/layer/lattice.rs` `Lattice::fold`, the ground's `GROUND`) as its
   surfaces' mean color and its fill's volume (`pxl-render
@@ -173,7 +173,7 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   `--folds` zooms over the leaves, the whole guard for every layer. A source declares the
   coarsest zoom it supplies whole — the published version in its metadata,
   the tile server at `/tile/source` — and the floor is that zoom.
-- **Terrain, places and objects are audited side by side** before a change is
+- **The terrain, place and object layers are audited side by side** before a change is
   done: anything one does its own way is removed or explained.
 
 ## What the bake paints

@@ -25,7 +25,7 @@ query                                         │
   │   the one way to ask what is there        │
   ▼                                           │
 layers                                        │
-  │   terrain · objects · places              │
+  │   terrain · object · place                │
   ▼                                           │
 tiles ────────────────────────────────────────┘
       fetched only when the view lacks them
@@ -208,7 +208,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                 |
 | `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                               |
 | `pxl-api`       | The application's server.                                                                                                                |
-| `pxl-geo-bake`  | The bakes — terrain, places, divisions, the Earth — and, behind a feature, the dev tile server.                                          |
+| `pxl-geo-bake`  | The bakes — terrain, place, division, earth — and, behind a feature, the dev tile server.                                                |
 | `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables; generates code from `spec/`; bakes the stars, the Moon, the brand.  |
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat. The kernel's are named as the chain is:

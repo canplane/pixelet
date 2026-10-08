@@ -4,7 +4,7 @@
 //! Generation, July 2004 (21600 × 10800, 2 km, the sea a flat blue), as
 //! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
 //! eight tiles). Each is averaged in linear light over what a texel covers.
-//!  - The Earth layer's tiles (pxl-spec bake/earth_tile.rs) at its top zoom, a
+//!  - The earth layer's tiles (pxl-spec bake/earth_tile.rs) at its top zoom, a
 //!    ground cell a texel, to `./out/earth/<version>/<name>`. A tile that is one
 //!    color says nothing the global picture does not, and has no object.
 //!  - The global picture every tile falls back to, 2048 × 1024, to

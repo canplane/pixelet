@@ -44,7 +44,7 @@ const EARTH: Asset = Asset::sky_earth_07_webp;
 
 use crate::view::frame::pose::{sea_under_eye, view};
 
-const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");
+const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the earth layer holds");
 
 pub fn stage_write() {
     let v = view();
