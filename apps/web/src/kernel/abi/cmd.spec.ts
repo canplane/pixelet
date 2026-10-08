@@ -66,7 +66,8 @@ export const enum InputMinor {
   POSE = 0x09,
   POSE_END = 0x0a,
   HOLD = 0x0b,
-  HOLD_TEXT = 0x0c,
+  MARKER_WORDS = 0x0c,
+  MARKER_CANCEL = 0x0d,
 }
 
 /** The device sensors' verbs. */
@@ -139,6 +140,13 @@ export const enum PointerKind {
   Mouse = 0,
   Touch = 1,
   Pen = 2,
+}
+
+/** What a marker tool's tap left waiting for words. */
+export const enum MarkerWaiting {
+  None = 0,
+  Put = 1,
+  Reword = 2,
 }
 
 /** What the pointer holds. */
@@ -276,8 +284,10 @@ export const enum Command {
   INPUT_POINTER = 0x1102,
   /** What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer. */
   INPUT_HOLD = 0x110b,
-  /** The words the marker tool puts up, sent when they change: what a marker placed from then on carries. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut. */
-  INPUT_HOLD_TEXT = 0x110c,
+  /** The words for the marker the tool left waiting (HoldingState.marker): puts it up at the cell a tap chose, or words again the marker a tap on its badge chose, and nothing waits after. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut. */
+  INPUT_MARKER_WORDS = 0x110c,
+  /** The marker the tool left waiting is let go, nothing put up. */
+  INPUT_MARKER_CANCEL = 0x110d,
   INPUT_WHEEL = 0x1103,
   /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
   INPUT_KEYS = 0x1106,
@@ -437,19 +447,21 @@ export function read_companion_state(b: BranchCursor): CompanionState {
   return { person_ready: b.at(0).get<boolean>(), pet_ready: b.at(1).get<boolean>() };
 }
 
-/** What the pointer holds, as INPUT_HOLD and INPUT_HOLD_TEXT set it: the cube, the decor and the marker's words are each remembered whichever tool is held. */
+/** What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held; and a marker the tool left waiting for its words. */
 export interface HoldingState {
   tool: ActiveTool;
   /** The held cube, by its number in the catalog's one value space. */
   cube: u32;
   decor: u32;
   tier: u32;
-  /** The words the marker tool puts up, as INPUT_HOLD_TEXT set them. */
-  text: string;
+  /** What the marker tool left waiting for its words, which INPUT_MARKER_WORDS or INPUT_MARKER_CANCEL ends. */
+  marker: MarkerWaiting;
+  /** A waiting marker's words as they are: the marker's own where it is worded again, none where it is new. */
+  words: string;
 }
 
 export function read_holding_state(b: BranchCursor): HoldingState {
-  return { tool: b.at(0).get<ActiveTool>(), cube: b.at(1).get<u32>(), decor: b.at(2).get<u32>(), tier: b.at(3).get<u32>(), text: b.at(4).get<string>() };
+  return { tool: b.at(0).get<ActiveTool>(), cube: b.at(1).get<u32>(), decor: b.at(2).get<u32>(), tier: b.at(3).get<u32>(), marker: b.at(4).get<MarkerWaiting>(), words: b.at(5).get<string>() };
 }
 
 export interface OrientationState {
@@ -657,12 +669,12 @@ export function encode_input_hold(p: InputHold): U8Array {
   return packet((b) => b.u32(p.tool).u32(p.value).u32(p.tier));
 }
 
-/** Command.INPUT_HOLD_TEXT's packet. */
-export interface InputHoldText {
+/** Command.INPUT_MARKER_WORDS's packet. */
+export interface InputMarkerWords {
   text: string;
 }
 
-export function encode_input_hold_text(p: InputHoldText): U8Array {
+export function encode_input_marker_words(p: InputMarkerWords): U8Array {
   return packet((b) => b.str(p.text));
 }
 

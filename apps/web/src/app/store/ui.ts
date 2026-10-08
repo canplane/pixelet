@@ -5,7 +5,7 @@ import { create } from "zustand";
 import type { i32, u16, u32 } from "@xpute/core/abi/word.ts";
 import { cube_types } from "@/catalog/cell/cube_type.spec.ts";
 import { decorKinds, type PlaceableCube, placeableCubes } from "@/catalog/cell/mod.ts";
-import { ActiveTool, Command, encode_chat_send, encode_input_hold_text } from "@/kernel/abi/cmd.spec.ts";
+import { ActiveTool, Command, encode_chat_send, encode_input_marker_words } from "@/kernel/abi/cmd.spec.ts";
 import { MARKER_TEXT_CHARS } from "@/catalog/cell/ext.spec.ts";
 import { kernel_command, kernel_fits, kernel_hold, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
@@ -20,17 +20,19 @@ const MAX_CHAT_LINES = 10;
 let nextChatLineId = 0;
 
 // The hotbar's MRU list, across cube and decor; the tool says which catalog a pick's number is in.
-type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u16 };
+type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u16 } | { tool: ActiveTool.Marker };
 
 function isSamePick(a: RecentPick, b: RecentPick): boolean {
   if (a.tool === ActiveTool.Object) return b.tool === ActiveTool.Object && a.cube === b.cube;
-  return b.tool === ActiveTool.Decor && a.kind === b.kind;
+  if (a.tool === ActiveTool.Decor) return b.tool === ActiveTool.Decor && a.kind === b.kind;
+  return b.tool === ActiveTool.Marker;
 }
 
 // A stored pick may name something the catalog no longer gives out.
 function isKnownPick(pick: RecentPick): boolean {
   if (pick.tool === ActiveTool.Object) return placeableCubes.includes(pick.cube);
-  return pick.tool === ActiveTool.Decor && decorKinds.includes(pick.kind);
+  if (pick.tool === ActiveTool.Decor) return decorKinds.includes(pick.kind);
+  return pick.tool === ActiveTool.Marker;
 }
 
 // Only a new pick joins, at the front: slots reshuffling under the finger disorient.
@@ -45,6 +47,7 @@ interface UiState {
   recentPicks: RecentPick[];
   selectCube: (cube: PlaceableCube) => void;
   selectDecor: (kind: u16) => void;
+  selectMarker: () => void;
 
   chatLines: ChatLine[];
   appendChatLine: (text: string) => void;
@@ -132,6 +135,10 @@ export const useUiStore = create<UiState>()((set) => ({
     kernel_hold(ActiveTool.Decor, kind, kernel_snapshot().holding.tier);
     set((state) => ({ recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Decor, kind }) }));
   },
+  selectMarker: () => {
+    holdTool(ActiveTool.Marker);
+    set((state) => ({ recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Marker }) }));
+  },
 
   dockTurn: 0,
   turnDock: (delta) => set((state) => ({ dockTurn: state.dockTurn + delta })),
@@ -159,9 +166,14 @@ export function chatFits(text: string): boolean {
   return kernel_fits(encode_chat_send({ text }));
 }
 
-/** The words the marker tool puts up from now on, and words a tapped marker takes. */
-export function holdMarkerText(text: string): void {
-  kernel_command(Command.INPUT_HOLD_TEXT, encode_input_hold_text({ text }));
+/** The words for the marker a tap left waiting: it is put up, or worded again. */
+export function putMarkerWords(text: string): void {
+  kernel_command(Command.INPUT_MARKER_WORDS, encode_input_marker_words({ text }));
+}
+
+/** The waiting marker is let go. */
+export function cancelMarker(): void {
+  kernel_command(Command.INPUT_MARKER_CANCEL);
 }
 
 /** Words past the cap are refused whole, never cut. */
@@ -170,7 +182,11 @@ export function markerTextFits(text: string): boolean {
 }
 
 export function useInHand(pick: RecentPick): boolean {
-  return useKernel(({ holding: h }) => pick.tool === ActiveTool.Object ? h.tool === ActiveTool.Object && h.cube === pick.cube : h.tool === ActiveTool.Decor && h.decor === pick.kind);
+  return useKernel(({ holding: h }) => {
+    if (pick.tool === ActiveTool.Object) return h.tool === ActiveTool.Object && h.cube === pick.cube;
+    if (pick.tool === ActiveTool.Decor) return h.tool === ActiveTool.Decor && h.decor === pick.kind;
+    return h.tool === ActiveTool.Marker;
+  });
 }
 
 useUiStore.subscribe((s, prev) => {

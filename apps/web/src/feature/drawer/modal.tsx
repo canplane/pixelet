@@ -7,7 +7,7 @@ import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react
 import type { f64, u8 } from "@xpute/core/abi/word.ts";
 import { decorKinds, decorSection, type PlaceableCube, placeableCubeId, placeableCubes, placeableCubeSection } from "@/catalog/cell/mod.ts";
 
-import { holdTool, useInHand, useUiStore } from "@/app/store/ui.ts";
+import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { useKernel } from "@/kernel/snapshot.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { Panel } from "@platform/panel.tsx";
@@ -199,7 +199,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
   }
 
   function pickMarker(): void {
-    holdTool(ActiveTool.Marker);
+    useUiStore.getState().selectMarker();
     onClose();
   }
 

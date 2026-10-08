@@ -17,7 +17,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 pub use crate::abi::cmd::ActiveTool;
 use crate::control::interaction::collision::{anchor_center, object_aabb};
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
-use crate::control::interaction::edit::{place, place_air, place_marker, place_decor, remove};
+use crate::control::interaction::edit::{place, place_air, wait_to_put, place_decor, remove};
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;
@@ -214,9 +214,10 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
                 place_decor(&hovered, DECOR_SIZE, ui.decor_id);
             }
         }
+        // It waits there for its words, which the shell asks for.
         ActiveTool::Marker => {
             if !is_placement_blocked(PlacementTool::Instance, &hovered, object_size) {
-                place_marker(&hovered, DECOR_SIZE);
+                wait_to_put(&hovered);
             }
         }
         ActiveTool::Object => {

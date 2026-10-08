@@ -177,8 +177,12 @@
           "value": 11
         },
         {
-          "name": "HOLD_TEXT",
+          "name": "MARKER_WORDS",
           "value": 12
+        },
+        {
+          "name": "MARKER_CANCEL",
+          "value": 13
         }
       ]
     },
@@ -396,6 +400,28 @@
         },
         {
           "name": "Pen",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "name": "MarkerWaiting",
+      "doc": [
+        "What a marker tool's tap left waiting for words."
+      ],
+      "format": "dec",
+      "default": "None",
+      "entries": [
+        {
+          "name": "None",
+          "value": 0
+        },
+        {
+          "name": "Put",
+          "value": 1
+        },
+        {
+          "name": "Reword",
           "value": 2
         }
       ]
@@ -1025,16 +1051,23 @@
           ]
         },
         {
-          "name": "INPUT_HOLD_TEXT",
+          "name": "INPUT_MARKER_WORDS",
           "value": 4364,
           "doc": [
-            "The words the marker tool puts up, sent when they change: what a marker placed from then on carries. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut."
+            "The words for the marker the tool left waiting (HoldingState.marker): puts it up at the cell a tap chose, or words again the marker a tap on its badge chose, and nothing waits after. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut."
           ],
           "packet": [
             {
               "name": "text",
               "type": "str"
             }
+          ]
+        },
+        {
+          "name": "INPUT_MARKER_CANCEL",
+          "value": 4365,
+          "doc": [
+            "The marker the tool left waiting is let go, nothing put up."
           ]
         },
         {
@@ -1568,7 +1601,7 @@
     {
       "name": "HoldingState",
       "doc": [
-        "What the pointer holds, as INPUT_HOLD and INPUT_HOLD_TEXT set it: the cube, the decor and the marker's words are each remembered whichever tool is held."
+        "What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held; and a marker the tool left waiting for its words."
       ],
       "fields": [
         {
@@ -1591,10 +1624,17 @@
           "type": "u32"
         },
         {
-          "name": "text",
+          "name": "marker",
+          "type": "MarkerWaiting",
+          "doc": [
+            "What the marker tool left waiting for its words, which INPUT_MARKER_WORDS or INPUT_MARKER_CANCEL ends."
+          ]
+        },
+        {
+          "name": "words",
           "type": "str",
           "doc": [
-            "The words the marker tool puts up, as INPUT_HOLD_TEXT set them."
+            "A waiting marker's words as they are: the marker's own where it is worded again, none where it is new."
           ]
         }
       ]

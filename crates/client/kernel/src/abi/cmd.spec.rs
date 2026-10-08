@@ -106,11 +106,12 @@ pub enum InputMinor {
     POSE = 0x09,
     POSE_END = 0x0a,
     HOLD = 0x0b,
-    HOLD_TEXT = 0x0c,
+    MARKER_WORDS = 0x0c,
+    MARKER_CANCEL = 0x0d,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 12] = [
+    pub const ALL: [InputMinor; 13] = [
         InputMinor::RECT,
         InputMinor::POINTER,
         InputMinor::WHEEL,
@@ -122,7 +123,8 @@ impl InputMinor {
         InputMinor::POSE,
         InputMinor::POSE_END,
         InputMinor::HOLD,
-        InputMinor::HOLD_TEXT,
+        InputMinor::MARKER_WORDS,
+        InputMinor::MARKER_CANCEL,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -321,6 +323,25 @@ impl PointerKind {
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<PointerKind> {
         PointerKind::ALL.into_iter().find(|m| *m as u32 == number)
+    }
+}
+
+/// What a marker tool's tap left waiting for words.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u32)]
+pub enum MarkerWaiting {
+    #[default]
+    None = 0,
+    Put = 1,
+    Reword = 2,
+}
+
+impl MarkerWaiting {
+    pub const ALL: [MarkerWaiting; 3] = [MarkerWaiting::None, MarkerWaiting::Put, MarkerWaiting::Reword];
+
+    /// The member a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<MarkerWaiting> {
+        MarkerWaiting::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -567,8 +588,10 @@ pub enum Command {
     INPUT_POINTER = 0x1102,
     /// What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
     INPUT_HOLD = 0x110b,
-    /// The words the marker tool puts up, sent when they change: what a marker placed from then on carries. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut.
-    INPUT_HOLD_TEXT = 0x110c,
+    /// The words for the marker the tool left waiting (HoldingState.marker): puts it up at the cell a tap chose, or words again the marker a tap on its badge chose, and nothing waits after. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut.
+    INPUT_MARKER_WORDS = 0x110c,
+    /// The marker the tool left waiting is let go, nothing put up.
+    INPUT_MARKER_CANCEL = 0x110d,
     INPUT_WHEEL = 0x1103,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_KEYS = 0x1106,
@@ -633,7 +656,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 42] = [
+    pub const ALL: [Command; 43] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::IMAGE_DECODED,
@@ -649,7 +672,8 @@ impl Command {
         Command::INPUT_RECT,
         Command::INPUT_POINTER,
         Command::INPUT_HOLD,
-        Command::INPUT_HOLD_TEXT,
+        Command::INPUT_MARKER_WORDS,
+        Command::INPUT_MARKER_CANCEL,
         Command::INPUT_WHEEL,
         Command::INPUT_KEYS,
         Command::GPU_READY,
@@ -807,27 +831,30 @@ impl CompanionState {
     }
 }
 
-/// What the pointer holds, as INPUT_HOLD and INPUT_HOLD_TEXT set it: the cube, the decor and the marker's words are each remembered whichever tool is held.
+/// What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held; and a marker the tool left waiting for its words.
 pub struct HoldingState<'a> {
     pub tool: ActiveTool,
     /// The held cube, by its number in the catalog's one value space.
     pub cube: u32,
     pub decor: u32,
     pub tier: u32,
-    /// The words the marker tool puts up, as INPUT_HOLD_TEXT set them.
-    pub text: &'a dyn Display,
+    /// What the marker tool left waiting for its words, which INPUT_MARKER_WORDS or INPUT_MARKER_CANCEL ends.
+    pub marker: MarkerWaiting,
+    /// A waiting marker's words as they are: the marker's own where it is worded again, none where it is new.
+    pub words: &'a dyn Display,
 }
 
 impl HoldingState<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 5;
+    pub const FIELDS: u32 = 6;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.tool as u32));
         w.u32(Some(self.cube));
         w.u32(Some(self.decor));
         w.u32(Some(self.tier));
-        w.str_display(self.text);
+        w.u32(Some(self.marker as u32));
+        w.str_display(self.words);
     }
 }
 
@@ -1194,16 +1221,16 @@ impl InputHold {
     }
 }
 
-/// Command::INPUT_HOLD_TEXT's packet.
+/// Command::INPUT_MARKER_WORDS's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct InputHoldText<'a> {
+pub struct InputMarkerWords<'a> {
     pub text: &'a str,
 }
 
-impl<'a> InputHoldText<'a> {
-    pub fn read(pkt: &'a [u8]) -> Result<InputHoldText<'a>, MarshalError> {
+impl<'a> InputMarkerWords<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<InputMarkerWords<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputHoldText { text: f.at(0)?.get_str_ref()? })
+        Ok(InputMarkerWords { text: f.at(0)?.get_str_ref()? })
     }
 }
 

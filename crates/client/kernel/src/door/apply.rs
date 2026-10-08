@@ -142,13 +142,21 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 }
                 abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Marker => {}
             }
+            // A marker waits for its words only while its tool is held.
+            if p.tool != abi::ActiveTool::Marker {
+                crate::control::interaction::edit::cancel_marker();
+            }
             hold(holding);
             camera_rehover();
             Ok(Some(0))
         }
-        Command::INPUT_HOLD_TEXT => {
-            let text = abi::InputHoldText::read(packet(pkt)?)?.text;
-            or_refuse(crate::control::interaction::edit::hold_text(text).ok(), Errno::EMSGSIZE)?;
+        Command::INPUT_MARKER_WORDS => {
+            let text = abi::InputMarkerWords::read(packet(pkt)?)?.text;
+            or_refuse(crate::control::interaction::edit::put_words(text).ok(), Errno::EMSGSIZE)?;
+            Ok(Some(0))
+        }
+        Command::INPUT_MARKER_CANCEL => {
+            crate::control::interaction::edit::cancel_marker();
             Ok(Some(0))
         }
         Command::INPUT_WHEEL => {
@@ -404,8 +412,8 @@ fn profiler_take(s: &mut State) -> u32 {
 mod test;
 
 /// A badge takes a tap before the ground under it: the pointer goes to it,
-/// the eraser takes away a marker someone put up, and the marker tool words
-/// it again with the words it holds.
+/// the eraser takes away a marker someone put up, and the marker tool has it
+/// wait to be worded again.
 fn tap_at(x: f64, y: f64) {
     use crate::chunk::place::Went;
     use crate::control::interaction::ActiveTool;
@@ -414,7 +422,7 @@ fn tap_at(x: f64, y: f64) {
         (ActiveTool::Pointer, Some(Went::To(at) | Went::Marker(_, at))) => go_to_place(at),
         (ActiveTool::Pointer, Some(Went::Into(at))) => go_into_place(at),
         (ActiveTool::Eraser, Some(Went::Marker(e, _))) => crate::control::interaction::edit::remove(e),
-        (ActiveTool::Marker, Some(Went::Marker(e, _))) => crate::control::interaction::edit::reword(e),
+        (ActiveTool::Marker, Some(Went::Marker(e, _))) => crate::control::interaction::edit::wait_to_reword(e),
         _ => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
     }
 }

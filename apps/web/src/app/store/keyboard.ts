@@ -44,9 +44,10 @@ function sendMove(): void {
 }
 
 function pickSlot(slot: number): void {
-  const { recentPicks, selectCube, selectDecor, cueSwatch } = useUiStore.getState();
+  const { recentPicks, selectCube, selectDecor, selectMarker, cueSwatch } = useUiStore.getState();
   const pick = recentPicks[slot];
   if (pick.tool === ActiveTool.Decor) return selectDecor(pick.kind);
+  if (pick.tool === ActiveTool.Marker) return selectMarker();
   selectCube(pick.cube);
   cueSwatch(pick.cube, false);
 }

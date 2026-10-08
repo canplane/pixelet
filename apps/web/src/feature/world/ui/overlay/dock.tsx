@@ -22,9 +22,9 @@ import { TextField } from "@/shared/ui/text-field.tsx";
 import { touches } from "@/shared/ui/touch.ts";
 import { alpha, chrome, color, disabledContent, material, shadow } from "@/shared/ui/theme.ts";
 import { openModal } from "@/app/modal.tsx";
-import { chatFits, holdMarkerText, holdTier, holdTool, markerTextFits, useInHand, useUiStore } from "@/app/store/ui.ts";
+import { cancelMarker, chatFits, holdTier, holdTool, markerTextFits, putMarkerWords, useInHand, useUiStore } from "@/app/store/ui.ts";
 import { useKernel } from "@/kernel/shell.ts";
-import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
+import { ActiveTool, MarkerWaiting } from "@/kernel/abi/cmd.spec.ts";
 import { type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
@@ -233,6 +233,22 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   );
 }
 
+function MarkerButton() {
+  const { t } = useTranslation();
+  const selectMarker = useUiStore.getState().selectMarker;
+  const active = useInHand({ tool: ActiveTool.Marker });
+
+  return (
+    <Pressable onPress={selectMarker} accessibilityRole="button" accessibilityLabel={t("drawer.marker")} style={styles.slot}>
+      <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
+        <View style={[styles.decorDisc, active ? styles.swatchSelected : styles.swatchIdle]}>
+          <Glyph glyph="bubble.left" size={16} color={active ? STRIP.glyphOn : STRIP.glyph} />
+        </View>
+      </Motion>
+    </Pressable>
+  );
+}
+
 function ToolButton({ label, glyph, active, onPress }: { label: string; glyph: GlyphName; active?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.slot}>
@@ -260,9 +276,10 @@ export function Dock() {
     }),
   ).current;
   const activeTool = useKernel((s) => s.holding.tool);
-  // With the marker tool, the message card words markers rather than chatting.
-  const wording = activeTool === ActiveTool.Marker;
-  const heldWords = useKernel((s) => s.holding.text);
+  // A marker waiting for its words turns the message card to wording it.
+  const marker = useKernel((s) => s.holding.marker);
+  const markerWords = useKernel((s) => s.holding.words);
+  const wording = marker !== MarkerWaiting.None;
   const recentPicks = useUiStore((s) => s.recentPicks);
   const appendChatLine = useUiStore.getState().appendChatLine;
   const [messageText, setMessageText] = useState("");
@@ -277,19 +294,34 @@ export function Dock() {
   const bar = useRef<View | null>(null);
 
   const front = PANES.find((pane) => deckDepth(pane, rotation, PANES.length) === 0);
-  // The message card in front is for typing; turned away, the keyboard goes with it.
+  // The message card in front is for typing; turned away, the keyboard goes
+  // with it, and a marker waiting for its words is let go.
   useEffect(() => {
     if (front === Pane.Message) inputRef.current?.focus();
-    else Keyboard.dismiss();
+    else {
+      Keyboard.dismiss();
+      if (wording) cancelMarker();
+    }
   }, [front]);
+
+  // A marker waits: the card comes up with its words as they are.
+  useEffect(() => {
+    if (!wording) return;
+    setMessageText(markerWords);
+    if (front !== Pane.Message) useUiStore.getState().turnDock(1);
+    inputRef.current?.focus();
+  }, [marker, markerWords]);
 
   function sendMessage() {
     const text = messageText.trim();
     if (!canSend || !fits || isSending) return;
     setIsSending(true);
     setTimeout(() => {
-      if (wording) holdMarkerText(text);
-      else appendChatLine(text);
+      if (wording) {
+        putMarkerWords(text);
+        // Put up, the palette comes back for the next.
+        useUiStore.getState().turnDock(1);
+      } else appendChatLine(text);
       setMessageText("");
       setIsSending(false);
       inputRef.current?.focus();
@@ -388,7 +420,7 @@ export function Dock() {
                   value={messageText}
                   onChangeText={setMessageText}
                   onSubmit={sendMessage}
-                  placeholder={wording ? t("world.dock.marker_placeholder", { words: heldWords }) : t("world.dock.message_placeholder")}
+                  placeholder={wording ? t("world.dock.marker_placeholder") : t("world.dock.message_placeholder")}
                   placeholderTextColor={LABEL.placeholder}
                   style={styles.messageInput}
                 />
@@ -426,7 +458,11 @@ export function Dock() {
                 contentContainerStyle={styles.picksContent}
               >
                 {recentPicks.map((pick) =>
-                  pick.tool === ActiveTool.Object ? <SwatchButton key={placeableCubeId(pick.cube)} cube={pick.cube} sizes={sizes} /> : <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
+                  pick.tool === ActiveTool.Object
+                    ? <SwatchButton key={placeableCubeId(pick.cube)} cube={pick.cube} sizes={sizes} />
+                    : pick.tool === ActiveTool.Decor
+                    ? <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
+                    : <MarkerButton key="marker" />
                 )}
               </ScrollView>
 

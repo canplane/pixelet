@@ -5,7 +5,8 @@
 
 use crate::layer::object::ext::Ext;
 use pxl_spec::cell::ext::MARKER_TEXT_CHARS;
-use pxl_spec::cell::object::MARKER;
+use crate::abi::cmd::MarkerWaiting;
+use pxl_spec::cell::object::{object_value_is_marker, MARKER};
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::preview::RenderEdits;
@@ -116,39 +117,69 @@ pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Ins
     (size >= units(GROUND.cell()) && object_value_is_air(read_state(at))).then(|| World::now().grown(DecorKind::of(decor_id), at))?
 }
 
-/// The words the marker tool puts up, until the shell hands it others.
-static HELD_TEXT: Global<String> = Global::new();
-
-fn held_text() -> &'static mut String {
-    HELD_TEXT.get(|| String::from("foo"))
+/// What the marker tool left waiting for its words: a cell to put one up
+/// at, or a marker to word again.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Waiting {
+    Put(Pvf3),
+    Reword(EntryAt),
 }
 
-/// Words past `MARKER_TEXT_CHARS` are refused whole.
-pub fn hold_text(text: &str) -> Result<(), Errno> {
+static WAITING: Global<Option<Waiting>> = Global::new();
+
+fn waiting() -> &'static mut Option<Waiting> {
+    WAITING.get(|| None)
+}
+
+/// A tap of the marker tool on a free cell: it waits there for its words.
+pub fn wait_to_put(at: &Pvf3) {
+    *waiting() = Some(Waiting::Put(*at));
+}
+
+/// A tap of the marker tool on a marker's badge: it waits to be worded again.
+pub fn wait_to_reword(at: EntryAt) {
+    *waiting() = Some(Waiting::Reword(at));
+}
+
+/// Nothing waits any more.
+pub fn cancel_marker() {
+    *waiting() = None;
+}
+
+/// What waits, and its words as they are, for the shell.
+pub fn marker_waiting() -> (MarkerWaiting, String) {
+    match *waiting() {
+        None => (MarkerWaiting::None, String::new()),
+        Some(Waiting::Put(_)) => (MarkerWaiting::Put, String::new()),
+        Some(Waiting::Reword(at)) => (MarkerWaiting::Reword, marker_words(at).unwrap_or_default()),
+    }
+}
+
+fn marker_words(at: EntryAt) -> Option<String> {
+    let objects = &crate::kernel().objects;
+    match objects.ext(&get_placed_object(at)?)? {
+        Ext::MarkerText(t) => Some(t.clone()),
+    }
+}
+
+/// The words for what waits: a marker put up at its cell, if the cell is
+/// still free, or the marker worded again, if it is still there. Words past
+/// `MARKER_TEXT_CHARS` are refused whole, and what waits keeps waiting.
+pub fn put_words(text: &str) -> Result<(), Errno> {
     if text.chars().count() > MARKER_TEXT_CHARS as usize {
         return Err(Errno::EMSGSIZE);
     }
-    text.clone_into(held_text());
+    let words = Ext::MarkerText(text.to_string());
+    match waiting().take() {
+        Some(Waiting::Put(at)) if !is_placement_blocked(PlacementTool::Instance, &at, DECOR_SIZE) => submit(Write::at(&at, DECOR_SIZE, MARKER).carrying(words)),
+        Some(Waiting::Reword(at)) if get_placed_object(at).is_some_and(|e| object_value_is_marker(e.state)) => submit(Write {
+            key: key_of::<3>(at.zoom(), at.at()),
+            id: MARKER,
+            ext: Some(words),
+        }),
+        _ => {}
+    }
     Ok(())
-}
-
-/// The words the marker tool holds, as the shell is told them.
-pub fn held_words() -> &'static str {
-    held_text()
-}
-
-/// A marker carrying the words the tool holds.
-pub fn place_marker(at: &Pvf3, size: f64) {
-    submit(Write::at(at, size, MARKER).carrying(Ext::MarkerText(held_text().clone())));
-}
-
-/// A marker already up, worded again with the words the tool holds.
-pub fn reword(at: EntryAt) {
-    submit(Write {
-        key: key_of::<3>(at.zoom(), at.at()),
-        id: MARKER,
-        ext: Some(Ext::MarkerText(held_text().clone())),
-    });
 }
 
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
