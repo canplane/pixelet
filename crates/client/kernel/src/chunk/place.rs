@@ -13,7 +13,7 @@ use crate::billboard::field::billboard_instance;
 use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::chunk::Chunk;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::cell::object::object_value_is_billboard;
+use pxl_spec::cell::object::object_value_is_marker;
 use crate::layer::poi::{rank_of, Places, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
 use crate::layer::Layer;
 use crate::layer::{Answer, Query};
@@ -91,13 +91,13 @@ fn shown_at(units_per_px: f64) -> Option<Shown> {
     }
 }
 
-/// The billboards placed in `chunk`, each at its cell's center over the floor
+/// The markers put up in `chunk`, each at its cell's center over the floor
 /// it stands on, by the chunk its base is in.
-fn signs(chunk: Chunk, read_zoom: Zoom, found: &mut Vec<(Cell, Label, Cell, f64, Shown, V3)>) {
+fn markers(chunk: Chunk, read_zoom: Zoom, found: &mut Vec<(Cell, Label, Cell, f64, Shown, V3)>) {
     let region = chunk.region();
     let Some(objects) = crate::kernel().objects.read(chunk.node(), chunk.cell_zoom()).value() else { return };
     objects.entries(&mut |e| {
-        if !object_value_is_billboard(e.state) {
+        if !object_value_is_marker(e.state) {
             return;
         }
         let c = e.cube();
@@ -106,7 +106,7 @@ fn signs(chunk: Chunk, read_zoom: Zoom, found: &mut Vec<(Cell, Label, Cell, f64,
             return;
         }
         let ground = GROUND.cell_of(LEAF_ZOOM, &e.corner());
-        found.push((POI_LATTICE.cell_of(read_zoom, &ground.mid()), Label::Sign(e.id()), ground, base[2], Shown::All, base));
+        found.push((POI_LATTICE.cell_of(read_zoom, &ground.mid()), Label::Marker(e.id()), ground, base[2], Shown::All, base));
     });
 }
 
@@ -157,7 +157,7 @@ pub fn step(ctx: &mut TickContext) {
     let places = settings_store().poi;
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
         let read_zoom = POI_LATTICE.read_zoom(chunk.cell_zoom());
-        signs(chunk, read_zoom, &mut found);
+        markers(chunk, read_zoom, &mut found);
         if !places {
             continue;
         }
@@ -264,12 +264,12 @@ pub fn step(ctx: &mut TickContext) {
 }
 
 /// Where a badge's tap goes: to its place, or into a count, so it comes
-/// apart into its places; a placed billboard's is its entry's, which the tool
+/// apart into its places; a marker someone put up is its entry's, which the tool
 /// held decides what to do with.
 pub enum Went {
     To(Pvf3),
     Into(Pvf3),
-    Sign(EntryAt, Pvf3),
+    Marker(EntryAt, Pvf3),
 }
 
 /// `ndc` in [−1, 1], y up. The badge that took the tap, if any.
@@ -279,7 +279,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
     let &(_, label, stands) = hits.iter().find(|(r, _, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y))?;
     Some(match label {
         Label::Count(..) => Went::Into(stands),
-        Label::Sign(e) => Went::Sign(e, stands),
+        Label::Marker(e) => Went::Marker(e, stands),
         Label::Place { .. } => Went::To(stands),
     })
 }

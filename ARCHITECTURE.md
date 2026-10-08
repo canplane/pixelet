@@ -80,7 +80,7 @@ The world is stored as layers, each in its own shape, and a layer is a payload a
 
 ## What is drawn as one thing
 
-One cell's worth of the world is drawn on two axes that do not depend on each other. Its **kind** is how it is drawn — a cube, a decor model, later a billboard — and it is the cell catalog's: an id is its class over its shape (`spec/spec/cell/id.json`, `SHAPE_BITS`), so a test for decor is a test of the class. Its **source** is which layer holds it: the ground grows it, or a player placed it. So decor is no layer: a tree the terrain grows and a tree a player places are one kind from two sources, and both arrive as the same record, `layer/instance.rs` `Instance` — its id, where it stands, its source and what its class carries (a decor's variant, heading and scale). The ground grows decor by evaluating, never storing: what stands in a leaf cell is a function of the cell, its look and a seed (`layer/terrain/scatter.rs` `grown_at`), and a region scattered at the leaves is its cells scattered alone (`pxl-spec procedural.test.rs`).
+One cell's worth of the world is drawn on two axes that do not depend on each other. Its **kind** is how it is drawn — a cube, a decor model, a marker drawn flat to the camera — and it is the cell catalog's: an id is its class over its shape (`spec/spec/cell/id.json`, `SHAPE_BITS`), so a test for decor is a test of the class. Its **source** is which layer holds it: the ground grows it, or a player placed it. So decor is no layer: a tree the terrain grows and a tree a player places are one kind from two sources, and both arrive as the same record, `layer/instance.rs` `Instance` — its id, where it stands, its source and what its class carries (a decor's variant, heading and scale). The ground grows decor by evaluating, never storing: what stands in a leaf cell is a function of the cell, its look and a seed (`layer/terrain/scatter.rs` `grown_at`), and a region scattered at the leaves is its cells scattered alone (`pxl-spec procedural.test.rs`).
 
 Every cube's color, every decor kind's models, seed and density are catalog entries, compiled into both sides and never sent (Catalogs and assets).
 
@@ -366,7 +366,7 @@ Badges are one instanced quad (`billboard/field.rs`) drawn from one sheet (`pxl-
 
 An entry of the sheet is drawn on the GPU once, when what it shows changes (`gpu/sheet.rs`, `frame/shader/sheet.wgsl`): its shapes — rounded rectangles, circles, rings, a bubble's tail — as signed distances, and its text as lines the platform drew, into a texture of the entry's size copied into its rectangle. Text is asked of the platform a line at a time (Below the view), so kerning, joining, bidirectional runs, fallback and emoji are the platform engine's on every target: a tab's canvas, an iPhone's CoreText, Android's `Canvas` ([the sheet on the GPU, and text by the line](./decision/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
 
-A billboard record from the objects would be drawn by this pass once the kind joins the cell catalog ([BACKLOG.md](./BACKLOG.md)).
+A marker someone puts up is drawn by the same pass, beside the places: the objects' marker class (`spec/spec/cell/id.json`), read through their query in each drawn chunk and shown whether or not places are on. Its words are one for every marker until each keeps its own ([BACKLOG.md](./BACKLOG.md)).
 
 ---
 

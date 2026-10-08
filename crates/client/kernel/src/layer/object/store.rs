@@ -15,7 +15,7 @@ use std::collections::TryReserveError;
 pub use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::fold::majority;
-use pxl_spec::cell::object::{decor_id_from_num, object_value_is_billboard, object_value_is_decor, object_value_is_voxel, placeable_cube_of, PlaceableCube};
+use pxl_spec::cell::object::{decor_id_from_num, object_value_is_marker, object_value_is_decor, object_value_is_voxel, placeable_cube_of, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
@@ -35,7 +35,7 @@ use crate::sched::edge::request_world_tick;
 pub enum EntryKind {
     Solid { cube: PlaceableCube },
     Decor { decor_id: DecorId },
-    Billboard,
+    Marker,
 }
 
 /// A leaf as an asker meets it: its cube, X in the asker's frame.
@@ -63,10 +63,10 @@ impl Entry {
         cube(self.zoom, self.at)
     }
 
-    /// Not for air, which is the eraser's marker.
+    /// Not for air, which is the eraser's mark.
     pub fn kind(&self) -> EntryKind {
-        if object_value_is_billboard(self.state) {
-            EntryKind::Billboard
+        if object_value_is_marker(self.state) {
+            EntryKind::Marker
         } else if object_value_is_decor(self.state) {
             EntryKind::Decor {
                 decor_id: decor_id_from_num(self.state),

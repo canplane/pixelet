@@ -3,7 +3,7 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the objects' query and written to the store.
 
-use pxl_spec::cell::object::BILLBOARD;
+use pxl_spec::cell::object::MARKER;
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::preview::RenderEdits;
@@ -115,8 +115,8 @@ pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Ins
     (size >= units(GROUND.cell()) && object_value_is_air(read_state(at))).then(|| World::now().grown(DecorKind::of(decor_id), at))?
 }
 
-pub fn place_billboard(at: &Pvf3, size: f64) {
-    write_object_value(at, size, BILLBOARD);
+pub fn place_marker(at: &Pvf3, size: f64) {
+    write_object_value(at, size, MARKER);
 }
 
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
@@ -162,12 +162,12 @@ pub fn pending_step() -> RenderEdits {
     // material whatever its sub-cell bytes, so the cell goes whole anyway.
     let size = match (&object, active_tool) {
         (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
-        (_, ActiveTool::Decor | ActiveTool::Billboard) => DECOR_SIZE,
+        (_, ActiveTool::Decor | ActiveTool::Marker) => DECOR_SIZE,
         _ if digging || scattered => units(GROUND.cell()),
         _ => object_size_of(ui.object_tier),
     };
     let blocked = match (&hovered, active_tool) {
-        (Some(h), ActiveTool::Object | ActiveTool::Decor | ActiveTool::Billboard) => {
+        (Some(h), ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker) => {
             let tool = if active_tool == ActiveTool::Object { PlacementTool::Object } else { PlacementTool::Instance };
             is_placement_blocked(tool, h, object_size_of(ui.object_tier))
         }

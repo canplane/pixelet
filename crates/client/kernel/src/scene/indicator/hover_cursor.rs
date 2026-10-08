@@ -1,4 +1,4 @@
-// pxl-kernel/scene/marker/hover_cursor.rs
+// pxl-kernel/scene/indicator/hover_cursor.rs
 
 //! The hover cursor's ghost, half transparent: a box in the mesher's layout
 //! drawn by the chunk shader, or one decor instance drawn by decor's. What it

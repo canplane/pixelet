@@ -1,4 +1,4 @@
-// pxl-kernel/scene/marker/location_puck.rs
+// pxl-kernel/scene/indicator/location_puck.rs
 
 //! The device's location puck: a zone of cells about the fix, each on the
 //! ground under it, and a beacon above that eases, spins and bobs.
@@ -129,7 +129,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
     }
     if p.drawn.as_ref().is_none_or(|(c, l)| *c != center_pos || *l != lane) {
         if let Some(k) = laid() {
-            k.scene.markers.set_zone(&mut k.draw, center_pos, &lane, ZONE_RADIUS_CELL * units(GROUND.cell()));
+            k.scene.puck.set_zone(&mut k.draw, center_pos, &lane, ZONE_RADIUS_CELL * units(GROUND.cell()));
         }
         let old = p.drawn.replace((center_pos, lane)).map(|(_, l)| l);
         lane = old.unwrap_or_default();
@@ -143,7 +143,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
     let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], kernel().scene.environment.night());
     if p.beacon_for != Some(beacon) {
         p.beacon_for = Some(beacon);
-        kernel().scene.markers.set_beacon(beacon.0, beacon.1);
+        kernel().scene.puck.set_beacon(beacon.0, beacon.1);
     }
 }
 
@@ -154,7 +154,7 @@ fn clear(p: &mut Puck) {
     p.shown = false;
     p.drawn = None;
     if let Some(k) = laid() {
-        k.scene.markers.clear(&mut k.draw);
+        k.scene.puck.clear(&mut k.draw);
     }
     request_world_tick();
 }
@@ -180,11 +180,11 @@ pub struct PuckDraw {
 }
 
 #[derive(Default)]
-pub struct Markers {
+pub struct LocationPuck {
     puck: Option<PuckDraw>,
 }
 
-impl Markers {
+impl LocationPuck {
     /// `lane` holds ZONE_INSTANCE_FLOATS floats an instance. Replaces what was there.
     pub fn set_zone(&mut self, draw: &mut DrawList, center: V3, lane: &[f32], snap_dist: f64) {
         let count = (lane.len() / ZONE_INSTANCE_FLOATS) as u32;
@@ -234,7 +234,7 @@ impl Markers {
     pub fn clear(&mut self, draw: &mut DrawList) {
         if let Some(p) = self.puck.take() {
             draw.free(p.handle);
-            // SAFETY: the block this marker took and has not given back.
+            // SAFETY: the block this indicator took and has not given back.
             unsafe { free((p.at, p.bytes)) };
         }
     }

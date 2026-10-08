@@ -53,13 +53,11 @@ Nothing now.
 
 ## P2
 
-- **Badges are drawn by kind, not by the POI layer.** What is drawn and
-  struck splits by render kind (cube, decor, billboard) and what is stored by
-  where it comes from (the geodata's layers, the objects); decor is moving to
-  that shape. A billboard today is drawn from the POI layer alone, so a
-  user's signpost, an object whose id is a billboard kind, has no way on
-  screen. The billboard kind joins the cell catalog and the badges take its
-  records from whichever layer answers them, when a signpost is wanted.
+- **A marker keeps its own words.** Someone puts a marker up from the
+  drawer, and every one reads "foo": the objects' store holds an id a leaf
+  and no text. Its words come from the message input, and are kept beside
+  the entry under a new storage key, with what words someone writes in the
+  world bringing reporting and moderation nearer.
 
 - **Terrain's lanes are one record, which keeps it from being a quadtree.**
   A tile is its ground, elevation, decks and index together

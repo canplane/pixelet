@@ -140,7 +140,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 abi::ActiveTool::Decor => {
                     holding.decor_id = or_refuse(u16::try_from(p.value).ok().and_then(DecorId::of), Errno::EINVAL)?;
                 }
-                abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Billboard => {}
+                abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Marker => {}
             }
             hold(holding);
             camera_rehover();
@@ -399,15 +399,15 @@ fn profiler_take(s: &mut State) -> u32 {
 mod test;
 
 /// A badge takes a tap before the ground under it: the pointer goes to it,
-/// and the eraser takes away a billboard someone placed.
+/// and the eraser takes away a marker someone put up.
 fn tap_at(x: f64, y: f64) {
     use crate::chunk::place::Went;
     use crate::control::interaction::ActiveTool;
     use crate::control::navigation::destination::{go_into_place, go_to_place};
     match (crate::control::interaction::holding().active_tool, crate::chunk::place::tap(x, y)) {
-        (ActiveTool::Pointer, Some(Went::To(at) | Went::Sign(_, at))) => go_to_place(at),
+        (ActiveTool::Pointer, Some(Went::To(at) | Went::Marker(_, at))) => go_to_place(at),
         (ActiveTool::Pointer, Some(Went::Into(at))) => go_into_place(at),
-        (ActiveTool::Eraser, Some(Went::Sign(e, _))) => crate::control::interaction::edit::remove(e),
+        (ActiveTool::Eraser, Some(Went::Marker(e, _))) => crate::control::interaction::edit::remove(e),
         _ => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
     }
 }

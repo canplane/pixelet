@@ -159,14 +159,14 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** Markers for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs). */
+  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/indicator/coverage_gizmo.rs). */
   world_gizmo: {
     key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/marker/camera_gizmo.rs). */
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/indicator/camera_gizmo.rs). */
   camera_gizmo: {
     key: 14 as number,
     kind: "toggle",
@@ -281,7 +281,7 @@ export const SETTINGS_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** Markers for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/marker/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/marker/coverage_gizmo.rs). */
+  /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/indicator/coverage_gizmo.rs). */
   world_gizmo: {
     key: 13 as number,
     kind: "toggle",

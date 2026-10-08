@@ -140,10 +140,10 @@ function DecorItem({ kind, cell, onPick }: { kind: u8; cell: f64; onPick: (kind:
   );
 }
 
-/** A temporary way in: one billboard, its words not kept yet. */
-function BillboardItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
+/** A temporary way in: one marker, its words not kept yet. */
+function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
   const { t } = useTranslation();
-  const active = useKernel(({ holding: h }) => h.tool === ActiveTool.Billboard);
+  const active = useKernel(({ holding: h }) => h.tool === ActiveTool.Marker);
 
   return (
     <Item label={t("drawer.marker")} active={active} cell={cell} onPress={onPick}>
@@ -197,8 +197,8 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
-  function pickBillboard(): void {
-    holdTool(ActiveTool.Billboard);
+  function pickMarker(): void {
+    holdTool(ActiveTool.Marker);
     onClose();
   }
 
@@ -237,7 +237,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                 ))}
               {tab === DrawerTab.Decor && (
                 <Grid head={<SectionTitle>{t("drawer.markers")}</SectionTitle>}>
-                  {(cell) => <BillboardItem cell={cell} onPick={pickBillboard} />}
+                  {(cell) => <MarkerItem cell={cell} onPick={pickMarker} />}
                 </Grid>
               )}
 

@@ -146,7 +146,7 @@ export const enum ActiveTool {
   Object = 1,
   Decor = 2,
   Eraser = 3,
-  Billboard = 4,
+  Marker = 4,
 }
 
 /** What the tracking button did, as the button showed it. */

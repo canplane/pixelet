@@ -23,7 +23,7 @@ pub fn find_overlapping_object(corner: &Pvf3, size: f64) -> Option<Entry> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlacementTool {
     Object,
-    /// A decor or a billboard: one cell, and nothing stands on it.
+    /// A decor or a marker: one cell, and nothing stands on it.
     Instance,
 }
 
@@ -36,7 +36,7 @@ pub fn is_placement_blocked(tool: PlacementTool, corner: &Pvf3, object_size: f64
 /// Placed or scattered. An instance is stood on nowhere, so nothing is placed on it.
 fn instance_under(corner: &Pvf3) -> bool {
     let under = pvf3::add(corner, &base_of(GROUND.cell(), [0, 0, -1]));
-    let placed = objects_at(&under).iter().any(|o| matches!(o.kind(), EntryKind::Decor { .. } | EntryKind::Billboard));
+    let placed = objects_at(&under).iter().any(|o| matches!(o.kind(), EntryKind::Decor { .. } | EntryKind::Marker));
     placed || !holds_entry(&under) && KINDS.iter().any(|k| World::now().grown(k, &under).is_some())
 }
 
