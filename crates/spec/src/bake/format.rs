@@ -40,7 +40,7 @@ impl Ground {
 }
 
 /// Which of a tile and its four children are tiles of their own, the rest
-/// said whole by the tile (terrain's zero tile, POI's uncrowded ground):
+/// said whole by the tile (terrain's zero tile, places's uncrowded ground):
 /// children in the low four bits in `slot_of`'s order, the tile itself above
 /// them. A client never asks for a child its parent marks absent.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -89,15 +89,6 @@ pub struct Index {
     coarse: Cow<'static, [[i16; 2]]>, // `extent` joined over each coarser cell: rebuilt from it, never on the wire
     pub occupancy: Occupancy,         // which children are tiles: none is asked for that is not
 }
-
-/// A partial version's list, beside its tiles: the full version it overlays
-/// and the tiles it writes or removes over it, by name. A version without
-/// one is full.
-pub const SNAPSHOT_KEY: &str = "_snapshot";
-
-/// The code a version's tiles were baked by and the shards they cover,
-/// beside its tiles: a region is baked only over a version of the same code.
-pub const BUILT_KEY: &str = "_built";
 
 /// How far past the lane's facts the client draws a cell, down and up: the
 /// way's own cell under a bore's or a cutting's surface. Every read of the
@@ -161,7 +152,7 @@ fn coarse_of(lane: &[[i16; 2]], coarse: &mut [[i16; 2]]) {
 /// A tile: one lane a fact the client cannot make. What it draws by rule —
 /// a slab, a bore, a pier — is not here.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Terrain {
+pub struct TerrainTile {
     pub ground: Ground,           // a class a cell: the source rasterized
     pub decks: Decks,             // ways off the ground: source lines, tops solved offline
     pub ele: Cow<'static, [i16]>, // padded height samples, in leaf cells: from the raster
@@ -172,12 +163,12 @@ pub struct Terrain {
 static VOID_ELE: std::sync::LazyLock<Vec<i16>> = std::sync::LazyLock::new(|| vec![0; ELE_LANE]);
 static VOID_CELLS: std::sync::LazyLock<Vec<GroundCell>> = std::sync::LazyLock::new(|| vec![crate::cell::cube_types::sentinel::void; GROUND_LANE]);
 
-impl Terrain {
+impl TerrainTile {
     /// Where the source has nothing at all: void cells, which give no surface,
     /// so nothing is drawn while the ground is still known and stays asked
     /// for, and no child, so none is asked for under it.
-    pub fn void() -> Terrain {
-        Terrain {
+    pub fn void() -> TerrainTile {
+        TerrainTile {
             ground: Ground {
                 cells: Cow::Borrowed(&VOID_CELLS[..]),
             },
@@ -188,9 +179,9 @@ impl Terrain {
     }
 
     /// A leaf, its index taken from its own surface and decks.
-    pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> Terrain {
+    pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> TerrainTile {
         let extent = extent_of(&ele, &decks);
-        Terrain {
+        TerrainTile {
             ground,
             decks,
             ele: ele.into(),
@@ -200,7 +191,7 @@ impl Terrain {
 }
 
 // Cells go out packed, as the client holds them, so decoding is a length check and a copy.
-pub fn encode_terrain(tile: &Terrain) -> Result<Vec<u8>, MarshalError> {
+pub fn encode_terrain(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
         b.i16_array(Some(&tile.ele))
@@ -245,7 +236,7 @@ fn read_tile(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
 
 /// Decode straight into the tile's resident room; the index's coarse are
 /// built there before the tile is returned.
-pub fn decode_terrain_into(pkt: &[u8], room: TileRoom) -> Result<Terrain, MarshalError> {
+pub fn decode_terrain_into(pkt: &[u8], room: TileRoom) -> Result<TerrainTile, MarshalError> {
     let Lanes { ele, cells, extent, occupancy, decks } = read_tile(pkt)?;
     if room.ele.len() != ELE_LANE || room.cells.len() != GROUND_LANE || room.extent.len() != EXTENT_LANE {
         return Err(malformed());
@@ -261,7 +252,7 @@ pub fn decode_terrain_into(pkt: &[u8], room: TileRoom) -> Result<Terrain, Marsha
         coarse,
         decks: deck_room,
     } = room;
-    Ok(Terrain {
+    Ok(TerrainTile {
         ground: Ground { cells: (&*cells).into() },
         decks: decks.into_room(deck_room),
         ele: (&*ele).into(),
@@ -274,9 +265,9 @@ pub fn decode_terrain_into(pkt: &[u8], room: TileRoom) -> Result<Terrain, Marsha
 }
 
 // Copied out, for a tile that outlives its packet.
-pub fn decode_terrain(pkt: &[u8]) -> Result<Terrain, MarshalError> {
+pub fn decode_terrain(pkt: &[u8]) -> Result<TerrainTile, MarshalError> {
     let Lanes { ele, cells, extent, occupancy, decks } = read_tile(pkt)?;
-    Ok(Terrain {
+    Ok(TerrainTile {
         ele: ele.to_vec().into(),
         ground: Ground { cells: cells.to_vec().into() },
         decks: decks.to_decks(),

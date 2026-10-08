@@ -1,6 +1,6 @@
-// pxl-spec/bake/poi_tile.rs
+// pxl-spec/bake/place_tile.rs
 
-//! The POI layer's tile: per occupied `POI_LATTICE` cell, how many places
+//! The places layer's tile: per occupied `PLACE_LATTICE` cell, how many places
 //! stand in it and, of each kind, the named place of least id with the leaf
 //! cell it stands in. Least id is stable across zooms and says nothing
 //! of prominence; which to show is the reader's choice. Folding sums counts
@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 
 use crate::bake::format::{occupancy_of, Occupancy};
-use crate::bake::poi_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
+use crate::bake::place_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
 use crate::space::coord::pvf3::pvf3::Pvf3;
 use crate::space::layer::lattice::{Lattice, GROUND};
 use crate::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -27,9 +27,9 @@ use crate::space::coord::zoom::Zoom;
 /// badges overlap: a zoom draws its ground cell at three pixels or more,
 /// and the widest badge is under 192 pixels, which s = 6 covers and s = 5
 /// does not.
-pub const POI_LATTICE: Lattice = Lattice::new(GROUND.cell() - 6);
+pub const PLACE_LATTICE: Lattice = Lattice::new(GROUND.cell() - 6);
 
-const CELLS: u32 = POI_LATTICE.tile_cells() * POI_LATTICE.tile_cells();
+const CELLS: u32 = PLACE_LATTICE.tile_cells() * PLACE_LATTICE.tile_cells();
 
 /// The longest name a tile holds, in code points; a longer one is cut to end
 /// in an ellipsis. At 32, 99% of the places Overture names in Korea are whole
@@ -40,17 +40,17 @@ pub const NAME_CHARS: usize = 32;
 /// A cell holds a place of each kind, and a kind is a byte.
 const KINDS_MAX: usize = 256;
 
-// A position is an offset in leaf cells inside a POI cell, a half-word a lane.
+// A position is an offset in leaf cells inside a places cell, a half-word a lane.
 const _: () = assert!(
-    GROUND.cell_zoom(LEAF_ZOOM) - POI_LATTICE.cell_zoom(GROUND.top()) <= 16,
-    "a POI cell's leaf cells no longer fit a half-word a lane"
+    GROUND.cell_zoom(LEAF_ZOOM) - PLACE_LATTICE.cell_zoom(GROUND.top()) <= 16,
+    "a place cell's leaf cells no longer fit a half-word a lane"
 );
 
 /// An occupied cell. `partial` marks a count that is a floor: a source that
 /// answers a few at a time gave only the first of a crowd. Its places are a
 /// run of the tile's `shown`, one of each kind, by kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PoiCell {
+pub struct PlaceCell {
     pub cell: u32,
     pub count: u32,
     pub partial: bool,
@@ -59,7 +59,7 @@ pub struct PoiCell {
 }
 
 /// A shown place: its pool index and the leaf cell it stands in, as an
-/// offset in its POI cell.
+/// offset in its places cell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Shown {
     pub place: u32,
@@ -220,9 +220,9 @@ pub fn kind_color(kind: u8) -> u32 {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct PoiTile {
+pub struct PlaceTile {
     /// Ascending by cell index.
-    pub cells: Vec<PoiCell>,
+    pub cells: Vec<PlaceCell>,
     /// A cell's places in one run, by kind.
     pub shown: Vec<Shown>,
     pub places: Places,
@@ -232,14 +232,14 @@ pub struct PoiTile {
     pub occupancy: Occupancy,
 }
 
-impl PoiTile {
+impl PlaceTile {
     /// A tile at `z` from places all in that tile, names cut to
     /// `NAME_CHARS`; `complete` is false where the source gave only some.
-    pub fn of_places<'a>(zoom: Zoom, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>, complete: bool) -> PoiTile {
+    pub fn of_places<'a>(zoom: Zoom, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>, complete: bool) -> PlaceTile {
         let cut: Vec<_> = places
             .into_iter()
             .map(|(point, place)| {
-                let cell = POI_LATTICE.cell_of(zoom, &point);
+                let cell = PLACE_LATTICE.cell_of(zoom, &point);
                 (cell.index(), cell.offset_of(GROUND.cell_of(LEAF_ZOOM, &point)), cut_name(place.name), place)
             })
             .collect();
@@ -249,20 +249,20 @@ impl PoiTile {
         )
     }
 
-    pub fn shown(&self, c: &PoiCell) -> impl Iterator<Item = (u32, Place<'_>, [u32; 2])> + '_ {
+    pub fn shown(&self, c: &PlaceCell) -> impl Iterator<Item = (u32, Place<'_>, [u32; 2])> + '_ {
         self.shown[c.first as usize..(c.first + c.len) as usize].iter().map(|s| (s.place, self.places.get(s.place), s.at))
     }
 }
 
 /// `p` from its four children, in `Tile::children`'s order.
-pub fn fold_poi(p: Tile, children: [&PoiTile; 4]) -> PoiTile {
+pub fn fold_place(p: Tile, children: [&PlaceTile; 4]) -> PlaceTile {
     let mut cells = Vec::new();
     for (q, (k, child)) in p.children().into_iter().zip(children).enumerate() {
         cells.extend(child.cells.iter().map(move |c| {
-            let parent = POI_LATTICE.parent_cell(q, c.cell);
+            let parent = PLACE_LATTICE.parent_cell(q, c.cell);
             let places = child.shown(c).map(move |(_, place, at)| {
-                let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, LEAF_ZOOM, at);
-                (POI_LATTICE.cell_at(p, parent).offset_of(ground), place)
+                let ground = PLACE_LATTICE.cell_at(k, c.cell).inner_at(GROUND, LEAF_ZOOM, at);
+                (PLACE_LATTICE.cell_at(p, parent).offset_of(ground), place)
             });
             (parent, c.count, c.partial, places)
         }));
@@ -283,7 +283,7 @@ fn cut_name(name: &str) -> std::borrow::Cow<'_, str> {
 
 /// Cells ascending, each once: counts summed, partial if any part is, and per
 /// kind the named place of least id; a leaf has no children to mark.
-fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(leaf: bool, cells: impl Iterator<Item = (u32, u32, bool, P)>) -> PoiTile {
+fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(leaf: bool, cells: impl Iterator<Item = (u32, u32, bool, P)>) -> PlaceTile {
     let mut counts: Vec<(u32, u32, bool)> = Vec::new();
     let mut places: Vec<(u32, [u32; 2], Place<'a>)> = Vec::new();
     for (cell, count, partial, of) in cells {
@@ -294,7 +294,7 @@ fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(leaf: bool, cells: im
     places.sort_unstable_by(|a, b| (a.0, a.2.kind, a.2.id, a.2.name, a.1).cmp(&(b.0, b.2.kind, b.2.id, b.2.name, b.1)));
     places.dedup_by(|b, a| (a.0, a.2.kind) == (b.0, b.2.kind));
     let mut pool = Pool::default();
-    let mut tile = PoiTile::default();
+    let mut tile = PlaceTile::default();
     let mut from = 0;
     for group in counts.chunk_by(|a, b| a.0 == b.0) {
         let cell = group[0].0;
@@ -304,7 +304,7 @@ fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(leaf: bool, cells: im
             tile.shown.push(Shown { place: pool.add(place), at });
             from += 1;
         }
-        tile.cells.push(PoiCell {
+        tile.cells.push(PlaceCell {
             cell,
             count: group.iter().map(|c| c.1).sum(),
             partial: group.iter().any(|c| c.2),
@@ -315,7 +315,7 @@ fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(leaf: bool, cells: im
     tile.places = pool.places;
     let mut crowded = [false; 4];
     for c in tile.cells.iter().filter(|c| !leaf && (c.count > 1 || c.partial)) {
-        crowded[POI_LATTICE.child_cells(c.cell).0] = true;
+        crowded[PLACE_LATTICE.child_cells(c.cell).0] = true;
     }
     tile.occupancy = Occupancy::of_slots(crowded);
     tile
@@ -325,7 +325,7 @@ fn gathered<'a, P: Iterator<Item = ([u32; 2], Place<'a>)>>(leaf: bool, cells: im
 /// where its run of shown starts; the occupancy; per shown its place and position (two
 /// half-words); per place its kind by name ("" for none), the source's id and
 /// its names (`named`).
-pub fn encode(tile: &PoiTile) -> Result<Vec<u8>, MarshalError> {
+pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, MarshalError> {
     validate(tile)?;
     let cells: Vec<u32> = tile.cells.iter().map(|c| c.cell).collect();
     let counts: Vec<u32> = tile.cells.iter().map(|c| c.count).collect();
@@ -381,7 +381,7 @@ fn write(l: &Lanes) -> Result<Vec<u8>, MarshalError> {
 
 /// A kind this reader's table does not name reads as none, so a tile from a
 /// newer table still opens.
-pub fn decode(bytes: &[u8]) -> Result<PoiTile, MarshalError> {
+pub fn decode(bytes: &[u8]) -> Result<PlaceTile, MarshalError> {
     let root = TreeReader::new(bytes)?.read_branch()?;
     let (cells, counts, partial, starts) = (
         root.at(0)?.get_array::<u32>()?,
@@ -405,9 +405,9 @@ pub fn decode(bytes: &[u8]) -> Result<PoiTile, MarshalError> {
         }
         pooled.push(name, names.languages(i), kind_of(kinds.get(i).ok_or_else(malformed)?), ids.get(i).ok_or_else(malformed)?);
     }
-    let tile = PoiTile {
+    let tile = PlaceTile {
         cells: (0..n)
-            .map(|i| PoiCell {
+            .map(|i| PlaceCell {
                 cell: cells[i],
                 count: counts[i],
                 partial: partial[i] != 0,
@@ -429,7 +429,7 @@ pub fn decode(bytes: &[u8]) -> Result<PoiTile, MarshalError> {
 /// What a bake writes: cells ascending and in the tile; runs contiguous;
 /// shown places one per kind, ascending; positions a half-word a lane; kinds
 /// in the badge table; names whole within `NAME_CHARS`.
-fn validate(tile: &PoiTile) -> Result<(), MarshalError> {
+fn validate(tile: &PlaceTile) -> Result<(), MarshalError> {
     if tile.cells.iter().any(|c| c.cell >= CELLS || c.count == 0) || tile.cells.windows(2).any(|w| w[0].cell >= w[1].cell) {
         return Err(malformed());
     }
@@ -456,5 +456,5 @@ fn validate(tile: &PoiTile) -> Result<(), MarshalError> {
 }
 
 #[cfg(test)]
-#[path = "poi_tile.test.rs"]
+#[path = "place_tile.test.rs"]
 mod test;

@@ -212,7 +212,13 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
     // An id is its class over its shape (id.json).
     let id = read(ID_JSON)?;
     let shape_bits = id.get("SHAPE_BITS").map(Node::value).and_then(Node::num).ok_or(format!("{ID_JSON}: no SHAPE_BITS"))? as u32;
-    let class = |name: &str| id.get("CLASS").and_then(|c| c.get(name)).and_then(Node::num).map(|n| n as u32).ok_or(format!("{ID_JSON}: no class {name}"));
+    let class = |name: &str| {
+        id.get("CLASS")
+            .and_then(|c| c.get(name))
+            .and_then(Node::num)
+            .map(|n| n as u32)
+            .ok_or(format!("{ID_JSON}: no class {name}"))
+    };
     let (cube_class, decor_class) = (class("cube")?, class("decor")?);
     for (name, value) in &decor {
         if *value > u32::from(u16::MAX) || value >> shape_bits != decor_class {
@@ -412,13 +418,7 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
         "            match self {".into(),
     ]);
     rs.extend(named(&ground).map(|e| format!("                Ground::{} => Kind::{},", e.name, pascal(e.kind.unwrap_or("land")))));
-    rs.extend([
-        "            }".to_string(),
-        "        }".into(),
-        String::new(),
-        "    }".into(),
-        String::new(),
-    ]);
+    rs.extend(["            }".to_string(), "        }".into(), String::new(), "    }".into(), String::new()]);
     // The object's colors.
     let colors: Vec<&Entry> = named(&object).filter(|e| is_color(e)).collect();
     rs.extend([
@@ -463,7 +463,12 @@ pub fn decor_outputs() -> Result<Vec<Output>, String> {
     .to_vec();
     let entries: Vec<(&str, String)> = spec
         .get("decor_types")
-        .map(|d| d.entries().iter().map(|(k, v)| (k.as_str(), v.get("value").and_then(Node::num).map(js_num).unwrap_or_default())).collect())
+        .map(|d| {
+            d.entries()
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.get("value").and_then(Node::num).map(js_num).unwrap_or_default()))
+                .collect()
+        })
         .unwrap_or_default();
     let kinds = decor_kinds(&spec, &ground_names()?)?;
 
@@ -559,7 +564,11 @@ fn decor_kinds(spec: &Node, looks: &[String]) -> Result<Vec<String>, String> {
     .map(String::from)
     .to_vec();
     let meta = spec.get("meta").ok_or(format!("{DECOR_JSON}: no meta"))?.entries();
-    rs.extend(["/// What a decor thing carries beside where it stands.".to_string(), "#[derive(Clone, Copy, Debug, PartialEq)]".into(), "pub struct DecorMeta {".into()]);
+    rs.extend([
+        "/// What a decor thing carries beside where it stands.".to_string(),
+        "#[derive(Clone, Copy, Debug, PartialEq)]".into(),
+        "pub struct DecorMeta {".into(),
+    ]);
     for (field, ty) in meta {
         let ty = ty.str().filter(|t| matches!(*t, "u32" | "f64")).ok_or(format!("{DECOR_JSON}: meta.{field} is no u32 or f64"))?;
         rs.push(format!("    pub {field}: {ty},"));
@@ -579,7 +588,12 @@ fn decor_kinds(spec: &Node, looks: &[String]) -> Result<Vec<String>, String> {
         let on = k.get("on").and_then(Node::arr).ok_or(at("on"))?;
         let on = on
             .iter()
-            .map(|l| l.str().filter(|l| looks.iter().any(|g| g == l)).map(|l| format!("crate::cell::cube_types::ground::{l}")).ok_or(format!("{}: {l:?} is no ground look", at("on"))))
+            .map(|l| {
+                l.str()
+                    .filter(|l| looks.iter().any(|g| g == l))
+                    .map(|l| format!("crate::cell::cube_types::ground::{l}"))
+                    .ok_or(format!("{}: {l:?} is no ground look", at("on")))
+            })
             .collect::<Result<Vec<_>, _>>()?;
         let variants = k.get("variants").and_then(Node::arr).ok_or(at("variants"))?;
         let variants = variants

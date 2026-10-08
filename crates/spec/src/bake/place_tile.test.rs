@@ -1,4 +1,4 @@
-// pxl-spec/bake/poi_tile.test.rs
+// pxl-spec/bake/place_tile.test.rs
 
 use super::*;
 use crate::space::coord::pvf3::ivec;
@@ -8,10 +8,10 @@ fn leaf() -> Tile {
     Tile::new(LEAF_ZOOM, ivec::gather(3, -2, 0))
 }
 
-/// The corner of POI cell (tx, ty), then `dx`, `dy` leaf cells in.
+/// The corner of places cell (tx, ty), then `dx`, `dy` leaf cells in.
 fn point(tx: u32, ty: u32, dx: u32, dy: u32) -> Pvf3 {
-    let base = POI_LATTICE.cell_at(leaf(), POI_LATTICE.cell_index(tx, ty)).base();
-    POI_LATTICE.cell_of(LEAF_ZOOM, &base).inner_at(GROUND, LEAF_ZOOM, [dx, dy]).mid()
+    let base = PLACE_LATTICE.cell_at(leaf(), PLACE_LATTICE.cell_index(tx, ty)).base();
+    PLACE_LATTICE.cell_of(LEAF_ZOOM, &base).inner_at(GROUND, LEAF_ZOOM, [dx, dy]).mid()
 }
 
 fn called<'a>(name: &'a str, id: &'a str) -> Place<'a> {
@@ -21,7 +21,7 @@ fn called<'a>(name: &'a str, id: &'a str) -> Place<'a> {
 /// A cell's count and its places as (name, where it stands).
 type Cell<'a> = (u32, Vec<(&'a str, [u32; 2])>);
 
-fn cells(tile: &PoiTile) -> Vec<Cell<'_>> {
+fn cells(tile: &PlaceTile) -> Vec<Cell<'_>> {
     tile.cells.iter().map(|c| (c.count, tile.shown(c).map(|(_, p, at)| (p.name, at)).collect())).collect()
 }
 
@@ -33,7 +33,7 @@ fn a_tile_and_its_places_come_back_as_they_went() {
         id: "7",
         ..Place::default()
     };
-    let tile = PoiTile::of_places(
+    let tile = PlaceTile::of_places(
         LEAF_ZOOM,
         [
             (point(1, 0, 1, 2), station),
@@ -73,22 +73,22 @@ fn a_tile_and_its_places_come_back_as_they_went() {
 fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     let at = point(5, 4, 3, 1);
     let ground = GROUND.cell_of(LEAF_ZOOM, &at);
-    let empty = PoiTile::default();
+    let empty = PlaceTile::default();
     let tower = Place {
         name: "Namsan Tower",
         kind: kind_of("attraction"),
         id: "11",
         ..Place::default()
     };
-    let mut below = (leaf(), PoiTile::of_places(LEAF_ZOOM, [(at, tower)], true));
+    let mut below = (leaf(), PlaceTile::of_places(LEAF_ZOOM, [(at, tower)], true));
     for zoom in (GROUND.top()..LEAF_ZOOM).rev() {
         let p = Tile::over(zoom, below.0.tile);
-        let up = fold_poi(p, p.children().map(|k| if k == below.0 { &below.1 } else { &empty }));
+        let up = fold_place(p, p.children().map(|k| if k == below.0 { &below.1 } else { &empty }));
         assert_eq!(up.cells.len(), 1);
         let c = up.cells[0];
         let (_, place, at) = up.shown(&c).next().unwrap();
         assert_eq!(place, tower);
-        assert_eq!(POI_LATTICE.cell_at(p, c.cell).inner_at(GROUND, LEAF_ZOOM, at), ground, "z{zoom}");
+        assert_eq!(PLACE_LATTICE.cell_at(p, c.cell).inner_at(GROUND, LEAF_ZOOM, at), ground, "z{zoom}");
         below = (p, up);
     }
 }
@@ -98,13 +98,13 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
 fn a_tile_settles_every_child_but_one_under_a_crowd() {
     let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
     let [crowd, lone, empty, _] = p.children();
-    let at = |k: Tile, dx: u32| POI_LATTICE.cell_at(k, 0).inner_at(GROUND, LEAF_ZOOM, [dx, 0]).mid();
+    let at = |k: Tile, dx: u32| PLACE_LATTICE.cell_at(k, 0).inner_at(GROUND, LEAF_ZOOM, [dx, 0]).mid();
     let leaves = [
-        (crowd, PoiTile::of_places(LEAF_ZOOM, [(at(crowd, 0), called("A", "1")), (at(crowd, 1), called("B", "2"))], true)),
-        (lone, PoiTile::of_places(LEAF_ZOOM, [(at(lone, 0), called("C", "3"))], true)),
+        (crowd, PlaceTile::of_places(LEAF_ZOOM, [(at(crowd, 0), called("A", "1")), (at(crowd, 1), called("B", "2"))], true)),
+        (lone, PlaceTile::of_places(LEAF_ZOOM, [(at(lone, 0), called("C", "3"))], true)),
     ];
-    let none = PoiTile::default();
-    let tile = fold_poi(p, p.children().map(|k| leaves.iter().find(|(q, _)| *q == k).map_or(&none, |(_, tile)| tile)));
+    let none = PlaceTile::default();
+    let tile = fold_place(p, p.children().map(|k| leaves.iter().find(|(q, _)| *q == k).map_or(&none, |(_, tile)| tile)));
     assert!(tile.occupancy.has_child(crowd.slot()));
     assert!(!tile.occupancy.has_child(lone.slot()));
     assert!(!tile.occupancy.has_child(empty.slot()));
@@ -126,12 +126,12 @@ fn a_crowd_holds_one_place_of_each_kind() {
         ..Place::default()
     };
     let places = [(point(0, 0, 0, 0), cafe), (point(0, 0, 2, 0), Place { id: "10", ..cafe }), (point(1, 0, 5, 0), station)];
-    let leaf_tile = PoiTile::of_places(LEAF_ZOOM, places, true);
+    let leaf_tile = PlaceTile::of_places(LEAF_ZOOM, places, true);
     assert_eq!(cells(&leaf_tile), [(2, vec![("Cafe", [2, 0])]), (1, vec![("Gangnam", [5, 0])])]);
     let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
-    let empty = PoiTile::default();
-    let folded = fold_poi(p, p.children().map(|k| if k == leaf() { &leaf_tile } else { &empty }));
-    assert_eq!(folded, PoiTile::of_places(LEAF_ZOOM - 1, places, true));
+    let empty = PlaceTile::default();
+    let folded = fold_place(p, p.children().map(|k| if k == leaf() { &leaf_tile } else { &empty }));
+    assert_eq!(folded, PlaceTile::of_places(LEAF_ZOOM - 1, places, true));
     let mut held: Vec<_> = folded.shown(&folded.cells[0]).map(|(_, p, at)| (p.kind, p.id, at)).collect();
     held.sort_unstable();
     assert_eq!(folded.cells[0].count, 3);
@@ -145,7 +145,7 @@ fn a_crowd_holds_one_place_of_each_kind() {
 /// What the wire cannot hold is refused.
 #[test]
 fn a_tile_that_names_no_place_or_splits_a_character_is_refused() {
-    let tile = PoiTile::of_places(
+    let tile = PlaceTile::of_places(
         LEAF_ZOOM,
         [
             (
@@ -213,7 +213,7 @@ fn what_any_source_gives_comes_back() {
         kind: kind_of("subway"),
         id: "ChIJ3S-JXmauEmsRUcIaWtf4MzE",
     };
-    let tile = PoiTile::of_places(LEAF_ZOOM, [(point(1, 0, 0, 0), station)], true);
+    let tile = PlaceTile::of_places(LEAF_ZOOM, [(point(1, 0, 0, 0), station)], true);
     let back = decode(&encode(&tile).unwrap()).unwrap();
     assert_eq!(back, tile);
     assert_eq!(back.places.get(0), station);
@@ -223,13 +223,13 @@ fn what_any_source_gives_comes_back() {
 /// A partial count stays a floor at every zoom over it.
 #[test]
 fn a_floor_stays_a_floor_as_it_folds() {
-    let some = PoiTile::of_places(LEAF_ZOOM, [(point(0, 0, 0, 0), called("A", "1"))], false);
-    let all = PoiTile::of_places(LEAF_ZOOM, [(point(0, 0, 0, 0), called("A", "1"))], true);
+    let some = PlaceTile::of_places(LEAF_ZOOM, [(point(0, 0, 0, 0), called("A", "1"))], false);
+    let all = PlaceTile::of_places(LEAF_ZOOM, [(point(0, 0, 0, 0), called("A", "1"))], true);
     assert_eq!(decode(&encode(&some).unwrap()).unwrap(), some);
     let p = Tile::over(LEAF_ZOOM - 1, leaf().tile);
-    let empty = PoiTile::default();
+    let empty = PlaceTile::default();
     for (leaf_tile, partial) in [(&some, true), (&all, false)] {
-        let up = fold_poi(p, p.children().map(|k| if k == leaf() { leaf_tile } else { &empty }));
+        let up = fold_place(p, p.children().map(|k| if k == leaf() { leaf_tile } else { &empty }));
         assert_eq!(up.cells[0].partial, partial);
         assert_eq!(up.occupancy.has_child(leaf().slot()), partial);
     }

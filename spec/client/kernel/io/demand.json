@@ -6,9 +6,8 @@
   ],
   "CATEGORY_NAMES": [
     "terrain",
-    "poi",
-    "geocode",
-    "geocode_dict",
+    "place",
+    "division",
     "asset",
     "earth"
   ],

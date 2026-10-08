@@ -34,11 +34,11 @@
     "preview:oven": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task --cwd apps/web preview:oven) & wait\"",
     "preview:shelf": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --shelf ./out) & (deno task --cwd apps/web preview:shelf) & wait\"",
 
-    // Terrain and geocode resume; POI writes one immutable snapshot.
-    "bake:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_tiles -- \"$@\"' --",
-    "bake:poi": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_poi_tiles -- \"$@\"' --",
+    // Each bakes the shards it is told (--shard; every one when none is), then assembles a version.
+    "bake:terrain": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_terrain -- \"$@\"' --",
+    "bake:place": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_place -- \"$@\"' --",
     "bake:earth": "cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo-bake --bin bake_earth",
-    "bake:geocode": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_geocode_tiles -- \"$@\"' --",
+    "bake:division": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_division -- \"$@\"' --",
 
     // After any change under asset/.
     "ingest:asset": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin ingest_asset",

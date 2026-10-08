@@ -60,7 +60,7 @@ const DATA_SPECS: [DataSpec; 20] = [
     DataSpec {
         json: "spec/spec/division.json",
         uses: &[],
-        ts: Some("apps/web/src/feature/world/geocode/division.spec.ts"),
+        ts: Some("apps/web/src/feature/world/division/division.spec.ts"),
         rs: Some("crates/spec/src/division.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
@@ -138,9 +138,9 @@ const DATA_SPECS: [DataSpec; 20] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/spec/bake/poi_badge.json",
+        json: "spec/spec/bake/place_badge.json",
         uses: &[],
-        ts: Some("apps/web/src/feature/search/poi_badge.spec.ts"),
+        ts: Some("apps/web/src/feature/search/place_badge.spec.ts"),
         rs: None,
         module: None,
         enums: Enums::None,

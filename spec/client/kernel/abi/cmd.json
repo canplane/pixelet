@@ -1506,7 +1506,7 @@
           "list": true,
           "doc": [
             "The division the focus is in and every one above it, broad to narrow; empty",
-            "where the center is in none or the packets it is read out of have not arrived."
+            "where the focus is in none or the tile it is read out of has not arrived."
           ]
         },
         {
@@ -1675,6 +1675,14 @@
           "name": "names",
           "type": "LangName",
           "list": true
+        },
+        {
+          "name": "prominence",
+          "type": "u8",
+          "doc": [
+            "Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the",
+            "subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java)."
+          ]
         }
       ]
     },

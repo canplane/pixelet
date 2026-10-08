@@ -91,4 +91,3 @@ fn epsg3857_tile_bbox_preserves_the_exclusive_positive_world_boundary() {
     let [_, max_geodetic] = epsg4326::get_tile_bbox(Z15, tile_idx);
     assert_almost(max_geodetic[0], 180.0, 1e-10);
 }
-

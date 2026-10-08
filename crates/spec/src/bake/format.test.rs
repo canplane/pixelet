@@ -17,7 +17,7 @@ impl Rng {
 }
 
 /// Random lanes, each index cell's lowest under its highest.
-fn tile(seed: u64) -> Terrain {
+fn tile(seed: u64) -> TerrainTile {
     let mut rng = Rng(SplitMix64::new(seed));
     let ele: Vec<i16> = (0..ELE_LANE).map(|_| rng.next() as i16).collect();
     let cells: Vec<GroundCell> = (0..GROUND_LANE).map(|_| rng.next() as GroundCell).collect();
@@ -32,7 +32,7 @@ fn tile(seed: u64) -> Terrain {
         let points: Vec<([f64; 2], i16)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16)).collect();
         decks.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, deck::Form::of((rng.next() % 3) as u8), rng.next() as u8);
     }
-    Terrain {
+    TerrainTile {
         ele: ele.into(),
         ground: Ground { cells: cells.into() },
         decks: decks.finish(),

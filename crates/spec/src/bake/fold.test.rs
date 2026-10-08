@@ -158,9 +158,9 @@ fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
 }
 
 /// The open ocean: flat water at sea level, no tile.
-fn zero_tile() -> Terrain {
+fn zero_tile() -> TerrainTile {
     let cells = vec![ground::water; SPAN * SPAN];
-    let mut t = Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default());
+    let mut t = TerrainTile::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default());
     t.index.occupancy = Occupancy::ZERO;
     t
 }
