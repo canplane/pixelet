@@ -242,8 +242,9 @@ const SOURCE: &str = include_str!("ingest.rs");
 /// What a type's rows are made by, so a change to one type's rules makes
 /// that table whole and no other: this script but for the regions one type
 /// owns (marked `// own: <type> {` … `// } own`), the type itself, the regions
-/// it owns, and what the script reads from its dependencies, the shards'
-/// rectangles and the projection. A change outside every region is anyone's,
+/// it owns, and what the script reads from its dependencies: the shards'
+/// rectangles, the projection a feature's span is taken in, and the one it
+/// is written in. A change outside every region is anyone's,
 /// so a helper a type alone uses but left unmarked rebuilds every table
 /// rather than none. The tests are owned by no type, so they rebuild none.
 fn code_of(source: &str, ty: &Type, shards: &[Shard]) -> String {
@@ -261,7 +262,9 @@ fn code_of(source: &str, ty: &Type, shards: &[Shard]) -> String {
         }
     }
     let rectangles: Vec<_> = shards.iter().map(|s| (s.m, s.deg)).collect();
-    let read = format!("{shared}{own}{ty:?}{rectangles:?}{}", projected("wkb"));
+    // `span_m`'s projection, which decides the shards a feature meets, at points that span it.
+    let spans: Vec<_> = [[-180.0, -85.0], [0.0, 0.0], [126.978, 37.5665], [180.0, 85.0]].map(|[x, y]| epsg4326::to_mercator(&[x, y, 0.0])).into();
+    let read = format!("{shared}{own}{ty:?}{rectangles:?}{spans:?}{}", projected("wkb"));
     format!("{:016x}", fnv1a(read.as_bytes()))
 }
 

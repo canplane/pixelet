@@ -260,7 +260,7 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
         &[&tables],
     )?;
     let elevation = text(client, "SELECT shard, data_date::text, file_name, status FROM elevation_catalog ORDER BY shard", &[])?;
-    // The coastline keeps no catalog; its import makes the table anew.
-    let coastline = text(client, "SELECT pg_relation_filenode(to_regclass('osm_land_polygons'))::text", &[])?;
+    // The coastline's identity is its download's hash, the table's comment (`infra/geo/coastline`).
+    let coastline = text(client, "SELECT obj_description(to_regclass('osm_land_polygons'), 'pg_class')", &[])?;
     Ok(serde_json::json!({ "overture": overture, "elevation": elevation, "coastline": coastline }))
 }

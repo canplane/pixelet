@@ -96,6 +96,8 @@ The coast as OSM's land, split into small polygons and already in EPSG:3857,
 one zip for the world (about 1 GB), ODbL. A coast is never taken in part, so
 the table holds the world's, whatever shards are ingested. The zip is kept in
 `coastline/raw/` and fetched again only when osmdata publishes a newer one.
+The table's identity is the zip's hash, its comment: the same zip is not
+imported again, and a new one is filled beside the table and swapped in.
 
 ## 2. Prerequisites (macOS)
 
