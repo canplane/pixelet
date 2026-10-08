@@ -26,7 +26,7 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 20] = [
+const DATA_SPECS: [DataSpec; 21] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
@@ -45,6 +45,16 @@ const DATA_SPECS: [DataSpec; 20] = [
         module: Some("ext"),
         enums: Enums::All,
         ts_names: Some(&["MARKER_TEXT_CHARS"]),
+        cpp: None,
+    },
+    DataSpec {
+        json: "spec/spec/cell/marker.json",
+        uses: &[],
+        ts: None,
+        rs: Some("crates/spec/src/cell/marker.spec.rs"),
+        module: Some("marker"),
+        enums: Enums::None,
+        ts_names: None,
         cpp: None,
     },
     DataSpec {
@@ -138,9 +148,9 @@ const DATA_SPECS: [DataSpec; 20] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/spec/bake/place_badge.json",
+        json: "spec/spec/bake/place_theme.json",
         uses: &[],
-        ts: Some("apps/web/src/feature/search/place_badge.spec.ts"),
+        ts: Some("apps/web/src/feature/search/place_theme.spec.ts"),
         rs: None,
         module: None,
         enums: Enums::None,

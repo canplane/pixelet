@@ -25,11 +25,21 @@ pub fn band(o: &Observation, tau: Tau, lattice: Lattice, top: Zoom, zoom: Zoom) 
     (from <= o.far()).then_some((from, to))
 }
 
-/// The most tiles a zoom's demand span along an axis: ⌊d / tile⌋ + 2, the same at every zoom.
-pub const REACH_ACROSS: u32 = (2.0 * GROUND.demand_reach(LEAF_ZOOM) / units(LEAF_ZOOM)) as u32 + 2;
+/// The most of a lattice's tiles a zoom's demand spans along an axis:
+/// ⌊d / tile⌋ + 2, the same at every zoom. A tile of fewer grid cells is
+/// asked for more of.
+pub const fn reach_across(lattice: Lattice) -> u32 {
+    (2.0 * lattice.demand_reach(LEAF_ZOOM) / units(LEAF_ZOOM)) as u32 + 2
+}
 
-/// The most tiles a zoom's demand name about one observer.
-pub const REACH_TILES: u32 = REACH_ACROSS * REACH_ACROSS;
+/// The most of a lattice's tiles a zoom's demand names about one observer.
+pub const fn reach_tiles(lattice: Lattice) -> u32 {
+    reach_across(lattice) * reach_across(lattice)
+}
+
+/// The ground's, which the floor and the Earth's window are cut to.
+pub const REACH_ACROSS: u32 = reach_across(GROUND);
+pub const REACH_TILES: u32 = reach_tiles(GROUND);
 
 /// Every tile at `z` with ground within `radius` of `at`.
 pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Tile> {

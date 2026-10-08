@@ -307,7 +307,7 @@ export const SUMMARY = {
     requests: 1 as number,
     WORDS: 2 as number,
   },
-  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from. */
+  /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, as zooms: `cell_want` the camera grid's cell the view wants there, at the distance it is met at, and `cell_drawn` the cells of the chunk drawn there now, coarser while the finer is on its way. */
   view: {
     AT: 601 as number,
     dist: 0 as number,
@@ -323,12 +323,11 @@ export const SUMMARY = {
     hover_lon: 10 as number,
     hover_lat: 11 as number,
     hover_alt: 12 as number,
-    chunk_zoom: 13 as number,
-    tier_zoom: 14 as number,
-    read_zoom: 15 as number,
-    WORDS: 16 as number,
+    cell_want: 13 as number,
+    cell_drawn: 14 as number,
+    WORDS: 15 as number,
   },
-  WORDS: 617 as number,
+  WORDS: 616 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

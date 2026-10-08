@@ -13,6 +13,8 @@ pub mod decor;
 pub mod ext;
 #[path = "cell/id.spec.rs"]
 pub mod id;
+#[path = "cell/marker.spec.rs"]
+pub mod marker;
 pub mod object;
 
 pub use cube_type::{cube_types, Kind};

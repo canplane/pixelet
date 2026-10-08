@@ -399,7 +399,7 @@
     },
     "view": {
       "$doc": [
-        "Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from."
+        "Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, as zooms: `cell_want` the camera grid's cell the view wants there, at the distance it is met at, and `cell_drawn` the cells of the chunk drawn there now, coarser while the finer is on its way."
       ],
       "dist": 1,
       "polar": 1,
@@ -414,9 +414,8 @@
       "hover_lon": 1,
       "hover_lat": 1,
       "hover_alt": 1,
-      "chunk_zoom": 1,
-      "tier_zoom": 1,
-      "read_zoom": 1
+      "cell_want": 1,
+      "cell_drawn": 1
     }
   },
   "READ": {

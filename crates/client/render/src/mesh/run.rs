@@ -7,7 +7,7 @@ use crate::mesh::word::{taps_of, unpack_material, SUB_CELL_NONE};
 use crate::mesh::{grow, try_push, Refused};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::zoom::count;
-use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::lattice::GROUND_FOLD;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -17,7 +17,7 @@ use xpute_core::status::errno::Errno;
 pub const APRON: u32 = 1;
 
 /// The widest set: a chunk's columns where they fold into its cells, and its apron.
-pub const COL_SPAN: u32 = CHUNK_CELLS * count(GROUND.fold(), 0) + 2 * APRON;
+pub const COL_SPAN: u32 = CHUNK_CELLS * count(GROUND_FOLD, 0) + 2 * APRON;
 const COLUMN_CNT: usize = (COL_SPAN * COL_SPAN) as usize;
 
 /// Column `(cx, cy)` of the chunk's own in a set `span` wide.

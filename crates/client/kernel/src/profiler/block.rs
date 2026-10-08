@@ -247,9 +247,8 @@ pub struct ViewBlock {
     pub hover_lon: f64,
     pub hover_lat: f64,
     pub hover_alt: f64,
-    pub chunk_zoom: f64,
-    pub tier_zoom: f64,
-    pub read_zoom: f64,
+    pub cell_want: f64,
+    pub cell_drawn: f64,
 }
 
 words!(ViewBlock, SUMMARY::view::WORDS,
@@ -257,7 +256,7 @@ words!(ViewBlock, SUMMARY::view::WORDS,
     center_lon => SUMMARY::view::center_lon, center_lat => SUMMARY::view::center_lat, center_z => SUMMARY::view::center_z,
     hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
     hover_lon => SUMMARY::view::hover_lon, hover_lat => SUMMARY::view::hover_lat, hover_alt => SUMMARY::view::hover_alt,
-    chunk_zoom => SUMMARY::view::chunk_zoom, tier_zoom => SUMMARY::view::tier_zoom, read_zoom => SUMMARY::view::read_zoom,
+    cell_want => SUMMARY::view::cell_want, cell_drawn => SUMMARY::view::cell_drawn,
 );
 
 words!(QualityBlock, SUMMARY::quality::WORDS,

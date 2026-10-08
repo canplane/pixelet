@@ -18,7 +18,7 @@ pub type Stands = (i32, i32, Option<(u32, u8)>);
 /// What stands in each column of the sample's grid, apron included, lowest
 /// first and none overlapping. `step` is the sample's cells a cell spans
 /// upright. What is painted later wins a cell, as the layers are laid: the
-/// ground, then decks, then what is placed, air included.
+/// ground, then bridges and tunnels, then what is placed, air included.
 pub fn stands_of(sample: &ChunkSample, painter: &Painter, cells: &HashMap<[i64; 3], u32>, (cx0, cy0): (i64, i64), step: u32, stands: &mut Vec<(u32, Stands)>) -> Result<(), Refused> {
     let span = i64::from(sample.span);
     let apron = APRON as i64;
@@ -26,7 +26,7 @@ pub fn stands_of(sample: &ChunkSample, painter: &Painter, cells: &HashMap<[i64; 
     let columns = (sample.span * sample.span) as usize;
     stands.clear();
     // A deck span cut by n placed stands is n + 1 pieces.
-    grow(stands, 2 * cells.len() + sample.span_at[columns] as usize)?;
+    grow(stands, 2 * cells.len() + sample.over_at[columns] as usize)?;
     for (&[x, y, z], &state) in cells {
         let (px, py) = (x - cx0 + apron, y - cy0 + apron);
         if (0..span).contains(&px) && (0..span).contains(&py) {
@@ -42,7 +42,7 @@ pub fn stands_of(sample: &ChunkSample, painter: &Painter, cells: &HashMap<[i64; 
         while next < placed && stands[next].0 == i as u32 {
             next += 1;
         }
-        for d in &sample.spans[sample.span_at[i] as usize..sample.span_at[i + 1] as usize] {
+        for d in &sample.over[sample.over_at[i] as usize..sample.over_at[i + 1] as usize] {
             let mut lo = d.lo;
             for k in first..next {
                 let (plo, phi, _) = stands[k].1;

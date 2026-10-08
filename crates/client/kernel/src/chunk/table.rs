@@ -394,17 +394,6 @@ impl Scheduler {
         s.layout.map(|_| s.chunk.cell_zoom())
     }
 
-    /// The finest drawn chunk holding `p`, as tile zooms, as the gauge reads
-    /// them: its own tile's, its cells', and the one it is read from.
-    pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
-        let s = self.drawn_slot(p)?;
-        Some((
-            GROUND.read_zoom(s.chunk.cell_zoom()) as i32,
-            s.layout.map(|_| GROUND.tile_zoom(s.chunk.cell_zoom())),
-            s.sources.read_from.map(|z| z as i32),
-        ))
-    }
-
     /// Whether the last frame drew any ground on screen.
     pub fn shows_ground(&self) -> bool {
         self.zoom_boxes.iter().any(|&n| n > 0)

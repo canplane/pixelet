@@ -19,10 +19,8 @@ use crate::io::demand::Category;
 use crate::io::fetch::{answer_settled, body, next_answered, release, Answered};
 use crate::io::request::attempt_of;
 use crate::layer::earth::{self, Earth};
-use crate::layer::place::MAJOR_UNITS_PER_PX;
 use crate::layer::{Asks, Layer};
 use crate::sched::edge::world_edge;
-use crate::view::frame::pose::units_per_px_at;
 use pxl_spec::bake::division_tile::DivisionTile;
 use xpute_core::status::errno::Errno;
 use xpute_guest::mem::heap::Block;
@@ -39,7 +37,7 @@ use crate::io::demand::{Ask, Phases, Why};
 use crate::io::failure::Failure;
 use crate::io::request::declare;
 use crate::layer::residency::floor::{self, Fallback, Floor};
-use crate::layer::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
+use crate::layer::residency::{Candidate, Residency, Victim};
 use crate::view::observation::{observation, ByFootprints};
 use crate::view::sight::Footprint;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -69,10 +67,6 @@ impl Observed for TerrainTile {
 impl Observed for PlaceTile {
     fn demand() -> &'static mut Demand<PlaceTile> {
         PLACE.get(Demand::default)
-    }
-
-    fn reach() -> f64 {
-        MAJOR_UNITS_PER_PX / units_per_px_at(1.0)
     }
 }
 
@@ -247,7 +241,7 @@ impl<L: Observed> Demand<L> {
             for p in asks.keys() {
                 read[p.zoom as usize] += 1;
             }
-            xpute_core::ensure!(read.iter().all(|&n| n <= ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
+            xpute_core::ensure!(read.iter().all(|&n| n <= Residency::<L>::ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
             if !matches!(L::ASKS, Asks::Line) {
                 let mut floor = 0u32;
                 let f = floor_at.unwrap_or(o);

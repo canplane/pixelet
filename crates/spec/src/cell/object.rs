@@ -13,7 +13,11 @@ use std::sync::LazyLock;
 use crate::cell::color;
 use crate::cell::cube_types::{object, Ground, Object};
 use crate::cell::id::{Class, SHAPE_BITS};
+use crate::cell::marker::MARKER_SCALE_STEPS;
 use crate::cell::{decor_types, DecorId};
+use crate::space::coord::zoom::Zoom;
+use crate::space::layer::lattice::Lattice;
+use crate::space::layer::tile::LEAF_ZOOM;
 
 /// Explicit air: retains the leaf and erases lower layers.
 pub fn object_value_is_air(value: u32) -> bool {
@@ -32,6 +36,14 @@ pub fn object_value_is_decor(value: u32) -> bool {
 /// The one marker a placement puts up: a label, which its shape does not tell
 /// apart from another's.
 pub const MARKER: u32 = (Class::marker as u32) << SHAPE_BITS;
+
+/// A mark's cell: 16 pixels of the web map's 256-pixel tile, four zooms
+/// finer than the tile, the cell Carto keeps its 14-pixel icons apart in.
+pub const MARK_STEPS: Zoom = 4;
+
+/// The marker's cells, at its scale on the camera grid (`cell/marker.json`):
+/// its zoom is the tile zoom of the grid's cell there.
+pub const MARKER_LATTICE: Lattice = Lattice::new(LEAF_ZOOM + MARK_STEPS).scaled(MARKER_SCALE_STEPS);
 
 pub fn object_value_is_marker(value: u32) -> bool {
     class_of(value) == Some(Class::marker)

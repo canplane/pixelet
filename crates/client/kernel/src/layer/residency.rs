@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use fnv::FnvBuildHasher;
 
-use pxl_spec::space::layer::demand::REACH_TILES;
+use pxl_spec::space::layer::demand::reach_tiles;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use floor::{Fallback, Floor};
@@ -27,8 +27,6 @@ use crate::layer::{Asks, Layer};
 
 /// Only the eye. Another point observer would add its own misses.
 const OBSERVERS: u32 = 1;
-
-pub const ZOOM_DEMAND_TILES: u32 = REACH_TILES;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Hold {
@@ -96,10 +94,17 @@ impl<L: Layer> Residency<L> {
     /// A destination's line from its leaf to the top.
     pub const DESTINATION_TILES: u32 = Self::ZOOMS;
 
-    const DEMAND_TILES: u32 = if matches!(L::ASKS, Asks::View) { OBSERVERS * ZOOM_DEMAND_TILES * Self::ZOOMS } else { 0 };
+    /// The most of its tiles a zoom's demand names, by its lattice.
+    pub const ZOOM_DEMAND_TILES: u32 = reach_tiles(L::LATTICE);
+
+    const DEMAND_TILES: u32 = if matches!(L::ASKS, Asks::View) { OBSERVERS * Self::ZOOM_DEMAND_TILES * Self::ZOOMS } else { 0 };
 
     /// The lines over the misses, every zoom's but the finest.
-    const ANCESTOR_TILES: u32 = if matches!(L::ASKS, Asks::View) { OBSERVERS * ZOOM_DEMAND_TILES * (Self::ZOOMS - 1) } else { 0 };
+    const ANCESTOR_TILES: u32 = if matches!(L::ASKS, Asks::View) {
+        OBSERVERS * Self::ZOOM_DEMAND_TILES * (Self::ZOOMS - 1)
+    } else {
+        0
+    };
 
     /// Held hard apart from the view: the floor and a destination's line. A new
     /// consumer that cannot take a coarser answer would declare its tiles here.

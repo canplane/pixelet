@@ -12,6 +12,7 @@ use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, re
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::sheet::shelf::PAD;
 use crate::gpu::text::{Font, Raster, TextOf};
+use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
 use xpute_core::math::scalar::round;
 
 const SHAPE_FLOATS: usize = 20;
@@ -45,6 +46,24 @@ pub const SHEET_SCALE: f64 = 2.0;
 pub struct Sketch {
     shapes: Vec<[f32; SHAPE_FLOATS]>,
     lines: Vec<Line>,
+    icons: Vec<Icon>,
+}
+
+/// One of Carto's symbols (pxl-spec asset/symbol.spec.rs), centered at
+/// `at`, its mask in `color`.
+struct Icon {
+    symbol: usize,
+    color: u32,
+    at: [f32; 2],
+}
+
+/// A symbol's mask in `color`, as the platform hands text: RGBA, not
+/// premultiplied, top row first.
+fn tinted(symbol: usize, color: u32) -> Vec<u8> {
+    let side = (SYMBOL_PX * SYMBOL_PX) as usize;
+    let mask = &SYMBOL_MASKS[symbol * side..(symbol + 1) * side];
+    let [r, g, b, a] = color.to_be_bytes();
+    mask.iter().flat_map(|&m| [r, g, b, ((u32::from(m) * u32::from(a) + 127) / 255) as u8]).collect()
 }
 
 fn px(v: f32) -> f32 {
@@ -100,6 +119,11 @@ impl Sketch {
         self.shapes.push(shape(TRIANGLE, rect, color, [a[0], a[1], b[0], b[1]], c));
     }
 
+    /// Carto's `symbol`, by its place in `SYMBOLS`, centered at (cx, cy).
+    pub fn icon(&mut self, symbol: usize, color: u32, cx: f32, cy: f32) {
+        self.icons.push(Icon { symbol, color, at: [cx, cy] });
+    }
+
     pub fn text(&mut self, font: Font, color: u32, text: &str, x: f32, y: f32, align: Align) {
         self.lines.push(Line {
             font,
@@ -135,16 +159,19 @@ impl SheetPainter {
             let Some(r) = text(line.font, line.color, &line.text) else { return false };
             rasters.push(r);
         }
-        // The text's pixels and the shapes', which go into the stream whole.
-        let payload = rasters.iter().map(|r| r.pixels.len()).sum::<usize>() + (sketch.shapes.len() + rasters.len()) * SHAPE_FLOATS * 4;
+        let icons: Vec<Vec<u8>> = sketch.icons.iter().map(|i| tinted(i.symbol, i.color)).collect();
+        // The text's and the icons' pixels and the shapes', which go into the stream whole.
+        let drawn = rasters.len() + icons.len();
+        let payload = rasters.iter().map(|r| r.pixels.len()).chain(icons.iter().map(Vec::len)).sum::<usize>() + (sketch.shapes.len() + drawn) * SHAPE_FLOATS * 4;
         if !room(payload as u32) {
             return false;
         }
         let [x, y, w, h] = rect;
 
-        let layer_w = rasters.iter().map(|r| r.width).max().unwrap_or(1).max(1);
-        let layer_h = rasters.iter().map(|r| r.height).max().unwrap_or(1).max(1);
-        let layers = (rasters.len() as u32).max(1);
+        let icon_side = if icons.is_empty() { 1 } else { SYMBOL_PX };
+        let layer_w = rasters.iter().map(|r| r.width).max().unwrap_or(1).max(icon_side);
+        let layer_h = rasters.iter().map(|r| r.height).max().unwrap_or(1).max(icon_side);
+        let layers = (drawn as u32).max(1);
         let lines = object();
         g.texture(lines, layer_w, layer_h, layers, format::RGBA8_SRGB, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST);
         let mut shapes = sketch.shapes.clone();
@@ -158,6 +185,15 @@ impl SheetPainter {
             let y0 = round(px(line.at[1]) - r.origin[1]);
             let place = [x0, y0, x0 + r.width as f32, y0 + r.height as f32];
             let cover = [layer as f32, r.width as f32 / layer_w as f32, r.height as f32 / layer_h as f32, 0.0];
+            shapes.push(shape(TEXT, place, 0, cover, [0.0; 2]));
+        }
+        for (k, (icon, pixels)) in sketch.icons.iter().zip(&icons).enumerate() {
+            let layer = (rasters.len() + k) as u32;
+            g.write_texture(lines, layer, SYMBOL_PX, SYMBOL_PX, pixels);
+            let half = SYMBOL_PX as f32 / 2.0;
+            let (x0, y0) = (round(px(icon.at[0]) - half), round(px(icon.at[1]) - half));
+            let place = [x0, y0, x0 + SYMBOL_PX as f32, y0 + SYMBOL_PX as f32];
+            let cover = [layer as f32, SYMBOL_PX as f32 / layer_w as f32, SYMBOL_PX as f32 / layer_h as f32, 0.0];
             shapes.push(shape(TEXT, place, 0, cover, [0.0; 2]));
         }
         let lines_view = object();
