@@ -2,7 +2,8 @@
 
 //! Which sections the memory has and where each begins:
 //!
-//!   module    stack first (an overflow traps), the rings, then the linker's data
+//!   module    stack first (an overflow traps), the rings, then the linker's data;
+//!             on a device the stack's and the data's ranges stand empty
 //!   .fixed    ranges sized at compile time, never freed (fixed.rs)
 //!   heap      everything left, one allocator
 //!

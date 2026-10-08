@@ -288,7 +288,7 @@ The shell reads the kernel through one **snapshot**, written after a turn that c
 
 ## The memory map
 
-The client's state is one memory, reserved once and never grown: in a tab a `WebAssembly.Memory`, 1 GiB on the desktop and 512 MiB on a phone, `initial == maximum`; on a device one region of 512 MiB the library takes from the system on the first call (`pxl-native memory.rs`). Since it never moves, a ring keeps its words and a table is read where it lies for the kernel's whole life. A phone's tab gets half because JavaScriptCore counts the whole reservation as the tab's JavaScript memory, committed or not.
+The client's state is xpute's [core memory](./xpute/ARCHITECTURE.md#the-core-memory-placed-once): in a tab a `WebAssembly.Memory`, 1 GiB on the desktop and 512 MiB on a phone, `initial == maximum`; on a device one region of 512 MiB the library takes from the system on the first call (`pxl-native memory.rs`). Since it never moves, a ring keeps its words and a table is read where it lies for the guest's whole life. A phone's tab gets half because JavaScriptCore counts the whole reservation as the tab's JavaScript memory, committed or not.
 
 Every address the kernel names is an offset from the memory's first byte (xpute's `mem/base.rs`), so the map holds on both targets and the shell reads the same numbers either way. On a device the stack and the library's data are where the system put them, outside the region, and the two ranges the map keeps for them stand empty.
 

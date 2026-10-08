@@ -18,7 +18,7 @@ It was written for a program driven by TypeScript: compiled to one WebAssembly m
             │                                                  │
             └──────────────────────────┬───────────────────────┘
                                        ▼
-           ┌─ one linear memory ─────────────────────────────────┐
+           ┌─ the core memory ───────────────────────────────────┐
            │ everything else crosses here, and nothing else does │
            └─────────────────────────────────────────────────────┘
 ```

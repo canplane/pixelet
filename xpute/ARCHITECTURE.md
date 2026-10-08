@@ -12,9 +12,9 @@ Three things cross between them and nothing else does: one memory they share, on
 
 ---
 
-## One memory, placed once
+## The core memory, placed once
 
-The two sides share one linear memory and nothing else. The host reserves it at boot and never grows it, so a view taken into that memory stays valid for as long as the guest lives. Everything below rests on that: a message queue can keep its words at a fixed address, and a payload can be read where it lies rather than copied out of the way first.
+The two sides share one memory and nothing else, the **core memory** — core in the old sense of a program's main memory, as in a core dump, not a CPU's. The host reserves it at boot and never grows it, so a view taken into that memory stays valid for as long as the guest lives. Everything below rests on that: a message queue can keep its words at a fixed address, and a payload can be read where it lies rather than copied out of the way first.
 
 What goes in the memory is the guest's business; placing it is the guest end's. The guest hands in a base, a unit and a list of sizes, and gets back where each range landed (`mem/section`). A linker script does the same thing with output sections, for the same reason: whatever places ranges should not need to know what any of them hold. A range comes back as a section, and whatever is asked of it — a span to write, or ranges laid inside it — is checked against where it ends (`Section::at`, `nth`), so nothing written through one range lands in the next.
 
@@ -192,7 +192,7 @@ Handles are in `guest` and `host` rather than `kit` because a handle is one side
 Most of what is above is how one end happens to be built. A tick is how one guest divides its quota, a completion ring sized to a turn is how one guest keeps its output in bounds, a strobe is how one host decides when to ring; each end could be built another way, in another language, and be the same arrangement to the other. What cannot change is shorter: the rules below, and the formats they travel in — the directory, the message's four words, the ring's layout and the stream's records — which are the boundary's and not either end's. Each rule is one the other end could catch being broken.
 
 0. **The directory.** The guest's first turn writes it, and the host finds everything else it reads from the one offset it learns outside the memory. A key appears in a directory at most once, and one the host does not know, it passes over.
-1. **One memory.** It never moves and never grows while the guest lives, and every address that crosses is an offset into it.
+1. **The core memory.** It never moves and never grows while the guest lives, and every address that crosses is an offset into it.
 2. **The turn.** The guest runs only inside `interrupt`, and the two sides never run at once: the host touches nothing a turn writes until the turn has returned. The call carries a quota, which is advice and not a deadline, and returns `wake_ms`: 0 asks for the next turn as soon as the host schedules one, a positive number for one that many milliseconds from now, and a negative one (`NO_WAKE`) for none. A turn of no quota is still a turn, and a question the host needs answered before it goes on is asked in one. Which commands may be asked that way is each command's own: one the guest answers from what it already holds, waiting on nothing outside, may be; one that waits on anything outside is sent and answered on a later turn. A command is one or the other, never both.
 3. **The message.** Four words: `tag`, `cmd` with its flags, `result`, and the packet. With `ACKREQ` a message gets exactly one reply; without it, a reply only when it failed. A reply carries its message's `tag` and `cmd`, which is how an answer finds its caller, and `RES`, so a completion without it is one the guest raised on its own.
 4. **What the host sends** is applied in the order it was sent, each message once. The guest may leave some for a later turn, but never out of order and never skipped, and while it leaves any it asks for the next turn (`wake_ms` 0).

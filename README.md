@@ -115,20 +115,20 @@ To measure the client, use `preview` (`localhost:4173`). It is the bundle as the
 
 ## What runs where
 
-The client is a Rust **kernel** and the TypeScript around it. The kernel holds the world, schedules its own work and draws; its **host** gives it memory, I/O and the device, and its **shell** is the UI, which decides nothing about the world. In a browser tab the kernel is one WebAssembly module drawing through the page's WebGPU; on a device it is linked into a React Native app and draws through wgpu. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./xpute/ARCHITECTURE.md), which knows nothing of any of this.
+The client is a Rust **kernel** and the TypeScript around it. The kernel holds the world, schedules its own work and draws; its **host** gives it memory, I/O and the device, and its **shell** is the UI, which decides nothing about the world. In a browser tab the kernel runs in one WebAssembly module drawing through the page's WebGPU; on a device it is linked into a React Native app and draws through wgpu. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./xpute/ARCHITECTURE.md), which knows nothing of any of this.
 
 Almost nothing is computed at request time. Tiles and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a tile under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked. [ARCHITECTURE.md](./ARCHITECTURE.md) follows the chain above, part by part.
 
-| Layer     | Technology                                                                                                               | Where                                                 |
-| --------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| Shell     | TypeScript, React 19 in React Native: react-native-web and Vite on a page, Expo on a device                              | the browser, served by the Worker; the device app     |
-| Kernel    | Rust, no wasm-bindgen; `embassy-executor`: one WebAssembly module on a page, a static library linked into the device app | 512 MiB on a phone and 1 GiB elsewhere, reserved once |
-| Rendering | WebGPU (WGSL), driven from the kernel: the browser's, or wgpu over Metal on an iPhone and Vulkan on Android              | the device's GPU                                      |
-| Edge      | Cloudflare Worker + R2                                                                                                   | the client, the baked tiles, the assets               |
-| Servers   | Rust: axum, tokio-postgres — one per URL root, one database each                                                         | one VM behind Caddy                                   |
-| Databases | PostgreSQL: `db-main`, and `db-geo` with PostGIS                                                                         | the same VM                                           |
-| Geodata   | Overture Maps + OSM land polygons + GEDTM30, ingested into db-geo, baked into tiles                                      | offline, into R2                                      |
-| Workspace | Deno drives every task, the Rust ones included                                                                           | —                                                     |
+| Layer     | Technology                                                                                                                     | Where                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| Shell     | TypeScript, React 19 in React Native: react-native-web and Vite on a page, Expo on a device                                    | the browser, served by the Worker; the device app     |
+| Kernel    | Rust, no wasm-bindgen; `embassy-executor`: in one WebAssembly module on a page, in a static library linked into the device app | 512 MiB on a phone and 1 GiB elsewhere, reserved once |
+| Rendering | WebGPU (WGSL), driven from the kernel: the browser's, or wgpu over Metal on an iPhone and Vulkan on Android                    | the device's GPU                                      |
+| Edge      | Cloudflare Worker + R2                                                                                                         | the client, the baked tiles, the assets               |
+| Servers   | Rust: axum, tokio-postgres — one per URL root, one database each                                                               | one VM behind Caddy                                   |
+| Databases | PostgreSQL: `db-main`, and `db-geo` with PostGIS                                                                               | the same VM                                           |
+| Geodata   | Overture Maps + OSM land polygons + GEDTM30, ingested into db-geo, baked into tiles                                            | offline, into R2                                      |
+| Workspace | Deno drives every task, the Rust ones included                                                                                 | —                                                     |
 
 ```text
                 every request
@@ -174,8 +174,8 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 │   │   ├── render/           #     pxl-render: the view
 │   │   └── kernel/           #     pxl-kernel: the kernel
 │   ├── client-bracket/       #   where the client is plugged in to run, no domain
-│   │   ├── wasm/             #     pxl-wasm: the kernel as one WebAssembly module
-│   │   └── native/           #     pxl-native: the kernel as a device app's library
+│   │   ├── wasm/             #     pxl-wasm: the guest as one WebAssembly module
+│   │   └── native/           #     pxl-native: the guest as a device app's library
 │   ├── server/               #   pxl-server: what geo and api both need to start
 │   │   ├── geo-spec/         #     pxl-geo-spec: geographic provider values (Overture today)
 │   │   ├── geo/              #     pxl-geo: the world's data server (/geo)
@@ -200,8 +200,8 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 | `pxl-spec`      | The model: PVF3, the zooms and lattices, the cell catalogs, the command numbers, the tile formats, the asset tables. One implementation. |
 | `pxl-render`    | The view: the column runs, the mesher, glTF, the badge sheet, the draw list, the shaders, the renderer. It knows no kernel.              |
 | `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                    |
-| `pxl-wasm`      | The kernel in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.              |
-| `pxl-native`    | The kernel on a device: a static library that runs every call on a thread of its own and exports `pxl_interrupt` through the C ABI.      |
+| `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.               |
+| `pxl-native`    | The guest on a device: a static library that runs every call on a thread of its own and exports `pxl_interrupt` through the C ABI.       |
 | `apps/web`      | The kernel's host and its shell, both apps'; and the Cloudflare Worker that serves it all.                                               |
 | `apps/native`   | The device app: the same host and shell run by Metro, what only a device does, and the native module that links the kernel.              |
 | `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                              |
