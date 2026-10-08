@@ -266,8 +266,10 @@ and `--force` (re-fetch existing tiles and `.empty` markers). It needs
 terrain's `land_tiles.json`, not its tables.
 
 Verify `failed=` is zero and that `_dict` and a group open
-(`place_tile::open_place_dict`, `open_place_group`). A group's name is a
-tile's first eleven digits.
+(`division_tile::open_division_dict`, `open_division_group`). A group's name
+is a tile's first eleven digits. A tile's name is the division it is in and
+each above it, by Overture's `parent_division_id`, which the ingest takes
+whole, ancestors past the coverage included.
 
 ## Versions, and when the bake logic changes
 

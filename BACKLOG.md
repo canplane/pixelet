@@ -37,31 +37,25 @@ Nothing now.
   demand now follows `POI_LATTICE`, not the ground's, and which children
   are tiles is the occupancy the bake writes, as terrain's is; the POI set
   is to be baked again in that format.
-- **POI and reverse geocode: Overture's schema, Carto's look.** A place's
-  kind is still this tree's own 35 (`poi_badge.json`), shown by OpenMapTiles'
-  class rank, and a name's depth its own ladder (`spec/spec/place.json`).
-  The data and the look part: what a place is follows Overture's schema,
-  its taxonomy and basic category, its names, confidence, sources and GERS
-  id, and a name's depth follows the divisions' subtype (country, region,
-  county, locality, neighborhood), since Overture was made to merge vendors'
-  places and every vendor's tree (Naver, Kakao, Google) maps onto it as
-  Overture's own sources do; OSM's tags are an editors' vocabulary, a kind
-  spread over several keys. How a place is drawn follows Carto (the ground
-  is its looks, decision/20261005-the-ground-is-a-carto-palette.md): one
-  table, the theme's, from an Overture kind to a Carto icon group, color
-  and minimum zoom (`amenity-points.mss`). A provider is an adapter onto the
-  schema, baked or asked live as its terms allow; terrain's sources stay
-  Overture and OSM. The taxonomy changes between releases, so the table is
-  checked against the release the ingest records. openstreetmap-carto is
-  CC0, the cartographic design and `symbols/` included; its name and
-  OpenStreetMap's are trademarks, kept out of ours.
-  The words follow the schema, renamed in the same change: what is now
-  `poi` (`layer/poi.rs`, `poi_tile.rs`, `bake:poi`, `/tile/poi/`) and
-  `place` meaning a venue (`chunk/place.rs`) are `places`, and `place`
-  meaning a named area (`place.json`, `place_tile.rs`, geocode's
-  dictionary) is `divisions`, so `place` stops naming two things;
-  `geocode` stays the name of the question a division answers. The bucket
-  paths move with it, so the next publish uploads under the new ones.
+- **Places: Overture's schema, Carto's look.** A place's kind is still this
+  tree's own 35 (`poi_badge.json`), shown by OpenMapTiles' class rank. What
+  a place is follows Overture's schema, as the divisions now do: its
+  taxonomy and basic category, its names, confidence, sources and GERS id,
+  since Overture was made to merge vendors' places and every vendor's tree
+  (Naver, Kakao, Google) maps onto it as Overture's own sources do; OSM's
+  tags are an editors' vocabulary, a kind spread over several keys. How a
+  place is drawn follows Carto (the ground is its looks,
+  decision/20261005-the-ground-is-a-carto-palette.md): one table, the
+  theme's, from an Overture kind to a Carto icon group, color and minimum
+  zoom (`amenity-points.mss`). A provider is an adapter onto the schema,
+  baked or asked live as its terms allow; terrain's sources stay Overture
+  and OSM. The taxonomy changes between releases, so the table is checked
+  against the release the ingest records. openstreetmap-carto is CC0, the
+  cartographic design and `symbols/` included; its name and
+  OpenStreetMap's are trademarks, kept out of ours. The words follow the
+  schema in the same change: `poi` (`layer/poi.rs`, `poi_tile.rs`,
+  `bake:poi`, `/tile/poi/`) and `place` meaning a venue (`chunk/place.rs`)
+  are `places`, and the bucket paths move with them.
 
 ## P2
 

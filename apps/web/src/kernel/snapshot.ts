@@ -18,7 +18,7 @@ const INITIAL: Snapshot = {
   zooming: false,
   settings: [],
   m_per_px: 0,
-  place: [],
+  division: [],
   previews: [],
 };
 

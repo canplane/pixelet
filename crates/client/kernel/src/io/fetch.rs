@@ -20,7 +20,7 @@ use crate::io::failure::{Ended, Failure};
 use crate::io::file::{self, Opened, Owner};
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::sched::edge::{request_world_tick, world_edge};
-use pxl_spec::bake::place_tile::{group_key, DICT_OBJECT};
+use pxl_spec::bake::division_tile::{group_key, DICT_OBJECT};
 use pxl_spec::space::hierarchy::morton::write_name;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::clock::now;

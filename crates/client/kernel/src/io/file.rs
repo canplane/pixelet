@@ -7,7 +7,7 @@
 use xpute_guest::ipc::file::Files;
 use xpute_guest::ipc::sys::Fd;
 
-use pxl_spec::bake::place_tile::DICT_OBJECT;
+use pxl_spec::bake::division_tile::DICT_OBJECT;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::abi::host::{root, OBJECTS_PATH, SETTINGS_PATH};

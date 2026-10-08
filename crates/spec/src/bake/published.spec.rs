@@ -37,7 +37,7 @@ pub struct Format {
 pub const FORMAT: Format = Format {
     terrain: 8,
     poi: 9,
-    geocode: 5,
+    geocode: 6,
     earth: 1,
 };
 

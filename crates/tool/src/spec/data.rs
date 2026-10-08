@@ -48,10 +48,10 @@ const DATA_SPECS: [DataSpec; 19] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/spec/place.json",
+        json: "spec/spec/division.json",
         uses: &[],
-        ts: Some("apps/web/src/feature/world/geocode/place.spec.ts"),
-        rs: Some("crates/spec/src/place.spec.rs"),
+        ts: Some("apps/web/src/feature/world/geocode/division.spec.ts"),
+        rs: Some("crates/spec/src/division.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,

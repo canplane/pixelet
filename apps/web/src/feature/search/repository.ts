@@ -3,7 +3,7 @@
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { originGet } from "@platform/origin.ts";
 import { SEARCH_URL } from "@/config/route.spec.ts";
-import type { PlacePart } from "@/feature/world/geocode/label.ts";
+import type { DivisionPart } from "@/feature/world/geocode/label.ts";
 
 export interface SearchResult {
   gers_id: string;
@@ -13,7 +13,7 @@ export interface SearchResult {
   /** Only for `kind: 'division'`; null for POIs. */
   common: Record<string, string> | null;
   /** Tells same-named results apart; replaced an address field that could name another city. */
-  context: PlacePart[];
+  context: DivisionPart[];
   lon: f64;
   lat: f64;
 }

@@ -9,7 +9,7 @@
 //! any place, and only moving to another group asks again. A failed fetch is
 //! not one; its want waits out the request scheduler's retry.
 
-use pxl_spec::bake::place_tile::{open_place_dict, open_place_group, PlaceGroupView, PlacesView};
+use pxl_spec::bake::division_tile::{open_division_dict, open_division_group, DivisionGroupView, DivisionsView};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
 use xpute_guest::mem::base::ptr_at;
@@ -52,9 +52,9 @@ unsafe fn open<V>(block: Block, view: impl FnOnce(&'static [u8]) -> Result<V, Ma
 #[derive(Default)]
 struct GeocodeStore {
     /// None inside where the bake wrote no dictionary.
-    dict: Option<Option<Resident<PlacesView<'static>>>>,
+    dict: Option<Option<Resident<DivisionsView<'static>>>>,
     /// None inside where the bake wrote no object.
-    group: Option<(IVec, Option<Resident<PlaceGroupView<'static>>>)>,
+    group: Option<(IVec, Option<Resident<DivisionGroupView<'static>>>)>,
 }
 
 static STORE: Global<GeocodeStore> = Global::new();
@@ -63,7 +63,7 @@ fn store() -> &'static mut GeocodeStore {
     STORE.get(GeocodeStore::default)
 }
 
-pub fn dict() -> Option<&'static Resident<PlacesView<'static>>> {
+pub fn dict() -> Option<&'static Resident<DivisionsView<'static>>> {
     store().dict.as_ref()?.as_ref()
 }
 
@@ -76,7 +76,7 @@ pub fn answered() -> Option<IVec> {
 }
 
 /// Only where it is the one held and has an object.
-pub fn group_of(group_idx: IVec) -> Option<&'static Resident<PlaceGroupView<'static>>> {
+pub fn group_of(group_idx: IVec) -> Option<&'static Resident<DivisionGroupView<'static>>> {
     match &store().group {
         Some((idx, held)) if *idx == group_idx => held.as_ref(),
         _ => None,
@@ -87,7 +87,7 @@ pub fn group_of(group_idx: IVec) -> Option<&'static Resident<PlaceGroupView<'sta
 /// As `open`.
 pub unsafe fn adopt_dict(block: Block) -> Result<(), MarshalError> {
     // SAFETY: the caller's contract. Dropping what was held gives its block back.
-    store().dict = Some(Some(unsafe { open(block, open_place_dict) }?));
+    store().dict = Some(Some(unsafe { open(block, open_division_dict) }?));
     Ok(())
 }
 
@@ -95,7 +95,7 @@ pub unsafe fn adopt_dict(block: Block) -> Result<(), MarshalError> {
 /// As `open`.
 pub unsafe fn adopt_group(group_idx: IVec, block: Block) -> Result<(), MarshalError> {
     // SAFETY: the caller's contract.
-    store().group = Some((group_idx, Some(unsafe { open(block, open_place_group) }?)));
+    store().group = Some((group_idx, Some(unsafe { open(block, open_division_group) }?)));
     Ok(())
 }
 

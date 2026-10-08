@@ -76,10 +76,10 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  *   pyramid as terrain's are: how many places stand in each of its cells. A
  *   page with none is no object.
  * - `geocode/<version>/<name>`, 11 digits, because a reverse-geocode object
- *   covers a group of 16 pages a side (pxl-spec bake/place_tile.rs's
+ *   covers a group of 16 pages a side (pxl-spec bake/division_tile.rs's
  *   `GROUP_SHAMT`). Plus the one `_dict` the whole set is read against, since
- *   a group names the places its pages are in by number into it. A missing
- *   group means "no page under it is in any place", which the kernel's
+ *   a group names the divisions its pages are in by number into it. A missing
+ *   group means "no page under it is in any division", which the kernel's
  *   layer/geocode/ reads as no label.
  * - `asset/<path>/<stem>-<12 hex>.<ext>` — a model or an image under the tree
  *   it lives in, with a hash of its bytes in the stem, the way a bundler names

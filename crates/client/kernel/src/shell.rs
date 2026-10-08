@@ -4,7 +4,7 @@
 //! only when changed) and the commands it applies to the stores.
 
 use crate::view::demand::Observed as _;
-use pxl_spec::bake::place_tile::leaf_slot;
+use pxl_spec::bake::division_tile::leaf_slot;
 use pxl_spec::cell::object::{decor_num_id, placeable_cube_num_id};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
@@ -12,7 +12,7 @@ use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use xpute_core::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
-use crate::abi::cmd::{CompanionState, FocusState, GroundStatus, HoldingState, LocationState, LonLat, OrientationState, PlaceName, PlacePart, Snapshot};
+use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, OrientationState, Snapshot};
 use crate::control::camera::controller::{dist, focus, Motion};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
 use crate::control::interaction::holding;
@@ -33,26 +33,26 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::zoom::idx;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-/// The center tile's place, broad to narrow. Every language is sent, so
-/// switching language re-reads rather than refetches.
-fn place_parts(tile: Option<IVec>, each: &mut dyn FnMut(&PlacePart<'_>)) {
+/// The center tile's division and each above it, broad to narrow. Every
+/// language is sent, so switching language re-reads rather than refetches.
+fn division_parts(tile: Option<IVec>, each: &mut dyn FnMut(&DivisionPart<'_>)) {
     let parts = tile
         .zip(crate::control::camera::controller::focus().map(|c| group_of(&c)))
         .zip(geocode_store::dict())
         .and_then(|((tile, group), dict)| {
             let group = geocode_store::group_of(group)?;
-            group.view.place_of(leaf_slot(ivec::X(tile), ivec::Y(tile)), &dict.view)
+            group.view.name_of(leaf_slot(ivec::X(tile), ivec::Y(tile)), &dict.view)
         })
         .into_iter()
         .flatten();
     for part in parts {
-        let names = |each: &mut dyn FnMut(&PlaceName<'_>)| {
+        let names = |each: &mut dyn FnMut(&LangName<'_>)| {
             for (lang, name) in part.languages() {
-                each(&PlaceName { lang: &lang, name: &name });
+                each(&LangName { lang: &lang, name: &name });
             }
         };
-        each(&PlacePart {
-            rank: part.rank as u8,
+        each(&DivisionPart {
+            subtype: part.subtype as u8,
             name: &part.name,
             names: &names,
         });
@@ -118,7 +118,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         zooming: crate::control::camera::controller::zooming(),
         settings: &values,
         m_per_px: m_per_px(),
-        place: &|each| place_parts(tile, each),
+        division: &|each| division_parts(tile, each),
         previews: &previews[..preview_cnt],
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);

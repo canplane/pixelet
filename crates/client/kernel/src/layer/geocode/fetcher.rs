@@ -4,7 +4,7 @@
 //! is in. A key with any answer is not asked again. Both sit behind every
 //! terrain tile: a label must not take a credit from the ground.
 
-use pxl_spec::bake::place_tile::GROUP_SHAMT;
+use pxl_spec::bake::division_tile::GROUP_SHAMT;
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::coord::pvf3::Pvf3;
 

@@ -694,11 +694,11 @@ pub struct Snapshot<'a> {
     pub zooming: bool,
     /// Every setting's value by its SettingKey, as SETTING_SET carries one.
     pub settings: &'a [u32],
-    /// The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it.
+    /// The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it.
     pub m_per_px: f64,
-    /// The place the focus is in, broad to narrow, every rung of it; empty where
-    /// the center is in none or the packets it is read out of have not arrived.
-    pub place: &'a dyn Fn(&mut dyn FnMut(&PlacePart<'_>)),
+    /// The division the focus is in and every one above it, broad to narrow; empty
+    /// where the center is in none or the packets it is read out of have not arrived.
+    pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
 }
@@ -720,10 +720,10 @@ impl Snapshot<'_> {
         w.u32_array(Some(self.settings));
         w.f64(Some(self.m_per_px));
         let mut n = 0;
-        (self.place)(&mut |_| n += 1);
+        (self.division)(&mut |_| n += 1);
         w.branch(n, |w| {
-            (self.place)(&mut |item| {
-                w.branch(PlacePart::FIELDS, |w| item.write(w));
+            (self.division)(&mut |item| {
+                w.branch(DivisionPart::FIELDS, |w| item.write(w));
             })
         });
         w.u32_array(Some(self.previews));
@@ -839,39 +839,39 @@ impl OrientationState {
     }
 }
 
-/// One rung of the place, in every language the provider had rather than one resolved
+/// One division of the name, in every language the provider had rather than one resolved
 /// name: the reader's language is the page's, and switching it re-reads a label already
 /// sent.
-pub struct PlacePart<'a> {
-    /// Where the part sits, broadest first (spec/spec/place.json).
-    pub rank: u8,
+pub struct DivisionPart<'a> {
+    /// Overture's subtype, broadest first (spec/spec/division.json).
+    pub subtype: u8,
     pub name: &'a dyn Display,
-    pub names: &'a dyn Fn(&mut dyn FnMut(&PlaceName<'_>)),
+    pub names: &'a dyn Fn(&mut dyn FnMut(&LangName<'_>)),
 }
 
-impl PlacePart<'_> {
+impl DivisionPart<'_> {
     /// The children it is written as.
     pub const FIELDS: u32 = 3;
 
     pub fn write(&self, w: &mut PacketWriter) {
-        w.u8(Some(self.rank));
+        w.u8(Some(self.subtype));
         w.str_display(self.name);
         let mut n = 0;
         (self.names)(&mut |_| n += 1);
         w.branch(n, |w| {
             (self.names)(&mut |item| {
-                w.branch(PlaceName::FIELDS, |w| item.write(w));
+                w.branch(LangName::FIELDS, |w| item.write(w));
             })
         });
     }
 }
 
-pub struct PlaceName<'a> {
+pub struct LangName<'a> {
     pub lang: &'a dyn Display,
     pub name: &'a dyn Display,
 }
 
-impl PlaceName<'_> {
+impl LangName<'_> {
     /// The children it is written as.
     pub const FIELDS: u32 = 2;
 

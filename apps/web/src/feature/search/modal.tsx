@@ -22,7 +22,7 @@ import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { CATEGORY_BADGE, DEFAULT_BADGE } from "./poi_badge.spec.ts";
 import { assembleLabel, localName, primaryLanguage } from "@/feature/world/geocode/label.ts";
-import { useCenterCoordinates, usePlaceLabel } from "@/feature/world/geocode/center.ts";
+import { useCenterCoordinates, useDivisionLabel } from "@/feature/world/geocode/center.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 
@@ -108,7 +108,7 @@ function LocateCard() {
 /** Where the search looks from: the focus, which is not the device's location. */
 function MapCenter() {
   const { t } = useTranslation();
-  const place = usePlaceLabel();
+  const place = useDivisionLabel();
   const coordinates = useCenterCoordinates();
   if (coordinates === null) return null;
   return (
