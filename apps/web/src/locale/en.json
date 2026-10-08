@@ -20,7 +20,7 @@
       },
       "textures": {
         "label": "Textures",
-        "description": "Textures block faces instead of a flat color."
+        "description": "Textures cube faces instead of a flat color."
       },
       "resolution": {
         "label": "Resolution",
@@ -66,7 +66,7 @@
       "section_title": "Light and shadow",
       "section_caption": "Light, shadow and outlines",
       "edge_shade": {
-        "label": "Block Outlines",
+        "label": "Cube Outlines",
         "description": "Darkens only edges exposed to open air, keeping flat ground seamless while outlining changes in height."
       },
       "ao": {
@@ -77,7 +77,7 @@
         },
         "corner": {
           "label": "Corners",
-          "description": "Darkens contact areas and inside corners so blocks look grounded instead of floating. Light on performance."
+          "description": "Darkens contact areas and inside corners so cubes look grounded instead of floating. Light on performance."
         },
         "screen": {
           "label": "Detailed (SSAO)",
@@ -90,7 +90,7 @@
       },
       "rim_light": {
         "label": "Rim Light",
-        "description": "Adds a subtle highlight around the edges of blocks, decor and characters to make them stand out from the background."
+        "description": "Adds a subtle highlight around the edges of cubes, decor and characters to make them stand out from the background."
       }
     },
     "debug": {
@@ -210,7 +210,7 @@
   "drawer": {
     "title": "Drawer",
     "tabs": {
-      "cube": "Block",
+      "cube": "Cube",
       "decor": "Decor",
       "character": "Character"
     },
