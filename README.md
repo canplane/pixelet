@@ -86,7 +86,7 @@ deno task dev:oven
 | `deno task preview:{oven,shelf}`          | The production bundle over `dev:oven`'s or `dev:shelf`'s servers                            |
 | `deno task clear:oven`                    | Empty `dev:oven`'s cache, after a re-ingest or a bake change                                |
 | `deno task clear:shelf [kind…]`           | Delete the named kinds' sets under `./out` (all three when none), to bake them from nothing |
-| `deno task build:wasm`                    | Build the kernel module into `apps/web/src/kernel/kernel.wasm`                              |
+| `deno task build:wasm`                    | Build the guest module into `apps/web/src/kernel/guest.wasm`                                |
 | `deno task dev:native`                    | Metro, for the device app                                                                   |
 | `deno task bake:{terrain,place,division}` | db-geo into each kind's set, `./out/<kind>/`                                                |
 | `deno task bake:earth`                    | The Earth's picture, its tiles into `./out/earth/<version>`                                 |

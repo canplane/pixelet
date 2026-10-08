@@ -1,7 +1,7 @@
 // @pxl/web/kernel/module.ts
 
 /**
- * The Rust core as the shell holds it on any platform: its memory and its
+ * The guest as the host holds it on any platform: its memory and its
  * doorbell. Everything else crosses in the memory.
  */
 
@@ -12,9 +12,9 @@ import { Directory } from "@xpute/host/ipc/directory.ts";
 import { DIRECTORY_AT } from "@/kernel/mem/mem.spec.ts";
 
 /** The memory never moves or grows. */
-export interface Core {
+export interface Guest {
   buffer: ArrayBuffer;
-  /** Returns when the kernel wants its next turn, in ms. A core that records
+  /** Returns when the kernel wants its next turn, in ms. A guest that records
    * GPU calls runs them here, before the turn is over. */
   interrupt(quota_ms: f64): f64;
 }

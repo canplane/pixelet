@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run -A
-// Builds the Rust core for a device (crates/client-bracket/native) as the app is
+// Builds the guest for a device (crates/client-bracket/native) as the app is
 // built, and the app links what it leaves: so the kernel in an app is always
 // this tree's, built for the configuration and the system the app is. A
 // kernel kept between builds let an app link one left from another

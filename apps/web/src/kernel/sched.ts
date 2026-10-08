@@ -9,7 +9,7 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { Strobe } from "@xpute/host/sched/strobe.ts";
 import { Command, encode_world_frame } from "@/kernel/abi/cmd.spec.ts";
-import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
+import { GUEST, GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { directory } from "@/kernel/module.ts";
 
 export interface Viewport {
@@ -26,20 +26,20 @@ export function request_frame(): void {
 }
 
 export function send_next(cmd: u32, pkt?: U8Array): void {
-  CORE_DOORBELL.send(0, cmd, pkt);
+  GUEST_DOORBELL.send(0, cmd, pkt);
   request_frame();
 }
 
 export function send_input(cmd: u32, pkt?: U8Array): void {
-  CORE_DOORBELL.send(0, cmd, pkt);
+  GUEST_DOORBELL.send(0, cmd, pkt);
   strobe.input();
   request_frame();
 }
 
 /** Rung at once with no quota, so it is heard even after the strobe has stopped. */
 export function ring_now(cmd: Command, pkt?: U8Array): void {
-  CORE_DOORBELL.send(0, cmd, pkt);
-  CORE_DOORBELL.ring(0);
+  GUEST_DOORBELL.send(0, cmd, pkt);
+  GUEST_DOORBELL.ring(0);
   request_frame();
 }
 
@@ -53,13 +53,13 @@ const NET_CREDITS = 6;
 export let strobe: Strobe;
 
 export function start_sched(): void {
-  strobe = new Strobe(CORE_DOORBELL, directory(CORE.buffer).quantum(), (grant, delta_s) => {
+  strobe = new Strobe(GUEST_DOORBELL, directory(GUEST.buffer).quantum(), (grant, delta_s) => {
     if (driver === null) return;
     const { width: w, height: h, dpr } = driver();
     const width = Math.max(1, w);
     const height = Math.max(1, h);
     const unix_ms = Date.now();
-    CORE_DOORBELL.send(
+    GUEST_DOORBELL.send(
       0,
       Command.WORLD_FRAME,
       encode_world_frame({

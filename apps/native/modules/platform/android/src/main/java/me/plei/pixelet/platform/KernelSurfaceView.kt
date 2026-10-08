@@ -65,12 +65,12 @@ class KernelSurfaceView(context: Context, appContext: AppContext) : ExpoView(con
     val wanted = if (ready) surface else 0
     if (bound == wanted) return
     if (bound != 0) {
-      PxlCore.surfaceUnbind(bound)
+      PxlGuest.surfaceUnbind(bound)
       bound = 0
       onDetach(mapOf<String, Any>())
     }
     if (wanted == 0) return
-    if (PxlCore.surfaceBind(wanted, view.holder.surface) == 0) {
+    if (PxlGuest.surfaceBind(wanted, view.holder.surface) == 0) {
       bound = wanted
       onAttach(mapOf("surface" to wanted))
     }

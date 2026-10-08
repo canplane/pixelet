@@ -1,4 +1,4 @@
-// @pxl/native/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlCore.kt
+// @pxl/native/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlGuest.kt
 
 package me.plei.pixelet.platform
 
@@ -6,14 +6,14 @@ import android.view.Surface
 import java.nio.ByteBuffer
 
 /**
- * The kernel as this app calls it: the Rust core (crates/client-bracket/native),
+ * The kernel as this app calls it: the guest (crates/client-bracket/native),
  * loaded as the shared library the app's build puts beside it, and reached
  * through the functions its src/android.rs names for JNI — the same calls an
  * iPhone's Swift makes through the C ABI. Whatever reaches the kernel runs on
  * the kernel's own thread while the caller waits, so any thread may call, one
  * call at a time.
  */
-object PxlCore {
+object PxlGuest {
   init {
     System.loadLibrary("pxl_native")
   }
@@ -22,7 +22,7 @@ object PxlCore {
    * first lays the memory out. */
   external fun interrupt(quotaMs: Double): Double
 
-  /** The memory, a direct buffer over the whole region the core took. */
+  /** The memory, a direct buffer over the whole region the guest took. */
   external fun memory(): ByteBuffer
 
   /** The device's uniform offset alignment and whether it times its passes,

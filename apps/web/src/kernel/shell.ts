@@ -5,7 +5,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import type { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/kernel/abi/cmd.spec.ts";
-import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
+import { GUEST, GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { ring_now, send_input } from "@/kernel/sched.ts";
 import { orientationPermit } from "@platform/sensor.ts";
 
@@ -28,7 +28,7 @@ export function kernel_setting(key: u32, value: u32): void {
 
 /** Whether a command carrying `pkt` can be sent; the shell refuses input that cannot. */
 export function kernel_fits(pkt: U8Array): boolean {
-  return CORE_DOORBELL.fits(pkt);
+  return GUEST_DOORBELL.fits(pkt);
 }
 
 export function kernel_enable_location(): void {
@@ -37,12 +37,12 @@ export function kernel_enable_location(): void {
 
 /** The kernel's memory, where a call leaves its reply; a view of it holds until the next turn. */
 export function kernel_memory(): ArrayBuffer {
-  return CORE.buffer;
+  return GUEST.buffer;
 }
 
 /** A command answered inside the call: the address of its reply in `kernel_memory()`. */
 export function kernel_call(cmd: Command, pkt: U8Array | null = null): u32 {
-  return CORE_DOORBELL.call(cmd, pkt, (at) => {
+  return GUEST_DOORBELL.call(cmd, pkt, (at) => {
     // A refusal is -errno, never an address.
     if (at < 0) throw new FaultError(-at as Errno);
     return at >>> 0;
