@@ -94,24 +94,23 @@ version costs a pyramid's worth. Deleting an old version is free.
 A version is uploaded from `out/<kind>.publish/`, which the bake's
 `publish` stage makes from the set (`tile/shard.rs` `publish`): every tile,
 less for places and divisions those no reader asks for. It is a copy for the
-upload alone, removed after; the version's name is chosen here,
-`v<format>.<UTC day>.<n>` (`spec/spec/bake/published.json`).
+upload alone. `deno task publish <kind>…` (`script/publish.ts`) uploads it
+under a new name, `v<format>.<UTC day>.<n>` — the format is
+`spec/spec/bake/published.json`'s `FORMAT`, set by hand, and n is past every
+version of that format and day the bucket holds — checks the stored count,
+sets `PUBLISHED_VERSION`, regenerates, and removes the copy.
 
 ### Terrain
 
 ```bash
 deno task bake:terrain --stage publish
-aws s3 sync ./out/terrain.publish s3://pixelet-tiles/terrain/<version> \
-  --profile r2 --endpoint-url $R2 \
-  --content-type application/octet-stream \
-  --content-encoding "$(jq -r .content_encoding out/terrain/manifest.json)" \
-  --cache-control "public, max-age=31536000, immutable"
+deno task publish terrain
 ```
 
 **Never overwrite an existing version in place**, of any kind — publish a new
 prefix and point the app at it.
 
-**Objects are stored already packed, so the upload must set the
+**Objects are stored already packed, so the upload sets the
 `Content-Encoding` they were packed in** — the manifest's `content_encoding`,
 which the bake writes beside the version: zstd from the bake after v4, gzip
 for terrain v4, places v5 and divisions v2, which were baked before it. The
@@ -128,11 +127,7 @@ As terrain:
 
 ```bash
 deno task bake:place --stage publish
-aws s3 sync ./out/place.publish s3://pixelet-tiles/place/<version> \
-  --profile r2 --endpoint-url $R2 \
-  --content-type application/octet-stream \
-  --content-encoding "$(jq -r .content_encoding out/place/manifest.json)" \
-  --cache-control "public, max-age=31536000, immutable"
+deno task publish place
 ```
 
 A tile its parent's occupancy marks none is no object — the tree stops where no cell over a
@@ -146,11 +141,7 @@ As terrain:
 
 ```bash
 deno task bake:division --stage publish
-aws s3 sync ./out/division.publish s3://pixelet-tiles/division/<version> \
-  --profile r2 --endpoint-url $R2 --exclude "*.part" \
-  --content-type "$(jq -r .content_type out/division/manifest.json)" \
-  --content-encoding "$(jq -r .content_encoding out/division/manifest.json)" \
-  --cache-control "public, max-age=31536000, immutable"
+deno task publish division
 ```
 
 Empty markers are local.
@@ -196,7 +187,7 @@ aws s3api head-object --bucket pixelet-tiles --key asset/<sha256> --profile r2 -
 
 ## Deploy
 
-Set `PUBLISHED_VERSION` to the folder a new bake was uploaded as, then:
+With `PUBLISHED_VERSION` set by the publish:
 
 ```bash
 deno task deploy

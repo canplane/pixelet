@@ -85,6 +85,8 @@
     "smoke": "./script/smoke.ts",
     // Reads with wrangler's login and hcloud's context.
     "usage": "./script/usage.ts",
+    // A bake's publish stage into the bucket under a new name; deploy after.
+    "publish": "./script/publish.ts",
 
     // The rest.
     "export:xpute": "./xpute/script/export.ts",
