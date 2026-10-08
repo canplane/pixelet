@@ -13,7 +13,7 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::adapter::epsg3857::{self, mer_from_u};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 
-use crate::coverage::Coverage;
+use crate::coverage::{holdings, Coverage};
 use crate::deck::{self, source::Store};
 use crate::terrain::bake::assemble;
 use crate::terrain::pipeline::deck::bake_decks;
@@ -74,15 +74,22 @@ pub fn bake_leaf(r: &mut deck::Reader<impl Store>, tile: IVec) -> Result<(Terrai
     Ok((assemble(surface, lines), flat))
 }
 
+/// What the land list is a function of: what `has_ground` reads of the DB,
+/// its tables, the coastline among them (`coverage.rs` `holdings`).
+pub fn ground_source(client: &mut Client) -> Result<serde_json::Value, String> {
+    holdings(client, &[&GROUND_READS])
+}
+
 /// The tiles `has_ground` found, kept for the geocode bake and later stages;
-/// refused unless made at this tile size, coverage, rule and release.
-pub fn land_tiles(path: &Path, coverage: &Coverage, release: Option<&str>) -> Result<Vec<IVec>, String> {
+/// refused unless made at this tile size, coverage and rule, and from
+/// `source` where it is given.
+pub fn land_tiles(path: &Path, coverage: &Coverage, source: Option<&serde_json::Value>) -> Result<Vec<IVec>, String> {
     let reclassify = "run bake_tiles, which writes it as a side effect of its own classification (`--limit 0` does the classification and bakes nothing)";
     let raw = std::fs::read_to_string(path).map_err(|_| format!("{} not found — {reclassify}.", path.display()))?;
     let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-    let want = land_key(coverage, release.unwrap_or_default());
+    let want = land_key(coverage, source.unwrap_or(&serde_json::Value::Null));
     for (k, want) in want.as_object().into_iter().flatten() {
-        if (k != "release" || release.is_some()) && v.get(k) != Some(want) {
+        if (k != "source" || source.is_some()) && v.get(k) != Some(want) {
             return Err(format!(
                 "{} was classified with {k} {}, and it is now {want} — {reclassify}.",
                 path.display(),
@@ -94,17 +101,17 @@ pub fn land_tiles(path: &Path, coverage: &Coverage, release: Option<&str>) -> Re
     list.iter().map(|s| s.as_str().ok_or("a tile is not a string")?.parse::<IVec>().map_err(|e| e.to_string())).collect()
 }
 
-pub fn write_land_tiles(path: &Path, coverage: &Coverage, release: &str, land: &[IVec]) -> Result<(), String> {
-    let mut v = land_key(coverage, release);
+pub fn write_land_tiles(path: &Path, coverage: &Coverage, source: &serde_json::Value, land: &[IVec]) -> Result<(), String> {
+    let mut v = land_key(coverage, source);
     v["tiles"] = land.iter().map(|p| p.to_string()).collect();
     std::fs::write(path, serde_json::to_string(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
-fn land_key(coverage: &Coverage, release: &str) -> serde_json::Value {
+fn land_key(coverage: &Coverage, source: &serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "leaf_z": pxl_spec::space::layer::tile::LEAF_ZOOM,
         "shards": coverage.shards().map(|s| s.name()).collect::<Vec<_>>(),
         "ground": format!("{GROUND:016x}"),
-        "release": release,
+        "source": source,
     })
 }

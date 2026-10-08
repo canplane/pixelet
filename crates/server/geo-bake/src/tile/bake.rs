@@ -47,7 +47,8 @@ pub fn bake<T>(
     }
     prelude(&args.out)?;
 
-    let land = land_tiles(&args.land_cache, &Coverage::of_source()?, Some(&b.source.release))?;
+    let ground = crate::terrain::leaf::ground_source(&mut b.source.connect()?)?;
+    let land = land_tiles(&args.land_cache, &Coverage::of_source()?, Some(&ground))?;
     println!("[bake/{}] {} land tiles from {}", b.kind, land.len(), args.land_cache.display());
     let mut targets = walk::targets_of(&land, b.group_shamt);
     if let Some(n) = args.limit {

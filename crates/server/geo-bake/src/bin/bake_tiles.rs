@@ -336,10 +336,11 @@ fn run() -> Result<(), String> {
         let candidates = coverage.tiles();
         println!("[bake] {} shards = {} candidate tiles", coverage.shards().count(), candidates.len());
 
+        let ground = leaf::ground_source(&mut client)?;
         let cached = if args.reclassify {
             Err("--reclassify".to_string())
         } else {
-            land_tiles(&land_cache, &coverage, Some(&source.release))
+            land_tiles(&land_cache, &coverage, Some(&ground))
         };
         let land: Vec<IVec> = match cached {
             Ok(land) => {
@@ -350,7 +351,7 @@ fn run() -> Result<(), String> {
                 println!("[bake/classify] classifying: {why}");
                 let land = classify_land_tiles(&mut client, &candidates).map_err(|e| e.to_string())?;
                 fs::create_dir_all(land_cache.parent().unwrap_or(Path::new("."))).map_err(|e| e.to_string())?;
-                write_land_tiles(&land_cache, &coverage, &source.release, &land)?;
+                write_land_tiles(&land_cache, &coverage, &ground, &land)?;
                 println!("[bake/classify] done: land={} ocean={} -> {}", land.len(), candidates.len() - land.len(), land_cache.display());
                 land
             }
@@ -428,7 +429,8 @@ fn run() -> Result<(), String> {
         write_json(&leaf_json, &leaf_record(true))?;
     }
 
-    let land = land_tiles(&land_cache, &coverage, source.as_ref().map(|s| s.release.as_str()))?;
+    let ground = source.as_ref().map(|s| s.connect().and_then(|mut c| leaf::ground_source(&mut c))).transpose()?;
+    let land = land_tiles(&land_cache, &coverage, ground.as_ref())?;
     let targets = &land[..args.limit.map_or(land.len(), |n| n.min(land.len()))];
 
     if args.stages.contains(&Stage::Assemble) {
