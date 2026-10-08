@@ -103,7 +103,7 @@ deno task dev:oven
 | `deno task test`                          | Every test, every workspace member                                                          |
 | `deno task lint` / `fmt`                  | Lint / format                                                                               |
 
-db-geo is filled by the scripts under `infra/geo/**/script/`, run by path as [infra/geo/README.md](./infra/geo/README.md) §4 says: they make a database's state rather than a file the tree keeps.
+db-geo is filled by each source's `ingest` under `infra/geo/`, run by path as [infra/geo/README.md](./infra/geo/README.md) says: they make a database's state rather than a file the tree keeps.
 
 To measure the client, use `preview` (`localhost:4173`). It is the bundle as the deployment builds it, so the dev server's unbundled modules and hooks are gone. It is still a development build, so it offers the nightly settings a deployed build leaves out; the profiler's overlay, which reads the numbers, is in both.
 
