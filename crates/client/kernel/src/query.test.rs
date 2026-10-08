@@ -111,7 +111,7 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
     let leaf = top().children()[0];
     let mut decks = Builder::default();
     decks.push([([0.0, 10.5], 10), ([40.0, 10.5], 10)], 4 * POINT_SCALE as u8, ground::residential_road, Form::Bridge, 0);
-    let void = TerrainTile::leaf(
+    let void = Terrain::leaf(
         vec![0; PADDED * PADDED],
         Ground {
             cells: vec![sentinel::void; SPAN * SPAN].into(),

@@ -18,7 +18,7 @@
       "name": "unknown",
       "value": 255,
       "doc": [
-        "land no source here describes, past the coverage, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface"
+        "the ground past the coverage, which no source here describes, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface"
       ]
     }
   ],
@@ -26,8 +26,7 @@
     "note": [
       "The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in",
       "the order Carto paints (decision/20261005-the-ground-is-a-carto-palette.md).",
-      "`kind` is how the renderer draws it; `shift` how far off the sampled",
-      "height it stands."
+      "`kind` is how the renderer draws it; every look stands at its sampled height."
     ],
     "entries": [
       { "section": "landcover" },
@@ -165,10 +164,9 @@
         "name": "water",
         "value": 32,
         "kind": "water",
-        "shift": -1,
         "doc": ["sea, lake, river, canal, any water: Carto @water-color"]
       },
-      { "section": "water features" },
+      { "section": "water_features" },
       {
         "name": "dam",
         "value": 33,
@@ -186,19 +184,17 @@
         "name": "building",
         "value": 35,
         "kind": "structure",
-        "shift": -1,
         "doc": ["a building: Carto @building-fill"]
       },
       {
         "name": "building_major",
         "value": 36,
         "kind": "structure",
-        "shift": -1,
         "doc": [
           "a place of worship, a terminal, a station: Carto @building-major-fill at z16 and finer, as a cell is z16"
         ]
       },
-      { "section": "roads, by Carto's z" },
+      { "section": "roads", "doc": ["by Carto's z"] },
       {
         "name": "footway",
         "value": 37,

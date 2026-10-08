@@ -42,9 +42,9 @@ impl Piece {
 pub fn piece_of(way: &Segment) -> Option<Piece> {
     let t = way.tags;
     let form = if t.bridge && !t.tunnel && !t.indoor {
-        Form::Deck
+        Form::Bridge
     } else if (t.tunnel && !(way.subtype == "road" && t.indoor)) || (way.is_subway() && !t.bridge) {
-        Form::Bore
+        Form::Tunnel
     } else {
         return None;
     };

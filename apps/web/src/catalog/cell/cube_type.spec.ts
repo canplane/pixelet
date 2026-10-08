@@ -6,20 +6,19 @@
 // order Carto paints, and an object's value a u16 whose byte range is
 // that palette and whose range past it is what only an object can be.
 
-/** How the renderer draws a ground look, and the texture pack's prefix for it. */
-export type Kind = "land" | "water" | "transport" | "structure";
+/** The catalog's section a placeable cube is listed under, as Carto groups the looks. */
+export type CubeSection = "landcover" | "water" | "water_features" | "buildings" | "roads" | "aeroways" | "colors";
 
 export const cube_types = {
   sentinel: {
     /** nothing painted: the ground before a bake writes it, and an object cell no leaf holds */
     void: 0x00,
-    /** land no source here describes, past the coverage, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface */
+    /** the ground past the coverage, which no source here describes, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface */
     unknown: 0xff,
   },
   // The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in
   // the order Carto paints (decision/20261005-the-ground-is-a-carto-palette.md).
-  // `kind` is how the renderer draws it; `shift` how far off the sampled
-  // height it stands.
+  // `kind` is how the renderer draws it; every look stands at its sampled height.
   ground: {
     // ---- landcover ----
 
@@ -91,7 +90,7 @@ export const cube_types = {
     /** sea, lake, river, canal, any water: Carto @water-color */
     water: 32,
 
-    // ---- water features ----
+    // ---- water_features ----
 
     /** dam: Carto @dam */
     dam: 33,
@@ -105,7 +104,7 @@ export const cube_types = {
     /** a place of worship, a terminal, a station: Carto @building-major-fill at z16 and finer, as a cell is z16 */
     building_major: 36,
 
-    // ---- roads, by Carto's z ----
+    // ---- roads ----
 
     /** footway, steps, path: Carto @footway-fill, @steps-fill */
     footway: 37,
@@ -174,63 +173,78 @@ export const cube_types = {
   },
 } as const satisfies Record<string, Record<string, number>>;
 
-/** Each look's kind, by its number. */
-export const ground_kind: Readonly<Record<number, Kind>> = {
-  1: "land",
-  2: "land",
-  3: "land",
-  4: "land",
-  5: "land",
-  6: "land",
-  7: "land",
-  8: "land",
-  9: "land",
-  10: "land",
-  11: "land",
-  12: "land",
-  13: "land",
-  14: "land",
-  15: "land",
-  16: "land",
-  17: "land",
-  18: "land",
-  19: "land",
-  20: "land",
-  21: "land",
-  22: "land",
-  23: "land",
-  24: "land",
-  25: "land",
-  26: "land",
-  27: "land",
-  28: "land",
-  29: "land",
-  30: "land",
-  31: "land",
+/** Each placeable cube's section, by its number. */
+export const cube_section: Readonly<Record<number, CubeSection>> = {
+  1: "landcover",
+  2: "landcover",
+  3: "landcover",
+  4: "landcover",
+  5: "landcover",
+  6: "landcover",
+  7: "landcover",
+  8: "landcover",
+  9: "landcover",
+  10: "landcover",
+  11: "landcover",
+  12: "landcover",
+  13: "landcover",
+  14: "landcover",
+  15: "landcover",
+  16: "landcover",
+  17: "landcover",
+  18: "landcover",
+  19: "landcover",
+  20: "landcover",
+  21: "landcover",
+  22: "landcover",
+  23: "landcover",
+  24: "landcover",
+  25: "landcover",
+  26: "landcover",
+  27: "landcover",
+  28: "landcover",
+  29: "landcover",
+  30: "landcover",
+  31: "water",
   32: "water",
-  33: "structure",
-  34: "structure",
-  35: "structure",
-  36: "structure",
-  37: "transport",
-  38: "transport",
-  39: "transport",
-  40: "transport",
-  41: "transport",
-  42: "transport",
-  43: "transport",
-  44: "transport",
-  45: "transport",
-  46: "transport",
-  47: "transport",
-  48: "transport",
-  49: "transport",
-  50: "transport",
-  51: "transport",
-  52: "transport",
-  53: "transport",
-  54: "transport",
-  55: "transport",
+  33: "water_features",
+  34: "water_features",
+  35: "buildings",
+  36: "buildings",
+  37: "roads",
+  38: "roads",
+  39: "roads",
+  40: "roads",
+  41: "roads",
+  42: "roads",
+  43: "roads",
+  44: "roads",
+  45: "roads",
+  46: "roads",
+  47: "roads",
+  48: "roads",
+  49: "roads",
+  50: "roads",
+  51: "roads",
+  52: "roads",
+  53: "roads",
+  54: "roads",
+  55: "aeroways",
+  257: "colors",
+  258: "colors",
+  259: "colors",
+  260: "colors",
+  261: "colors",
+  262: "colors",
+  263: "colors",
+  264: "colors",
+  265: "colors",
+  266: "colors",
+  267: "colors",
+  268: "colors",
+  269: "colors",
+  270: "colors",
+  271: "colors",
 };
 
 /** What a cell nothing painted shows. */

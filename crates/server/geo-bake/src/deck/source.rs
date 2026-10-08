@@ -8,14 +8,12 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use postgres::types::ToSql;
-use pxl_spec::bake::format::GroundCell;
+use pxl_spec::bake::format::ELE_LANE;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 
 use crate::segment::Segment;
-use crate::terrain::bake::Surface;
 use crate::terrain::repository::TerrainRepository;
-use crate::terrain::source::fetch_surface;
 use crate::util::{pack, unpack, write_atomic, Level};
 
 /// The tables the solve's queries name, for the catalog.
@@ -36,9 +34,8 @@ const WATER_SQL: &str = "SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FR
 pub struct TileRows {
     ways: Vec<Segment>,
     water: Vec<(String, Option<String>, Vec<u8>)>,
-    /// Its ground as the client draws it: the elevation and the cells whose shift goes on it.
+    /// Its elevation, flat where the raster does not reach.
     ele: Vec<i16>,
-    cells: Vec<GroundCell>,
 }
 
 impl TileRows {
@@ -52,11 +49,8 @@ impl TileRows {
         &self.water
     }
 
-    pub fn surface(&self) -> Surface {
-        Surface {
-            ele: self.ele.clone(),
-            ground: pxl_spec::bake::format::Ground { cells: self.cells.clone().into() },
-        }
+    pub fn elevation(&self) -> &[i16] {
+        &self.ele
     }
 }
 
@@ -66,13 +60,11 @@ fn tile_rows(client: &mut Client, repo: &TerrainRepository, tile: IVec) -> Resul
     let read = |client: &mut Client, sql: &str| client.query(sql, &env).map_err(|e| e.to_string());
     let ways = read(client, SEGMENTS_SQL)?;
     let water = read(client, WATER_SQL)?;
-    // the paint of its ways is no matter to the ground's height, so none is drawn
-    let (surface, _) = fetch_surface(repo, client, tile, &[])?;
+    let ele = repo.elevation(client, [min, max]).map_err(|e| e.to_string())?;
     Ok(TileRows {
         ways: ways.iter().flat_map(Segment::of).collect(),
         water: water.iter().map(|r| (r.get("subtype"), r.get("class"), r.get::<_, &[u8]>("geom_wkb").to_vec())).collect(),
-        ele: surface.ele,
-        cells: surface.ground.cells.to_vec(),
+        ele: ele.unwrap_or_else(|| vec![0; ELE_LANE]),
     })
 }
 

@@ -27,14 +27,13 @@ pub mod cube_types {
     pub mod sentinel {
         /// nothing painted: the ground before a bake writes it, and an object cell no leaf holds
         pub const void: u8 = 0x00;
-        /// land no source here describes, past the coverage, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface
+        /// the ground past the coverage, which no source here describes, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface
         pub const unknown: u8 = 0xff;
     }
 
     // The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in
     // the order Carto paints (decision/20261005-the-ground-is-a-carto-palette.md).
-    // `kind` is how the renderer draws it; `shift` how far off the sampled
-    // height it stands.
+    // `kind` is how the renderer draws it; every look stands at its sampled height.
     pub mod ground {
 
         // ---- landcover ----
@@ -107,7 +106,7 @@ pub mod cube_types {
         /// sea, lake, river, canal, any water: Carto @water-color
         pub const water: u8 = 32;
 
-        // ---- water features ----
+        // ---- water_features ----
 
         /// dam: Carto @dam
         pub const dam: u8 = 33;
@@ -121,7 +120,7 @@ pub mod cube_types {
         /// a place of worship, a terminal, a station: Carto @building-major-fill at z16 and finer, as a cell is z16
         pub const building_major: u8 = 36;
 
-        // ---- roads, by Carto's z ----
+        // ---- roads ----
 
         /// footway, steps, path: Carto @footway-fill, @steps-fill
         pub const footway: u8 = 37;
@@ -494,22 +493,12 @@ pub mod cube_types {
                 Ground::aeroway => Kind::Transport,
             }
         }
-
-        /// How far off its sampled height a cell showing the look stands, in units, up positive.
-        pub const fn shift(self) -> i16 {
-            match self {
-                Ground::water => -1,
-                Ground::building => -1,
-                Ground::building_major => -1,
-                _ => 0,
-            }
-        }
     }
 
-    /// A placed color, by its number.
+    /// One of the object's colors, by its number.
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     #[repr(u16)]
-    pub enum Block {
+    pub enum Object {
         white = 257,
         grey = 258,
         dark_grey = 259,
@@ -527,42 +516,42 @@ pub mod cube_types {
         pink = 271,
     }
 
-    impl Block {
-        pub const ALL: [Block; 15] = [
-            Block::white,
-            Block::grey,
-            Block::dark_grey,
-            Block::black,
-            Block::red,
-            Block::orange,
-            Block::brown,
-            Block::yellow,
-            Block::green,
-            Block::dark_green,
-            Block::cyan,
-            Block::blue,
-            Block::violet,
-            Block::magenta,
-            Block::pink,
+    impl Object {
+        pub const ALL: [Object; 15] = [
+            Object::white,
+            Object::grey,
+            Object::dark_grey,
+            Object::black,
+            Object::red,
+            Object::orange,
+            Object::brown,
+            Object::yellow,
+            Object::green,
+            Object::dark_green,
+            Object::cyan,
+            Object::blue,
+            Object::violet,
+            Object::magenta,
+            Object::pink,
         ];
 
-        pub const fn of(value: u16) -> Option<Block> {
+        pub const fn of(value: u16) -> Option<Object> {
             match value {
-                257 => Some(Block::white),
-                258 => Some(Block::grey),
-                259 => Some(Block::dark_grey),
-                260 => Some(Block::black),
-                261 => Some(Block::red),
-                262 => Some(Block::orange),
-                263 => Some(Block::brown),
-                264 => Some(Block::yellow),
-                265 => Some(Block::green),
-                266 => Some(Block::dark_green),
-                267 => Some(Block::cyan),
-                268 => Some(Block::blue),
-                269 => Some(Block::violet),
-                270 => Some(Block::magenta),
-                271 => Some(Block::pink),
+                257 => Some(Object::white),
+                258 => Some(Object::grey),
+                259 => Some(Object::dark_grey),
+                260 => Some(Object::black),
+                261 => Some(Object::red),
+                262 => Some(Object::orange),
+                263 => Some(Object::brown),
+                264 => Some(Object::yellow),
+                265 => Some(Object::green),
+                266 => Some(Object::dark_green),
+                267 => Some(Object::cyan),
+                268 => Some(Object::blue),
+                269 => Some(Object::violet),
+                270 => Some(Object::magenta),
+                271 => Some(Object::pink),
                 _ => None,
             }
         }

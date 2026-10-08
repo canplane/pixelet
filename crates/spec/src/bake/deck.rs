@@ -45,13 +45,13 @@ pub fn slab_depth(u_per_m: f64) -> i32 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Form {
-    Deck = 0,  // a bridge: a slab under its surface
-    Bore = 1,  // a tunnel: its clear height and shell over its surface
-    Grade = 2, // a way on the ground taking a structure's end to it: a cutting or an embankment
+    Bridge = 0, // a slab under its surface
+    Tunnel = 1, // its clear height and shell over its surface
+    Grade = 2,  // a way on the ground taking a structure's end to it: a cutting or an embankment
 }
 
 impl Form {
-    const ALL: [Form; 3] = [Form::Deck, Form::Bore, Form::Grade];
+    const ALL: [Form; 3] = [Form::Bridge, Form::Tunnel, Form::Grade];
 
     /// A byte `read_branch` let through.
     pub fn of(byte: u8) -> Form {
@@ -64,12 +64,12 @@ impl Form {
 
     /// Can stand below the ground.
     pub fn sinks(self) -> bool {
-        self != Form::Deck
+        self != Form::Bridge
     }
 
     /// Can stand above the ground.
     pub fn rises(self) -> bool {
-        self != Form::Bore
+        self != Form::Tunnel
     }
 }
 
@@ -163,14 +163,14 @@ impl Over {
         // next column's without a gap however steep it runs
         let (low, top) = (round(self.low) as i32, round(self.top) as i32);
         match self.form {
-            Form::Deck => {
+            Form::Bridge => {
                 let lo = low - slab_depth(u_per_m);
                 Occupies::Above {
                     slab: [lo, top],
                     pier: (self.pier && lo > ground).then_some([ground, lo]),
                 }
             }
-            Form::Bore => Occupies::Through {
+            Form::Tunnel => Occupies::Through {
                 air: [low, top + i32::from(self.clear)],
             },
             // a way on the ground moves the ground with it: filled up to it, cut down to it
@@ -323,7 +323,7 @@ impl Deck<'_> {
             top: z0.max(z1),
             kind: self.kind,
             form: self.form,
-            pier: self.form != Form::Bore && frame.is_some_and(|f| pier_covers(f, self.width_cells(), a, [dx, dy], near, at)),
+            pier: self.form != Form::Tunnel && frame.is_some_and(|f| pier_covers(f, self.width_cells(), a, [dx, dy], near, at)),
             clear: self.clear,
         })
     }
