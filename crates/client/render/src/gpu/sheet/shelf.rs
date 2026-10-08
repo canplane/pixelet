@@ -161,6 +161,13 @@ impl Sheet {
         [self.x[s], self.y[s], self.w[s], self.h[s]]
     }
 
+    /// Whether a live slot holds its drawing, which one added or marked
+    /// dirty lacks until a sync paints it.
+    pub fn painted(&self, slot: u32) -> bool {
+        let s = slot as usize;
+        self.state.get(s) == Some(&LIVE) && !self.is_dirty.get(s).copied().unwrap_or(false)
+    }
+
     pub fn slot_draw(&self, slot: u32) -> Option<&DrawSpec> {
         (self.state.get(slot as usize) == Some(&LIVE)).then(|| self.draws[slot as usize].as_ref()).flatten()
     }

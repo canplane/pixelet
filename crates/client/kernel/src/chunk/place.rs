@@ -12,7 +12,6 @@ use crate::billboard::batch::BillboardBatch;
 use crate::billboard::field::billboard_instance;
 use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::chunk::Chunk;
-use crate::layer::object::ext::Ext;
 use crate::layer::object::preview::draft;
 use core::hash::Hasher;
 use pxl_spec::bake::constant::EntryAt;
@@ -63,6 +62,10 @@ struct Placement {
     moved: bool,
     mounted: Vec<(Chunk, bool, bool)>,
     labeled: Vec<(Label, Pvf3)>,
+    /// Last turn's `labeled`, its buffer reused.
+    spare: Vec<(Label, Pvf3)>,
+    /// Markers whose new words are not ready yet, kept to become so.
+    pending: Vec<Label>,
     instances: Vec<f32>,
 }
 static PLACEMENT: Global<Placement> = Global::new();
@@ -105,11 +108,7 @@ fn markers(chunk: Chunk, read_zoom: Zoom, found: &mut Vec<(Cell, Label, Cell, f6
         if !object_value_is_marker(e.state) {
             return;
         }
-        let words = match objects.ext(e) {
-            Some(Ext::MarkerText(t)) => t.as_str(),
-            None => "",
-        };
-        let marker = marker_at(e.id(), words, read_zoom);
+        let marker = marker_at(e.id(), objects.words(e).unwrap_or_default(), read_zoom);
         if (0..3).all(|k| (region.min[k]..region.max[k]).contains(&marker.5[k])) {
             found.push(marker);
         }
@@ -225,8 +224,10 @@ pub fn step(ctx: &mut TickContext) {
     }
     found.sort_unstable_by_key(|f| f.0);
     p.batch.reset();
-    let mut labeled = core::mem::take(&mut p.labeled);
+    let drawn_before = core::mem::take(&mut p.labeled);
+    let mut labeled = core::mem::take(&mut p.spare);
     labeled.clear();
+    p.pending.clear();
     let eye = crate::view::observation::eye().unwrap_or_default();
     // A waiting marker stands over whatever stands at its place, with the words it has so far.
     let draft = draft();
@@ -238,13 +239,28 @@ pub fn step(ctx: &mut TickContext) {
         if shown_at(units_per_px_at(d)) != Some(shown) {
             continue;
         }
+        // A marker's words changed: what was drawn stays until the new words are ready to show.
+        let label = match label {
+            Label::Marker { at: e, .. } => match drawn_before.iter().find(|d| matches!(d.0, Label::Marker { at, .. } if at == e)) {
+                Some(&(before, _)) if before != label && !badge::ready(label) => {
+                    p.pending.push(label);
+                    before
+                }
+                _ => label,
+            },
+            _ => label,
+        };
         let Some(width) = badge::width(label) else { continue };
         let center = stands.center(top);
         let local = crate::view::frame::coord::to_world(&center);
         p.batch.push(local[0], local[1], local[2], width, badge::ANCHOR, labeled.len() as f64);
         labeled.push((label, center));
     }
-    badge::retain(&labeled.iter().map(|l| l.0).collect());
+    badge::retain(&labeled.iter().map(|l| l.0).chain(p.pending.iter().copied()).collect());
+    // Painted at render, which asks for no turn: one looks again.
+    if !p.pending.is_empty() {
+        crate::sched::edge::request_world_tick();
+    }
     p.found = found;
     select_visible_billboards(&mut p.batch, &mut p.kept);
     p.drawn.clear();
@@ -283,7 +299,7 @@ pub fn step(ctx: &mut TickContext) {
         write_billboard_set(set, &instances);
         ctx.invalidate();
     }
-    (p.labeled, p.instances) = (labeled, instances);
+    (p.labeled, p.spare, p.instances) = (labeled, drawn_before, instances);
 }
 
 /// Where a badge's tap goes: to its place, or into a count, so it comes

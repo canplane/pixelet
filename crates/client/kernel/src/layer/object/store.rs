@@ -389,6 +389,13 @@ impl Store {
         self.ext.get(subclass_of(e.state)?, e.ext)
     }
 
+    /// A marker's words, as put up; none for anything else.
+    pub fn words(&self, e: &Entry) -> Option<&str> {
+        match self.ext(e)? {
+            Ext::MarkerText(t) => Some(t),
+        }
+    }
+
     /// Applies every write; the cubes that changed. A write whose record its
     /// pool has no room for is left out, as if never sent.
     pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> Vec<Aabb> {

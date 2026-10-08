@@ -34,6 +34,16 @@ pub struct Draft {
 
 static DRAFT: Global<Option<Draft>> = Global::new();
 
+/// The words a marker at `at` shows: the waiting one's so far, else those
+/// put up there; none where no marker stands or waits.
+pub fn words_at(at: EntryAt) -> Option<&'static str> {
+    if let Some(d) = draft().filter(|d| d.at == at) {
+        return Some(&d.words);
+    }
+    let objects = &crate::kernel().objects;
+    objects.words(&objects.placed(at.zoom(), at.at())?)
+}
+
 /// The one waiting, which the badges draw.
 pub fn draft() -> Option<&'static Draft> {
     DRAFT.get(|| None).as_ref()

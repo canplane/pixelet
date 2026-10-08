@@ -1,7 +1,6 @@
 // pxl-kernel/chunk/place/badge.rs
 
-use crate::layer::object::ext::Ext;
-use crate::layer::object::preview::draft;
+use crate::layer::object::preview::words_at;
 use pxl_spec::bake::constant::EntryAt;
 use std::collections::{HashMap, HashSet};
 
@@ -51,14 +50,7 @@ impl Label {
     /// A marker's words, the waiting one's as they are so far, empty once
     /// it has gone.
     fn words(at: EntryAt) -> String {
-        if let Some(d) = draft().filter(|d| d.at == at) {
-            return d.words.clone();
-        }
-        let objects = &crate::kernel().objects;
-        match objects.placed(at.zoom(), at.at()).and_then(|e| objects.ext(&e).cloned()) {
-            Some(Ext::MarkerText(t)) => t,
-            None => String::new(),
-        }
+        words_at(at).unwrap_or_default().to_string()
     }
 
     pub fn text(self) -> String {
@@ -115,6 +107,14 @@ pub fn width(label: Label) -> Option<f64> {
     let width = badge_width(text_width(BADGE_FONT, &label.text())?.ceil(), matches!(label, Label::Place { .. }));
     badges().insert(label, Badge { width, slot: NO_SLOT });
     Some(width)
+}
+
+/// Whether the label is laid out and painted, so drawing it shows its words.
+pub fn ready(label: Label) -> bool {
+    width(label).is_some() && {
+        let slot = slot(label);
+        slot != NO_SLOT && billboard_sheet().painted(slot as u32)
+    }
 }
 
 /// Its label was measured first.

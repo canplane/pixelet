@@ -8,7 +8,7 @@ use pxl_spec::cell::ext::MARKER_TEXT_CHARS;
 use pxl_spec::cell::object::{object_value_is_marker, MARKER};
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
-use crate::layer::object::preview::{draft, redraft, Draft, RenderEdits};
+use crate::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::EntryKind;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
@@ -119,7 +119,7 @@ pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Ins
 /// A marker tool's tap at `at`, a place free or holding a marker: the marker
 /// waits there, with the marker's own words if one stands there.
 pub fn wait_at(at: EntryAt) {
-    *redraft() = Some(Draft { at, words: marker_words(at).unwrap_or_default() });
+    *redraft() = Some(Draft { at, words: words_at(at).unwrap_or_default().to_string() });
 }
 
 /// A marker tool's tap on the free cell whose min corner is `corner`.
@@ -136,12 +136,6 @@ pub fn cancel_marker() {
 /// Whether a marker waits, and its words, for the shell.
 pub fn marker_waiting() -> (bool, &'static str) {
     draft().map_or((false, ""), |d| (true, d.words.as_str()))
-}
-
-fn marker_words(at: EntryAt) -> Option<String> {
-    match kernel().objects.ext(&get_placed_object(at)?)? {
-        Ext::MarkerText(t) => Some(t.clone()),
-    }
 }
 
 /// The waiting marker's words as they are now. Words past
