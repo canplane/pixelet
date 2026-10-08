@@ -1,7 +1,7 @@
 // pxl-geo-bake/elevation.rs
 
 //! A tile's elevation grid, the one definition of ground height for the bake,
-//! the client and the deck solve. It reproduces PostGIS's
+//! the client and the separation solve. It reproduces PostGIS's
 //! `ST_Resample(…, 'Bilinear')` (GDAL's warper) value for value; the steps
 //! below name the GDAL/PostGIS function each copies.
 
@@ -14,14 +14,24 @@ use postgres::Client;
 use pxl_spec::bake::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use pxl_spec::space::coord::adapter::epsg3857::BBox3857;
 use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, u_per_m};
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_core::math::scalar::round;
 
 const HELD: usize = 512;
 
 /// A side of the raster's blocks, in samples: the ingest cuts its warps into
-/// them (`raster2pgsql -t`), and one global grid of them is what the bake
-/// finds a sample's block by.
+/// them (`raster2pgsql -t`), each a tile of the pyramid at `BLOCK_ZOOM`, kept
+/// under that tile's name.
 pub const BLOCK: u32 = 256;
+
+/// The zoom a block is a tile at: `BLOCK` samples of a leaf's `TILE_ELE_SPAN`.
+pub const BLOCK_ZOOM: Zoom = LEAF_ZOOM - (BLOCK / TILE_ELE_SPAN).trailing_zeros() as Zoom;
+
+const _: () = assert!(
+    BLOCK.is_multiple_of(TILE_ELE_SPAN) && (BLOCK / TILE_ELE_SPAN).is_power_of_two(),
+    "a block is a whole tile of the pyramid"
+);
 
 // The padded samples and the resample's two strides past them stay in a leaf.
 const _: () = assert!(ELE_PAD + 2 <= TILE_ELE_SPAN, "a tile's elevation reads past its shard's apron");
@@ -52,9 +62,9 @@ pub struct Raster {
     held: Mutex<Held>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct RasterTileAt {
-    rid: i32,
+    tile: String,
     x0: f64,
     y0: f64,
     gx: i64,
@@ -80,21 +90,16 @@ impl Raster {
     /// Refused unless the raster holds exactly the coverage's shards, each whole.
     pub fn open(client: &mut Client) -> Result<Raster, String> {
         let want: BTreeSet<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
-        let have: BTreeSet<String> = client
-            .query("SELECT shard FROM elevation_catalog WHERE status = 'COMPLETED'", &[])
-            .map_err(|e| e.to_string())?
-            .iter()
-            .map(|r| r.get(0))
-            .collect();
+        let have: BTreeSet<String> = client.query("SELECT shard FROM elevation_catalog", &[]).map_err(|e| e.to_string())?.iter().map(|r| r.get(0)).collect();
         if have != want {
             let (missing, extra) = (want.difference(&have).count(), have.difference(&want).count());
             return Err(format!(
-                "elevation lacks {missing} of the coverage's shards and holds {extra} past them: run ./infra/geo/elevation/script/setup-elevation.sh"
+                "elevation lacks {missing} of the coverage's shards and holds {extra} past them: run ./infra/geo/elevation/ingest.sh"
             ));
         }
         let rows = client
             .query(
-                "SELECT rid, ST_UpperLeftX(rast) AS x0, ST_UpperLeftY(rast) AS y0, ST_ScaleX(rast) AS sx, ST_ScaleY(rast) AS sy,
+                "SELECT tile, ST_UpperLeftX(rast) AS x0, ST_UpperLeftY(rast) AS y0, ST_ScaleX(rast) AS sx, ST_ScaleY(rast) AS sy,
                     ST_Width(rast) AS w, ST_Height(rast) AS h FROM elevation_raster",
                 &[],
             )
@@ -105,7 +110,7 @@ impl Raster {
         let raster_tiles: Vec<RasterTileAt> = rows
             .iter()
             .map(|r| RasterTileAt {
-                rid: r.get("rid"),
+                tile: r.get("tile"),
                 x0: r.get("x0"),
                 y0: r.get("y0"),
                 gx: round((r.get::<_, f64>("x0") - origin[0]) / sx) as i64,
@@ -145,8 +150,8 @@ impl Raster {
         if let Some(raster_tile) = &*slot {
             return Ok(raster_tile.clone());
         }
-        let at = self.raster_tiles[i];
-        let row = client.query_one("SELECT ST_AsBinary(rast) AS wkb FROM elevation_raster WHERE rid = $1", &[&at.rid])?;
+        let at = &self.raster_tiles[i];
+        let row = client.query_one("SELECT ST_AsBinary(rast) AS wkb FROM elevation_raster WHERE tile = $1", &[&at.tile])?;
         let raster_tile = Arc::new(RasterTile::of_wkb(row.get("wkb"), (at.w * at.h) as usize));
         *slot = Some(raster_tile.clone());
         Ok(raster_tile)
@@ -168,7 +173,7 @@ impl Raster {
         for ky in cy0.div_euclid(self.side)..=(cy1 - 1).div_euclid(self.side) {
             for kx in cx0.div_euclid(self.side)..=(cx1 - 1).div_euclid(self.side) {
                 let Some(&i) = self.by_key.get(&(kx, ky)) else { continue };
-                let t = self.raster_tiles[i];
+                let t = &self.raster_tiles[i];
                 let Some(c) = self.clip(t, env) else { continue };
                 hull = Some(hull.map_or(c, |h| [h[0].min(c[0]), h[1].min(c[1]), h[2].max(c[2]), h[3].max(c[3])]));
                 reached.push(i);
@@ -178,7 +183,7 @@ impl Raster {
         let (mw, mh) = ((mx1 - mx0) as usize, (my1 - my0) as usize);
         let mut mosaic = vec![None; mw * mh];
         for i in reached {
-            let t = self.raster_tiles[i];
+            let t = &self.raster_tiles[i];
             let raster_tile = self.raster_tile(client, i)?;
             for y in t.gy.max(my0)..(t.gy + t.h).min(my1) {
                 for x in t.gx.max(mx0)..(t.gx + t.w).min(mx1) {
@@ -248,7 +253,7 @@ impl Raster {
 
 impl Raster {
     /// `ST_Clip`'s pixels of tile `t` (rt_raster.c `rt_raster_gdal_rasterize`).
-    fn clip(&self, t: RasterTileAt, env: [f64; 4]) -> Option<[i64; 4]> {
+    fn clip(&self, t: &RasterTileAt, env: [f64; 4]) -> Option<[i64; 4]> {
         let (sx, sy) = (self.sx, self.sy);
         let left = env[0].max(t.x0);
         let right = env[2].min(t.x0 + t.w as f64 * sx);

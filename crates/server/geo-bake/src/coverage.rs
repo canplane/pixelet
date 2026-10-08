@@ -1,6 +1,6 @@
 // pxl-geo-bake/coverage.rs
 
-//! What the bakes publish — the shards `infra/geo/elevation/metadata.json`
+//! What the bakes publish — the shards `infra/geo/coverage.json`
 //! names, a tile at `SHARD_ZOOM` each — which are what the ingests take, and the
 //! one door to the DB.
 
@@ -13,9 +13,10 @@ use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::coord::zoom::{count, shamt, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
+use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-const METADATA: &str = include_str!("../../../../infra/geo/elevation/metadata.json");
+const COVERAGE: &str = include_str!("../../../../infra/geo/coverage.json");
 
 /// A shard, by its index at `SHARD_ZOOM`.
 pub type Shard = [i64; 2];
@@ -89,12 +90,9 @@ impl Coverage {
     }
 
     fn derive() -> Result<Coverage, String> {
-        let bad = |why: String| format!("infra/geo/elevation/metadata.json: {why}");
-        let entries: serde_json::Value = serde_json::from_str(METADATA).map_err(|e| bad(e.to_string()))?;
-        let Some([entry]) = entries.as_array().map(Vec::as_slice) else {
-            return Err(bad("want an array of exactly one entry".into()));
-        };
-        let names = entry["shards"].as_array().ok_or_else(|| bad("no shards".into()))?;
+        let bad = |why: String| format!("infra/geo/coverage.json: {why}");
+        let coverage: serde_json::Value = serde_json::from_str(COVERAGE).map_err(|e| bad(e.to_string()))?;
+        let names = coverage["shards"].as_array().ok_or_else(|| bad("no shards".into()))?;
         let shards = names
             .iter()
             .map(|n| {
@@ -189,7 +187,7 @@ pub struct Overture {
     url: String,
 }
 
-const INGEST: &str = "run ./infra/geo/overture/script/ingest.rs";
+const INGEST: &str = "run ./infra/geo/overture/ingest.rs";
 
 impl Overture {
     /// For a bake whose statements are `reads` over the shards `need`.
@@ -200,7 +198,7 @@ impl Overture {
         let want: BTreeSet<String> = need.iter().map(|n| n.name()).collect();
         let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
         let rows = client
-            .query(&format!("SELECT file_name, node FROM {CATALOG} WHERE file_name = ANY($1)"), &[&tables])
+            .query(&format!("SELECT table_name, shard FROM {CATALOG} WHERE table_name = ANY($1)"), &[&tables])
             .map_err(|e| format!("{CATALOG}: {e}: {INGEST}"))?;
         for &table in &tables {
             let have: BTreeSet<&str> = rows.iter().filter(|r| r.get::<_, &str>(0) == table).map(|r| r.get(1)).collect();
@@ -219,8 +217,8 @@ impl Overture {
 }
 
 /// What the geo DB holds for `reads`, which a set's manifest says it was
-/// made from: each Overture table it names by its release and counts, and
-/// the elevation.
+/// made from: each source by the `version` and `accessed_at` the DB records
+/// for it, each Overture table with its counts.
 pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Value, String> {
     let tables = tables_of(reads);
     let text = |client: &mut Client, sql: &str, params: &[&(dyn postgres::types::ToSql + Sync)]| -> Result<Vec<Vec<Option<String>>>, String> {
@@ -229,11 +227,18 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
     };
     let overture = text(
         client,
-        &format!("SELECT file_name, max(data_date), sum(total_count)::text FROM {CATALOG} WHERE file_name = ANY($1) GROUP BY file_name ORDER BY file_name"),
+        &format!(
+            "SELECT table_name, version, accessed_at::text, sum(total_count)::text FROM {CATALOG} WHERE table_name = ANY($1) GROUP BY table_name, version, accessed_at ORDER BY table_name, version"
+        ),
         &[&tables],
     )?;
-    let elevation = text(client, "SELECT shard, data_date::text, file_name, status FROM elevation_catalog ORDER BY shard", &[])?;
-    Ok(serde_json::json!({ "overture": overture, "elevation": elevation }))
+    let elevation = text(
+        client,
+        "SELECT version, accessed_at::text, count(*)::text FROM elevation_catalog GROUP BY version, accessed_at ORDER BY version",
+        &[],
+    )?;
+    let coastline = text(client, "SELECT obj_description(to_regclass('osm_land_polygons'), 'pg_class')", &[])?;
+    Ok(serde_json::json!({ "overture": overture, "elevation": elevation, "coastline": coastline }))
 }
 
 /// `holdings`, for a set's manifest.
