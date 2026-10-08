@@ -107,6 +107,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             cube: placeable_cube_num_id(held.object_cube),
             decor: decor_num_id(held.decor_id),
             tier: held.object_tier,
+            text: &crate::control::interaction::edit::held_words(),
         },
         orientation: OrientationState {
             status: orientation.pose.status(),

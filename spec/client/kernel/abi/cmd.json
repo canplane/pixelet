@@ -1568,7 +1568,7 @@
     {
       "name": "HoldingState",
       "doc": [
-        "What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held."
+        "What the pointer holds, as INPUT_HOLD and INPUT_HOLD_TEXT set it: the cube, the decor and the marker's words are each remembered whichever tool is held."
       ],
       "fields": [
         {
@@ -1589,6 +1589,13 @@
         {
           "name": "tier",
           "type": "u32"
+        },
+        {
+          "name": "text",
+          "type": "str",
+          "doc": [
+            "The words the marker tool puts up, as INPUT_HOLD_TEXT set them."
+          ]
         }
       ]
     },

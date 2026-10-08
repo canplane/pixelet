@@ -22,7 +22,7 @@ import { TextField } from "@/shared/ui/text-field.tsx";
 import { touches } from "@/shared/ui/touch.ts";
 import { alpha, chrome, color, disabledContent, material, shadow } from "@/shared/ui/theme.ts";
 import { openModal } from "@/app/modal.tsx";
-import { chatFits, holdTier, holdTool, useInHand, useUiStore } from "@/app/store/ui.ts";
+import { chatFits, holdMarkerText, holdTier, holdTool, markerTextFits, useInHand, useUiStore } from "@/app/store/ui.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
@@ -260,6 +260,9 @@ export function Dock() {
     }),
   ).current;
   const activeTool = useKernel((s) => s.holding.tool);
+  // With the marker tool, the message card words markers rather than chatting.
+  const wording = activeTool === ActiveTool.Marker;
+  const heldWords = useKernel((s) => s.holding.text);
   const recentPicks = useUiStore((s) => s.recentPicks);
   const appendChatLine = useUiStore.getState().appendChatLine;
   const [messageText, setMessageText] = useState("");
@@ -285,7 +288,8 @@ export function Dock() {
     if (!canSend || !fits || isSending) return;
     setIsSending(true);
     setTimeout(() => {
-      appendChatLine(text);
+      if (wording) holdMarkerText(text);
+      else appendChatLine(text);
       setMessageText("");
       setIsSending(false);
       inputRef.current?.focus();
@@ -331,7 +335,7 @@ export function Dock() {
   const x = PixelRatio.roundToNearestPixel((barWidth - width) / 2);
   const canSend = messageText.trim() !== "";
   // A line too long for the kernel is refused whole, never cut.
-  const fits = chatFits(messageText.trim());
+  const fits = wording ? markerTextFits(messageText.trim()) : chatFits(messageText.trim());
 
   const card = (pane: Pane, fill: string, content: React.ReactNode, { tint, onContentWidth }: { tint?: string; onContentWidth?: (w: f64) => void } = {}) => {
     const depth = deckDepth(pane, rotation, PANES.length);
@@ -384,7 +388,7 @@ export function Dock() {
                   value={messageText}
                   onChangeText={setMessageText}
                   onSubmit={sendMessage}
-                  placeholder={t("world.dock.message_placeholder")}
+                  placeholder={wording ? t("world.dock.marker_placeholder", { words: heldWords }) : t("world.dock.message_placeholder")}
                   placeholderTextColor={LABEL.placeholder}
                   style={styles.messageInput}
                 />

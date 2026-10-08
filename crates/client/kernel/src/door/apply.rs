@@ -404,7 +404,8 @@ fn profiler_take(s: &mut State) -> u32 {
 mod test;
 
 /// A badge takes a tap before the ground under it: the pointer goes to it,
-/// and the eraser takes away a marker someone put up.
+/// the eraser takes away a marker someone put up, and the marker tool words
+/// it again with the words it holds.
 fn tap_at(x: f64, y: f64) {
     use crate::chunk::place::Went;
     use crate::control::interaction::ActiveTool;
@@ -413,6 +414,7 @@ fn tap_at(x: f64, y: f64) {
         (ActiveTool::Pointer, Some(Went::To(at) | Went::Marker(_, at))) => go_to_place(at),
         (ActiveTool::Pointer, Some(Went::Into(at))) => go_into_place(at),
         (ActiveTool::Eraser, Some(Went::Marker(e, _))) => crate::control::interaction::edit::remove(e),
+        (ActiveTool::Marker, Some(Went::Marker(e, _))) => crate::control::interaction::edit::reword(e),
         _ => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
     }
 }

@@ -132,9 +132,23 @@ pub fn hold_text(text: &str) -> Result<(), Errno> {
     Ok(())
 }
 
+/// The words the marker tool holds, as the shell is told them.
+pub fn held_words() -> &'static str {
+    held_text()
+}
+
 /// A marker carrying the words the tool holds.
 pub fn place_marker(at: &Pvf3, size: f64) {
     submit(Write::at(at, size, MARKER).carrying(Ext::MarkerText(held_text().clone())));
+}
+
+/// A marker already up, worded again with the words the tool holds.
+pub fn reword(at: EntryAt) {
+    submit(Write {
+        key: key_of::<3>(at.zoom(), at.at()),
+        id: MARKER,
+        ext: Some(Ext::MarkerText(held_text().clone())),
+    });
 }
 
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides

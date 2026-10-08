@@ -5,7 +5,8 @@ import { create } from "zustand";
 import type { i32, u16, u32 } from "@xpute/core/abi/word.ts";
 import { cube_types } from "@/catalog/cell/cube_type.spec.ts";
 import { decorKinds, type PlaceableCube, placeableCubes } from "@/catalog/cell/mod.ts";
-import { ActiveTool, Command, encode_chat_send } from "@/kernel/abi/cmd.spec.ts";
+import { ActiveTool, Command, encode_chat_send, encode_input_hold_text } from "@/kernel/abi/cmd.spec.ts";
+import { MARKER_TEXT_CHARS } from "@/catalog/cell/ext.spec.ts";
 import { kernel_command, kernel_fits, kernel_hold, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
@@ -156,6 +157,16 @@ export const useUiStore = create<UiState>()((set) => ({
 /** A line too long to send is refused whole, never cut. */
 export function chatFits(text: string): boolean {
   return kernel_fits(encode_chat_send({ text }));
+}
+
+/** The words the marker tool puts up from now on, and words a tapped marker takes. */
+export function holdMarkerText(text: string): void {
+  kernel_command(Command.INPUT_HOLD_TEXT, encode_input_hold_text({ text }));
+}
+
+/** Words past the cap are refused whole, never cut. */
+export function markerTextFits(text: string): boolean {
+  return [...text].length <= MARKER_TEXT_CHARS;
 }
 
 export function useInHand(pick: RecentPick): boolean {

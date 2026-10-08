@@ -689,7 +689,7 @@ pub struct Snapshot<'a> {
     pub focus: FocusState,
     pub location: LocationState,
     pub companion: CompanionState,
-    pub holding: HoldingState,
+    pub holding: HoldingState<'a>,
     pub orientation: OrientationState,
     /// The view's azimuth.
     pub azimuth: f64,
@@ -807,24 +807,27 @@ impl CompanionState {
     }
 }
 
-/// What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held.
-pub struct HoldingState {
+/// What the pointer holds, as INPUT_HOLD and INPUT_HOLD_TEXT set it: the cube, the decor and the marker's words are each remembered whichever tool is held.
+pub struct HoldingState<'a> {
     pub tool: ActiveTool,
     /// The held cube, by its number in the catalog's one value space.
     pub cube: u32,
     pub decor: u32,
     pub tier: u32,
+    /// The words the marker tool puts up, as INPUT_HOLD_TEXT set them.
+    pub text: &'a dyn Display,
 }
 
-impl HoldingState {
+impl HoldingState<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 4;
+    pub const FIELDS: u32 = 5;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.tool as u32));
         w.u32(Some(self.cube));
         w.u32(Some(self.decor));
         w.u32(Some(self.tier));
+        w.str_display(self.text);
     }
 }
 

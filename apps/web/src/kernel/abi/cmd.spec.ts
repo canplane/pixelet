@@ -437,17 +437,19 @@ export function read_companion_state(b: BranchCursor): CompanionState {
   return { person_ready: b.at(0).get<boolean>(), pet_ready: b.at(1).get<boolean>() };
 }
 
-/** What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held. */
+/** What the pointer holds, as INPUT_HOLD and INPUT_HOLD_TEXT set it: the cube, the decor and the marker's words are each remembered whichever tool is held. */
 export interface HoldingState {
   tool: ActiveTool;
   /** The held cube, by its number in the catalog's one value space. */
   cube: u32;
   decor: u32;
   tier: u32;
+  /** The words the marker tool puts up, as INPUT_HOLD_TEXT set them. */
+  text: string;
 }
 
 export function read_holding_state(b: BranchCursor): HoldingState {
-  return { tool: b.at(0).get<ActiveTool>(), cube: b.at(1).get<u32>(), decor: b.at(2).get<u32>(), tier: b.at(3).get<u32>() };
+  return { tool: b.at(0).get<ActiveTool>(), cube: b.at(1).get<u32>(), decor: b.at(2).get<u32>(), tier: b.at(3).get<u32>(), text: b.at(4).get<string>() };
 }
 
 export interface OrientationState {
