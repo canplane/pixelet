@@ -376,11 +376,11 @@ export interface Snapshot {
   zooming: boolean;
   /** Every setting's value by its SettingKey, as SETTING_SET carries one. */
   settings: u32[];
-  /** The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and the place's depth are the shell's to make of it. */
+  /** The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it. */
   m_per_px: f64;
-  /** The place the focus is in, broad to narrow, every rung of it; empty where
-   * the center is in none or the packets it is read out of have not arrived. */
-  place: PlacePart[];
+  /** The division the focus is in and every one above it, broad to narrow; empty
+   * where the focus is in none or the tile it is read out of has not arrived. */
+  division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
 }
@@ -398,7 +398,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     zooming: b.at(8).get<boolean>(),
     settings: Array.from(b.at(9).get<U32Array>()),
     m_per_px: b.at(10).get<f64>(),
-    place: list(b.at_branch(11), read_place_part),
+    division: list(b.at_branch(11), read_division_part),
     previews: Array.from(b.at(12).get<U32Array>()),
   };
 }
@@ -472,26 +472,29 @@ export function read_orientation_state(b: BranchCursor): OrientationState {
   return { status: b.at(0).get<DevicePoseStatus>(), error: b.at(1).get<Message | null>() };
 }
 
-/** One rung of the place, in every language the provider had rather than one resolved
+/** One division of the name, in every language the provider had rather than one resolved
  * name: the reader's language is the page's, and switching it re-reads a label already
  * sent. */
-export interface PlacePart {
-  /** Where the part sits, broadest first (spec/spec/place.json). */
-  rank: u8;
+export interface DivisionPart {
+  /** Overture's subtype, broadest first (spec/spec/division.json). */
+  subtype: u8;
   name: string;
-  names: PlaceName[];
+  names: LangName[];
+  /** Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the
+   * subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java). */
+  prominence: u8;
 }
 
-export function read_place_part(b: BranchCursor): PlacePart {
-  return { rank: b.at(0).get<u8>(), name: b.at(1).get<string>(), names: list(b.at_branch(2), read_place_name) };
+export function read_division_part(b: BranchCursor): DivisionPart {
+  return { subtype: b.at(0).get<u8>(), name: b.at(1).get<string>(), names: list(b.at_branch(2), read_lang_name), prominence: b.at(3).get<u8>() };
 }
 
-export interface PlaceName {
+export interface LangName {
   lang: string;
   name: string;
 }
 
-export function read_place_name(b: BranchCursor): PlaceName {
+export function read_lang_name(b: BranchCursor): LangName {
   return { lang: b.at(0).get<string>(), name: b.at(1).get<string>() };
 }
 

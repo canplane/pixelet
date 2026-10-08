@@ -13,15 +13,15 @@
 /// bumps the format. Setting a name here is the whole change.
 pub struct PublishedVersion {
     pub terrain: &'static str,
-    pub poi: &'static str,
-    pub geocode: &'static str,
+    pub place: &'static str,
+    pub division: &'static str,
     pub earth: &'static str,
 }
 
 pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {
     terrain: "v7.2026-10-04.1",
-    poi: "v9.2026-10-04.2",
-    geocode: "v5.2026-10-04.1",
+    place: "v9.2026-10-04.2",
+    division: "v5.2026-10-04.1",
     earth: "v1.2026-10-05.1",
 };
 
@@ -29,15 +29,15 @@ pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {
 /// its day. Bumped only by a change to how the client reads a tile.
 pub struct Format {
     pub terrain: u32,
-    pub poi: u32,
-    pub geocode: u32,
+    pub place: u32,
+    pub division: u32,
     pub earth: u32,
 }
 
 pub const FORMAT: Format = Format {
     terrain: 8,
-    poi: 9,
-    geocode: 5,
+    place: 9,
+    division: 7,
     earth: 1,
 };
 
@@ -54,13 +54,13 @@ pub fn version_name(format: u32, day: &str, n: u32) -> String {
 #[repr(u32)]
 pub enum BakeKind {
     terrain,
-    poi,
-    geocode,
+    place,
+    division,
     earth,
 }
 
 impl BakeKind {
-    pub const ALL: [BakeKind; 4] = [BakeKind::terrain, BakeKind::poi, BakeKind::geocode, BakeKind::earth];
+    pub const ALL: [BakeKind; 4] = [BakeKind::terrain, BakeKind::place, BakeKind::division, BakeKind::earth];
 
     /// The kind a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<BakeKind> {
@@ -73,15 +73,15 @@ impl PublishedVersion {
     pub fn of(&self, kind: BakeKind) -> &'static str {
         match kind {
             BakeKind::terrain => self.terrain,
-            BakeKind::poi => self.poi,
-            BakeKind::geocode => self.geocode,
+            BakeKind::place => self.place,
+            BakeKind::division => self.division,
             BakeKind::earth => self.earth,
         }
     }
 }
 
 /// What the published bake declares of itself to the client: `top_z`, the
-/// coarsest zoom of the pyramid it supplies whole, terrain and POI alike. The
+/// coarsest zoom of the pyramid it supplies whole, terrain and places alike. The
 /// client's floor is held there, all around the eye, and the far edge is where
 /// that zoom ends (pxl-kernel layer/residency/floor.rs). The dev tile server
 /// answers the same object at the tile root's `source`, its `--folds` zooms

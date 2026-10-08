@@ -11,18 +11,19 @@
 //! child is never asked for.
 
 use pxl_spec::bake::earth_tile::EARTH_REACH;
-use pxl_spec::bake::format::Terrain;
-use pxl_spec::bake::poi_tile::PoiTile;
+use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::place_tile::PlaceTile;
 use xpute_guest::global::Global;
 
 use crate::io::demand::Category;
 use crate::io::fetch::{answer_settled, body, next_answered, release, Answered};
 use crate::io::request::attempt_of;
 use crate::layer::earth::{self, Earth};
-use crate::layer::poi::MAJOR_UNITS_PER_PX;
-use crate::layer::Layer;
+use crate::layer::place::MAJOR_UNITS_PER_PX;
+use crate::layer::{Asks, Layer};
 use crate::sched::edge::world_edge;
 use crate::view::frame::pose::units_per_px_at;
+use pxl_spec::bake::division_tile::DivisionTile;
 use xpute_core::status::errno::Errno;
 use xpute_guest::mem::heap::Block;
 
@@ -54,23 +55,30 @@ pub trait Observed: Layer {
     }
 }
 
-static TERRAIN: Global<Demand<Terrain>> = Global::new();
-static POI: Global<Demand<PoiTile>> = Global::new();
+static TERRAIN: Global<Demand<TerrainTile>> = Global::new();
+static PLACE: Global<Demand<PlaceTile>> = Global::new();
 static EARTH: Global<Demand<Earth>> = Global::new();
+static DIVISION: Global<Demand<DivisionTile>> = Global::new();
 
-impl Observed for Terrain {
-    fn demand() -> &'static mut Demand<Terrain> {
+impl Observed for TerrainTile {
+    fn demand() -> &'static mut Demand<TerrainTile> {
         TERRAIN.get(Demand::default)
     }
 }
 
-impl Observed for PoiTile {
-    fn demand() -> &'static mut Demand<PoiTile> {
-        POI.get(Demand::default)
+impl Observed for PlaceTile {
+    fn demand() -> &'static mut Demand<PlaceTile> {
+        PLACE.get(Demand::default)
     }
 
     fn reach() -> f64 {
         MAJOR_UNITS_PER_PX / units_per_px_at(1.0)
+    }
+}
+
+impl Observed for DivisionTile {
+    fn demand() -> &'static mut Demand<DivisionTile> {
+        DIVISION.get(Demand::default)
     }
 }
 
@@ -210,7 +218,7 @@ impl<L: Observed> Demand<L> {
         };
         let order = |o: &Observation, p: Tile| crate::view::observation::order_of_tile(o, L::LATTICE, p);
         if let Some(o) = o {
-            if L::DEMANDS {
+            if matches!(L::ASKS, Asks::View) {
                 estimator.requirements(o, &mut |p| demand.push(p));
             }
             demand.sort_unstable();
@@ -240,13 +248,15 @@ impl<L: Observed> Demand<L> {
                 read[p.zoom as usize] += 1;
             }
             xpute_core::ensure!(read.iter().all(|&n| n <= ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
-            let mut floor = 0u32;
-            let f = floor_at.unwrap_or(o);
-            Floor::floor(f, top, |p| {
-                floor += 1;
-                ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
-            });
-            xpute_core::ensure!(floor <= Floor::TILES, ENOTRECOVERABLE, floor);
+            if !matches!(L::ASKS, Asks::Line) {
+                let mut floor = 0u32;
+                let f = floor_at.unwrap_or(o);
+                Floor::floor(f, top, |p| {
+                    floor += 1;
+                    ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
+                });
+                xpute_core::ensure!(floor <= Floor::TILES, ENOTRECOVERABLE, floor);
+            }
         }
         // The whole line, not only the finest tile: which one says the ground is
         // known only once those above are, and asking one at a time would cost a
@@ -263,7 +273,7 @@ impl<L: Observed> Demand<L> {
                 },
             );
         }
-        xpute_core::ensure!(named <= if L::DEMANDS { Residency::<L>::DESTINATION_TILES } else { 0 }, ENOTRECOVERABLE, named);
+        xpute_core::ensure!(named <= if matches!(L::ASKS, Asks::Floor) { 0 } else { Residency::<L>::DESTINATION_TILES }, ENOTRECOVERABLE, named);
 
         self.wants.clear();
         self.wants.extend(
@@ -381,7 +391,7 @@ pub fn admit_arrived() {
             subject,
             block,
             mut phases,
-        }) = next_answered(&[Category::terrain, Category::poi, Category::earth])
+        }) = next_answered(&[Category::terrain, Category::place, Category::earth, Category::division])
         else {
             return;
         };
@@ -393,8 +403,9 @@ pub fn admit_arrived() {
             continue;
         }
         let result = match (category, block) {
-            (Category::terrain, block) => arrived::<Terrain>(tile, block, &mut phases),
-            (Category::poi, block) => arrived::<PoiTile>(tile, block, &mut phases),
+            (Category::terrain, block) => arrived::<TerrainTile>(tile, block, &mut phases),
+            (Category::place, block) => arrived::<PlaceTile>(tile, block, &mut phases),
+            (Category::division, block) => arrived::<DivisionTile>(tile, block, &mut phases),
             (Category::earth, None) => arrived::<Earth>(tile, None, &mut phases),
             (Category::earth, Some(b)) => {
                 let mut framed = None;

@@ -21,7 +21,7 @@ use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
 use crate::sched::tick::tick_step_stats;
 use crate::{kernel, with_parts};
-use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pack;
 use xpute_guest::clock::now;
@@ -232,7 +232,7 @@ fn side(out: &mut [f64]) {
     );
 
     let [step, star] = crate::chunk::quality::reading();
-    let residency = Terrain::residency();
+    let residency = TerrainTile::residency();
     let [admitted, evicted] = residency.churn();
     let [refined, changes_peak] = kernel().sched.pace();
     put(

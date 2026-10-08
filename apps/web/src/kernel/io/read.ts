@@ -2,7 +2,8 @@
 
 /**
  * The bus under the kernel's reads: the kernel names a baked object or a
- * shipped asset, this side makes it a URL. 404 is ENOENT, not a failure.
+ * shipped asset, this side makes it a URL. 204 is a page its version leaves
+ * out, ENOENT; 404 names nothing, a failure like any other.
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
@@ -26,7 +27,7 @@ async function get(url: string, name: string, signal: AbortSignal): Promise<U8Ar
     if (!signal.aborted) console.warn(`[read] ${name}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
     throw new FileError(err instanceof Error && err.name === "TypeError" ? Errno.ENETUNREACH : Errno.EIO);
   }
-  if (res.status === 404) throw new FileError(Errno.ENOENT);
+  if (res.status === 204) throw new FileError(Errno.ENOENT);
   if (!res.ok) throw new FileError(Errno.EACCES, res.status);
   return body;
 }

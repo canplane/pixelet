@@ -6,29 +6,30 @@ use std::collections::HashMap;
 
 use xpute_core::status::error::MarshalError;
 
-use pxl_spec::bake::place_tile::{encode_place_dict, Named};
+use pxl_spec::bake::division_tile::{encode_division_dict, Division, NONE};
 
-/// A place many tiles share is carried by its dictionary id; one only a few
-/// tiles share is carried inline by its group.
-pub enum PartSource {
-    Shared(String),
-    Local { place: Named, approx: bool },
-}
+/// A dictionary division as it is read: its id, its parent's, and itself.
+pub type Entry = (String, Option<String>, Division);
 
-/// Read whole before any group is written: a label is a place's position in
+/// Read whole before any group is written: a division is its position in
 /// this list, so every reader must see the same order.
-pub struct PlaceDict {
-    pub places: Vec<Named>,
+pub struct DivisionDict {
+    pub divisions: Vec<Division>,
     at: HashMap<String, u32>,
 }
 
-impl PlaceDict {
-    pub fn of(rows: Vec<(String, Named)>) -> PlaceDict {
-        let at = rows.iter().enumerate().map(|(i, (id, _))| (id.clone(), i as u32)).collect();
-        PlaceDict {
-            places: rows.into_iter().map(|(_, d)| d).collect(),
-            at,
-        }
+impl DivisionDict {
+    /// Each division's parent numbered by its place here; one the rows lack is none.
+    pub fn of(rows: Vec<Entry>) -> DivisionDict {
+        let at: HashMap<String, u32> = rows.iter().enumerate().map(|(i, (id, _, _))| (id.clone(), i as u32)).collect();
+        let divisions = rows
+            .into_iter()
+            .map(|(_, parent, d)| Division {
+                parent: parent.and_then(|p| at.get(&p).copied()).unwrap_or(NONE),
+                ..d
+            })
+            .collect();
+        DivisionDict { divisions, at }
     }
 
     pub fn number(&self, id: &str) -> Option<u32> {
@@ -36,7 +37,7 @@ impl PlaceDict {
     }
 
     pub fn packet(&self) -> Result<Vec<u8>, MarshalError> {
-        encode_place_dict(&self.places)
+        encode_division_dict(&self.divisions)
     }
 }
 

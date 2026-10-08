@@ -57,7 +57,7 @@ export const FRAME = {
   mounts_layouts: 84 as number,
   tiles_total: 85 as number,
   zoom_tiles: 86 as number,
-  tiles_poi: 110 as number,
+  tiles_place: 110 as number,
   heap_used_mb: 111 as number,
   heap_live_mb: 112 as number,
   heap_run_mb: 113 as number,
@@ -72,7 +72,7 @@ export const FRAME = {
   work_fine_peak: 122 as number,
   work_coarse_peak: 123 as number,
   q_terrain: 124 as number,
-  q_poi: 125 as number,
+  q_place: 125 as number,
   stale_hidden: 126 as number,
   stale_uncovered: 127 as number,
   stale_unready: 128 as number,
@@ -106,8 +106,8 @@ export const FRAME_GROUPS = {
   slot: ["slot_waits", "slot_wait_zooms", "slot_chained"],
   cap: ["cap_commit_left", "cap_mount_left", "cap_mount_full", "cap_record_refused"],
   work: ["work_runs", "work_bakes", "work_fine_peak", "work_coarse_peak"],
-  q: ["q_terrain", "q_poi"],
-  tiles: ["tiles_total", "zoom_tiles", "tiles_poi"],
+  q: ["q_terrain", "q_place"],
+  tiles: ["tiles_total", "zoom_tiles", "tiles_place"],
   cover: ["cover_rule", "cover_drawn", "cover_gaps"],
   view: ["view_rays", "view_visits"],
   device: ["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"],
@@ -218,10 +218,10 @@ export const SUMMARY = {
   tasks: {
     AT: 263 as number,
     slots: 0 as number,
-    WORDS: 150 as number,
+    WORDS: 125 as number,
   },
   counters: {
-    AT: 413 as number,
+    AT: 388 as number,
     faces_kept: 0 as number,
     faces_possible: 1 as number,
     runs_culled: 2 as number,
@@ -236,7 +236,7 @@ export const SUMMARY = {
     WORDS: 11 as number,
   },
   sheet: {
-    AT: 424 as number,
+    AT: 399 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -245,7 +245,7 @@ export const SUMMARY = {
     WORDS: 5 as number,
   },
   held: {
-    AT: 429 as number,
+    AT: 404 as number,
     run_sets: 0 as number,
     run_set_mb: 1 as number,
     tiers: 2 as number,
@@ -255,14 +255,14 @@ export const SUMMARY = {
     WORDS: 6 as number,
   },
   fetch: {
-    AT: 435 as number,
+    AT: 410 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   peak: {
-    AT: 438 as number,
+    AT: 413 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -271,7 +271,7 @@ export const SUMMARY = {
     draw_calls: 5 as number,
     triangles: 6 as number,
     q_terrain: 7 as number,
-    q_poi: 8 as number,
+    q_place: 8 as number,
     chunks: 9 as number,
     in_frustum: 10 as number,
     pending: 11 as number,
@@ -284,13 +284,13 @@ export const SUMMARY = {
     WORDS: 18 as number,
   },
   steps: {
-    AT: 456 as number,
+    AT: 431 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   quality: {
-    AT: 617 as number,
+    AT: 592 as number,
     step: 0 as number,
     star: 1 as number,
     frames_held: 2 as number,
@@ -302,14 +302,14 @@ export const SUMMARY = {
   },
   /** The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for. */
   heap: {
-    AT: 624 as number,
+    AT: 599 as number,
     used_mb: 0 as number,
     requests: 1 as number,
     WORDS: 2 as number,
   },
   /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the tile it is read from. */
   view: {
-    AT: 626 as number,
+    AT: 601 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -328,7 +328,7 @@ export const SUMMARY = {
     read_zoom: 15 as number,
     WORDS: 16 as number,
   },
-  WORDS: 642 as number,
+  WORDS: 617 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

@@ -15,15 +15,15 @@
  */
 export const PUBLISHED_VERSION = {
   terrain: "v7.2026-10-04.1",
-  poi: "v9.2026-10-04.2",
-  geocode: "v5.2026-10-04.1",
+  place: "v9.2026-10-04.2",
+  division: "v5.2026-10-04.1",
   earth: "v1.2026-10-05.1",
 } as const;
 
 export type BakeKind = keyof typeof PUBLISHED_VERSION;
 
 /** The kinds by the number the kernel names one by: the root a bake's objects are opened below (xpute's OPENAT). */
-export const BAKE_KINDS: readonly BakeKind[] = ["terrain", "poi", "geocode", "earth"];
+export const BAKE_KINDS: readonly BakeKind[] = ["terrain", "place", "division", "earth"];
 
 /** What a tile source declares of itself: SOURCE's shape, which the dev tile
  * server answers too. */
@@ -33,7 +33,7 @@ export interface TileSource {
 
 /**
  * What the published bake declares of itself to the client: `top_z`, the
- * coarsest zoom of the pyramid it supplies whole, terrain and POI alike. The
+ * coarsest zoom of the pyramid it supplies whole, terrain and places alike. The
  * client's floor is held there, all around the eye, and the far edge is where
  * that zoom ends (pxl-kernel layer/residency/floor.rs). The dev tile server
  * answers the same object at the tile root's `source`, its `--folds` zooms

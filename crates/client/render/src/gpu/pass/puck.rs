@@ -8,8 +8,8 @@ use crate::gpu::api_spec::format;
 use crate::gpu::atmosphere::AIR_WORDS;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{buffer_size, Blocks, Draws};
-use crate::look::color::linear_rgb;
 use crate::look::color::indicator;
+use crate::look::color::linear_rgb;
 
 const BEACON_RADIUS: f32 = 0.3;
 

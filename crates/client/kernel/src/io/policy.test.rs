@@ -22,7 +22,7 @@ fn the_ground_goes_before_what_stands_on_it() {
     let tile = at(Why::Demand, true, 0.0);
     let terrain = key(Category::terrain, tile);
     let asset = key(Category::asset, Ask::PLAIN);
-    let places = key(Category::poi, tile);
+    let places = key(Category::place, tile);
     assert!(before(terrain, asset) && before(asset, places));
 }
 

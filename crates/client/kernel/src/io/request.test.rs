@@ -189,7 +189,7 @@ fn every_want_is_served_at_rest() {
     let mut wanted: Vec<(u64, Ask)> = (0..12).map(|k| (k, ask(Why::Demand, (k * 7 % 12) as f64))).collect();
     let mut out: Vec<u64> = Vec::new();
     for turn in 0..200 {
-        l.declare(Category::poi, &wanted, turn as f64);
+        l.declare(Category::place, &wanted, turn as f64);
         l.pump(turn as f64);
         let stops = stopped(&mut l);
         out.retain(|k| !stops.contains(k));

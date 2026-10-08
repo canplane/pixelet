@@ -1,8 +1,8 @@
 // pxl-geo-bake/bin/bake_geocode_tiles.rs
 
-//! Reverse-geocode tiles: a dictionary of places, then one object per group
-//! of tiles. The dictionary is written first from one ordered read, so a
-//! resumed run numbers places the same way.
+//! Reverse-geocode tiles: a dictionary of divisions, then one object per
+//! group of tiles. The dictionary is written first from one ordered read, so
+//! a resumed run numbers divisions the same way.
 //!
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_geocode_tiles -- [flags]
 //!
@@ -15,12 +15,12 @@
 use std::process::ExitCode;
 
 use postgres::Client;
-use pxl_spec::bake::place_tile::{encode_place_group, DICT_OBJECT, GROUP_SHAMT};
+use pxl_spec::bake::division_tile::{encode_division_group, DICT_OBJECT, GROUP_SHAMT};
 use pxl_spec::bake::published::FORMAT;
 
 use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::geocode::provider::overture::{self, GeocodeProvider};
-use pxl_geo_bake::geocode::PlaceDict;
+use pxl_geo_bake::geocode::DivisionDict;
 use pxl_geo_bake::terrain::leaf;
 use pxl_geo_bake::tile::bake::{self, Bake};
 use pxl_geo_bake::tile::walk::Tile;
@@ -36,8 +36,8 @@ fn run() -> Result<(), String> {
     let (source, mut client) = Overture::reading(&reads, &pxl_geo_bake::coverage::Coverage::of_source()?.shards().collect())?;
 
     let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
-    let dict = PlaceDict::of(provider.dictionary(&mut client).map_err(|e| e.to_string())?);
-    println!("[bake/geocode] {} places in the dictionary", dict.places.len());
+    let dict = DivisionDict::of(provider.dictionary(&mut client).map_err(|e| e.to_string())?);
+    println!("[bake/geocode] {} divisions in the dictionary", dict.divisions.len());
     let packed_dict = pack(&dict.packet().map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
     drop(client);
 
@@ -48,7 +48,7 @@ fn run() -> Result<(), String> {
             group_shamt: GROUP_SHAMT,
             every: 200,
             content_type: "application/octet-stream",
-            format: Some("xtp place dictionary and groups (encode_place_dict, encode_place_group)"),
+            format: Some("xtp division dictionary and groups (encode_division_dict, encode_division_group)"),
             source: &source,
             reads: &reads,
         },
@@ -61,8 +61,8 @@ fn run() -> Result<(), String> {
         |w, target| match w.provider.group(&mut w.client, &dict, &target.leaves)? {
             None => Ok(Tile::Empty),
             Some(group) => Ok(Tile::Object {
-                items: group.labels.len() as u64,
-                raw: encode_place_group(&group).map_err(|e| format!("{e:?}"))?,
+                items: group.tiles.iter().filter(|&&n| n != pxl_spec::bake::division_tile::NONE).count() as u64,
+                raw: encode_division_group(&group).map_err(|e| format!("{e:?}"))?,
             }),
         },
     )

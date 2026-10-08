@@ -21,14 +21,14 @@ use crate::layer::terrain::Source;
 use crate::layer::Answer;
 use crate::layer::Layer as _;
 use crate::layer::{Bound, Query};
-use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::space::camera::grid::Tau;
 
 /// The world's query: the resident ground and the placed objects, read
 /// as one.
 #[derive(Clone, Copy)]
 pub struct World<'a> {
-    pub(super) terrain: &'a Residency<Terrain>,
+    pub(super) terrain: &'a Residency<TerrainTile>,
     pub(super) objects: &'a Store,
     /// How decor is struck; none, and a ray passes through decor.
     pub(super) decor: Option<Decor<'a>>,
@@ -38,7 +38,7 @@ pub struct World<'a> {
 impl World<'static> {
     pub fn now() -> World<'static> {
         let objects: &'static Store = &kernel().objects;
-        World::new(Terrain::residency(), objects)
+        World::new(TerrainTile::residency(), objects)
     }
 
     /// As `now`, and decor is struck too, where the chunks drawing at `tau`
@@ -50,7 +50,7 @@ impl World<'static> {
 }
 
 impl<'a> World<'a> {
-    pub fn new(terrain: &'a Residency<Terrain>, objects: &'a Store) -> World<'a> {
+    pub fn new(terrain: &'a Residency<TerrainTile>, objects: &'a Store) -> World<'a> {
         World {
             terrain,
             objects,

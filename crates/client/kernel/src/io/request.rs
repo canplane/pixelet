@@ -48,14 +48,13 @@ pub trait Serve {
 
 /// How many of a category's wants are held at once. A layer's tiles: at most
 /// its residency's frames, since it asks only for what it can hold, which the
-/// layer says (`open`). An asset: as a model and as an image. Streams of one: one.
+/// layer says (`open`). An asset: as a model and as an image.
 pub type Bounds = [usize; Category::ALL.len()];
 
 fn bounds_of(frames: impl Fn(Category) -> u32) -> Bounds {
     Category::ALL.map(|c| match c {
         Category::asset => 2 * LOADS,
-        Category::geocode | Category::geocode_dict => 1,
-        Category::terrain | Category::poi | Category::earth => frames(c) as usize,
+        Category::terrain | Category::place | Category::earth | Category::division => frames(c) as usize,
     })
 }
 

@@ -129,8 +129,8 @@
       "cost": "med",
       "sources_chunks": true
     },
-    "poi": {
-      "$doc": ["The places' badges over the world, from the published POI tiles."],
+    "place": {
+      "$doc": ["The places' badges over the world, from the published places tiles."],
       "kind": "toggle",
       "default": false,
       "section": "world",
