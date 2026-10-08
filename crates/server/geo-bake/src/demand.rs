@@ -21,7 +21,7 @@ use std::sync::Arc;
 pub mod job;
 use job::{Limits, Runner};
 
-#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Kind {
     Terrain,
     Poi,

@@ -5,6 +5,8 @@
 //! across restarts until either changes, and a change starts an empty one. The
 //! Earth's picture is baked offline by pxl-tool, so it is served from that
 //! bake (`--out`), under the names the bucket holds, whichever way the rest is.
+//! `--baked` serves each kind's last bake, the version its manifest names,
+//! so a bake is looked at before anything is published.
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -29,7 +31,8 @@ use std::sync::Arc;
 
 enum Tiles {
     Demand(Server),
-    Baked(PathBuf),
+    /// The directory, and each kind's version in it.
+    Baked(PathBuf, Vec<(Kind, String)>),
 }
 
 struct App {
@@ -70,7 +73,12 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
     let demand = match &app.tiles {
         Tiles::Demand(demand) => demand,
-        Tiles::Baked(dir) => return baked(dir, kind, published_version(kind), &name).await,
+        Tiles::Baked(dir, versions) => {
+            return match versions.iter().find(|(k, _)| *k == kind) {
+                Some((_, version)) => baked(dir, kind, version, &name).await,
+                None => StatusCode::NOT_FOUND.into_response(),
+            };
+        }
     };
     match demand.get(kind, &name).await {
         Ok(Some(bytes)) => packed(bytes),
@@ -85,12 +93,23 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
     }
 }
 
-fn published_version(kind: Kind) -> &'static str {
-    match kind {
-        Kind::Terrain => PUBLISHED_VERSION.terrain,
-        Kind::Poi => PUBLISHED_VERSION.poi,
-        Kind::Geocode => PUBLISHED_VERSION.geocode,
-    }
+/// Each kind's last bake under `dir`, by the manifest the bake writes beside its versions.
+fn last_bakes(dir: &std::path::Path) -> Vec<(Kind, String)> {
+    [Kind::Terrain, Kind::Poi, Kind::Geocode]
+        .into_iter()
+        .filter_map(|kind| {
+            let manifest = dir.join(kind.name()).join("manifest.json");
+            let version = std::fs::read_to_string(&manifest)
+                .ok()
+                .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+                .and_then(|v| v["version"].as_str().map(String::from));
+            match &version {
+                Some(v) => println!("[tile] {}: {v}", kind.name()),
+                None => eprintln!("[tile] {}: no bake under {} — its tiles 404", kind.name(), manifest.display()),
+            }
+            Some((kind, version?))
+        })
+        .collect()
 }
 
 /// The bucket's address, `<kind>/<version>/<name>`, as a production build asks for it.
@@ -105,7 +124,7 @@ async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name))
     if kind == EARTH {
         return earth(&app, &version, &name).await;
     }
-    let (Tiles::Baked(dir), Some(kind)) = (&app.tiles, Kind::parse(&kind)) else {
+    let (Tiles::Baked(dir, _), Some(kind)) = (&app.tiles, Kind::parse(&kind)) else {
         return StatusCode::NOT_FOUND.into_response();
     };
     baked(dir, kind, &version, &name).await
@@ -190,7 +209,10 @@ fn run() -> Result<(), String> {
     }
 
     let (tiles, top_z) = match baked {
-        Some(dir) => (Tiles::Baked(dir), PUBLISHED_TOP_ZOOM),
+        Some(dir) => {
+            let versions = last_bakes(&dir);
+            (Tiles::Baked(dir, versions), PUBLISHED_TOP_ZOOM)
+        }
         None => {
             let top_z = LEAF_ZOOM.checked_sub(folds).filter(|&z| z >= GROUND.top()).ok_or("--folds past the pyramid's top")?;
             (Tiles::Demand(Server::open(workers, cache, top_z, limits)?), top_z)
