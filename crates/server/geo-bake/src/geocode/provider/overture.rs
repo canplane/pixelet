@@ -12,16 +12,16 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::geocode::{PartSource, PlaceDict};
 
-/// A stable order: a resumed bake must number places the same way.
-const ALL_DIVISIONS_SQL: &str = concat!(
-    "SELECT gers_id, subtype, name, ",
-    pxl_geo_spec::division_names!("overture_divisions"),
-    " AS names_common
-FROM overture_divisions
-WHERE name IS NOT NULL AND subtype IN ",
-    pxl_geo_spec::division_areas!(),
-    "
-ORDER BY gers_id"
+/// The divisions an area is of or another is the child of: every one a
+/// tile's name can walk up through. A stable order, so a resumed bake
+/// numbers them the same way.
+const DICTIONARY_SQL: &str = concat!(
+    "SELECT d.gers_id, d.subtype, d.name, ",
+    pxl_geo_spec::division_names!("d"),
+    " AS names_common, d.properties->>'parent_division_id' AS parent
+FROM overture_divisions d
+WHERE d.gers_id IN (SELECT properties->>'division_id' FROM overture_division_areas UNION SELECT properties->>'parent_division_id' FROM overture_divisions)
+ORDER BY d.gers_id"
 );
 
 /// Every statement the provider runs, for the catalog check.

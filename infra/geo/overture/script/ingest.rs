@@ -25,11 +25,20 @@ serde_json = "1"
 //! fetches only itself and the ground between shards is never fetched. The extract is
 //! read once into a staging table, each row with its shard, and the run is
 //! written from it in one transaction, its catalog rows with it, so it is
-//! whole or absent. A table holds one identity, the release and this
-//! script's code: a run of another is whole, built beside the table and
-//! swapped in. A column a reader filters on is generated from `properties`.
+//! whole or absent. A run takes the types it is given (`--type`, every one
+//! when none is), each its own table and catalog rows, so one type moves to
+//! a new release while the others stay. It adds the shards it is given to
+//! each table as it is, leaving a feature it holds already; `--whole` makes
+//! each table anew from every shard, beside the live one, and swaps it in.
+//! When to run which is the user's to say: the catalog records each shard's
+//! release and when it was ingested, and decides nothing. The release is the
+//! one `metadata.json` pins, never the CLI's latest. A column a reader
+//! filters on is generated from `properties`.
+//! A division names its parent, which may stand past every shard: the
+//! divisions are taken with their ancestors, each fetched by its id, so a
+//! name's chain never breaks at the coverage's edge.
 //!
-//!   ./infra/geo/overture/script/ingest.rs
+//!   ./infra/geo/overture/script/ingest.rs [--type <type>]… [--shard <name>]… [--whole]
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -43,13 +52,14 @@ use postgres::binary_copy::BinaryCopyInWriter;
 use postgres::types::Type as Pg;
 use postgres::{Client, NoTls, Transaction};
 use pxl_geo_bake::coverage::{Coverage, Node};
-use pxl_geo_bake::util::{code_id, fnv1a};
+use pxl_geo_bake::util::fnv1a;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::world::REACH;
 use serde_json::{Map, Number, Value};
 use xpute_core::math::scalar::round;
 
 /// An Overture type, its table, its generated columns, its indexes past the geometry's.
+#[derive(Debug)]
 struct Type {
     overture: &'static str,
     table: &'static str,
@@ -76,8 +86,9 @@ const TYPES: &[Type] = &[
         indexes: &["class"],
     },
     Type { overture: "building_part", table: "overture_building_parts", columns: &[], indexes: &[] },
-    Type { overture: "division", table: "overture_division_points", columns: &[SUBTYPE, NAME], indexes: &["subtype"] },
-    Type { overture: "division_area", table: "overture_divisions", columns: &[SUBTYPE, NAME], indexes: &["subtype"] },
+    Type { overture: "division", table: "overture_divisions", columns: &[SUBTYPE, NAME], indexes: &["subtype"] },
+    // `division_id` keyed, so a bake tests a division for an area by its id, not by a scan.
+    Type { overture: "division_area", table: "overture_division_areas", columns: &[SUBTYPE, NAME], indexes: &["subtype", "((properties->>'division_id'))"] },
     Type { overture: "division_boundary", table: "overture_division_boundaries", columns: &[], indexes: &[] },
     Type {
         overture: "place",
@@ -118,6 +129,7 @@ const VENV: &str = "./infra/geo/overture/.venv";
 /// CLI's behaviour arrives with a commit rather than unnoticed.
 const CLI_VERSION: &str = "1.0.2";
 const EXTRACTS: &str = "./infra/geo/overture/raw";
+const METADATA: &str = "./infra/geo/overture/metadata.json";
 
 /// How long the swap waits for the live table's readers, and how often it
 /// tries: waiting longer would queue every new reader behind it.
@@ -127,11 +139,14 @@ const SWAP_TRIES: u32 = 12;
 /// The CLI's bbox test is strict, so the shards are asked for this much wider.
 const SLACK_DEG: f64 = 1e-4;
 
-/// A shard's edges are taken this far out, in meters, so a feature on one is in both.
-const EPS_M: f64 = 1.0;
-
 /// id, properties, geometry, shard.
 type Row = (String, String, Vec<u8>, String);
+
+/// The type closed under a parent, and the property naming it.
+const PARENT: (&str, &str) = ("division", "parent_division_id");
+
+/// The shard an ancestor is staged under: none, so the catalog counts it in none.
+const ANCESTOR: &str = "";
 
 fn main() -> ExitCode {
     match run() {
@@ -144,58 +159,55 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    if std::env::args().len() > 1 {
-        return Err("no flags: the shards are the coverage's (infra/geo/elevation/metadata.json)".to_string());
+    // `--type <type>`, repeated, for those types' tables alone; `--shard <name>`, repeated, for those
+    // shards alone; `--whole` for each table made anew from every shard.
+    let (mut types, mut named, mut whole) = (Vec::<String>::new(), Vec::<String>::new(), false);
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--type" => types.push(args.next().ok_or("--type names an Overture type")?),
+            "--shard" => named.push(args.next().ok_or("--shard names a shard")?),
+            "--whole" => whole = true,
+            other => return Err(format!("unknown flag: {other}")),
+        }
     }
-    let shards: Vec<Shard> = Coverage::of_source()?.shards().map(Shard::of).collect();
+    if let Some(t) = types.iter().find(|t| !TYPES.iter().any(|ty| ty.overture == t.as_str())) {
+        return Err(format!("{t}: no Overture type this ingests"));
+    }
+    let all: Vec<Shard> = Coverage::of_source()?.shards().map(Shard::of).collect();
+    if let Some(n) = named.iter().find(|n| !all.iter().any(|s| s.name == **n)) {
+        return Err(format!("{n}: no shard of the coverage (infra/geo/elevation/metadata.json)"));
+    }
+    if whole && !named.is_empty() {
+        return Err("--whole makes each table from every shard; it takes no --shard".into());
+    }
+    let shards: Vec<&Shard> = all.iter().filter(|s| named.is_empty() || named.contains(&s.name)).collect();
     let mut client = Client::connect(&db_geo_url()?, NoTls).map_err(|e| e.to_string())?;
     let cli = ensure_cli()?;
-    let release = release(&cli)?;
-    println!("[ingest] release {release}, {} shards", shards.len());
-    // The whole binary, not a constant bumped by hand: a change to anything a
-    // row is made by, the projection, `meets`, the columns, makes every table
-    // whole, and the extract is cached, so that costs the DB time alone.
-    let code = code_id()?;
+    let release = pinned_release()?;
+    println!("[ingest] release {release}, {} shards{}", shards.len(), if whole { ", whole" } else { "" });
     client.batch_execute(&format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{CATALOG_SQL}")).map_err(|e| e.to_string())?;
-    if !keyed(&mut client, "overture_catalog", &["node", "file_name"])? {
-        return Err("overture_catalog is keyed otherwise than by (node, file_name)".into());
-    }
 
-    for ty in TYPES {
-        // A table of an older shape, or none, is one more identity this run is not.
-        let reshaped = !keyed(&mut client, ty.table, &["gers_id"])?;
-        let held = client
-            .query("SELECT node, data_date = $2 AND code IS NOT DISTINCT FROM $3 FROM overture_catalog WHERE file_name = $1", &[&ty.table, &release, &code])
-            .map_err(|e| e.to_string())?;
-        // Another identity anywhere in the table makes the run whole, so a table never mixes two.
-        let whole = reshaped || held.is_empty() || held.iter().any(|r| !r.get::<_, bool>(1));
-        let done: Vec<String> = if whole { Vec::new() } else { held.iter().map(|r| r.get(0)).collect() };
-        // Only the table a partial run adds to is kept; DDL on one a whole run
-        // replaces would build indexes on a table about to be dropped.
+    for ty in TYPES.iter().filter(|ty| types.is_empty() || types.iter().any(|t| t == ty.overture)) {
         if !whole {
-            client.batch_execute(&indexes(ty, ty.table)).map_err(|e| e.to_string())?;
-        }
-        let to_do: Vec<&Shard> = shards.iter().filter(|s| !done.contains(&s.name)).collect();
-        if to_do.is_empty() {
-            println!("[ingest/{}] every shard already release {release} of this code", ty.table);
-            continue;
+            // A shard is added to the table as it is; one of another shape is made anew only on --whole.
+            let exists: bool = client.query_one("SELECT to_regclass($1::text) IS NOT NULL", &[&ty.table]).map_err(|e| e.to_string())?.get(0);
+            if exists && !keyed(&mut client, ty.table, &["gers_id"])? {
+                return Err(format!("{}: keyed otherwise than by gers_id; run with --whole", ty.table));
+            }
+            client.batch_execute(&format!("{}{}", table(ty, ty.table), indexes(ty, ty.table))).map_err(|e| e.to_string())?;
         }
         let started = std::time::Instant::now();
-        let extracts = download(&cli, ty, &groups(&to_do), &release)?;
+        let extracts = download(&cli, ty, &groups(&shards), &release)?;
         let fetched = started.elapsed().as_secs_f64();
         stage(&mut client, ty, &extracts)?;
-        let rows = if whole { build_and_swap(&mut client, ty, &to_do, &release, &code)? } else { add(&mut client, ty, &to_do, &release, &code)? };
-        client.batch_execute(&format!("DROP TABLE {}; ANALYZE {}", staging(ty), ty.table)).map_err(|e| e.to_string())?;
-        if reshaped && !held.is_empty() {
-            println!("[ingest/{}] now in this script's shape: restart the servers reading it onto this code", ty.table);
+        if ty.overture == PARENT.0 {
+            let fetched = ancestors(&cli, &mut client, ty, &release, !whole)?;
+            println!("[ingest/{}] {fetched} ancestors past the shards", ty.table);
         }
-        println!(
-            "[ingest/{}] {rows} features in {} shards{} in {:.0}s, {fetched:.0}s of it fetching",
-            ty.table,
-            to_do.len(),
-            if whole { ", whole" } else { "" },
-            started.elapsed().as_secs_f64()
-        );
+        let rows = if whole { build_and_swap(&mut client, ty, &shards, &release)? } else { add(&mut client, ty, &shards, &release)? };
+        client.batch_execute(&format!("DROP TABLE {}; ANALYZE {}", staging(ty), ty.table)).map_err(|e| e.to_string())?;
+        println!("[ingest/{}] {rows} features in {} shards in {:.0}s, {fetched:.0}s of it fetching", ty.table, shards.len(), started.elapsed().as_secs_f64());
     }
     Ok(())
 }
@@ -294,6 +306,13 @@ fn stage(client: &mut Client, ty: &Type, extracts: &[(PathBuf, Vec<&Shard>)]) ->
     client
         .batch_execute(&format!("DROP TABLE IF EXISTS {t}; CREATE UNLOGGED TABLE {t} (node TEXT NOT NULL, gers_id TEXT NOT NULL, properties TEXT NOT NULL, wkb BYTEA NOT NULL)"))
         .map_err(|e| e.to_string())?;
+    copy_extracts(client, &t, extracts.iter().map(|(p, s)| (p.as_path(), Some(s.as_slice()))))?;
+    client.batch_execute(&format!("CREATE INDEX ON {t} (node); CREATE INDEX ON {t} (gers_id)")).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Extracts' rows into the staging table `t`, each under the shards it meets.
+fn copy_extracts<'a>(client: &mut Client, t: &str, extracts: impl Iterator<Item = (&'a Path, Option<&'a [&'a Shard]>)>) -> Result<(), String> {
     let mut copy = BinaryCopyInWriter::new(client.copy_in(&format!("COPY {t} (gers_id, properties, wkb, node) FROM STDIN (FORMAT binary)")).map_err(|e| e.to_string())?, &[Pg::TEXT, Pg::TEXT, Pg::BYTEA, Pg::TEXT]);
     for (extract, shards) in extracts {
         let file = std::fs::File::open(extract).map_err(|e| format!("{}: {e}", extract.display()))?;
@@ -305,8 +324,62 @@ fn stage(client: &mut Client, ty: &Type, extracts: &[(PathBuf, Vec<&Shard>)]) ->
         }
     }
     copy.finish().map_err(|e| e.to_string())?;
-    client.batch_execute(&format!("CREATE INDEX ON {t} (node)")).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// The parents the staged divisions name and neither the staging table nor,
+/// for a partial run, the live one holds, fetched by id with the CLI's
+/// `gers` and staged under no shard, until every parent is held. A feature
+/// the registry finds in another release than the run's fails the run. An
+/// ancestor's extract is named by its release and id, so a run fetches it
+/// once.
+fn ancestors(cli: &Path, client: &mut Client, ty: &Type, release: &str, live: bool) -> Result<usize, String> {
+    let t = staging(ty);
+    let held = if live { format!(" AND NOT EXISTS (SELECT 1 FROM {} l WHERE l.gers_id = p.id)", ty.table) } else { String::new() };
+    let missing_sql = format!(
+        "SELECT DISTINCT p.id FROM (SELECT properties::jsonb->>'{}' AS id FROM {t}) p WHERE p.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {t} s WHERE s.gers_id = p.id){held} ORDER BY p.id",
+        PARENT.1
+    );
+    let prefix = format!("{}-ancestor.", ty.overture);
+    let mut kept = Vec::new();
+    let mut asked = std::collections::HashSet::new();
+    loop {
+        let missing: Vec<String> = client.query(&missing_sql, &[]).map_err(|e| e.to_string())?.iter().map(|r| r.get(0)).collect();
+        if missing.is_empty() {
+            break;
+        }
+        // The registry answering another feature than the one asked would ask forever.
+        if let Some(id) = missing.iter().find(|id| !asked.insert((*id).clone())) {
+            return Err(format!("gers {id}: fetched, and still not held"));
+        }
+        let mut extracts = Vec::new();
+        for id in &missing {
+            let extract = Path::new(EXTRACTS).join(format!("{prefix}{release}.{id}.parquet"));
+            if !extract.exists() {
+                let part = extract.with_extension("parquet.part");
+                let out = Command::new(cli).args(["gers", id, "-f", "geoparquet", "-o", &part.to_string_lossy()]).output().map_err(|e| format!("{}: {e}", cli.display()))?;
+                let said = String::from_utf8_lossy(&out.stderr);
+                if !out.status.success() {
+                    return Err(format!("gers {id}: {}", said.trim()));
+                }
+                // The registry says the release it found the feature in, on stderr.
+                if !said.contains(&format!("in release {release}")) {
+                    return Err(format!("gers {id}: not found in release {release}: {}", said.trim()));
+                }
+                std::fs::rename(&part, &extract).map_err(|e| e.to_string())?;
+            }
+            extracts.push(extract);
+        }
+        copy_extracts(client, &t, extracts.iter().map(|p| (p.as_path(), None)))?;
+        kept.extend(extracts);
+    }
+    for entry in std::fs::read_dir(EXTRACTS).map_err(|e| e.to_string())?.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with(&prefix) && !name.starts_with(&format!("{prefix}{release}.")) {
+            std::fs::remove_file(entry.path()).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(kept.len())
 }
 
 /// Each feature of the staging table once, in key order, made into a row.
@@ -320,11 +393,18 @@ fn features(ty: &Type, into: &str) -> String {
 
 /// The catalog rows of the shards written: a shard's count is the features
 /// meeting it, so their sum over shards exceeds the table's rows.
-fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str, code: &str) -> Result<(), postgres::Error> {
+/// Each shard's row, what it says read and never decided on: the release
+/// it holds, when it was ingested, and its features. A shard ingested again
+/// replaces its row.
+fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str) -> Result<(), postgres::Error> {
     let counts: HashMap<String, i64> = tx.query(&format!("SELECT node, count(*) FROM {} GROUP BY node", staging(ty)), &[])?.iter().map(|r| (r.get(0), r.get(1))).collect();
     for s in shards {
         let count = counts.get(&s.name).copied().unwrap_or(0);
-        tx.execute("INSERT INTO overture_catalog (file_name, node, data_date, code, total_count) VALUES ($1, $2, $3, $4, $5)", &[&ty.table, &s.name, &release, &code, &count])?;
+        tx.execute(
+            "INSERT INTO overture_catalog (file_name, node, data_date, total_count) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (node, file_name) DO UPDATE SET data_date = EXCLUDED.data_date, total_count = EXCLUDED.total_count, imported_at = now()",
+            &[&ty.table, &s.name, &release, &count],
+        )?;
     }
     Ok(())
 }
@@ -332,7 +412,7 @@ fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str, co
 /// A whole run: the table built anew beside the live one, its readers
 /// answered from the live one meanwhile, then swapped in with the catalog in
 /// one short transaction. Its indexes are built after it is filled.
-fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str, code: &str) -> Result<i64, String> {
+fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str) -> Result<i64, String> {
     let (t, next) = (ty.table, format!("{}_next", ty.table));
     let db = |e: postgres::Error| format!("{t}: {e}");
     client.batch_execute(&format!("DROP TABLE IF EXISTS {next}; {}", table(ty, &next))).map_err(db)?;
@@ -355,21 +435,20 @@ fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &s
             }
         }
         tx.execute("DELETE FROM overture_catalog WHERE file_name = $1", &[&t]).map_err(db)?;
-        catalog(&mut tx, ty, shards, release, code).map_err(db)?;
+        catalog(&mut tx, ty, shards, release).map_err(db)?;
         tx.commit().map_err(db)?;
         return Ok(rows);
     }
     Err(format!("{t}: its readers held it through {SWAP_TRIES} tries; {next} is built and left beside it"))
 }
 
-/// A partial run at the table's own identity: a feature already held is the
-/// same bytes, so the shards only add, with their catalog rows, in one
-/// transaction.
-fn add(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str, code: &str) -> Result<i64, String> {
+/// The shards added to the table as it is: a feature held already is left,
+/// with their catalog rows, in one transaction.
+fn add(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str) -> Result<i64, String> {
     let db = |e: postgres::Error| format!("{}: {e}", ty.table);
     let mut tx = client.transaction().map_err(db)?;
     let rows = tx.execute(&format!("{} ON CONFLICT (gers_id) DO NOTHING", features(ty, ty.table)), &[]).map_err(db)? as i64;
-    catalog(&mut tx, ty, shards, release, code).map_err(db)?;
+    catalog(&mut tx, ty, shards, release).map_err(db)?;
     tx.commit().map_err(db)?;
     Ok(rows)
 }
@@ -395,10 +474,11 @@ impl Shard {
     }
 
     /// Whether a feature whose vertices span `[lo_x, lo_y, hi_x, hi_y]` in
-    /// meters lies in the shard grown by `EPS_M`.
+    /// meters meets what the shard holds; its edges, rounded to the meter,
+    /// are already `EPS` out (`SHARD_APRON`), so a feature on one is in both.
     fn meets(&self, [lo_x, lo_y, hi_x, hi_y]: [f64; 4]) -> bool {
         let [left, bottom, right, top] = self.m;
-        lo_x <= right + EPS_M && hi_x >= left - EPS_M && lo_y <= top + EPS_M && hi_y >= bottom - EPS_M
+        lo_x <= right && hi_x >= left && lo_y <= top && hi_y >= bottom
     }
 }
 
@@ -467,10 +547,11 @@ fn vertices(b: &[u8], at: &mut usize, each: &mut dyn FnMut(f64, f64)) -> Result<
     }
 }
 
-/// A row for each feature and each shard of `shards` it meets. The properties
+/// A row for each feature and each shard of `shards` it meets, or one under
+/// no shard where `shards` is none. The properties
 /// are every column but the id, the geometry and the bbox, a null one left
 /// out; the geometry is the release's WKB, its doubles as written.
-fn rows(group: &RecordBatch, shards: &[&Shard]) -> Result<Vec<Row>, String> {
+fn rows(group: &RecordBatch, shards: Option<&[&Shard]>) -> Result<Vec<Row>, String> {
     let id = cast(group.column_by_name("id").ok_or("no id column")?, &DataType::Utf8).map_err(|e| e.to_string())?;
     let id = id.as_string::<i32>();
     let geometry = cast(group.column_by_name("geometry").ok_or("no geometry column")?, &DataType::LargeBinary).map_err(|e| e.to_string())?;
@@ -483,7 +564,10 @@ fn rows(group: &RecordBatch, shards: &[&Shard]) -> Result<Vec<Row>, String> {
             return Err(format!("{}: a feature with no id or geometry", if id.is_null(i) { "?" } else { id.value(i) }));
         }
         let span = span_m(geometry.value(i)).map_err(|e| format!("{}: {e}", id.value(i)))?;
-        let nodes: Vec<&str> = shards.iter().filter(|s| s.meets(span)).map(|s| s.name.as_str()).collect();
+        let nodes: Vec<&str> = match shards {
+            Some(shards) => shards.iter().filter(|s| s.meets(span)).map(|s| s.name.as_str()).collect(),
+            None => vec![ANCESTOR],
+        };
         if nodes.is_empty() {
             continue;
         }
@@ -561,7 +645,6 @@ CREATE TABLE IF NOT EXISTS overture_catalog (
   total_count BIGINT NOT NULL,
   PRIMARY KEY (node, file_name)
 );
-ALTER TABLE overture_catalog ADD COLUMN IF NOT EXISTS code TEXT;
 ";
 
 fn table(ty: &Type, t: &str) -> String {
@@ -617,10 +700,12 @@ fn ensure_cli() -> Result<PathBuf, String> {
     run_cmd(&Path::new(VENV).join("bin/pip"), &["install", "--quiet", &format!("overturemaps=={CLI_VERSION}")])?;
     Ok(cli)
 }
-/// `overturemaps releases latest`, the snapshot's own date.
-fn release(cli: &Path) -> Result<String, String> {
-    let out = overture(cli, &["releases", "latest"])?;
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+/// The release `metadata.json` pins.
+fn pinned_release() -> Result<String, String> {
+    let path = Path::new(METADATA);
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let meta: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    meta["pin"]["release"].as_str().map(str::to_string).ok_or_else(|| format!("{}: no pin.release", path.display()))
 }
 /// `DB_GEO_URL` from the environment, or `.env` with its `${...}` expanded.
 fn db_geo_url() -> Result<String, String> {
@@ -652,3 +737,4 @@ fn db_geo_url() -> Result<String, String> {
     out.push_str(rest);
     Ok(out)
 }
+
