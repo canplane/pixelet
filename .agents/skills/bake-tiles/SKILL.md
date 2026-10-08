@@ -27,8 +27,7 @@ Every tool writes its kind's set, `./out/<kind>/`, with a manifest of the
 Overture release its tables were ingested from and the commit it was built
 at. A version is the set uploaded under a name, `v<format>.<day>.<n>`: the
 kind's `FORMAT` in `spec/spec/bake/published.json`, the day it was
-published (UTC) and that day's count, from 1 — `v7.2026-10-04.1`
-(`pxl-spec bake/published.spec.rs` `version_name`).
+published (UTC) and that day's count, from 1 — `v7.2026-10-04.1`.
 
 A tile is named by its 2D Morton key written a digit a zoom, and every bake
 writes that name straight out, flat in its set: the filename _is_ the

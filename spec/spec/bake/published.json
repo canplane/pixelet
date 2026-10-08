@@ -2,7 +2,7 @@
   "doc": [
     "What each bake is published as, read by the client for the path it",
     "requests: `v<format>.<date>.<n>`, the format the client reads it in, and",
-    "the day it was baked with that day's count, 1 for the first. What it was",
+    "the UTC day it was published with that day's count, 1 for the first. What it was",
     "baked from and by is its manifest's to say, not its name's.",
     "",
     "A published folder is immutable, so a cache never holds a tile another",
@@ -12,8 +12,8 @@
   ],
   "FORMAT": {
     "$doc": [
-      "The format each bake writes now, which a bake's folder is named by with",
-      "its day. Bumped only by a change to how the client reads a tile."
+      "The format each bake writes now, which a published name begins with.",
+      "Bumped only by a change to how the client reads a tile."
     ],
     "terrain": 8,
     "place": 10,

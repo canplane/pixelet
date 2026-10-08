@@ -5,7 +5,7 @@
 /**
  * What each bake is published as, read by the client for the path it
  * requests: `v<format>.<date>.<n>`, the format the client reads it in, and
- * the day it was baked with that day's count, 1 for the first. What it was
+ * the UTC day it was published with that day's count, 1 for the first. What it was
  * baked from and by is its manifest's to say, not its name's.
  *
  * A published folder is immutable, so a cache never holds a tile another
@@ -24,6 +24,17 @@ export type BakeKind = keyof typeof PUBLISHED_VERSION;
 
 /** The kinds by the number the kernel names one by: the root a bake's objects are opened below (xpute's OPENAT). */
 export const BAKE_KINDS: readonly BakeKind[] = ["terrain", "place", "division", "earth"];
+
+/**
+ * The format each bake writes now, which a published name begins with.
+ * Bumped only by a change to how the client reads a tile.
+ */
+export const FORMAT: Record<BakeKind, number> = {
+  terrain: 8,
+  place: 10,
+  division: 7,
+  earth: 1,
+};
 
 /** What a tile source declares of itself: SOURCE's shape, which the dev tile
  * server answers too. */
