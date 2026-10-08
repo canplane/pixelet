@@ -25,15 +25,20 @@ serde_json = "1"
 //! fetches only itself and the ground between shards is never fetched. The extract is
 //! read once into a staging table, each row with its shard, and the run is
 //! written from it in one transaction, its catalog rows with it, so it is
-//! whole or absent. A table holds one identity, the release and the code
-//! its type's rows are made by (`code_of`): a run of another is whole, built
-//! beside the table and swapped in. The release is the one `metadata.json`
-//! pins, never the CLI's latest. A column a reader filters on is generated from `properties`.
+//! whole or absent. A run takes the types it is given (`--type`, every one
+//! when none is), each its own table and catalog rows, so one type moves to
+//! a new release while the others stay. It adds the shards it is given to
+//! each table as it is, leaving a feature it holds already; `--whole` makes
+//! each table anew from every shard, beside the live one, and swaps it in.
+//! When to run which is the user's to say: the catalog records each shard's
+//! release and when it was ingested, and decides nothing. The release is the
+//! one `metadata.json` pins, never the CLI's latest. A column a reader
+//! filters on is generated from `properties`.
 //! A division names its parent, which may stand past every shard: the
 //! divisions are taken with their ancestors, each fetched by its id, so a
 //! name's chain never breaks at the coverage's edge.
 //!
-//!   ./infra/geo/overture/script/ingest.rs
+//!   ./infra/geo/overture/script/ingest.rs [--type <type>]… [--shard <name>]… [--whole]
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -66,7 +71,6 @@ const SUBTYPE: (&str, &str) = ("subtype", "TEXT GENERATED ALWAYS AS (properties-
 const CLASS: (&str, &str) = ("class", "TEXT GENERATED ALWAYS AS (properties->>'class') STORED");
 const NAME: (&str, &str) = ("name", "TEXT GENERATED ALWAYS AS (properties->'names'->>'primary') STORED");
 
-// own: types {
 const TYPES: &[Type] = &[
     Type { overture: "address", table: "overture_addresses", columns: &[], indexes: &[] },
     Type { overture: "bathymetry", table: "overture_base_bathymetry", columns: &[SUBTYPE, CLASS], indexes: &[] },
@@ -83,7 +87,8 @@ const TYPES: &[Type] = &[
     },
     Type { overture: "building_part", table: "overture_building_parts", columns: &[], indexes: &[] },
     Type { overture: "division", table: "overture_divisions", columns: &[SUBTYPE, NAME], indexes: &["subtype"] },
-    Type { overture: "division_area", table: "overture_division_areas", columns: &[SUBTYPE, NAME], indexes: &["subtype"] },
+    // `division_id` keyed, so a bake tests a division for an area by its id, not by a scan.
+    Type { overture: "division_area", table: "overture_division_areas", columns: &[SUBTYPE, NAME], indexes: &["subtype", "((properties->>'division_id'))"] },
     Type { overture: "division_boundary", table: "overture_division_boundaries", columns: &[], indexes: &[] },
     Type {
         overture: "place",
@@ -114,7 +119,6 @@ const TYPES: &[Type] = &[
     Type { overture: "land_use", table: "overture_base_land_use", columns: &[SUBTYPE, CLASS], indexes: &["class"] },
     Type { overture: "water", table: "overture_base_water", columns: &[SUBTYPE, CLASS], indexes: &["class"] },
 ];
-// } own
 
 /// The official CLI, a tool regenerable under `cache/`, and what it downloads,
 /// the source, kept beside this script.
@@ -135,19 +139,14 @@ const SWAP_TRIES: u32 = 12;
 /// The CLI's bbox test is strict, so the shards are asked for this much wider.
 const SLACK_DEG: f64 = 1e-4;
 
-/// A shard's edges are taken this far out, in meters, so a feature on one is in both.
-const EPS_M: f64 = 1.0;
-
 /// id, properties, geometry, shard.
 type Row = (String, String, Vec<u8>, String);
 
-// own: division {
 /// The type closed under a parent, and the property naming it.
 const PARENT: (&str, &str) = ("division", "parent_division_id");
 
 /// The shard an ancestor is staged under: none, so the catalog counts it in none.
 const ANCESTOR: &str = "";
-// } own
 
 fn main() -> ExitCode {
     match run() {
@@ -160,93 +159,57 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    if std::env::args().len() > 1 {
-        return Err("no flags: the shards are the coverage's (infra/geo/elevation/metadata.json)".to_string());
+    // `--type <type>`, repeated, for those types' tables alone; `--shard <name>`, repeated, for those
+    // shards alone; `--whole` for each table made anew from every shard.
+    let (mut types, mut named, mut whole) = (Vec::<String>::new(), Vec::<String>::new(), false);
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--type" => types.push(args.next().ok_or("--type names an Overture type")?),
+            "--shard" => named.push(args.next().ok_or("--shard names a shard")?),
+            "--whole" => whole = true,
+            other => return Err(format!("unknown flag: {other}")),
+        }
     }
-    let shards: Vec<Shard> = Coverage::of_source()?.shards().map(Shard::of).collect();
+    if let Some(t) = types.iter().find(|t| !TYPES.iter().any(|ty| ty.overture == t.as_str())) {
+        return Err(format!("{t}: no Overture type this ingests"));
+    }
+    let all: Vec<Shard> = Coverage::of_source()?.shards().map(Shard::of).collect();
+    if let Some(n) = named.iter().find(|n| !all.iter().any(|s| s.name == **n)) {
+        return Err(format!("{n}: no shard of the coverage (infra/geo/elevation/metadata.json)"));
+    }
+    if whole && !named.is_empty() {
+        return Err("--whole makes each table from every shard; it takes no --shard".into());
+    }
+    let shards: Vec<&Shard> = all.iter().filter(|s| named.is_empty() || named.contains(&s.name)).collect();
     let mut client = Client::connect(&db_geo_url()?, NoTls).map_err(|e| e.to_string())?;
     let cli = ensure_cli()?;
     let release = pinned_release()?;
-    println!("[ingest] release {release}, {} shards", shards.len());
+    println!("[ingest] release {release}, {} shards{}", shards.len(), if whole { ", whole" } else { "" });
     client.batch_execute(&format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{CATALOG_SQL}")).map_err(|e| e.to_string())?;
-    if !keyed(&mut client, "overture_catalog", &["node", "file_name"])? {
-        return Err("overture_catalog is keyed otherwise than by (node, file_name)".into());
-    }
 
-    for ty in TYPES {
-        let code = code_of(SOURCE, ty, &shards);
-        // A table of an older shape, or none, is one more identity this run is not.
-        let reshaped = !keyed(&mut client, ty.table, &["gers_id"])?;
-        let held = client
-            .query("SELECT node, data_date = $2 AND code IS NOT DISTINCT FROM $3 FROM overture_catalog WHERE file_name = $1", &[&ty.table, &release, &code])
-            .map_err(|e| e.to_string())?;
-        // Another identity anywhere in the table makes the run whole, so a table never mixes two.
-        let whole = reshaped || held.is_empty() || held.iter().any(|r| !r.get::<_, bool>(1));
-        let done: Vec<String> = if whole { Vec::new() } else { held.iter().map(|r| r.get(0)).collect() };
-        // Only the table a partial run adds to is kept; DDL on one a whole run
-        // replaces would build indexes on a table about to be dropped.
+    for ty in TYPES.iter().filter(|ty| types.is_empty() || types.iter().any(|t| t == ty.overture)) {
         if !whole {
-            client.batch_execute(&indexes(ty, ty.table)).map_err(|e| e.to_string())?;
-        }
-        let to_do: Vec<&Shard> = shards.iter().filter(|s| !done.contains(&s.name)).collect();
-        if to_do.is_empty() {
-            println!("[ingest/{}] every shard already release {release} of this code", ty.table);
-            continue;
+            // A shard is added to the table as it is; one of another shape is made anew only on --whole.
+            let exists: bool = client.query_one("SELECT to_regclass($1::text) IS NOT NULL", &[&ty.table]).map_err(|e| e.to_string())?.get(0);
+            if exists && !keyed(&mut client, ty.table, &["gers_id"])? {
+                return Err(format!("{}: keyed otherwise than by gers_id; run with --whole", ty.table));
+            }
+            client.batch_execute(&format!("{}{}", table(ty, ty.table), indexes(ty, ty.table))).map_err(|e| e.to_string())?;
         }
         let started = std::time::Instant::now();
-        let extracts = download(&cli, ty, &groups(&to_do), &release)?;
+        let extracts = download(&cli, ty, &groups(&shards), &release)?;
         let fetched = started.elapsed().as_secs_f64();
         stage(&mut client, ty, &extracts)?;
         if ty.overture == PARENT.0 {
             let fetched = ancestors(&cli, &mut client, ty, &release, !whole)?;
             println!("[ingest/{}] {fetched} ancestors past the shards", ty.table);
         }
-        let rows = if whole { build_and_swap(&mut client, ty, &to_do, &release, &code)? } else { add(&mut client, ty, &to_do, &release, &code)? };
+        let rows = if whole { build_and_swap(&mut client, ty, &shards, &release)? } else { add(&mut client, ty, &shards, &release)? };
         client.batch_execute(&format!("DROP TABLE {}; ANALYZE {}", staging(ty), ty.table)).map_err(|e| e.to_string())?;
-        if reshaped && !held.is_empty() {
-            println!("[ingest/{}] now in this script's shape: restart the servers reading it onto this code", ty.table);
-        }
-        println!(
-            "[ingest/{}] {rows} features in {} shards{} in {:.0}s, {fetched:.0}s of it fetching",
-            ty.table,
-            to_do.len(),
-            if whole { ", whole" } else { "" },
-            started.elapsed().as_secs_f64()
-        );
+        println!("[ingest/{}] {rows} features in {} shards in {:.0}s, {fetched:.0}s of it fetching", ty.table, shards.len(), started.elapsed().as_secs_f64());
     }
     Ok(())
-}
-
-/// This script, which a table's identity is read from.
-const SOURCE: &str = include_str!("ingest.rs");
-
-/// What a type's rows are made by, so a change to one type's rules makes
-/// that table whole and no other: this script but for the regions one type
-/// owns (marked `// own: <type> {` … `// } own`), the type itself, the regions
-/// it owns, and what the script reads from its dependencies: the shards'
-/// rectangles, the projection a feature's span is taken in, and the one it
-/// is written in. A change outside every region is anyone's,
-/// so a helper a type alone uses but left unmarked rebuilds every table
-/// rather than none. The tests are owned by no type, so they rebuild none.
-fn code_of(source: &str, ty: &Type, shards: &[Shard]) -> String {
-    let (mut shared, mut own) = (String::new(), String::new());
-    let mut owner: Option<&str> = None;
-    for line in source.lines() {
-        match (line.trim().strip_prefix("// own: ").and_then(|t| t.strip_suffix(" {")), line.trim() == "// } own") {
-            (Some(tag), _) => owner = Some(tag),
-            (_, true) => owner = None,
-            _ => match owner {
-                None => shared.extend([line, "\n"]),
-                Some(tag) if tag == ty.overture => own.extend([line, "\n"]),
-                Some(_) => {}
-            },
-        }
-    }
-    let rectangles: Vec<_> = shards.iter().map(|s| (s.m, s.deg)).collect();
-    // `span_m`'s projection, which decides the shards a feature meets, at points that span it.
-    let spans: Vec<_> = [[-180.0, -85.0], [0.0, 0.0], [126.978, 37.5665], [180.0, 85.0]].map(|[x, y]| epsg4326::to_mercator(&[x, y, 0.0])).into();
-    let read = format!("{shared}{own}{ty:?}{rectangles:?}{spans:?}{}", projected("wkb"));
-    format!("{:016x}", fnv1a(read.as_bytes()))
 }
 
 /// Whether a table is keyed as this script keys it.
@@ -364,7 +327,6 @@ fn copy_extracts<'a>(client: &mut Client, t: &str, extracts: impl Iterator<Item 
     Ok(())
 }
 
-// own: division {
 /// The parents the staged divisions name and neither the staging table nor,
 /// for a partial run, the live one holds, fetched by id with the CLI's
 /// `gers` and staged under no shard, until every parent is held. A feature
@@ -419,7 +381,6 @@ fn ancestors(cli: &Path, client: &mut Client, ty: &Type, release: &str, live: bo
     }
     Ok(kept.len())
 }
-// } own
 
 /// Each feature of the staging table once, in key order, made into a row.
 fn features(ty: &Type, into: &str) -> String {
@@ -432,11 +393,18 @@ fn features(ty: &Type, into: &str) -> String {
 
 /// The catalog rows of the shards written: a shard's count is the features
 /// meeting it, so their sum over shards exceeds the table's rows.
-fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str, code: &str) -> Result<(), postgres::Error> {
+/// Each shard's row, what it says read and never decided on: the release
+/// it holds, when it was ingested, and its features. A shard ingested again
+/// replaces its row.
+fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str) -> Result<(), postgres::Error> {
     let counts: HashMap<String, i64> = tx.query(&format!("SELECT node, count(*) FROM {} GROUP BY node", staging(ty)), &[])?.iter().map(|r| (r.get(0), r.get(1))).collect();
     for s in shards {
         let count = counts.get(&s.name).copied().unwrap_or(0);
-        tx.execute("INSERT INTO overture_catalog (file_name, node, data_date, code, total_count) VALUES ($1, $2, $3, $4, $5)", &[&ty.table, &s.name, &release, &code, &count])?;
+        tx.execute(
+            "INSERT INTO overture_catalog (file_name, node, data_date, total_count) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (node, file_name) DO UPDATE SET data_date = EXCLUDED.data_date, total_count = EXCLUDED.total_count, imported_at = now()",
+            &[&ty.table, &s.name, &release, &count],
+        )?;
     }
     Ok(())
 }
@@ -444,7 +412,7 @@ fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str, co
 /// A whole run: the table built anew beside the live one, its readers
 /// answered from the live one meanwhile, then swapped in with the catalog in
 /// one short transaction. Its indexes are built after it is filled.
-fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str, code: &str) -> Result<i64, String> {
+fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str) -> Result<i64, String> {
     let (t, next) = (ty.table, format!("{}_next", ty.table));
     let db = |e: postgres::Error| format!("{t}: {e}");
     client.batch_execute(&format!("DROP TABLE IF EXISTS {next}; {}", table(ty, &next))).map_err(db)?;
@@ -467,21 +435,20 @@ fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &s
             }
         }
         tx.execute("DELETE FROM overture_catalog WHERE file_name = $1", &[&t]).map_err(db)?;
-        catalog(&mut tx, ty, shards, release, code).map_err(db)?;
+        catalog(&mut tx, ty, shards, release).map_err(db)?;
         tx.commit().map_err(db)?;
         return Ok(rows);
     }
     Err(format!("{t}: its readers held it through {SWAP_TRIES} tries; {next} is built and left beside it"))
 }
 
-/// A partial run at the table's own identity: a feature already held is the
-/// same bytes, so the shards only add, with their catalog rows, in one
-/// transaction.
-fn add(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str, code: &str) -> Result<i64, String> {
+/// The shards added to the table as it is: a feature held already is left,
+/// with their catalog rows, in one transaction.
+fn add(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str) -> Result<i64, String> {
     let db = |e: postgres::Error| format!("{}: {e}", ty.table);
     let mut tx = client.transaction().map_err(db)?;
     let rows = tx.execute(&format!("{} ON CONFLICT (gers_id) DO NOTHING", features(ty, ty.table)), &[]).map_err(db)? as i64;
-    catalog(&mut tx, ty, shards, release, code).map_err(db)?;
+    catalog(&mut tx, ty, shards, release).map_err(db)?;
     tx.commit().map_err(db)?;
     Ok(rows)
 }
@@ -507,10 +474,11 @@ impl Shard {
     }
 
     /// Whether a feature whose vertices span `[lo_x, lo_y, hi_x, hi_y]` in
-    /// meters lies in the shard grown by `EPS_M`.
+    /// meters meets what the shard holds; its edges, rounded to the meter,
+    /// are already `EPS` out (`SHARD_APRON`), so a feature on one is in both.
     fn meets(&self, [lo_x, lo_y, hi_x, hi_y]: [f64; 4]) -> bool {
         let [left, bottom, right, top] = self.m;
-        lo_x <= right + EPS_M && hi_x >= left - EPS_M && lo_y <= top + EPS_M && hi_y >= bottom - EPS_M
+        lo_x <= right && hi_x >= left && lo_y <= top && hi_y >= bottom
     }
 }
 
@@ -677,7 +645,6 @@ CREATE TABLE IF NOT EXISTS overture_catalog (
   total_count BIGINT NOT NULL,
   PRIMARY KEY (node, file_name)
 );
-ALTER TABLE overture_catalog ADD COLUMN IF NOT EXISTS code TEXT;
 ";
 
 fn table(ty: &Type, t: &str) -> String {
@@ -771,36 +738,3 @@ fn db_geo_url() -> Result<String, String> {
     Ok(out)
 }
 
-// own: tests {
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    fn codes(source: &str) -> Vec<String> {
-        let shards: Vec<Shard> = Coverage::of_source().expect("the coverage").shards().map(Shard::of).collect();
-        TYPES.iter().map(|ty| code_of(source, ty, &shards)).collect()
-    }
-
-    /// `line` put just inside the region `tag` owns, or before every region.
-    fn with(line: &str, tag: Option<&str>) -> String {
-        match tag {
-            Some(tag) => SOURCE.replacen(&format!("// own: {tag} {{\n"), &format!("// own: {tag} {{\n{line}\n"), 1),
-            None => format!("{line}\n{SOURCE}"),
-        }
-    }
-
-    #[test]
-    fn a_change_to_one_types_rules_is_that_tables_alone() {
-        let (before, after) = (codes(SOURCE), codes(&with("// a division rule", Some(PARENT.0))));
-        for (ty, (b, a)) in TYPES.iter().zip(before.iter().zip(&after)) {
-            assert_eq!(b != a, ty.overture == PARENT.0, "{}", ty.table);
-        }
-    }
-
-    #[test]
-    fn a_change_outside_every_region_is_every_tables() {
-        let (before, after) = (codes(SOURCE), codes(&with("// a shared rule", None)));
-        assert!(before.iter().zip(&after).all(|(b, a)| b != a));
-    }
-}
-// } own

@@ -5,10 +5,8 @@
 # hash in metadata.json's `pin`, as an Overture release is: the zip kept in
 # raw/ is used while it is the pinned one, and osmdata, which serves only its
 # latest, is asked only when it is not, which fails unless osmdata still
-# serves the pin. The table's identity is that hash, kept as its comment, which a bake's
-# holdings read (`pxl-geo-bake coverage.rs`): the same download is not
-# imported again, and a new one is filled beside the table and swapped in,
-# so readers never see it emptied.
+# serves the pin. Each run imports it, filled beside the table and swapped
+# in, so readers never see it emptied.
 
 set -e
 set -o pipefail
@@ -44,12 +42,7 @@ if [ ! -f "$ZIP" ] || [ "$(hash_of "$ZIP")" != "$PIN" ]; then
     fi
     mv "$ZIP.part" "$ZIP"
 fi
-ID="$PIN"
 SHP=$(unzip -Z1 "$ZIP" | grep '\.shp$')
-if [ "$(psql_geo -Atc "SELECT obj_description(to_regclass('$TABLE'), 'pg_class')")" = "$ID" ]; then
-    echo "✨ $TABLE already holds $ZIP ($ID)"
-    exit 0
-fi
 unzip -o -q "$ZIP" -d "$DATA_DIR"
 
 NEXT="${TABLE}_next"
@@ -57,7 +50,7 @@ ogr2ogr -f PostgreSQL "PG:host=$DB_GEO_HOST port=$DB_GEO_PORT user=$DB_GEO_USER 
     -overwrite -nln "$NEXT" -nlt PROMOTE_TO_MULTI -lco GEOMETRY_NAME=geom -lco SPATIAL_INDEX=GIST -a_srs EPSG:3857
 psql_geo -c "ANALYZE $NEXT;" > /dev/null
 # One short transaction: the old table dropped, the new one and its indexes
-# given its names, and its identity said.
+# given its names.
 psql_geo > /dev/null <<SQL
 BEGIN;
 SET LOCAL lock_timeout = '30s';
@@ -68,7 +61,6 @@ DO \$\$ DECLARE i text; BEGIN
     IF i LIKE '${NEXT}%' THEN EXECUTE format('ALTER INDEX %I RENAME TO %I', i, '$TABLE' || substr(i, length('$NEXT') + 1)); END IF;
   END LOOP;
 END \$\$;
-COMMENT ON TABLE $TABLE IS '$ID';
 COMMIT;
 SQL
 echo "✨ $TABLE: $(psql_geo -Atc "SELECT count(*) FROM $TABLE") polygons, $(date -r "$ZIP" +%Y-%m-%d)"

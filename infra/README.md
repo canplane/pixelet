@@ -41,15 +41,15 @@ Seventeen tables from Overture, GEDTM30 and OSM, and the ingests that write them
 are [infra/geo/README.md](./geo/README.md) — the sources, what each pipeline
 drops before it writes, how to run one and how to check it afterward.
 
-**A table is replaced, never emptied.** A whole ingest fills the table beside
-the one being read (`<table>_next`), holding no lock on it, and swaps it in
-with one short transaction, a bounded `lock_timeout` retried, that drops the
-old table, renames the new one and writes its catalog rows; a partial ingest
-adds to the live table. A table's identity is its release and the code its
-type's rows are made by (`ingest.rs` `code_of`), so a change of shape is a
-change of identity and a whole ingest like any other, and a change to one
-type's rules makes its table whole and no other: nothing is dropped or truncated by hand first, and readers see the
-old table until the swap. Filling takes room for both tables at once.
+**A table is replaced, never emptied.** A whole ingest (`--whole`) fills the
+table beside the one being read (`<table>_next`), holding no lock on it, and
+swaps it in with one short transaction, a bounded `lock_timeout` retried,
+that drops the old table, renames the new one and writes its catalog rows;
+an ingest of some shards (`--shard`) adds them to the live table, leaving a
+feature it holds already. Which to run, and when, is the operator's to say:
+the catalog records each shard's release and when it was ingested, and
+decides nothing. Nothing is dropped or truncated by hand first, and readers
+see the old table until the swap. Filling takes room for both tables at once.
 
 ## 3. Production (Hetzner Cloud)
 
