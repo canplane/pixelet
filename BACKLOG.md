@@ -39,9 +39,17 @@ Nothing now.
   is to be baked again in that format.
 - **POI and reverse geocode follow Carto.** The ground is Carto's looks
   (decision/20261005-the-ground-is-a-carto-palette.md); a place's icon and
-  its kind's label are still Overture's taxonomy as the search list names it
-  (`pxl-geo-spec overture/properties.rs`), where Carto's `amenity-points.mss`
-  gives each tag an icon and a color.
+  its kind's label are still this tree's own 35 kinds (`poi_badge.json`),
+  shown by OpenMapTiles' class rank, and a name's depth is its own ladder
+  (`spec/spec/place.json`). Carto is the default for both: a place's kind is
+  the Carto feature its OSM tag draws as, with Carto's minimum zoom, icon
+  group and color (`amenity-points.mss`), and a name's depth OSM's
+  `admin_level` and `place=*`. The theme is fixed there; the data is not.
+  Terrain's sources stay Overture and OSM, where POI and geocode take any
+  provider (Naver for Korea, say) through an adapter mapping its vocabulary
+  onto Carto's, as Overture's `category_of` does now. openstreetmap-carto is
+  CC0, the cartographic design and `symbols/` included, so nothing binds its
+  use; its name and OpenStreetMap's are trademarks, kept out of ours.
 
 ## P2
 
