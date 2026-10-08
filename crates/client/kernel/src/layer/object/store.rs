@@ -189,6 +189,14 @@ struct Found<'a> {
 impl Store {
     fn find(&self, zoom: Zoom, at: [i64; 3]) -> Option<Found<'_>> {
         let tree = self.columns.get(&key(SHARD_ZOOM, column(zoom, at)))?;
+        // The column itself is its tree's root, whose children are the first block.
+        if zoom == SHARD_ZOOM {
+            return Some(Found {
+                tree,
+                zoom,
+                slot: Slot::Branch(0),
+            });
+        }
         let (depth, slot) = tree.get(u32::from(zoom - SHARD_ZOOM), at);
         Some(Found {
             tree,

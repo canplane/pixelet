@@ -66,9 +66,11 @@ struct Placement {
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
+/// What `found` was read from: the drawn chunks, and whether places were on.
 #[derive(Default, PartialEq)]
 struct Found {
     drawn: Vec<Chunk>,
+    places: bool,
 }
 
 pub fn moved() {
@@ -155,6 +157,9 @@ pub fn step(ctx: &mut TickContext) {
     p.now.drawn.clear();
     p.now.drawn.extend(p.mounted.iter().filter(|m| m.1).map(|m| m.0));
     p.now.drawn.sort_unstable();
+    // Places are a setting; what someone placed is always shown.
+    p.now.places = settings_store().poi;
+    let places = p.now.places;
     let stale = core::mem::take(&mut p.moved) | (p.found_for.as_ref() != Some(&p.now));
     if stale {
         let now = core::mem::take(&mut p.now);
@@ -165,8 +170,6 @@ pub fn step(ctx: &mut TickContext) {
         found.clear();
     }
     let read: &[(Chunk, bool, bool)] = if stale { &p.mounted } else { &[] };
-    // Places are a setting; what someone placed is always shown.
-    let places = settings_store().poi;
     for &(chunk, _, _) in read.iter().filter(|m| m.1) {
         let read_zoom = POI_LATTICE.read_zoom(chunk.cell_zoom());
         markers(chunk, read_zoom, &mut found);
