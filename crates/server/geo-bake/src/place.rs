@@ -4,12 +4,13 @@ use std::collections::BTreeMap;
 
 use crate::coverage::Coverage;
 use postgres::Client;
-use pxl_geo_spec::overture::properties::{category_named, CATEGORY_SQL};
+use pxl_geo_spec::overture::properties::CATEGORY_SQL;
 use pxl_spec::bake::format::Occupancy;
-use pxl_spec::bake::place_tile::{self, fold_place, kind_of, Place, PlaceTile, PLACE_LATTICE};
+use pxl_spec::bake::place_tile::{self, fold_place, kind_of, Place, PlaceTile};
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::zoom::idx;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 impl crate::pyramid::Layer for PlaceTile {
@@ -36,8 +37,8 @@ const PLACES_SQL: &str = "SELECT ST_X(geom), ST_Y(geom), name, {category}, gers_
 /// Every statement the places bake runs, for the catalog check.
 pub const READS: [&str; 2] = [PLACES_SQL, CATEGORY_SQL];
 
-/// The leaves under `within`, a leaf or a shard: a place belongs to the
-/// place-lattice cell its projected position floors into, and is published
+/// The leaves under `within`, a leaf or a shard, that hold a place: a place
+/// belongs to the leaf its projected position floors into, and is published
 /// only on a tile of the coverage.
 pub fn leaves(client: &mut Client, coverage: &Coverage, within: Tile) -> Result<BTreeMap<IVec, PlaceTile>, String> {
     let select = PLACES_SQL.replace("{category}", CATEGORY_SQL);
@@ -45,37 +46,24 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Tile) -> Result<
     let rows = client
         .query(&format!("{select} WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)"), &[&x0, &y0, &x1, &y1])
         .map_err(|e| e.to_string())?;
-    let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u8, String)>> = BTreeMap::new();
+    let mut places: BTreeMap<IVec, Vec<(Pvf3, String, u16, String)>> = BTreeMap::new();
     for row in rows {
         let at = epsg3857::project(row.get(0), row.get(1), 0.0);
-        let leaf = PLACE_LATTICE.cell_of(LEAF_ZOOM, &at).tile();
+        let leaf = Tile::over(LEAF_ZOOM, idx(LEAF_ZOOM, at.i));
         if Tile::over(within.zoom, leaf.tile) != within || !coverage.contains(leaf.tile) {
             continue;
         }
-        let kind = kind_of(category_named(row.get::<_, Option<serde_json::Value>>(3).as_ref()));
+        let kind = kind_of(row.get::<_, Option<&str>>(3).unwrap_or(""));
         places.entry(leaf.tile).or_default().push((at, row.get(2), kind, row.get(4)));
     }
     Ok(places
         .into_iter()
-        .map(|(tile, p)| {
+        .map(|(at, p)| {
             (
-                tile,
-                PlaceTile::of_places(
-                    LEAF_ZOOM,
-                    p.iter().map(|(at, name, kind, id)| {
-                        (
-                            *at,
-                            Place {
-                                name,
-                                kind: *kind,
-                                id,
-                                ..Place::default()
-                            },
-                        )
-                    }),
-                    true,
-                ),
+                at,
+                PlaceTile::leaf(Tile::new(LEAF_ZOOM, at), p.iter().map(|(point, name, kind, id)| (*point, Place { name, kind: *kind, id }))),
             )
         })
+        .filter(|(_, tile)| !tile.is_empty())
         .collect())
 }

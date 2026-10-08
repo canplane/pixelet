@@ -134,10 +134,11 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   `observe`), which are held residency's (`layer/residency.rs`), when they are
   fetched the scheduler's (`io/request.rs`), and a tile is folded only by the
   bake's `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not
-  data — terrain folds by majority and average, places by sum.
+  data — terrain folds by majority and average, places by what shows from
+  the parent's zoom on.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
   and x, y, z (`chunk.rs`); a cube that holds nothing is no
-  chunk. Terrain and places are tiles, a 2D heightfield and a 2D count; placed
+  chunk. Terrain and places are tiles, a 2D heightfield and the places shown; placed
   objects are resident in their store, a sparse tree a shard (`SHARD_ZOOM`). Each layer,
   and the world composed of them, is read through one query
   (`layer/query.rs` `Query`): what a node holds and its records, at a cell
@@ -162,8 +163,8 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   sees an error cross a cell, alike on every axis, and something under it
   is held finer. What lies inside a cell is its layer's to fold into one,
   never a second rule outside it: terrain's by majority and average in the
-  bake, objects' by `majority`, places' to a lattice sixty-four ground cells
-  wide. A chunk draws a cell from what is composed there one zoom finer
+  bake, objects' by `majority`, places' to a cell an icon wide at Carto's
+  zoom, one place a cell (decision/20261009-places-follow-carto.md). A chunk draws a cell from what is composed there one zoom finer
   (`space/layer/lattice.rs` `Lattice::fold`, the ground's `GROUND`) as its
   surfaces' mean color and its fill's volume (`pxl-render
   mesh/chunk.rs`); past a layer's data it draws its finest. What is folded is a summary, so nothing

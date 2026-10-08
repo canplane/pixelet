@@ -28,19 +28,15 @@ const BLACK: u32 = 0x000000ff;
 const WHITE: u32 = 0xffffffff;
 
 pub const BADGE_FONT: Font = Font { weight: REGULAR, px: 12.0 };
-const ICON_FONT: Font = Font { weight: REGULAR, px: 13.0 };
-const ICON_SIZE: f32 = 20.0;
+const PILL_INNER: f32 = 20.0;
 const PAD_X: f32 = 10.0;
-const GAP: f32 = 6.0;
 const PAD_Y: f32 = 7.0;
 const DOT_DIAM: f32 = 6.0;
 const DOT_GAP: f32 = 4.0;
 const DOT_BORDER: f32 = 1.0;
-const PILL_H: f32 = ICON_SIZE + PAD_Y;
+const PILL_H: f32 = PILL_INNER + PAD_Y;
 const PILL_R: f32 = PILL_H / 2.0;
 const DOT_CY: f32 = PILL_H + DOT_GAP + DOT_DIAM / 2.0;
-/// Past the icon, which is concentric with the pill's left cap.
-const TEXT_X: f32 = PILL_R + ICON_SIZE / 2.0 + GAP;
 
 fn pill(p: &mut Sketch, logical_w: f32) {
     p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, 0x14141ab8);
@@ -51,21 +47,59 @@ fn anchor_dot(p: &mut Sketch, logical_w: f32) {
     p.ring(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, DOT_BORDER, 0xffffff40);
 }
 
-pub fn badge_width(text_w: f64, icon: bool) -> f64 {
-    if icon {
-        (TEXT_X + PAD_X) as f64 + text_w
-    } else {
-        (text_w + 2.0 * PAD_X as f64).max(PILL_H as f64)
+pub fn badge_width(text_w: f64) -> f64 {
+    (text_w + 2.0 * PAD_X as f64).max(PILL_H as f64)
+}
+
+// A place as OpenStreetMap Carto draws one (style/amenity-points.mss): a dot
+// four pixels wide, or its symbol in its square of 14, with the name under it
+// set `text-dy` 10 down, with @standard-line-spacing-size (−1.5) between
+// lines, haloed white at 0.6 a pixel round (style/style.mss). A kind with no
+// symbol is a disc of its fill. The name is in a marker's font, not Carto's
+// 10 pixels: one text in the world.
+
+pub const POINT_FONT: Font = BADGE_FONT;
+/// The width a name wraps at: six em, where Carto's @standard-wrap-width is
+/// three, which broke a Korean name of five syllables in two.
+pub const POINT_WRAP: f64 = 6.0 * POINT_FONT.px as f64;
+const POINT_ICON: f32 = 14.0;
+const POINT_DOT: f32 = 4.0;
+const POINT_DY: f32 = 10.0;
+const POINT_HALO: f32 = 1.0;
+const POINT_HALO_FILL: u32 = 0xffffff99;
+/// A line, the font's size and its halo above and below.
+const POINT_LINE: f32 = POINT_FONT.px + 2.0 * POINT_HALO;
+/// From one line to the next.
+const POINT_PITCH: f32 = POINT_LINE - 1.5;
+
+/// A point's sprite for a name laid out in `lines` as wide as `text_w`, or
+/// none: its width, height and where the place is, down from its top.
+pub fn point_size(text: Option<(f64, usize)>) -> [f64; 3] {
+    let icon = f64::from(POINT_ICON);
+    match text {
+        None => [icon, icon, icon / 2.0],
+        Some((w, lines)) => {
+            let h = icon / 2.0 + f64::from(POINT_DY) + f64::from(POINT_PITCH) * (lines.max(1) - 1) as f64 + f64::from(POINT_LINE) / 2.0;
+            [(w + 2.0 * f64::from(POINT_HALO)).ceil().max(icon), h.ceil(), icon / 2.0]
+        }
     }
 }
 
-fn place(p: &mut Sketch, name: &str, icon: &str, color: u32, logical_w: f32) {
-    pill(p, logical_w);
-    let (cx, cy) = (PILL_R, PILL_H / 2.0);
-    p.circle(cx, cy, ICON_SIZE / 2.0, color);
-    p.text(ICON_FONT, WHITE, icon, cx, cy + 1.0, Align::Center);
-    p.text(BADGE_FONT, WHITE, name, TEXT_X, PILL_H / 2.0 + 1.0, Align::Left);
-    anchor_dot(p, logical_w);
+#[allow(clippy::too_many_arguments)]
+fn point(p: &mut Sketch, lines: &[String], icon: bool, symbol: Option<u16>, fill: u32, text: u32, logical_w: f32) {
+    let (cx, cy) = (logical_w / 2.0, POINT_ICON / 2.0);
+    match (icon, symbol) {
+        (true, Some(s)) => p.icon(usize::from(s), fill, cx, cy),
+        (true, None) => p.circle(cx, cy, POINT_ICON / 2.0 - 2.0, fill),
+        (false, _) => p.circle(cx, cy, POINT_DOT / 2.0, fill),
+    }
+    for (k, line) in lines.iter().enumerate() {
+        let ty = cy + POINT_DY + POINT_PITCH * k as f32;
+        for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0), (-1.0, -1.0), (1.0, 1.0), (-1.0, 1.0), (1.0, -1.0)] {
+            p.text(POINT_FONT, POINT_HALO_FILL, line, cx + dx * POINT_HALO, ty + dy * POINT_HALO, Align::Center);
+        }
+        p.text(POINT_FONT, text, line, cx, ty, Align::Center);
+    }
 }
 
 fn labeled_pill(p: &mut Sketch, label: &str, logical_w: f32) {
@@ -210,7 +244,14 @@ impl BadgePass {
             let mut p = Sketch::default();
             match spec {
                 DrawSpec::Pill { label, logical_w } => labeled_pill(&mut p, label, *logical_w as f32),
-                DrawSpec::Place { name, icon, color, logical_w } => place(&mut p, name, icon, *color, *logical_w as f32),
+                DrawSpec::Point {
+                    lines,
+                    icon,
+                    symbol,
+                    fill,
+                    text,
+                    logical_w,
+                } => point(&mut p, lines, *icon, *symbol, *fill, *text, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w, box_h } => bubble(&mut p, lines, *box_w as f32, *box_h as f32),
             }
             if self.painter.paint(g, encoder, self.sheet, sheet.slot_rect(slot), &p, text, &mut made) {

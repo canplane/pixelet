@@ -24,6 +24,7 @@ use crate::{kernel, with_parts};
 use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pack;
+use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
@@ -259,14 +260,25 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let hover = crate::control::interaction::hover().coord;
+    // What the pointer meets as drawn, whether or not it could strike it there.
+    let met = crate::control::interaction::pointed().zip(crate::chunk::domain::current()).and_then(|([x, y], d)| {
+        let (mut origin, mut direction) = ([0.0; 3], [0.0; 3]);
+        crate::view::frame::pose::view_ray(x, y, &mut origin, &mut direction);
+        let ray = crate::query::Ray {
+            origin,
+            direction,
+            reach: crate::view::frame::pose::view().far,
+        };
+        let hit = crate::query::World::now().first_hit(&ray, crate::query::Detail::Distance(d.tau())).value().flatten()?;
+        // The grid's cell there is the distance's (`Tau::cell_at`), as the chunks are cut.
+        Some((crate::view::frame::coord::world_to_canonical(&hit.point), d.tau().cell_at(hit.t)))
+    });
+    let (hover, cell_want) = (met.map(|m| m.0), met.map(|m| m.1));
     let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| pack::unpack(p.i, p.f));
     let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
     let [center_lon, center_lat, center_z] = controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
-    let (chunk_zoom, tier_zoom, read_zoom) = hover
-        .and_then(|p| with_parts(|_, sched, _| sched.drawn_at(&p)).flatten())
-        .map_or((None, None, None), |(c, t, r)| (Some(c), t, r));
-    let zoom = |z: Option<i32>| z.map_or(f64::NAN, f64::from);
+    let cell_drawn = hover.and_then(|p| with_parts(|_, sched, _| sched.cells_at(&p)).flatten());
+    let zoom = |z: Option<Zoom>| z.map_or(f64::NAN, f64::from);
     put(
         out,
         SUMMARY::view::AT,
@@ -284,9 +296,8 @@ fn side(out: &mut [f64]) {
             hover_lon,
             hover_lat,
             hover_alt,
-            chunk_zoom: zoom(chunk_zoom),
-            tier_zoom: zoom(tier_zoom),
-            read_zoom: zoom(read_zoom),
+            cell_want: zoom(cell_want),
+            cell_drawn: zoom(cell_drawn),
         },
     );
 

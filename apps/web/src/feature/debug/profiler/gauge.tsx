@@ -77,7 +77,7 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
       <Row k="hover (u)" v={hovering ? `${Math.floor(v.hover_x)}, ${Math.floor(v.hover_y)}, ${Math.floor(v.hover_z)}` : "-"} />
       <Row k="hover" v={geo(v.hover_lat, v.hover_lon)} />
       <Row k="hover altitude" v={metres(v.hover_alt)} />
-      <Row k="chunk/tier/tile" v={hovering ? `${zoomName(v.chunk_zoom)}/${zoomName(v.tier_zoom)}/${zoomName(v.read_zoom)}` : "-"} warn={v.read_zoom < v.chunk_zoom} />
+      <Row k="cells wanted/drawn" v={hovering ? `${zoomName(v.cell_want)}/${zoomName(v.cell_drawn)}` : "-"} warn={v.cell_drawn < v.cell_want} />
     </>
   );
 }

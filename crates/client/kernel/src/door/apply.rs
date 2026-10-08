@@ -420,10 +420,9 @@ mod test;
 fn tap_at(x: f64, y: f64) {
     use crate::chunk::place::Went;
     use crate::control::interaction::ActiveTool;
-    use crate::control::navigation::destination::{go_into_place, go_to_place};
+    use crate::control::navigation::destination::go_to_place;
     match (crate::control::interaction::holding().active_tool, crate::chunk::place::tap(x, y)) {
         (ActiveTool::Pointer, Some(Went::To(at) | Went::Marker(_, at))) => go_to_place(at),
-        (ActiveTool::Pointer, Some(Went::Into(at))) => go_into_place(at),
         (ActiveTool::Eraser, Some(Went::Marker(e, _))) => crate::control::interaction::edit::remove(e),
         (ActiveTool::Marker, Some(Went::Marker(e, _))) => crate::control::interaction::edit::wait_at(e),
         _ => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
