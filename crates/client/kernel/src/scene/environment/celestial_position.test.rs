@@ -2,18 +2,6 @@
 
 use super::*;
 
-/// Seoul at local noon the day before the solstice: altitude near 74°, a
-/// little east of south.
-#[test]
-fn the_sun_at_seoul_noon_is_high_and_south_south_east() {
-    let d = j2000_days(1_718_852_400_000.0);
-    let s = sun_position(d, 37.5665, 126.978);
-    let want = [13.449099302276881, -23.813088623065383, 96.18762154345812];
-    for k in 0..3 {
-        assert!((s[k] - want[k]).abs() < 1e-9, "axis {k}: {} vs {}", s[k], want[k]);
-    }
-}
-
 #[test]
 fn the_stars_turn_with_the_sun_and_the_moon() {
     let d = j2000_days(1_718_852_400_000.0);

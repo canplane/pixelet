@@ -18,3 +18,4 @@ fn the_hull_clears_every_requirement_and_never_sags() {
     let straight = upper_hull(vec![(0.0, 2.0), (4.0, 1.0), (10.0, 12.0)]);
     assert_eq!(straight, vec![(0.0, 2.0), (10.0, 12.0)]);
 }
+

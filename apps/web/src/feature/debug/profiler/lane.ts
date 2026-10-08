@@ -94,7 +94,7 @@ export function valueText(name: string, v: f64): string {
   return Number.isInteger(v) ? String(v) : n1(v);
 }
 
-export function label(group: string, name: string): string {
+function label(group: string, name: string): string {
   const bare = name.startsWith(`${group}_`) ? name.slice(group.length + 1) : name;
   return bare.replace(UNIT, "") || name;
 }

@@ -752,11 +752,11 @@ fn rs(spec: &Spec, t: &Target) -> Result<String, String> {
             rs_writer(spec, &mut out, &format!("{name}Signal"), Some(&doc), signal)?;
         }
     }
-    out.extend(["", "#[cfg(test)]", "#[path = \"cmd.test.rs\"]", "mod test;"].map(String::from));
     Ok(file(&out))
 }
 
-fn test_rs(spec: &Spec, t: &Target) -> Result<String, String> {
+/// Every command is numbered by a major and a minor that cmd.json names.
+fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
     let mut cmds: Vec<&Member> = Vec::new();
     let mut minors: Vec<&Enum> = Vec::new();
     let mut majors: Vec<(u32, &str)> = Vec::new();
@@ -771,48 +771,15 @@ fn test_rs(spec: &Spec, t: &Target) -> Result<String, String> {
             }
         }
     }
-    let mut out: Vec<String> = vec![format!("// {}/cmd.test.rs", t.rs_logical), "//".to_string(), super::generated(t.json, t.json)];
-    out.extend(
-        [
-            "",
-            "use super::*;",
-            "use xpute_core::abi::cmd::cmd;",
-            "",
-            "#[test]",
-            "fn every_number_is_its_major_and_minor() {",
-            "    use Command::*;",
-            "    let parts = [",
-        ]
-        .map(String::from),
-    );
-    for c in cmds {
-        if c.value == 0 {
-            continue;
-        }
-        let major = majors.iter().find(|(v, _)| *v == c.value >> 8).map(|(_, n)| *n).ok_or(format!("cmd.json: {} has no major", c.name))?;
-        let minor_value = c.value & 0xff;
+    for c in cmds.into_iter().filter(|c| c.value != 0) {
+        let major = majors.iter().find(|(v, _)| *v == c.value >> 8).map(|(_, n)| *n).ok_or(format!("{json}: {} has no major", c.name))?;
         let table_name = format!("{}Minor", pascal(major));
-        let table = minors.iter().find(|t| t.name == table_name);
-        let entry = table.and_then(|t| members(t).find(|m| m.value == minor_value));
-        let minor = match (table, entry) {
-            (Some(t), Some(m)) => format!("{}::{}", t.name, m.name),
-            _ => return Err(format!("cmd.json: {}'s minor is in no {table_name}", c.name)),
-        };
-        out.push(format!("        ({}, Major::{major} as u32, {minor} as u32),", c.name));
+        let minor = minors.iter().find(|t| t.name == table_name).and_then(|t| members(t).find(|m| m.value == c.value & 0xff));
+        if minor.is_none() {
+            return Err(format!("{json}: {}'s minor is in no {table_name}", c.name));
+        }
     }
-    out.extend(
-        [
-            "    ];",
-            "    for (c, major, minor) in parts {",
-            "        assert_eq!(c as u32, cmd(major, minor), \"{c:?}\");",
-            "        assert_eq!(Command::of(c as u32), Some(c));",
-            "    }",
-            "    assert_eq!(Command::of(0x0fff), None);",
-            "}",
-        ]
-        .map(String::from),
-    );
-    Ok(file(&out))
+    Ok(())
 }
 
 struct Target {
@@ -880,9 +847,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     for t in &TARGETS {
         let spec: Spec = read_as(t.json)?;
         check_base(&spec, t.json)?;
+        check_numbers(&spec, t.json)?;
         out.push(Output::new(t.ts, ts(&spec, t)?));
         out.push(Output::new(&format!("{}/cmd.spec.rs", t.rs_dir), rs(&spec, t)?));
-        out.push(Output::new(&format!("{}/cmd.test.rs", t.rs_dir), test_rs(&spec, t)?));
         if let Some((path, namespace)) = t.cpp {
             out.push(Output::new(path, cpp(&spec, t, path, namespace)?));
         }

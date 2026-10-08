@@ -1,6 +1,5 @@
 // pxl-geo-bake/util.rs
 
-use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 
@@ -29,57 +28,18 @@ pub enum Level {
 }
 
 const ZSTD_MAGIC: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
-const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 
 pub fn pack(raw: &[u8], level: Level) -> std::io::Result<Vec<u8>> {
     zstd::bulk::compress(raw, level as i32)
 }
 
-pub fn encoding_of(stored: &[u8]) -> Option<&'static str> {
-    if stored.starts_with(&ZSTD_MAGIC) {
-        Some("zstd")
-    } else if stored.starts_with(&GZIP_MAGIC) {
-        Some("gzip")
-    } else {
-        None
-    }
+/// Whether the bytes are packed as a bake stores them, not served as is.
+pub fn is_packed(stored: &[u8]) -> bool {
+    stored.starts_with(&ZSTD_MAGIC)
 }
 
-/// Told apart by bytes, not by a manifest: older sets are gzip.
 pub fn unpack(stored: &[u8]) -> std::io::Result<Vec<u8>> {
-    match encoding_of(stored) {
-        Some("zstd") => zstd::stream::decode_all(stored),
-        Some(_) => {
-            let mut raw = Vec::new();
-            flate2::read::GzDecoder::new(stored).read_to_end(&mut raw)?;
-            Ok(raw)
-        }
-        None => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "neither zstd nor gzip")),
-    }
-}
-
-/// An upload gives a directory one Content-Encoding, so a resumed bake must
-/// not mix encodings.
-pub fn refuse_mixed(dir: &Path) -> Result<(), String> {
-    let Ok(entries) = std::fs::read_dir(dir) else { return Ok(()) };
-    for entry in entries {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let name = entry.file_name().to_string_lossy().to_string();
-        if !entry.file_type().map_err(|e| e.to_string())?.is_file() || name.ends_with(".part") || name.ends_with(".empty") {
-            continue;
-        }
-        let mut head = [0u8; 4];
-        let n = std::fs::File::open(entry.path()).and_then(|mut f| f.read(&mut head)).map_err(|e| e.to_string())?;
-        return match encoding_of(&head[..n]) {
-            Some(CONTENT_ENCODING) => Ok(()),
-            other => Err(format!(
-                "{} holds {} objects and this bake writes {CONTENT_ENCODING}: bake into a fresh directory, or pass --force to rewrite every object",
-                dir.display(),
-                other.unwrap_or("unrecognized")
-            )),
-        };
-    }
-    Ok(())
+    zstd::stream::decode_all(stored)
 }
 
 pub fn fmt_bytes(n: f64) -> String {

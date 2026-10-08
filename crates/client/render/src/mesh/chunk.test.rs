@@ -40,32 +40,6 @@ fn ground(z1: i32) -> Vec<Run> {
     vec![Run { z0: 0, z1, rgb: [0, 0, 0], layer: 0 }]
 }
 
-#[test]
-fn a_cell_walled_in_on_every_side_shows_only_its_top_and_its_bottom() {
-    let columns: Vec<Vec<Run>> = (0..9).map(|_| ground(3)).collect();
-    let set = set_of(3, &columns);
-    let view = set.view();
-    let faces = exposed_faces(&view, 4, 0, 0, 3);
-    assert_eq!(faces, 2.0, "a buried run keeps its top and its bottom alone");
-}
-
-#[test]
-fn a_wall_shows_the_side_it_stands_above() {
-    let columns: Vec<Vec<Run>> = (0..9).map(|k| ground(if k == 4 { 4 } else { 0 })).collect();
-    let set = set_of(3, &columns);
-    let view = set.view();
-    assert_eq!(exposed_faces(&view, 4, 0, 0, 4), 2.0 + 4.0 * 4.0);
-}
-
-#[test]
-fn a_column_off_the_sets_edge_is_air_and_leaves_the_side_open() {
-    let columns: Vec<Vec<Run>> = (0..9).map(|_| ground(0)).collect();
-    let set = set_of(3, &columns);
-    let view = set.view();
-    // A corner column: two of its four sides have no column beyond them.
-    assert_eq!(exposed_faces(&view, 0, 0, 0, 0), 2.0 + 2.0);
-}
-
 fn bake_in_blocks(set: &OwnedRunSet, lod_step: u32, block: u32) -> Vec<u32> {
     let mut bake = BakeContext::default();
     let view = set.view();

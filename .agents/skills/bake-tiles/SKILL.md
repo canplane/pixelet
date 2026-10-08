@@ -36,9 +36,7 @@ object key, and a name's length is its zoom (publish-bucket).
 
 Every object is packed in the encoding `util.rs`'s `CONTENT_ENCODING` names —
 zstd — and each manifest says so in `content_encoding`, which is what the
-upload labels the objects with. A version baked before zstd (terrain v4,
-POI v5, geocode v2) is gzip, and a bake refuses to resume into it: one
-version holds one encoding.
+upload labels the objects with.
 
 Every object is written to `.part` and renamed, so an interrupted run
 leaves no truncated file; a shard is made beside its old one and renamed in

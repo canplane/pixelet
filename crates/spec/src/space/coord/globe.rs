@@ -53,19 +53,6 @@ impl Globe {
         let haversine = shp * shp + c * c0 * shl * shl;
         [rr * c * libm::sin(dl), rr * (libm::sin(dphi) + 2.0 * c * s0 * shl * shl), h - 2.0 * rr * haversine]
     }
-    /// A height does not move the result: the clouds are anchored to the map by it.
-    pub fn unplace(&self, p: V3) -> [f64; 2] {
-        let (s0, c0) = (self.sin_lat, self.cos_lat);
-        let v = [p[0], p[1], p[2] + self.radius_u()];
-        let axis = v[1] * c0 + v[2] * s0;
-        let meridian = -v[1] * s0 + v[2] * c0;
-        let east = v[0];
-        let across = libm::hypot(east, meridian);
-        let length = libm::hypot(across, axis);
-        // tan(π/4 + φ/2) = (1 + sin φ) / cos φ, against the center's.
-        let e = (length + axis) / across;
-        [MERCATOR_RADIUS_U * libm::atan2(east, meridian), MERCATOR_RADIUS_U * libm::log(e / self.e0)]
-    }
 }
 
 #[cfg(test)]

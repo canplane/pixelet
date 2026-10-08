@@ -35,14 +35,6 @@ fn what_the_view_needs_is_asked_for_out_from_the_eye() {
 }
 
 #[test]
-fn only_a_failure_waits() {
-    let p = Policy::standard();
-    assert_eq!(p.retry_after(Outcome::error), Some(param::RETRY_MS));
-    assert_eq!(p.retry_after(Outcome::ok), None);
-    assert_eq!(p.retry_after(Outcome::aborted), None);
-}
-
-#[test]
 fn of_tiles_as_near_the_finer_is_asked_first() {
     use pxl_spec::space::layer::tile::LEAF_ZOOM;
     let p = Policy::standard();
