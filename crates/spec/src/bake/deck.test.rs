@@ -7,7 +7,7 @@ use crate::space::coord::adapter::epsg3857::u_per_m;
 
 fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Decks {
     let mut b = Builder::default();
-    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t)), (width_cells * POINT_SCALE) as u8, 3, Form::Deck, 0);
+    b.push(points.iter().zip(tops).map(|(&p, &t)| (p, t)), (width_cells * POINT_SCALE) as u8, 3, Form::Bridge, 0);
     b.finish()
 }
 
@@ -57,7 +57,7 @@ fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() 
     assert_eq!(pier_stands(pier, land, d.over_point(frame, at, 1.0), 5, 0.5), Some(pier));
     assert_eq!(pier_stands(pier, road, d.over_point(frame, at, 1.0), 5, 0.5), None);
     let mut under = Builder::default();
-    under.push([([0.0, 3.0], 10), ([40.0, 3.0], 10)], 4 * POINT_SCALE as u8, 3, Form::Deck, 0);
+    under.push([([0.0, 3.0], 10), ([40.0, 3.0], 10)], 4 * POINT_SCALE as u8, 3, Form::Bridge, 0);
     let under = under.finish();
     let column = d.over_point(frame, at, 1.0).chain(under.over_point(frame, at, 1.0));
     assert_eq!(pier_stands(pier, land, column, 5, 0.5), None);
@@ -98,17 +98,22 @@ fn each_form_is_drawn_from_its_surface() {
     };
     // Two cells a metre: a 2 m slab is 4 cells; a bore is clear its line's cells over its surface.
     let cpm = 2.0;
-    assert_eq!(over(Form::Deck, 30.0).occupies(10, cpm), Occupies::Above { slab: [26, 30], pier: None });
-    assert_eq!(over(Form::Bore, 10.0).occupies(40, cpm), Occupies::Through { air: [10, 13] });
+    assert_eq!(over(Form::Bridge, 30.0).occupies(10, cpm), Occupies::Above { slab: [26, 30], pier: None });
+    assert_eq!(over(Form::Tunnel, 10.0).occupies(40, cpm), Occupies::Through { air: [10, 13] });
     // a way on the ground moves the ground: filled up to it, cut down to it
     assert_eq!(over(Form::Grade, 14.0).occupies(10, cpm), Occupies::Above { slab: [10, 14], pier: None });
     assert_eq!(over(Form::Grade, 20.0).occupies(10, cpm), Occupies::Above { slab: [10, 20], pier: None });
     assert_eq!(over(Form::Grade, 10.0).occupies(14, cpm), Occupies::Through { air: [10, 14] });
     assert_eq!(over(Form::Grade, 10.0).occupies(10, cpm), Occupies::Grade);
     // a surface falling 8 cells across a column is solid over all of it, and a bore clear over all of it
-    let steep = Over { low: 22.0, ..over(Form::Deck, 30.0) };
+    let steep = Over {
+        low: 22.0,
+        ..over(Form::Bridge, 30.0)
+    };
     assert_eq!(steep.occupies(10, cpm), Occupies::Above { slab: [18, 30], pier: None });
-    let steep = Over { low: 10.0, ..over(Form::Bore, 18.0) };
+    let steep = Over {
+        low: 10.0,
+        ..over(Form::Tunnel, 18.0)
+    };
     assert_eq!(steep.occupies(40, cpm), Occupies::Through { air: [10, 21] });
 }
-
