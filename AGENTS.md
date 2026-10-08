@@ -134,10 +134,10 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   `observe`), which are held residency's (`layer/residency.rs`), when they are
   fetched the scheduler's (`io/request.rs`), and a tile is folded only by the
   bake's `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not
-  data — terrain folds by majority and average, POI by sum.
+  data — terrain folds by majority and average, places by sum.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
   and x, y, z (`chunk.rs`); a cube that holds nothing is no
-  chunk. Terrain and POI are tiles, a 2D heightfield and a 2D count; placed
+  chunk. Terrain and places are tiles, a 2D heightfield and a 2D count; placed
   objects are resident in their store, a sparse tree a z8 column. Each layer,
   and the world composed of them, is read through one query
   (`layer/query.rs` `Query`): what a node holds and its records, at a cell
@@ -172,7 +172,7 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   `--folds` zooms over the leaves, the whole guard for every layer. A source declares the
   coarsest zoom it supplies whole — the published version in its metadata,
   the tile server at `/tile/source` — and the floor is that zoom.
-- **Terrain, POI and objects are audited side by side** before a change is
+- **Terrain, places and objects are audited side by side** before a change is
   done: anything one does its own way is removed or explained.
 
 ## What the bake paints
@@ -189,6 +189,17 @@ column was empty, and much of `width_rules` is an import's width classes.
 What a chunk can make when drawn — a deck's slab, a tunnel's mouth — is the
 client's; the bake carries only what the client cannot work out
 ([decision/20261001-ways-off-the-ground.md](./decision/20261001-ways-off-the-ground.md)).
+
+**A leaf reads its 1-ring and no further — an invariant, never a default.**
+A terrain leaf's bake reads at most itself and its eight neighbours: a
+query, a search radius or a way's geometry past them is a violation,
+however small. Reading a neighbour's own derived data (its padded
+elevation) carries that neighbour's reach along, and even so nothing
+reaches past the source's 2-ring. Every bake, the divisions' z12 leaves
+too, reads no farther past its leaf than one reach (`pxl-geo-bake
+coverage.rs` `BAKE_REACH`, a z13 tile), which the shard's apron holds; a rule
+that wants more, a structure that runs on, is cut there, not given a
+wider read.
 
 **A read is scoped by the policy that consumes it.** What the bake asks of
 the database is what its paint policy uses: the policy's own tables are the
@@ -344,8 +355,8 @@ already does what is wanted; the change makes it say so once, by extending
 the structure that holds the fact, not by inventing mechanism beside it.
 
 **Identity, not revision.** A tile's content is fixed by its name within a
-version, and a version is named by the source and the code that made it
-(the dev cache is; a published version must be made to be); what changes is
+version, and a published version is named by the source and the code that
+made it; what changes is
 which identity answers a node. Keys compare identities, and the one change event left
 carries identities, not a counter — only content that mutates under a fixed
 key, the objects' edits, needs its own. An extremal summary (max, OR, a
