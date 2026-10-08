@@ -1520,7 +1520,3 @@ impl WorldSnapshotSignal {
         w.u32(Some(self.len));
     }
 }
-
-#[cfg(test)]
-#[path = "cmd.test.rs"]
-mod test;

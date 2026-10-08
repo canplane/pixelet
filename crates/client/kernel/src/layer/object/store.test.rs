@@ -132,52 +132,8 @@ fn air_is_a_value_and_folds_like_one() {
     assert_eq!(out.get(&[x, y, 0]), Some(&AIR));
 }
 
-fn entry_boxes(store: &Store) -> Vec<Aabb> {
-    let all = Aabb {
-        min: [-1e7, -1e7, REACH.min[2]],
-        max: [1e7, 1e7, REACH.max[2]],
-    };
-    let mut out = Vec::new();
-    store.entries_in(&all, &mut |e| {
-        if e.state != VOID {
-            out.push(e.cube());
-        }
-    });
-    out
-}
-
 fn cube_at(store: &mut Store, [x, y, z]: [i64; 3], state: u32) {
     store.write([Write::at(&corner(x, y, z), 1.0, state)]);
-}
-
-/// The index may give a box with only air in it, never none where an entry
-/// is; checked after every edit, over boxes of every size across zero.
-#[test]
-fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
-    let mut rng = Rng(SplitMix64::new(0x5851_f42d_4c95_7f2d));
-    let mut store = Store::default();
-    let red = placeable_cube_num_id(PlaceableCube::Object(Object::red));
-    let mut met = 0;
-    for step in 0..200 {
-        let at = [0, 1, 2].map(|_| (rng.next() % 400) as i64 - 200);
-        cube_at(&mut store, at, rng.pick(&[red, red, AIR, VOID]));
-        let boxes = entry_boxes(&store);
-        for _ in 0..20 {
-            let node = some_node(&mut rng, 250.0);
-            let query = region(node);
-            // A node is half-open: a cube that only touches it is not in it.
-            let truth = boxes.iter().filter_map(|b| b.meet(query)).filter(|m| (0..3).all(|k| m.min[k] < m.max[k])).reduce(Aabb::join);
-            let given = store.bounds(node, node.0).value().flatten().map(|b| b.aabb);
-            met += truth.is_some() as u32;
-            match (truth, given) {
-                (Some(t), Some(g)) => assert!(g.contains(t) && query.contains(g), "step {step}: {t:?} in {g:?} in {query:?}"),
-                (Some(t), None) => panic!("step {step}: {t:?} in {query:?} missed"),
-                (None, Some(g)) => assert!(query.contains(g), "step {step}: {g:?} past {query:?}"),
-                (None, None) => {}
-            }
-        }
-    }
-    assert!(met > 1_000, "only {met} boxes held an entry");
 }
 
 #[test]

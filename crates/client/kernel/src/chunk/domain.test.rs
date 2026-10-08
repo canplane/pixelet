@@ -5,16 +5,10 @@ use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 
-use super::*;
 use crate::chunk::Chunk;
-use crate::fixture::Free;
 use crate::view::sight::cell_angle;
 
 use crate::fixture::{self, eye, World};
-
-fn ladder() -> Vec<Tau> {
-    (0..6).map(|k| Tau::of(libm::pow(2f64, k as f64 / 2.0))).collect()
-}
 
 fn point(p: V3) -> Pvf3 {
     world::point(p[0], p[1], p[2])

@@ -84,10 +84,6 @@ pub struct Coverage {
 static SOURCE: LazyLock<Result<Coverage, String>> = LazyLock::new(Coverage::derive);
 
 impl Coverage {
-    pub fn new(shards: impl IntoIterator<Item = Shard>) -> Coverage {
-        Coverage { shards: shards.into_iter().collect() }
-    }
-
     pub fn of_source() -> Result<Coverage, String> {
         SOURCE.clone()
     }

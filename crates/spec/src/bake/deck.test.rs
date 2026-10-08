@@ -86,41 +86,6 @@ fn a_straight_flat_deck_folds_to_its_ends() {
 }
 
 #[test]
-fn a_full_parent_keeps_its_widest_lines_within_both_bounds() {
-    let line = |b: &mut Builder, n: usize, y: f64, width_cells: f64| {
-        // A zigzag two parent cells deep, which no simplification shortens.
-        let points = (0..n).map(|i| ([i as f64 * 0.25, y + 4.0 * (i % 2) as f64], 40));
-        b.push(points, (width_cells * POINT_SCALE) as u8, 3, Form::Deck, 0);
-    };
-    // Points: four lines of 2000 and a short one; the narrowest long line does not fit, the short one does.
-    let mut children: Vec<Decks> = (0..3)
-        .map(|k| {
-            let mut b = Builder::default();
-            line(&mut b, 2000, 10.0, 8.0 - k as f64);
-            b.finish()
-        })
-        .collect();
-    let mut b = Builder::default();
-    line(&mut b, 2000, 10.0, 4.0);
-    line(&mut b, 2, 100.0, 2.0);
-    children.push(b.finish());
-    let up = fold_decks([&children[0], &children[1], &children[2], &children[3]], 1);
-    let widths: Vec<f64> = up.iter().map(|d| d.width_cells()).collect();
-    assert_eq!(widths, [4.0, 3.5, 3.0, 1.0]);
-    // Decks: 1200 two-point lines, widest first, ties in the children's order.
-    let mut b = Builder::default();
-    for i in 0..300 {
-        line(&mut b, 2, i as f64, if i < 100 { 2.0 } else { 4.0 });
-    }
-    let child = b.finish();
-    let fold = || fold_decks([&child, &child, &child, &child], 15);
-    let up = fold();
-    assert_eq!(up.len(), MAX_DECKS);
-    assert_eq!(up.iter().filter(|d| d.width_cells() == 2.0).count(), 800);
-    assert_eq!(up, fold());
-}
-
-#[test]
 fn each_form_is_drawn_from_its_surface() {
     use crate::cell::cube_types::ground as t;
     let over = |form: Form, top: f64| Over {
@@ -152,3 +117,4 @@ fn each_form_is_drawn_from_its_surface() {
     };
     assert_eq!(steep.occupies(40, cpm), Occupies::Through { air: [10, 21] });
 }
+

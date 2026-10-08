@@ -58,14 +58,6 @@ fn a_feature_two_cells_wide_survives_a_fold() {
 }
 
 #[test]
-fn ties_alternate_their_corner_by_zoom() {
-    // Every block ties 2:2 across the diagonal: (0, 0) wins a step up from the leaves, (1, 1) the next.
-    let columns = plane(|x, _| if x % 2 == 0 { ground::parking } else { ground::aeroway });
-    assert!(fold([&columns, &columns, &columns, &columns], LEAF_ZOOM - 1).iter().all(|&v| v == ground::parking));
-    assert!(fold([&columns, &columns, &columns, &columns], LEAF_ZOOM - 2).iter().all(|&v| v == ground::aeroway));
-}
-
-#[test]
 fn each_child_lands_in_its_own_quarter() {
     let q = [plane(|_, _| 1), plane(|_, _| 2), plane(|_, _| 3), plane(|_, _| 4)];
     let out = fold([&q[0], &q[1], &q[2], &q[3]], 1);

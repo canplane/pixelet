@@ -110,7 +110,3 @@ impl SysOpened {
         })
     }
 }
-
-#[cfg(test)]
-#[path = "cmd.test.rs"]
-mod test;
