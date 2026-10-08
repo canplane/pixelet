@@ -95,9 +95,12 @@ It is a bare-earth DTM: ground elevation carries no building or canopy height.
 The coast as OSM's land, split into small polygons and already in EPSG:3857,
 one zip for the world (about 1 GB), ODbL. A coast is never taken in part, so
 the table holds the world's, whatever shards are ingested. The zip is kept in
-`coastline/raw/` and fetched again only when osmdata publishes a newer one.
-The table's identity is the zip's hash, its comment: the same zip is not
-imported again, and a new one is filled beside the table and swapped in.
+`coastline/raw/`. The zip is pinned, as an Overture release is: its hash and
+day are `coastline/metadata.json`'s `pin`, and a newer one is taken by
+changing the pin, never by a run that happens to fetch it. osmdata serves
+only its latest, so the kept zip is the pinned one's only copy. The table's
+identity is that hash, its comment: the same zip is not imported again, and
+a new one is filled beside the table and swapped in.
 
 ## 2. Prerequisites (macOS)
 
