@@ -41,7 +41,7 @@ function touchRecent(recentPicks: readonly RecentPick[], pick: RecentPick): Rece
   return [pick, ...recentPicks].slice(0, RECENT_PICKS);
 }
 
-/** What the dock is for; ordered as its swipe goes, up from the palette to the message. */
+/** What the dock is for. */
 export const enum DockMode {
   Palette = 0,
   Message = 1,
@@ -61,6 +61,8 @@ interface UiState {
   /** What the dock is for: picking, at rest, or typing, which the keyboard follows. */
   dockMode: DockMode;
   setDockMode: (mode: DockMode) => void;
+  /** A swipe either way or Tab: the other mode. */
+  switchDockMode: () => void;
 
   /** A key's pick or size step, which the dock shows over the cube's swatch as a press would: its seed, or the sizes open. */
   swatchCue: SwatchCue;
@@ -148,6 +150,7 @@ export const useUiStore = create<UiState>()((set) => ({
 
   dockMode: DockMode.Palette,
   setDockMode: (dockMode) => set({ dockMode }),
+  switchDockMode: () => set((state) => ({ dockMode: state.dockMode === DockMode.Message ? DockMode.Palette : DockMode.Message })),
 
   swatchCue: { n: 0, cube: null, open: false },
   cueSwatch: (cube, open) => set((state) => ({ swatchCue: { n: state.swatchCue.n + 1, cube, open } })),

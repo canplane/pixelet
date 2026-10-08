@@ -13,7 +13,7 @@ import type { i32 } from "@xpute/core/abi/word.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_keys } from "@/kernel/shell.ts";
 import { closeModal, modalOpen, openModal } from "@/app/modal.tsx";
-import { DockMode, holdTool, RECENT_PICKS, useUiStore } from "@/app/store/ui.ts";
+import { holdTool, RECENT_PICKS, useUiStore } from "@/app/store/ui.ts";
 
 const MOVE: Record<string, [i32, i32]> = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] };
 
@@ -61,8 +61,7 @@ export function keyDown(code: string, { inField }: { inField: boolean }): boolea
   }
   if (modalOpen()) return false;
   if (code === "Tab") {
-    const { dockMode, setDockMode } = useUiStore.getState();
-    setDockMode(dockMode === DockMode.Message ? DockMode.Palette : DockMode.Message);
+    useUiStore.getState().switchDockMode();
     return true;
   }
   if (inField) return false;

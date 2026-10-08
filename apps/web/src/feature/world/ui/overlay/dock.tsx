@@ -262,12 +262,12 @@ function ToolButton({ label, glyph, active, onPress }: { label: string; glyph: G
 export function Dock() {
   const { t } = useTranslation();
   const mode = useUiStore((s) => s.dockMode);
-  // Up raises the message, down brings the palette back; swatches open their
-  // sizes on a hold, so the two never compete.
+  // A swipe either way switches the mode; swatches open their sizes on a
+  // hold, so the two never compete.
   const swipe = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponderCapture: (_e, s) => Math.abs(s.dy) > DRAG_PX && Math.abs(s.dy) > Math.abs(s.dx),
-      ...deckSwipe((delta) => useUiStore.getState().setDockMode(delta > 0 ? DockMode.Message : DockMode.Palette), { press: keepKeyboard }),
+      ...deckSwipe(() => useUiStore.getState().switchDockMode(), { press: keepKeyboard }),
     }),
   ).current;
   const activeTool = useKernel((s) => s.holding.tool);
@@ -370,7 +370,7 @@ export function Dock() {
   const card = (pane: DockMode, fill: string, content: React.ReactNode, { tint, onContentWidth }: { tint?: string; onContentWidth?: (w: f64) => void } = {}) => {
     const depth = pane === mode ? 0 : 1;
     const pose = cardPose(depth, PEEK_PX);
-    // Whichever way it was chosen, the chosen card comes forward from behind.
+    // However it was chosen, the chosen card comes forward from behind.
     return (
       <Motion
         key={pane}
