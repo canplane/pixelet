@@ -9,7 +9,6 @@ use std::borrow::Cow;
 
 use super::constant::ELE_PADDED_SPAN;
 use super::deck::{self, Decks};
-use super::ground::SHIFT_RANGE;
 use super::malformed;
 use super::surface::extent_of;
 use crate::space::layer::lattice::{EXTENT, TILE_CELLS};
@@ -101,12 +100,9 @@ pub const SNAPSHOT_KEY: &str = "_snapshot";
 pub const BUILT_KEY: &str = "_built";
 
 /// How far past the lane's facts the client draws a cell, down and up: the
-/// ground's shift and a bore's floor. Every read of the lane widens by it.
-pub const DRAWN_PAST: [i16; 2] = {
-    let [lo, hi] = SHIFT_RANGE;
-    // Ground shifted down, or the way's own cell under a bore's or a cutting's surface.
-    [if lo < -1 { lo } else { -1 }, hi]
-};
+/// way's own cell under a bore's or a cutting's surface. Every read of the
+/// lane widens by it.
+pub const DRAWN_PAST: [i16; 2] = [-1, 0];
 
 pub fn drawn([lo, hi]: [i16; 2]) -> [i16; 2] {
     [lo.saturating_add(DRAWN_PAST[0]), hi.saturating_add(DRAWN_PAST[1])]

@@ -15,11 +15,10 @@ struct Entry<'a> {
     name: &'a str,
     value: u32,
     kind: Option<&'a str>,
-    shift: Option<f64>,
     doc: Option<Vec<String>>,
 }
 
-/// A list's entries in order, a section heading as `Err(title)`.
+/// A list's entries in order, a section heading as `Err(id)`.
 fn entries<'a>(list: &'a Node, what: &str) -> Result<Vec<Result<Entry<'a>, &'a str>>, String> {
     let list = list
         .get("entries")
@@ -37,7 +36,6 @@ fn entries<'a>(list: &'a Node, what: &str) -> Result<Vec<Result<Entry<'a>, &'a s
                 name,
                 value,
                 kind: e.str_at("kind"),
-                shift: e.get("shift").and_then(Node::num),
                 doc: e.lines_at("doc"),
             }))
         })
@@ -48,18 +46,36 @@ fn named<'l, 'a>(list: &'l [Result<Entry<'a>, &'a str>]) -> impl Iterator<Item =
     list.iter().filter_map(|e| e.as_ref().ok())
 }
 
-/// The ground's looks by kind and the object's colors as `block`: the groups a
-/// texture's file name is prefixed by.
+/// The catalog's two groups of placeable cubes, the ground's looks and the
+/// object's colors, which a texture is filed under.
 pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
     let spec = read(CUBE_TYPE_JSON)?;
     let ground = entries(spec.get("ground").ok_or("no ground")?, "ground")?;
     let object = entries(spec.get("object").ok_or("no object")?, "object")?;
-    let mut groups: Vec<(String, Vec<String>)> = KINDS
-        .iter()
-        .map(|k| (k.to_string(), named(&ground).filter(|e| e.kind == Some(*k)).map(|e| e.name.to_string()).collect()))
-        .collect();
-    groups.push(("block".into(), named(&object).filter(|e| e.value > 256).map(|e| e.name.to_string()).collect()));
-    Ok(groups)
+    Ok(vec![
+        ("ground".into(), named(&ground).map(|e| e.name.to_string()).collect()),
+        ("object".into(), named(&object).filter(|e| is_color(e)).map(|e| e.name.to_string()).collect()),
+    ])
+}
+
+/// One of the object's colors: what past a ground byte it gives out to be placed.
+fn is_color(e: &Entry) -> bool {
+    e.value > 256
+}
+
+/// Each placeable cube with the section heading it is listed under.
+fn sectioned<'l, 'a>(list: &'l [Result<Entry<'a>, &'a str>]) -> impl Iterator<Item = (&'a str, &'l Entry<'a>)> {
+    list.iter()
+        .scan("", |section, item| {
+            Some(match item {
+                Err(s) => {
+                    *section = s;
+                    None
+                }
+                Ok(e) => Some((*section, e)),
+            })
+        })
+        .flatten()
 }
 
 /// Each ground look's color by name, packed `0xRRGGBB`, as color.json gives it.
@@ -244,10 +260,18 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
     // TS
     let mut ts = vec!["// @pxl/web/catalog/cell/cube_type.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
+    // Every placeable cube under its heading: the ground's looks, and the colors past a ground byte.
+    let cube_sections: Vec<(&str, &Entry)> = sectioned(&ground).chain(sectioned(&object).filter(|(_, e)| is_color(e))).collect();
+    let mut section_ids: Vec<&str> = Vec::new();
+    for (s, _) in &cube_sections {
+        if !section_ids.contains(s) {
+            section_ids.push(s);
+        }
+    }
     ts.extend([
         String::new(),
-        "/** How the renderer draws a ground look, and the texture pack's prefix for it. */".to_string(),
-        format!("export type Kind = {};", KINDS.iter().map(|k| format!("\"{k}\"")).collect::<Vec<_>>().join(" | ")),
+        "/** The catalog's section a placeable cube is listed under, as Carto groups the looks. */".to_string(),
+        format!("export type CubeSection = {};", section_ids.iter().map(|s| format!("\"{s}\"")).collect::<Vec<_>>().join(" | ")),
     ]);
     ts.extend([String::new(), "export const cube_types = {".into(), "  sentinel: {".into()]);
     for e in named(&sentinel) {
@@ -280,9 +304,9 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
         }
     }
     ts.extend(["  },".to_string(), "} as const satisfies Record<string, Record<string, number>>;".into(), String::new()]);
-    ts.push("/** Each look's kind, by its number. */".into());
-    ts.push("export const ground_kind: Readonly<Record<number, Kind>> = {".into());
-    ts.extend(named(&ground).map(|e| format!("  {}: \"{}\",", e.value, e.kind.unwrap_or("land"))));
+    ts.push("/** Each placeable cube's section, by its number. */".into());
+    ts.push("export const cube_section: Readonly<Record<number, CubeSection>> = {".into());
+    ts.extend(cube_sections.iter().map(|(s, e)| format!("  {}: \"{s}\",", e.value)));
     ts.extend([
         "};".to_string(),
         String::new(),
@@ -392,37 +416,32 @@ pub fn cube_type_outputs() -> Result<Vec<Output>, String> {
         "            }".to_string(),
         "        }".into(),
         String::new(),
-        "        /// How far off its sampled height a cell showing the look stands, in units, up positive.".into(),
-        "        pub const fn shift(self) -> i16 {".into(),
-        "            match self {".into(),
+        "    }".into(),
+        String::new(),
     ]);
-    for e in named(&ground).filter(|e| e.shift.is_some()) {
-        rs.push(format!("                Ground::{} => {},", e.name, js_num(e.shift.unwrap_or(0.0))));
-    }
-    rs.extend(["                _ => 0,".to_string(), "            }".into(), "        }".into(), "    }".into(), String::new()]);
     // The object's colors.
-    let colors: Vec<&Entry> = named(&object).filter(|e| e.value > 256).collect();
+    let colors: Vec<&Entry> = named(&object).filter(|e| is_color(e)).collect();
     rs.extend([
-        "    /// A placed color, by its number.".to_string(),
+        "    /// One of the object's colors, by its number.".to_string(),
         "    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]".into(),
         "    #[repr(u16)]".into(),
-        "    pub enum Block {".into(),
+        "    pub enum Object {".into(),
     ]);
     rs.extend(colors.iter().map(|e| format!("        {} = {},", e.name, e.value)));
     rs.extend([
         "    }".to_string(),
         String::new(),
-        "    impl Block {".into(),
-        format!("        pub const ALL: [Block; {}] = [", colors.len()),
+        "    impl Object {".into(),
+        format!("        pub const ALL: [Object; {}] = [", colors.len()),
     ]);
-    rs.extend(colors.iter().map(|e| format!("            Block::{},", e.name)));
+    rs.extend(colors.iter().map(|e| format!("            Object::{},", e.name)));
     rs.extend([
         "        ];".to_string(),
         String::new(),
-        "        pub const fn of(value: u16) -> Option<Block> {".into(),
+        "        pub const fn of(value: u16) -> Option<Object> {".into(),
         "            match value {".into(),
     ]);
-    rs.extend(colors.iter().map(|e| format!("                {} => Some(Block::{}),", e.value, e.name)));
+    rs.extend(colors.iter().map(|e| format!("                {} => Some(Object::{}),", e.value, e.name)));
     rs.extend(["                _ => None,".to_string(), "            }".into(), "        }".into(), "    }".into(), "}".into()]);
     Ok(vec![
         Output::new("apps/web/src/catalog/cell/cube_type.spec.ts", file(&ts)),

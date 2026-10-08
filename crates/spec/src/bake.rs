@@ -11,7 +11,6 @@ pub mod division_tile;
 pub mod earth_tile;
 pub mod fold;
 pub mod format;
-pub mod ground;
 pub mod named;
 #[path = "bake/object.spec.rs"]
 pub mod object;
