@@ -14,7 +14,7 @@ import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
-import { cardPose, deckSwipe, peekBelow, useTurnedBack } from "@/shared/ui/deck.ts";
+import { cardPose, deckSwipe, peekBelow } from "@/shared/ui/deck.ts";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { FADE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
@@ -262,7 +262,6 @@ function ToolButton({ label, glyph, active, onPress }: { label: string; glyph: G
 export function Dock() {
   const { t } = useTranslation();
   const mode = useUiStore((s) => s.dockMode);
-  const turnedBack = useTurnedBack(mode);
   // Up raises the message, down brings the palette back; swatches open their
   // sizes on a hold, so the two never compete.
   const swipe = useRef(
@@ -371,12 +370,10 @@ export function Dock() {
   const card = (pane: DockMode, fill: string, content: React.ReactNode, { tint, onContentWidth }: { tint?: string; onContentWidth?: (w: f64) => void } = {}) => {
     const depth = pane === mode ? 0 : 1;
     const pose = cardPose(depth, PEEK_PX);
-    const fromAbove = depth === 0 && turnedBack;
+    // Whichever way it was chosen, the chosen card comes forward from behind.
     return (
       <Motion
         key={pane}
-        from={fromAbove ? pose.above : pose.rest}
-        replay={fromAbove ? mode : null}
         to={pose.rest}
         transition={SETTLE}
         style={[styles.card, depth === 0 ? touches.pass : touches.block, { zIndex: pose.zIndex }]}
