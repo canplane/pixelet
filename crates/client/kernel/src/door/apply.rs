@@ -152,7 +152,11 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::INPUT_MARKER_WORDS => {
             let text = abi::InputMarkerWords::read(packet(pkt)?)?.text;
-            or_refuse(crate::control::interaction::edit::put_words(text).ok(), Errno::EMSGSIZE)?;
+            or_refuse(crate::control::interaction::edit::draft_words(text).ok(), Errno::EMSGSIZE)?;
+            Ok(Some(0))
+        }
+        Command::INPUT_MARKER_PUT => {
+            crate::control::interaction::edit::put_marker();
             Ok(Some(0))
         }
         Command::INPUT_MARKER_CANCEL => {
@@ -412,8 +416,8 @@ fn profiler_take(s: &mut State) -> u32 {
 mod test;
 
 /// A badge takes a tap before the ground under it: the pointer goes to it,
-/// the eraser takes away a marker someone put up, and the marker tool has it
-/// wait to be worded again.
+/// the eraser takes away a marker someone put up, and the marker tool has the
+/// waiting marker stand there.
 fn tap_at(x: f64, y: f64) {
     use crate::chunk::place::Went;
     use crate::control::interaction::ActiveTool;
@@ -422,7 +426,7 @@ fn tap_at(x: f64, y: f64) {
         (ActiveTool::Pointer, Some(Went::To(at) | Went::Marker(_, at))) => go_to_place(at),
         (ActiveTool::Pointer, Some(Went::Into(at))) => go_into_place(at),
         (ActiveTool::Eraser, Some(Went::Marker(e, _))) => crate::control::interaction::edit::remove(e),
-        (ActiveTool::Marker, Some(Went::Marker(e, _))) => crate::control::interaction::edit::wait_to_reword(e),
+        (ActiveTool::Marker, Some(Went::Marker(e, _))) => crate::control::interaction::edit::wait_at(e),
         _ => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
     }
 }

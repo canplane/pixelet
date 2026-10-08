@@ -13,6 +13,7 @@ use crate::billboard::field::billboard_instance;
 use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::chunk::Chunk;
 use crate::layer::object::ext::Ext;
+use crate::layer::object::preview::draft;
 use core::hash::Hasher;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::cell::object::object_value_is_marker;
@@ -37,7 +38,7 @@ use pxl_spec::space::coord::pvf3::pack;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::len3;
 use pxl_spec::space::coord::world::REACH;
-use pxl_spec::space::coord::zoom::{count, Zoom};
+use pxl_spec::space::coord::zoom::{base_of, count, cube, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Cell, LEAF_ZOOM};
 use std::collections::HashSet;
@@ -95,8 +96,7 @@ fn shown_at(units_per_px: f64) -> Option<Shown> {
     }
 }
 
-/// The markers put up in `chunk`, each at its cell's center over the floor
-/// it stands on, by the chunk its base is in.
+/// The markers put up in `chunk`, by the chunk their base is in.
 fn markers(chunk: Chunk, read_zoom: Zoom, found: &mut Vec<(Cell, Label, Cell, f64, Shown, V3)>) {
     let region = chunk.region();
     let objects = &crate::kernel().objects;
@@ -105,23 +105,27 @@ fn markers(chunk: Chunk, read_zoom: Zoom, found: &mut Vec<(Cell, Label, Cell, f6
         if !object_value_is_marker(e.state) {
             return;
         }
-        let c = e.cube();
-        let base = [(c.min[0] + c.max[0]) / 2.0, (c.min[1] + c.max[1]) / 2.0, c.min[2]];
-        if !(0..3).all(|k| (region.min[k]..region.max[k]).contains(&base[k])) {
-            return;
-        }
-        let ground = GROUND.cell_of(LEAF_ZOOM, &e.corner());
         let words = match objects.ext(e) {
-            Some(Ext::MarkerText(t)) => {
-                let mut h = fnv::FnvHasher::default();
-                h.write(t.as_bytes());
-                h.finish()
-            }
-            None => 0,
+            Some(Ext::MarkerText(t)) => t.as_str(),
+            None => "",
         };
-        let label = Label::Marker { at: e.id(), words };
-        found.push((POI_LATTICE.cell_of(read_zoom, &ground.mid()), label, ground, base[2], Shown::All, base));
+        let marker = marker_at(e.id(), words, read_zoom);
+        if (0..3).all(|k| (region.min[k]..region.max[k]).contains(&marker.5[k])) {
+            found.push(marker);
+        }
     });
+}
+
+/// A marker at its cell's center over the floor it stands on, its words by
+/// their hash, so words changed under one entry are another badge.
+fn marker_at(at: EntryAt, words: &str, read_zoom: Zoom) -> (Cell, Label, Cell, f64, Shown, V3) {
+    let c = cube(at.zoom(), at.at());
+    let base = [(c.min[0] + c.max[0]) / 2.0, (c.min[1] + c.max[1]) / 2.0, c.min[2]];
+    let ground = GROUND.cell_of(LEAF_ZOOM, &base_of(at.zoom(), at.at()));
+    let mut h = fnv::FnvHasher::default();
+    h.write(words.as_bytes());
+    let label = Label::Marker { at, words: h.finish() };
+    (POI_LATTICE.cell_of(read_zoom, &ground.mid()), label, ground, base[2], Shown::All, base)
 }
 
 /// None where nothing over it is known.
@@ -224,7 +228,11 @@ pub fn step(ctx: &mut TickContext) {
     let mut labeled = core::mem::take(&mut p.labeled);
     labeled.clear();
     let eye = crate::view::observation::eye().unwrap_or_default();
-    for &(_, label, stands, top, shown, at) in &found {
+    // A waiting marker stands over whatever stands at its place, with the words it has so far.
+    let draft = draft();
+    let drafted = draft.map(|d| marker_at(d.at, &d.words, LEAF_ZOOM));
+    let is_drafted = |label: &Label| matches!(label, Label::Marker { at, .. } if Some(*at) == draft.map(|d| d.at));
+    for &(_, label, stands, top, shown, at) in drafted.iter().chain(found.iter().filter(|f| !is_drafted(&f.1))) {
         // Found once while it stands, so its lap is chosen as the eye moves.
         let d = len3(&[nearest(at[0], eye[0]) - eye[0], at[1] - eye[1], at[2] - eye[2]]);
         if shown_at(units_per_px_at(d)) != Some(shown) {

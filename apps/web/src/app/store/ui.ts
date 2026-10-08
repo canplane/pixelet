@@ -166,9 +166,14 @@ export function chatFits(text: string): boolean {
   return kernel_fits(encode_chat_send({ text }));
 }
 
-/** The words for the marker a tap left waiting: it is put up, or worded again. */
-export function putMarkerWords(text: string): void {
+/** The waiting marker's words as typed, which it is drawn with. */
+export function draftMarkerWords(text: string): void {
   kernel_command(Command.INPUT_MARKER_WORDS, encode_input_marker_words({ text }));
+}
+
+/** The waiting marker put up with its words. */
+export function putMarker(): void {
+  kernel_command(Command.INPUT_MARKER_PUT);
 }
 
 /** The waiting marker is let go. */

@@ -22,9 +22,9 @@ import { TextField } from "@/shared/ui/text-field.tsx";
 import { touches } from "@/shared/ui/touch.ts";
 import { alpha, chrome, color, disabledContent, material, shadow } from "@/shared/ui/theme.ts";
 import { openModal } from "@/app/modal.tsx";
-import { cancelMarker, chatFits, holdTier, holdTool, markerTextFits, putMarkerWords, useInHand, useUiStore } from "@/app/store/ui.ts";
-import { useKernel } from "@/kernel/shell.ts";
-import { ActiveTool, MarkerWaiting } from "@/kernel/abi/cmd.spec.ts";
+import { cancelMarker, chatFits, draftMarkerWords, holdTier, holdTool, markerTextFits, putMarker, useInHand, useUiStore } from "@/app/store/ui.ts";
+import { kernel_snapshot, useKernel } from "@/kernel/shell.ts";
+import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
 import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
@@ -277,9 +277,7 @@ export function Dock() {
   ).current;
   const activeTool = useKernel((s) => s.holding.tool);
   // A marker waiting for its words turns the message card to wording it.
-  const marker = useKernel((s) => s.holding.marker);
-  const markerWords = useKernel((s) => s.holding.words);
-  const wording = marker !== MarkerWaiting.None;
+  const wording = useKernel((s) => s.holding.marker);
   const recentPicks = useUiStore((s) => s.recentPicks);
   const appendChatLine = useUiStore.getState().appendChatLine;
   const [messageText, setMessageText] = useState("");
@@ -304,13 +302,19 @@ export function Dock() {
     }
   }, [front]);
 
-  // A marker waits: the card comes up with its words as they are.
+  // A marker starts waiting: the card comes up with its words, which from then
+  // on are the field's, sent as typed; done, the field is the chat's again.
   useEffect(() => {
+    setMessageText(wording ? kernel_snapshot().holding.words : "");
     if (!wording) return;
-    setMessageText(markerWords);
     if (front !== Pane.Message) useUiStore.getState().turnDock(1);
     inputRef.current?.focus();
-  }, [marker, markerWords]);
+  }, [wording]);
+
+  function changeText(text: string) {
+    setMessageText(text);
+    if (wording && markerTextFits(text.trim())) draftMarkerWords(text.trim());
+  }
 
   function sendMessage() {
     const text = messageText.trim();
@@ -318,7 +322,7 @@ export function Dock() {
     setIsSending(true);
     setTimeout(() => {
       if (wording) {
-        putMarkerWords(text);
+        putMarker();
         // Put up, the palette comes back for the next.
         useUiStore.getState().turnDock(1);
       } else appendChatLine(text);
@@ -418,7 +422,7 @@ export function Dock() {
                 <TextField
                   ref={inputRef}
                   value={messageText}
-                  onChangeText={setMessageText}
+                  onChangeText={changeText}
                   onSubmit={sendMessage}
                   placeholder={wording ? t("world.dock.marker_placeholder") : t("world.dock.message_placeholder")}
                   placeholderTextColor={LABEL.placeholder}

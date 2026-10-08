@@ -5,18 +5,17 @@
 
 use crate::layer::object::ext::Ext;
 use pxl_spec::cell::ext::MARKER_TEXT_CHARS;
-use crate::abi::cmd::MarkerWaiting;
 use pxl_spec::cell::object::{object_value_is_marker, MARKER};
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
-use crate::layer::object::preview::RenderEdits;
+use crate::layer::object::preview::{draft, redraft, Draft, RenderEdits};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::EntryKind;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::cell::object::{decor_num_id, object_value_is_air, placeable_cube_num_id, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::zoom::{index_of, of_side, units};
+use pxl_spec::space::coord::zoom::{base_of, index_of, of_side, units};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -117,69 +116,67 @@ pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Ins
     (size >= units(GROUND.cell()) && object_value_is_air(read_state(at))).then(|| World::now().grown(DecorKind::of(decor_id), at))?
 }
 
-/// What the marker tool left waiting for its words: a cell to put one up
-/// at, or a marker to word again.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Waiting {
-    Put(Pvf3),
-    Reword(EntryAt),
+/// A marker tool's tap at `at`, a place free or holding a marker: the marker
+/// waits there, with the words it has so far, or else the marker's own.
+pub fn wait_at(at: EntryAt) {
+    let draft = redraft();
+    let words = match draft.take() {
+        Some(d) => d.words,
+        None => marker_words(at).unwrap_or_default(),
+    };
+    *draft = Some(Draft { at, words });
 }
 
-static WAITING: Global<Option<Waiting>> = Global::new();
-
-fn waiting() -> &'static mut Option<Waiting> {
-    WAITING.get(|| None)
-}
-
-/// A tap of the marker tool on a free cell: it waits there for its words.
-pub fn wait_to_put(at: &Pvf3) {
-    *waiting() = Some(Waiting::Put(*at));
-}
-
-/// A tap of the marker tool on a marker's badge: it waits to be worded again.
-pub fn wait_to_reword(at: EntryAt) {
-    *waiting() = Some(Waiting::Reword(at));
+/// A marker tool's tap on the free cell whose min corner is `corner`.
+pub fn wait_to_put(corner: &Pvf3) {
+    let zoom = of_side(DECOR_SIZE);
+    wait_at(EntryAt::new(zoom, index_of(zoom, corner)));
 }
 
 /// Nothing waits any more.
 pub fn cancel_marker() {
-    *waiting() = None;
+    *redraft() = None;
 }
 
-/// What waits, and its words as they are, for the shell.
-pub fn marker_waiting() -> (MarkerWaiting, String) {
-    match *waiting() {
-        None => (MarkerWaiting::None, String::new()),
-        Some(Waiting::Put(_)) => (MarkerWaiting::Put, String::new()),
-        Some(Waiting::Reword(at)) => (MarkerWaiting::Reword, marker_words(at).unwrap_or_default()),
-    }
+/// Whether a marker waits, and its words, for the shell.
+pub fn marker_waiting() -> (bool, &'static str) {
+    draft().map_or((false, ""), |d| (true, d.words.as_str()))
 }
 
 fn marker_words(at: EntryAt) -> Option<String> {
-    let objects = &crate::kernel().objects;
-    match objects.ext(&get_placed_object(at)?)? {
+    match kernel().objects.ext(&get_placed_object(at)?)? {
         Ext::MarkerText(t) => Some(t.clone()),
     }
 }
 
-/// The words for what waits: a marker put up at its cell, if the cell is
-/// still free, or the marker worded again, if it is still there. Words past
-/// `MARKER_TEXT_CHARS` are refused whole, and what waits keeps waiting.
-pub fn put_words(text: &str) -> Result<(), Errno> {
+/// The waiting marker's words as they are now. Words past
+/// `MARKER_TEXT_CHARS` are refused whole, and the words before stay.
+pub fn draft_words(text: &str) -> Result<(), Errno> {
     if text.chars().count() > MARKER_TEXT_CHARS as usize {
         return Err(Errno::EMSGSIZE);
     }
-    let words = Ext::MarkerText(text.to_string());
-    match waiting().take() {
-        Some(Waiting::Put(at)) if !is_placement_blocked(PlacementTool::Instance, &at, DECOR_SIZE) => submit(Write::at(&at, DECOR_SIZE, MARKER).carrying(words)),
-        Some(Waiting::Reword(at)) if get_placed_object(at).is_some_and(|e| object_value_is_marker(e.state)) => submit(Write {
-            key: key_of::<3>(at.zoom(), at.at()),
-            id: MARKER,
-            ext: Some(words),
-        }),
-        _ => {}
+    if let Some(d) = redraft() {
+        d.words = text.to_string();
     }
     Ok(())
+}
+
+/// The waiting marker put up with its words, where its place is still free
+/// or still a marker; none is put up without words.
+pub fn put_marker() {
+    let Some(Draft { at, words }) = redraft().take() else { return };
+    let (zoom, cell) = (at.zoom(), at.at());
+    let stands = match get_placed_object(at) {
+        Some(e) => object_value_is_marker(e.state),
+        None => !is_placement_blocked(PlacementTool::Instance, &base_of(zoom, cell), DECOR_SIZE),
+    };
+    if stands && !words.is_empty() {
+        submit(Write {
+            key: key_of::<3>(zoom, cell),
+            id: MARKER,
+            ext: Some(Ext::MarkerText(words)),
+        });
+    }
 }
 
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides

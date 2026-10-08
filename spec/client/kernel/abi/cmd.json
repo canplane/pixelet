@@ -183,6 +183,10 @@
         {
           "name": "MARKER_CANCEL",
           "value": 13
+        },
+        {
+          "name": "MARKER_PUT",
+          "value": 14
         }
       ]
     },
@@ -400,28 +404,6 @@
         },
         {
           "name": "Pen",
-          "value": 2
-        }
-      ]
-    },
-    {
-      "name": "MarkerWaiting",
-      "doc": [
-        "What a marker tool's tap left waiting for words."
-      ],
-      "format": "dec",
-      "default": "None",
-      "entries": [
-        {
-          "name": "None",
-          "value": 0
-        },
-        {
-          "name": "Put",
-          "value": 1
-        },
-        {
-          "name": "Reword",
           "value": 2
         }
       ]
@@ -1054,7 +1036,7 @@
           "name": "INPUT_MARKER_WORDS",
           "value": 4364,
           "doc": [
-            "The words for the marker the tool left waiting (HoldingState.marker): puts it up at the cell a tap chose, or words again the marker a tap on its badge chose, and nothing waits after. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut."
+            "The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut."
           ],
           "packet": [
             {
@@ -1068,6 +1050,13 @@
           "value": 4365,
           "doc": [
             "The marker the tool left waiting is let go, nothing put up."
+          ]
+        },
+        {
+          "name": "INPUT_MARKER_PUT",
+          "value": 4366,
+          "doc": [
+            "The waiting marker is put up with its words, if its place is still free or still a marker, and nothing waits after."
           ]
         },
         {
@@ -1625,16 +1614,16 @@
         },
         {
           "name": "marker",
-          "type": "MarkerWaiting",
+          "type": "bool",
           "doc": [
-            "What the marker tool left waiting for its words, which INPUT_MARKER_WORDS or INPUT_MARKER_CANCEL ends."
+            "Whether a marker the tool left waits for its words, which INPUT_MARKER_PUT or INPUT_MARKER_CANCEL ends."
           ]
         },
         {
           "name": "words",
           "type": "str",
           "doc": [
-            "A waiting marker's words as they are: the marker's own where it is worded again, none where it is new."
+            "The waiting marker's words, which the shell takes up when it starts waiting: the marker's own where one stands there, none where it is new."
           ]
         }
       ]

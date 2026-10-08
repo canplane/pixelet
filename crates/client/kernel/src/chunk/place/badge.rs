@@ -1,6 +1,7 @@
 // pxl-kernel/chunk/place/badge.rs
 
 use crate::layer::object::ext::Ext;
+use crate::layer::object::preview::draft;
 use pxl_spec::bake::constant::EntryAt;
 use std::collections::{HashMap, HashSet};
 
@@ -31,8 +32,8 @@ pub enum Label {
         tile: Tile,
         place: u32,
     },
-    /// A marker someone put up, by its entry, and its words by their hash, so
-    /// words changed under one entry are another badge.
+    /// A marker someone put up, or one waiting for its words, by its entry,
+    /// and its words by their hash.
     Marker { at: EntryAt, words: u64 },
 }
 
@@ -47,8 +48,12 @@ impl Label {
         }
     }
 
-    /// A marker's words, empty once it has gone.
+    /// A marker's words, the waiting one's as they are so far, empty once
+    /// it has gone.
     fn words(at: EntryAt) -> String {
+        if let Some(d) = draft().filter(|d| d.at == at) {
+            return d.words.clone();
+        }
         let objects = &crate::kernel().objects;
         match objects.placed(at.zoom(), at.at()).and_then(|e| objects.ext(&e).cloned()) {
             Some(Ext::MarkerText(t)) => t,

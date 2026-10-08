@@ -108,10 +108,11 @@ pub enum InputMinor {
     HOLD = 0x0b,
     MARKER_WORDS = 0x0c,
     MARKER_CANCEL = 0x0d,
+    MARKER_PUT = 0x0e,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 13] = [
+    pub const ALL: [InputMinor; 14] = [
         InputMinor::RECT,
         InputMinor::POINTER,
         InputMinor::WHEEL,
@@ -125,6 +126,7 @@ impl InputMinor {
         InputMinor::HOLD,
         InputMinor::MARKER_WORDS,
         InputMinor::MARKER_CANCEL,
+        InputMinor::MARKER_PUT,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -323,25 +325,6 @@ impl PointerKind {
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<PointerKind> {
         PointerKind::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
-/// What a marker tool's tap left waiting for words.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[repr(u32)]
-pub enum MarkerWaiting {
-    #[default]
-    None = 0,
-    Put = 1,
-    Reword = 2,
-}
-
-impl MarkerWaiting {
-    pub const ALL: [MarkerWaiting; 3] = [MarkerWaiting::None, MarkerWaiting::Put, MarkerWaiting::Reword];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<MarkerWaiting> {
-        MarkerWaiting::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -588,10 +571,12 @@ pub enum Command {
     INPUT_POINTER = 0x1102,
     /// What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
     INPUT_HOLD = 0x110b,
-    /// The words for the marker the tool left waiting (HoldingState.marker): puts it up at the cell a tap chose, or words again the marker a tap on its badge chose, and nothing waits after. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut.
+    /// The words the waiting marker (HoldingState.marker) is drawn with and put up with. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut.
     INPUT_MARKER_WORDS = 0x110c,
     /// The marker the tool left waiting is let go, nothing put up.
     INPUT_MARKER_CANCEL = 0x110d,
+    /// The waiting marker is put up with its words, if its place is still free or still a marker, and nothing waits after.
+    INPUT_MARKER_PUT = 0x110e,
     INPUT_WHEEL = 0x1103,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_KEYS = 0x1106,
@@ -656,7 +641,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 43] = [
+    pub const ALL: [Command; 44] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::IMAGE_DECODED,
@@ -674,6 +659,7 @@ impl Command {
         Command::INPUT_HOLD,
         Command::INPUT_MARKER_WORDS,
         Command::INPUT_MARKER_CANCEL,
+        Command::INPUT_MARKER_PUT,
         Command::INPUT_WHEEL,
         Command::INPUT_KEYS,
         Command::GPU_READY,
@@ -838,9 +824,9 @@ pub struct HoldingState<'a> {
     pub cube: u32,
     pub decor: u32,
     pub tier: u32,
-    /// What the marker tool left waiting for its words, which INPUT_MARKER_WORDS or INPUT_MARKER_CANCEL ends.
-    pub marker: MarkerWaiting,
-    /// A waiting marker's words as they are: the marker's own where it is worded again, none where it is new.
+    /// Whether a marker the tool left waits for its words, which INPUT_MARKER_PUT or INPUT_MARKER_CANCEL ends.
+    pub marker: bool,
+    /// The waiting marker's words, which the shell takes up when it starts waiting: the marker's own where one stands there, none where it is new.
     pub words: &'a dyn Display,
 }
 
@@ -853,7 +839,7 @@ impl HoldingState<'_> {
         w.u32(Some(self.cube));
         w.u32(Some(self.decor));
         w.u32(Some(self.tier));
-        w.u32(Some(self.marker as u32));
+        w.bool(Some(self.marker));
         w.str_display(self.words);
     }
 }
