@@ -134,6 +134,8 @@ export const enum PointerPhase {
   Move = 1,
   Up = 2,
   Out = 3,
+  /** The pointer's gesture ends with no tap: the platform took it, or the shell spent it on something of its own. */
+  Cancel = 4,
 }
 
 /** What the pointer is, as the browser's `pointerType` says. */

@@ -10,7 +10,8 @@ import { round } from "@xpute/core/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
 import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_open, kernel_pointer, kernel_rect, kernel_visible, kernel_wheel } from "@/kernel/control/input.ts";
+import { kernel_open, kernel_rect, kernel_visible, kernel_wheel } from "@/kernel/control/input.ts";
+import { worldPointer } from "@/app/store/pointer.ts";
 import { keyDown, keyUp, releaseKeys } from "@/app/store/keyboard.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { surface_close, surface_open, surface_size } from "@/kernel/render/surface.ts";
@@ -89,9 +90,10 @@ function drive(canvas: HTMLCanvasElement): () => void {
     const r = canvas.getBoundingClientRect();
     kernel_rect(r.left, r.top, r.width, r.height);
   };
-  const pointer = (phase: PointerPhase) => (e: PointerEvent) => kernel_pointer(phase, pointerKind(e), e.pointerId, e.button, e.clientX, e.clientY);
+  const pointer = (phase: PointerPhase) => (e: PointerEvent) => worldPointer(phase, pointerKind(e), e.pointerId, e.button, e.clientX, e.clientY);
   const onMove = pointer(PointerPhase.Move);
   const onUp = pointer(PointerPhase.Up);
+  const onCancel = pointer(PointerPhase.Cancel);
   const onLeave = pointer(PointerPhase.Out);
   const down = pointer(PointerPhase.Down);
   const onDown = (e: PointerEvent) => {
@@ -108,10 +110,10 @@ function drive(canvas: HTMLCanvasElement): () => void {
     sendRect();
     request_frame();
   };
-  // A composed or shortcut key is the IME's or the browser's; Tab turns the dock mid-word too.
+  // A composed or shortcut key is the IME's or the browser's; Tab switches the dock mid-word too.
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.repeat || (e.isComposing && e.code !== "Tab") || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (keyDown(e.code, { shift: e.shiftKey, inField: inField(e) })) e.preventDefault();
+    if (keyDown(e.code, { inField: inField(e) })) e.preventDefault();
   };
   const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
   const onVisibility = () => {
@@ -127,7 +129,7 @@ function drive(canvas: HTMLCanvasElement): () => void {
   canvas.addEventListener("wheel", onWheel, { passive: false });
   globalThis.addEventListener("scroll", onResize, true);
   globalThis.addEventListener("pointerup", onUp);
-  globalThis.addEventListener("pointercancel", onUp);
+  globalThis.addEventListener("pointercancel", onCancel);
   document.addEventListener("visibilitychange", onVisibility);
   globalThis.addEventListener("pagehide", onPageHide);
   // Captured: react-native-web's TextInput stops a key's propagation before it bubbles here.
@@ -148,7 +150,7 @@ function drive(canvas: HTMLCanvasElement): () => void {
     globalThis.removeEventListener("keydown", onKeyDown, true);
     globalThis.removeEventListener("pagehide", onPageHide);
     document.removeEventListener("visibilitychange", onVisibility);
-    globalThis.removeEventListener("pointercancel", onUp);
+    globalThis.removeEventListener("pointercancel", onCancel);
     globalThis.removeEventListener("pointerup", onUp);
     globalThis.removeEventListener("scroll", onResize, true);
     canvas.removeEventListener("wheel", onWheel);

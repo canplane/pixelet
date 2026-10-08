@@ -11,6 +11,7 @@ import { DebugOverlay } from "@/feature/debug/overlay.tsx";
 import { bottomRest } from "@/shared/ui/bottom-rest.ts";
 import { Toaster } from "@/shared/ui/toast/stack.tsx";
 import { chrome, layer } from "@/shared/ui/theme.ts";
+import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 
 import { useChromeTop } from "./chrome.ts";
 import { BusyDim } from "./busy-dim.tsx";
@@ -53,7 +54,8 @@ export function WorldView() {
         <DebugOverlay />
       </BetweenChrome>
 
-      <View style={StyleSheet.absoluteFill}>
+      {/* The world's own pointer puts the keyboard away (`worldPointer`). */}
+      <View {...KEEPS_KEYBOARD} style={StyleSheet.absoluteFill}>
         <WorldSurface />
       </View>
 

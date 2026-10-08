@@ -299,10 +299,12 @@ pub enum PointerPhase {
     Move = 1,
     Up = 2,
     Out = 3,
+    /// The pointer's gesture ends with no tap: the platform took it, or the shell spent it on something of its own.
+    Cancel = 4,
 }
 
 impl PointerPhase {
-    pub const ALL: [PointerPhase; 4] = [PointerPhase::Down, PointerPhase::Move, PointerPhase::Up, PointerPhase::Out];
+    pub const ALL: [PointerPhase; 5] = [PointerPhase::Down, PointerPhase::Move, PointerPhase::Up, PointerPhase::Out, PointerPhase::Cancel];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<PointerPhase> {

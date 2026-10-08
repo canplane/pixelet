@@ -41,6 +41,12 @@ function touchRecent(recentPicks: readonly RecentPick[], pick: RecentPick): Rece
   return [pick, ...recentPicks].slice(0, RECENT_PICKS);
 }
 
+/** What the dock is for; ordered as its swipe goes, up from the palette to the message. */
+export const enum DockMode {
+  Palette = 0,
+  Message = 1,
+}
+
 /** What the pointer holds is the kernel's; the shell says what changes and reads it back. */
 interface UiState {
   // Advanced only by selectCube/selectDecor, which also switch the tool.
@@ -52,9 +58,9 @@ interface UiState {
   chatLines: ChatLine[];
   appendChatLine: (text: string) => void;
 
-  /** How far the dock's deck has turned, by a swipe or a key; the dock says which card that is. */
-  dockTurn: i32;
-  turnDock: (delta: i32) => void;
+  /** What the dock is for: picking, at rest, or typing, which the keyboard follows. */
+  dockMode: DockMode;
+  setDockMode: (mode: DockMode) => void;
 
   /** A key's pick or size step, which the dock shows over the cube's swatch as a press would: its seed, or the sizes open. */
   swatchCue: SwatchCue;
@@ -140,8 +146,8 @@ export const useUiStore = create<UiState>()((set) => ({
     set((state) => ({ recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Marker }) }));
   },
 
-  dockTurn: 0,
-  turnDock: (delta) => set((state) => ({ dockTurn: state.dockTurn + delta })),
+  dockMode: DockMode.Palette,
+  setDockMode: (dockMode) => set({ dockMode }),
 
   swatchCue: { n: 0, cube: null, open: false },
   cueSwatch: (cube, open) => set((state) => ({ swatchCue: { n: state.swatchCue.n + 1, cube, open } })),

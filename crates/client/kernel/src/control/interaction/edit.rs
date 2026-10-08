@@ -117,14 +117,9 @@ pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Ins
 }
 
 /// A marker tool's tap at `at`, a place free or holding a marker: the marker
-/// waits there, with the words it has so far, or else the marker's own.
+/// waits there, with the marker's own words if one stands there.
 pub fn wait_at(at: EntryAt) {
-    let draft = redraft();
-    let words = match draft.take() {
-        Some(d) => d.words,
-        None => marker_words(at).unwrap_or_default(),
-    };
-    *draft = Some(Draft { at, words });
+    *redraft() = Some(Draft { at, words: marker_words(at).unwrap_or_default() });
 }
 
 /// A marker tool's tap on the free cell whose min corner is `corner`.

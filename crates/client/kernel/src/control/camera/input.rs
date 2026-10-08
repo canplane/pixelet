@@ -350,7 +350,7 @@ fn tap_if_still(s: &Input, mode: DragMode) -> Option<[f64; 2]> {
     (!s.did_drag && mode == DragMode::Pan).then_some([s.pointer_x, s.pointer_y])
 }
 
-/// A pointer went up, or was canceled; where it tapped, if it was a tap.
+/// A pointer went up or was canceled; where it tapped, if it was a tap.
 pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32) -> Option<[f64; 2]> {
     let s = input();
     let camera = camera_state();

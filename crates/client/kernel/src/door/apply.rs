@@ -123,6 +123,9 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                     }
                 }
                 abi::PointerPhase::Out => camera_pointer_out(),
+                abi::PointerPhase::Cancel => {
+                    camera_pointer_up(p.kind, p.id);
+                }
             }
             Ok(Some(0))
         }
@@ -141,10 +144,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                     holding.decor_id = or_refuse(u16::try_from(p.value).ok().and_then(DecorId::of), Errno::EINVAL)?;
                 }
                 abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Marker => {}
-            }
-            // A marker waits for its words only while its tool is held.
-            if p.tool != abi::ActiveTool::Marker {
-                crate::control::interaction::edit::cancel_marker();
             }
             hold(holding);
             camera_rehover();

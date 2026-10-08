@@ -384,6 +384,13 @@
         {
           "name": "Out",
           "value": 3
+        },
+        {
+          "name": "Cancel",
+          "value": 4,
+          "doc": [
+            "The pointer's gesture ends with no tap: the platform took it, or the shell spent it on something of its own."
+          ]
         }
       ]
     },
