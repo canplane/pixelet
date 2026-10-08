@@ -6,8 +6,8 @@ import { StyleSheet, Text, View } from "react-native";
 import { Prose, Section, settingText } from "@/feature/setting/row.tsx";
 import { BrandSymbol } from "@/shared/ui/brand-symbol.tsx";
 import { textStyle } from "@/shared/ui/theme.ts";
-import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/config/deploy.ts";
-import { PUBLISHED_VERSION } from "@/config/published.spec.ts";
+import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE, PUBLISHED_TILES } from "@/config/deploy.ts";
+import { BAKE_KINDS, FORMAT, PUBLISHED_VERSION } from "@/config/published.spec.ts";
 import { OBJECTS_PATH } from "@/kernel/abi/host.spec.ts";
 import { LABEL } from "@platform/palette.ts";
 
@@ -19,9 +19,13 @@ function envLabel(): string {
   return DEV_SOURCE === "delivery" ? env : `${env}:${DEV_SOURCE}`;
 }
 
-/** Each bake by the name it is published as, a line each, since each is baked on its own. */
+/**
+ * Each bake a line, as what is read: the published name, or in dev the
+ * format of the unnamed tiles the dev server serves — but the Earth's, which
+ * is baked under its published name.
+ */
 function bakeLines(): string[] {
-  return Object.entries(PUBLISHED_VERSION).map(([kind, name]) => `${kind}/${name}`);
+  return BAKE_KINDS.map((kind) => `${kind}/${PUBLISHED_TILES || kind === "earth" ? PUBLISHED_VERSION[kind] : `v${FORMAT[kind]}`}`);
 }
 
 /** The objects one has placed, kept on the device: their store's format. */

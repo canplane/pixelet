@@ -4,7 +4,7 @@
 
 /// What each bake is published as, read by the client for the path it
 /// requests: `v<format>.<date>.<n>`, the format the client reads it in, and
-/// the day it was baked with that day's count, 1 for the first. What it was
+/// the UTC day it was published with that day's count, 1 for the first. What it was
 /// baked from and by is its manifest's to say, not its name's.
 ///
 /// A published folder is immutable, so a cache never holds a tile another
@@ -25,8 +25,8 @@ pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {
     earth: "v1.2026-10-05.1",
 };
 
-/// The format each bake writes now, which a bake's folder is named by with
-/// its day. Bumped only by a change to how the client reads a tile.
+/// The format each bake writes now, which a published name begins with.
+/// Bumped only by a change to how the client reads a tile.
 pub struct Format {
     pub terrain: u32,
     pub place: u32,
@@ -40,12 +40,6 @@ pub const FORMAT: Format = Format {
     division: 7,
     earth: 1,
 };
-
-/// A bake's folder and published name: its format, the day it was baked
-/// (`YYYY-MM-DD`, UTC) and that day's count of bakes of its kind, from 1.
-pub fn version_name(format: u32, day: &str, n: u32) -> String {
-    format!("v{format}.{day}.{n}")
-}
 
 /// The kinds a version is published for: the fields of `PUBLISHED_VERSION`,
 /// numbered in their order.

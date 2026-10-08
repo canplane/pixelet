@@ -55,6 +55,11 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
         .map(String::from),
     );
     ts.push(format!("export const BAKE_KINDS: readonly BakeKind[] = [{}];", list(&|k| json_str(k))));
+    ts.extend(["".to_string(), "/**".into()]);
+    ts.extend(format_doc.iter().map(|l| if l.is_empty() { " *".to_string() } else { format!(" * {l}") }));
+    ts.extend([" */".to_string(), "export const FORMAT: Record<BakeKind, number> = {".into()]);
+    ts.extend(formats.iter().map(|(k, n)| format!("  {k}: {n},")));
+    ts.push("};".into());
     ts.extend([
         "".to_string(),
         "/** What a tile source declares of itself: SOURCE's shape, which the dev tile".into(),
@@ -77,19 +82,7 @@ pub fn published_outputs() -> Result<Vec<Output>, String> {
     rs.extend(kinds.iter().map(|(k, _)| format!("    pub {k}: u32,")));
     rs.extend(["}".to_string(), String::new(), "pub const FORMAT: Format = Format {".into()]);
     rs.extend(formats.iter().map(|(k, n)| format!("    {k}: {n},")));
-    rs.extend(
-        [
-            "};",
-            "",
-            "/// A bake's folder and published name: its format, the day it was baked",
-            "/// (`YYYY-MM-DD`, UTC) and that day's count of bakes of its kind, from 1.",
-            "pub fn version_name(format: u32, day: &str, n: u32) -> String {",
-            "    format!(\"v{format}.{day}.{n}\")",
-            "}",
-            "",
-        ]
-        .map(String::from),
-    );
+    rs.extend(["};", ""].map(String::from));
     rs.extend(
         [
             "/// The kinds a version is published for: the fields of `PUBLISHED_VERSION`,",
