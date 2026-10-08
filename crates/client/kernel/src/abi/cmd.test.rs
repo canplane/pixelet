@@ -24,6 +24,7 @@ fn every_number_is_its_major_and_minor() {
         (INPUT_RECT, Major::INPUT as u32, InputMinor::RECT as u32),
         (INPUT_POINTER, Major::INPUT as u32, InputMinor::POINTER as u32),
         (INPUT_HOLD, Major::INPUT as u32, InputMinor::HOLD as u32),
+        (INPUT_HOLD_TEXT, Major::INPUT as u32, InputMinor::HOLD_TEXT as u32),
         (INPUT_WHEEL, Major::INPUT as u32, InputMinor::WHEEL as u32),
         (INPUT_KEYS, Major::INPUT as u32, InputMinor::KEYS as u32),
         (GPU_READY, Major::GPU as u32, GpuMinor::READY as u32),

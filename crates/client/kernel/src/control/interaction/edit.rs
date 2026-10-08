@@ -3,6 +3,8 @@
 //! What an edit writes and what it reads to decide: placing, removing and
 //! carving objects, read through the objects' query and written to the store.
 
+use crate::layer::object::ext::Ext;
+use pxl_spec::cell::ext::MARKER_TEXT_CHARS;
 use pxl_spec::cell::object::MARKER;
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
@@ -56,8 +58,7 @@ pub fn objects_at(at: &Pvf3) -> Vec<Entry> {
 }
 
 pub fn get_placed_object(at: EntryAt) -> Option<Entry> {
-    let state = u32::from(cells((at.zoom(), at.at())).placed()?);
-    (!object_value_is_air(state)).then_some(Entry { zoom: at.zoom(), at: at.at(), state })
+    cells((at.zoom(), at.at())).placed().filter(|e| !object_value_is_air(e.state))
 }
 
 /// The never-written AIR entry the eraser's preview injects into the drawn
@@ -76,8 +77,8 @@ fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
 
 /// A write is made here at once and sent to be kept.
 fn submit(write: Write) {
-    apply([write]);
     repository::send(&write);
+    apply([write]);
 }
 
 /// Whether a whole-cell pick of a look only undoes a carve: the terrain must
@@ -115,8 +116,25 @@ pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Ins
     (size >= units(GROUND.cell()) && object_value_is_air(read_state(at))).then(|| World::now().grown(DecorKind::of(decor_id), at))?
 }
 
+/// The words the marker tool puts up, until the shell hands it others.
+static HELD_TEXT: Global<String> = Global::new();
+
+fn held_text() -> &'static mut String {
+    HELD_TEXT.get(|| String::from("foo"))
+}
+
+/// Words past `MARKER_TEXT_CHARS` are refused whole.
+pub fn hold_text(text: &str) -> Result<(), Errno> {
+    if text.chars().count() > MARKER_TEXT_CHARS as usize {
+        return Err(Errno::EMSGSIZE);
+    }
+    text.clone_into(held_text());
+    Ok(())
+}
+
+/// A marker carrying the words the tool holds.
 pub fn place_marker(at: &Pvf3, size: f64) {
-    write_object_value(at, size, MARKER);
+    submit(Write::at(at, size, MARKER).carrying(Ext::MarkerText(held_text().clone())));
 }
 
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
@@ -129,6 +147,7 @@ pub fn remove(at: EntryAt) {
     submit(Write {
         key: key_of::<3>(at.zoom(), at.at()),
         id: VOID,
+        ext: None,
     });
 }
 

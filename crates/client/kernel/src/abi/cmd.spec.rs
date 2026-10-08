@@ -106,10 +106,11 @@ pub enum InputMinor {
     POSE = 0x09,
     POSE_END = 0x0a,
     HOLD = 0x0b,
+    HOLD_TEXT = 0x0c,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 11] = [
+    pub const ALL: [InputMinor; 12] = [
         InputMinor::RECT,
         InputMinor::POINTER,
         InputMinor::WHEEL,
@@ -121,6 +122,7 @@ impl InputMinor {
         InputMinor::POSE,
         InputMinor::POSE_END,
         InputMinor::HOLD,
+        InputMinor::HOLD_TEXT,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -565,6 +567,8 @@ pub enum Command {
     INPUT_POINTER = 0x1102,
     /// What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer.
     INPUT_HOLD = 0x110b,
+    /// The words the marker tool puts up, sent when they change: what a marker placed from then on carries. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut.
+    INPUT_HOLD_TEXT = 0x110c,
     INPUT_WHEEL = 0x1103,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_KEYS = 0x1106,
@@ -629,7 +633,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 41] = [
+    pub const ALL: [Command; 42] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::IMAGE_DECODED,
@@ -645,6 +649,7 @@ impl Command {
         Command::INPUT_RECT,
         Command::INPUT_POINTER,
         Command::INPUT_HOLD,
+        Command::INPUT_HOLD_TEXT,
         Command::INPUT_WHEEL,
         Command::INPUT_KEYS,
         Command::GPU_READY,
@@ -1021,7 +1026,7 @@ pub struct WorldBoot<'a> {
     /// reports a failure itself (SENSOR_ORIENTATION_LOST).
     pub orientation_silence_is_loss: bool,
     /// What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
-    /// (host.json's STORAGE_KEYS), handed over unread as a process is handed its environment,
+    /// (host.json's SETTINGS_PATH), handed over unread as a process is handed its environment,
     /// which the kernel reads and from then on writes itself.
     pub settings: &'a str,
 }
@@ -1183,6 +1188,19 @@ impl InputHold {
             value: integer::<u32>(f.at(1)?.get_number()?)?,
             tier: integer::<u32>(f.at(2)?.get_number()?)?,
         })
+    }
+}
+
+/// Command::INPUT_HOLD_TEXT's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct InputHoldText<'a> {
+    pub text: &'a str,
+}
+
+impl<'a> InputHoldText<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<InputHoldText<'a>, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(InputHoldText { text: f.at(0)?.get_str_ref()? })
     }
 }
 

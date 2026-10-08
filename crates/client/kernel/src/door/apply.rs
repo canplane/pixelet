@@ -146,6 +146,11 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             camera_rehover();
             Ok(Some(0))
         }
+        Command::INPUT_HOLD_TEXT => {
+            let text = abi::InputHoldText::read(packet(pkt)?)?.text;
+            or_refuse(crate::control::interaction::edit::hold_text(text).ok(), Errno::EMSGSIZE)?;
+            Ok(Some(0))
+        }
         Command::INPUT_WHEEL => {
             camera_wheel(abi::InputWheel::read(packet(pkt)?)?.delta_y);
             Ok(Some(0))

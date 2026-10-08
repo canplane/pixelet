@@ -68,6 +68,7 @@ fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
     store.write([Write {
         key: pxl_spec::space::hierarchy::morton::key_of::<3>(side, index_of(side, &at)),
         id: state,
+        ext: None,
     }]);
 }
 

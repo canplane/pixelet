@@ -175,6 +175,10 @@
         {
           "name": "HOLD",
           "value": 11
+        },
+        {
+          "name": "HOLD_TEXT",
+          "value": 12
         }
       ]
     },
@@ -827,7 +831,7 @@
               "type": "str",
               "doc": [
                 "What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file",
-                "(host.json's STORAGE_KEYS), handed over unread as a process is handed its environment,",
+                "(host.json's SETTINGS_PATH), handed over unread as a process is handed its environment,",
                 "which the kernel reads and from then on writes itself."
               ]
             }
@@ -1017,6 +1021,19 @@
               "doc": [
                 "The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs)."
               ]
+            }
+          ]
+        },
+        {
+          "name": "INPUT_HOLD_TEXT",
+          "value": 4364,
+          "doc": [
+            "The words the marker tool puts up, sent when they change: what a marker placed from then on carries. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut."
+          ],
+          "packet": [
+            {
+              "name": "text",
+              "type": "str"
             }
           ]
         },

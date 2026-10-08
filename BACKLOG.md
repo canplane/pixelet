@@ -59,11 +59,12 @@ Nothing now.
 
 ## P2
 
-- **A marker keeps its own words.** Someone puts a marker up from the
-  drawer, and every one reads "foo": the objects' store holds an id a leaf
-  and no text. Its words come from the message input, and are kept beside
-  the entry under a new storage key, with what words someone writes in the
-  world bringing reporting and moderation nearer.
+- **A marker's words come from the message input.** A marker carries its
+  words as its leaf's extension, kept and saved with it, and the tool puts
+  up the words it holds (`INPUT_HOLD_TEXT`, within `MARKER_TEXT_CHARS`); until
+  the shell sends them, every marker says "foo". The message input sends the
+  held words, and a marker already up is worded again by the same way. What
+  words someone writes in the world brings reporting and moderation nearer.
 
 - **Terrain's lanes are one record, which keeps it from being a quadtree.**
   A tile is its ground, elevation, decks and index together

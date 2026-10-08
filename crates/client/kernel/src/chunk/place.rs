@@ -12,6 +12,8 @@ use crate::billboard::batch::BillboardBatch;
 use crate::billboard::field::billboard_instance;
 use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::chunk::Chunk;
+use crate::layer::object::ext::Ext;
+use core::hash::Hasher;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::cell::object::object_value_is_marker;
 use crate::layer::poi::{rank_of, Places, ALL_UNITS_PER_PX, MAJOR_UNITS_PER_PX};
@@ -95,8 +97,9 @@ fn shown_at(units_per_px: f64) -> Option<Shown> {
 /// it stands on, by the chunk its base is in.
 fn markers(chunk: Chunk, read_zoom: Zoom, found: &mut Vec<(Cell, Label, Cell, f64, Shown, V3)>) {
     let region = chunk.region();
-    let Some(objects) = crate::kernel().objects.read(chunk.node(), chunk.cell_zoom()).value() else { return };
-    objects.entries(&mut |e| {
+    let objects = &crate::kernel().objects;
+    let Some(cells) = objects.read(chunk.node(), chunk.cell_zoom()).value() else { return };
+    cells.entries(&mut |e| {
         if !object_value_is_marker(e.state) {
             return;
         }
@@ -106,7 +109,16 @@ fn markers(chunk: Chunk, read_zoom: Zoom, found: &mut Vec<(Cell, Label, Cell, f6
             return;
         }
         let ground = GROUND.cell_of(LEAF_ZOOM, &e.corner());
-        found.push((POI_LATTICE.cell_of(read_zoom, &ground.mid()), Label::Marker(e.id()), ground, base[2], Shown::All, base));
+        let words = match objects.ext(e) {
+            Some(Ext::MarkerText(t)) => {
+                let mut h = fnv::FnvHasher::default();
+                h.write(t.as_bytes());
+                h.finish()
+            }
+            None => 0,
+        };
+        let label = Label::Marker { at: e.id(), words };
+        found.push((POI_LATTICE.cell_of(read_zoom, &ground.mid()), label, ground, base[2], Shown::All, base));
     });
 }
 
@@ -279,7 +291,7 @@ pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
     let &(_, label, stands) = hits.iter().find(|(r, _, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y))?;
     Some(match label {
         Label::Count(..) => Went::Into(stands),
-        Label::Marker(e) => Went::Marker(e, stands),
+        Label::Marker { at, .. } => Went::Marker(at, stands),
         Label::Place { .. } => Went::To(stands),
     })
 }

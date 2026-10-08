@@ -1,5 +1,6 @@
 // pxl-kernel/chunk/place/badge.rs
 
+use crate::layer::object::ext::Ext;
 use pxl_spec::bake::constant::EntryAt;
 use std::collections::{HashMap, HashSet};
 
@@ -30,8 +31,9 @@ pub enum Label {
         tile: Tile,
         place: u32,
     },
-    /// A marker someone put up, by its entry.
-    Marker(EntryAt),
+    /// A marker someone put up, by its entry, and its words by their hash, so
+    /// words changed under one entry are another badge.
+    Marker { at: EntryAt, words: u64 },
 }
 
 impl Label {
@@ -45,20 +47,26 @@ impl Label {
         }
     }
 
-    pub fn text(self) -> String {
-        match self {
-            Label::Count(n, partial) => format!("{n}{}", if partial { "+" } else { "" }),
-            // Its words are not kept yet: every sign says the same.
-            Label::Marker(_) => String::from("foo"),
-            Label::Place { tile, place } => {
-                let full = Label::place(tile, place).name;
-                let mut shown: String = full.chars().take(SHOWN_CHARS).collect();
-                if full.chars().count() > SHOWN_CHARS {
-                    shown.push('…');
-                }
-                shown
-            }
+    /// A marker's words, empty once it has gone.
+    fn words(at: EntryAt) -> String {
+        let objects = &crate::kernel().objects;
+        match objects.placed(at.zoom(), at.at()).and_then(|e| objects.ext(&e).cloned()) {
+            Some(Ext::MarkerText(t)) => t,
+            None => String::new(),
         }
+    }
+
+    pub fn text(self) -> String {
+        let full = match self {
+            Label::Count(n, partial) => return format!("{n}{}", if partial { "+" } else { "" }),
+            Label::Marker { at, .. } => Label::words(at),
+            Label::Place { tile, place } => Label::place(tile, place).name.to_string(),
+        };
+        let mut shown: String = full.chars().take(SHOWN_CHARS).collect();
+        if full.chars().count() > SHOWN_CHARS {
+            shown.push('…');
+        }
+        shown
     }
 }
 
@@ -112,7 +120,7 @@ pub fn slot(label: Label) -> i32 {
             b.width * SHEET_SCALE,
             HEIGHT * SHEET_SCALE,
             match label {
-                Label::Count(..) | Label::Marker(_) => DrawSpec::Pill {
+                Label::Count(..) | Label::Marker { .. } => DrawSpec::Pill {
                     label: label.text(),
                     logical_w: b.width,
                 },

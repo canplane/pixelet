@@ -66,6 +66,7 @@ export const enum InputMinor {
   POSE = 0x09,
   POSE_END = 0x0a,
   HOLD = 0x0b,
+  HOLD_TEXT = 0x0c,
 }
 
 /** The device sensors' verbs. */
@@ -275,6 +276,8 @@ export const enum Command {
   INPUT_POINTER = 0x1102,
   /** What the pointer holds, sent when it changes: the tool, the cube or decor a placing tool takes, and the object size tier. The kernel keeps a cube and a decor apart, so choosing another tool forgets neither, and picks again under a hovering pointer. */
   INPUT_HOLD = 0x110b,
+  /** The words the marker tool puts up, sent when they change: what a marker placed from then on carries. Words past MARKER_TEXT_CHARS (pxl-spec cell/ext.json) are refused whole, never cut. */
+  INPUT_HOLD_TEXT = 0x110c,
   INPUT_WHEEL = 0x1103,
   /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
   INPUT_KEYS = 0x1106,
@@ -556,7 +559,7 @@ export interface WorldBoot {
    * reports a failure itself (SENSOR_ORIENTATION_LOST). */
   orientation_silence_is_loss: boolean;
   /** What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
-   * (host.json's STORAGE_KEYS), handed over unread as a process is handed its environment,
+   * (host.json's SETTINGS_PATH), handed over unread as a process is handed its environment,
    * which the kernel reads and from then on writes itself. */
   settings: string;
 }
@@ -650,6 +653,15 @@ export interface InputHold {
 
 export function encode_input_hold(p: InputHold): U8Array {
   return packet((b) => b.u32(p.tool).u32(p.value).u32(p.tier));
+}
+
+/** Command.INPUT_HOLD_TEXT's packet. */
+export interface InputHoldText {
+  text: string;
+}
+
+export function encode_input_hold_text(p: InputHoldText): U8Array {
+  return packet((b) => b.str(p.text));
 }
 
 /** Command.INPUT_WHEEL's packet. */
