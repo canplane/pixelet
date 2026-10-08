@@ -5,7 +5,7 @@
 //! across restarts until either changes, and a change starts an empty one. The
 //! Earth's picture is baked offline by pxl-tool, so it is served from that
 //! bake (`--out`), under the names the bucket holds, whichever way the rest is.
-//! `--baked` serves each kind's last bake, the version its manifest names,
+//! `--shelf` serves each kind's last bake, the version its manifest names,
 //! so a bake is looked at before anything is published.
 
 use axum::body::Bytes;
@@ -29,10 +29,12 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
+/// Where the tiles come from: the oven, baked on demand, or the shelf, the
+/// last bakes under a directory.
 enum Tiles {
-    Demand(Server),
+    Oven(Server),
     /// The directory, and each kind's version in it.
-    Baked(PathBuf, Vec<(Kind, String)>),
+    Shelf(PathBuf, Vec<(Kind, String)>),
 }
 
 struct App {
@@ -72,10 +74,10 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
     }
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
     let demand = match &app.tiles {
-        Tiles::Demand(demand) => demand,
-        Tiles::Baked(dir, versions) => {
+        Tiles::Oven(demand) => demand,
+        Tiles::Shelf(dir, versions) => {
             return match versions.iter().find(|(k, _)| *k == kind) {
-                Some((_, version)) => baked(dir, kind, version, &name).await,
+                Some((_, version)) => from_shelf(dir, kind, version, &name).await,
                 None => StatusCode::NOT_FOUND.into_response(),
             };
         }
@@ -124,13 +126,13 @@ async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name))
     if kind == EARTH {
         return earth(&app, &version, &name).await;
     }
-    let (Tiles::Baked(dir, _), Some(kind)) = (&app.tiles, Kind::parse(&kind)) else {
+    let (Tiles::Shelf(dir, _), Some(kind)) = (&app.tiles, Kind::parse(&kind)) else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    baked(dir, kind, &version, &name).await
+    from_shelf(dir, kind, &version, &name).await
 }
 
-async fn baked(dir: &std::path::Path, kind: Kind, version: &str, name: &str) -> Response {
+async fn from_shelf(dir: &std::path::Path, kind: Kind, version: &str, name: &str) -> Response {
     // On disk as in the bucket: a version's objects flat under their names.
     if name.is_empty() || name.starts_with('.') || name.contains('/') {
         return StatusCode::NOT_FOUND.into_response();
@@ -188,7 +190,7 @@ fn run() -> Result<(), String> {
     let mut cache = PathBuf::from("./cache/tile");
     // Zooms folded over the leaves: a cold tile at the top bakes 4^folds leaves.
     let mut folds: Zoom = 2;
-    let mut baked: Option<PathBuf> = None;
+    let mut shelf: Option<PathBuf> = None;
     let mut out = PathBuf::from("./out");
 
     let mut flags = Flags::of(argv);
@@ -202,20 +204,20 @@ fn run() -> Result<(), String> {
             "--workers" => workers = flags.parse()?,
             "--cache" => cache = PathBuf::from(flags.value()?),
             "--folds" => folds = flags.parse()?,
-            "--baked" => baked = Some(PathBuf::from(flags.value()?)),
+            "--shelf" => shelf = Some(PathBuf::from(flags.value()?)),
             "--out" => out = PathBuf::from(flags.value()?),
             other => return Err(format!("unknown flag: {other}")),
         }
     }
 
-    let (tiles, top_z) = match baked {
+    let (tiles, top_z) = match shelf {
         Some(dir) => {
             let versions = last_bakes(&dir);
-            (Tiles::Baked(dir, versions), PUBLISHED_TOP_ZOOM)
+            (Tiles::Shelf(dir, versions), PUBLISHED_TOP_ZOOM)
         }
         None => {
             let top_z = LEAF_ZOOM.checked_sub(folds).filter(|&z| z >= GROUND.top()).ok_or("--folds past the pyramid's top")?;
-            (Tiles::Demand(Server::open(workers, cache, top_z, limits)?), top_z)
+            (Tiles::Oven(Server::open(workers, cache, top_z, limits)?), top_z)
         }
     };
     let app = Arc::new(App { tiles, top_z, asset_dir, out });

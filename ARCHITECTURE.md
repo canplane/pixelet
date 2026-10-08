@@ -420,7 +420,7 @@ The leaves a bake works from are of one `source_id`; a leaf stage over leaves of
 
 ## The dev tile server
 
-In development the same bake runs on demand (`pxl-geo-bake demand/`), every pyramid layer the same way (`demand/pyramid.rs`): a leaf baked when it is first asked for, a tile above folded as the offline bake folds, no more than `--folds` zooms over the leaves, the one guard every layer shares. Its cache is named by `source_id` — the binary and the holdings — computed when it starts, so a cache never outlives its code or its data; since an ingest changes the holdings, its data is seen once the server is restarted. With `--baked` it serves a finished version as it is, so a bake is looked at before it is published.
+In development the same bake runs on demand (`pxl-geo-bake demand/`), every pyramid layer the same way (`demand/pyramid.rs`): a leaf baked when it is first asked for, a tile above folded as the offline bake folds, no more than `--folds` zooms over the leaves, the one guard every layer shares. Its cache is named by `source_id` — the binary and the holdings — computed when it starts, so a cache never outlives its code or its data; since an ingest changes the holdings, its data is seen once the server is restarted. With `--shelf` it serves each kind's last bake as it is, so a bake is looked at before it is published. The development tasks are named for where the tiles come from, as a bakery's bread is: `dev:oven` bakes them on demand, `dev:shelf` takes the last bakes, and `dev` has them delivered from the published deployment.
 
 ## Publishing
 

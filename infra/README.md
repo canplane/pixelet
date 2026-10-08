@@ -198,7 +198,7 @@ route that is not there. A root is reserved on the server's side because the
 app routes on paths of its own; giving the app the prefix instead would put one
 in every URL a user sees.
 
-`deno task dev:local` runs one process per root plus the tiles: pxl-geo on 3000,
+`deno task dev:oven` runs one process per root plus the tiles: pxl-geo on 3000,
 serve_tiles on 3001, pxl-api on 3002, and the dev proxy splits on the same
 prefixes the Worker does. A deployment has no tile server at all, because the
 bucket answers those two prefixes.

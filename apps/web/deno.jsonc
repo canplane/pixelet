@@ -24,12 +24,20 @@
     // database or Docker. See vite.config.ts's VITE_DEV_SOURCE comment.
     "dev": { "command": "deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
     // The same client against the servers on this machine.
-    "dev:local": { "command": "VITE_DEV_SOURCE=local deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
-    "dev:baked": { "command": "VITE_DEV_SOURCE=baked deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
+    "dev:oven": { "command": "VITE_DEV_SOURCE=oven deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
+    "dev:shelf": { "command": "VITE_DEV_SOURCE=shelf deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
 
     "build": { "command": "deno run -A --node-modules-dir=auto npm:vite build", "dependencies": ["build:wasm:published"] },
     "preview": { "command": "deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },
-    "preview:local": { "command": "VITE_DEV_SOURCE=local deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },
+    // A bundle names where its tiles come from when it is built, so each is its own build.
+    "preview:oven": {
+      "command": "VITE_DEV_SOURCE=oven deno run -A --node-modules-dir=auto npm:vite build && VITE_DEV_SOURCE=oven deno run -A --node-modules-dir=auto npm:vite preview",
+      "dependencies": ["build:wasm:published"]
+    },
+    "preview:shelf": {
+      "command": "VITE_DEV_SOURCE=shelf deno run -A --node-modules-dir=auto npm:vite build && VITE_DEV_SOURCE=shelf deno run -A --node-modules-dir=auto npm:vite preview",
+      "dependencies": ["build:wasm:published"]
+    },
 
     // Build, then publish the Worker (app + R2 tile route). Run through Deno
     // rather than npx: wrangler requires Node >=22 and the system Node may be

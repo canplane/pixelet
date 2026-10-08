@@ -226,10 +226,10 @@ that, worked back from how far each thing draws:
 
 A finished bake is on disk as the bucket holds it, so it is looked at in
 the app with nothing uploaded by serving `out/` as it is: `deno task
-dev:baked` runs the tile server with `--baked ./out`, which answers each
+dev:shelf` runs the tile server with `--shelf ./out`, which answers each
 kind from its last bake, the version `out/<kind>/manifest.json` names
-(`serve_tiles.rs` `last_bakes`), so nothing is published to look at it.
-A production bundle (`preview:baked`) still asks for the published versions.
+(`serve_tiles.rs` `last_bakes`), so nothing is published to look at it;
+`preview:shelf` is the same under a production bundle.
 
 ## POI
 

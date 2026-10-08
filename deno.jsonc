@@ -13,24 +13,26 @@
   "exclude": ["xpute/", "**/.vite/", "**/dist/", "**/node_modules/", "out/", "cache/", "infra/geo/elevation/warped/"],
 
   "tasks": {
-    // Every route is the published deployment's, so not for bake work: its tile prefix is frozen.
+    // Where the tiles come from, a bakery's three: `dev` has them delivered, every
+    // route the published deployment's, so not for bake work, its tile prefix
+    // frozen; `dev:oven` bakes each on demand; `dev:shelf` takes the last bakes
+    // under ./out. The two local ones run the three servers beside the client.
     "dev": { "command": "deno task --cwd apps/web dev", "dependencies": ["sync:build-number"] },
-    "dev:local": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
+    "dev:oven": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task dev:web:oven) & wait\"",
     // The `server` profile: a debug build's rasterizer is felt on every page.
     "dev:geo": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo -- \"$@\"' --",
     "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-api -- \"$@\"' --",
     "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --features serve --bin serve_tiles -- \"$@\"' --",
-    "dev:web": { "command": "deno task --cwd apps/web dev:local", "dependencies": ["sync:build-number"] },
-    "dev:web:baked": { "command": "deno task --cwd apps/web dev:baked", "dependencies": ["sync:build-number"] },
-    "dev:baked": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --baked ./out) & (deno task dev:web:baked) & wait\"",
+    "dev:web:oven": { "command": "deno task --cwd apps/web dev:oven", "dependencies": ["sync:build-number"] },
+    "dev:web:shelf": { "command": "deno task --cwd apps/web dev:shelf", "dependencies": ["sync:build-number"] },
+    "dev:shelf": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --shelf ./out) & (deno task dev:web:shelf) & wait\"",
     "dev:native": "deno task --cwd apps/native start",
     // Only a hand deploy writes apps/web/.build_number, so it is refreshed before vite reads it.
     "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labeled from the cached number\" >&2'",
     // Measure the client here: the dev server's unbundled modules are not what ships.
     "preview": "deno task --cwd apps/web preview",
-    "preview:local": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task preview:web) & wait\"",
-    "preview:baked": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --baked ./out) & (deno task preview:web) & wait\"",
-    "preview:web": "deno task --cwd apps/web preview:local",
+    "preview:oven": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task --cwd apps/web preview:oven) & wait\"",
+    "preview:shelf": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --shelf ./out) & (deno task --cwd apps/web preview:shelf) & wait\"",
 
     // Terrain and geocode resume; POI writes one immutable snapshot.
     "bake:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_tiles -- \"$@\"' --",
