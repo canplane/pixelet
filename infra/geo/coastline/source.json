@@ -5,9 +5,8 @@
     "page": "https://osmdata.openstreetmap.de/data/land-polygons.html",
     "license": "ODbL 1.0, © OpenStreetMap contributors"
   },
-  "table": "osm_land_polygons",
   "pin": {
     "version": "996af2fab0d242a0",
-    "accessed": "2026-10-08"
+    "accessed_at": "2026-10-08T07:14:13Z"
   }
 }

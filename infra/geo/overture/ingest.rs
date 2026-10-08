@@ -7,9 +7,9 @@ edition = "2021"
 arrow = { version = "60", default-features = false }
 parquet = { version = "60", default-features = false, features = ["arrow", "snap", "zstd"] }
 postgres = "0.19"
-pxl-geo-bake = { path = "../../../../crates/server/geo-bake" }
-pxl-spec = { path = "../../../../crates/spec" }
-xpute-core = { path = "../../../../xpute/rust/core" }
+pxl-geo-bake = { path = "../../../crates/server/geo-bake" }
+pxl-spec = { path = "../../../crates/spec" }
+xpute-core = { path = "../../../xpute/rust/core" }
 serde_json = "1"
 ---
 
@@ -32,13 +32,13 @@ serde_json = "1"
 //! each table anew from every shard, beside the live one, and swaps it in.
 //! When to run which is the user's to say: the catalog records each shard's
 //! release and when it was ingested, and decides nothing. The release is the
-//! one `metadata.json` pins, never the CLI's latest. A column a reader
+//! one `source.json` pins, never the CLI's latest. A column a reader
 //! filters on is generated from `properties`.
 //! A division names its parent, which may stand past every shard: the
 //! divisions are taken with their ancestors, each fetched by its id, so a
 //! name's chain never breaks at the coverage's edge.
 //!
-//!   ./infra/geo/overture/script/ingest.rs [--type <type>]… [--shard <name>]… [--whole]
+//!   ./infra/geo/overture/ingest.rs [--type <type>]… [--shard <name>]… [--whole]
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -129,7 +129,7 @@ const VENV: &str = "./infra/geo/overture/.venv";
 /// CLI's behaviour arrives with a commit rather than unnoticed.
 const CLI_VERSION: &str = "1.0.2";
 const EXTRACTS: &str = "./infra/geo/overture/raw";
-const METADATA: &str = "./infra/geo/overture/metadata.json";
+const SOURCE: &str = "./infra/geo/overture/source.json";
 
 /// How long the swap waits for the live table's readers, and how often it
 /// tries: waiting longer would queue every new reader behind it.
@@ -176,7 +176,7 @@ fn run() -> Result<(), String> {
     }
     let all: Vec<Shard> = Coverage::of_source()?.shards().map(Shard::of).collect();
     if let Some(n) = named.iter().find(|n| !all.iter().any(|s| s.name == **n)) {
-        return Err(format!("{n}: no shard of the coverage (infra/geo/elevation/metadata.json)"));
+        return Err(format!("{n}: no shard of the coverage (infra/geo/coverage.json)"));
     }
     if whole && !named.is_empty() {
         return Err("--whole makes each table from every shard; it takes no --shard".into());
@@ -184,7 +184,7 @@ fn run() -> Result<(), String> {
     let shards: Vec<&Shard> = all.iter().filter(|s| named.is_empty() || named.contains(&s.name)).collect();
     let mut client = Client::connect(&db_geo_url()?, NoTls).map_err(|e| e.to_string())?;
     let cli = ensure_cli()?;
-    let release = pinned_release()?;
+    let (release, accessed_at) = (pinned("version")?, pinned("accessed_at")?);
     println!("[ingest] release {release}, {} shards{}", shards.len(), if whole { ", whole" } else { "" });
     client.batch_execute(&format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{CATALOG_SQL}")).map_err(|e| e.to_string())?;
 
@@ -205,7 +205,7 @@ fn run() -> Result<(), String> {
             let fetched = ancestors(&cli, &mut client, ty, &release, !whole)?;
             println!("[ingest/{}] {fetched} ancestors past the shards", ty.table);
         }
-        let rows = if whole { build_and_swap(&mut client, ty, &shards, &release)? } else { add(&mut client, ty, &shards, &release)? };
+        let rows = if whole { build_and_swap(&mut client, ty, &shards, &release, &accessed_at)? } else { add(&mut client, ty, &shards, &release, &accessed_at)? };
         client.batch_execute(&format!("DROP TABLE {}; ANALYZE {}", staging(ty), ty.table)).map_err(|e| e.to_string())?;
         println!("[ingest/{}] {rows} features in {} shards in {:.0}s, {fetched:.0}s of it fetching", ty.table, shards.len(), started.elapsed().as_secs_f64());
     }
@@ -396,14 +396,14 @@ fn features(ty: &Type, into: &str) -> String {
 /// Each shard's row, what it says read and never decided on: the release
 /// it holds, when it was ingested, and its features. A shard ingested again
 /// replaces its row.
-fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str) -> Result<(), postgres::Error> {
+fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str, accessed_at: &str) -> Result<(), postgres::Error> {
     let counts: HashMap<String, i64> = tx.query(&format!("SELECT shard, count(*) FROM {} GROUP BY shard", staging(ty)), &[])?.iter().map(|r| (r.get(0), r.get(1))).collect();
     for s in shards {
         let count = counts.get(&s.name).copied().unwrap_or(0);
         tx.execute(
-            "INSERT INTO overture_catalog (table_name, shard, version, total_count) VALUES ($1, $2, $3, $4)
-             ON CONFLICT (shard, table_name) DO UPDATE SET version = EXCLUDED.version, total_count = EXCLUDED.total_count, imported_at = now()",
-            &[&ty.table, &s.name, &release, &count],
+            "INSERT INTO overture_catalog (table_name, shard, version, accessed_at, total_count) VALUES ($1, $2, $3, $4::text::timestamptz, $5)
+             ON CONFLICT (shard, table_name) DO UPDATE SET version = EXCLUDED.version, accessed_at = EXCLUDED.accessed_at, total_count = EXCLUDED.total_count",
+            &[&ty.table, &s.name, &release, &accessed_at, &count],
         )?;
     }
     Ok(())
@@ -412,7 +412,7 @@ fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str) ->
 /// A whole run: the table built anew beside the live one, its readers
 /// answered from the live one meanwhile, then swapped in with the catalog in
 /// one short transaction. Its indexes are built after it is filled.
-fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str) -> Result<i64, String> {
+fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str, accessed_at: &str) -> Result<i64, String> {
     let (t, next) = (ty.table, format!("{}_next", ty.table));
     let db = |e: postgres::Error| format!("{t}: {e}");
     client.batch_execute(&format!("DROP TABLE IF EXISTS {next}; {}", table(ty, &next))).map_err(db)?;
@@ -435,7 +435,7 @@ fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &s
             }
         }
         tx.execute("DELETE FROM overture_catalog WHERE table_name = $1", &[&t]).map_err(db)?;
-        catalog(&mut tx, ty, shards, release).map_err(db)?;
+        catalog(&mut tx, ty, shards, release, accessed_at).map_err(db)?;
         tx.commit().map_err(db)?;
         return Ok(rows);
     }
@@ -444,11 +444,11 @@ fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &s
 
 /// The shards added to the table as it is: a feature held already is left,
 /// with their catalog rows, in one transaction.
-fn add(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str) -> Result<i64, String> {
+fn add(client: &mut Client, ty: &Type, shards: &[&Shard], release: &str, accessed_at: &str) -> Result<i64, String> {
     let db = |e: postgres::Error| format!("{}: {e}", ty.table);
     let mut tx = client.transaction().map_err(db)?;
     let rows = tx.execute(&format!("{} ON CONFLICT (gers_id) DO NOTHING", features(ty, ty.table)), &[]).map_err(db)? as i64;
-    catalog(&mut tx, ty, shards, release).map_err(db)?;
+    catalog(&mut tx, ty, shards, release, accessed_at).map_err(db)?;
     tx.commit().map_err(db)?;
     Ok(rows)
 }
@@ -641,7 +641,7 @@ CREATE TABLE IF NOT EXISTS overture_catalog (
   table_name TEXT NOT NULL,
   shard TEXT NOT NULL,
   version TEXT NOT NULL,
-  imported_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  accessed_at TIMESTAMPTZ NOT NULL,
   total_count BIGINT NOT NULL,
   PRIMARY KEY (shard, table_name)
 );
@@ -700,19 +700,20 @@ fn ensure_cli() -> Result<PathBuf, String> {
     run_cmd(&Path::new(VENV).join("bin/pip"), &["install", "--quiet", &format!("overturemaps=={CLI_VERSION}")])?;
     Ok(cli)
 }
-/// The release `metadata.json` pins, Overture's name for its version.
-fn pinned_release() -> Result<String, String> {
-    let path = Path::new(METADATA);
+/// A field of `source.json`'s pin: the release (Overture's name for its
+/// version) and when it was taken, which the catalog repeats.
+fn pinned(field: &str) -> Result<String, String> {
+    let path = Path::new(SOURCE);
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let meta: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-    meta["pin"]["version"].as_str().map(str::to_string).ok_or_else(|| format!("{}: no pin.version", path.display()))
+    meta["pin"][field].as_str().map(str::to_string).ok_or_else(|| format!("{}: no pin.{field}", path.display()))
 }
 /// `DB_GEO_URL` from the environment, or `.env` with its `${...}` expanded.
 fn db_geo_url() -> Result<String, String> {
     if let Ok(url) = std::env::var("DB_GEO_URL") {
         return Ok(url);
     }
-    let dotenv = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../.env");
+    let dotenv = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.env");
     let text = std::fs::read_to_string(&dotenv).map_err(|_| format!("env:DB_GEO_URL:missing, and no {}", dotenv.display()))?;
     let mut vars: HashMap<&str, &str> = HashMap::new();
     for line in text.lines() {

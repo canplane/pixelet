@@ -94,7 +94,7 @@ impl Raster {
         if have != want {
             let (missing, extra) = (want.difference(&have).count(), have.difference(&want).count());
             return Err(format!(
-                "elevation lacks {missing} of the coverage's shards and holds {extra} past them: run ./infra/geo/elevation/script/setup-elevation.sh"
+                "elevation lacks {missing} of the coverage's shards and holds {extra} past them: run ./infra/geo/elevation/ingest.sh"
             ));
         }
         let rows = client

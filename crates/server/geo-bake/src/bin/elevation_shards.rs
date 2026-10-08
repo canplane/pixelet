@@ -12,7 +12,7 @@
 //! `block_m`, as the ingest finds a warped block by) and the name of the tile
 //! at `BLOCK_ZOOM` it is, which the raster keeps it under.
 //!
-//!   ./infra/geo/elevation/script/setup-elevation.sh   # reads it
+//!   ./infra/geo/elevation/ingest.sh   # reads it
 
 use std::process::ExitCode;
 
