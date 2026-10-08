@@ -430,10 +430,10 @@ export function Dock() {
                   onPress={sendMessage}
                   disabled={isSending || !fits}
                   accessibilityRole="button"
-                  accessibilityLabel={t("world.dock.send")}
-                  style={({ pressed }) => [styles.send, pressed && styles.sendPressed, !fits && styles.sendRefused]}
+                  accessibilityLabel={wording ? t("world.dock.marker_done") : t("world.dock.send")}
+                  style={({ pressed }) => [styles.send, wording && styles.confirm, pressed && styles.sendPressed, !fits && styles.sendRefused]}
                 >
-                  <Glyph glyph="arrow.up" size={chrome.glyph} weight="bold" color={color.white} />
+                  <Glyph glyph={wording ? "checkmark" : "arrow.up"} size={chrome.glyph} weight="bold" color={color.white} />
                 </Pressable>
               </Presence>
             </View>,
@@ -508,6 +508,7 @@ const styles = StyleSheet.create({
   fieldFill: { flex: 1, minWidth: 0 },
   messageInput: { width: "100%", color: LABEL.primary },
   send: { width: chrome.selection, height: chrome.selection, borderRadius: chrome.selection / 2, alignItems: "center", justifyContent: "center", backgroundColor: color.send },
+  confirm: { backgroundColor: color.confirm },
   sendPressed: { opacity: 0.7 },
   sendRefused: { opacity: disabledContent },
 
