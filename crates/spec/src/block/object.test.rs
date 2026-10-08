@@ -1,7 +1,7 @@
 // pxl-spec/block/object.test.rs
 
 use super::*;
-use crate::block::cubes::{object, sentinel};
+use crate::block::cube::{object, sentinel};
 
 #[test]
 fn every_cube_round_trips_through_its_leaf_value_and_has_a_color() {

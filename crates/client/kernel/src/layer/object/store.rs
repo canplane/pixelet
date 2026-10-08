@@ -19,7 +19,7 @@ pub use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::fold::majority;
 use pxl_spec::block::object::{cube_of, decor_id_from_num, object_value_is_decor, object_value_is_marker, object_value_is_voxel, Cube};
-use pxl_spec::block::{cubes, DecorId};
+use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::world::{node_near, wrap_index, REACH};
@@ -109,9 +109,9 @@ pub fn take_written(out: &mut Vec<Aabb>) {
     core::mem::swap(out, WRITTEN.get(Vec::new));
 }
 
-pub const VOID: u32 = cubes::sentinel::void as u32;
-pub const AIR: u32 = cubes::object::air as u32;
-pub const UNKNOWN: u32 = cubes::sentinel::unknown as u32;
+pub const VOID: u32 = cube::sentinel::void as u32;
+pub const AIR: u32 = cube::object::air as u32;
+pub const UNKNOWN: u32 = cube::sentinel::unknown as u32;
 const _: () = assert!(VOID == 0);
 
 /// What a tree's leaf holds: the catalog value, and its record's handle.

@@ -1,6 +1,6 @@
 // pxl-kernel/layer/object/store.test.rs
 
-use pxl_spec::block::cubes::Object;
+use pxl_spec::block::cube::Object;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::GROUND;
 

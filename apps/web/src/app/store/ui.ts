@@ -3,7 +3,7 @@
 import { create } from "zustand";
 
 import type { i32, u16, u32 } from "@xpute/kit/abi/word.ts";
-import { cubes } from "@/catalog/block/cube.spec.ts";
+import { cube } from "@/catalog/block/cube.spec.ts";
 import { allCubes, type Cube, decorIds } from "@/catalog/block/mod.ts";
 import { ActiveTool, Command, encode_chat_send, encode_input_marker_words } from "@/kernel/abi/cmd.spec.ts";
 import { MARKER_TEXT_CHARS } from "@/catalog/block/ext.spec.ts";
@@ -79,13 +79,13 @@ interface SwatchCue {
 
 // One per placeable genre, so a fresh hotbar hints at everything placeable; as many as the hotbar holds.
 const SEED: readonly RecentPick[] = [
-  { tool: ActiveTool.Object, cube: cubes.object.white },
-  { tool: ActiveTool.Object, cube: cubes.ground.land },
-  { tool: ActiveTool.Object, cube: cubes.ground.water },
-  { tool: ActiveTool.Object, cube: cubes.ground.building },
-  { tool: ActiveTool.Object, cube: cubes.ground.residential_road },
-  { tool: ActiveTool.Object, cube: cubes.object.red },
-  { tool: ActiveTool.Object, cube: cubes.object.blue },
+  { tool: ActiveTool.Object, cube: cube.object.white },
+  { tool: ActiveTool.Object, cube: cube.ground.land },
+  { tool: ActiveTool.Object, cube: cube.ground.water },
+  { tool: ActiveTool.Object, cube: cube.ground.building },
+  { tool: ActiveTool.Object, cube: cube.ground.residential_road },
+  { tool: ActiveTool.Object, cube: cube.object.red },
+  { tool: ActiveTool.Object, cube: cube.object.blue },
   { tool: ActiveTool.Decor, kind: decorIds[0] },
 ];
 

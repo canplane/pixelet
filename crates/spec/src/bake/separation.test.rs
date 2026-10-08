@@ -1,7 +1,7 @@
 // pxl-spec/bake/separation.test.rs
 
 use super::*;
-use crate::block::cubes::ground;
+use crate::block::cube::ground;
 use crate::procedural::{pier_stands, Frame, BEAM_PILLAR_INTERVAL_M};
 use crate::space::coord::adapter::epsg3857::u_per_m;
 
@@ -87,7 +87,7 @@ fn a_straight_flat_line_folds_to_its_ends() {
 
 #[test]
 fn each_form_is_drawn_from_its_surface() {
-    use crate::block::cubes::ground as t;
+    use crate::block::cube::ground as t;
     let over = |form: Form, top: f64| Crossing {
         low: top,
         top,

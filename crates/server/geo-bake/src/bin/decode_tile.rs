@@ -30,7 +30,7 @@ use pxl_spec::bake::separation::{Form, Separation};
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::surface::extent_of;
 use pxl_spec::block::color;
-use pxl_spec::block::cubes::{ground, sentinel, Ground};
+use pxl_spec::block::cube::{ground, sentinel, Ground};
 use pxl_spec::space::coord::zoom::idx;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::{Tile as Placed, LEAF_ZOOM};

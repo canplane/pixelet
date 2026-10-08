@@ -9,7 +9,7 @@ use std::collections::TryReserveError;
 use pxl_render::mesh::paint::terrain::sample::TileSource;
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::bake::separation::Separation;
-use pxl_spec::block::cubes::Ground;
+use pxl_spec::block::cube::Ground;
 use pxl_spec::block::decor::{Decor, DecorMeta, Orientation};
 use pxl_spec::procedural::{scatter, scatter_at, Candidate};
 use pxl_spec::space::coord::aabb::Aabb;

@@ -165,7 +165,7 @@ pub fn render_rs(rows: &[Row], pack: &Pack) -> String {
 
 #![allow(non_camel_case_types)]
 
-use crate::block::cubes;
+use crate::block::cube;
 use crate::block::object::Cube;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -253,7 +253,7 @@ pub const PACK: Pack = Pack {
     for f in &pack.faces {
         let variant = if f.group == "object" { "Object" } else { "Ground" };
         let face = f.face.member();
-        let _ = writeln!(out, "        (Cube::{variant}(cubes::{variant}::{}), CubeFace::{face}, {}),", f.ty, f.tile);
+        let _ = writeln!(out, "        (Cube::{variant}(cube::{variant}::{}), CubeFace::{face}, {}),", f.ty, f.tile);
     }
     out.push_str("    ],\n    means: &[\n");
     for m in &pack.means {

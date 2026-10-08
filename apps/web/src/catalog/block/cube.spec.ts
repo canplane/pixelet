@@ -9,7 +9,7 @@
 /** The catalog's section a placeable cube is listed under, as Carto groups the looks. */
 export type CubeSection = "landcover" | "water" | "water_features" | "buildings" | "roads" | "aeroways" | "colors";
 
-export const cubes = {
+export const cube = {
   sentinel: {
     /** nothing painted: the ground before a bake writes it, and an object cell no leaf holds */
     void: 0x00,
@@ -249,4 +249,4 @@ export const cube_section: Readonly<Record<number, CubeSection>> = {
 };
 
 /** What a cell nothing painted shows. */
-export const BASE = cubes.ground.land;
+export const BASE = cube.ground.land;

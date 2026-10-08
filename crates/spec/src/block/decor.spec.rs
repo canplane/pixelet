@@ -22,35 +22,31 @@
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
 // case them the way Rust would is to rename the protocol.
-#[allow(non_upper_case_globals, non_camel_case_types)]
-pub mod decors {
-    pub const tree: u16 = 1024;
-    pub const boat: u16 = 1025;
-    pub const car: u16 = 1026;
-    pub const train: u16 = 1027;
+#![allow(non_upper_case_globals, non_camel_case_types)]
+pub const tree: u16 = 1024;
+pub const boat: u16 = 1025;
+pub const car: u16 = 1026;
+pub const train: u16 = 1027;
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    #[repr(u16)]
-    pub enum DecorId {
-        tree = 1024,
-        boat = 1025,
-        car = 1026,
-        train = 1027,
-    }
-
-    impl DecorId {
-        /// Every decor the catalog gives out, in the JSON's own order.
-        pub const ALL: [DecorId; 4] = [DecorId::tree, DecorId::boat, DecorId::car, DecorId::train];
-
-        /// The decor a number names, or none for a number the catalog does not
-        /// give out.
-        pub fn of(value: u16) -> Option<DecorId> {
-            DecorId::ALL.into_iter().find(|t| *t as u16 == value)
-        }
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u16)]
+pub enum DecorId {
+    tree = 1024,
+    boat = 1025,
+    car = 1026,
+    train = 1027,
 }
 
-pub use decors::DecorId;
+impl DecorId {
+    /// Every decor the catalog gives out, in the JSON's own order.
+    pub const ALL: [DecorId; 4] = [DecorId::tree, DecorId::boat, DecorId::car, DecorId::train];
+
+    /// The decor a number names, or none for a number the catalog does not
+    /// give out.
+    pub fn of(value: u16) -> Option<DecorId> {
+        DecorId::ALL.into_iter().find(|t| *t as u16 == value)
+    }
+}
 
 /// How a decor the ground grows faces: any way, or along the road or rail its
 /// cell lies on.
@@ -97,7 +93,7 @@ pub const DECORS: [Decor; 4] = [
         seed: 0x07ee5eed7eec0de1,
         density: 0.04,
         orientation: Orientation::random,
-        on: &[crate::block::cubes::ground::park, crate::block::cubes::ground::forest, crate::block::cubes::ground::land],
+        on: &[crate::block::cube::ground::park, crate::block::cube::ground::forest, crate::block::cube::ground::land],
         variants: &[
             Variant {
                 model: crate::asset::ingested::Asset::decor_kenney_fantasy_town_tree_glb,
@@ -145,7 +141,7 @@ pub const DECORS: [Decor; 4] = [
         seed: 0xb0a75eed0002dec0,
         density: 0.002,
         orientation: Orientation::random,
-        on: &[crate::block::cubes::ground::water],
+        on: &[crate::block::cube::ground::water],
         variants: &[
             Variant {
                 model: crate::asset::ingested::Asset::decor_kenney_watercraft_pack_boat_row_small_glb,
@@ -175,11 +171,11 @@ pub const DECORS: [Decor; 4] = [
         density: 0.004,
         orientation: Orientation::along_transport,
         on: &[
-            crate::block::cubes::ground::motorway,
-            crate::block::cubes::ground::trunk,
-            crate::block::cubes::ground::primary,
-            crate::block::cubes::ground::secondary,
-            crate::block::cubes::ground::residential_road,
+            crate::block::cube::ground::motorway,
+            crate::block::cube::ground::trunk,
+            crate::block::cube::ground::primary,
+            crate::block::cube::ground::secondary,
+            crate::block::cube::ground::residential_road,
         ],
         variants: &[
             Variant {
@@ -213,11 +209,11 @@ pub const DECORS: [Decor; 4] = [
         density: 0.004,
         orientation: Orientation::along_transport,
         on: &[
-            crate::block::cubes::ground::tram,
-            crate::block::cubes::ground::light_rail,
-            crate::block::cubes::ground::subway,
-            crate::block::cubes::ground::monorail,
-            crate::block::cubes::ground::rail,
+            crate::block::cube::ground::tram,
+            crate::block::cube::ground::light_rail,
+            crate::block::cube::ground::subway,
+            crate::block::cube::ground::monorail,
+            crate::block::cube::ground::rail,
         ],
         variants: &[
             Variant {

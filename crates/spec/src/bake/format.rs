@@ -161,7 +161,7 @@ pub struct TerrainTile {
 
 // Made on first use: a constant array of zeros would ship in the module's data.
 static VOID_ELE: std::sync::LazyLock<Vec<i16>> = std::sync::LazyLock::new(|| vec![0; ELE_LANE]);
-static VOID_CELLS: std::sync::LazyLock<Vec<GroundCell>> = std::sync::LazyLock::new(|| vec![crate::block::cubes::sentinel::void; GROUND_LANE]);
+static VOID_CELLS: std::sync::LazyLock<Vec<GroundCell>> = std::sync::LazyLock::new(|| vec![crate::block::cube::sentinel::void; GROUND_LANE]);
 
 impl TerrainTile {
     /// Where the source has nothing at all: void cells, which give no surface,

@@ -6,7 +6,7 @@
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::bake::format::Ground;
-use pxl_spec::block::cubes::{self, ground, sentinel};
+use pxl_spec::block::cube::{self, ground, sentinel};
 use pxl_spec::block::object::{cube_id, Cube};
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
@@ -94,7 +94,7 @@ fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
     assert_eq!(access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).value().flatten(), None);
 
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cubes::Object::red));
+    let red = cube_id(Cube::Object(cube::Object::red));
     write(&mut store, [x0 + 10.0, y0 + 10.0, 5.0], OBJECT_COARSEST, red);
     let access = World::new(&residency, &store);
     assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(6.0)));
@@ -144,7 +144,7 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let top = World::new(&residency, &Store::default()).at(&point(-seam + 20.5, 100.5), LEAF_ZOOM).value().unwrap().top().unwrap();
 
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cubes::Object::red));
+    let red = cube_id(Cube::Object(cube::Object::red));
     write(&mut store, [-seam + 40.0, 100.0, top], OBJECT_COARSEST, red);
     let access = World::new(&residency, &store);
 

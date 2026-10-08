@@ -11,7 +11,7 @@
 use std::sync::LazyLock;
 
 use crate::block::color;
-use crate::block::cubes::{object, Ground, Object};
+use crate::block::cube::{object, Ground, Object};
 use crate::block::id::{Kind, SHAPE_BITS};
 use crate::block::marker::MARKER_SCALE_STEPS;
 use crate::block::DecorId;

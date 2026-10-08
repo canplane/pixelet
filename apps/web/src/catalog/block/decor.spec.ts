@@ -18,11 +18,11 @@
 // A decor thing carries `meta`, the fields its id gives it beside where it
 // stands: which variant of its kind, its heading in radians and its scale. The
 // ground evaluates them from its cell; a placed one's are the placement's.
-export const decors = {
+export const decor = {
   tree: 1024,
   boat: 1025,
   car: 1026,
   train: 1027,
 } as const satisfies Record<string, number>;
 
-export type DecorId = keyof typeof decors;
+export type DecorId = keyof typeof decor;

@@ -7,8 +7,8 @@
 
 import type { u16 } from "@xpute/kit/abi/word.ts";
 import palette from "./color.spec.ts";
-import { cube_section, cubes, type CubeSection } from "./cube.spec.ts";
-import { type DecorId, decors } from "./decor.spec.ts";
+import { cube, cube_section, type CubeSection } from "./cube.spec.ts";
+import { decor, type DecorId } from "./decor.spec.ts";
 
 /** A cube by its number in the catalog's one value space: a ground look or a placed color. */
 export type Cube = u16;
@@ -18,7 +18,7 @@ export type { CubeSection };
 /** The catalog's group a cube's name is in. */
 type Group = "ground" | "object";
 
-const GROUND: ReadonlySet<number> = new Set(Object.values(cubes.ground));
+const GROUND: ReadonlySet<number> = new Set(Object.values(cube.ground));
 
 function groupOf(cube: Cube): Group {
   return GROUND.has(cube) ? "ground" : "object";
@@ -29,7 +29,7 @@ export function cubeSection(cube: Cube): CubeSection {
   return cube_section[cube];
 }
 
-const NAME = Object.fromEntries(Object.entries(cubes).flatMap(([, values]) => Object.entries(values).map(([name, n]) => [n, name]))) as Record<number, string>;
+const NAME = Object.fromEntries(Object.entries(cube).flatMap(([, values]) => Object.entries(values).map(([name, n]) => [n, name]))) as Record<number, string>;
 
 function cubeName(cube: Cube): string {
   return NAME[cube];
@@ -46,13 +46,13 @@ export function cubeHex(cube: Cube): string | null {
 
 /** The placed colors first, then the looks in paint order. */
 export const allCubes: readonly Cube[] = [
-  ...Object.values(cubes.object).filter((n) => n !== cubes.object.air),
-  ...Object.values(cubes.ground),
+  ...Object.values(cube.object).filter((n) => n !== cube.object.air),
+  ...Object.values(cube.ground),
 ];
 
-const DECOR_NAME = Object.fromEntries(Object.entries(decors).map(([name, n]) => [n, name])) as Record<number, DecorId>;
+const DECOR_NAME = Object.fromEntries(Object.entries(decor).map(([name, n]) => [n, name])) as Record<number, DecorId>;
 
-export const decorIds: readonly u16[] = Object.values(decors).sort((a, b) => a - b);
+export const decorIds: readonly u16[] = Object.values(decor).sort((a, b) => a - b);
 
 export function decorName(kind: u16): DecorId {
   return DECOR_NAME[kind];

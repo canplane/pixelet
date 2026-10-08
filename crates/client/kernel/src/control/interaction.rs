@@ -9,7 +9,7 @@ pub mod ghost;
 pub mod pick;
 
 use pxl_spec::block::object::Cube;
-use pxl_spec::block::{cubes, DecorId};
+use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -42,7 +42,7 @@ impl Default for Holding {
     fn default() -> Holding {
         Holding {
             active_tool: ActiveTool::Pointer,
-            object_cube: Cube::Object(cubes::Object::red),
+            object_cube: Cube::Object(cube::Object::red),
             object_tier: 0,
             decor_id: DecorId::tree,
         }

@@ -3,7 +3,7 @@
 //! The object store's records as voxels of a chunk: the materials its values
 //! are drawn as, by the catalog.
 
-use pxl_spec::block::cubes;
+use pxl_spec::block::cube;
 use pxl_spec::block::object::{cube_id, decor_ids, decor_num_id, ALL_CUBES};
 
 use crate::mesh::paint::palette::rgb255;
@@ -14,7 +14,7 @@ use pxl_spec::block::object::{cube_rgb, Cube};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-const AIR: u32 = cubes::object::air as u32;
+const AIR: u32 = cube::object::air as u32;
 
 /// Decor renders as instanced geometry, not a cell.
 #[derive(Clone, Copy, PartialEq, Eq)]

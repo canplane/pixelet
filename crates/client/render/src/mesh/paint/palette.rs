@@ -5,7 +5,7 @@
 
 use pxl_spec::asset::ingested::CubeFace;
 use pxl_spec::asset::shipped_tile_mean;
-use pxl_spec::block::cubes::{Ground, Object};
+use pxl_spec::block::cube::{Ground, Object};
 use pxl_spec::block::object::cube_rgb;
 use pxl_spec::block::object::{Cube, ALL_CUBES};
 use std::sync::LazyLock;

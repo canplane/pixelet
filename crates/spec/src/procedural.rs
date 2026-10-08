@@ -11,7 +11,7 @@ use xpute_kit::math::scalar::round;
 use crate::bake::format::GroundCell;
 use crate::bake::separation::{slab_depth, Crossing, Occupies, STACKED_DECK_HEADROOM_M};
 use crate::bake::way::half_cells;
-use crate::block::cubes::Ground;
+use crate::block::cube::Ground;
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::pvf3::ivec::gather;
 use crate::space::coord::zoom::Zoom;

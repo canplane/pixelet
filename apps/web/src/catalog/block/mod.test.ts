@@ -2,7 +2,7 @@
 
 import { assert } from "@std/assert";
 
-import { cubes } from "./cube.spec.ts";
+import { cube } from "./cube.spec.ts";
 import { allCubes, cubeHex, cubeId } from "./mod.ts";
 
 Deno.test("ALL_CUBES - every cube is spelled once and has a color to swatch", () => {
@@ -13,6 +13,6 @@ Deno.test("ALL_CUBES - every cube is spelled once and has a color to swatch", ()
     seen.add(id);
     assert(cubeHex(cube) !== null, `no color for ${id}`);
   }
-  for (const name of Object.keys(cubes.ground)) assert(seen.has(`ground.${name}`), name);
+  for (const name of Object.keys(cube.ground)) assert(seen.has(`ground.${name}`), name);
   assert(!seen.has("object.air"));
 });

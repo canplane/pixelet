@@ -13,7 +13,7 @@ use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::block::ext::MARKER_TEXT_CHARS;
 use pxl_spec::block::object::{cube_id, decor_num_id, object_value_is_air, Cube};
 use pxl_spec::block::object::{object_value_is_marker, MARKER};
-use pxl_spec::block::{cubes, DecorId};
+use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::zoom::{base_of, index_of, of_side, units};
 use pxl_spec::space::hierarchy::morton::key_of;
@@ -174,7 +174,7 @@ pub fn put_marker() {
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
 /// baked terrain, which has no leaf of its own to delete.
 pub fn place_air(at: &Pvf3, size: f64) {
-    write_object_value(at, size, cubes::object::air as u32);
+    write_object_value(at, size, cube::object::air as u32);
 }
 
 pub fn remove(at: EntryAt) {

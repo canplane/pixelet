@@ -7,7 +7,7 @@
 #[path = "block/color.spec.rs"]
 pub mod color;
 #[path = "block/cube.spec.rs"]
-mod cube;
+pub mod cube;
 #[path = "block/decor.spec.rs"]
 pub mod decor;
 pub mod ext;
@@ -17,8 +17,7 @@ pub mod id;
 pub mod marker;
 pub mod object;
 
-pub use cube::cubes;
-pub use decor::{decors, DecorId};
+pub use decor::DecorId;
 
 /// A catalog color, packed `0xRRGGBB` by the generator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

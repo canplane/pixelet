@@ -9,7 +9,7 @@
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::bake::separation::{Crossing, Occupies, Separation};
 use pxl_spec::block::color;
-use pxl_spec::block::cubes::{ground, sentinel, Ground};
+use pxl_spec::block::cube::{ground, sentinel, Ground};
 use pxl_spec::block::object::Cube;
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::space::coord::adapter::epsg3857::u_per_m;
