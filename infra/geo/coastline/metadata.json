@@ -7,8 +7,7 @@
   },
   "table": "osm_land_polygons",
   "pin": {
-    "$doc": "The download the table is made from: the first 16 hex of its SHA-256, and the day osmdata built it. osmdata serves only its latest, so a newer one is taken by changing this, not by a run that happens to fetch it.",
-    "id": "996af2fab0d242a0",
-    "date": "2026-10-08"
+    "version": "996af2fab0d242a0",
+    "accessed": "2026-10-08"
   }
 }

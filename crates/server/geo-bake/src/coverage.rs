@@ -201,7 +201,7 @@ impl Overture {
         let want: BTreeSet<String> = need.iter().map(|n| n.name()).collect();
         let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
         let rows = client
-            .query(&format!("SELECT file_name, node FROM {CATALOG} WHERE file_name = ANY($1)"), &[&tables])
+            .query(&format!("SELECT table_name, shard FROM {CATALOG} WHERE table_name = ANY($1)"), &[&tables])
             .map_err(|e| format!("{CATALOG}: {e}: {INGEST}"))?;
         for &table in &tables {
             let have: BTreeSet<&str> = rows.iter().filter(|r| r.get::<_, &str>(0) == table).map(|r| r.get(1)).collect();
@@ -220,8 +220,8 @@ impl Overture {
 }
 
 /// What the geo DB holds for `reads`, which a set's manifest says it was
-/// made from: each Overture table it names by its release and counts, and
-/// the elevation.
+/// made from, each source by the version the DB records for it: each
+/// Overture table with its counts, the elevation and the coastline.
 pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Value, String> {
     let tables = tables_of(reads);
     let text = |client: &mut Client, sql: &str, params: &[&(dyn postgres::types::ToSql + Sync)]| -> Result<Vec<Vec<Option<String>>>, String> {
@@ -230,11 +230,12 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
     };
     let overture = text(
         client,
-        &format!("SELECT file_name, max(data_date), sum(total_count)::text FROM {CATALOG} WHERE file_name = ANY($1) GROUP BY file_name ORDER BY file_name"),
+        &format!("SELECT table_name, max(version), sum(total_count)::text FROM {CATALOG} WHERE table_name = ANY($1) GROUP BY table_name ORDER BY table_name"),
         &[&tables],
     )?;
-    let elevation = text(client, "SELECT shard, data_date::text, file_name, status FROM elevation_catalog ORDER BY shard", &[])?;
-    Ok(serde_json::json!({ "overture": overture, "elevation": elevation }))
+    let elevation = text(client, "SELECT DISTINCT version FROM elevation_catalog ORDER BY version", &[])?;
+    let coastline = text(client, "SELECT obj_description(to_regclass('osm_land_polygons'), 'pg_class')", &[])?;
+    Ok(serde_json::json!({ "overture": overture, "elevation": elevation, "coastline": coastline }))
 }
 
 /// `holdings`, for a set's manifest.

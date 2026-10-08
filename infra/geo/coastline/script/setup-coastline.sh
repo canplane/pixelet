@@ -27,7 +27,8 @@ psql_geo() { PGPASSWORD="$DB_GEO_PASSWORD" psql -h "$DB_GEO_HOST" -p "$DB_GEO_PO
 
 URL=$(jq -r '.provider.url' "$ROOT/metadata.json")
 TABLE=$(jq -r '.table' "$ROOT/metadata.json")
-PIN=$(jq -r '.pin.id' "$ROOT/metadata.json")
+PIN=$(jq -r '.pin.version' "$ROOT/metadata.json")
+DATE=$(jq -r '.pin.accessed' "$ROOT/metadata.json")
 ZIP="$DATA_DIR/$(basename "$URL")"
 mkdir -p "$DATA_DIR"
 hash_of() { shasum -a 256 "$1" | cut -c1-16; }
@@ -56,6 +57,7 @@ BEGIN;
 SET LOCAL lock_timeout = '30s';
 DROP TABLE IF EXISTS $TABLE;
 ALTER TABLE $NEXT RENAME TO $TABLE;
+COMMENT ON TABLE $TABLE IS '$PIN $DATE';
 DO \$\$ DECLARE i text; BEGIN
   FOR i IN SELECT indexrelid::regclass::text FROM pg_index WHERE indrelid = '$TABLE'::regclass LOOP
     IF i LIKE '${NEXT}%' THEN EXECUTE format('ALTER INDEX %I RENAME TO %I', i, '$TABLE' || substr(i, length('$NEXT') + 1)); END IF;

@@ -304,16 +304,16 @@ fn staging(ty: &Type) -> String {
 fn stage(client: &mut Client, ty: &Type, extracts: &[(PathBuf, Vec<&Shard>)]) -> Result<(), String> {
     let t = staging(ty);
     client
-        .batch_execute(&format!("DROP TABLE IF EXISTS {t}; CREATE UNLOGGED TABLE {t} (node TEXT NOT NULL, gers_id TEXT NOT NULL, properties TEXT NOT NULL, wkb BYTEA NOT NULL)"))
+        .batch_execute(&format!("DROP TABLE IF EXISTS {t}; CREATE UNLOGGED TABLE {t} (shard TEXT NOT NULL, gers_id TEXT NOT NULL, properties TEXT NOT NULL, wkb BYTEA NOT NULL)"))
         .map_err(|e| e.to_string())?;
     copy_extracts(client, &t, extracts.iter().map(|(p, s)| (p.as_path(), Some(s.as_slice()))))?;
-    client.batch_execute(&format!("CREATE INDEX ON {t} (node); CREATE INDEX ON {t} (gers_id)")).map_err(|e| e.to_string())?;
+    client.batch_execute(&format!("CREATE INDEX ON {t} (shard); CREATE INDEX ON {t} (gers_id)")).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 /// Extracts' rows into the staging table `t`, each under the shards it meets.
 fn copy_extracts<'a>(client: &mut Client, t: &str, extracts: impl Iterator<Item = (&'a Path, Option<&'a [&'a Shard]>)>) -> Result<(), String> {
-    let mut copy = BinaryCopyInWriter::new(client.copy_in(&format!("COPY {t} (gers_id, properties, wkb, node) FROM STDIN (FORMAT binary)")).map_err(|e| e.to_string())?, &[Pg::TEXT, Pg::TEXT, Pg::BYTEA, Pg::TEXT]);
+    let mut copy = BinaryCopyInWriter::new(client.copy_in(&format!("COPY {t} (gers_id, properties, wkb, shard) FROM STDIN (FORMAT binary)")).map_err(|e| e.to_string())?, &[Pg::TEXT, Pg::TEXT, Pg::BYTEA, Pg::TEXT]);
     for (extract, shards) in extracts {
         let file = std::fs::File::open(extract).map_err(|e| format!("{}: {e}", extract.display()))?;
         let reader = ParquetRecordBatchReaderBuilder::try_new(file).map_err(|e| e.to_string())?.build().map_err(|e| e.to_string())?;
@@ -397,12 +397,12 @@ fn features(ty: &Type, into: &str) -> String {
 /// it holds, when it was ingested, and its features. A shard ingested again
 /// replaces its row.
 fn catalog(tx: &mut Transaction, ty: &Type, shards: &[&Shard], release: &str) -> Result<(), postgres::Error> {
-    let counts: HashMap<String, i64> = tx.query(&format!("SELECT node, count(*) FROM {} GROUP BY node", staging(ty)), &[])?.iter().map(|r| (r.get(0), r.get(1))).collect();
+    let counts: HashMap<String, i64> = tx.query(&format!("SELECT shard, count(*) FROM {} GROUP BY shard", staging(ty)), &[])?.iter().map(|r| (r.get(0), r.get(1))).collect();
     for s in shards {
         let count = counts.get(&s.name).copied().unwrap_or(0);
         tx.execute(
-            "INSERT INTO overture_catalog (file_name, node, data_date, total_count) VALUES ($1, $2, $3, $4)
-             ON CONFLICT (node, file_name) DO UPDATE SET data_date = EXCLUDED.data_date, total_count = EXCLUDED.total_count, imported_at = now()",
+            "INSERT INTO overture_catalog (table_name, shard, version, total_count) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (shard, table_name) DO UPDATE SET version = EXCLUDED.version, total_count = EXCLUDED.total_count, imported_at = now()",
             &[&ty.table, &s.name, &release, &count],
         )?;
     }
@@ -434,7 +434,7 @@ fn build_and_swap(client: &mut Client, ty: &Type, shards: &[&Shard], release: &s
                 tx.batch_execute(&format!("ALTER INDEX {name} RENAME TO {t}{rest}")).map_err(db)?;
             }
         }
-        tx.execute("DELETE FROM overture_catalog WHERE file_name = $1", &[&t]).map_err(db)?;
+        tx.execute("DELETE FROM overture_catalog WHERE table_name = $1", &[&t]).map_err(db)?;
         catalog(&mut tx, ty, shards, release).map_err(db)?;
         tx.commit().map_err(db)?;
         return Ok(rows);
@@ -638,12 +638,12 @@ fn projected(wkb: &str) -> String {
 
 const CATALOG_SQL: &str = "
 CREATE TABLE IF NOT EXISTS overture_catalog (
-  file_name TEXT NOT NULL,
-  node TEXT NOT NULL,
-  data_date TEXT NOT NULL,
+  table_name TEXT NOT NULL,
+  shard TEXT NOT NULL,
+  version TEXT NOT NULL,
   imported_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   total_count BIGINT NOT NULL,
-  PRIMARY KEY (node, file_name)
+  PRIMARY KEY (shard, table_name)
 );
 ";
 
@@ -700,12 +700,12 @@ fn ensure_cli() -> Result<PathBuf, String> {
     run_cmd(&Path::new(VENV).join("bin/pip"), &["install", "--quiet", &format!("overturemaps=={CLI_VERSION}")])?;
     Ok(cli)
 }
-/// The release `metadata.json` pins.
+/// The release `metadata.json` pins, Overture's name for its version.
 fn pinned_release() -> Result<String, String> {
     let path = Path::new(METADATA);
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let meta: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-    meta["pin"]["release"].as_str().map(str::to_string).ok_or_else(|| format!("{}: no pin.release", path.display()))
+    meta["pin"]["version"].as_str().map(str::to_string).ok_or_else(|| format!("{}: no pin.version", path.display()))
 }
 /// `DB_GEO_URL` from the environment, or `.env` with its `${...}` expanded.
 fn db_geo_url() -> Result<String, String> {

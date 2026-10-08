@@ -1,14 +1,12 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS postgis_raster;
 
--- One row a block of the one grid, by its place on it: a block two shards'
+-- One row a block of the one grid, a tile of the pyramid at `BLOCK_ZOOM`
+-- (pxl-geo-bake elevation.rs), under that tile's name: a block two shards'
 -- aprons share is the same samples, so it is stored once.
 CREATE TABLE IF NOT EXISTS public.elevation_raster (
-    rid SERIAL PRIMARY KEY,
-    rast RASTER NOT NULL,
-    bx INTEGER NOT NULL,
-    by INTEGER NOT NULL,
-    UNIQUE (bx, by)
+    tile TEXT PRIMARY KEY,
+    rast RASTER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_elevation_raster_rast_convexhull
@@ -24,9 +22,7 @@ CREATE TABLE IF NOT EXISTS public.elevation_stage (
 -- One row a shard, written once its raster is whole.
 CREATE TABLE IF NOT EXISTS elevation_catalog (
     shard TEXT PRIMARY KEY,
-    data_date DATE NOT NULL,
-    file_name TEXT NOT NULL,
-    status VARCHAR(20) NOT NULL,
-    imported_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    version TEXT NOT NULL,
+    imported_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     total_count BIGINT NOT NULL DEFAULT 0
 );

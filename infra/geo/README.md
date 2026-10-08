@@ -60,13 +60,17 @@ the coast at bake time out of `osm_land_polygons`, and `HAS_GROUND_SQL`
 when no `overture_base_land` row or building touches its bbox and no way
 (not a ferry) comes within `DRAWN_REACH_U` of it.
 
-Each catalog keeps one row per shard: `overture_catalog` a row per table and
-shard, with its release, the code its type's rows are made by and the count
-of features the shard meets (a feature two shards meet counts in both, so a
-table's counts sum past its rows); `elevation_catalog` a row per shard, with its release.
-`read_source_catalogs()` (`bake_terrain.rs`) copies them into every baked
-version's `manifest.json`, which is how a published set says what data it was
-made from.
+Each source's version is in the DB itself, so the DB says what it holds
+without the files that filled it. `overture_catalog` has a row per table and
+shard with the Overture release as its `version` and the count of features
+the shard meets (a feature two shards meet counts in both, so a table's counts
+sum past its rows); `elevation_catalog` a row per shard with GEDTM30's
+`version`; and `osm_land_polygons`' table comment holds the land polygons'
+version, their download's hash, osmdata giving them none of its own,
+and the day it was downloaded. Each is the `pin.version` of its
+`metadata.json`, written by the run that fills the table. `holdings`
+(`pxl-geo-bake coverage.rs`) copies them into a set's `manifest.json`, which
+is how a set says what data it was made from.
 
 ### Overture Maps
 
@@ -192,13 +196,13 @@ should carry a row for each of the coverage's shards, with the release it
 was ingested from.
 
 ```sql
-SELECT file_name, count(*) AS shards, min(data_date), max(data_date), sum(total_count)
-FROM overture_catalog GROUP BY file_name ORDER BY file_name;
+SELECT table_name, count(*) AS shards, min(version), max(version), sum(total_count)
+FROM overture_catalog GROUP BY table_name ORDER BY table_name;
 ```
 
 A shard with rows but no catalog row means an ingest stopped inside it. A
-`data_date` that differs from the rest was filled from a different Overture
-release, and a bake over the set would mix them; a bake refuses both.
+`version` that differs from the rest was filled from a different Overture
+release, which a new release's whole ingest (`--whole`) replaces.
 
 After a large ingest, `VACUUM ANALYZE` — or `VACUUM FULL ANALYZE` where
 downtime is acceptable — reclaims what replacing a shard's rows leaves behind.
