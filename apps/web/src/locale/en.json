@@ -212,6 +212,7 @@
     "tabs": {
       "cube": "Cube",
       "decor": "Decor",
+      "marker": "Marker",
       "character": "Character"
     },
     "sections": {

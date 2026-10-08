@@ -157,10 +157,11 @@ function MarkerItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
 const enum DrawerTab {
   Cube = 0,
   Decor = 1,
-  Character = 2,
+  Marker = 2,
+  Character = 3,
 }
 
-/** Cube and decor picks close the sheet; character picks apply at once and leave it open. */
+/** Cube, decor and marker picks close the sheet; character picks apply at once and leave it open. */
 export function DrawerModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<DrawerTab>(DrawerTab.Cube);
@@ -215,6 +216,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                   segments={[
                     { value: DrawerTab.Cube, label: t("drawer.tabs.cube") },
                     { value: DrawerTab.Decor, label: t("drawer.tabs.decor") },
+                    { value: DrawerTab.Marker, label: t("drawer.tabs.marker") },
                     { value: DrawerTab.Character, label: t("drawer.tabs.character") },
                   ]}
                 />
@@ -235,7 +237,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                     {(cell) => kinds.map((kind) => <DecorItem key={kind} kind={kind} cell={cell} onPick={pickDecor} />)}
                   </Grid>
                 ))}
-              {tab === DrawerTab.Decor && (
+              {tab === DrawerTab.Marker && (
                 <Grid head={<SectionTitle>{t("drawer.markers")}</SectionTitle>}>
                   {(cell) => <MarkerItem cell={cell} onPick={pickMarker} />}
                 </Grid>
