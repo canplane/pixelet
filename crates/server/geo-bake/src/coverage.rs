@@ -227,10 +227,16 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
     };
     let overture = text(
         client,
-        &format!("SELECT table_name, version, accessed_at::text, sum(total_count)::text FROM {CATALOG} WHERE table_name = ANY($1) GROUP BY table_name, version, accessed_at ORDER BY table_name, version"),
+        &format!(
+            "SELECT table_name, version, accessed_at::text, sum(total_count)::text FROM {CATALOG} WHERE table_name = ANY($1) GROUP BY table_name, version, accessed_at ORDER BY table_name, version"
+        ),
         &[&tables],
     )?;
-    let elevation = text(client, "SELECT version, accessed_at::text, count(*)::text FROM elevation_catalog GROUP BY version, accessed_at ORDER BY version", &[])?;
+    let elevation = text(
+        client,
+        "SELECT version, accessed_at::text, count(*)::text FROM elevation_catalog GROUP BY version, accessed_at ORDER BY version",
+        &[],
+    )?;
     let coastline = text(client, "SELECT obj_description(to_regclass('osm_land_polygons'), 'pg_class')", &[])?;
     Ok(serde_json::json!({ "overture": overture, "elevation": elevation, "coastline": coastline }))
 }
