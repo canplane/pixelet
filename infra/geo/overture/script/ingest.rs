@@ -27,7 +27,8 @@ serde_json = "1"
 //! written from it in one transaction, its catalog rows with it, so it is
 //! whole or absent. A table holds one identity, the release and the code
 //! its type's rows are made by (`code_of`): a run of another is whole, built
-//! beside the table and swapped in. A column a reader filters on is generated from `properties`.
+//! beside the table and swapped in. The release is the one `metadata.json`
+//! pins, never the CLI's latest. A column a reader filters on is generated from `properties`.
 //! A division names its parent, which may stand past every shard: the
 //! divisions are taken with their ancestors, each fetched by its id, so a
 //! name's chain never breaks at the coverage's edge.
@@ -124,6 +125,7 @@ const VENV: &str = "./infra/geo/overture/.venv";
 /// CLI's behaviour arrives with a commit rather than unnoticed.
 const CLI_VERSION: &str = "1.0.2";
 const EXTRACTS: &str = "./infra/geo/overture/raw";
+const METADATA: &str = "./infra/geo/overture/metadata.json";
 
 /// How long the swap waits for the live table's readers, and how often it
 /// tries: waiting longer would queue every new reader behind it.
@@ -164,7 +166,7 @@ fn run() -> Result<(), String> {
     let shards: Vec<Shard> = Coverage::of_source()?.shards().map(Shard::of).collect();
     let mut client = Client::connect(&db_geo_url()?, NoTls).map_err(|e| e.to_string())?;
     let cli = ensure_cli()?;
-    let release = release(&cli)?;
+    let release = pinned_release()?;
     println!("[ingest] release {release}, {} shards", shards.len());
     client.batch_execute(&format!("CREATE EXTENSION IF NOT EXISTS postgis;\nCREATE EXTENSION IF NOT EXISTS pg_trgm;\n{CATALOG_SQL}")).map_err(|e| e.to_string())?;
     if !keyed(&mut client, "overture_catalog", &["node", "file_name"])? {
@@ -211,27 +213,6 @@ fn run() -> Result<(), String> {
             if whole { ", whole" } else { "" },
             started.elapsed().as_secs_f64()
         );
-    }
-    retire(&mut client)
-}
-
-/// A table the catalog names and no type does, left by a rename or a type
-/// taken out, dropped with its catalog rows: the change that retired it
-/// moved its readers off it, so nothing reads it now.
-fn retire(client: &mut Client) -> Result<(), String> {
-    let named: Vec<&str> = TYPES.iter().map(|t| t.table).collect();
-    let retired: Vec<String> = client
-        .query("SELECT DISTINCT file_name FROM overture_catalog WHERE NOT file_name = ANY($1)", &[&named])
-        .map_err(|e| e.to_string())?
-        .iter()
-        .map(|r| r.get(0))
-        .collect();
-    for t in retired {
-        let mut tx = client.transaction().map_err(|e| e.to_string())?;
-        tx.batch_execute(&format!("DROP TABLE IF EXISTS {t}")).map_err(|e| format!("{t}: {e}"))?;
-        tx.execute("DELETE FROM overture_catalog WHERE file_name = $1", &[&t]).map_err(|e| format!("{t}: {e}"))?;
-        tx.commit().map_err(|e| e.to_string())?;
-        println!("[ingest/{t}] no type's table: dropped");
     }
     Ok(())
 }
@@ -752,10 +733,12 @@ fn ensure_cli() -> Result<PathBuf, String> {
     run_cmd(&Path::new(VENV).join("bin/pip"), &["install", "--quiet", &format!("overturemaps=={CLI_VERSION}")])?;
     Ok(cli)
 }
-/// `overturemaps releases latest`, the snapshot's own date.
-fn release(cli: &Path) -> Result<String, String> {
-    let out = overture(cli, &["releases", "latest"])?;
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+/// The release `metadata.json` pins.
+fn pinned_release() -> Result<String, String> {
+    let path = Path::new(METADATA);
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let meta: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    meta["pin"]["release"].as_str().map(str::to_string).ok_or_else(|| format!("{}: no pin.release", path.display()))
 }
 /// `DB_GEO_URL` from the environment, or `.env` with its `${...}` expanded.
 fn db_geo_url() -> Result<String, String> {
