@@ -244,8 +244,10 @@ impl Overture {
 }
 
 /// What the geo DB holds for `reads`, the one description of a bake's source:
-/// each Overture table it names, the elevation and the coastline. A manifest
-/// records it and the dev cache is named by it; an ingest changes it.
+/// each Overture table it names by its identity, release and code, and its
+/// counts, the elevation and the coastline. A manifest records it and the
+/// dev cache is named by it; an ingest that changes a table changes it, and
+/// one that writes the same table again does not.
 pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Value, String> {
     let tables = tables_of(reads);
     let text = |client: &mut Client, sql: &str, params: &[&(dyn postgres::types::ToSql + Sync)]| -> Result<Vec<Vec<Option<String>>>, String> {
@@ -254,10 +256,10 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
     };
     let overture = text(
         client,
-        &format!("SELECT file_name, max(data_date), max(imported_at)::text, sum(total_count)::text FROM {CATALOG} WHERE file_name = ANY($1) GROUP BY file_name ORDER BY file_name"),
+        &format!("SELECT file_name, max(data_date), string_agg(DISTINCT code, ','), sum(total_count)::text FROM {CATALOG} WHERE file_name = ANY($1) GROUP BY file_name ORDER BY file_name"),
         &[&tables],
     )?;
-    let elevation = text(client, "SELECT shard, data_date::text, file_name, status, imported_at::text FROM elevation_catalog ORDER BY shard", &[])?;
+    let elevation = text(client, "SELECT shard, data_date::text, file_name, status FROM elevation_catalog ORDER BY shard", &[])?;
     // The coastline keeps no catalog; its import makes the table anew.
     let coastline = text(client, "SELECT pg_relation_filenode(to_regclass('osm_land_polygons'))::text", &[])?;
     Ok(serde_json::json!({ "overture": overture, "elevation": elevation, "coastline": coastline }))
