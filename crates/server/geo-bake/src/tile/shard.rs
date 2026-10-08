@@ -14,8 +14,8 @@
 //!   that folded to none;
 //! - `commit`, only once folded, turns `fold.done` into `commit.done`, moves
 //!   what is staged into the set and takes away what each `.done` lists,
-//!   each `.done` last. A commit begun is finished before a leaf or a fold
-//!   runs, which would otherwise fold from a set half moved.
+//!   each `.done` last. While a commit is begun, a leaf or a fold is
+//!   refused: it would fold from a set half moved.
 
 use std::collections::HashSet;
 use std::fs;
@@ -109,7 +109,7 @@ impl Stage {
     pub fn leaf<L: Layer>(&self, shard: Node, fill: impl FnOnce(&TileSet) -> Result<(), String>) -> Result<(), String> {
         let at = shard_tile(shard);
         fs::create_dir_all(&self.stage.root).map_err(|e| io(&self.stage.root, e))?;
-        self.finish_commit::<L>()?;
+        self.not_committing()?;
         self.remove_done(&shard.name())?;
         self.clear_fold(L::LEAF)?;
         let under = |set: &TileSet| -> Result<Vec<Tile>, String> { Ok(set.by_zoom()?.remove(&L::LEAF).unwrap_or_default().into_iter().filter(|&p| ancestor(p, SHARD_ZOOM) == at).collect()) };
@@ -124,7 +124,7 @@ impl Stage {
 
     /// Folds again what the whole shards change.
     pub fn fold<L: Layer>(&self, absent: &impl Absent<L>, workers: usize) -> Result<(), String> {
-        self.finish_commit::<L>()?;
+        self.not_committing()?;
         self.clear_fold(L::LEAF)?;
         let whole = self.whole()?;
         let tiles: HashSet<Tile> = whole.iter().copied().map(shard_tile).collect();
@@ -165,11 +165,14 @@ impl Stage {
         self.finish_commit::<L>()
     }
 
-    /// The commit begun, carried to its end; nothing where none was begun.
-    fn finish_commit<L: Layer>(&self) -> Result<(), String> {
-        if !self.done(COMMIT).exists() {
-            return Ok(());
+    fn not_committing(&self) -> Result<(), String> {
+        match self.done(COMMIT).exists() {
+            true => Err(format!("{}: a commit is begun; finish it with --stage commit", self.stage.root.display())),
+            false => Ok(()),
         }
+    }
+
+    fn finish_commit<L: Layer>(&self) -> Result<(), String> {
         fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
         let staged = self.stage.by_zoom()?;
         let put = |p: Tile| fs::rename(self.stage.path(p), self.set.path(p)).map_err(|e| io(&self.stage.path(p), e));
