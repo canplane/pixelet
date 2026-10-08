@@ -225,8 +225,8 @@
       "nature": "Nature",
       "vehicle": "Vehicles"
     },
-    "billboards": "Billboards",
-    "billboard": "Billboard",
+    "markers": "Markers",
+    "marker": "Marker",
     "character": {
       "person_label": "Character",
       "female_label": "Female",

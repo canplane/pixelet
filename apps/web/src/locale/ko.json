@@ -143,8 +143,8 @@
       "nature": "자연",
       "vehicle": "탈것"
     },
-    "billboards": "빌보드",
-    "billboard": "빌보드",
+    "markers": "마커",
+    "marker": "마커",
     "character": {
       "person_label": "캐릭터",
       "female_label": "여성",

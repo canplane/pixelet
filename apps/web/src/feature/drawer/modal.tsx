@@ -146,7 +146,7 @@ function BillboardItem({ cell, onPick }: { cell: f64; onPick: () => void }) {
   const active = useKernel(({ holding: h }) => h.tool === ActiveTool.Billboard);
 
   return (
-    <Item label={t("drawer.billboard")} active={active} cell={cell} onPress={onPick}>
+    <Item label={t("drawer.marker")} active={active} cell={cell} onPress={onPick}>
       <View style={[styles.decor, { width: itemOf(cell), height: itemOf(cell) }, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
         <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
       </View>
@@ -236,7 +236,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                   </Grid>
                 ))}
               {tab === DrawerTab.Decor && (
-                <Grid head={<SectionTitle>{t("drawer.billboards")}</SectionTitle>}>
+                <Grid head={<SectionTitle>{t("drawer.markers")}</SectionTitle>}>
                   {(cell) => <BillboardItem cell={cell} onPick={pickBillboard} />}
                 </Grid>
               )}
