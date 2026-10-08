@@ -121,8 +121,8 @@ impl Query for World<'_> {
 
 /// What the objects hold over a ground cell, as the composer reads them: at
 /// a leaf's cells whether anything is held, over a fold what it folds to.
-pub enum Over {
-    Leaf { held: bool },
+pub enum Held {
+    Leaf { any: bool },
     Folded(Option<u32>),
 }
 
@@ -130,9 +130,9 @@ pub enum Over {
 /// so it is neither drawn nor struck: at a leaf's cells anything held does,
 /// air included, so erasing a grown tree is placing air over it; over a fold
 /// only a fill does.
-pub fn covers(over: Over) -> bool {
-    match over {
-        Over::Leaf { held } => held,
-        Over::Folded(state) => state.is_some_and(|s| s != AIR),
+pub fn covers(held: Held) -> bool {
+    match held {
+        Held::Leaf { any } => any,
+        Held::Folded(state) => state.is_some_and(|s| s != AIR),
     }
 }
