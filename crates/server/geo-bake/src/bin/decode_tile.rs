@@ -1,8 +1,8 @@
 // pxl-geo-bake/bin/decode_tile.rs
 
 //! A baked terrain tile read back the way the kernel reads it, checked
-//! against the bake's contract. A byte that is no look draws as unknown
-//! ground, so it is checked here. Run `--all` after
+//! against the bake's contract. A byte that is no look draws nothing, so
+//! one is a fault unless it is the unknown land past the coverage. Run `--all` after
 //! `deno task bake:tiles`; one tile also writes PNGs for the eye.
 //!
 //!   decode_tile 12720250262323200                # one leaf: summary + PNGs
@@ -29,8 +29,11 @@ use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::surface::extent_of;
 use pxl_spec::cell::color;
-use pxl_spec::cell::cube_types::{ground, Ground};
-use pxl_spec::space::layer::lattice::TILE_CELLS;
+use pxl_geo_bake::coverage::Coverage;
+use pxl_spec::cell::cube_types::{ground, sentinel, Ground};
+use pxl_spec::space::coord::zoom::idx;
+use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
+use pxl_spec::space::layer::tile::{Tile as Placed, LEAF_ZOOM};
 use xpute_core::math::scalar::round;
 use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
@@ -79,7 +82,8 @@ struct Summary {
     faults: Vec<String>,
 }
 
-fn summarize(tile: &Tile) -> Summary {
+/// `at`: where the tile lies, which says which of its cells are past the coverage.
+fn summarize(tile: &Tile, at: Option<Placed>) -> Summary {
     let (min, max) = tile.ele.iter().fold((i16::MAX, i16::MIN), |(lo, hi), &h| (lo.min(h), hi.max(h)));
     let mean = tile.ele.iter().map(|&h| h as f64).sum::<f64>() / tile.ele.len() as f64;
     let mut counts = BTreeMap::new();
@@ -87,7 +91,18 @@ fn summarize(tile: &Tile) -> Summary {
         *counts.entry(cell).or_insert(0) += 1;
     }
     let mut faults = Vec::new();
-    let past: Vec<String> = counts.iter().filter(|(&c, _)| Ground::of(c).is_none()).map(|(c, n)| format!("{c}×{n}")).collect();
+    let coverage = Coverage::of_source().ok();
+    let past_coverage = |i: usize| match (at, &coverage) {
+        (Some(p), Some(c)) => !c.contains(idx(LEAF_ZOOM, GROUND.cell_at(p, i as u32).base().i)),
+        _ => false,
+    };
+    let mut stray = BTreeMap::new();
+    for (i, &cell) in tile.cells.iter().enumerate() {
+        if Ground::of(cell).is_none() && !(cell == sentinel::unknown && past_coverage(i)) {
+            *stray.entry(cell).or_insert(0u32) += 1;
+        }
+    }
+    let past: Vec<String> = stray.iter().map(|(c, n)| format!("{c}×{n}")).collect();
     if !past.is_empty() {
         faults.push(format!("byte(s) that are no look — {}", past.join(", ")));
     }
@@ -216,7 +231,8 @@ fn stored_tiles(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
         let path = entry?.path();
         if path.is_dir() {
             stored_tiles(&path, out)?;
-        } else if !matches!(path.extension().and_then(|e| e.to_str()), Some("part" | "empty")) {
+        // `_built`, `_snapshot`: a version's records about itself, no tile.
+        } else if !matches!(path.extension().and_then(|e| e.to_str()), Some("part" | "empty")) && !path.file_name().is_some_and(|n| n.to_string_lossy().starts_with('_')) {
             out.push(path);
         }
     }
@@ -238,7 +254,7 @@ fn check_all(tiles: &Path) -> ExitCode {
         let name = path.strip_prefix(tiles).unwrap_or(path).display().to_string();
         match read_tile(path).and_then(|pkt| decode(&pkt)) {
             Ok(tile) => {
-                let s = summarize(&tile);
+                let s = summarize(&tile, path.file_name().and_then(|n| Placed::of_name(&n.to_string_lossy())));
                 if !s.faults.is_empty() {
                     bad.push(format!("{name}: {}", s.faults.join("; ")));
                 }
@@ -262,7 +278,7 @@ fn check_all(tiles: &Path) -> ExitCode {
 
 fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     let tile = decode(&read_tile(path)?)?;
-    let s = summarize(&tile);
+    let s = summarize(&tile, path.file_name().and_then(|n| Placed::of_name(&n.to_string_lossy())));
     let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
     print_summary(&name, &s);
     print_decks(&tile.decks);
