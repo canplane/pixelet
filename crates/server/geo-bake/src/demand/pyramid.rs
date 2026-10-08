@@ -5,7 +5,7 @@
 
 use super::job::{self, Job, Runner};
 use super::{Dataset, Failure, Kind};
-use crate::pyramid::{fold_stored, Absent, Layer, TileSet};
+use crate::pyramid::{fold_stored, Absent, Base, TileSet};
 use crate::util::{pack, Level};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::Tile;
@@ -52,7 +52,7 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, as
     })
 }
 
-pub(super) fn execute<L: Layer>(p: Tile, cache: &Path, out: &Path, leaf: impl FnOnce() -> Result<Option<L>, String>, absent: &impl Absent<L>) -> Result<(), String> {
+pub(super) fn execute<L: Base>(p: Tile, cache: &Path, out: &Path, leaf: impl FnOnce() -> Result<Option<L>, String>, absent: &impl Absent<L>) -> Result<(), String> {
     let tile = if p.zoom == L::LEAF { leaf()? } else { fold_stored(&TileSet::new(cache), p, absent)? };
     let packet = tile.map(|tile| pack(&tile.encode()?, Level::Live).map_err(|e| e.to_string())).transpose()?;
     job::write_packet(out, packet.as_deref())

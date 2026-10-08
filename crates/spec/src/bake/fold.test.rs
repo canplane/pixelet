@@ -2,7 +2,7 @@
 
 use super::*;
 
-use crate::cell::cube_types::ground;
+use crate::block::cubes::ground;
 use crate::space::layer::tile::{neighborhood, Tile, LEAF_ZOOM};
 
 const SPAN: usize = TILE_CELLS as usize;

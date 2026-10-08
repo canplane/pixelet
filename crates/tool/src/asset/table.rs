@@ -78,7 +78,7 @@ pub fn faces(slots: &[Slot], groups: &[(String, Vec<String>)]) -> Result<Vec<Til
             }
         }
         if out.len() == before {
-            return Err(format!("the manifest's {slot:?} is no cube type in spec/spec/cell/cube_type.json"));
+            return Err(format!("the manifest's {slot:?} is no cube in spec/spec/block/cube.json"));
         }
     }
     Ok(out)
@@ -165,8 +165,8 @@ pub fn render_rs(rows: &[Row], pack: &Pack) -> String {
 
 #![allow(non_camel_case_types)]
 
-use crate::cell::cube_types;
-use crate::cell::object::PlaceableCube;
+use crate::block::cubes;
+use crate::block::object::Cube;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]
@@ -234,7 +234,7 @@ pub struct Pack {
     pub bytes: u64,
     pub cell: u32,
     pub columns: u32,
-    pub tiles: &'static [(PlaceableCube, CubeFace, u32)],
+    pub tiles: &'static [(Cube, CubeFace, u32)],
     /// What each tile reads as from far enough away that the tile itself is
     /// gone: its own mean color, taken in linear light. A mesh that
     /// summarizes a patch of ground takes its color from here rather than
@@ -253,7 +253,7 @@ pub const PACK: Pack = Pack {
     for f in &pack.faces {
         let variant = if f.group == "object" { "Object" } else { "Ground" };
         let face = f.face.member();
-        let _ = writeln!(out, "        (PlaceableCube::{variant}(cube_types::{variant}::{}), CubeFace::{face}, {}),", f.ty, f.tile);
+        let _ = writeln!(out, "        (Cube::{variant}(cubes::{variant}::{}), CubeFace::{face}, {}),", f.ty, f.tile);
     }
     out.push_str("    ],\n    means: &[\n");
     for m in &pack.means {

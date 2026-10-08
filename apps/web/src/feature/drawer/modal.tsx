@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { f64, u8 } from "@xpute/kit/abi/word.ts";
-import { decorKinds, decorSection, type PlaceableCube, placeableCubeId, placeableCubes, placeableCubeSection } from "@/catalog/cell/mod.ts";
+import { allCubes, type Cube, cubeId, cubeSection, decorIds, decorSection } from "@/catalog/block/mod.ts";
 
 import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { useKernel } from "@/kernel/snapshot.ts";
@@ -17,7 +17,7 @@ import { Segmented } from "@platform/segmented.tsx";
 import { chrome, color, hairline, textStyle } from "@/shared/ui/theme.ts";
 import { SectionTitle } from "@/shared/ui/section-title.tsx";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
-import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
+import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/block/swatch.tsx";
 import { LABEL } from "@platform/palette.ts";
 
 /** Each section's items, in the catalog's order. */
@@ -26,8 +26,8 @@ function sectioned<S, T>(items: readonly T[], sectionOf: (item: T) => S): Map<S,
   for (const item of items) sections.set(sectionOf(item), [...(sections.get(sectionOf(item)) ?? []), item]);
   return sections;
 }
-const SECTIONS = sectioned(placeableCubes, placeableCubeSection);
-const DECOR_SECTIONS = sectioned(decorKinds, decorSection);
+const SECTIONS = sectioned(allCubes, cubeSection);
+const DECOR_SECTIONS = sectioned(decorIds, decorSection);
 
 // A press lands on 44 at least (decision/20260928-three-sizes-of-a-control.md); a circle cut a block's texture away, so a rounded square.
 const GRID_GAP = 4;
@@ -116,7 +116,7 @@ function NameTip({ named, sheetHeight }: { named: Named; sheetHeight: f64 }) {
   );
 }
 
-function CubeItem({ cube, cell, onPick }: { cube: PlaceableCube; cell: f64; onPick: (cube: PlaceableCube) => void }) {
+function CubeItem({ cube, cell, onPick }: { cube: Cube; cell: f64; onPick: (cube: Cube) => void }) {
   const { t } = useTranslation();
   const active = useInHand({ tool: ActiveTool.Object, cube });
 
@@ -188,7 +188,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
     },
   }), []);
 
-  function pickCube(cube: PlaceableCube): void {
+  function pickCube(cube: Cube): void {
     selectCube(cube);
     onClose();
   }
@@ -227,7 +227,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
               {tab === DrawerTab.Cube &&
                 [...SECTIONS].map(([section, cubes]) => (
                   <Grid key={section} head={<SectionTitle>{t(`drawer.sections.cube.${section}`)}</SectionTitle>}>
-                    {(cell) => cubes.map((cube) => <CubeItem key={placeableCubeId(cube)} cube={cube} cell={cell} onPick={pickCube} />)}
+                    {(cell) => cubes.map((cube) => <CubeItem key={cubeId(cube)} cube={cube} cell={cell} onPick={pickCube} />)}
                   </Grid>
                 ))}
 

@@ -34,24 +34,21 @@ pub fn unpack_sub_cell_size(packed: u8) -> f64 {
     }
 }
 
-pub struct MaterialClasses;
+/// Which side of the world a cell is from: the base's ground, or a placed object.
+pub struct Side;
 
-impl MaterialClasses {
-    pub const AIR: u8 = 0;
-    pub const LAND: u8 = 1;
-    pub const WATER: u8 = 2;
-    pub const TRANSPORT: u8 = 3;
-    pub const STRUCTURE: u8 = 4;
+impl Side {
+    pub const BASE: u8 = 1;
     /// Exempt from hiding its neighbors' faces, and drawn with its bottom face.
-    pub const OBJECT: u8 = 5;
+    pub const OBJECT: u8 = 2;
 }
 
-/// A cell's material word, `0xCC_RRGGBB`: its class, then its color.
-pub fn pack_material(class: u8, [r, g, b]: [u8; 3]) -> u32 {
-    u32::from_be_bytes([class, r, g, b])
+/// A cell's material word, `0xSS_RRGGBB`: its side, then its color.
+pub fn pack_material(side: u8, [r, g, b]: [u8; 3]) -> u32 {
+    u32::from_be_bytes([side, r, g, b])
 }
 
 pub fn unpack_material(word: u32) -> (u8, [u8; 3]) {
-    let [class, r, g, b] = word.to_be_bytes();
-    (class, [r, g, b])
+    let [side, r, g, b] = word.to_be_bytes();
+    (side, [r, g, b])
 }

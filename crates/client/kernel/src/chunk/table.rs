@@ -52,7 +52,7 @@ use xpute_kit::status::errno::Errno;
 use crate::chunk::domain::{self, Domain};
 use crate::chunk::Chunk;
 use crate::io::demand::Order;
-use crate::layer::Layer as _;
+use crate::layer::Base as _;
 use pxl_spec::bake::format::TerrainTile;
 
 /// `.fixed.mounts`, handed in at boot.

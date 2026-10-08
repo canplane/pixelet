@@ -8,7 +8,7 @@ use crate::billboard::sheet::billboard_sheet;
 use crate::control::camera::controller;
 use crate::io::failure::Outcome;
 use crate::io::request::{counts, credits};
-use crate::layer::Layer as _;
+use crate::layer::Base as _;
 use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
 use crate::profiler::block::{FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};

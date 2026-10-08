@@ -16,11 +16,11 @@ use xpute_guest::global::Global;
 use crate::io::demand::{Category, Phases};
 use crate::io::failure::Failure;
 use crate::layer::residency::Residency;
-use crate::layer::{Asks, Layer};
+use crate::layer::{Asks, Base};
 
 static DIVISION: Global<Residency<DivisionTile>> = Global::new();
 
-impl Layer for DivisionTile {
+impl Base for DivisionTile {
     const CATEGORY: Category = Category::division;
     const LATTICE: Lattice = GROUND;
     const ASKS: Asks = Asks::Line;

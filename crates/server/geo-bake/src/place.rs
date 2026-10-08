@@ -6,14 +6,14 @@ use crate::coverage::Coverage;
 use postgres::Client;
 use pxl_geo_spec::overture::properties::CATEGORY_SQL;
 use pxl_spec::bake::format::Occupancy;
-use pxl_spec::bake::place_tile::{self, fold_place, kind_of, Place, PlaceTile};
+use pxl_spec::bake::place_tile::{self, category_of, fold_place, Place, PlaceTile};
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::zoom::idx;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-impl crate::pyramid::Layer for PlaceTile {
+impl crate::pyramid::Base for PlaceTile {
     fn encode(&self) -> Result<Vec<u8>, String> {
         place_tile::encode(self).map_err(|e| e.to_string())
     }
@@ -53,15 +53,15 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Tile) -> Result<
         if Tile::over(within.zoom, leaf.tile) != within || !coverage.contains(leaf.tile) {
             continue;
         }
-        let kind = kind_of(row.get::<_, Option<&str>>(3).unwrap_or(""));
-        places.entry(leaf.tile).or_default().push((at, row.get(2), kind, row.get(4)));
+        let category = category_of(row.get::<_, Option<&str>>(3).unwrap_or(""));
+        places.entry(leaf.tile).or_default().push((at, row.get(2), category, row.get(4)));
     }
     Ok(places
         .into_iter()
         .map(|(at, p)| {
             (
                 at,
-                PlaceTile::leaf(Tile::new(LEAF_ZOOM, at), p.iter().map(|(point, name, kind, id)| (*point, Place { name, kind: *kind, id }))),
+                PlaceTile::leaf(Tile::new(LEAF_ZOOM, at), p.iter().map(|(point, name, category, id)| (*point, Place { name, category: *category, id }))),
             )
         })
         .filter(|(_, tile)| !tile.is_empty())

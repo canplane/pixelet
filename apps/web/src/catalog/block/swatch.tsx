@@ -1,22 +1,22 @@
-// @pxl/web/catalog/cell/swatch.tsx
+// @pxl/web/catalog/block/swatch.tsx
 
 import { Image, type StyleProp, View, type ViewStyle } from "react-native";
 
 import type { u8 } from "@xpute/kit/abi/word.ts";
-import type { DecorId } from "@/catalog/cell/decor.spec.ts";
-import { decorName, type PlaceableCube, placeableCubeHex, placeableCubeId } from "@/catalog/cell/mod.ts";
+import type { DecorId } from "@/catalog/block/decor.spec.ts";
+import { type Cube, cubeHex, cubeId, decorName } from "@/catalog/block/mod.ts";
 import { shippedTopTextureKey } from "@/catalog/asset/texture.ts";
 import type { GlyphName } from "@platform/icon.tsx";
 import { ORIGIN } from "@platform/origin.ts";
 import { assetUrl } from "@/config/route.ts";
 
-function placeableCubeTextureUrl(cube: PlaceableCube): string | null {
-  const key = shippedTopTextureKey(placeableCubeId(cube));
+function cubeTextureUrl(cube: Cube): string | null {
+  const key = shippedTopTextureKey(cubeId(cube));
   return key ? `${ORIGIN}${assetUrl(key)}` : null;
 }
 
 interface CubeSwatchProps {
-  cube: PlaceableCube;
+  cube: Cube;
   size: number;
   radius: number;
   style?: StyleProp<ViewStyle>;
@@ -24,7 +24,7 @@ interface CubeSwatchProps {
 
 export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
   const box = { width: size, height: size, borderRadius: radius, overflow: "hidden" as const };
-  const textureUrl = placeableCubeTextureUrl(cube);
+  const textureUrl = cubeTextureUrl(cube);
   if (textureUrl) {
     return (
       <View style={[box, style]}>
@@ -32,7 +32,7 @@ export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
       </View>
     );
   }
-  return <View style={[box, { backgroundColor: placeableCubeHex(cube) ?? undefined }, style]} />;
+  return <View style={[box, { backgroundColor: cubeHex(cube) ?? undefined }, style]} />;
 }
 
 const DECOR_GLYPH: Record<DecorId, GlyphName> = {
@@ -46,8 +46,8 @@ export function decorGlyph(kind: u8): GlyphName {
   return DECOR_GLYPH[decorName(kind)];
 }
 
-export function cubeLabel(t: (key: string) => string, cube: PlaceableCube): string {
-  return t(`blocks.cube.${placeableCubeId(cube)}`);
+export function cubeLabel(t: (key: string) => string, cube: Cube): string {
+  return t(`blocks.cube.${cubeId(cube)}`);
 }
 
 export function decorLabel(t: (key: string) => string, kind: u8): string {

@@ -16,6 +16,7 @@ struct Field {
     optional: bool,
     #[serde(default)]
     list: bool,
+    #[serde(rename = "$doc")]
     doc: Option<Vec<String>>,
 }
 
@@ -23,6 +24,7 @@ struct Field {
 struct Member {
     name: String,
     value: u32,
+    #[serde(rename = "$doc")]
     doc: Option<Vec<String>>,
     packet: Option<Vec<Field>>,
     signal: Option<Vec<Field>>,
@@ -43,6 +45,7 @@ enum Entry {
 #[derive(Deserialize)]
 struct Enum {
     name: String,
+    #[serde(rename = "$doc")]
     doc: Option<Vec<String>>,
     format: String,
     default: Option<String>,
@@ -60,12 +63,14 @@ struct Extern {
 #[derive(Deserialize)]
 struct Record {
     name: String,
+    #[serde(rename = "$doc")]
     doc: Option<Vec<String>>,
     fields: Vec<Field>,
 }
 
 #[derive(Deserialize)]
 struct Spec {
+    #[serde(rename = "$doc")]
     doc: Vec<String>,
     base: Option<String>,
     program_major: Option<u32>,

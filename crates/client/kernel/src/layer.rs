@@ -36,7 +36,7 @@ pub enum Asks {
     View,
 }
 
-pub trait Layer: Clone + 'static {
+pub trait Base: Clone + 'static {
     const CATEGORY: Category;
 
     /// Which of its children are tiles of their own, as the bake wrote it.
@@ -45,7 +45,7 @@ pub trait Layer: Clone + 'static {
     /// Its tiles' cells, which say what of the grid a tile at each zoom draws.
     const LATTICE: Lattice;
 
-    /// The zoom its tiles are made at, as the bake's `Layer::LEAF`.
+    /// The zoom its tiles are made at, as the bake's `Base::LEAF`.
     const LEAF: Zoom = LEAF_ZOOM;
 
     /// What it asks of the view; its residency is sized so.

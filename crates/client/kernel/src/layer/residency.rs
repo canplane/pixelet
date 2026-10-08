@@ -23,7 +23,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use floor::{Fallback, Floor};
 
 use crate::io::demand::{Ask, Why};
-use crate::layer::{Asks, Layer};
+use crate::layer::{Asks, Base};
 
 /// Only the eye. Another point observer would add its own misses.
 const OBSERVERS: u32 = 1;
@@ -71,7 +71,7 @@ impl<L> Entry<L> {
     }
 }
 
-pub struct Residency<L: Layer> {
+pub struct Residency<L: Base> {
     tiles: HashMap<Tile, Entry<L>, FnvBuildHasher>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
@@ -86,8 +86,8 @@ pub struct Residency<L: Layer> {
 }
 
 /// What a layer's residency holds at once, from what it asks for. A layer
-/// holds only what it asks for (`Layer::ASKS`).
-impl<L: Layer> Residency<L> {
+/// holds only what it asks for (`Base::ASKS`).
+impl<L: Base> Residency<L> {
     /// The zooms the layer's pyramid holds, its leaves to its lattice's top.
     pub const ZOOMS: u32 = (L::LEAF - L::LATTICE.top() + 1) as u32;
 
@@ -133,7 +133,7 @@ impl<L: Layer> Residency<L> {
     const SAFE: () = assert!(Self::FRAMES >= Self::HARD_TILES + Self::WORKSPACE, "safety: no frame for a tile nothing holds hard to land in");
 }
 
-impl<L: Layer> Default for Residency<L> {
+impl<L: Base> Default for Residency<L> {
     fn default() -> Self {
         let () = Self::SAFE;
         Residency {
@@ -201,7 +201,7 @@ impl Line {
     }
 }
 
-impl<L: Layer> Residency<L> {
+impl<L: Base> Residency<L> {
     fn entry(&self, p: Tile) -> Option<&Entry<L>> {
         self.tiles.get(&p)
     }

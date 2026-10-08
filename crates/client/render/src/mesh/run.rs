@@ -33,7 +33,7 @@ struct Run {
     r: u8,
     g: u8,
     b: u8,
-    material_class: u8,
+    side: u8,
 }
 
 pub struct RunWriter {
@@ -128,7 +128,7 @@ impl RunWriter {
             at = at.add(len);
             core::slice::from_raw_parts_mut(p, len)
         };
-        let (r, g, b, class) = (lane(n), lane(n), lane(n), lane(n));
+        let (r, g, b, side) = (lane(n), lane(n), lane(n), lane(n));
         let (ox, oy, oz, size) = (lane(n), lane(n), lane(n), lane(n));
         for (i, run) in self.runs.iter().enumerate() {
             z0[i] = run.z0 as u32;
@@ -137,7 +137,7 @@ impl RunWriter {
             r[i] = run.r;
             g[i] = run.g;
             b[i] = run.b;
-            class[i] = run.material_class;
+            side[i] = run.side;
             // A written run fills its cells; only a summary shrinks one.
             (ox[i], oy[i], oz[i], size[i]) = (0, 0, 0, SUB_CELL_NONE);
         }
@@ -158,7 +158,7 @@ impl RunWriter {
 }
 
 fn run_of(z0: i32, z1: i32, material: u32, layer_idx: u8) -> Run {
-    let (material_class, [r, g, b]) = unpack_material(material);
+    let (side, [r, g, b]) = unpack_material(material);
     Run {
         z0,
         z1,
@@ -166,7 +166,7 @@ fn run_of(z0: i32, z1: i32, material: u32, layer_idx: u8) -> Run {
         r,
         g,
         b,
-        material_class,
+        side,
     }
 }
 
@@ -183,7 +183,7 @@ pub struct RunSet<'a> {
     pub r: &'a [u8],
     pub g: &'a [u8],
     pub b: &'a [u8],
-    pub material_class: &'a [u8],
+    pub side: &'a [u8],
     pub sub_ox: &'a [u8],
     pub sub_oy: &'a [u8],
     pub sub_oz: &'a [u8],
@@ -236,7 +236,7 @@ impl<'a> RunSet<'a> {
             r: lane(),
             g: lane(),
             b: lane(),
-            material_class: lane(),
+            side: lane(),
             sub_ox: lane(),
             sub_oy: lane(),
             sub_oz: lane(),
@@ -256,7 +256,7 @@ pub struct OwnedRunSet {
     pub r: Vec<u8>,
     pub g: Vec<u8>,
     pub b: Vec<u8>,
-    pub material_class: Vec<u8>,
+    pub side: Vec<u8>,
     pub sub_ox: Vec<u8>,
     pub sub_oy: Vec<u8>,
     pub sub_oz: Vec<u8>,
@@ -273,7 +273,7 @@ impl OwnedRunSet {
             &mut self.r,
             &mut self.g,
             &mut self.b,
-            &mut self.material_class,
+            &mut self.side,
             &mut self.sub_ox,
             &mut self.sub_oy,
             &mut self.sub_oz,
@@ -304,7 +304,7 @@ impl OwnedRunSet {
                 self.r.push(set.r[i]);
                 self.g.push(set.g[i]);
                 self.b.push(set.b[i]);
-                self.material_class.push(set.material_class[i]);
+                self.side.push(set.side[i]);
                 self.sub_ox.push(set.sub_ox[i]);
                 self.sub_oy.push(set.sub_oy[i]);
                 self.sub_oz.push(set.sub_oz[i]);
@@ -323,7 +323,7 @@ impl OwnedRunSet {
             &mut self.r,
             &mut self.g,
             &mut self.b,
-            &mut self.material_class,
+            &mut self.side,
             &mut self.sub_ox,
             &mut self.sub_oy,
             &mut self.sub_oz,
@@ -346,7 +346,7 @@ impl OwnedRunSet {
             r: &self.r,
             g: &self.g,
             b: &self.b,
-            material_class: &self.material_class,
+            side: &self.side,
             sub_ox: &self.sub_ox,
             sub_oy: &self.sub_oy,
             sub_oz: &self.sub_oz,

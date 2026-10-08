@@ -1,24 +1,24 @@
-// pxl-spec/cell.rs
+// pxl-spec/block.rs
 
-//! The cell model: the generated tables — colors, cubes, cube types, decor,
-//! their types — and `object`, where a cell becomes the value the object
-//! store keeps.
+//! The block catalog: the generated tables — the ids' kinds, the cubes and
+//! their colors, the decors, the marker, what an id carries beyond itself —
+//! and `object`, where a block becomes the value the object store keeps.
 
-#[path = "cell/color.spec.rs"]
+#[path = "block/color.spec.rs"]
 pub mod color;
-#[path = "cell/cube_type.spec.rs"]
-mod cube_type;
-#[path = "cell/decor.spec.rs"]
+#[path = "block/cube.spec.rs"]
+mod cube;
+#[path = "block/decor.spec.rs"]
 pub mod decor;
 pub mod ext;
-#[path = "cell/id.spec.rs"]
+#[path = "block/id.spec.rs"]
 pub mod id;
-#[path = "cell/marker.spec.rs"]
+#[path = "block/marker.spec.rs"]
 pub mod marker;
 pub mod object;
 
-pub use cube_type::{cube_types, Kind};
-pub use decor::{decor_types, DecorId};
+pub use cube::cubes;
+pub use decor::{decors, DecorId};
 
 /// A catalog color, packed `0xRRGGBB` by the generator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,10 +40,10 @@ impl decor::Variant {
     }
 }
 
-impl decor::DecorKind {
+impl decor::Decor {
     /// What a placed one is stored as.
     pub const fn value(&self) -> u16 {
-        self.decor as u16
+        self.id as u16
     }
 
     pub const fn variant_count(&self) -> u32 {
@@ -60,15 +60,15 @@ impl decor::DecorKind {
         self.variants.iter().map(decor::Variant::extent).fold(0.0, largest)
     }
 
-    /// Where its variants are numbered from: the variants of the kinds before it.
+    /// Where its variants are numbered from: the variants of the decors before it.
     pub fn first_group(&self) -> u32 {
-        decor::KINDS.iter().take_while(|k| k.decor != self.decor).map(|k| k.variant_count()).sum()
+        decor::DECORS.iter().take_while(|d| d.id != self.id).map(|d| d.variant_count()).sum()
     }
 
-    /// The generator writes one a decor, so every decor has its kind.
-    pub fn of(decor: DecorId) -> &'static decor::DecorKind {
+    /// The generator writes one entry a decor, so every id has one.
+    pub fn of(id: DecorId) -> &'static decor::Decor {
         use xpute_kit::status::bug::OrBug;
-        decor::KINDS.iter().find(|k| k.decor == decor).or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE)
+        decor::DECORS.iter().find(|d| d.id == id).or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE)
     }
 }
 

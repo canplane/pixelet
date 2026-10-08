@@ -11,7 +11,7 @@ use xpute_kit::math::scalar::round;
 use crate::look::color::{linear, srgb};
 use crate::mesh::paint::palette::layer_mean;
 use crate::mesh::run::{OwnedRunSet, RunSet, COL_SPAN};
-use crate::mesh::word::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, MaterialClasses, NO_LAYER, SUB_CELL_NONE};
+use crate::mesh::word::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, Side, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::{grow, Refused};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use xpute_kit::status::bug::OrBug;
@@ -745,7 +745,7 @@ impl BakeContext {
         let (mut run_z0, run_z1) = (set.z0[i], set.z1[i]);
         // Ground is solid under its surface: the column stops at the chunk's floor
         // only to save runs, and read from there a coarse sea cell was a thousandth full.
-        if i == set.start[col as usize] as usize && set.material_class[i] != MaterialClasses::OBJECT {
+        if i == set.start[col as usize] as usize && set.side[i] != Side::OBJECT {
             run_z0 = run_z0.div_euclid(bucket) * bucket;
         }
         // With the pack drawn a far patch shows its layer's mean color; with it off,
@@ -759,7 +759,7 @@ impl BakeContext {
             // A sub-cell thing: volume the fraction cubed, each face the fraction squared, none hidden.
             let idx = self.find_or_create_bucket(start, cnt, run_z0.div_euclid(bucket));
             let acc = &mut self.buckets[idx as usize];
-            acc.ground |= set.material_class[i] != MaterialClasses::OBJECT;
+            acc.ground |= set.side[i] != Side::OBJECT;
             acc.add(frac * frac * frac * cell as f64, FULL_FACE_CNT as f64 * frac * frac, rgb);
             return cnt.max(idx - start + 1);
         }
@@ -770,7 +770,7 @@ impl BakeContext {
             let idx = self.find_or_create_bucket(start, cnt, bz);
             cnt = cnt.max(idx - start + 1);
             let acc = &mut self.buckets[idx as usize];
-            acc.ground |= set.material_class[i] != MaterialClasses::OBJECT;
+            acc.ground |= set.side[i] != Side::OBJECT;
             acc.add((hi - lo + 1) as f64, exposed_faces(set, col, i, lo, hi), rgb);
         }
         cnt
@@ -830,7 +830,7 @@ impl BakeContext {
                 co.g.push(rgb[1]);
                 co.b.push(rgb[2]);
                 co.layer_taps.push(taps);
-                co.material_class.push(MaterialClasses::LAND);
+                co.side.push(Side::BASE);
                 co.sub_s.push(SUB_CELL_NONE);
                 for lane in [&mut co.sub_ox, &mut co.sub_oy, &mut co.sub_oz] {
                     lane.push(0);
@@ -842,10 +842,10 @@ impl BakeContext {
                 continue;
             }
             // A placed-things box hides none of its neighbors' faces and shows its underside.
-            let class = if acc.ground { MaterialClasses::LAND } else { MaterialClasses::OBJECT };
+            let side = if acc.ground { Side::BASE } else { Side::OBJECT };
             let co = &mut self.coarse;
             if let Some(o) = open.filter(|_| inset.is_none() && bucket_lo == last_top + 1) {
-                if [co.r[o], co.g[o], co.b[o]] == rgb && co.layer_taps[o] == taps && co.sub_s[o] == SUB_CELL_NONE && co.material_class[o] == class {
+                if [co.r[o], co.g[o], co.b[o]] == rgb && co.layer_taps[o] == taps && co.sub_s[o] == SUB_CELL_NONE && co.side[o] == side {
                     co.z1[o] = bucket_hi;
                     last_top = bucket_hi;
                     continue;
@@ -858,7 +858,7 @@ impl BakeContext {
             co.g.push(rgb[1]);
             co.b.push(rgb[2]);
             co.layer_taps.push(taps);
-            co.material_class.push(class);
+            co.side.push(side);
             let (offset, scale) = inset.unwrap_or((0, 0));
             co.sub_s.push(if inset.is_none() { SUB_CELL_NONE } else { scale.max(1) });
             co.sub_ox.push(offset);
@@ -1007,7 +1007,7 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
         if covered_to >= z1 {
             rel |= ABUTS_SIDE;
         }
-        if r_z0 <= z0 && r_z1 >= z1 && set.material_class[i] != MaterialClasses::OBJECT {
+        if r_z0 <= z0 && r_z1 >= z1 && set.side[i] != Side::OBJECT {
             rel |= HIDES_SIDE;
         }
         if r_z0 <= above && r_z1 >= above {
@@ -1055,7 +1055,7 @@ fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
     let mask_all = if run_include_bottom(set, col as usize, i) { ALL_FACES } else { OPEN_BOTTOM_FACES };
     if set.sub_s[i] != SUB_CELL_NONE {
         // A coarse box is the ground itself shrunk, so its underside is more ground.
-        let under = if set.material_class[i] == MaterialClasses::OBJECT { 0 } else { UNDER_AS_TOP };
+        let under = if set.side[i] == Side::OBJECT { 0 } else { UNDER_AS_TOP };
         return mask_all | ALL_CREASES | under;
     }
     let mut mask = mask_all;
@@ -1120,7 +1120,7 @@ fn runs_match(set: &RunSet, a: usize, b: usize) -> bool {
         && set.g[a] == set.g[b]
         && set.b[a] == set.b[b]
         && set.layer_taps[a] == set.layer_taps[b]
-        && set.material_class[a] == set.material_class[b]
+        && set.side[a] == set.side[b]
         && set.sub_s[a] == SUB_CELL_NONE
         && set.sub_s[b] == SUB_CELL_NONE
 }

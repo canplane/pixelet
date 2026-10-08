@@ -18,14 +18,14 @@ use crate::io::failure::Failure;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::layer::terrain::fixed::RANGE;
 use crate::layer::terrain::fixed::{coarse_off, ele_off, extent_off, ground_off, separation_off, COARSE_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES, SEPARATION_LANE_BYTES};
-use crate::layer::Layer;
+use crate::layer::Base;
 use pxl_spec::bake::format::Occupancy;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
 static TERRAIN: Global<Residency<TerrainTile>> = Global::new();
 
-impl Layer for TerrainTile {
+impl Base for TerrainTile {
     const CATEGORY: Category = Category::terrain;
     const LATTICE: Lattice = GROUND;
 

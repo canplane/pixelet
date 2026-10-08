@@ -7,7 +7,7 @@
 #[path = "turn/step.spec.rs"]
 pub mod spec;
 
-use crate::layer::Layer as _;
+use crate::layer::Base as _;
 use pxl_spec::space::coord::aabb::Aabb;
 use spec::{EffectName, StepName};
 use xpute_guest::sched::edge::{notified, Notify};

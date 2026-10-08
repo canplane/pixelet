@@ -4,7 +4,7 @@
 //! only when changed) and the commands it applies to the stores.
 
 use crate::view::demand::Observed as _;
-use pxl_spec::cell::object::{decor_num_id, placeable_cube_num_id};
+use pxl_spec::block::object::{cube_id, decor_num_id};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use xpute_kit::wire::xtp::PacketWriter;
@@ -93,7 +93,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         },
         holding: HoldingState {
             tool: held.active_tool,
-            cube: placeable_cube_num_id(held.object_cube),
+            cube: cube_id(held.object_cube),
             decor: decor_num_id(held.decor_id),
             tier: held.object_tier,
             marker: waiting,

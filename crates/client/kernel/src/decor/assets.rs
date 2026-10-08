@@ -1,6 +1,6 @@
 // pxl-kernel/decor/assets.rs
 
-//! Every decor kind's loaded models. A model is registered with the scheduler
+//! Every decor's loaded models. A model is registered with the scheduler
 //! as it arrives, so the pick (`decor/strike.rs`) and the renderer read the
 //! same mesh. A skin is the load cache's (`load_image`), asked of it where read.
 
@@ -11,26 +11,26 @@ use crate::io::host::heap_stat;
 use crate::io::load::{load_failed, load_gltf, load_image, take_settled, Load};
 use crate::model::asset::register_model;
 use crate::sched::edge::{request_world_tick, world_edge};
-use pxl_spec::cell::decor::{DecorKind, KINDS};
+use pxl_spec::block::decor::{Decor, DECORS};
 use xpute_guest::global::Global;
 
 #[derive(Clone)]
-pub struct KindAssets {
-    pub kind: &'static DecorKind,
+pub struct DecorAssets {
+    pub decor: &'static Decor,
     /// None while it loads.
     pub models: Vec<Option<u32>>,
 }
 
-impl KindAssets {
+impl DecorAssets {
     /// The shell's image handle for a variant's skin; None while it loads.
     pub fn skin(&self, variant: usize) -> Option<u32> {
-        load_image(Load::Asset(self.kind.variants.get(variant)?.skin))
+        load_image(Load::Asset(self.decor.variants.get(variant)?.skin))
     }
 }
 
 struct Store {
-    /// In `KINDS` order, written in place as assets arrive.
-    entries: [KindAssets; 4],
+    /// In `DECORS` order, written in place as assets arrive.
+    entries: [DecorAssets; 4],
     /// The heap's release count when it last refused a model: not retried until
     /// a block is given back.
     refused: Option<u32>,
@@ -41,10 +41,10 @@ static STORE: Global<Store> = Global::new();
 /// One per asset, since an arrival settles every variant naming it.
 pub const MODELS_MAX: usize = pxl_spec::asset::ingested::Asset::ALL.len();
 
-/// Two kinds may name the same model; both reach one object.
-fn settle(entries: &mut [KindAssets], asset: Asset, model: u32) {
+/// Two decors may name the same model; both reach one object.
+fn settle(entries: &mut [DecorAssets], asset: Asset, model: u32) {
     for entry in entries {
-        for (v, variant) in entry.kind.variants.iter().enumerate() {
+        for (v, variant) in entry.decor.variants.iter().enumerate() {
             if variant.model == asset {
                 entry.models[v] = Some(model);
             }
@@ -55,12 +55,12 @@ fn settle(entries: &mut [KindAssets], asset: Asset, model: u32) {
 
 fn store() -> &'static mut Store {
     STORE.get(|| {
-        let entry = |kind: &'static DecorKind| KindAssets {
-            kind,
-            models: vec![None; kind.variants.len()],
+        let entry = |decor: &'static Decor| DecorAssets {
+            decor,
+            models: vec![None; decor.variants.len()],
         };
         Store {
-            entries: KINDS.each_ref().map(entry),
+            entries: DECORS.each_ref().map(entry),
             refused: None,
         }
     })
@@ -88,8 +88,8 @@ pub async fn decor_asset_task() {
     loop {
         let mut refused = None;
         for b in 0..store().entries.len() {
-            let kind = store().entries[b].kind;
-            for (v, variant) in kind.variants.iter().enumerate() {
+            let decor = store().entries[b].decor;
+            for (v, variant) in decor.variants.iter().enumerate() {
                 yield_if_spent(world_edge).await;
                 let s = store();
                 let model = Load::Asset(variant.model);
@@ -111,10 +111,10 @@ pub async fn decor_asset_task() {
 }
 
 /// A variant still in flight reads as None.
-pub fn kind_assets() -> &'static [KindAssets] {
+pub fn decor_assets() -> &'static [DecorAssets] {
     &store().entries
 }
 
-pub fn decor_assets_for(kind: &DecorKind) -> Option<&'static KindAssets> {
-    kind_assets().iter().find(|entry| entry.kind.decor == kind.decor)
+pub fn decor_assets_for(decor: &Decor) -> Option<&'static DecorAssets> {
+    decor_assets().iter().find(|entry| entry.decor.id == decor.id)
 }

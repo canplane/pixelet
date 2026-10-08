@@ -14,7 +14,7 @@ use pxl_render::mesh::run::APRON;
 
 use crate::chunk::Chunk as PyramidChunk;
 use crate::layer::terrain::Source;
-use crate::layer::Layer as _;
+use crate::layer::Base as _;
 use crate::layer::{Answer, Query};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;

@@ -1,5 +1,5 @@
 {
-  "doc": [
+  "$doc": [
     "Every program's commands, by number (kit abi/cmd: `major << 8 | minor`), and the",
     "packet each carries — an XTP branch whose children are its fields, in order. A",
     "command with no fields carries no packet. The majors below PROGRAM_MAJOR are xpute's;",
@@ -14,7 +14,7 @@
   "enums": [
     {
       "name": "Major",
-      "doc": ["What a command is about."],
+      "$doc": ["What a command is about."],
       "format": "hex2",
       "entries": [
         { "name": "NOP", "value": 0 },
@@ -23,7 +23,7 @@
     },
     {
       "name": "SysMinor",
-      "doc": ["The system calls' answers (ipc/sys.json)."],
+      "$doc": ["The system calls' answers (ipc/sys.json)."],
       "format": "hex2",
       "entries": [
         { "name": "OPENED", "value": 1 }
@@ -31,19 +31,19 @@
     },
     {
       "name": "Command",
-      "doc": ["Every program's commands."],
+      "$doc": ["Every program's commands."],
       "format": "hex4",
       "entries": [
         {
           "name": "NOP",
           "value": 0,
-          "doc": ["Replies with its packet's value, or 0 where it has none — the rings' own test."],
+          "$doc": ["Replies with its packet's value, or 0 where it has none — the rings' own test."],
           "packet": [{ "name": "value", "type": "u32" }]
         },
         {
           "name": "SYS_OPENED",
           "value": 257,
-          "doc": [
+          "$doc": [
             "An OPENAT answered: the file's size, or -errno — ENOENT where there is no such file.",
             "Never sent for a descriptor already closed."
           ],
@@ -53,7 +53,7 @@
             {
               "name": "detail",
               "type": "u32",
-              "doc": ["Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on."]
+              "$doc": ["Whatever number the host refused with — for HTTP its status — kept for a reader to print and for nothing to branch on."]
             }
           ]
         }

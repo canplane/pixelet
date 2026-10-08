@@ -7,7 +7,7 @@
 //! the fallback's tiles and a destination's, the best reason per tile.
 //! Nothing drawn enters them but what the turn hands in: the goal the chunks
 //! last published and the quality's τ, decided first. Where a tile marks a
-//! child as no tile (`Layer::occupancy`), its ground is the tile's and the
+//! child as no tile (`Base::occupancy`), its ground is the tile's and the
 //! child is never asked for.
 
 use pxl_spec::bake::earth_tile::EARTH_REACH;
@@ -19,7 +19,7 @@ use crate::io::demand::Category;
 use crate::io::fetch::{answer_settled, body, next_answered, release, Answered};
 use crate::io::request::attempt_of;
 use crate::layer::earth::{self, Earth};
-use crate::layer::{Asks, Layer};
+use crate::layer::{Asks, Base};
 use crate::sched::edge::world_edge;
 use pxl_spec::bake::division_tile::DivisionTile;
 use xpute_guest::mem::heap::Block;
@@ -43,7 +43,7 @@ use crate::view::sight::Footprint;
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// A layer as the view asks of it: its demand, held beside its records.
-pub trait Observed: Layer {
+pub trait Observed: Base {
     fn demand() -> &'static mut Demand<Self>;
 
     /// How far from the eye the layer draws anything; past it nothing of it
@@ -178,7 +178,7 @@ impl<L: Observed> Demand<L> {
         self.asks.keys().all(|&p| L::residency().has_answer(p))
     }
 
-    /// No object for `p`: the tile over it says its ground; at the source's top, `Layer::empty`.
+    /// No object for `p`: the tile over it says its ground; at the source's top, `Base::empty`.
     pub fn absent(&mut self, p: Tile) {
         let top = L::TOP.or(floor::top()).unwrap_or(L::LATTICE.top());
         match L::empty() {

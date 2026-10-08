@@ -4,7 +4,7 @@ use super::{file, json_str, line_comments, packed, read, rs_doc, Output};
 
 pub fn published_outputs() -> Result<Vec<Output>, String> {
     let spec = read("spec/spec/bake/published.json")?;
-    let doc = spec.lines_at("doc").unwrap_or_default();
+    let doc = spec.lines_at("$doc").unwrap_or_default();
     let kinds: Vec<(&str, &str)> = spec
         .get("PUBLISHED_VERSION")
         .map(|p| p.entries().iter().map(|(k, v)| (k.as_str(), v.str().unwrap_or_default())).collect())
@@ -169,7 +169,7 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
         .collect();
     // A kind is a half-word on the wire, and 0 is none.
     if kinds.len() >= u16::MAX as usize {
-        return Err(format!("{cat_json}: {} kinds do not fit a half-word beside none", kinds.len()));
+        return Err(format!("{cat_json}: {} categories do not fit a half-word beside none", kinds.len()));
     }
     let rows = theme.get("THEME").ok_or(format!("{theme_json}: no THEME"))?;
     if let Some((k, _)) = rows.named().find(|(k, _)| !kinds.contains(k)) {

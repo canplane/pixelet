@@ -25,9 +25,9 @@ import { openModal } from "@/app/modal.tsx";
 import { cancelMarker, chatFits, DockMode, draftMarkerWords, holdTier, holdTool, markerTextFits, putMarker, useInHand, useUiStore } from "@/app/store/ui.ts";
 import { kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
-import { type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
+import { type Cube, cubeId } from "@/catalog/block/mod.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
-import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
+import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/block/swatch.tsx";
 
 const PEEK_PX = 10;
 
@@ -185,7 +185,7 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
   return responder.current.panHandlers;
 }
 
-function SwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<SizeGesture, "tap"> }) {
+function SwatchButton({ cube, sizes }: { cube: Cube; sizes: Omit<SizeGesture, "tap"> }) {
   const { t } = useTranslation();
   const selectCube = useUiStore.getState().selectCube;
   const selected = useInHand({ tool: ActiveTool.Object, cube });
@@ -455,7 +455,7 @@ export function Dock() {
               >
                 {recentPicks.map((pick) =>
                   pick.tool === ActiveTool.Object
-                    ? <SwatchButton key={placeableCubeId(pick.cube)} cube={pick.cube} sizes={sizes} />
+                    ? <SwatchButton key={cubeId(pick.cube)} cube={pick.cube} sizes={sizes} />
                     : pick.tool === ActiveTool.Decor
                     ? <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
                     : <MarkerButton key="marker" />

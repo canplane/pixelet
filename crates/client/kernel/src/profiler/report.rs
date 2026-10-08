@@ -12,7 +12,7 @@ use xpute_kit::math::scalar::round;
 use crate::chunk::table::Census;
 use crate::io::request::pending_count;
 use crate::kernel;
-use crate::layer::{Layer, Query};
+use crate::layer::{Base, Query};
 use crate::mem::MB;
 use crate::profiler::frame::{CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample, TurnSample, ViewSample, WorkSample};
 use crate::profiler::record::{profiler_record_frame, profiler_recording, profiler_take_rings};

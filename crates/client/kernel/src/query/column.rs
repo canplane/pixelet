@@ -8,7 +8,7 @@ use crate::layer::Query;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::fold::majority;
 use pxl_spec::bake::separation::Occupies;
-use pxl_spec::cell::object::object_value_is_decor;
+use pxl_spec::block::object::object_value_is_decor;
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::space::coord::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::tree::child_of;

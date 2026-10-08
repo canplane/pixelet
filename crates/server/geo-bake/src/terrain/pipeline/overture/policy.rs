@@ -8,7 +8,7 @@
 //! draws no fill for paints nothing, and the land under it shows.
 
 use pxl_spec::bake::format::GroundCell;
-use pxl_spec::cell::cube_types::ground as g;
+use pxl_spec::block::cubes::ground as g;
 use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
 use crate::segment::Segment;

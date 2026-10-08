@@ -8,10 +8,9 @@
 
 use pxl_spec::bake::format::GroundCell;
 use pxl_spec::bake::separation::{Crossing, Occupies, Separation};
-use pxl_spec::cell::color;
-use pxl_spec::cell::cube_types::{ground, sentinel, Ground};
-use pxl_spec::cell::object::PlaceableCube;
-use pxl_spec::cell::Kind;
+use pxl_spec::block::color;
+use pxl_spec::block::cubes::{ground, sentinel, Ground};
+use pxl_spec::block::object::Cube;
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::space::coord::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::tree::{ancestor_of, offset_in};
@@ -21,7 +20,7 @@ use crate::mesh::paint::palette::rgb255;
 use crate::mesh::paint::palette::LAYER_IDX;
 use crate::mesh::paint::terrain::elevation::ground_ele_at;
 use crate::mesh::run::{APRON, COL_SPAN};
-use crate::mesh::word::{pack_material, MaterialClasses, NO_LAYER};
+use crate::mesh::word::{pack_material, Side, NO_LAYER};
 use crate::mesh::{try_push, Refused};
 use std::sync::LazyLock;
 
@@ -37,17 +36,8 @@ pub struct Materials {
 
 pub static MATERIALS: LazyLock<Materials> = LazyLock::new(Materials::of_palette);
 
-fn class_of(kind: Kind) -> u8 {
-    match kind {
-        Kind::Land => MaterialClasses::LAND,
-        Kind::Water => MaterialClasses::WATER,
-        Kind::Structure => MaterialClasses::STRUCTURE,
-        Kind::Transport => MaterialClasses::TRANSPORT,
-    }
-}
-
 impl Materials {
-    /// Packed `0xCC_RRGGBB`; none for a byte that is no look.
+    /// Packed `0xSS_RRGGBB`; none for a byte that is no look.
     pub fn of(&self, cell: GroundCell) -> Option<(u32, u8)> {
         self.looks[cell as usize]
     }
@@ -61,12 +51,12 @@ impl Materials {
         let mut looks = [None; 256];
         for g in Ground::ALL {
             let rgb = color::ground(g as u8).map_or([0; 3], |s| rgb255(s.rgb));
-            looks[g as usize] = Some((pack_material(class_of(g.kind()), rgb), LAYER_IDX(PlaceableCube::Ground(g)) as u8));
+            looks[g as usize] = Some((pack_material(Side::BASE, rgb), LAYER_IDX(Cube::Ground(g)) as u8));
         }
         let rgb = color::sentinel(sentinel::unknown).map_or([0; 3], |s| rgb255(s.rgb));
         Materials {
             looks,
-            unknown: (pack_material(MaterialClasses::LAND, rgb), NO_LAYER as u8),
+            unknown: (pack_material(Side::BASE, rgb), NO_LAYER as u8),
         }
     }
 }
@@ -143,7 +133,7 @@ pub const fn beside_index(qx: i64, qy: i64) -> usize {
 /// Apron cells are read from what their own tile is drawn from, as the chunk
 /// beside draws it, so the face mask sees what is on screen; they are never painted or emitted.
 pub struct ChunkSample {
-    /// Packed 0xCC_RRGGBB.
+    /// Packed 0xSS_RRGGBB.
     pub material: Vec<u32>,
     pub layer_idx: Vec<u8>,
     /// In cells; a column's top is one below it.

@@ -1,11 +1,11 @@
 {
   "$doc": [
     "What a placed thing may carry beyond its id: its extension. Things whose",
-    "extensions have one shape are a subclass, and each subclass keeps its",
+    "extensions have one shape are a class, and each class keeps its",
     "extensions in a pool of its own; a leaf names its record by its place there,",
-    "or none. Which subclass an id is of is the catalog's (pxl-spec cell/ext.rs)."
+    "or none. Which class an id is of is the catalog's (pxl-spec block/ext.rs)."
   ],
-  "SUBCLASS": { "$type": "u8", "marker_text": 0 },
+  "CLASS": { "$type": "u8", "marker_text": 0 },
   "MARKER_TEXT_CHARS": {
     "$value": 40,
     "$type": "u32",

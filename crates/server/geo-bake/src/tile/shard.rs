@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::Flags;
 use crate::coverage::{source_of, Coverage, Node};
-use crate::pyramid::{ancestor, fold, unasked, write_manifest, Absent, Layer, Staged, TileSet};
+use crate::pyramid::{ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet};
 use crate::util::git_sha;
 use pxl_spec::bake::published::PUBLISHED_TOP_ZOOM;
 use pxl_spec::space::coord::pvf3::ivec;
@@ -106,7 +106,7 @@ impl Stage {
 
     /// The shard's leaves staged anew by `fill`, then its `.done`. A leaf
     /// stage makes any fold stale, so the fold's unit goes first.
-    pub fn leaf<L: Layer>(&self, shard: Node, fill: impl FnOnce(&TileSet) -> Result<(), String>) -> Result<(), String> {
+    pub fn leaf<L: Base>(&self, shard: Node, fill: impl FnOnce(&TileSet) -> Result<(), String>) -> Result<(), String> {
         let at = shard_tile(shard);
         fs::create_dir_all(&self.stage.root).map_err(|e| io(&self.stage.root, e))?;
         self.not_committing()?;
@@ -123,7 +123,7 @@ impl Stage {
     }
 
     /// Folds again what the whole shards change.
-    pub fn fold<L: Layer>(&self, absent: &impl Absent<L>, workers: usize) -> Result<(), String> {
+    pub fn fold<L: Base>(&self, absent: &impl Absent<L>, workers: usize) -> Result<(), String> {
         self.not_committing()?;
         self.clear_fold(L::LEAF)?;
         let whole = self.whole()?;
@@ -155,7 +155,7 @@ impl Stage {
     /// Moves what is staged into the set and takes away what each `.done`
     /// lists, each `.done` last; only once folded, else the set would hold
     /// leaves under parents not folded from them.
-    pub fn commit<L: Layer>(&self) -> Result<(), String> {
+    pub fn commit<L: Base>(&self) -> Result<(), String> {
         if !self.done(COMMIT).exists() {
             if !self.done(FOLD).exists() {
                 return Err(format!("{}: nothing folded; run --stage fold first", self.stage.root.display()));
@@ -172,7 +172,7 @@ impl Stage {
         }
     }
 
-    fn finish_commit<L: Layer>(&self) -> Result<(), String> {
+    fn finish_commit<L: Base>(&self) -> Result<(), String> {
         fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
         let staged = self.stage.by_zoom()?;
         let put = |p: Tile| fs::rename(self.stage.path(p), self.set.path(p)).map_err(|e| io(&self.stage.path(p), e));
@@ -197,7 +197,7 @@ impl Stage {
 
     /// The set as a version is uploaded, into `to`, made empty first: every
     /// tile, less where `pruned` those no reader asks for.
-    pub fn publish<L: Layer>(&self, to: &Path, pruned: bool) -> Result<(), String> {
+    pub fn publish<L: Base>(&self, to: &Path, pruned: bool) -> Result<(), String> {
         if to.exists() {
             fs::remove_dir_all(to).map_err(|e| io(to, e))?;
         }
@@ -266,7 +266,7 @@ impl Run {
 
     /// Every stage after the leaves; the set's manifest says what it was
     /// made from once it is committed.
-    pub fn finish<L: Layer>(&self, absent: &impl Absent<L>, reads: &[&[&str]], pruned: bool) -> Result<(), String> {
+    pub fn finish<L: Base>(&self, absent: &impl Absent<L>, reads: &[&[&str]], pruned: bool) -> Result<(), String> {
         if self.fold {
             self.stage.fold::<L>(absent, self.concurrency)?;
         }

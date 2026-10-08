@@ -1,6 +1,6 @@
 {
-  "doc": [
-    "Numbered in the decor class (id.json), so a placed leaf's value says it is",
+  "$doc": [
+    "Numbered in the decor kind (id.json), so a placed leaf's value says it is",
     "decor: an object value is a u16.",
     "",
     "Each kind is said here once: its number, its models, and how the ground",
@@ -16,10 +16,10 @@
     "ground evaluates them from its cell; a placed one's are the placement's."
   ],
   "meta": { "variant": "u32", "rotation": "f64", "scale": "f64" },
-  "decor_types": {
+  "decors": {
     "tree": {
       "value": 1024,
-      "doc": [
+      "$doc": [
         "Trees on green and bare land. Bare is the fallback type for untagged land",
         "and this pack draws it as grass; sports fields are left out as maintained,",
         "not natural, ground. Sparse: a hillside with some trees, not a forest wall",
@@ -43,7 +43,7 @@
     },
     "boat": {
       "value": 1025,
-      "doc": [
+      "$doc": [
         "Boats on open river and lake water; wetland is too shallow. Rivers are a",
         "few cells wide, so the per-cell rate reads far denser than on land: cut to",
         "a quarter of 0.015 after boats covered the water."
@@ -61,7 +61,7 @@
     },
     "car": {
       "value": 1026,
-      "doc": [
+      "$doc": [
         "Cars on major roads only: neighborhood streets and pedestrian ways are",
         "where users build, and a car there reads as in the way. Aligned to the",
         "road, since a random heading reads as a crash. Sparse: a car every couple",
@@ -81,7 +81,7 @@
     },
     "train": {
       "value": 1027,
-      "doc": [
+      "$doc": [
         "Trains on rail lines the ground shows (a tunnel's is not painted), aligned",
         "to the rail, since one lying across it reads as derailed. Very sparse:",
         "trains should read as occasional."

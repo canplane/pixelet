@@ -261,7 +261,7 @@ that needs none — a `const`, a `LazyLock`, associated constants.
 **A file's name is its language's**: `snake_case` in Rust, C++ and
 `packages/`, `kebab-case` in `apps/`, `script/` and for a file of no
 language. Generated from `spec/` carries `.spec.` on both sides
-(`cube_type.spec.rs`, `cube_type.spec.ts`) and is regenerated, never edited;
+(`cube.spec.rs`, `cube.spec.ts`) and is regenerated, never edited;
 a test carries `.test.`; a Rust module reaches either through `#[path]`.
 **Directories are singular**, named for the concept they hold, except where an
 ecosystem fixes the name (`node_modules/`, `apps/`, `crates/`), and a file

@@ -20,7 +20,7 @@ use xpute_guest::mem::heap::{free, Block};
 use crate::io::demand::{Category, Phases};
 use crate::io::failure::Failure;
 use crate::layer::residency::Residency;
-use crate::layer::{Asks, Layer};
+use crate::layer::{Asks, Base};
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// What a held tile is: its texels are in its frame's layer on the GPU.
@@ -29,7 +29,7 @@ pub struct Earth;
 
 static EARTH: Global<Residency<Earth>> = Global::new();
 
-impl Layer for Earth {
+impl Base for Earth {
     const CATEGORY: Category = Category::earth;
     const LATTICE: Lattice = GROUND;
     const ASKS: Asks = Asks::Floor;

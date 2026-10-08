@@ -3,8 +3,8 @@
 //! What a placed thing carries beyond its value: decor's variant and heading,
 //! seeded by where it is placed, its one stable identity.
 
-use pxl_spec::cell::decor::{DecorKind, DecorMeta};
-use pxl_spec::cell::object::{decor_id_from_num, object_value_is_decor};
+use pxl_spec::block::decor::{Decor, DecorMeta};
+use pxl_spec::block::object::{decor_id_from_num, object_value_is_decor};
 use pxl_spec::procedural::MASTER_SEED;
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use xpute_kit::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
@@ -28,10 +28,10 @@ pub fn placed(e: &Entry) -> Option<Instance> {
     if !object_value_is_decor(e.state) {
         return None;
     }
-    let (c, kind) = (e.cube(), DecorKind::of(decor_id_from_num(e.state)));
-    let (variant, rotation) = user_decor_pick(e.corner().i, kind.variant_count());
+    let (c, decor) = (e.cube(), Decor::of(decor_id_from_num(e.state)));
+    let (variant, rotation) = user_decor_pick(e.corner().i, decor.variant_count());
     Some(Instance {
-        id: kind.value(),
+        id: decor.value(),
         at: [(c.min[0] + c.max[0]) / 2.0, (c.min[1] + c.max[1]) / 2.0, c.min[2]],
         source: Source::Object(e.id()),
         meta: Meta::Decor(DecorMeta { variant, rotation, scale: 1.0 }),

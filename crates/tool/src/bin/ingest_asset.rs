@@ -80,7 +80,7 @@ fn run() -> Result<(), String> {
 
     // A look's top ships drawn toward its Carto color; a side, a bottom and a color are not looks.
     let slots = pack::load(&asset_dir.join("cube"))?;
-    let carto = pxl_tool::spec::cell::ground_colors()?;
+    let carto = pxl_tool::spec::block::ground_colors()?;
     let toward: BTreeMap<String, u32> = slots
         .iter()
         .filter_map(|i| match &i.slot {
@@ -136,7 +136,7 @@ fn run() -> Result<(), String> {
     if let Some(i) = slots.iter().find(|i| !tiles.contains(&format!("cube/{}", i.file))) {
         return Err(format!("{} names {}, which is not under asset/cube", i.label, i.file));
     }
-    let faces = table::faces(&tile_slots, &pxl_tool::spec::cell::catalog()?)?;
+    let faces = table::faces(&tile_slots, &pxl_tool::spec::block::catalog()?)?;
     let composed = pack::compose(&tiles.iter().map(|t| (t.clone(), shipped[t].as_slice())).collect::<Vec<_>>())?;
     let image_name = named("cube/pack.webp", &hex(&composed.bytes));
     let at = out_dir.join(&image_name);

@@ -14,7 +14,11 @@ fn point(x: u32, y: u32) -> Pvf3 {
 }
 
 fn called<'a>(name: &'a str, category: &str, id: &'a str) -> Place<'a> {
-    Place { name, kind: kind_of(category), id }
+    Place {
+        name,
+        category: category_of(category),
+        id,
+    }
 }
 
 fn shown_at(tile: &PlaceTile, zoom: Zoom) -> Vec<&str> {
@@ -54,8 +58,8 @@ fn a_cell_keeps_its_first_by_the_zoom_its_kind_shows_from_then_id() {
 fn what_is_shown_only_grows_with_the_zoom() {
     let places: Vec<_> = (0..60u32).map(|k| (point(k * 7 % 500, k * 13 % 500), k)).collect();
     let ids: Vec<String> = places.iter().map(|(_, k)| format!("{k:03}")).collect();
-    let kinds = ["cafe", "hospital", "restaurant", "pharmacy_and_drug_store", "shopping"];
-    let tile = PlaceTile::leaf(leaf(), places.iter().map(|&(at, k)| (at, called("x", kinds[k as usize % kinds.len()], &ids[k as usize]))));
+    let categories = ["cafe", "hospital", "restaurant", "pharmacy_and_drug_store", "shopping"];
+    let tile = PlaceTile::leaf(leaf(), places.iter().map(|&(at, k)| (at, called("x", categories[k as usize % categories.len()], &ids[k as usize]))));
     for zoom in PLACE_FIRST..PLACE_LAST {
         let now: Vec<_> = tile.iter().filter(|(_, h)| h.from <= zoom).map(|(i, _)| i).collect();
         let next: Vec<_> = tile.iter().filter(|(_, h)| h.from <= zoom + 1).map(|(i, _)| i).collect();
@@ -79,9 +83,9 @@ fn a_parent_is_what_its_children_show_from_its_zoom_on() {
 
 #[test]
 fn every_kind_carto_draws_an_icon_for_ships_its_symbol() {
-    for kind in 1..=CATEGORIES.len() as u16 {
-        if ICON_ZOOM[usize::from(kind - 1)] != 0 {
-            assert!(symbol_of(kind).is_some(), "{} has no symbol shipped", CATEGORIES[usize::from(kind - 1)]);
+    for category in 1..=CATEGORIES.len() as u16 {
+        if ICON_ZOOM[usize::from(category - 1)] != 0 {
+            assert!(symbol_of(category).is_some(), "{} has no symbol shipped", CATEGORIES[usize::from(category - 1)]);
         }
     }
 }

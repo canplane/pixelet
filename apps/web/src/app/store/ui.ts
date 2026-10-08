@@ -3,10 +3,10 @@
 import { create } from "zustand";
 
 import type { i32, u16, u32 } from "@xpute/kit/abi/word.ts";
-import { cube_types } from "@/catalog/cell/cube_type.spec.ts";
-import { decorKinds, type PlaceableCube, placeableCubes } from "@/catalog/cell/mod.ts";
+import { cubes } from "@/catalog/block/cube.spec.ts";
+import { allCubes, type Cube, decorIds } from "@/catalog/block/mod.ts";
 import { ActiveTool, Command, encode_chat_send, encode_input_marker_words } from "@/kernel/abi/cmd.spec.ts";
-import { MARKER_TEXT_CHARS } from "@/catalog/cell/ext.spec.ts";
+import { MARKER_TEXT_CHARS } from "@/catalog/block/ext.spec.ts";
 import { kernel_command, kernel_fits, kernel_hold, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
@@ -20,7 +20,7 @@ const MAX_CHAT_LINES = 10;
 let nextChatLineId = 0;
 
 // The hotbar's MRU list, across cube and decor; the tool says which catalog a pick's number is in.
-type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u16 } | { tool: ActiveTool.Marker };
+type RecentPick = { tool: ActiveTool.Object; cube: Cube } | { tool: ActiveTool.Decor; kind: u16 } | { tool: ActiveTool.Marker };
 
 function isSamePick(a: RecentPick, b: RecentPick): boolean {
   if (a.tool === ActiveTool.Object) return b.tool === ActiveTool.Object && a.cube === b.cube;
@@ -30,8 +30,8 @@ function isSamePick(a: RecentPick, b: RecentPick): boolean {
 
 // A stored pick may name something the catalog no longer gives out.
 function isKnownPick(pick: RecentPick): boolean {
-  if (pick.tool === ActiveTool.Object) return placeableCubes.includes(pick.cube);
-  if (pick.tool === ActiveTool.Decor) return decorKinds.includes(pick.kind);
+  if (pick.tool === ActiveTool.Object) return allCubes.includes(pick.cube);
+  if (pick.tool === ActiveTool.Decor) return decorIds.includes(pick.kind);
   return pick.tool === ActiveTool.Marker;
 }
 
@@ -51,7 +51,7 @@ export const enum DockMode {
 interface UiState {
   // Advanced only by selectCube/selectDecor, which also switch the tool.
   recentPicks: RecentPick[];
-  selectCube: (cube: PlaceableCube) => void;
+  selectCube: (cube: Cube) => void;
   selectDecor: (kind: u16) => void;
   selectMarker: () => void;
 
@@ -66,27 +66,27 @@ interface UiState {
 
   /** A key's pick or size step, which the dock shows over the cube's swatch as a press would: its seed, or the sizes open. */
   swatchCue: SwatchCue;
-  cueSwatch: (cube: PlaceableCube, open: boolean) => void;
+  cueSwatch: (cube: Cube, open: boolean) => void;
   stepSize: (delta: i32) => void;
 }
 
 interface SwatchCue {
   /** Counts the cues, so the same one twice still shows. */
   n: u32;
-  cube: PlaceableCube | null;
+  cube: Cube | null;
   open: boolean;
 }
 
 // One per placeable genre, so a fresh hotbar hints at everything placeable; as many as the hotbar holds.
 const SEED: readonly RecentPick[] = [
-  { tool: ActiveTool.Object, cube: cube_types.object.white },
-  { tool: ActiveTool.Object, cube: cube_types.ground.land },
-  { tool: ActiveTool.Object, cube: cube_types.ground.water },
-  { tool: ActiveTool.Object, cube: cube_types.ground.building },
-  { tool: ActiveTool.Object, cube: cube_types.ground.residential_road },
-  { tool: ActiveTool.Object, cube: cube_types.object.red },
-  { tool: ActiveTool.Object, cube: cube_types.object.blue },
-  { tool: ActiveTool.Decor, kind: decorKinds[0] },
+  { tool: ActiveTool.Object, cube: cubes.object.white },
+  { tool: ActiveTool.Object, cube: cubes.ground.land },
+  { tool: ActiveTool.Object, cube: cubes.ground.water },
+  { tool: ActiveTool.Object, cube: cubes.ground.building },
+  { tool: ActiveTool.Object, cube: cubes.ground.residential_road },
+  { tool: ActiveTool.Object, cube: cubes.object.red },
+  { tool: ActiveTool.Object, cube: cubes.object.blue },
+  { tool: ActiveTool.Decor, kind: decorIds[0] },
 ];
 
 /** The hotbar's slots, always full: the seed fills it, and a new pick pushes the last out. */

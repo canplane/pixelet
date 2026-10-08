@@ -197,7 +197,7 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 
 | Crate / package | What it is                                                                                                                               |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `pxl-spec`      | The model: PVF3, the zooms and lattices, the cell catalogs, the command numbers, the tile formats, the asset tables. One implementation. |
+| `pxl-spec`      | The model: PVF3, the zooms and lattices, the block catalog, the command numbers, the tile formats, the asset tables. One implementation. |
 | `pxl-render`    | The view: the column runs, the mesher, glTF, the badge sheet, the draw list, the shaders, the renderer. It knows no kernel.              |
 | `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                    |
 | `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.               |

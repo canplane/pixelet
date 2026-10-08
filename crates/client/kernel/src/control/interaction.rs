@@ -8,8 +8,8 @@ pub mod edit;
 pub mod ghost;
 pub mod pick;
 
-use pxl_spec::cell::object::PlaceableCube;
-use pxl_spec::cell::{cube_types, DecorId};
+use pxl_spec::block::object::Cube;
+use pxl_spec::block::{cubes, DecorId};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -32,7 +32,7 @@ use xpute_guest::global::Global;
 pub struct Holding {
     pub active_tool: ActiveTool,
     /// A placed color or a ground look.
-    pub object_cube: PlaceableCube,
+    pub object_cube: Cube,
     /// The object size by its tier (`object_size_of`).
     pub object_tier: u32,
     pub decor_id: DecorId,
@@ -42,7 +42,7 @@ impl Default for Holding {
     fn default() -> Holding {
         Holding {
             active_tool: ActiveTool::Pointer,
-            object_cube: PlaceableCube::Object(cube_types::Object::red),
+            object_cube: Cube::Object(cubes::Object::red),
             object_tier: 0,
             decor_id: DecorId::tree,
         }

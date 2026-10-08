@@ -7,7 +7,7 @@
 use crate::terrain::CELL_U;
 use pxl_spec::bake::format::{Ground, GroundCell};
 use pxl_spec::bake::way;
-use pxl_spec::cell::cube_types::ground;
+use pxl_spec::block::cubes::ground;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 
 use crate::terrain::pipeline::feature::{Feature, Layer, P};
