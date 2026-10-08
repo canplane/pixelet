@@ -2,8 +2,8 @@
 
 //! What a query answers: a value, exact or coarser with the tile it lacked.
 
-use pxl_spec::bake::format::GroundCell;
-use pxl_spec::cell::cube_types;
+use pxl_spec::bake::format::GroundId;
+use pxl_spec::block::cube;
 use pxl_spec::space::layer::tile::Tile;
 
 /// A coarser answer carries the tile it lacked, so none passes for exact.
@@ -57,12 +57,12 @@ pub struct Ground {
     /// The surface's height as drawn, which a line is measured against
     /// whether or not the cell has ground.
     pub height: f64,
-    pub cell: GroundCell,
+    pub cell: GroundId,
 }
 
 impl Ground {
     /// None where the terrain gives no surface, a cell that is no look.
     pub fn top(&self) -> Option<f64> {
-        cube_types::Ground::of(self.cell).is_some().then_some(self.height)
+        cube::Ground::of(self.cell).is_some().then_some(self.height)
     }
 }

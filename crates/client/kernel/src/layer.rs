@@ -1,7 +1,7 @@
 // pxl-kernel/layer.rs
 
-//! What is in the world, by kind. A layer owns its store and knows nothing
-//! of its neighbours.
+//! What is in the world, in layers. A layer owns its store and knows
+//! nothing of its neighbours.
 
 mod answer;
 use pxl_spec::bake::format::Occupancy;
@@ -9,7 +9,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-use crate::io::demand::{Category, Phases};
+use crate::io::demand::{Phases, Stream};
 use crate::io::failure::Failure;
 use residency::Residency;
 
@@ -36,8 +36,8 @@ pub enum Asks {
     View,
 }
 
-pub trait Layer: Clone + 'static {
-    const CATEGORY: Category;
+pub trait Base: Clone + 'static {
+    const STREAM: Stream;
 
     /// Which of its children are tiles of their own, as the bake wrote it.
     fn occupancy(&self) -> Occupancy;
@@ -45,7 +45,7 @@ pub trait Layer: Clone + 'static {
     /// Its tiles' cells, which say what of the grid a tile at each zoom draws.
     const LATTICE: Lattice;
 
-    /// The zoom its tiles are made at, as the bake's `Layer::LEAF`.
+    /// The zoom its tiles are made at, as the bake's `Base::LEAF`.
     const LEAF: Zoom = LEAF_ZOOM;
 
     /// What it asks of the view; its residency is sized so.

@@ -7,9 +7,10 @@
  */
 
 import type * as WebAboveKeyboard from "../../../web/src/platform/web/above-keyboard.tsx";
-import type * as WebCore from "../../../web/src/platform/web/core.ts";
+import type * as WebGuest from "../../../web/src/platform/web/guest.ts";
 import type * as WebBacking from "../../../web/src/platform/web/backing.tsx";
 import type * as WebBackdrop from "../../../web/src/platform/web/backdrop.ts";
+import type * as WebDevice from "../../../web/src/platform/web/device.ts";
 import type * as WebIcon from "../../../web/src/platform/web/icon.tsx";
 import type * as WebGesture from "../../../web/src/platform/web/gesture.ts";
 import type * as WebGpu from "../../../web/src/platform/web/gpu.ts";
@@ -33,9 +34,10 @@ import type * as WebTypeface from "../../../web/src/platform/web/typeface.ts";
 import type * as WebVisualViewport from "../../../web/src/platform/web/viewport.ts";
 
 import * as AboveKeyboard from "./above-keyboard.tsx";
-import * as Core from "./core.ts";
+import * as Guest from "./guest.ts";
 import * as Backing from "./backing.tsx";
 import * as Backdrop from "./backdrop.ts";
+import * as Device from "./device.ts";
 import * as Icon from "./icon.tsx";
 import * as Gesture from "./gesture.ts";
 import * as Gpu from "./gpu.ts";
@@ -68,9 +70,10 @@ import * as TextFieldAndroid from "./text-field.android.ts";
 
 export const CONFORMS = [
   AboveKeyboard satisfies typeof WebAboveKeyboard,
-  Core satisfies typeof WebCore,
+  Guest satisfies typeof WebGuest,
   Backing satisfies typeof WebBacking,
   Backdrop satisfies typeof WebBackdrop,
+  Device satisfies typeof WebDevice,
   Icon satisfies typeof WebIcon,
   Gesture satisfies typeof WebGesture,
   Gpu satisfies typeof WebGpu,

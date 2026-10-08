@@ -1,7 +1,7 @@
 // pxl-kernel/control/navigation/follow_mode.rs
 
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use xpute_core::math::scalar::wrap;
+use xpute_kit::math::scalar::wrap;
 
 use crate::control::camera::controller::Motion;
 use crate::control::camera::state::IntentPatch;

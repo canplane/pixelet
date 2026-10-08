@@ -2,10 +2,10 @@
 
 /** A ring of frames, laid out by spec/ipc/ring.json. */
 
-import type { i32, u32 } from "@xpute/core/abi/word.ts";
-import type { U8Array } from "@xpute/core/abi/array.ts";
-import { Errno } from "@xpute/core/status/errno.spec.ts";
-import { InvariantError, MarshalError } from "@xpute/core/status/error.ts";
+import type { i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
 
 import * as frame from "./frame.ts";
 import { CAPACITY, HEAD, HEADER_WORDS, SLOT_BASE, SLOT_BYTES, TAIL } from "./ring.spec.ts";

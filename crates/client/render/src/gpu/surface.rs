@@ -3,9 +3,9 @@
 //! The canvases the kernel draws into. The page scales whatever buffer exists
 //! into the layout box, so a stale or smaller buffer still shows whole.
 
-use xpute_core::math::scalar::round;
 use xpute_guest::abi::handle::{handle_slot, HandleTable};
 use xpute_guest::global::Global;
+use xpute_kit::math::scalar::round;
 
 /// Slot 0 is never a surface.
 pub const SURFACES: usize = 9;

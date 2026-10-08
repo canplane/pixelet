@@ -2,7 +2,7 @@
 
 import { assertEquals, assertThrows } from "@std/assert";
 
-import { InvariantError } from "@xpute/core/status/error.ts";
+import { InvariantError } from "@xpute/kit/status/error.ts";
 import { Doorbell } from "./doorbell.ts";
 import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
 

@@ -8,7 +8,7 @@ use crate::billboard::sheet::billboard_sheet;
 use crate::control::camera::controller;
 use crate::io::failure::Outcome;
 use crate::io::request::{counts, credits};
-use crate::layer::Layer as _;
+use crate::layer::Base as _;
 use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
 use crate::profiler::block::{FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
@@ -140,7 +140,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
     let (ok, aborted, error) = (Outcome::ok as u32 as f64, Outcome::aborted as u32 as f64, Outcome::error as u32 as f64);
     let mut block = TasksBlock::default();
     for (c, slot) in block.slots.iter_mut().enumerate() {
-        let mine = || tasks.iter().filter(move |r| r.category == c as f64);
+        let mine = || tasks.iter().filter(move |r| r.stream == c as f64);
         let n = mine().count();
         if n == 0 {
             continue;

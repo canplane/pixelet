@@ -2,12 +2,12 @@
 
 import { StyleSheet, View } from "react-native";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 
 import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
-import { HANDHELD } from "@platform/core.ts";
+import { HANDHELD } from "@platform/device.ts";
 import type { GlyphName } from "@platform/icon.tsx";
 import { haloGap, HaloIcon } from "@/shared/ui/halo.tsx";
 import { color } from "@/shared/ui/theme.ts";

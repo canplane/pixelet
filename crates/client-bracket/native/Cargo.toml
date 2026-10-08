@@ -15,7 +15,7 @@ test = false
 doctest = false
 
 [dependencies]
-xpute-core = { path = "../../../xpute/rust/core" }
+xpute-kit = { path = "../../../xpute/rust/kit" }
 xpute-guest = { path = "../../../xpute/rust/guest" }
 pxl-kernel = { path = "../../client/kernel", default-features = false }
 pxl-render = { path = "../../client/render" }

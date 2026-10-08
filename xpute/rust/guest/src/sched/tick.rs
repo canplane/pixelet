@@ -7,8 +7,8 @@
 
 use super::frame_budget::FrameBudget;
 use crate::clock::now;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 #[path = "tick.spec.rs"]
 mod spec;
@@ -44,7 +44,7 @@ impl<S> TickContext<'_, S> {
     }
 
     pub fn off_tick(&mut self, id: u32) {
-        xpute_core::ensure!(self.off_len < OFFS_MAX, ENOSPC, OFFS_MAX);
+        xpute_kit::ensure!(self.off_len < OFFS_MAX, ENOSPC, OFFS_MAX);
         self.offs[self.off_len] = id;
         self.off_len += 1;
     }
@@ -125,7 +125,7 @@ impl<S, const N: usize> Tick<S, N> {
 
     /// `name` is the caller's number the step's time is reported under.
     pub fn on_tick(&mut self, phase: Phase, step: TickStep<S>, name: u32) -> u32 {
-        xpute_core::ensure!(self.len < N, ENOSPC, N);
+        xpute_kit::ensure!(self.len < N, ENOSPC, N);
         let id = self.next_id;
         self.next_id += 1;
         self.registry[self.len] = Some(Registered { id, phase, step, name });

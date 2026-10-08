@@ -1,6 +1,6 @@
 // pxl-kernel/control/camera/state.rs
 
-use xpute_core::math::scalar::clamp;
+use xpute_kit::math::scalar::clamp;
 
 use crate::control::camera::controller::look_domain;
 use crate::param::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MIN_DIST};

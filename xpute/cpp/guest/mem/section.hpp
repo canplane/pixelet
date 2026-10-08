@@ -10,7 +10,7 @@
 #include <optional>
 #include <span>
 
-#include "../../core/status/bug.hpp"
+#include "../../kit/status/bug.hpp"
 
 namespace xpute {
 

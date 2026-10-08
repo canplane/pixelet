@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { type StyleProp, StyleSheet, View, type ViewStyle } from "react-native";
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Spinner } from "@platform/icon.tsx";
 import { LABEL } from "@platform/palette.ts";
 import { CaseSurface } from "@platform/surface.tsx";

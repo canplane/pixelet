@@ -6,10 +6,10 @@
  * place by the time the kernel reads it.
  */
 
-import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { td, te } from "@xpute/core/codec/encoding.ts";
-import { Errno, strerror } from "@xpute/core/status/errno.spec.ts";
+import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
+import { td, te } from "@xpute/kit/codec/encoding.ts";
+import { Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
 import { text_of } from "@xpute/host/ipc/stream.ts";
 import { Command as XputeCommand, encode_sys_opened } from "@xpute/host/abi/cmd.spec.ts";
 import { FileError, Sys } from "@xpute/host/ipc/sys.ts";

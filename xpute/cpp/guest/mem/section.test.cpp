@@ -4,7 +4,7 @@
 
 #include <array>
 
-#include "../../core/test.hpp"
+#include "../../kit/test.hpp"
 
 using namespace xpute;
 

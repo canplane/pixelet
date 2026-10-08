@@ -16,8 +16,8 @@ use crate::io::load::LOADS;
 use crate::io::request::Credit;
 use crate::mem::spec::MIN_HEAP_BYTES;
 use crate::sched::edge::request_world_tick;
-use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
+use xpute_kit::status::errno::Errno;
 
 /// A file the kernel keeps in storage. Storage is opened and written only by
 /// one of these, so what a turn can record there follows from how many.
@@ -173,7 +173,7 @@ pub fn close(fd: Fd) {
 }
 
 fn named(path: &str) -> &str {
-    xpute_core::ensure!(path.len() <= PATH_BYTES, EMSGSIZE, path.len());
+    xpute_kit::ensure!(path.len() <= PATH_BYTES, EMSGSIZE, path.len());
     path
 }
 

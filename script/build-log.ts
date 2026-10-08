@@ -8,7 +8,7 @@
 //   ./script/build-log.ts --record 18 --web --server --smoke success     append one (CI)
 //   ./script/build-log.ts --last web                                       the sha the client went out from
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 
 const BUCKET = "pixelet-tiles";
 const KEY = "_meta/build-log.jsonl";

@@ -6,8 +6,8 @@
  * adds needs no word here; only list lanes are spelled out.
  */
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { round } from "@xpute/core/math/scalar.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import { round } from "@xpute/kit/math/scalar.ts";
 
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
 import { CENSUS_TAGS, FRAME, FRAME_GROUPS, LIMITS } from "./profiler.spec.ts";

@@ -7,18 +7,18 @@
 use pxl_spec::bake::place_tile::{self, PlaceTile, PLACE_LATTICE};
 use pxl_spec::space::layer::lattice::Lattice;
 
-use crate::io::demand::{Category, Phases};
+use crate::io::demand::{Phases, Stream};
 use crate::io::failure::Failure;
 use crate::layer::residency::Residency;
-use crate::layer::Layer;
+use crate::layer::Base;
 use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::global::Global;
 
 static PLACE: Global<Residency<PlaceTile>> = Global::new();
 
-impl Layer for PlaceTile {
-    const CATEGORY: Category = Category::place;
+impl Base for PlaceTile {
+    const STREAM: Stream = Stream::place;
     const LATTICE: Lattice = PLACE_LATTICE;
 
     fn occupancy(&self) -> Occupancy {

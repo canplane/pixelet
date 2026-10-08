@@ -3,9 +3,9 @@
 //! What the ground paints: a shape in the tile's cells and the cell it paints.
 
 use crate::terrain::CELL_U;
-use pxl_spec::bake::format::GroundCell;
+use pxl_spec::bake::format::GroundId;
 use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, G3857};
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 use crate::wkb::WkbGeometry;
 
@@ -67,7 +67,7 @@ pub struct Feature {
     pub width: f64,
     /// Ends a flag or a line cuts: square, not rounded.
     pub cut: [bool; 2],
-    pub cell: GroundCell,
+    pub cell: GroundId,
     pub rank: Rank,
 }
 
@@ -84,7 +84,7 @@ pub fn closes(g: &WkbGeometry) -> bool {
 
 impl Feature {
     /// A line of no width yet, from its points; None where it has none.
-    pub fn line(points: &[G3857], tile_min: G3857, cell: GroundCell, rank: Rank) -> Option<Feature> {
+    pub fn line(points: &[G3857], tile_min: G3857, cell: GroundId, rank: Rank) -> Option<Feature> {
         (!points.is_empty()).then(|| Feature {
             points: points.iter().map(|&p| local(p, tile_min)).collect(),
             holes: Vec::new(),
@@ -97,7 +97,7 @@ impl Feature {
     }
 
     /// An area, or a line of no width, from a geometry; None where it has no points.
-    pub fn of(g: &WkbGeometry, tile_min: G3857, cell: GroundCell, rank: Rank) -> Option<Feature> {
+    pub fn of(g: &WkbGeometry, tile_min: G3857, cell: GroundId, rank: Rank) -> Option<Feature> {
         (!g.points.is_empty()).then(|| Feature {
             points: g.points.iter().map(|&p| local(p, tile_min)).collect(),
             holes: g.holes.iter().map(|ring| ring.iter().map(|&p| local(p, tile_min)).collect()).collect(),

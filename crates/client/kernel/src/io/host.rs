@@ -8,10 +8,10 @@
 use core::panic::Location;
 pub use xpute_guest::mem::heap::HeapStat;
 
-use xpute_core::status::errno::Errno;
 use xpute_guest::ipc::stream::{record_bytes, WORD};
 use xpute_guest::ipc::sys::{descriptor_turn_bytes, Sys};
 use xpute_guest::mem::base::ptr_at;
+use xpute_kit::status::errno::Errno;
 
 use crate::abi::host::{op, stream};
 use crate::io::file::{Kept, PATH_BYTES};

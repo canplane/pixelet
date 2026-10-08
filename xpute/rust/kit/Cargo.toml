@@ -1,0 +1,15 @@
+[package]
+name = "xpute-kit"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+# The golden records' reader (src/golden.rs), for another crate's tests.
+golden = []
+
+[dev-dependencies]
+hex.workspace = true

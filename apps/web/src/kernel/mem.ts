@@ -1,35 +1,35 @@
 // @pxl/web/kernel/mem.ts
 
 /**
- * The opened core and its doorbell. What lies where in the buffer is the
+ * The opened guest and its doorbell. What lies where in the buffer is the
  * kernel's alone; the shell holds addresses the kernel handed out.
  */
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Doorbell } from "@xpute/host/ipc/doorbell.ts";
-import { openCore } from "@platform/core.ts";
+import { openGuest } from "@platform/guest.ts";
 import { key } from "@xpute/host/ipc/directory.spec.ts";
-import { type Core, directory } from "@/kernel/module.ts";
+import { directory, type Guest } from "@/kernel/module.ts";
 import { run_host_stream } from "@/kernel/host.ts";
 
-// Set once by `load_core`, which the boot awaits: Metro's bundle cannot wait on a module import.
+// Set once by `load_guest`, which the boot awaits: Metro's bundle cannot wait on a module import.
 
-export let CORE: Core;
+export let GUEST: Guest;
 
 /** A trapped turn leaves its errno and place in the host stream. */
-export let CORE_DOORBELL: Doorbell;
+export let GUEST_DOORBELL: Doorbell;
 
-export async function load_core(): Promise<void> {
-  const core = await openCore();
-  const dir = directory(core.buffer);
+export async function load_guest(): Promise<void> {
+  const guest = await openGuest();
+  const dir = directory(guest.buffer);
   const host_stream = dir.get(key.SYS);
-  CORE = core;
-  CORE_DOORBELL = new Doorbell(core.buffer, dir.get(key.SUBMISSION), dir.get(key.COMPLETION), (quota_ms) => {
+  GUEST = guest;
+  GUEST_DOORBELL = new Doorbell(guest.buffer, dir.get(key.SUBMISSION), dir.get(key.COMPLETION), (quota_ms) => {
     let wake: f64;
     try {
-      wake = core.interrupt(quota_ms);
+      wake = guest.interrupt(quota_ms);
     } finally {
-      run_host_stream(core.buffer, host_stream);
+      run_host_stream(guest.buffer, host_stream);
     }
     return wake;
   });

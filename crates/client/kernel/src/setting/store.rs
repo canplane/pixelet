@@ -5,7 +5,7 @@
 //! stored default would be a decision nobody made, and changing it in source
 //! would then reach only people with empty storage.
 
-use xpute_core::codec::json::{read_json, JsonKind};
+use xpute_kit::codec::json::{read_json, JsonType};
 
 use crate::io::file::{self, Kept};
 use crate::io::host::development;
@@ -78,7 +78,7 @@ pub fn settings_load(kept: &str) {
 
 fn read_kept(kept: &str) -> Settings {
     let mut s = Settings::DEFAULT;
-    if let Some(kept) = read_json(kept).filter(|v| v.kind() == JsonKind::Object) {
+    if let Some(kept) = read_json(kept).filter(|v| v.type_of() == JsonType::Object) {
         for key in SettingKey::ALL {
             let Some(v) = kept.get(key.name()) else { continue };
             let value = match key.kind() {

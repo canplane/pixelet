@@ -13,7 +13,7 @@ fnv.workspace = true
 indexmap.workspace = true
 libm.workspace = true
 xpute-guest = { path = "../../../xpute/rust/guest" }
-xpute-core = { path = "../../../xpute/rust/core" }
+xpute-kit = { path = "../../../xpute/rust/kit" }
 pxl-spec = { path = "../../spec" }
 pxl-render = { path = "../render" }
 # The executor the door polls the kernel's tasks on inside a turn

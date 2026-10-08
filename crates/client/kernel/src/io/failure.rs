@@ -5,8 +5,8 @@
 use core::fmt;
 use core::panic::Location;
 
-use xpute_core::status::errno::Errno;
-use xpute_core::status::error::MarshalError;
+use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::MarshalError;
 
 pub use crate::io::spec::OutcomeName as Outcome;
 

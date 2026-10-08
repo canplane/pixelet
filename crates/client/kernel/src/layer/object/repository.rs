@@ -7,19 +7,19 @@
 
 use base64::Engine;
 use pxl_spec::space::hierarchy::morton::key_of;
-use xpute_core::status::errno::Errno;
-use xpute_core::status::error::MarshalError;
-use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::sched::edge::{notified, Notify};
+use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::MarshalError;
+use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::io::file::{self, Kept, KeptFile};
 use crate::kernel;
 use crate::layer::object::ext::Ext;
 use crate::layer::object::store::{apply, written, Write};
 use crate::sched::edge::wake_at;
-use pxl_spec::cell::ext::{subclass_of, Subclass};
+use pxl_spec::block::ext::{class_of, Class};
 
 struct State {
     save_due_ms: Option<f64>,
@@ -34,7 +34,7 @@ fn store_state() -> &'static mut State {
 }
 
 // Kept as one blob of every leaf as the write that made it, `<key, id, ext>`:
-// [key_hi u64[], key_lo u64[], id u32[]], then a subclass's records, each its
+// [key_hi u64[], key_lo u64[], id u32[]], then a class's records, each its
 // leaf's row and its fields as lanes: a marker's words [row u32[], text strs].
 // The layout's version is in the storage key; a blob of another layout is
 // never read.
@@ -82,8 +82,8 @@ fn decode(blob: &str) -> Result<(), MarshalError> {
     let mut ext: Vec<Option<Ext>> = vec![None; id.len()];
     for (r, t) in text_rows.iter().zip(texts.iter()) {
         let r = *r as usize;
-        // A record is its leaf's subclass's, or the blob is not this layout.
-        if id.get(r).and_then(|&v| subclass_of(v)) != Some(Subclass::marker_text) {
+        // A record is its leaf's class's, or the blob is not this layout.
+        if id.get(r).and_then(|&v| class_of(v)) != Some(Class::marker_text) {
             return Err(MarshalError::new(Errno::EINVAL));
         }
         ext[r] = Some(Ext::MarkerText(t.to_string()));

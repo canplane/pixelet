@@ -23,7 +23,7 @@ use pxl_spec::space::coord::adapter::epsg3857::mer_from_u;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, LEAF_ZOOM};
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 fn run() -> Result<(), String> {
     let coverage = Coverage::of_source()?;

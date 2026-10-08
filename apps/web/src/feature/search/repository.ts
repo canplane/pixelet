@@ -1,6 +1,6 @@
 // @pxl/web/feature/search/repository.ts
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import { originGet } from "@platform/origin.ts";
 import { SEARCH_URL } from "@/config/route.spec.ts";
 import type { DivisionPart } from "@/feature/world/division/label.ts";

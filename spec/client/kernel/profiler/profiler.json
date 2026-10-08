@@ -217,9 +217,9 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One settled task (profiler/task.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's."
+      "One settled task (profiler/task.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's."
     ],
-    "category": 1,
+    "stream": 1,
     "subject": 1,
     "priority": 1,
     "enqueue_ms": 1,
@@ -256,7 +256,7 @@
     "$type": "u32",
     "$packed": true,
     "$doc": [
-      "One category's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes."
+      "One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes."
     ],
     "n": 1,
     "ok": 1,
@@ -322,7 +322,7 @@
       "last": "FRAME"
     },
     "tasks": {
-      "slots": "CATEGORY_NAMES * TASK_SUMMARY"
+      "slots": "STREAM_NAMES * TASK_SUMMARY"
     },
     "counters": {
       "faces_kept": 1,

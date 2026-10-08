@@ -2,20 +2,20 @@
 
 //! The world's reads. The kernel names an object (its bake and its name in
 //! it, `DemandName`) and opens it as a file; the host alone knows the address
-//! and protocol. What an absent object means is decided here per category.
+//! and protocol. What an absent object means is decided here per stream.
 //! Every body is a heap block released in the command that decodes it,
 //! unless a store keeps it.
 
 use core::fmt;
 use std::collections::VecDeque;
 
-use xpute_core::status::errno::Errno;
 use xpute_guest::ipc::sys::Fd;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free, Block};
 use xpute_guest::sched::edge::{next_turn, notified, yield_if_spent, Notify};
+use xpute_kit::status::errno::Errno;
 
-use crate::io::demand::{Category, Phases, TaskPhaseName};
+use crate::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::io::failure::{Ended, Failure};
 use crate::io::file::{self, Opened, Owner};
 use crate::io::request::{attempt_of, settle, Credit};
@@ -25,22 +25,22 @@ use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
-pub struct DemandName(pub Category, pub u64);
+pub struct DemandName(pub Stream, pub u64);
 
 impl fmt::Display for DemandName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let key = self;
         match key.0 {
-            Category::terrain | Category::place | Category::earth | Category::division => write_name::<2>(f, Tile::of_subject(key.1).key()),
+            Stream::terrain | Stream::place | Stream::earth | Stream::division => write_name::<2>(f, Tile::of_subject(key.1).key()),
             // Assets are opened below the assets' root (io/load.rs), never here.
-            Category::asset => Ok(()),
+            Stream::asset => Ok(()),
         }
     }
 }
 
-pub fn start(credit: Credit, category: Category, subject: u64) {
-    let Some(bake) = category.bake() else { return };
-    let name = DemandName(category, subject).to_string();
+pub fn start(credit: Credit, stream: Stream, subject: u64) {
+    let Some(bake) = stream.bake() else { return };
+    let name = DemandName(stream, subject).to_string();
     let owner = Owner::Fetch { key: credit.key(), at_ms: now() };
     file::open(credit, bake as u32, &name, owner);
 }
@@ -88,7 +88,7 @@ static ARRIVED: Global<Vec<Arrival>> = Global::new();
 /// fetch stays out until the owner settles it.
 pub struct Answered {
     pub key: u64,
-    pub category: Category,
+    pub stream: Stream,
     pub subject: u64,
     /// None where the source has no object for it.
     pub block: Option<Block>,
@@ -99,9 +99,9 @@ static ANSWERED: Global<VecDeque<Answered>> = Global::new();
 
 /// The oldest answer of one of `of`, not yet taken. No more are kept than
 /// fetches are out, so the scan is short.
-pub fn next_answered(of: &[Category]) -> Option<Answered> {
+pub fn next_answered(of: &[Stream]) -> Option<Answered> {
     let all = ANSWERED.get(VecDeque::new);
-    let at = all.iter().position(|a| of.contains(&a.category))?;
+    let at = all.iter().position(|a| of.contains(&a.stream))?;
     all.remove(at)
 }
 
@@ -168,7 +168,7 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         _ => None,
     };
     // A key the request scheduler does not hold is one a reset forgot.
-    let Some((category, subject)) = attempt_of(key) else {
+    let Some((stream, subject)) = attempt_of(key) else {
         release(block);
         return;
     };
@@ -181,14 +181,8 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
         // Taken by its owner, which settles it; and a turn asked, so one takes it.
         Got::Absent | Got::Read(Some(_)) => {
             // An asset loads through io/load, never a fetch: nothing would take its answer.
-            xpute_core::ensure!(category != Category::asset, ENOTRECOVERABLE);
-            ANSWERED.get(VecDeque::new).push_back(Answered {
-                key,
-                category,
-                subject,
-                block,
-                phases,
-            });
+            xpute_kit::ensure!(stream != Stream::asset, ENOTRECOVERABLE);
+            ANSWERED.get(VecDeque::new).push_back(Answered { key, stream, subject, block, phases });
             request_world_tick();
             return;
         }

@@ -10,9 +10,9 @@
 #include <cstdint>
 #include <span>
 
-#include "../../core/status/bug.hpp"
-#include "../../core/status/errno.spec.hpp"
-#include "../../core/wire/xtp/encode.hpp"
+#include "../../kit/status/bug.hpp"
+#include "../../kit/status/errno.spec.hpp"
+#include "../../kit/wire/xtp/encode.hpp"
 #include "frame.hpp"
 #include "ring.hpp"
 

@@ -2,7 +2,7 @@
 
 import { useWindowDimensions } from "react-native";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 
 export function useWindowSize(): { width: f64; height: f64 } {
   const { width, height } = useWindowDimensions();

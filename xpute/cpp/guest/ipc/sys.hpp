@@ -14,7 +14,7 @@
 #include <string_view>
 #include <vector>
 
-#include "../../core/status/errno.spec.hpp"
+#include "../../kit/status/errno.spec.hpp"
 #include "../mem/memory.hpp"
 #include "stream.hpp"
 #include "sys.spec.hpp"

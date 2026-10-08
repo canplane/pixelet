@@ -6,11 +6,11 @@
 use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
 use pxl_spec::space::coord::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
 use pxl_spec::space::coord::v3::{norm3, sub3, V3};
-use xpute_core::math::scalar::round;
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
+use xpute_kit::math::scalar::round;
 
 use crate::frame::draw::{
     uniform_of, Lists, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR,
@@ -40,8 +40,8 @@ use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURN
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
 const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
@@ -106,7 +106,7 @@ pub struct FrameInput<'a> {
     pub handheld: bool,
 }
 
-/// The Earth layer's tiles as the GPU reads them: the floor's window, its
+/// The earth layer's tiles as the GPU reads them: the floor's window, its
 /// south-west tile first, and per tile its layer plus one; `upload` hands each
 /// tile that has come to the writer while the writer takes it.
 pub struct EarthTiles<'a> {
@@ -330,7 +330,7 @@ pub const fn blocks_bytes(slots: usize) -> u32 {
 /// `at` must address `blocks_bytes(slots)`, 4-aligned and zeroed, the
 /// renderer's alone for as long as the module runs.
 pub unsafe fn set_blocks(at: u32, slots: usize) {
-    xpute_core::ensure!(slots.is_power_of_two(), EINVAL, slots);
+    xpute_kit::ensure!(slots.is_power_of_two(), EINVAL, slots);
     // SAFETY: the caller's range, one lane of `slots` words after another.
     let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize + k * slots * 4), slots) };
     BLOCKS.set(Blocks {
@@ -410,7 +410,7 @@ impl Blocks {
     fn insert(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32, vertex_cnt: u32, index_cnt: u32) {
         self.remove(handle);
         // Slots are twice the most blocks the owners can hold, so this is that bound broken.
-        xpute_core::ensure!((self.count as usize) < self.handle.len() / 2, ENOTRECOVERABLE, self.handle.len() / 2);
+        xpute_kit::ensure!((self.count as usize) < self.handle.len() / 2, ENOTRECOVERABLE, self.handle.len() / 2);
         let mut i = home(handle, self.handle.len());
         while self.handle[i] != EMPTY {
             i = (i + 1) & (self.handle.len() - 1);
@@ -498,7 +498,7 @@ impl Blocks {
 static BLOCKS: Global<Blocks> = Global::new();
 
 fn blocks() -> &'static mut Blocks {
-    BLOCKS.get(|| xpute_core::bug!(ENOTRECOVERABLE))
+    BLOCKS.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
 }
 
 #[derive(Clone, Copy)]
@@ -896,7 +896,7 @@ impl Renderer {
             };
             // A missing buffer is a fault in the list. Skipping it silently once drew no
             // ground at all with every gauge reading normal.
-            let Some(buffer) = buffer else { xpute_core::bug!(ENOTRECOVERABLE, handle, which) };
+            let Some(buffer) = buffer else { xpute_kit::bug!(ENOTRECOVERABLE, handle, which) };
             if let (Some(p), 0) = (own, bound) {
                 g.set_pipeline(pass, p);
                 g.set_bind_group(pass, 0, self.bind_group, &[]);

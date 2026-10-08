@@ -208,9 +208,9 @@ pub mod FRAME_GROUPS {
     ];
 }
 
-/// One settled task (profiler/task.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's.
+/// One settled task (profiler/task.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's.
 pub mod TASK {
-    pub const category: u32 = 0;
+    pub const stream: u32 = 0;
     pub const subject: u32 = 1;
     pub const priority: u32 = 2;
     pub const enqueue_ms: u32 = 3;
@@ -227,7 +227,7 @@ pub mod TASK {
     pub const phase_values: u32 = 19;
     pub const WORDS: u32 = 25;
     pub const KEYS: &[&str] = &[
-        "category",
+        "stream",
         "subject",
         "priority",
         "enqueue_ms",
@@ -263,7 +263,7 @@ pub mod SPREAD {
     pub const KEYS: &[&str] = &["p50", "p95", "max", "WORDS"];
 }
 
-/// One category's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes.
+/// One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes.
 pub mod TASK_SUMMARY {
     pub const n: u32 = 0;
     pub const ok: u32 = 1;

@@ -20,7 +20,7 @@ pub struct DecorScratch {
     pub(crate) group_count: usize,
 }
 
-/// A single kind's scatter is thousands; growing a few at a time would ask
+/// A single decor's scatter is thousands; growing a few at a time would ask
 /// the heap every handful.
 const MIN_GROWTH: usize = 1024;
 

@@ -41,35 +41,35 @@ pub const FORMAT: Format = Format {
     earth: 1,
 };
 
-/// The kinds a version is published for: the fields of `PUBLISHED_VERSION`,
+/// The base layers a version is published for: the fields of `PUBLISHED_VERSION`,
 /// numbered in their order.
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum BakeKind {
+pub enum BaseLayer {
     terrain,
     place,
     division,
     earth,
 }
 
-impl BakeKind {
-    pub const ALL: [BakeKind; 4] = [BakeKind::terrain, BakeKind::place, BakeKind::division, BakeKind::earth];
+impl BaseLayer {
+    pub const ALL: [BaseLayer; 4] = [BaseLayer::terrain, BaseLayer::place, BaseLayer::division, BaseLayer::earth];
 
-    /// The kind a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<BakeKind> {
-        BakeKind::ALL.into_iter().find(|k| *k as u32 == number)
+    /// The layer a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<BaseLayer> {
+        BaseLayer::ALL.into_iter().find(|k| *k as u32 == number)
     }
 }
 
 impl PublishedVersion {
-    /// `PUBLISHED_VERSION[kind]`.
-    pub fn of(&self, kind: BakeKind) -> &'static str {
-        match kind {
-            BakeKind::terrain => self.terrain,
-            BakeKind::place => self.place,
-            BakeKind::division => self.division,
-            BakeKind::earth => self.earth,
+    /// `PUBLISHED_VERSION[layer]`.
+    pub fn of(&self, layer: BaseLayer) -> &'static str {
+        match layer {
+            BaseLayer::terrain => self.terrain,
+            BaseLayer::place => self.place,
+            BaseLayer::division => self.division,
+            BaseLayer::earth => self.earth,
         }
     }
 }

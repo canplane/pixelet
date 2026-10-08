@@ -7,7 +7,7 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::io::spec::{CATEGORY_NAMES, TASK_PHASE_NAMES};
+use crate::io::spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use crate::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS, ZOOMS};
 use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY};
 use crate::profiler::word::{words, Words};
@@ -16,7 +16,7 @@ use xpute_guest::sched::tick::PHASES;
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 pub const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
-const CATEGORIES: usize = CATEGORY_NAMES.len();
+const CATEGORIES: usize = STREAM_NAMES.len();
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

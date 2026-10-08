@@ -1,12 +1,12 @@
-# The Rust kit, and the guest end over it. `core` is what any program that
+# The Rust kit, and the guest end over it. `kit` is what any program that
 # links it may use; `guest` asks to be run its way — a turn on a doorbell, a
 # quota measured from the frame, I/O asked of the host — and depends on
-# `core`, never the reverse. `conformance` is the guest the
+# `kit`, never the reverse. `conformance` is the guest the
 # contract's traces drive (spec/conformance/).
 
 [workspace]
 resolver = "2"
-members = ["core", "guest", "conformance"]
+members = ["kit", "guest", "conformance"]
 
 [workspace.dependencies]
 # A set whose position is the value: insert appends, swap_remove moves the

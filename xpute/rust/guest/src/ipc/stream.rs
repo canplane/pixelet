@@ -39,7 +39,7 @@ pub struct Stream {
 
 impl Stream {
     pub fn new(words: &'static mut [u32], head: usize) -> Stream {
-        xpute_core::ensure!(head > END && head < words.len(), EINVAL);
+        xpute_kit::ensure!(head > END && head < words.len(), EINVAL);
         Stream {
             words,
             head,
@@ -72,7 +72,7 @@ impl Stream {
     #[track_caller]
     pub fn open(&mut self, op: u32, n: usize) -> &mut [u32] {
         let at = self.head + self.len;
-        xpute_core::ensure!(at + 2 + n <= self.words.len(), ENOSPC, self.words.len() * 4);
+        xpute_kit::ensure!(at + 2 + n <= self.words.len(), ENOSPC, self.words.len() * 4);
         self.len += 2 + n;
         let w = &mut self.words[at..at + 2 + n];
         w[0] = op;

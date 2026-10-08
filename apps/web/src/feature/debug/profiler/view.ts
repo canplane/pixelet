@@ -6,12 +6,12 @@
  * only until the next turn, so each read copies into plain objects.
  */
 
-import type { F64Array } from "@xpute/core/abi/array.ts";
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { td } from "@xpute/core/codec/encoding.ts";
+import type { F64Array } from "@xpute/kit/abi/array.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import { td } from "@xpute/kit/codec/encoding.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
-import { CATEGORY_NAMES, OUTCOME_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/demand.spec.ts";
+import { OUTCOME_NAMES, STREAM_NAMES, TASK_PHASE_NAMES } from "@/kernel/io/demand.spec.ts";
 import { kernel_call, kernel_memory } from "@/kernel/shell.ts";
 
 import { PHASES } from "@xpute/host/sched/tick.spec.ts";
@@ -45,7 +45,7 @@ function tasksAt(at: u32, count: u32): TaskRecord[] {
     }
     const start = w[o + TASK.start_ms];
     return {
-      category: CATEGORY_NAMES[w[o + TASK.category]] ?? "?",
+      stream: STREAM_NAMES[w[o + TASK.stream]] ?? "?",
       subject: subjects[o + TASK.subject].toString(),
       priority: w[o + TASK.priority],
       enqueue_ms: w[o + TASK.enqueue_ms],
@@ -92,7 +92,7 @@ export interface FrameSummary {
 }
 
 export interface TaskRecord {
-  category: string;
+  stream: string;
   subject: string;
   priority: f64;
   enqueue_ms: f64;
@@ -107,7 +107,7 @@ export interface TaskRecord {
 }
 
 export interface TaskSummary {
-  category: string;
+  stream: string;
   n: u32;
   ok: u32;
   aborted: u32;
@@ -167,7 +167,7 @@ function frameSummary(s: F64Array): FrameSummary | null {
 
 function taskSummaries(s: F64Array): TaskSummary[] {
   const out: TaskSummary[] = [];
-  CATEGORY_NAMES.forEach((category, c) => {
+  STREAM_NAMES.forEach((stream, c) => {
     const a = SUMMARY.tasks.AT + SUMMARY.tasks.slots + c * TASK_SUMMARY.WORDS;
     const n = s[a + TASK_SUMMARY.n];
     if (n === 0) return;
@@ -177,7 +177,7 @@ function taskSummaries(s: F64Array): TaskSummary[] {
     });
     const means = TASK_PHASE_NAMES.map((name, p) => [name, s[a + TASK_SUMMARY.phase_mean + p]] as [string, f64]).filter(([, v]) => !Number.isNaN(v));
     out.push({
-      category,
+      stream,
       n,
       ok: s[a + TASK_SUMMARY.ok],
       aborted: s[a + TASK_SUMMARY.aborted],

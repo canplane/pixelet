@@ -5,9 +5,9 @@
 //! eraser is over.
 
 use pxl_render::look::color::indicator;
-use pxl_spec::cell::decor::DecorKind;
-use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_of, placeable_cube_rgb, PlaceableCube};
-use pxl_spec::cell::DecorId;
+use pxl_spec::block::decor::Decor;
+use pxl_spec::block::object::{cube_id, cube_of, cube_rgb, Cube};
+use pxl_spec::block::DecorId;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -19,7 +19,7 @@ use crate::decor::assets::decor_assets_for;
 use crate::layer::instance::Meta;
 use crate::layer::object::meta::user_decor_pick;
 use crate::layer::object::size::DECOR_SIZE;
-use crate::layer::object::store::EntryKind;
+use crate::layer::object::store::Block;
 use crate::query::World;
 use crate::setting::store::settings_store;
 
@@ -49,32 +49,32 @@ pub fn ghost() -> Ghost {
     let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker | ActiveTool::Eraser) || hovered_object.is_some();
     let current_scale = if use_object_style { preview_size } else { units(GROUND.cell()) };
 
-    let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
+    let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
             let cell = World::now().at(h, LEAF_ZOOM).value().map_or(0, |g| g.cell);
-            placeable_cube_of(u32::from(cell))
+            cube_of(u32::from(cell))
         }
         _ => None,
     };
 
-    let cube: Option<PlaceableCube> = match (active_tool, hovered_object.map(|o| o.kind())) {
+    let cube: Option<Cube> = match (active_tool, hovered_object.map(|o| o.block())) {
         (ActiveTool::Pointer | ActiveTool::Decor, _) => None,
-        (_, Some(EntryKind::Solid { cube })) => Some(cube),
+        (_, Some(Block::Cube { cube })) => Some(cube),
         (ActiveTool::Object, _) => Some(ui.object_cube),
         _ => carved_style_cube,
     };
 
-    let decor_id = match (active_tool, hovered_object.map(|o| o.kind())) {
+    let decor_id = match (active_tool, hovered_object.map(|o| o.block())) {
         (ActiveTool::Decor, _) => Some(ui.decor_id),
-        (_, Some(EntryKind::Decor { decor_id })) => Some(decor_id),
+        (_, Some(Block::Decor { decor_id })) => Some(decor_id),
         _ => None,
     };
-    let decor_kind = decor_id.map(DecorKind::of);
-    let decor_assets = decor_kind.and_then(decor_assets_for);
+    let decor = decor_id.map(Decor::of);
+    let decor_assets = decor.and_then(decor_assets_for);
 
     let decor_pick_i = match (active_tool, &hovered_object) {
         (ActiveTool::Decor, _) => hovered.map(|h| h.i),
-        (_, Some(o)) if matches!(o.kind(), EntryKind::Decor { .. }) => Some(o.corner().i),
+        (_, Some(o)) if matches!(o.block(), Block::Decor { .. }) => Some(o.corner().i),
         _ => None,
     };
     // Placing back an erased scattered decor restores that instance; the ghost
@@ -83,7 +83,7 @@ pub fn ghost() -> Ghost {
         (ActiveTool::Decor, Some(h)) => restores_scattered(h, DECOR_SIZE, ui.decor_id),
         _ => None,
     };
-    let decor_pick = match (decor_kind, decor_pick_i, restored) {
+    let decor_pick = match (decor, decor_pick_i, restored) {
         (Some(_), _, Some(d)) => {
             let Meta::Decor(m) = d.meta;
             Some((m.variant, m.rotation, m.scale))
@@ -101,7 +101,7 @@ pub fn ghost() -> Ghost {
         _ => false,
     };
 
-    let swatch = cube.and_then(placeable_cube_rgb);
+    let swatch = cube.and_then(cube_rgb);
     let fallback = if active_tool == ActiveTool::Eraser { indicator::ERASE } else { indicator::ACTION };
 
     // A carve no longer needs the coplanar bias: its voxel is gone from the mesh
@@ -109,10 +109,10 @@ pub fn ghost() -> Ghost {
     let coplanar_with_terrain = !use_object_style;
 
     let scattered_ghost = hover.scattered.filter(|_| matches!(active_tool, ActiveTool::Pointer | ActiveTool::Eraser)).and_then(|s| {
-        let (Meta::Decor(m), kind) = (s.meta, DecorKind::of(DecorId::of(s.id)?));
+        let (Meta::Decor(m), decor) = (s.meta, Decor::of(DecorId::of(s.id)?));
         Some(Ghost::Decor {
             at: s.at,
-            group: kind.first_group() + m.variant,
+            group: decor.first_group() + m.variant,
             rotation: m.rotation,
             scale: m.scale,
         })
@@ -121,10 +121,10 @@ pub fn ghost() -> Ghost {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {
             let [x, y, z] = crate::view::frame::coord::to_world(&h);
-            match (decor_kind, decor_pick) {
-                (Some(kind), Some((variant, rotation, scale))) if is_decor_ghost => Ghost::Decor {
+            match (decor, decor_pick) {
+                (Some(decor), Some((variant, rotation, scale))) if is_decor_ghost => Ghost::Decor {
                     at: [x + preview_size / 2.0, y + preview_size / 2.0, z],
-                    group: kind.first_group() + variant,
+                    group: decor.first_group() + variant,
                     rotation,
                     scale,
                 },
@@ -132,7 +132,7 @@ pub fn ghost() -> Ghost {
                     at: [x, y, z],
                     size: current_scale,
                     value: match (cube, textures) {
-                        (Some(cube), true) => placeable_cube_num_id(cube),
+                        (Some(cube), true) => cube_id(cube),
                         _ => 0,
                     },
                     rgb: swatch.unwrap_or(fallback),

@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/abi/cmd.json — do not edit.
 //
-// Every program's commands, by number (core abi/cmd: `major << 8 | minor`), and the
+// Every program's commands, by number (kit abi/cmd: `major << 8 | minor`), and the
 // packet each carries — an XTP branch whose children are its fields, in order. A
 // command with no fields carries no packet. The majors below PROGRAM_MAJOR are xpute's;
 // a program numbers its own from there, in a table of its own that names this one as
@@ -19,11 +19,11 @@
 #include <span>
 #include <string_view>
 
-#include "../../core/abi/cmd.hpp"
-#include "../../core/math/scalar.hpp"
-#include "../../core/status/error.hpp"
-#include "../../core/wire/xtp/cursor.hpp"
-#include "../../core/wire/xtp/encode.hpp"
+#include "../../kit/abi/cmd.hpp"
+#include "../../kit/math/scalar.hpp"
+#include "../../kit/status/error.hpp"
+#include "../../kit/wire/xtp/cursor.hpp"
+#include "../../kit/wire/xtp/encode.hpp"
 
 namespace xpute::abi {
 

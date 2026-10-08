@@ -15,7 +15,7 @@ use crate::billboard::sheet::{new_billboard_set, place_billboard_set, remove_bil
 use crate::chunk::Chunk;
 use crate::layer::object::preview::draft;
 use crate::layer::place::carto_zoom;
-use crate::layer::Layer;
+use crate::layer::Base;
 use crate::layer::Query;
 use crate::query::{Detail, Ray, World};
 use crate::sched::tick::TickContext;
@@ -26,11 +26,11 @@ use badge::{Label, Look};
 use core::hash::Hasher;
 use pxl_render::gpu::sheet::shelf::NO_SLOT;
 use pxl_spec::bake::constant::EntryAt;
-use pxl_spec::cell::object::{object_value_is_marker, MARKER_LATTICE};
+use pxl_spec::block::object::{object_value_is_marker, MARKER_LATTICE};
 use pxl_spec::space::coord::v3::V3;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use pxl_spec::bake::place_tile::{stands, PlaceTile, PLACE_FIRST, PLACE_LATTICE};
 use pxl_spec::space::coord::pvf3::pack;

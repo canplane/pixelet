@@ -2,7 +2,7 @@
 
 /** The host as an interrupt source: drivers translate their events into these. */
 
-import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
+import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import {
   type ActiveTool,
   Command,
@@ -12,15 +12,15 @@ import {
   encode_input_rect,
   encode_input_wheel,
   encode_world_visibility,
-  type PointerKind,
   type PointerPhase,
+  type PointerType,
 } from "@/kernel/abi/cmd.spec.ts";
 import { permissionFollow } from "@platform/sensor.ts";
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
+import { GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame, ring_now, send_input, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
 
-export function kernel_pointer(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void {
-  send_input(Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y }));
+export function kernel_pointer(phase: PointerPhase, pointer_type: PointerType, id: i32, button: i32, x: f64, y: f64): void {
+  send_input(Command.INPUT_POINTER, encode_input_pointer({ phase, pointer_type, id, button, x, y }));
 }
 
 export function kernel_wheel(delta_y: f64): void {
@@ -32,7 +32,7 @@ export function kernel_keys(x: i32, y: i32): void {
 }
 
 export function kernel_rect(left: f64, top: f64, width: f64, height: f64): void {
-  CORE_DOORBELL.send(0, Command.INPUT_RECT, encode_input_rect({ left, top, width, height }));
+  GUEST_DOORBELL.send(0, Command.INPUT_RECT, encode_input_rect({ left, top, width, height }));
 }
 
 export function kernel_hold(tool: ActiveTool, value: u32, tier: u32): void {
@@ -54,8 +54,8 @@ export function kernel_open(viewport: () => Viewport): () => void {
 
 /** Rung at once with no quota: a hidden page gets no frame, and this is the last sure moment for a save. */
 export function kernel_visible(visible: boolean): void {
-  CORE_DOORBELL.send(0, Command.WORLD_VISIBILITY, encode_world_visibility({ visible }));
-  CORE_DOORBELL.ring(0);
+  GUEST_DOORBELL.send(0, Command.WORLD_VISIBILITY, encode_world_visibility({ visible }));
+  GUEST_DOORBELL.ring(0);
   if (visible) {
     strobe.start();
     request_frame();

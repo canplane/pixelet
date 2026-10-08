@@ -16,7 +16,7 @@ use pxl_spec::space::layer::tile::{neighborhood, Tile};
 /// The ground cell's side: what the raster, the separation's lines and a height count in.
 pub const CELL_U: f64 = units(GROUND.cell());
 
-impl crate::pyramid::Layer for TerrainTile {
+impl crate::pyramid::Base for TerrainTile {
     fn encode(&self) -> Result<Vec<u8>, String> {
         encode_terrain(self).map_err(|e| format!("{e:?}"))
     }

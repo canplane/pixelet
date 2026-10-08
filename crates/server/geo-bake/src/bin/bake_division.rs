@@ -16,7 +16,7 @@ use std::process::ExitCode;
 
 use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::division::{leaf, READS};
-use pxl_geo_bake::pyramid::Layer;
+use pxl_geo_bake::pyramid::Base;
 use pxl_geo_bake::tile::shard::Run;
 use pxl_geo_bake::tile::walk::{over, Done};
 use pxl_geo_bake::util::{pack, Level};

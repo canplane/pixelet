@@ -18,8 +18,8 @@ use std::collections::TryReserveError;
 pub use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::fold::majority;
-use pxl_spec::cell::object::{decor_id_from_num, object_value_is_decor, object_value_is_marker, object_value_is_voxel, placeable_cube_of, PlaceableCube};
-use pxl_spec::cell::{cube_types, DecorId};
+use pxl_spec::block::object::{cube_of, decor_id_from_num, object_value_is_decor, object_value_is_marker, object_value_is_voxel, Cube};
+use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::world::{node_near, wrap_index, REACH};
@@ -27,24 +27,24 @@ use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, unit
 use pxl_spec::space::hierarchy::morton::{child_cube, key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
 use pxl_spec::space::hierarchy::tree::{first_descendant_of, region, Node};
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::kernel;
 use crate::layer::object::ext::{Ext, Pools, NONE};
 use crate::layer::{Answer, Bound, Query};
 use crate::sched::edge::request_world_tick;
-use pxl_spec::cell::ext::subclass_of;
+use pxl_spec::block::ext::class_of;
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum EntryKind {
-    Solid { cube: PlaceableCube },
+pub enum Block {
+    Cube { cube: Cube },
     Decor { decor_id: DecorId },
     Marker,
 }
 
 /// A leaf as an asker meets it: its cube, X in the asker's frame, and the
-/// handle of its record in its subclass's pool.
+/// handle of its record in its class's pool.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Entry {
     pub zoom: Zoom,
@@ -70,18 +70,18 @@ impl Entry {
         cube(self.zoom, self.at)
     }
 
-    /// Not for air, which is the eraser's mark.
-    pub fn kind(&self) -> EntryKind {
+    /// What it is, by its kind; not for air, which is the eraser's mark.
+    pub fn block(&self) -> Block {
         if object_value_is_marker(self.state) {
-            EntryKind::Marker
+            Block::Marker
         } else if object_value_is_decor(self.state) {
-            EntryKind::Decor {
+            Block::Decor {
                 decor_id: decor_id_from_num(self.state),
             }
         } else {
-            EntryKind::Solid {
+            Block::Cube {
                 // Every value the store writes is one the catalog gives out.
-                cube: placeable_cube_of(self.state).or_bug(Errno::ENOTRECOVERABLE),
+                cube: cube_of(self.state).or_bug(Errno::ENOTRECOVERABLE),
             }
         }
     }
@@ -109,9 +109,9 @@ pub fn take_written(out: &mut Vec<Aabb>) {
     core::mem::swap(out, WRITTEN.get(Vec::new));
 }
 
-pub const VOID: u32 = cube_types::sentinel::void as u32;
-pub const AIR: u32 = cube_types::object::air as u32;
-pub const UNKNOWN: u32 = cube_types::sentinel::unknown as u32;
+pub const VOID: u32 = cube::sentinel::void as u32;
+pub const AIR: u32 = cube::object::air as u32;
+pub const UNKNOWN: u32 = cube::sentinel::unknown as u32;
 const _: () = assert!(VOID == 0);
 
 /// What a tree's leaf holds: the catalog value, and its record's handle.
@@ -382,7 +382,7 @@ impl Store {
 
     /// What a leaf carries beyond its id, if anything.
     pub fn ext(&self, e: &Entry) -> Option<&Ext> {
-        self.ext.get(subclass_of(e.state)?, e.ext)
+        self.ext.get(class_of(e.state)?, e.ext)
     }
 
     /// A marker's words, as put up; none for anything else.
@@ -398,10 +398,10 @@ impl Store {
         let mut changed = Vec::new();
         for Write { key: k, id, ext } in writes {
             let (zoom, at) = node_of::<3>(k);
-            xpute_core::ensure!((CUBE_ZOOM..=OBJECT_FINEST).contains(&zoom), ENOTRECOVERABLE, zoom);
+            xpute_kit::ensure!((CUBE_ZOOM..=OBJECT_FINEST).contains(&zoom), ENOTRECOVERABLE, zoom);
             let id16 = u16::try_from(id).or_bug(Errno::EOVERFLOW);
-            // A record is the shape its id's subclass names, or none.
-            xpute_core::ensure!(ext.as_ref().map(Ext::subclass) == ext.as_ref().and(subclass_of(id)), EINVAL, id);
+            // A record is the shape its id's class names, or none.
+            xpute_kit::ensure!(ext.as_ref().map(Ext::class) == ext.as_ref().and(class_of(id)), EINVAL, id);
             self.release(zoom, at);
             let handle = match ext {
                 Some(ext) => match self.ext.keep(ext) {
@@ -433,7 +433,7 @@ impl Store {
         let mut freed = Vec::new();
         if let Some(f) = self.find(zoom, at) {
             if let Slot::Leaf(v) = f.slot {
-                xpute_core::ensure!(f.zoom == zoom || v.ext == NONE, ENOTRECOVERABLE, f.zoom);
+                xpute_kit::ensure!(f.zoom == zoom || v.ext == NONE, ENOTRECOVERABLE, f.zoom);
             }
         }
         self.each_in(zoom, at, &mut |e| {
@@ -442,8 +442,8 @@ impl Store {
             }
         });
         for (id, h) in freed {
-            if let Some(sub) = subclass_of(id) {
-                self.ext.free(sub, h);
+            if let Some(class) = class_of(id) {
+                self.ext.free(class, h);
             }
         }
     }

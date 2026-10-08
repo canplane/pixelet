@@ -4,7 +4,7 @@
 //! of the crates it writes into, so it builds when their generated code is broken.
 
 pub mod bake;
-pub mod cell;
+pub mod block;
 pub mod cmd;
 pub mod data;
 pub mod route;
@@ -32,9 +32,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     out.extend(cmd::outputs()?);
     out.extend(setting::outputs()?);
     out.extend(xpute::errno_outputs()?);
-    out.extend(cell::color_outputs()?);
-    out.extend(cell::cube_type_outputs()?);
-    out.extend(cell::decor_outputs()?);
+    out.extend(block::color_outputs()?);
+    out.extend(block::cube_outputs()?);
+    out.extend(block::decor_outputs()?);
     out.extend(bake::published_outputs()?);
     out.extend(bake::object_outputs()?);
     out.extend(bake::place_theme_outputs()?);

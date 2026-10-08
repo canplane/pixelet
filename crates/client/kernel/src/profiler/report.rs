@@ -5,14 +5,14 @@
 
 use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::bake::place_tile::PlaceTile;
-use xpute_core::math::scalar::round;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
+use xpute_kit::math::scalar::round;
 
 use crate::chunk::table::Census;
 use crate::io::request::pending_count;
 use crate::kernel;
-use crate::layer::{Layer, Query};
+use crate::layer::{Base, Query};
 use crate::mem::MB;
 use crate::profiler::frame::{CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, StaleSample, TileSample, TurnSample, ViewSample, WorkSample};
 use crate::profiler::record::{profiler_record_frame, profiler_recording, profiler_take_rings};
@@ -154,8 +154,8 @@ pub fn report_step(ctx: &mut TickContext) {
         heap: heap_sample(),
         rings,
         work,
-        q_terrain: pending_count(TerrainTile::CATEGORY) as f64,
-        q_place: pending_count(PlaceTile::CATEGORY) as f64,
+        q_terrain: pending_count(TerrainTile::STREAM) as f64,
+        q_place: pending_count(PlaceTile::STREAM) as f64,
         stale: StaleSample {
             hidden: census.ready_waiting as f64,
             slot_waits: census.slot_waits as f64,

@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { type StyleProp, StyleSheet, Text, type TextStyle, View, type ViewStyle } from "react-native";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { IconProps } from "@platform/icon.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { color as theme, halo, haloRings, textScale } from "@/shared/ui/theme.ts";

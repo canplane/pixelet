@@ -115,9 +115,9 @@ export const FRAME_GROUPS = {
   ring: ["ring_cq_peak", "ring_held_peak"],
 } as const;
 
-/** One settled task (profiler/task.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's. */
+/** One settled task (profiler/task.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's. */
 export const TASK = {
-  category: 0 as number,
+  stream: 0 as number,
   subject: 1 as number,
   priority: 2 as number,
   enqueue_ms: 3 as number,
@@ -150,7 +150,7 @@ export const SPREAD = {
   WORDS: 3 as number,
 } as const;
 
-/** One category's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes. */
+/** One stream's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes. */
 export const TASK_SUMMARY = {
   n: 0 as number,
   ok: 1 as number,

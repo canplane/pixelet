@@ -30,12 +30,12 @@ use crate::kernel;
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::Store;
 use crate::layer::terrain::scatter::SCALE_JITTER;
-use crate::layer::Layer;
+use crate::layer::Base;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::units_per_px_at;
 use crate::view::observation::{eye, observation};
 use pxl_spec::bake::format::TerrainTile;
-use pxl_spec::cell::decor::{DecorKind, Variant, KINDS};
+use pxl_spec::block::decor::{Decor, Variant, DECORS};
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::global::Global;
 
@@ -90,8 +90,8 @@ fn cells() -> &'static mut Cells {
 pub const BLOCKS_MAX: usize = OCCUPANCY;
 
 /// What a chunk is admitted by before its block says what it holds.
-fn largest_possible(kinds: &[DecorKind]) -> f64 {
-    let extent = kinds.iter().map(|k| k.extent()).fold(0.0, f64::max);
+fn largest_possible(decors: &[Decor]) -> f64 {
+    let extent = decors.iter().map(|k| k.extent()).fold(0.0, f64::max);
     extent * (1.0f64 + SCALE_JITTER).max(DECOR_SIZE)
 }
 
@@ -125,7 +125,7 @@ fn sources_of(chunk: Chunk, hide: Option<DecorHide>) -> Option<Sources> {
     })
 }
 
-fn build(c: &mut Cells, chunk: Chunk, kinds: &[DecorKind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
+fn build(c: &mut Cells, chunk: Chunk, decors: &[Decor], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
     let terrain = TerrainTile::residency();
     // The tile the terrain draws the chunk from, read over the chunk whose
     // side is that many of its cells; past the leaves, the chunk over it as wide.
@@ -158,7 +158,7 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[DecorKind], store: &Store, draw: 
         folded: (target < GROUND.cell()).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
-    let built = DecorBuild::build(scratch, kinds, Some(&ground), sources.hide.filter(|_| own), store, sources.shown, chunk)?;
+    let built = DecorBuild::build(scratch, decors, Some(&ground), sources.hide.filter(|_| own), store, sources.shown, chunk)?;
     let index = built.bytes();
     let heights = built.heights();
     let instances = built.instances() as u32;
@@ -186,12 +186,12 @@ fn release(block: Block, draw: &mut DrawList) {
 /// Builds the decor of the chunks the terrain has mounted, within what is
 /// left of the turn as the chunks' builds are, and lets go of what an
 /// unmounted chunk held.
-pub fn step(kinds: &[DecorKind], store: &Store, sched: &Scheduler, draw: &mut DrawList, hide: Option<DecorHide>, frame_eye: V3, budget: &FrameBudget) {
+pub fn step(decors: &[Decor], store: &Store, sched: &Scheduler, draw: &mut DrawList, hide: Option<DecorHide>, frame_eye: V3, budget: &FrameBudget) {
     let c = cells();
     let mut mounted = core::mem::take(&mut c.mounted);
     sched.mounted(&mut mounted);
     mounted.sort_unstable_by_key(|m| m.0);
-    let largest = largest_possible(kinds);
+    let largest = largest_possible(decors);
     let held = |k: &Chunk| mounted.binary_search_by_key(k, |m| m.0).is_ok_and(|i| may_show(mounted[i].0, largest));
     c.gone.clear();
     c.gone.extend(c.blocks.keys().copied().filter(|k| !held(k)));
@@ -210,7 +210,7 @@ pub fn step(kinds: &[DecorKind], store: &Store, sched: &Scheduler, draw: &mut Dr
             if c.blocks.get(&chunk).is_some_and(|b| b.sources == sources) {
                 return false;
             }
-            let Some(b) = build(c, chunk, kinds, store, draw, sources) else { return false };
+            let Some(b) = build(c, chunk, decors, store, draw, sources) else { return false };
             if let Some(old) = c.blocks.insert(chunk, b) {
                 release(old, draw);
             }
@@ -248,7 +248,7 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
         // SAFETY: the chunk's block, `bytes` long, its own to write past `index`.
         let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
         let (lanes_of, list) = words.split_at_mut(block.index as usize / 4);
-        let mut extents = KINDS.iter().flat_map(|k| k.variants.iter().map(Variant::extent));
+        let mut extents = DECORS.iter().flat_map(|k| k.variants.iter().map(Variant::extent));
         let (mut at, mut changed) = (0usize, false);
         for (group, (offset, count)) in decor_groups(lanes_of).enumerate() {
             let extent = extents.next().unwrap_or(0.0);

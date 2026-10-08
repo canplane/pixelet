@@ -29,7 +29,7 @@ await step("check:bundle", "deno", ["task", "check:bundle"]);
 await step("publish", "deno", wrangler("deploy"));
 // The `#n` → path table for this build's panics, kept beside the build log, never served.
 if (number) {
-  const paths = new URL("../src/kernel/kernel.paths.json", import.meta.url);
+  const paths = new URL("../src/kernel/guest.paths.json", import.meta.url);
   await step("keep the paths", "deno", wrangler("r2", "object", "put", `pixelet-tiles/_meta/paths/${number}.json`, "--remote", "--file", paths.pathname, "--content-type", "application/json"));
 }
 

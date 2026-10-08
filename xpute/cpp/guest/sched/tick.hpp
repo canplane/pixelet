@@ -15,7 +15,7 @@
 #include <span>
 #include <string_view>
 
-#include "../../core/status/bug.hpp"
+#include "../../kit/status/bug.hpp"
 #include "../clock.hpp"
 #include "frame_budget.hpp"
 #include "tick.spec.hpp"

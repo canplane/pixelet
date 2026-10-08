@@ -3,12 +3,12 @@
 # The device's half of the app's platform (apps/native/src/platform/): the
 # view the kernel draws into, the kernel linked with it, and what the shell
 # asks of the system — storage, the clipboard, text, the compass. The kernel
-# is the Rust core (crates/client-bracket/native), built by this pod's script phase
+# is in the guest (crates/client-bracket/native), built by this pod's script phase
 # (apps/native/script/build-native.ts) for the configuration and the SDK the
 # app is, into a directory each has of its own, which the app links from and
-# Swift imports it from (`import PxlNative`, the core's include/). Not named
+# Swift imports it from (`import PxlNative`, the guest's include/). Not named
 # PxlNative: a pod is a Swift module of its own name, and that one is the
-# core's.
+# guest's.
 
 Pod::Spec.new do |s|
   s.name = 'PxlPlatform'

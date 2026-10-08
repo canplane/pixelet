@@ -45,7 +45,7 @@ pub struct Billboards {
 impl Billboards {
     pub fn new_set(&mut self, order: u32) -> u32 {
         // One set per order (sheet.rs `SETS_MAX`).
-        xpute_core::ensure!(self.sets.iter().all(|(_, s)| s.order != order), ENOTRECOVERABLE, order);
+        xpute_kit::ensure!(self.sets.iter().all(|(_, s)| s.order != order), ENOTRECOVERABLE, order);
         let set = Set {
             order,
             anchor: Anchor::At([0.0; 3]),

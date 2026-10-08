@@ -29,9 +29,9 @@ use crate::chunk::table::builds;
 use crate::chunk::Chunk as PyramidChunk;
 use crate::sched::edge::{request_world_tick, world_edge};
 use crate::with_parts;
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 use xpute_guest::sched::edge::{notified, yield_if_spent};
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 /// `.fixed.bake`, handed in at boot.
 pub static BAKE_RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();

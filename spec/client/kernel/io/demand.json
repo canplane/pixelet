@@ -4,7 +4,7 @@
     "its run came to an end, and the phases a run reports its time in. The profiler",
     "records and reports them by these names (spec/client/kernel/profiler/profiler.json)."
   ],
-  "CATEGORY_NAMES": [
+  "STREAM_NAMES": [
     "terrain",
     "place",
     "division",

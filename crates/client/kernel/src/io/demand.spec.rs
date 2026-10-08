@@ -14,10 +14,10 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
-pub const CATEGORY_NAMES: &[&str] = &["terrain", "place", "division", "asset", "earth"];
+pub const STREAM_NAMES: &[&str] = &["terrain", "place", "division", "asset", "earth"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
-pub enum CategoryName {
+pub enum StreamName {
     terrain = 0,
     place = 1,
     division = 2,
@@ -25,14 +25,14 @@ pub enum CategoryName {
     earth = 4,
 }
 
-impl CategoryName {
+impl StreamName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [CategoryName; 5] = [CategoryName::terrain, CategoryName::place, CategoryName::division, CategoryName::asset, CategoryName::earth];
+    pub const ALL: [StreamName; 5] = [StreamName::terrain, StreamName::place, StreamName::division, StreamName::asset, StreamName::earth];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(value: u8) -> Option<CategoryName> {
-        CategoryName::ALL.into_iter().find(|member| *member as u8 == value)
+    pub fn of(value: u8) -> Option<StreamName> {
+        StreamName::ALL.into_iter().find(|member| *member as u8 == value)
     }
 }
 

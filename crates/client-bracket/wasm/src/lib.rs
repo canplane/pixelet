@@ -50,7 +50,7 @@ fn heap_stat() -> HeapStat {
 /// linker's end of its data, the page's clock and the allocator.
 fn bracket() -> Bracket {
     let stack_high = core::ptr::addr_of!(__stack_high) as u32;
-    xpute_core::ensure!(stack_high == pxl_kernel::mem::spec::STACK_BYTES, ENOTRECOVERABLE, stack_high);
+    xpute_kit::ensure!(stack_high == pxl_kernel::mem::spec::STACK_BYTES, ENOTRECOVERABLE, stack_high);
     let given = given();
     Bracket {
         given: given.min(u32::MAX as u64) as u32,

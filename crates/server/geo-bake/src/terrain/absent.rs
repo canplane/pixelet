@@ -10,12 +10,12 @@
 use std::borrow::Cow;
 
 use pxl_spec::bake::format::{Ground, Occupancy, TerrainTile, ELE_LANE};
-use pxl_spec::cell::cube_types::{ground, sentinel};
+use pxl_spec::block::cube::{ground, sentinel};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::coverage::Coverage;
-use crate::pyramid::{Absent, Layer};
+use crate::pyramid::{Absent, Base};
 
 pub struct Absence {
     coverage: Coverage,

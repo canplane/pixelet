@@ -7,7 +7,7 @@
 #[path = "turn/step.spec.rs"]
 pub mod spec;
 
-use crate::layer::Layer as _;
+use crate::layer::Base as _;
 use pxl_spec::space::coord::aabb::Aabb;
 use spec::{EffectName, StepName};
 use xpute_guest::sched::edge::{notified, Notify};
@@ -222,7 +222,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, puck, location_puck_step(off_center().device_coord));
     effect!(worst, settings, crate::setting::store::settings_keep_step());
     // After every producer has spoken, including assets asked for during the turn.
-    effect!(worst, assets, crate::io::request::declare(crate::io::demand::Category::asset, crate::io::load::load_wants()));
+    effect!(worst, assets, crate::io::request::declare(crate::io::demand::Stream::asset, crate::io::load::load_wants()));
     effect!(worst, pump, pump());
     *WORST_EFFECT.get(|| (0.0, None)) = worst;
     now() - at

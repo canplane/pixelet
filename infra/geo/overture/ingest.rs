@@ -9,7 +9,7 @@ parquet = { version = "60", default-features = false, features = ["arrow", "snap
 postgres = "0.19"
 pxl-geo-bake = { path = "../../../crates/server/geo-bake" }
 pxl-spec = { path = "../../../crates/spec" }
-xpute-core = { path = "../../../xpute/rust/core" }
+xpute-kit = { path = "../../../xpute/rust/kit" }
 serde_json = "1"
 ---
 
@@ -56,7 +56,7 @@ use pxl_geo_bake::util::fnv1a;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::world::REACH;
 use serde_json::{Map, Number, Value};
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 /// An Overture type, its table, its generated columns, its indexes past the geometry's.
 #[derive(Debug)]

@@ -11,9 +11,9 @@ import UIKit
 /// and what the shell asks of the system.
 ///
 /// The kernel's memory is handed over as one ArrayBuffer over the region the
-/// core took — no copy, so a ring the shell writes is the ring the kernel
+/// guest took — no copy, so a ring the shell writes is the ring the kernel
 /// reads. The shell calls on the JavaScript thread, one call at a time; the
-/// core runs each on its own thread while this one waits
+/// guest runs each on its own thread while this one waits
 /// (crates/client-bracket/native/src/thread.rs), and an image's decode runs off both.
 public class PlatformModule: Module {
   public func definition() -> ModuleDefinition {
@@ -28,12 +28,12 @@ public class PlatformModule: Module {
       ViewModifierRegistry.unregister(contentScrollsModifier)
     }
 
-    // ---- the kernel (platform/core.ts, gpu.ts, image.ts) ----
+    // ---- the kernel (platform/guest.ts, gpu.ts, image.ts) ----
 
     Function("memory") { () throws -> NativeArrayBuffer in
       var bytes: UInt32 = 0
       guard let at = pxl_memory(&bytes) else { throw MemoryException() }
-      // The region is the core's for the app's life: nothing is let go when
+      // The region is the guest's for the app's life: nothing is let go when
       // the buffer is.
       return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: Int(bytes)), cleanup: {})
     }
@@ -152,6 +152,6 @@ public class PlatformModule: Module {
 
 internal final class MemoryException: Exception, @unchecked Sendable {
   override var reason: String {
-    "the core has no memory"
+    "the guest has no memory"
   }
 }

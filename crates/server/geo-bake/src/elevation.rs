@@ -16,7 +16,7 @@ use pxl_spec::space::coord::adapter::epsg3857::BBox3857;
 use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, u_per_m};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 const HELD: usize = 512;
 

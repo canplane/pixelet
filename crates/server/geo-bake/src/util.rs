@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use xpute_core::math::scalar::round;
+use xpute_kit::math::scalar::round;
 
 /// The `Content-Encoding` every baked tile is uploaded with, so the transport decodes it.
 pub const CONTENT_ENCODING: &str = "zstd";
