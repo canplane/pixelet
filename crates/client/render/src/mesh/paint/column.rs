@@ -34,6 +34,14 @@ pub fn stands_of(sample: &ChunkSample, painter: &Painter, cells: &HashMap<[i64; 
         }
     }
     stands.sort_unstable_by_key(|&(col, (z, _, _))| (col, z));
+    // A stack of one material is one stand, however many leaves it was folded from.
+    stands.dedup_by(|above, below| {
+        let joins = above.0 == below.0 && above.1 .0 == below.1 .1 && above.1 .2 == below.1 .2;
+        if joins {
+            below.1 .1 = above.1 .1;
+        }
+        joins
+    });
     let placed = stands.len();
     // A deck's span keeps only what nothing placed stands in.
     let mut next = 0;

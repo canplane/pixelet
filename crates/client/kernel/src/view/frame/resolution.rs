@@ -39,6 +39,11 @@ fn resolution() -> &'static mut Resolution {
     })
 }
 
+/// Device pixels per CSS pixel the world is drawn at now.
+pub fn world_ratio() -> f64 {
+    resolution().ratio
+}
+
 /// 0 is a device that reports none.
 pub fn resolution_observe(gpu_ms: f64) {
     resolution().gpu_ms = (gpu_ms > 0.0).then_some(gpu_ms);

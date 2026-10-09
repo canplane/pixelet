@@ -154,3 +154,35 @@ fn an_edge_wall_reaches_down_to_the_ground_beside_it() {
         assert!(covers(&faces, 1.0 + 1e-3, 20.0), "step {lod_step}: east faces {faces:?} leave the drop to the ground beside open");
     }
 }
+
+/// A fold's fixed point: a cell full of one leaf folds to that leaf, its
+/// swatch and its texture, not a summary of it.
+#[test]
+fn a_cell_full_of_one_leaf_folds_to_that_leaf() {
+    let (span, taps) = (10, taps_of(5));
+    let columns: Vec<Vec<Run>> = (0..span * span).map(|_| vec![Run { z0: 0, z1: 7, rgb: [10, 20, 30], layer: taps }]).collect();
+    let set = set_of(span, &columns);
+    let mut bake = BakeContext::default();
+    let view = set.view();
+    assert!(bake.begin(&view, 2, 1.0, 1.0, true, true, (8, 512), None).is_ok());
+    let mut buf: Vec<u32> = Vec::new();
+    loop {
+        match bake.step(&view) {
+            Step::Working => {}
+            Step::NeedMesh(n) => {
+                buf = vec![0; n as usize];
+                // SAFETY: `buf`, untouched until the bake is done.
+                unsafe { bake.provide_mesh(buf.as_mut_ptr(), n) };
+            }
+            Step::Full => panic!("one block holds the mesh"),
+            Step::Refused => panic!("the heap refused a test bake"),
+            Step::Done => break,
+        }
+    }
+    let mesh = bake.finish();
+    let boxes = &buf[..(mesh.box_cnt * FINE_BOX_WORDS) as usize];
+    assert!(!boxes.is_empty());
+    for m in boxes.chunks(FINE_BOX_WORDS as usize) {
+        assert_eq!((m[3].to_le_bytes(), m[4]), ([10, 20, 30, 0], taps));
+    }
+}
