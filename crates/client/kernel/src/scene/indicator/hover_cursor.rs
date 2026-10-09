@@ -5,7 +5,7 @@
 //! shows is the tool's (`control/interaction/ghost.rs`); this draws it.
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
-use pxl_render::mesh::chunk::{write_lone_box, Heights, FINE_BOX_WORDS};
+use pxl_render::mesh::chunk::{on_whole_units, write_lone_box, Heights, FINE_BOX_WORDS};
 use pxl_render::mesh::word::NO_LAYER;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::mem::base::ptr_at;
@@ -17,7 +17,7 @@ pub const GHOST_OPACITY: f32 = 0.5;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Shape {
-    Box { size_bits: u64, rgb: [u8; 3], layer: u8, coplanar: bool },
+    Box { size_bits: u64, offset_bits: [u64; 3], rgb: [u8; 3], layer: u8, coplanar: bool },
     Decor { group: u32, rotation_bits: u32, scale_bits: u32 },
 }
 
@@ -45,8 +45,10 @@ impl GhostDraw {
             Some((m, l)) => ([(m >> 16) as u8, (m >> 8) as u8, m as u8], l),
             None => ([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8),
         };
+        let offset = on_whole_units(at).1;
         let shape = Shape::Box {
             size_bits: size.to_bits(),
+            offset_bits: offset.map(f64::to_bits),
             rgb,
             layer,
             coplanar,
@@ -59,7 +61,7 @@ impl GhostDraw {
         let Some(block) = self.replace(draw, shape, bytes) else { return true };
         // SAFETY: a block of the words asked for, this ghost's until replaced.
         let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), bytes as usize / 4) };
-        let heights = write_lone_box(m, size, rgb, layer);
+        let heights = write_lone_box(m, offset, size, rgb, layer);
         self.held.as_mut().unwrap().heights = heights;
         self.upload(draw, 1, 0);
         true
@@ -114,15 +116,15 @@ impl GhostDraw {
 
     pub fn draw(&self, draw: &mut DrawList, eye: V3) {
         let Some(h) = &self.held else { return };
-        let t = DrawList::translation(self.at, eye);
         match h.shape {
             Shape::Box { coplanar, size_bits, .. } => {
                 let pipeline = if coplanar { PIPELINE_GHOST_BOX_COPLANAR } else { PIPELINE_GHOST_BOX };
+                let t = DrawList::translation(on_whole_units(self.at).0, eye);
                 // Written in a cell of its own size (write_lone_box).
                 let unit = f64::from_bits(size_bits) as f32;
                 draw.draw_in(pipeline, h.handle, 1, 0, t, GHOST_OPACITY, unit, h.heights.step as f32);
             }
-            Shape::Decor { group, .. } => draw.draw_instances(PIPELINE_GHOST_DECOR, h.handle, group, 1, [0, 1, 6], t, GHOST_OPACITY),
+            Shape::Decor { group, .. } => draw.draw_instances(PIPELINE_GHOST_DECOR, h.handle, group, 1, [0, 1, 6], DrawList::translation(self.at, eye), GHOST_OPACITY),
         }
     }
 }

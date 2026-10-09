@@ -27,7 +27,7 @@ Nothing now.
   already names "the GPU's feedback" as a better estimator) — and how the
   choice stays on the main axis, the grid deciding the chunk, the chunk
   asking the query, nothing beside the hierarchy. Near "How the samples are
-  drawn" above.
+  drawn", parked below.
 
 ## P2
 

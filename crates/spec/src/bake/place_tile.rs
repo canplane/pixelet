@@ -30,19 +30,28 @@ pub const PLACE_LAST: Zoom = 19;
 /// An icon's cell: a mark's, which a power of two makes nest.
 const ICON_STEPS: Zoom = MARK_STEPS;
 
-/// A cell an icon wide at its tile's zoom of Carto's, scaled a step coarser
-/// than the camera grid, so an icon spans two grid cells, 20 to 24 pixels
-/// where Carto's is 16: which zoom of Carto's a place is drawn at there, and
-/// so which categories show, is the tile zoom of the grid's cell
-/// (`Lattice::tile_zoom_of_grid`), past the leaf too.
-pub const PLACE_LATTICE: Lattice = Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-1);
+/// The one knob of how far apart places stand, in zooms: an icon's cell is
+/// this many coarser than the camera grid's, and the cell a place keeps to
+/// itself this many coarser again. At 2 an icon's cell spans four grid
+/// cells, some 48 pixels round the drawn icon (22), and a place keeps four
+/// icons a side, some 190 pixels, which also holds a name of a few words; at
+/// 1 places stood too close for their names. A product choice.
+const SPREAD_STEPS: Zoom = 2;
 
-/// The cell a place keeps to itself, as a zoom under the tile: four icons a
-/// side, eight grid cells, some 80 to 100 pixels on a phone or a laptop,
-/// which also holds a name of a few words. A product choice, as places are
-/// seen: at an icon's own cell, places a few metres apart stood side by side
-/// as near as the view came.
-const SPACING_STEPS: Zoom = ICON_STEPS - 2;
+/// A cell an icon wide at its tile's zoom of Carto's, `SPREAD_STEPS` coarser
+/// than the camera grid: which zoom of Carto's a place is drawn at there,
+/// and so which categories show, is the tile zoom of the grid's cell
+/// (`Lattice::tile_zoom_of_grid`), past the leaf too.
+pub const PLACE_LATTICE: Lattice = Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i8));
+
+/// The cell a place keeps to itself, as a zoom under the tile. Seen at an
+/// icon's own cell, places a few metres apart stood side by side as near as
+/// the view came.
+const SPACING_STEPS: Zoom = ICON_STEPS - SPREAD_STEPS;
+
+/// The camera grid's cells across the cell a place keeps to itself, which
+/// its name wraps to.
+pub const SPACING_CELLS: u32 = 1 << (PLACE_LATTICE.grid_zoom(LEAF_ZOOM) - LEAF_ZOOM - SPACING_STEPS);
 
 /// The coarsest zoom any category is shown from; no tile coarser holds a place.
 pub const PLACE_FIRST: Zoom = {

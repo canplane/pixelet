@@ -12,15 +12,18 @@ use xpute_guest::abi::handle::Slots;
 use crate::billboard::sheet::billboard_sheet;
 
 /// Anchor relative to the set's (3), logical size in pixels (2), sheet
-/// rectangle (4), anchor's place down the sprite, 0 top 1 bottom (1).
-/// badge.wgsl reads the same stride.
-pub const BILLBOARD_FLOATS: usize = 10;
+/// rectangle (4), anchor's place down the sprite, 0 top 1 bottom (1), and
+/// its region's width (1). badge.wgsl reads the same stride.
+pub const BILLBOARD_FLOATS: usize = 11;
 
 /// One instance: its anchor `at`, `size` in logical pixels, the sheet's
-/// `slot`, and where down the sprite the anchor stands.
-pub fn billboard_instance(at: V3, size: [f64; 2], slot: u32, down: f64) -> [f32; BILLBOARD_FLOATS] {
+/// `slot`, where down the sprite the anchor stands, and the width of the
+/// region it keeps, as tall as it and centered on it: a billboard is one
+/// thing, hidden whole where a nearer one's region is in front of its anchor
+/// (badge.wgsl).
+pub fn billboard_instance(at: V3, size: [f64; 2], slot: u32, down: f64, region: f64) -> [f32; BILLBOARD_FLOATS] {
     let sheet = billboard_sheet();
-    [at[0], at[1], at[2], size[0], size[1], sheet.u0(slot), sheet.v0(slot), sheet.u1(slot), sheet.v1(slot), down].map(|v| v as f32)
+    [at[0], at[1], at[2], size[0], size[1], sheet.u0(slot), sheet.v0(slot), sheet.u1(slot), sheet.v1(slot), down, region.max(size[0])].map(|v| v as f32)
 }
 
 #[derive(Clone, Copy)]

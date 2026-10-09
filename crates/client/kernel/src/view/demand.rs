@@ -91,7 +91,7 @@ impl Observed for Earth {
 #[derive(PartialEq)]
 struct Seen {
     o: Option<Observation>,
-    floor: [Option<Tile>; Floor::TILES as usize],
+    floor: Vec<Tile>,
     destination: Option<Tile>,
     tau: Tau,
     /// The published goal's.
@@ -166,7 +166,7 @@ impl<L: Observed> Demand<L> {
 
     /// The floor's tiles as last observed.
     pub fn floor(&self) -> impl Iterator<Item = Tile> + Clone + '_ {
-        self.last.iter().flat_map(|seen| seen.floor.iter().flatten().copied())
+        self.last.iter().flat_map(|seen| seen.floor.iter().copied())
     }
 
     pub fn demand(&self) -> &[Tile] {
@@ -245,11 +245,11 @@ impl<L: Observed> Demand<L> {
             if !matches!(L::ASKS, Asks::Line) {
                 let mut floor = 0u32;
                 let f = floor_at.unwrap_or(o);
-                Floor::floor(f, top, |p| {
+                Floor::<L>::floor(f, top, |p| {
                     floor += 1;
                     ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
                 });
-                xpute_kit::ensure!(floor <= Floor::TILES, ENOTRECOVERABLE, floor);
+                xpute_kit::ensure!(floor <= Floor::<L>::TILES, ENOTRECOVERABLE, floor);
             }
         }
         // The whole line, not only the finest tile: which one says the ground is
@@ -305,18 +305,21 @@ impl<L: Observed> Demand<L> {
         };
         let live = observation().map(own);
         let seen_from = live.map(|live| published.as_ref().map_or(live, |d| own(*d.observation)));
+        let mut now = self.now.take().unwrap_or_else(|| Seen {
+            o: None,
+            floor: Vec::new(),
+            destination: None,
+            tau,
+            footprints: Vec::new(),
+            lacks: Vec::new(),
+        });
         // the floor follows the live eye, so a jump asks for it at once
-        let mut floor_now = [None; Floor::TILES as usize];
+        now.floor.clear();
         if let Some(l) = &live {
-            let mut n = 0;
-            Floor::floor(l, top, |p| {
-                if n < floor_now.len() {
-                    floor_now[n] = Some(p);
-                }
-                n += 1;
-            });
+            Floor::<L>::floor(l, top, |p| now.floor.push(p));
         }
         if seen_from.is_none() && destination.is_none() {
+            self.now = Some(now);
             return;
         }
         let tau = match seen_from {
@@ -324,15 +327,7 @@ impl<L: Observed> Demand<L> {
             None => Tau::FINEST,
         };
         let o = seen_from.map(|o| Observation { reach: o.reach.min(L::reach()), ..o });
-        let mut now = self.now.take().unwrap_or_else(|| Seen {
-            o: None,
-            floor: [None; Floor::TILES as usize],
-            destination: None,
-            tau,
-            footprints: Vec::new(),
-            lacks: Vec::new(),
-        });
-        (now.o, now.floor, now.destination, now.tau) = (o, floor_now, destination, tau);
+        (now.o, now.destination, now.tau) = (o, destination, tau);
         now.footprints.clear();
         now.footprints.extend_from_slice(published.as_ref().map_or(&[], |d| d.footprints));
         now.lacks.clear();

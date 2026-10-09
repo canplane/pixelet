@@ -60,8 +60,6 @@ pub fn stage_write() {
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
     s[STAGE_AT::FOV] = v.fov;
-    s[STAGE_AT::NEAR] = v.near;
-    s[STAGE_AT::FAR] = v.far;
     // The camera grid's cell angle: the largest drawn cell per unit of
     // distance, since a cell is drawn from its split distance on.
     s[STAGE_AT::LOD_CELL] = crate::view::sight::cell_angle(crate::chunk::quality::effective().tau());
@@ -69,7 +67,8 @@ pub fn stage_write() {
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
     s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
-    s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH;
+    // In the pixels the world is drawn at, which the resolution steps.
+    s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH * crate::view::frame::resolution::world_ratio();
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { crate::param::RIM_INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
 }

@@ -114,7 +114,8 @@ impl Default for Heights {
 }
 
 impl Heights {
-    /// In units, from a set whose cells are `z_unit` tall.
+    /// In units, from a set whose cells are `z_unit` tall. The floor stands on
+    /// a whole unit, so a texture's repeat is read off the mesh's own heights.
     fn of(set: &RunSet, z_unit: f64) -> Heights {
         let (mut lo, mut hi) = (i32::MAX, i32::MIN);
         for i in 0..set.count as usize {
@@ -124,9 +125,10 @@ impl Heights {
         if lo > hi {
             return Heights::default();
         }
-        let span = (hi - lo) as f64 * z_unit;
+        let floor = (lo as f64 * z_unit).floor();
+        let span = hi as f64 * z_unit - floor;
         Heights {
-            floor: lo as f64 * z_unit,
+            floor,
             step: (span / Z_STEPS).max(f64::MIN_POSITIVE),
         }
     }
@@ -186,9 +188,22 @@ struct ZBucketAccum {
     vr: f64,
     vg: f64,
     vb: f64,
+    /// The one cell it holds, swatch and taps, while every run in it is that cell.
+    one: Option<([u8; 3], u32)>,
+    mixed: bool,
 }
 
 impl ZBucketAccum {
+    fn meet(&mut self, cell: ([u8; 3], u32)) {
+        self.mixed |= self.one.is_some_and(|o| o != cell);
+        self.one = Some(cell);
+    }
+
+    /// Full of one cell: then it is that cell, drawn as the leaves are, not a summary.
+    fn whole(&self, volume: f64) -> Option<([u8; 3], u32)> {
+        self.one.filter(|_| !self.mixed && self.coverage >= volume)
+    }
+
     fn add(&mut self, volume: f64, faces: f64, rgb: [f64; 3]) {
         self.coverage += volume;
         self.faces += faces;
@@ -760,6 +775,7 @@ impl BakeContext {
             let idx = self.find_or_create_bucket(start, cnt, run_z0.div_euclid(bucket));
             let acc = &mut self.buckets[idx as usize];
             acc.ground |= set.side[i] != Side::OBJECT;
+            acc.mixed = true;
             acc.add(frac * frac * frac * cell as f64, FULL_FACE_CNT as f64 * frac * frac, rgb);
             return cnt.max(idx - start + 1);
         }
@@ -771,6 +787,7 @@ impl BakeContext {
             cnt = cnt.max(idx - start + 1);
             let acc = &mut self.buckets[idx as usize];
             acc.ground |= set.side[i] != Side::OBJECT;
+            acc.meet((swatch, set.layer_taps[i]));
             acc.add((hi - lo + 1) as f64, exposed_faces(set, col, i, lo, hi), rgb);
         }
         cnt
@@ -806,8 +823,7 @@ impl BakeContext {
             let linear = libm::cbrt(kept);
             // A sparse cell is inset by the cube root of its fill on every axis.
             let inset = (linear < 1.0).then(|| pack_inset(linear));
-            let rgb = acc.color();
-            let taps = taps_of(NO_LAYER as u8);
+            let (rgb, taps) = acc.whole(volume).unwrap_or((acc.color(), taps_of(NO_LAYER as u8)));
             // A shrunk ground box leaves gaps that read as holes from above, so a ground
             // cell lays its full bottom face as a floor. The lowest box also hangs a skirt
             // a cell down, or a step between neighbors' floors showed daylight.
@@ -871,11 +887,20 @@ impl BakeContext {
 
 /// Every lateral edge a crease, so each shades as a silhouette.
 const LONE_BOX_FACES: u32 = ALL_FACES | ALL_CREASES;
-/// The hover ghost's box, written as a bake writes one so it is lit as a placed cube is.
-pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) -> Heights {
+/// Where a mesh holding a box cornered at `min` stands, and the box in it: on
+/// the whole unit under it, as a chunk's mesh stands, so a texture's repeat is
+/// read off the mesh's own coordinates.
+pub fn on_whole_units(min: V3) -> (V3, V3) {
+    let origin = min.map(f64::floor);
+    (origin, [min[0] - origin[0], min[1] - origin[1], min[2] - origin[2]])
+}
+
+/// The hover ghost's box at `offset` in its mesh (`on_whole_units`), written
+/// as a bake writes one so it is lit and tiled as a placed cube is.
+pub fn write_lone_box(m: &mut [u32], offset: V3, size: f64, rgb: [u8; 3], layer: u8) -> Heights {
     xpute_kit::ensure!(m.len() == FINE_BOX_WORDS as usize, ENOTRECOVERABLE);
-    let heights = Heights { floor: 0.0, step: size / Z_STEPS };
-    write_box(m, [0.0; 3], [size; 3], rgb, taps_of(layer), LONE_BOX_FACES, size, heights);
+    let heights = Heights { floor: 0.0, step: (offset[2] + size) / Z_STEPS };
+    write_box(m, offset, [size; 3], rgb, taps_of(layer), LONE_BOX_FACES, size, heights);
     heights
 }
 

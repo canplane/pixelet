@@ -3,7 +3,7 @@
 //! Visibility of world-anchored billboards: in the frustum as a sphere about
 //! the anchor (a point test dropped the nearest badges first at an oblique
 //! camera, since a badge is drawn above its anchor), and with a box on
-//! screen. Overlaps are kept: a badge stands for the places under its cell.
+//! screen, nearest first.
 
 use pxl_spec::space::coord::mat4::mat4_transform_point;
 use pxl_spec::space::coord::v3::{add3, dot3, sub3};
@@ -56,14 +56,14 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>)
         mat4_transform_point(&mut ndc, &v.world_view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
         let [sx, sy] = ndc_to_px([ndc[0], ndc[1]]);
 
-        let w = batch.w_px[i] as f64;
+        let w = batch.region_px[i] as f64;
         let x0 = sx - w / 2.0;
         let y0 = sy - batch.anchor_px[i] as f64;
-        let (x1, y1) = (x0 + w, sy);
-        if x1 < 0.0 || y1 < 0.0 || x0 > v.width || y0 > v.height {
+        let region = [x0, y0, x0 + w, y0 + batch.h_px[i] as f64];
+        if region[2] < 0.0 || region[3] < 0.0 || x0 > v.width || y0 > v.height {
             continue;
         }
-        batch.screen[i] = [x0, y0, x1, y1];
+        batch.screen[i] = region;
         out.push(i as u32);
     }
 }
