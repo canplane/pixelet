@@ -49,7 +49,7 @@ One CX23 (2 vCPU, 4 GB, 40 GB) runs both servers, both databases and Caddy
 in one compose stack (`prod/`). Caddy is the only published port and sends
 `/geo/*` to `api` (pxl-geo) and `/api/*` to `app` (pxl-api). Production's
 db-geo holds only what search reads: `overture_places`,
-`overture_division_areas`, `overture_divisions` and their catalog rows.
+`overture_division_areas` and `overture_divisions`.
 
 ### Setup, once
 
@@ -97,8 +97,7 @@ a format production's Postgres 16 cannot restore:
 set -a; . ./.env; set +a
 docker exec pixelet-db-geo pg_dump --format=custom --no-owner \
   -U "$DB_GEO_USER" -d "$DB_GEO_NAME" \
-  -t overture_places -t overture_division_areas -t overture_divisions \
-  -t overture_catalog > overture.dump
+  -t overture_places -t overture_division_areas -t overture_divisions > overture.dump
 
 scp overture.dump root@$(hcloud server ip pixelet-prod):
 ssh root@$(hcloud server ip pixelet-prod)
@@ -114,8 +113,8 @@ sql() { docker exec -i pixelet-db-geo sh -c 'exec "$@" -U "$POSTGRES_USER" -d "$
 sql psql -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm;'
 # one transaction: a failure leaves the old tables as they were
 sql pg_restore --no-owner --no-privileges --clean --if-exists --single-transaction < ~/overture.dump
-# only the copied tables' catalog rows, and the planner's statistics restore does not write
-sql psql -v ON_ERROR_STOP=1 -c "DELETE FROM overture_catalog WHERE table_name NOT IN ('overture_places', 'overture_division_areas', 'overture_divisions'); ANALYZE overture_places; ANALYZE overture_division_areas; ANALYZE overture_divisions;"
+# the planner's statistics, which restore does not write
+sql psql -v ON_ERROR_STOP=1 -c "ANALYZE overture_places; ANALYZE overture_division_areas; ANALYZE overture_divisions;"
 rm ~/overture.dump
 ```
 
