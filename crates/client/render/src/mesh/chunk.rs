@@ -899,7 +899,10 @@ pub fn on_whole_units(min: V3) -> (V3, V3) {
 /// as a bake writes one so it is lit and tiled as a placed cube is.
 pub fn write_lone_box(m: &mut [u32], offset: V3, size: f64, rgb: [u8; 3], layer: u8) -> Heights {
     xpute_kit::ensure!(m.len() == FINE_BOX_WORDS as usize, ENOTRECOVERABLE);
-    let heights = Heights { floor: 0.0, step: (offset[2] + size) / Z_STEPS };
+    let heights = Heights {
+        floor: 0.0,
+        step: (offset[2] + size) / Z_STEPS,
+    };
     write_box(m, offset, [size; 3], rgb, taps_of(layer), LONE_BOX_FACES, size, heights);
     heights
 }

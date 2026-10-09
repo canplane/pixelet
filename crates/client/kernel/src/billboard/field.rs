@@ -23,7 +23,20 @@ pub const BILLBOARD_FLOATS: usize = 11;
 /// (badge.wgsl).
 pub fn billboard_instance(at: V3, size: [f64; 2], slot: u32, down: f64, region: f64) -> [f32; BILLBOARD_FLOATS] {
     let sheet = billboard_sheet();
-    [at[0], at[1], at[2], size[0], size[1], sheet.u0(slot), sheet.v0(slot), sheet.u1(slot), sheet.v1(slot), down, region.max(size[0])].map(|v| v as f32)
+    [
+        at[0],
+        at[1],
+        at[2],
+        size[0],
+        size[1],
+        sheet.u0(slot),
+        sheet.v0(slot),
+        sheet.u1(slot),
+        sheet.v1(slot),
+        down,
+        region.max(size[0]),
+    ]
+    .map(|v| v as f32)
 }
 
 #[derive(Clone, Copy)]

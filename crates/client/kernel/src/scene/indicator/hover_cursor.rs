@@ -17,8 +17,18 @@ pub const GHOST_OPACITY: f32 = 0.5;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Shape {
-    Box { size_bits: u64, offset_bits: [u64; 3], rgb: [u8; 3], layer: u8, coplanar: bool },
-    Decor { group: u32, rotation_bits: u32, scale_bits: u32 },
+    Box {
+        size_bits: u64,
+        offset_bits: [u64; 3],
+        rgb: [u8; 3],
+        layer: u8,
+        coplanar: bool,
+    },
+    Decor {
+        group: u32,
+        rotation_bits: u32,
+        scale_bits: u32,
+    },
 }
 
 struct Held {
