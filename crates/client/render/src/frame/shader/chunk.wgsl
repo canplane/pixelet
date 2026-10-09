@@ -200,16 +200,20 @@ fn chunk_vertex(v: u32, words: BoxWords, fine: bool) -> VertexOut {
   o.sun = seen.light.sun;
   o.other = seen.light.other;
   o.fill = seen.light.fill;
-  // Real-size tile UV, one repeat per cell; side faces put the box's top at v = 0.
+  // Real-size tile UV, one repeat a unit, read from where the face stands and
+  // not from its box: a leaf cut into several boxes still wears one tile. The
+  // mesh's corner and floor stand on whole units (Heights::of), so its own
+  // coordinates are the world's modulo the repeat; v runs down a side.
+  let p = vec3f(b.min_xy, b.z.x) + size * (local + 0.5);
   let is_side = abs(normal.z) < 0.5;
   if (is_side) {
     if (abs(normal.x) > 0.5) {
-      o.box_uv = vec2f((local.y + 0.5) * size.y, (0.5 - local.z) * size.z);
+      o.box_uv = vec2f(p.y, -p.z);
     } else {
-      o.box_uv = vec2f((local.x + 0.5) * size.x, (0.5 - local.z) * size.z);
+      o.box_uv = vec2f(p.x, -p.z);
     }
   } else {
-    o.box_uv = vec2f((local.x + 0.5) * size.x, (local.y + 0.5) * size.y);
+    o.box_uv = p.xy;
   }
   return o;
 }
@@ -234,12 +238,14 @@ fn crease_dist(d: f32, convex: bool, concave: bool) -> f32 {
 
 // An edge is a crease when the face that way also exists or the cell at
 // (d + n) is solid. Flat ground has no creases.
-fn edge_factor(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f32 {
+// `pixel` is the units one of the surface's pixels spans along each axis: an
+// edge is a line of the same pixels whatever the cube's size or distance.
+fn edge_factor(local_pos: vec3f, box_scale: vec3f, pixel: vec3f, normal: vec3f, faces: u32) -> f32 {
   if (frame_edge_strength() <= 0.0) {
     return 0.0;
   }
   let is_side = abs(normal.z) < 0.5;
-  let dist_to_edge = (0.5 - abs(local_pos)) * box_scale;
+  let dist_to_edge = (0.5 - abs(local_pos)) * box_scale / max(pixel, vec3f(1e-9));
   let px = local_pos.x > 0.0;
   let py = local_pos.y > 0.0;
   let pz = local_pos.z > 0.0;
@@ -279,26 +285,26 @@ fn edge_factor(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) ->
   return t * t;
 }
 
-// Corner occlusion from the mesher's face bits: each concave edge darkens over
-// AO_REACH cells; silhouette edges take none.
-const AO_REACH: f32 = 1.5;
 // #1a1006 as a ratio: a warm contact shadow rather than gray.
 const AO_TINT: vec3f = vec3f(1.0, 0.615, 0.231);
 
+// Corner occlusion from the mesher's face bits: each concave edge darkens over
+// one of the mesh's cells, `d` in them, and no further, since a box knows only
+// the cells beside it: a reach past them was cut where the next box began.
 // Squared, not smoothstep: a smoothstep sits flat against the wall and reads as
 // a dark strip with an edge rather than a gradient.
 fn occlusion_of(d: f32) -> f32 {
-  let t = 1.0 - clamp(d / AO_REACH, 0.0, 1.0);
+  let t = 1.0 - clamp(d, 0.0, 1.0);
   return t * t;
 }
 
-fn occlusion(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f32 {
+fn occlusion(local_pos: vec3f, box_scale: vec3f, cell: f32, normal: vec3f, faces: u32) -> f32 {
   if (frame_ao_strength() <= 0.0) {
     return 0.0;
   }
   let is_side = abs(normal.z) < 0.5;
-  let to_pos = (0.5 - local_pos) * box_scale;
-  let to_neg = (0.5 + local_pos) * box_scale;
+  let to_pos = (0.5 - local_pos) * box_scale / cell;
+  let to_neg = (0.5 + local_pos) * box_scale / cell;
   let x_dom = abs(normal.x) > 0.5;
   var n_positive: bool;
   if (x_dom) {
@@ -366,14 +372,14 @@ fn occlusion(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f
 
 // Minecraft's grass over dirt: the surface cell wears top/side/bottom, every
 // cell under it (or under something) wears the bottom image on every face.
-fn face_image(normal: vec3f, v: f32, faces: u32) -> u32 {
+fn face_image(normal: vec3f, below_top: f32, faces: u32) -> u32 {
   if (normal.z > 0.5) {
     return IMAGE_TOP;
   }
   if (normal.z < -0.5) {
     return IMAGE_BOTTOM;
   }
-  return select(IMAGE_BOTTOM, IMAGE_SIDE, v < 1.0 && !face_bit(faces, CAP_PZ));
+  return select(IMAGE_BOTTOM, IMAGE_SIDE, below_top < 1.0 && !face_bit(faces, CAP_PZ));
 }
 
 // Gradients are passed in because the read is inside a branch.
@@ -395,21 +401,23 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let textured = i.layer_taps.x < NO_LAYER - 0.5 && frame_low_spec() < 0.5;
   let ddx = dpdx(i.box_uv);
   let ddy = dpdy(i.box_uv);
+  let at = i.local_pos * i.box_scale;
+  let pixel = sqrt(dpdx(at) * dpdx(at) + dpdy(at) * dpdy(at));
   var taps = i.rgb;
   if (textured) {
-    let image = face_image(i.normal, i.box_uv.y, i.faces);
+    let image = face_image(i.normal, (0.5 - i.local_pos.z) * i.box_scale.z, i.faces);
     taps = (sample_tap(i.layer_taps.x, image, i.box_uv, ddx, ddy, i.rgb)
       + sample_tap(i.layer_taps.y, image, i.box_uv, ddx, ddy, i.rgb)
       + sample_tap(i.layer_taps.z, image, i.box_uv, ddx, ddy, i.rgb)
       + sample_tap(i.layer_taps.w, image, i.box_uv, ddx, ddy, i.rgb)) * 0.25;
   }
   var base = taps;
-  base = base * mix(1.0, 1.0 - frame_edge_strength(), edge_factor(i.local_pos, i.box_scale, i.normal, i.faces));
+  base = base * mix(1.0, 1.0 - frame_edge_strength(), edge_factor(i.local_pos, i.box_scale, pixel, i.normal, i.faces));
 
   // Ground shrunk into a box is lit under as over: below it is more ground.
   let under = i.normal.z < -0.5 && face_bit(i.faces, UNDER_AS_TOP);
   let n = normalize(select(i.normal, vec3f(i.normal.xy, -i.normal.z), under));
-  let k = frame_ao_strength() * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
+  let k = frame_ao_strength() * occlusion(i.local_pos, i.box_scale, i.cell, i.normal, i.faces);
   let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
   let color = shade(base, n, i.world_pos, sun_lit(i.world_pos, n), open * screen_open(i.clip.xy), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
   return vec4f(finish(cell_share(color, i), i.clip.xy), i.opacity);

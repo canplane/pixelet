@@ -21,6 +21,7 @@ const FILL: u32 = 0;
 const STROKE: u32 = 1;
 const TRIANGLE: u32 = 2;
 const TEXT: u32 = 3;
+const HALO: u32 = 4;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Align {
@@ -34,6 +35,18 @@ struct Line {
     text: String,
     at: [f32; 2],
     align: Align,
+    halo: Option<Halo>,
+}
+
+/// A color round a line's glyphs and its radius, and under it a shadow, its
+/// color, radius and drop; in logical pixels.
+#[derive(Clone, Copy)]
+pub struct Halo {
+    pub color: u32,
+    pub radius: f32,
+    pub shadow: u32,
+    pub shadow_radius: f32,
+    pub shadow_dy: f32,
 }
 
 /// Device pixels a sheet draws per logical pixel: past two, texels cost more
@@ -107,6 +120,15 @@ impl Sketch {
         self.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, color);
     }
 
+    /// A disc whose edge fades over `edge` and whose fill is `shade` lighter
+    /// at its top and as much darker at its foot.
+    #[allow(clippy::too_many_arguments)]
+    pub fn soft_circle(&mut self, cx: f32, cy: f32, r: f32, edge: f32, shade: f32, color: u32) {
+        let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
+        let scale = SHEET_SCALE as f32;
+        self.shapes.push(shape(FILL, rect, color, [r * scale, edge * scale, 0.0, 0.0], [shade, 0.0]));
+    }
+
     pub fn ring(&mut self, cx: f32, cy: f32, r: f32, width: f32, color: u32) {
         let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
         let scale = SHEET_SCALE as f32;
@@ -131,7 +153,17 @@ impl Sketch {
             text: text.to_owned(),
             at: [x, y],
             align,
+            halo: None,
         });
+    }
+
+    /// Text over its own glyphs grown into `halo`, under every line's text.
+    #[allow(clippy::too_many_arguments)]
+    pub fn haloed_text(&mut self, font: Font, color: u32, halo: Halo, text: &str, x: f32, y: f32, align: Align) {
+        self.text(font, color, text, x, y, align);
+        if let Some(line) = self.lines.last_mut() {
+            line.halo = Some(halo);
+        }
     }
 }
 
@@ -175,16 +207,40 @@ impl SheetPainter {
         let lines = object();
         g.texture(lines, layer_w, layer_h, layers, format::RGBA8_SRGB, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST);
         let mut shapes = sketch.shapes.clone();
-        for (layer, (line, r)) in sketch.lines.iter().zip(&rasters).enumerate() {
-            g.write_texture(lines, layer as u32, r.width, r.height, r.pixels);
-            let start = match line.align {
-                Align::Left => px(line.at[0]),
-                Align::Center => px(line.at[0]) - r.advance / 2.0,
-            };
-            let x0 = round(start - r.origin[0]);
-            let y0 = round(px(line.at[1]) - r.origin[1]);
-            let place = [x0, y0, x0 + r.width as f32, y0 + r.height as f32];
-            let cover = [layer as f32, r.width as f32 / layer_w as f32, r.height as f32 / layer_h as f32, 0.0];
+        let placed: Vec<([f32; 4], [f32; 4])> = sketch
+            .lines
+            .iter()
+            .zip(&rasters)
+            .enumerate()
+            .map(|(layer, (line, r))| {
+                g.write_texture(lines, layer as u32, r.width, r.height, r.pixels);
+                let start = match line.align {
+                    Align::Left => px(line.at[0]),
+                    Align::Center => px(line.at[0]) - r.advance / 2.0,
+                };
+                let x0 = round(start - r.origin[0]);
+                let y0 = round(px(line.at[1]) - r.origin[1]);
+                let place = [x0, y0, x0 + r.width as f32, y0 + r.height as f32];
+                (place, [layer as f32, r.width as f32 / layer_w as f32, r.height as f32 / layer_h as f32, 0.0])
+            })
+            .collect();
+        // Every shadow, then every halo, so one line's never covers another's.
+        let scale = SHEET_SCALE as f32;
+        for (line, &(place, cover)) in sketch.lines.iter().zip(&placed) {
+            if let Some(h) = line.halo {
+                let dy = round(h.shadow_dy * scale);
+                let dropped = [place[0], place[1] + dy, place[2], place[3] + dy];
+                // Soft over all of its radius past the halo's.
+                let soft = (h.shadow_radius - h.radius) * scale;
+                shapes.push(shape(HALO, dropped, h.shadow, [cover[0], cover[1], cover[2], h.shadow_radius * scale], [soft, 0.0]));
+            }
+        }
+        for (line, &(place, cover)) in sketch.lines.iter().zip(&placed) {
+            if let Some(h) = line.halo {
+                shapes.push(shape(HALO, place, h.color, [cover[0], cover[1], cover[2], h.radius * scale], [0.0; 2]));
+            }
+        }
+        for &(place, cover) in &placed {
             shapes.push(shape(TEXT, place, 0, cover, [0.0; 2]));
         }
         for (k, (icon, pixels)) in sketch.icons.iter().zip(&icons).enumerate() {

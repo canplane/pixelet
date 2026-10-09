@@ -13,6 +13,9 @@ pub struct BillboardBatch {
 
     /// CSS pixels.
     pub w_px: Vec<f32>,
+    pub h_px: Vec<f32>,
+    /// The width of the region it keeps (`field.rs`), at least its own.
+    pub region_px: Vec<f32>,
     /// Canvas-space Y of the anchor, CSS pixels.
     pub anchor_px: Vec<f32>,
     /// Only keeps two at equal distance from swapping between frames.
@@ -25,7 +28,7 @@ pub struct BillboardBatch {
     pub world_z: Vec<f64>,
     /// Squared: only the order is used.
     pub d2: Vec<f64>,
-    /// Viewport pixels: left, top, right, bottom.
+    /// Its region in viewport pixels: left, top, right, bottom.
     pub screen: Vec<[f64; 4]>,
     /// Indices that passed the frustum.
     pub order: Vec<u32>,
@@ -41,7 +44,8 @@ impl BillboardBatch {
         self.count = 0;
     }
 
-    pub fn push(&mut self, local_x: f64, local_y: f64, local_z: f64, w_px: f64, anchor_px: f64, tiebreak: f64) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn push(&mut self, local_x: f64, local_y: f64, local_z: f64, [w_px, h_px, region_px]: [f64; 3], anchor_px: f64, tiebreak: f64) {
         let i = self.count as usize;
         self.count += 1;
         if i >= self.cap() {
@@ -51,6 +55,8 @@ impl BillboardBatch {
         self.local_y[i] = local_y;
         self.local_z[i] = local_z;
         self.w_px[i] = w_px as f32;
+        self.h_px[i] = h_px as f32;
+        self.region_px[i] = region_px.max(w_px) as f32;
         self.anchor_px[i] = anchor_px as f32;
         self.tiebreak[i] = tiebreak;
     }
@@ -60,6 +66,8 @@ impl BillboardBatch {
         self.local_y.resize(n, 0.0);
         self.local_z.resize(n, 0.0);
         self.w_px.resize(n, 0.0);
+        self.h_px.resize(n, 0.0);
+        self.region_px.resize(n, 0.0);
         self.anchor_px.resize(n, 0.0);
         self.tiebreak.resize(n, 0.0);
         self.world_x.resize(n, 0.0);

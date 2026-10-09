@@ -1,127 +1,102 @@
 // pxl-render/frame/shader/badge.wgsl
 
-// Billboards drawn after the world. Whether the labeled point is visible is
-// decided per badge in the vertex shader; what stands in front of the badge
-// is the depth test's, against an upright twin of the quad.
+// Billboards drawn after the world, each standing in it as an upright twin of
+// its quad, in two passes over the same instances. A billboard keeps a region
+// about itself, clear and centered on what it draws, and asks at one point,
+// its anchor, whether it is seen: badge_region.wgsl draws every region whose
+// anchor the world leaves seen, each as its billboard's number, the nearest
+// winning a pixel; badge_sprite.wgsl draws a billboard only where the number
+// at its anchor is its own. So one is seen whole or not at all, and two seen
+// may still overlap.
 
-// Hidden when three of five samples up the badge are behind the world.
+// A twin stands this far toward the eye, so a badge is not lost in the
+// surface it stands on.
 const DEPTH_BIAS_U: f32 = 1.0;
 const DEPTH_BIAS_CELLS: f32 = 1.5;
-const DEPTH_SAMPLES: u32 = 5u;
-const DEPTH_HIDE_AT: u32 = 3u;
-const DEPTH_LIFT_U: f32 = 2.0;
-
-struct Badge {
-  view: mat4x4f,
-  proj: mat4x4f,
-  translation: vec3f,
-  px_k: f32,
-  near: f32,
-  far: f32,
-  _p0: f32,
-  _p1: f32,
-};
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process.
+// Safari's WebGPU its GPU process. view, proj, translation and px_k, then the
+// number before the set's first billboard.
 @group(1) @binding(0) var<uniform> badge_words: array<vec4f, 10>;
 
 fn badge_view() -> mat4x4f { return mat4x4f(badge_words[0], badge_words[1], badge_words[2], badge_words[3]); }
 fn badge_proj() -> mat4x4f { return mat4x4f(badge_words[4], badge_words[5], badge_words[6], badge_words[7]); }
 fn badge_translation() -> vec3f { return badge_words[8].xyz; }
 fn badge_px_k() -> f32 { return badge_words[8].w; }
-fn badge_near() -> f32 { return badge_words[9].x; }
-fn badge_far() -> f32 { return badge_words[9].y; }
 
 @group(1) @binding(1) var<storage, read> instances: array<f32>;
-@group(2) @binding(0) var sheet: texture_2d<f32>;
-@group(2) @binding(1) var sheet_sampler: sampler;
 
-struct VertexOut {
-  @builtin(position) clip: vec4f,
-  @location(0) uv: vec2f,
-  @location(1) upright_z: f32,
-  @location(2) @interpolate(flat) hidden: u32,
+// A billboard's number, never 0, which is no region.
+fn badge_number(ii: u32) -> u32 {
+  return u32(badge_words[9].x) + ii + 1u;
+}
+
+struct Placed {
+  clip: vec4f,
+  // The twin's depth at this corner.
+  upright_z: f32,
+  // Across the sprite, 0 to 1.
+  across: f32,
+  q: vec2f,
+  // The anchor and how far toward the eye a twin stands.
+  anchor_view: vec3f,
+  push: f32,
 };
 
-// Reversed depth through GL's clip z, so the formula is three's.
-fn view_distance(d: f32) -> f32 {
-  let z = depth_to_gl_z(d);
-  return (2.0 * badge_near() * badge_far()) / (badge_far() + badge_near() - z * (badge_far() - badge_near()));
-}
-
-// A point off the screen has no depth to read and counts as visible.
-fn behind_world(clip: vec4f) -> bool {
-  if (clip.w <= 0.0) {
-    return false;
-  }
-  let ndc = clip.xyz / clip.w;
-  let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-  if (any(uv < vec2f(0.0)) || any(uv >= vec2f(1.0))) {
-    return false;
-  }
-  let dims = vec2f(textureDimensions(world_depth));
-  let world = view_distance(textureLoad(world_depth, vec2i(uv * dims), 0));
-  let point = view_distance(ndc.z);
-  return world < point - DEPTH_BIAS_U - point * frame_cell() * DEPTH_BIAS_CELLS;
-}
-
-@vertex
-fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
+// Corner `vi` of instance `ii`'s quad, as wide as its sprite or its region.
+fn placed(vi: u32, ii: u32, region: bool) -> Placed {
   // BILLBOARD_FLOATS floats an instance.
-  let k = ii * 10u;
+  let k = ii * 11u;
   let anchor = on_globe(vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge_translation());
-  let size_px = vec2f(instances[k + 3u], instances[k + 4u]);
-  let rect = vec4f(instances[k + 5u], instances[k + 6u], instances[k + 7u], instances[k + 8u]);
+  let sprite_w = instances[k + 3u];
+  let size_px = vec2f(select(sprite_w, instances[k + 10u], region), instances[k + 4u]);
   let frac = instances[k + 9u];
   let corners = array<vec2f, 4>(vec2f(-0.5, -0.5), vec2f(0.5, -0.5), vec2f(-0.5, 0.5), vec2f(0.5, 0.5));
   let q = corners[vi];
 
   let anchor_view = (badge_view() * vec4f(anchor, 1.0)).xyz;
-  let dist = length(anchor_view);
   let depth = max(-anchor_view.z, 1e-3);
   let size = size_px * depth / badge_px_k();
   let drop = size.y * (frac - 0.5);
   let center_view = anchor_view + vec3f(0.0, drop, 0.0);
   let corner = q * size;
 
-  var o: VertexOut;
-  o.clip = badge_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);
-  o.uv = vec2f(mix(rect.x, rect.z, q.x + 0.5), mix(rect.w, rect.y, q.y + 0.5));
-
-  let view_proj = badge_proj() * badge_view();
-  let lifted = view_proj * vec4f(anchor + vec3f(0.0, 0.0, DEPTH_LIFT_U), 1.0);
-  let rise = view_proj * vec4f(0.0, 0.0, size.y, 0.0);
-  var hidden = 0u;
-  for (var s = 0u; s < DEPTH_SAMPLES; s++) {
-    if (behind_world(lifted + rise * (f32(s) / f32(DEPTH_SAMPLES - 1u)))) {
-      hidden++;
-    }
-  }
-  o.hidden = select(0u, 1u, hidden >= DEPTH_HIDE_AT);
+  var p: Placed;
+  p.clip = badge_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);
+  p.across = q.x * size_px.x / sprite_w + 0.5;
+  p.q = q;
+  p.anchor_view = anchor_view;
 
   let world_up_view = normalize((badge_view() * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
-  let push = DEPTH_BIAS_U + max(0.0, -center_view.z) * frame_cell() * DEPTH_BIAS_CELLS;
-  let upright = badge_proj() * vec4f(center_view + vec3f(corner.x, 0.0, push) + world_up_view * corner.y, 1.0);
-  o.upright_z = clamp(upright.z / upright.w, 0.0, 1.0);
-  return o;
-}
-
-struct FragOut {
-  @location(0) color: vec4f,
-  @builtin(frag_depth) depth: f32,
-};
-
-@fragment
-fn fs(i: VertexOut) -> FragOut {
-  let texel = textureSample(sheet, sheet_sampler, i.uv);
-  if (i.hidden != 0u) {
-    discard;
+  p.push = DEPTH_BIAS_U + max(0.0, -center_view.z) * frame_cell() * DEPTH_BIAS_CELLS;
+  // What hangs under the anchor lies on the level ground through it, where the
+  // eye sees it; stood up, it would be in the ground the eye sees in front.
+  let over = drop + corner.y;
+  var twin = anchor_view + vec3f(corner.x, 0.0, 0.0) + world_up_view * max(over, 0.0);
+  let shown = center_view + vec3f(corner, 0.0);
+  let toward = dot(shown, world_up_view);
+  let t = dot(anchor_view, world_up_view) / toward;
+  if (over < 0.0 && abs(toward) > 1e-6 && t > 0.0 && t < 1.0) {
+    twin = shown * t;
   }
-  var o: FragOut;
-  // The sheet is premultiplied so its mips filter without a dark fringe.
-  let color = texel.rgb / max(texel.a, 1e-4);
-  o.color = vec4f(to_srgb(color * vignette_of(i.clip.xy, frame_viewport(), frame_vignette())), texel.a);
-  o.depth = i.upright_z;
-  return o;
+  let upright = badge_proj() * vec4f(twin + vec3f(0.0, 0.0, p.push), 1.0);
+  p.upright_z = clamp(upright.z / upright.w, 0.0, 1.0);
+  return p;
 }
+
+// The pixel of a target `dims` large the anchor falls in; x < 0 off the screen.
+fn anchor_pixel(p: Placed, dims: vec2u) -> vec2i {
+  let at = badge_proj() * vec4f(p.anchor_view, 1.0);
+  if (at.w <= 0.0) {
+    return vec2i(-1);
+  }
+  let ndc = at.xy / at.w;
+  let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+  if (any(uv < vec2f(0.0)) || any(uv >= vec2f(1.0))) {
+    return vec2i(-1);
+  }
+  return vec2i(uv * vec2f(dims));
+}
+
+// A quad with no area: nothing of it is drawn.
+const NOWHERE: vec4f = vec4f(0.0, 0.0, 0.0, 1.0);

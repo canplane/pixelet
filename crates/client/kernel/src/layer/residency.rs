@@ -109,9 +109,9 @@ impl<L: Base> Residency<L> {
     /// Held hard apart from the view: the floor and a destination's line. A new
     /// consumer that cannot take a coarser answer would declare its tiles here.
     const PINNED_TILES: u32 = match L::ASKS {
-        Asks::Floor => Floor::TILES,
+        Asks::Floor => Floor::<L>::TILES,
         Asks::Line => Self::DESTINATION_TILES,
-        Asks::View => Floor::TILES + Self::DESTINATION_TILES,
+        Asks::View => Floor::<L>::TILES + Self::DESTINATION_TILES,
     };
 
     /// What is held hard at most.

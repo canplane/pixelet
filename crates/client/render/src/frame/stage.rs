@@ -22,16 +22,14 @@ pub mod STAGE_AT {
     /// The viewport in CSS pixels (2).
     pub const VIEWPORT: usize = 54;
     pub const FOV: usize = 56;
-    pub const NEAR: usize = 57;
-    pub const FAR: usize = 58;
-    pub const LOD_CELL: usize = 59;
-    pub const EDGE_STRENGTH: usize = 60;
-    pub const LOW_SPEC: usize = 61;
-    pub const EDGE_WIDTH: usize = 62;
-    pub const RIM_INTENSITY: usize = 63;
-    pub const SHADOWS: usize = 64;
-    pub const AO_STRENGTH: usize = 65;
-    pub const SCREEN_AO: usize = 66;
+    pub const LOD_CELL: usize = 57;
+    pub const EDGE_STRENGTH: usize = 58;
+    pub const LOW_SPEC: usize = 59;
+    pub const EDGE_WIDTH: usize = 60;
+    pub const RIM_INTENSITY: usize = 61;
+    pub const SHADOWS: usize = 62;
+    pub const AO_STRENGTH: usize = 63;
+    pub const SCREEN_AO: usize = 64;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

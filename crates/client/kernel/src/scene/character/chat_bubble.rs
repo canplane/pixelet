@@ -130,7 +130,7 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
         return;
     }
     b.written = Some(stamp);
-    let lane = billboard_instance([0.0; 3], [held.layout.box_w, held.layout.logical_h], held.slot, 1.0);
+    let lane = billboard_instance([0.0; 3], [held.layout.box_w, held.layout.logical_h], held.slot, 1.0, held.layout.box_w);
     follow_billboard_set(held.set, actor, tip_z);
     write_billboard_set(held.set, &lane);
 }
