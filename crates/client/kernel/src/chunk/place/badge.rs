@@ -9,13 +9,14 @@ use pxl_spec::bake::constant::EntryAt;
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, LABEL_ZOOM, TEXT};
-use pxl_spec::bake::place_tile::{symbol_of, PlaceTile, Placed};
+use pxl_spec::bake::place_tile::{symbol_of, PlaceTile, Placed, SPACING_CELLS};
+use pxl_spec::space::camera::grid::px_per_unit;
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::billboard::sheet::billboard_sheet;
 use crate::io::text::{text_lines, text_width};
 use crate::layer::Base;
-use pxl_render::gpu::pass::badges::{badge_width, point_size, BADGE_FONT, POINT_FONT, POINT_WRAP};
+use pxl_render::gpu::pass::badges::{badge_width, point_size, BADGE_FONT, POINT_FONT};
 use pxl_render::gpu::sheet::shelf::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::sheet::SHEET_SCALE;
 use pxl_spec::block::marker::MARKER_SHOWN_FROM;
@@ -104,8 +105,20 @@ impl Label {
 /// Code points, so a non-BMP character is never cut in half.
 const SHOWN_CHARS: usize = 12;
 
+/// The cell a place keeps to itself, as wide as the camera grid's cells are
+/// at the view's own τ: its name wraps to it and its billboard's region is it.
+/// Not the τ in force, which coarsens while the view moves and would lay
+/// every name out again; whole pixels, so only the view's size or angle does.
+pub fn spacing_px() -> f64 {
+    let v = crate::view::frame::pose::view();
+    let cell = crate::view::sight::cell_angle(crate::chunk::quality::target()) * px_per_unit(v.height, v.fov);
+    libm::round(f64::from(SPACING_CELLS) * cell)
+}
+
 struct Badge {
     size: [f64; 3],
+    /// What a place's name was wrapped at.
+    wrap: f64,
     /// A place's name as it was laid out when sized: the host's layouts are
     /// a cache it may let go.
     lines: Vec<String>,
@@ -138,20 +151,27 @@ pub fn retain(labels: &HashSet<Label>) {
 /// Its width, height and where it stands down from its top; none until its
 /// words are laid out, which a later turn has.
 pub fn size(label: Label) -> Option<[f64; 3]> {
+    let wrap = if matches!(label, Label::Place { look, .. } if look.named) { spacing_px() } else { 0.0 };
     if let Some(b) = badges().get(&label) {
-        return Some(b.size);
+        if b.wrap == wrap {
+            return Some(b.size);
+        }
+        if b.slot != NO_SLOT {
+            billboard_sheet().release(b.slot as u32);
+        }
+        badges().remove(&label);
     }
     let text = label.text();
     let (size, lines) = match label {
         Label::Marker { .. } => ([badge_width(text_width(BADGE_FONT, &text)?.ceil()), MARKER_HEIGHT, MARKER_ANCHOR], Vec::new()),
-        Label::Place { .. } if text.is_empty() => (point_size(None), Vec::new()),
-        Label::Place { .. } => {
-            let laid = text_lines(POINT_FONT, POINT_WRAP, &text)?;
-            let size = point_size(Some((laid.iter().map(|&(_, w)| w).fold(0.0, f64::max), laid.len())));
+        Label::Place { look, .. } if text.is_empty() => (point_size(look.icon, None), Vec::new()),
+        Label::Place { look, .. } => {
+            let laid = text_lines(POINT_FONT, wrap, &text)?;
+            let size = point_size(look.icon, Some((laid.iter().map(|&(_, w)| w).fold(0.0, f64::max), laid.len())));
             (size, laid.iter().map(|&(l, _)| l.trim().to_owned()).collect())
         }
     };
-    badges().insert(label, Badge { size, lines, slot: NO_SLOT });
+    badges().insert(label, Badge { size, wrap, lines, slot: NO_SLOT });
     Some(size)
 }
 

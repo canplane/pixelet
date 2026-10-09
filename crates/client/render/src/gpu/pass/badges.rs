@@ -12,7 +12,7 @@ use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{Blocks, Draws};
 use crate::gpu::sheet::shelf::{DrawSpec, Sheet};
-use crate::gpu::sheet::{Align, SheetPainter, Sketch};
+use crate::gpu::sheet::{Align, Halo, SheetPainter, Sketch, SHEET_SCALE};
 use crate::gpu::text::{Font, TextOf};
 
 const BADGE_FLOATS: usize = 40;
@@ -51,21 +51,39 @@ pub fn badge_width(text_w: f64) -> f64 {
     (text_w + 2.0 * PAD_X as f64).max(PILL_H as f64)
 }
 
-// A place as OpenStreetMap Carto draws one (style/amenity-points.mss): a dot
-// four pixels wide, or its symbol in its square of 14, with the name under it
-// set `text-dy` 10 down, haloed white at 0.6 a pixel round (style/style.mss).
-// A category with no symbol is a disc of its fill. The name is in a marker's font, not Carto's
-// 10 pixels: one text in the world.
+// A place as a map app draws one: its symbol white on a disc of its
+// category's fill, rimmed white so it holds on any ground, lit from above and
+// casting a soft shadow, or before its icon's zoom a small disc of the same; the name under it in its category's
+// color, semibold, in a near-opaque white halo. Which places and when are
+// Carto's (`pxl-spec bake/place_theme.spec.rs`); how they look is not.
 
-pub const POINT_FONT: Font = BADGE_FONT;
-/// The width a name wraps at: six em, where Carto's @standard-wrap-width is
-/// three, which broke a Korean name of five syllables in two.
-pub const POINT_WRAP: f64 = 6.0 * POINT_FONT.px as f64;
-const POINT_ICON: f32 = 14.0;
-const POINT_DOT: f32 = 4.0;
-const POINT_DY: f32 = 10.0;
-const POINT_HALO: f32 = 1.0;
-const POINT_HALO_FILL: u32 = 0xffffff99;
+pub const POINT_FONT: Font = Font { weight: SEMIBOLD, px: 12.0 };
+/// A symbol's disc across: the symbol (`SYMBOL_PX` at the sheet's scale, 14)
+/// with four pixels of fill round it.
+const POINT_DISC: f32 = 22.0;
+const POINT_DOT: f32 = 8.0;
+const POINT_RIM: f32 = 1.5;
+const POINT_RIM_FILL: u32 = 0xffffffe6;
+/// The fill lighter at the disc's top and darker at its foot by this much.
+const POINT_SHADE: f32 = 0.18;
+/// A shadow as wide as the disc and a little more, dropped and blurred, and
+/// the room it takes round the disc.
+const POINT_SHADOW_DY: f32 = 1.5;
+const POINT_SHADOW_BLUR: f32 = 3.0;
+const POINT_SHADOW_FILL: u32 = 0x00000059;
+const POINT_PAD: f32 = 3.0;
+/// From the mark's foot to the name's first line.
+const POINT_GAP: f32 = 2.0;
+const POINT_HALO: f32 = 2.0;
+const POINT_HALO_FILL: u32 = 0xfffffff2;
+/// Under the halo as under the disc: dropped, and soft past the halo's edge.
+const POINT_TEXT_HALO: Halo = Halo {
+    color: POINT_HALO_FILL,
+    radius: POINT_HALO,
+    shadow: 0x00000038,
+    shadow_radius: POINT_HALO + 1.5,
+    shadow_dy: 1.0,
+};
 /// A line, the font's size and its halo above and below.
 const POINT_LINE: f32 = POINT_FONT.px + 2.0 * POINT_HALO;
 /// From one line to the next, as Mapnik sets it (text_line.cpp): the face's
@@ -74,33 +92,40 @@ const POINT_LINE: f32 = POINT_FONT.px + 2.0 * POINT_HALO;
 /// CSS's `line-height: normal` at its high end (CSS 2.1 §10.8.1).
 const POINT_PITCH: f32 = (1.2 - 0.15) * POINT_FONT.px;
 
-/// A point's sprite for a name laid out in `lines` as wide as `text_w`, or
-/// none: its width, height and where the place is, down from its top.
-pub fn point_size(text: Option<(f64, usize)>) -> [f64; 3] {
-    let icon = f64::from(POINT_ICON);
+/// The disc's side and the shadow's room round it.
+fn point_mark(icon: bool) -> f32 {
+    2.0 * POINT_PAD + if icon { POINT_DISC } else { POINT_DOT }
+}
+
+/// A point's sprite, its mark an icon's or a dot's, for a name laid out in
+/// `lines` as wide as `text_w`, or none: its width, height and where the
+/// place is, down from its top.
+pub fn point_size(icon: bool, text: Option<(f64, usize)>) -> [f64; 3] {
+    let mark = f64::from(point_mark(icon));
     match text {
-        None => [icon, icon, icon / 2.0],
+        None => [mark, mark, mark / 2.0],
         Some((w, lines)) => {
-            let h = icon / 2.0 + f64::from(POINT_DY) + f64::from(POINT_PITCH) * (lines.max(1) - 1) as f64 + f64::from(POINT_LINE) / 2.0;
-            [(w + 2.0 * f64::from(POINT_HALO)).ceil().max(icon), h.ceil(), icon / 2.0]
+            // The last line's shadow reaches past its halo.
+            let shadow = f64::from(POINT_TEXT_HALO.shadow_radius - POINT_HALO + POINT_TEXT_HALO.shadow_dy);
+            let h = mark - f64::from(POINT_PAD) + f64::from(POINT_GAP) + f64::from(POINT_PITCH) * (lines.max(1) - 1) as f64 + f64::from(POINT_LINE) + shadow;
+            [(w + 2.0 * f64::from(POINT_TEXT_HALO.shadow_radius)).ceil().max(mark), h.ceil(), mark / 2.0]
         }
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn point(p: &mut Sketch, lines: &[String], icon: bool, symbol: Option<u16>, fill: u32, text: u32, logical_w: f32) {
-    let (cx, cy) = (logical_w / 2.0, POINT_ICON / 2.0);
-    match (icon, symbol) {
-        (true, Some(s)) => p.icon(usize::from(s), fill, cx, cy),
-        (true, None) => p.circle(cx, cy, POINT_ICON / 2.0 - 2.0, fill),
-        (false, _) => p.circle(cx, cy, POINT_DOT / 2.0, fill),
+    let (cx, cy) = (logical_w / 2.0, point_mark(icon) / 2.0);
+    let r = cy - POINT_PAD;
+    p.soft_circle(cx, cy + POINT_SHADOW_DY, r + 0.5, POINT_SHADOW_BLUR, 0.0, POINT_SHADOW_FILL);
+    p.circle(cx, cy, r, POINT_RIM_FILL);
+    p.soft_circle(cx, cy, r - POINT_RIM, 1.0 / SHEET_SCALE as f32, POINT_SHADE, fill);
+    if let (true, Some(s)) = (icon, symbol) {
+        p.icon(usize::from(s), WHITE, cx, cy);
     }
     for (k, line) in lines.iter().enumerate() {
-        let ty = cy + POINT_DY + POINT_PITCH * k as f32;
-        for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0), (-1.0, -1.0), (1.0, 1.0), (-1.0, 1.0), (1.0, -1.0)] {
-            p.text(POINT_FONT, POINT_HALO_FILL, line, cx + dx * POINT_HALO, ty + dy * POINT_HALO, Align::Center);
-        }
-        p.text(POINT_FONT, text, line, cx, ty, Align::Center);
+        let ty = 2.0 * cy - POINT_PAD + POINT_GAP + POINT_LINE / 2.0 + POINT_PITCH * k as f32;
+        p.haloed_text(POINT_FONT, text, POINT_TEXT_HALO, line, cx, ty, Align::Center);
     }
 }
 
