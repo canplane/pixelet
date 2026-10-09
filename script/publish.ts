@@ -21,13 +21,15 @@ const endpoint = Deno.env.get("R2") || die("no $R2: export the bucket's S3 endpo
 // AWS CLI v2 sends checksum headers R2 refuses.
 const env = { AWS_REQUEST_CHECKSUM_CALCULATION: "when_required" };
 
-async function aws(args: string[], inherit = false): Promise<string> {
+async function aws(args: string[], inherit = false, none = false): Promise<string> {
   const out = await new Deno.Command("aws", {
     args: [...args, "--profile", "r2", "--endpoint-url", endpoint],
     env,
     stdout: inherit ? "inherit" : "piped",
     stderr: inherit ? "inherit" : "piped",
   }).output();
+  // `s3 ls` exits 1, silent, on a prefix that holds nothing.
+  if (none && out.code === 1 && out.stderr.length === 0) return "";
   if (!out.success) die(`aws ${args.slice(0, 3).join(" ")} failed${inherit ? "" : `:\n${new TextDecoder().decode(out.stderr)}`}`);
   return inherit ? "" : new TextDecoder().decode(out.stdout);
 }
@@ -44,7 +46,7 @@ function files(dir: string): number {
 
 /** Past every `v<format>.<day>.<n>` the bucket holds under `kind`. */
 async function nextName(kind: string, format: number, day: string): Promise<string> {
-  const listed = await aws(["s3", "ls", `s3://${BUCKET}/${kind}/`]);
+  const listed = await aws(["s3", "ls", `s3://${BUCKET}/${kind}/`], false, true);
   const prefix = `v${format}.${day}.`;
   const taken = listed.split("\n")
     .map((line) => line.trim().match(/^PRE (.+)\/$/)?.[1] ?? "")
