@@ -1,7 +1,8 @@
 // pxl-render/gpu/renderer.rs
 
 //! Executes the scheduler's draw lists on the device, in the kernel's own turn.
-//! Depth is reversed f32 throughout (depth.wgsl).
+//! Depth is reversed f32 throughout, near 1 and far 0: float precision and
+//! perspective depth cancel, so far coplanar faces stop fighting.
 
 use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
 use pxl_spec::space::coord::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
@@ -816,8 +817,6 @@ impl Renderer {
         put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
         put_mat(&mut b.proj, 0, &proj);
         b.px_k = (s[STAGE_AT::VIEWPORT + 1] / (2.0 * libm::tan(s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0))) as f32;
-        b.near = s[STAGE_AT::NEAR] as f32;
-        b.far = s[STAGE_AT::FAR] as f32;
 
         let u = &mut self.frame;
         a.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
@@ -965,7 +964,7 @@ impl Renderer {
         self.impostor.prepare(g, draws.of(PIPELINE_IMPOSTOR), uniforms, b);
         self.skinned.prepare(g, draws.of(PIPELINE_SKINNED), uniforms, b);
         self.puck.prepare_zone(g, &draws, b);
-        self.badges.prepare(g, world.depth_view, &draws, b);
+        self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
         self.prepare_cases(g, &draws, uniforms, input.cases);
         let q = self.query_set;

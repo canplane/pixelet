@@ -60,8 +60,6 @@ pub fn stage_write() {
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
     s[STAGE_AT::FOV] = v.fov;
-    s[STAGE_AT::NEAR] = v.near;
-    s[STAGE_AT::FAR] = v.far;
     // The camera grid's cell angle: the largest drawn cell per unit of
     // distance, since a cell is drawn from its split distance on.
     s[STAGE_AT::LOD_CELL] = crate::view::sight::cell_angle(crate::chunk::quality::effective().tau());

@@ -31,7 +31,8 @@ pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_CLOUD_COMPOSITE: u32 = 23;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 24;
 pub const SHADER_CAMERA_GRID: u32 = 25;
-pub const SHADERS: u32 = 26;
+pub const SHADER_BADGE_REGION: u32 = 26;
+pub const SHADERS: u32 = 27;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -100,7 +101,8 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_PUCK_ZONE => wgsl!("frame", "globe", "encode", "finish", "puck", "puck_zone"),
         SHADER_PUCK_BEACON => wgsl!("frame", "globe", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "place", "puck", "puck_beacon"),
-        SHADER_BADGE => wgsl!("frame", "globe", "encode", "depth", "badge_depth", "badge"),
+        SHADER_BADGE => wgsl!("frame", "globe", "encode", "badge", "badge_sprite"),
+        SHADER_BADGE_REGION => wgsl!("frame", "globe", "encode", "badge", "badge_region"),
         SHADER_SKY => wgsl!(
             "frame",
             "globe",
@@ -220,7 +222,9 @@ pub const PIPELINE_SHEET: u32 = 33;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 35;
 pub const PIPELINE_CLOUD_MARCH: u32 = 36;
 pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 37;
-pub const PIPELINES: u32 = 39;
+/// The billboards' regions, numbered, into a target of their own (pass/badges.rs).
+pub const PIPELINE_BADGE_REGION: u32 = 39;
+pub const PIPELINES: u32 = 40;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -322,6 +326,12 @@ const fn prepass(shader: u32, cull: u32) -> Head {
         depth_bias_slope: 0,
         ..depth_only(shader)
     }
+}
+
+/// A billboard set's uniform and instances, and what its pass reads at an
+/// anchor: the world's depth for the regions, the regions for the sprites.
+fn badge_group(read: u32) -> Vec<u32> {
+    group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, read]])
 }
 
 const fn screen(shader: u32) -> Head {
@@ -496,7 +506,18 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_BADGE, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[frame(BOTH), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, DEPTH]]), group(&SKIN)],
+            &[frame(BOTH), badge_group(TEXTURE_UNFILTERED), group(&SKIN)],
+        ),
+        PIPELINE_BADGE_REGION => record(
+            Head {
+                topology: STRIP,
+                depth_write: true,
+                depth_compare: GREATER_EQUAL,
+                blend: OPAQUE,
+                ..blended(SHADER_BADGE_REGION, CULL_NONE, 0, 0.0)
+            },
+            &[],
+            &[frame(BOTH), badge_group(DEPTH)],
         ),
         PIPELINE_DEBUG => record(
             Head {

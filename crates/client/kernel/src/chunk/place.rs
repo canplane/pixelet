@@ -172,6 +172,7 @@ pub fn step(ctx: &mut TickContext) {
     // A waiting marker is shown wherever it is.
     let drafted = draft.map(|d| marker_at(d.at, &d.words)).map(|(label, ground, top, at)| (label, ground, top, at, i32::MAX));
     let is_drafted = |label: &Label| matches!(label, Label::Marker { at, .. } if Some(*at) == draft.map(|d| d.at));
+    let spacing = badge::spacing_px();
     for &(label, stands, top, _, zoom) in drafted.iter().chain(found.iter().filter(|f| !is_drafted(&f.0))) {
         let Some(label) = label.at(zoom) else { continue };
         // A marker's words changed: what was drawn stays until the new words are ready to show.
@@ -185,10 +186,11 @@ pub fn step(ctx: &mut TickContext) {
             },
             _ => label,
         };
-        let Some([width, _, anchor]) = badge::size(label) else { continue };
+        let Some([width, height, anchor]) = badge::size(label) else { continue };
+        let region = if matches!(label, Label::Place { .. }) { spacing } else { width };
         let center = stands.center(top);
         let local = crate::view::frame::coord::to_world(&center);
-        p.batch.push(local[0], local[1], local[2], width, anchor, labeled.len() as f64);
+        p.batch.push(local[0], local[1], local[2], [width, height, region], anchor, labeled.len() as f64);
         labeled.push((label, center));
     }
     badge::retain(&labeled.iter().map(|l| l.0).chain(p.pending.iter().copied()).collect());
@@ -205,7 +207,7 @@ pub fn step(ctx: &mut TickContext) {
         }
         p.drawn.push(i);
     }
-    // Farthest first: the pass writes no depth, so the nearer must draw last.
+    // Farthest first: where two are both seen, the nearer is drawn over.
     let batch = &p.batch;
     p.drawn.sort_by(|&a, &b| {
         batch.d2[b as usize]
@@ -222,7 +224,7 @@ pub fn step(ctx: &mut TickContext) {
         let i = i as usize;
         let at = [p.batch.local_x[i] - about[0], p.batch.local_y[i] - about[1], p.batch.local_z[i] - about[2]];
         let [w, h, anchor] = badge::size(labeled[i].0).or_bug(Errno::ENOTRECOVERABLE);
-        instances.extend_from_slice(&billboard_instance(at, [w, h], badge::slot(labeled[i].0) as u32, anchor / h));
+        instances.extend_from_slice(&billboard_instance(at, [w, h], badge::slot(labeled[i].0) as u32, anchor / h, f64::from(p.batch.region_px[i])));
     }
     if p.set.is_some() || !instances.is_empty() {
         let set = *p.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Place));
