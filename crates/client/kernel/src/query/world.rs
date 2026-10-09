@@ -17,13 +17,13 @@ use super::decor::Grown;
 use crate::kernel;
 use crate::layer::object::store::{Store, AIR};
 use crate::layer::residency::Residency;
-use pxl_spec::space::layer::lattice::GROUND;
 use crate::layer::terrain::Source;
 use crate::layer::Answer;
 use crate::layer::Base as _;
 use crate::layer::{Bound, Query};
 use pxl_spec::bake::format::TerrainTile;
 use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::layer::lattice::GROUND;
 
 /// The world's query: the resident ground and the placed objects, read
 /// as one.

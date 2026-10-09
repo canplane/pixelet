@@ -145,7 +145,10 @@ impl<'s> DecorBuild<'s> {
                     None => Cover::leaf(store, cell),
                     Some(f) => {
                         let [x, y, z] = cell.map(|c| index(own, c));
-                        Cover::Folded { here: f.get(&[x, y, z]).copied(), under: f.get(&[x, y, z - 1]).copied() }
+                        Cover::Folded {
+                            here: f.get(&[x, y, z]).copied(),
+                            under: f.get(&[x, y, z - 1]).copied(),
+                        }
                     }
                 };
                 if covers(cover) {
