@@ -142,10 +142,11 @@ impl<'s> DecorBuild<'s> {
             |i| {
                 let (Source::Ground(cell), Meta::Decor(m)) = (i.source, i.meta) else { return Ok(()) };
                 let cover = match ground.folded {
-                    None => Cover::Leaf {
-                        any: store.read((GROUND.cell(), cell), GROUND.cell()).value().is_some_and(|c| c.holds()),
-                    },
-                    Some(f) => Cover::Folded(f.get(&cell.map(|c| index(own, c))).copied()),
+                    None => Cover::leaf(store, cell),
+                    Some(f) => {
+                        let [x, y, z] = cell.map(|c| index(own, c));
+                        Cover::Folded { here: f.get(&[x, y, z]).copied(), under: f.get(&[x, y, z - 1]).copied() }
+                    }
                 };
                 if covers(cover) {
                     return Ok(());

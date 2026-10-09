@@ -123,8 +123,7 @@ impl<'a> World<'a> {
         for decor in &DECORS {
             let Some(i) = grown_at(decor, &view, cell, leaf.in_tile()) else { continue };
             let Source::Ground(at) = i.source else { continue };
-            let any = self.objects.read((GROUND.cell(), at), GROUND.cell()).value().is_some_and(|c| c.holds());
-            if !covers(Cover::Leaf { any }) {
+            if !covers(Cover::leaf(self.objects, at)) {
                 meet(s, ray, i);
             }
         }

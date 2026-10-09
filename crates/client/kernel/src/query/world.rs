@@ -17,6 +17,7 @@ use super::decor::Grown;
 use crate::kernel;
 use crate::layer::object::store::{Store, AIR};
 use crate::layer::residency::Residency;
+use pxl_spec::space::layer::lattice::GROUND;
 use crate::layer::terrain::Source;
 use crate::layer::Answer;
 use crate::layer::Base as _;
@@ -119,20 +120,30 @@ impl Query for World<'_> {
     }
 }
 
-/// What the objects hold over a ground cell, as the composer reads them: at
-/// a leaf's cells whether anything is held, over a fold what it folds to.
+/// What the objects hold where the ground grows a thing, as the composer
+/// reads them: in the cell it stands in and the cell under, its footing; at a
+/// leaf's cells whether anything is held, over a fold what it folds to.
 pub enum Cover {
-    Leaf { any: bool },
-    Folded(Option<u32>),
+    Leaf { here: bool, under: bool },
+    Folded { here: Option<u32>, under: Option<u32> },
 }
 
-/// Whether the objects over a ground cell cover what the ground grows there,
-/// so it is neither drawn nor struck: at a leaf's cells anything held does,
-/// air included, so erasing a grown tree is placing air over it; over a fold
-/// only a fill does.
+impl Cover {
+    /// At the leaf cell `cell`, in the store.
+    pub fn leaf(store: &Store, [x, y, z]: [i64; 3]) -> Cover {
+        let held = |z: i64| store.read((GROUND.cell(), [x, y, z]), GROUND.cell()).value().is_some_and(|c| c.holds());
+        Cover::Leaf { here: held(z), under: held(z - 1) }
+    }
+}
+
+/// Whether the objects cover what the ground grows in a cell, so it is
+/// neither drawn nor struck: anything held under it takes its footing, air
+/// dug there included; in its own cell, at a leaf's cells anything held does,
+/// air included, so erasing a grown tree is placing air over it, and over a
+/// fold only a fill does.
 pub fn covers(cover: Cover) -> bool {
     match cover {
-        Cover::Leaf { any } => any,
-        Cover::Folded(state) => state.is_some_and(|s| s != AIR),
+        Cover::Leaf { here, under } => here || under,
+        Cover::Folded { here, under } => here.is_some_and(|s| s != AIR) || under.is_some(),
     }
 }
