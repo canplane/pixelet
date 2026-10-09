@@ -15,7 +15,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
 
-use crate::util::{measure_output, pack, unpack, write_atomic, Level};
+use crate::util::{pack, unpack, write_atomic, Level};
 
 /// A layer's tile as the pyramid holds it. One fold makes each zoom's tiles
 /// from the next finer one's; a parent reads its four children unless
@@ -214,9 +214,9 @@ pub fn unasked<L: Base>(set: &TileSet, top: Zoom) -> Result<HashSet<Tile>, Strin
 /// Measured from disk, not the run: a resumed run that skipped everything
 /// would describe an empty set.
 pub fn write_manifest(set: &TileSet, top: Zoom, built: Option<&str>, layer: serde_json::Value) -> Result<(), String> {
-    // Every object in the version; the zooms count the tiles.
-    let (objects, bytes) = measure_output(&set.root).map_err(|e| e.to_string())?;
+    // The tiles, a zoom at a time; the set is its tiles and the manifest.
     let listed = set.by_zoom()?;
+    let (mut objects, mut bytes) = (0u64, 0u64);
     let mut zooms = Vec::new();
     for zoom in (top..=listed.keys().last().copied().unwrap_or(top)).rev() {
         let (mut n, mut b) = (0u64, 0u64);
@@ -224,6 +224,7 @@ pub fn write_manifest(set: &TileSet, top: Zoom, built: Option<&str>, layer: serd
             n += 1;
             b += fs::metadata(set.path(p)).map_err(|e| e.to_string())?.len();
         }
+        (objects, bytes) = (objects + n, bytes + b);
         zooms.push(serde_json::json!({ "z": zoom, "objects": n, "bytes": b }));
     }
     let mut fields = serde_json::json!({ "objects": objects, "bytes": bytes, "zooms": zooms, "content_type": "application/octet-stream" });

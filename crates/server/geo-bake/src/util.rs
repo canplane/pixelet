@@ -131,20 +131,6 @@ pub fn write_manifest(path: &Path, built: Option<&str>, fields: serde_json::Valu
     Ok(())
 }
 
-pub fn measure_output(dir: &Path) -> std::io::Result<(u64, u64)> {
-    let (mut count, mut bytes) = (0u64, 0u64);
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
-        let name = entry.file_name().to_string_lossy().to_string();
-        if !entry.file_type()?.is_file() || name.ends_with(".part") || name.ends_with(".empty") {
-            continue;
-        }
-        count += 1;
-        bytes += entry.metadata()?.len();
-    }
-    Ok((count, bytes))
-}
-
 #[cfg(test)]
 #[path = "util.test.rs"]
 mod test;
