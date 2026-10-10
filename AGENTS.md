@@ -295,9 +295,9 @@ out (`pixelet-db-geo`, `pixelet-tiles`).
 **Comments are few and short**: a few words at the line they explain, saying
 what a reader would get wrong without them — the failure a branch prevents,
 where a number comes from, a non-obvious algorithm or invariant, a decision
-left alone on purpose. Never restate the code, narrate a design, its
-alternatives or its history, or list references; that is `decision/`'s.
-Trivial code gets none.
+left alone on purpose, the precedent a rule follows and its source. Never
+restate the code or narrate a design, its alternatives or its history; that
+is `decision/`'s. Trivial code gets none.
 
 **Comments are working notes, not a contract.** Read them before "fixing"
 what looks unfinished, but never cite one as evidence: verify against the
