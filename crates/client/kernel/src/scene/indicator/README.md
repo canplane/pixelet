@@ -19,7 +19,8 @@ file.
 
 `frame_gizmo.rs`, `coverage_gizmo.rs` and `camera_gizmo.rs` live here too
 but are debug visualizations behind the `world_gizmo` setting (the focus's
-cell and the frames' rings; the drawn pieces and the goal) and the
-`camera_gizmo` setting (the camera grid's cells), as debug lines — not real
+cell and the frames' rings; the drawn pieces, the goal and their shards) and the
+`camera_gizmo` setting (the camera grid's cells), as debug lines, which the
+gizmos' own faces hide and nothing of the world does — not real
 one-off indicators in the same sense, adjacent by folder convenience, not by
 tier.

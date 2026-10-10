@@ -51,6 +51,11 @@ pub struct ScreenAo {
 }
 
 impl ScreenAo {
+    /// Its full-size depth's bytes, one f32 a pixel.
+    pub fn depth_bytes(&self) -> f64 {
+        self.width as f64 * self.height as f64 * 4.0
+    }
+
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32, frame_buffer: u32) -> ScreenAo {
         let blank = object();
         g.texture(blank, 1, 1, 1, format::R8, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST);

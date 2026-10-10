@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/debug.wgsl
 
-// Debug gizmos as segments with no depth test, so a gizmo shows through the
-// ground. A line primitive is one pixel wide on every device, so each segment
+// Debug gizmos as segments, hidden behind the gizmos' own faces and nothing
+// else; the faces draw only their depth (`vs_depth`). A line primitive is one pixel wide on every device, so each segment
 // is a quad its width across on the screen.
 
 const WIDTH_PX: f32 = 3.0;
@@ -39,6 +39,11 @@ fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec3f, @location(1) color:
   o.clip = vec4f(c.xy + across * SIDES[vi] * c.w, c.z, c.w);
   o.color = color;
   return o;
+}
+
+@vertex
+fn vs_depth(@location(0) p: vec3f) -> @builtin(position) vec4f {
+  return frame_view_proj() * vec4f(on_globe(p + draw_translation()), 1.0);
 }
 
 @fragment

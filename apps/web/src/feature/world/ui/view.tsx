@@ -7,7 +7,7 @@ import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { useVisualViewport } from "@platform/viewport.ts";
 import { WorldSurface } from "@platform/surface.tsx";
-import { DebugOverlay } from "@/feature/debug/overlay.tsx";
+import { DebugPanels } from "@/feature/debug/panels.tsx";
 import { bottomRest } from "@/shared/ui/bottom-rest.ts";
 import { Toaster } from "@/shared/ui/toast/stack.tsx";
 import { chrome, layer } from "@/shared/ui/theme.ts";
@@ -51,7 +51,7 @@ export function WorldView() {
     <View style={[StyleSheet.absoluteFill, styles.root]}>
       <ToastController />
       <BetweenChrome>
-        <DebugOverlay />
+        <DebugPanels />
       </BetweenChrome>
 
       {/* The world's own pointer puts the keyboard away (`worldPointer`). */}
@@ -73,7 +73,7 @@ export function WorldView() {
 
 const styles = StyleSheet.create({
   root: { overflow: "hidden", backgroundColor: "black" },
-  between: { position: "absolute", left: chrome.inset, zIndex: layer.chrome, alignItems: "flex-start", pointerEvents: "box-none" },
+  between: { position: "absolute", left: chrome.inset, zIndex: layer.debug, alignItems: "flex-start", pointerEvents: "box-none" },
   // The dock's width chain needs a real ancestor width to grow into.
   bottom: { width: "100%", minWidth: 0, alignItems: "center" },
 });

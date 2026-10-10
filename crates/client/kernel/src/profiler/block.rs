@@ -224,15 +224,6 @@ pub struct QualityBlock {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct HeapBlock {
-    pub used_mb: f64,
-    pub requests: f64,
-}
-
-words!(HeapBlock, SUMMARY::heap::WORDS, used_mb => SUMMARY::heap::used_mb, requests => SUMMARY::heap::requests);
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ViewBlock {
     pub dist: f64,
     pub polar: f64,

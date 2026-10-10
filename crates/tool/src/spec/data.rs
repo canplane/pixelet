@@ -26,7 +26,7 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 21] = [
+const DATA_SPECS: [DataSpec; 22] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
@@ -165,6 +165,16 @@ const DATA_SPECS: [DataSpec; 21] = [
         module: Some("variant_spec"),
         enums: Enums::All,
         ts_names: Some(&["groups", "PERSON_GENDER_PREFIXES"]),
+        cpp: None,
+    },
+    DataSpec {
+        json: "spec/client/kernel/scene/indicator/gizmo.json",
+        uses: &[],
+        ts: Some("apps/web/src/feature/debug/gizmo.spec.ts"),
+        rs: Some("crates/client/kernel/src/scene/indicator/gizmo.spec.rs"),
+        module: Some("gizmo_spec"),
+        enums: Enums::None,
+        ts_names: None,
         cpp: None,
     },
     DataSpec {

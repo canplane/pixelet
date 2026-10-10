@@ -96,13 +96,17 @@
     "debug": {
       "section_title": "디버그",
       "section_caption": "화면과 스케줄러를 들여다보는 진단 도구입니다",
-      "debug_overlay": {
-        "label": "디버그 오버레이",
-        "description": "카메라와 화면 중심 위치, 프레임·GPU·메모리·요청 상태를 보여줍니다."
+      "view_overlay": {
+        "label": "뷰 오버레이",
+        "description": "카메라와 포인터의 위치를 보여줍니다: 거리, 각도, τ, 좌표, 포인터 아래 셀 줌."
+      },
+      "performance_overlay": {
+        "label": "퍼포먼스 오버레이",
+        "description": "프레임 시간, GPU, 그리기, 요청, 메모리를 보여주고 켜져 있는 동안 기록합니다."
       },
       "world_gizmo": {
         "label": "월드 기즈모",
-        "description": "화면 중심과 그 셀, 축 원을 월드 위에 그려 디버깅을 돕습니다."
+        "description": "화면 중심과 그 셀, 축 원, 그려진 조각과 그 타일·샤드를 월드 위에 범례와 함께 그려 디버깅을 돕습니다."
       }
     },
     "disclaimer": {

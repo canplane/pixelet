@@ -9,12 +9,33 @@ use xpute_guest::sched::tick::PHASES;
 
 use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, SUMMARY, WORST};
 use crate::profiler::word::{words, Words};
+use pxl_render::frame::draw::{
+    PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+    PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
+};
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
 
 /// (draws, triangles) per pipeline, in CENSUS_TAGS' order.
 pub type DrawCensus = [[f64; 2]; CENSUS_LEN];
+
+/// The pipeline each tag counts, the tag its name: one a tag, so a tag added
+/// without its pipeline does not compile.
+pub const CENSUS_PIPELINES: [u32; CENSUS_LEN] = [
+    PIPELINE_CHUNK,
+    PIPELINE_DECOR,
+    PIPELINE_GHOST_BOX,
+    PIPELINE_GHOST_BOX_COPLANAR,
+    PIPELINE_GHOST_DECOR,
+    PIPELINE_SKINNED,
+    PIPELINE_PUCK_ZONE,
+    PIPELINE_PUCK_BEACON,
+    PIPELINE_BADGE,
+    PIPELINE_DEBUG,
+    PIPELINE_CHUNK_COARSE,
+    PIPELINE_IMPOSTOR,
+];
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -190,8 +211,6 @@ pub struct TurnSample {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CapSample {
     pub commit_left: f64,
-    pub mount_left: f64,
-    pub mount_full: f64,
     pub record_refused: f64,
 }
 
@@ -250,8 +269,7 @@ words!(FrameSample, FRAME::WORDS,
     stale.hidden => FRAME::stale_hidden, stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready,
     stale.slot_waits => FRAME::slot_waits, stale.wait_zooms => FRAME::slot_wait_zooms,
     stale.chained => FRAME::slot_chained,
-    cap.commit_left => FRAME::cap_commit_left, cap.mount_left => FRAME::cap_mount_left,
-    cap.mount_full => FRAME::cap_mount_full, cap.record_refused => FRAME::cap_record_refused,
+    cap.commit_left => FRAME::cap_commit_left, cap.record_refused => FRAME::cap_record_refused,
     turn.effects_ms => FRAME::turn_effects_ms, turn.stage_ms => FRAME::turn_stage_ms,
     turn.step_ms => FRAME::turn_step_ms, turn.step_name => FRAME::turn_step_name,
     cover.rule => FRAME::cover_rule, cover.drawn => FRAME::cover_drawn, cover.gaps => FRAME::cover_gaps,

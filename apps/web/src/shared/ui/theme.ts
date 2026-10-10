@@ -6,7 +6,7 @@
  * their hue, so two uses sharing a value can change apart.
  */
 
-import { FAMILY, MONO } from "@platform/typeface.ts";
+import { FAMILY } from "@platform/typeface.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
 export function alpha(hex: string, a: number): string {
@@ -113,10 +113,6 @@ export const haloRings: readonly number[] = Array.from({ length: halo.reach }, (
 
 export const hairline = alpha(color.labelGray, 0.1);
 
-export const font = {
-  mono: MONO,
-};
-
 /** Apple's text styles, a step smaller, since the chrome floats over a map. */
 export const weight = { regular: "400", medium: "500", semibold: "600" } as const;
 
@@ -140,8 +136,8 @@ export const textScale = { chrome: 1.2, mark: 1 } as const;
 
 export const sectionTitle = { ...textStyle.caption, fontWeight: weight.medium, letterSpacing: 0.6, textTransform: "uppercase" } as const;
 
-/** The map screen's layers, back to front: the dock and toasts, the scrim, the top chrome, a sheet. */
-export const layer = { bottom: 40, scrim: 49, chrome: 50, sheet: 70 } as const;
+/** The map screen's layers, back to front: the dock and toasts, the scrim, the top chrome, the debug panels, a sheet. */
+export const layer = { bottom: 40, scrim: 49, chrome: 50, debug: 51, sheet: 70 } as const;
 
 export const chrome = {
   inset: 16,

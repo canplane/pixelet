@@ -1,8 +1,8 @@
 // pxl-kernel/scene/indicator/coverage_gizmo.rs
 
 //! The coverage gizmo (the `world_gizmo` setting), as translucent debug lines: the
-//! drawn pieces, the goal's pieces nothing drawn covers and the drawn pieces'
-//! tiles, each colored as its `Mark` says.
+//! drawn pieces, the goal's pieces nothing drawn covers, the drawn pieces'
+//! tiles and their shards, each colored as its `Mark` says.
 //! Every line is cut at each edge's ends on it, and each stretch drawn once in
 //! the highest mark over it, straight between its ends on the ground:
 //! overlaid, the lines read as none of them, and laid along the ground they
@@ -24,45 +24,61 @@ use crate::layer::residency::floor;
 use crate::layer::Base as _;
 use crate::query::World;
 use crate::scene::indicator::debug_lines::DebugLines;
+use crate::scene::indicator::gizmo_spec;
 use crate::view::frame::pose::view;
 use crate::view::observation::observation;
+use pxl_render::look::color::linear_rgb;
 use pxl_spec::space::coord::zoom::{units, within, Zoom};
 
-/// What an edge marks, lowest first: a stretch takes the highest over it.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+/// What an edge marks. Its look and its rank are the spec's
+/// (`gizmo_spec::coverage`): a stretch takes the mark of highest rank over it.
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Mark {
-    /// White, solid: a drawn piece.
     Drawn,
-    /// Cyan, solid: a drawn piece read from the floor's tile alone.
     DrawnFromFloor,
-    /// Yellow, dashed: a goal piece with a tile on its line, its mesh not yet built.
     Unbuilt,
-    /// Magenta, dashed: a goal piece only the floor's tile can build.
     FloorOnly,
-    /// Red, dashed: a goal piece with no tile on its line.
     NoTile,
-    /// Orange: a drawn piece's tile.
     Tile,
+    Shard,
 }
 
-const MARKS: usize = Mark::ALL.len();
+const MARKS: usize = gizmo_spec::coverage::KEYS.len();
 
 impl Mark {
-    const ALL: [Mark; 6] = [Mark::Drawn, Mark::DrawnFromFloor, Mark::Unbuilt, Mark::FloorOnly, Mark::NoTile, Mark::Tile];
+    const ALL: [Mark; MARKS] = [Mark::Drawn, Mark::DrawnFromFloor, Mark::Unbuilt, Mark::FloorOnly, Mark::NoTile, Mark::Tile, Mark::Shard];
 
-    fn rgba(self) -> [f32; 4] {
+    /// Its name in the spec, its color, opacity and dash.
+    fn look(self) -> (&'static str, u32, f32, bool) {
+        use gizmo_spec::coverage::*;
         match self {
-            Mark::Drawn => [1.0, 1.0, 1.0, 0.4],
-            Mark::DrawnFromFloor => [0.0, 1.0, 1.0, 0.6],
-            Mark::Unbuilt => [1.0, 1.0, 0.0, 0.6],
-            Mark::FloorOnly => [1.0, 0.0, 1.0, 0.6],
-            Mark::NoTile => [1.0, 0.0, 0.0, 0.6],
-            Mark::Tile => [1.0, 0.3, 0.0, 0.9],
+            Mark::Drawn => ("drawn", drawn::rgb, drawn::alpha, drawn::dashed),
+            Mark::DrawnFromFloor => ("drawn_from_floor", drawn_from_floor::rgb, drawn_from_floor::alpha, drawn_from_floor::dashed),
+            Mark::Unbuilt => ("unbuilt", unbuilt::rgb, unbuilt::alpha, unbuilt::dashed),
+            Mark::FloorOnly => ("floor_only", floor_only::rgb, floor_only::alpha, floor_only::dashed),
+            Mark::NoTile => ("no_tile", no_tile::rgb, no_tile::alpha, no_tile::dashed),
+            Mark::Tile => ("tile", tile::rgb, tile::alpha, tile::dashed),
+            Mark::Shard => ("shard", shard::rgb, shard::alpha, shard::dashed),
         }
     }
 
+    /// Its place in the spec's order.
+    fn rank(self) -> usize {
+        gizmo_spec::coverage::KEYS.iter().position(|&k| k == self.look().0).expect("a mark the spec names")
+    }
+
+    fn of_rank(rank: usize) -> Mark {
+        *Mark::ALL.iter().find(|m| m.rank() == rank).expect("a rank the spec has")
+    }
+
+    fn rgba(self) -> [f32; 4] {
+        let (_, rgb, a, _) = self.look();
+        let [r, g, b] = linear_rgb(rgb).map(|c| c as f32);
+        [r, g, b, a]
+    }
+
     fn dashed(self) -> bool {
-        matches!(self, Mark::Unbuilt | Mark::FloorOnly | Mark::NoTile)
+        self.look().3
     }
 }
 
@@ -74,9 +90,10 @@ pub struct CoverageGizmo {
     lines: DebugLines,
     /// What is drawn, and about where; none while hidden.
     drawn: Option<V3>,
-    lane: Vec<f32>,
-    /// The lines laid this step, kept so a step allocates nothing.
-    next: Vec<f32>,
+    /// The lines then the faces, and where the faces begin.
+    lane: (Vec<f32>, usize),
+    /// Those laid this step, kept so their buffer is reused.
+    next: (Vec<f32>, usize),
 }
 
 impl CoverageGizmo {
@@ -84,7 +101,7 @@ impl CoverageGizmo {
     pub fn step(&mut self, draw: &mut DrawList, show: bool, goal: &[Chunk], drawn: &[Chunk]) {
         if !show {
             if self.drawn.take().is_some() {
-                self.lines.set(draw, [0.0; 3], &[]);
+                self.lines.set(draw, [0.0; 3], &[], 0);
             }
             return;
         }
@@ -112,13 +129,15 @@ impl CoverageGizmo {
                 Some(s) if floor_only(s.from) => Mark::FloorOnly,
                 Some(_) => Mark::Unbuilt,
             };
-            lines.square(g.rect(), mark);
+            lines.piece(g.rect(), mark);
         }
         let mut tiles: Vec<Tile> = Vec::with_capacity(drawn.len());
+        let mut shards: Vec<Chunk> = Vec::with_capacity(drawn.len());
         for &d in drawn {
+            shards.push(d.ancestors().last().unwrap_or(d));
             let tile = GROUND.read_tile(d.column(), d.cell_zoom());
             let from_floor = matches!(residency.read(d.node(), d.cell_zoom()), Answer::Coarser(s, _) if floor_only(s.from));
-            lines.square(d.rect(), if from_floor { Mark::DrawnFromFloor } else { Mark::Drawn });
+            lines.piece(d.rect(), if from_floor { Mark::DrawnFromFloor } else { Mark::Drawn });
             tiles.push(tile);
         }
         tiles.sort_unstable();
@@ -126,10 +145,15 @@ impl CoverageGizmo {
         for p in tiles {
             lines.square(p.rect(), Mark::Tile);
         }
-        self.next.clear();
-        lines.lay(&mut self.next, about, &World::now());
+        shards.sort_unstable();
+        shards.dedup();
+        for s in shards {
+            lines.square(s.rect(), Mark::Shard);
+        }
+        self.next.0.clear();
+        self.next.1 = lines.lay(&mut self.next.0, about, &World::now());
         if self.drawn != Some(about) || self.next != self.lane {
-            self.lines.set(draw, about, &self.next);
+            self.lines.set(draw, about, &self.next.0, self.next.1);
             self.drawn = Some(about);
             core::mem::swap(&mut self.next, &mut self.lane);
         }
@@ -149,8 +173,9 @@ fn line_top(mut p: Tile, top: Zoom) -> Tile {
 
 /// Edges by the line they lie on, its axis (0 along x, 1 along y) and where
 /// it crosses the other: each a stretch along it and its mark.
+/// And the pieces' squares, whose faces hide what of the gizmo is behind them.
 #[derive(Default)]
-struct Lines(HashMap<(u8, u64), Vec<Stretch>>);
+struct Lines(HashMap<(u8, u64), Vec<Stretch>>, Vec<(f64, f64, f64)>);
 
 /// From, to, and what the edge marks.
 type Stretch = (f64, f64, Mark);
@@ -164,18 +189,29 @@ impl Lines {
         }
     }
 
+    /// A piece's square, its face among them.
+    fn piece(&mut self, rect: (f64, f64, f64), mark: Mark) {
+        self.square(rect, mark);
+        self.1.push(rect);
+    }
+
     /// Each line swept once, cut at every edge's end on it: a stretch takes
     /// the highest mark over it and is drawn straight between its ends on the
-    /// ground.
-    fn lay(&self, lane: &mut Vec<f32>, origin: V3, access: &World) {
-        let ground = |x: f64, y: f64| -> V3 {
-            let z = access.surface_support(&world::point(x, y, 0.0)).value().flatten().unwrap_or(0.0);
-            [pxl_spec::space::coord::world::nearest(x, origin[0]) - origin[0], y - origin[1], z - origin[2]]
-        };
+    /// ground. Then each piece's face, a fan from its center through every cut
+    /// on its edges, so its rim is the lines' own. Returns where the faces begin.
+    fn lay(&self, lane: &mut Vec<f32>, origin: V3, access: &World) -> usize {
+        let mut grounds: HashMap<(u64, u64), V3> = HashMap::new();
         let mut ends: Vec<(f64, bool, Mark)> = Vec::new();
+        // Each point asked once, by the lines and the faces alike.
+        let mut ground = |x: f64, y: f64| -> V3 {
+            *grounds.entry((x.to_bits(), y.to_bits())).or_insert_with(|| {
+                let z = access.surface_support(&world::point(x, y, 0.0)).value().flatten().unwrap_or(0.0);
+                [pxl_spec::space::coord::world::nearest(x, origin[0]) - origin[0], y - origin[1], z - origin[2]]
+            })
+        };
         for (&(axis, at), edges) in &self.0 {
             let at = f64::from_bits(at);
-            let point = |t: f64| if axis == 0 { ground(t, at) } else { ground(at, t) };
+            let mut point = |t: f64| if axis == 0 { ground(t, at) } else { ground(at, t) };
             ends.clear();
             ends.extend(edges.iter().flat_map(|&(a, b, m)| [(a, true, m), (b, false, m)]));
             ends.sort_unstable_by(|x, y| x.0.total_cmp(&y.0));
@@ -187,20 +223,60 @@ impl Lines {
                 // Every edge on the line cuts it, so a coarse edge over finer
                 // ones is drawn as they are, in its own mark.
                 if let (Some(f), Some(m)) = (from, (0..MARKS).rev().find(|&m| over[m] > 0)) {
-                    stretch(lane, point(f), point(t), Mark::ALL[m]);
+                    stretch(lane, point(f), point(t), Mark::of_rank(m));
                 }
                 while k < ends.len() && ends[k].0 == t {
                     let (_, opens, m) = ends[k];
                     if opens {
-                        over[m as usize] += 1;
+                        over[m.rank()] += 1;
                     } else {
-                        over[m as usize] -= 1;
+                        over[m.rank()] -= 1;
                     }
                     k += 1;
                 }
                 from = Some(t);
             }
         }
+        let lines = lane.len();
+        let mut rim: Vec<f64> = Vec::new();
+        // A face only where no finer piece lies inside it, at whatever height: a
+        // coarse face would hide the finer edges where the ground dips under it.
+        let key = |(x, y, side): (f64, f64, f64)| (x.to_bits(), y.to_bits(), side.to_bits());
+        let widest = self.1.iter().map(|r| r.2).fold(0.0, f64::max);
+        let mut coarser = HashSet::new();
+        for &(x0, y0, side) in &self.1 {
+            let mut s = side * 2.0;
+            while s <= widest {
+                coarser.insert(key(((x0 / s).floor() * s, (y0 / s).floor() * s, s)));
+                s *= 2.0;
+            }
+        }
+        let mut laid = HashSet::new();
+        for &(x0, y0, side) in self.1.iter().filter(|&&r| !coarser.contains(&key(r)) && laid.insert(key(r))) {
+            let (x1, y1) = (x0 + side, y0 + side);
+            let center = ground(x0 + side / 2.0, y0 + side / 2.0);
+            let mut prev: Option<V3> = None;
+            // Counterclockwise from the south-west corner: each edge's cuts, its far corner last.
+            for (axis, at, from, to) in [(0, y0, x0, x1), (1, x1, y0, y1), (0, y1, x1, x0), (1, x0, y1, y0)] {
+                rim.clear();
+                rim.extend(self.0.get(&(axis, at.to_bits())).into_iter().flatten().flat_map(|&(a, b, _)| [a, b]));
+                rim.retain(|&t| (t - from) * (t - to) < 0.0);
+                rim.push(to);
+                rim.sort_unstable_by(|a, b| ((a - from).abs()).total_cmp(&(b - from).abs()));
+                rim.dedup();
+                let start = if axis == 0 { ground(from, at) } else { ground(at, from) };
+                let mut last = prev.unwrap_or(start);
+                for &t in &rim {
+                    let p = if axis == 0 { ground(t, at) } else { ground(at, t) };
+                    for v in [center, last, p] {
+                        lane.extend(v.map(|c| c as f32));
+                    }
+                    last = p;
+                }
+                prev = Some(last);
+            }
+        }
+        lines
     }
 }
 

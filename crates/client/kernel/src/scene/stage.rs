@@ -19,7 +19,7 @@ use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
 use crate::mem::MB;
-use crate::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
+use crate::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_PIPELINES};
 use pxl_spec::asset::ingested::Asset;
 use xpute_kit::math::scalar::round;
 
@@ -149,8 +149,7 @@ pub fn stage_render() {
         ground: kernel().sched.shows_ground(),
     });
     resolution_observe(stat.gpu_ms);
-    let mut census: DrawCensus = Default::default();
-    census.copy_from_slice(&stat.census[..CENSUS_LEN]);
+    let census: DrawCensus = CENSUS_PIPELINES.map(|p| stat.census[p as usize]);
     set_host_frame_stat(
         GpuSample {
             ms: stat.gpu_ms,

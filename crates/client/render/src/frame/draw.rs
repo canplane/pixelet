@@ -42,7 +42,7 @@ pub const PIPELINE_PUCK_ZONE: u32 = 6;
 pub const PIPELINE_PUCK_BEACON: u32 = 7;
 /// (block handle, count, 0, uniform, pipeline).
 pub const PIPELINE_BADGE: u32 = 8;
-/// Line segments over everything: handle, vertex count.
+/// Line segments: handle, line vertex count, face vertex count.
 pub const PIPELINE_DEBUG: u32 = 9;
 /// The camera grid over the screen: (0, 0, 0, uniform, pipeline); listed is shown.
 pub const PIPELINE_CAMERA_GRID: u32 = 38;

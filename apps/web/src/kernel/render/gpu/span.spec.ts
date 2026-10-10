@@ -5,4 +5,4 @@
 // The GPU spans a frame is timed in, in the order the renderer encodes them
 // (pxl-render gpu/renderer.rs); the profiler records and reports them by these names.
 
-export const GPU_SPAN_NAMES = ["air", "shadow", "prepass", "ao", "world", "badges", "cases"] as const;
+export const GPU_SPAN_NAMES = ["air", "shadow", "prepass", "ao", "world", "badges", "debug", "cases"] as const;

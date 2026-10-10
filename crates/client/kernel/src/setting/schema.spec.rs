@@ -198,18 +198,20 @@ pub enum SettingKey {
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
     resolution = 11,
-    /// The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
-    debug_overlay = 12,
-    /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/indicator/coverage_gizmo.rs).
-    world_gizmo = 13,
+    /// Where the camera and the pointer are, read live (profiler/summary.rs, its view section).
+    view_overlay = 12,
+    /// The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
+    performance_overlay = 13,
+    /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs).
+    world_gizmo = 14,
     /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/indicator/camera_gizmo.rs).
-    camera_gizmo = 14,
-    person = 15,
-    pet = 16,
+    camera_gizmo = 15,
+    person = 16,
+    pet = 17,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 17] = [
+    pub const ALL: [SettingKey; 18] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::place,
@@ -222,7 +224,8 @@ impl SettingKey {
         SettingKey::ao,
         SettingKey::shadows,
         SettingKey::resolution,
-        SettingKey::debug_overlay,
+        SettingKey::view_overlay,
+        SettingKey::performance_overlay,
         SettingKey::world_gizmo,
         SettingKey::camera_gizmo,
         SettingKey::person,
@@ -248,7 +251,8 @@ impl SettingKey {
             SettingKey::ao => SettingKind::Choice,
             SettingKey::shadows => SettingKind::Toggle,
             SettingKey::resolution => SettingKind::Choice,
-            SettingKey::debug_overlay => SettingKind::Toggle,
+            SettingKey::view_overlay => SettingKind::Toggle,
+            SettingKey::performance_overlay => SettingKind::Toggle,
             SettingKey::world_gizmo => SettingKind::Toggle,
             SettingKey::camera_gizmo => SettingKind::Toggle,
             SettingKey::person => SettingKind::Index,
@@ -271,7 +275,8 @@ impl SettingKey {
             SettingKey::ao => "ao",
             SettingKey::shadows => "shadows",
             SettingKey::resolution => "resolution",
-            SettingKey::debug_overlay => "debug_overlay",
+            SettingKey::view_overlay => "view_overlay",
+            SettingKey::performance_overlay => "performance_overlay",
             SettingKey::world_gizmo => "world_gizmo",
             SettingKey::camera_gizmo => "camera_gizmo",
             SettingKey::person => "person",
@@ -324,7 +329,8 @@ pub struct Settings {
     pub ao: AoMode,
     pub shadows: bool,
     pub resolution: ResolutionMode,
-    pub debug_overlay: bool,
+    pub view_overlay: bool,
+    pub performance_overlay: bool,
     pub world_gizmo: bool,
     pub camera_gizmo: bool,
     pub person: u8,
@@ -346,7 +352,8 @@ impl Settings {
         ao: AoMode::corner,
         shadows: false,
         resolution: ResolutionMode::auto,
-        debug_overlay: false,
+        view_overlay: false,
+        performance_overlay: false,
         world_gizmo: false,
         camera_gizmo: false,
         person: 1,
@@ -369,7 +376,8 @@ impl Settings {
             SettingKey::ao => self.ao as u32,
             SettingKey::shadows => self.shadows as u32,
             SettingKey::resolution => self.resolution as u32,
-            SettingKey::debug_overlay => self.debug_overlay as u32,
+            SettingKey::view_overlay => self.view_overlay as u32,
+            SettingKey::performance_overlay => self.performance_overlay as u32,
             SettingKey::world_gizmo => self.world_gizmo as u32,
             SettingKey::camera_gizmo => self.camera_gizmo as u32,
             SettingKey::person => self.person as u32,
@@ -405,7 +413,8 @@ impl Settings {
                 Some(o) => self.resolution = o,
                 None => return false,
             },
-            SettingKey::debug_overlay if value <= 1 => self.debug_overlay = value == 1,
+            SettingKey::view_overlay if value <= 1 => self.view_overlay = value == 1,
+            SettingKey::performance_overlay if value <= 1 => self.performance_overlay = value == 1,
             SettingKey::world_gizmo if value <= 1 => self.world_gizmo = value == 1,
             SettingKey::camera_gizmo if value <= 1 => self.camera_gizmo = value == 1,
             SettingKey::person => match u8::try_from(value) {
