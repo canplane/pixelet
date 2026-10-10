@@ -8,13 +8,13 @@
 //! second tile's lanes.
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::format::GroundId;
-use pxl_spec::bake::format::COARSE_LANE;
 use pxl_spec::bake::separation::{MAX_BOXES, MAX_LINES, MAX_POINTS};
+use pxl_spec::bake::tile::terrain::GroundId;
+use pxl_spec::bake::tile::terrain::COARSE_LANE;
 use pxl_spec::space::layer::lattice::{EXTENT, TILE_CELLS};
 
 use crate::layer::residency::Residency;
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 
 /// `.fixed.terrain`, handed in at boot.
 pub static RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();

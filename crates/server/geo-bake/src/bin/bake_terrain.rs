@@ -16,7 +16,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use postgres::Client;
-use pxl_spec::bake::format::{encode_terrain, TerrainTile};
+use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
@@ -100,7 +100,7 @@ fn run() -> Result<(), String> {
                             store: held,
                         };
                         let terrain = bake_leaf(reader, tile)?;
-                        let packed = pack(&encode_terrain(&terrain).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
+                        let packed = pack(&terrain::encode(&terrain).map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
                         set.write(Tile::new(LEAF_ZOOM, tile), &packed)?;
                         Ok(Done::Wrote { bytes: packed.len() as u64, items: 0 })
                     },

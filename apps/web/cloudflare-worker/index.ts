@@ -76,7 +76,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  *   pyramid as terrain's are: how many places stand in each of its cells. A
  *   page with none is no object.
  * - `division/<version>/<name>`, 5 to 12 digits, the divisions' pyramid,
- *   whose leaves are z12 (pxl-spec bake/division_tile.rs `DIVISION_LEAF`):
+ *   whose leaves are z12 (pxl-spec bake/tile/division.rs `DIVISION_LEAF`):
  *   per cell the division it is in. A page that says no more than its
  *   parent is no object, and the kernel's layer/division/ reads the parent.
  * - `asset/<path>/<stem>-<12 hex>.<ext>` — a model or an image under the tree

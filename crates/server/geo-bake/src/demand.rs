@@ -7,9 +7,9 @@ mod pyramid;
 mod terrain;
 
 use cache::Cache;
-use pxl_spec::bake::division_tile::DivisionTile;
-use pxl_spec::bake::format::TerrainTile;
-use pxl_spec::bake::place_tile::PlaceTile;
+use pxl_spec::bake::tile::division::DivisionTile;
+use pxl_spec::bake::tile::place::PlaceTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::pyramid::Base;

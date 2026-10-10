@@ -1,11 +1,11 @@
-// pxl-spec/bake/format.test.rs
+// pxl-spec/bake/tile/terrain.test.rs
 
 use xpute_kit::golden::Golden;
 
 use super::*;
 use xpute_kit::math::rng::SplitMix64;
 
-const GOLDEN: &str = include_str!("../../golden/bake/format.tsv");
+const GOLDEN: &str = include_str!("../../../golden/bake/terrain.tsv");
 
 /// So a tile's lanes are the same on every run.
 struct Rng(SplitMix64);
@@ -71,20 +71,20 @@ fn fnv(bytes: &[u8]) -> u64 {
 fn the_formats_write_and_read_what_the_record_holds() {
     let v = Golden::load(GOLDEN);
     let tile = tile(0x9e37_79b9_7f4a_7c15);
-    let terrain = encode_terrain(&tile).unwrap();
+    let terrain = encode(&tile).unwrap();
     assert_eq!(format!("{:016x}", fnv(&terrain)), v.s("terrain.fnv"), "the tile's bytes");
-    assert_eq!(decode_terrain(&terrain).unwrap(), tile, "a tile reads back as it was written");
+    assert_eq!(decode(&terrain).unwrap(), tile, "a tile reads back as it was written");
     let room = room();
-    assert_eq!(decode_terrain_into(&terrain, room).unwrap(), tile, "a tile reads into its room as it was written");
+    assert_eq!(decode_into(&terrain, room).unwrap(), tile, "a tile reads into its room as it was written");
 }
 
 #[test]
 fn a_packet_that_is_not_a_tile_is_refused() {
     let v = Golden::load(GOLDEN);
     let small = hex::decode(v.s("not_a_page")).unwrap();
-    assert!(decode_terrain(&small).is_err());
+    assert!(decode(&small).is_err());
     let room = room();
-    assert!(decode_terrain_into(&small, room).is_err());
+    assert!(decode_into(&small, room).is_err());
 }
 
 /// Every index block is exactly the join of its cells, at every size.

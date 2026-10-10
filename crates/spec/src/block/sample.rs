@@ -5,9 +5,9 @@
 //! tunnels stand off the column as runs of their own; a bore or a cutting
 //! takes the air over its floor out of the column.
 
-use crate::bake::format::GroundId;
 use crate::bake::separation::{Crossing, Occupies, Separation};
 use crate::bake::surface::bicubic;
+use crate::bake::tile::terrain::GroundId;
 use crate::block::cube::{ground, Ground};
 use crate::procedural::{pier_stands, Frame};
 use crate::space::camera::grid::CHUNK_STEPS;

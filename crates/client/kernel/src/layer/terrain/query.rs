@@ -4,7 +4,7 @@
 //! from, or the nearest resident tile over it, at that tile's cells; it is
 //! exact where that tile says it, coarser where one over it only draws it.
 
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::block::sample::{TileSource, TileView};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};

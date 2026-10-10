@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use crate::bake::format::GroundId;
+use crate::bake::tile::terrain::GroundId;
 use crate::block::object::{cube_of, object_value_is_air};
 use crate::block::sample::{grow, ChunkSample, Refused, APRON};
 use crate::space::coord::zoom::{units, Zoom};

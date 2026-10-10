@@ -10,9 +10,9 @@
 //! child as no tile (`Base::occupancy`), its ground is the tile's and the
 //! child is never asked for.
 
-use pxl_spec::bake::earth_tile::EARTH_REACH;
-use pxl_spec::bake::format::TerrainTile;
-use pxl_spec::bake::place_tile::PlaceTile;
+use pxl_spec::bake::tile::earth::EARTH_REACH;
+use pxl_spec::bake::tile::place::PlaceTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::global::Global;
 
 use crate::io::demand::Stream;
@@ -21,7 +21,7 @@ use crate::io::request::attempt_of;
 use crate::layer::earth::{self, Earth};
 use crate::layer::{Asks, Base};
 use crate::sched::edge::world_edge;
-use pxl_spec::bake::division_tile::DivisionTile;
+use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::mem::heap::Block;
 use xpute_kit::status::errno::Errno;
 

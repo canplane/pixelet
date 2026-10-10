@@ -12,8 +12,8 @@ use std::collections::HashMap;
 
 use postgres::types::ToSql;
 use postgres::Client;
-use pxl_spec::bake::division_tile::{Division, DivisionTile, DIVISION_LEAF, NONE};
-use pxl_spec::bake::format::Occupancy;
+use pxl_spec::bake::tile::division::{Division, DivisionTile, DIVISION_LEAF, NONE};
+use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::division::Subtype;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
@@ -195,16 +195,16 @@ impl crate::pyramid::Base for DivisionTile {
     const LEAF: pxl_spec::space::coord::zoom::Zoom = DIVISION_LEAF;
 
     fn encode(&self) -> Result<Vec<u8>, String> {
-        pxl_spec::bake::division_tile::encode(self).map_err(|e| format!("{e:?}"))
+        pxl_spec::bake::tile::division::encode(self).map_err(|e| format!("{e:?}"))
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {
-        pxl_spec::bake::division_tile::decode(raw).map_err(|e| format!("{e:?}"))
+        pxl_spec::bake::tile::division::decode(raw).map_err(|e| format!("{e:?}"))
     }
 
     fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
         let [a, b, c, d] = p.children().map(held);
-        Some(pxl_spec::bake::division_tile::fold_division([a?, b?, c?, d?], p.zoom))
+        Some(pxl_spec::bake::tile::division::fold([a?, b?, c?, d?], p.zoom))
     }
 
     fn occupancy(&self) -> Occupancy {

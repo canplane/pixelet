@@ -20,8 +20,8 @@ use crate::control::sensor::device_orientation::{orientation_watchdog_step, Orie
 use crate::control::sensor::geolocation::geolocation_step;
 use crate::io::request::{pump, set_credits};
 use crate::io::text::text_rise;
-use pxl_spec::bake::format::TerrainTile;
-use pxl_spec::bake::place_tile::PlaceTile;
+use pxl_spec::bake::tile::place::PlaceTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 
 use crate::decor::assets::decor_assets_wanted;
 use crate::kernel;
@@ -36,7 +36,7 @@ use crate::sched::edge::{request_world_tick, world_edge};
 use crate::sched::tick::{on_tick, run_tick, TickContext, TickState};
 use crate::setting::store::settings_store;
 use crate::view::demand::Observed as _;
-use pxl_spec::bake::division_tile::DivisionTile;
+use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::sched::tick::{Phase, TickReport};

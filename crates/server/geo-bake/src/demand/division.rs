@@ -1,7 +1,7 @@
 // pxl-geo-bake/demand/division.rs
 
 use super::job;
-use pxl_spec::bake::division_tile::DivisionTile;
+use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::tile::Tile;
 
 pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {

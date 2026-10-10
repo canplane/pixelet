@@ -18,7 +18,7 @@ use crate::layer::residency::Residency;
 use crate::layer::Answer;
 use crate::layer::Base as _;
 use crate::layer::{Bound, Query};
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid::Tau;
 
 /// The world's query: the resident ground and the placed objects, read

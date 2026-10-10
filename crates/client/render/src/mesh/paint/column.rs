@@ -5,7 +5,7 @@
 //! a part-filled cell would have to be drawn as something inside the cell,
 //! and in flat places the whole zoom turned to cubes standing apart.
 
-use pxl_spec::bake::format::GroundId;
+use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::color;
 use pxl_spec::block::cube::{sentinel, Ground};
 use pxl_spec::block::object::Cube;

@@ -26,7 +26,7 @@ use crate::scene::character::preview::{preview_rows, CASES_MAX};
 use crate::setting::store::{settings_store, SettingKey};
 use crate::turn::world_platform;
 use crate::view::frame::pose::units_per_px_at;
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// The focus's division and each above it, broad to narrow. Every language

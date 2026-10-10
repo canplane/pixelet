@@ -1,7 +1,7 @@
 // pxl-geo-bake/demand/place.rs
 
 use super::job;
-use pxl_spec::bake::place_tile::PlaceTile;
+use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::space::layer::tile::Tile;
 
 pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {

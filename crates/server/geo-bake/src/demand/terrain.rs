@@ -11,7 +11,7 @@ pub(super) const SOURCE: &str = ".source";
 
 pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, seconds: u64) -> Result<(), String> {
     use crate::terrain::{leaf, repository::TerrainRepository};
-    use pxl_spec::bake::format::TerrainTile;
+    use pxl_spec::bake::tile::terrain::TerrainTile;
     super::pyramid::execute::<TerrainTile>(
         p,
         cache,

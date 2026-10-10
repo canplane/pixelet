@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
-use pxl_spec::bake::format::Occupancy;
+use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;

@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 
 use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
-use pxl_spec::bake::format::GroundId;
+use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::sample::{beside_index, span, Around, ChunkSample, Refused, APRON, COL_SPAN};
 use pxl_spec::block::stand::{compose, stands_of, z_unit, Block, Stand};
 use pxl_spec::space::coord::aabb::Aabb;

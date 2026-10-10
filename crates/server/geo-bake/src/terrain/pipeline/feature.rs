@@ -3,7 +3,7 @@
 //! What the ground paints: a shape in the tile's cells and the cell it paints.
 
 use crate::terrain::CELL_U;
-use pxl_spec::bake::format::GroundId;
+use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::space::coord::adapter::epsg3857::{u_from_mer, G3857};
 use xpute_kit::math::scalar::round;
 

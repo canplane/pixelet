@@ -6,8 +6,8 @@
 
 use std::collections::TryReserveError;
 
-use pxl_spec::bake::format::GroundId;
 use pxl_spec::bake::separation::Separation;
+use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::cube::Ground;
 use pxl_spec::block::decor::{Decor, DecorMeta, Orientation};
 use pxl_spec::block::sample::TileSource;

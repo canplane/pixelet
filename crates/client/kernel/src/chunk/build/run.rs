@@ -8,7 +8,7 @@ use crate::param::BAKE_ROWS_PER_STEP;
 use crate::query::World;
 use pxl_render::mesh::paint::column::write_rows;
 use pxl_render::mesh::run::RunSet;
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::block::sample::APRON;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};

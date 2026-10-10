@@ -23,11 +23,12 @@ use pxl_geo_bake::coverage::Coverage;
 use pxl_geo_bake::pyramid::TileSet;
 use pxl_geo_bake::util::{is_packed, unpack};
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::format::decode_terrain;
-use pxl_spec::bake::format::{GroundId, Occupancy};
 use pxl_spec::bake::separation::{Form, Separation};
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::surface::extent_of;
+use pxl_spec::bake::tile::terrain;
+use pxl_spec::bake::tile::terrain::GroundId;
+use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::block::color;
 use pxl_spec::block::cube::{ground, sentinel, Ground};
 use pxl_spec::space::coord::zoom::idx;
@@ -57,7 +58,7 @@ struct Tile {
 }
 
 fn decode(pkt: &[u8]) -> Result<Tile, String> {
-    let t = decode_terrain(pkt).map_err(|e| format!("not a tile: {e:?}"))?;
+    let t = terrain::decode(pkt).map_err(|e| format!("not a tile: {e:?}"))?;
     let (ele, cells, extent, occupancy, separation) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent().to_vec(), t.index.occupancy, t.separation);
     // Nothing may follow the tree: the decoder only checks the payload is there.
     let at = WORD_SZ as usize;

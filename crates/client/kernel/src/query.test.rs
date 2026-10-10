@@ -5,7 +5,7 @@
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
-use pxl_spec::bake::format::Ground;
+use pxl_spec::bake::tile::terrain::Ground;
 use pxl_spec::block::cube::{self, ground, sentinel};
 use pxl_spec::block::object::{cube_id, Cube};
 use pxl_spec::space::coord::pvf3::ivec;
@@ -13,7 +13,7 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 
 use super::*;
 use crate::layer::Answer;
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;

@@ -5,11 +5,11 @@
 //! zoom or schedule of its own. A tile's texels go to the GPU once and are
 //! kept nowhere here; the global picture answers wherever no tile is held.
 
-use pxl_spec::bake::earth_tile::{self, EARTH_ZOOM};
+use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::world::{around, wrap_index};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
 
-use pxl_spec::bake::format::Occupancy;
+use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::Tile;
@@ -45,7 +45,7 @@ impl Base for Earth {
     }
 
     fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<Earth, Failure> {
-        earth_tile::decode(pkt)?;
+        earth::decode(pkt)?;
         Ok(Earth)
     }
 }
@@ -84,7 +84,7 @@ pub fn keep(record: Option<u32>, block: Block) {
 pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
     for (record, slot) in uploads().iter_mut().enumerate() {
         let Some(block) = *slot else { continue };
-        let Ok(texels) = earth_tile::decode(view(block)) else { continue };
+        let Ok(texels) = earth::decode(view(block)) else { continue };
         if !write(record as u32, texels) {
             return;
         }

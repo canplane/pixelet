@@ -5,7 +5,7 @@
 //! redrawn only when the light's height or the camera's altitude moves (the
 //! table is kept relative to the light's azimuth); and every frame the exposure.
 
-use pxl_spec::bake::earth_tile::{self, EARTH_ZOOM};
+use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 
@@ -143,7 +143,7 @@ impl Atmosphere {
             words[at] = v as f32;
         }
         words[SUN_DIR + 2] = 1.0;
-        words[EARTH_REACH] = earth_tile::EARTH_REACH as f32;
+        words[EARTH_REACH] = earth::EARTH_REACH as f32;
         words[EARTH_WINDOW + 2] = f32::from_bits(REACH_ACROSS);
         words[EARTH_WINDOW + 3] = f32::from_bits(around(EARTH_ZOOM) as u32);
 

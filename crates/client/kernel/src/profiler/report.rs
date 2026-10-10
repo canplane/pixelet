@@ -3,8 +3,8 @@
 //! A turn's frame record: what the host measured, the chunks' census and the
 //! layers' residency, taken after every other phase.
 
-use pxl_spec::bake::format::TerrainTile;
-use pxl_spec::bake::place_tile::PlaceTile;
+use pxl_spec::bake::tile::place::PlaceTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_kit::math::scalar::round;

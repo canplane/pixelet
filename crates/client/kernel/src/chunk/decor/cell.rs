@@ -34,7 +34,7 @@ use crate::layer::Base;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::units_per_px_at;
 use crate::view::observation::{eye, observation};
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::block::decor::{Decor, Variant, DECORS};
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::global::Global;

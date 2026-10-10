@@ -24,7 +24,7 @@ pub const fn ele_index(x: u32, y: u32) -> usize {
     (y * ELE_PADDED_SPAN + x) as usize
 }
 
-/// Cells on a tile's side in its index lane (bake/format.rs `Index`): one per
+/// Cells on a tile's side in its index lane (bake/tile/terrain.rs `Index`): one per
 /// elevation sample spacing, at 4 KiB a tile.
 pub const EXTENT_SPAN: u32 = TILE_ELE_SPAN;
 

@@ -12,9 +12,10 @@ use crate::space::layer::tile::{neighbor_index, CHILDREN};
 use xpute_kit::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
-use super::format::{join, Ground, Index, Occupancy, TerrainTile};
 use super::separation::fold_separation;
 use super::surface::extent_of;
+use super::tile::terrain::{join, Ground, Index, TerrainTile};
+use super::tile::Occupancy;
 use crate::space::coord::zoom::Zoom;
 
 /// The value filling more than half of a 2×2 (or 2×2×2) block, `v[dx + 2·dy +

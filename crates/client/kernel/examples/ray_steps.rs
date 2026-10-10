@@ -34,7 +34,7 @@ use pxl_kernel::layer::object::store::Store;
 use pxl_kernel::layer::residency::{Candidate, Residency, Victim};
 use pxl_kernel::layer::Answer;
 use pxl_kernel::query::{Detail, Ray, World};
-use pxl_spec::bake::format::{decode_terrain, TerrainTile};
+use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
@@ -115,7 +115,7 @@ impl Tiles {
         if !out.status.success() || out.stdout.is_empty() {
             return false;
         }
-        let Ok(tile) = decode_terrain(&out.stdout) else { return false };
+        let Ok(tile) = terrain::decode(&out.stdout) else { return false };
         self.residency.admit(p, &Keep, |_| Ok::<_, ()>(tile)).is_ok()
     }
 }

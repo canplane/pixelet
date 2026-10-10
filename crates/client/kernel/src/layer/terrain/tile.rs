@@ -6,8 +6,8 @@
 //! open water; at the source's top, it is void.
 
 use crate::layer::residency::Residency;
-use pxl_spec::bake::format::{decode_terrain_into, GroundId, TerrainTile, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::bake::separation::{self, MAX_BOXES, MAX_LINES, MAX_POINTS};
+use pxl_spec::bake::tile::terrain::{decode_into, GroundId, TerrainTile, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use xpute_guest::mem::base::ptr_at;
 use xpute_kit::status::bug::OrBug;
@@ -19,7 +19,7 @@ use crate::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::layer::terrain::fixed::RANGE;
 use crate::layer::terrain::fixed::{coarse_off, ele_off, extent_off, ground_off, separation_off, COARSE_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES, SEPARATION_LANE_BYTES};
 use crate::layer::Base;
-use pxl_spec::bake::format::Occupancy;
+use pxl_spec::bake::tile::Occupancy;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
@@ -48,7 +48,7 @@ impl Base for TerrainTile {
     fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<TerrainTile, Failure> {
         let t0 = now();
         // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
-        let terrain = decode_terrain_into(pkt, unsafe { room_of(record) })?;
+        let terrain = decode_into(pkt, unsafe { room_of(record) })?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
         Ok(terrain)
     }

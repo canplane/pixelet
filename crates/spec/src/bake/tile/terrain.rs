@@ -1,4 +1,4 @@
-// pxl-spec/bake/format.rs
+// pxl-spec/bake/tile/terrain.rs
 
 //! A baked terrain tile and its wire: `[ele, ground, extent, occupancy, separation]`.
 
@@ -7,10 +7,11 @@ use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, Tr
 
 use std::borrow::Cow;
 
-use super::constant::ELE_PADDED_SPAN;
-use super::malformed;
-use super::separation::{self, Separation};
-use super::surface::extent_of;
+use super::{occupancy_of, Occupancy};
+use crate::bake::constant::ELE_PADDED_SPAN;
+use crate::bake::malformed;
+use crate::bake::separation::{self, Separation};
+use crate::bake::surface::extent_of;
 use crate::space::layer::lattice::{EXTENT, TILE_CELLS};
 
 /// A tile's lane lengths; a tile is these and no other size.
@@ -37,48 +38,6 @@ impl Ground {
 
     pub fn is_empty(&self) -> bool {
         self.cells.is_empty()
-    }
-}
-
-/// Which of a tile and its four children are tiles of their own, the rest
-/// said whole by the tile (terrain's zero tile, places's uncrowded ground):
-/// children in the low four bits in `slot_of`'s order, the tile itself above
-/// them. A client never asks for a child its parent marks absent.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Occupancy(u8);
-
-impl Occupancy {
-    const TILE: u8 = 1 << 4;
-
-    pub const ZERO: Occupancy = Occupancy(0);
-
-    pub const LEAF: Occupancy = Occupancy(Occupancy::TILE);
-
-    pub fn of_children(children: [Occupancy; 4]) -> Occupancy {
-        Occupancy::of_slots(children.map(Occupancy::is_tile))
-    }
-
-    /// A tile whose children in `slot_of`'s order are tiles where `slots` says.
-    pub fn of_slots(slots: [bool; 4]) -> Occupancy {
-        let bits = (0..4).filter(|&q| slots[q]).fold(0, |bits, q| bits | 1 << q);
-        Occupancy(if bits == 0 { 0 } else { Occupancy::TILE | bits })
-    }
-
-    pub fn is_tile(self) -> bool {
-        self.0 & Occupancy::TILE != 0
-    }
-
-    pub fn has_child(self, slot: usize) -> bool {
-        self.0 & (1 << slot) != 0
-    }
-
-    pub fn bits(self) -> u8 {
-        self.0
-    }
-
-    /// None for a byte no tile can have: a bit past the five, or a child without its parent.
-    pub fn of_bits(bits: u8) -> Option<Occupancy> {
-        (bits == 0 || (bits & Occupancy::TILE != 0 && bits < Occupancy::TILE << 1)).then_some(Occupancy(bits))
     }
 }
 
@@ -192,7 +151,7 @@ impl TerrainTile {
 }
 
 // Cells go out packed, as the client holds them, so decoding is a length check and a copy.
-pub fn encode_terrain(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
+pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
         b.i16_array(Some(&tile.ele))
@@ -243,7 +202,7 @@ fn read_tile(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
 
 /// Decode straight into the tile's resident room; the index's coarse are
 /// built there before the tile is returned.
-pub fn decode_terrain_into(pkt: &[u8], room: TileRoom) -> Result<TerrainTile, MarshalError> {
+pub fn decode_into(pkt: &[u8], room: TileRoom) -> Result<TerrainTile, MarshalError> {
     let Lanes {
         ele,
         ground,
@@ -278,7 +237,7 @@ pub fn decode_terrain_into(pkt: &[u8], room: TileRoom) -> Result<TerrainTile, Ma
 }
 
 // Copied out, for a tile that outlives its packet.
-pub fn decode_terrain(pkt: &[u8]) -> Result<TerrainTile, MarshalError> {
+pub fn decode(pkt: &[u8]) -> Result<TerrainTile, MarshalError> {
     let Lanes {
         ele,
         ground,
@@ -301,12 +260,6 @@ fn pairs(flat: &[i16]) -> Result<&[[i16; 2]], MarshalError> {
     }
 }
 
-/// A whole number a byte holds, never a cast of one that is not.
-pub fn occupancy_of(number: f64) -> Result<Occupancy, MarshalError> {
-    let whole = number.fract() == 0.0 && (0.0..=255.0).contains(&number);
-    whole.then_some(number as u8).and_then(Occupancy::of_bits).ok_or_else(malformed)
-}
-
 #[cfg(test)]
-#[path = "format.test.rs"]
+#[path = "terrain.test.rs"]
 mod test;

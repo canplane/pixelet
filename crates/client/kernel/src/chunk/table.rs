@@ -51,7 +51,7 @@ use crate::chunk::domain::{self, Domain};
 use crate::chunk::Chunk;
 use crate::io::demand::Order;
 use crate::layer::Base as _;
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 
 /// `.fixed.mounts`, handed in at boot.
 pub static MOUNTS_RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();

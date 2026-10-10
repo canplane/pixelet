@@ -8,7 +8,8 @@ pub mod repository;
 pub mod source;
 
 use pxl_spec::bake::fold::fold_terrain;
-use pxl_spec::bake::format::{decode_terrain, encode_terrain, Occupancy, TerrainTile};
+use pxl_spec::bake::tile::terrain::{self, TerrainTile};
+use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{neighborhood, Tile};
@@ -18,11 +19,11 @@ pub const CELL_U: f64 = units(GROUND.cell());
 
 impl crate::pyramid::Base for TerrainTile {
     fn encode(&self) -> Result<Vec<u8>, String> {
-        encode_terrain(self).map_err(|e| format!("{e:?}"))
+        terrain::encode(self).map_err(|e| format!("{e:?}"))
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {
-        decode_terrain(raw).map_err(|e| format!("{e:?}"))
+        terrain::decode(raw).map_err(|e| format!("{e:?}"))
     }
 
     /// The ring around the four children too, for the elevation padding.

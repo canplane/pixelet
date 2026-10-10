@@ -21,7 +21,7 @@ use crate::profiler::task::TaskRow;
 use crate::profiler::word::put;
 use crate::sched::tick::tick_step_stats;
 use crate::{kernel, with_parts};
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pack;
 use pxl_spec::space::coord::zoom::Zoom;

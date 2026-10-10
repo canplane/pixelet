@@ -4,7 +4,7 @@
 //! nothing of its neighbours.
 
 mod answer;
-use pxl_spec::bake::format::Occupancy;
+use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;

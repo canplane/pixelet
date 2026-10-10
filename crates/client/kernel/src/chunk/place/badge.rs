@@ -9,7 +9,7 @@ use pxl_spec::bake::constant::EntryAt;
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, LABEL_ZOOM, TEXT};
-use pxl_spec::bake::place_tile::{symbol_of, PlaceTile, Placed, SPACING_CELLS};
+use pxl_spec::bake::tile::place::{symbol_of, PlaceTile, Placed, SPACING_CELLS};
 use pxl_spec::space::camera::grid::px_per_unit;
 use pxl_spec::space::layer::tile::Tile;
 
