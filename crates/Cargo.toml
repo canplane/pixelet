@@ -106,9 +106,6 @@ panic = "abort"
 # features before it can take them off — which it cannot do if Cargo has
 # already thrown them away.
 
-[profile.dev]
-panic = "abort"
-
 # What the server and the bake tools are built with. `panic` is a profile
 # setting and a profile is the root manifest's alone, so a member cannot ask
 # for one; the release profile above aborts because unwinding costs the module

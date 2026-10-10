@@ -29,7 +29,7 @@ const CRATES = new URL("../../../crates/", import.meta.url);
 interface Build {
   target: string;
   published: boolean;
-  /** The library as cargo writes it, and where the app takes it from. */
+  /** The library under cargo's target directory, and where the app takes it from. */
   built: string;
   linked: string;
   /** cargo's subcommand and its own arguments before the shared ones. */
@@ -60,7 +60,7 @@ function xcode(): Build {
   return {
     target,
     published: need("CONFIGURATION") === "Release",
-    built: `target/${target}/native/libpxl_native.a`,
+    built: `${target}/native/libpxl_native.a`,
     linked: `${need("PODS_CONFIGURATION_BUILD_DIR")}/PxlNative/libpxl_native.a`,
     cargo: ["build"],
     env,
@@ -80,7 +80,7 @@ function gradle(args: Record<string, string | undefined>): Build {
   return {
     target: ANDROID_TARGET,
     published: need("variant") === "release",
-    built: `target/${ANDROID_TARGET}/native/libpxl_native.so`,
+    built: `${ANDROID_TARGET}/native/libpxl_native.so`,
     linked: `${need("out")}/${ANDROID_ABI}/libpxl_native.so`,
     cargo: ["rustc", "--crate-type", "cdylib"],
     env: {
@@ -115,7 +115,9 @@ if (code !== 0) Deno.exit(code);
 
 // Copied only when cargo wrote a new one: the app relinks whenever the
 // library it takes is newer than the one it has.
-const built = new URL(build.built, CRATES).pathname;
+// Cargo's own rule: CARGO_TARGET_DIR, else the workspace's target/.
+const targetDir = Deno.env.get("CARGO_TARGET_DIR") ? new URL(`file://${Deno.env.get("CARGO_TARGET_DIR")}/`) : new URL("target/", CRATES);
+const built = new URL(build.built, targetDir).pathname;
 const mtime = (path: string) => Deno.stat(path).then((s) => s.mtime?.getTime() ?? 0, () => 0);
 if ((await mtime(built)) > (await mtime(build.linked))) {
   await Deno.mkdir(build.linked.slice(0, build.linked.lastIndexOf("/")), { recursive: true });
