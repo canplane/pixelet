@@ -253,4 +253,4 @@ purges under Caching → Configuration. Both reach entries the Worker put
 there through the Cache API. `cache.delete(request)` inside the Worker
 would not: it clears the one colo that ran it.
 
-Old version prefixes simply stop being requested; delete them whenever.
+`publish` removes a kind's older versions as it goes, keeping the new one, the one it replaces and the one `deploy`'s tree names.
