@@ -15,13 +15,16 @@ how it gets there and how you know it arrived.
 
 ## What the bucket holds
 
-| Prefix                | Object                      | Named by               | Policy                                                        |
-| --------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
-| `terrain/<version>/`  | packed XTP tile             | name, 5–15             | immutable; a re-bake is a new version                         |
-| `place/<version>/`    | XTP count tile              | name, 5–15             | immutable; a re-bake is a new version                         |
-| `division/<version>/` | XTP division tile           | name, 5–12             | immutable; a re-bake is a new version                         |
-| `asset/`              | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
-| `_meta/build-counter` | the official build count    | fixed name             | mutable; taken and written by CI's gate, never by hand        |
+| Prefix                  | Object                                          | Named by               | Policy                                                           |
+| ----------------------- | ----------------------------------------------- | ---------------------- | ---------------------------------------------------------------- |
+| `terrain/<version>/`    | packed XTP tile                                 | name, 5–15             | immutable; a re-bake is a new version                            |
+| `place/<version>/`      | XTP count tile                                  | name, 5–15             | immutable; a re-bake is a new version                            |
+| `division/<version>/`   | XTP division tile                               | name, 5–12             | immutable; a re-bake is a new version                            |
+| `earth/<version>/`      | packed earth tile                               | name, 5                | immutable; a re-bake is a new version                            |
+| `asset/`                | glb, png, webp — not packed                     | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever    |
+| `_meta/build-counter`   | the official build count                        | fixed name             | mutable; taken and written by CI's gate, never by hand           |
+| `_meta/build-log.jsonl` | a line a published build                        | fixed name             | appended by CI's `record` (`script/build-log.ts`)                |
+| `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number           | written by `deno task deploy` under a build number; never served |
 
 A tile is named by its 2D Morton key at the zoom the tile is held at, one
 base-4 digit a zoom, coarsest first, rows counted from the south (pxl-spec
@@ -40,10 +43,10 @@ The versions the client requests are `PUBLISHED_VERSION` in
 name carries no extension, so **content-type and content-encoding are
 stored with the object at upload** — that is what every flag below is for.
 
-Immutability is the whole cache story: the edge, the browser and any
+Immutability is the whole cache story: every object is uploaded
+`public, max-age=31536000, immutable`, and the edge, the browser and any
 future OPFS cache are invalidated by requesting a new prefix, with no purge
-call. Places and divisions are the exception, and pay for it with a one-day
-`max-age` instead of a year.
+call.
 
 ## One-time setup
 
@@ -75,11 +78,10 @@ checksums (v2 sends `x-amz-checksum-*` headers R2 refuses), set
 **What a publish costs is one Class A operation an object**, and a server-side
 copy is the same one. The free month has a million, and nothing stops at it:
 the guarantee that the bucket cannot bill covers its reads, which all pass
-the Worker's fail-closed plan, and not its writes. A new terrain version is
-every tile of the pyramid — the sum of `objects` over the bake manifest's
-`zooms`, 227,310 for v6 — and a places version likewise, so four terrain
-publishes in a month, or one rename done twice, is past it. September 2026
-went to 1.67M on bakes re-published and the old tile rename run twice.
+the Worker's fail-closed plan, and not its writes. A version costs the files
+in `out/<kind>.publish/`, which `publish` prints before it uploads — every
+tile for terrain — so a few terrain publishes in a month, or a re-keying of
+the bucket, is past it.
 
 So before an upload, and after one:
 
@@ -100,11 +102,9 @@ under a new name, `v<format>.<UTC day>.<n>` — the format is
 version of that format and day the bucket holds — checks the stored count,
 sets `PUBLISHED_VERSION`, regenerates, and removes the copy.
 
-### Terrain
-
 ```bash
-deno task bake:terrain --stage publish
-deno task publish terrain
+deno task bake:<kind> --stage publish    # terrain, place or division
+deno task publish <kind>
 ```
 
 **Never overwrite an existing version in place**, of any kind — publish a new
@@ -112,39 +112,38 @@ prefix and point the app at it.
 
 **Objects are stored already packed, so the upload sets the
 `Content-Encoding` they were packed in** — the manifest's `content_encoding`,
-which the bake writes beside the version: zstd from the bake after v4, gzip
-for terrain v4, places v5 and divisions v2, which were baked before it. The
+which the bake writes beside the set: zstd (`util.rs` `CONTENT_ENCODING`). The
 browser decodes by that header, and the kernel and the shell never see the
 codec (decision/20260913-compression-by-traffic.md). A wrong label hands the
 client compressed bytes it does not know to decode. This is the single
 easiest step to get wrong, and it fails as a decode error far from its
-cause. A bake refuses to add objects to a directory of the other encoding,
-so one version holds one encoding.
+cause.
 
-### Places
+For places and divisions, a tile no reader asks for is no object
+(`pyramid.rs` `unasked`), and the client reads its ground from the tile over
+it, so a missing tile is never an error to repair.
 
-As terrain:
+### Earth
 
-```bash
-deno task bake:place --stage publish
-deno task publish place
-```
+`publish` does not take earth: `bake_earth` writes under the name the
+generated `PUBLISHED_VERSION.earth` already holds. A new version, in order:
 
-A tile its parent's occupancy marks none is no object — the tree stops where no cell over a
-tile holds two places — and the client reads its ground from the tile over it,
-so a missing tile is never an error to repair. The client shows places only outside production until
-the layer is switched on there.
+1. Set `PUBLISHED_VERSION.earth` in `spec/spec/bake/published.json` to a
+   `v<FORMAT>.<UTC day>.<n>` the bucket does not hold (`aws s3 ls
+   s3://pixelet-tiles/earth/`), then `deno task spec` — the bake reads the
+   generated constant, and without it overwrites the live version.
+2. `deno task bake:earth`, which writes `out/earth/<version>/` and the
+   global picture `asset/sky/earth/07.webp`.
+3. Upload, then hold the stored count to the files:
 
-### Divisions
+   ```bash
+   aws s3 sync out/earth/<version> s3://pixelet-tiles/earth/<version> \
+     --profile r2 --endpoint-url $R2 --exclude "*.part" \
+     --content-type application/octet-stream --content-encoding zstd \
+     --cache-control "public, max-age=31536000, immutable"
+   ```
 
-As terrain:
-
-```bash
-deno task bake:division --stage publish
-deno task publish division
-```
-
-Empty markers are local.
+4. `deno task ingest:asset` and the asset upload below, for the picture.
 
 ### Assets
 
@@ -182,7 +181,7 @@ aws s3 ls s3://pixelet-tiles/terrain/<version>/ --profile r2 --endpoint-url $R2 
 # metadata must have survived: expect the manifest's ContentEncoding on a tile,
 # ContentType model/gltf-binary and no ContentEncoding on a glb
 aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<name> --profile r2 --endpoint-url $R2
-aws s3api head-object --bucket pixelet-tiles --key asset/<sha256> --profile r2 --endpoint-url $R2
+aws s3api head-object --bucket pixelet-tiles --key asset/<path>/<stem>-<12 hex>.<ext> --profile r2 --endpoint-url $R2
 ```
 
 ## Deploy
@@ -197,8 +196,8 @@ Through the task, not around it: it runs `check:bundle` between the build
 and the publish, which is what stops a dev-only surface from reaching the
 live site, and it drives wrangler through Deno rather than a system Node
 that may be older than wrangler requires. What the Worker is and how it
-routes is [infra/README.md](../../../infra/README.md) §4, along with the
-one-loop smoke test over every path the app takes.
+routes is [infra/README.md](../../../infra/README.md) §4; `deno task smoke
+<url>` then asks the routes `script/smoke.ts` lists.
 
 ## Verify what is served
 
@@ -207,19 +206,19 @@ perfectly correct while the serving path is not:
 
 ```bash
 U=https://plei.me/tile/terrain/<version>/<name>
-curl -s -H "Accept-Encoding: gzip, zstd" -D - -o /dev/null "$U"   # expect the manifest's content-encoding
-curl -s -H "Accept-Encoding: gzip, zstd" "$U" | zstd -dcq | head -c 2 | xxd -p   # zstd: expect 5854 (XT)
-curl -s --compressed "$U" | head -c 2 | xxd -p                  # gzip: expect 5854 (XT), never 1f8b
+curl -s -H "Accept-Encoding: zstd" -D - -o /dev/null "$U"            # expect content-encoding: zstd
+curl -s -H "Accept-Encoding: zstd" "$U" | zstd -dcq | head -c 2 | xxd -p   # expect 5854 (XT)
 ```
 
-A response whose gzip body is _smaller_ than the stored object means the
-runtime compressed it a second time — `encodeBody: "manual"` is missing
-from the Worker's `Response`. A body that still starts `1f8b` after
-`--compressed` means the same thing from the other direction.
+A body of another size than the stored object, or one that does not
+decode to `5854`, means the runtime encoded it a second time —
+`encodeBody: "manual"` is missing from the Worker's `Response` (`serve`).
+HTML means the app's fallback answered a route the Worker should have
+claimed.
 
-**Request each tile twice.** Edge caching sits in front of R2, and
-`encodeBody: "manual"` does not survive the cache round trip — a first
-request can be correct while every cached hit after it is double-compressed.
+**Request each tile twice.** Edge caching sits in front of R2, and a cached
+hit takes its own path back out (`STORED_ENCODING`) — a first request can be
+correct while every cached hit after it is not.
 Compare both responses against the stored size, and check `cf-cache-status`
 to confirm the second one actually hit.
 

@@ -31,6 +31,11 @@ Nothing now.
 
 ## P2
 
+- **A notice with the published tiles.** A version is fetchable tile by tile
+  from `plei.me/tile/`; whether ODbL asks for a notice beside it (§4.2, a
+  derivative database) or the app's attribution suffices (§4.3, a produced
+  work) is unsettled, and nothing publishes one (infra/README.md "Licenses").
+
 ## Parked, with the reason on file
 
 - **How the samples are drawn**, held until the user says the time is
