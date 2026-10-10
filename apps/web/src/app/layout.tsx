@@ -1,21 +1,37 @@
 // @pxl/web/app/layout.tsx
 
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { BootFailed } from "./boot-failed.tsx";
+import { Message } from "@/kernel/abi/cmd.spec.ts";
+import { Gpu, useGpu } from "@/kernel/gpu.ts";
+import { useKernel } from "@/kernel/shell.ts";
 import { Boot, useBoot } from "./bootstrap.ts";
 import { Modals } from "./modal.tsx";
+import { Halt } from "./halt.tsx";
 import { KeyboardAway } from "@/shared/ui/keyboard.tsx";
 import { DockMode, useUiStore } from "@/app/store/ui.ts";
 
+/** What ends the app, said in place of it: no GPU it will ask for again, a kernel that never started, or reads given up. */
+function haltOf(gpu: Gpu, boot: Boot, givenUp: boolean): string | null {
+  if (gpu === Gpu.Missing) return "gpu_lost";
+  if (boot === Boot.Failed) return "boot";
+  return givenUp ? "given_up" : null;
+}
+
 export function AppLayout({ children }: { children: ReactNode }) {
+  const gpu = useGpu();
   const boot = useBoot();
+  const givenUp = useKernel((s) => s.stall === Message.WorldUnavailable);
+  useEffect(() => {
+    if (givenUp) console.error("[read] a read failed past every retry; the space is given up");
+  }, [givenUp]);
+  const halt = haltOf(gpu, boot, givenUp);
+  if (halt !== null) return <Halt why={halt} />;
   return (
     // A touch elsewhere puts the typing away with the keyboard.
     <KeyboardAway onAway={() => useUiStore.getState().setDockMode(DockMode.Palette)}>
       <View style={styles.page}>{boot === Boot.Started && children}</View>
-      {boot === Boot.Failed && <BootFailed />}
       <Modals />
     </KeyboardAway>
   );

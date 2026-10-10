@@ -28,7 +28,10 @@ async function get(url: string, name: string, signal: AbortSignal): Promise<U8Ar
     throw new FileError(err instanceof Error && err.name === "TypeError" ? Errno.ENETUNREACH : Errno.EIO);
   }
   if (res.status === 204) throw new FileError(Errno.ENOENT);
-  if (!res.ok) throw new FileError(Errno.EACCES, res.status);
+  if (!res.ok) {
+    console.warn(`[read] ${name}: HTTP ${res.status}`);
+    throw new FileError(Errno.EACCES, res.status);
+  }
   return body;
 }
 

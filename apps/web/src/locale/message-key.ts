@@ -10,10 +10,9 @@ export function messageKey(message: Message): string {
       return "device.geolocation.unsupported";
     case Message.GeolocationPermissionDenied:
       return "device.geolocation.permission_denied";
-    case Message.GeolocationPositionUnavailable:
-      return "device.geolocation.position_unavailable";
     case Message.GeolocationTimeout:
       return "device.geolocation.timeout";
+    case Message.GeolocationPositionUnavailable:
     case Message.GeolocationGenericError:
       return "device.geolocation.generic_error";
 
@@ -25,10 +24,12 @@ export function messageKey(message: Message): string {
       return "device.orientation.signal_lost";
 
     case Message.WorldGpuLost:
-      return "stall.gpu_lost";
+      return "toast.gpu_recovering";
     case Message.WorldOffline:
-      return "stall.offline";
+      return "toast.offline";
     case Message.WorldReadFailing:
-      return "stall.read_failing";
+      return "toast.server_error";
+    case Message.WorldUnavailable:
+      return "halt.given_up.title";
   }
 }

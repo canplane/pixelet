@@ -53,6 +53,18 @@ export const enum Missing {
 /** `navigator.gpu` exists only in a secure context, so the LAN address over
  * http has none where localhost has it. */
 export async function whatIsMissing(): Promise<Missing | null> {
+  const missing = await missingOf();
+  if (missing !== null) console.error(`[gpu] cannot draw here: ${MISSING[missing]}`);
+  return missing;
+}
+
+const MISSING: Record<Missing, string> = {
+  [Missing.WebGpu]: "this browser has no WebGPU",
+  [Missing.Insecure]: "WebGPU needs a secure context, and this page is not one",
+  [Missing.Gpu]: "WebGPU is here but no adapter answered",
+};
+
+async function missingOf(): Promise<Missing | null> {
   if (!("gpu" in navigator)) return isSecureContext ? Missing.WebGpu : Missing.Insecure;
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
   return adapter ? null : Missing.Gpu;

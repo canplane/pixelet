@@ -11,7 +11,7 @@ import { AppRegistry, type RootTag } from "react-native";
 import { AppRouter } from "@/app/router.tsx";
 import { bootstrapApp } from "@/app/bootstrap.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
-import { Unsupported } from "@/platform/web/unsupported.tsx";
+import { Halt } from "@/app/halt.tsx";
 import { whatIsMissing } from "@/platform/web/webgpu.ts";
 import "@/app/style/index.css";
 
@@ -29,7 +29,7 @@ try {
   if (!container) throw new Error("web: missing root container: #root");
   AppRegistry.registerComponent("pixelet", () => () => (
     <StrictMode>
-      {missing ? <Unsupported reason={missing} /> : <AppRouter />}
+      {missing ? <Halt why={missing} /> : <AppRouter />}
     </StrictMode>
   ));
   AppRegistry.runApplication("pixelet", { rootTag: container as unknown as RootTag, initialProps: {} });

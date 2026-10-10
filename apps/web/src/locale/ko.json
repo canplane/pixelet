@@ -162,24 +162,26 @@
   },
   "device": {
     "orientation": {
-      "permission_denied": "방향 센서 권한이 거부되었습니다.",
-      "permission_error": "방향 센서 권한을 요청하는 중 오류가 발생했습니다.",
-      "signal_lost": "방향 센서 신호가 끊겼습니다."
+      "permission_denied": "방향 센서 사용을 허용해 주세요.",
+      "permission_error": "방향 센서를 사용할 수 없습니다.",
+      "signal_lost": "방향을 확인할 수 없습니다."
     },
     "geolocation": {
       "unsupported": "이 환경에서는 위치 정보를 사용할 수 없습니다.",
+      "permission_denied": "위치 정보 사용을 허용해 주세요.",
       "generic_error": "현재 위치를 확인할 수 없습니다.",
-      "permission_denied": "위치 권한을 허용해 주세요.",
-      "position_unavailable": "현재 위치를 확인할 수 없습니다.",
-      "timeout": "위치 정보를 가져오는 데 시간이 초과되었습니다."
+      "timeout": "위치를 확인하지 못했습니다. 다시 시도해 주세요."
     }
   },
   "toast": {
+    "server_error": "서버에 문제가 발생했습니다. 다시 시도하고 있습니다.",
     "location_checking": "현재 위치를 확인하고 있습니다.",
     "world_loading": "공간을 불러오고 있습니다.",
     "world_ready": "공간을 불러왔습니다.",
     "companion_loading": "동행을 준비하고 있습니다.",
-    "outside": "서비스 없음"
+    "outside": "지원하지 않는 지역입니다.",
+    "offline": "인터넷 연결을 기다리고 있습니다.",
+    "gpu_recovering": "WebGPU 연결을 기다리고 있습니다."
   },
   "world": {
     "dock": {
@@ -217,18 +219,30 @@
       "focus": "현재 위치"
     }
   },
-  "boot": {
-    "failed": "앱을 시작하지 못했습니다. 페이지를 새로고침해 주세요."
-  },
-  "stall": {
-    "gpu_lost": "그래픽 장치를 다시 연결하고 있습니다.",
-    "offline": "인터넷 연결을 기다리고 있습니다.",
-    "read_failing": "서버에서 공간을 받아오지 못했습니다. 다시 시도하고 있습니다."
-  },
-  "unsupported": {
-    "title": "지원하지 않는 브라우저입니다",
-    "webgpu": "이 브라우저에는 세계를 그리는 데 쓰는 WebGPU가 없습니다. 최신 버전의 Chrome, Edge, Firefox, Safari에서 열어 주세요.",
-    "insecure": "WebGPU는 HTTPS에서만 쓸 수 있습니다. https:// 주소로 열어 주세요.",
-    "gpu": "WebGPU는 있지만 그래픽 어댑터가 응답하지 않았습니다. 이 GPU에서 꺼져 있거나 차단되었을 수 있습니다."
+  "halt": {
+    "webgpu": {
+      "title": "WebGPU를 사용할 수 없습니다.",
+      "body": "브라우저를 최신 버전으로 업데이트하거나 다른 브라우저에서 열어 주세요."
+    },
+    "insecure": {
+      "title": "HTTPS 연결이 필요합니다.",
+      "body": "WebGPU를 사용하려면 HTTPS로 접속해야 합니다."
+    },
+    "gpu": {
+      "title": "WebGPU를 시작하지 못했습니다.",
+      "body": "브라우저 또는 기기의 설정을 확인해 주세요."
+    },
+    "boot": {
+      "title": "공간을 불러오지 못했습니다.",
+      "body": "다시 시도해 주세요."
+    },
+    "given_up": {
+      "title": "공간을 불러오지 못했습니다.",
+      "body": "잠시 후 다시 시도해 주세요."
+    },
+    "gpu_lost": {
+      "title": "WebGPU 연결이 실패했습니다.",
+      "body": "페이지를 새로고침하거나 앱을 다시 실행해 주세요."
+    }
   }
 }
