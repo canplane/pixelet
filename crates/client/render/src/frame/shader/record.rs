@@ -2,8 +2,7 @@
 
 //! Shaders and their pipeline records (lanes, bind groups, primitive, depth and
 //! blend state) as one source the host turns into WebGPU or wgpu descriptors.
-//! `cargo test` compiles every shader with naga and holds each record against
-//! what the shader declares.
+//! `cargo test` compiles and validates every shader with naga.
 
 pub const SHADER_CHUNK: u32 = 0;
 pub const SHADER_DECOR: u32 = 1;
@@ -689,3 +688,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         _ => Vec::new(),
     }
 }
+
+#[cfg(test)]
+#[path = "record.test.rs"]
+mod test;
