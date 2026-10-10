@@ -46,7 +46,7 @@ fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
 pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
     use crate::control::camera::input::{camera_input_rect, camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_rehover, camera_wheel, Rect};
     use crate::control::interaction::{hold, holding};
-    use crate::control::sensor::geolocation;
+    use crate::control::sensor::{device_orientation, geolocation};
     use crate::profiler::log::{profiler_follow, profiler_set_logging, profiler_window_start, profiler_window_stop};
     use crate::sched::edge::request_world_tick;
     use crate::setting::store::{settings_load, settings_store, SettingKey};
@@ -78,9 +78,16 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             super::host_attached(s);
             crate::io::host::set_development(p.development);
             crate::io::host::set_handheld(p.handheld);
-            crate::turn::set_world_platform(crate::turn::Platform { geolocation: p.geolocation });
+            crate::turn::set_world_platform(crate::turn::Platform {
+                geolocation: p.geolocation,
+                orientation: device_orientation::OrientationPlatform {
+                    supported: p.orientation,
+                    needs_permission: p.orientation_permission,
+                    silence_is_loss: p.orientation_silence_is_loss,
+                },
+            });
             settings_load(p.settings);
-            profiler_follow(settings_store().debug_overlay, crate::profiler::summary::counters());
+            profiler_follow(settings_store().performance_overlay, crate::profiler::summary::counters());
             crate::layer::object::repository::open();
             // The shell holds the kernel's state from its first render on.
             applied(s)
@@ -164,8 +171,8 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             camera_keys(p.x, p.y);
             Ok(Some(0))
         }
-        Command::INPUT_RECENTER => {
-            ui::recenter();
+        Command::INPUT_TRACKING => {
+            ui::tracking_action(abi::InputTracking::read(packet(pkt)?)?.tracking);
             request_world_tick();
             Ok(Some(0))
         }
@@ -175,7 +182,10 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             applied(s)
         }
         Command::INPUT_COMPASS_RESET => {
-            crate::control::camera::controller::reset_azimuth();
+            // Following the heading would turn it straight back.
+            if !crate::control::navigation::follow_mode::following() {
+                crate::control::camera::controller::reset_azimuth();
+            }
             applied(s)
         }
         Command::INPUT_GO_TO => {
@@ -206,6 +216,18 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             geolocation::geolocation_error(abi::SensorError::read(packet(pkt)?)?.code);
             Ok(Some(0))
         }
+        Command::SENSOR_ORIENTATION => {
+            let p = abi::SensorOrientation::read(packet(pkt)?)?;
+            // DeviceOrientationEvent's ranges, closed: a reading at an end is still one.
+            let within = |v: Option<f64>, half: f64| v.is_none_or(|v| (-half..=half).contains(&v));
+            refuse_unless(bearing(p.webkit_compass_heading) && bearing(p.alpha) && within(p.beta, 180.0) && within(p.gamma, 90.0), Errno::EINVAL)?;
+            device_orientation::orientation_event(p.webkit_compass_heading, p.alpha, p.beta, p.gamma);
+            Ok(Some(0))
+        }
+        Command::SENSOR_ORIENTATION_LOST => {
+            device_orientation::orientation_lost();
+            Ok(Some(0))
+        }
         Command::SENSOR_PERMISSION => {
             let p = abi::SensorPermission::read(packet(pkt)?)?;
             match p.sensor {
@@ -214,13 +236,16 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                         geolocation::geolocation_permission_granted(world_platform().geolocation);
                     }
                 }
+                abi::Sensor::Orientation => device_orientation::orientation_permission(p.answer, world_platform().orientation),
             }
             Ok(Some(0))
         }
         Command::WORLD_VISIBILITY => {
             let visible = abi::WorldVisibility::read(packet(pkt)?)?.visible;
             geolocation::geolocation_visibility(visible, world_platform().geolocation);
-            if !visible {
+            if visible {
+                device_orientation::orientation_visible();
+            } else {
                 crate::layer::object::repository::flush();
             }
             Ok(Some(0))
@@ -286,7 +311,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 if p.key.sources_chunks() {
                     crate::chunk::source::chunk_sources_changed();
                 }
-                if p.key == SettingKey::debug_overlay {
+                if p.key == SettingKey::performance_overlay {
                     profiler_follow(p.value == 1, crate::profiler::summary::counters());
                 }
             }
@@ -309,7 +334,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // Records only while the profiler setting is on: a window opened with the
         // panel off would record with nothing to show or stop it.
         Command::PROFILER_START => {
-            refuse_unless(settings_store().debug_overlay, Errno::EPERM)?;
+            refuse_unless(settings_store().performance_overlay, Errno::EPERM)?;
             profiler_window_start(crate::profiler::summary::counters());
             applied(s)
         }
@@ -319,7 +344,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::PROFILER_LOG => {
             let on = abi::ProfilerLog::read(packet(pkt)?)?.on;
-            refuse_unless(!on || settings_store().debug_overlay, Errno::EPERM)?;
+            refuse_unless(!on || settings_store().performance_overlay, Errno::EPERM)?;
             profiler_set_logging(on);
             applied(s)
         }

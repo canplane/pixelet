@@ -1,5 +1,6 @@
 // @pxl/native/modules/platform/ios/PlatformModule.swift
 
+import CoreLocation
 import ExpoModulesCore
 import ExpoUI
 import PxlNative
@@ -93,6 +94,15 @@ public class PlatformModule: Module {
     Function("textRaster") { (weight: Double, px: Double, rgba: UInt32, text: String, x: Double, width: Int, height: Int, out: Uint8Array) in
       guard out.byteLength >= width * height * 4 else { return }
       textRaster(text, weight, px, rgba, x, width, height, out.rawPointer)
+    }
+
+    // ---- the compass (platform/sensor.ts) ----
+
+    /// Whether the device has a compass at all, which expo-horizon-location only says
+    /// by failing a watch — and a failed watch reads as a compass lost, not
+    /// one never there.
+    Function("headingAvailable") { () -> Bool in
+      CLLocationManager.headingAvailable()
     }
 
     // ---- the surface (platform/surface.tsx, SurfaceView.swift) ----

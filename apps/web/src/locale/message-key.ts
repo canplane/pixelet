@@ -16,11 +16,19 @@ export function messageKey(message: Message): string {
       return "device.geolocation.timeout";
     case Message.GeolocationGenericError:
       return "device.geolocation.generic_error";
+
+    case Message.OrientationPermissionError:
+      return "device.orientation.permission_error";
+    case Message.OrientationPermissionDenied:
+      return "device.orientation.permission_denied";
+    case Message.OrientationSignalLost:
+      return "device.orientation.signal_lost";
+
     case Message.WorldGpuLost:
-      return "load.gpu_lost";
+      return "stall.gpu_lost";
     case Message.WorldOffline:
-      return "load.offline";
+      return "stall.offline";
     case Message.WorldReadFailing:
-      return "load.read_failing";
+      return "stall.read_failing";
   }
 }

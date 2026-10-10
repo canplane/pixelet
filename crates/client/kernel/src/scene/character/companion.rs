@@ -1,9 +1,10 @@
 // pxl-kernel/scene/character/companion.rs
 
 //! A companion (person + pet) at focus. When focus comes to rest it
-//! makes a fixed-duration catch-up walk there; steered by the keys, where
-//! focus never rests, it instead glides at the world-scroll rate so the
-//! two cancel and it holds at screen center.
+//! makes a fixed-duration catch-up walk there; in follow mode, where
+//! focus is a ~1 Hz GPS stream that never rests, or steered by the keys,
+//! it instead glides at the world-scroll rate so the two cancel and it
+//! holds at screen center.
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::approach::damp_alpha;
@@ -11,7 +12,6 @@ use crate::io::load::{load_image, Load};
 use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
-use crate::param::COMPANION_STEP_CELLS;
 use crate::query::over;
 use crate::query::World;
 use crate::scene::character::chat_bubble::chat_bubble_step;
@@ -21,7 +21,8 @@ use crate::scene::character::variant_spec::IDLE_CLIP;
 use crate::sched::edge::wake_at;
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
-use crate::view::frame::coord::world_to_canonical;
+use crate::view::frame::coord::{to_world, world_to_canonical};
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use xpute_guest::global::Global;
 
 pub const ACTORS_MAX: usize = Group::ALL.len();
@@ -35,7 +36,7 @@ const CATCHUP_DURATION_S: f64 = 0.6;
 const SETTLE_DELAY_S: f64 = 0.15;
 
 // The world scroll's own rate: the two cancel, holding the character at
-// screen center, so this is the only position smoothing while steered.
+// screen center, so this is the only position smoothing while following.
 const FOLLOW_LERP_K: f64 = crate::param::POS_DAMP;
 
 // +PI turns a model whose forward is -Y into the screen, back to the camera.
@@ -64,7 +65,7 @@ struct Figure {
     at: [f64; 2],
     heading: f64,
     actor_clip: Option<u32>,
-    was_steered: bool,
+    was_following: bool,
     walk_plan: Option<WalkPlan>,
     /// Its falling edge, a gesture's end, fixes the destination.
     was_dragging: bool,
@@ -82,7 +83,7 @@ impl Figure {
             at: [0.0; 2],
             heading: 0.0,
             actor_clip: None,
-            was_steered: false,
+            was_following: false,
             walk_plan: None,
             was_dragging: false,
             settle: SettleTracker::new(target, 0.0),
@@ -127,10 +128,10 @@ impl Figure {
         self.set_ready(false);
     }
 
-    /// A target the keys steer is followed as it moves, facing its way, rather
-    /// than walked to once it settles.
+    /// `follows`: the target is followed as it moves, by a fix or by the keys,
+    /// rather than walked to once it settles; a steered one faces its way.
     fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_z: f64, p: &CompanionProps) {
-        let steered = p.steered;
+        let (follows, steered) = (p.following || p.steered, p.steered);
         let variant = self.variant;
         self.acquire(target);
         if self.held.is_none() {
@@ -144,14 +145,16 @@ impl Figure {
         let gap = |a: [f64; 2], b: [f64; 2]| libm::hypot(a[0] - b[0], a[1] - b[1]);
         let (mut at, is_walking);
 
-        if steered {
-            at = if self.was_steered {
+        if follows {
+            at = if self.was_following {
                 let a = damp_alpha(FOLLOW_LERP_K, ctx.delta);
                 std::array::from_fn(|k| self.at[k] + (target[k] - self.at[k]) * a)
             } else {
                 target
             };
-            if gap(target, self.at) > WALK_EPS {
+            if !steered {
+                self.heading = back_to_camera(p.azimuth);
+            } else if gap(target, self.at) > WALK_EPS {
                 self.heading = heading_to(self.at, target) + core::f64::consts::PI / 2.0;
             }
             if gap(target, at) > WALK_EPS {
@@ -160,9 +163,9 @@ impl Figure {
             is_walking = now < self.follow_walk_until;
             self.walk_plan = None;
         } else {
-            // Rebase the tracker, or the delta accumulated while steered reads as one
+            // Rebase the tracker, or the delta accumulated while following reads as one
             // giant dash.
-            if self.was_steered {
+            if self.was_following {
                 self.settle = SettleTracker::new(target, now);
                 self.walk_plan = None;
             }
@@ -212,25 +215,20 @@ impl Figure {
             }
         }
 
-        self.was_steered = steered;
+        self.was_following = follows;
         self.was_dragging = dragging;
 
-        // Steered there is no end to wait for, so a wall its way meets puts it
-        // at its target, which the focus walked to, at once.
+        // Following there is no end to wait for, so a wall its way meets puts it
+        // at its target at once.
         let arrived = gap(target, at) <= WALK_EPS;
         let moved = at != self.at;
         let stands = self.stands_z.get_or_insert(arrive_z);
         if arrived {
             *stands = arrive_z;
         } else if moved {
-            match step_from(at, *stands) {
-                Some(Some(z)) => *stands = z,
-                Some(None) if steered => {
-                    at = target;
-                    *stands = arrive_z;
-                }
-                Some(None) => at = self.at,
-                None => {}
+            // Where a column on the way is not resident, it keeps its height.
+            if let Some((to, z)) = walk_to(self.at, *stands, at, &p.eye) {
+                (at, *stands) = if follows && gap(to, at) > WALK_EPS { (target, arrive_z) } else { (to, z) };
             }
         }
         self.at = at;
@@ -273,8 +271,11 @@ pub struct CompanionProps {
     pub azimuth: f64,
     /// Whether the camera is being dragged, whose release ends a catch-up.
     pub dragging: bool,
-    /// Whether the keys steer it.
+    /// Whether the keys steer it, and whether the map follows the device.
     pub steered: bool,
+    pub following: bool,
+    /// The eye, whose camera grid the walk is judged at.
+    pub eye: Pvf3,
 }
 
 fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: [f64; 2]) -> &'a mut Figure {
@@ -309,8 +310,9 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
     let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
-    // Its own floor beside the person, stepped to from the person's height.
-    let pet_z = step_from(pet_target, p.floor).flatten().unwrap_or(p.floor);
+    // Its own floor beside the person, walked to from the person.
+    let reached = |(beside, _): &([f64; 2], f64)| libm::hypot(beside[0] - pet_target[0], beside[1] - pet_target[1]) <= WALK_EPS;
+    let pet_z = walk_to(p.center, p.floor, pet_target, &p.eye).filter(reached).map_or(p.floor, |(_, z)| z);
     pet.step(ctx, pet_target, pet_z, &p);
 }
 
@@ -320,10 +322,13 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
     [&c.person, &c.pet].into_iter().flatten().filter_map(|w| w.held.as_ref()).map(|h| (h.model.model, h.skin))
 }
 
-/// None inside where a wall holds it; None outside where no tile is resident.
-fn step_from([x, y]: [f64; 2], stands: f64) -> Option<Option<f64>> {
-    let at = world_to_canonical(&[x, y, over(stands)]);
-    World::now().support(&at, COMPANION_STEP_CELLS).value()
+/// The world's step-slide from `from`, its floor at `stands`, toward `to`:
+/// where it ends and its floor there; none where a column on the way is not
+/// resident.
+fn walk_to(from: [f64; 2], stands: f64, to: [f64; 2], eye: &Pvf3) -> Option<([f64; 2], f64)> {
+    let [a, b] = [from, to].map(|[x, y]| world_to_canonical(&[x, y, over(stands)]));
+    let at = to_world(&World::now().step_slide(&a, &b, eye, true)?);
+    Some(([at[0], at[1]], at[2] - over(0.0)))
 }
 
 /// Whether the companion's models have loaded: a live, unpersisted signal

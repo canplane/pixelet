@@ -2,7 +2,7 @@
 #
 # The device's half of the app's platform (apps/native/src/platform/): the
 # view the kernel draws into, the kernel linked with it, and what the shell
-# asks of the system — storage, the clipboard, text. The kernel
+# asks of the system — storage, the clipboard, text, the compass. The kernel
 # is in the guest (crates/client-bracket/native), built by this pod's script phase
 # (apps/native/script/build-native.ts) for the configuration and the SDK the
 # app is, into a directory each has of its own, which the app links from and

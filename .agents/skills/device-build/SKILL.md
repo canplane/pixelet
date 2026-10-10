@@ -210,6 +210,8 @@ for anything found failing on one. What differs is the device:
 - **Location** comes through expo-horizon-location, expo-location's fork,
   since Horizon OS has no Google Play Services. A Quest has no GPS: the
   position is the network's, and its updates come minutes apart.
+- **No compass**: `headingAvailable` finds neither sensor, and the kernel
+  never listens for a heading.
 
 No headset has run it. A headset takes `adb` once its developer mode is on
 (the Meta Horizon phone app, under a Meta developer account) and it is

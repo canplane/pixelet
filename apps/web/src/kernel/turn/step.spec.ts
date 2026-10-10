@@ -12,6 +12,8 @@ export const EFFECT_NAMES = [
   "navigation",
   "bootstrap",
   "geolocation",
+  "orientation",
+  "follow",
   "destination",
   "view",
   "decor",
