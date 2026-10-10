@@ -9,9 +9,9 @@ pub const INTAKE: u32 = u32::MAX;
 
 // ---- I/O robustness ----
 
-/// A failed read waits up to `RETRY_BASE_MS` doubled per failure, never past
-/// `RETRY_CAP_MS`; a server that fails `RETRY_ATTEMPTS` times is given up,
-/// about a minute of waits at most. A network that is down is waited on.
+/// A server that fails holds every read back up to `RETRY_BASE_MS` doubled per
+/// failure in a row, never past `RETRY_CAP_MS`; past `RETRY_ATTEMPTS` waits,
+/// about a minute in all, it is given up. A network that is down is waited on.
 pub const RETRY_BASE_MS: f64 = 1_000.0;
 pub const RETRY_CAP_MS: f64 = 30_000.0;
 pub const RETRY_ATTEMPTS: u32 = 6;
