@@ -27,6 +27,7 @@ import { GUEST, GUEST_DOORBELL, load_guest } from "@/kernel/mem.ts";
 import { root, SETTINGS_PATH } from "@/kernel/abi/host.spec.ts";
 import { bytes_at } from "@/kernel/module.ts";
 import { gpuBoot } from "@platform/gpu.ts";
+import { onlineWatch } from "@platform/online.ts";
 import { HANDHELD } from "@platform/device.ts";
 import { start_sched } from "@/kernel/sched.ts";
 import { set_snapshot } from "@/kernel/snapshot.ts";
@@ -61,6 +62,7 @@ export async function boot_kernel(): Promise<void> {
   start_sched();
   GUEST_DOORBELL.signal = on_signal;
   gpuBoot();
+  onlineWatch();
   const boot = (settings: string) =>
     encode_world_boot({
       development: __IS_DEV__,

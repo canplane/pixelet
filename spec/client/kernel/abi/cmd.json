@@ -661,27 +661,20 @@
           "value": 772
         },
         {
-          "section": "0x04 why the world does not come"
-        },
-        {
-          "name": "WorldGpuLost",
-          "value": 1025,
-          "$doc": [
-            "The device that drew it is gone; the host asks for another."
-          ]
-        },
-        {
-          "name": "WorldOffline",
-          "value": 1026,
-          "$doc": [
-            "Reads reach no server; they are tried again."
-          ]
+          "section": "0x04 why the server does not answer the world's reads"
         },
         {
           "name": "WorldReadFailing",
           "value": 1027,
           "$doc": [
             "Reads reach the server and fail; they are tried again."
+          ]
+        },
+        {
+          "name": "WorldUnavailable",
+          "value": 1028,
+          "$doc": [
+            "Reads failed past every retry; the world is not coming."
           ]
         }
       ]
@@ -1548,7 +1541,7 @@
           "type": "Message",
           "optional": true,
           "$doc": [
-            "Why the world is not coming now, where something keeps it: the device lost, or reads failing since the last answered. Absent while it comes or is shown."
+            "Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say."
           ]
         }
       ]

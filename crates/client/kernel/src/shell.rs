@@ -173,13 +173,15 @@ pub fn sensors_close() {
     orientation_close();
 }
 
-/// Why the world is not coming now: the device gone, or reads failing.
+/// Why the server does not answer the world's reads now: failing, or given up.
+/// The network and the GPU are the host's, which says them.
 fn stall() -> Option<Message> {
-    match (screen(), crate::io::request::failing()) {
-        (Screen::Lost, _) => Some(Message::WorldGpuLost),
-        (_, Some(Errno::ENETUNREACH)) => Some(Message::WorldOffline),
-        (_, Some(_)) => Some(Message::WorldReadFailing),
-        (_, None) => None,
+    if crate::io::request::given_up() {
+        return Some(Message::WorldUnavailable);
+    }
+    match crate::io::request::failing() {
+        Some(Errno::ENETUNREACH) | None => None,
+        Some(_) => Some(Message::WorldReadFailing),
     }
 }
 

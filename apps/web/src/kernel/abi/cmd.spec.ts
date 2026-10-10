@@ -234,14 +234,12 @@ export const enum Message {
   OrientationPermissionDenied = 0x0303,
   OrientationSignalLost = 0x0304,
 
-  // ---- 0x04 why the world does not come ----
+  // ---- 0x04 why the server does not answer the world's reads ----
 
-  /** The device that drew it is gone; the host asks for another. */
-  WorldGpuLost = 0x0401,
-  /** Reads reach no server; they are tried again. */
-  WorldOffline = 0x0402,
   /** Reads reach the server and fail; they are tried again. */
   WorldReadFailing = 0x0403,
+  /** Reads failed past every retry; the world is not coming. */
+  WorldUnavailable = 0x0404,
 }
 
 export const enum Command {
@@ -394,7 +392,7 @@ export interface Snapshot {
   division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
-  /** Why the world is not coming now, where something keeps it: the device lost, or reads failing since the last answered. Absent while it comes or is shown. */
+  /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say. */
   stall: Message | null;
 }
 

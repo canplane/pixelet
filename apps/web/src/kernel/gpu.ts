@@ -2,13 +2,19 @@
 
 import { create } from "zustand";
 
-/** Whether the host asked for a GPU and none answered: the kernel, given none, cannot say it. */
-const useGpu = create(() => ({ absent: false }));
-
-export function gpuAbsent(absent: boolean): void {
-  useGpu.setState({ absent });
+/** What the host has of a GPU, which the kernel, given none, cannot say: one, none yet while it asks again, or none it will ask for again. */
+export const enum Gpu {
+  Present = 0,
+  Waiting = 1,
+  Missing = 2,
 }
 
-export function useGpuAbsent(): boolean {
-  return useGpu((s) => s.absent);
+const useGpuStore = create(() => ({ gpu: Gpu.Present }));
+
+export function setGpu(gpu: Gpu): void {
+  useGpuStore.setState({ gpu });
+}
+
+export function useGpu(): Gpu {
+  return useGpuStore((s) => s.gpu);
 }

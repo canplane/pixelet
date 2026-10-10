@@ -4,8 +4,10 @@
 //! stream each turn) and what is out (`attempt`). Ordering, intake and
 //! retry waits are the `Serve` policy's.
 //!
-//! An answer ends its want; a failure ends only its attempt and waits on the
-//! want. A running attempt is never preempted.
+//! An answer ends its want; a failure ends only its attempt. A failure of the
+//! object drops its want; one of the network or the server holds back every
+//! start, then lets one probe out until something answers, and the server's
+//! past its last wait gives the reads up. A running attempt is never preempted.
 //!
 //! Invariants: no more attempts than credits and no want past its stream's
 //! bound; ties broken by stream then subject so the order is total; a free
@@ -15,7 +17,7 @@
 use core::cmp::Ordering;
 
 use crate::io::demand::{Ask, Phases, Stream};
-use crate::io::failure::{Ended, Outcome};
+use crate::io::failure::{Ended, Failure};
 use crate::io::load::LOADS;
 use crate::io::policy::Policy;
 use crate::profiler::record::profiler_record;
@@ -24,6 +26,7 @@ use std::collections::HashMap;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::off_of_slice;
+use xpute_kit::math::rng::derive_seed_u64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -43,7 +46,22 @@ pub trait Serve {
 
     fn intake(&self) -> u32;
 
-    fn retry_after(&self, outcome: Outcome) -> Option<f64>;
+    fn blame(&self, failure: Failure) -> Blame;
+
+    /// The wait after the server's `strikes`th failure in a row, none once
+    /// it is given up; `seed` differs per failure.
+    fn backoff(&self, strikes: u32, seed: u64) -> Option<f64>;
+}
+
+/// Whose a failure is, which decides what waits on it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Blame {
+    /// The object's own: asking again brings the same.
+    Object,
+    /// No way to the server: waited on, never given up.
+    Network,
+    /// The server's: counted toward giving up.
+    Server,
 }
 
 /// How many of a stream's wants are held at once. A layer's tiles: at most
@@ -65,6 +83,7 @@ struct Wanted {
     ask: Ask,
     /// First wanted, kept across re-declarations so the profiler measures the real wait.
     enqueue_ms: f64,
+    /// Infinite once its object failed.
     until_ms: f64,
 }
 
@@ -110,6 +129,14 @@ pub struct RequestScheduler<S> {
     ready: Vec<(Placed, usize)>,
     /// Why reads fail, since the last that came to an answer.
     failing: Option<Errno>,
+    /// The server's failures since the last answer, one an outage's wait:
+    /// what was already out when one was counted fails with it.
+    strikes: u32,
+    struck_ms: f64,
+    /// No attempt starts before it.
+    held_until: f64,
+    /// The server failed past its last wait; only a reset ends it.
+    given_up: bool,
 }
 
 /// A started attempt's right to open a file: only the scheduler makes one, so
@@ -142,6 +169,10 @@ impl<S: Serve> RequestScheduler<S> {
             stops: Vec::new(),
             ready: Vec::with_capacity(desired),
             failing: None,
+            strikes: 0,
+            struck_ms: f64::NEG_INFINITY,
+            held_until: f64::NEG_INFINITY,
+            given_up: false,
         }
     }
 
@@ -231,6 +262,11 @@ impl<S: Serve> RequestScheduler<S> {
             }
         }
 
+        // A held server takes nothing; a failing one one probe at a time.
+        if self.given_up || at < self.held_until {
+            return;
+        }
+        let room = if self.failing.is_some() { 1 } else { self.credits as usize };
         let mut ready = core::mem::take(&mut self.ready);
         ready.clear();
         for (i, w) in self.desired.iter().enumerate() {
@@ -243,6 +279,9 @@ impl<S: Serve> RequestScheduler<S> {
 
         let intake = self.serve.intake().max(1) as usize;
         for &(placed, i) in ready.iter().take(intake) {
+            if self.attempt.iter().flatten().count() >= room {
+                break;
+            }
             let Some(slot) = self.free_slot() else { break };
             let w = self.desired[i].or_bug(Errno::ENOTRECOVERABLE);
             self.start(slot, w, placed.rank, at);
@@ -300,21 +339,55 @@ impl<S: Serve> RequestScheduler<S> {
     pub fn settle(&mut self, key: u64, ended: Ended, phases: Option<Phases>, at: f64) {
         let Some(slot) = self.slot_of(key) else { return };
         let a = self.end(slot);
-        let outcome = ended.outcome();
+        let want = self.find(a.stream, a.subject);
         match ended {
-            Ended::Ok => self.failing = None,
-            // An absent file is an answer.
-            Ended::Failed(f) if f.errno != Errno::ENOENT => self.failing = Some(f.errno),
-            _ => {}
-        }
-        if let Some(i) = self.find(a.stream, a.subject) {
-            if outcome == Outcome::ok {
-                self.desired[i] = None;
-            } else if let (Some(wait), Some(w)) = (self.serve.retry_after(outcome), &mut self.desired[i]) {
-                w.until_ms = at + wait;
+            Ended::Ok => {
+                self.answered();
+                if let Some(i) = want {
+                    self.desired[i] = None;
+                }
             }
+            Ended::Failed(f) => self.failed(want, f, a.start_ms, at),
+            Ended::Aborted => {}
         }
         record(&a, at, ended, phases);
+    }
+
+    /// The server answered: whatever held it back is over.
+    fn answered(&mut self) {
+        self.failing = None;
+        self.strikes = 0;
+        self.struck_ms = f64::NEG_INFINITY;
+        self.held_until = f64::NEG_INFINITY;
+    }
+
+    fn failed(&mut self, want: Option<usize>, failure: Failure, started_ms: f64, at: f64) {
+        let seed = derive_seed_u64(self.strikes as u64, at.to_bits());
+        match self.serve.blame(failure) {
+            Blame::Object => {
+                // Still an answer from the server.
+                self.answered();
+                if let Some(w) = want.and_then(|i| self.desired[i].as_mut()) {
+                    w.until_ms = f64::INFINITY;
+                }
+            }
+            Blame::Network => {
+                self.failing = Some(failure.errno);
+                self.held_until = at + self.serve.backoff(1, seed).unwrap_or(0.0);
+            }
+            Blame::Server => {
+                self.failing = Some(failure.errno);
+                if started_ms <= self.struck_ms {
+                    return;
+                }
+                self.struck_ms = at;
+                self.strikes += 1;
+                match self.serve.backoff(self.strikes, seed) {
+                    Some(wait) => self.held_until = at + wait,
+                    None => self.given_up = true,
+                }
+            }
+        }
     }
 
     /// The module is being reset under a host that will not answer what it was told to run.
@@ -325,7 +398,8 @@ impl<S: Serve> RequestScheduler<S> {
             }
         }
         self.desired.fill(None);
-        self.failing = None;
+        self.answered();
+        self.given_up = false;
         self.started.clear();
         self.stops.clear();
     }
@@ -405,7 +479,12 @@ pub fn pending_count(stream: Stream) -> u32 {
 }
 
 pub fn pump() {
-    sched().pump(now());
+    let s = sched();
+    s.pump(now());
+    // Nothing else need come to end a hold.
+    if s.held_until.is_finite() && !s.given_up {
+        crate::sched::edge::wake_at(s.held_until);
+    }
 }
 
 pub fn take_started(each: impl FnMut(Credit, Stream, u64)) {
@@ -431,6 +510,11 @@ pub fn reset() {
 /// Why reads fail, where none has come to an answer since one did.
 pub fn failing() -> Option<Errno> {
     sched().failing
+}
+
+/// Whether the server failed past its last wait.
+pub fn given_up() -> bool {
+    sched().given_up
 }
 
 #[cfg(test)]

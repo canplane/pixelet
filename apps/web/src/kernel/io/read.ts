@@ -15,6 +15,7 @@ import { PUBLISHED_TILES } from "@/config/deploy.ts";
 import { BASE_LAYERS } from "@/config/published.spec.ts";
 import { assetUrl, tileUrl } from "@/config/route.ts";
 import { originGet } from "@platform/origin.ts";
+import { online } from "@/kernel/online.ts";
 
 async function get(url: string, name: string, signal: AbortSignal): Promise<U8Array> {
   let res: Response;
@@ -23,12 +24,17 @@ async function get(url: string, name: string, signal: AbortSignal): Promise<U8Ar
     res = await originGet(url, signal);
     body = new Uint8Array(await res.arrayBuffer());
   } catch (err) {
-    // TypeError covers offline, DNS, CORS and refused alike; the words are only logged.
+    // TypeError covers offline, DNS, CORS and refused alike, so only the
+    // browser's own word says offline; the rest is the server's.
     if (!signal.aborted) console.warn(`[read] ${name}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
-    throw new FileError(err instanceof Error && err.name === "TypeError" ? Errno.ENETUNREACH : Errno.EIO);
+    throw new FileError(online() ? Errno.EIO : Errno.ENETUNREACH);
   }
   if (res.status === 204) throw new FileError(Errno.ENOENT);
-  if (!res.ok) throw new FileError(Errno.EACCES, res.status);
+  if (!res.ok) {
+    console.warn(`[read] ${name}: HTTP ${res.status}`);
+    // A key that names nothing is the object's failure; any other, the server's.
+    throw new FileError(res.status === 404 ? Errno.ENXIO : Errno.EACCES, res.status);
+  }
   return body;
 }
 

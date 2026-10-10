@@ -273,24 +273,26 @@
   },
   "device": {
     "orientation": {
-      "permission_denied": "Orientation sensor access was denied.",
-      "permission_error": "Something went wrong while requesting orientation sensor access.",
-      "signal_lost": "Orientation sensor signal lost."
+      "permission_denied": "Please allow access to the orientation sensor.",
+      "permission_error": "The orientation sensor isn’t available.",
+      "signal_lost": "Can’t determine your heading."
     },
     "geolocation": {
       "unsupported": "Location services aren’t supported in this environment.",
-      "generic_error": "Couldn’t get your location.",
       "permission_denied": "Please allow location access.",
-      "position_unavailable": "Couldn’t determine your location.",
-      "timeout": "Location request timed out."
+      "generic_error": "Couldn’t determine your location.",
+      "timeout": "Couldn’t check your location. Please try again."
     }
   },
   "toast": {
+    "server_unstable": "Having trouble connecting to the server.",
     "location_checking": "Checking your location…",
     "world_loading": "Loading area…",
     "world_ready": "Area loaded.",
     "companion_loading": "Preparing your companion…",
-    "outside": "No Service"
+    "outside": "This area isn’t supported.",
+    "network_unstable": "Having trouble connecting to the network.",
+    "gpu_unstable": "Having trouble connecting to WebGPU."
   },
   "world": {
     "dock": {
@@ -328,18 +330,32 @@
       "focus": "Current location"
     }
   },
-  "boot": {
-    "failed": "The app could not start. Please reload the page."
-  },
-  "stall": {
-    "gpu_lost": "Reconnecting to the graphics device.",
-    "offline": "Waiting for an internet connection.",
-    "read_failing": "The server did not send the area. Trying again."
-  },
-  "unsupported": {
-    "title": "This browser isn't supported",
-    "webgpu": "This browser has no WebGPU, which is what the world is drawn with. Open the page in a recent Chrome, Edge, Firefox or Safari.",
-    "insecure": "WebGPU is only available over HTTPS. Open the page at its https:// address.",
-    "gpu": "WebGPU is here but no graphics adapter answered. It may be disabled or blocked for this GPU."
+  "halt": {
+    "web": {
+      "webgpu": {
+        "title": "WebGPU isn’t available.",
+        "body": "Update your browser to the latest version or open this in another browser."
+      },
+      "insecure": {
+        "title": "An HTTPS connection is required.",
+        "body": "Open this again at its https:// address."
+      },
+      "gpu": {
+        "title": "WebGPU couldn’t start.",
+        "body": "Check the settings of your browser or device."
+      }
+    },
+    "boot": {
+      "title": "Something went wrong.",
+      "body": "Please try again in a moment."
+    },
+    "server_failed": {
+      "title": "The server connection failed.",
+      "body": "Please try again in a moment."
+    },
+    "gpu_failed": {
+      "title": "The WebGPU connection failed.",
+      "body": "Please try again in a moment."
+    }
   }
 }

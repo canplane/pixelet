@@ -18,10 +18,12 @@
 
 use crate::io::demand::Order;
 use crate::io::demand::{Ask, Stream};
-use crate::io::failure::Outcome;
-use crate::io::request::{Rank, Serve};
+use crate::io::failure::Failure;
+use crate::io::request::{Blame, Rank, Serve};
 use crate::param;
 use pxl_spec::space::layer::tile::Tile;
+use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
+use xpute_kit::status::errno::Errno;
 
 /// A layer's classes: seen or unseen.
 const SHELLS: u8 = 2;
@@ -31,16 +33,12 @@ const PLACE: u8 = ASSET + 1;
 const ASIDE: u8 = PLACE + SHELLS;
 
 pub struct Policy {
-    pub retry_ms: f64,
     pub intake: u32,
 }
 
 impl Policy {
     pub const fn standard() -> Policy {
-        Policy {
-            retry_ms: param::RETRY_MS,
-            intake: param::INTAKE,
-        }
+        Policy { intake: param::INTAKE }
     }
 }
 
@@ -81,9 +79,35 @@ impl Serve for Policy {
         self.intake
     }
 
-    /// Only a failure waits; an answer and a stop do not.
-    fn retry_after(&self, outcome: Outcome) -> Option<f64> {
-        (outcome == Outcome::error).then_some(self.retry_ms)
+    /// As the host's read classes them (web `kernel/io/read.ts`). An object's
+    /// failure comes back the same however often it is asked: the bytes are
+    /// fixed by the key within a version.
+    fn blame(&self, failure: Failure) -> Blame {
+        match failure.errno {
+            // The browser says it is offline.
+            Errno::ENETUNREACH => Blame::Network,
+            // Any other status but 204 and 404, or no response while online. The
+            // Worker answers only 200, 204 and 404, so this is the platform under
+            // it: R2's internal error, a Cloudflare incident (R2 down 59 minutes
+            // on 2025-02-06), the free plan's daily cap failing closed, an edge
+            // refusing the connection.
+            Errno::EACCES | Errno::EIO => Blame::Server,
+            // ENXIO: 404, a key that names nothing. EBADMSG: a body empty, still
+            // packed in an encoding this browser does not undo, or not decoding.
+            // EFBIG: larger than the heap takes.
+            _ => Blame::Object,
+        }
+    }
+
+    /// Exponential because the server is shared, so every client's retries add up
+    /// on it; AWS's "full jitter", uniform up to the capped exponential, so
+    /// clients one outage failed together do not return together.
+    fn backoff(&self, strikes: u32, seed: u64) -> Option<f64> {
+        if strikes > param::RETRY_ATTEMPTS {
+            return None;
+        }
+        let ceiling = (param::RETRY_BASE_MS * libm::exp2(f64::from(strikes - 1))).min(param::RETRY_CAP_MS);
+        Some(ceiling * u32_to_unit(SplitMix64::new(seed).next_u32()))
     }
 }
 
