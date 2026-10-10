@@ -37,7 +37,8 @@ struct Frame {
   cell: f32,
   // 1 while the camera grid is listed, derived by the renderer: chunks tint by their cells' share of a grid cell.
   gizmo: f32,
-  _p13: f32,
+  // How far the chunks that cast reach, a share of the shadow map's half width.
+  shadow_rim: f32,
   _p14: vec2f,
 };
 
@@ -67,6 +68,7 @@ fn frame_globe() -> vec4f { return frame_words[20]; }
 fn frame_up() -> vec3f { return frame_words[21].xyz; }
 fn frame_cell() -> f32 { return frame_words[21].w; }
 fn frame_gizmo() -> f32 { return frame_words[22].x; }
+fn frame_shadow_rim() -> f32 { return frame_words[22].y; }
 
 fn on_globe(p: vec3f) -> vec3f {
   return on_globe_of(p, frame_planet(), frame_globe());

@@ -1,8 +1,9 @@
 // pxl-render/gpu/shadow.rs
 
 //! The sun's shadow map: the world's depth from the sun each frame, orthographic
-//! and 400 units across, so a texel is a fifth of a unit at 2048; any wider and
-//! the shadow reads as blocks. 16 MB at 2048, 4 MB at 1024 on a phone.
+//! about the eye and as wide as the chunks that cast reach (the renderer's
+//! `reach`), so its texel follows the camera grid. 16 MB at 2048, 4 MB at 1024
+//! on a phone.
 
 use pxl_spec::space::coord::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
 use pxl_spec::space::coord::v3::{dot3, norm3, V3};
@@ -11,10 +12,6 @@ use crate::frame::shader::record::FRAME_FLOATS;
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::renderer::{put_globe, put_mat, VIEW_PROJ};
-
-const HALF_EXTENT: f64 = 200.0;
-const LIGHT_DISTANCE: f64 = 1200.0;
-const LIGHT_FAR: f64 = 2400.0;
 
 fn map_size(handheld: bool) -> u32 {
     if handheld {
@@ -42,8 +39,9 @@ pub struct Shadow {
     pub light_frame: u32,
     light: [f32; FRAME_FLOATS],
     pub light_view_proj: Mat4,
-    /// The normal offset a fragment takes.
+    /// The normal offset a fragment takes: a texel at the last reach.
     pub texel: f64,
+    size: u32,
     pub bytes: u32,
     /// The sun the map is cast from, moved only when the real one has gone a
     /// step from it.
@@ -75,7 +73,8 @@ impl Shadow {
             light_frame,
             light: [0.0; FRAME_FLOATS],
             light_view_proj: mat4(),
-            texel: HALF_EXTENT * 2.0 / size as f64,
+            texel: 0.0,
+            size,
             bytes: size * size * 4,
             cast_from: None,
         }
@@ -90,30 +89,34 @@ impl Shadow {
     }
 
     /// The light's frame carries the globe, so a far caster shades the ground it
-    /// stands over on the planet. `fixed` is a point that stays put in the world
-    /// as the eye moves, in the eye's frame.
-    pub fn aim(&mut self, g: &Gpu, sun_dir: &[f32], target: V3, fixed: V3, globe: [f32; 8]) {
+    /// stands over on the planet. `reach` is the map's half width about `target`;
+    /// `fixed` is a point that stays put in the world as the eye moves, in the
+    /// eye's frame.
+    pub fn aim(&mut self, g: &Gpu, sun_dir: &[f32], target: V3, reach: f64, fixed: V3, globe: [f32; 8]) {
+        self.texel = reach * 2.0 / f64::from(self.size);
         // A step turns the map's edge by a texel, so a shadow ticks a texel on as
         // the sun goes, on purpose: the sun read as moving. Turned on every
         // frame instead, the grid below snapped another way each time and a
         // wall's shadow flickered as fast as the frames came.
         let sun = norm3(&[sun_dir[0] as f64, sun_dir[1] as f64, sun_dir[2] as f64]);
-        let step = self.texel / HALF_EXTENT;
+        let step = self.texel / reach;
         let from = match self.cast_from {
             Some(from) if dot3(&from, &sun) > libm::cos(step) => from,
             _ => sun,
         };
         self.cast_from = Some(from);
-        let eye: V3 = core::array::from_fn(|k| target[k] + from[k] * LIGHT_DISTANCE);
+        // Two reaches up the sun, so the sphere of `reach` about the target lies
+        // between the planes a reach either side of it, whatever the sun's angle.
+        let eye: V3 = core::array::from_fn(|k| target[k] + from[k] * 2.0 * reach);
         let (mut view, mut proj) = (mat4(), mat4());
         mat4_look_at(&mut view, eye, target, [0.0, 0.0, 1.0]);
-        ortho(&mut proj, HALF_EXTENT, 0.1, LIGHT_FAR);
+        ortho(&mut proj, reach, reach, 3.0 * reach);
         mat4_mul(&mut self.light_view_proj, &proj, &view);
         // The map follows the eye, so its texels are slid onto a grid fixed in the
         // world: off it, every edge fell on other texels each frame as the view
         // moved, and shimmered (stable shadow maps, texel snapping).
         let m = &mut self.light_view_proj;
-        let step = self.texel / HALF_EXTENT;
+        let step = self.texel / reach;
         for k in 0..2 {
             let at = m[k] * fixed[0] + m[4 + k] * fixed[1] + m[8 + k] * fixed[2] + m[12 + k];
             m[12 + k] -= at - (at / step).round_ties_even() * step;
