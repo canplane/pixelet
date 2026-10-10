@@ -15,6 +15,7 @@ import { haloGap, HaloIcon } from "@/shared/ui/halo.tsx";
 import { chrome, color, layer } from "@/shared/ui/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { SensorStatus } from "./sensor-status.tsx";
+import { StatusBand } from "./status-band.tsx";
 import { DummyChatText } from "./dummy-chat-text.tsx";
 import { MapScaleBar } from "../control/scale-bar.tsx";
 import { LocationButtons } from "../control/location-buttons.tsx";
@@ -85,6 +86,7 @@ function SearchStrip() {
               <CurrentAddress />
             </View>
             <SensorStatus />
+            <StatusBand />
           </View>
         </Presence>
         <View style={styles.scale}>

@@ -4,23 +4,13 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import type { Errno } from "@xpute/kit/status/errno.spec.ts";
-import { Command, encode_input_tracking, encode_setting_set, Tracking } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_setting_set } from "@/kernel/abi/cmd.spec.ts";
 import { GUEST, GUEST_DOORBELL } from "@/kernel/mem.ts";
-import { ring_now, send_input } from "@/kernel/sched.ts";
-import { orientationPermit } from "@platform/sensor.ts";
+import { ring_now } from "@/kernel/sched.ts";
 
 export { kernel_snapshot, useKernel } from "@/kernel/snapshot.ts";
 export { kernel_hold, kernel_keys } from "@/kernel/control/input.ts";
 export { ring_now as kernel_command } from "@/kernel/sched.ts";
-
-/** iOS Safari's compass prompt runs here, inside the press. */
-export async function kernel_tracking(tracking: Tracking): Promise<void> {
-  if (tracking === Tracking.Follow && !(await orientationPermit())) {
-    console.error("[orientation] could not start the sensor.");
-    return;
-  }
-  send_input(Command.INPUT_TRACKING, encode_input_tracking({ tracking }));
-}
 
 export function kernel_setting(key: u32, value: u32): void {
   ring_now(Command.SETTING_SET, encode_setting_set({ key, value }));

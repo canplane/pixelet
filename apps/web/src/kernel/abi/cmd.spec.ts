@@ -59,7 +59,7 @@ export const enum InputMinor {
   POINTER = 0x02,
   WHEEL = 0x03,
   KEYS = 0x06,
-  TRACKING = 0x04,
+  RECENTER = 0x04,
   VIEW = 0x05,
   COMPASS_RESET = 0x07,
   GO_TO = 0x08,
@@ -77,12 +77,10 @@ export const enum SensorMinor {
   POSITION = 0x02,
   STOP = 0x03,
   ERROR = 0x04,
-  ORIENTATION = 0x05,
   PERMISSION = 0x06,
   ENABLE_LOCATION = 0x07,
   OPEN = 0x08,
   CLOSE = 0x09,
-  ORIENTATION_LOST = 0x0a,
 }
 
 /** An image's verbs. */
@@ -154,16 +152,6 @@ export const enum ActiveTool {
   Marker = 4,
 }
 
-/** What the tracking button did, as the button showed it. */
-export const enum Tracking {
-  /** Back to the device. */
-  Recenter = 0,
-  /** Follow mode on, where the compass is listened to. */
-  Follow = 1,
-  /** Follow mode off, north up again. */
-  Unfollow = 2,
-}
-
 /** The browser's PositionError codes. */
 export const enum GeolocationErrorCode {
   Other = 0,
@@ -175,7 +163,6 @@ export const enum GeolocationErrorCode {
 /** Which of the device's sensors. */
 export const enum Sensor {
   Geolocation = 0,
-  Orientation = 1,
 }
 
 /** A sensor permission, as the shell's prompt or the browser's change reported it. */
@@ -188,8 +175,10 @@ export const enum PermissionAnswer {
   Failed = 3,
 }
 
-/** Whether the view shows any ground: Loading while the screen has none,
- * on a first load or after a jump, Idle before there is a view. */
+/** Whether the screen shows the world: Success once a frame that drew ground went
+ * to it, or one went over a view whose tiles all answered with nothing to draw;
+ * Loading until then, on a first load, after a jump or a lost device; Idle before
+ * there is a view. */
 export const enum GroundStatus {
   Idle = 0,
   Loading = 1,
@@ -226,11 +215,14 @@ export const enum Message {
   GeolocationTimeout = 0x0206,
   GeolocationGenericError = 0x0207,
 
-  // ---- 0x03 which way the device is facing ----
+  // ---- 0x04 why the world does not come ----
 
-  OrientationPermissionError = 0x0302,
-  OrientationPermissionDenied = 0x0303,
-  OrientationSignalLost = 0x0304,
+  /** The device that drew it is gone; the host asks for another. */
+  WorldGpuLost = 0x0401,
+  /** Reads reach no server; they are tried again. */
+  WorldOffline = 0x0402,
+  /** Reads reach the server and fail; they are tried again. */
+  WorldReadFailing = 0x0403,
 }
 
 export const enum Command {
@@ -249,12 +241,8 @@ export const enum Command {
   IMAGE_DECODED = 0x1301,
   /** A GPS fix; a field is absent where the browser gave none. */
   SENSOR_POSITION = 0x1202,
-  /** An orientation event; a field is absent where the browser gave none. */
-  SENSOR_ORIENTATION = 0x1205,
   /** The watch failed and was stopped. */
   SENSOR_ERROR = 0x1204,
-  /** The compass failed and its listener was removed, where the platform says so. */
-  SENSOR_ORIENTATION_LOST = 0x120a,
 
   // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
 
@@ -309,8 +297,8 @@ export const enum Command {
   SETTING_SET = 0x1601,
   /** A line the player said, shown over the character. */
   CHAT_SEND = 0x1701,
-  /** The tracking button's press, as the button showed it. */
-  INPUT_TRACKING = 0x1104,
+  /** The location button's press: the view moved to the device, its distance and heading kept. */
+  INPUT_RECENTER = 0x1104,
   /** Where the camera stands, set outright rather than driven: what the kernel's own
    * test puts a view at, and what an A/B reads two builds at the same view with. */
   INPUT_VIEW = 0x1105,
@@ -329,9 +317,7 @@ export const enum Command {
   SENSOR_OPEN = 0x1208,
   /** The world is gone, and the sensors are let go. */
   SENSOR_CLOSE = 0x1209,
-  /** The search panel's location card: the location asked for. The compass is asked for
-   * where it is used, entering follow mode (TRACKING), and never alone: nothing reads it
-   * without the location. */
+  /** The search panel's location card: the location asked for. */
   SENSOR_ENABLE_LOCATION = 0x1207,
   /** A fresh recording window. */
   PROFILER_START = 0x1901,
@@ -367,10 +353,8 @@ export interface Snapshot {
   location: LocationState;
   companion: CompanionState;
   holding: HoldingState;
-  orientation: OrientationState;
   /** The view's azimuth. */
   azimuth: f64;
-  is_follow_mode: boolean;
   camera_busy: boolean;
   /** A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is. */
   zooming: boolean;
@@ -383,6 +367,8 @@ export interface Snapshot {
   division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
+  /** Why the world is not coming now, where something keeps it: the device lost, or reads failing since the last answered. Absent while it comes or is shown. */
+  stall: Message | null;
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {
@@ -391,15 +377,14 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     location: read_location_state(b.at_branch(1)),
     companion: read_companion_state(b.at_branch(2)),
     holding: read_holding_state(b.at_branch(3)),
-    orientation: read_orientation_state(b.at_branch(4)),
-    azimuth: b.at(5).get<f64>(),
-    is_follow_mode: b.at(6).get<boolean>(),
-    camera_busy: b.at(7).get<boolean>(),
-    zooming: b.at(8).get<boolean>(),
-    settings: Array.from(b.at(9).get<U32Array>()),
-    m_per_px: b.at(10).get<f64>(),
-    division: list(b.at_branch(11), read_division_part),
-    previews: Array.from(b.at(12).get<U32Array>()),
+    azimuth: b.at(4).get<f64>(),
+    camera_busy: b.at(5).get<boolean>(),
+    zooming: b.at(6).get<boolean>(),
+    settings: Array.from(b.at(7).get<U32Array>()),
+    m_per_px: b.at(8).get<f64>(),
+    division: list(b.at_branch(9), read_division_part),
+    previews: Array.from(b.at(10).get<U32Array>()),
+    stall: b.at(11).get<Message | null>(),
   };
 }
 
@@ -460,16 +445,6 @@ export interface HoldingState {
 
 export function read_holding_state(b: BranchCursor): HoldingState {
   return { tool: b.at(0).get<ActiveTool>(), cube: b.at(1).get<u32>(), decor: b.at(2).get<u32>(), tier: b.at(3).get<u32>(), marker: b.at(4).get<boolean>(), words: b.at(5).get<string>() };
-}
-
-export interface OrientationState {
-  status: DevicePoseStatus;
-  /** Present exactly when status is Error: the failure the kernel chose. */
-  error: Message | null;
-}
-
-export function read_orientation_state(b: BranchCursor): OrientationState {
-  return { status: b.at(0).get<DevicePoseStatus>(), error: b.at(1).get<Message | null>() };
 }
 
 /** One division of the name, in every language the provider had rather than one resolved
@@ -539,18 +514,6 @@ export function encode_sensor_position(p: SensorPosition): U8Array {
   return packet((b) => b.f64(p.lon).f64(p.lat).f64(p.altitude).f64(p.accuracy).f64(p.course));
 }
 
-/** Command.SENSOR_ORIENTATION's packet. */
-export interface SensorOrientation {
-  webkit_compass_heading: f64 | null;
-  alpha: f64 | null;
-  beta: f64 | null;
-  gamma: f64 | null;
-}
-
-export function encode_sensor_orientation(p: SensorOrientation): U8Array {
-  return packet((b) => b.f64(p.webkit_compass_heading).f64(p.alpha).f64(p.beta).f64(p.gamma));
-}
-
 /** Command.SENSOR_ERROR's packet. */
 export interface SensorError {
   code: GeolocationErrorCode;
@@ -566,13 +529,6 @@ export interface WorldBoot {
   development: boolean;
   handheld: boolean;
   geolocation: boolean;
-  orientation: boolean;
-  /** iOS 13+'s gate: requestPermission exists and must run inside a gesture. */
-  orientation_permission: boolean;
-  /** A browser's compass talks while the device is still and cannot say it stopped, so
-   * silence is the only sign of loss; a device's speaks only when the heading turns and
-   * reports a failure itself (SENSOR_ORIENTATION_LOST). */
-  orientation_silence_is_loss: boolean;
   /** What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
    * (host.json's SETTINGS_PATH), handed over unread as a process is handed its environment,
    * which the kernel reads and from then on writes itself. */
@@ -580,7 +536,7 @@ export interface WorldBoot {
 }
 
 export function encode_world_boot(p: WorldBoot): U8Array {
-  return packet((b) => b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).bool(p.orientation_silence_is_loss).str(p.settings));
+  return packet((b) => b.bool(p.development).bool(p.handheld).bool(p.geolocation).str(p.settings));
 }
 
 /** Command.WORLD_FRAME's packet. */
@@ -777,15 +733,6 @@ export interface ChatSend {
 
 export function encode_chat_send(p: ChatSend): U8Array {
   return packet((b) => b.str(p.text));
-}
-
-/** Command.INPUT_TRACKING's packet. */
-export interface InputTracking {
-  tracking: Tracking;
-}
-
-export function encode_input_tracking(p: InputTracking): U8Array {
-  return packet((b) => b.u32(p.tracking));
 }
 
 /** Command.INPUT_VIEW's packet. */

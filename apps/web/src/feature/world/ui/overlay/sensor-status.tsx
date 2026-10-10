@@ -7,7 +7,6 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
-import { HANDHELD } from "@platform/device.ts";
 import type { GlyphName } from "@platform/icon.tsx";
 import { haloGap, HaloIcon } from "@/shared/ui/halo.tsx";
 import { color } from "@/shared/ui/theme.ts";
@@ -22,7 +21,6 @@ const LOOK: Record<DevicePoseStatus, { color: string; presence: f64 }> = {
 
 export function SensorStatus() {
   const location = useKernel((s) => s.location.status);
-  const orientation = useKernel((s) => s.orientation.status);
 
   // Faded as one layer with its halo: faded apart, the halo greyed the glyph.
   const icon = (glyph: GlyphName, status: DevicePoseStatus) => (
@@ -34,7 +32,6 @@ export function SensorStatus() {
   return (
     <View style={styles.row}>
       {icon("location", location)}
-      {HANDHELD && orientation !== DevicePoseStatus.Unavailable && icon("location.north.circle", orientation)}
     </View>
   );
 }

@@ -17,7 +17,6 @@ use crate::control::camera::gesture::{linear, Anchor};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
 use crate::control::interaction::{clear_hover, clear_hover_coord, hover_at};
 use crate::control::navigation::destination::cancel as cancel_destination;
-use crate::control::navigation::follow_mode::set_following;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::view;
@@ -261,7 +260,6 @@ pub fn camera_pointer_down(pointer_type: PointerType, pointer_id: i32, button: i
         s.hovering = false;
         s.active_pointers.insert(pointer_id, PointerPos { x: client_x, y: client_y });
         camera.camera_status = CameraStatus::Drag;
-        set_following(false);
         match s.active_pointers.len() {
             1 => {
                 s.drag_mode = DragMode::Pan;
@@ -298,7 +296,6 @@ pub fn camera_pointer_down(pointer_type: PointerType, pointer_id: i32, button: i
     }
     update_pointer(s, client_x, client_y);
     camera.camera_status = CameraStatus::Drag;
-    set_following(false);
 }
 
 pub fn camera_pointer_move(pointer_type: PointerType, pointer_id: i32, client_x: f64, client_y: f64) {

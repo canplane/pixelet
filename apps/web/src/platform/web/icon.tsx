@@ -2,7 +2,6 @@
 
 import {
   Archive,
-  ArrowCircleUp,
   ArrowUp,
   Bug,
   Car,
@@ -54,9 +53,6 @@ const PHOSPHOR = {
   "ladybug": [Bug, false, 0],
   "line.3.horizontal": [List, false, 0],
   "location": [NavigationArrow, false, 90],
-  "location.fill": [NavigationArrow, true, 90],
-  "location.north.circle": [ArrowCircleUp, false, 0],
-  "location.north.line.fill": [NavigationArrow, true, 45],
   "magnifyingglass": [MagnifyingGlass, false, 0],
   "mappin.circle": [MapPin, false, 0],
   "mappin.circle.fill": [MapPin, true, 0],

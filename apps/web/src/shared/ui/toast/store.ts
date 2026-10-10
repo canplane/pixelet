@@ -1,6 +1,6 @@
 // @pxl/web/shared/ui/toast/store.ts
 
-import type { i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import { create } from "zustand";
 
 export const enum ToastTone {
@@ -52,7 +52,18 @@ export function toastShow(id: u32, spec: ToastSpec): void {
   set({ entries: [{ id, ...spec }, ...entries] });
 }
 
+const timers = new Map<u32, ReturnType<typeof setTimeout>>();
+
+/** An event's toast: shown for `ms`, then gone; a later one of the same id restarts it. */
+export function toastFor(id: u32, spec: ToastSpec, ms: f64): void {
+  clearTimeout(timers.get(id));
+  toastShow(id, spec);
+  timers.set(id, setTimeout(() => toastDismiss(id), ms));
+}
+
 export function toastDismiss(id: u32): void {
+  clearTimeout(timers.get(id));
+  timers.delete(id);
   const { entries, pending } = get();
   set({ entries: entries.filter((e) => e.id !== id), pending: pending === id ? null : pending });
 }

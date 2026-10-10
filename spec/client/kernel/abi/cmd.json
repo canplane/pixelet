@@ -149,7 +149,7 @@
           "value": 6
         },
         {
-          "name": "TRACKING",
+          "name": "RECENTER",
           "value": 4
         },
         {
@@ -214,10 +214,6 @@
           "value": 4
         },
         {
-          "name": "ORIENTATION",
-          "value": 5
-        },
-        {
           "name": "PERMISSION",
           "value": 6
         },
@@ -232,10 +228,6 @@
         {
           "name": "CLOSE",
           "value": 9
-        },
-        {
-          "name": "ORIENTATION_LOST",
-          "value": 10
         }
       ]
     },
@@ -446,36 +438,6 @@
       ]
     },
     {
-      "name": "Tracking",
-      "$doc": [
-        "What the tracking button did, as the button showed it."
-      ],
-      "format": "dec",
-      "entries": [
-        {
-          "name": "Recenter",
-          "value": 0,
-          "$doc": [
-            "Back to the device."
-          ]
-        },
-        {
-          "name": "Follow",
-          "value": 1,
-          "$doc": [
-            "Follow mode on, where the compass is listened to."
-          ]
-        },
-        {
-          "name": "Unfollow",
-          "value": 2,
-          "$doc": [
-            "Follow mode off, north up again."
-          ]
-        }
-      ]
-    },
-    {
       "name": "GeolocationErrorCode",
       "$doc": [
         "The browser's PositionError codes."
@@ -511,10 +473,6 @@
         {
           "name": "Geolocation",
           "value": 0
-        },
-        {
-          "name": "Orientation",
-          "value": 1
         }
       ]
     },
@@ -552,8 +510,10 @@
     {
       "name": "GroundStatus",
       "$doc": [
-        "Whether the view shows any ground: Loading while the screen has none,",
-        "on a first load or after a jump, Idle before there is a view."
+        "Whether the screen shows the world: Success once a frame that drew ground went",
+        "to it, or one went over a view whose tiles all answered with nothing to draw;",
+        "Loading until then, on a first load, after a jump or a lost device; Idle before",
+        "there is a view."
       ],
       "format": "dec",
       "default": "Idle",
@@ -644,19 +604,28 @@
           "value": 519
         },
         {
-          "section": "0x03 which way the device is facing"
+          "section": "0x04 why the world does not come"
         },
         {
-          "name": "OrientationPermissionError",
-          "value": 770
+          "name": "WorldGpuLost",
+          "value": 1025,
+          "$doc": [
+            "The device that drew it is gone; the host asks for another."
+          ]
         },
         {
-          "name": "OrientationPermissionDenied",
-          "value": 771
+          "name": "WorldOffline",
+          "value": 1026,
+          "$doc": [
+            "Reads reach no server; they are tried again."
+          ]
         },
         {
-          "name": "OrientationSignalLost",
-          "value": 772
+          "name": "WorldReadFailing",
+          "value": 1027,
+          "$doc": [
+            "Reads reach the server and fail; they are tried again."
+          ]
         }
       ]
     },
@@ -748,35 +717,6 @@
           ]
         },
         {
-          "name": "SENSOR_ORIENTATION",
-          "value": 4613,
-          "$doc": [
-            "An orientation event; a field is absent where the browser gave none."
-          ],
-          "packet": [
-            {
-              "name": "webkit_compass_heading",
-              "type": "f64",
-              "optional": true
-            },
-            {
-              "name": "alpha",
-              "type": "f64",
-              "optional": true
-            },
-            {
-              "name": "beta",
-              "type": "f64",
-              "optional": true
-            },
-            {
-              "name": "gamma",
-              "type": "f64",
-              "optional": true
-            }
-          ]
-        },
-        {
           "name": "SENSOR_ERROR",
           "value": 4612,
           "$doc": [
@@ -787,13 +727,6 @@
               "name": "code",
               "type": "GeolocationErrorCode"
             }
-          ]
-        },
-        {
-          "name": "SENSOR_ORIENTATION_LOST",
-          "value": 4618,
-          "$doc": [
-            "The compass failed and its listener was removed, where the platform says so."
           ]
         },
         {
@@ -820,26 +753,6 @@
             {
               "name": "geolocation",
               "type": "bool"
-            },
-            {
-              "name": "orientation",
-              "type": "bool"
-            },
-            {
-              "name": "orientation_permission",
-              "type": "bool",
-              "$doc": [
-                "iOS 13+'s gate: requestPermission exists and must run inside a gesture."
-              ]
-            },
-            {
-              "name": "orientation_silence_is_loss",
-              "type": "bool",
-              "$doc": [
-                "A browser's compass talks while the device is still and cannot say it stopped, so",
-                "silence is the only sign of loss; a device's speaks only when the heading turns and",
-                "reports a failure itself (SENSOR_ORIENTATION_LOST)."
-              ]
             },
             {
               "name": "settings",
@@ -1239,16 +1152,10 @@
           ]
         },
         {
-          "name": "INPUT_TRACKING",
+          "name": "INPUT_RECENTER",
           "value": 4356,
           "$doc": [
-            "The tracking button's press, as the button showed it."
-          ],
-          "packet": [
-            {
-              "name": "tracking",
-              "type": "Tracking"
-            }
+            "The location button's press: the view moved to the device, its distance and heading kept."
           ]
         },
         {
@@ -1360,9 +1267,7 @@
           "name": "SENSOR_ENABLE_LOCATION",
           "value": 4615,
           "$doc": [
-            "The search panel's location card: the location asked for. The compass is asked for",
-            "where it is used, entering follow mode (TRACKING), and never alone: nothing reads it",
-            "without the location."
+            "The search panel's location card: the location asked for."
           ]
         },
         {
@@ -1460,19 +1365,11 @@
           "type": "HoldingState"
         },
         {
-          "name": "orientation",
-          "type": "OrientationState"
-        },
-        {
           "name": "azimuth",
           "type": "f64",
           "$doc": [
             "The view's azimuth."
           ]
-        },
-        {
-          "name": "is_follow_mode",
-          "type": "bool"
         },
         {
           "name": "camera_busy",
@@ -1515,6 +1412,14 @@
           "list": true,
           "$doc": [
             "The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here."
+          ]
+        },
+        {
+          "name": "stall",
+          "type": "Message",
+          "optional": true,
+          "$doc": [
+            "Why the world is not coming now, where something keeps it: the device lost, or reads failing since the last answered. Absent while it comes or is shown."
           ]
         }
       ]
@@ -1631,23 +1536,6 @@
           "type": "str",
           "$doc": [
             "The waiting marker's words, which the shell takes up when it starts waiting: the marker's own where one stands there, none where it is new."
-          ]
-        }
-      ]
-    },
-    {
-      "name": "OrientationState",
-      "fields": [
-        {
-          "name": "status",
-          "type": "DevicePoseStatus"
-        },
-        {
-          "name": "error",
-          "type": "Message",
-          "optional": true,
-          "$doc": [
-            "Present exactly when status is Error: the failure the kernel chose."
           ]
         }
       ]

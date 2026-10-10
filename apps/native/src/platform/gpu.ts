@@ -2,6 +2,7 @@
 
 import { Command, encode_gpu_ready } from "@/kernel/abi/cmd.spec.ts";
 import { send_next } from "@/kernel/sched.ts";
+import { HostTrouble, hostTrouble } from "@/kernel/trouble.ts";
 import { PLATFORM } from "./module.ts";
 
 export function gpuBoot(): void {
@@ -9,6 +10,7 @@ export function gpuBoot(): void {
   if (info === null) {
     // The app installs only where Metal or Vulkan exists, so this is the system failing.
     console.error("[gpu] the system opened no GPU; nothing can be drawn");
+    hostTrouble(HostTrouble.NoGpu);
     return;
   }
   const [align, timestamps] = info;
