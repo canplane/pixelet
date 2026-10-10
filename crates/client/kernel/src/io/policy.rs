@@ -18,10 +18,12 @@
 
 use crate::io::demand::Order;
 use crate::io::demand::{Ask, Stream};
-use crate::io::failure::Outcome;
-use crate::io::request::{Rank, Serve};
+use crate::io::failure::Failure;
+use crate::io::request::{Rank, Retry, Serve};
 use crate::param;
 use pxl_spec::space::layer::tile::Tile;
+use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
+use xpute_kit::status::errno::Errno;
 
 /// A layer's classes: seen or unseen.
 const SHELLS: u8 = 2;
@@ -31,17 +33,21 @@ const PLACE: u8 = ASSET + 1;
 const ASIDE: u8 = PLACE + SHELLS;
 
 pub struct Policy {
-    pub retry_ms: f64,
     pub intake: u32,
 }
 
 impl Policy {
     pub const fn standard() -> Policy {
-        Policy {
-            retry_ms: param::RETRY_MS,
-            intake: param::INTAKE,
-        }
+        Policy { intake: param::INTAKE }
     }
+}
+
+/// The wait before the `failures`th retry: AWS's "full jitter", uniform up to
+/// the capped exponential, so clients one outage failed together do not
+/// return together.
+fn backoff(failures: u32, seed: u64) -> f64 {
+    let ceiling = (param::RETRY_BASE_MS * libm::exp2(f64::from(failures - 1))).min(param::RETRY_CAP_MS);
+    ceiling * u32_to_unit(SplitMix64::new(seed).next_u32())
 }
 
 fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
@@ -81,9 +87,12 @@ impl Serve for Policy {
         self.intake
     }
 
-    /// Only a failure waits; an answer and a stop do not.
-    fn retry_after(&self, outcome: Outcome) -> Option<f64> {
-        (outcome == Outcome::error).then_some(self.retry_ms)
+    /// A network that is down is waited on; a server that keeps failing is given up.
+    fn retry(&self, failure: Failure, failures: u32, seed: u64) -> Retry {
+        if failure.errno != Errno::ENETUNREACH && failures >= param::RETRY_ATTEMPTS {
+            return Retry::GiveUp;
+        }
+        Retry::After(backoff(failures, seed))
     }
 }
 

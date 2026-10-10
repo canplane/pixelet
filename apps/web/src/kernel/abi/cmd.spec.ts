@@ -242,6 +242,8 @@ export const enum Message {
   WorldOffline = 0x0402,
   /** Reads reach the server and fail; they are tried again. */
   WorldReadFailing = 0x0403,
+  /** Reads failed past every retry; the world is not coming. */
+  WorldUnavailable = 0x0404,
 }
 
 export const enum Command {
@@ -394,7 +396,7 @@ export interface Snapshot {
   division: DivisionPart[];
   /** The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here. */
   previews: u32[];
-  /** Why the world is not coming now, where something keeps it: the device lost, or reads failing since the last answered. Absent while it comes or is shown. */
+  /** Why the world is not coming now, where something keeps it: the device lost, reads failing since the last answered, or given up. Absent while it comes or is shown. */
   stall: Message | null;
 }
 

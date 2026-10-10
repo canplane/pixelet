@@ -8,7 +8,7 @@ use crate::io::demand::Why;
 use xpute_kit::status::errno::Errno;
 
 use crate::io::demand::Order;
-use crate::io::failure::{Ended, Failure, Outcome};
+use crate::io::failure::{Ended, Failure};
 
 struct ByWhy;
 
@@ -25,8 +25,8 @@ impl Serve for ByWhy {
         u32::MAX
     }
 
-    fn retry_after(&self, outcome: Outcome) -> Option<f64> {
-        (outcome == Outcome::error).then_some(2_000.0)
+    fn retry(&self, _failure: Failure, _failures: u32, _seed: u64) -> Retry {
+        Retry::After(2_000.0)
     }
 }
 
@@ -177,8 +177,8 @@ impl Serve for Restless {
         1
     }
 
-    fn retry_after(&self, _outcome: Outcome) -> Option<f64> {
-        None
+    fn retry(&self, _failure: Failure, _failures: u32, _seed: u64) -> Retry {
+        Retry::After(0.0)
     }
 }
 

@@ -683,6 +683,13 @@
           "$doc": [
             "Reads reach the server and fail; they are tried again."
           ]
+        },
+        {
+          "name": "WorldUnavailable",
+          "value": 1028,
+          "$doc": [
+            "Reads failed past every retry; the world is not coming."
+          ]
         }
       ]
     },
@@ -1548,7 +1555,7 @@
           "type": "Message",
           "optional": true,
           "$doc": [
-            "Why the world is not coming now, where something keeps it: the device lost, or reads failing since the last answered. Absent while it comes or is shown."
+            "Why the world is not coming now, where something keeps it: the device lost, reads failing since the last answered, or given up. Absent while it comes or is shown."
           ]
         }
       ]

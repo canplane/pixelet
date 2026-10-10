@@ -173,8 +173,11 @@ pub fn sensors_close() {
     orientation_close();
 }
 
-/// Why the world is not coming now: the device gone, or reads failing.
+/// Why the world is not coming now: the device gone, or reads failing or given up.
 fn stall() -> Option<Message> {
+    if crate::io::request::given_up() {
+        return Some(Message::WorldUnavailable);
+    }
     match (screen(), crate::io::request::failing()) {
         (Screen::Lost, _) => Some(Message::WorldGpuLost),
         (_, Some(Errno::ENETUNREACH)) => Some(Message::WorldOffline),

@@ -5,7 +5,7 @@
 //! retry waits are the `Serve` policy's.
 //!
 //! An answer ends its want; a failure ends only its attempt and waits on the
-//! want. A running attempt is never preempted.
+//! want, or gives it up. A running attempt is never preempted.
 //!
 //! Invariants: no more attempts than credits and no want past its stream's
 //! bound; ties broken by stream then subject so the order is total; a free
@@ -15,7 +15,7 @@
 use core::cmp::Ordering;
 
 use crate::io::demand::{Ask, Phases, Stream};
-use crate::io::failure::{Ended, Outcome};
+use crate::io::failure::{Ended, Failure};
 use crate::io::load::LOADS;
 use crate::io::policy::Policy;
 use crate::profiler::record::profiler_record;
@@ -24,6 +24,7 @@ use std::collections::HashMap;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::off_of_slice;
+use xpute_kit::math::rng::derive_seed_u64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -43,7 +44,14 @@ pub trait Serve {
 
     fn intake(&self) -> u32;
 
-    fn retry_after(&self, outcome: Outcome) -> Option<f64>;
+    /// What a want does after its `failures`th failure; `seed` differs per want and per failure.
+    fn retry(&self, failure: Failure, failures: u32, seed: u64) -> Retry;
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Retry {
+    After(f64),
+    GiveUp,
 }
 
 /// How many of a stream's wants are held at once. A layer's tiles: at most
@@ -66,6 +74,8 @@ struct Wanted {
     /// First wanted, kept across re-declarations so the profiler measures the real wait.
     enqueue_ms: f64,
     until_ms: f64,
+    /// Since it was first wanted; kept across re-declarations, as the wait is.
+    failures: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -110,6 +120,8 @@ pub struct RequestScheduler<S> {
     ready: Vec<(Placed, usize)>,
     /// Why reads fail, since the last that came to an answer.
     failing: Option<Errno>,
+    /// A want failed past its retries; only a reset ends it.
+    given_up: bool,
 }
 
 /// A started attempt's right to open a file: only the scheduler makes one, so
@@ -142,6 +154,7 @@ impl<S: Serve> RequestScheduler<S> {
             stops: Vec::new(),
             ready: Vec::with_capacity(desired),
             failing: None,
+            given_up: false,
         }
     }
 
@@ -186,6 +199,7 @@ impl<S: Serve> RequestScheduler<S> {
                 ask,
                 enqueue_ms: at,
                 until_ms: f64::NEG_INFINITY,
+                failures: 0,
             });
         }
     }
@@ -300,7 +314,6 @@ impl<S: Serve> RequestScheduler<S> {
     pub fn settle(&mut self, key: u64, ended: Ended, phases: Option<Phases>, at: f64) {
         let Some(slot) = self.slot_of(key) else { return };
         let a = self.end(slot);
-        let outcome = ended.outcome();
         match ended {
             Ended::Ok => self.failing = None,
             // An absent file is an answer.
@@ -308,13 +321,27 @@ impl<S: Serve> RequestScheduler<S> {
             _ => {}
         }
         if let Some(i) = self.find(a.stream, a.subject) {
-            if outcome == Outcome::ok {
-                self.desired[i] = None;
-            } else if let (Some(wait), Some(w)) = (self.serve.retry_after(outcome), &mut self.desired[i]) {
-                w.until_ms = at + wait;
+            match ended {
+                Ended::Ok => self.desired[i] = None,
+                Ended::Failed(f) => self.hold_back(i, f, at),
+                Ended::Aborted => {}
             }
         }
         record(&a, at, ended, phases);
+    }
+
+    /// A failed want waits as the policy says, or is given up: never asked again.
+    fn hold_back(&mut self, i: usize, failure: Failure, at: f64) {
+        let Some(w) = &mut self.desired[i] else { return };
+        w.failures += 1;
+        let seed = derive_seed_u64(w.subject ^ ((w.stream as u64) << 56), at.to_bits());
+        match self.serve.retry(failure, w.failures, seed) {
+            Retry::After(wait) => w.until_ms = at + wait,
+            Retry::GiveUp => {
+                w.until_ms = f64::INFINITY;
+                self.given_up = true;
+            }
+        }
     }
 
     /// The module is being reset under a host that will not answer what it was told to run.
@@ -326,6 +353,7 @@ impl<S: Serve> RequestScheduler<S> {
         }
         self.desired.fill(None);
         self.failing = None;
+        self.given_up = false;
         self.started.clear();
         self.stops.clear();
     }
@@ -431,6 +459,11 @@ pub fn reset() {
 /// Why reads fail, where none has come to an answer since one did.
 pub fn failing() -> Option<Errno> {
     sched().failing
+}
+
+/// Whether a want failed past its retries.
+pub fn given_up() -> bool {
+    sched().given_up
 }
 
 #[cfg(test)]

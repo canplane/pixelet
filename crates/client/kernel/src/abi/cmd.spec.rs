@@ -517,10 +517,12 @@ pub enum Message {
     WorldOffline = 0x0402,
     /// Reads reach the server and fail; they are tried again.
     WorldReadFailing = 0x0403,
+    /// Reads failed past every retry; the world is not coming.
+    WorldUnavailable = 0x0404,
 }
 
 impl Message {
-    pub const ALL: [Message; 11] = [
+    pub const ALL: [Message; 12] = [
         Message::GeolocationUnsupported,
         Message::GeolocationPermissionDenied,
         Message::GeolocationPositionUnavailable,
@@ -532,6 +534,7 @@ impl Message {
         Message::WorldGpuLost,
         Message::WorldOffline,
         Message::WorldReadFailing,
+        Message::WorldUnavailable,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -731,7 +734,7 @@ pub struct Snapshot<'a> {
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
-    /// Why the world is not coming now, where something keeps it: the device lost, or reads failing since the last answered. Absent while it comes or is shown.
+    /// Why the world is not coming now, where something keeps it: the device lost, reads failing since the last answered, or given up. Absent while it comes or is shown.
     pub stall: Option<Message>,
 }
 
