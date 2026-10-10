@@ -285,14 +285,14 @@
     }
   },
   "toast": {
-    "server_error": "Something went wrong on the server. Trying again.",
+    "server_unstable": "Having trouble connecting to the server.",
     "location_checking": "Checking your location…",
     "world_loading": "Loading area…",
     "world_ready": "Area loaded.",
     "companion_loading": "Preparing your companion…",
     "outside": "This area isn’t supported.",
-    "offline": "Waiting for an internet connection.",
-    "gpu_recovering": "Waiting for the WebGPU connection."
+    "network_unstable": "Having trouble connecting to the network.",
+    "gpu_unstable": "Having trouble connecting to WebGPU."
   },
   "world": {
     "dock": {
@@ -331,29 +331,31 @@
     }
   },
   "halt": {
-    "webgpu": {
-      "title": "WebGPU isn’t available.",
-      "body": "Update your browser to the latest version or open this in another browser."
-    },
-    "insecure": {
-      "title": "An HTTPS connection is required.",
-      "body": "WebGPU needs this to be opened over HTTPS."
-    },
-    "gpu": {
-      "title": "WebGPU couldn’t start.",
-      "body": "Check the settings of your browser or device."
+    "web": {
+      "webgpu": {
+        "title": "WebGPU isn’t available.",
+        "body": "Update your browser to the latest version or open this in another browser."
+      },
+      "insecure": {
+        "title": "An HTTPS connection is required.",
+        "body": "Open this again at its https:// address."
+      },
+      "gpu": {
+        "title": "WebGPU couldn’t start.",
+        "body": "Check the settings of your browser or device."
+      }
     },
     "boot": {
-      "title": "The space couldn’t be loaded.",
-      "body": "Please try again."
+      "title": "Something went wrong.",
+      "body": "Please try again in a moment."
     },
-    "given_up": {
-      "title": "The space couldn’t be loaded.",
-      "body": "Please try again later."
+    "server_failed": {
+      "title": "The server connection failed.",
+      "body": "Please try again in a moment."
     },
-    "gpu_lost": {
+    "gpu_failed": {
       "title": "The WebGPU connection failed.",
-      "body": "Reload the page or restart the app."
+      "body": "Please try again in a moment."
     }
   }
 }

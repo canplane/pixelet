@@ -23,13 +23,9 @@ export function messageKey(message: Message): string {
     case Message.OrientationSignalLost:
       return "device.orientation.signal_lost";
 
-    case Message.WorldGpuLost:
-      return "toast.gpu_recovering";
-    case Message.WorldOffline:
-      return "toast.offline";
     case Message.WorldReadFailing:
-      return "toast.server_error";
+      return "toast.server_unstable";
     case Message.WorldUnavailable:
-      return "halt.given_up.title";
+      return "halt.server_failed";
   }
 }

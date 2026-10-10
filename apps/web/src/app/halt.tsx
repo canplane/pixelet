@@ -6,14 +6,14 @@ import { StyleSheet, Text, View } from "react-native";
 import { color, textStyle } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
-/** In place of the app, for good: where it cannot run, or what it needed did not come. `why` names
- * its words under `halt.`; the detail is the log's. */
-export function Halt({ why }: { why: string }) {
+/** In place of the app, for good: where it cannot run, or what it needed did not come. `of` is the
+ * locale key its title and body are under; the detail is the log's. */
+export function Halt({ of }: { of: string }) {
   const { t } = useTranslation();
   return (
     <View style={styles.cover}>
-      <Text accessibilityRole="header" style={styles.title}>{t(`halt.${why}.title`)}</Text>
-      <Text style={styles.body}>{t(`halt.${why}.body`)}</Text>
+      <Text accessibilityRole="header" style={styles.title}>{t(`${of}.title`)}</Text>
+      <Text style={styles.body}>{t(`${of}.body`)}</Text>
     </View>
   );
 }

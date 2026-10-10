@@ -29,6 +29,7 @@ function askAgain(): void {
 
 export function gpuBoot(): void {
   const lost = () => {
+    setGpu(Gpu.Waiting);
     send_next(Command.GPU_LOST);
     askAgain();
   };

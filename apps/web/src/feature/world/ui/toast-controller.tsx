@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { messageKey } from "@/locale/message-key.ts";
 import { DevicePoseStatus, GroundStatus, Message } from "@/kernel/abi/cmd.spec.ts";
 import { Gpu, useGpu } from "@/kernel/gpu.ts";
+import { useOnline } from "@/kernel/online.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { toastDismiss, toastShow, ToastTone } from "@/shared/ui/toast/store.ts";
@@ -15,8 +16,9 @@ const enum Report {
   Orientation = 1,
   Outside = 2,
   World = 3,
-  ClientError = 4,
-  ServerError = 5,
+  Gpu = 4,
+  Network = 5,
+  Server = 6,
 }
 
 /** The ready word: said once, as the first world and its companions are on screen. */
@@ -61,13 +63,12 @@ function location(status: DevicePoseStatus, failure: Message | null): Said | nul
   return status === DevicePoseStatus.Loading ? loading("toast.location_checking") : null;
 }
 
-/** This device's: no GPU answered yet, the one drawing is lost, or reads reach no network. */
-function clientError(gpu: Gpu, stall: Message | null): Said | null {
-  if (gpu === Gpu.Waiting) return error("toast.gpu_recovering");
-  return stall === Message.WorldGpuLost || stall === Message.WorldOffline ? error(messageKey(stall)) : null;
+/** The GPU's: none answered yet, or the one drawing is lost. */
+function gpuError(gpu: Gpu): Said | null {
+  return gpu === Gpu.Waiting ? error("toast.gpu_unstable") : null;
 }
 
-/** The server's: reads reach it and fail. */
+/** The server's: it fails the reads that reach it. */
 function serverError(stall: Message | null): Said | null {
   return stall === Message.WorldReadFailing ? error(messageKey(stall)) : null;
 }
@@ -79,7 +80,7 @@ function progress(shown: boolean, companionLoading: boolean, greeting: Greeting)
   return greeting === Greeting.Said ? { key: "toast.world_ready", tone: ToastTone.Ready } : null;
 }
 
-/** Each toast is derived from what the kernel and the host say now; an error is one toast a side, its words changing. */
+/** Each toast is derived from what the kernel and the host say now; an error is one toast a source. */
 export function ToastController() {
   const locationStatus = useKernel((s) => s.location.status);
   const locationError = useKernel((s) => s.location.error);
@@ -93,18 +94,22 @@ export function ToastController() {
 
   const gpu = useGpu();
   const stall = useKernel((s) => s.stall);
-  useSaid(Report.ClientError, clientError(gpu, stall));
-  useSaid(Report.ServerError, serverError(stall));
+  useSaid(Report.Gpu, gpuError(gpu));
+  useSaid(Report.Network, useOnline() ? null : error("toast.network_unstable"));
+  useSaid(Report.Server, serverError(stall));
 
   const shown = useKernel((s) => s.focus.status === GroundStatus.Success);
   const companionLoading = useKernel((s) => !s.companion.person_ready || !s.companion.pet_ready);
   const [greeting, setGreeting] = useState(Greeting.Waiting);
   const ready = shown && !companionLoading;
   useEffect(() => {
-    if (!ready || greeting !== Greeting.Waiting) return;
-    setGreeting(Greeting.Said);
-    setTimeout(() => setGreeting(Greeting.Done), READY_MS);
+    if (ready && greeting === Greeting.Waiting) setGreeting(Greeting.Said);
   }, [ready, greeting]);
+  useEffect(() => {
+    if (greeting !== Greeting.Said) return;
+    const timer = setTimeout(() => setGreeting(Greeting.Done), READY_MS);
+    return () => clearTimeout(timer);
+  }, [greeting]);
   useSaid(Report.World, progress(shown, companionLoading, greeting));
 
   return null;

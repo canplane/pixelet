@@ -29,7 +29,7 @@ try {
   if (!container) throw new Error("web: missing root container: #root");
   AppRegistry.registerComponent("pixelet", () => () => (
     <StrictMode>
-      {missing ? <Halt why={missing} /> : <AppRouter />}
+      {missing ? <Halt of={`halt.${missing}`} /> : <AppRouter />}
     </StrictMode>
   ));
   AppRegistry.runApplication("pixelet", { rootTag: container as unknown as RootTag, initialProps: {} });

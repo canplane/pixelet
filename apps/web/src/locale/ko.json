@@ -174,14 +174,14 @@
     }
   },
   "toast": {
-    "server_error": "서버에 문제가 발생했습니다. 다시 시도하고 있습니다.",
+    "server_unstable": "서버 연결이 원활하지 않습니다.",
     "location_checking": "현재 위치를 확인하고 있습니다.",
     "world_loading": "공간을 불러오고 있습니다.",
     "world_ready": "공간을 불러왔습니다.",
     "companion_loading": "동행을 준비하고 있습니다.",
     "outside": "지원하지 않는 지역입니다.",
-    "offline": "인터넷 연결을 기다리고 있습니다.",
-    "gpu_recovering": "WebGPU 연결을 기다리고 있습니다."
+    "network_unstable": "네트워크 연결이 원활하지 않습니다.",
+    "gpu_unstable": "WebGPU 연결이 원활하지 않습니다."
   },
   "world": {
     "dock": {
@@ -220,29 +220,31 @@
     }
   },
   "halt": {
-    "webgpu": {
-      "title": "WebGPU를 사용할 수 없습니다.",
-      "body": "브라우저를 최신 버전으로 업데이트하거나 다른 브라우저에서 열어 주세요."
-    },
-    "insecure": {
-      "title": "HTTPS 연결이 필요합니다.",
-      "body": "WebGPU를 사용하려면 HTTPS로 접속해야 합니다."
-    },
-    "gpu": {
-      "title": "WebGPU를 시작하지 못했습니다.",
-      "body": "브라우저 또는 기기의 설정을 확인해 주세요."
+    "web": {
+      "webgpu": {
+        "title": "WebGPU를 사용할 수 없습니다.",
+        "body": "브라우저를 최신 버전으로 업데이트하거나 다른 브라우저에서 열어 주세요."
+      },
+      "insecure": {
+        "title": "HTTPS 연결이 필요합니다.",
+        "body": "https:// 주소로 다시 접속해 주세요."
+      },
+      "gpu": {
+        "title": "WebGPU를 시작하지 못했습니다.",
+        "body": "브라우저 또는 기기 설정을 확인해 주세요."
+      }
     },
     "boot": {
-      "title": "공간을 불러오지 못했습니다.",
-      "body": "다시 시도해 주세요."
-    },
-    "given_up": {
-      "title": "공간을 불러오지 못했습니다.",
+      "title": "일시적인 오류가 발생했습니다.",
       "body": "잠시 후 다시 시도해 주세요."
     },
-    "gpu_lost": {
+    "server_failed": {
+      "title": "서버 연결이 실패했습니다.",
+      "body": "잠시 후 다시 시도해 주세요."
+    },
+    "gpu_failed": {
       "title": "WebGPU 연결이 실패했습니다.",
-      "body": "페이지를 새로고침하거나 앱을 다시 실행해 주세요."
+      "body": "잠시 후 다시 시도해 주세요."
     }
   }
 }

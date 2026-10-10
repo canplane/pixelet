@@ -45,9 +45,9 @@ interface DeviceInfo {
   timestamps: boolean;
 }
 export const enum Missing {
-  WebGpu = "webgpu",
-  Insecure = "insecure",
-  Gpu = "gpu",
+  WebGpu = "web.webgpu",
+  Insecure = "web.insecure",
+  Gpu = "web.gpu",
 }
 
 /** `navigator.gpu` exists only in a secure context, so the LAN address over
