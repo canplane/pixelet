@@ -63,6 +63,7 @@ export function ToastController() {
   useSaid(Report.Outside, outside ? { key: "toast.outside", tone: ToastTone.Error } : null);
 
   // Why the world is not on screen outranks that it is coming; a stall is retried, so it waits.
+  // Outside the service area nothing is coming, which its own toast says.
   const gpuAbsent = useGpuAbsent();
   const stall = useKernel((s) => s.stall);
   const shown = useKernel((s) => s.focus.status === GroundStatus.Success);
@@ -73,7 +74,7 @@ export function ToastController() {
       ? { key: "unsupported.gpu", tone: ToastTone.Error }
       : stall !== null
       ? { key: messageKey(stall), tone: ToastTone.Loading }
-      : !shown
+      : !shown && !outside
       ? { key: "toast.world_loading", tone: ToastTone.Loading }
       : companionLoading
       ? { key: "toast.companion_loading", tone: ToastTone.Loading }
