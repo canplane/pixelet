@@ -7,18 +7,15 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk::{box_words, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_spec::bake::constant::EntryAt;
-use std::collections::HashMap;
+use pxl_spec::block::stand::z_unit;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::Block;
 
 use crate::chunk::build::BAKE_RANGE;
-use crate::layer::object::store::AIR;
 use crate::setting::store::settings_store;
 
 use crate::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES};
-use pxl_spec::space::coord::world::around;
-use pxl_spec::space::coord::zoom::{base_of, count, index_of, units, Zoom};
+use pxl_spec::space::coord::zoom::{count, units};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -38,22 +35,6 @@ pub(super) struct BakeJob {
     pub(super) handed: u32,
 }
 
-/// The eraser's preview: the cells at `zoom` its entry covers, cut to air,
-/// X in the frame of the cells from `from_x`.
-pub(super) fn carve_into(cells: &mut HashMap<[i64; 3], u32>, carve: EntryAt, zoom: Zoom, from_x: i64) {
-    let own = carve.zoom();
-    let [ix, iy, iz] = index_of(zoom, &base_of(own, carve.at()));
-    let ix = from_x + (ix - from_x).rem_euclid(around(zoom));
-    let n = if own < zoom { i64::from(count(zoom, own)) } else { 1 };
-    for dz in 0..n {
-        for dy in 0..n {
-            for dx in 0..n {
-                cells.insert([ix + dx, iy + dy, iz + dz], AIR);
-            }
-        }
-    }
-}
-
 impl Builder {
     pub(super) fn abort_bake(&mut self) {
         if self.bake_job.take().is_some() {
@@ -65,7 +46,7 @@ impl Builder {
         let holding = matches!(&self.bake_job, Some(j) if j.id == id);
         let c = &self.chunks[&id];
         let runs = self.runs_of(id).or_bug(Errno::ENOTRECOVERABLE);
-        let set = Self::run_set(&runs, run_span(self.chunks[&id].at, runs.zoom));
+        let set = Self::run_set(&runs, pxl_spec::block::sample::span(self.chunks[&id].at.zoom(), runs.zoom));
         if !holding {
             if self.bake_job.is_some() {
                 return Progress::Blocked;

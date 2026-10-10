@@ -4,8 +4,8 @@
 //! from, or the nearest resident tile over it, at that tile's cells; it is
 //! exact where that tile says it, coarser where one over it only draws it.
 
-use pxl_render::mesh::paint::terrain::sample::{TileSource, TileView};
 use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::block::sample::{TileSource, TileView};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
@@ -55,7 +55,18 @@ pub(crate) struct Drawn<'a> {
     exact: bool,
 }
 
-impl Drawn<'_> {
+impl<'a> Drawn<'a> {
+    /// Its tile's cells as they are read from the tile it is drawn from.
+    pub(crate) fn source(&self) -> Source<'a> {
+        let corner = GROUND.cell_at(self.tile, GROUND.cell_index(0, 0));
+        Source {
+            tile: self.body,
+            from: self.from,
+            origin: corner.in_tile_above(self.tile.zoom - self.from.zoom),
+            n: count(GROUND.cell_zoom(self.tile.zoom), GROUND.cell_zoom(self.from.zoom)),
+        }
+    }
+
     /// Exact where a resident tile says the tile's ground, else coarser.
     pub(crate) fn answer<T>(&self, v: T) -> Answer<T> {
         match self.exact {
@@ -141,13 +152,6 @@ impl Query for Residency<TerrainTile> {
     fn read(&self, (zoom, [x, y, _]): Node<3>, cell: Zoom) -> Answer<Source<'_>> {
         let p = GROUND.read_tile((zoom, [x, y]), cell);
         let Some(d) = self.drawn(p) else { return Answer::Nothing(p) };
-        let (src, tile) = (d.from, d.body);
-        let corner = GROUND.cell_at(p, GROUND.cell_index(0, 0));
-        d.answer(Source {
-            tile,
-            from: src,
-            origin: corner.in_tile_above(p.zoom - src.zoom),
-            n: count(GROUND.cell_zoom(p.zoom), GROUND.cell_zoom(src.zoom)),
-        })
+        d.answer(d.source())
     }
 }

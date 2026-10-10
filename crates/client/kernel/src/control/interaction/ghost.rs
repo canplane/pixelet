@@ -51,7 +51,7 @@ pub fn ghost() -> Ghost {
 
     let carved_style_cube: Option<Cube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let cell = World::now().at(h, LEAF_ZOOM).value().map_or(0, |g| g.cell);
+            let cell = World::now().surface(h, LEAF_ZOOM).value().flatten().map_or(0, |s| s.block);
             cube_of(u32::from(cell))
         }
         _ => None,

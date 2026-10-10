@@ -28,7 +28,6 @@ pub mod view;
 use crate::billboard::field::Billboards;
 use crate::model::registry::Models;
 use pxl_render::frame::draw::DrawList;
-use pxl_render::mesh::paint::object::Painter;
 
 use crate::chunk::table::Scheduler;
 use crate::layer::object::store::Store;
@@ -39,7 +38,6 @@ pub struct Kernel {
     /// The memory map is laid; nothing of the world is made before it.
     pub laid_out: bool,
     pub objects: Store,
-    pub painter: Painter,
     pub sched: Scheduler,
     pub scene: Scene,
     /// What the renderer is handed: every layer lists into it.
@@ -53,7 +51,6 @@ impl Kernel {
         Kernel {
             laid_out: false,
             objects: Store::default(),
-            painter: Painter::new(),
             sched: Scheduler::new(),
             scene: Scene::default(),
             draw: DrawList::default(),
@@ -75,10 +72,9 @@ pub fn laid() -> Option<&'static mut Kernel> {
     k.laid_out.then_some(k)
 }
 
-/// The objects and the painter, borrowed together for a turn's build.
+/// The objects, borrowed for a turn's build.
 pub struct Build<'a> {
     pub store: &'a crate::layer::object::store::Store,
-    pub painter: &'a mut pxl_render::mesh::paint::object::Painter,
 }
 
 impl Kernel {
@@ -88,7 +84,6 @@ impl Kernel {
         let Kernel {
             laid_out,
             objects,
-            painter,
             sched,
             scene,
             draw,
@@ -97,7 +92,7 @@ impl Kernel {
         if !*laid_out {
             return None;
         }
-        Some((Build { store: objects, painter }, sched, scene, draw))
+        Some((Build { store: objects }, sched, scene, draw))
     }
 }
 

@@ -1,64 +1,67 @@
-// pxl-render/mesh/paint/terrain/sample.rs
+// pxl-spec/block/sample.rs
 
-//! A terrain tile's chunk as the render pipeline reads it: per cell one
-//! material, its look's, and one top, painted as a column
-//! from a floor shared by the chunk. Bridges and tunnels stand off the column as runs of
-//! their own; a bore or a cutting takes the air over its floor out of the
-//! column.
+//! A terrain tile's chunk as its blocks are composed from it: per cell one
+//! look and one top, a column from a floor shared by the chunk. Bridges and
+//! tunnels stand off the column as runs of their own; a bore or a cutting
+//! takes the air over its floor out of the column.
 
-use pxl_spec::bake::format::GroundId;
-use pxl_spec::bake::separation::{Crossing, Occupies, Separation};
-use pxl_spec::block::color;
-use pxl_spec::block::cube::{ground, sentinel, Ground};
-use pxl_spec::block::object::Cube;
-use pxl_spec::procedural::{pier_stands, Frame};
-use pxl_spec::space::coord::adapter::epsg3857::u_per_m;
-use pxl_spec::space::hierarchy::tree::{ancestor_of, offset_in};
-use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-
-use crate::mesh::paint::palette::rgb255;
-use crate::mesh::paint::palette::LAYER_IDX;
-use crate::mesh::paint::terrain::elevation::ground_ele_at;
-use crate::mesh::run::{APRON, COL_SPAN};
-use crate::mesh::word::{pack_material, Side, NO_LAYER};
-use crate::mesh::{try_push, Refused};
-use std::sync::LazyLock;
+use crate::bake::format::GroundId;
+use crate::bake::separation::{Crossing, Occupies, Separation};
+use crate::bake::surface::bicubic;
+use crate::block::cube::{ground, Ground};
+use crate::procedural::{pier_stands, Frame};
+use crate::space::camera::grid::CHUNK_STEPS;
+use crate::space::coord::adapter::epsg3857::u_per_m;
+use crate::space::coord::zoom::{count, Zoom};
+use crate::space::hierarchy::tree::{ancestor_of, offset_in};
+use crate::space::layer::lattice::{GROUND, GROUND_FOLD, TILE_CELLS};
 
 const TERRAIN_Z_MARGIN: i32 = 4;
-const COL_SPAN2: usize = (COL_SPAN * COL_SPAN) as usize;
 
-/// Each byte's material word and layer: a look's, or unknown's for a byte
-/// that is none.
-pub struct Materials {
-    looks: [Option<(u32, u8)>; 256],
-    unknown: (u32, u8),
+/// The ring of neighbor columns a chunk is composed with. Without it the face
+/// mask read every chunk seam as open air, losing occlusion, creases and
+/// culling there. Nothing is emitted from an apron column.
+pub const APRON: u32 = 1;
+
+/// Columns a row of a node at `zoom` composed at `runs`, the apron's among them.
+pub const fn span(zoom: Zoom, runs: Zoom) -> u32 {
+    count(runs, zoom) + 2 * APRON
 }
 
-pub static MATERIALS: LazyLock<Materials> = LazyLock::new(Materials::of_palette);
+/// Column `(cx, cy)` of the chunk's own in a sample `span` wide.
+pub fn apron_col(span: u32, cx: u32, cy: u32) -> u32 {
+    (cy + APRON) * span + cx + APRON
+}
 
-impl Materials {
-    /// Packed `0xSS_RRGGBB`; none for a byte that is no look.
-    pub fn of(&self, cell: GroundId) -> Option<(u32, u8)> {
-        self.looks[cell as usize]
-    }
+/// The widest: a chunk's columns where they fold into its cells, and its apron.
+pub const COL_SPAN: u32 = span(0, CHUNK_STEPS + GROUND_FOLD);
 
-    /// What a cell draws as: a byte that is no look as unknown.
-    pub fn drawn(&self, cell: GroundId) -> (u32, u8) {
-        self.of(cell).unwrap_or(self.unknown)
-    }
+// A composition's workspace grows with what stands in the chunk, so it is the
+// heap's. Growth asks for room first; a refused one ends, what is drawn stays
+// drawn, and it is asked for again later, rather than the allocator ending the module.
 
-    fn of_palette() -> Materials {
-        let mut looks = [None; 256];
-        for g in Ground::ALL {
-            let rgb = color::ground(g as u8).map_or([0; 3], |s| rgb255(s.rgb));
-            looks[g as usize] = Some((pack_material(Side::BASE, rgb), LAYER_IDX(Cube::Ground(g)) as u8));
-        }
-        let rgb = color::sentinel(sentinel::unknown).map_or([0; 3], |s| rgb255(s.rgb));
-        Materials {
-            looks,
-            unknown: (pack_material(Side::BASE, rgb), NO_LAYER as u8),
-        }
+/// The heap refused a composition's workspace room.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Refused;
+
+impl From<std::collections::TryReserveError> for Refused {
+    fn from(_: std::collections::TryReserveError) -> Refused {
+        Refused
     }
+}
+
+pub fn grow<T>(v: &mut Vec<T>, more: usize) -> Result<(), Refused> {
+    let need = v.len() + more;
+    if need > v.capacity() {
+        v.try_reserve(need.max(2 * v.len()) - v.len())?;
+    }
+    Ok(())
+}
+
+pub fn try_push<T>(v: &mut Vec<T>, x: T) -> Result<(), Refused> {
+    grow(v, 1)?;
+    v.push(x);
+    Ok(())
 }
 
 /// The lines over the columns `s` is read for, the apron's too: a column the
@@ -114,7 +117,8 @@ impl TileSource<'_> {
         let on_tile = (0..=last).contains(&tx) && (0..=last).contains(&ty);
         let cell = if on_tile { tile.cells[GROUND.cell_index(tx as u32, ty as u32) as usize] } else { ground::BASE };
         let center = |v: i64| (v as f64 + 0.5) / n as f64;
-        (cell, ground_ele_at(tile.ele, center(x), center(y)) as i32)
+        // A height h is cells up to h − 1 of ground, its surface at z = h.
+        (cell, bicubic(tile.ele, center(x), center(y)) as i32)
     }
 }
 
@@ -133,13 +137,14 @@ pub const fn beside_index(qx: i64, qy: i64) -> usize {
 /// Apron cells are read from what their own tile is drawn from, as the chunk
 /// beside draws it, so the face mask sees what is on screen; they are never painted or emitted.
 pub struct ChunkSample {
-    /// Packed 0xSS_RRGGBB.
-    pub material: Vec<u32>,
-    pub layer_idx: Vec<u8>,
+    /// What each column's ground is drawn as: its look, or a way's at grade.
+    pub block: Vec<GroundId>,
     /// In cells; a column's top is one below it.
     pub ele: Vec<i32>,
     pub floor: i32,
-    /// Columns a row, its own and the apron's (`run.rs` `apron_col`).
+    /// The floor of the ground alone, before what is placed lowers it.
+    ground_floor: i32,
+    /// Columns a row, its own and the apron's (`apron_col`).
     pub span: u32,
     /// Its cells a leaf cell's side: past the leaves, a way's slab stays a leaf cell thick.
     scale: i32,
@@ -157,8 +162,7 @@ pub struct ChunkSample {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Under {
     pub span: [i32; 2],
-    pub material: u32,
-    pub layer: u8,
+    pub block: GroundId,
 }
 
 /// `lo` up to `hi` exclusive, in cells.
@@ -166,33 +170,40 @@ pub struct Under {
 pub struct Over {
     pub lo: i32,
     pub hi: i32,
-    pub material: u32,
-    pub layer: u8,
-}
-
-impl Default for ChunkSample {
-    fn default() -> Self {
-        ChunkSample {
-            material: vec![0; COL_SPAN2],
-            layer_idx: vec![0; COL_SPAN2],
-            ele: vec![0; COL_SPAN2],
-            floor: 0,
-            span: COL_SPAN,
-            scale: 1,
-            over_at: vec![0; COL_SPAN2 + 1],
-            over: Vec::new(),
-            under: vec![Under::default(); COL_SPAN2],
-            look: vec![ground::BASE; COL_SPAN2],
-            crossing: Vec::new(),
-        }
-    }
+    pub block: GroundId,
 }
 
 impl ChunkSample {
+    /// Room for `span` columns a row at most.
+    pub fn of_span(span: u32) -> ChunkSample {
+        let n = (span * span) as usize;
+        ChunkSample {
+            block: vec![ground::BASE; n],
+            ele: vec![0; n],
+            floor: 0,
+            ground_floor: 0,
+            span,
+            scale: 1,
+            over_at: vec![0; n + 1],
+            over: Vec::new(),
+            under: vec![Under::default(); n],
+            look: vec![ground::BASE; n],
+            crossing: Vec::new(),
+        }
+    }
+
+    /// The ground's floor, and under `lowest` too, as under the lowest
+    /// surface: what one composition of what is placed asks of it.
+    pub fn lower_floor(&mut self, lowest: i32) {
+        self.floor = match (self.ground_floor, lowest) {
+            (i32::MIN, _) | (_, i32::MAX) => self.ground_floor,
+            (floor, lowest) => floor.min(lowest - TERRAIN_Z_MARGIN * self.scale),
+        };
+    }
+
     /// Each cell as its source draws it (`TileSource::cell_at`). `span`
     /// columns a row, the apron's among them.
     pub fn read(&mut self, around: &Around, first: [i64; 2], span: u32) -> Result<(), Refused> {
-        let tables = &*MATERIALS;
         (self.span, self.scale) = (span, 1);
         for py in 0..span {
             for px in 0..span {
@@ -207,13 +218,13 @@ impl ChunkSample {
                     },
                 };
                 let (cell, ele) = source.cell_at([x, y]);
-                self.look[i] = cell;
-                (self.material[i], self.layer_idx[i]) = tables.drawn(cell);
+                (self.look[i], self.block[i]) = (cell, cell);
                 self.ele[i] = ele;
             }
         }
         self.read_separation(around, first)?;
-        self.floor = self.floor_of();
+        self.ground_floor = self.floor_of();
+        self.floor = self.ground_floor;
         Ok(())
     }
 
@@ -263,7 +274,6 @@ impl ChunkSample {
     }
 
     fn over_of(&mut self, crossing: &mut Vec<(usize, usize, Crossing)>, per_m: f64) -> Result<(), Refused> {
-        let tables = &*MATERIALS;
         // A line over a column is all its segments sweep there; a station is one segment's,
         // so the pier is either's.
         crossing.sort_by_key(|a| (a.0, a.1));
@@ -285,46 +295,28 @@ impl ChunkSample {
             while i < crossing.len() && crossing[i].0 == col {
                 let o = crossing[i].2;
                 i += 1;
-                let Some((slab, slab_layer)) = tables.of(o.kind) else { continue };
+                if Ground::of(o.kind).is_none() {
+                    continue;
+                }
                 let ground = self.ele[col];
                 let (slab_at, pier_at) = match o.occupies(ground, per_m) {
                     Occupies::Grade => {
-                        (self.material[col], self.layer_idx[col]) = (slab, slab_layer);
+                        self.block[col] = o.kind;
                         continue;
                     }
                     Occupies::Under { span } => {
                         if span[1] - span[0] > self.under[col].span[1] - self.under[col].span[0] {
-                            self.under[col] = Under {
-                                span,
-                                material: slab,
-                                layer: slab_layer,
-                            };
+                            self.under[col] = Under { span, block: o.kind };
                         }
                         continue;
                     }
                     Occupies::Over { slab, pier } => (slab, pier),
                 };
                 let [lo, hi] = slab_at;
-                try_push(
-                    &mut self.over,
-                    Over {
-                        lo,
-                        hi,
-                        material: slab,
-                        layer: slab_layer,
-                    },
-                )?;
+                try_push(&mut self.over, Over { lo, hi, block: o.kind })?;
                 let column = crossing[col_from..].iter().take_while(|c| c.0 == col).map(|c| c.2);
-                if let (Some([lo, hi]), Some((pier, pier_layer))) = (pier_at.and_then(|p| pier_stands(p, self.look[col], column, ground, per_m)), tables.of(PIER)) {
-                    try_push(
-                        &mut self.over,
-                        Over {
-                            lo,
-                            hi,
-                            material: pier,
-                            layer: pier_layer,
-                        },
-                    )?;
+                if let Some([lo, hi]) = pier_at.and_then(|p| pier_stands(p, self.look[col], column, ground, per_m)) {
+                    try_push(&mut self.over, Over { lo, hi, block: PIER })?;
                 }
             }
             // Lowest first; a higher span keeps what two share.
@@ -360,8 +352,7 @@ impl ChunkSample {
             for px in 0..span {
                 let i = (py * span + px) as usize;
                 let j = (in_leaf(at[1], py) * i64::from(leaf.span) + in_leaf(at[0], px)) as usize;
-                self.material[i] = leaf.material[j];
-                self.layer_idx[i] = leaf.layer_idx[j];
+                self.block[i] = leaf.block[j];
                 self.look[i] = leaf.look[j];
                 self.ele[i] = leaf.ele[j] * scale;
                 let b = leaf.under[j];
@@ -380,7 +371,8 @@ impl ChunkSample {
             }
         }
         self.over_at[(span * span) as usize] = self.over.len() as u32;
-        self.floor = self.floor_of();
+        self.ground_floor = self.floor_of();
+        self.floor = self.ground_floor;
         Ok(())
     }
 
@@ -393,29 +385,21 @@ impl ChunkSample {
         Ground::of(self.look[i]).is_some()
     }
 
-    pub fn ground_runs<E>(&self, i: usize, from: i32, to: i32, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
+    pub fn ground_runs<E>(&self, i: usize, from: i32, to: i32, mut run: impl FnMut(i32, i32, GroundId) -> Result<(), E>) -> Result<(), E> {
         if !self.has_ground(i) {
             return Ok(());
         }
         let top = self.ele[i].min(to);
-        let (m, l) = (self.material[i], self.layer_idx[i]);
-        let mut part = |lo: i32, hi: i32, m: u32, l: u8| if lo.max(from) < hi { run(lo.max(from), hi - 1, m, l) } else { Ok(()) };
+        let g = self.block[i];
+        let mut part = |lo: i32, hi: i32, g: GroundId| if lo.max(from) < hi { run(lo.max(from), hi - 1, g) } else { Ok(()) };
         let b = self.under[i];
         if b.span[0] >= b.span[1] {
-            return part(from, top, m, l);
+            return part(from, top, g);
         }
         let floor = b.span[0];
-        part(from, (floor - self.scale).min(top), m, l)?;
-        part(floor - self.scale, floor.min(top), b.material, b.layer)?;
-        part(b.span[1], top, m, l)
-    }
-
-    pub fn column_runs<E>(&self, i: usize, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
-        self.ground_runs(i, self.floor, i32::MAX, &mut run)?;
-        for s in &self.over[self.over_at[i] as usize..self.over_at[i + 1] as usize] {
-            run(s.lo, s.hi - 1, s.material, s.layer)?;
-        }
-        Ok(())
+        part(from, (floor - self.scale).min(top), g)?;
+        part(floor - self.scale, floor.min(top), b.block)?;
+        part(b.span[1], top, g)
     }
 }
 

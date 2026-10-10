@@ -6,7 +6,6 @@ use super::decor::Strike;
 use super::world::World;
 use crate::layer::instance::{Instance, Source};
 use crate::layer::residency::Lines;
-use crate::layer::terrain::Drawn;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::block::object::{object_value_is_air, object_value_is_voxel};
 use pxl_spec::space::camera::grid::Tau;
@@ -24,7 +23,6 @@ use pxl_spec::space::coord::zoom::{cube, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::child_cube;
 use pxl_spec::space::hierarchy::tree::Node;
 
-use super::column::*;
 use crate::layer::Query;
 use crate::layer::*;
 
@@ -89,14 +87,12 @@ pub struct Hit {
 }
 
 /// A square across which neither the tile nor the index cell changes.
-pub(super) struct Region<'a> {
+pub(super) struct Region {
     pub(super) base: [f64; 2],
     pub(super) side: f64,
     pub(super) tile: Tile,
     /// Index bounds and whether read from the tile asked; none if nothing is resident.
     pub(super) terrain: Option<((f64, f64), bool)>,
-    /// What the tile is drawn from, which every cell walked in it reads.
-    pub(super) drawn: Option<Drawn<'a>>,
 }
 
 pub(super) fn exit(ray: &Ray, base: [f64; 2], side: f64) -> f64 {
@@ -277,7 +273,7 @@ impl<'a> World<'a> {
         })
     }
 
-    pub(super) fn region(&self, p: &V3, zoom: Zoom, lines: &mut Lines) -> Region<'a> {
+    pub(super) fn region(&self, p: &V3, zoom: Zoom, lines: &mut Lines) -> Region {
         // One index cell of the tile at `zoom`: one bound across it, the whole tile where none is known.
         let (e, cell) = (EXTENT.cell_of(zoom, &on_ground(p)), GROUND.grid_zoom(zoom));
         let line = self.terrain.seek(lines, e.tile());
@@ -294,7 +290,6 @@ impl<'a> World<'a> {
             side: units(cell_zoom),
             tile: e.tile(),
             terrain,
-            drawn: self.terrain.drawn_of(&line),
         }
     }
 
@@ -325,7 +320,7 @@ impl<'a> World<'a> {
             if let Some(s) = strike.as_mut().filter(|s| from < s.held && zoom == LEAF_ZOOM) {
                 self.strike_near(s, ray, cell);
             }
-            let hit = r.drawn.as_ref().and_then(|d| self.column(ray, cell, zoom, (from, to), d));
+            let hit = self.cell(cell, zoom, |c| c.ground_hit(ray, to)).value().flatten();
             if hit.is_some() {
                 return hit;
             }
@@ -339,56 +334,6 @@ impl<'a> World<'a> {
             from = to;
         }
         None
-    }
-
-    pub(super) fn column(&self, ray: &Ray, cell: [i64; 2], zoom: Zoom, (t0, t1): (f64, f64), d: &Drawn) -> Option<Hit> {
-        let c = self.composed_in(cell, zoom, d).value()?;
-        self.ground_column(ray, &c, t0, t1)
-    }
-
-    /// Ground hit in a column: the first leaf-tall cell the ground holds
-    /// (`holds`). Steps by cell only once under the column's ceiling.
-    pub(super) fn ground_column(&self, ray: &Ray, c: &Composed, t0: f64, t1: f64) -> Option<Hit> {
-        let (side, across) = (units(GROUND.cell()), units(GROUND.cell_zoom(c.zoom)));
-        let ([ix, iy], top) = (c.cell, c.ceiling()? as f64 * side);
-        let (za, zb) = (ray.at(t0)[2], ray.at(t1)[2]);
-        let dz = ray.direction[2];
-        let at_z = |z: f64| (z - ray.origin[2]) / dz;
-        let mut from = t0;
-        if za >= top {
-            if zb >= top {
-                return None;
-            }
-            from = at_z(top);
-        }
-        let mut cz = (ray.at(from)[2] / side).floor() as i64;
-        if from <= 0.0 && self.holds(c, cz) {
-            return None;
-        }
-        loop {
-            let leave = if dz.abs() < 1e-12 {
-                t1
-            } else {
-                let face = if dz > 0.0 { (cz + 1) as f64 * side } else { cz as f64 * side };
-                at_z(face).min(t1)
-            };
-            if from > 0.0 && self.holds(c, cz) {
-                // Through the column's side on the entry cell, else through floor or ceiling.
-                let normal = if from == t0 {
-                    wall_normal(ray, from, across)
-                } else {
-                    [0.0, 0.0, if dz > 0.0 { -1.0 } else { 1.0 }]
-                };
-                let min = [ix as f64 * across, iy as f64 * across, cz as f64 * side];
-                let max = [min[0] + across, min[1] + across, min[2] + side];
-                return Some(hit(ray, from, normal, Aabb { min, max }, Struck::Ground));
-            }
-            if leave >= t1 {
-                return None;
-            }
-            cz += if dz > 0.0 { 1 } else { -1 };
-            from = leave;
-        }
     }
 
     /// First object the ray meets, in cells of `cell_zoom`, each read through the objects' query.

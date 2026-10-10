@@ -91,8 +91,8 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: Cube) -> bool {
     }
     let Cube::Ground(look) = cube else { return false };
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
-    let Some(ground) = World::now().at(at, LEAF_ZOOM).exact() else { return false };
-    if ground.cell != look as u8 {
+    let Some(Some(surface)) = World::now().surface(at, LEAF_ZOOM).exact() else { return false };
+    if surface.block != look as u8 {
         return false;
     }
     object_value_is_air(read_state(at))

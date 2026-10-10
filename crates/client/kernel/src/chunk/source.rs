@@ -1,16 +1,12 @@
 // pxl-kernel/chunk/source.rs
 
-//! Which written cubes a chunk draws, and what of the objects it draws: the
-//! catalog numbers it reads, so a chunk is remade only where they differ.
+//! Which written cubes a chunk draws: where the objects are written, a chunk
+//! that draws them is remade.
 
 use crate::layer::Query;
-use pxl_render::mesh::run::APRON;
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::aabb::Aabb;
 
-use std::collections::HashMap;
-
-use crate::chunk::build::runs_of;
 use crate::chunk::Chunk as PyramidChunk;
 use crate::layer::object::preview::RenderEdits;
 use crate::layer::object::store::Store;
@@ -62,43 +58,35 @@ fn reach(k: PyramidChunk) -> Aabb {
 
 /// Whether `k` draws the cube at `e`.
 pub fn draws(k: PyramidChunk, e: EntryAt) -> bool {
+    draws_in(k, &cube(e.zoom(), e.at()))
+}
+
+/// Whether `k` draws anything in `b`.
+fn draws_in(k: PyramidChunk, b: &Aabb) -> bool {
     let r = reach(k);
-    let b = nearest_box(&cube(e.zoom(), e.at()), (r.min[0] + r.max[0]) / 2.0);
+    let b = nearest_box(b, (r.min[0] + r.max[0]) / 2.0);
     (0..3).all(|a| b.min[a] < r.max[a] && b.max[a] > r.min[a])
 }
 
-/// What a chunk's runs draw of the objects: the catalog number at every
-/// place of their grid (`Cells::column_cells`), VOID where none is listed. A place
-/// and its number are one word, sorted; none where the heap refused it.
-#[derive(Clone, PartialEq, Eq)]
-pub struct Drawn {
-    runs: Zoom,
-    cells: Vec<u64>,
+/// Where the objects were written since the chunks last compared their sources.
+static WRITTEN: Global<Vec<Aabb>> = Global::new();
+
+/// The objects were written in `regions`: a chunk that draws any of them is
+/// remade, whether or not what it folds them to changed.
+pub fn objects_written(regions: &[Aabb]) {
+    WRITTEN.get(Vec::new).extend_from_slice(regions);
+    chunk_sources_changed();
 }
 
-impl Drawn {
-    /// The zoom the chunk's runs are written at.
-    pub fn runs(&self) -> Zoom {
-        self.runs
-    }
+/// Whether the objects were written where `k` draws, since the chunks last
+/// compared their sources (`compared`).
+pub fn written_in(k: PyramidChunk) -> bool {
+    WRITTEN.get(Vec::new).iter().any(|b| draws_in(k, b))
 }
 
-pub fn objects_drawn(store: &Store, k: PyramidChunk) -> Option<Drawn> {
-    let runs = runs_of(store, k);
-    let mut cells = Vec::new();
-    let objects = store.read(k.node(), runs).value()?;
-    let (from, _) = objects.column_cells(i64::from(APRON));
-    let mut folded = HashMap::new();
-    objects.fold(i64::from(APRON), None, &mut folded).ok()?;
-    cells.try_reserve_exact(folded.len()).ok()?;
-    // X and Y within the grid fit a byte each (`Cells::column_cells`); Z is the lane's.
-    cells.extend(
-        folded
-            .into_iter()
-            .map(|([x, y, z], v)| (x - from[0]) as u64 | ((y - from[1]) as u64) << 8 | u64::from(z as i32 as u32) << 16 | u64::from(v as u16) << 48),
-    );
-    cells.sort_unstable();
-    Some(Drawn { runs, cells })
+/// The chunks compared their sources.
+pub fn compared() {
+    WRITTEN.get(Vec::new).clear();
 }
 
 /// One leaf a chunk's decor stands among: its zoom, catalog number and place

@@ -8,15 +8,18 @@
 //! may differ at a chunk's edge.
 
 use pxl_spec::block::decor::{Decor, DECORS};
+use pxl_spec::block::stand::Block;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::coord::pvf3::pvf3;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::zoom::{base_of, index_of};
+use pxl_spec::space::coord::zoom::{base_of, index_of, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use super::ray::{Detail, Ray};
-use super::world::{covers, Cover, World};
+use super::support::block_in;
+use super::world::World;
 use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Source};
 use crate::layer::object::meta::placed;
@@ -48,6 +51,19 @@ pub(super) struct Strike<'a> {
 }
 
 impl<'a> World<'a> {
+    /// Whether the ground grows `decor` standing in the leaf block `at`, as
+    /// the tile zoom `zoom`'s chunks draw it: the block void, and the one
+    /// under it ground `decor` grows on. Air placed there or under it is no void.
+    pub fn grows(&self, decor: &Decor, [x, y, z]: [i64; 3], zoom: Zoom) -> bool {
+        let half = units(GROUND.cell()) / 2.0;
+        let base = base_of(GROUND.cell(), [x, y, z]);
+        let center = pvf3::gather(pvf3::X(&base) + pvf3::from_real(half), pvf3::Y(&base) + pvf3::from_real(half), pvf3::Z(&base));
+        // The block and the one under it, from one composition of their column.
+        let (at, under) = (pvf3::to_real(pvf3::Z(&base)) + half, pvf3::to_real(pvf3::Z(&base)) - half);
+        let blocks = self.runs_at(&center, zoom, |runs, _| [at, under].map(|z| block_in(runs, z)));
+        matches!(blocks.value(), Some([None, Some(Block::Ground(g))]) if decor.allows(g))
+    }
+
     /// What the ground grows of `decor` standing in the leaf cell `at` lies
     /// in; none where it grows nothing there or its leaf tile is not resident.
     pub fn grown(&self, decor: &Decor, at: &Pvf3) -> Option<Instance> {
@@ -123,7 +139,7 @@ impl<'a> World<'a> {
         for decor in &DECORS {
             let Some(i) = grown_at(decor, &view, cell, leaf.in_tile()) else { continue };
             let Source::Ground(at) = i.source else { continue };
-            if !covers(Cover::leaf(self.objects, at)) {
+            if self.grows(decor, at, LEAF_ZOOM) {
                 meet(s, ray, i);
             }
         }

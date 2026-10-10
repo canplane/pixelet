@@ -4,23 +4,18 @@
 //! decision about a chunk is the table's (table.rs); this acts on what it asks.
 
 mod bake;
-mod read;
 mod run;
 mod shape;
 
 pub use bake::BAKE_BYTES;
-pub(crate) use read::{ground_of, leaf_of};
-pub use shape::{draws_as_held, runs_of};
+pub use shape::draws_as_held;
 
-use bake::{carve_into, BakeJob};
+use bake::BakeJob;
 use run::{RunHold, RunsJob, RUN_SETS};
-use shape::*;
 
+use crate::query::{Blocks, Composer};
 use pxl_render::mesh::chunk::{BakeContext, Heights};
-use pxl_render::mesh::paint::column::Stands;
-use pxl_render::mesh::paint::terrain::sample::ChunkSample;
 use pxl_render::mesh::run::RunWriter;
-use std::collections::HashMap;
 
 use crate::Build;
 
@@ -126,12 +121,9 @@ pub struct Builder {
     direct: RunWriter,
     bake: BakeContext,
     bake_job: Option<BakeJob>,
-    sample: ChunkSample,
-    /// A leaf chunk's, which a chunk past the leaves refines.
-    leaf_sample: ChunkSample,
+    composer: Composer,
+    blocks: Blocks,
     run_holds: [Option<RunHold>; RUN_SETS],
-    folded: HashMap<[i64; 3], u32>,
-    stands: Vec<(u32, Stands)>,
     runs_job: Option<RunsJob>,
     pub stat: BuildStat,
 }
@@ -143,11 +135,9 @@ impl Default for Builder {
             direct: RunWriter::new(),
             bake: BakeContext::default(),
             bake_job: None,
-            sample: ChunkSample::default(),
-            leaf_sample: ChunkSample::default(),
+            composer: Composer::default(),
+            blocks: Blocks::default(),
             run_holds: [const { None }; RUN_SETS],
-            folded: HashMap::new(),
-            stands: Vec::new(),
             runs_job: None,
             stat: BuildStat::default(),
         }

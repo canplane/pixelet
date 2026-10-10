@@ -242,7 +242,7 @@ fn main() {
         }
         p = p.parent();
     }
-    let ground = World::new(&tiles.residency, &store).at(&point(x, y), LEAF_ZOOM).value().and_then(|g| g.top()).unwrap_or(0.0);
+    let ground = World::new(&tiles.residency, &store).surface(&point(x, y), LEAF_ZOOM).value().flatten().map_or(0.0, |s| s.top);
     println!("at {lon}, {lat}: ground {ground:.1} u, tiles from {}", tiles.server);
 
     for view in VIEWS {

@@ -10,9 +10,10 @@ use xpute_kit::math::scalar::round;
 
 use crate::look::color::{linear, srgb};
 use crate::mesh::paint::palette::layer_mean;
-use crate::mesh::run::{OwnedRunSet, RunSet, COL_SPAN};
+use crate::mesh::run::{OwnedRunSet, RunSet};
 use crate::mesh::word::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, Side, NO_LAYER, SUB_CELL_NONE};
-use crate::mesh::{grow, Refused};
+use pxl_spec::block::sample::COL_SPAN;
+use pxl_spec::block::sample::{grow, Refused};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;

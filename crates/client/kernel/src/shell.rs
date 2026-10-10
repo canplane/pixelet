@@ -179,5 +179,5 @@ fn m_per_px() -> f64 {
 /// The source has nothing under `at`: the ground cell there, as the finest
 /// tile held over it gives it, is void.
 fn void_under(at: &Pvf3) -> bool {
-    crate::query::World::now().at(at, LEAF_ZOOM).value().is_some_and(|g| g.top().is_none())
+    crate::query::World::now().surface(at, LEAF_ZOOM).value().is_some_and(|s| s.is_none())
 }

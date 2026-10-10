@@ -1,16 +1,51 @@
-// pxl-render/mesh/paint/terrain/elevation.test.rs
+// pxl-spec/block/sample.test.rs
 
-use pxl_spec::space::layer::lattice::TILE_CELLS;
+use crate::bake::constant::ELE_PADDED_SPAN;
+use crate::block::cube::sentinel;
+use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use super::*;
+
+/// A tile past the coverage gives no surface, so it puts no floor under
+/// what is placed there.
+#[test]
+fn a_chunk_with_no_surface_has_no_ground_and_no_floor() {
+    let cells = vec![sentinel::void; (TILE_CELLS * TILE_CELLS) as usize];
+    let ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
+    let separation = Separation::default();
+    let tile = Tile::new(LEAF_ZOOM, 0);
+    let own = TileSource {
+        tile: TileView {
+            cells: &cells,
+            ele: &ele,
+            separation: &separation,
+        },
+        frame: Frame::of(tile),
+        origin: [0, 0],
+        n: 1,
+    };
+    let mut sample = ChunkSample::of_span(COL_SPAN);
+    sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN).unwrap();
+    assert_eq!(sample.floor, i32::MIN);
+    let i = apron_col(COL_SPAN, 0, 0) as usize;
+    assert!(!sample.has_ground(i));
+    let mut runs = 0;
+    sample
+        .ground_runs(i, sample.floor, i32::MAX, |_, _, _| {
+            runs += 1;
+            Ok::<(), ()>(())
+        })
+        .unwrap();
+    assert_eq!(runs, 0);
+}
 
 /// A folded tile against a baked one differs only in the outermost padding
 /// sample, the bicubic's first tap (weight at most ~0.074), read by rim cells.
 /// The step it leaves must sit under a chunk's one-cell skirt.
 #[test]
 fn a_tile_folded_without_its_ring_seams_under_a_cell() {
-    use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
-    use pxl_spec::bake::fold::fold_ele;
+    use crate::bake::constant::{ELE_PAD, TILE_ELE_SPAN};
+    use crate::bake::fold::fold_ele;
 
     let padded = ELE_PADDED_SPAN as usize;
     let inner = TILE_ELE_SPAN as i64;
@@ -40,7 +75,7 @@ fn a_tile_folded_without_its_ring_seams_under_a_cell() {
     let (mut worst_rim, mut worst_inside) = (0i32, 0i32);
     for ty in 0..span {
         for tx in 0..span {
-            let d = (sample_ele(&baked, tx, ty) as i32 - sample_ele(&folded, tx, ty) as i32).abs();
+            let d = (bicubic(&baked, f64::from(tx) + 0.5, f64::from(ty) + 0.5) as i32 - bicubic(&folded, f64::from(tx) + 0.5, f64::from(ty) + 0.5) as i32).abs();
             let at_rim = tx < rim || ty < rim || tx >= span - rim || ty >= span - rim;
             let worst = if at_rim { &mut worst_rim } else { &mut worst_inside };
             *worst = (*worst).max(d);

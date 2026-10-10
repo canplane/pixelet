@@ -73,7 +73,6 @@ struct Sources {
 struct Cells {
     blocks: HashMap<Chunk, Block>,
     scratch: Option<DecorScratch>,
-    folded: HashMap<[i64; 3], u32>,
     /// Kept so a settled turn asks the heap for nothing.
     mounted: Vec<(Chunk, bool, bool)>,
     gone: Vec<Chunk>,
@@ -142,11 +141,6 @@ fn build(c: &mut Cells, chunk: Chunk, decors: &[Decor], store: &Store, draw: &mu
     let own_view = terrain.read(over.node(), over.cell_zoom()).value()?.view();
     // Interaction reads what is drawn as it is held, never a fold of it.
     let own = draws_as_held(chunk, GROUND.cell());
-    let target = GROUND.cell_zoom(zoom);
-    match target < GROUND.cell() && sources.shown {
-        true => store.read(over.node(), target).value()?.fold(0, sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
-        false => c.folded.clear(),
-    }
     let ground = Ground {
         source: own_view,
         zoom,
@@ -155,7 +149,6 @@ fn build(c: &mut Cells, chunk: Chunk, decors: &[Decor], store: &Store, draw: &mu
         tx0,
         ty0,
         side,
-        folded: (target < GROUND.cell()).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
     let built = DecorBuild::build(scratch, decors, Some(&ground), sources.hide.filter(|_| own), store, sources.shown, chunk)?;

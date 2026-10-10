@@ -67,10 +67,10 @@ fn companion_props() -> Option<CompanionProps> {
 /// The tool's ghost, drawn by the scene.
 fn ghost_step() {
     use crate::control::interaction::ghost::{ghost, Ghost};
-    let changed = kernel().parts().map(|(mut build, _, scene, draw)| match ghost() {
+    let changed = kernel().parts().map(|(_, _, scene, draw)| match ghost() {
         Ghost::None => scene.ghost.clear(draw),
         Ghost::Decor { at, group, rotation, scale } => scene.ghost.set_decor(draw, at, group, rotation as f32, scale as f32),
-        Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(&mut build, draw, at, size, value, rgb, coplanar),
+        Ghost::Box { at, size, value, rgb, coplanar } => scene.ghost.set_box(draw, at, size, value, rgb, coplanar),
     });
     if changed == Some(true) {
         request_world_tick();
@@ -356,6 +356,9 @@ fn changes_step() {
     DivisionTile::residency().take_moved(divisions);
     crate::layer::object::store::take_written(written);
     let shared = !ground.is_empty() || !written.is_empty();
+    if !written.is_empty() {
+        crate::chunk::source::objects_written(written);
+    }
     if shared {
         crate::chunk::source::chunk_sources_changed();
         crate::chunk::domain::moved(ground.iter().map(|p| p.region()).chain(written.iter().copied()));

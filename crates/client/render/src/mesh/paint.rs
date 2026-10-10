@@ -5,4 +5,3 @@
 pub mod column;
 pub mod object;
 pub mod palette;
-pub mod terrain;

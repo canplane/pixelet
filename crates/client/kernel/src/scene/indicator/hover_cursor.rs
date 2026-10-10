@@ -6,12 +6,11 @@
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
 use pxl_render::mesh::chunk::{on_whole_units, write_lone_box, Heights, FINE_BOX_WORDS};
+use pxl_render::mesh::paint::object::PAINTER;
 use pxl_render::mesh::word::NO_LAYER;
 use pxl_spec::space::coord::v3::V3;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
-
-use crate::Build;
 
 pub const GHOST_OPACITY: f32 = 0.5;
 
@@ -49,9 +48,8 @@ pub struct GhostDraw {
 impl GhostDraw {
     /// Painted as `state` paints, or as untextured `rgb` where it paints
     /// nothing. Whether what is drawn changed.
-    #[allow(clippy::too_many_arguments)]
-    pub fn set_box(&mut self, build: &mut Build, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) -> bool {
-        let (rgb, layer) = match build.painter.material_of(state) {
+    pub fn set_box(&mut self, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) -> bool {
+        let (rgb, layer) = match PAINTER.material_of(state) {
             Some((m, l)) => ([(m >> 16) as u8, (m >> 8) as u8, m as u8], l),
             None => ([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8),
         };
