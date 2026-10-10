@@ -36,18 +36,12 @@ runs:
           | tar xz -C /opt
         echo "/opt/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
 
-    # Keyed on the lockfiles, so a run that changed no dependency restores
-    # exactly and a run that changed one still starts from the nearest
-    # earlier tree rather than from nothing.
-    - uses: actions/cache@v5
+    # The registry and the dependencies' builds, not the workspace's own,
+    # which every run rebuilds anyway; keyed on the lockfile and the toolchain.
+    - uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry/index
-          ~/.cargo/registry/cache
-          ~/.cargo/git/db
-          crates/target
-        key: ${{ inputs.cache }}-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('crates/Cargo.lock') }}
-        restore-keys: ${{ inputs.cache }}-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+        workspaces: crates -> target
+        shared-key: ${{ inputs.cache }}
 
     - uses: actions/cache@v5
       with:

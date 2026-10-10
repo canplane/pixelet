@@ -24,9 +24,11 @@ skills in [.agents/skills/](./.agents/skills/).
 root; README.md lists the tasks. The one `package.json` is the device app's
 (`apps/native`), where Expo and Metro find packages as npm lays them out.
 
-**`deno task check` is the gate before a push to `deploy`**, which is how
-publishing happens ([infra/README.md](./infra/README.md) §5), or when asked;
-`check:diff` checks only what changed. A kernel change reaches the running
+**A push to `deploy` waits on `check:ship` and the tests** over what changed
+since the last deploy ([infra/README.md](./infra/README.md) §5), which is
+how publishing happens. `deno task check` is everything — style, the device,
+the bakes, xpute too — run before a commit or when asked; `check:diff` is it
+over what changed. A kernel change reaches the running
 dev server through `deno task build:wasm`. main is not built by CI.
 
 **Never `down -v` the geo database** (`pixelet-db-geo`): the volume is a

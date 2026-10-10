@@ -57,16 +57,22 @@
     "spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec -- --write",
     "build:wasm": "deno task --cwd apps/web build:wasm",
 
-    // The gate, and what it is made of.
-    "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:native && deno task check:xpute && deno task check:rust && deno task check:spec",
+    // `check` is everything; `check:ship` is what a deploy waits on — what it
+    // ships compiles, lints and is what its JSON writes. Style, the device,
+    // the bakes, the tests' own code and xpute's checks are local.
+    "check": "deno task check:style && deno task check:ship && deno task check:native && deno task check:host && deno task check:xpute",
+    "check:ship": "deno task check:toolchain && deno task check:web && deno task check:rust && deno task check:spec",
+    "check:style": "deno task check:fmt && deno task check:rules && deno task lint",
     "check:diff": "./script/check-diff.ts",
-    "check:fmt": "deno fmt --check",
+    "check:fmt": "deno fmt --check && cargo fmt --manifest-path crates/Cargo.toml --all --check",
     "check:web": "deno task --cwd apps/web check",
     // check:web never reaches the device's own modules.
-    "check:native": "deno check apps/native/src",
+    "check:native": "deno check apps/native/src && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings",
     "check:xpute": "deno task --cwd xpute check",
-    // The wasm32 pass builds no `.test.rs`; the host pass does.
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-linux-android -p pxl-native --no-default-features -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
+    // What ships: the kernel's module in both builds, and the servers.
+    "check:rust": "cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-api -- -D warnings",
+    // What runs here alone: the tests' code, the bakes and the tools.
+    "check:host": "cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings",
     // A Rust version written twice is a binary built on a compiler the gate never ran.
     "check:toolchain": "./script/check-toolchain.ts",
     "check:rules": "./script/check-rules.ts",
@@ -90,7 +96,7 @@
 
     // The rest.
     "export:xpute": "./xpute/script/export.ts",
-    // Only a hand deploy writes apps/web/.build_number, so it is refreshed before vite reads it.
+    // apps/web/.build_number is written by any read of the build log, so it is refreshed before vite reads it.
     "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labeled from the cached number\" >&2'"
   },
 
