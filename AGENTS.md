@@ -480,9 +480,11 @@ performance; contracts outside the tree; effort; diff size.
 - **Commit only when asked, one commit per thing worth reverting or reading
   on its own** — several fixes in one layer together, an infra repair and an
   unrelated tool apart; never one per round trip.
-- **A kept branch is named for why it is kept.** `original/<date>-<name>` is
-  the history a squash replaced, pushed before it and never moved, as git
-  keeps a rewritten branch's under `refs/original/`;
+- **A kept branch is named for why it is kept.** `original` is main's
+  history before its squashes, as git keeps a rewritten branch's under
+  `refs/original/`: before a squash, the history it replaces is merged onto
+  it, the branch first, so `git log --first-parent original` reads a merge a
+  squash; the branches that once kept them each open with a commit naming them;
   `checkpoint/<date>-<name>` is a point on main worth returning to;
   `archive/<date>-<name>` is work set aside rather than merged.
 - **A commit's subject is `type(scope): a sentence`**: a Conventional
