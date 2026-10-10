@@ -1,0 +1,29 @@
+{
+  "$doc": [
+    "What each line of the world gizmo is drawn in, so the lines and the",
+    "shell's legend of them read one color: the frame's marks about the focus",
+    "(scene/indicator/frame_gizmo.rs) and the coverage's over the ground",
+    "(scene/indicator/coverage_gizmo.rs). Each #rrggbb in sRGB, dashed where a",
+    "dashed line draws it: a ring of the frame, a stretch of the coverage."
+  ],
+  "frame": {
+    "$type": "rgb",
+    "$doc": "About the focus; the rings are dashed.",
+    "focus": { "rgb": "#000000", "dashed": false, "$doc": "The focus and the ground cell it floors to." },
+    "level": { "rgb": "#000000", "dashed": true, "$doc": "The level ring." },
+    "forward": { "rgb": "#ff0000", "dashed": true, "$doc": "The upright ring facing the screen, and the view's forward on it." },
+    "north": { "rgb": "#00ff00", "dashed": true, "$doc": "The upright ring through north, and north on it." },
+    "up": { "rgb": "#0000ff", "dashed": false, "$doc": "Straight up." }
+  },
+  "coverage": {
+    "$type": "rgb",
+    "$doc": "Over the ground, lowest first: a stretch shared by several is drawn in the last.",
+    "drawn": { "rgb": "#ffffff", "dashed": false, "$doc": "A drawn piece." },
+    "drawn_from_floor": { "rgb": "#00ffff", "dashed": false, "$doc": "A drawn piece read from the floor's tile alone." },
+    "unbuilt": { "rgb": "#ffff00", "dashed": true, "$doc": "A goal piece with a tile on its line, its mesh not yet built." },
+    "floor_only": { "rgb": "#ff00ff", "dashed": true, "$doc": "A goal piece only the floor's tile can build." },
+    "no_tile": { "rgb": "#ff0000", "dashed": true, "$doc": "A goal piece with no tile on its line." },
+    "tile": { "rgb": "#ff9500", "dashed": false, "$doc": "A drawn piece's tile." },
+    "shard": { "rgb": "#7cff7c", "dashed": false, "$doc": "A drawn piece's shard, the unit the world's data is kept in." }
+  }
+}

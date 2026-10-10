@@ -20,7 +20,9 @@
     "puck_zone",
     "puck_beacon",
     "badge",
-    "debug"
+    "debug",
+    "chunk_coarse",
+    "impostor"
   ],
   "LIMITS": {
     "$type": "u32",
@@ -93,8 +95,6 @@
     "slot_wait_zooms": 1,
     "slot_chained": 1,
     "cap_commit_left": 1,
-    "cap_mount_left": 1,
-    "cap_mount_full": 1,
     "cap_record_refused": 1,
     "turn_effects_ms": 1,
     "turn_stage_ms": 1,
@@ -163,8 +163,6 @@
     ],
     "cap": [
       "cap_commit_left",
-      "cap_mount_left",
-      "cap_mount_full",
       "cap_record_refused"
     ],
     "work": [
@@ -389,13 +387,6 @@
       "evicted": 1,
       "refined": 1,
       "changes_peak": 1
-    },
-    "heap": {
-      "$doc": [
-        "The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for."
-      ],
-      "used_mb": 1,
-      "requests": 1
     },
     "view": {
       "$doc": [

@@ -6,7 +6,7 @@
  * their hue, so two uses sharing a value can change apart.
  */
 
-import { FAMILY, MONO } from "@platform/typeface.ts";
+import { FAMILY } from "@platform/typeface.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
 export function alpha(hex: string, a: number): string {
@@ -112,10 +112,6 @@ export const halo = { reach: 2, ring: 0.3 } as const;
 export const haloRings: readonly number[] = Array.from({ length: halo.reach }, (_, i) => halo.reach - i);
 
 export const hairline = alpha(color.labelGray, 0.1);
-
-export const font = {
-  mono: MONO,
-};
 
 /** Apple's text styles, a step smaller, since the chrome floats over a map. */
 export const weight = { regular: "400", medium: "500", semibold: "600" } as const;

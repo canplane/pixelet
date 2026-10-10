@@ -15,7 +15,7 @@ import { BOUND, failText } from "./report.ts";
 import type { FrameSummary, Gauge, Spread } from "./view.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
 import { kernel_memory } from "@/kernel/shell.ts";
-import { alpha, color, font } from "@/shared/ui/theme.ts";
+import { alpha, color, textStyle } from "@/shared/ui/theme.ts";
 
 const CENSUS_ROWS = 5;
 const SPAN_ROWS = 3;
@@ -47,7 +47,7 @@ export const Title = ({ children, end, first }: { children: string; end?: ReactN
   </View>
 );
 
-const Head = ({ children, end }: { children: string; end?: ReactNode }) => (
+export const Head = ({ children, end }: { children: string; end?: ReactNode }) => (
   <View style={gauge.head}>
     <Text style={[gauge.text, gauge.headText]}>{children}</Text>
     <View style={gauge.headLine} />
@@ -63,17 +63,18 @@ const metres = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
 
 /** Live: where the camera and the pointer are now, not over the window. */
-export function ProfilerView({ v }: { v: Gauge["view"] }) {
+export function ProfilerView({ v, q }: { v: Gauge["view"]; q: Gauge["quality"] }) {
   const hovering = !Number.isNaN(v.hover_x);
   return (
     <>
-      <Head>camera</Head>
+      <Head>Camera</Head>
       <Row k="distance" v={`${n1(v.dist)} u`} />
       <Row k="polar/azimuth" v={`${n1(deg(v.polar))}°/${n1(deg(v.azimuth))}°`} />
-      <Row k="τ" v={or(v.tau)} />
+      {/* The ladder's step over the screen's target, and the step it settled on. */}
+      <Row k="τ · step/star" v={`${or(v.tau)} · ${q.step}/${q.star}`} />
       <Row k="center" v={geo(v.center_lat, v.center_lon)} />
       <Row k="center altitude" v={metres(v.center_z)} />
-      <Head>pointer</Head>
+      <Head>Pointer</Head>
       <Row k="hover (u)" v={hovering ? `${Math.floor(v.hover_x)}, ${Math.floor(v.hover_y)}, ${Math.floor(v.hover_z)}` : "-"} />
       <Row k="hover" v={geo(v.hover_lat, v.hover_lon)} />
       <Row k="hover altitude" v={metres(v.hover_alt)} />
@@ -89,7 +90,7 @@ export function ProfilerRec({ rec }: { rec: Gauge["rec"] }) {
       <View style={gauge.row}>
         <View style={gauge.recState}>
           <View style={[gauge.recDot, rec.recording && gauge.recDotOn]} />
-          <Text style={[gauge.text, rec.recording && gauge.warn]}>{rec.recording ? "recording" : "stopped"}</Text>
+          <Text style={[gauge.text, rec.recording && gauge.warn]}>{rec.recording ? "Recording" : "Stopped"}</Text>
         </View>
         <Text style={gauge.text}>{`${(rec.elapsed_ms / 1000).toFixed(1)} s`}</Text>
       </View>
@@ -112,8 +113,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
       {f === null && <Note>no frames sampled yet</Note>}
       {f !== null && (
         <>
-          <Head>frame/gpu</Head>
-          <Row k="frame p50/p95" v={`${n1(f.dt.p50)}/${n1(f.dt.p95)} ms`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
+          <Head>Frame/GPU</Head>
+          <Row k="frame p50/p95" v={`${n1(f.dt.p50)}/${n1(f.dt.p95)} ms`} />
           <Row k="frame max" v={`${n1(f.dt.max)} ms`} warn={f.dt.max > LONG_FRAME_MS} />
           <Row k="missed/moving" v={`${f.missed}/${f.moving}`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
           <Row k="budget/frame" v={`${n1(f.last.budget_ms)}/${n1(f.last.frame_ms)} ms${f.last.settled ? " still" : ""}`} />
@@ -142,15 +143,15 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
             />
           )}
 
-          <Head>draw/lod</Head>
-          <Row k="chunks/in view/pending" v={`${f.last.lod_chunks}/${f.last.lod_in_frustum}/${f.last.lod_pending}`} warn={f.last.lod_pending > 32} />
+          <Head>Draw/LOD</Head>
+          <Row k="chunks/in view/pending" v={`${f.last.lod_chunks}/${f.last.lod_in_frustum}/${f.last.lod_pending}`} />
           <Row
             k="off-view · oldest off/in"
             v={`${f.last.lod_offscreen_pending} · ${round(f.last.lod_oldest_release_ms)}/${round(f.last.lod_oldest_visible_ms)} ms`}
             warn={Math.max(f.last.lod_oldest_release_ms, f.last.lod_oldest_visible_ms) > STARVED_MS}
           />
           <Row
-            k="moves hidden/uncovered/unready"
+            k="built hidden/refused/waiting"
             v={`${round(f.last.stale_hidden)}/${round(f.last.stale_uncovered)}/${round(f.last.stale_unready)}`}
           />
           <Row
@@ -158,27 +159,22 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
             v={`${round(f.last.slot_waits)}/${round(f.last.slot_chained)} ${zoomsText(f.last.slot_wait_zooms)}`}
             warn={f.last.slot_waits > 0}
           />
-          {
-            /* `full`: the mount pass stopped on a full table rather than its own
-                          cap, i.e. a number is too small. */
-          }
           <Row
-            k="room commit/mount/page"
-            v={`${round(f.last.cap_commit_left)}/${round(f.last.cap_mount_left)}${f.last.cap_mount_full ? " full" : ""}/${round(f.last.cap_record_refused)}`}
-            warn={f.last.cap_mount_full > 0 || f.last.cap_record_refused > 0}
+            k="commit room/terrain refused"
+            v={`${round(f.last.cap_commit_left)}/${round(f.last.cap_record_refused)}`}
+            warn={f.last.cap_record_refused > 0}
           />
           <Row k="draws/triangles" v={`${f.last.draw_calls}/${tris(f.last.triangles)}`} />
           {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
           {heaviest(f.zoom_tris.map((t, k) => ({ k, t })), (r) => r.t, ZOOM_ROWS).map((r) => <Row key={r.k} k={`  ${zoomName(r.k)} triangles`} v={tris(r.t)} />)}
-          <Row k="fill" v={valueText("px", f.last.px)} warn={f.last.px > 12e6} />
+          <Row k="world surface" v={valueText("px", f.last.px)} />
           <Row k="bakes/runs per s" v={`${round(f.backlogPerS[1])}/${round(f.backlogPerS[0])}`} />
           <Row k="faces kept" v={`${pct(kept, possible)}%`} />
         </>
       )}
 
-      <Head>requests</Head>
+      <Head>Requests</Head>
       {f !== null && <Row k="queued terrain/place" v={`${f.last.q_terrain}/${f.last.q_place}`} warn={f.last.q_terrain + f.last.q_place > 12} />}
-      {f !== null && <Row k="ring answers/held peak" v={`${f.last.ring_cq_peak}/${f.last.ring_held_peak}`} warn={f.last.ring_held_peak > 0} />}
       {g.tasks.length === 0 && <Note>none in the window</Note>}
       {g.tasks.map((t) => (
         <View key={t.stream}>
@@ -190,14 +186,17 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
 
       {f !== null && (
         <>
-          <Head>memory</Head>
-          <Row k="heap change" v={`${f.used_delta_mb >= 0 ? "+" : ""}${f.used_delta_mb} MB`} />
+          <Head>Door</Head>
+          <Row k="answers/held peak" v={`${f.last.ring_cq_peak}/${f.last.ring_held_peak}`} warn={f.last.ring_held_peak > 0} />
+
+          <Head>Memory</Head>
+          <Row k="heap peak change" v={`${f.used_delta_mb >= 0 ? "+" : ""}${f.used_delta_mb} MB`} />
           {
             /* `live` counts a carved run whole; `slot` is what is held. The shares
                           are computed here, not separate lanes. */
           }
           <Row
-            k="heap used/live of"
+            k="heap peak/live of"
             v={`${f.last.heap_used_mb}/${f.last.heap_live_mb} of ${f.last.heap_range_mb} MB ${pct(f.last.heap_live_mb, f.last.heap_range_mb)}%`}
             warn={f.last.heap_live_mb >= f.last.heap_range_mb * 0.8}
           />
@@ -208,12 +207,14 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           />
           <Row k="refused/largest free" v={`${f.last.heap_refusals}/${n1(f.last.heap_largest_free_mb)} MB`} warn={f.last.heap_refusals > 0} />
           <Row
-            k="tiles"
-            v={`${f.last.tiles_total}${f.last.tiles_total > 0 ? ` ${zoomName(f.last.zoom_tiles.findLastIndex((n) => n > 0))}..${zoomName(f.last.zoom_tiles.findIndex((n) => n > 0))}` : ""}`}
+            k="tiles terrain/place"
+            v={`${f.last.tiles_total}/${f.last.tiles_place}${
+              f.last.tiles_total > 0 ? ` ${zoomName(f.last.zoom_tiles.findLastIndex((n) => n > 0))}..${zoomName(f.last.zoom_tiles.findIndex((n) => n > 0))}` : ""
+            }`}
           />
           <Row k="kernel memory" v={`${round(kernel_memory().byteLength / 1048576)} MB`} />
           <Row k="buffers/arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}/${valueText("_mb", f.last.arena_mb)}`} />
-          <Row k="depth/shadow/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_shadow_mb}/${f.last.tex_layers_mb} MB`} />
+          <Row k="shadow/layers" v={`${f.last.tex_shadow_mb}/${f.last.tex_layers_mb} MB`} />
           {g.sheet.entries > 0 && <Row k="sheet" v={`${g.sheet.size}px ${g.sheet.entries} ${sheetPct}%`} warn={g.sheet.size > g.sheet.initial && sheetPct < ATLAS_SPARSE_PCT} />}
         </>
       )}
@@ -222,19 +223,20 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
 }
 
 export const gauge = StyleSheet.create({
-  text: { fontFamily: font.mono, fontSize: 10.5, lineHeight: 16, color: alpha(color.white, 0.9) },
+  // Figures a fixed width, so a column of them lines up.
+  text: { fontFamily: textStyle.caption.fontFamily, fontSize: 10.5, lineHeight: 16, fontVariant: ["tabular-nums"], color: alpha(color.white, 0.9) },
   key: { color: alpha(color.white, 0.45) },
   warn: { color: color.profilerHalt },
   row: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   head: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 2 },
   // macOS's smallest text style; smaller does not render on a 1x screen.
-  headText: { fontSize: 10, letterSpacing: 0.4, textTransform: "uppercase", color: alpha(color.white, 0.3) },
+  headText: { fontSize: 10, color: alpha(color.white, 0.3) },
   rec: { marginTop: 8 },
   recState: { flexDirection: "row", alignItems: "center", gap: 6 },
   recDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: alpha(color.white, 0.25) },
   recDotOn: { backgroundColor: color.profilerHalt },
   title: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10, paddingBottom: 3, borderBottomWidth: 1, borderBottomColor: alpha(color.white, 0.2) },
   titleFirst: { marginTop: 0 },
-  titleText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: alpha(color.white, 0.75) },
+  titleText: { fontSize: 11, fontWeight: "600", color: alpha(color.white, 0.75) },
   headLine: { flex: 1, borderTopWidth: 1, borderTopColor: alpha(color.white, 0.1) },
 });

@@ -1,8 +1,8 @@
 // pxl-kernel/scene/indicator/coverage_gizmo.rs
 
 //! The coverage gizmo (the `world_gizmo` setting), as translucent debug lines: the
-//! drawn pieces, the goal's pieces nothing drawn covers and the drawn pieces'
-//! tiles, each colored as its `Mark` says.
+//! drawn pieces, the goal's pieces nothing drawn covers, the drawn pieces'
+//! tiles and their shards, each colored as its `Mark` says.
 //! Every line is cut at each edge's ends on it, and each stretch drawn once in
 //! the highest mark over it, straight between its ends on the ground:
 //! overlaid, the lines read as none of them, and laid along the ground they
@@ -24,45 +24,53 @@ use crate::layer::residency::floor;
 use crate::layer::Base as _;
 use crate::query::World;
 use crate::scene::indicator::debug_lines::DebugLines;
+use crate::scene::indicator::gizmo_spec;
 use crate::view::frame::pose::view;
 use crate::view::observation::observation;
+use pxl_render::look::color::linear_rgb;
 use pxl_spec::space::coord::zoom::{units, within, Zoom};
 
 /// What an edge marks, lowest first: a stretch takes the highest over it.
+/// Each one's color and dash is the spec's (`gizmo_spec::coverage`).
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Mark {
-    /// White, solid: a drawn piece.
     Drawn,
-    /// Cyan, solid: a drawn piece read from the floor's tile alone.
     DrawnFromFloor,
-    /// Yellow, dashed: a goal piece with a tile on its line, its mesh not yet built.
     Unbuilt,
-    /// Magenta, dashed: a goal piece only the floor's tile can build.
     FloorOnly,
-    /// Red, dashed: a goal piece with no tile on its line.
     NoTile,
-    /// Orange: a drawn piece's tile.
     Tile,
+    Shard,
 }
 
 const MARKS: usize = Mark::ALL.len();
 
 impl Mark {
-    const ALL: [Mark; 6] = [Mark::Drawn, Mark::DrawnFromFloor, Mark::Unbuilt, Mark::FloorOnly, Mark::NoTile, Mark::Tile];
+    const ALL: [Mark; 7] = [Mark::Drawn, Mark::DrawnFromFloor, Mark::Unbuilt, Mark::FloorOnly, Mark::NoTile, Mark::Tile, Mark::Shard];
 
-    fn rgba(self) -> [f32; 4] {
+    /// The spec's color and dash, and how opaque it is drawn: a drawn piece's
+    /// faint under what marks something wrong.
+    fn look(self) -> (u32, bool, f32) {
+        use gizmo_spec::coverage::*;
         match self {
-            Mark::Drawn => [1.0, 1.0, 1.0, 0.4],
-            Mark::DrawnFromFloor => [0.0, 1.0, 1.0, 0.6],
-            Mark::Unbuilt => [1.0, 1.0, 0.0, 0.6],
-            Mark::FloorOnly => [1.0, 0.0, 1.0, 0.6],
-            Mark::NoTile => [1.0, 0.0, 0.0, 0.6],
-            Mark::Tile => [1.0, 0.3, 0.0, 0.9],
+            Mark::Drawn => (drawn::rgb, drawn::dashed, 0.4),
+            Mark::DrawnFromFloor => (drawn_from_floor::rgb, drawn_from_floor::dashed, 0.6),
+            Mark::Unbuilt => (unbuilt::rgb, unbuilt::dashed, 0.6),
+            Mark::FloorOnly => (floor_only::rgb, floor_only::dashed, 0.6),
+            Mark::NoTile => (no_tile::rgb, no_tile::dashed, 0.6),
+            Mark::Tile => (tile::rgb, tile::dashed, 0.9),
+            Mark::Shard => (shard::rgb, shard::dashed, 1.0),
         }
     }
 
+    fn rgba(self) -> [f32; 4] {
+        let (rgb, _, a) = self.look();
+        let [r, g, b] = linear_rgb(rgb).map(|c| c as f32);
+        [r, g, b, a]
+    }
+
     fn dashed(self) -> bool {
-        matches!(self, Mark::Unbuilt | Mark::FloorOnly | Mark::NoTile)
+        self.look().1
     }
 }
 
@@ -115,7 +123,9 @@ impl CoverageGizmo {
             lines.square(g.rect(), mark);
         }
         let mut tiles: Vec<Tile> = Vec::with_capacity(drawn.len());
+        let mut shards: Vec<Chunk> = Vec::with_capacity(drawn.len());
         for &d in drawn {
+            shards.push(d.ancestors().last().unwrap_or(d));
             let tile = GROUND.read_tile(d.column(), d.cell_zoom());
             let from_floor = matches!(residency.read(d.node(), d.cell_zoom()), Answer::Coarser(s, _) if floor_only(s.from));
             lines.square(d.rect(), if from_floor { Mark::DrawnFromFloor } else { Mark::Drawn });
@@ -125,6 +135,11 @@ impl CoverageGizmo {
         tiles.dedup();
         for p in tiles {
             lines.square(p.rect(), Mark::Tile);
+        }
+        shards.sort_unstable();
+        shards.dedup();
+        for s in shards {
+            lines.square(s.rect(), Mark::Shard);
         }
         self.next.clear();
         lines.lay(&mut self.next, about, &World::now());

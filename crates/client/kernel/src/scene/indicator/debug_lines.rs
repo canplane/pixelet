@@ -1,6 +1,6 @@
 // pxl-kernel/scene/indicator/debug_lines.rs
 
-//! Line segments drawn over everything, for the dev gizmos. A module built
+//! Line segments, hidden behind what stands nearer, for the dev gizmos. A module built
 //! without the gizmos holds none.
 
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_DEBUG};

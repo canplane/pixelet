@@ -11,7 +11,7 @@ use crate::io::request::{counts, credits};
 use crate::layer::Base as _;
 use crate::profiler::block::CountersBlock;
 use crate::profiler::block::TASK_PHASES;
-use crate::profiler::block::{FetchBlock, FramesBlock, HeapBlock, HeldBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
+use crate::profiler::block::{FetchBlock, FramesBlock, HeldBlock, QualityBlock, RecBlock, SheetBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock, ViewBlock};
 use crate::profiler::frame::FrameSample;
 use crate::profiler::frame::{missed, overran};
 use crate::profiler::log::window_baseline;
@@ -247,16 +247,6 @@ fn side(out: &mut [f64]) {
             evicted: evicted as f64,
             refined: refined as f64,
             changes_peak: changes_peak as f64,
-        },
-    );
-
-    let h = crate::io::host::heap_stat();
-    put(
-        out,
-        SUMMARY::heap::AT,
-        &HeapBlock {
-            used_mb: h.used as f64 / (1 << 20) as f64,
-            requests: h.requests as f64,
         },
     );
 

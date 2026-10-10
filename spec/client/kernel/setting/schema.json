@@ -225,15 +225,21 @@
       "options": "RESOLUTION_MODES",
       "section": "display"
     },
-    "debug_overlay": {
-      "$doc": ["The debug overlay: where the camera and the pointer are, and the profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`)."],
+    "view_overlay": {
+      "$doc": ["Where the camera and the pointer are, read live (profiler/summary.rs, its view section)."],
+      "kind": "toggle",
+      "default": false,
+      "section": "debug"
+    },
+    "performance_overlay": {
+      "$doc": ["The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`)."],
       "kind": "toggle",
       "default": false,
       "section": "debug"
     },
     "world_gizmo": {
       "$doc": [
-        "Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, and the tiles (scene/indicator/coverage_gizmo.rs)."
+        "Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs)."
       ],
       "kind": "toggle",
       "default": false,

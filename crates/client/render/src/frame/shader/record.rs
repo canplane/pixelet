@@ -518,11 +518,12 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[],
             &[frame(BOTH), badge_group(DEPTH)],
         ),
+        // Hidden where the world stands nearer, pulled toward the eye as the
+        // coplanar ghost is, so a line laid on the ground stays over it.
         PIPELINE_DEBUG => record(
             Head {
-                depth_compare: ALWAYS,
                 blend: ALPHA,
-                ..blended(SHADER_DEBUG, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_DEBUG, CULL_NONE, 8, 2.0)
             },
             &[vec![56, PER_INSTANCE, 3, 0, 0, F32X3, 1, 12, F32X4, 2, 28, F32X3]],
             &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM]])],

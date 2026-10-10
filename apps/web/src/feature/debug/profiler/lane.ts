@@ -27,7 +27,7 @@ export type Frame =
 /** The kernel counts by zoom: slot z, bit z or a value z is zoom z. */
 export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
 
-/** A wait this old says a demand was starved, well before aging's 16 s. */
+/** A wait this old says a demand was starved. */
 export const STARVED_MS = 2000;
 
 const ZOOM_NAMES = Array.from({ length: LIMITS.ZOOMS }, (_, z) => zoomName(z));

@@ -7,7 +7,7 @@ import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { useVisualViewport } from "@platform/viewport.ts";
 import { WorldSurface } from "@platform/surface.tsx";
-import { DebugOverlay } from "@/feature/debug/overlay.tsx";
+import { DebugPanels } from "@/feature/debug/panels.tsx";
 import { bottomRest } from "@/shared/ui/bottom-rest.ts";
 import { Toaster } from "@/shared/ui/toast/stack.tsx";
 import { chrome, layer } from "@/shared/ui/theme.ts";
@@ -51,7 +51,7 @@ export function WorldView() {
     <View style={[StyleSheet.absoluteFill, styles.root]}>
       <ToastController />
       <BetweenChrome>
-        <DebugOverlay />
+        <DebugPanels />
       </BetweenChrome>
 
       {/* The world's own pointer puts the keyboard away (`worldPointer`). */}

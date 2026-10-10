@@ -190,8 +190,6 @@ pub struct TurnSample {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CapSample {
     pub commit_left: f64,
-    pub mount_left: f64,
-    pub mount_full: f64,
     pub record_refused: f64,
 }
 
@@ -250,8 +248,7 @@ words!(FrameSample, FRAME::WORDS,
     stale.hidden => FRAME::stale_hidden, stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready,
     stale.slot_waits => FRAME::slot_waits, stale.wait_zooms => FRAME::slot_wait_zooms,
     stale.chained => FRAME::slot_chained,
-    cap.commit_left => FRAME::cap_commit_left, cap.mount_left => FRAME::cap_mount_left,
-    cap.mount_full => FRAME::cap_mount_full, cap.record_refused => FRAME::cap_record_refused,
+    cap.commit_left => FRAME::cap_commit_left, cap.record_refused => FRAME::cap_record_refused,
     turn.effects_ms => FRAME::turn_effects_ms, turn.stage_ms => FRAME::turn_stage_ms,
     turn.step_ms => FRAME::turn_step_ms, turn.step_name => FRAME::turn_step_name,
     cover.rule => FRAME::cover_rule, cover.drawn => FRAME::cover_drawn, cover.gaps => FRAME::cover_gaps,

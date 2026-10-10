@@ -184,8 +184,6 @@ pub fn report_step(ctx: &mut TickContext) {
         },
         cap: CapSample {
             commit_left: census.commit_left as f64,
-            mount_left: census.refused as f64,
-            mount_full: (census.refused > 0) as u32 as f64,
             record_refused,
         },
     });

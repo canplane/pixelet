@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/debug.wgsl
 
-// Debug gizmos as segments with no depth test, so a gizmo shows through the
-// ground. A line primitive is one pixel wide on every device, so each segment
+// Debug gizmos as segments, hidden where the world stands nearer, as what
+// stands in front of them would be. A line primitive is one pixel wide on every device, so each segment
 // is a quad its width across on the screen.
 
 const WIDTH_PX: f32 = 3.0;

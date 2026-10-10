@@ -9,6 +9,7 @@ use crate::chunk::table::Frame;
 use crate::laid;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::view::frame::pose::{globe, view_resize};
+use pxl_render::frame::draw::{PIPELINE_CHUNK_COARSE, PIPELINE_IMPOSTOR};
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
@@ -149,8 +150,8 @@ pub fn stage_render() {
         ground: kernel().sched.shows_ground(),
     });
     resolution_observe(stat.gpu_ms);
-    let mut census: DrawCensus = Default::default();
-    census.copy_from_slice(&stat.census[..CENSUS_LEN]);
+    // In CENSUS_TAGS' order: the pipelines numbered below the debug lines, then those past them.
+    let census: DrawCensus = core::array::from_fn(|k| stat.census[[PIPELINE_CHUNK_COARSE, PIPELINE_IMPOSTOR].get(k.wrapping_sub(CENSUS_LEN - 2)).map_or(k, |&p| p as usize)]);
     set_host_frame_stat(
         GpuSample {
             ms: stat.gpu_ms,
