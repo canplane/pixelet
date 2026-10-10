@@ -13,9 +13,8 @@ import { toastDismiss, toastFor, toastShow, ToastTone } from "@/shared/ui/toast/
 const enum Report {
   Location = 0,
   Orientation = 1,
-  Outside = 2,
-  World = 3,
-  Ready = 4,
+  World = 2,
+  Ready = 3,
 }
 
 const READY_MS = 3000;
@@ -59,11 +58,9 @@ export function ToastController() {
   const orientationError = useKernel((s) => s.orientation.error);
   useSaid(Report.Orientation, orientationError !== null ? { key: messageKey(orientationError), tone: ToastTone.Error } : null);
 
+  // Where the world is, in one toast: why it is not on screen outranks that there is none to
+  // come, which outranks that it is coming; a stall is retried, so it waits.
   const outside = useKernel((s) => s.focus.outside);
-  useSaid(Report.Outside, outside ? { key: "toast.outside", tone: ToastTone.Error } : null);
-
-  // Why the world is not on screen outranks that it is coming; a stall is retried, so it waits.
-  // Outside the service area nothing is coming, which its own toast says.
   const gpuAbsent = useGpuAbsent();
   const stall = useKernel((s) => s.stall);
   const shown = useKernel((s) => s.focus.status === GroundStatus.Success);
@@ -74,7 +71,9 @@ export function ToastController() {
       ? { key: "unsupported.gpu", tone: ToastTone.Error }
       : stall !== null
       ? { key: messageKey(stall), tone: ToastTone.Loading }
-      : !shown && !outside
+      : outside
+      ? { key: "toast.outside", tone: ToastTone.Error }
+      : !shown
       ? { key: "toast.world_loading", tone: ToastTone.Loading }
       : companionLoading
       ? { key: "toast.companion_loading", tone: ToastTone.Loading }
