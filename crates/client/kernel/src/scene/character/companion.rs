@@ -1,9 +1,9 @@
 // pxl-kernel/scene/character/companion.rs
 
 //! A companion (person + pet) at focus. When focus comes to rest it
-//! makes a fixed-duration catch-up walk there; in follow mode, where
-//! focus is a ~1 Hz GPS stream that never rests, it instead glides at
-//! the world-scroll rate so the two cancel and it holds at screen center.
+//! makes a fixed-duration catch-up walk there; steered by the keys, where
+//! focus never rests, it instead glides at the world-scroll rate so the
+//! two cancel and it holds at screen center.
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::approach::damp_alpha;
@@ -35,7 +35,7 @@ const CATCHUP_DURATION_S: f64 = 0.6;
 const SETTLE_DELAY_S: f64 = 0.15;
 
 // The world scroll's own rate: the two cancel, holding the character at
-// screen center, so this is the only position smoothing in follow mode.
+// screen center, so this is the only position smoothing while steered.
 const FOLLOW_LERP_K: f64 = crate::param::POS_DAMP;
 
 // +PI turns a model whose forward is -Y into the screen, back to the camera.
@@ -64,7 +64,7 @@ struct Figure {
     at: [f64; 2],
     heading: f64,
     actor_clip: Option<u32>,
-    was_follow_mode: bool,
+    was_steered: bool,
     walk_plan: Option<WalkPlan>,
     /// Its falling edge, a gesture's end, fixes the destination.
     was_dragging: bool,
@@ -82,7 +82,7 @@ impl Figure {
             at: [0.0; 2],
             heading: 0.0,
             actor_clip: None,
-            was_follow_mode: false,
+            was_steered: false,
             walk_plan: None,
             was_dragging: false,
             settle: SettleTracker::new(target, 0.0),
@@ -127,10 +127,10 @@ impl Figure {
         self.set_ready(false);
     }
 
-    /// `follows`: the target is followed as it moves, by a fix or by the keys,
-    /// rather than walked to once it settles; a steered one faces its way.
+    /// A target the keys steer is followed as it moves, facing its way, rather
+    /// than walked to once it settles.
     fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_z: f64, p: &CompanionProps) {
-        let (follows, steered) = (p.following || p.steered, p.steered);
+        let steered = p.steered;
         let variant = self.variant;
         self.acquire(target);
         if self.held.is_none() {
@@ -144,16 +144,14 @@ impl Figure {
         let gap = |a: [f64; 2], b: [f64; 2]| libm::hypot(a[0] - b[0], a[1] - b[1]);
         let (mut at, is_walking);
 
-        if follows {
-            at = if self.was_follow_mode {
+        if steered {
+            at = if self.was_steered {
                 let a = damp_alpha(FOLLOW_LERP_K, ctx.delta);
                 std::array::from_fn(|k| self.at[k] + (target[k] - self.at[k]) * a)
             } else {
                 target
             };
-            if !steered {
-                self.heading = back_to_camera(p.azimuth);
-            } else if gap(target, self.at) > WALK_EPS {
+            if gap(target, self.at) > WALK_EPS {
                 self.heading = heading_to(self.at, target) + core::f64::consts::PI / 2.0;
             }
             if gap(target, at) > WALK_EPS {
@@ -162,9 +160,9 @@ impl Figure {
             is_walking = now < self.follow_walk_until;
             self.walk_plan = None;
         } else {
-            // Rebase the tracker, or the delta accumulated while following reads as one
+            // Rebase the tracker, or the delta accumulated while steered reads as one
             // giant dash.
-            if self.was_follow_mode {
+            if self.was_steered {
                 self.settle = SettleTracker::new(target, now);
                 self.walk_plan = None;
             }
@@ -214,11 +212,11 @@ impl Figure {
             }
         }
 
-        self.was_follow_mode = follows;
+        self.was_steered = steered;
         self.was_dragging = dragging;
 
-        // A wall holds it walking in place until the walk ends; following a fix
-        // there is no end to wait for, so a wall puts it at its target at once.
+        // Steered there is no end to wait for, so a wall its way meets puts it
+        // at its target, which the focus walked to, at once.
         let arrived = gap(target, at) <= WALK_EPS;
         let moved = at != self.at;
         let stands = self.stands_z.get_or_insert(arrive_z);
@@ -227,7 +225,7 @@ impl Figure {
         } else if moved {
             match step_from(at, *stands) {
                 Some(Some(z)) => *stands = z,
-                Some(None) if follows => {
+                Some(None) if steered => {
                     at = target;
                     *stands = arrive_z;
                 }
@@ -275,9 +273,8 @@ pub struct CompanionProps {
     pub azimuth: f64,
     /// Whether the camera is being dragged, whose release ends a catch-up.
     pub dragging: bool,
-    /// Whether the keys steer it, and whether the map follows the device.
+    /// Whether the keys steer it.
     pub steered: bool,
-    pub following: bool,
 }
 
 fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: [f64; 2]) -> &'a mut Figure {

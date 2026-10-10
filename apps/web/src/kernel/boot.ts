@@ -9,16 +9,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { Command, encode_world_boot, read_sensor_start, read_sensor_stop, read_world_snapshot, Sensor } from "@/kernel/abi/cmd.spec.ts";
-import {
-  geolocationStart,
-  geolocationStop,
-  geolocationSupported,
-  orientationListen,
-  orientationNeedsPermission,
-  orientationRemove,
-  orientationSilenceIsLoss,
-  orientationSupported,
-} from "@platform/sensor.ts";
+import { geolocationStart, geolocationStop, geolocationSupported } from "@platform/sensor.ts";
 import { declare_source } from "@/kernel/io/source.ts";
 import { read_asset, read_object } from "@/kernel/io/read.ts";
 import { bind_root, read_storage } from "@/kernel/host.ts";
@@ -41,11 +32,9 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
     }
     case Command.SENSOR_START:
       if (read_sensor_start(f!).sensor === Sensor.Geolocation) geolocationStart();
-      else orientationListen();
       return;
     case Command.SENSOR_STOP:
       if (read_sensor_stop(f!).sensor === Sensor.Geolocation) geolocationStop();
-      else orientationRemove();
       return;
   }
   console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
@@ -66,9 +55,6 @@ export async function boot_kernel(): Promise<void> {
       development: __IS_DEV__,
       handheld: HANDHELD,
       geolocation: geolocationSupported(),
-      orientation: orientationSupported(),
-      orientation_permission: orientationNeedsPermission(),
-      orientation_silence_is_loss: orientationSilenceIsLoss(),
       settings,
     });
   // Storage is the user's to edit: kept settings too large to send are no

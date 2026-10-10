@@ -227,8 +227,7 @@ pub fn set_intent(partial: IntentPatch) -> Intent {
     }
 }
 
-/// Tilt is kept: "align north" is what both the compass and the end of
-/// follow mode mean.
+/// North up, the compass's press; tilt is kept.
 pub fn reset_azimuth() {
     set_intent(IntentPatch {
         azimuth: Some(DEFAULT_AZIMUTH),

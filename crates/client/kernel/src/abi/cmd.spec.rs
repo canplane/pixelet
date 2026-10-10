@@ -99,7 +99,7 @@ pub enum InputMinor {
     POINTER = 0x02,
     WHEEL = 0x03,
     KEYS = 0x06,
-    TRACKING = 0x04,
+    RECENTER = 0x04,
     VIEW = 0x05,
     COMPASS_RESET = 0x07,
     GO_TO = 0x08,
@@ -117,7 +117,7 @@ impl InputMinor {
         InputMinor::POINTER,
         InputMinor::WHEEL,
         InputMinor::KEYS,
-        InputMinor::TRACKING,
+        InputMinor::RECENTER,
         InputMinor::VIEW,
         InputMinor::COMPASS_RESET,
         InputMinor::GO_TO,
@@ -143,26 +143,22 @@ pub enum SensorMinor {
     POSITION = 0x02,
     STOP = 0x03,
     ERROR = 0x04,
-    ORIENTATION = 0x05,
     PERMISSION = 0x06,
     ENABLE_LOCATION = 0x07,
     OPEN = 0x08,
     CLOSE = 0x09,
-    ORIENTATION_LOST = 0x0a,
 }
 
 impl SensorMinor {
-    pub const ALL: [SensorMinor; 10] = [
+    pub const ALL: [SensorMinor; 8] = [
         SensorMinor::START,
         SensorMinor::POSITION,
         SensorMinor::STOP,
         SensorMinor::ERROR,
-        SensorMinor::ORIENTATION,
         SensorMinor::PERMISSION,
         SensorMinor::ENABLE_LOCATION,
         SensorMinor::OPEN,
         SensorMinor::CLOSE,
-        SensorMinor::ORIENTATION_LOST,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -351,27 +347,6 @@ impl ActiveTool {
     }
 }
 
-/// What the tracking button did, as the button showed it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum Tracking {
-    /// Back to the device.
-    Recenter = 0,
-    /// Follow mode on, where the compass is listened to.
-    Follow = 1,
-    /// Follow mode off, north up again.
-    Unfollow = 2,
-}
-
-impl Tracking {
-    pub const ALL: [Tracking; 3] = [Tracking::Recenter, Tracking::Follow, Tracking::Unfollow];
-
-    /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<Tracking> {
-        Tracking::ALL.into_iter().find(|m| *m as u32 == number)
-    }
-}
-
 /// The browser's PositionError codes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -401,11 +376,10 @@ impl GeolocationErrorCode {
 #[repr(u32)]
 pub enum Sensor {
     Geolocation = 0,
-    Orientation = 1,
 }
 
 impl Sensor {
-    pub const ALL: [Sensor; 2] = [Sensor::Geolocation, Sensor::Orientation];
+    pub const ALL: [Sensor; 1] = [Sensor::Geolocation];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<Sensor> {
@@ -434,8 +408,10 @@ impl PermissionAnswer {
     }
 }
 
-/// Whether the view shows any ground: Loading while the screen has none,
-/// on a first load or after a jump, Idle before there is a view.
+/// Whether the screen shows the world: Success once a frame that drew ground went
+/// to it, or one went over a view whose tiles all answered with nothing to draw;
+/// Loading until then, on a first load, after a jump or a lost device; Idle before
+/// there is a view.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u32)]
 pub enum GroundStatus {
@@ -503,10 +479,13 @@ pub enum Message {
     GeolocationTimeout = 0x0206,
     GeolocationGenericError = 0x0207,
 
-    // ---- 0x03 which way the device is facing ----
-    OrientationPermissionError = 0x0302,
-    OrientationPermissionDenied = 0x0303,
-    OrientationSignalLost = 0x0304,
+    // ---- 0x04 why the world does not come ----
+    /// The device that drew it is gone; the host asks for another.
+    WorldGpuLost = 0x0401,
+    /// Reads reach no server; they are tried again.
+    WorldOffline = 0x0402,
+    /// Reads reach the server and fail; they are tried again.
+    WorldReadFailing = 0x0403,
 }
 
 impl Message {
@@ -516,9 +495,9 @@ impl Message {
         Message::GeolocationPositionUnavailable,
         Message::GeolocationTimeout,
         Message::GeolocationGenericError,
-        Message::OrientationPermissionError,
-        Message::OrientationPermissionDenied,
-        Message::OrientationSignalLost,
+        Message::WorldGpuLost,
+        Message::WorldOffline,
+        Message::WorldReadFailing,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -543,12 +522,8 @@ pub enum Command {
     IMAGE_DECODED = 0x1301,
     /// A GPS fix; a field is absent where the browser gave none.
     SENSOR_POSITION = 0x1202,
-    /// An orientation event; a field is absent where the browser gave none.
-    SENSOR_ORIENTATION = 0x1205,
     /// The watch failed and was stopped.
     SENSOR_ERROR = 0x1204,
-    /// The compass failed and its listener was removed, where the platform says so.
-    SENSOR_ORIENTATION_LOST = 0x120a,
 
     // ---- the host tells the process: its start, its turn, its window, its devices and its input ----
     /// The kernel's start: what the platform is, and what it was handed to start with.
@@ -601,8 +576,8 @@ pub enum Command {
     SETTING_SET = 0x1601,
     /// A line the player said, shown over the character.
     CHAT_SEND = 0x1701,
-    /// The tracking button's press, as the button showed it.
-    INPUT_TRACKING = 0x1104,
+    /// The location button's press: the view moved to the device, its distance and heading kept.
+    INPUT_RECENTER = 0x1104,
     /// Where the camera stands, set outright rather than driven: what the kernel's own
     /// test puts a view at, and what an A/B reads two builds at the same view with.
     INPUT_VIEW = 0x1105,
@@ -621,9 +596,7 @@ pub enum Command {
     SENSOR_OPEN = 0x1208,
     /// The world is gone, and the sensors are let go.
     SENSOR_CLOSE = 0x1209,
-    /// The search panel's location card: the location asked for. The compass is asked for
-    /// where it is used, entering follow mode (TRACKING), and never alone: nothing reads it
-    /// without the location.
+    /// The search panel's location card: the location asked for.
     SENSOR_ENABLE_LOCATION = 0x1207,
     /// A fresh recording window.
     PROFILER_START = 0x1901,
@@ -643,14 +616,12 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 44] = [
+    pub const ALL: [Command; 42] = [
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::IMAGE_DECODED,
         Command::SENSOR_POSITION,
-        Command::SENSOR_ORIENTATION,
         Command::SENSOR_ERROR,
-        Command::SENSOR_ORIENTATION_LOST,
         Command::WORLD_BOOT,
         Command::WORLD_FRAME,
         Command::WORLD_VISIBILITY,
@@ -673,7 +644,7 @@ impl Command {
         Command::PREVIEW_CLOSE,
         Command::SETTING_SET,
         Command::CHAT_SEND,
-        Command::INPUT_TRACKING,
+        Command::INPUT_RECENTER,
         Command::INPUT_VIEW,
         Command::INPUT_COMPASS_RESET,
         Command::INPUT_GO_TO,
@@ -702,10 +673,8 @@ pub struct Snapshot<'a> {
     pub location: LocationState,
     pub companion: CompanionState,
     pub holding: HoldingState<'a>,
-    pub orientation: OrientationState,
     /// The view's azimuth.
     pub azimuth: f64,
-    pub is_follow_mode: bool,
     pub camera_busy: bool,
     /// A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is.
     pub zooming: bool,
@@ -718,20 +687,20 @@ pub struct Snapshot<'a> {
     pub division: &'a dyn Fn(&mut dyn FnMut(&DivisionPart<'_>)),
     /// The surfaces a character preview is drawn on: its model and skin have arrived. The shell shows a case loading until its surface is here.
     pub previews: &'a [u32],
+    /// Why the world is not coming now, where something keeps it: the device lost, or reads failing since the last answered. Absent while it comes or is shown.
+    pub stall: Option<Message>,
 }
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 13;
+    pub const FIELDS: u32 = 12;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(FocusState::FIELDS, |w| self.focus.write(w));
         w.branch(LocationState::FIELDS, |w| self.location.write(w));
         w.branch(CompanionState::FIELDS, |w| self.companion.write(w));
         w.branch(HoldingState::FIELDS, |w| self.holding.write(w));
-        w.branch(OrientationState::FIELDS, |w| self.orientation.write(w));
         w.f64(Some(self.azimuth));
-        w.bool(Some(self.is_follow_mode));
         w.bool(Some(self.camera_busy));
         w.bool(Some(self.zooming));
         w.u32_array(Some(self.settings));
@@ -744,6 +713,7 @@ impl Snapshot<'_> {
             })
         });
         w.u32_array(Some(self.previews));
+        w.u32(self.stall.map(|m| m as u32));
     }
 }
 
@@ -843,22 +813,6 @@ impl HoldingState<'_> {
         w.u32(Some(self.tier));
         w.bool(Some(self.marker));
         w.str_display(self.words);
-    }
-}
-
-pub struct OrientationState {
-    pub status: DevicePoseStatus,
-    /// Present exactly when status is Error: the failure the kernel chose.
-    pub error: Option<Message>,
-}
-
-impl OrientationState {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.status as u32));
-        w.u32(self.error.map(|m| m as u32));
     }
 }
 
@@ -985,39 +939,6 @@ impl SensorPosition {
     }
 }
 
-/// Command::SENSOR_ORIENTATION's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct SensorOrientation {
-    pub webkit_compass_heading: Option<f64>,
-    pub alpha: Option<f64>,
-    pub beta: Option<f64>,
-    pub gamma: Option<f64>,
-}
-
-impl SensorOrientation {
-    pub fn read(pkt: &[u8]) -> Result<SensorOrientation, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SensorOrientation {
-            webkit_compass_heading: match f.at(0)?.opt() {
-                Some(c) => Some(finite(c.get_number()?)?),
-                None => None,
-            },
-            alpha: match f.at(1)?.opt() {
-                Some(c) => Some(finite(c.get_number()?)?),
-                None => None,
-            },
-            beta: match f.at(2)?.opt() {
-                Some(c) => Some(finite(c.get_number()?)?),
-                None => None,
-            },
-            gamma: match f.at(3)?.opt() {
-                Some(c) => Some(finite(c.get_number()?)?),
-                None => None,
-            },
-        })
-    }
-}
-
 /// Command::SENSOR_ERROR's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct SensorError {
@@ -1040,13 +961,6 @@ pub struct WorldBoot<'a> {
     pub development: bool,
     pub handheld: bool,
     pub geolocation: bool,
-    pub orientation: bool,
-    /// iOS 13+'s gate: requestPermission exists and must run inside a gesture.
-    pub orientation_permission: bool,
-    /// A browser's compass talks while the device is still and cannot say it stopped, so
-    /// silence is the only sign of loss; a device's speaks only when the heading turns and
-    /// reports a failure itself (SENSOR_ORIENTATION_LOST).
-    pub orientation_silence_is_loss: bool,
     /// What storage keeps of the settings, as it keeps it, empty for none: the kernel's own file
     /// (host.json's SETTINGS_PATH), handed over unread as a process is handed its environment,
     /// which the kernel reads and from then on writes itself.
@@ -1060,10 +974,7 @@ impl<'a> WorldBoot<'a> {
             development: f.at(0)?.get_bool()?,
             handheld: f.at(1)?.get_bool()?,
             geolocation: f.at(2)?.get_bool()?,
-            orientation: f.at(3)?.get_bool()?,
-            orientation_permission: f.at(4)?.get_bool()?,
-            orientation_silence_is_loss: f.at(5)?.get_bool()?,
-            settings: f.at(6)?.get_str_ref()?,
+            settings: f.at(3)?.get_str_ref()?,
         })
     }
 }
@@ -1389,21 +1300,6 @@ impl<'a> ChatSend<'a> {
     pub fn read(pkt: &'a [u8]) -> Result<ChatSend<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(ChatSend { text: f.at(0)?.get_str_ref()? })
-    }
-}
-
-/// Command::INPUT_TRACKING's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct InputTracking {
-    pub tracking: Tracking,
-}
-
-impl InputTracking {
-    pub fn read(pkt: &[u8]) -> Result<InputTracking, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputTracking {
-            tracking: Tracking::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
-        })
     }
 }
 

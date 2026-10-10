@@ -1,33 +1,12 @@
 // @pxl/web/platform/web/sensor.ts
 
-/**
- * The device's sensors as the browser grants them. iOS gates the compass
- * behind a prompt that must be raised inside the gesture.
- */
+/** The device's sensors as the browser grants them. */
 
 import { GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_orientation, kernel_permission, kernel_position, kernel_position_error } from "@/kernel/control/sensor.ts";
-
-interface IOSOrientationEvent extends DeviceOrientationEvent {
-  webkitCompassHeading?: number;
-}
-type IOSOrientationEventCtor = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<"granted" | "denied"> };
+import { kernel_permission, kernel_position, kernel_position_error } from "@/kernel/control/sensor.ts";
 
 export function geolocationSupported(): boolean {
   return "geolocation" in navigator;
-}
-
-export function orientationSupported(): boolean {
-  return typeof DeviceOrientationEvent !== "undefined";
-}
-
-export function orientationNeedsPermission(): boolean {
-  return orientationSupported() && typeof (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission === "function";
-}
-
-/** No event says the listener stopped hearing, so silence is how a loss shows. */
-export function orientationSilenceIsLoss(): boolean {
-  return true;
 }
 
 let geolocationWatch: number | null = null;
@@ -60,23 +39,6 @@ export function geolocationStart(): void {
   );
 }
 
-let orientationEvent: string | null = null;
-
-function onOrientation(e: Event): void {
-  const o = e as IOSOrientationEvent;
-  kernel_orientation({ webkit_compass_heading: o.webkitCompassHeading ?? null, alpha: o.alpha, beta: o.beta, gamma: o.gamma });
-}
-
-function listenOrientation(name: string): void {
-  if (orientationEvent !== null) return;
-  orientationEvent = name;
-  globalThis.addEventListener(name, onOrientation, true);
-}
-
-export function orientationListen(): void {
-  listenOrientation("ondeviceorientationabsolute" in globalThis ? "deviceorientationabsolute" : "deviceorientation");
-}
-
 /** A grant in the browser's site settings reaches the kernel, since nothing re-asks after a refusal. */
 export function permissionFollow(): () => void {
   let status: PermissionStatus | null = null;
@@ -91,29 +53,4 @@ export function permissionFollow(): () => void {
     stopped = true;
     status?.removeEventListener("change", onChange);
   };
-}
-
-/** The prompt is called before any await, so it stays inside the gesture. */
-export function orientationPermit(): Promise<boolean> {
-  if (!orientationNeedsPermission() || orientationEvent !== null) return Promise.resolve(true);
-  const prompt = (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!();
-  kernel_permission({ sensor: Sensor.Orientation, answer: PermissionAnswer.Asking });
-  return prompt.then(
-    (permission) => {
-      const granted = permission === "granted";
-      if (granted) listenOrientation("deviceorientation");
-      kernel_permission({ sensor: Sensor.Orientation, answer: granted ? PermissionAnswer.Granted : PermissionAnswer.Denied });
-      return granted;
-    },
-    (err) => {
-      console.error("[kernel] orientation permission error:", err);
-      kernel_permission({ sensor: Sensor.Orientation, answer: PermissionAnswer.Failed });
-      return false;
-    },
-  );
-}
-
-export function orientationRemove(): void {
-  if (orientationEvent !== null) globalThis.removeEventListener(orientationEvent, onOrientation, true);
-  orientationEvent = null;
 }

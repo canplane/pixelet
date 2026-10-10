@@ -108,6 +108,8 @@ pub struct RequestScheduler<S> {
     started: Vec<(u64, Stream, u64)>,
     stops: Vec<u64>,
     ready: Vec<(Placed, usize)>,
+    /// Why reads fail, since the last that came to an answer.
+    failing: Option<Errno>,
 }
 
 /// A started attempt's right to open a file: only the scheduler makes one, so
@@ -139,6 +141,7 @@ impl<S: Serve> RequestScheduler<S> {
             started: Vec::new(),
             stops: Vec::new(),
             ready: Vec::with_capacity(desired),
+            failing: None,
         }
     }
 
@@ -298,6 +301,12 @@ impl<S: Serve> RequestScheduler<S> {
         let Some(slot) = self.slot_of(key) else { return };
         let a = self.end(slot);
         let outcome = ended.outcome();
+        match ended {
+            Ended::Ok => self.failing = None,
+            // An absent file is an answer.
+            Ended::Failed(f) if f.errno != Errno::ENOENT => self.failing = Some(f.errno),
+            _ => {}
+        }
         if let Some(i) = self.find(a.stream, a.subject) {
             if outcome == Outcome::ok {
                 self.desired[i] = None;
@@ -316,6 +325,7 @@ impl<S: Serve> RequestScheduler<S> {
             }
         }
         self.desired.fill(None);
+        self.failing = None;
         self.started.clear();
         self.stops.clear();
     }
@@ -416,6 +426,11 @@ pub fn settle(key: u64, ended: Ended, phases: Option<Phases>) {
 
 pub fn reset() {
     sched().reset();
+}
+
+/// Why reads fail, where none has come to an answer since one did.
+pub fn failing() -> Option<Errno> {
+    sched().failing
 }
 
 #[cfg(test)]

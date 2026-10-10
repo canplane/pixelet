@@ -38,6 +38,26 @@ use crate::setting::store::{settings_store, AoMode};
 use crate::view::demand::Observed as _;
 use crate::view::frame::resolution::resolution_observe;
 
+/// What the screen holds of the world: nothing yet, nothing since the device
+/// went, or the last frame that went to it and whether that frame drew ground.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Screen {
+    Blank,
+    Lost,
+    Drawn { ground: bool },
+}
+
+static SCREEN: Global<Screen> = Global::new();
+
+pub fn screen() -> Screen {
+    *SCREEN.get(|| Screen::Blank)
+}
+
+/// The device went, and what it drew with it; a frame on the next one ends this.
+pub fn screen_lost() {
+    SCREEN.set(Screen::Lost);
+}
+
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
 /// season, as Google Earth and Cesium keep one mosaic.
 const EARTH: Asset = Asset::sky_earth_07_webp;
@@ -125,6 +145,9 @@ pub fn stage_render() {
         request_world_tick();
     }
     let Some(stat) = out.stat else { return };
+    SCREEN.set(Screen::Drawn {
+        ground: kernel().sched.shows_ground(),
+    });
     resolution_observe(stat.gpu_ms);
     let mut census: DrawCensus = Default::default();
     census.copy_from_slice(&stat.census[..CENSUS_LEN]);

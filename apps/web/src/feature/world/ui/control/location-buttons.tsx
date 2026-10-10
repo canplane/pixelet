@@ -2,54 +2,51 @@
 
 import { useTranslation } from "react-i18next";
 
-import { type GlyphName, Spinner } from "@platform/icon.tsx";
-import { Motion } from "@platform/motion.tsx";
-import { LABEL } from "@platform/palette.ts";
-import { Command, DevicePoseStatus, Tracking } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_command, kernel_tracking, useKernel } from "@/kernel/shell.ts";
+import { Spinner } from "@platform/icon.tsx";
+import { LABEL, STATUS } from "@platform/palette.ts";
+import { Command, DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command, kernel_enable_location, useKernel } from "@/kernel/shell.ts";
 import { CompassFace } from "@/feature/world/ui/control/compass.tsx";
+import { Report } from "@/feature/world/ui/toast-controller.tsx";
+import { messageKey } from "@/locale/message-key.ts";
 import { ButtonStack } from "@/shared/ui/button-stack.tsx";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { SETTLE } from "@/shared/ui/motion/transition.ts";
-import { chrome, color } from "@/shared/ui/theme.ts";
+import { toastFor, ToastTone } from "@/shared/ui/toast/store.ts";
+import { chrome } from "@/shared/ui/theme.ts";
 
-/** MKUserTrackingButton's glyphs. */
-const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
-  [Tracking.Recenter]: { glyph: "location", label: "world.controls.move_to_location" },
-  [Tracking.Follow]: { glyph: "location.fill", label: "world.controls.start_compass_mode" },
-  [Tracking.Unfollow]: { glyph: "location.north.line.fill", label: "world.controls.exit_compass_mode" },
-};
+const SAID_MS = 3000;
 
+/** The location's state is the button's: a failed one is pressed to ask again, and the press says why it failed. */
 export function LocationButtons() {
   const { t } = useTranslation();
   const status = useKernel((s) => s.location.status);
   const hasLocation = useKernel((s) => s.location.has_location);
-  const following = useKernel((s) => s.is_follow_mode);
-  const offCenter = useKernel((s) => s.focus.is_off_center);
+  const error = useKernel((s) => s.location.error);
 
-  const press = following ? Tracking.Unfollow : offCenter ? Tracking.Recenter : Tracking.Follow;
-  const { glyph, label } = PRESS[press];
+  const press = () => {
+    if (error !== null) {
+      kernel_enable_location();
+      toastFor(Report.Location, { message: t(messageKey(error)), tone: ToastTone.Error }, SAID_MS);
+      return;
+    }
+    kernel_command(Command.INPUT_RECENTER);
+  };
+  const face = status === DevicePoseStatus.Loading
+    ? <Spinner size={chrome.glyph} color={LABEL.primary} />
+    : <Glyph glyph="location" size={chrome.glyph} color={error !== null ? STATUS.failed : LABEL.primary} />;
 
   return (
     <ButtonStack
-      isActive={following}
       items={[
         {
-          label: t(label),
-          onPress: () => void kernel_tracking(press),
-          isActive: following,
-          disabled: status !== DevicePoseStatus.Ready || !hasLocation,
-          face: status === DevicePoseStatus.Loading ? <Spinner size={chrome.glyph} color={LABEL.primary} /> : (
-            // One turn as following starts.
-            <Motion to={{ rotate: 0 }} from={{ rotate: -90 }} replay={following ? "follow" : null} transition={SETTLE}>
-              <Glyph glyph={glyph} size={chrome.glyph} color={following ? color.action : LABEL.primary} />
-            </Motion>
-          ),
+          label: t("world.controls.move_to_location"),
+          onPress: press,
+          disabled: error === null && (status !== DevicePoseStatus.Ready || !hasLocation),
+          face,
         },
         {
           label: t("world.controls.reset_orientation"),
           onPress: () => kernel_command(Command.INPUT_COMPASS_RESET),
-          disabled: following,
           face: <CompassFace />,
         },
       ]}

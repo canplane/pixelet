@@ -3,6 +3,7 @@
 import { create } from "zustand";
 
 import { boot_kernel } from "@/kernel/boot.ts";
+import { HostTrouble, hostTrouble } from "@/kernel/trouble.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
 
 const useBoot = create(() => ({ booted: false }));
@@ -15,7 +16,10 @@ export function bootstrapApp(): void {
       console.info("[boot] the kernel started");
       useBoot.setState({ booted: true });
     },
-    (err) => console.error("[boot] the kernel did not start:", err),
+    (err) => {
+      console.error("[boot] the kernel did not start:", err);
+      hostTrouble(HostTrouble.BootFailed);
+    },
   );
 }
 

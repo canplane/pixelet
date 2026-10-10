@@ -9,25 +9,24 @@ use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use xpute_kit::wire::xtp::PacketWriter;
 
-pub use crate::abi::cmd::Tracking;
-use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, OrientationState, Snapshot};
+use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, Message, Snapshot};
 use crate::control::camera::controller::{dist, focus, Motion};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
 use crate::control::interaction::holding;
 use crate::control::navigation::destination::go_to_ground;
-use crate::control::navigation::follow_mode::{following, set_following};
 use crate::control::navigation::off_center::off_center;
-use crate::control::sensor::device_orientation::{orientation_close, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
-use crate::control::sensor::reading::{device_location_store, device_orientation_store};
+use crate::control::sensor::reading::device_location_store;
 use crate::layer::division::named;
 use crate::scene::character::companion::companion_load_store;
 use crate::scene::character::preview::{preview_rows, CASES_MAX};
+use crate::scene::stage::{screen, Screen};
 use crate::setting::store::{settings_store, SettingKey};
 use crate::turn::world_platform;
 use crate::view::frame::pose::units_per_px_at;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use xpute_kit::status::errno::Errno;
 
 /// The focus's division and each above it, broad to narrow. Every language
 /// is sent, so switching language re-reads rather than refetches.
@@ -51,7 +50,6 @@ fn division_parts(at: Option<Pvf3>, each: &mut dyn FnMut(&DivisionPart<'_>)) {
 /// None where it does not fit.
 pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     let location = device_location_store();
-    let orientation = device_orientation_store();
     let camera = camera_state();
     let settings = settings_store();
     let companion = companion_load_store();
@@ -71,12 +69,13 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     }
     let snapshot = Snapshot {
         focus: FocusState {
-            // Loaded once ground is drawn, or every tile the view needs has answered,
-            // which over a source's void leaves nothing to draw.
-            status: match crate::view::observation::eye() {
-                None => GroundStatus::Idle,
-                Some(_) if crate::kernel().sched.shows_ground() || TerrainTile::demand().answered() => GroundStatus::Success,
-                Some(_) => GroundStatus::Loading,
+            // Shown once a frame that drew ground went to the screen, or one went over
+            // a view whose tiles all answered, which over a source's void draws nothing.
+            status: match (crate::view::observation::eye(), screen()) {
+                (None, _) => GroundStatus::Idle,
+                (Some(_), Screen::Drawn { ground: true }) => GroundStatus::Success,
+                (Some(_), Screen::Drawn { ground: false }) if TerrainTile::demand().answered() => GroundStatus::Success,
+                _ => GroundStatus::Loading,
             },
             is_off_center: off_center().is_off_center,
             center,
@@ -99,50 +98,30 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             marker: waiting,
             words: &words,
         },
-        orientation: OrientationState {
-            status: orientation.pose.status(),
-            error: orientation.pose.error(),
-        },
         azimuth: camera.intent.azimuth,
-        is_follow_mode: following(),
         camera_busy: camera.camera_status != CameraStatus::Idle,
         zooming: crate::control::camera::controller::zooming(),
         settings: &values,
         m_per_px: m_per_px(),
         division: &|each| division_parts(at, each),
         previews: &previews[..preview_cnt],
+        stall: stall(),
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);
     w.finish()
 }
 
-/// The shell decides which of the three from the state it drew the button
-/// in, so the press means what the user saw.
-pub fn tracking_action(tracking: Tracking) {
-    match tracking {
-        Tracking::Recenter => {
-            // A fix's Z is altitude, absent on most and never the ground's height.
-            if let Some(device) = off_center().device_coord {
-                go_to_ground(device, Motion::Snap);
-            }
-            set_following(false);
-            crate::control::camera::controller::come_in_to_default();
-        }
-        Tracking::Follow => {
-            // The heading is asked for, and the view turns with it once it comes;
-            // where there is none, following is where one is alone.
-            request_orientation(world_platform().orientation);
-            set_following(true);
-        }
-        Tracking::Unfollow => {
-            set_following(false);
-            crate::control::camera::controller::reset_azimuth();
-        }
+/// The location button's press: the view moves to the device, its distance
+/// and heading kept.
+pub fn recenter() {
+    // A fix's Z is altitude, absent on most and never the ground's height.
+    if let Some(device) = off_center().device_coord {
+        go_to_ground(device, Motion::Snap);
     }
 }
 
-/// A search's place, as the location button goes to one.
+/// A search's place: a view far out comes in.
 pub fn go_to_degrees(lon: f64, lat: f64) {
     crate::control::navigation::destination::go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
     crate::control::camera::controller::come_in_to_default();
@@ -153,20 +132,26 @@ pub fn set_view(dist: Option<f64>, polar: Option<f64>) {
     crate::control::camera::controller::set_intent(IntentPatch { dist, azimuth: None, polar });
 }
 
-/// The compass is asked for where it is used (`tracking_action`).
 pub fn location_enable() {
     start_watching(world_platform().geolocation);
 }
 
 pub fn sensors_open() {
-    let platform = world_platform();
-    geolocation_open(platform.geolocation);
-    request_orientation(platform.orientation);
+    geolocation_open(world_platform().geolocation);
 }
 
 pub fn sensors_close() {
     geolocation_close();
-    orientation_close();
+}
+
+/// Why the world is not coming now: the device gone, or reads failing.
+fn stall() -> Option<Message> {
+    match (screen(), crate::io::request::failing()) {
+        (Screen::Lost, _) => Some(Message::WorldGpuLost),
+        (_, Some(Errno::ENETUNREACH)) => Some(Message::WorldOffline),
+        (_, Some(_)) => Some(Message::WorldReadFailing),
+        (_, None) => None,
+    }
 }
 
 /// The view's scale at the focus, as the meters a logical pixel spans;
