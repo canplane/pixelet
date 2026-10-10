@@ -10,11 +10,13 @@ use crate::control::camera::controller::focus;
 use crate::control::camera::controller::Motion;
 use crate::control::navigation::destination::go_to_ground;
 use crate::control::navigation::off_center::off_center;
+use crate::control::navigation::support::unknown_z;
 use crate::control::sensor::reading::{device_location_store, DevicePoseStatus};
 use xpute_guest::global::Global;
 
 fn fallback_seed() -> Pvf3 {
-    epsg4326::project(&FALLBACK_G4326)
+    // A place, not a height: it stands on the surface.
+    unknown_z(&epsg4326::project(&FALLBACK_G4326))
 }
 
 /// Within a cell: the focus comes back through the camera's floats, not

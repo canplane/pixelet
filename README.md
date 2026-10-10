@@ -93,6 +93,7 @@ deno task dev:oven
 | `deno task ingest:asset`                  | Hash `asset/` into `./out/asset`, compose the texture pack, regenerate the asset tables     |
 | `deno task download:{pack,moon}`          | Normalize the texture pack's sources, or cut the Moon's near side                           |
 | `deno task bake:star`                     | The star catalog into the renderer's `bright-stars.bin`                                     |
+| `deno task bake:geoid <egm2008-5.pgm>`    | EGM2008's geoid into `spec/spec/space/geoid.json`, which puts a GPS height on sea level     |
 | `deno task render:brand`                  | The favicon, app icons and link preview from `apps/web/brand/`                              |
 | `deno task spec`                          | Generate Rust and TypeScript from the JSON under `spec/`                                    |
 | `deno task usage`                         | What the deployment has used of its free allowances, before a publish                       |

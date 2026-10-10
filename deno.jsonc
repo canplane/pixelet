@@ -51,6 +51,7 @@
     "download:pack": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_texture_pack",
     "download:moon": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_moon",
     "bake:star": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin bake_star --",
+    "bake:geoid": "cargo run --release --manifest-path crates/Cargo.toml -p pxl-tool --bin bake_geoid --",
     "render:brand": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin render_brand",
 
     // Made from the tree: the code generated from spec/, the kernel's module.

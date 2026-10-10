@@ -81,6 +81,11 @@ pub fn resolve(at: &Pvf3, held: V3) -> V3 {
     }
 }
 
+/// A known Z, a fix's altitude, on the floor nearest it once a leaf gives it.
+pub fn nearest(at: &Pvf3) -> Option<Pvf3> {
+    World::now().support_nearest(at).exact().flatten().map(|top| stand_over(at, top))
+}
+
 /// An unknown Z once a leaf gives it.
 pub fn exact(at: &Pvf3) -> Option<Pvf3> {
     standing(at).exact().flatten()

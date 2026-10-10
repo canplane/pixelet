@@ -264,6 +264,27 @@ fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
     assert_eq!((pvf3::to_real(pvf3::Y(&to)), floor(to)), (y + 1.5, 5.0));
 }
 
+/// A height picks the floor nearest it: the ground under a deck, or the deck,
+/// whichever its height is closer to; a solid with no clear cell over it is
+/// no floor.
+#[test]
+fn a_height_stands_on_the_floor_nearest_it() {
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let mut store = Store::default();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    // A deck a cube thick, its top at 10, with the ground at 5 under it.
+    write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
+    let access = World::new(&residency, &store);
+    let near = |z: f64| access.support_nearest(&world::point(x + 0.5, y + 0.5, z));
+    assert_eq!(near(6.0), Answer::Exact(Some(5.0)), "the ground under the deck");
+    assert_eq!(near(12.0), Answer::Exact(Some(10.0)), "the deck");
+    // A cube right under the deck's: its top has no clear cell over it.
+    write(&mut store, [x, y, 8.0], OBJECT_COARSEST, red);
+    let access = World::new(&residency, &store);
+    assert_eq!(access.support_nearest(&world::point(x + 0.5, y + 0.5, 9.0)), Answer::Exact(Some(10.0)));
+}
+
 /// A walker is a ground cell wide: what is held finer anywhere in a cell, a
 /// thin rail along its far edge, is climbed, not walked through.
 #[test]

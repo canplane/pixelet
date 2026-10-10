@@ -3,6 +3,7 @@
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 
+use crate::control::navigation::support::unknown_z;
 use crate::control::sensor::reading::device_location_store;
 use xpute_guest::global::Global;
 
@@ -14,8 +15,17 @@ pub struct OffCenter {
 
 static OFF_CENTER: Global<bool> = Global::new();
 
+/// At its altitude; where the device gives none, its Z unknown.
 fn device_coord() -> Option<Pvf3> {
-    device_location_store().location.map(|location| epsg4326::project(&location.coords))
+    device_location_store().location.map(|l| {
+        let [lng, lat] = l.coords;
+        let at = epsg4326::project(&[lng, lat, l.altitude.unwrap_or(0.0)]);
+        if l.altitude.is_some() {
+            at
+        } else {
+            unknown_z(&at)
+        }
+    })
 }
 
 /// Whether the focus has wandered off the device, as of this turn.
@@ -29,8 +39,8 @@ pub fn off_center() -> OffCenter {
 /// Whether the focus is off the device, decided once a turn.
 pub fn off_center_step() {
     let off = OFF_CENTER.get(|| false);
-    // Horizontal only: the fix's Z is GPS altitude and the center's is terrain
-    // from another source, and their mismatch could hold it off-center forever.
+    // Horizontal only: the fix's Z is GPS altitude and the center's a floor, and
+    // their mismatch could hold it off-center forever.
     match (crate::control::camera::controller::focus(), device_coord()) {
         (Some(center), Some(device)) => {
             // PVF3 X wraps a full world period, so the difference is short across the
