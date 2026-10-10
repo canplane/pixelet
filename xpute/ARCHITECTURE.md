@@ -245,3 +245,25 @@ There are two kinds, and the difference decides whether a record may ever be re-
 The rule in one line: inside a language, each follows its own; across a protocol, the results must match exactly.
 
 A third kind is not an output at all. The **traces** under `spec/conformance/` say what a host does and what it must then see: the steps, and the completions, stream records and next-turn asks each turn leaves. One host runs them against every guest through the boundary alone (`ts/conformance/src/trace.test.ts`) — the TypeScript host's own ring, directory and stream reader, over a guest of two C calls. The guest is built as a native library booted into a region the host holds, or as a WebAssembly module instantiated over a memory it reserves, and its boot answers where its directory is. They are written from the contract's rules rather than recorded from a guest, and they name only what a host can observe: a guest's sizes, and how it keeps its output in bounds, are its own. So they hold every guest to the same thing, whatever language it is written in. They run against each guest there is, the Rust one (`conformance guest.rs`) and the C++ one (`cpp/conformance/guest.cpp`), each over the commands `spec/conformance/guest.json` numbers and each laying its memory out its own way. Each is built both ways, and the module imports nothing but its memory and the clock.
+
+## Prior art
+
+What xpute took from work done before it, or found it had arrived at: the precedent, where xpute follows it, and what it takes. A link is given where the tree records the source.
+
+| Precedent                                                   | Where                            | What is taken                                                                  |
+| ----------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
+| The exokernel and its library operating system              | the arrangement                  | The host grants real resources; the guest keeps its own abstractions over them |
+| Aegis                                                       | `sched/quantum`                  | The quota as a cooperative counterpart of the exokernel's CPU slice            |
+| "core" for main memory, as in a core dump                   | the core memory                  | Its name                                                                       |
+| A linker script's output sections                           | `mem/section`                    | Ranges placed end to end without knowing what they hold                        |
+| [evanw/buddy-malloc](https://github.com/evanw/buddy-malloc) | `alloc/buddy_tree`               | The page allocator, ported line for line                                       |
+| SLUB                                                        | `alloc/slab`                     | A slab keeps its free list inside its free slots                               |
+| virtio's descriptor table, AF_XDP's UMEM                    | the rings (`spec/ipc/ring.json`) | Descriptors kept apart from the payload's slots                                |
+| io_uring                                                    | the rings                        | A submission ring and a completion ring, rung by a doorbell                    |
+| Plan 9's file access, in POSIX's words                      | `ipc/sys`                        | Descriptors the guest issues; a root and a path; the host binds the roots      |
+| The ELF auxiliary vector                                    | `ipc/directory`                  | Entries a reader skips when it does not know them                              |
+| POSIX and Linux errno                                       | `spec/status/errno.json`         | Negative errno numbers                                                         |
+| The host's `JSON.parse`                                     | `codec/json`                     | The grammar, judged as the host's parser judges it                             |
+| IEEE 754's round half to even, as WGSL rounds               | `math/scalar`                    | One rounding in every language                                                 |
+| splitmix64                                                  | `math/rng`                       | A reproducible generator and its seed's finalizer                              |
+| FNV                                                         | `codec`                          | The hash                                                                       |
