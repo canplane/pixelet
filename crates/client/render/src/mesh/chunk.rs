@@ -795,7 +795,7 @@ impl BakeContext {
     }
 
     /// Buckets have distinct heights, so sorting visits them lowest first.
-    /// `edge_low` is the lowest ground across the chunk's edge, which the skirt hangs to.
+    /// `edge_low` is the lowest ground across the chunk's edge, which the block under hangs to.
     fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, step: i32, edge_low: Option<i32>) {
         let grown = self.coarse.grow_runs(2 * cnt as usize);
         if !self.room(grown) {
@@ -825,20 +825,14 @@ impl BakeContext {
             // A sparse cell is inset by the cube root of its fill on every axis.
             let inset = (linear < 1.0).then(|| pack_inset(linear));
             let (rgb, taps) = acc.whole(volume).unwrap_or((acc.color(), taps_of(NO_LAYER as u8)));
-            // A shrunk ground box leaves gaps that read as holes from above, so a ground
-            // cell lays its full bottom face as a floor. The lowest box also hangs a skirt
-            // a cell down, or a step between neighbors' floors showed daylight.
+            // Under the ground is ground: where a ground box leaves its cell open below,
+            // shrunk or lowest, the block under it is laid, a cell or down to the
+            // neighbors' ground; its top fills the gaps that read as holes, its sides
+            // the steps that showed daylight.
             let lowest = open.is_none() && last_top == i32::MIN;
             let floored = last_top == bucket_lo - 1 && open.is_some_and(|o| self.coarse.sub_s[o] == SUB_CELL_NONE);
-            let under = if !acc.ground || floored {
-                None
-            } else if lowest {
-                Some(((bucket_lo - step).min(edge_low.map_or(i32::MAX, |low| low + 1)), bucket_lo - 1))
-            } else if inset.is_some() {
-                Some((bucket_lo, bucket_lo - 1))
-            } else {
-                None
-            };
+            let under =
+                (acc.ground && !floored && (lowest || inset.is_some())).then(|| ((bucket_lo - step).min(edge_low.map_or(i32::MAX, |low| low + 1)).max(last_top.saturating_add(1)), bucket_lo - 1));
             if let Some((z0, z1)) = under {
                 let co = &mut self.coarse;
                 co.z0.push(z0);
