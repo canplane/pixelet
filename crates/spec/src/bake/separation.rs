@@ -111,7 +111,8 @@ pub struct Separation {
     pub form: Cow<'static, [u8]>,         // `Form`: the source's flags
     pub clear: Cow<'static, [u8]>,        // a bore's clear space over its surface, in leaf cells: solved
     /// Derived: a tree of boxes over the points in order, each the segments it
-    /// covers widened by their reach, in points; what `crossing_point` walks.
+    /// covers widened by their reach, in points; what `crossing_point` and
+    /// `crossing_grid` walk.
     pub boxes: Cow<'static, [[i16; 4]]>,
 }
 
@@ -211,20 +212,27 @@ impl Separation {
     /// column at a joint is reported for both segments; the caller joins them.
     pub fn crossing_grid(&self, frame: Option<Frame>, origin: [f64; 2], step: f64, size: [i64; 2], mut each: impl FnMut(i64, i64, usize, Crossing)) {
         let cell = |v: f64, k: usize| (v - origin[k]) / step - 0.5;
-        for (d, line) in self.iter().enumerate() {
+        let far = [0, 1].map(|k| origin[k] + size[k] as f64 * step);
+        let area = [origin[0], origin[1], far[0], far[1]].map(|v| v * POINT_SCALE);
+        // Only the segments whose boxes reach the grid.
+        for p in Near::new(&self.boxes, self.points.len(), area) {
+            let d = self.starts.partition_point(|&s| s as usize <= p) - 1;
+            let line = self.line(d);
+            let s = p - self.starts[d] as usize;
+            if s + 1 >= line.points.len() {
+                continue;
+            }
             let half = line.reach();
-            for s in 0..line.points.len().saturating_sub(1) {
-                let (a, b) = (line.point(s), line.point(s + 1));
-                let range = |k: usize| {
-                    let (lo, hi) = (cell(a[k].min(b[k]) - half, k).ceil() as i64, cell(a[k].max(b[k]) + half, k).floor() as i64);
-                    lo.max(0)..=hi.min(size[k] - 1)
-                };
-                for j in range(1) {
-                    for i in range(0) {
-                        let at = [origin[0] + (i as f64 + 0.5) * step, origin[1] + (j as f64 + 0.5) * step];
-                        if let Some(over) = line.crossing_segment(frame, s, at, step) {
-                            each(i, j, d, over);
-                        }
+            let (a, b) = (line.point(s), line.point(s + 1));
+            let range = |k: usize| {
+                let (lo, hi) = (cell(a[k].min(b[k]) - half, k).ceil() as i64, cell(a[k].max(b[k]) + half, k).floor() as i64);
+                lo.max(0)..=hi.min(size[k] - 1)
+            };
+            for j in range(1) {
+                for i in range(0) {
+                    let at = [origin[0] + (i as f64 + 0.5) * step, origin[1] + (j as f64 + 0.5) * step];
+                    if let Some(over) = line.crossing_segment(frame, s, at, step) {
+                        each(i, j, d, over);
                     }
                 }
             }
@@ -233,7 +241,7 @@ impl Separation {
 
     /// Every line over the column of side `side` about `at`.
     pub fn crossing_point(&self, frame: Option<Frame>, at: [f64; 2], side: f64) -> impl Iterator<Item = Crossing> + '_ {
-        Near::new(&self.boxes, self.points.len(), at.map(|v| v * POINT_SCALE)).filter_map(move |i| {
+        Near::new(&self.boxes, self.points.len(), [at[0], at[1], at[0], at[1]].map(|v| v * POINT_SCALE)).filter_map(move |i| {
             let d = self.starts.partition_point(|&s| s as usize <= i) - 1;
             let line = self.line(d);
             let s = i - self.starts[d] as usize;
@@ -598,10 +606,11 @@ fn union(a: [i16; 4], b: [i16; 4]) -> [i16; 4] {
     [a[0].min(b[0]), a[1].min(b[1]), a[2].max(b[2]), a[3].max(b[3])]
 }
 
-/// The points whose segment's box holds `at`, in order: the tree walked depth first.
+/// The points whose segment's box meets `area`, low corner then high, in
+/// order: the tree walked depth first.
 struct Near<'a> {
     boxes: &'a [[i16; 4]],
-    at: [f64; 2],
+    area: [f64; 4],
     /// each level's first box, leaves at 0
     level_at: [usize; 8],
     stack: [(u8, u16); 8 * FANOUT],
@@ -611,10 +620,10 @@ struct Near<'a> {
 }
 
 impl<'a> Near<'a> {
-    fn new(boxes: &'a [[i16; 4]], points: usize, at: [f64; 2]) -> Near<'a> {
+    fn new(boxes: &'a [[i16; 4]], points: usize, area: [f64; 4]) -> Near<'a> {
         let mut near = Near {
             boxes,
-            at,
+            area,
             level_at: [0; 8],
             stack: [(0, 0); 8 * FANOUT],
             len: 0,
@@ -633,8 +642,9 @@ impl<'a> Near<'a> {
         near
     }
 
-    fn holds(&self, b: [i16; 4]) -> bool {
-        f64::from(b[0]) <= self.at[0] && self.at[0] <= f64::from(b[2]) && f64::from(b[1]) <= self.at[1] && self.at[1] <= f64::from(b[3])
+    fn meets(&self, b: [i16; 4]) -> bool {
+        let a = self.area;
+        f64::from(b[0]) <= a[2] && a[0] <= f64::from(b[2]) && f64::from(b[1]) <= a[3] && a[1] <= f64::from(b[3])
     }
 }
 
@@ -652,7 +662,7 @@ impl Iterator for Near<'_> {
             self.len -= 1;
             let (level, k) = self.stack[self.len];
             let (level, k) = (level as usize, k as usize);
-            if !self.holds(self.boxes[self.level_at[level] + k]) {
+            if !self.meets(self.boxes[self.level_at[level] + k]) {
                 continue;
             }
             if level == 0 {
