@@ -66,7 +66,7 @@ db-geo holds only what search reads: `overture_places`,
    hcloud firewall replace-rules pixelet-prod-fw --rules-file fw_rules.json
    hcloud firewall apply-to-resource pixelet-prod-fw --type server --server pixelet-prod
    ```
-3. **Docker.** `curl -fsSL https://get.docker.com | sh`
+3. **Docker.** `curl -fsSL https://get.docker.com | sh`.
 4. **DNS.** An A record for `api.plei.me` to the VM, **proxied** through
    Cloudflare; DNS-only would bypass the edge the firewall relies on.
 5. **The tree.** Cloned whole onto the VM: both servers' Dockerfiles
@@ -77,11 +77,19 @@ db-geo holds only what search reads: `overture_places`,
    ```sh
    cd infra/prod
    cp .env.example .env     # fill in, then chmod 600
+   # the disk's bounds: container logs, BuildKit's cache by last use, the
+   # journal by size and a day; a server deploy reinstalls them when changed
+   install -m 644 etc/daemon.json /etc/docker/daemon.json && systemctl restart docker
+   install -D -m 644 etc/journald.conf /etc/systemd/journald.conf.d/pixelet.conf && systemctl restart systemd-journald
    docker compose up -d --build
    ```
 
-A CI deploy updates the stack after that (§5); by hand it is `git pull` and
-`docker compose up -d --build`.
+   CI's deploy user is root, which installing them needs.
+
+A CI deploy updates the stack after that (§5). By hand it is the same steps
+in `/opt/pixelet`: `git reset --hard` to the commit, install a changed
+`infra/prod/etc/` file and restart what reads it, then in `infra/prod`
+`docker compose up -d --build --force-recreate` and `docker image prune -f`.
 
 ### Copying the search tables
 
@@ -159,10 +167,8 @@ surface's strings; calling wrangler directly skips it. A deploy uploads only
 changed static assets and leaves the bucket alone: uploading tiles and
 assets is [the publish-bucket skill](../.agents/skills/publish-bucket/SKILL.md).
 
-What the smoke does not check: a tile begins `5854` (`XT`) — `1f8b` means it
-arrived still gzipped, and HTML means the fallback answered a route the
-Worker should have claimed; an asset is `model/gltf-binary` or `image/png`
-with no `content-encoding`.
+The smoke does not check a tile's or an asset's served bytes; that is the
+skill's "Verify what is served".
 
 ## 5. CI/CD
 
@@ -171,13 +177,13 @@ pull requests, never on main: main carries work between machines, compiling
 or not. **Publishing is `git push origin main:deploy`**, forced once main has
 been rewritten. Why each job is as it is lives in the workflow's comments.
 
-| Job             | When                                                 | What                                                                                          |
-| :-------------- | :--------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
-| `gate`          | always                                               | `deno task check`, `test`, `lint`; on deploy, takes a build number                            |
-| `deploy-server` | gate green, and the servers' tree changed            | ssh, reset to the run's commit, `docker compose up -d --build --force-recreate`, origin smoke |
-| `deploy-web`    | after `deploy-server`, and the client's tree changed | `deno task deploy` under the build number                                                     |
-| `smoke`         | after either deployed                                | `deno task smoke https://plei.me`                                                             |
-| `record`        | after either deployed                                | appends the build to the log                                                                  |
+| Job             | When                                                 | What                                                                                                |
+| :-------------- | :--------------------------------------------------- | :-------------------------------------------------------------------------------------------------- |
+| `gate`          | always                                               | `check:ship` and the tests over what changed since the last deploy; on deploy, takes a build number |
+| `deploy-server` | gate green, and the servers' tree changed            | ssh, reset to the run's commit, `docker compose up -d --build --force-recreate`, origin smoke       |
+| `deploy-web`    | after `deploy-server`, and the client's tree changed | `deno task deploy` under the build number                                                           |
+| `smoke`         | after either deployed                                | `deno task smoke https://plei.me`                                                                   |
+| `record`        | after either deployed                                | appends the build to the log                                                                        |
 
 The servers go first because an old client against a new server is safe and
 the reverse is not. "Changed" is measured against the commit that half last
@@ -207,6 +213,5 @@ before shortening, rewording or dropping one.
 | GEDTM30                     | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)        | CC BY's elements, as it gives no line: `Modified GEDTM30 by Yufeng Ho and Tom Hengl (OpenGeoHub), licensed under CC BY 4.0`, linking v1.2's record ([10.5281/zenodo.18887460](https://doi.org/10.5281/zenodo.18887460)).                                                        |
 | Arnis                       | [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)        | Code, not data: the piers are ported from it ([THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)), so the app shows its NOTICE's `Copyright (c) 2022-2026 Louis Erbkamm (louis-e)`, as Apache 2.0 §4(d) asks.                                                                  |
 
-A published version is fetchable tile by tile, so it carries a notice
-naming its license too (ODbL §4.2): when publishing resumes, each kind's
-version has one.
+Whether a published version, fetchable tile by tile, needs a notice of its
+own beyond the app's is open (BACKLOG.md).
