@@ -1,4 +1,4 @@
-// pxl-spec/bake/earth_tile.rs
+// pxl-spec/bake/tile/earth.rs
 
 //! The Earth's picture as a layer of the pyramid, at its top zoom alone, a
 //! ground cell a texel: per cell, Blue Marble's reflectance coded as

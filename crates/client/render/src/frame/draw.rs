@@ -15,6 +15,8 @@ pub const DRAW_WORDS: usize = 5;
 /// Draw uniforms: eye-relative translation (3), a pipeline-specific float,
 /// opacity, padding to 32 bytes.
 pub const UNIFORM_FLOATS: usize = 8;
+/// Where a chunk draw's uniform holds its camera grid cell, in units.
+pub const CHUNK_UNIT: usize = 5;
 
 pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
     &uniforms[d[3] as usize * UNIFORM_FLOATS..][..UNIFORM_FLOATS]

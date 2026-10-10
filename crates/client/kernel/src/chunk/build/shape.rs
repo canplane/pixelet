@@ -1,48 +1,12 @@
 // pxl-kernel/chunk/build/shape.rs
 
-//! A chunk's runs: the zoom they are written at, the cells they fold and how wide a column of them is.
-
-use pxl_spec::space::camera::grid::CHUNK_CELLS;
-use pxl_spec::space::layer::lattice::{GROUND, GROUND_FOLD};
-
-use pxl_render::mesh::run::APRON;
-
-use crate::layer::object::store::Store;
-use crate::layer::Query;
+//! Which cells a chunk draws as held.
 
 use crate::chunk::Chunk as PyramidChunk;
-use pxl_spec::space::coord::zoom::{count, units, Zoom};
-
-/// The zoom a chunk's runs are written at: the records its cells fold
-/// (`GROUND_FOLD` finer) where anything is held finer than its cells, else its
-/// cells, which then fold nothing.
-pub(super) fn runs_zoom(c: PyramidChunk, finest: Zoom) -> Zoom {
-    match c.cell_zoom() {
-        cell if cell < finest => cell + GROUND_FOLD,
-        cell => cell,
-    }
-}
-
-/// The zoom a chunk's runs are written at, from its own column alone: its
-/// apron is read at that zoom, as a neighbour of another zoom is.
-pub fn runs_of(store: &Store, c: PyramidChunk) -> Zoom {
-    let finest = store.bounds(c.column(), c.cell_zoom()).value().flatten().map(|b| b.finest);
-    runs_zoom(c, finest.map_or(GROUND.cell(), |z| z.max(GROUND.cell())))
-}
-
-/// The world's units a run's cell is tall: a leaf cell's, or past the
-/// leaves the run's cell.
-pub(super) fn z_unit(runs: Zoom) -> f64 {
-    units(runs.max(GROUND.cell()))
-}
+use pxl_spec::space::coord::zoom::Zoom;
 
 /// Whether `c` draws what is held at `held` as it is, not folded into a
 /// coarser cell: only there is it struck, hidden or cut by a preview.
 pub fn draws_as_held(c: PyramidChunk, held: Zoom) -> bool {
     c.cell_zoom() >= held
-}
-
-/// Run columns a row, the apron's among them.
-pub(super) fn run_span(c: PyramidChunk, runs: Zoom) -> u32 {
-    CHUNK_CELLS * count(runs, c.cell_zoom()) + 2 * APRON
 }

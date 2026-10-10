@@ -13,7 +13,7 @@ use crate::view::demand::Observed as _;
 use std::collections::{HashMap, HashSet};
 
 use pxl_render::frame::draw::DrawList;
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::GROUND;

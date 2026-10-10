@@ -8,20 +8,17 @@ use crate::layer::residency::Line;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
-
-use crate::layer::object::store::Cells;
+use super::block::Column;
+use crate::layer::object::store::EntryAt;
 
 use super::decor::Grown;
 use crate::kernel;
-use crate::layer::object::store::{Store, AIR};
+use crate::layer::object::store::Store;
 use crate::layer::residency::Residency;
-use crate::layer::terrain::Source;
 use crate::layer::Answer;
 use crate::layer::Base as _;
 use crate::layer::{Bound, Query};
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid::Tau;
 
 /// The world's query: the resident ground and the placed objects, read
@@ -33,6 +30,9 @@ pub struct World<'a> {
     /// How decor is struck; none, and a ray passes through decor.
     pub(super) decor: Option<Grown<'a>>,
     pub(super) visits: Option<&'a std::cell::Cell<u64>>,
+    /// What of what is placed a preview hides, and what it cuts to air.
+    pub(super) hide: Option<EntryAt>,
+    pub(super) carve: Option<EntryAt>,
 }
 
 impl World<'static> {
@@ -56,7 +56,14 @@ impl<'a> World<'a> {
             objects,
             decor: None,
             visits: None,
+            hide: None,
+            carve: None,
         }
+    }
+
+    /// As a preview shows it: `hide` left out, `carve` cut to air.
+    pub fn previewing(self, hide: Option<EntryAt>, carve: Option<EntryAt>) -> World<'a> {
+        World { hide, carve, ..self }
     }
 
     pub fn counting(self, visits: &'a std::cell::Cell<u64>) -> World<'a> {
@@ -68,14 +75,6 @@ impl<'a> World<'a> {
             v.set(v.get() + 1);
         }
     }
-}
-
-/// A node's cells as the world holds them: the ground they stand on and the
-/// objects placed in them.
-#[derive(Clone, Copy)]
-pub struct Composed<'a> {
-    pub ground: Source<'a>,
-    pub objects: Cells<'a>,
 }
 
 fn join(a: Option<Bound>, b: Option<Bound>) -> Option<Bound> {
@@ -90,7 +89,7 @@ fn join(a: Option<Bound>, b: Option<Bound>) -> Option<Bound> {
 
 impl Query for World<'_> {
     type Record<'b>
-        = Composed<'b>
+        = Column<'b>
     where
         Self: 'b;
 
@@ -109,30 +108,8 @@ impl Query for World<'_> {
         self.terrain.bound(at, node, cell).map(|ground| join(ground, objects))
     }
 
-    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Composed<'_>> {
-        let objects = self.objects.read(node, cell).value();
-        self.terrain.read(node, cell).map(|ground| Composed {
-            ground,
-            // Objects are all resident: their answer is always exact.
-            objects: objects.or_bug(Errno::ENOTRECOVERABLE),
-        })
-    }
-}
-
-/// What the objects hold over a ground cell, as the composer reads them: at
-/// a leaf's cells whether anything is held, over a fold what it folds to.
-pub enum Cover {
-    Leaf { any: bool },
-    Folded(Option<u32>),
-}
-
-/// Whether the objects over a ground cell cover what the ground grows there,
-/// so it is neither drawn nor struck: at a leaf's cells anything held does,
-/// air included, so erasing a grown tree is placing air over it; over a fold
-/// only a fill does.
-pub fn covers(cover: Cover) -> bool {
-    match cover {
-        Cover::Leaf { any } => any,
-        Cover::Folded(state) => state.is_some_and(|s| s != AIR),
+    /// A chunk column's records to compose its blocks from.
+    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Column<'_>> {
+        self.column(node, cell)
     }
 }

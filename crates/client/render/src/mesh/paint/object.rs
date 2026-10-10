@@ -11,6 +11,7 @@ use crate::mesh::paint::palette::LAYER_IDX;
 use crate::mesh::word::NO_LAYER;
 use crate::mesh::word::{pack_material, Side};
 use pxl_spec::block::object::{cube_rgb, Cube};
+use std::sync::LazyLock;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -24,6 +25,9 @@ enum Kind {
     Air = 2,
     Decor = 3,
 }
+
+/// The one table, fixed by the catalog.
+pub static PAINTER: LazyLock<Painter> = LazyLock::new(Painter::new);
 
 pub struct Painter {
     kinds: Vec<Kind>,

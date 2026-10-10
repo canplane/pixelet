@@ -8,8 +8,8 @@ use std::collections::TryReserveError;
 use xpute_kit::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 use xpute_kit::math::scalar::round;
 
-use crate::bake::format::GroundId;
 use crate::bake::separation::{slab_depth, Crossing, Occupies, STACKED_DECK_HEADROOM_M};
+use crate::bake::tile::terrain::GroundId;
 use crate::bake::way::half_cells;
 use crate::block::cube::Ground;
 use crate::space::coord::adapter::epsg3857::u_per_m;

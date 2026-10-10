@@ -13,7 +13,7 @@ use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::separation::{self, source::Disk};
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
-use pxl_spec::bake::format::encode_terrain;
+use pxl_spec::bake::tile::terrain;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -34,7 +34,7 @@ fn main() {
             store: &mut Disk(&memo),
         };
         let terrain = bake_leaf(reader, idx).expect("bake");
-        let bytes = encode_terrain(&terrain).expect("encode");
+        let bytes = terrain::encode(&terrain).expect("encode");
         fs::write(format!("{dir}/{tile}.db.tile"), &bytes).expect("write");
         println!("{tile}\t{}", bytes.len());
     }

@@ -6,11 +6,11 @@
 
 use std::collections::TryReserveError;
 
-use pxl_render::mesh::paint::terrain::sample::TileSource;
-use pxl_spec::bake::format::GroundId;
 use pxl_spec::bake::separation::Separation;
+use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::cube::Ground;
 use pxl_spec::block::decor::{Decor, DecorMeta, Orientation};
+use pxl_spec::block::sample::TileSource;
 use pxl_spec::procedural::{scatter, scatter_at, Candidate};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{count, index, units, Zoom};
@@ -68,13 +68,10 @@ struct Draw {
     scale: f64,
 }
 
-/// What `candidate` draws in the tile's cell `tile_at`: none off the decor's
-/// ground or under a line.
+/// What `candidate` draws in the tile's cell `tile_at`: none under a line.
+/// Whether its footing is ground it grows on is the world's (`World::grows`).
 fn draw(decor: &Decor, candidate: Candidate, cells: &[GroundId], lines: &Separation, tile_at: [u32; 2]) -> Option<Draw> {
     let [cell_x, cell_y] = tile_at;
-    if !decor.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
-        return None;
-    }
     let mut rng = Rng::new(candidate.seed);
     let variant = ((rng.unit() * decor.variant_count() as f64).floor() as u32).min(decor.variant_count() - 1);
     let rotation = if decor.orientation == Orientation::along_transport {
@@ -132,8 +129,8 @@ pub fn grown_at(decor: &Decor, source: &TileSource, cell: [i64; 2], at: [u32; 2]
     stand(decor, source, scatter_at(decor.seed, decor.density, cell)?, at)
 }
 
-/// A candidate on the source's cell `at`: none off the decor's ground or under
-/// a deck; else at the height the chunk draws there.
+/// A candidate on the source's cell `at`: none under a line; else at the
+/// height the chunk draws there.
 fn stand(decor: &Decor, source: &TileSource, candidate: Candidate, at: [u32; 2]) -> Option<Instance> {
     let tile = &source.tile;
     let Draw { gx, gy, variant, rotation, scale } = draw(decor, candidate, tile.cells, tile.separation, at)?;

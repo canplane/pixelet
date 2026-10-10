@@ -1,4 +1,4 @@
-// pxl-spec/bake/place_tile.test.rs
+// pxl-spec/bake/tile/place.test.rs
 
 use super::*;
 use crate::space::coord::pvf3::ivec;
@@ -74,7 +74,7 @@ fn a_parent_is_what_its_children_show_from_its_zoom_on() {
     let p = leaf().parent();
     let mut children = [&empty; 4];
     children[leaf().slot()] = &child;
-    let parent = fold_place(p, children);
+    let parent = fold(p, children);
     assert_eq!(shown_at(&parent, p.zoom), ["Peak"]);
     // The cafe shows only deeper, so the leaf stays a tile under it.
     assert!(parent.occupancy.has_child(leaf().slot()));

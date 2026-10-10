@@ -160,7 +160,16 @@ fn an_edge_wall_reaches_down_to_the_ground_beside_it() {
 #[test]
 fn a_cell_full_of_one_leaf_folds_to_that_leaf() {
     let (span, taps) = (10, taps_of(5));
-    let columns: Vec<Vec<Run>> = (0..span * span).map(|_| vec![Run { z0: 0, z1: 7, rgb: [10, 20, 30], layer: taps }]).collect();
+    let columns: Vec<Vec<Run>> = (0..span * span)
+        .map(|_| {
+            vec![Run {
+                z0: 0,
+                z1: 7,
+                rgb: [10, 20, 30],
+                layer: taps,
+            }]
+        })
+        .collect();
     let set = set_of(span, &columns);
     let mut bake = BakeContext::default();
     let view = set.view();

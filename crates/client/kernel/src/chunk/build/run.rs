@@ -2,18 +2,20 @@
 
 //! A column of chunks shares its runs: written once into a heap block, held while any chunk over it bakes.
 
+use crate::layer::Base as _;
 use crate::layer::Query;
-use pxl_spec::space::layer::lattice::GROUND;
-
 use crate::param::BAKE_ROWS_PER_STEP;
-use pxl_render::mesh::paint::column::{stands_of, write_rows};
-use pxl_render::mesh::run::{RunSet, APRON};
+use crate::query::World;
+use pxl_render::mesh::paint::column::write_rows;
+use pxl_render::mesh::run::RunSet;
+use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_spec::block::sample::APRON;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
 use crate::chunk::source::draws;
 
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::Zoom;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -48,7 +50,7 @@ pub(super) struct Runs {
     pub(super) block: (usize, u32),
     pub(super) bytes: u32,
     pub(super) count: u32,
-    /// What they were written at, which the data decided (`runs_zoom`).
+    /// What they were written at, which the data decided (`query::runs`).
     pub(super) zoom: Zoom,
 }
 
@@ -130,54 +132,31 @@ impl Builder {
             None => {}
         }
         let c = self.chunks[&id];
-        let target = runs_of(build.store, c.at);
-        let Some(read) = c.read(target) else {
-            return Progress::Blocked;
-        };
         if self.run_set_for(id).is_none() {
             return Progress::Blocked;
         }
-        let (k, span) = (c.finer(target), run_span(c.at, target));
-        let sampled = if k == 0 {
-            self.sample.read(&read.around(), read.first, span)
-        } else {
-            let leaf = c.leaf(target);
-            let leaf_span = run_span(leaf, GROUND.cell_zoom(GROUND.read_zoom(leaf.cell_zoom())));
-            self.leaf_sample
-                .read(&read.around(), read.first, leaf_span)
-                .and_then(|()| self.sample.refine(&self.leaf_sample, k, c.in_leaf(target), span))
-        };
-        if sampled.is_err() {
-            self.refuse(id);
-            return Progress::Blocked;
-        }
         let edits = crate::chunk::source::previewed();
-        self.folded.clear();
-        let objects = build.store.read(c.at.node(), target).value().or_bug(Errno::ENOTRECOVERABLE);
-        let (from, _) = objects.column_cells(i64::from(APRON));
-        let (cx, cy) = (from[0] + i64::from(APRON), from[1] + i64::from(APRON));
-        if objects.fold(i64::from(APRON), edits.hide.filter(|&e| draws_as_held(c.at, e.zoom())), &mut self.folded).is_err() {
+        let hide = edits.hide.filter(|&e| draws_as_held(c.at, e.zoom()));
+        let carve = edits.carve.filter(|&e| draws(c.at, e) && draws_as_held(c.at, e.zoom()));
+        let world = World::new(TerrainTile::residency(), build.store).previewing(hide, carve);
+        let Some(column) = world.read(c.at.node(), c.at.cell_zoom()).value() else {
+            return Progress::Blocked;
+        };
+        let target = column.runs;
+        if column.compose(&mut self.composer, &mut self.blocks).is_err() {
             self.refuse(id);
             return Progress::Blocked;
         }
-        if let Some(carve) = edits.carve.filter(|&e| draws(c.at, e) && draws_as_held(c.at, e.zoom())) {
-            carve_into(&mut self.folded, carve, target, from[0]);
-        }
-        let step = (units(target) / z_unit(target)) as u32;
-        if stands_of(&self.sample, build.painter, &self.folded, (cx, cy), step, &mut self.stands).is_err() {
-            self.refuse(id);
-            return Progress::Blocked;
-        }
-        xpute_kit::ensure!(self.direct.begin(span), ENOTRECOVERABLE);
+        xpute_kit::ensure!(self.direct.begin(self.blocks.sample.span), ENOTRECOVERABLE);
         self.runs_job = Some(RunsJob { id, zoom: target, row: 0, next: 0 });
         Progress::Busy
     }
 
     pub(super) fn write_runs(&mut self, id: u32) -> Progress {
         let job = self.runs_job.as_mut().or_bug(Errno::ENOTRECOVERABLE);
-        let span = self.sample.span;
+        let span = self.blocks.sample.span;
         let rows = job.row..span.min(job.row + BAKE_ROWS_PER_STEP);
-        if write_rows(&mut self.direct, &self.sample, &self.stands, rows.clone(), &mut job.next).is_err() {
+        if write_rows(&mut self.direct, &self.blocks.sample, &self.blocks.stands, rows.clone(), &mut job.next).is_err() {
             self.runs_job = None;
             self.direct.abort();
             self.refuse(id);

@@ -20,7 +20,7 @@ use pxl_geo_bake::pyramid::Base;
 use pxl_geo_bake::tile::shard::Run;
 use pxl_geo_bake::tile::walk::{over, Done};
 use pxl_geo_bake::util::{pack, Level};
-use pxl_spec::bake::division_tile::{DivisionTile, DIVISION_LEAF};
+use pxl_spec::bake::tile::division::{DivisionTile, DIVISION_LEAF};
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::layer::tile::Tile;
 

@@ -4,7 +4,7 @@
 //! nothing of its neighbours.
 
 mod answer;
-use pxl_spec::bake::format::Occupancy;
+use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -22,7 +22,7 @@ mod query;
 pub mod residency;
 pub mod terrain;
 
-pub use answer::{Answer, Ground, Relief};
+pub use answer::{Answer, Relief};
 pub use query::{Bound, Query};
 
 /// What a layer asks for of the view.

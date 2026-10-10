@@ -1,4 +1,4 @@
-// pxl-spec/bake/division_tile.rs
+// pxl-spec/bake/tile/division.rs
 
 //! The divisions layer's tile: per cell of the ground's lattice the finest
 //! division it is in, and every division a cell names with each of its
@@ -13,9 +13,9 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::bake::fold::majority;
-use crate::bake::format::{occupancy_of, Occupancy};
 use crate::bake::malformed;
 use crate::bake::named::{NameLanes, NamesView};
+use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::division::Subtype;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -228,7 +228,7 @@ pub fn decode(pkt: &[u8]) -> Result<DivisionTile, MarshalError> {
 /// One zoom coarser, at `zoom`: each cell the majority of the 2×2 under it,
 /// compared by id; a child is kept where it has children of its own or its
 /// cells are not its parent's, each repeated.
-pub fn fold_division(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
+pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
     // every child's divisions under one numbering, by id
     let mut all: Vec<Division> = Vec::new();
     let mut by_id: HashMap<String, u32> = HashMap::new();

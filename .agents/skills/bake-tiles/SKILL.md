@@ -175,7 +175,7 @@ the same under a production bundle.
 ## Places
 
 Places is a second layer of terrain's pyramid: the same tiles, zooms and names,
-holding, per cell (`pxl-spec bake/place_tile.rs`, one XTP tree), a count of
+holding, per cell (`pxl-spec bake/tile/place.rs`, one XTP tree), a count of
 places and, of each kind, the place of least id with the leaf cell it
 stands in — its names, held to 32 code points, the source's own id and its
 kind by name, from a pool of places held once a tile. A kind is the place's
@@ -201,7 +201,7 @@ default, is on.
 deno task bake:division
 ```
 
-Its leaves are z12 (`division_tile.rs` `DIVISION_LEAF`), a shard's every
+Its leaves are z12 (`tile/division.rs` `DIVISION_LEAF`), a shard's every
 z12 tile with a division in it (`division.rs` `leaf`); each coarser zoom is
 folded, and a version leaves out a tile that says no more than its parent.
 

@@ -14,7 +14,6 @@ pub use census::{Census, ChunkCounts, ChunkHeld};
 pub use mesh::Meshes;
 pub use mount::MOUNTS_BYTES;
 
-use crate::chunk::build::{ground_of, leaf_of};
 use crate::layer::Query;
 use crate::query::World;
 use mesh::*;
@@ -37,8 +36,7 @@ use xpute_guest::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 use crate::chunk::build::{draws_as_held, BuildEvent, Builder};
 use crate::chunk::frontier::{pool_of, Env, Frontier, Now, Slots};
 use crate::chunk::mesh_slot::{group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, OCCUPANCY};
-use crate::chunk::source::{draws, objects_drawn, Drawn};
-use crate::kernel;
+use crate::chunk::source::{compared, draws, written_in};
 use crate::layer::object::preview::RenderEdits;
 use crate::layer::object::store::EntryAt;
 use crate::param;
@@ -53,7 +51,7 @@ use crate::chunk::domain::{self, Domain};
 use crate::chunk::Chunk;
 use crate::io::demand::Order;
 use crate::layer::Base as _;
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 
 /// `.fixed.mounts`, handed in at boot.
 pub static MOUNTS_RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
@@ -129,7 +127,6 @@ struct Sources {
     /// A tier above a leaf bakes one color with no texture layer, so the setting
     /// is part of what the tier was built from.
     textured: bool,
-    objects: Option<Drawn>,
     hide: Option<EntryAt>,
     carve: Option<EntryAt>,
     /// Zoom of the tile the chunk and each apron neighbour are read from, so a
@@ -142,15 +139,14 @@ impl Sources {
     fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
         let drawn = |at: &EntryAt| draws(k, *at) && draws_as_held(k, at.zoom());
-        let objects = objects_drawn(&kernel().objects, k);
-        let (own, beside) = ground_of(leaf_of(k, objects.as_ref().map_or(k.cell_zoom(), Drawn::runs)));
+        let world = World::now();
+        let column = world.read(k.node(), k.cell_zoom()).value();
         Sources {
             textured: settings.textures,
-            objects,
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
-            read_from: own.value().map(|s| s.from.zoom),
-            beside_from: beside.map(|b| b.map(|s| s.from.zoom)),
+            read_from: column.map(|c| c.ground.from.zoom),
+            beside_from: column.map_or([None; 8], |c| c.beside.map(|b| b.map(|s| s.from.zoom))),
         }
     }
 }
@@ -497,11 +493,12 @@ impl Scheduler {
         for i in 0..self.slots.len() {
             let k = self.slots[i].chunk;
             let sources = Sources::of(k, edits);
-            if sources != self.slots[i].sources {
+            if written_in(k) || sources != self.slots[i].sources {
                 self.slots[i].sources = sources;
                 self.source(i);
             }
         }
+        compared();
     }
 
     /// The build task's step. Returns whether any build did work.

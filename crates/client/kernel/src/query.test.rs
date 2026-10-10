@@ -4,8 +4,8 @@
 // parent as the bake folds them, and objects written into a store.
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::constant::OBJECT_COARSEST;
-use pxl_spec::bake::format::Ground;
+use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
+use pxl_spec::bake::tile::terrain::Ground;
 use pxl_spec::block::cube::{self, ground, sentinel};
 use pxl_spec::block::object::{cube_id, Cube};
 use pxl_spec::space::coord::pvf3::ivec;
@@ -13,7 +13,7 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 
 use super::*;
 use crate::layer::Answer;
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
@@ -21,7 +21,7 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::layer::object::store::Store;
 use crate::layer::residency::Residency;
-use pxl_spec::space::coord::zoom::{index_of, Zoom};
+use pxl_spec::space::coord::zoom::{index_of, units, Zoom};
 
 use crate::layer::object::store::Write;
 use crate::layer::residency::{Candidate, Victim};
@@ -89,7 +89,7 @@ fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
 
     let empty = Store::default();
     let access = World::new(&residency, &empty);
-    assert_eq!(access.at(&point(at[0], at[1]), LEAF_ZOOM).value().unwrap().top(), None);
+    assert_eq!(access.surface(&point(at[0], at[1]), LEAF_ZOOM).value().unwrap(), None);
     assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(None));
     assert_eq!(access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).value().flatten(), None);
 
@@ -141,7 +141,7 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let tile = |x: i64| pxl_spec::space::layer::tile::tile_at(LEAF_ZOOM, [x, 0]);
     let residency = resident(&[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())]);
     let seam = pxl_spec::space::coord::world::ROUND / 2.0;
-    let top = World::new(&residency, &Store::default()).at(&point(-seam + 20.5, 100.5), LEAF_ZOOM).value().unwrap().top().unwrap();
+    let top = World::new(&residency, &Store::default()).surface(&point(-seam + 20.5, 100.5), LEAF_ZOOM).value().flatten().unwrap().top;
 
     let mut store = Store::default();
     let red = cube_id(Cube::Object(cube::Object::red));
@@ -159,4 +159,72 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let hit = access.first_hit(&along, Detail::Zoom(LEAF_ZOOM)).exact().flatten().unwrap();
     assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
     assert_eq!(hit.point[0], seam + 40.0, "{hit:?}");
+}
+
+fn flat_at_five() -> (Residency<TerrainTile>, [f64; 2]) {
+    let leaf = top().children()[0];
+    let flat = TerrainTile::leaf(
+        vec![5; PADDED * PADDED],
+        Ground {
+            cells: vec![ground::land; SPAN * SPAN].into(),
+        },
+        Default::default(),
+    );
+    let (x0, y0, _) = leaf.rect();
+    (resident(&[(leaf, flat)]), [x0 + 10.0, y0 + 10.0])
+}
+
+/// A quarter of a cell dug a cell deep is stood on and struck at its bottom,
+/// the rest of the cell at the surface: the query answers at what is placed's
+/// own size, as a chunk drawing it as held does.
+#[test]
+fn a_cell_dug_in_part_is_met_where_each_part_is_drawn() {
+    use crate::layer::object::store::AIR;
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let mut store = Store::default();
+    for z in [4.0, 4.5] {
+        write(&mut store, [x, y, z], OBJECT_COARSEST + 1, AIR);
+    }
+    let access = World::new(&residency, &store);
+    for (at, top) in [([x + 0.25, y + 0.25], 4.0), ([x + 0.75, y + 0.75], 5.0)] {
+        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(top)), "{at:?}");
+        let hit = access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).exact().flatten().unwrap();
+        assert_eq!(hit.point[2], top, "{hit:?}");
+    }
+}
+
+/// A cell dug at the finest zoom is met there, not folded to a coarser one.
+#[test]
+fn a_cell_dug_at_the_finest_is_met_as_held() {
+    use crate::layer::object::store::AIR;
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let mut store = Store::default();
+    let side = units(OBJECT_FINEST);
+    write(&mut store, [x, y, 5.0 - side], OBJECT_FINEST, AIR);
+    let access = World::new(&residency, &store);
+    for (at, top) in [([x + side / 2.0, y + side / 2.0], 5.0 - side), ([x + 0.5, y + 0.5], 5.0)] {
+        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(top)), "{at:?}");
+        let hit = access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).exact().flatten().unwrap();
+        assert_eq!(hit.point[2], top, "{hit:?}");
+    }
+}
+
+/// In a stack with a cell left out, what stands in the gap stands on the
+/// cube under it, and the cube over it is its ceiling.
+#[test]
+fn a_gap_in_a_stack_is_floored_and_roofed_by_its_cubes() {
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let mut store = Store::default();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    for z in [5.0, 7.0] {
+        write(&mut store, [x, y, z], OBJECT_COARSEST, red);
+    }
+    let access = World::new(&residency, &store);
+    let gap = world::point(x + 0.5, y + 0.5, 6.5);
+    assert_eq!(access.floor_under(&gap), Answer::Exact(Some(6.0)));
+    assert_eq!(access.ceiling_over(&gap), Answer::Exact(Some(7.0)));
+    assert_eq!(access.surface_support(&gap), Answer::Exact(Some(6.0)));
 }

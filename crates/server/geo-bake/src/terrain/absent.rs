@@ -9,7 +9,8 @@
 
 use std::borrow::Cow;
 
-use pxl_spec::bake::format::{Ground, Occupancy, TerrainTile, ELE_LANE};
+use pxl_spec::bake::tile::terrain::{Ground, TerrainTile, ELE_LANE};
+use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::block::cube::{ground, sentinel};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::tile::Tile;

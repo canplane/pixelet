@@ -32,7 +32,7 @@ use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use pxl_spec::bake::place_tile::{stands, PlaceTile, PLACE_FIRST, PLACE_LATTICE};
+use pxl_spec::bake::tile::place::{stands, PlaceTile, PLACE_FIRST, PLACE_LATTICE};
 use pxl_spec::space::coord::pvf3::pack;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::world::REACH;

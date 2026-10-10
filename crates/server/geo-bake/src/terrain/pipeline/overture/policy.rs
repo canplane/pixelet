@@ -7,7 +7,7 @@
 //! `water.mss`, `buildings.mss`, `roads.mss`, `project.mml`); a class Carto
 //! draws no fill for paints nothing, and the land under it shows.
 
-use pxl_spec::bake::format::GroundId;
+use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::cube::ground as g;
 use pxl_spec::space::coord::adapter::epsg3857::G3857;
 

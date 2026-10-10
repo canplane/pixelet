@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use crate::coverage::Coverage;
 use postgres::Client;
 use pxl_geo_spec::overture::properties::CATEGORY_SQL;
-use pxl_spec::bake::format::Occupancy;
-use pxl_spec::bake::place_tile::{self, category_of, fold_place, Place, PlaceTile};
+use pxl_spec::bake::tile::place::{self, category_of, Place, PlaceTile};
+use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
@@ -15,16 +15,16 @@ use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 impl crate::pyramid::Base for PlaceTile {
     fn encode(&self) -> Result<Vec<u8>, String> {
-        place_tile::encode(self).map_err(|e| e.to_string())
+        place::encode(self).map_err(|e| e.to_string())
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {
-        place_tile::decode(raw).map_err(|e| e.to_string())
+        place::decode(raw).map_err(|e| e.to_string())
     }
 
     fn fold_tile<'a>(p: Tile, held: impl Fn(Tile) -> Option<&'a Self>) -> Option<Self> {
         let [a, b, c, d] = p.children().map(held);
-        Some(fold_place(p, [a?, b?, c?, d?]))
+        Some(place::fold(p, [a?, b?, c?, d?]))
     }
 
     fn occupancy(&self) -> Occupancy {

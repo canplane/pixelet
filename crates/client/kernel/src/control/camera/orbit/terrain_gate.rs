@@ -9,13 +9,13 @@ use pxl_spec::space::layer::lattice::GROUND;
 use xpute_kit::math::scalar::wrap;
 
 use crate::control::camera::orbit::orbit_eye_offset;
-use crate::control::navigation::support::{in_cell, passage, Passage};
+use crate::control::navigation::support::{passage, stand_over, Passage};
 use crate::layer::Answer;
 use crate::param::EYE_CLEARANCE_U;
 use crate::query::World;
 use crate::setting::store::{settings_store, OrbitObstacleMode};
 use crate::view::frame::coord::world_to_canonical;
-use pxl_spec::space::coord::zoom::index_of;
+use pxl_spec::space::coord::zoom::{index_of, units};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewTriple {
@@ -56,8 +56,9 @@ fn climb_rise(at: &ViewPose) -> Option<f64> {
     let (local, eye) = eye(at);
     let center = world_to_canonical(&at.target);
     let access = World::now();
-    let ground = match passage(&center, [local[0] - at.target[0], local[1] - at.target[1]], index_of(GROUND.cell(), &eye)[2]) {
-        Passage::Open(cz) => access.floor_under(&in_cell(&eye, cz)),
+    let floor = index_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
+    let ground = match passage(&center, [local[0] - at.target[0], local[1] - at.target[1]], floor) {
+        Passage::Open(floor) => access.floor_under(&stand_over(&eye, floor)),
         Passage::Unknown => access.floor_under(&eye),
         Passage::Blocked => return None,
     };

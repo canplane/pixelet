@@ -4,26 +4,11 @@
 //! sources, a column at a time, and packed into one block (`RunSet`).
 
 use crate::mesh::word::{taps_of, unpack_material, SUB_CELL_NONE};
-use crate::mesh::{grow, try_push, Refused};
-use pxl_spec::space::camera::grid::CHUNK_CELLS;
-use pxl_spec::space::coord::zoom::count;
-use pxl_spec::space::layer::lattice::GROUND_FOLD;
+use pxl_spec::block::sample::{grow, try_push, Refused, COL_SPAN};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-/// The ring of neighbor columns a run set carries. Without it the face mask
-/// read every chunk seam as open air, losing occlusion, creases and culling
-/// there. Nothing is emitted from an apron column.
-pub const APRON: u32 = 1;
-
-/// The widest set: a chunk's columns where they fold into its cells, and its apron.
-pub const COL_SPAN: u32 = CHUNK_CELLS * count(GROUND_FOLD, 0) + 2 * APRON;
 const COLUMN_CNT: usize = (COL_SPAN * COL_SPAN) as usize;
-
-/// Column `(cx, cy)` of the chunk's own in a set `span` wide.
-pub fn apron_col(span: u32, cx: u32, cy: u32) -> u32 {
-    (cy + APRON) * span + cx + APRON
-}
 
 #[derive(Clone, Copy)]
 struct Run {

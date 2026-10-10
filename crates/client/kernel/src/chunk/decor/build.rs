@@ -7,21 +7,20 @@
 use crate::chunk::Chunk as PyramidChunk;
 use crate::layer::Query;
 use pxl_render::gpu::api::word_bytes;
-use pxl_render::mesh::paint::terrain::sample::TileSource;
+use pxl_spec::block::sample::TileSource;
 use pxl_spec::space::camera::grid::target_cell_px;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::layer::lattice::GROUND;
 
-use std::collections::{HashMap, TryReserveError};
+use std::collections::TryReserveError;
 
 use crate::chunk::decor::instance::{DecorScratch, GroupLanes, DECOR_GROUPS, HIDDEN_FLAG};
 use crate::layer::instance::{Meta, Source};
 use crate::layer::object::meta::placed;
 use crate::layer::object::store::{EntryAt, Store};
 use crate::layer::terrain::scatter::grow;
-use crate::query::{covers, Cover};
+use crate::query::World;
 use pxl_spec::block::decor::Decor;
-use pxl_spec::space::coord::zoom::{index, units, Zoom};
+use pxl_spec::space::coord::zoom::{units, Zoom};
 
 /// A decor is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
 /// down to `DECOR_SPRITE_PX`. No fade: the edge is per instance, so it staggers.
@@ -56,9 +55,6 @@ pub struct Ground<'a> {
     pub tx0: u32,
     pub ty0: u32,
     pub side: u32,
-    /// What the objects fold to over cells coarser than a cell; none where
-    /// the cells are a cell's.
-    pub folded: Option<&'a HashMap<[i64; 3], u32>>,
 }
 
 /// What the eraser is over, hidden in its block while it is.
@@ -100,7 +96,7 @@ impl<'s> DecorBuild<'s> {
             }
             Self::placed(scratch, decor, first, store, at).ok()?;
             if let Some(ground) = ground.filter(|_| grows) {
-                Self::grown(scratch, decor, first, ground, store, chunk).ok()?;
+                Self::grown(scratch, decor, first, ground, chunk).ok()?;
             }
         }
         Some(DecorBuild {
@@ -126,9 +122,9 @@ impl<'s> DecorBuild<'s> {
         refused
     }
 
-    /// What the ground grows here, less what the objects over it cover.
-    fn grown(scratch: &mut DecorScratch, decor: &Decor, first: usize, ground: &Ground, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
-        let own = GROUND.cell_zoom(ground.zoom);
+    /// What the ground grows here, where the chunks draw its footing.
+    fn grown(scratch: &mut DecorScratch, decor: &Decor, first: usize, ground: &Ground, chunk: Aabb) -> Result<(), TryReserveError> {
+        let world = World::now();
         let mut candidates = core::mem::take(&mut scratch.candidates);
         let grew = grow(
             decor,
@@ -141,13 +137,7 @@ impl<'s> DecorBuild<'s> {
             &mut candidates,
             |i| {
                 let (Source::Ground(cell), Meta::Decor(m)) = (i.source, i.meta) else { return Ok(()) };
-                let cover = match ground.folded {
-                    None => Cover::Leaf {
-                        any: store.read((GROUND.cell(), cell), GROUND.cell()).value().is_some_and(|c| c.holds()),
-                    },
-                    Some(f) => Cover::Folded(f.get(&cell.map(|c| index(own, c))).copied()),
-                };
-                if covers(cover) {
+                if !world.grows(decor, cell, ground.zoom) {
                     return Ok(());
                 }
                 scratch.push(first + m.variant as usize, i)

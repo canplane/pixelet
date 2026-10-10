@@ -71,7 +71,7 @@ pub struct Decor {
     pub seed: u64,
     pub density: f64,
     pub orientation: Orientation,
-    pub on: &'static [crate::bake::format::GroundId],
+    pub on: &'static [crate::bake::tile::terrain::GroundId],
     pub variants: &'static [Variant],
 }
 

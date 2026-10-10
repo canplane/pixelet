@@ -22,7 +22,7 @@ use pxl_spec::block::object::{cube_of, decor_id_from_num, object_value_is_decor,
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::world::{node_near, wrap_index, REACH};
+use pxl_spec::space::coord::world::{around, node_near, wrap_index, REACH};
 use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{child_cube, key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
@@ -505,6 +505,24 @@ impl Cells<'_> {
     pub fn fold(&self, apron: i64, hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
         let (from, to) = self.column_cells(apron);
         self.store.fold_at(self.cell, from, to, hide, out)
+    }
+
+    /// Cuts the cells `carve` covers to air in `out`, as `fold` writes them:
+    /// an eraser's preview.
+    pub fn carve(&self, apron: i64, carve: EntryAt, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
+        let (from, _) = self.column_cells(apron);
+        let own = carve.zoom();
+        let [ix, iy, iz] = index_of(self.cell, &base_of(own, carve.at()));
+        let ix = from[0] + (ix - from[0]).rem_euclid(around(self.cell));
+        let n = if own < self.cell { i64::from(count(self.cell, own)) } else { 1 };
+        for dz in 0..n {
+            for dy in 0..n {
+                for dx in 0..n {
+                    try_insert(out, [ix + dx, iy + dy, iz + dz], AIR)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// The leaf holding the node, or the node as its eight fold to, and whether it is that fold.

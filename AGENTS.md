@@ -320,6 +320,12 @@ transition — the same reduction at the size of one loader.
 - **The query is the only seam.** A chunk asks a node of the query — a
   bound to descend by, the records to build from — and storage's shape
   stays behind it; render is handed cells.
+- **What is drawn and the world's mechanics are parallel.** What is in each
+  block, and whether it fills it, is one composition of the query's records
+  (`pxl-spec block/`), under both: a chunk draws the column it composes,
+  and control asks the world, which composes the same column at the same
+  zoom. Control is headless — it names no chunk and nothing drawn — and
+  render only colors what is composed.
 - **Descent carries what it knows.** Drawing and casting descend the
   pyramid, each step answered from its parent, never re-asked from the top.
   Speed is sought only inside that hierarchy (the camera grid's resolution,
@@ -328,9 +334,9 @@ transition — the same reduction at the size of one loader.
   CPU or on the GPU, never one kind of it sent to the other side.
 - **Dependencies point one way:** turn, door and shell (the UI's way in)
   wire everything from the top, and nothing below names them; control,
-  which the door's events enter, moves the eye over the view and names
-  neither scene nor chunk, whose share of what it decides the turn hands
-  down; scene → chunk → view → query → layer;
+  which the door's events enter, moves the eye over the view and asks the
+  world's query, naming neither scene nor chunk, whose share of what it
+  decides the turn hands down; scene → chunk → view → query → layer;
   io and the turn's edge and phases below everyone, io as transport; leaves
   (settings, models, billboards) below what reads them. The profiler is a
   debug path beside the axis: it reads anything, and production reaches it

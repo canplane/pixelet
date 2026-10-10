@@ -2,8 +2,7 @@
 
 //! Shaders and their pipeline records (lanes, bind groups, primitive, depth and
 //! blend state) as one source the host turns into WebGPU or wgpu descriptors.
-//! `cargo test` compiles every shader with naga and holds each record against
-//! what the shader declares.
+//! `cargo test` compiles and validates every shader with naga.
 
 pub const SHADER_CHUNK: u32 = 0;
 pub const SHADER_DECOR: u32 = 1;
@@ -193,7 +192,7 @@ pub fn source(kind: u32) -> &'static str {
 
 pub const FRAME_FLOATS: usize = 92;
 /// Frame uniform field offsets in floats, in frame.wgsl's order.
-pub const FRAME_AT: [usize; 20] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84, 87, 88];
+pub const FRAME_AT: [usize; 21] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84, 87, 88, 89];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_CHUNK_DEPTH: u32 = 10;
@@ -689,3 +688,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         _ => Vec::new(),
     }
 }
+
+#[cfg(test)]
+#[path = "record.test.rs"]
+mod test;

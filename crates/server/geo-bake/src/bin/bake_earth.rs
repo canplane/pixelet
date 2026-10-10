@@ -4,7 +4,7 @@
 //! Generation, July 2004 (21600 × 10800, 2 km, the sea a flat blue), as
 //! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
 //! eight tiles). Each is averaged in linear light over what a texel covers.
-//!  - The earth layer's tiles (pxl-spec bake/earth_tile.rs) at its top zoom, a
+//!  - The earth layer's tiles (pxl-spec bake/tile/earth.rs) at its top zoom, a
 //!    ground cell a texel, to `./out/earth/<version>/<name>`. A tile that is one
 //!    color says nothing the global picture does not, and has no object.
 //!  - The global picture every tile falls back to, 2048 × 1024, to
@@ -22,8 +22,8 @@ use std::process::ExitCode;
 use image::ImageFormat;
 
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
-use pxl_spec::bake::earth_tile::{self, EARTH_ZOOM};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
+use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::pvf3::pvf3;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -168,7 +168,7 @@ fn lng_lat(x: f64, y: f64) -> [f64; 2] {
 
 fn tile_texels(px: i64, py: i64, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
     let tile = tile_at(EARTH_ZOOM, [px, py]);
-    let mut rgba = vec![0u8; earth_tile::EARTH_BYTES];
+    let mut rgba = vec![0u8; earth::EARTH_BYTES];
     for ty in 0..TILE_CELLS {
         for tx in 0..TILE_CELLS {
             let index = GROUND.cell_index(tx, ty);
@@ -285,9 +285,7 @@ fn run() -> Result<(), String> {
                 for &[px, py] in tiles.iter().skip(t).step_by(threads) {
                     let Some(rgba) = tile_texels(px, py, day, night) else { continue };
                     let name = tile_at(EARTH_ZOOM, [px, py]).name();
-                    let stored = earth_tile::encode(&rgba)
-                        .map_err(|e| format!("{e:?}"))
-                        .and_then(|pkt| pack(&pkt, Level::Stored).map_err(|e| e.to_string()));
+                    let stored = earth::encode(&rgba).map_err(|e| format!("{e:?}")).and_then(|pkt| pack(&pkt, Level::Stored).map_err(|e| e.to_string()));
                     match stored.and_then(|b| write_atomic(&out.join(&name), &b).map_err(|e| e.to_string())) {
                         Ok(()) => drop(written.fetch_add(1, std::sync::atomic::Ordering::Relaxed)),
                         Err(e) => *failed.lock().unwrap_or_else(|e| e.into_inner()) = Some(format!("{name}: {e}")),

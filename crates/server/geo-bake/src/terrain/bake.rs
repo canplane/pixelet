@@ -2,8 +2,8 @@
 
 //! One tile's source rows baked into its surface, which with its lines is the tile.
 
-use pxl_spec::bake::format::{Ground, TerrainTile};
 use pxl_spec::bake::separation::Separation;
+use pxl_spec::bake::tile::terrain::{Ground, TerrainTile};
 use pxl_spec::space::coord::adapter::epsg3857::{self, G3857};
 use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;

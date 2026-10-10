@@ -2,7 +2,8 @@
 
 //! The block catalog: the generated tables — the ids' kinds, the cubes and
 //! their colors, the decors, the marker, what an id carries beyond itself —
-//! and `object`, where a block becomes the value the object store keeps.
+//! `object`, where a block becomes the value the object store keeps, and what
+//! is in each block of the world, composed from the ground and what is placed.
 
 #[path = "block/color.spec.rs"]
 pub mod color;
@@ -16,6 +17,8 @@ pub mod id;
 #[path = "block/marker.spec.rs"]
 pub mod marker;
 pub mod object;
+pub mod sample;
+pub mod stand;
 
 pub use decor::DecorId;
 
@@ -50,7 +53,7 @@ impl decor::Decor {
     }
 
     /// Whether the ground grows it on a cell of `look`.
-    pub fn allows(&self, look: crate::bake::format::GroundId) -> bool {
+    pub fn allows(&self, look: crate::bake::tile::terrain::GroundId) -> bool {
         self.on.contains(&look)
     }
 

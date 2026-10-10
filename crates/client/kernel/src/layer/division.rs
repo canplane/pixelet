@@ -5,8 +5,8 @@
 //! the cell. Nothing here is drawn; the name is read straight into the UI
 //! snapshot.
 
-use pxl_spec::bake::division_tile::{self, Division, DivisionTile, DIVISION_LEAF};
-use pxl_spec::bake::format::Occupancy;
+use pxl_spec::bake::tile::division::{self, Division, DivisionTile, DIVISION_LEAF};
+use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::pvf3::Pvf3;
 use pxl_spec::space::coord::zoom::{idx, Zoom};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
@@ -36,7 +36,7 @@ impl Base for DivisionTile {
 
     /// A handful over the focus, so held on the heap with its names decoded.
     fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<DivisionTile, Failure> {
-        Ok(division_tile::decode(pkt)?)
+        Ok(division::decode(pkt)?)
     }
 }
 

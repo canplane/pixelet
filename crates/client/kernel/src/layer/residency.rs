@@ -12,7 +12,7 @@
 
 pub mod floor;
 
-use pxl_spec::bake::format::Occupancy;
+use pxl_spec::bake::tile::Occupancy;
 use std::collections::HashMap;
 
 use fnv::FnvBuildHasher;

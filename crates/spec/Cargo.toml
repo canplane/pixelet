@@ -6,6 +6,7 @@ publish.workspace = true
 
 [lib]
 path = "src/lib.rs"
+doctest = false
 
 [features]
 # The shapes both servers answer with, as serde types. The kernel compiles

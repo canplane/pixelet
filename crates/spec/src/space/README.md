@@ -139,7 +139,7 @@ represents:
 |                                           | axes | resident                             | a node holds                                                    | stored                                                           | walked                                                          |
 | ----------------------------------------- | ---- | ------------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------- |
 | the pyramid (`layer/tile.rs`)             | 2    | resident by tile: one can be missing | a layer's fold of all under it                                  | a record a tile                                                  | from a point, up to the nearest resident tile                   |
-| a tile's index (`bake/format.rs` `Index`) | 2    | with its tile                        | the lowest and highest drawn under a cell                       | dense lanes in the tile, and coarser cells of them               | a coarse cell passed whole where a ray is above it              |
+| a tile's index (`bake/tile/terrain.rs` `Index`) | 2    | with its tile                        | the lowest and highest drawn under a cell                       | dense lanes in the tile, and coarser cells of them               | a coarse cell passed whole where a ray is above it              |
 | the objects (pxl-kernel object/store.rs)  | 3    | whole                                | its leaf's value, or the majority of its eight, read when asked | the leaves alone, one tree a column (`hierarchy/sparse_tree.rs`) | down a cube's key range, by a box, or along a ray nearest first |
 
 The pyramid is a tree across zooms: every tile holds a summary of the
@@ -155,7 +155,7 @@ eight equal leaves are joined into their parent.
 The two ways of stopping are one rule. A node stops growing where it
 already says all of the ground under it, and a coarser cell of equal ones is the
 case where any summary loses nothing. The pyramid's tile says it in its
-occupancy (`bake/format.rs` `Occupancy`), which children are tiles, written by
+occupancy (`bake/tile/terrain.rs` `Occupancy`), which children are tiles, written by
 the bake's fold: a tile of places marks a child none when no cell over it
 holds two places, so the tree of places is only as deep as a crowd needs,
 and terrain marks only a child that is the zero tile, its vote being lossy.

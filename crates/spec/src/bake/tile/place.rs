@@ -1,4 +1,4 @@
-// pxl-spec/bake/place_tile.rs
+// pxl-spec/bake/tile/place.rs
 
 //! The places layer's tile: the places OpenStreetMap Carto would draw within
 //! it at its zoom, each with the zoom it is shown from. A tile at zoom z
@@ -12,8 +12,8 @@
 use std::collections::HashSet;
 
 use crate::asset::symbol::SYMBOLS;
-use crate::bake::format::{occupancy_of, Occupancy};
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
+use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::block::object::MARK_STEPS;
 use crate::space::coord::pvf3::pvf3::Pvf3;
 use crate::space::coord::zoom::Zoom;
@@ -237,7 +237,7 @@ pub fn stands(tile: Tile, at: [u32; 2]) -> Cell {
 /// `p` from its four children, in `Tile::children`'s order: what of theirs is
 /// shown from `p`'s zoom on. A child is a tile where it holds more, or has a
 /// child that does, so a place first shown deeper stays reachable.
-pub fn fold_place(p: Tile, children: [&PlaceTile; 4]) -> PlaceTile {
+pub fn fold(p: Tile, children: [&PlaceTile; 4]) -> PlaceTile {
     let side = 1u32 << (GROUND.cell() - p.zoom - 1);
     let mut placed = Vec::new();
     let mut kept = [false; 4];
@@ -332,5 +332,5 @@ fn validate(tile: &PlaceTile) -> Result<(), MarshalError> {
 }
 
 #[cfg(test)]
-#[path = "place_tile.test.rs"]
+#[path = "place.test.rs"]
 mod test;

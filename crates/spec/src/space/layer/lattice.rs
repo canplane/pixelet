@@ -225,7 +225,7 @@ pub const GROUND: Lattice = Lattice::new(LEAF_ZOOM + 9).scaled(1);
 pub const GROUND_FOLD: Zoom = GROUND.scale_steps() as Zoom;
 const _: () = assert!(GROUND.scale_steps() >= 0, "the ground's cells are finer than the grid's");
 
-/// The index lane's lattice (bake/format.rs `Index`).
+/// The index lane's lattice (bake/tile/terrain.rs `Index`).
 pub const EXTENT: Lattice = Lattice::new(EXTENT_CELL);
 
 pub const TILE_CELLS: u32 = GROUND.tile_cells();

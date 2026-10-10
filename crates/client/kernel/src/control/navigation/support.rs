@@ -17,7 +17,7 @@ use crate::layer::Answer;
 use crate::query::{Detail, Ray, World};
 use crate::setting::store::settings_store;
 use crate::view::frame::coord::{to_world, world_to_canonical};
-use pxl_spec::space::coord::zoom::{index_of, units};
+use pxl_spec::space::coord::zoom::units;
 
 /// The Z lane's floor, under any ground.
 const UNKNOWN_Z: i64 = -(1 << (IVEC_Z_W - 1)) << FRAC_W;
@@ -50,7 +50,7 @@ pub fn floor_of(center: &Pvf3) -> f64 {
     pvf3::to_real(pvf3::Z(center)) - units(GROUND.cell()) / 2.0
 }
 
-fn stand_over(at: &Pvf3, top: f64) -> Pvf3 {
+pub fn stand_over(at: &Pvf3, top: f64) -> Pvf3 {
     with_z(at, pvf3::from_real(over(top)))
 }
 
@@ -105,8 +105,8 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) ->
         return *from;
     }
     let mut at = to;
-    match passage(from, way, index_of(GROUND.cell(), from)[2]) {
-        Passage::Open(cz) => at = in_cell(&to, cz),
+    match passage(from, way, floor_of(from)) {
+        Passage::Open(floor) => at = stand_over(&to, floor),
         Passage::Unknown => {}
         Passage::Blocked => return *from,
     }
@@ -117,45 +117,42 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) ->
     }
 }
 
-/// `at` in cell height `cz`.
-pub fn in_cell(at: &Pvf3, cz: i64) -> Pvf3 {
-    stand_over(at, cz as f64 * units(GROUND.cell()))
-}
-
 pub enum Passage {
-    Open(i64),
+    /// The floor it is open over.
+    Open(f64),
     /// Open sky, way not known exactly.
     Unknown,
     Blocked,
 }
 
-/// Lowest open cell height from `start` along `way`: over each blocker, under `from`'s ceiling.
-pub fn passage(from: &Pvf3, way: [f64; 2], start: i64) -> Passage {
+/// Lowest open floor from `start` along `way`: over each blocker, under `from`'s ceiling.
+pub fn passage(from: &Pvf3, way: [f64; 2], start: f64) -> Passage {
     let access = World::now();
     let Some(ceiling) = access.ceiling_over(from).exact() else { return Passage::Blocked };
     let length = libm::hypot(way[0], way[1]);
     let side = units(GROUND.cell());
     let [x, y] = [pvf3::to_real(pvf3::X(from)), pvf3::to_real(pvf3::Y(from))];
     let dir = if length > 0.0 { [way[0] / length, way[1] / length] } else { [0.0, 0.0] };
-    let mut cz = start;
+    let mut floor = start;
     // Decor is passed.
     let mut t = 0.0;
     loop {
-        if ceiling.is_some_and(|top| cz >= top) {
+        if ceiling.is_some_and(|top| floor >= top) {
             return Passage::Blocked;
         }
         let ray = Ray {
-            origin: [x + dir[0] * t, y + dir[1] * t, over(cz as f64 * side)],
+            origin: [x + dir[0] * t, y + dir[1] * t, over(floor)],
             direction: [dir[0], dir[1], 0.0],
             reach: length - t,
         };
         match access.first_hit(&ray, Detail::Zoom(LEAF_ZOOM)) {
-            Answer::Exact(None) => return Passage::Open(cz),
+            Answer::Exact(None) => return Passage::Open(floor),
             Answer::Exact(Some(hit)) => {
-                let p = ray.at(hit.t + side / 2.0);
-                let cell = pvf3::gather(pvf3::from_real(p[0]), pvf3::from_real(p[1]), pvf3::from_real(p[2]));
-                match access.open_from(&cell).exact() {
-                    Some(open) if open > cz => (cz, t) = (open, 0.0),
+                // Inside the box struck, at the walker's height.
+                let [cx, cy, _] = hit.cube.center();
+                let inside = pvf3::gather(pvf3::from_real(cx), pvf3::from_real(cy), pvf3::from_real(ray.origin[2]));
+                match access.open_from(&inside).exact() {
+                    Some(open) if open > floor => (floor, t) = (open, 0.0),
                     Some(_) => t += hit.t + side,
                     None => return Passage::Blocked,
                 }
