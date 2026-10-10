@@ -2,7 +2,7 @@
 #
 # Build context is the repo root: docker build -f crates/server/geo/Dockerfile .
 
-# Must equal rust-toolchain.toml; script/check-toolchain.ts checks it.
+# Must equal rust-toolchain.toml.
 FROM rust:1.98.1-slim-trixie AS build
 WORKDIR /src
 

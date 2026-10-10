@@ -179,7 +179,7 @@ been rewritten. Why each job is as it is lives in the workflow's comments.
 | Job             | When                                                 | What                                                                                                |
 | :-------------- | :--------------------------------------------------- | :-------------------------------------------------------------------------------------------------- |
 | `gate`          | always                                               | `check:ship` and the tests over what changed since the last deploy; on deploy, takes a build number |
-| `deploy-server` | gate green, and the servers' tree changed            | ssh, reset to the run's commit, `docker compose up -d --build --force-recreate`, origin smoke       |
+| `deploy-server` | gate green, and the servers' tree changed            | ssh, reset to the run's commit, `docker compose up -d --build --force-recreate`                     |
 | `deploy-web`    | after `deploy-server`, and the client's tree changed | `deno task deploy` under the build number                                                           |
 | `smoke`         | after either deployed                                | `deno task smoke https://plei.me`                                                                   |
 | `record`        | after either deployed                                | appends the build to the log                                                                        |

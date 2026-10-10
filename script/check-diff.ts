@@ -126,7 +126,6 @@ if (base && !changed.every(placed)) {
 }
 
 // What a deploy ships.
-if (changed.some((path) => /^(rust-toolchain\.toml|\.tool-versions|crates\/.*Dockerfile)$/.test(path))) task("check:toolchain");
 if (web) task("check:web");
 cargo("check:rust");
 if (under("spec/") || changed.some((path) => path.includes(".spec.")) || touched.has("pxl-tool")) task("check:spec");

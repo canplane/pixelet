@@ -2,6 +2,5 @@
 # `deno-version-file`, and asdf and mise read the same file, so a machine
 # with either switches to it the way rustup switches on rust-toolchain.toml.
 # Deno has no rustup: without one of those this is a number to upgrade to
-# rather than one that arrives, and script/check-toolchain.ts is what says
-# when the two have parted.
+# rather than one that arrives.
 deno 2.9.7
