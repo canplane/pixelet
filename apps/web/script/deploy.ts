@@ -33,6 +33,4 @@ if (number) {
   await step("keep the paths", "deno", wrangler("r2", "object", "put", `pixelet-tiles/_meta/paths/${number}.json`, "--remote", "--file", paths.pathname, "--content-type", "application/json"));
 }
 
-// Gitignored cache of the last published number, for the dev server.
-if (number) await Deno.writeTextFile(new URL("../.build_number", import.meta.url), `${number}\n`);
 console.log(number ? `[deploy] #${number} published` : "[deploy] published, unnumbered");
