@@ -16,6 +16,7 @@ use core::fmt;
 const LANES: [u32; 3] = [IVEC_X_W, IVEC_Y_W, IVEC_Z_W];
 
 /// The digits axis `axis` has at `zoom`: one a zoom from where its lane reaches.
+#[inline]
 const fn digits(axis: usize, zoom: Zoom) -> u32 {
     (zoom as u32).saturating_sub(UNIT_ZOOM as u32 - LANES[axis])
 }
@@ -38,8 +39,56 @@ fn axes<const D: usize>(zoom: Zoom) -> impl Iterator<Item = usize> {
 /// The key of the node at `zoom` whose index is `at`.
 pub fn key_of<const D: usize>(zoom: Zoom, at: [i64; D]) -> u128 {
     let n = bits::<D>(zoom);
-    let digits = (1..=zoom).fold(0u128, |key, z| axes::<D>(z).fold(key, |key, i| (key << 1) | ((at[i] >> (zoom - z)) & 1) as u128));
-    (digits << (127 - n)) | (1 << (126 - n))
+    (digits_of(zoom, &at) << (127 - n)) | (1 << (126 - n))
+}
+
+/// The zoom axis `axis`'s first digit is at.
+const fn first_zoom(axis: usize) -> Zoom {
+    (UNIT_ZOOM as u32 - LANES[axis] + 1) as Zoom
+}
+
+/// `at`'s digits at `zoom`, coarsest first: zooms with the same axes are a
+/// run of each axis's next low bits, interleaved in `axes`' order.
+fn digits_of<const D: usize>(zoom: Zoom, at: &[i64; D]) -> u128 {
+    let mut key = 0u128;
+    let mut z = 1;
+    while z <= zoom {
+        let next = (0..D).map(first_zoom).filter(|&s| s > z).fold(zoom + 1, Zoom::min);
+        let (len, k) = (u32::from(next - z), axes::<D>(z).count() as u32);
+        let mut run = 0u128;
+        for (p, i) in axes::<D>(z).enumerate() {
+            // The axis's digits at zooms `z..next`, finest lowest.
+            let lane = ((at[i] >> (zoom + 1 - next)) as u64) & ((1u64 << len) - 1);
+            run |= u128::from(spread(lane, k)) << (k - 1 - p as u32);
+        }
+        key = (key << (len * k)) | run;
+        z = next;
+    }
+    key
+}
+
+/// `v`'s bits `n` apart, lowest first: bit `j` to bit `n · j`.
+#[inline]
+fn spread(v: u64, n: u32) -> u64 {
+    match n {
+        1 => v,
+        2 => {
+            let mut x = v & 0xffff_ffff;
+            x = (x | (x << 16)) & 0x0000_ffff_0000_ffff;
+            x = (x | (x << 8)) & 0x00ff_00ff_00ff_00ff;
+            x = (x | (x << 4)) & 0x0f0f_0f0f_0f0f_0f0f;
+            x = (x | (x << 2)) & 0x3333_3333_3333_3333;
+            (x | (x << 1)) & 0x5555_5555_5555_5555
+        }
+        _ => {
+            let mut x = v & 0x1f_ffff;
+            x = (x | (x << 32)) & 0x001f_0000_0000_ffff;
+            x = (x | (x << 16)) & 0x001f_0000_ff00_00ff;
+            x = (x | (x << 8)) & 0x100f_00f0_0f00_f00f;
+            x = (x | (x << 4)) & 0x10c3_0c30_c30c_30c3;
+            (x | (x << 2)) & 0x1249_2492_4924_9249
+        }
+    }
 }
 
 /// `key_of`'s inverse: the zoom, and each axis's index at it, signed.

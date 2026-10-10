@@ -43,6 +43,7 @@ impl Tile {
         [ivec::X(self.tile), ivec::Y(self.tile)]
     }
 
+    #[inline]
     pub fn parent(self) -> Tile {
         let [x, y] = parent_of(self.at());
         Tile::new(self.zoom - 1, ivec::gather(x, y, 0))

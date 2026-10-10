@@ -191,6 +191,7 @@ impl Separation {
         self.width.is_empty()
     }
 
+    #[inline]
     pub fn line(&self, d: usize) -> Line<'_> {
         let (a, b) = (self.starts[d] as usize, self.starts[d + 1] as usize);
         Line {
@@ -276,6 +277,7 @@ impl Separation {
 }
 
 impl Line<'_> {
+    #[inline]
     pub fn point(&self, i: usize) -> [f64; 2] {
         self.points[i].map(|v| f64::from(v) / POINT_SCALE)
     }
