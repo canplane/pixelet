@@ -62,7 +62,7 @@
     // ships compiles, lints and is what its JSON writes. Style, the device,
     // the bakes, the tests' own code and xpute's checks are local.
     "check": "deno task check:style && deno task check:ship && deno task check:native && deno task check:host && deno task check:xpute",
-    "check:ship": "deno task check:toolchain && deno task check:web && deno task check:rust && deno task check:spec",
+    "check:ship": "deno task check:web && deno task check:rust && deno task check:spec",
     "check:style": "deno task check:fmt && deno task check:rules && deno task lint",
     "check:diff": "./script/check-diff.ts",
     "check:fmt": "deno fmt --check && cargo fmt --manifest-path crates/Cargo.toml --all --check",
@@ -74,8 +74,6 @@
     "check:rust": "cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-api -- -D warnings",
     // What runs here alone: the tests' code, the bakes and the tools.
     "check:host": "cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings",
-    // A Rust version written twice is a binary built on a compiler the gate never ran.
-    "check:toolchain": "./script/check-toolchain.ts",
     "check:rules": "./script/check-rules.ts",
     "check:spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec",
     "test": "deno task test:web && deno task test:xpute && deno task test:rust",

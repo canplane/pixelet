@@ -1,8 +1,7 @@
 // pxl-tool/spec/route.rs
 
-//! The address space from one JSON, written into the shell, the kernel and the
-//! Worker, and checked against wrangler's `run_worker_first` and the deploy
-//! guard's sentinels, which can only carry literals.
+//! The address space from one JSON, written into the shell, the kernel, the
+//! Worker and wrangler's `run_worker_first`.
 
 use regex::Regex;
 
@@ -10,20 +9,6 @@ use super::{json_str, line_comments, read, ts_doc, Node, Output};
 use crate::root;
 
 const JSON: &str = "spec/spec/route.json";
-
-fn listed(path: &str, pattern: &str, what: &str) -> Result<Vec<String>, String> {
-    let text = std::fs::read_to_string(root().join(path)).map_err(|e| format!("{path}: {e}"))?;
-    let re = Regex::new(pattern).map_err(|e| e.to_string())?;
-    let found = re.captures(&text).ok_or(format!("{path}: no {what} to check against {JSON}"))?;
-    let quoted = Regex::new(r#""([^"]+)""#).map_err(|e| e.to_string())?;
-    let mut out: Vec<String> = quoted.captures_iter(&found[1]).map(|c| c[1].to_string()).collect();
-    out.sort();
-    Ok(out)
-}
-
-fn json_list(xs: &[String]) -> String {
-    serde_json::to_string(xs).unwrap_or_default()
-}
 
 pub fn outputs() -> Result<Vec<Output>, String> {
     let spec = read(JSON)?;
@@ -45,16 +30,16 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     let worker_first: Vec<String> = roots.iter().map(|(n, _)| format!("{}/*", path(n))).collect();
 
-    let declared = listed("apps/web/wrangler.jsonc", r#""run_worker_first"\s*:\s*\[([^\]]*)\]"#, "run_worker_first")?;
-    let mut claimed = worker_first.clone();
-    claimed.sort();
-    if declared != claimed {
-        return Err(format!(
-            "apps/web/wrangler.jsonc's run_worker_first is {} where {JSON}'s roots are {}. A root the edge does not claim is answered by the static-asset fallback with index.html, which reads as the app loading rather than as a route that is not there.",
-            json_list(&declared),
-            json_list(&worker_first)
-        ));
+    // Every root, so none is answered by the static-asset fallback with
+    // index.html, which reads as the app loading rather than as no route.
+    let wrangler_path = "apps/web/wrangler.jsonc";
+    let wrangler = std::fs::read_to_string(root().join(wrangler_path)).map_err(|e| format!("{wrangler_path}: {e}"))?;
+    let claim = Regex::new(r#""run_worker_first"\s*:\s*\[[^\]]*\]"#).map_err(|e| e.to_string())?;
+    if !claim.is_match(&wrangler) {
+        return Err(format!("{wrangler_path}: no run_worker_first to write"));
     }
+    let list = serde_json::to_string(&worker_first).unwrap_or_default().replace(',', ", ");
+    let wrangler = claim.replace(&wrangler, format!(r#""run_worker_first": {list}"#).as_str()).into_owned();
 
     let mut all: Vec<(String, String)> = Vec::new();
     all.extend(roots.iter().map(|(n, _)| (n.to_string(), path(n))));
@@ -109,5 +94,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         Output::new("crates/spec/src/route.spec.rs", rs.join("\n")),
         Output::new("apps/web/src/config/route.spec.ts", ts.join("\n")),
         Output::new("apps/web/cloudflare-worker/route.spec.ts", worker.join("\n")),
+        Output::new(wrangler_path, wrangler),
     ])
 }

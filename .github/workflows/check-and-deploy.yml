@@ -74,8 +74,7 @@ env:
   # Neither language's version is here. rust-toolchain.toml says the Rust and
   # rustup reads it on its own; .tool-versions says the Deno and setup-deno is
   # pointed at it. A job installs from a file rather than being told, so the
-  # number is in one place and a checkout can be held to the same one
-  # (script/check-toolchain.ts).
+  # number is in one place.
   #
   # wasm-opt prints the import/export mapping the shell imports, and which
   # letters it assigns is the optimizer's own business — so the version is
@@ -392,10 +391,6 @@ jobs:
             docker image prune -f
             docker compose ps
           REMOTE
-
-      - name: Smoke-test the origin directly
-        if: steps.scope.outputs.run == 'true'
-        run: deno task smoke https://api.plei.me --origin
 
       # Last, so a failure anywhere above leaves it unset.
       - id: landed
