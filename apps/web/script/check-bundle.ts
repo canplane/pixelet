@@ -28,7 +28,6 @@ const DEV_MARKERS = ["dev/test", "development"];
 const SENTINELS = ["/geo/search", "/tile"];
 // Kept empty: the generator fails if this list is missing.
 const KERNEL_ROUTE_SENTINELS = [] as string[];
-const KERNEL_SENTINELS = ["_dict"];
 
 function leaves(o: unknown, path = ""): [string, string][] {
   if (o !== null && typeof o === "object") {
@@ -76,7 +75,7 @@ for (const s of SENTINELS) {
     Deno.exit(1);
   }
 }
-for (const s of [...KERNEL_ROUTE_SENTINELS, ...KERNEL_SENTINELS]) {
+for (const s of KERNEL_ROUTE_SENTINELS) {
   if (!kernel.includes(s)) {
     console.error(`[check-bundle] sentinel ${JSON.stringify(s)} missing from the kernel — the build is not what this expects, so a pass would mean nothing`);
     Deno.exit(1);

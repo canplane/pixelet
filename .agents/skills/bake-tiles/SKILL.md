@@ -113,7 +113,7 @@ where no line draws it.
 
 ```bash
 deno task bake:terrain --shard 01033210 --stage leaf
-deno task bake:terrain --stage assemble
+deno task bake:terrain --stage fold --stage commit
 ```
 
 A shard's leaves are its tiles anything is drawn in — land, or a way,
@@ -143,9 +143,9 @@ that, worked back from how far each thing draws:
 
 ### Verifying
 
-1. **Zero failures.** Each stage's line reports `failed=`. Anything above
-   zero in `surface` means tiles are missing; repeat the stage (it skips the
-   successes). `commit` refuses to run before `fold`.
+1. **Zero failures.** The leaf stage's line reports `failed=`. Anything
+   above zero means tiles are missing; repeat the stage. `commit` refuses to
+   run before `fold`.
 2. **Spot-check tiles against the dev tile server, at more than one zoom.**
    The dev server bakes terrain on a miss with the same functions this tool
    runs (`terrain/leaf.rs` for a leaf, `pyramid.rs` for a tile above),
@@ -154,8 +154,7 @@ that, worked back from how far each thing draws:
    not the objects. With `deno task dev:tile` up — not `dev`, which proxies
    every route to the live deployment:
 
-   The dev server answers the bucket's addresses, so it takes the tile's name
-   while the file on disk is still under its zoom — one tile, two names:
+   The set holds a tile flat under the name the dev server is asked by:
 
    ```bash
    curl -s localhost:3001/tile/terrain/<name> | zstd -dcq | shasum
@@ -193,8 +192,8 @@ deno task bake:place
 
 A shard's leaves are its places, read by the shard's bbox. Verify that the
 manifest's `zooms` reach z5 and that a leaf decodes (`place_tile::decode`).
-The client shows it only outside production, behind `place` in the
-development settings, until a nationwide version is published.
+The client shows it when `place`, in the settings' world section and off by
+default, is on.
 
 ## Divisions
 

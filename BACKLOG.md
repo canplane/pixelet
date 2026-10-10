@@ -31,12 +31,13 @@ Nothing now.
 
 ## P2
 
+- **A notice with the published tiles.** A version is fetchable tile by tile
+  from `plei.me/tile/`; whether ODbL asks for a notice beside it (§4.2, a
+  derivative database) or the app's attribution suffices (§4.3, a produced
+  work) is unsettled, and nothing publishes one (infra/README.md "Licenses").
+
 ## Parked, with the reason on file
 
-- **Publishing**: a push to `deploy`, any upload to the bucket (terrain, place,
-  division) and the copy into production's db-geo, held until the user says
-  the time is right, since the bake side has refactoring ahead. Meanwhile a
-  bake is looked at through `dev:shelf` and `preview:shelf`.
 - **How the samples are drawn**, held until the user says the time is
   right. On the iPhone 13 mini, four shapes over the same tiles and views: today's boxes, the same as masked faces, a ray a
   pixel, and a bounded observation a cell — what the rule asks for, a cell

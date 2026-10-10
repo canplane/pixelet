@@ -98,8 +98,9 @@ deno task dev:oven
 | `deno task usage`                         | What the deployment has used of its free allowances, before a publish                       |
 | `deno task deploy`                        | Build the client and publish the Cloudflare Worker                                          |
 | `deno task smoke <url>`                   | What a deployment must answer, against a running one                                        |
-| `deno task check`                         | The gate: format, types, clippy, the C++, the files made from `spec/`                       |
-| `deno task check:diff`                    | The gate over only what changed                                                             |
+| `deno task check`                         | Everything: format, rules, types, clippy, the device, the C++, the files made from `spec/`  |
+| `deno task check:ship`                    | What a deploy waits on: what it ships type-checks, lints and matches `spec/`                |
+| `deno task check:diff`                    | `check` over what changed; with `--base <sha>`, the deploy gate over what changed since it  |
 | `deno task test`                          | Every test, every workspace member                                                          |
 | `deno task lint` / `fmt`                  | Lint / format                                                                               |
 

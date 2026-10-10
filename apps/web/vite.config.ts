@@ -49,8 +49,7 @@ function buildId(): string {
  * than a sign meaning "after"; before any number is cached, the id alone.
  * The count lives in the bucket and is taken by the gate job
  * (script/build-counter.ts); .build_number is only this checkout's cache of
- * it, written by `deno task deploy` and by any read of
- * `./script/build-log.ts`.
+ * it, written by any read of `./script/build-log.ts`.
  */
 function buildNumber(id: string): string {
   const official = process.env.PXL_BUILD_NUMBER;

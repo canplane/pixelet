@@ -14,9 +14,9 @@
  * bumps the format. Setting a name here is the whole change.
  */
 export const PUBLISHED_VERSION = {
-  terrain: "v7.2026-10-04.1",
-  place: "v9.2026-10-04.2",
-  division: "v5.2026-10-04.1",
+  terrain: "v8.2026-10-09.1",
+  place: "v10.2026-10-09.1",
+  division: "v7.2026-10-09.1",
   earth: "v1.2026-10-05.1",
 } as const;
 

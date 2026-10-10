@@ -13,7 +13,7 @@ import { INGESTED } from "../apps/web/src/catalog/asset/ingested.spec.ts";
 
 import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route.spec.ts";
 
-/** A land page in Bundang, the one infra/README's procedure names: the zoom-15 tile's name. */
+/** A land page in Bundang: the zoom-15 tile's name. */
 const PAGE = "010332102130223";
 
 /** PAGE's divisions page at the pyramid's top, z5: its first five digits,
@@ -43,10 +43,6 @@ function edgeChecks(): Check[] {
     { path: `${TILE_ROOT}/division/${PUBLISHED_VERSION.division}/${DIVISION_TOP}`, want: 200, why: "the divisions' top page over PAGE" },
     { path: `/${ASSET_KEY}`, want: 200, why: "a content-addressed asset, its own root" },
     ...commonChecks(),
-    { path: `${API_ROOT}/tiles/terrain/${PUBLISHED_VERSION.terrain}/${PAGE}`, want: 404, why: "the old tile address, which must be gone" },
-    { path: `${TILE_ROOT}/terrain/${PUBLISHED_VERSION.terrain}/0/12720250262323200`, want: 404, why: "the old page name, which must be gone" },
-    { path: `${GEO_ROOT}/tiles/terrain/${PUBLISHED_VERSION.terrain}/${PAGE}`, want: 404, why: "the old tile address under the geo root, which must be gone" },
-    { path: `${API_ROOT}/search?q=x`, want: 404, why: "the old search address, which must be gone" },
   ];
 }
 

@@ -156,7 +156,7 @@ function left(): Response {
 }
 
 /** A baked page's key: a kind, a version and a page name. */
-const BAKE_KEY = /^(terrain|place|division)\/[^/]+\/.+$/;
+const BAKE_KEY = /^(terrain|place|division|earth)\/[^/]+\/.+$/;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

@@ -84,10 +84,15 @@ env:
   # The C++ guest's wasm build (xpute/script/cpp.ts wasm, under deno task test);
   # pinned for the same reason, since its clang decides what the module holds.
   WASI_SDK_VERSION: "34"
+  # A runner's build is thrown away: debuginfo and incremental state were
+  # most of a 5 GB cache that took four minutes to unpack.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
 
 jobs:
   gate:
-    name: check, test, lint
+    name: check and test
     runs-on: ubuntu-latest
     # One holder of the counter at a time, across every ref and trigger: the
     # take is read-add-write and two runs holding it together would take the
@@ -99,9 +104,11 @@ jobs:
     outputs:
       build_number: ${{ steps.number.outputs.value }}
     steps:
+      # Whole, so the commit the last deploy went out from can be diffed.
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - uses: denoland/setup-deno@v2
         with:
@@ -109,11 +116,10 @@ jobs:
 
       # The runner ships toolchains this build never runs. The kernel's test
       # binary is linked through mmap, and on a full disk the linker dies of
-      # SIGBUS rather than saying so.
+      # SIGBUS rather than saying so. In the background: the delete took
+      # three minutes in front of everything else.
       - name: Free the runner's disk
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
+        run: nohup sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL > /dev/null 2>&1 &
 
       - name: Install the WASI SDK
         run: |
@@ -126,12 +132,38 @@ jobs:
           cache: rust
           binaryen-version: ${{ env.BINARYEN_VERSION }}
 
-      # The repo's own gate (AGENTS.md): every workspace member type-checked,
-      # the Rust linted for both targets it ships to, and every generated file
-      # held against the JSON it is written from.
-      - run: deno task check
-      - run: deno task test
-      - run: deno task lint
+      # The commit the older half last went out from, when both halves' are
+      # ancestors of this one: each was a gated run's HEAD, so what lies
+      # before it was checked. Its own step, so the token is never in the
+      # environment of the code the checks build and run.
+      - name: Find the last deploy
+        id: base
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          WEB=$(./script/build-log.ts --last web 2>/dev/null) || WEB=
+          SERVER=$(./script/build-log.ts --last server 2>/dev/null) || SERVER=
+          ancestor() { [ -n "$1" ] && git merge-base --is-ancestor "$1" "$2" 2>/dev/null; }
+          BASE=
+          if ancestor "$WEB" HEAD && ancestor "$SERVER" HEAD; then
+            if ancestor "$WEB" "$SERVER"; then BASE=$WEB; else BASE=$SERVER; fi
+          fi
+          echo "sha=$BASE" >> "$GITHUB_OUTPUT"
+
+      # What a deploy waits on (deno.jsonc check:ship) and the tests, over
+      # what changed since then; with no base, all of it. Style, the device
+      # and the bakes are checked where they are written, not here.
+      - name: Check what changed
+        env:
+          BASE: ${{ steps.base.outputs.sha }}
+        run: |
+          df -h /
+          if [ -n "$BASE" ]; then
+            deno task check:diff --base "$BASE"
+          else
+            deno task check:ship && deno task test
+          fi
 
       # Every build of deploy is numbered, shipped or not — a build lab's count.
       # A push of prose alone never reaches here and takes no number (see the
@@ -216,7 +248,7 @@ jobs:
           # crates/tool is the repository's own tooling, which nothing
           # the bundle holds is built from; what it writes lands elsewhere in
           # the tree and is caught there.
-          if printf '%s\n' "$changed" | grep -v '^crates/tool/' | grep -qE '^(apps/|crates/|packages/|spec/|deno\.jsonc|deno\.lock|rust-toolchain\.toml)'; then
+          if printf '%s\n' "$changed" | grep -v '^crates/tool/' | grep -qE '^(apps/|crates/|xpute/|spec/|deno\.jsonc|deno\.lock|rust-toolchain\.toml)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -288,11 +320,11 @@ jobs:
             changed="crates/"
           fi
           # crates/tool is in no image; see the client's scope above.
-          if printf '%s\n' "$changed" | grep -v '^crates/tool/' | grep -qE '^(crates/|infra/prod/|crates/server/geo/Dockerfile|\.dockerignore)'; then
+          if printf '%s\n' "$changed" | grep -v '^crates/tool/' | grep -qE '^(crates/|xpute/rust/|infra/prod/|\.dockerignore)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "nothing under crates/, infra/prod/ or the Dockerfile changed — the VM is left alone"
+            echo "nothing under crates/, xpute/rust/ or infra/prod/ changed — the VM is left alone"
           fi
 
       - name: Rebuild and restart the stack
@@ -343,6 +375,19 @@ jobs:
               git reset --hard origin/deploy
             fi
             cd infra/prod
+            # The disk's bounds are the tree's: a changed one is installed
+            # before the stack is recreated under it.
+            # Validated first: a config dockerd refuses would leave every
+            # container stopped.
+            if [ -f etc/daemon.json ] && ! cmp -s etc/daemon.json /etc/docker/daemon.json; then
+              dockerd --validate --config-file etc/daemon.json
+              install -m 644 etc/daemon.json /etc/docker/daemon.json
+              systemctl restart docker
+            fi
+            if [ -f etc/journald.conf ] && ! cmp -s etc/journald.conf /etc/systemd/journald.conf.d/pixelet.conf; then
+              install -D -m 644 etc/journald.conf /etc/systemd/journald.conf.d/pixelet.conf
+              systemctl restart systemd-journald
+            fi
             docker compose up -d --build --force-recreate
             docker image prune -f
             docker compose ps
@@ -358,7 +403,7 @@ jobs:
         run: echo "yes=true" >> "$GITHUB_OUTPUT"
 
   # What plei.me answers is the two deploys composed, so it is asked once both
-  # have settled rather than from inside either. One of the twelve checks,
+  # have settled rather than from inside either. One of its checks,
   # /geo/search, is the Worker proxying to the VM: asked from deploy-web it can
   # land while deploy-server is still recreating the stack, and Cloudflare
   # answers 521 for an origin that is merely restarting.
