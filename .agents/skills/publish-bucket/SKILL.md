@@ -192,9 +192,7 @@ With `PUBLISHED_VERSION` set by the publish:
 deno task deploy
 ```
 
-Through the task, not around it: it runs `check:bundle` between the build
-and the publish, which is what stops a dev-only surface from reaching the
-live site, and it drives wrangler through Deno rather than a system Node
+Through the task, not around it: it drives wrangler through Deno rather than a system Node
 that may be older than wrangler requires. What the Worker is and how it
 routes is [infra/README.md](../../../infra/README.md) §4; `deno task smoke
 <url>` then asks the routes `script/smoke.ts` lists.

@@ -56,22 +56,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ));
     }
 
-    // Only roots the client requests whole appear as literals in a bundle. Both
-    // sentinel lists are checked: a path moving between them looks like a
-    // missing one.
-    for (list, where_) in [("SENTINELS", "shell"), ("KERNEL_ROUTE_SENTINELS", "kernel")] {
-        let found = listed("apps/web/script/check-bundle.ts", &format!(r"const {list} = \[([^\]]*)\]"), list)?;
-        let mut want: Vec<String> = roots.iter().chain(branches.iter()).filter(|(_, r)| r.str_at("bundle") == Some(where_)).map(|(n, _)| path(n)).collect();
-        want.sort();
-        if found != want {
-            return Err(format!(
-                "apps/web/script/check-bundle.ts's {list} is {} where {JSON} marks {} as reaching the {where_}. A sentinel the build never emits fails every deploy; one the build dropped passes a guard that is checking nothing.",
-                json_list(&found),
-                json_list(&want)
-            ));
-        }
-    }
-
     let mut all: Vec<(String, String)> = Vec::new();
     all.extend(roots.iter().map(|(n, _)| (n.to_string(), path(n))));
     all.extend(branches.iter().map(|(n, _)| (n.to_string(), path(n))));

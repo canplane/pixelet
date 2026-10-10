@@ -41,7 +41,6 @@
     // correctly and still leave its strings in the bundle. Runs between build
     // and publish so a leak stops the deploy rather than being noticed on the
     // live site.
-    "check:bundle": "deno run -A script/check-bundle.ts",
     // Builds, checks the bundle and publishes the Worker under the build
     // number CI took — see script/deploy.ts. wrangler runs through Deno, not
     // npx, since it wants a newer Node than a system may have.

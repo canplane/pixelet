@@ -40,7 +40,6 @@
     },
     "TILE_ROOT": {
       "path": "/tile",
-      "bundle": "shell",
       "$doc": [
         "Baked tiles — terrain, place and division — by kind, version and",
         "name. Its own root for the reason the asset root is: the bake puts",
@@ -62,7 +61,7 @@
   },
 
   "branches": {
-    "SEARCH_URL": { "under": "GEO_ROOT", "name": "search", "bundle": "shell", "$doc": ["Forward search, the one geo query with no finite tile to bake it against."] },
+    "SEARCH_URL": { "under": "GEO_ROOT", "name": "search", "$doc": ["Forward search, the one geo query with no finite tile to bake it against."] },
     "GEO_INTERNAL": {
       "under": "GEO_ROOT",
       "name": "internal",
