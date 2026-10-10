@@ -4,9 +4,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import { decor_ids, decor_num_id, type DecorId, placeable_cube_id, placeable_cube_num_id, placeable_cubes, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
-import { DEFAULT_OBJECT_SIZE } from "@/catalog/object/size.ts";
-import { kernel_action, kernel_hold } from "@/kernel/kernel.ts";
+import { decor_ids, type DecorId, placeable_cube_ids, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
+import { DEFAULT_OBJECT_SIZE } from "@/module/world/object/size.ts";
 
 export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
 
@@ -47,7 +46,7 @@ function is_same_pick(a: RecentPick, b: RecentPick): boolean {
 // rather than trusted as-is, so a stale localStorage entry can't leave a
 // dead id sitting in the hotbar forever.
 function is_known_pick(pick: RecentPick): boolean {
-  return pick.kind === "object" ? placeable_cubes.some((cube) => placeable_cube_id(cube) === pick.id) : (decor_ids as readonly string[]).includes(pick.id);
+  return pick.kind === "object" ? (placeable_cube_ids as readonly string[]).includes(pick.id) : (decor_ids as readonly string[]).includes(pick.id);
 }
 
 // Only ever inserts a genuinely new pick at the front — re-picking one
@@ -96,16 +95,12 @@ type UiState = {
 // pointer tool, and chatLines is dev-only dummy data, not user state.
 export const useUiStore = create<UiState>()(persist((set) => ({
   activeTool: "pointer",
-  set_activeTool: (activeTool) => {
-    set({ activeTool });
-  },
+  set_activeTool: (activeTool) => set({ activeTool }),
 
-  object_color_id: "block.red",
+  object_color_id: "red",
 
   object_size: DEFAULT_OBJECT_SIZE,
-  set_object_size: (object_size) => {
-    set({ object_size });
-  },
+  set_object_size: (object_size) => set({ object_size }),
 
   decor_id: "tree",
 
@@ -121,38 +116,33 @@ export const useUiStore = create<UiState>()(persist((set) => ({
   // which is what the genre row above is least able to hint at — white
   // alone does not say "there are colors in here".
   recent_picks: [
-    { kind: "object", id: "block.white" },
-    { kind: "object", id: "land.bare" },
-    { kind: "object", id: "water.river" },
-    { kind: "object", id: "structure.building" },
-    { kind: "object", id: "transport.road_default" },
-    { kind: "object", id: "block.red" },
-    { kind: "object", id: "block.blue" },
+    { kind: "object", id: "white" },
+    { kind: "object", id: "land.BARE" },
+    { kind: "object", id: "water.RIVER" },
+    { kind: "object", id: "structure.BUILDING" },
+    { kind: "object", id: "transport.ROAD_DEFAULT" },
+    { kind: "object", id: "red" },
+    { kind: "object", id: "blue" },
     { kind: "decor", id: decor_ids[0] },
   ],
-  select_cube: (id) => {
+  select_cube: (id) =>
     set((state) => ({
       object_color_id: id,
       activeTool: "object",
       recent_picks: touch_recent(state.recent_picks, { kind: "object", id }),
-    }));
-  },
-  select_decor: (id) => {
+    })),
+  select_decor: (id) =>
     set((state) => ({
       decor_id: id,
       activeTool: "decor",
       recent_picks: touch_recent(state.recent_picks, { kind: "decor", id }),
-    }));
-  },
+    })),
 
   chatLines: [],
-  append_chat_line: (text) => {
+  append_chat_line: (text) =>
     set((state) => ({
       chatLines: [...state.chatLines, { id: nextChatLineID++, text, ts: Date.now() }].slice(-MAX_CHAT_LINES),
-    }));
-    // The kernel draws the bubble over the companion from the last line.
-    kernel_action({ type: "append_chat_line", text });
-  },
+    })),
 }), {
   name: "pxl:ui_hotbar",
   partialize: (state) => ({
@@ -186,19 +176,3 @@ export const useUiStore = create<UiState>()(persist((set) => ({
     };
   },
 }));
-
-// What the pointer holds crosses to the kernel with each pointer event, by
-// the catalog's numbers (spec/cell): the object tool holds the cube, the decor
-// tool the decor kind.
-const TOOL_NUMBER: Record<ActiveTool, number> = { pointer: 0, object: 1, decor: 2, eraser: 3 };
-
-function hold(s: UiState): void {
-  const cube = placeable_cubes.find((c) => placeable_cube_id(c) === s.object_color_id);
-  const value = s.activeTool === "object" ? (cube ? placeable_cube_num_id(cube) : 0) : s.activeTool === "decor" ? decor_num_id(s.decor_id) : 0;
-  kernel_hold(TOOL_NUMBER[s.activeTool], value, s.object_size);
-}
-
-hold(useUiStore.getState());
-useUiStore.subscribe((s, prev) => {
-  if (s.activeTool !== prev.activeTool || s.object_color_id !== prev.object_color_id || s.decor_id !== prev.decor_id || s.object_size !== prev.object_size) hold(s);
-});

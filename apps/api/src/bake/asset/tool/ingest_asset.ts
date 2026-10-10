@@ -8,10 +8,10 @@
 // Two outputs. ./out/asset/{glb,png,webp}/<sha256> is a copy of every file
 // under its key, split by type so `aws s3 sync` can set one content-type per
 // directory (the object name carries no extension, so the type has to be
-// stored with it). And packages/pxl/shared/src/asset/ingested.ts is the
-// table the catalogs read — asset path to key, size and extent —
+// stored with it). And packages/pxl/shared/src/record/ingested.ts is the
+// table the shipped palette reads — asset path to key, size and extent —
 // generated in sorted order so a re-run with no changes writes no diff,
-// and crates/pxl/spec/src/asset/ingested.rs is the same table for the
+// and crates/pxl/shared/src/record/ingested.rs is the same table for the
 // Rust pair, from the same rows.
 //
 // The texture pack is also ingested as one object: every image under
@@ -34,15 +34,13 @@ import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "npm:sharp@0.33";
 
-import { cube_types } from "@pxl/shared/spec/cell/cube_type.ts";
-
 import { render_rust_table, render_table, type Sheet } from "../table.ts";
 
 const ROOT = fileURLToPath(new URL("../../../../../../", import.meta.url));
 const ASSET_DIR = resolve(ROOT, "asset");
 const OUT_DIR = resolve(ROOT, "out/asset");
-const TABLE_PATH = resolve(ROOT, "packages/pxl/shared/src/asset/ingested.ts");
-const RUST_TABLE_PATH = resolve(ROOT, "crates/pxl/spec/src/asset/ingested.rs");
+const TABLE_PATH = resolve(ROOT, "packages/pxl/shared/src/record/ingested.ts");
+const RUST_TABLE_PATH = resolve(ROOT, "crates/pxl/shared/src/record/ingested.rs");
 
 async function* walk_files(dir: string): AsyncGenerator<string> {
   for await (const entry of Deno.readDir(dir)) {
@@ -54,7 +52,7 @@ async function* walk_files(dir: string): AsyncGenerator<string> {
 
 /** What the bucket prefix for content-addressed objects is; a key is this
  * over the sha256 hex. Mirrored by the Worker's KEY_RE and by
- * apps/web/src/config/route.ts's asset_url. */
+ * lib/env/route.ts's asset_url. */
 const KEY_PREFIX = "asset/";
 
 type Ingested = {
@@ -234,7 +232,7 @@ async function ingest_sheet(rows: Ingested[]): Promise<Sheet> {
 const rows = await ingest();
 const sheet = await ingest_sheet(rows);
 await Deno.writeTextFile(TABLE_PATH, render_table(rows, sheet));
-await Deno.writeTextFile(RUST_TABLE_PATH, render_rust_table(rows, sheet, cube_types));
+await Deno.writeTextFile(RUST_TABLE_PATH, render_rust_table(rows, sheet));
 const total = rows.reduce((n, r) => n + r.bytes, 0);
 console.log(
   `[ingest] ${rows.length} assets, ${(total / 1024 / 1024).toFixed(1)} MiB, sheet ${sheet.tiles.length} tiles ${(sheet.bytes / 1024).toFixed(0)} KiB -> ${

@@ -8,9 +8,10 @@
  * cell" has to agree on that precedence or they answer differently about
  * the same cell: the terrain shader picks a texture layer from it, and the
  * object layer asks whether a placed terrain-styled cube would show
- * anything the terrain does not already show. A road over bare ground reads
- * `land = BARE` while rendering as road, so comparing one channel would
- * cancel a bare-ground cube into a road.
+ * anything the terrain does not already show. They disagreed before this
+ * was one definition — a road over bare ground reads `land = BARE` while
+ * rendering as road, so comparing one channel cancelled a bare-ground cube
+ * into a road.
  */
 
 import { GROUND_CH_KEYS, GroundChannelKey } from "./format.ts";
@@ -20,7 +21,7 @@ export { GROUND_CH_KEYS, GroundChannelKey };
 
 /** Land with nothing painted still renders as bare ground rather than as
  * nothing, so LAND alone has a fallback the other channels do not. */
-export const LAND_BASE_TYPE: number = cube_types.land.bare;
+export const LAND_BASE_TYPE: number = cube_types.land.BARE;
 
 export type ShownGround = { channel: GroundChannelKey; type_id: number };
 

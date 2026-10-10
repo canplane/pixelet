@@ -18,6 +18,7 @@
 
 import type { u32 } from "../kit/word.ts";
 import type { AnyTypedArray, AnyTypedArrayCtor } from "../kit/array.ts";
+import { HEAP_ALLOC, type TypedAlloc } from "./typed_alloc.ts";
 import { MarshalError } from "../sys/error.ts";
 import { Errno } from "../sys/errno.ts";
 
@@ -27,18 +28,21 @@ export type LaneViews<S extends LaneSpec> = { readonly [K in keyof S]: InstanceT
 export type LanesOptions = {
   init_cap?: u32;
   max_cap?: u32;
+  alloc?: TypedAlloc;
 };
 
 export class Lanes<S extends LaneSpec> {
   mem: LaneViews<S>;
   readonly max_cap: u32;
   private readonly keys: (keyof S)[];
+  private readonly alloc: TypedAlloc;
   private _cap: u32;
   private _len: u32 = 0;
 
   constructor(readonly spec: S, opts: LanesOptions = {}) {
-    const { init_cap = 1 << 10, max_cap = 1 << 24 } = opts;
+    const { init_cap = 1 << 10, max_cap = 1 << 24, alloc = HEAP_ALLOC } = opts;
     this.keys = Object.keys(spec) as (keyof S)[];
+    this.alloc = alloc;
     this.max_cap = max_cap;
     this._cap = Math.min(init_cap, max_cap);
     this.mem = this.take(this._cap);
@@ -83,7 +87,7 @@ export class Lanes<S extends LaneSpec> {
 
   private take(cap: u32): LaneViews<S> {
     const views: Partial<Record<keyof S, AnyTypedArray>> = {};
-    for (const key of this.keys) views[key] = new this.spec[key](cap);
+    for (const key of this.keys) views[key] = this.alloc.take(this.spec[key], cap);
     return views as LaneViews<S>;
   }
 
@@ -96,6 +100,7 @@ export class Lanes<S extends LaneSpec> {
       // across the number/bigint split.
       // deno-lint-ignore no-explicit-any
       (next[key] as any).set(this.mem[key].subarray(0, this._len));
+      this.alloc.give(this.mem[key]);
     }
     this.mem = next;
     this._cap = new_cap;

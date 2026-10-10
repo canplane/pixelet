@@ -1,155 +1,14 @@
 # Architecture
 
-A spatial engine that turns real-world geographic data and player-built objects into one voxel-style 3D world.
+A spatial engine for turning real-world geographic data and player-built objects into one voxel-style 3D world.
 
-The document has two halves. **Runtime** describes how the client runs: the crates and packages, the turn, the rings, and the memory. **Engine** describes what the client runs: coordinates, the spatial hierarchy, terrain, the chunk pipeline, LOD and rendering, the camera, catalogs, and wire formats.
+The engine is split into a pixelet-specific domain layer (**`@pxl/shared`**: coordinate system, cell/terrain model, spatial hierarchy, bake wire format, the record layer) and a project-agnostic utility layer (**`@xpute/core`**: collections, allocators, codecs, and the binary tree protocol those formats use) — see [Repository Structure](./README.md#repository-structure).
 
-Three properties hold throughout:
+Three things run through every section below, and are the shape the client has had since September 2026: the world's state lives in **one linear memory** ([Memory](#memory)), the frame's work runs as **one cooperative tick** with one budget ([Scheduling](#scheduling)), and what the client measures about itself is a **read-only ledger** that never feeds back ([Scheduling](#scheduling)). The destination those were built for — a Rust core in WASM drawing through WebGPU, with three.js gone — is where the client stands since 2026-09-14: the core in `crates/` builds, decides and lists what to draw, the renderer in `apps/web/src/render/gpu/` executes the list; see [issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md).
 
-- The world's state lives in **one linear memory**.
-- The work runs in **turns under one quota**.
-- What the client measures about itself goes to a **read-only ledger** that never feeds back into a decision.
-
-The destination is WebAssembly and WebGPU ([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md)). The kernel decides and draws, and the TypeScript that remains is the shell.
-
-Earlier states of the project are preserved on `checkpoint/20260107-float`, `checkpoint/20260405-xpute` and `checkpoint/20260409-wasm-aborted`.
+> Earlier iterations explored a decentralized P2P/WebRTC runtime (`xpute` as a peer-symmetric IPC substrate) and a Rust/WebGPU rewrite of the spatial/bake stack. Both were parked in favor of a plain client-server MVP; the WASM/WebGPU direction is decided again as of 2026-09-12 (above), to be built on the MVP's state model rather than resumed from the April checkpoint. Their last states are preserved on `checkpoint/20260107-float`, `checkpoint/20260405-xpute`, and `checkpoint/20260409-wasm-aborted`.
 
 ---
-
-# Runtime
-
-## Crates and packages
-
-```text
-xpute-core ◀── pxl-spec ◀── pxl-render ◀── pxl-kernel ◀── pxl-wasm ──▶ kernel.wasm ──▶ apps/web
-@xpute/core ◀── @pxl/shared ◀─────────────────────────────────────────────────────────── apps/web, apps/api
-```
-
-| Crate / package | Role                                                                                                                                        |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `xpute-core`    | The generic runtime kit: collections and lanes, the slab and buddy allocators, the rings and change log, the scheduler's three levels, XTP. |
-| `pxl-spec`      | The model: PVF3 and the spatial hierarchy, the cell catalogs, the command and message numbers, the bake's formats, the asset tables.        |
-| `pxl-render`    | The view: volumes, the column scan and the mesher, glTF, the LOD ladder, the billboards' atlas, the draw list, the shaders, the renderer.   |
-| `pxl-kernel`    | The kernel: the chunk scheduler and nodes, the layers and their stores, fetches and loads, the camera and sensors, the turn, the ledger.    |
-| `pxl-wasm`      | The module: the allocator and executor it installs, the linker flags that fix the memory's front, the rings, and the exports.               |
-| `@xpute/core`   | The TypeScript kit: XTP, the rings' host end (`ipc/doorbell.ts`), the strobe and quantum (`sched/`), the memory reservation (`sys/mem.ts`). |
-| `@pxl/shared`   | The model in TypeScript for the API's bake and the shell: PVF3, cells, bake formats, asset tables, command numbers.                         |
-
-Two boundaries are kept on purpose:
-
-- **xpute has no domain.** It holds no coordinates, terrain or tiles, so it stays portable to other projects ([issue/20260914-mechanism-and-policy-and-what-xpute-is.md](./issue/20260914-mechanism-and-policy-and-what-xpute-is.md)). A mechanism belongs to xpute, and the policy over it belongs to the kernel. The tick's phases are xpute's, for example, while their shares and the steps registered in them are the kernel's.
-- **The view never names the kernel.** `pxl-render` knows the model and nothing of `pxl-kernel`. The kernel writes the frame's uniforms into the stage lane, builds a `FrameInput` from the draw list and the stores, and calls `render_frame`, which returns what the frame cost. This is the same split as Godot's servers or Bevy's extract step ([issue/20260917-the-view-is-its-own-crate.md](./issue/20260917-the-view-is-its-own-crate.md)).
-
-`pxl-kernel` knows nothing about WebAssembly or a browser. The host's clock, storage, text measurement and entropy reach it as function hooks that `pxl-wasm` installs (`sys/host.rs`), so the same code runs natively under `cargo test`.
-
-**The kernel finds nothing by a string.** An identity is a number decided in data: a catalog JSON, the asset ingest, or the bake. That covers a command, a decor kind, a character variant, a sky theme, an asset and a message. The kernel indexes by that number. The words a message is shown in are the shell's locale files.
-
-## Shell and kernel
-
-The shell (`apps/web`) is a driver. It does five things:
-
-- It reserves the memory and instantiates the module (`kernel/core_mem.ts`, `kernel/module.ts`).
-- It runs the turns (`@xpute/core/sched/strobe.ts`) and submits what a frame carries: the viewport, the gap since the last frame, the measured frame interval and the I/O credits.
-- It forwards pointer, wheel, sensor and visibility events as commands.
-- It answers the kernel's signals: it starts and cancels the fetches the kernel names, reads a response body into a block the kernel gives it, decodes images, and runs the sensors' watches.
-- It hands a canvas over as a surface. The canvas is transferred to an `OffscreenCanvas` and from then on is drawn by the kernel alone, through the calls in `device/gpu.ts`.
-
-The UI renders one snapshot, a JSON document the kernel writes after a turn when it has changed. Every control on the UI is an action the kernel applies. What draws on the canvas is the kernel's, and what is only UI state is the shell's.
-
-## The turn
-
-The host and the guest take turns like a clock's two edges ([issue/20260917-the-turn-as-a-clock.md](./issue/20260917-the-turn-as-a-clock.md)).
-
-```text
-rising edge    host → guest   interrupt(quota_ms)
-               the guest applies what waits on its submission ring,
-               polls its tasks on the quota, posts to its completion ring
-falling edge   guest → host   the call returns wake_ms:
-               0 = the next frame · n = in n ms · NO_WAKE = none
-```
-
-A turn runs on an animation frame, and only when something asked for one: the shell (an input, an arrival) or the kernel (its last falling edge). The host runs no heartbeat, so an idle world costs nothing. A doorbell rung with no quota and no frame only applies what waits, which is how a UI action takes effect inside the click that caused it.
-
-Scheduling has three levels, from outside in:
-
-1. **Quantum** (`xpute sched/quantum`, the host's). The quota is a share of the frame, and the frame interval is measured rather than assumed. It is the 25th percentile of recent gaps between interactive turns, ignoring gaps longer than 50 ms. A turn is interactive when there was input within `settle_ms` or the guest's last falling edge asked for the very next frame. An interactive turn gets the frame less a margin, and any other turn gets `batch_frames` frames. An overrun comes off the guest's own next quota, down to nothing: a constant bandwidth server's rule. The policy numbers (margin share, batch frames, settle time) are the kernel's (`sched/tick.rs`'s `QUANTUM`), and the boot block carries them out to the host.
-2. **Tick** (`xpute sched/tick`, the guest's). One tick per frame runs its phases in a fixed order against the quota, counted from the rising edge. The order is the priority:
-
-   | Phase         | What                                                                                   |
-   | ------------- | -------------------------------------------------------------------------------------- |
-   | `interaction` | input, camera damping, environment, the view frame, the companion; unbudgeted and O(1) |
-   | `visible`     | the chunk scheduler's pass                                                             |
-   | `content`     | what is about to be on screen; guaranteed `content_share` of the budget                |
-   | `cosmetic`    | what only looks better for running (debug gizmos)                                      |
-   | `report`      | the ledger, last, so it sees everything                                                |
-
-3. **Pass** (`xpute sched/frame_budget`). A list of steps runs until the budget or a step cap says stop. **Forward progress is the invariant**: the first step that does work always runs, so one expensive item cannot block everything behind it. `hard_slack_ms` bounds a step that costs time but reports no work.
-
-Outside the tick, the kernel's work runs as **tasks** on an executor the module installs, the way a global allocator is installed: `embassy-executor`'s raw executor behind `xpute sched/task`. The kernel spawns six tasks: the frame, fetch decoding, glTF parsing, chunk builds, decor assets and the object store's save. A task yields with `yield_if_spent` or `next_turn` (`xpute sched/edge`) and is woken on the next rising edge, never within the same poll. The **frame task** is one task because a frame has an internal order: the effects (fetchers, followers, markers), then the tick's phases, the fetch pump, and the draw. Nothing depends on the order in which the executor polls tasks.
-
-**I/O is granted by credits** (`xpute sched/io`). The kernel does no I/O itself. Each category syncs its entire wishlist once a turn. Anything no longer wished for is dropped if queued or aborted if in flight, and one pump per turn starts at most as many requests as the host granted credits, in priority order across categories.
-
-**The ledger** (`pxl-kernel sched/ledger`) records frames (pacing, per-phase time, GPU ask, heap gauges, LOD pressure, draw census) and tasks (per-job waits) into rings whose layout is `spec/kernel/sched/ledger/ledger.json`. The shell reads them in place (`ledger_read`, `ledger_log`) without allocating, and prints a report or exports a Chrome trace. Nothing the ledger holds is read back into a scheduling decision ([issue/20260909-cooperative-scheduler-and-task-ledger.md](./issue/20260909-cooperative-scheduler-and-task-ledger.md)).
-
-## Rings and the channel
-
-Everything after boot crosses in three rings in the shared memory: submission (shell → kernel), completion (kernel → shell), and a spill that completions overflow into so that order is kept (`xpute ipc/ring.rs`; [issue/20260914-the-ring-and-its-precedents.md](./issue/20260914-the-ring-and-its-precedents.md), [issue/20260917-the-ring-a-slot-and-its-payload.md](./issue/20260917-the-ring-a-slot-and-its-payload.md)).
-
-```text
-descriptors                                   payloads, elsewhere in memory
-┌──────────────────────────────────────────┐  ┌────────┬────────┬───┬───────────┐
-│ header: capacity · head · tail ·         │  │ slot 0 │ slot 1 │ … │ slot 2047 │
-│         slot_bytes · slot_base · 3 rsv   │  └────▲───┴────────┴───┴───────────┘
-├──────────────────────────────────────────┤       │ 4 KiB each
-│ message n: tag                           │       │
-│            cmd (low 16) | flags (high 16)│       │
-│            result (value or -errno)      │       │
-│            packet address ───────────────┼───────┘  (slot n & (capacity-1))
-└──────────────────────────────────────────┘
-```
-
-- **Single producer, single consumer.** The producer writes only the tail and its payloads, and the consumer writes only the head, so no lock is needed. Positions only grow and are taken modulo the capacity, so `tail - head` is how many messages wait.
-- **One payload slot per message.** A slot is free exactly when its message is consumed, so no second allocator is needed. A push fails for exactly two reasons: `EAGAIN` when the ring is full (the producer waits, and nothing is dropped) and `EMSGSIZE` when the packet is larger than a slot, whatever the ring's state. Anything larger than a page crosses by address: the kernel hands out a heap block and the shell fills it.
-- **Descriptors apart from payloads,** as virtio's descriptor table and AF_XDP's UMEM are: the descriptors are kilobytes and the payloads megabytes.
-- **Fixed addresses.** `build.rs` places the rings between the stack and the linker's data and emits `--global-base` from the same numbers, so the linker cannot place `.data` over a ring.
-
-A message's packet is an XTP tree that the kernel reads in place. A **command** is a number, `major << 8 | minor` (`xpute ipc/cmd.rs`), and the numbers are `spec/cmd.json`'s. On the completion ring, `RES` marks a reply to a submission that asked for one (`ACKREQ`) or that failed. Everything else the kernel posts is a **signal** it raised itself: a fetch to start or cancel, a load, a sensor watch, a console line, a new snapshot.
-
-The read half of the channel is a **change log** (`xpute ipc/change.rs`; [issue/20260913-the-read-direction-a-change-log.md](./issue/20260913-the-read-direction-a-change-log.md)). A source bumps `(topic, key)`, and the topic's tick becomes the key's revision, written to a revision table and one fixed journal ring. A reader compares a revision or walks the journal from its cursor. A cursor that the journal has overwritten re-reads its topics. A change carries no value: the value is read where it lives. The world's log (`pxl-kernel world/change.rs`) has six topics: object column, decor column, object cell, terrain page, POI page and decor asset. Listeners (`ipc/change_waker.rs`) run when the tick pumps, never inside the write.
-
-`xpute ipc/frame.rs` and `ipc/port.rs` are the same command shape for a transferred buffer rather than shared memory: what a worker would use. No worker exists yet.
-
-## Memory
-
-The client's state is one `WebAssembly.Memory`: 1 GiB on the desktop and 512 MiB on a phone, `initial == maximum`, never grown. Growing would detach every view over it. Because the memory never moves, a view over it stays valid for the module's life, which is what lets a ring hold its words and a lane be read where it lies. A reservation is committed lazily, but JavaScriptCore reports all of it as the page's JavaScript memory, which is why a phone gets half.
-
-```text
-address        bytes                    range                  placed by
-──────────────────────────────────────────────────────────────────────────────────────
-0              1 MiB                    .stack                 rustc (-z stack-size, --stack-first)
-1 MiB          36 KiB × 3               .ring.desc             build.rs
-2 MiB          8 MiB × 3                .ring.slot             build.rs
-32 MiB         ~0.5 MiB                 .rodata .data .bss     wasm-ld (--global-base)
-               ↑ __data_end, rounded up to a page
-~32.5 MiB      196.43 MiB               .fixed.terrain         the kernel (sys/mem/fixed.rs)
-~229 MiB       283 MiB  (phone)         .heap                  the allocator
-               795 MiB  (desktop)
-512 MiB / 1 GiB                         end
-──────────────────────────────────────────────────────────────────────────────────────
-```
-
-The layout is `pxl-kernel sys/mem/section.rs`'s, over `xpute sys/mem.rs`, which lays ranges end to end the way a linker script does ([issue/20260917-the-front-of-the-memory.md](./issue/20260917-the-front-of-the-memory.md)).
-
-- **The stack comes first.** An overflow wraps below zero and lands outside the memory, which traps. There is no MMU and so no guard page, so the wraparound is the whole protection. The kernel asserts at boot that the linker's `__stack_high` is where `mem.json` says.
-- **`.fixed`** is what the kernel places once, never frees, and sizes at compile time, laid from the first page past `__data_end`. It is not `.bss`: a 196 MiB static would land in the same place, but the size is a decision about how much world is resident and should not read as compiler output. Its one range today is the resident terrain (`layer/terrain/fixed.rs`). The terrain is laid out as one ground plane per channel and an elevation plane, addressed by a page's own L3 coordinate modulo the axis, like a clipmap. The axis is `2 × KEEP_PAGES + 1` = 7 pages, so 49 records. A page arriving overwrites one the view has already left, so eviction needs no list and no quarantine, and a page cannot be refused.
-- **`.heap`** is everything left, served by one allocator: a slab of size classes (`xpute ds/slab.rs`) over a buddy of 4 KiB pages (`ds/buddy_tree.rs`, evanw/buddy-malloc over a given range). A request under a page takes a slot of its class. A class with no free slot borrows a run of pages and gives it back when its last slot is freed. A request of a page or more goes straight to the buddy. The bookkeeping lives in the free blocks themselves, SLUB-style, so no descriptor array grows with the range. A `String`, a band's voxel lanes, a chunk's mesh and a fetch body all come from and return to this one range. **A refused request is a wait, not a failure:** the build keeps its place and asks again after something is released, and the LOD ladder's pressure makes the view coarser.
-- **One file for the numbers.** `spec/kernel/sys/mem/mem.json` holds the page, the stack, the ring addresses, `--global-base`, the phone and desktop reservations and the heap a phone is guaranteed (`MIN_HEAP_BYTES`). The kernel's map, `build.rs` and the shell's reservation all read it. Whether the front leaves that guarantee is asserted at compile time, against the lowest the heap could begin, and again at boot, against where it did.
-
-Everything the canvas reads each frame lives here as **lanes**, structure-of-arrays views: terrain planes, voxel bands, column run sets, tier meshes, the chunk table, decor instance matrices, the object store's records and index, and every registry (`IndexedMap`, `PageTable`, handle tables). A table whose columns move together is one `Lanes` (`xpute ds/lanes.rs`). A slot is dense, and its handle is told when it moves. A lane set has one owner, and a consumer borrows it for one call ([issue/20260912-linear-memory-what-is-left.md](./issue/20260912-linear-memory-what-is-left.md)). What stays in the JavaScript heap is glue: React, the WebGPU objects behind the kernel's handles, and response bodies until the kernel reads them.
-
----
-
-# Engine
 
 ## Coordinate System — PVF3
 
@@ -160,12 +19,12 @@ PVF3 = { i: IVec (64-bit), f: FVec (32-bit) }
 ```
 
 - **IVec** packs three signed integer lanes in a `24/24/16` X/Y/Z layout. X is cyclic so the canonical world wraps at the longitude seam.
-- **FVec** packs three unsigned 8-bit fractional residues, giving `1/256` resolution within one canonical unit, the same lattice the render payload below uses.
-- Arithmetic is integer and deterministic across platforms: 64-bit words in Rust, BigInt in TypeScript.
+- **FVec** packs three unsigned 8-bit fractional residues, giving `1/256` resolution within one canonical unit (10 bits until 2026-09-03; narrowed so the coordinate and the render payload below share one lattice).
+- Arithmetic is deterministic across platforms through BigInt.
 - The bit fields contain no guard lanes: IVec uses its full signed `24/24/16` ranges, while FVec uses all 8 bits per residue lane (the top byte of its 32-bit word remains unused).
 - The EPSG:3857 adapter assigns physical meaning: currently `1u = 1 L1 block ≈ 2.389` planar Mercator meters at the equator. Geographic distortion and page-constant vertical correction live in the adapter, not in PVF3 itself.
 
-Placed-object render payloads (`SUB_CELL_SCALE` in `crates/pxl/render/src/mesh/volume.rs`) quantize their sub-cell offset and size to the same `1/256` of an L1 block, so a placed position round-trips between the coordinate and the mesh without rounding. A page-local `f32`, which is how the object store saves a position, is exact on that lattice too.
+Placed-object render payloads (`SUB_CELL_SCALE` in `render/mesh/voxel.ts`) quantize their sub-cell offset and size to the same `1/256` of an L1 block, so a placed position round-trips between the coordinate and the mesh without rounding. A `Placement` row's page-local `f32` ([Records](#records)) is exact on that lattice too.
 
 ## Spatial Hierarchy
 
@@ -180,13 +39,13 @@ The short level names are deliberate: the same `BASE`, `CENTER`, `LIMIT`, and `I
 | L4    | Anchor        | `4096` blocks         | Floating-origin frame                                           |
 | L5    | Shard         | `65536` blocks        | Global sharding domain (reserved, not yet implemented)          |
 
-Extent is a linear range on one packed lane (`RANGE` in `crates/pxl/spec/src/space/indexer.rs`), not an inherent cube — L0–L5 are a pure scale/addressing tier, dimension-agnostic by construction. Whether a level ends up populated on one axis, two axes (a Tile), or all three (a Volume) is a shape-axis decision made by whichever layer uses that level, never a property of the level itself; see [Layer, space, and shape](#layer-space-and-shape) below. `N³`/`N²` notation elsewhere in this document describes a specific layer's _usage_ of a level (e.g. the renderer treating L2 as a `64³` Volume), not the level's own definition.
+Extent is a linear range on one packed lane (`RANGE` in `indexer.ts`), not an inherent cube — L0–L5 are a pure scale/addressing tier, dimension-agnostic by construction. Whether a level ends up populated on one axis, two axes (a Tile), or all three (a Volume) is a shape-axis decision made by whichever layer uses that level, never a property of the level itself; see [Layer, space, and shape](#layer-space-and-shape) below. `N³`/`N²` notation elsewhere in this document describes a specific layer's _usage_ of a level (e.g. the renderer treating L2 as a `64³` Volume), not the level's own definition.
 
-L5 is reserved, not active code today (`L5_SHAMT` stays commented out in `crates/pxl/spec/src/space/indexer.rs`). Once implemented, its Z lane collapses — Z is only 16 bits wide, narrower than `L5_SHAMT` — so L5 can only ever address X/Y, regardless of what any layer does with it.
+L5 is reserved, not active code today (`L5_SHAMT` stays commented out in `indexer.ts`). Once implemented, its Z lane collapses — Z is only 16 bits wide, narrower than `L5_SHAMT` — so L5 can only ever address X/Y, regardless of what any layer does with it.
 
-Objects have no server persistence yet: the store is client-local. Its records (`crates/pxl/kernel/src/layer/object/store.rs`) are a palette per L2 chunk and one sparse octree per occupied `64³` band, whose leaves are palette indices. The chunk's entries are derived from those as lanes, with a cell index over them for occupancy and hit tests. The store also keeps the leaf ids, the change-log bumps and the eraser's virtual edits. It persists to `localStorage` as five lanes per L3 page (a page-local position, the footprint's side and the value) under a storage key that carries its layout's version.
+Objects have no server persistence yet — the store is client-local. Its records are the module's (`crates/pxl/core/src/world/object.rs`): a palette per L2 chunk and one sparse octree per occupied `64³` band whose leaves are palette indices, with the chunk's entries derived as lanes and a cell index over them for occupancy and hit tests; `module/world/object/store.ts` lowers a coordinate to what the module keys by, reads the lanes back as views, and keeps the leaf ids, the change-log bumps and the eraser's virtual edits. The object layer paints in the module too. It persists as one `Placement` record per L3 page ([Records](#records)), which is the form a server would receive too.
 
-One chunk node (`crates/pxl/kernel/src/world/chunk/node.rs`) owns one L2 XY column and composes however many signed 64-cell L2 Z bands its content touches. One L3 page therefore contains 256 possible L2 columns.
+One chunk node (`module/world/chunk_node.ts`) owns one L2 XY column and composes however many signed 64-cell L2 Z bands its content touches. One L3 page therefore contains 256 possible L2 columns.
 
 ### Layer, space, and shape
 
@@ -198,18 +57,22 @@ Three independent axes describe any piece of world data, and none of them implie
 
 Terrain today is Tile-shaped data addressed at Page granularity; objects are Volume-shaped (sparse tree) data kept per Chunk band, with the renderer composing an L2/Chunk-sized Volume as their shared transport/render envelope (see [Temporary dense bands](#temporary-dense-bands)).
 
-| Layer                               | Space level           | Shape  | Concrete type                                   | Atomic unit |
-| ----------------------------------- | --------------------- | ------ | ----------------------------------------------- | ----------- |
-| terrain (source)                    | L3 Page               | Tile   | a `.fixed.terrain` record (`layer/terrain/`)    | Pixel       |
-| object (source)                     | L2 Chunk / `64³` Band | Volume | palette per chunk, sparse tree per band         | Voxel       |
-| terrain+object (composed for build) | L2 Chunk              | Volume | a volume of bands (`pxl-render mesh/volume.rs`) | Voxel       |
-| — (any)                             | L4 Anchor             | none   | the view's root frame (`world/frame/`)          | —           |
+| Layer                               | Space level           | Shape  | Concrete type                                    | Atomic unit |
+| ----------------------------------- | --------------------- | ------ | ------------------------------------------------ | ----------- |
+| terrain (source)                    | L3 Page               | Tile   | `Tile` / `TileStore`                             | Pixel       |
+| object (source)                     | L2 Chunk / `64³` Band | Volume | palette per chunk, sparse tree per band          | Voxel       |
+| terrain+object (renderer, composed) | L2 Chunk              | Volume | `ChunkVolume`, sliced into `VoxelBand`s ("Band") | Voxel       |
+| — (any)                             | L4 Anchor             | none   | `AnchorRegistry`                                 | —           |
+
+## Memory
+
+The client's state is one fixed `WebAssembly.Memory` — 512 MB on the desktop, 256 on a phone, `initial == maximum`, never grown, since growing would detach every view and a resizable buffer is slower to read and refused by WebGL — cut into **sections** with fixed starts and sizes (`wasm/core_pool.ts`, [issue/20260913-sections-of-the-core-memory-and-what-full-means.md](./issue/20260913-sections-of-the-core-memory-and-what-full-means.md)), none borrowing from another: **module**, the first 32 MB, for the Rust module's own stack, data and heap (where a wasm32 linker puts them; its allocator is `crates/xpute/core/src/ds/fixed_heap.rs`, and the module states its size so the map is checked at instantiation), then each its own buddy allocator over its range — the buddy itself runs in the module (`crates/xpute/core/src/ds/buddy.rs`), the TypeScript pool (`@xpute/core/ds/buddy.ts`) naming its blocks through it and keeping only what the module cannot reach, the plain regions past a range: **fixed** for what is allocated once and never freed (the change log, the scheduler's lanes, the mesher's scratch, the module's sixteen standing band stores; it refuses rather than spills, so a shortfall fails at startup), **page** for resident terrain and POI pages, **mesh** for what churns as the view moves. Blocks are what typed-array views are taken over. Everything the canvas reads each frame lives there as **lanes** (structure-of-arrays typed views): terrain pages, voxel bands, column run sets, baked meshes, the chunk table, decor instance matrices, the POI index, the badge atlas's slots, the object store's records and its derived index, and every registry that used to be a `Map` or a `Set` of objects (`IndexedMap`, `PageTable`); a table whose columns move together is one `Lanes` (`@xpute/core/ds/lanes.ts`), and a block with several spans is cut by `carver`. The allocator itself allocates nothing: its free lists are threaded through the free blocks. What stays in the JS heap is glue — React, the handles that name a slot, the WebGPU objects the renderer holds behind the module's handles.
+
+The rules that came out of that move ([issue/20260912-linear-memory-what-is-left.md](./issue/20260912-linear-memory-what-is-left.md)): a lane set has one owner and a consumer borrows it for one call, keeping only what it wrote; a slot is dense and its handle is told when it moves; two owners means a refcount. Past its range the page section still hands out plain regions the collector can reclaim, which the module cannot read; the mesh section's blocks for builds come from the module's own pool and are refused past it, and a refused build keeps its place and asks again next tick, and the mesh section's fill is a second trigger for reclaiming off-screen chunks.
 
 ## Terrain Data and Streaming
 
-L3 pages are the terrain's unit of transfer and storage. The client keeps terrain in its source-appropriate 2.5D form: dense categorical ground rasters plus a padded elevation raster reconstructed with bicubic sampling.
-
-One radius decides which pages: every page within `KEEP_DIST` of the range anchor (`spec/kernel/layer/terrain/config.json`). That one set is what gets fetched, what stays decoded, and what `.fixed.terrain` has a record for, so a page can never be requested and then dropped from under its own request. The range anchor is the view centre on the ground, snapped to a chunk, not the camera, so rotating the view does not sweep pages in and out. A fetched page is copied into its record, and the body is released in the same command.
+L3 pages are the primary terrain streaming unit, storing terrain's Tile-shaped data. The client requests pages around the current center and keeps terrain in its source-appropriate 2.5D form: dense categorical ground rasters plus a padded elevation raster reconstructed with bicubic sampling.
 
 Each page carries four ground channels rasterized from Overture Maps geometry (Buildings/Transportation/Base, plus coastline derived from Overture's Base `water` theme):
 
@@ -220,7 +83,7 @@ Each page carries four ground channels rasterized from Overture Maps geometry (B
 | `STRUCTURE` | Buildings and constructed surfaces                  |
 | `TRANSPORT` | Roads, paths, railways                              |
 
-Sea is a `LAND` value with the high bit set (`sea = 129`, `spec/cell/cube_type.json`), partitioned by that bit so a channel stays one byte a cell.
+Sea cells use `SEA_FLAG = 0x80` to distinguish sea from ordinary land while retaining the byte-sized channel representation.
 
 ## Bake Pipeline
 
@@ -234,75 +97,58 @@ Overture PostGIS rows
   → compressed HTTP page response
 ```
 
-The bake is TypeScript under Deno (`apps/api/src/bake/`), over `@pxl/shared`'s formats. Polygon rasterization uses even-odd fill with hole support. Linear features use a thickness kernel. Arena-backed scratch allocation reduces garbage-collection pressure during geometry work. Elevation is stored as signed 16-bit cell units, using one page-constant Mercator Z scale so the API, terrain, and objects do not drift by applying different pointwise scale rules.
+Polygon rasterization uses even-odd fill with hole support. Linear features use a thickness kernel. Arena-backed scratch allocation reduces garbage-collection pressure during geometry work. Elevation is stored as signed 16-bit cell units, using one page-constant Mercator Z scale so the API, terrain, and objects do not drift by applying different pointwise scale rules.
 
-## Chunk Pipeline
+## Unified World-Layer Pipeline
 
-Terrain and objects keep different source storage:
+Terrain and objects deliberately keep different source storage:
 
-- **Terrain** is dense and varied, a Tile-shaped layer, so L3 pages keep dense 2D channels and elevation.
-- **Objects** are sparse and fully 3D, a Volume-shaped layer, so each occupied `64³` band of an L2 chunk owns a sparse tree of palette indices. A value of `0` is VOID, meaning absence or fallback. `128` is explicit AIR, which keeps the leaf and erases whatever a lower layer would show. `255` is UNKNOWN. Every other value is a placed cube colour, a terrain-styled pick or a decor kind, and that value is also its id in the one global palette (`crates/pxl/spec/src/cell/`).
+- **Terrain** is dense and varied — a Tile-shaped layer — so L3 pages retain dense 2D channels and elevation data.
+- **Objects** are sparse and fully 3D — a Volume-shaped layer — so each occupied `64³` band of an L2 chunk owns a sparse tree of palette indices. A catalog value of `0` is `OBJECT_UNDEF`, meaning absence/fallback. `0x80` is explicit AIR (retains the leaf, erasing whatever a lower layer would otherwise show), `0xff` is UNKNOWN, and every other real value is a placed cube color, terrain-styled pick, or decor kind (`cell/cube.ts`, `cell/decor.ts`, `cell/mod.ts`) — which is also its id in the global palette ([Records](#records)).
 
-They meet only when a chunk is built:
+They unify only at the renderer boundary through `WorldLayer`:
 
 ```text
-terrain record ──▶ terrain paint (mesh/paint/terrain) ──┐
-                                                        ├─▶ volume: signed-Z 64³ bands
-object store ────▶ object paint  (mesh/paint/object)  ──┘        │
-                                                                 ▼
-terrain record ──▶ direct runs, one a column ────────────▶ column run set (mesh/voxel_scan)
-  (no object in the chunk)                                       │
-                                                  ┌──────────────┴──────────────┐
-                                                  ▼                             ▼
-                                        mesher (mesh/chunk_mesher)       raycast (world/chunk/raycast)
-                                        a mesh per LOD tier               the same column walk
+terrain page ──→ TerrainLayer ──┐
+                               ├─→ temporary signed-Z voxel bands
+object store   → ObjectLayer ──┘       ├─→ shared mesher → baked per-chunk geometry
+                                       └─→ shared raycaster → world hit
 ```
 
-Objects paint after terrain, so a placed value replaces the terrain's at the same voxel. What a chunk was built from is a tuple of revisions: the terrain page's, and the column's object and decor revisions from the change log. A chunk whose tuple has not moved is not rebuilt. Because the mesher and the raycast read the same runs, rendered and clickable geometry cannot drift apart.
+Each layer provides:
 
-A chunk with nothing placed in it skips the volume altogether: the terrain writes one run a column straight into the run set (the direct path). Objects are painted a band's worth of voxels at a time, and a store written between two steps restarts the paint.
+- `revision(key)`: a cheap layer-owned cache identity;
+- `paint(key, target)`: full voxel composition.
+
+Registration order is override priority, so later layers replace earlier material at the same voxel. Cache invalidation does not know terrain- or object-specific stores; it compares the revision tuples owned by the registered layers.
 
 ### Temporary dense bands
 
-A composed chunk is a set of sorted, signed 64-cell Z bands (`crates/pxl/render/src/mesh/volume.rs`). A band is allocated whole even when one peak touches it; sparsity exists only between bands. Within a band the lanes are flat:
+One chunk composes into its L2/Chunk-sized Volume as sorted, signed 64-cell Z bands. Within a band, arrays are flat and direct:
 
-- `material`, u32: material class and RGB (`0xCC_RRGGBB`);
-- `layer_idx`, u8: the texture-array layer;
-- a sub-cell payload only for bands holding fine objects, and an overflow list for objects sharing a base voxel.
+- `Uint32Array material`: material class + RGB (`0xCC_RRGGBB`);
+- `Uint8Array layer_idx`: texture-array layer;
+- optional sub-cell payload only for bands containing fine objects.
 
-The common payload is five bytes a voxel, so one `64³` band is about 1.25 MiB. Keeping one for every visible chunk would exceed a phone's budget, so bands exist only while a chunk is composed and scanned. Up to 16 band stores keep their lanes for the next composite, because building them fresh was measured as the heap's worst churn.
+The common payload is five bytes per voxel. One `64³` band is therefore about `1.25 MiB`; retaining one for hundreds of visible chunks would exceed a mobile memory budget. Bands are pooled scratch storage and released immediately after meshing — `ChunkVolume` never survives past one synchronous composite pass.
 
-What survives is the chunk's **column run set**: every one of its `64²` columns' merged material runs, packed as lanes in one heap block (22 bytes a run) rather than as a view into the bands. It is scanned once and reused by every LOD tier and every tier transition until the chunk leaves the retained set or its sources change. Each LOD tier a chunk has built is kept as one heap block holding the mesh's lanes, under a retain budget of half the heap for what is off screen (`RETAIN_BUDGET_BYTES`), because rebuilding a tier from the runs is not free either.
+What _does_ survive that pass, per in-frustum chunk, is the chunk's **column run set** — every one of its `64²` columns' already-merged material runs (`voxel_scan.ts`), packed as parallel lanes over one pooled block (17 bytes a run) rather than a view into the released bands. It is scanned once and reused across every LOD tier and every LOD transition after that, until the chunk leaves the retained set or its source revision changes — the expensive part (walking bands) happens once per chunk's lifetime instead of once per rebuild, and the same run set feeds LOD1 and every coarse tier. Coarse tiers of pure terrain skip the volume altogether and are built from the page heightmap directly. A `BuiltChunkBucket` (`render/mesh/chunk_bucket.ts`) is kept per LOD tier a chunk has actually built, retained under a memory budget rather than evicted on every tier change, since rebuilding one from the run set isn't free either. Its buffers are one pooled block per mesh, refcounted where the layout and the mounted geometry both hold it, so a mesh's several typed-array spans are one allocation whose lifetime ends together.
 
-The raycast needs exact composed voxels, but only near the pointer, so it keeps its own composites: at most four chunks and eight bands (about 10 MiB). A chunk taller than that is used once and not cached.
-
-### The chunk scheduler
-
-Every decision about a chunk is `crates/pxl/kernel/src/world/chunk/table.rs`'s, one slot a chunk (flags, distances, bounding sphere, pending-since, retained bytes); the nodes (`node.rs`) hold what the decisions act on. A tick is four passes: **mount** decides which chunks exist, by range from the anchor, with hysteresis so a chunk at the edge is not traded back and forth; **refresh** measures each against the frustum; **recheck** asks the LOD ladder which tiers distance wants and marks the slot pending; **commit** applies a layout whose tiers are all in hand, or releases one that has gone off screen.
-
-What to build next is one priority: slot holders first, then chunks in the frustum by distance from the **lead point** — where the camera is going rather than where it is drawn, so a pan fills in ahead of the view (`crates/pxl/kernel/src/sched/priority.rs`) — with ageing, so a chunk the camera keeps almost reaching cannot wait forever. Builds run in the build task on what the quota leaves after the tick, one scan and one bake open at a time, a step at a time.
-
-**Memory is paid for in LOD.** A block the heap refuses ends the tick's builds, the chunk gives up its slot and is not tried again until the heap releases something, and reclaim gives back off-screen work farthest first. When a refusal finds nothing to reclaim, the ladder steps in one tier (at most every half second, up to three), and steps back out after five seconds without one — the view gets coarser rather than the page dying.
+Raycasting needs exact composed voxels but only near the pointer ray, so it uses a separate LRU capped at four chunks and eight total bands (about 10 MiB of common payload). An oversized vertical chunk is consumed once instead of entering the cache.
 
 ## Rendering and LOD
 
-The world is drawn from a draw list (`crates/pxl/render/src/frame/draw.rs`). Each tick, the scheduler lists what to upload, free and draw: the chunks' mesh blocks at the weights its blend decided, decor as instanced draws of a group's model over the block a chunk shows, the actors with their joint palettes, the puck, the billboards and the dev gizmos. The renderer (`crates/pxl/render/src/gpu/renderer.rs` and the passes in `gpu/pass/`) executes the list with no decision of its own.
+The world is drawn from the module's draw list (`crates/pxl/core/src/render/draw.rs`): each tick the scheduler lists what to upload, free and draw — the chunks' mesh blocks at the weights its blend decided, decor as instanced draws of a group's model over the block a chunk shows, the actors with their joint palettes, the puck, the billboards, the dev gizmos — and the renderer (`apps/web/src/render/gpu/renderer.ts` and the passes beside it) executes the list through WebGPU with no decision of its own: the buffers behind the module's handles, the texture pack's arrays, the frame's uniforms. The shaders and the pipelines are the module's too (`crates/pxl/core/src/render/shader.rs` and the WGSL in `shader/`): each pipeline is a record of words — its shaders, its vertex lanes, its bind group layouts, its primitive, depth and blend state — that `render/gpu/pipeline.ts` turns into a WebGPU descriptor and a native shell would turn into wgpu's, and `cargo test` compiles every shader with naga and holds each record to what its shader declares. The view — the orbit camera and the root frame the world stands in, the map's azimuth and the floating origin's translation — is `module/world/frame/view.ts`, doubles composed the moment a damping step writes them, read by the module's frame, the renderer, the placement passes and the pointer's ray. Chunk ownership is imperative: `chunk_node.ts` holds a chunk's tiers and decor blocks and tells the module its sources, rather than a component tree, since one component per chunk per tier made React's reconciler the thing deciding when GPU buffers live and die.
 
-The renderer reaches WebGPU through the host's calls (`gpu/api.rs`, answered by `apps/web/src/device/gpu.ts`). Every call passes numbers and the address and length of what it names, and every GPU object is named by a handle the kernel gave it. The shaders and pipelines are the kernel's too (`crates/pxl/render/src/frame/shader/`). Each pipeline is a record of words (its shaders, its vertex lanes, its bind group layouts, its primitive, depth and blend state) that the host turns into a WebGPU descriptor, and that a native host could turn into wgpu's. `cargo test` compiles every shader with naga and holds each record to what its shader declares. Depth is reversed float throughout, with near at 1 and far at 0, so a float's precision falls where a perspective depth needs it and far coplanar terrain faces do not fight. When the device is lost, the blocks stay in memory and are put back on the next device from their addresses.
+LOD samples the 64² chunk at strides `1/2/4/8/16/32/64`. A tier hands off to the next when one of its cells would project to about six pixels — screen-space error, derived from the viewport height and field of view (`module/world/lod.ts`), which at the reference viewport puts the handoffs at `192/384/768/1536/3072/6144` world units, proportional to the stride so projected coarse-cell size changes smoothly. Everything that keeps step with the tiers — the POI badge lattice, the badge fade, decor's range — is a multiple of that first handoff. Decor is drawn by the same criterion applied to a kind's extent: a thing that would cover fewer pixels than two of the tier's cells is not drawn, at full density up to that tier and not past it (`module/world/decor/decor_kinds.ts`).
 
-The view (`crates/pxl/kernel/src/world/frame/view.rs`) is the orbit camera and the root frame the world stands in. The eye never turns: the world turns under it, by the map's azimuth, and is translated to put the map centre at the origin. The local origin is the map centre's L4 base, so the world stays in `f32` range near the camera, and the translation rebases in the same step that it snaps. The matrices are doubles, composed the moment a damping step writes them, and read by the chunk scheduler, the renderer, placement and the pointer's ray.
+The visible handoffs use complementary stochastic visibility between adjacent LOD meshes rather than alpha-overlapping them. LOD work is frame-budgeted, while a newly visible chunk starts from its distance-derived tier instead of always flashing through the coarsest proxy.
 
-A drawn frame is handed over whole. After the tick, the kernel writes the frame's uniforms into the stage lane (`pxl-render frame/stage.rs`), then calls the renderer with a `FrameInput`: the draw list, the environment, the models and skins as they stand, the billboard sheet and the surfaces. The renderer returns what the frame cost and whether another turn is wanted. It draws into every open surface: the world's canvas and the character picker's case.
-
-LOD samples the 64² chunk at strides `1/2/4/8/16/32/64`. A tier hands off to the next when one of its cells would project to about six pixels — screen-space error, derived from the viewport height and field of view (`crates/pxl/render/src/look/lod.rs`), which at the reference viewport puts the handoffs at `192/384/768/1536/3072/6144` world units, proportional to the stride so projected coarse-cell size changes smoothly. Everything that keeps step with the tiers — the POI badge lattice, the badge fade, decor's range — is a multiple of that first handoff. Decor is drawn by the same criterion applied to a kind's extent: a thing that would cover fewer pixels than two of the tier's cells is not drawn, at full density up to that tier and not past it (`crates/pxl/kernel/src/layer/decor/build.rs`).
-
-The visible handoffs dither between adjacent LOD meshes with complementary screen-space masks instead of alpha-overlapping them. A newly visible chunk starts from its distance-derived tier instead of flashing through the coarsest one.
-
-Frustum culling uses the exact union of the terrain, object, primary and secondary mesh bounds. Measured bounds survive GPU eviction and are invalidated with their source revisions. Until a chunk has measured geometry, a conservative guard keeps a low camera from culling the ground directly beneath the view.
+Frustum culling uses the exact union of terrain/object and primary/secondary mesh bounds. Measured bounds survive GPU/surface eviction and are invalidated with their source revisions. Until a chunk has measured geometry, a conservative camera-projection guard prevents the low-camera-polar false negative that previously removed the ground directly beneath the view.
 
 ### Coarse LOD
 
-A coarse cell (`lod_step > 1`, `crates/pxl/render/src/mesh/chunk_mesher.rs`)
+A coarse cell (`lod_step > 1`, `chunk_mesher.ts`'s `bake_chunk_mesh_coarse`)
 merges `lod_step³` voxels into one box, and says three things about them.
 
 - **How much is there.** Fill is coverage over `lod_step³` — one scalar, no
@@ -346,11 +192,89 @@ per cell. A merge consumes the border between two cells, so it may only
 cross a border that carries nothing to draw or shade, and each pass tests
 the border it is about to swallow rather than the one the box started at.
 
+### Scheduling
+
+Every per-frame subscriber in the world is a named step of **one tick**
+(`module/world/sched/tick.ts`), run once per animation frame something
+asked for — a gesture, a damping step still settling, a build with more to
+commit — and never otherwise, so an idle view costs nothing. The
+tick runs its phases in priority order — `interaction` (camera, frame,
+puck, companion: unbudgeted and O(1) by contract), `visible` (the chunks on
+screen: LOD recheck, scan, bake, commit), `content` (what fills the world
+but is not this frame's geometry: the POI index sweep and placement),
+`cosmetic` (fades, environment, the badge field), `report` (the ledger) —
+on one budget sized from the display's measured frame interval, with a
+fifth of it held back from `visible` so `content` is never left the
+forward-progress floor alone. A step runs its work as units under
+`budget.run`, which guarantees that the first unit that does work always
+runs and stops after the deadline; a budgeted phase is only as cooperative
+as its units are small, which the ledger's step table exists to check.
+
+The scheduler's view of every chunk is one slot in `sched/chunk_table.ts`:
+flags, distances, bounding sphere, pending-since, retained bytes. What to
+build next is one unified priority (`sched/priority.ts`) — slot holders,
+then in-frustum by distance from the lead point, with ageing so a chunk the
+camera keeps almost reaching cannot wait forever — and what to keep is a
+memory budget over the retained meshes.
+
+The renderer follows a single-threaded cooperative-yield model, closer to
+Figma's than to a preemptive one: everything that can be cut into units
+under the budget stays on the main thread, and that is nearly everything.
+A chunk's build runs in the Rust core (`crates/pxl/core`, compiled by
+`crates/pxl/wasm` into one module whose exports are a boot block and a doorbell, no bindgen, which
+imports the core memory): the node sends which tiers it lacks through a
+submission ring, the stage rings the tick interrupt once a frame with the pending
+chunks in priority order and what is left of the budget, and the module makes
+the runs — straight from the terrain for a coarse tier with nothing placed,
+else by composing terrain and objects into a volume and scanning it — and
+bakes the tiers a step at a time, one scan and one bake open at once. Each
+mesh comes back through the completion ring in a block of the mesh section
+the node then owns; nothing is copied, and a block the pool refuses leaves
+the work where it is for a later tick. The TypeScript scan and mesher stay
+only as the references the module is held to byte for byte; on a phone the
+Rust bake cost a third to a half as much per run and its longest step was
+1–4 ms against 12–17
+([issue/experiment/20260913-mesher-in-rust/](./issue/experiment/20260913-mesher-in-rust/)).
+`module/world/sched/` also holds the fetch scheduler (a priority
+queue over a concurrency ceiling, aborting what falls out of a category's
+wishlist) and the **ledger**: a read-only ring of frames and tasks with a
+step table, per-job waits, a draw census and a GPU timer where one exists,
+printed as a report and exported as a Chrome trace. The ledger observes; it
+never feeds back into the schedulers' own decisions
+([issue/20260909-cooperative-scheduler-and-task-ledger.md](./issue/20260909-cooperative-scheduler-and-task-ledger.md)).
+
+### The channel: commands and changes
+
+What crosses a boundary — between the UI and the world, the main thread and
+a worker, later the glue and a WASM core — has two halves, both data
+([issue/20260913-boundaries-commands-and-what-comes-back-from-april.md](./issue/20260913-boundaries-commands-and-what-comes-back-from-april.md),
+[issue/20260913-the-read-direction-a-change-log.md](./issue/20260913-the-read-direction-a-change-log.md)).
+The write half is a **command**: a numeric `cmd`, args, a body, an `errno`
+reply, laid out as a frame in the buffer that carries it (`@xpute/core/ipc/frame.ts`),
+dispatched by a port that is codec and dispatch only, carried by a link
+that transfers. The read half is a **change log** (`@xpute/core/ipc/change.ts`):
+a source bumps `(topic, key)` and the topic's tick becomes the key's
+revision, written to a revision table and one fixed ring; a reader compares
+a revision or walks the ring from its cursor, and a cursor the ring has
+overwritten re-reads its topics. A change carries no value — the value is
+read where it lives — so the ring is small and a span of it crosses a
+boundary unchanged. The world's log (`module/world/change.ts`) numbers six
+topics — object column, decor column, object cell, terrain page, POI page,
+decor asset — and every way of reading that existed before (store
+revisions, per-key listeners, page interests, `useSyncExternalStore`, the
+per-tick pull) is an adapter over it; listeners run when the tick pumps,
+never inside the write. Inside a page nothing on these boundaries is lost,
+so there is no acknowledgement, deadline or retry; reliability is decided at
+the network boundary alone, when a server exists. A command travels on a
+ring in the receiver's memory with a doorbell that names only a count — the
+submission ring is not built yet: the Rust mesher is still called export by
+export.
+
 ## Camera
 
 The orbit camera is driven by three controls — `dist`, `polar`, `azimuth` —
 and nothing else writes them. Terrain is allowed one question, in
-`crates/pxl/kernel/src/control/camera/terrain_gate.rs`: would this view state put the eye inside
+`module/camera/terrain_gate.ts`: would this view state put the eye inside
 it. The gate is a pure function of the three controls rather than of the
 live scene graph, and it sits in `set_view_state`, the one funnel every
 input path goes through, so a refused move never leaves the controls and the
@@ -361,7 +285,7 @@ drawn camera disagreeing.
 grants every control and raises the _drawn_ pitch instead, leaving
 `view_state` untouched so the pitch relaxes back on its own.
 
-Every setting is one entry of one schema (`spec/kernel/shell/setting/schema.json`): its
+Every setting is one entry of one schema (`app/setting/schema.ts`): its
 default, its kind and its section. The store reads the defaults with the
 user's overrides on top and stores only the overrides, and the settings
 sheet renders its rows from the schema. Dev-only settings — the debug
@@ -369,26 +293,24 @@ gizmos, the ledger panel, a render-path bisect — are entries marked `dev`.
 
 ## Billboards and POI
 
-**POI is disconnected** until its per-page index is rewritten ([issue/BACKLOG.md](./issue/BACKLOG.md)). What follows is the design the code holds.
-
 A POI page is an XTP record the API emits — positions, category, rank and
 id hash as lanes, the strings as leaves read one at a time — copied into
 the core memory on arrival. A spatial index over the resident disc
-(`crates/pxl/kernel/src/layer/poi/index.rs`) is rebuilt a range of records per unit
+(`module/world/poi/poi_index.ts`) is rebuilt a range of records per unit
 in the content phase while the previous build keeps answering; placement
-(`crates/pxl/kernel/src/layer/poi/placement.rs`) is a job of the same phase — query, file the hits into an
+(`poi_layer.tsx`) is a job of the same phase — query, file the hits into an
 implicit lattice by tier, offer them with estimated widths, greedy
 placement on a screen grid in distance order, build the badges — committed
-whole. Badges are drawn from one atlas (`crates/pxl/render/src/asset/atlas.rs`,
+whole. Badges are drawn from one atlas (`module/world/billboard/atlas.ts`,
 shelf-packed, uploaded by rectangle) as **one instanced quad**
-(`crates/pxl/kernel/src/layer/billboard/field.rs`): anchor, size and sheet rectangle are per-instance
+(`billboard/field.ts`): anchor, size and sheet rectangle are per-instance
 attributes, and the fit to screen pixels, the distance fade and the anchor
 pinning are the vertex shader's.
 
-Occlusion is all or nothing per badge, on purpose: the badge pass
-attaches the world's depth read-only and binds it as a texture, and its shader
-(`crates/pxl/render/src/frame/shader/badge.wgsl`) reprojects several points up each badge
-through it and discards the badge when most are behind terrain.
+Occlusion is all or nothing per badge, on purpose: `render/scene_depth.ts`
+copies world depth after the scene render, and
+`billboard/anchor_occlusion.ts` reprojects several points up each badge
+through that copy and discards the badge when most are behind terrain.
 The same pass writes `gl_FragDepth` from an upright twin of the quad, so
 billboards sort against the world along world-up rather than camera-up.
 Chat bubbles still use the sprite form of the same patch.
@@ -404,14 +326,13 @@ XTP is the binary wire format used by the bake pipeline and terrain-page API:
 - **GRAFT**: a pre-encoded subtree packet splices with the same wire layout as an inline node;
 - **Type-preserving nulls**: optional nodes retain type metadata while physically absent.
 
-Every packet on the rings is XTP too. TLV is used separately for flat, self-delimiting stream arguments. XTP lives in xpute (`crates/xpute/core/src/io/marshal/tree/`, `@xpute/core/io/marshal/tree/`), not in the model, because the codec contains no pixelet domain knowledge.
+TLV is used separately for flat, self-delimiting stream arguments. XTP lives in `@xpute/core`, not `@pxl/shared`, because the codec itself contains no pixelet domain knowledge.
 
-## Catalogs and assets
+## Records
 
-What a build ships is decided at build time and written once as JSON under `spec/`: pxl-spec's at the top, and `kernel/`, `render/` and `xpute/` below, each mirroring the crate path it generates into. `script/spec.ts` generates a Rust module from each file (through rustfmt) and, where the shell reads it, a TypeScript one (through `deno fmt`). `deno task spec` writes them, and `deno task check:spec` fails when what is on disk is not what the JSON writes. The generated files include the command numbers, the cell catalogs, the memory map's numbers, the GPU API's enums, the ledger's layout, the settings schema, and the decor and character catalogs.
+On top of the tree packet, `@pxl/shared/record` defines the **column layer**: a record is `[kind, version, keys, required flags, count, columns...]`, so a reader finds a column by name, skips one it does not know and refuses one marked required — glTF's `extensionsRequired` and PNG's critical bit under one rule. Two records are shared by everything ([issue/20260913-everything-is-a-file-the-placement-and-the-palette.md](./issue/20260913-everything-is-a-file-the-placement-and-the-palette.md)):
 
-Nothing in a catalog is sent between shell and kernel or between client and server. Both sides compile the same catalog, so a message carrying it would be a program telling itself what it already has ([issue/20260913-everything-is-a-file-the-placement-and-the-palette.md](./issue/20260913-everything-is-a-file-the-placement-and-the-palette.md)). Where bytes do cross, as a published bake or a saved blob, their layout is the model's and their version is in the envelope: the path or the storage key.
+- **`Placement`** — one row per placed thing, whatever it is: a `u64` id, a page-local `f32` position, the footprint's side in world units, an ENU heading (radians about up, counter-clockwise from +x), and a palette id; ancillary scale, rotation and tags. A tree, a placed cube and a bare ground cell are the same row; what differs is the palette entry.
+- **`Palette`** — one global record naming every kind of thing: id, kind (`cube`, `ground`, `decor`, `actor`), name, model and skin by bucket key (`asset/<sha256>`, the content), extent measured at ingest, size, licence, author, colour. The palette this build ships is built from the cell constants plus a row per decor model and per character, over `record/ingested.ts` — the table `deno task ingest:asset` generates from the top-level `asset/` tree, which hashes every model, skin and texture into the bucket and measures each glb's bounds. Nothing imports a model or an image: the client fetches a key, the same key from the dev API's `./out/asset` and from R2. The texture pack is one more table over the palette (`record/texture.ts`, which image a cube type wears on which face) and one object in the bucket: the ingest composes its images into a single WebP sheet, and the client fills its layer array from that one download, a layer at a time. A cube's colour is the palette row's own (`spec/cell/color.ts`), what the minimap and the coarse tiers draw, and a pack decorates it.
 
-- **Cubes and decor kinds** are `spec/cell/`'s (`cube_type.json`, `color.json`, `decor.json`); a value's number is what the object store writes.
-- **Models** are named by their path under the top-level `asset/` tree, in the catalog that uses them: each decor kind's `models` and `skins` in `spec/kernel/layer/decor/kind/kind.json`, each character group's `keys`, `models`, `skin` and `size` in `spec/kernel/layer/character/variant.json`. A path resolves to a bucket key and a measured extent through the asset table (`crates/pxl/spec/src/asset/ingested.rs`, `@pxl/shared/asset/ingested.ts`) that `deno task ingest:asset` generates, which hashes every model, skin and texture into the bucket (`asset/<sha256>`) and measures each glb's bounds. Nothing imports a model or an image: the client fetches a key, the same key from the dev API's `./out/asset` and from R2.
-- **The texture pack** is one table (`crates/pxl/spec/src/asset/texture.rs`, which image a cube type wears on which face) and one object in the bucket: the ingest composes its images into a single WebP sheet, and the client fills its layer array from that one download, a layer at a time. A cube's colour is `spec/cell/color.json`'s, what the minimap and the coarse tiers draw, and a pack decorates it.
+Containers stay what they are — a terrain page is dense lanes, a POI page point records, the object store a sparse tree per band — and only the row is unified. The control plane above the records is deliberately narrow: identity, ownership, lifetime, revision, residency, and no universal read/write interface.

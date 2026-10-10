@@ -53,7 +53,7 @@ export type Env = {
   API_ORIGIN: string;
 };
 
-/** Mirrors src/config/route.ts's EDGE_* prefixes, as literals: this file
+/** Mirrors src/lib/env/route.ts's EDGE_* prefixes, as literals: this file
  * is bundled for the Workers runtime rather than from src/. Neither branch
  * reads past its prefix. */
 const API_PREFIX = "/api/";
@@ -75,7 +75,7 @@ const PREFIX = "/api/tiles/";
  *   geocode/repository.ts resolves that to `null` directly).
  * - `asset/<sha256>` — a model or an image, named by its content;
  *   apps/api/src/bake/asset/tool/ingest_asset.ts writes them and the
- *   catalogs name them by path. No version segment: a changed file is a
+ *   shipped palette names them. No version segment: a changed file is a
  *   new key, which is what makes `immutable` true of it.
  *
  * page_idx is an L3 index printed as a decimal BigInt (see tile_repository.ts/

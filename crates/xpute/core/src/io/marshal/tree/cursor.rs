@@ -1,4 +1,4 @@
-// xpute-core/io/marshal/tree/cursor.rs
+// xpute_core/io/marshal/tree/cursor.rs
 
 //! The read end: lazy cursors over a packet. The TypeScript's class
 //! hierarchy — `NodeCursor`, with `NullCursor` and `BranchCursor` extending
@@ -121,17 +121,6 @@ impl Cursor {
     pub fn get_str(&self) -> Result<String, MarshalError> {
         match self.get()? {
             NodeValue::Str(s) => Ok(s),
-            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a string, got type 0x{:x}", self.type_())), None)),
-        }
-    }
-
-    /// `get<string>()` read where it lies: the packet's own bytes for as long
-    /// as the cursor is held, with nothing decoded into a string of its own.
-    /// A string that is not UTF-8 is EBADMSG, where the host's decode would
-    /// have replaced what does not read.
-    pub fn get_str_ref(&self) -> Result<&str, MarshalError> {
-        match self {
-            Cursor::Node(c) if c.type_ == SequenceType::STR as u8 => c._str_ref(),
             _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a string, got type 0x{:x}", self.type_())), None)),
         }
     }
@@ -439,24 +428,6 @@ impl NodeCursor {
             arr.put(i, if x != 0 { 1 } else { 0 });
         }
         Ok(arr)
-    }
-
-    /// The string's own bytes where they lie, checked as `_str` checks them.
-    fn _str_ref(&self) -> Result<&str, MarshalError> {
-        if self.base + WORD_SZ > self.pkt.byte_length() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("len slot OOB"), None));
-        }
-        let mut reg = WORD_REG;
-        let [nbyte, _] = GET_WORD(&self.pkt, self.base, &mut reg);
-        let payload_start = self.base + WORD_SZ;
-        if payload_start > self.pkt.byte_length() as u32 || nbyte as u64 + 1 > (self.pkt.byte_length() as u32 - payload_start) as u64 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
-        }
-        let bytes = self.pkt.as_slice();
-        if bytes[(payload_start + nbyte) as usize] != 0 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("missing string terminator"), None));
-        }
-        core::str::from_utf8(&bytes[payload_start as usize..(payload_start + nbyte) as usize]).map_err(|_| MarshalError::new(Errno::EBADMSG, Some("a string that is not UTF-8"), None))
     }
 
     // STR stores UTF-8 bytes with a trailing NUL on wire, while len excludes that terminator.

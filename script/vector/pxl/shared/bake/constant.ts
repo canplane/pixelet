@@ -1,7 +1,7 @@
 // script/vector/pxl/shared/bake/constant.ts
 //
 // The unit, grid and elevation constants and the object layout, for
-// crates/pxl/spec/src/bake/constant.test.rs.
+// crates/pxl/shared/src/bake/constant.test.rs.
 
 import * as c from "@pxl/shared/bake/constant.ts";
 import { f64_bits } from "../../../../vector.ts";

@@ -1,0 +1,734 @@
+// pxl_shared/spec/cmd.rs
+
+//! The shell's and the kernel's commands, by number (xpute_core::ipc::cmd:
+//! `major << 8 | minor`), and the packet each carries — an XTP branch whose
+//! children are listed in order. A message's tag is its subject: a chunk's
+//! id where there is one, so no packet repeats it. A command with no
+//! children carries no packet.
+//!
+//! The same number is a command on the submission ring and a signal on the
+//! completion ring (its `RES` clear): a chunk the shell creates is a chunk
+//! it registers, a chunk the kernel creates is one it mounted. The direction
+//! is the ring.
+
+#![allow(non_camel_case_types, clippy::upper_case_acronyms)]
+
+/// What a command is about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum Major {
+    NOP = 0x00,
+    CHUNK = 0x01,
+    PAGE = 0x02,
+    EDIT = 0x03,
+    TIER = 0x04,
+    RUNS = 0x05,
+    DECOR = 0x06,
+    RAY = 0x07,
+    OBJECT = 0x08,
+    STATE = 0x09,
+    TERRAIN = 0x0a,
+    DECOR_KIND = 0x0b,
+    GHOST = 0x0c,
+    PUCK = 0x0d,
+    BILLBOARD = 0x0e,
+    ACTOR = 0x0f,
+    DEBUG = 0x10,
+    ENV = 0x11,
+    MODEL = 0x12,
+    CHANGE = 0x13,
+    FRAME = 0x14,
+    DRAW = 0x15,
+    SHADER = 0x16,
+    POOL = 0x17,
+    VOLUME = 0x18,
+    BAKE = 0x19,
+    SCAN = 0x1a,
+}
+
+/// The hover ghost's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum GhostMinor {
+    BOX = 0x10,
+    DECOR = 0x11,
+}
+
+/// The location puck's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum PuckMinor {
+    BEACON = 0x10,
+}
+
+/// A billboard set's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum BillboardMinor {
+    PLACE = 0x10,
+    FOLLOW = 0x11,
+}
+
+/// An actor's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ActorMinor {
+    PLAY = 0x10,
+}
+
+/// A model's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ModelMinor {
+    JOINT = 0x10,
+    CLIP = 0x11,
+    CHANNEL = 0x12,
+    SEAL = 0x13,
+}
+
+/// The environment's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum EnvMinor {
+    OBSERVE = 0x10,
+    LANES = 0x11,
+}
+
+/// The change log's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ChangeMinor {
+    LANES = 0x10,
+}
+
+/// The shaders' own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ShaderMinor {
+    PIPELINE = 0x10,
+}
+
+/// A pool's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum PoolMinor {
+    ACQUIRE = 0x10,
+    RELEASE = 0x11,
+    FREE = 0x12,
+}
+
+/// A volume's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum VolumeMinor {
+    FILL = 0x10,
+    VOXEL = 0x11,
+    SUB_VOXEL = 0x12,
+    SEAL = 0x13,
+    POOLS = 0x14,
+    STAT = 0x15,
+}
+
+/// The bake's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum BakeMinor {
+    STEP = 0x10,
+    MESH = 0x11,
+    FINISH = 0x12,
+}
+
+/// The scan's own verbs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ScanMinor {
+    STEP = 0x10,
+    SET = 0x11,
+}
+
+/// The terrain's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum TerrainMinor {
+    PAINT = 0x10,
+}
+
+/// The raycast's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum RayMinor {
+    COLUMN = 0x10,
+}
+
+/// An object store's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ObjectMinor {
+    REINDEX = 0x10,
+    LANES = 0x11,
+    CELL = 0x12,
+    COLUMNS = 0x13,
+    STAT = 0x14,
+    PAINT = 0x15,
+}
+
+/// A decor kind's own verb.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum DecorKindMinor {
+    MODEL = 0x10,
+}
+
+/// A chunk's own verbs, past the four every subject has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ChunkMinor {
+    WANT = 0x10,
+    VISIBLE = 0x11,
+    LAYOUT = 0x12,
+    BLEND = 0x13,
+    BUILD = 0x14,
+    DECOR = 0x15,
+    TICK = 0x16,
+}
+
+/// What a step answers: BAKE_STEP's and SCAN_STEP's result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum StepResult {
+    WORKING = 0,
+    /// Wanting a block, whose size the reply carries.
+    NEED_BLOCK = 1,
+    DONE = 2,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum Cmd {
+    /// Replies with its packet's first child, a u32, or 0 — the rings' own
+    /// test.
+    NOP = 0x0000,
+
+    // ---- shell → kernel ----
+    /// tag chunk · [base u64, tx0 u32, ty0 u32, base_x i32, base_y i32,
+    /// stable_hash u32]
+    CHUNK_CREATE = 0x0101,
+    /// tag chunk · [page: [land u32, water u32, structure u32, transport u32,
+    /// ele u32] addresses | null, show_structures bool]
+    CHUNK_UPDATE = 0x0103,
+    /// tag chunk · no packet
+    CHUNK_DELETE = 0x0104,
+    /// tag chunk · [first u32, second u32], a step or 0 — the builder's ask,
+    /// past the scheduler, for the tests
+    CHUNK_WANT = 0x0110,
+    /// [page u64]
+    PAGE_CREATE = 0x0201,
+    /// [page u64]
+    PAGE_DELETE = 0x0204,
+    /// [hide: [column u64, band i32, pos u32] | null, carve: [column u64,
+    /// lx f32, ly f32, lz f32, size f32] | null]
+    EDIT_UPDATE = 0x0303,
+    /// [key u64, band_z i32, x u32, y u32, z u32, level i32, value u32] — one
+    /// leaf; the chunk's entries are not re-derived until OBJECT_REINDEX
+    OBJECT_UPDATE = 0x0803,
+    /// no packet — the whole store emptied
+    OBJECT_DELETE = 0x0804,
+    /// [key u64] — the chunk's entries and cells re-derived, and the change
+    /// recorded in the change log: the column in both topics, every cell
+    /// whose entries changed
+    OBJECT_REINDEX = 0x0810,
+    /// [state u32, kind u32 (1 solid, 2 air, 3 decor), material u32 (packed
+    /// 0xCC_RRGGBB), layer u32] — what a leaf's state paints as
+    STATE_UPDATE = 0x0903,
+    /// [base: [r u32, g u32, b u32, layer u32, class u32], channels: [land,
+    /// water, structure, transport: [class u32, rgb u8[768], has_color u8[256],
+    /// layer u8[256], has_layer u8[256]]]] — every table a cell's material is
+    /// read from, whole
+    TERRAIN_UPDATE = 0x0a03,
+    /// [kinds: [[tag u64, density f64, variant_count u32, align_transport
+    /// bool, extent f64, decor_value i32 (-1 none), rules: [land, water,
+    /// structure, transport: [mode u32 (0 any, 1 void, 2 one of), types u8[]]]]]]
+    /// — every decor kind, in group order, replacing what was taught
+    DECOR_KIND_UPDATE = 0x0b03,
+    /// [group u32, model u32] — the model a decor group is drawn with, for the
+    /// hit test
+    DECOR_KIND_MODEL = 0x0b10,
+
+    // ---- the scene: what is drawn beside the chunks ----
+    //
+    // A lane of floats crosses in the packet, not by address: the glue's
+    // scratch is given back as soon as the command is sent, and the command
+    // is applied later.
+    /// [x f64, y f64, z f64, size f64, value u32, rgb u32, coplanar bool] — the
+    /// hover ghost as a box, its min corner at (x, y, z)
+    GHOST_BOX = 0x0c10,
+    /// [x f64, y f64, z f64, group u32, rotation f64] — the hover ghost as one
+    /// instance of a decor group
+    GHOST_DECOR = 0x0c11,
+    /// no packet — the ghost gone
+    GHOST_DELETE = 0x0c04,
+    /// [x f64, y f64, z f64, zone f32[7 an instance], snap_dist f64, fog_far
+    /// f64] — the puck's zone about its centre
+    PUCK_UPDATE = 0x0d03,
+    /// [offset_x f64, offset_y f64, night bool]
+    PUCK_BEACON = 0x0d10,
+    /// no packet — the puck gone
+    PUCK_DELETE = 0x0d04,
+    /// tag call · [order u32] → result: the set's id
+    BILLBOARD_CREATE = 0x0e01,
+    /// tag set · [instances f32[10 an instance]], relative to its anchor
+    BILLBOARD_UPDATE = 0x0e03,
+    /// tag set · [x f64, y f64, z f64] — stood at a point
+    BILLBOARD_PLACE = 0x0e10,
+    /// tag set · [actor u32, lift f64] — stood above an actor
+    BILLBOARD_FOLLOW = 0x0e11,
+    /// tag set · no packet
+    BILLBOARD_DELETE = 0x0e04,
+    /// tag call · [model u32] → result: the actor's id, or -1
+    ACTOR_CREATE = 0x0f01,
+    /// tag actor · [x f64, y f64, z f64, rotation_z f64, visible bool]
+    ACTOR_UPDATE = 0x0f03,
+    /// tag actor · [clip u32, fade_s f32]
+    ACTOR_PLAY = 0x0f10,
+    /// tag actor · no packet
+    ACTOR_DELETE = 0x0f04,
+    /// [x f64, y f64, z f64, vertices f32[6 a vertex]] — the dev gizmos'
+    /// segments about an origin
+    DEBUG_UPDATE = 0x1003,
+    /// [theme f32[34]] — the theme the environment eases toward
+    ENV_UPDATE = 0x1103,
+    /// [lat f64, lon f64, unix_ms f64] — the observer and the wall clock
+    ENV_OBSERVE = 0x1110,
+
+    // ---- models: a mesh block the glue writes, and its skeleton and clips ----
+    /// tag call · [vertex_cnt u32, index_cnt u32, joint_cnt u32] → result: the
+    /// model's id, or -1 when the mesh pool refused; with an id, [block_at u32]
+    /// — where the glue writes the vertices and indices, in the module's
+    /// memory
+    MODEL_CREATE = 0x1201,
+    /// tag call · [model u32] → result: the renderer's handle for its mesh
+    /// block, 0 before it is sealed
+    MODEL_READ = 0x1202,
+    /// tag model · [joint u32, parent i32, pose f32[42]: rest (10), what
+    /// stands above a root (16), inverse bind (16)]
+    MODEL_JOINT = 0x1210,
+    /// tag call · [model u32, duration f32] → result: the clip's index
+    MODEL_CLIP = 0x1211,
+    /// tag model · [clip u32, joint u32, path u32 (0 translation, 1 rotation,
+    /// 2 scale), step bool, times f32[], values f32[]]
+    MODEL_CHANNEL = 0x1212,
+    /// tag model · [scale f32] — complete: its block goes to the GPU
+    MODEL_SEAL = 0x1213,
+
+    // ---- the change log, the chunks' rebuilds now, the day ----
+    /// tag call · [topic u32, key u64] → result: the key's new revision
+    CHANGE_UPDATE = 0x1303,
+    /// tag call · [topic u32, key u64] → result: the key's revision, 0 for
+    /// one never bumped
+    CHANGE_READ = 0x1302,
+    /// [topic u32, key u64] — the key's revision forgotten
+    CHANGE_DELETE = 0x1304,
+    /// tag chunk · no packet — its layout built to the end now: a placement
+    /// shows in the frame it was made
+    CHUNK_BUILD = 0x0114,
+    /// tag chunk · [show_decor bool] — its decor rebuilt now for the layout it
+    /// shows; the tiers untouched
+    CHUNK_DECOR = 0x0115,
+    /// tag call · [lat f64, lon f64, day_start_ms f64] → [sunrise f64, sunset
+    /// f64], in hours after the day's start
+    ENV_READ = 0x1102,
+
+    // ---- where the lanes the shell reads in place are ----
+    //
+    // Asked once, or once a frame for the draw lists: the answer is addresses
+    // in the module's memory, which never grows.
+    /// tag call · no packet → [frame_at u32 (FRAME_WORDS doubles the glue
+    /// writes before a tick), uniform u32[14]: the frame uniform's floats,
+    /// then where each field starts]
+    FRAME_READ = 0x1402,
+    /// tag call · no packet → [census_at u32 (13 doubles), stat_at u32 (11
+    /// words)]
+    CHUNK_READ = 0x0102,
+    /// tag call · no packet → [out_at u32]: the environment's ENV_FLOATS
+    ENV_LANES = 0x1111,
+    /// tag call · no packet → [topic_at u32, key_at u32, revision_at u32,
+    /// head_at u32, ticks_at u32, capacity u32]: the change log's lanes
+    CHANGE_LANES = 0x1310,
+    /// tag call · no packet → [row u32[10]]: the renderer's lists taken — the
+    /// uploads' address and count, the frees', the draws', the uniforms', the
+    /// rewrites' — valid until the next take
+    DRAW_READ = 0x1502,
+    /// tag call · [kind u32] → result: the WGSL's length in bytes, 0 for a
+    /// kind that is not one; with one, [at u32]
+    SHADER_READ = 0x1602,
+    /// tag call · [id u32] → [record u32[]]: the pipeline's record, empty for
+    /// an id that is not one
+    SHADER_PIPELINE = 0x1610,
+
+    // ---- the memory's pools ----
+    //
+    // Mechanism rather than the world's: numbered here while this is the one
+    // table. The pool a command is about is its packet's first child, so a
+    // release can be asked about as well as sent.
+    /// tag call · [start u32, bytes u32, region_bytes u32, min_block_bytes
+    /// u32] → result: the pool's id — over `bytes` of the memory at `start`,
+    /// a section of the map, whose range the shell keeps for it alone
+    POOL_CREATE = 0x1701,
+    /// tag call · [pool u32] → result: where its stat is, twelve words in
+    /// BuddyStat's first twelve fields' order, valid until the next
+    /// POOL_CREATE
+    POOL_READ = 0x1702,
+    /// tag call · [pool u32, bytes u32] → result: the block's address, 0 when
+    /// the range is used up or the request is larger than a region
+    POOL_ACQUIRE = 0x1710,
+    /// [pool u32, at u32, bytes u32] — the block returned; EINVAL for one the
+    /// pool does not hold or holds already
+    POOL_RELEASE = 0x1711,
+    /// tag call · [pool u32, at u32, bytes u32] → result: 1 where the block
+    /// is free, 0 where not
+    POOL_FREE = 0x1712,
+
+    // ---- the reference paths ----
+    //
+    // A volume painted, baked and scanned by hand, as apps/web/src/reference/
+    // does to hold the module to the TypeScript pipeline it replaced; the
+    // live build composes, bakes and scans inside the scheduler. One bake and
+    // one scan are open at a time, so neither names a subject. A step's
+    // result is a StepResult.
+    /// tag call · no packet → result: a volume with no bands, its id (never 0)
+    VOLUME_CREATE = 0x1801,
+    /// tag call · [volume u32] → result: its band count; with bands, [rows
+    /// u32[]]: BAND_WORDS words a band — band_z, the material, layer and
+    /// sub-cell lanes' addresses (0 for none), the extras' count and their
+    /// five lanes' addresses — valid until the volume is painted again
+    VOLUME_READ = 0x1802,
+    /// [volume u32] — its bands to the stores up to their cap, the rest to the
+    /// pools
+    VOLUME_DELETE = 0x1804,
+    /// tag call · [volume u32, cx u32, cy u32, z0 i32, z1 i32, material u32,
+    /// layer u32] → result: 1, or 0 when a band could not be made — no pool
+    /// had room — and the volume is not the composite asked for
+    VOLUME_FILL = 0x1810,
+    /// tag call · [volume u32, cx u32, cy u32, z i32, material u32, layer u32,
+    /// sub u32 (0 a full cell)] → result as VOLUME_FILL: the voxel replaced
+    VOLUME_VOXEL = 0x1811,
+    /// tag call · as VOLUME_VOXEL — another sub-cell object on a base voxel
+    /// already claimed
+    VOLUME_SUB_VOXEL = 0x1812,
+    /// [volume u32] — closed to painting, its overflow sorted by column
+    VOLUME_SEAL = 0x1813,
+    /// [fixed u32, mesh u32] — the pools volumes draw on: the standing band
+    /// stores from `fixed`, the rest from `mesh`; before any tick
+    VOLUME_POOLS = 0x1814,
+    /// tag call · no packet → result: where the volumes' stat is, three words:
+    /// allocated, reused, refused
+    VOLUME_STAT = 0x1815,
+    /// tag call · [at u32, count u32, span u32, lod_step u32] → result: 1, or 0
+    /// while a bake is open — of the run set at `at`, in column_run.ts's
+    /// layout, which the shell keeps until the bake closes
+    BAKE_CREATE = 0x1901,
+    /// tag call · no packet → result: the step's; wanting a block, [words
+    /// u32]: the mesh's
+    BAKE_STEP = 0x1910,
+    /// [at u32, words u32] — where the mesh goes, 4-aligned, the shell's
+    BAKE_MESH = 0x1911,
+    /// tag call · no packet → result: where nine words are — vertex count,
+    /// index count, the six counters so far, the module heap's use — the
+    /// complete bake closed
+    BAKE_FINISH = 0x1912,
+    /// no packet — the open bake abandoned
+    BAKE_DELETE = 0x1904,
+    /// tag call · [volume u32] → result: 1, or 0 while a scan is open — the
+    /// volume kept sealed until it closes
+    SCAN_CREATE = 0x1a01,
+    /// tag call · no packet → result: the step's; wanting a block, [bytes
+    /// u32]: the run set's
+    SCAN_STEP = 0x1a10,
+    /// tag call · [at u32, bytes u32] → result: the run count of the set packed
+    /// there, the scan closed
+    SCAN_SET = 0x1a11,
+    /// no packet — the open scan abandoned
+    SCAN_DELETE = 0x1a04,
+    /// tag call · [land u32, water u32, structure u32, transport u32, ele u32
+    /// (addresses), tx0 u32, ty0 u32, show_structures bool] → [floor i32,
+    /// material_at u32, layer_at u32, ele_at u32]: the chunk read, and its
+    /// 4096 packed materials, layer bytes and elevations, valid until the next
+    /// read; EINVAL for a chunk past its page
+    TERRAIN_READ = 0x0a02,
+    /// tag call · [volume u32] → result: 1, or 0 when a band could not be made
+    /// — the chunk last read, a column a cell from the floor
+    TERRAIN_PAINT = 0x0a10,
+    /// tag call · [volume u32, key u64, hide: [band i32, pos u32] | null,
+    /// carve: [lx f64, ly f64, lz f64, size f64] | null] → result: bit 0 a
+    /// voxel painted, bit 1 a paint refused
+    OBJECT_PAINT = 0x0815,
+    /// tag call · [volume u32, cx u32, cy u32] → result: the column's run
+    /// count; [z0_at u32, z1_at u32, class_at u32, sub_at u32]: its lanes,
+    /// valid until the next walk
+    RAY_COLUMN = 0x0710,
+    /// [ids u32[], budget_ms f64] — the builder alone over the chunks, no
+    /// scheduler
+    CHUNK_TICK = 0x0116,
+
+    // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
+    //
+    // CHUNK_CREATE: tag chunk · [page u64, base_x i32, base_y i32] — mounted
+    // CHUNK_DELETE: tag chunk · no packet — unmounted
+    /// tag chunk · [on bool]
+    CHUNK_VISIBLE = 0x0111,
+    /// tag chunk · [primary u32, secondary u32 (0 for none), ready bool]
+    CHUNK_LAYOUT = 0x0112,
+    /// tag chunk · [primary f32, secondary f32, decor_secondary bool]
+    CHUNK_BLEND = 0x0113,
+    /// tag chunk · [generation u32, step u32, at u32, bytes u32, vertex_cnt u32,
+    /// index_cnt u32] — a tier built, in its mesh block
+    TIER_CREATE = 0x0401,
+    /// tag chunk · [step u32] — a tier evicted
+    TIER_DELETE = 0x0404,
+    /// tag chunk · [bytes u32]
+    RUNS_UPDATE = 0x0503,
+    /// tag chunk · [step u32, at u32, bytes u32]
+    DECOR_CREATE = 0x0601,
+
+    // ---- queries: ACKREQ, answered in the turn they are asked ----
+    //
+    // A ray: [ray f64[9]: origin_x, origin_y (the map origin, units), ox, oy,
+    // oz, dx, dy, dz, max_dist], in the root frame. The reply's result is 1
+    // on a hit and 0 on none.
+    /// tag call · [ray f64[9]] → [chunk u32, band u32, pos u32, t f64]: the
+    /// placed decor entry struck
+    DECOR_READ = 0x0602,
+    /// tag call · [ray f64[9]] → [hit f64[14]: material class, normal ×3,
+    /// point ×3, t, box min ×3, box max ×3]
+    RAY_READ = 0x0702,
+    /// tag call · [key u64, band_z i32, x u32, y u32, z u32] → result: the
+    /// state stored at the leaf, VOID where nothing is
+    OBJECT_READ = 0x0802,
+    /// tag call · [key u64] → result: the chunk's entry count, 0 where it
+    /// holds none; with entries, [band_at u32, pos_at u32, state_at u32] — the
+    /// addresses of its lanes, valid until the next write or reindex
+    OBJECT_LANES = 0x0811,
+    /// tag call · [key u64, cx u32, cy u32, cz i32] → result 1 where the cell
+    /// holds entries, 0 where not; with them, [start u32, count u32, solid u32]
+    OBJECT_CELL = 0x0812,
+    /// tag call · no packet → [keys u64[]]: the columns holding objects, in
+    /// the store's order
+    OBJECT_COLUMNS = 0x0813,
+    /// tag call · no packet → [chunks u32, bands u32, cells u32]
+    OBJECT_STAT = 0x0814,
+}
+
+impl Cmd {
+    const ALL: [Cmd; 94] = [
+        Cmd::NOP,
+        Cmd::CHUNK_CREATE,
+        Cmd::CHUNK_UPDATE,
+        Cmd::CHUNK_DELETE,
+        Cmd::CHUNK_WANT,
+        Cmd::PAGE_CREATE,
+        Cmd::PAGE_DELETE,
+        Cmd::EDIT_UPDATE,
+        Cmd::OBJECT_UPDATE,
+        Cmd::OBJECT_DELETE,
+        Cmd::OBJECT_REINDEX,
+        Cmd::STATE_UPDATE,
+        Cmd::TERRAIN_UPDATE,
+        Cmd::DECOR_KIND_UPDATE,
+        Cmd::DECOR_KIND_MODEL,
+        Cmd::CHUNK_VISIBLE,
+        Cmd::CHUNK_LAYOUT,
+        Cmd::CHUNK_BLEND,
+        Cmd::TIER_CREATE,
+        Cmd::TIER_DELETE,
+        Cmd::RUNS_UPDATE,
+        Cmd::DECOR_CREATE,
+        Cmd::DECOR_READ,
+        Cmd::RAY_READ,
+        Cmd::OBJECT_READ,
+        Cmd::OBJECT_LANES,
+        Cmd::OBJECT_CELL,
+        Cmd::OBJECT_COLUMNS,
+        Cmd::OBJECT_STAT,
+        Cmd::GHOST_BOX,
+        Cmd::GHOST_DECOR,
+        Cmd::GHOST_DELETE,
+        Cmd::PUCK_UPDATE,
+        Cmd::PUCK_BEACON,
+        Cmd::PUCK_DELETE,
+        Cmd::BILLBOARD_CREATE,
+        Cmd::BILLBOARD_UPDATE,
+        Cmd::BILLBOARD_PLACE,
+        Cmd::BILLBOARD_FOLLOW,
+        Cmd::BILLBOARD_DELETE,
+        Cmd::ACTOR_CREATE,
+        Cmd::ACTOR_UPDATE,
+        Cmd::ACTOR_PLAY,
+        Cmd::ACTOR_DELETE,
+        Cmd::DEBUG_UPDATE,
+        Cmd::ENV_UPDATE,
+        Cmd::ENV_OBSERVE,
+        Cmd::MODEL_CREATE,
+        Cmd::MODEL_READ,
+        Cmd::MODEL_JOINT,
+        Cmd::MODEL_CLIP,
+        Cmd::MODEL_CHANNEL,
+        Cmd::MODEL_SEAL,
+        Cmd::CHANGE_UPDATE,
+        Cmd::CHANGE_READ,
+        Cmd::CHANGE_DELETE,
+        Cmd::CHUNK_BUILD,
+        Cmd::CHUNK_DECOR,
+        Cmd::ENV_READ,
+        Cmd::FRAME_READ,
+        Cmd::CHUNK_READ,
+        Cmd::ENV_LANES,
+        Cmd::CHANGE_LANES,
+        Cmd::DRAW_READ,
+        Cmd::SHADER_READ,
+        Cmd::SHADER_PIPELINE,
+        Cmd::POOL_CREATE,
+        Cmd::POOL_READ,
+        Cmd::POOL_ACQUIRE,
+        Cmd::POOL_RELEASE,
+        Cmd::POOL_FREE,
+        Cmd::VOLUME_CREATE,
+        Cmd::VOLUME_READ,
+        Cmd::VOLUME_DELETE,
+        Cmd::VOLUME_FILL,
+        Cmd::VOLUME_VOXEL,
+        Cmd::VOLUME_SUB_VOXEL,
+        Cmd::VOLUME_SEAL,
+        Cmd::VOLUME_POOLS,
+        Cmd::VOLUME_STAT,
+        Cmd::BAKE_CREATE,
+        Cmd::BAKE_STEP,
+        Cmd::BAKE_MESH,
+        Cmd::BAKE_FINISH,
+        Cmd::BAKE_DELETE,
+        Cmd::SCAN_CREATE,
+        Cmd::SCAN_STEP,
+        Cmd::SCAN_SET,
+        Cmd::SCAN_DELETE,
+        Cmd::TERRAIN_READ,
+        Cmd::TERRAIN_PAINT,
+        Cmd::OBJECT_PAINT,
+        Cmd::RAY_COLUMN,
+        Cmd::CHUNK_TICK,
+    ];
+
+    /// The command a message's number names, or none for one nobody numbers.
+    pub fn of(number: u32) -> Option<Cmd> {
+        Cmd::ALL.into_iter().find(|c| *c as u32 == number)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use xpute_core::ipc::cmd::{cmd, Minor};
+
+    #[test]
+    fn every_number_is_its_major_and_minor() {
+        use Cmd::*;
+        let parts = [
+            (CHUNK_CREATE, Major::CHUNK as u32, Minor::CREATE as u32),
+            (CHUNK_UPDATE, Major::CHUNK as u32, Minor::UPDATE as u32),
+            (CHUNK_DELETE, Major::CHUNK as u32, Minor::DELETE as u32),
+            (CHUNK_WANT, Major::CHUNK as u32, ChunkMinor::WANT as u32),
+            (CHUNK_VISIBLE, Major::CHUNK as u32, ChunkMinor::VISIBLE as u32),
+            (CHUNK_LAYOUT, Major::CHUNK as u32, ChunkMinor::LAYOUT as u32),
+            (CHUNK_BLEND, Major::CHUNK as u32, ChunkMinor::BLEND as u32),
+            (PAGE_CREATE, Major::PAGE as u32, Minor::CREATE as u32),
+            (PAGE_DELETE, Major::PAGE as u32, Minor::DELETE as u32),
+            (EDIT_UPDATE, Major::EDIT as u32, Minor::UPDATE as u32),
+            (OBJECT_UPDATE, Major::OBJECT as u32, Minor::UPDATE as u32),
+            (OBJECT_DELETE, Major::OBJECT as u32, Minor::DELETE as u32),
+            (OBJECT_REINDEX, Major::OBJECT as u32, ObjectMinor::REINDEX as u32),
+            (STATE_UPDATE, Major::STATE as u32, Minor::UPDATE as u32),
+            (TERRAIN_UPDATE, Major::TERRAIN as u32, Minor::UPDATE as u32),
+            (DECOR_KIND_UPDATE, Major::DECOR_KIND as u32, Minor::UPDATE as u32),
+            (DECOR_KIND_MODEL, Major::DECOR_KIND as u32, DecorKindMinor::MODEL as u32),
+            (TIER_CREATE, Major::TIER as u32, Minor::CREATE as u32),
+            (TIER_DELETE, Major::TIER as u32, Minor::DELETE as u32),
+            (RUNS_UPDATE, Major::RUNS as u32, Minor::UPDATE as u32),
+            (DECOR_CREATE, Major::DECOR as u32, Minor::CREATE as u32),
+            (DECOR_READ, Major::DECOR as u32, Minor::READ as u32),
+            (RAY_READ, Major::RAY as u32, Minor::READ as u32),
+            (OBJECT_READ, Major::OBJECT as u32, Minor::READ as u32),
+            (OBJECT_LANES, Major::OBJECT as u32, ObjectMinor::LANES as u32),
+            (OBJECT_CELL, Major::OBJECT as u32, ObjectMinor::CELL as u32),
+            (OBJECT_COLUMNS, Major::OBJECT as u32, ObjectMinor::COLUMNS as u32),
+            (OBJECT_STAT, Major::OBJECT as u32, ObjectMinor::STAT as u32),
+            (GHOST_BOX, Major::GHOST as u32, GhostMinor::BOX as u32),
+            (GHOST_DECOR, Major::GHOST as u32, GhostMinor::DECOR as u32),
+            (GHOST_DELETE, Major::GHOST as u32, Minor::DELETE as u32),
+            (PUCK_UPDATE, Major::PUCK as u32, Minor::UPDATE as u32),
+            (PUCK_BEACON, Major::PUCK as u32, PuckMinor::BEACON as u32),
+            (PUCK_DELETE, Major::PUCK as u32, Minor::DELETE as u32),
+            (BILLBOARD_CREATE, Major::BILLBOARD as u32, Minor::CREATE as u32),
+            (BILLBOARD_UPDATE, Major::BILLBOARD as u32, Minor::UPDATE as u32),
+            (BILLBOARD_PLACE, Major::BILLBOARD as u32, BillboardMinor::PLACE as u32),
+            (BILLBOARD_FOLLOW, Major::BILLBOARD as u32, BillboardMinor::FOLLOW as u32),
+            (BILLBOARD_DELETE, Major::BILLBOARD as u32, Minor::DELETE as u32),
+            (ACTOR_CREATE, Major::ACTOR as u32, Minor::CREATE as u32),
+            (ACTOR_UPDATE, Major::ACTOR as u32, Minor::UPDATE as u32),
+            (ACTOR_PLAY, Major::ACTOR as u32, ActorMinor::PLAY as u32),
+            (ACTOR_DELETE, Major::ACTOR as u32, Minor::DELETE as u32),
+            (DEBUG_UPDATE, Major::DEBUG as u32, Minor::UPDATE as u32),
+            (ENV_UPDATE, Major::ENV as u32, Minor::UPDATE as u32),
+            (ENV_OBSERVE, Major::ENV as u32, EnvMinor::OBSERVE as u32),
+            (MODEL_CREATE, Major::MODEL as u32, Minor::CREATE as u32),
+            (MODEL_READ, Major::MODEL as u32, Minor::READ as u32),
+            (MODEL_JOINT, Major::MODEL as u32, ModelMinor::JOINT as u32),
+            (MODEL_CLIP, Major::MODEL as u32, ModelMinor::CLIP as u32),
+            (MODEL_CHANNEL, Major::MODEL as u32, ModelMinor::CHANNEL as u32),
+            (MODEL_SEAL, Major::MODEL as u32, ModelMinor::SEAL as u32),
+            (CHANGE_UPDATE, Major::CHANGE as u32, Minor::UPDATE as u32),
+            (CHANGE_READ, Major::CHANGE as u32, Minor::READ as u32),
+            (CHANGE_DELETE, Major::CHANGE as u32, Minor::DELETE as u32),
+            (CHUNK_BUILD, Major::CHUNK as u32, ChunkMinor::BUILD as u32),
+            (CHUNK_DECOR, Major::CHUNK as u32, ChunkMinor::DECOR as u32),
+            (ENV_READ, Major::ENV as u32, Minor::READ as u32),
+            (FRAME_READ, Major::FRAME as u32, Minor::READ as u32),
+            (CHUNK_READ, Major::CHUNK as u32, Minor::READ as u32),
+            (ENV_LANES, Major::ENV as u32, EnvMinor::LANES as u32),
+            (CHANGE_LANES, Major::CHANGE as u32, ChangeMinor::LANES as u32),
+            (DRAW_READ, Major::DRAW as u32, Minor::READ as u32),
+            (SHADER_READ, Major::SHADER as u32, Minor::READ as u32),
+            (SHADER_PIPELINE, Major::SHADER as u32, ShaderMinor::PIPELINE as u32),
+            (POOL_CREATE, Major::POOL as u32, Minor::CREATE as u32),
+            (POOL_READ, Major::POOL as u32, Minor::READ as u32),
+            (POOL_ACQUIRE, Major::POOL as u32, PoolMinor::ACQUIRE as u32),
+            (POOL_RELEASE, Major::POOL as u32, PoolMinor::RELEASE as u32),
+            (POOL_FREE, Major::POOL as u32, PoolMinor::FREE as u32),
+            (VOLUME_CREATE, Major::VOLUME as u32, Minor::CREATE as u32),
+            (VOLUME_READ, Major::VOLUME as u32, Minor::READ as u32),
+            (VOLUME_DELETE, Major::VOLUME as u32, Minor::DELETE as u32),
+            (VOLUME_FILL, Major::VOLUME as u32, VolumeMinor::FILL as u32),
+            (VOLUME_VOXEL, Major::VOLUME as u32, VolumeMinor::VOXEL as u32),
+            (VOLUME_SUB_VOXEL, Major::VOLUME as u32, VolumeMinor::SUB_VOXEL as u32),
+            (VOLUME_SEAL, Major::VOLUME as u32, VolumeMinor::SEAL as u32),
+            (VOLUME_POOLS, Major::VOLUME as u32, VolumeMinor::POOLS as u32),
+            (VOLUME_STAT, Major::VOLUME as u32, VolumeMinor::STAT as u32),
+            (BAKE_CREATE, Major::BAKE as u32, Minor::CREATE as u32),
+            (BAKE_STEP, Major::BAKE as u32, BakeMinor::STEP as u32),
+            (BAKE_MESH, Major::BAKE as u32, BakeMinor::MESH as u32),
+            (BAKE_FINISH, Major::BAKE as u32, BakeMinor::FINISH as u32),
+            (BAKE_DELETE, Major::BAKE as u32, Minor::DELETE as u32),
+            (SCAN_CREATE, Major::SCAN as u32, Minor::CREATE as u32),
+            (SCAN_STEP, Major::SCAN as u32, ScanMinor::STEP as u32),
+            (SCAN_SET, Major::SCAN as u32, ScanMinor::SET as u32),
+            (SCAN_DELETE, Major::SCAN as u32, Minor::DELETE as u32),
+            (TERRAIN_READ, Major::TERRAIN as u32, Minor::READ as u32),
+            (TERRAIN_PAINT, Major::TERRAIN as u32, TerrainMinor::PAINT as u32),
+            (OBJECT_PAINT, Major::OBJECT as u32, ObjectMinor::PAINT as u32),
+            (RAY_COLUMN, Major::RAY as u32, RayMinor::COLUMN as u32),
+            (CHUNK_TICK, Major::CHUNK as u32, ChunkMinor::TICK as u32),
+        ];
+        for (c, major, minor) in parts {
+            assert_eq!(c as u32, cmd(major, minor), "{c:?}");
+            assert_eq!(Cmd::of(c as u32), Some(c));
+        }
+        assert_eq!(Cmd::of(0x0fff), None);
+    }
+}

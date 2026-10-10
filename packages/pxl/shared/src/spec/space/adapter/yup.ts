@@ -5,28 +5,36 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { fill3, type V3 } from "@pxl/shared/spec/space/v3.ts";
 
 /**
- * Y-up <-> Z-up conversion on the CPU, for a boundary where a Y-up basis
+ * Y-up <-> Z-up conversion, for boundaries where Three.js's default basis
  * meets this project's.
  *
- * **Nothing imports this, and that is the expected state, not rot.** The
- * engine is Z-up throughout; ENU maps straight onto the render axes. The one
- * Y-up input it has, glTF models, is not converted here either:
- * crates/pxl/render/src/asset/gltf.rs keeps a model's own basis, and
- * crates/pxl/render/src/frame/shader/place.wgsl turns it to Z-up on the GPU as the model is placed.
+ * **Nothing imports this today, and that is the expected state, not rot.**
+ * The engine is natively Z-up: `bootstrap/three.ts` sets
+ * `THREE.Object3D.DEFAULT_UP` to (0, 0, 1) globally, and the 2026-04 Z-up
+ * unification deleted the per-subsystem Y-up adaptations that used to call
+ * helpers like these. Inside the engine there is no longer anywhere for a
+ * conversion to happen — ENU maps straight onto the render axes.
  *
- * So: don't reach for these while working inside the world. Reach for them
- * only where Y-up coordinates have to be read on the CPU at an asset or
- * third-party boundary, and keep the conversion localized there rather than
- * letting Y-up coordinates travel inward.
+ * What it is kept for has not arrived yet: **imported assets.** All geometry
+ * is currently generated in code (BufferGeometry / InstancedMesh built by
+ * chunk_stage, location_puck, and friends), and the repository
+ * has no GLTF/GLB loader at all. The moment one is added — avatars or props
+ * for the social layer, say — it lands Y-up, because Blender and the glTF
+ * spec both are, and this is the seam that converts it.
+ *
+ * So: don't reach for these while working inside the world; the engine
+ * basis is Z-up end to end. Reach for them only at an asset or third-party
+ * boundary, and keep the conversion localized there rather than letting
+ * Y-up coordinates travel inward.
  *
  * Basis transform:
- *   Z-up (X, Y, Z) -> Y-up (X, Z, -Y)
+ *   Z-up (X, Y, Z) -> Y-up Three-style (X, Z, -Y)
  */
 
 /** Rotation for mounting Y-up XY-plane content into the Z-up world. */
 export const YUP_TO_ZUP_ROTATION = [-Math.PI / 2, 0, 0] as const;
 
-/** Converts a Z-up vector into Y-up coordinates. */
+/** Converts a Z-up vector into Y-up Three-style coordinates. */
 export function yup(zup: Readonly<V3>, out: V3 = fill3(0)): V3 {
   const zup_x: f64 = zup[0];
   const zup_y: f64 = zup[1];

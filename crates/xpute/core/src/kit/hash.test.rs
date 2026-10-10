@@ -1,9 +1,9 @@
-// xpute-core/kit/hash.test.rs
+// xpute_core/kit/hash.test.rs
 // (no pair: hash.ts has no test file)
 
 use super::*;
 use crate::kit::encoding::hex_to_bytes;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/kit/hash.tsv");
 

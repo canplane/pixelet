@@ -1,4 +1,4 @@
-// xpute-core/kit/math.rs
+// xpute_core/kit/math.rs
 
 pub const EPS: f64 = 1e-5;
 
@@ -17,15 +17,6 @@ pub fn approx_eq(a: f64, b: f64, eps: Option<f64>) -> bool {
 /// Physical/intuitive proximity check using only absolute distance.
 pub fn near(a: f64, b: f64, tol: f64) -> bool {
     (a - b).abs() < tol
-}
-
-/// Rounds to the nearest integer, a half-way case toward +∞.
-pub fn round_half_up(x: f64) -> f64 {
-    if x.fract() == -0.5 {
-        x.ceil()
-    } else {
-        x.round()
-    }
 }
 
 pub fn lerp(a: f64, b: f64, t: f64) -> f64 {

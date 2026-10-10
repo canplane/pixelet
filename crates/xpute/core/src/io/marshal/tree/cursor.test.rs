@@ -1,4 +1,4 @@
-// xpute-core/io/marshal/tree/cursor.test.rs
+// xpute_core/io/marshal/tree/cursor.test.rs
 // (no pair: the TypeScript tree has no test file)
 
 use super::*;
@@ -7,7 +7,7 @@ use crate::io::marshal::tree::spec::NodeValue;
 use crate::io::marshal::tree::view::{NodeView, TreeView};
 use crate::kit::array::Kind;
 use crate::kit::encoding::{bytes_to_hex, hex_to_bytes};
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../../../vector/io/marshal/tree/cursor.tsv");
 

@@ -1,4 +1,4 @@
-// xpute-core/kit/array.rs
+// xpute_core/kit/array.rs
 
 //! AB-backed typed array helpers: the pair of kit/array.ts.
 //!

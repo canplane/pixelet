@@ -45,7 +45,7 @@ export const coast_policy: NormalizePolicy<CoastRawFeature> = {
 
   determine_cell_cfg: (_raw, category, extra): CellConfig | null => {
     if (extra.is_ocean || category === "sea") {
-      return { cell_type: cube_types.land.sea, ch_key: GroundChannelKey.LAND };
+      return { cell_type: cube_types.land.SEA, ch_key: GroundChannelKey.LAND };
     }
     return null;
   },

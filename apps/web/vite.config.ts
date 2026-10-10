@@ -12,7 +12,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import svgr from "vite-plugin-svgr";
 
-import { DEV_PROXY_ROUTES } from "./src/config/route.ts";
+import { DEV_PROXY_ROUTES } from "./src/lib/env/route.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -57,7 +57,7 @@ function build_number(): string {
 
 /**
  * `virtual:pxl-build` — what a build is: when it was built, which source,
- * which official number (config/deploy.ts reads it). A module rather than
+ * which official number (lib/env/config.ts reads it). A module rather than
  * `define` constants so that a dev server gives every page load the values
  * as they are then, not as they were when the server started: the module is
  * dropped from the graph on each navigation and computed again on import,
@@ -107,11 +107,8 @@ function build_stamp(): Plugin {
 // nothing here ever surfaced that a hardcoded domain had gone stale.)
 const remoteOriginDefault = "https://plei.me";
 
-// anti-HMR. The shell's kernel glue is here too: kernel.ts boots the device
-// and the world at module load, and its importers are component modules Vite
-// hot-swaps, so a hot update ran that boot again against the one kernel the
-// memory holds — a second device beside the renderer's objects on the first.
-const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/", "/apps/web/src/kernel/"];
+// anti-HMR
+const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/"];
 function fullReloadOnCoreChange() {
   function isCoreFile(file: string): boolean {
     const p = file.replaceAll("\\", "/");

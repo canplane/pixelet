@@ -44,7 +44,7 @@
 //
 // Also captures `names.common` (Overture's own per-language name map),
 // filtered to this app's supported UI languages (see
-// apps/web/src/locale/i18n.ts's own `supportedLngs`) — reverse
+// apps/web/src/bootstrap/i18n.ts's own `supportedLngs`) — reverse
 // geocoding's own multilingual data, unlike POI's sparse `names.rules[]`.
 // Despite the map<LanguageTag,StrippedString> the official schema docs
 // describe, the actual GeoJSON encodes `names.common` as an array of
@@ -80,7 +80,7 @@ const AREA_KEPT_SUBTYPES = new Set(["region", "county", "locality", "neighborhoo
 // point-fallback would be redundant for those two.
 const POINT_KEPT_SUBTYPES = new Set(["locality", "neighborhood", "microhood", "macrohood"]);
 
-// apps/web/src/locale/i18n.ts's own supportedLngs — kept in sync by hand
+// apps/web/src/bootstrap/i18n.ts's own supportedLngs — kept in sync by hand
 // since api/web are separate Deno workspace members with no shared i18n
 // config to import from. Filtering here (not storing the full names.common
 // map) keeps baked tile payloads small and avoids re-ingesting just because

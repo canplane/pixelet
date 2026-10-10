@@ -37,6 +37,7 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { I64Array, U32Array } from "@xpute/core/kit/array.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
+import { HEAP_ALLOC, type TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
 
 export type Topic = u32;
 export type Revision = u32;
@@ -50,6 +51,7 @@ export type ChangeLogOptions = {
   capacity: u32;
   /** Keys a topic's table holds before it grows. */
   keys_per_topic?: u32;
+  alloc?: TypedAlloc;
 };
 
 /** What a reader walks: the journal's lanes and positions. ChangeLog is one;
@@ -78,17 +80,17 @@ export class ChangeLog implements ChangeJournal {
   private readonly revisions: Vector<U32Array>[] = [];
 
   constructor(opts: ChangeLogOptions) {
-    const { topics, capacity, keys_per_topic = 64 } = opts;
+    const { topics, capacity, keys_per_topic = 64, alloc = HEAP_ALLOC } = opts;
     if (topics < 1 || topics > 0x10000) throw new Error(`change: ${topics} topics, want 1..65536`);
     if (capacity < 1) throw new Error("change: a journal needs a capacity");
     this.capacity = capacity;
-    this.topic = new Uint16Array(capacity);
-    this.key = new BigInt64Array(capacity);
-    this.revision = new Uint32Array(capacity);
-    this.ticks = new Uint32Array(topics);
+    this.topic = alloc.take(Uint16Array, capacity);
+    this.key = alloc.take(BigInt64Array, capacity);
+    this.revision = alloc.take(Uint32Array, capacity);
+    this.ticks = alloc.take(Uint32Array, topics);
     for (let t = 0; t < topics; t++) {
-      this.tables.push(new IndexedMap(I64_KEYS, keys_per_topic));
-      this.revisions.push(new Vector(Uint32Array, { init_cap: keys_per_topic }));
+      this.tables.push(new IndexedMap(I64_KEYS, keys_per_topic, alloc));
+      this.revisions.push(new Vector(Uint32Array, { init_cap: keys_per_topic, alloc }));
     }
   }
 

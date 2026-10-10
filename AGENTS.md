@@ -41,14 +41,12 @@ follow that rather than improvising SQL against the raw tables.
 
 ```
 asset                   the shipped models and texture pack; data, not code — nothing imports it
-spec                    the numbers and names every language is generated from (script/spec.ts): pxl-spec's at the top, kernel/, render/ and xpute/ below
 packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
 packages/pxl/shared     pixelet domain — PVF3 coordinates, cell/terrain model, bake wire format
-crates/xpute/core       the generic runtime kit in Rust; no domain
-crates/pxl/spec         the spec in Rust, the server's and the client's — the space, the cell catalogs, the commands, the bake's formats, the assets' tables; @pxl/shared's counterpart
-crates/pxl/render       the view — the volumes and meshes a chunk bakes into, glTF, the billboards' sheet, the draw list, the shaders, the device
-crates/pxl/kernel       the kernel — the stores, the fetches, the schedulers, the turn; what is drawn and when, handed to the view
-crates/pxl/wasm         the one WebAssembly module: rings, a boot block and a doorbell over the crates
+crates/xpute/core       @xpute/core's pair, file for file (script/pair.ts holds them together); no domain
+crates/pxl/shared       @pxl/shared's pair — PVF3, the indexer, the sparse tree, the adapters
+crates/pxl/core         the world in Rust — the bake, the scheduler, the objects, the draw list, the shaders
+crates/pxl/wasm         the one WebAssembly module: rings, a boot block and a doorbell over the two crates
 apps/api                Hono server + the Overture/DEM bake pipeline
 apps/web                Vite + React 19 client, drawing through WebGPU
 ```
@@ -58,10 +56,19 @@ Two boundaries matter, and both are easy to erode by accident:
 - **`@xpute/core` must contain no pixelet domain knowledge.** It is meant to stay
   portable to other projects. Coordinates, terrain, tiles, Overture — none of
   those concepts belong there. If something needs them, it belongs in
-  `@pxl/shared`. The same line runs through the Rust: `crates/xpute/core`
-  holds no domain, and the domain is `crates/pxl/spec`'s. The view
-  (`crates/pxl/render`) knows the model and nothing of the kernel
-  (`crates/pxl/kernel`): the kernel hands a frame what it draws.
+  `@pxl/shared`. The same line runs through the Rust: `crates/xpute/core` is
+  `@xpute/core`'s counterpart and `crates/pxl/shared` is `@pxl/shared`'s,
+  each the same tree file for file, export for export and test for test
+  (`deno task check:pair`; a difference the languages force is listed with
+  its reason in `script/pair.exempt.json`). The check runs one way: the
+  Rust may carry more. The TypeScript side is the source and changes only
+  where it is found wrong: a Rust module that needs one thing of a
+  TypeScript file is that whole file, at that path. The same holds when an
+  upper layer moves into the module: every TypeScript file it references
+  comes over whole, at its path, if its `.rs` is not there yet. What was
+  checked and where the two still differ is in
+  [issue/20260914-where-the-pair-differs.md](./issue/20260914-where-the-pair-differs.md).
+  `crates/pxl/core` is the only crate that knows what a chunk is.
 - **`@pxl/shared` is a contract between `apps/web` and `apps/api`.** Both sides
   encode and decode the same binary formats from this one source. Changing a
   format changes both ends at once; there is no versioned negotiation between
@@ -91,8 +98,8 @@ The destination — a Rust core compiled to WASM, drawing through WebGPU,
 three.js gone, iOS 26 and iPhone 11 as the floor
 ([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md))
 — is where the client stands since 2026-09-14: the core builds, decides
-and lists what to draw, and the renderer (`crates/pxl/render/src/gpu/`)
-executes the list through the host's WebGPU and decides nothing. What is still TypeScript is glue and the pieces not
+and lists what to draw, and `apps/web/src/render/gpu/` executes the list
+and decides nothing. What is still TypeScript is glue and the pieces not
 yet moved, listed in P0 of [issue/BACKLOG.md](./issue/BACKLOG.md): a piece
 is first cut out behind a boundary that carries typed arrays, still in
 TypeScript, and only then does what sits behind the boundary become Rust.
@@ -222,17 +229,16 @@ Two rules that came out of doing it:
 **Every source file opens with a comment naming its own logical path:**
 
 ```ts
-// @pxl/web/ui/map/view.tsx
+// @pxl/web/module/world/terrain/use_tile_fetcher.ts
 ```
 
 This is the import-map path, not the filesystem path — extension included, so
 a `.tsx` file says `.tsx`. New files get one too, tests included. A Rust file
-says it the same way: its package's name as Cargo.toml has it, hyphens and
-all, then the file's path under `src/`: `// pxl-spec/space/indexer.rs`. A
-comment that names a crate by name uses the same hyphenated form; only a
-`::` path, which is code, keeps the underscore.
+names its own path the way Rust code names the crate — the crate's
+identifier, then the file's path under `src/`: `// pxl_shared/spec/space/indexer.rs`
+— never its TypeScript pair's, which the mirrored path already says.
 
-The one exception is `kit/ui/shadcn/`, where no file carries a header —
+The one exception is `shared/ui/shadcn/`, where no file carries a header —
 it's a flat, one-file-per-component shadcn tree, uniformly header-less rather
 than inconsistently so. Don't mass-add headers there, and don't read its
 absence as licence to drop them anywhere else.
@@ -293,6 +299,9 @@ load-bearing as real profiling data or a non-trivial derivation (the same bar
 "what a constant was re-derived from" already sets above), not just a
 stylistic preference.
 
+**No dead code by deletion.** Code being retired gets archived on a branch rather
+than deleted outright, so the reasoning stays recoverable.
+
 **Comments are working notes, not a contract.** Never cite an in-repo comment,
 doc-string, or "the contract says X" as evidence when justifying something —
 verify against the actual code, its behavior, or git history instead, every
@@ -331,7 +340,10 @@ just don't treat them as authority.
   of us actually turns on; otherwise say what is known and move on.
 - **"Revert" means leave no trace.** Restore the exact prior text — no comment
   explaining what was tried, no `// removed: ...` marker, no doc note about the
-  tradeoff. An abandoned in-session experiment gets erased completely.
+  tradeoff. An abandoned in-session experiment gets erased completely. That is
+  the opposite of the archive-a-branch rule above, and the distinction is
+  deliberate: shipped code being retired is worth preserving, a change made this
+  session that didn't pan out is not.
 - **Keep mechanisms orthogonal.** Gestures, animations, and styling stay
   independently verifiable; do not fuse them into one library mechanism because
   it's convenient at the call site.

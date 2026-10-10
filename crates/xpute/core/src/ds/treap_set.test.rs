@@ -1,9 +1,9 @@
-// xpute-core/ds/treap_set.test.rs
+// xpute_core/ds/treap_set.test.rs
 // (no pair: treap_set.ts has no test file)
 
 use super::*;
 use crate::kit::comp::comp_numeric;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/ds/treap_set.tsv");
 

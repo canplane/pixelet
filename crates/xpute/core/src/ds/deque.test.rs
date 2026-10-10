@@ -1,8 +1,8 @@
-// xpute-core/ds/deque.test.rs
+// xpute_core/ds/deque.test.rs
 // (no pair: deque.ts has no test file)
 
 use super::*;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/ds/deque.tsv");
 

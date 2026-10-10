@@ -7,11 +7,6 @@ to it. Updated as items close — the dates on each line are when they did.
 
 ## The rule
 
-**Superseded 2026-09-14** by
-[20260914-what-stays-in-javascript.md](./20260914-what-stays-in-javascript.md):
-three.js and React no longer hold anything this rule left to them, and
-the state it moved into lanes is the kernel's.
-
 The JS heap keeps glue and nothing else: the objects three.js and React
 require to exist (a `Mesh`, a `BufferAttribute`, a `Group`, a component), and
 the handles that name a slot in linear memory. Everything the program

@@ -20,7 +20,7 @@
 //   but letters and digits as one underscore).
 // - Every vector generator under script/vector/ (a `.ts` at the mirrored
 //   path, exporting `vectors()`) writes what the TypeScript computes for a
-//   fixed input set, as `path<TAB>value` lines; the file it writes under the crate's `vector/` (crates/xpute/core/vector, crates/pxl/spec/vector)
+//   fixed input set, as `path<TAB>value` lines; the file it writes under the crate's `vector/` (crates/xpute/core/vector, crates/pxl/shared/vector)
 //   must be committed as written (`deno task vector` writes them) and read
 //   by a Rust test through `include_str!`.
 //
@@ -45,7 +45,7 @@ type Tree = {
 
 const TREES: Tree[] = [
   { ts: "packages/xpute/core/src", rs: "crates/xpute/core/src", required: [""], vector: "crates/xpute/core/vector" },
-  { ts: "packages/pxl/shared/src", rs: "crates/pxl/spec/src", required: [""], vector: "crates/pxl/spec/vector" },
+  { ts: "packages/pxl/shared/src", rs: "crates/pxl/shared/src", required: [""], vector: "crates/pxl/shared/vector" },
 ];
 
 const EXEMPT_PATH = "script/pair.exempt.json";
@@ -226,7 +226,7 @@ async function check_tree(tree: Tree): Promise<void> {
   for (const t of ts_test) {
     const src = t.replace(/\.test\.ts$/, ".ts");
     if (ts_src.includes(src) || !required(src)) continue;
-    // A test named for no module (asset.test.ts beside asset/'s files) is
+    // A test named for no module (record.test.ts beside record/'s files) is
     // paired all the same: its tests in the `.test.rs` at its path, which a
     // module in the directory takes in by `#[path]`.
     const rs_test = t.replace(/\.test\.ts$/, ".test.rs");

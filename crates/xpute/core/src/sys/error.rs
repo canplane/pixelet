@@ -1,4 +1,4 @@
-// xpute-core/sys/error.rs
+// xpute_core/sys/error.rs
 
 use core::fmt;
 

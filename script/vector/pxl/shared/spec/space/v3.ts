@@ -1,7 +1,7 @@
 // script/vector/pxl/shared/spec/space/v3.ts
 //
 // Every V3 helper over fixed vectors, halves and negatives included, for
-// crates/pxl/spec/src/space/v3.test.rs.
+// crates/pxl/shared/src/spec/space/v3.test.rs.
 
 import * as v3 from "@pxl/shared/spec/space/v3.ts";
 import type { V3 } from "@pxl/shared/spec/space/v3.ts";

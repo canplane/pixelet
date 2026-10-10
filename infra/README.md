@@ -305,7 +305,7 @@ procedure with its own verification, in
 Afterwards, the routes that between them cover every path the app takes
 (the versions are `PUBLISHED_VERSION` in
 `packages/pxl/shared/src/bake/published.ts`; the asset key is any
-`key` in `asset/ingested.ts`):
+`model_key` in `record/ingested.ts`):
 
 ```sh
 for p in / \

@@ -1,9 +1,9 @@
-// xpute-core/io/marshal/tlv.test.rs
+// xpute_core/io/marshal/tlv.test.rs
 // (no pair: tlv.ts has no test file)
 
 use super::*;
 use crate::kit::encoding::bytes_to_hex;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../../vector/io/marshal/tlv.tsv");
 

@@ -1,4 +1,4 @@
-// xpute-core/kit/fdlibm.rs
+// xpute_core/kit/fdlibm.rs
 
 //! The libm functions the core needs, ported from FreeBSD's msun, so a result
 //! is the same bits on every toolchain and target rather than whatever the

@@ -1,9 +1,9 @@
-// xpute-core/ds/lattice_hash.test.rs
+// xpute_core/ds/lattice_hash.test.rs
 // (no pair: the hashes are tested beside the spatial hash, and this holds
 // them to the TypeScript over signed addresses)
 
 use super::*;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/ds/lattice_hash.tsv");
 

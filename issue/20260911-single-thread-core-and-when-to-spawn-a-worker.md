@@ -381,10 +381,9 @@ the day the bake moves will find in place.
 
 ## Status 2026-09-13
 
-The first candidate — the chunk bake — was built for a worker and
-measured on the phone, and not taken
-([experiment/20260913-bake-worker-on-the-phone.md](./experiment/20260913-bake-worker-on-the-phone.md)):
-the bake steps under the frame budget, in the module, on the main thread. Of
+The first candidate — the chunk bake — is decided for a worker
+([20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md),
+"The worker's case"), on the arithmetic that its unit cannot be cut. Of
 the open items: the iOS reservation is measured (256 MB on a handheld
 holds; what happens past it is in
 [20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md));

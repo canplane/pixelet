@@ -17,7 +17,7 @@
 //
 // Attribution: Places is CDLA-Permissive-2.0, which imposes no attribution
 // requirement as a condition of use — still shown in-app as a courtesy
-// (apps/web/src/ui/setting/section/attribution.tsx).
+// (apps/web/src/app/setting/section/attribution_section.tsx).
 //
 // Requires the official `overturemaps` Python CLI (pip), auto-installed on
 // first run into a local venv (./.venv, gitignored) next to this file — the

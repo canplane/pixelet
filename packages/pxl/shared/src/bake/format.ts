@@ -134,8 +134,12 @@ export type Tile = {
 
 // { ele, ground } -> [ele, [land, water, structure, transport]]
 //
-// A terrain page carries no POI: POI pages are their own bake
-// (apps/api/src/bake/poi/), with no relationship to a terrain page's bytes.
+// Used to take a third `pois: POI[]` argument and (nominally) encode it
+// into the tile too — dead on arrival even then (the actual encode call
+// was always commented out) and removed outright once POI moved to its
+// own Overture-sourced pipeline (apps/api/src/module/world/poi/) with no
+// relationship to a terrain tile's own bytes at all. `Tile` (below) never
+// had a `pois` field to match.
 export function encode_terrain(ele: I16Array, ground: Ground): U8Array {
   /**
    * Final baked terrain format:

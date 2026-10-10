@@ -1,8 +1,8 @@
-// xpute-core/kit/encoding.test.rs
+// xpute_core/kit/encoding.test.rs
 // (no pair: encoding.ts has no test file)
 
 use super::*;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/kit/encoding.tsv");
 

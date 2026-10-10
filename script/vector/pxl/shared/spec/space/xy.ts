@@ -1,6 +1,6 @@
 // script/vector/pxl/shared/spec/space/xy.ts
 //
-// TO_XY and the WITH_ setters, for crates/pxl/spec/src/space/xy.test.rs.
+// TO_XY and the WITH_ setters, for crates/pxl/shared/src/spec/space/xy.test.rs.
 
 import { CELL_CENTER_U, TO_XY, WITH_X, WITH_Y, WITH_Z } from "@pxl/shared/spec/space/xy.ts";
 import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";

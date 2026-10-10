@@ -2,6 +2,8 @@
 
 import { assertEquals } from "@std/assert";
 
+import { BuddyAllocator } from "./buddy.ts";
+import { buddy_alloc } from "./typed_alloc.ts";
 import { I64_KEYS, IndexedMap, type KeyTraits, U32_KEYS } from "./map.ts";
 
 Deno.test("IndexedMap - positions are dense and stable until a removal", () => {
@@ -25,7 +27,8 @@ Deno.test("IndexedMap - removal moves the last entry into the hole and says wher
 });
 
 function agrees_with_map<K extends number | bigint>(traits: KeyTraits<K>, make: (n: number) => K): void {
-  const m = new IndexedMap(traits, 2);
+  const pool = new BuddyAllocator({ min_block_bytes: 1 << 12, region_bytes: 1 << 20, max_idle_regions: 1, poison: false, bypass: false });
+  const m = new IndexedMap(traits, 2, buddy_alloc(pool));
   const ref = new Map<K, number>();
   const live: K[] = [];
   let seed = 12345;

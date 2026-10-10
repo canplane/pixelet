@@ -1,8 +1,8 @@
-// xpute-core/ipc/frame.test.rs
+// xpute_core/ipc/frame.test.rs
 // (no pair: frame.ts has no test file)
 
 use super::*;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/ipc/frame.tsv");
 

@@ -1,7 +1,7 @@
 // script/vector/pxl/shared/spec/space/pvf3/projection.ts
 //
 // project and unproject over reals across lattice seams and signs, for
-// crates/pxl/spec/src/space/pvf3/projection.test.rs.
+// crates/pxl/shared/src/spec/space/pvf3/projection.test.rs.
 
 import { projection, type PVF3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { f64_bits, seeded } from "../../../../../../vector.ts";

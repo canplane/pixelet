@@ -1,7 +1,7 @@
 // script/vector/pxl/shared/spec/space/adapter/3857.ts
 //
 // EPSG:3857 and 4326 over the world: project, unproject, Z_SCALE, the page
-// bbox, the haversine, as bits — for crates/pxl/spec/src/space/adapter/3857.test.rs.
+// bbox, the haversine, as bits — for crates/pxl/shared/src/spec/space/adapter/3857.test.rs.
 // The transcendental functions are where a libm can disagree in the last
 // bit, which is what this vector exists to find.
 

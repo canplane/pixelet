@@ -1,9 +1,9 @@
-// xpute-core/io/scalar.test.rs
+// xpute_core/io/scalar.test.rs
 // (no pair: scalar.ts has no test file)
 
 use super::*;
 use crate::kit::encoding::bytes_to_hex;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/io/scalar.tsv");
 

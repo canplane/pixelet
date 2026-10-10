@@ -43,6 +43,7 @@
 import type { i32, u32 } from "@xpute/core/kit/word.ts";
 import type { ElementOf, TypedArray, TypedArrayCtor, U32Array, U64Array, U8Array } from "@xpute/core/kit/array.ts";
 import { copy_ab_view } from "@xpute/core/kit/array.ts";
+import { HEAP_ALLOC, type TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
 
 import type { PVec, PVecTraits } from "@pxl/shared/spec/space/pvf3/mod.ts";
 import { ALIGN, GET_WORD, NONE, RESERVED, SET_WORD, WORD_SZ } from "@xpute/core/io/marshal/tree/spec.ts";
@@ -68,6 +69,9 @@ export type SparseTreeMemory<T extends TypedArray> = {
   data: T; // leaf payload values
   head: u32; // allocator cursor (next free slot)
   cap: u32; // current capacity in slots
+  /** Where heap and data come from, and go back to (typed_alloc.ts). A
+   * decoded tree's lanes are views over its blob and come from nowhere. */
+  alloc: TypedAlloc;
 };
 
 /**
@@ -121,25 +125,50 @@ function validate_layout(layout: SparseTreeLayout): void {
 }
 
 /** Allocate sparse tree memory and reserve the root child block at base 0. */
-export function alloc<T extends TypedArray>(dim: 2 | 3, cap: u32, ctor: TypedArrayCtor<T>): SparseTreeMemory<T> {
+export function alloc<T extends TypedArray>(dim: 2 | 3, cap: u32, ctor: TypedArrayCtor<T>, typed: TypedAlloc = HEAP_ALLOC): SparseTreeMemory<T> {
   const root_width: u32 = block_width(dim);
   cap = cap >= root_width ? cap : root_width;
 
   return {
-    heap: new Uint32Array(cap),
-    data: new ctor(cap),
+    heap: typed.take(Uint32Array, cap),
+    data: typed.take(ctor, cap) as T,
     head: root_width, // reserve base 0..root_width-1 for root block
     cap,
+    alloc: typed,
   };
+}
+
+/** Hands a memory's lanes back to where they came from. */
+export function free<T extends TypedArray>(mem: SparseTreeMemory<T>): void {
+  mem.alloc.give(mem.heap);
+  mem.alloc.give(mem.data);
 }
 
 /** The same tree with its data lane in another type — the heap is shared,
  * every value is carried across. For widening a leaf lane when its values
  * outgrow it. */
 export function retype<T extends TypedArray, U extends TypedArray>(mem: SparseTreeMemory<T>, ctor: TypedArrayCtor<U>): SparseTreeMemory<U> {
-  const data = new ctor(mem.cap);
+  const data = mem.alloc.take(ctor, mem.cap) as U;
   for (let i = 0; i < mem.head; i++) data[i] = mem.data[i] as never;
-  return { heap: mem.heap, data, head: mem.head, cap: mem.cap };
+  mem.alloc.give(mem.data);
+  return { heap: mem.heap, data, head: mem.head, cap: mem.cap, alloc: mem.alloc };
+}
+
+/** A copy of `mem` whose lanes come from `typed` — for a decoded tree,
+ * whose lanes are views over the blob it was read from. */
+export function adopt<T extends TypedArray>(mem: SparseTreeMemory<T>, typed: TypedAlloc): SparseTreeMemory<T> {
+  const ctor = mem.data.constructor as TypedArrayCtor<T>;
+  const out: SparseTreeMemory<T> = {
+    heap: typed.take(Uint32Array, mem.head),
+    data: typed.take(ctor, mem.head) as T,
+    head: mem.head,
+    cap: mem.head,
+    alloc: typed,
+  };
+  out.heap.set(mem.heap.subarray(0, mem.head));
+  // deno-lint-ignore no-explicit-any
+  out.data.set(mem.data.subarray(0, mem.head) as any);
+  return out;
 }
 
 /** Grow backing buffers so that slot range [0, end) fits. */
@@ -147,13 +176,14 @@ function grow<T extends TypedArray>(mem: SparseTreeMemory<T>, end: u32): void {
   let cap: u32 = mem.cap;
   while (cap < end) cap <<= 1;
 
-  const heap: U32Array = new Uint32Array(cap);
+  const heap: U32Array = mem.alloc.take(Uint32Array, cap);
   const ctor = mem.data.constructor as unknown as TypedArrayCtor<T>;
-  const data: T = new ctor(cap);
+  const data: T = mem.alloc.take(ctor, cap) as T;
 
   heap.set(mem.heap);
   data.set(mem.data);
 
+  free(mem);
   mem.heap = heap;
   mem.data = data;
   mem.cap = cap;
@@ -557,7 +587,7 @@ export function compact<T extends TypedArray>(
 
   _prune(mem, root, layout.max - layout.min, width);
 
-  const new_mem = alloc(layout.dim, mem.head, mem.data.constructor as TypedArrayCtor<T>);
+  const new_mem = alloc(layout.dim, mem.head, mem.data.constructor as TypedArrayCtor<T>, mem.alloc);
 
   const relocate = (old_base: u32, new_base: u32): void => {
     for (let i = 0; i < width; i++) {
@@ -579,11 +609,12 @@ export function compact<T extends TypedArray>(
 
   relocate(root, 0);
 
-  const compacted = alloc(layout.dim, new_mem.head, mem.data.constructor as TypedArrayCtor<T>);
+  const compacted = alloc(layout.dim, new_mem.head, mem.data.constructor as TypedArrayCtor<T>, mem.alloc);
 
   compacted.heap.set(new_mem.heap.subarray(0, new_mem.head));
   compacted.data.set(new_mem.data.subarray(0, new_mem.head));
   compacted.head = new_mem.head;
+  free(new_mem);
 
   return { mem: compacted, root: 0 };
 }
@@ -723,6 +754,7 @@ function read_mem<T extends TypedArray>(
     data,
     head: used,
     cap: used,
+    alloc: HEAP_ALLOC,
   };
 
   return { mem, nbyte: off };

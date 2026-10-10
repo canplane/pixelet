@@ -1,4 +1,4 @@
-// xpute-core/ds/map.rs
+// xpute_core/ds/map.rs
 
 //! A dense array of keys with an index into it: insert appends, delete moves
 //! the last entry into the hole, and a walk over every entry is a walk over
@@ -24,6 +24,8 @@
 //! The lane's constructor is the key type itself here.
 
 use crate::kit::array::{AnyElement, TypedArray};
+
+use super::typed_alloc::{TypedAlloc, HEAP_ALLOC};
 
 pub trait KeyTraits {
     /// The key, and the lane it is stored in.
@@ -70,6 +72,7 @@ pub const U32_KEYS: U32Keys = U32Keys;
 
 pub struct IndexedMap<T: KeyTraits> {
     traits: T,
+    alloc: Box<dyn TypedAlloc>,
     keys: TypedArray<T::Key>,
     /// Per slot, position + 1; 0 is an empty slot.
     table: TypedArray<u32>,
@@ -80,15 +83,17 @@ pub struct IndexedMap<T: KeyTraits> {
 }
 
 impl<T: KeyTraits> IndexedMap<T> {
-    pub fn new(traits: T, cap: u32) -> IndexedMap<T> {
+    pub fn new(traits: T, cap: u32, alloc: Option<Box<dyn TypedAlloc>>) -> IndexedMap<T> {
+        let mut alloc = alloc.unwrap_or_else(|| Box::new(HEAP_ALLOC));
         let mut size: u32 = 2;
         while size < cap * 2 {
             size <<= 1;
         }
-        let table = TypedArray::new(size as usize);
-        let keys = TypedArray::new((size >> 1) as usize);
+        let table = TypedArray::of(&alloc.take_view(u32::KIND, size)).unwrap();
+        let keys = TypedArray::of(&alloc.take_view(T::Key::KIND, size >> 1)).unwrap();
         IndexedMap {
             traits,
+            alloc,
             keys,
             table,
             mask: size - 1,
@@ -179,6 +184,10 @@ impl<T: KeyTraits> IndexedMap<T> {
         })
     }
 
+    fn take_keys(&mut self, n: u32) -> TypedArray<T::Key> {
+        TypedArray::of(&self.alloc.take_view(T::Key::KIND, n)).unwrap()
+    }
+
     fn home(&self, k: T::Key) -> u32 {
         self.traits.hash(k) >> self.shift
     }
@@ -223,10 +232,12 @@ impl<T: KeyTraits> IndexedMap<T> {
 
     fn grow(&mut self) {
         let size = self.table.length() as u32 * 2;
-        let keys = TypedArray::new((size >> 1) as usize);
+        let keys = self.take_keys(size >> 1);
         keys.set(&self.keys.subarray(0, self._size as usize));
+        self.alloc.give(&self.keys.view());
+        self.alloc.give(&self.table.view());
         self.keys = keys;
-        self.table = TypedArray::new(size as usize);
+        self.table = TypedArray::of(&self.alloc.take_view(u32::KIND, size)).unwrap();
         self.mask = size - 1;
         self.shift = 32 - size.ilog2();
         for pos in 0..self._size {

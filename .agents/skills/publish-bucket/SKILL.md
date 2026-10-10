@@ -25,7 +25,7 @@ how it gets there and how you know it arrived.
 
 The versions the client requests are `PUBLISHED_VERSION` in
 `packages/pxl/shared/src/bake/published.ts`; the asset keys are the
-generated table `packages/pxl/shared/src/asset/ingested.ts`. The object
+generated table `packages/pxl/shared/src/record/ingested.ts`. The object
 name carries no extension, so **content-type and content-encoding are
 stored with the object at upload** — that is what every flag below is for.
 
@@ -107,7 +107,7 @@ the two in step.
 
 ```bash
 deno task ingest:asset     # -> ./out/asset/{glb,png,webp}/<sha256>, and regenerates
-                           #    packages/pxl/shared/src/asset/ingested.ts
+                           #    packages/pxl/shared/src/record/ingested.ts
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   aws s3 sync ./out/asset/${t%%:*} s3://pixelet-tiles/asset \

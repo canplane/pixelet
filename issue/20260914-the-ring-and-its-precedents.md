@@ -18,8 +18,8 @@ be checked against the system itself first.
   the packet lives in the ring's own arena.
 - The producer writes and moves the tail; the consumer reads and moves the
   head. One writer per word, no lock.
-- The doorbell carries no message: it hands over the turn
-  (`interrupt(vector)`), and the receiver reads what waits.
+- The doorbell carries no message: it hands over the turn (`pxl_tick`,
+  `pxl_drain`), and the receiver reads what waits.
 - A full ring refuses (EAGAIN); nothing is dropped, and the producer
   waits.
 - A command is a number, major and minor; a reply is marked (`RES`), and

@@ -598,9 +598,9 @@ a statement to the user rather than a notice a licence demands verbatim.
 Everything else stays on the device: `pxl:lang`, `pxl:render_settings`,
 `pxl:debug_settings`, and `pxl:objects:v4` in `localStorage`.
 
-If the API is ever deployed, `ADMIN_TOKEN` must be regenerated rather than
-carried over from development. The bucket stays private and is read only
-through the Worker ("What actually bounds the spend", above).
+Two items remain for deploy time: the R2 bucket must be public **read-only**
+(its URL is baked into the bundle by design), and if the API is ever deployed,
+`ADMIN_TOKEN` must be regenerated rather than carried over from development.
 
 ## Changes this produced
 

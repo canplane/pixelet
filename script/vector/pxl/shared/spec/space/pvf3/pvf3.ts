@@ -2,7 +2,7 @@
 //
 // Every operation of ivec, fvec and pvf3 over a fixed set of words — the
 // lane extremes, zero, one, and a seeded scatter — as the TypeScript
-// computes it, for crates/pxl/spec/src/space/pvf3/pvf3.test.rs to
+// computes it, for crates/pxl-shared/src/spec/space/pvf3/pvf3.test.rs to
 // reproduce bit for bit. A result that throws in the TypeScript (a BigInt
 // division by zero) is recorded as "throw".
 

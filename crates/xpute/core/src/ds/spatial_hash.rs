@@ -1,4 +1,4 @@
-// xpute-core/ds/spatial_hash.rs
+// xpute_core/ds/spatial_hash.rs
 
 //! Broadphase index for sparse, moving points in 3D, rebuilt every frame and
 //! allocating nothing while it does.
@@ -64,6 +64,8 @@
 use crate::kit::array::{AnyElement, TypedArray};
 
 use super::lattice_hash::lattice_hash3;
+use super::typed_alloc::{TypedAlloc, HEAP_ALLOC};
+
 /// 27 in 3D: the query box can straddle at most one cell boundary per axis
 /// when the radius is the cell size, which is the sizing this is built for.
 /// Larger radii sweep more and remain correct.
@@ -131,29 +133,31 @@ impl SpatialHash {
     ///   measured the curve flattening well before that, and the cost of
     ///   overshooting is memory rather than time
     /// - `cell_size`: the query radius this index will be asked about
-    pub fn new(capacity: u32, bucket_count: u32, cell_size: f64) -> SpatialHash {
-        fn take<T: AnyElement>(n: u32) -> TypedArray<T> {
-            TypedArray::new(n as usize)
+    pub fn new(capacity: u32, bucket_count: u32, cell_size: f64, alloc: Option<Box<dyn TypedAlloc>>) -> SpatialHash {
+        let mut alloc = alloc.unwrap_or_else(|| Box::new(HEAP_ALLOC));
+        fn take<T: AnyElement>(alloc: &mut dyn TypedAlloc, n: u32) -> TypedArray<T> {
+            TypedArray::of(&alloc.take_view(T::KIND, n)).unwrap()
         }
+        let a = alloc.as_mut();
         SpatialHash {
             inv_cell: 1.0 / cell_size,
             capacity,
             bucket_count,
-            counts: take(bucket_count),
-            starts: take(bucket_count),
-            stamps: take(bucket_count),
-            cursors: take(bucket_count),
-            touched: take(bucket_count),
+            counts: take(a, bucket_count),
+            starts: take(a, bucket_count),
+            stamps: take(a, bucket_count),
+            cursors: take(a, bucket_count),
+            touched: take(a, bucket_count),
             touched_len: 0,
-            cells: take(capacity),
-            ids: take(capacity),
-            ins_cx: take(capacity),
-            ins_cy: take(capacity),
-            ins_cz: take(capacity),
-            items: take(capacity),
-            item_cx: take(capacity),
-            item_cy: take(capacity),
-            item_cz: take(capacity),
+            cells: take(a, capacity),
+            ids: take(a, capacity),
+            ins_cx: take(a, capacity),
+            ins_cy: take(a, capacity),
+            ins_cz: take(a, capacity),
+            items: take(a, capacity),
+            item_cx: take(a, capacity),
+            item_cy: take(a, capacity),
+            item_cz: take(a, capacity),
             generation: 0,
             count: 0,
             dropped: 0,

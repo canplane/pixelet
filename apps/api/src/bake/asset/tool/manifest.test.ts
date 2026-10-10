@@ -16,30 +16,30 @@ import { flatten_manifest, load_manifest } from "./manifest.ts";
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
 
 const EXPECTED_SIDE_TYPES = [
-  "bare",
-  "green_deep",
-  "green_light",
-  "sports",
-  "sand",
-  "residential",
-  "commercial",
-  "industrial",
-  "education",
-  "medical",
-  "public",
-  "apron",
-  "helipad",
+  "BARE",
+  "GREEN_DEEP",
+  "GREEN_LIGHT",
+  "SPORTS",
+  "SAND",
+  "RESIDENTIAL",
+  "COMMERCIAL",
+  "INDUSTRIAL",
+  "EDUCATION",
+  "MEDICAL",
+  "PUBLIC",
+  "APRON",
+  "HELIPAD",
 ].sort();
 
-// The source image at the center of the original bare/sports side-texture
+// The source image at the center of the original BARE/SPORTS side-texture
 // audit (see ../terrain/wire.ts's own `side` field
 // comment): bare exposed soil with no grass cap — a visible seam against
-// bare's grassy top — and must never come back as an active mapping for
+// BARE's grassy top — and must never come back as an active mapping for
 // any type, regardless of which pack generation is currently active.
 const SOURCE_28_EXPOSED_SOIL_URL = "https://image-assets.jianhua.art/public/1788082415653_ee1ee5.png";
 
-// bare's side in the current (cute-painted-fantasy-v1) pack generation —
-// pinned so a future manifest edit that quietly repoints bare's side back
+// BARE's side in the current (cute-painted-fantasy-v1) pack generation —
+// pinned so a future manifest edit that quietly repoints BARE's side back
 // at exposed soil (or anything else) fails loudly here instead of only
 // showing up as a visual seam.
 const SOURCE_BARE_SIDE_CUTE_PAINTED_URL = "https://image-assets.jianhua.art/public/1788243271391_ajtb22.png";
@@ -93,20 +93,20 @@ Deno.test("manifest - no two distinct entries share a destination filename", asy
   assertEquals(collisions, [], `distinct manifest entries must never target the same file: ${JSON.stringify(collisions)}`);
 });
 
-Deno.test("manifest - sports has its own dedicated side asset, not reused from bare/green_deep/green_light", async () => {
+Deno.test("manifest - SPORTS has its own dedicated side asset, not reused from BARE/GREEN_DEEP/GREEN_LIGHT", async () => {
   const manifest = await load_manifest();
-  const sports_url = manifest.terrain.side.sports.url;
-  assertNotEquals(sports_url, manifest.terrain.side.bare.url);
-  assertNotEquals(sports_url, manifest.terrain.side.green_deep.url);
-  assertNotEquals(sports_url, manifest.terrain.side.green_light.url);
+  const sports_url = manifest.terrain.side.SPORTS.url;
+  assertNotEquals(sports_url, manifest.terrain.side.BARE.url);
+  assertNotEquals(sports_url, manifest.terrain.side.GREEN_DEEP.url);
+  assertNotEquals(sports_url, manifest.terrain.side.GREEN_LIGHT.url);
   assertNotEquals(sports_url, SOURCE_28_EXPOSED_SOIL_URL);
 });
 
-Deno.test("manifest - bare's side is the current cute-painted asset, never the old bare-soil one", async () => {
+Deno.test("manifest - BARE's side is the current cute-painted asset, never the old bare-soil one", async () => {
   const manifest = await load_manifest();
-  assertEquals(manifest.terrain.side.bare.url, SOURCE_BARE_SIDE_CUTE_PAINTED_URL);
-  assertEquals(manifest.terrain.side.bare.style, "cute-painted-fantasy-v1");
-  assertNotEquals(manifest.terrain.side.bare.url, SOURCE_28_EXPOSED_SOIL_URL);
+  assertEquals(manifest.terrain.side.BARE.url, SOURCE_BARE_SIDE_CUTE_PAINTED_URL);
+  assertEquals(manifest.terrain.side.BARE.style, "cute-painted-fantasy-v1");
+  assertNotEquals(manifest.terrain.side.BARE.url, SOURCE_28_EXPOSED_SOIL_URL);
 });
 
 Deno.test("manifest - #28 (bare exposed soil) is not assigned to any active type", async () => {
@@ -155,12 +155,12 @@ Deno.test("manifest - no two active on-disk files are byte-identical (SHA-256)",
 // A texture-pack swap must never renumber the actual type IDs baked into
 // stored tiles; this is a tripwire, not exhaustive.
 Deno.test("manifest integration - terrain type IDs are untouched by this pack's own image swap", () => {
-  assertEquals(cube_types.land.bare, 1);
-  assertEquals(cube_types.land.green_deep, 10);
-  assertEquals(cube_types.land.green_light, 11);
-  assertEquals(cube_types.land.sand, 12);
-  assertEquals(cube_types.land.helipad, 31);
-  assertEquals(cube_types.water.river, 1);
-  assertEquals(cube_types.water.lake, 2);
-  assertEquals(cube_types.water.wetland, 3);
+  assertEquals(cube_types.land.BARE, 1);
+  assertEquals(cube_types.land.GREEN_DEEP, 10);
+  assertEquals(cube_types.land.GREEN_LIGHT, 11);
+  assertEquals(cube_types.land.SAND, 12);
+  assertEquals(cube_types.land.HELIPAD, 31);
+  assertEquals(cube_types.water.RIVER, 1);
+  assertEquals(cube_types.water.LAKE, 2);
+  assertEquals(cube_types.water.WETLAND, 3);
 });

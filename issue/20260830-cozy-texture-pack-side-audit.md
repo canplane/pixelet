@@ -8,7 +8,7 @@ revision of APRON/MEDICAL/COMMERCIAL/EDUCATION's side art — see "Fixed
 already" for the resolution, kept here (not deleted) as the record of what
 was wrong and why.
 
-**Status: complete 2026-09-17.**
+**Status: only "not yet individually audited" remains open.**
 
 ---
 

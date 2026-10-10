@@ -19,6 +19,7 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { U32Array } from "@xpute/core/kit/array.ts";
 import { Vector } from "@xpute/core/ds/arena.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
+import { HEAP_ALLOC, type TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
 
 import type { ChangeJournal, Cursor, Topic } from "./change.ts";
 
@@ -39,14 +40,14 @@ export class ChangeWaker {
   private readonly topic_lists: TopicListener[][] = [];
   private readonly topic_seen: IndexedMap<bigint>[] = [];
 
-  constructor(private readonly log: ChangeJournal) {
+  constructor(private readonly log: ChangeJournal, alloc: TypedAlloc = HEAP_ALLOC) {
     this.cursor = log.head;
     for (let t = 0; t < log.topics; t++) {
-      this.keys.push(new IndexedMap(I64_KEYS, 16));
+      this.keys.push(new IndexedMap(I64_KEYS, 16, alloc));
       this.lists.push([]);
-      this.woken.push(new Vector(Uint32Array, { init_cap: 16 }));
+      this.woken.push(new Vector(Uint32Array, { init_cap: 16, alloc }));
       this.topic_lists.push([]);
-      this.topic_seen.push(new IndexedMap(I64_KEYS, 64));
+      this.topic_seen.push(new IndexedMap(I64_KEYS, 64, alloc));
     }
   }
 

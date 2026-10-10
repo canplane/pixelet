@@ -1,4 +1,4 @@
-// xpute-core/kit/hash.rs
+// xpute_core/kit/hash.rs
 
 //! The SHA-256 functions there are the host's WebCrypto and are not here
 //! (script/pair.exempt.json).
@@ -18,17 +18,6 @@ pub fn fnv1a64_str(s: &str) -> u64 {
     let mut h = FNV64_OFFSET;
     for unit in s.encode_utf16() {
         h ^= unit as u64;
-        h = h.wrapping_mul(FNV64_PRIME);
-    }
-    h
-}
-
-/// The same word over a byte string, for an id built from numbers rather
-/// than spelled out as text.
-pub fn fnv1a64_bytes(bytes: &[u8]) -> u64 {
-    let mut h = FNV64_OFFSET;
-    for &b in bytes {
-        h ^= b as u64;
         h = h.wrapping_mul(FNV64_PRIME);
     }
     h

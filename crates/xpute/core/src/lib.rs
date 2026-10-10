@@ -9,5 +9,6 @@ pub mod ds;
 pub mod io;
 pub mod ipc;
 pub mod kit;
-pub mod sched;
 pub mod sys;
+#[cfg(any(test, feature = "vector"))]
+pub mod vector;

@@ -26,6 +26,7 @@
 
 import type { i32, u32 } from "../kit/word.ts";
 import type { AnyTypedArrayCtor, I64Array, U32Array } from "../kit/array.ts";
+import { HEAP_ALLOC, type TypedAlloc } from "./typed_alloc.ts";
 
 type KeyLane = I64Array | U32Array;
 
@@ -63,10 +64,10 @@ export class IndexedMap<K extends number | bigint> {
   private mask: u32;
   private _size: u32 = 0;
 
-  constructor(private readonly traits: KeyTraits<K>, cap: u32 = 16) {
+  constructor(private readonly traits: KeyTraits<K>, cap: u32 = 16, private readonly alloc: TypedAlloc = HEAP_ALLOC) {
     let size = 2;
     while (size < cap * 2) size <<= 1;
-    this.table = new Uint32Array(size);
+    this.table = alloc.take(Uint32Array, size);
     this.keys = this.take_keys(size >>> 1);
     this.mask = size - 1;
     this.shift = 32 - Math.log2(size);
@@ -146,7 +147,7 @@ export class IndexedMap<K extends number | bigint> {
   }
 
   private take_keys(n: u32): KeyLane {
-    return new (this.traits.ctor as unknown as AnyTypedArrayCtor<KeyLane>)(n);
+    return this.alloc.take(this.traits.ctor as unknown as AnyTypedArrayCtor<KeyLane>, n);
   }
 
   private home(k: K): u32 {
@@ -189,8 +190,10 @@ export class IndexedMap<K extends number | bigint> {
     const size = this.table.length * 2;
     const keys = this.take_keys(size >>> 1);
     keys.set(this.keys.subarray(0, this._size) as never);
+    this.alloc.give(this.keys);
+    this.alloc.give(this.table);
     this.keys = keys;
-    this.table = new Uint32Array(size);
+    this.table = this.alloc.take(Uint32Array, size);
     this.mask = size - 1;
     this.shift = 32 - Math.log2(size);
     for (let pos = 0; pos < this._size; pos++) this.place(keys[pos] as K, pos);

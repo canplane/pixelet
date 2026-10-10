@@ -74,9 +74,11 @@ not rediscover them.
 
 ## How to look next time
 
+- `__pxl_ledger_log()` in the console: `build … refused a block`,
+  `wait … on-screen oldest`, `lod … pending`, `section … (live/cut)`.
 - In a background tab, `requestAnimationFrame` polyfilled with
   `setTimeout` keeps the tick running; `CORE_BUILD.census()` and
-  `.stat()` read the module.
-- `__pxl_ledger_log`, `chunk_nodes` and `landing_log` went with the
-  TypeScript client on 2026-09-15 (apps/web1 keeps them); the ledger's
-  report is the kernel's (`module/world/sched/log.rs`).
+  `.stat()` read the module; `chunk_nodes` with `shown && !layout.ready`
+  names the chunks that are on screen and empty, and their page.
+- `landing_log` (chunk_node.ts, development) is the order layouts landed,
+  with time and place.

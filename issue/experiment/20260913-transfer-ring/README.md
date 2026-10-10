@@ -68,7 +68,7 @@ and not a phone.
 - Repetition: each cell ran once. The jump between N = 2 and N = 4 looks
   like worker wake-up scheduling and was not pursued.
 
-Related: the slab pool that had this shape between the main thread and a
-worker (`sched/slab.ts`, `SLAB_CAP = 4`, chosen without a measurement)
-went with the worker path on 2026-09-14; and the in-page boundaries in
+Related: `apps/web/src/module/world/sched/slab.ts` is this shape between
+the main thread and a worker, with `SLAB_CAP = 4` chosen without a
+measurement; and the in-page boundaries in
 [issue/20260913-boundaries-commands-and-what-comes-back-from-april.md](../../20260913-boundaries-commands-and-what-comes-back-from-april.md).

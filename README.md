@@ -10,142 +10,6 @@ _Started on December 15, 2025._
 
 <img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.png" height="480">
 
-The client is a small operating system in a browser tab. A Rust **kernel**, compiled to one WebAssembly module, holds the world, schedules its own work and draws through WebGPU. A TypeScript **shell** drives it the way a driver drives a device: it hands over a fixed block of memory once, then talks to the kernel only through two ring buffers and a doorbell.
-
-- **One fixed linear memory.** The shell reserves 512 MiB on a phone or 1 GiB elsewhere. Nothing grows it. The kernel lays it out the way a linker script lays out an image: a stack, the rings, the module's data, a resident terrain range, and one heap.
-- **Rings and a doorbell.** Commands go in on a submission ring and results come back on a completion ring. The doorbell is one call, `interrupt(quota_ms)`, and its return value says when the kernel wants its next turn.
-- **One cooperative scheduler.** A turn gets a quota sized from the display's measured frame. Inside it, one tick runs its phases in priority order, and async tasks yield when the quota is spent. A read-only ledger records where the time went.
-- **Numbers, not strings.** Commands, catalogs, assets and messages are numbered in JSON under `spec/`. Rust and TypeScript are both generated from it, so the kernel never looks anything up by name.
-- **Baked offline, streamed as pages.** The server rasterizes Overture geometry and elevation into 1024² pages in XTP, a zero-copy binary tree format. The client reads those pages where they land in memory.
-
----
-
-## System Overview
-
-```text
-┌─ browser tab ─────────────────────────────────────────────────────────────┐
-│                                                                           │
-│  shell  apps/web  (TypeScript, React)                                     │
-│    UI · input · sensors · HTTP · image decode · the WebGPU host           │
-│    strobe: a turn per animation frame, only when something asked for one  │
-│        │                                                   ▲              │
-│        │ submit          interrupt(quota_ms) → wake_ms     │ complete     │
-│        ▼                                                   │              │
-│  ┌─ WebAssembly.Memory  (fixed, shared by both sides) ─────┴───────────┐  │
-│  │   SQ ring ──▶  kernel  crates/pxl/wasm                  ──▶ CQ ring │  │
-│  │                  world · chunks · camera · stores · ledger          │  │
-│  │                  tick + tasks under the turn's quota                │  │
-│  │                  view: meshes, draw list, shaders, renderer         │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│        │ WebGPU calls (numbers and addresses)                             │
-│        ▼                                                                  │
-│      GPU                                                                  │
-└───────────────────────────────────────────────────────────────────────────┘
-          │ HTTP: XTP pages, content-addressed assets
-          ▼
-  Cloudflare Worker + R2 (the client, baked pages, assets)
-          │ /api
-          ▼
-  API  apps/api  (Hono)  ── PostGIS (Overture, GEDTM30) ── offline bake
-```
-
-The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell decides nothing about the world. It forwards events, runs the fetches the kernel names, decodes images, renders the UI from the kernel's snapshot, and turns the renderer's calls into WebGPU. The line between them is [issue/20260914-what-stays-in-javascript.md](./issue/20260914-what-stays-in-javascript.md).
-
-### Packages and crates
-
-The code is split two ways: generic kit (`xpute`) versus pixelet domain (`pxl`), and within `pxl`, model, view and kernel.
-
-```text
-               TypeScript                   Rust
-             ┌──────────────┐           ┌──────────────┐
-generic kit  │ @xpute/core  │  mirrors  │ xpute-core   │  no domain knowledge
-             └──────┬───────┘           └──────┬───────┘
-             ┌──────▼───────┐           ┌──────▼───────┐
-model        │ @pxl/shared  │  mirrors  │ pxl-spec     │  space, cells, commands, bake formats
-             └──┬────────┬──┘           └──────┬───────┘
-                │        │              ┌──────▼───────┐
-view            │        │              │ pxl-render   │  meshes, glTF, LOD, draw list, GPU
-                │        │              └──────┬───────┘
-                │        │              ┌──────▼───────┐
-kernel          │        │              │ pxl-kernel   │  stores, schedulers, the turn
-                │        │              └──────┬───────┘
-                │        │              ┌──────▼───────┐
-module          │        │              │ pxl-wasm     │  boot block, rings, doorbell
-                │        │              └──────┬───────┘
-             ┌──▼─────┐ ┌▼─────────┐           │ kernel.wasm
-apps         │apps/api│ │ apps/web │◀──────────┘
-             └────────┘ └──────────┘
-```
-
-- **`xpute`** is the runtime kit, meant to stay portable to other projects. It has collections, the allocators (a slab over a buddy), the rings, the change log, the three levels of the scheduler, and XTP. It has no coordinates, terrain or tiles.
-- **`pxl-spec`** is the model that both the server and the client follow. It holds the PVF3 coordinate system, the spatial hierarchy, the cell catalogs, the command numbers and the bake's wire formats. `@pxl/shared` is its TypeScript counterpart, and the API bakes with it.
-- **`pxl-render`** is the view: what the model looks like when drawn. It builds voxel volumes and meshes, loads glTF, runs the LOD ladder, packs the billboards' sheet, writes the draw list, and holds the WGSL shaders and the renderer. It knows the model and nothing of the kernel. The kernel hands it a frame.
-- **`pxl-kernel`** is the kernel. It owns the chunk scheduler, the stores, the fetch queue, the camera, the environment and the turn. Nothing in it knows about WebAssembly or a browser, so it runs natively under `cargo test`.
-- **`pxl-wasm`** is the only crate that knows it is WebAssembly. It installs the allocator and the executor, fixes the memory's front with linker flags, and exports `boot`, `interrupt` and the ledger's reads. It uses no wasm-bindgen.
-
-### The turn
-
-Scheduling works at three levels, the way an OS schedules processes, threads and time slices.
-
-```text
-host (shell)                                      guest (kernel)
-────────────                                      ──────────────
-requestAnimationFrame, only if asked
-quantum: quota from the measured frame,
-  interactive or batch, less last overrun
-submit WORLD_UPDATE (viewport, gap, credits)
-interrupt(quota_ms) ────── rising edge ─────────▶ drain the submission ring
-                                                  poll tasks on the quota:
-                                                    frame: effects → tick phases → draw
-                                                           interaction · visible · content
-                                                           · cosmetic · report
-                                                    build, fetch, glTF, decor, save
-                                                  post signals to the completion ring
-read the completion ring ◀── falling edge ─────── return wake_ms:
-schedule the next turn                              0 next frame · n ms · none
-```
-
-- **Quantum** (`xpute sched/quantum`): the host sizes one quota. It measures the display's frame as a low percentile of recent frame gaps, not an assumed 60 Hz. A turn counts as interactive when there was recent input or the guest asked for the very next frame. An overrun comes off the guest's own next quota.
-- **Tick** (`xpute sched/tick`): the guest's phases run in a fixed order against that one budget, and the order is the priority. `interaction` is O(1) and unbudgeted. `content` is guaranteed a share, so a busy `visible` phase cannot starve it.
-- **Pass** (`xpute sched/frame_budget`): a list of steps runs until the budget is spent. The first step that does work always runs, so work always moves forward even with no budget left.
-
-Async work (chunk builds, fetch decoding, glTF parsing, saving) runs as tasks on an `embassy` executor that the module installs. A task yields when the quota is spent and resumes on the next rising edge. An idle world asks for no turn, and the shell rings for none.
-
-### Rings
-
-```text
-descriptors (36 KiB)                          payloads (8 MiB)
-┌──────────┬──────┬──────┬────────────┬─────┐  ┌────────┬────────┬─────┐
-│ capacity │ head │ tail │ slot_bytes │ ... │  │ slot 0 │ slot 1 │ ... │  4 KiB each
-├──────────┴──────┴──────┴────────────┴─────┤  └────▲───┴────────┴─────┘
-│ msg 0: tag · cmd|flags · result · packet ─┼───────┘
-│ msg 1: ...                                │
-└───────────────────────────────────────────┘
-```
-
-Each ring is single-producer and single-consumer, with 2048 messages of four words. The producer writes only the tail and the consumer writes only the head, so no lock is needed. Message _n_ owns payload slot _n_, so a slot is free exactly when its message is consumed. A push can fail for only two reasons: the ring is full (`EAGAIN`, the producer waits) or the packet is larger than a slot (`EMSGSIZE`, whatever the ring's state). A packet is an XTP tree that the kernel reads where it lies. Anything larger than a page crosses by address. There are three rings: submission, completion, and a spill that the completion ring overflows into, which keeps order when the completion ring is full. The design follows virtio and AF_XDP ([issue/20260917-the-ring-a-slot-and-its-payload.md](./issue/20260917-the-ring-a-slot-and-its-payload.md)).
-
-### Memory
-
-```text
-address          size                   what                          placed by
-───────────────────────────────────────────────────────────────────────────────────
-0                1 MiB                  .stack  (overflow wraps, traps) rustc, --stack-first
-1 MiB            36 KiB × 3             .ring.desc  SQ · CQ · spill     build.rs
-2 MiB            8 MiB × 3              .ring.slot                      build.rs
-32 MiB           ~0.5 MiB               .rodata .data .bss              wasm-ld, --global-base
-~32.5 MiB        196.43 MiB             .fixed.terrain                  the kernel
-~229 MiB         283 MiB phone          .heap  slab over buddy          the allocator
-                 795 MiB desktop
-512 MiB / 1 GiB  end, never grown
-```
-
-- **`.fixed`** holds what is placed once and never freed, at a size known at compile time. Today that is the resident terrain: 7 × 7 pages, one record each. A page's record is its own coordinate modulo the axis, like a clipmap, so eviction needs no list and a page cannot be refused.
-- **`.heap`** is everything else, served by one allocator: a slab of size classes over a buddy of 4 KiB pages. A `String`, a band's voxel lanes and a chunk's mesh all come from the same range. When the heap refuses a request, that work waits for a later turn and the view gets coarser rather than failing.
-- **One file for the numbers.** `spec/kernel/sys/mem/mem.json` holds the numbers that the kernel's map, the linker flags in `build.rs`, and the shell's reservation all read. They are asserted at compile time and again at boot.
-
-Everything the canvas reads each frame lives here as lanes (structure-of-arrays views): terrain pages, voxel bands, column runs, meshes, the chunk table, decor instances, the object store. What stays in the JavaScript heap is glue.
-
 ---
 
 ## Getting Started
@@ -173,10 +37,7 @@ deno task dev
 | `deno task preview:remote` | The production bundle, served locally, data from the live deployment |
 | `deno task build:web`      | Build frontend                                                       |
 | `deno task build:api`      | Build backend                                                        |
-| `deno task build:wasm`     | Build the kernel module into `apps/web/src/kernel/kernel.wasm`       |
 | `deno task bake:tiles`     | Bake terrain into `./out/terrain/<version>`                          |
-| `deno task ingest:asset`   | Hash `asset/` into `./out/asset` and regenerate the asset table      |
-| `deno task spec`           | Generate Rust and TypeScript from the JSON under `spec/`             |
 | `deno task deploy`         | Build the client and publish the Cloudflare Worker                   |
 | `deno task check`          | Type-check all packages                                              |
 | `deno task test`           | Run all tests                                                        |
@@ -215,22 +76,20 @@ contract between them, and what to verify after each.
 The monorepo, package management, and task execution are unified under Deno.
 The web app uses Vite as its bundling/build entry; the api runs directly under Deno.
 
-| Layer               | Technology                                                                   |
-| ------------------- | ---------------------------------------------------------------------------- |
-| Runtime / Workspace | Deno + TypeScript                                                            |
-| Bundler (web)       | Vite                                                                         |
-| Web UI              | React 19                                                                     |
-| API                 | Hono                                                                         |
-| Kernel              | Rust → one WebAssembly module, no wasm-bindgen; `embassy-executor` for tasks |
-| 3D Rendering        | WebGPU (WGSL), driven from the kernel                                        |
-| Database            | PostgreSQL (main + geographic/PostGIS)                                       |
-| Geodata             | Overture Maps + GEDTM30 (elevation)                                          |
+| Layer               | Technology                             |
+| ------------------- | -------------------------------------- |
+| Runtime / Workspace | Deno + TypeScript                      |
+| Bundler (web)       | Vite                                   |
+| Web UI              | React 19                               |
+| API                 | Hono                                   |
+| 3D Rendering        | WebGPU, from a Rust core in WASM       |
+| Core (in progress)  | Rust → WebAssembly (`crates/`)         |
+| Database            | PostgreSQL (main + geographic/PostGIS) |
+| Geodata             | Overture Maps + GEDTM30 (elevation)    |
 
-Two formats are built for this project rather than adopted: PVF3, a packed fixed-point coordinate, and XTP, a relocatable binary tree whose typed-array leaves are read without copying. Every page the client receives is XTP, and so is every packet on the rings.
+Three more pieces of the stack are built for this project rather than adopted: a packed fixed-point coordinate format (PVF3), a typed-array wire protocol (XTP) for every page and record the client reads, and a record layer on it — one `Placement` row for every placed thing and one global `Palette` naming what it is. See [Repository Structure](#repository-structure) and [World and Rendering Model](#world-and-rendering-model) below, or [ARCHITECTURE.md](./ARCHITECTURE.md) for the full design.
 
-The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path ([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md)).
-
-**Naming:** Most identifiers use `snake_case`, the TypeScript included. React hooks, stores and components keep the ecosystem's own convention. The engine is data-oriented and shares its vocabulary with the Rust (`len`, `u32`, `new_len`), and `snake_case` keeps the two languages consistent at the boundary.
+**Naming:** Most identifiers here — files, functions, locals — use `snake_case` rather than TypeScript's usual `camelCase` (React hooks, stores, and components keep the ecosystem's own convention, since fighting that adds no value). The engine side of pixelet leans toward data-oriented design, closer to systems programming than typical frontend code, and a WebGPU/WASM path — including a partial Rust port — has been on the table from early on. C/C++/Rust-style abbreviations show up throughout (`len`, `u32`, `new_len` in `@xpute/core/ds`, for instance), and those read oddly bolted onto camelCase (`newLen` next to `len`); `snake_case` sits naturally with them instead. Unifying most of the TypeScript around it also keeps the two languages visually consistent at the boundary.
 
 ---
 
@@ -239,69 +98,56 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path (
 ```
 .
 ├── apps/
-│   ├── web/                  # The shell: Vite + React 19, and the Cloudflare Worker (worker/)
-│   │   └── src/
-│   │       ├── kernel/       #   the kernel's driver: memory, module, doorbell, signals
-│   │       ├── device/       #   the WebGPU host the renderer calls
-│   │       ├── app/ ui/      #   the frame, screens and controls
-│   │       ├── catalog/      #   the data screens show (settings schema, variants, geocode)
-│   │       ├── locale/       #   i18n catalogues, dev-only ones apart
-│   │       ├── config/       #   deployment config and routes
-│   │       ├── dev/          #   dev tools: the ledger overlay, test page
-│   │       └── kit/          #   shared UI kit and browser helpers
-│   └── api/                  # Hono server, the Overture/DEM bake pipeline, the asset ingest
-├── crates/                   # The Rust workspace
-│   ├── xpute/core/           #   xpute-core: generic runtime kit
-│   └── pxl/
-│       ├── spec/             #   pxl-spec: the model
-│       ├── render/           #   pxl-render: the view
-│       ├── kernel/           #   pxl-kernel: the kernel
-│       └── wasm/             #   pxl-wasm: the one WebAssembly module
-├── packages/                 # The TypeScript workspace packages
-│   ├── xpute/core/           #   @xpute/core: generic kit, XTP, rings, doorbell, strobe
-│   └── pxl/shared/           #   @pxl/shared: PVF3, cells, bake formats, asset tables
-├── spec/                     # JSON every language is generated from (script/spec.ts):
-│                             #   pxl-spec's at the top; kernel/, render/, xpute/ below
-├── asset/                    # Shipped models and texture pack (cube, decor, actor, brand);
-│                             #   input to `deno task ingest:asset`, imported by nothing
-├── script/                   # spec and locale generators and checks
-├── infra/                    # local and production compose files, operations
-└── issue/                    # Decisions and why, the backlog, experiment/ for measurements
+│   ├── web/                        # Web client (Deno + Vite + React 19 + WebGPU)
+│   └── api/                        # API server (Deno + Hono), Overture bake pipeline,
+│                                    # the asset ingest
+├── crates/                         # The Rust core: xpute-core (the generic kit, @xpute/core's
+│   ├── xpute-core/                 # counterpart: pools, the arena, the rings, the change log),
+│   ├── pxl-core/                   # pxl-core (the world: bake/, world/, render/, space/), and
+│   └── pxl-wasm/                   # pxl-wasm (the one WebAssembly module over both)
+├── asset/                          # The shipped models and texture pack, by rendering tier
+│   ├── cube/                       # (cube, decor, actor) — no code imports these: they are
+│   ├── decor/                      # the input of `deno task ingest:asset`, which hashes each
+│   ├── actor/                      # into the bucket and the table the palette reads
+│   └── brand/                      # the symbol and the preview the icons are rendered from
+├── issue/                          # What was decided and why, the backlog, and experiment/
+│                                    # for what was tried and measured
+│
+└── packages/
+    ├── xpute/
+    │   └── core/                   # Generic kit/collections/io/errors, XTP binary protocol,
+    │                                # the channel (command frame, port, link, change log)
+    │                                # (no pixelet domain knowledge — portable to other projects)
+    │
+    └── pxl/
+        └── shared/                 # PVF3 coordinate system, cell/terrain model, bake wire format,
+                                     # the record layer (Placement, Palette)
+                                     # (pixelet-specific — must stay identical between web and api)
 ```
 
-Inside the Rust crates, a crate's root holds only its directories, sorted by kind:
-
-| Crate        | Directories                                                   |
-| ------------ | ------------------------------------------------------------- |
-| `xpute-core` | `ds` `io` `ipc` `kit` `sched` `sys`                           |
-| `pxl-spec`   | `asset` `bake` `cell` `space`, plus `cmd`, `fetch`, `message` |
-| `pxl-render` | `mesh` `asset` `look` `frame` `gpu`                           |
-| `pxl-kernel` | `sys` `sched` `world` `layer` `io` `control` `shell`          |
+The engine is split into a pixelet-specific domain layer (`@pxl/shared`) and a project-agnostic utility layer (`@xpute/core`) that `@pxl/shared`'s binary formats are built on.
 
 ---
 
-## World Model
+## World and Rendering Model
 
-Storage, transfer and rendering use different scales on one hierarchy ([ARCHITECTURE.md](./ARCHITECTURE.md#spatial-hierarchy)):
+Storage, network transfer, and rendering deliberately use different scales. See [ARCHITECTURE.md](./ARCHITECTURE.md#spatial-hierarchy) for the full L0–L5 hierarchy and the layer/space/shape terminology it's built from — in short:
 
-| Level | Name   | Extent       | Role                                                            |
-| ----- | ------ | ------------ | --------------------------------------------------------------- |
-| L1    | Block  | 1 unit       | The canonical cell, about 2.39 m at the equator                 |
-| L2    | Chunk  | 64 blocks    | Meshing, LOD, raycasting and culling; composed in `64³` Z bands |
-| L3    | Page   | 1024 blocks  | Terrain's streaming and storage unit                            |
-| L4    | Anchor | 4096 blocks  | The floating origin the view is placed against                  |
-| L5    | Shard  | 65536 blocks | Reserved                                                        |
+- **L1 Block** (`1u` per axis): the canonical cell — a **Voxel** once it carries a material payload.
+- **L2 Chunk** (`64` blocks per axis): the renderer's render/LOD/raycasting unit. The renderer composes it into a `64³` **Volume** per occupied **Band** (one signed-Z slice), grouping all occupied L2 bands at one XY address into one chunk node.
+- **L3 Page** (`1024` blocks per axis): terrain's streaming/storage unit — terrain stores a `1024²` **Tile** there, X/Y only.
+- **L4 Anchor** (`4096` blocks per axis): the floating-origin frame. `get_local_world_origin` snaps the camera's map center down to its L4 base; `AnchorRegistry` keeps one ref-counted `THREE.Group` per live L4 index and re-bases every group's local position when that snapped origin shifts. Carries no Tile/Volume payload of its own — a pure addressing/reparenting mechanism.
+- **L5 Shard** (`65536` blocks per axis): reserved for a future global sharding domain — not implemented (`L5_SHAMT` stays commented out in `indexer.ts`). Once active, its Z lane collapses (Z is only 16 bits, narrower than `L5_SHAMT`), so L5 can only ever address X/Y.
 
-- **Terrain** is dense 2.5D data: each L3 page carries four ground channels (land, water, structure, transport) and an elevation raster sampled bicubically.
-- **Placed objects** are sparse 3D data: a palette per chunk and a sparse octree per `64³` band. They are client-local for now.
-- **One pipeline for both.** At build time both paint into one temporary signed-Z volume, which is scanned into column runs and baked into per-tier meshes. The raycast walks the same runs, so what is drawn and what is clickable cannot drift apart.
-- **Dense volumes are temporary.** They exist only while composing. What survives is the column runs and the meshes, retained under a byte budget. When memory runs short, the LOD gets coarser.
+Terrain (a Tile-shaped layer) stays dense 2.5D page data; placed objects (a Volume-shaped layer) are a palette per chunk and a sparse tree per `64³` band. A catalog value of `0` is `OBJECT_UNDEF` (sparse absence/fallback); `0x80` is explicit AIR (retains the leaf, erasing whatever a lower layer would otherwise show), `0xff` is UNKNOWN, and every other real value is a placed cube color, terrain-styled pick, or decor kind (`cell/cube.ts`, `cell/decor.ts`, `cell/mod.ts`) — which is also its id in the one global palette. At render time, both implement the same `WorldLayer` contract and paint into one temporary signed-Z Volume of Voxels. The same composed boxes drive meshing and raycasting, so rendered and clickable geometry cannot diverge by using separate approximations.
+
+Dense `64³` Volumes exist only while composing and meshing. Long-lived state keeps compact per-column run data and baked per-chunk geometry instead, avoiding the mobile memory cost of retaining a dense Volume for every visible chunk. All of it — pages, bands, runs, meshes, the scheduler's view of every chunk, the POI index, the object store — lives as typed lanes in one fixed `WebAssembly.Memory`, cut into sections with fixed starts (the Rust module's own, then fixed, page, mesh) each behind its own allocator, and the frame's work runs as one cooperative tick with one budget, measured by a read-only ledger. Across every boundary the client has — the UI and the world, a worker, later the core — a mutation is a numeric command and a change is a `(topic, key, revision)` in one change log, so how state is delivered is an adapter and never the protocol. The world is a Rust core in WASM (`crates/`): it builds every chunk, decides what is on screen and at which tier, holds the models, the billboards and the environment, and lists what to draw; the TypeScript renderer (`apps/web/src/render/gpu/`) executes that list through WebGPU and decides nothing — the destination decided in September 2026 ([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md)), with iOS 26 and iPhone 11 as the floor. Three.js is gone.
 
 ---
 
 ## Learn More
 
-[ARCHITECTURE.md](./ARCHITECTURE.md) covers the runtime (the turn, the rings, the memory) and the engine (coordinates, the chunk pipeline, LOD, rendering, catalogs and wire formats) in detail. [issue/](./issue/) records why each decision went the way it did, and [issue/BACKLOG.md](./issue/BACKLOG.md) lists what is queued.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the coordinate system, spatial hierarchy, unified world-layer pipeline, and wire format work under the hood. See [issue/](./issue/) for the reasoning behind those design decisions.
 
 ---
 

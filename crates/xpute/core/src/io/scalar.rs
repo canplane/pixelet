@@ -1,4 +1,4 @@
-// xpute-core/io/scalar.rs
+// xpute_core/io/scalar.rs
 
 //! Binary Scalar I/O
 //!

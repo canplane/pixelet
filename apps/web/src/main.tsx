@@ -1,6 +1,6 @@
 // @pxl/web/main.tsx
 
-import { bootstrap_app } from "@/app/bootstrap.ts";
+import { bootstrap_app } from "@/bootstrap/app.ts";
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

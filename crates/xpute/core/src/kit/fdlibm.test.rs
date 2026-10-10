@@ -1,8 +1,8 @@
-// xpute-core/kit/fdlibm.test.rs
+// xpute_core/kit/fdlibm.test.rs
 // (no pair: fdlibm.rs is JavaScript's Math, ported)
 
 use super::*;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 /// script/vector/xpute/core/kit/fdlibm.ts's output: V8's Math.
 const VECTOR: &str = include_str!("../../vector/kit/fdlibm.tsv");

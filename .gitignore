@@ -184,7 +184,7 @@ vite.config.ts.timestamp-*
 /crates/target
 
 # The core's module, built from crates/ by apps/web/script/build_wasm.ts
-apps/web/src/kernel/kernel.wasm
+apps/web/src/wasm/pxl.wasm
 
 # The last build number this checkout published (apps/web/script/deploy.ts)
 apps/web/.build_number

@@ -191,12 +191,6 @@ may be discarded, so the format changes without a migration.
 
 ## Decided
 
-**Superseded in part, 2026-09-13,** by
-[20260913-everything-is-a-file-the-placement-and-the-palette.md](./20260913-everything-is-a-file-the-placement-and-the-palette.md):
-the palette is one global record, not one per L2 chunk; an id is a `u64`,
-not a namespaced `rid` string; and a heading is radians counter-clockwise
-from +x (`record/placement.rs`), not zero at north.
-
 - **One cell format** for cubes and decor; storage is not split by kind.
   Anything a cell needs beyond its value hangs off a variable extension it
   points at.

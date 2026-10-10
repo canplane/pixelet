@@ -1,6 +1,7 @@
 {
+  "crates/xpute/core/src/ds/fixed_heap.rs": "The module's own heap (a GlobalAlloc over a fixed range): JavaScript has a garbage collector, a WebAssembly module has this. No TypeScript to mirror.",
   "crates/xpute/core/src/kit/fdlibm.rs": "JavaScript's Math builtins, as FreeBSD msun computes them, so a result is the same bits on every toolchain: the pair of a runtime global, not of a file.",
-  "crates/xpute/core/src/kit/json.rs": "JSON.stringify and JSON.parse of a flat string map, the host's JSON for the records' tags, and JSON read where it lies for a module with no heap: the pair of a runtime global, not of a file.",
+  "crates/xpute/core/src/kit/json.rs": "JSON.stringify and JSON.parse of a flat string map, the host's JSON for the records' tags: the pair of a runtime global, not of a file.",
   "crates/xpute/core/src/sys/console.rs": "JavaScript's console global; the host installs one.",
   "packages/xpute/core/src/kit/word.ts": "Integer types, casts, fit checks and masked shifts for a language that has only doubles and BigInt: Rust's primitives and `as`. A consumer uses the primitive.",
   "packages/xpute/core/src/ds/treap_set.ts#Key": "Type-level union (string | number | bigint) the set does not use; the set is generic over its comparator.",
@@ -14,14 +15,5 @@
   "packages/xpute/core/src/kit/hash.ts#sha256": "WebCrypto's digest: the host's.",
   "packages/xpute/core/src/kit/hash.ts#sha256_from_str": "WebCrypto's digest: the host's.",
   "packages/xpute/core/src/kit/hash.ts#sha256_hex": "WebCrypto's digest: the host's.",
-  "crates/xpute/core/src/sys/vector.rs": "The vectors' reader, test-only; its writer is script/pair.ts, not a file of the kit.",
-  "packages/xpute/core/src/sys/mem.ts#reserve_memory": "The central scheduler's reservation of a WebAssembly.Memory: the host's. The module is given its memory and lays out what is inside it.",
-  "packages/xpute/core/src/ipc/doorbell.ts": "The host's end of a guest's rings: it rings the guest and reads what comes back. The guest is rung, never rings; its end is the rings themselves (ipc/ring.rs) and its own export.",
-  "packages/xpute/core/src/sched/strobe.ts": "The central scheduler's clock for a guest, on the host's animation frames and timers. The guest is strobed, never strobes.",
-  "packages/xpute/core/src/sys/slab.ts": "The central scheduler's little memory: ArrayBuffers moved between the host's threads by transfer. The host's; the module never holds one.",
-  "crates/xpute/core/src/sched/task.rs": "A guest's executor interface and its one install point, as GlobalAlloc and #[global_allocator] are for memory. The host is never a guest; its turns are sched/strobe.ts.",
-  "crates/xpute/core/src/sched/edge.rs": "A guest's side of the turn: the quota as a deadline, the tasks parked for the next rising edge, and the falling edge's ask. The host is never a guest; its side is sched/quantum.ts and sched/strobe.ts.",
-  "crates/xpute/core/src/ds/buddy_tree.rs": "evanw/buddy-malloc in Rust: a buddy over one fixed range as a linearized binary tree, with the growth and the per-allocation header taken out. The pair of a C file, not of a TypeScript one — the host has no use for it, since the range it manages is the module's own memory.",
-  "crates/xpute/core/src/ds/slab.rs": "Size classes over ds/buddy_tree.rs, the pair of a level Linux keeps in the kernel: the module's own `#[global_allocator]`, over the one linear memory it was given. The host allocates with `new`, so there is nothing here for it.",
-  "crates/xpute/core/src/sys/global.rs": "One value for the module's lifetime, made on first use, from a shared static on one thread: a TypeScript module's own top-level `let`. The pair of a language feature, not of a file."
+  "crates/xpute/core/src/vector.rs": "The vectors' reader, test-only; its writer is script/pair.ts, not a file of the kit."
 }

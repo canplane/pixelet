@@ -74,14 +74,14 @@ export function bake_ground(elements: Feature[], has_coast_row: boolean): Ground
 
   // Inverse sea pass: initialize the land channel with the sea/land base first.
   if (has_sea) {
-    ground.land.fill(cube_types.land.sea);
+    ground.land.fill(cube_types.land.SEA);
 
     sea_feats.forEach((f) => {
       // only closed polygons carve land out of the sea base.
       if (f.shape.is_closed) {
         render_polygon(
           f.shape.points,
-          cube_types.land.bare,
+          cube_types.land.BARE,
           ground.land,
           f.shape.holes,
         );
@@ -91,15 +91,15 @@ export function bake_ground(elements: Feature[], has_coast_row: boolean): Ground
     // no sea_feats reached here, but coast_adapter.ts's from_coast_row() did see a
     // coastline row for this page (and dropped it — see its covers_page
     // comment): a single land polygon covers the page's full envelope, so
-    // painting bare directly is equivalent to carving it via render_polygon,
+    // painting BARE directly is equivalent to carving it via render_polygon,
     // without paying for the scanline rasterization.
-    ground.land.fill(cube_types.land.bare);
+    ground.land.fill(cube_types.land.BARE);
   } else {
     // no coastline row touched this page's envelope at all — there's no
     // land anywhere nearby, so this is open ocean, not "no data yet".
-    // Before this branch existed, this case fell through to the bare
+    // Before this branch existed, this case fell through to the BARE
     // default above and every open-ocean page baked as flat dry land.
-    ground.land.fill(cube_types.land.sea);
+    ground.land.fill(cube_types.land.SEA);
   }
 
   // render categorized ground features.
@@ -111,10 +111,10 @@ export function bake_ground(elements: Feature[], has_coast_row: boolean): Ground
     const { cell_type, ch_key } = cell_cfg;
     const target_ch = ground[ch_key];
 
-    // water and land overlays must not paint over true sea cells.
+    // water and land overlays must not paint over true SEA cells.
     const is_land_or_water: boolean = ch_key === GroundChannelKey.LAND || ch_key === GroundChannelKey.WATER;
     const mask_ch: U8Array | undefined = has_sea && is_land_or_water ? ground.land : undefined;
-    const mask_val: u8 = cube_types.land.sea;
+    const mask_val: u8 = cube_types.land.SEA;
 
     if (shape.is_closed) {
       render_polygon(

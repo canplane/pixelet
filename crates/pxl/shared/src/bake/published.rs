@@ -1,0 +1,39 @@
+// pxl_shared/bake/published.rs
+
+/// The published version of each bake, read by the bake tools for their
+/// output directory and by the client for the path it requests.
+///
+/// A published bake is immutable: re-baking bumps the version rather than
+/// overwriting objects, which is what invalidates CDN edge and browser
+/// caches. Bumping one here is the whole change.
+pub struct PublishedVersion {
+    pub terrain: &'static str,
+    pub poi: &'static str,
+    pub geocode: &'static str,
+}
+
+pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {
+    terrain: "v2",
+    poi: "v3",
+    geocode: "v1",
+};
+
+/// `keyof typeof PUBLISHED_VERSION`.
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BakeKind {
+    terrain,
+    poi,
+    geocode,
+}
+
+impl PublishedVersion {
+    /// `PUBLISHED_VERSION[kind]`.
+    pub fn of(&self, kind: BakeKind) -> &'static str {
+        match kind {
+            BakeKind::terrain => self.terrain,
+            BakeKind::poi => self.poi,
+            BakeKind::geocode => self.geocode,
+        }
+    }
+}

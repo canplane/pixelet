@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 
 import type { ModalController, UiController } from "../type/ui.types.ts";
 
-import { EditFooModal } from "@/ui/placeholder/edit_foo_modal.tsx";
-import type { EditFooProps } from "@/ui/placeholder/edit_foo_modal.tsx";
-import { SettingsModal, type SettingsModalProps } from "@/ui/setting/modal.tsx";
-import { DrawerModal, type DrawerModalProps } from "@/ui/map/overlay/drawer_modal.tsx";
-import { SearchModal, type SearchModalProps } from "@/ui/search/search_modal.tsx";
+import { EditFooModal } from "@/feature/manage_foo/ui/edit_foo_modal.tsx";
+import type { EditFooProps } from "@/feature/manage_foo/ui/edit_foo_modal.tsx";
+import { SettingsModal, type SettingsModalProps } from "@/app/setting/modal.tsx";
+import { DrawerModal, type DrawerModalProps } from "@/module/map/ui/overlay/drawer_modal.tsx";
+import { SearchModal, type SearchModalProps } from "@/module/map/ui/overlay/search_modal.tsx";
 
 /**
  * Represents the currently active modal state.

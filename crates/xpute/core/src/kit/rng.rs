@@ -1,4 +1,4 @@
-// xpute-core/kit/rng.rs
+// xpute_core/kit/rng.rs
 
 use core::cell::Cell;
 
@@ -102,28 +102,14 @@ pub type RNG = Box<dyn FnMut() -> u32>;
 ///
 /// `seed` defaults to `seed64()` for a non-deterministic stream.
 pub fn make_rng(seed: Option<u64>) -> RNG {
-    let mut stream = SplitMix64::new(seed.unwrap_or_else(seed64));
-    Box::new(move || stream.next_u32())
-}
+    let mut x: u64 = seed.unwrap_or_else(seed64);
 
-/// The stream `make_rng` draws, as a value: for a caller that seeds a stream
-/// per cell and keeps it on its stack, with nothing boxed.
-#[derive(Clone, Copy, Debug)]
-pub struct SplitMix64 {
-    x: u64,
-}
-
-impl SplitMix64 {
-    pub const fn new(seed: u64) -> SplitMix64 {
-        SplitMix64 { x: seed }
-    }
-
-    pub fn next_u32(&mut self) -> u32 {
+    Box::new(move || {
         // advance internal state (mod 2^64)
-        self.x = self.x.wrapping_add(0x9e3779b97f4a7c15);
+        x = x.wrapping_add(0x9e3779b97f4a7c15);
 
         // scramble bits (avalanche)
-        let mut z = self.x;
+        let mut z = x;
         z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
         z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
         z ^= z >> 31;
@@ -132,7 +118,7 @@ impl SplitMix64 {
         // rounds the 64-bit word to the nearest double first, then takes it
         // modulo 2^32, which is not the word's low bits once it is past 2^53.
         ((z as f64) % 4_294_967_296.0) as u32
-    }
+    })
 }
 
 /// Convert u32 random value to uniform float in [0, 1).

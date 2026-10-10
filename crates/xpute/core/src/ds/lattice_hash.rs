@@ -1,4 +1,4 @@
-// xpute-core/ds/lattice_hash.rs
+// xpute_core/ds/lattice_hash.rs
 
 //! One hash for an integer lattice address, shared by every structure that
 //! buckets cells: the spatial hash's broadphase and the billboard lattice's

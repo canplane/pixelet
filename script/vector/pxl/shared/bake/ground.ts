@@ -1,7 +1,7 @@
 // script/vector/pxl/shared/bake/ground.ts
 //
 // shown_ground over every mix of painted and unpainted channels, with and
-// without structures, for crates/pxl/spec/src/bake/ground.test.rs.
+// without structures, for crates/pxl/shared/src/bake/ground.test.rs.
 
 import { GROUND_CH_KEYS, type GroundChannelKey, LAND_BASE_TYPE, shown_ground } from "@pxl/shared/bake/ground.ts";
 

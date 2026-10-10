@@ -46,65 +46,9 @@ there is a layer:
 xpute       mechanism / substrate
 ```
 
-xpute's return is not the old general runtime restored; it is the
-mechanisms that proved themselves under pixelet's workload, pulled down one
-layer.
-
-## The scheduler has levels, and a turn
-
-Think of it as an OS, not as a web page. On the web the central scheduler
-is JavaScript because nothing else can be; natively it would be Rust. So
-xpute's mechanisms live on both sides, the same file in each language
-(`packages/xpute/core/src/sched`, `crates/xpute/core/src/sched`), and each
-side uses the half it runs.
-
-```
-central scheduler   owns the clock, the memory (big and little) and the
-  (the host)        connections; grants a guest a quantum, memory once, and
-                    I/O credits                          sched/quantum, sys/memory, sys/slab
-guest scheduler     inside the guest: its phases in priority order on the
-  (the kernel)      quantum, its I/O queue within the credits
-                                                         sched/tick, sched/io
-pass                one list of steps within a phase's share
-                                                         sched/frame_budget
-```
-
-The inside knows little of the outside. A turn is a strobe with a hint of
-how long it should take; the guest takes what waits on its fixed submission
-ring, runs its own tasks cooperatively, and leaves on its completion ring
-what goes back — what its turn spent among it. The central scheduler sizes
-the next hint from what only it sees: the display's frame interval and what
-the turn cost outside the guest's tick.
-
-The quantum is not real time. It says "about this long"; a step runs to
-completion, the first step always runs, and a turn that runs over costs the
-next grant what it overran. Two quanta are granted, interactive and batch,
-and the guest picks by whether its view moved — the split a multilevel
-feedback queue makes — because which applies is known only partway into the
-turn. The numbers are the guest's policy, declared to the central scheduler
-at boot (the boot block's quantum words), not the mechanism's.
-
-### Precedents
-
-Recalled, not re-read against their sources when this was written.
-
-| Precedent                                                   | What matches                                                                                                                                         | What to take                                                                                                                                                         |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Chromium's BeginFrame (cc/viz `BeginFrameArgs`)             | the strobe and the grant: each vsync the compositor sends the renderer a frame time, a deadline and an interval; the renderer works within and hands back | a grant as an absolute deadline and interval rather than a duration, so no phase's time needs separate accounting; a missed-frame flag                                |
-| Android Choreographer                                       | the phases: callbacks run in a fixed order — input, animation, insets animation, traversal, commit                                                   | the interaction → visible → … order is the platform's; commit, the correction after drawing, is the report phase                                                     |
-| `requestIdleCallback`'s `IdleDeadline`                      | the batch quantum: `timeRemaining()` is a hint for idle work, capped at 50 ms                                                                        | a hint, not a deadline; a ceiling for the batch quantum                                                                                                              |
-| Seastar (ScyllaDB)                                          | cooperative with a quota: the reactor's task quota, tasks checking whether to yield; scheduling groups with CPU and I/O shares                        | `content_share` is one fixed reserve; shares per phase are its general form, and the I/O queue can take the same shares                                              |
-| Scheduler activations (Anderson et al., 1991)               | the two levels themselves: the kernel grants resources and upcalls events; a user-level scheduler decides within                                     | the inside knows little of the outside; revocation is told by upcall, not done behind the scheduler's back                                                           |
-| Exokernel (Engler et al., 1995)                             | mechanism and policy split over granted resources: the kernel multiplexes securely, policy sits above                                                | visible revocation: memory the central scheduler takes back, the guest learns of and gives back itself                                                               |
-| Linux `SCHED_DEADLINE` with CBS; cgroup `cpu.max`           | the guest declaring its numbers: a task sets runtime, deadline and period with `sched_setattr`; a quota over a period, hierarchically                 | the boot block's quantum is `sched_setattr`; CBS postponing an overrunning task's deadline is "an overrun costs the next grant"; cgroups when there is a second guest |
-| Solaris IA class, FreeBSD ULE interactivity, Windows foreground quantum | interactive against batch: the focused or interactive process gets short, responsive quanta                                                 | the slice/batch choice is this family's                                                                                                                              |
-| io_uring; virtio notification suppression                   | the turn: one `io_uring_enter` submits and reaps; completion overflow is kept aside; a doorbell only when needed                                    | one strobe a turn, and what goes back accumulates on the completion ring                                                                                             |
-| Erlang BEAM reductions; Tokio's coop budget                 | a quantum counted in work, not wall time                                                                                                             | a work-count quota as an option, so a turn can be replayed deterministically                                                                                          |
-
-Where they differ: the OS precedents assume preemption, and nothing here
-preempts — CBS's guarantee does not carry over, only its "an overrun is paid
-for next time". Figma has the same host and WebAssembly-renderer arrangement,
-but no published account of its scheduler was at hand to compare.
+The crate split is already on this line. And xpute's return is not the
+old general runtime restored; it is the mechanisms that proved themselves
+under pixelet's workload, pulled down one layer.
 
 **Not xpute's:** WebGPU, the renderer, assets, the spatial model. WebGPU
 may sit on it later, and even then as middleware at most — not xpute's

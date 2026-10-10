@@ -1,146 +1,134 @@
-//! The one WebAssembly module: pxl-kernel behind a boot block and a doorbell.
+//! The one WebAssembly module: pxl-core behind a boot block and a doorbell.
 //!
-//! No wasm-bindgen. The central scheduler gives the module its memory, and
-//! the module lays out everything inside it when it is booted (`boot`,
-//! pxl_kernel::sys::mem); the shell reads the boot block once, and everything after
-//! crosses in the rings in that memory: a command and its packet in, its
-//! reply and the kernel's signals out, and `interrupt` to hand over the turn.
+//! No wasm-bindgen. The shell reads the boot block once (`boot`), and
+//! everything after crosses in the rings in the core memory, which the
+//! module imports and shares with the client (build.rs, fixed_heap.rs): a
+//! command and its packet in, its reply and the kernel's signals out, and
+//! `interrupt` to hand over the turn. A run set is baked where it lies
+//! and a mesh is written into a block of the memory, so nothing is copied
+//! across the boundary, and a thread that instantiates the module needs the
+//! memory and nothing else.
 //!
-//! The module is single-threaded, so the state is a plain global.
+//! One bake is open at a time, as with the TypeScript context; the module is
+//! single-threaded, so the state is a plain global.
 
-mod executor;
-
-use pxl_kernel::sys::global::Global;
-use pxl_kernel::sys::kernel::kernel;
-use pxl_kernel::sys::mem::section;
-use pxl_render::mesh::volume::Volumes;
-use pxl_spec::cmd::Cmd;
-use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
+use pxl_core::bake::mesher::{BakeContext, Step};
+use pxl_core::bake::run_set::{run_set_bytes, RunSet};
+use pxl_core::bake::scan::{BandView, ColumnRuns, ExtraView, ScanContext, ScanStep};
+use pxl_core::bake::terrain::{ChunkSample, Materials, PageView, ELE_PADDED_SPAN};
+use pxl_core::bake::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
+use pxl_core::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
+use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
+use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
+use pxl_core::world::object::{Carve, Kind, Painter, Store};
+use pxl_core::world::pool::Pool;
+use pxl_core::world::raycast::Raycast;
+use pxl_core::world::sched::{Event, Frame, Scheduler};
+use pxl_shared::spec::cmd::{Cmd, StepResult};
+use pxl_shared::spec::space::pvf3::ivec::{self, gather};
+use xpute_core::io::marshal::tree::{encoder, BranchCursor, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
+use xpute_core::ipc::cmd::Interrupt;
 use xpute_core::ipc::frame::FrameFlag;
-use xpute_core::ipc::ring::{ring_bytes, slots_bytes, Ring};
-use xpute_core::kit::array::{ArrayBuffer, U8Array};
+use xpute_core::ipc::ring::{ring_bytes, Ring, RING_ENTRY_WORDS, RING_HEADER_WORDS};
+use xpute_core::kit::array::ArrayBuffer;
+use xpute_core::kit::array::{F64Array, U8Array};
 use xpute_core::sys::errno::Errno;
 use xpute_core::sys::error::MarshalError;
-use xpute_core::sys::mem::{write_section, SECTION_WORDS};
+
+/// The section at the front of the core memory that is the module's own.
+/// Equal to core_pool.ts's MODULE_BYTES.
+pub const MODULE_BYTES: usize = 32 << 20;
 
 extern "C" {
-    /// Where the linker stopped: the end of `.rodata`, `.data` and `.bss`, and
-    /// so where the kernel may begin placing its own ranges. wasm-ld defines
-    /// it, and `--global-base` (build.rs) is what decides where the data it
-    /// measures began.
-    ///
-    /// Not `__heap_base`, though that symbol sits eight bytes further on and
-    /// would do. The linker calls it that because a C runtime starts its
-    /// `sbrk` there; this kernel's heap is past the fixed ranges and past the
-    /// terrain, so borrowing the name would leave `heap` meaning two things
-    /// two hundred megabytes apart.
-    #[allow(non_upper_case_globals)]
-    static __data_end: u8;
-    /// The top of the stack: `-z stack-size` past its start, which
-    /// `--stack-first` puts at the bottom of the memory. wasm-ld defines it.
-    #[allow(non_upper_case_globals)]
-    static __stack_high: u8;
+    static __heap_base: u8;
 }
 
-/// Where the linker stopped, as an address.
-fn data_end() -> u32 {
-    core::ptr::addr_of!(__data_end) as u32
-}
-
-/// The heap: from the page past the last fixed range to the end of the memory,
-/// ascending. Everything before it is settled before it — the stack, the
-/// rings, the linker's data, and `.fixed` — so the heap is what is left, and
-/// what is left is whatever the device gave.
+/// The module's heap: what is left of the module's section after the
+/// linker placed the stack and the data before it (`--stack-first`, the
+/// default; 1 MB of stack), up to the section's end. Sized against what a
+/// chunk's scratch reaches (wasm_bake.test.ts probes it): about 140 bytes
+/// a run at the peak, most of it a vector's old block held while its
+/// doubled replacement is filled, so a 65k-run chunk — whose fine mesh no
+/// longer fits a pool region — takes under 10 MB of the 31 the heap has.
 struct ModuleHeap;
 
-/// The largest block the heap's tree can describe. Two gigabytes is what a
-/// 32-bit address space holds a whole power of two of, so it is the top of the
-/// shape and not a claim about any device: the tree begins as a single leaf and
-/// doubles only as far as a request makes it, and how much of it is real comes
-/// from `end` at runtime.
-const HEAP_MAX_LOG2: usize = 31;
-
-/// The smallest block, which is the page the rest of the memory is counted in
-/// (mem.json's PAGE_BYTES).
-const HEAP_MIN_LOG2: usize = memory_shift(section::PAGE_BYTES);
-
-const fn memory_shift(bytes: u32) -> usize {
-    assert!(bytes.is_power_of_two());
-    bytes.trailing_zeros() as usize
-}
-
-/// A bit for every node of the tree that can be a parent. The exponents give
-/// the length and the compiler will not derive it for us, so it is written
-/// once here and `BuddyMalloc` checks it against them on the first request.
-const HEAP_SPLIT_BYTES: usize = (1 << (HEAP_MAX_LOG2 - HEAP_MIN_LOG2)) / 8;
-
-impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
-    const MIN_LOG2: usize = HEAP_MIN_LOG2;
-    const MAX_LOG2: usize = HEAP_MAX_LOG2;
-    type Split = [u8; HEAP_SPLIT_BYTES];
-    const SPLIT_INIT: Self::Split = [0; HEAP_SPLIT_BYTES];
-
+impl xpute_core::ds::fixed_heap::Range for ModuleHeap {
     fn base() -> usize {
-        // A pure function of the linker's answer and the map's constants, with
-        // no state and no order to be in: the first block is asked for long
-        // before anything has laid the memory out.
-        section::heap_at(data_end()) as usize
+        core::ptr::addr_of!(__heap_base) as usize
     }
-    fn end() -> usize {
-        core::arch::wasm32::memory_size(0) * (1 << 16)
-    }
+    const END: usize = MODULE_BYTES;
 }
 
-/// The module's one allocator: a slab of size classes over a buddy of 4 KiB
-/// pages, both over the range above. The buddy is what the sections' blocks
-/// come from; the slab is what a `Vec` or a `String` comes from, and it
-/// borrows and returns whole runs of pages to the same buddy, so neither level
-/// can starve while the other has room.
 #[global_allocator]
-static ALLOC: xpute_core::ds::slab::SlabMalloc<ModuleHeap> = xpute_core::ds::slab::SlabMalloc::new();
+static ALLOC: xpute_core::ds::fixed_heap::FixedHeap<ModuleHeap> = xpute_core::ds::fixed_heap::FixedHeap::new();
 
 struct State {
-    /// The submission ring (shell → core), at the address build.rs fixed;
-    /// the boot block carries it out to the shell.
+    ctx: BakeContext,
+    /// The open bake's run set: its address in the memory, and its shape.
+    input: (usize, u32, u32),
+    /// vertex_cnt, index_cnt, the six counters, then the heap's use.
+    result: [u32; 9],
+    scan: ScanContext,
+    /// The open scan's band table: its address, and how many bands.
+    bands: (usize, u32),
+    /// The pools over the memory's sections, by the id POOL_CREATE replied.
+    pools: Vec<Pool>,
+    /// The volumes, once VOLUME_POOLS has said which pools they draw on.
+    volumes: Option<Volumes>,
+    /// The open scan's bands, when it reads a volume of the module's.
+    scan_rows: Vec<[u32; VOLUME_BAND_WORDS]>,
+    /// The terrain tables, and the last chunk read.
+    terrain: Materials,
+    chunk: ChunkSample,
+    /// The object store, its painter, and the rows its lookups answer in.
+    objects: Store,
+    painter: Painter,
+    /// The raycast's column, and the row naming its lanes.
+    column: ColumnRuns,
+    /// The submission ring (glue → core) and the completion ring (core →
+    /// glue), in the module's heap for as long as the module lives.
     sq: Ring,
-    /// The completion ring and its spill.
-    outbox: Outbox,
-    /// The UI snapshot last posted, by hash: one is posted only when it changed.
-    snapshot: u64,
+    cq: Ring,
+    /// The chunks' builds, and the events they made that the completion
+    /// ring had no room for yet.
+    sched: Scheduler,
+    /// The world's change log (module/world/change.ts's topics).
+    changes: ChangeLog,
+    /// The frame the glue writes before each tick (FRAME_WORDS doubles).
+    frame: [f64; FRAME_WORDS],
+    census: [f64; 13],
+    events: std::collections::VecDeque<Event>,
+    /// Replies the completion ring had no room for yet: tag, command, result
+    /// and packet, flushed before any event.
+    replies: std::collections::VecDeque<(u32, u32, i32, Option<U8Array>)>,
+    build_stat: [u32; 11],
     /// The block `boot` hands out.
     boot: [u32; BOOT_WORDS],
+    /// The world's raycast and its kept composites.
+    raycast: Raycast,
 }
 
-// The front of the memory: where the rings are and where the linker was told
-// its own data may begin. Written by build.rs, which emits the same numbers
-// as `--global-base`, so the two cannot disagree.
-include!(concat!(env!("OUT_DIR"), "/ring_layout.rs"));
+/// Messages each ring holds: a page mounting is 64 chunks a frame, each
+/// with its tiers, decor and layout to come, and the glue reads the ring
+/// dry between ticks.
+pub const RING_CAPACITY: u32 = 4096;
 
-/// The three rings, in the order their descriptors and frames are laid out.
-const SQ: u32 = 0;
-const CQ: u32 = 1;
-const SPILL: u32 = 2;
+/// Each ring's packet arena: what is left of 1 MiB after the header and the
+/// messages. The heap hands out power-of-two classes (fixed_heap.rs), so a
+/// ring a byte past 1 MiB would take 2 MiB of it. A chunk's largest message
+/// is under 128 bytes, so a full ring's packets fit in about half.
+pub const RING_ARENA_BYTES: u32 = (1 << 20) - (RING_HEADER_WORDS + RING_CAPACITY * RING_ENTRY_WORDS) * 4;
 
-const _: () = assert!(ring_bytes(RING_CAPACITY) <= RING_DESC_STRIDE, "a ring's descriptors outgrow their stride");
-const _: () = assert!(slots_bytes(RING_CAPACITY, RING_SLOT_BYTES) == RING_SLOT_STRIDE, "a ring's payloads are not its stride");
-const _: () = assert!(RING_SLOT_BYTES == section::PAGE_BYTES, "a slot's payload is the page the rest of the memory is counted in");
-
-/// The whole memory as one buffer, which is what a ring's two areas are cut
-/// from: the descriptors near the bottom and the slots' payloads past them, at
-/// addresses build.rs fixed rather than anyone hands out.
-///
-/// # Safety
-/// The module's own memory, addressed from 0.
-unsafe fn module_memory() -> ArrayBuffer {
-    unsafe { ArrayBuffer::from_raw(core::ptr::null_mut(), core::arch::wasm32::memory_size(0) * (1 << 16)) }
-}
-
-/// The nth ring, laid out empty.
-fn new_ring(n: u32) -> Ring {
-    // SAFETY: the module's own memory; the two ranges are build.rs's and no
-    // one else's, the linker included.
-    let mem = unsafe { module_memory() };
-    Ring::init(mem, RING_DESC_AT + n * RING_DESC_STRIDE, RING_CAPACITY, RING_SLOT_AT + n * RING_SLOT_STRIDE, RING_SLOT_BYTES)
+fn new_ring(capacity: u32) -> Ring {
+    let bytes = ring_bytes(capacity, RING_ARENA_BYTES) as usize;
+    // Words of eight bytes, so the ring and every packet in its arena sit on
+    // an 8-aligned address, as a packet's f64 and u64 lanes need.
+    let words = vec![0u64; bytes.div_ceil(8)].leak();
+    // SAFETY: the words are leaked for the module's lifetime and only the
+    // two sides of the ring touch them.
+    let buffer = unsafe { ArrayBuffer::from_raw(words.as_mut_ptr() as *mut u8, words.len() * 8) };
+    Ring::init(buffer, 0, capacity, RING_ARENA_BYTES)
 }
 
 /// Where a ring's words start in the memory.
@@ -148,11 +136,16 @@ fn ring_address(ring: &Ring) -> u32 {
     ring.words.as_slice().as_ptr() as u32
 }
 
-/// The module's one state, made on first use. xpute's device for it rather
-/// than a `static mut`, whose references the compiler now warns of: the module
-/// is single-threaded and no export re-enters another, which is the promise
-/// `Global` is built on.
-static STATE: Global<State> = Global::new();
+/// The module's one state, made on first use. A cell rather than a
+/// `static mut`, whose references the compiler now warns of: the module
+/// is single-threaded and no export re-enters another, which is what
+/// `state()` promises.
+struct Global(core::cell::UnsafeCell<Option<State>>);
+
+// SAFETY: the module runs on one thread; see `state`.
+unsafe impl Sync for Global {}
+
+static STATE: Global = Global(core::cell::UnsafeCell::new(None));
 
 extern "C" {
     /// The client's: told a panic's message before the trap, since the trap
@@ -166,304 +159,303 @@ extern "C" {
 }
 
 fn state() -> &'static mut State {
-    STATE.get(|| {
-        std::panic::set_hook(Box::new(|info| {
-            let text = info.to_string();
-            // SAFETY: the client's import, told a message it copies out before
-            // the trap.
-            unsafe { host_panic(text.as_ptr(), text.len()) };
-        }));
-        section::map().unwrap_or_else(lay_out);
-        State {
-            sq: new_ring(SQ),
-            outbox: Outbox {
-                cq: new_ring(CQ),
-                spill: new_ring(SPILL),
-            },
-            snapshot: 0,
-            boot: [0; BOOT_WORDS],
-        }
-    })
+    // SAFETY: the module runs on one thread and no export re-enters another,
+    // so no two references to the state are live at once.
+    unsafe {
+        (*STATE.0.get()).get_or_insert_with(|| {
+            std::panic::set_hook(Box::new(|info| {
+                let text = info.to_string();
+                host_panic(text.as_ptr(), text.len());
+            }));
+            State {
+                ctx: BakeContext::new(),
+                input: (0, 0, 0),
+                result: [0; 9],
+                scan: ScanContext::new(),
+                bands: (0, 0),
+                pools: Vec::new(),
+                volumes: None,
+                scan_rows: Vec::new(),
+                terrain: Materials::default(),
+                chunk: ChunkSample::default(),
+                objects: Store::new(),
+                painter: Painter::new(),
+                column: ColumnRuns::new(),
+                sq: new_ring(RING_CAPACITY),
+                cq: new_ring(RING_CAPACITY),
+                sched: Scheduler::new(),
+                raycast: Raycast::default(),
+                changes: ChangeLog::new(ChangeLogOptions {
+                    topics: WORLD_TOPICS,
+                    capacity: JOURNAL_CAPACITY,
+                    keys_per_topic: None,
+                    alloc: None,
+                }),
+                frame: [0.0; FRAME_WORDS],
+                census: [0.0; 13],
+                events: std::collections::VecDeque::new(),
+                replies: std::collections::VecDeque::new(),
+                build_stat: [0; 11],
+                boot: [0; BOOT_WORDS],
+            }
+        })
+    }
+}
+
+fn input_view((at, count, span): (usize, u32, u32)) -> RunSet<'static> {
+    // SAFETY: the client points the bake at a run set in a pool block, which
+    // starts 8-aligned and holds run_set_bytes(count, span), and keeps the
+    // block until the bake closes.
+    unsafe {
+        let raw = core::slice::from_raw_parts(at as *const u8, run_set_bytes(count, span) as usize);
+        RunSet::carve(raw, count, span)
+    }
+}
+
+/// Words a band takes in the table the scan reads (a volume of the module's
+/// says its bands in, VOLUME_READ): band_z;
+/// the addresses of the material, layer and sub-cell lanes (0 for no
+/// sub-cells); the extras' count and the addresses of their five lanes.
+pub const BAND_WORDS: usize = VOLUME_BAND_WORDS;
+
+fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
+    // SAFETY: the table is either the client's, written into a lane of its
+    // own with every address naming a lane of a band it keeps until the scan
+    // closes, or the module's own, copied from a volume it holds;
+    // ScanContext::begin checks each lane's length against the band's.
+    unsafe {
+        let table = core::slice::from_raw_parts(at as *const u32, count as usize * BAND_WORDS);
+        table
+            .chunks_exact(BAND_WORDS)
+            .map(|w| {
+                let voxels = pxl_core::bake::volume::BAND_VOXELS;
+                let extras = w[4] as usize;
+                BandView {
+                    band_z: w[0] as i32,
+                    material: core::slice::from_raw_parts(w[1] as usize as *const u32, voxels),
+                    layer_idx: core::slice::from_raw_parts(w[2] as usize as *const u8, voxels),
+                    sub_cell: (w[3] != 0).then(|| core::slice::from_raw_parts(w[3] as usize as *const u8, voxels * 4)),
+                    extra: ExtraView {
+                        col: core::slice::from_raw_parts(w[5] as usize as *const u32, extras),
+                        z: core::slice::from_raw_parts(w[6] as usize as *const i32, extras),
+                        material: core::slice::from_raw_parts(w[7] as usize as *const u32, extras),
+                        layer_idx: core::slice::from_raw_parts(w[8] as usize as *const u8, extras),
+                        sub: core::slice::from_raw_parts(w[9] as usize as *const u32, extras),
+                    },
+                }
+            })
+            .collect()
+    }
+}
+
+/// The volumes once VOLUME_POOLS made them; by the field, so the state's
+/// other fields stay borrowable beside them.
+fn opened(volumes: &mut Option<Volumes>) -> &mut Volumes {
+    volumes.as_mut().expect("VOLUME_POOLS before any volume")
+}
+
+/// The volumes for a command: EINVAL before VOLUME_POOLS.
+fn volumes_of(volumes: &mut Option<Volumes>) -> Result<&mut Volumes, MarshalError> {
+    volumes.as_mut().ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("a volume before VOLUME_POOLS"), None))
+}
+
+// ---- Objects ----
+//
+// The client lowers a coordinate before it crosses: the chunk's key (an
+// IVec, passed as it is), the band's Z, the band-local lattice position in
+// finest-tier steps, and the level. What comes back is lanes to take views
+// over, valid until the next write or reindex. The store is the glue's
+// (module/world/object/store.ts). Writes, reads and the reference paint
+// alike are commands in the rings (pxl_shared::spec::cmd's OBJECT_*).
+
+/// module/world/change.ts's WorldTopic numbers the store bumps, and the
+/// log's shape.
+pub const TOPIC_OBJECT_COLUMN: u32 = 0;
+pub const TOPIC_DECOR_COLUMN: u32 = 1;
+pub const TOPIC_OBJECT_CELL: u32 = 2;
+pub const WORLD_TOPICS: u32 = 6;
+pub const JOURNAL_CAPACITY: u32 = 4096;
+
+/// Re-derives the chunk's entries and cells, and records the change: the
+/// column in both of its topics, and every cell whose entries changed, by
+/// its corner.
+fn reindex_object(s: &mut State, key: u64) {
+    s.objects.reindex(key);
+    s.changes.bump(TOPIC_OBJECT_COLUMN, key as i64);
+    s.changes.bump(TOPIC_DECOR_COLUMN, key as i64);
+    let (at, n) = s.objects.take_touched();
+    let (x0, y0) = (ivec::X(key), ivec::Y(key));
+    for r in 0..n {
+        // SAFETY: the rows take_touched just handed back, three words each.
+        let row = unsafe { core::slice::from_raw_parts(at.add(r * 3), 3) };
+        let corner = gather(x0 + row[0] as i64, y0 + row[1] as i64, row[2] as i64);
+        s.changes.bump(TOPIC_OBJECT_CELL, corner as i64);
+    }
 }
 
 // ---- Rings ----
 //
 // Commands and their effects cross in rings (crates/xpute/core/src/ipc/ring.rs):
-// a message names a command (pxl_spec::cmd) and an XTP packet in the
-// ring's slot, which the kernel reads where it lies. The shell assembles
+// a message names a command (pxl_shared::spec::cmd) and an XTP packet in the
+// ring's arena, which the kernel reads where it lies. The glue assembles
 // what it submits and takes apart what completes; nothing here is shaped
-// for it. The shell pushes into the submission ring, rings `interrupt` with
-// the turn's quota, and reads the completion ring when the call returns.
+// for it. The glue pushes into the submission ring, rings `interrupt`
+// (DRAIN or TICK), and reads the completion ring when the call returns.
 
-/// Words in the boot block: where the module's own data ends; where the
-/// submission ring and the completion ring are; then `.fixed` and the heap,
-/// each its offset, its bytes and the page it begins on; then the quantum the kernel declares to the
-/// central scheduler (xpute_core::sched::quantum's QuantumPolicy): margin
-/// share, batch frames and the settle time, each in thousandths; then the
-/// heap's row.
-pub const BOOT_WORDS: usize = 13;
+/// Doubles in the frame block, in the order sched::Frame names them: the
+/// root matrix (16), the origin (3), the planes (24), the camera (3), the
+/// lead (3), then viewport height, fov, delta seconds, budget, hard slack,
+/// pixel dither and the retain budget, then the range anchor's x and y,
+/// whether there is one, the render distance and the range hysteresis, and
+/// whether decor is scattered.
+pub const FRAME_WORDS: usize = 62;
 
-/// The boot word holding the address of the heap's row (`BuddyMalloc`'s
-/// `stat`): the range it spans, the top it has reached and what it has served.
-const BOOT_HEAP: usize = 12;
+/// Words in the boot block: the section the module keeps for itself at the
+/// front of the memory, which the shell checks its map against before
+/// anything else; then where the submission ring and the completion ring
+/// are.
+pub const BOOT_WORDS: usize = 3;
 
-const BOOT_QUANTUM: usize = 9;
-
-/// Lays out the memory the module was given, the first time, and hands out
-/// the boot block's address: what the shell reads once, before any ring.
+/// The boot block's address: what the shell reads once, before any ring.
 #[no_mangle]
 pub extern "C" fn boot() -> *const u32 {
-    install_host();
-    executor::install();
-    // The shell calls boot() again for the block's address (module.ts's
-    // boot_block), so the kernel boots with the layout, the first time only:
-    // a second boot would spawn its tasks past the pool.
-    let map = section::map().unwrap_or_else(|| {
-        let map = lay_out();
-        pxl_kernel::sched::turn::boot();
-        map
-    });
     let s = state();
-    let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
-    s.boot[..3].copy_from_slice(&[data_end(), sq, cq]);
-    s.boot[BOOT_HEAP] = ALLOC.stat() as u32;
-    for (i, sec) in [map.fixed, map.heap].into_iter().enumerate() {
-        write_section(&mut s.boot, 3 + i * SECTION_WORDS as usize, sec);
-    }
-    let q = pxl_kernel::sched::tick::QUANTUM;
-    for (i, v) in [q.margin_share, q.batch_frames, q.settle_ms].into_iter().enumerate() {
-        s.boot[BOOT_QUANTUM + i] = (v * 1000.0).round() as u32;
-    }
+    let boot = [MODULE_BYTES as u32, ring_address(&s.sq), ring_address(&s.cq)];
+    s.boot = boot;
     s.boot.as_ptr()
 }
 
-/// Records the kernel's map over the memory the central scheduler gave, and
-/// makes the volumes over it.
-///
-/// Nothing is cut here. The sections are ranges the map names and their
-/// contents' own affair; the heap is the one allocator and it knows its range
-/// without being told (`buddy_tree`'s `Range`).
-fn lay_out() -> section::Map {
-    let stack_high = core::ptr::addr_of!(__stack_high) as u32;
-    assert!(
-        stack_high == pxl_kernel::sys::mem::spec::STACK_BYTES,
-        "the stack was linked to end at {stack_high}, not at mem.json's STACK_BYTES"
-    );
-    let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
-    let map = section::lay_out(given.min(u32::MAX as u64) as u32, data_end());
-    // SAFETY: the memory is this module's own, addressed from 0.
-    kernel().volumes = Some(unsafe { Volumes::new(core::ptr::null_mut()) });
-    section::set_map(map);
-    map
-}
-
-/// The doorbell: the rising edge of a turn, with the time it may take. The
-/// kernel applies the submissions waiting, then polls its tasks on the quota
-/// — the frame among them, when the host asked for one — and the return is
-/// the falling edge: when the kernel wants the next turn, in ms from now, 0
-/// for the next frame and xpute_core::sched::quantum's NO_WAKE for none. A
-/// turn rung with no quota and no frame only applies what waits.
+/// The doorbell. The vector says what the turn is for
+/// (xpute_core::ipc::cmd::Interrupt): DRAIN applies the submissions waiting
+/// and answers how many messages it posted; TICK drains, then runs the
+/// scheduler's pass, and answers 1 when the canvas has something new to
+/// draw. A vector nobody numbers answers u32::MAX.
 #[no_mangle]
-pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
-    use pxl_kernel::sched::turn::{take_world_drawn, world_frame_waiting};
+pub extern "C" fn interrupt(vector: u32) -> u32 {
     let s = state();
-    pxl_kernel::world::change::world_edge().rise(quota_ms);
-    drain(s);
-    if quota_ms > 0.0 || world_frame_waiting() {
-        xpute_core::sched::task::poll();
+    match vector {
+        v if v == Interrupt::DRAIN as u32 => drain(s),
+        v if v == Interrupt::TICK as u32 => tick(s),
+        _ => u32::MAX,
     }
-    if take_world_drawn() {
-        post_turn(s);
-    }
-    pxl_kernel::world::change::world_fall()
 }
 
-/// The UI's snapshot: what WORLD_SNAPSHOT names instead of carrying.
-static SNAPSHOT: Held<u8> = Held::new();
+/// A packet of one branch, its children written by `f`.
+fn packet(f: &mut dyn FnMut(&mut BranchViewImpl)) -> U8Array {
+    let mut t = TreeView::new();
+    t.branch(Some(&mut |b| f(b)));
+    encoder()
+        .encode(
+            &t,
+            TreeEncoderOptions {
+                init_cap: Some(128),
+                ..Default::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{e}"))
+}
 
-/// A packet's bytes written in place into a ring slot: its length, or none
-/// when it did not fit one.
-type Write<'a> = &'a dyn Fn(&mut [u8]) -> Option<u32>;
-
-/// What a signal names rather than carries: a block the kernel holds and
-/// grows, valid until the next signal of the same command fills it again —
-/// the shell reads it before the next turn can make another, and there is no
-/// block to hand back.
-struct Held<T>(core::cell::UnsafeCell<Vec<T>>);
-
-// SAFETY: the module runs on one thread, and what is held is read before
-// anything fills it again.
-unsafe impl<T> Sync for Held<T> {}
-
-impl<T: Copy + Default> Held<T> {
-    const fn new() -> Held<T> {
-        Held(core::cell::UnsafeCell::new(Vec::new()))
+/// An event as the signal it raises: its chunk, its command and its packet.
+fn signal(e: &Event) -> (u32, Cmd, Option<U8Array>) {
+    match *e {
+        Event::Build(BuildEvent::Tier {
+            id,
+            generation,
+            step,
+            at,
+            bytes,
+            vertex_cnt,
+            index_cnt,
+        }) => (
+            id,
+            Cmd::TIER_CREATE,
+            Some(packet(&mut |b| {
+                b.u32(Some(generation)).u32(Some(step)).u32(Some(at)).u32(Some(bytes)).u32(Some(vertex_cnt)).u32(Some(index_cnt));
+            })),
+        ),
+        Event::Build(BuildEvent::Runs { id, bytes }) => (
+            id,
+            Cmd::RUNS_UPDATE,
+            Some(packet(&mut |b| {
+                b.u32(Some(bytes));
+            })),
+        ),
+        Event::Visible { id, on } => (
+            id,
+            Cmd::CHUNK_VISIBLE,
+            Some(packet(&mut |b| {
+                b.bool(Some(on));
+            })),
+        ),
+        Event::Layout { id, primary, secondary, ready } => (
+            id,
+            Cmd::CHUNK_LAYOUT,
+            Some(packet(&mut |b| {
+                b.u32(Some(primary)).u32(Some(secondary)).bool(Some(ready));
+            })),
+        ),
+        Event::Blend {
+            id,
+            primary,
+            secondary,
+            decor_secondary,
+        } => (
+            id,
+            Cmd::CHUNK_BLEND,
+            Some(packet(&mut |b| {
+                b.f32(Some(primary)).f32(Some(secondary)).bool(Some(decor_secondary));
+            })),
+        ),
+        Event::Evict { id, step } => (
+            id,
+            Cmd::TIER_DELETE,
+            Some(packet(&mut |b| {
+                b.u32(Some(step));
+            })),
+        ),
+        Event::Mount { id, page, base_x, base_y } => (
+            id,
+            Cmd::CHUNK_CREATE,
+            Some(packet(&mut |b| {
+                b.u64(Some(page)).u32(Some(base_x)).u32(Some(base_y));
+            })),
+        ),
+        Event::Unmount { id } => (id, Cmd::CHUNK_DELETE, None),
+        Event::Decor { id, step, at, bytes } => (
+            id,
+            Cmd::DECOR_CREATE,
+            Some(packet(&mut |b| {
+                b.u32(Some(step)).u32(Some(at)).u32(Some(bytes));
+            })),
+        ),
     }
+}
 
-    /// Fills it with `len` of `value`, and answers where it lies and how many.
-    ///
-    /// # Safety
-    /// Nothing may hold a reference into it from an earlier fill.
-    unsafe fn fill(&self, len: usize, mut value: impl FnMut(usize) -> T) -> (u32, u32) {
-        // SAFETY: see Sync.
-        let v = unsafe { &mut *self.0.get() };
-        v.clear();
-        v.resize(len, T::default());
-        for (i, slot) in v.iter_mut().enumerate() {
-            *slot = value(i);
+/// Moves what fits of the waiting replies, then of the waiting events, into
+/// the completion ring: a reply first, since its call is waiting on it.
+fn flush(s: &mut State) -> u32 {
+    let mut posted = 0;
+    while let Some((tag, number, value, reply)) = s.replies.front() {
+        if s.cq.push(*tag, *number, FrameFlag::RES as u32, reply.as_ref(), *value) != Errno::OK {
+            return posted;
         }
-        (v.as_ptr() as u32, len as u32)
+        s.replies.pop_front();
+        posted += 1;
     }
-}
-
-/// Where what the kernel posts goes: the completion ring while it has room
-/// and nothing waits before it, otherwise the spill ring behind it, so what
-/// was raised first is read first; `flush` moves the spill on once the shell
-/// has read. Each message is written once, in place, and nothing is held on
-/// a heap. A spill that fills as well is a sizing fault, as a full pool is.
-struct Outbox {
-    cq: Ring,
-    spill: Ring,
-}
-
-impl Outbox {
-    fn post(&self, tag: u32, cmd: u32, flags: u32, result: i32, write: Option<Write<'_>>) {
-        let push = |r: &Ring| match write {
-            Some(w) => r.push_in_place(tag, cmd, flags, result, w),
-            None => r.push(tag, cmd, flags, None, result),
-        };
-        if self.spill.is_empty() && push(&self.cq) == Errno::OK {
-            pxl_kernel::sched::ledger::record::ledger_note_rings(self.cq.len(), 0);
-            return;
+    while let Some(e) = s.events.front() {
+        let (tag, cmd, pkt) = signal(e);
+        if s.cq.push(tag, cmd as u32, 0, pkt.as_ref(), 0) != Errno::OK {
+            break;
         }
-        let e = push(&self.spill);
-        pxl_kernel::sched::ledger::record::ledger_note_rings(self.cq.len(), self.spill.len());
-        assert!(e == Errno::OK, "the completion ring and its spill are full: 0x{cmd:x} has nowhere to go (errno {})", e as i32);
+        s.events.pop_front();
+        posted += 1;
     }
-
-    /// Whether another command's worth of signals has somewhere to go. What
-    /// `drain` stops on: a command that has not been applied can be left in
-    /// the submission ring for the next call, where what it would have raised
-    /// cannot be left anywhere.
-    ///
-    /// The margin is the spill rather than the completion ring, so the shell
-    /// is asked to read before anything is at risk — io_uring answers a
-    /// submission `-EBUSY` while its backlog stands, for the same reason.
-    fn has_room(&self) -> bool {
-        self.spill.len() + MOST_SIGNALS <= self.spill.capacity
-    }
-
-    /// Moves what fits of the spill into the completion ring, in order.
-    fn flush(&self) {
-        loop {
-            let at = self.spill.peek();
-            if at < 0 {
-                return;
-            }
-            let at = at as u32;
-            let pkt = self.spill.packet(at).expect("a spilled packet is the kernel's own");
-            if self.cq.push(self.spill.tag(at), self.spill.cmd(at), self.spill.flags(at), pkt.as_ref(), self.spill.result(at)) != Errno::OK {
-                return;
-            }
-            self.spill.advance();
-        }
-    }
+    posted
 }
 
-/// Signals one command may raise before `drain` checks again. A frame is the
-/// many-signalled one — its sensor asks, snapshot, fetches and loads —
-/// so this bounds a single command rather than a turn.
-const MOST_SIGNALS: u32 = 64;
-
-/// A signal for the shell with a packet of `count` children written by `f`.
-fn raise(o: &Outbox, cmd: Cmd, count: u32, f: impl Fn(&mut PacketWriter)) {
-    o.post(
-        0,
-        cmd as u32,
-        0,
-        0,
-        Some(&|out: &mut [u8]| {
-            let mut w = PacketWriter::new(out, count);
-            f(&mut w);
-            w.finish()
-        }),
-    );
-}
-
-/// What the kernel asks of the shell since it last asked, raised as signals:
-/// the sensors' watches, console lines, the UI's snapshot when it
-/// changed, the fetches to start and cancel, and the loads.
-fn post_shell(s: &mut State) {
-    use pxl_kernel::control::sensor::device_orientation::{take_orientation_commands, OrientationCommand};
-    use pxl_kernel::control::sensor::geolocation::{take_geolocation_commands, GeolocationCommand};
-    use pxl_kernel::io::fetch_scheduler::{fetch_take_aborts, fetch_take_started};
-    use pxl_kernel::io::load::{take_load_requests, LoadKind};
-
-    const GEOLOCATION: u32 = 0;
-    const ORIENTATION: u32 = 1;
-    let sensor = |cmd: Cmd, which: u32| {
-        raise(&s.outbox, cmd, 1, |e| {
-            e.u32(Some(which));
-        })
-    };
-    for c in take_geolocation_commands() {
-        match c {
-            GeolocationCommand::Start => sensor(Cmd::SENSOR_CREATE, GEOLOCATION),
-            GeolocationCommand::Stop => sensor(Cmd::SENSOR_DELETE, GEOLOCATION),
-        }
-    }
-    for c in take_orientation_commands() {
-        match c {
-            OrientationCommand::Listen => sensor(Cmd::SENSOR_CREATE, ORIENTATION),
-            OrientationCommand::Remove => sensor(Cmd::SENSOR_DELETE, ORIENTATION),
-        }
-    }
-    let mut text = String::new();
-    pxl_kernel::shell::shell::ui_snapshot_json(&mut text).expect("a UI snapshot");
-    let hash = xpute_core::kit::hash::fnv1a64_str(&text);
-    if hash != s.snapshot {
-        s.snapshot = hash;
-        // The JSON is far past a slot and the shell reads it before the next
-        // turn can make another, so it crosses as an address and its bytes.
-        // SAFETY: the last snapshot, read by the shell before this one.
-        let (at, len) = unsafe { SNAPSHOT.fill(text.len(), |i| text.as_bytes()[i]) };
-        raise(&s.outbox, Cmd::WORLD_SNAPSHOT, 2, |e| {
-            e.u32(Some(at)).u32(Some(len));
-        });
-    }
-    // The key crosses as the one word the queue orders by; the shell holds it
-    // as a handle and hands it back, and never reads into it.
-    fetch_take_started(|d| {
-        let key = pxl_kernel::io::fetch_scheduler::hash_of(d.key);
-        raise(&s.outbox, Cmd::FETCH_CREATE, 2, |e| {
-            e.u64(Some(key)).str_display(pxl_kernel::io::fetch::DemandUrl(d));
-        });
-    });
-    fetch_take_aborts(|name| {
-        let key = pxl_kernel::io::fetch_scheduler::hash_of(name);
-        raise(&s.outbox, Cmd::FETCH_DELETE, 1, |e| {
-            e.u64(Some(key));
-        });
-    });
-    for q in take_load_requests() {
-        let kind = match q.kind {
-            LoadKind::Gltf => 0,
-            LoadKind::Image => 1,
-        };
-        raise(&s.outbox, Cmd::LOAD_CREATE, 2, |e| {
-            e.u32(Some(kind)).u32(Some(q.load.number()));
-        });
-    }
-}
-
-/// The end of a frame, the kernel having drawn it: what it asks of the shell,
-/// and last the draws it listed.
-fn post_turn(s: &mut State) {
-    post_shell(s);
-    let draws = kernel().sched.draw.draw_count();
-    raise(&s.outbox, Cmd::WORLD_UPDATE, 1, |b| {
-        b.u32(Some(draws));
-    });
+fn now() -> f64 {
+    // SAFETY: the import is the client's clock and reads nothing of ours.
+    unsafe { host_now() }
 }
 
 /// A packet's branch of children, refused when the command needs one and
@@ -491,239 +483,885 @@ fn u64_at(b: &BranchCursor, i: u32) -> Result<u64, MarshalError> {
     Ok(b.at(i)?.get_bigint()? as u64)
 }
 
+/// A lane of floats whose length is a whole number of `stride`s — for a
+/// theme, exactly `stride`.
+fn floats_at(b: &BranchCursor, i: u32, stride: usize) -> Result<xpute_core::kit::array::F32Array, MarshalError> {
+    let a = b.at(i)?.get_array::<f32>()?;
+    if !a.length().is_multiple_of(stride) {
+        return Err(MarshalError::new(
+            Errno::EBADMSG,
+            Some(&format!("a lane of {} floats is not whole instances of {stride}", a.length())),
+            None,
+        ));
+    }
+    Ok(a)
+}
+
+/// A u8 lane of exactly `len` elements.
+fn bytes_at(b: &BranchCursor, i: u32, len: usize) -> Result<xpute_core::kit::array::U8Array, MarshalError> {
+    let a = b.at(i)?.get_array::<u8>()?;
+    if len != usize::MAX && a.length() != len {
+        return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("a lane of {} bytes, not {len}", a.length())), None));
+    }
+    Ok(a)
+}
+
 fn bool_at(b: &BranchCursor, i: u32) -> Result<bool, MarshalError> {
     b.at(i)?.get_bool()
 }
 
-/// A load by its number, refused where the number names none.
-fn load_at(b: &BranchCursor, i: u32) -> Result<pxl_kernel::io::load::Load, MarshalError> {
-    pxl_kernel::io::load::Load::of(u32_at(b, i)?).ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("no such load"), None))
+/// A child branch, or none where the packet holds a null.
+fn branch_at(b: &BranchCursor, i: u32) -> Result<Option<BranchCursor>, MarshalError> {
+    b.at(i)?.opt().map(|c| c.as_branch()).transpose()
 }
 
-/// Applies one submission: its reply's value, or none for a command nobody
-/// numbers or a signal submitted as a command, which replies ENOSYS; a packet
-/// that does not read as the command's replies with its errno.
-fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32>, MarshalError> {
+/// The volume a packet's child `i` names, as its index: 0 is never a volume.
+fn volume_at(f: &BranchCursor, i: u32) -> Result<usize, MarshalError> {
+    match u32_at(f, i)? {
+        0 => Err(MarshalError::new(Errno::EINVAL, Some("volume 0"), None)),
+        id => Ok(id as usize - 1),
+    }
+}
+
+/// The pool a packet's first child names.
+fn pool_at<'a>(s: &'a mut State, f: &BranchCursor) -> Result<&'a mut Pool, MarshalError> {
+    let id = u32_at(f, 0)?;
+    s.pools.get_mut(id as usize).ok_or_else(|| MarshalError::new(Errno::EINVAL, Some(&format!("no pool {id}")), None))
+}
+
+/// A ray as a query's packet carries it: the map origin, the origin, the
+/// direction and the distance.
+fn ray_at(f: &BranchCursor) -> Result<[f64; 9], MarshalError> {
+    let r = f.at(0)?.get_array::<f64>()?;
+    <[f64; 9]>::try_from(r.as_slice()).map_err(|_| MarshalError::new(Errno::EBADMSG, Some(&format!("a ray of {} doubles, not 9", r.length())), None))
+}
+
+/// Applies one submission: its reply's value and packet, or none for a
+/// command nobody numbers, which replies ENOSYS; a packet that does not read
+/// as the command's replies with its errno.
+fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<Option<(i32, Option<U8Array>)>, MarshalError> {
     let Some(cmd) = Cmd::of(number) else { return Ok(None) };
+    match cmd {
+        Cmd::OBJECT_UPDATE => {
+            let f = fields(pkt)?;
+            s.objects
+                .write(u64_at(&f, 0)?, i32_at(&f, 1)?, [u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?], i32_at(&f, 5)?, u32_at(&f, 6)?);
+            return Ok(Some((0, None)));
+        }
+        Cmd::OBJECT_DELETE => {
+            s.objects.clear();
+            return Ok(Some((0, None)));
+        }
+        Cmd::OBJECT_REINDEX => {
+            let key = u64_at(&fields(pkt)?, 0)?;
+            reindex_object(s, key);
+            return Ok(Some((0, None)));
+        }
+        Cmd::STATE_UPDATE => {
+            let f = fields(pkt)?;
+            let kind = match u32_at(&f, 1)? {
+                1 => Kind::Solid,
+                2 => Kind::Air,
+                3 => Kind::Decor,
+                _ => Kind::Untaught,
+            };
+            s.painter.teach(u32_at(&f, 0)?, kind, u32_at(&f, 2)?, u32_at(&f, 3)? as u8);
+            return Ok(Some((0, None)));
+        }
+        Cmd::TERRAIN_UPDATE => {
+            let f = fields(pkt)?;
+            let base = f.at(0)?.as_branch()?;
+            let channels = f.at(1)?.as_branch()?;
+            let t = &mut s.terrain;
+            t.base_rgb = [u32_at(&base, 0)? as u8, u32_at(&base, 1)? as u8, u32_at(&base, 2)? as u8];
+            t.base_layer = u32_at(&base, 3)? as u8;
+            t.base_class = u32_at(&base, 4)? as u8;
+            for (ch, dst) in t.channels.iter_mut().enumerate() {
+                let c = channels.at(ch as u32)?.as_branch()?;
+                let (rgb, has_color, layer, has_layer) = (bytes_at(&c, 1, 768)?, bytes_at(&c, 2, 256)?, bytes_at(&c, 3, 256)?, bytes_at(&c, 4, 256)?);
+                dst.class = u32_at(&c, 0)? as u8;
+                for k in 0..256 {
+                    dst.rgb[k] = [rgb[k * 3], rgb[k * 3 + 1], rgb[k * 3 + 2]];
+                    dst.has_color[k] = has_color[k] != 0;
+                    dst.layer[k] = layer[k];
+                    dst.has_layer[k] = has_layer[k] != 0;
+                }
+            }
+            return Ok(Some((0, None)));
+        }
+        Cmd::DECOR_KIND_UPDATE => {
+            let kinds = fields(pkt)?.at(0)?.as_branch()?;
+            s.sched.decor_forget();
+            for k in kinds.iter() {
+                let k = k?.as_branch()?;
+                let value = i32_at(&k, 5)?;
+                let idx = s.sched.decor_kind(DecorKind {
+                    tag: u64_at(&k, 0)?,
+                    density: number_at(&k, 1)?,
+                    variant_count: u32_at(&k, 2)?,
+                    align_transport: bool_at(&k, 3)?,
+                    extent: number_at(&k, 4)?,
+                    decor_value: (value >= 0).then_some(value as u32),
+                    rules: [DecorRule::Any; 4],
+                });
+                let rules = k.at(6)?.as_branch()?;
+                for ch in 0..4 {
+                    let r = rules.at(ch)?.as_branch()?;
+                    match u32_at(&r, 0)? {
+                        0 => {}
+                        1 => s.sched.decor_rule(idx, ch as usize, DecorRule::Void),
+                        _ => {
+                            s.sched.decor_rule(idx, ch as usize, DecorRule::OneOf([0; 4]));
+                            for &t in bytes_at(&r, 1, usize::MAX)?.as_slice() {
+                                s.sched.decor_allow(idx, ch as usize, t);
+                            }
+                        }
+                    }
+                }
+            }
+            return Ok(Some((0, None)));
+        }
+        Cmd::DECOR_KIND_MODEL => {
+            let f = fields(pkt)?;
+            s.sched.decor_model(u32_at(&f, 0)?, u32_at(&f, 1)?);
+            return Ok(Some((0, None)));
+        }
+        Cmd::CHANGE_UPDATE | Cmd::CHANGE_READ | Cmd::CHANGE_DELETE => {
+            let f = fields(pkt)?;
+            let (topic, key) = (u32_at(&f, 0)?, u64_at(&f, 1)? as i64);
+            let revision = match cmd {
+                Cmd::CHANGE_UPDATE => s.changes.bump(topic, key),
+                Cmd::CHANGE_READ => s.changes.revision_of(topic, key),
+                _ => {
+                    s.changes.forget(topic, key);
+                    0
+                }
+            };
+            return Ok(Some((revision as i32, None)));
+        }
+        Cmd::FRAME_READ => {
+            let mut uniform = [pxl_core::render::shader::FRAME_FLOATS; 14];
+            uniform[1..].copy_from_slice(&pxl_core::render::shader::FRAME_AT);
+            let (frame_at, uniform) = (s.frame.as_ptr() as u32, xpute_core::kit::array::U32Array::from(&uniform));
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32(Some(frame_at)).u32_array(Some(&uniform));
+                })),
+            )));
+        }
+        Cmd::CHUNK_READ => {
+            let (census_at, stat_at) = (s.census.as_ptr() as u32, s.build_stat.as_ptr() as u32);
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32(Some(census_at)).u32(Some(stat_at));
+                })),
+            )));
+        }
+        Cmd::ENV_LANES => {
+            let out_at = s.sched.environment.out.as_ptr() as u32;
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32(Some(out_at));
+                })),
+            )));
+        }
+        Cmd::CHANGE_LANES => {
+            let l = s.changes.lanes();
+            let capacity = s.changes.capacity;
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32(Some(l[0] as u32))
+                        .u32(Some(l[1] as u32))
+                        .u32(Some(l[2] as u32))
+                        .u32(Some(l[3] as u32))
+                        .u32(Some(l[4] as u32))
+                        .u32(Some(capacity));
+                })),
+            )));
+        }
+        Cmd::DRAW_READ => {
+            let lanes = s.sched.draw.take();
+            let row = xpute_core::kit::array::U32Array::from(&lanes.map(|v| v as u32));
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32_array(Some(&row));
+                })),
+            )));
+        }
+        Cmd::SHADER_READ => {
+            let src = pxl_core::render::shader::source(u32_at(&fields(pkt)?, 0)?);
+            let at = src.as_ptr() as u32;
+            return Ok(Some((
+                src.len() as i32,
+                Some(packet(&mut |b| {
+                    b.u32(Some(at));
+                })),
+            )));
+        }
+        Cmd::SHADER_PIPELINE => {
+            let record = xpute_core::kit::array::U32Array::from(&pxl_core::render::shader::pipeline(u32_at(&fields(pkt)?, 0)?));
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32_array(Some(&record));
+                })),
+            )));
+        }
+        Cmd::MODEL_SEAL => {
+            let scale = number_at(&fields(pkt)?, 0)? as f32;
+            let mem = opened(&mut s.volumes).mem();
+            let sched = &mut s.sched;
+            // SAFETY: the model's block is in the volumes' memory.
+            unsafe { sched.models.seal(&mut sched.draw, mem, tag, scale) };
+            return Ok(Some((0, None)));
+        }
+        Cmd::OBJECT_READ => {
+            let f = fields(pkt)?;
+            let state = s.objects.read(u64_at(&f, 0)?, i32_at(&f, 1)?, [u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?]);
+            return Ok(Some((state as i32, None)));
+        }
+        Cmd::OBJECT_LANES => {
+            let key = u64_at(&fields(pkt)?, 0)?;
+            let Some(lanes) = s.objects.chunk_lanes(key) else { return Ok(Some((0, None))) };
+            let reply = packet(&mut |b| {
+                b.u32(Some(lanes.band_at as u32)).u32(Some(lanes.pos_at as u32)).u32(Some(lanes.state_at as u32));
+            });
+            return Ok(Some((lanes.count as i32, Some(reply))));
+        }
+        Cmd::OBJECT_CELL => {
+            let f = fields(pkt)?;
+            let Some(rec) = s.objects.cell(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, i32_at(&f, 3)?) else {
+                return Ok(Some((0, None)));
+            };
+            return Ok(Some((
+                1,
+                Some(packet(&mut |b| {
+                    b.u32(Some(rec.start)).u32(Some(rec.count)).u32(Some(rec.solid));
+                })),
+            )));
+        }
+        Cmd::OBJECT_COLUMNS => {
+            let keys: Vec<u64> = (0..s.objects.chunk_count()).map(|i| s.objects.chunk_key(i)).collect();
+            let keys = xpute_core::kit::array::U64Array::from(&keys);
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u64_array(Some(&keys));
+                })),
+            )));
+        }
+        Cmd::OBJECT_STAT => {
+            let o = &s.objects;
+            let (chunks, bands, cells) = (o.chunk_count() as u32, o.band_count() as u32, o.cell_count() as u32);
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.u32(Some(chunks)).u32(Some(bands)).u32(Some(cells));
+                })),
+            )));
+        }
+        Cmd::POOL_CREATE => {
+            let f = fields(pkt)?;
+            let (start, bytes) = (u32_at(&f, 0)? as usize, u32_at(&f, 1)? as usize);
+            // SAFETY: the memory is the module's own linear memory, addressed
+            // from 0, and the shell keeps the range for this pool alone.
+            let pool = unsafe { Pool::new(core::ptr::null_mut(), start + bytes, start, bytes, u32_at(&f, 2)?, u32_at(&f, 3)?) };
+            s.pools.push(pool);
+            return Ok(Some((s.pools.len() as i32 - 1, None)));
+        }
+        Cmd::POOL_READ => {
+            let f = fields(pkt)?;
+            return Ok(Some((pool_at(s, &f)?.stat_words() as usize as i32, None)));
+        }
+        Cmd::POOL_ACQUIRE => {
+            let f = fields(pkt)?;
+            let bytes = u32_at(&f, 1)?;
+            return Ok(Some((pool_at(s, &f)?.acquire(bytes).map_or(0, |at| at as i32), None)));
+        }
+        Cmd::POOL_RELEASE => {
+            let f = fields(pkt)?;
+            let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)?);
+            if !pool_at(s, &f)?.release(at, bytes) {
+                return Err(MarshalError::new(
+                    Errno::EINVAL,
+                    Some(&format!("a {bytes}B block at {at} its pool does not hold, or holds already")),
+                    None,
+                ));
+            }
+            return Ok(Some((0, None)));
+        }
+        Cmd::POOL_FREE => {
+            let f = fields(pkt)?;
+            let (at, bytes) = (u32_at(&f, 1)? as usize, u32_at(&f, 2)?);
+            return Ok(Some((pool_at(s, &f)?.is_free(at, bytes) as i32, None)));
+        }
+        Cmd::VOLUME_POOLS => {
+            let f = fields(pkt)?;
+            // SAFETY: the pools were cut from this module's memory, addressed from 0.
+            s.volumes = Some(unsafe { Volumes::new(core::ptr::null_mut(), u32_at(&f, 0)?, u32_at(&f, 1)?) });
+            return Ok(Some((0, None)));
+        }
+        Cmd::VOLUME_STAT => {
+            let at = &volumes_of(&mut s.volumes)?.stat as *const _ as usize;
+            return Ok(Some((at as i32, None)));
+        }
+        Cmd::VOLUME_CREATE => return Ok(Some((volumes_of(&mut s.volumes)?.open() as i32 + 1, None))),
+        Cmd::VOLUME_READ => {
+            let id = volume_at(&fields(pkt)?, 0)?;
+            let v = volumes_of(&mut s.volumes)?;
+            let count = v.band_count(id);
+            if count == 0 {
+                return Ok(Some((0, None)));
+            }
+            // The words, not the row's address: a row is written into one
+            // scratch the volumes keep, so every band's address would be the
+            // last band's.
+            let rows: Vec<u32> = (0..count).flat_map(|i| *v.band_row(id, i)).collect();
+            let rows = xpute_core::kit::array::U32Array::from(&rows);
+            return Ok(Some((
+                count as i32,
+                Some(packet(&mut |b| {
+                    b.u32_array(Some(&rows));
+                })),
+            )));
+        }
+        Cmd::VOLUME_DELETE => {
+            let id = volume_at(&fields(pkt)?, 0)?;
+            volumes_of(&mut s.volumes)?.release(&mut s.pools, id);
+            return Ok(Some((0, None)));
+        }
+        Cmd::VOLUME_FILL => {
+            let f = fields(pkt)?;
+            let id = volume_at(&f, 0)?;
+            let voxel = Voxel {
+                material: u32_at(&f, 5)?,
+                layer_idx: u32_at(&f, 6)? as u8,
+                sub: 0,
+            };
+            let (cx, cy, z0, z1) = (u32_at(&f, 1)?, u32_at(&f, 2)?, i32_at(&f, 3)?, i32_at(&f, 4)?);
+            let ok = volumes_of(&mut s.volumes)?.fill_column(&mut s.pools, id, (cx, cy), z0, z1, voxel);
+            return Ok(Some((ok as i32, None)));
+        }
+        Cmd::VOLUME_VOXEL | Cmd::VOLUME_SUB_VOXEL => {
+            let f = fields(pkt)?;
+            let id = volume_at(&f, 0)?;
+            let cell = Cell {
+                cx: u32_at(&f, 1)?,
+                cy: u32_at(&f, 2)?,
+                z: i32_at(&f, 3)?,
+            };
+            let voxel = Voxel {
+                material: u32_at(&f, 4)?,
+                layer_idx: u32_at(&f, 5)? as u8,
+                sub: u32_at(&f, 6)?,
+            };
+            let v = volumes_of(&mut s.volumes)?;
+            let ok = if cmd == Cmd::VOLUME_VOXEL {
+                v.set_voxel(&mut s.pools, id, cell, voxel)
+            } else {
+                v.append_sub_voxel(&mut s.pools, id, cell, voxel)
+            };
+            return Ok(Some((ok as i32, None)));
+        }
+        Cmd::VOLUME_SEAL => {
+            let id = volume_at(&fields(pkt)?, 0)?;
+            volumes_of(&mut s.volumes)?.seal(id);
+            return Ok(Some((0, None)));
+        }
+        Cmd::BAKE_CREATE => {
+            if s.ctx.is_open() {
+                return Ok(Some((0, None)));
+            }
+            let f = fields(pkt)?;
+            s.input = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?, u32_at(&f, 2)?);
+            let lod_step = u32_at(&f, 3)?;
+            return Ok(Some((s.ctx.begin(&input_view(s.input), lod_step) as i32, None)));
+        }
+        Cmd::BAKE_STEP => {
+            return Ok(Some(match s.ctx.step(&input_view(s.input)) {
+                Step::Working => (StepResult::WORKING as i32, None),
+                Step::NeedMesh(words) => (
+                    StepResult::NEED_BLOCK as i32,
+                    Some(packet(&mut |b| {
+                        b.u32(Some(words));
+                    })),
+                ),
+                Step::Done => (StepResult::DONE as i32, None),
+            }));
+        }
+        Cmd::BAKE_MESH => {
+            let f = fields(pkt)?;
+            let (at, words) = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?);
+            // SAFETY: the shell's block, `words` words at `at`, 4-aligned, kept
+            // until the bake finishes or aborts.
+            unsafe { s.ctx.provide_mesh(at as *mut u32, words) }
+            return Ok(Some((0, None)));
+        }
+        Cmd::BAKE_FINISH => {
+            let mesh = s.ctx.finish();
+            let c = s.ctx.counters;
+            s.result = [
+                mesh.vertex_cnt,
+                mesh.index_cnt,
+                c.total_runs,
+                c.culled,
+                c.faces_possible,
+                c.faces_kept,
+                c.coarse_total,
+                c.coarse_low_fill,
+                ALLOC.used() as u32,
+            ];
+            return Ok(Some((s.result.as_ptr() as usize as i32, None)));
+        }
+        Cmd::BAKE_DELETE => {
+            s.ctx.abort();
+            return Ok(Some((0, None)));
+        }
+        Cmd::SCAN_CREATE => {
+            if s.scan.is_open() {
+                return Ok(Some((0, None)));
+            }
+            let id = volume_at(&fields(pkt)?, 0)?;
+            let v = volumes_of(&mut s.volumes)?;
+            let count = v.band_count(id);
+            // The rows copied out, so the scan reads them as a table of its own.
+            s.scan_rows.clear();
+            for i in 0..count {
+                s.scan_rows.push(*v.band_row(id, i));
+            }
+            s.bands = (s.scan_rows.as_ptr() as usize, count as u32);
+            return Ok(Some((s.scan.begin(&band_views(s.bands)) as i32, None)));
+        }
+        Cmd::SCAN_STEP => {
+            return Ok(Some(match s.scan.step(&band_views(s.bands)) {
+                ScanStep::Working => (StepResult::WORKING as i32, None),
+                ScanStep::NeedSet(bytes) => (
+                    StepResult::NEED_BLOCK as i32,
+                    Some(packet(&mut |b| {
+                        b.u32(Some(bytes));
+                    })),
+                ),
+                ScanStep::Done => (StepResult::DONE as i32, None),
+            }));
+        }
+        Cmd::SCAN_SET => {
+            let f = fields(pkt)?;
+            let (at, bytes) = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?);
+            // SAFETY: the shell's block, `bytes` bytes at `at`, 4-aligned.
+            unsafe { s.scan.provide_set(at as *mut u8, bytes) }
+            return Ok(Some((s.scan.finish() as i32, None)));
+        }
+        Cmd::SCAN_DELETE => {
+            s.scan.abort();
+            return Ok(Some((0, None)));
+        }
+        Cmd::TERRAIN_READ => {
+            let f = fields(pkt)?;
+            let (tx0, ty0) = (u32_at(&f, 5)?, u32_at(&f, 6)?);
+            if tx0 > PAGE_CELL_SPAN - CHUNK_SPAN || ty0 > PAGE_CELL_SPAN - CHUNK_SPAN {
+                return Err(MarshalError::new(Errno::EINVAL, Some("a chunk past its page"), None));
+            }
+            let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
+            let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
+            let lanes = [u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?].map(|at| at as usize);
+            // SAFETY: the shell's page lanes, kept in the core memory for as long
+            // as the page is resident; a page's shape is fixed.
+            let page = unsafe {
+                PageView {
+                    ground: [
+                        core::slice::from_raw_parts(lanes[0] as *const u8, cells),
+                        core::slice::from_raw_parts(lanes[1] as *const u8, cells),
+                        core::slice::from_raw_parts(lanes[2] as *const u8, cells),
+                        core::slice::from_raw_parts(lanes[3] as *const u8, cells),
+                    ],
+                    ele: core::slice::from_raw_parts(lanes[4] as *const i16, samples),
+                }
+            };
+            s.chunk.read(&page, &s.terrain, tx0, ty0, bool_at(&f, 7)?);
+            let c = &s.chunk;
+            let (floor, material_at, layer_at, ele_at) = (c.floor, c.material.as_ptr() as usize as u32, c.layer_idx.as_ptr() as usize as u32, c.ele.as_ptr() as usize as u32);
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.i32(Some(floor)).u32(Some(material_at)).u32(Some(layer_at)).u32(Some(ele_at));
+                })),
+            )));
+        }
+        Cmd::TERRAIN_PAINT => {
+            let id = volume_at(&fields(pkt)?, 0)?;
+            let v = volumes_of(&mut s.volumes)?;
+            return Ok(Some((s.chunk.paint(v, &mut s.pools, id) as i32, None)));
+        }
+        Cmd::OBJECT_PAINT => {
+            let f = fields(pkt)?;
+            let (id, key) = (volume_at(&f, 0)?, u64_at(&f, 1)?);
+            let hide = match branch_at(&f, 2)? {
+                Some(h) => Some((i32_at(&h, 0)?, u32_at(&h, 1)?)),
+                None => None,
+            };
+            let carve = match branch_at(&f, 3)? {
+                Some(c) => Some(Carve {
+                    lx: number_at(&c, 0)?,
+                    ly: number_at(&c, 1)?,
+                    lz: number_at(&c, 2)?,
+                    size: number_at(&c, 3)?,
+                }),
+                None => None,
+            };
+            let v = volumes_of(&mut s.volumes)?;
+            let made = s.painter.paint(&s.objects, v, &mut s.pools, id, key, hide, carve);
+            return Ok(Some(((made.any as u32 | ((made.refused as u32) << 1)) as i32, None)));
+        }
+        Cmd::RAY_COLUMN => {
+            let f = fields(pkt)?;
+            let id = volume_at(&f, 0)?;
+            let (cx, cy) = (u32_at(&f, 1)?, u32_at(&f, 2)?);
+            let v = volumes_of(&mut s.volumes)?;
+            let rows: Vec<[u32; VOLUME_BAND_WORDS]> = (0..v.band_count(id)).map(|i| *v.band_row(id, i)).collect();
+            let n = s.column.walk(&band_views((rows.as_ptr() as usize, rows.len() as u32)), cx, cy);
+            let c = &s.column;
+            let lanes = [
+                c.z0.as_ptr() as usize as u32,
+                c.z1.as_ptr() as usize as u32,
+                c.material_class.as_ptr() as usize as u32,
+                c.sub.as_ptr() as usize as u32,
+            ];
+            return Ok(Some((
+                n as i32,
+                Some(packet(&mut |b| {
+                    for at in lanes {
+                        b.u32(Some(at));
+                    }
+                })),
+            )));
+        }
+        _ => {}
+    }
+    let Parts {
+        mut world, events, sched, raycast, ..
+    } = parts(s);
+    let mut emit = |e: Event| events.push_back(e);
     match cmd {
         Cmd::NOP => {
             let value = match pkt {
                 Some(_) => u32_at(&fields(pkt)?, 0)?,
                 None => 0,
             };
-            Ok(Some(value as i32))
+            return Ok(Some((value as i32, None)));
         }
-        Cmd::WORLD_UPDATE => {
+        Cmd::CHUNK_CREATE => {
             let f = fields(pkt)?;
-            let host = pxl_kernel::sched::turn::HostFrame {
-                width: number_at(&f, 0)?,
-                height: number_at(&f, 1)?,
-                dpr: number_at(&f, 2)?,
-                delta: number_at(&f, 3)?,
-                frame_ms: number_at(&f, 4)?,
-                interactive: bool_at(&f, 5)?,
-                credits: u32_at(&f, 6)?,
+            sched.add(tag, u64_at(&f, 0)?, i32_at(&f, 3)? as f64, i32_at(&f, 4)? as f64, u32_at(&f, 1)?, u32_at(&f, 2)?, u32_at(&f, 5)?);
+        }
+        Cmd::CHUNK_DELETE => sched.remove(&mut world, tag, &mut emit),
+        Cmd::CHUNK_UPDATE => {
+            let f = fields(pkt)?;
+            let page = match branch_at(&f, 0)? {
+                None => None,
+                Some(p) => Some(PageLanes {
+                    ground: [u32_at(&p, 0)? as usize, u32_at(&p, 1)? as usize, u32_at(&p, 2)? as usize, u32_at(&p, 3)? as usize],
+                    ele: u32_at(&p, 4)? as usize,
+                }),
             };
-            pxl_kernel::sched::turn::world_frame_asked(host);
-            Ok(Some(0))
+            sched.source(&mut world, tag, page, bool_at(&f, 1)?, &mut emit);
         }
-        Cmd::WORLD_CREATE => {
+        Cmd::CHUNK_WANT => {
             let f = fields(pkt)?;
-            pxl_kernel::shell::config::env::set_build_info(pxl_kernel::shell::config::env::BuildInfo {
-                app_env: f.at(0)?.get_str()?,
-                build_time: f.at(1)?.get_str()?,
-                build_id: f.at(2)?.get_str()?,
-                build_number: f.at(3)?.get_str()?,
-                published_tiles: bool_at(&f, 4)?,
-            });
-            pxl_kernel::sys::host::set_handheld(bool_at(&f, 5)?);
-            pxl_kernel::sched::turn::set_world_platform(pxl_kernel::sched::turn::Platform {
-                geolocation: bool_at(&f, 6)?,
-                orientation: pxl_kernel::control::sensor::device_orientation::OrientationPlatform {
-                    supported: bool_at(&f, 7)?,
-                    needs_permission: bool_at(&f, 8)?,
-                },
-            });
-            pxl_kernel::layer::object::store::load();
-            Ok(Some(0))
+            sched.builder.want(&mut world, tag, [u32_at(&f, 0)?, u32_at(&f, 1)?]);
         }
-        Cmd::WORLD_ACTION => {
+        Cmd::PAGE_CREATE | Cmd::PAGE_DELETE => sched.page(u64_at(&fields(pkt)?, 0)?, cmd == Cmd::PAGE_CREATE),
+        Cmd::EDIT_UPDATE => {
             let f = fields(pkt)?;
-            let text = f.at(0)?;
-            pxl_kernel::shell::shell::ui_action(text.get_str_ref()?);
-            post_shell(s);
-            Ok(Some(0))
-        }
-        Cmd::INPUT_UPDATE => {
-            let f = fields(pkt)?;
-            pxl_kernel::control::camera::input::camera_input_rect(pxl_kernel::control::camera::input::Rect {
-                left: number_at(&f, 0)?,
-                top: number_at(&f, 1)?,
-                width: number_at(&f, 2)?,
-                height: number_at(&f, 3)?,
-            });
-            Ok(Some(0))
-        }
-        Cmd::INPUT_POINTER => {
-            use pxl_kernel::control::camera::input::{camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, ActiveTool, Holding, PointerKind};
-            use pxl_spec::cell::{placeable_cube_of, DecorId};
-            let f = fields(pkt)?;
-            let kind = match u32_at(&f, 1)? {
-                1 => PointerKind::Touch,
-                2 => PointerKind::Pen,
-                _ => PointerKind::Mouse,
+            let hide = match branch_at(&f, 0)? {
+                None => None,
+                Some(h) => Some((u64_at(&h, 0)?, i32_at(&h, 1)?, u32_at(&h, 2)?)),
             };
-            let (id, button, x, y) = (i32_at(&f, 2)?, i32_at(&f, 3)?, number_at(&f, 4)?, number_at(&f, 5)?);
-            let (tool, value, size) = (u32_at(&f, 6)?, u32_at(&f, 7)?, number_at(&f, 8)?);
-            let mut holding = Holding {
-                object_size: size,
-                ..Holding::default()
+            let carve = match branch_at(&f, 1)? {
+                None => None,
+                Some(c) => Some((
+                    u64_at(&c, 0)?,
+                    Carve {
+                        lx: number_at(&c, 1)?,
+                        ly: number_at(&c, 2)?,
+                        lz: number_at(&c, 3)?,
+                        size: number_at(&c, 4)?,
+                    },
+                )),
             };
-            match tool {
-                1 => {
-                    holding.active_tool = ActiveTool::Object;
-                    if let Some(cube) = placeable_cube_of(value) {
-                        holding.object_cube = cube;
-                    }
-                }
-                2 => {
-                    holding.active_tool = ActiveTool::Decor;
-                    if let Some(decor) = u8::try_from(value).ok().and_then(DecorId::of) {
-                        holding.decor_id = decor;
-                    }
-                }
-                3 => holding.active_tool = ActiveTool::Eraser,
-                _ => {}
-            }
-            match u32_at(&f, 0)? {
-                0 => camera_pointer_down(kind, id, button, x, y, holding),
-                1 => camera_pointer_move(kind, id, x, y, holding),
-                2 => camera_pointer_up(kind, id, holding),
-                _ => camera_pointer_out(),
-            }
-            Ok(Some(0))
+            sched.builder.set_edits(hide, carve);
         }
-        Cmd::INPUT_TRACKING => {
-            use pxl_kernel::shell::shell::{tracking_action, Tracking};
-            tracking_action(match u32_at(&fields(pkt)?, 0)? {
-                0 => Tracking::Recenter,
-                1 => Tracking::Follow,
-                _ => Tracking::Unfollow,
-            });
-            pxl_kernel::world::change::request_world_tick();
-            Ok(Some(0))
-        }
-        Cmd::INPUT_WHEEL => {
-            pxl_kernel::control::camera::input::camera_wheel(number_at(&fields(pkt)?, 0)?);
-            Ok(Some(0))
-        }
-        Cmd::SENSOR_UPDATE => {
-            let f = fields(pkt)?;
-            let opt = |v: f64| (!v.is_nan()).then_some(v);
-            pxl_kernel::control::sensor::geolocation::geolocation_fix(number_at(&f, 0)?, number_at(&f, 1)?, opt(number_at(&f, 2)?), number_at(&f, 3)?, opt(number_at(&f, 4)?));
-            Ok(Some(0))
-        }
-        Cmd::SENSOR_ERROR => {
-            use pxl_kernel::control::sensor::geolocation::{geolocation_error, GeolocationErrorCode};
-            let code = match u32_at(&fields(pkt)?, 0)? {
-                1 => GeolocationErrorCode::PermissionDenied,
-                2 => GeolocationErrorCode::PositionUnavailable,
-                3 => GeolocationErrorCode::Timeout,
-                _ => GeolocationErrorCode::Other,
+        Cmd::RAY_READ => {
+            let r = ray_at(&fields(pkt)?)?;
+            let Some(h) = raycast.hit(&mut world, sched, [r[0], r[1]], [r[2], r[3], r[4]], [r[5], r[6], r[7]], r[8]) else {
+                return Ok(Some((0, None)));
             };
-            geolocation_error(code);
-            Ok(Some(0))
+            let row = [
+                h.material_class as f64,
+                h.normal[0],
+                h.normal[1],
+                h.normal[2],
+                h.point[0],
+                h.point[1],
+                h.point[2],
+                h.t,
+                h.box_min[0],
+                h.box_min[1],
+                h.box_min[2],
+                h.box_max[0],
+                h.box_max[1],
+                h.box_max[2],
+            ];
+            return Ok(Some((
+                1,
+                Some(packet(&mut |b| {
+                    b.f64_array(Some(&F64Array::from(&row)));
+                })),
+            )));
         }
-        Cmd::SENSOR_ORIENTATION => {
-            let f = fields(pkt)?;
-            let opt = |v: f64| (!v.is_nan()).then_some(v);
-            pxl_kernel::control::sensor::device_orientation::orientation_event(opt(number_at(&f, 0)?), opt(number_at(&f, 1)?), opt(number_at(&f, 2)?), opt(number_at(&f, 3)?));
-            Ok(Some(0))
-        }
-        Cmd::SENSOR_PERMISSION => {
-            use pxl_kernel::control::sensor::store::PermissionAnswer;
-            let f = fields(pkt)?;
-            let answer = match u32_at(&f, 1)? {
-                0 => PermissionAnswer::Asking,
-                1 => PermissionAnswer::Granted,
-                2 => PermissionAnswer::Denied,
-                _ => PermissionAnswer::Failed,
+        Cmd::DECOR_READ => {
+            let r = ray_at(&fields(pkt)?)?;
+            let Some(h) = pxl_core::world::raycast::hit_decor(&world, sched, [r[0], r[1]], [r[2], r[3], r[4]], [r[5], r[6], r[7]], r[8]) else {
+                return Ok(Some((0, None)));
             };
-            let platform = pxl_kernel::sched::turn::world_platform();
-            match u32_at(&f, 0)? {
-                0 => {
-                    if answer == PermissionAnswer::Granted {
-                        pxl_kernel::control::sensor::geolocation::geolocation_permission_granted(platform.geolocation);
-                    }
-                }
-                _ => pxl_kernel::control::sensor::device_orientation::orientation_permission(answer),
-            }
-            Ok(Some(0))
+            return Ok(Some((
+                1,
+                Some(packet(&mut |b| {
+                    b.u32(Some(h.chunk)).u32(Some(h.band)).u32(Some(h.pos)).f64(Some(h.t));
+                })),
+            )));
         }
-        Cmd::SENSOR_VISIBILITY => {
-            let visible = bool_at(&fields(pkt)?, 0)?;
-            let platform = pxl_kernel::sched::turn::world_platform();
-            pxl_kernel::control::sensor::geolocation::geolocation_visibility(visible, platform.geolocation);
-            if visible {
-                pxl_kernel::control::sensor::device_orientation::orientation_visible();
-            } else {
-                pxl_kernel::layer::object::store::flush_save();
-            }
-            Ok(Some(0))
+        Cmd::OBJECT_UPDATE
+        | Cmd::OBJECT_DELETE
+        | Cmd::OBJECT_REINDEX
+        | Cmd::STATE_UPDATE
+        | Cmd::TERRAIN_UPDATE
+        | Cmd::DECOR_KIND_UPDATE
+        | Cmd::DECOR_KIND_MODEL
+        | Cmd::OBJECT_READ
+        | Cmd::OBJECT_LANES
+        | Cmd::OBJECT_CELL
+        | Cmd::OBJECT_COLUMNS
+        | Cmd::OBJECT_STAT
+        | Cmd::MODEL_SEAL
+        | Cmd::CHANGE_UPDATE
+        | Cmd::CHANGE_READ
+        | Cmd::CHANGE_DELETE
+        | Cmd::FRAME_READ
+        | Cmd::CHUNK_READ
+        | Cmd::ENV_LANES
+        | Cmd::CHANGE_LANES
+        | Cmd::DRAW_READ
+        | Cmd::SHADER_READ
+        | Cmd::SHADER_PIPELINE
+        | Cmd::POOL_CREATE
+        | Cmd::POOL_READ
+        | Cmd::POOL_ACQUIRE
+        | Cmd::POOL_RELEASE
+        | Cmd::POOL_FREE
+        | Cmd::VOLUME_POOLS
+        | Cmd::VOLUME_STAT
+        | Cmd::VOLUME_CREATE
+        | Cmd::VOLUME_READ
+        | Cmd::VOLUME_DELETE
+        | Cmd::VOLUME_FILL
+        | Cmd::VOLUME_VOXEL
+        | Cmd::VOLUME_SUB_VOXEL
+        | Cmd::VOLUME_SEAL
+        | Cmd::BAKE_CREATE
+        | Cmd::BAKE_STEP
+        | Cmd::BAKE_MESH
+        | Cmd::BAKE_FINISH
+        | Cmd::BAKE_DELETE
+        | Cmd::SCAN_CREATE
+        | Cmd::SCAN_STEP
+        | Cmd::SCAN_SET
+        | Cmd::SCAN_DELETE
+        | Cmd::TERRAIN_READ
+        | Cmd::TERRAIN_PAINT
+        | Cmd::OBJECT_PAINT
+        | Cmd::RAY_COLUMN => {
+            unreachable!("applied before the parts are taken")
         }
-        Cmd::FETCH_UPDATE => {
+        Cmd::GHOST_BOX => {
             let f = fields(pkt)?;
-            pxl_kernel::io::fetch::fetch_queued(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
-            Ok(Some(0))
+            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
+            sched.ghost.set_box(&mut world, &mut sched.draw, at, number_at(&f, 3)?, u32_at(&f, 4)?, u32_at(&f, 5)?, bool_at(&f, 6)?);
         }
-        Cmd::LOAD_UPDATE => {
+        Cmd::GHOST_DECOR => {
             let f = fields(pkt)?;
-            // A model's bytes are far past a slot: the host holds them, and
-            // the models' task reads them on a turn's quota.
-            pxl_kernel::io::load::gltf_arrived(load_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?);
-            Ok(Some(0))
+            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
+            sched.ghost.set_decor(&mut world, &mut sched.draw, at, u32_at(&f, 3)?, number_at(&f, 4)? as f32);
         }
-        Cmd::LOAD_IMAGE => {
+        Cmd::GHOST_DELETE => sched.ghost.clear(&mut world, &mut sched.draw),
+        Cmd::PUCK_UPDATE => {
             let f = fields(pkt)?;
-            pxl_kernel::io::load::image_arrived(load_at(&f, 0)?, u32_at(&f, 1)?);
-            Ok(Some(0))
+            let zone = floats_at(&f, 3, 7)?;
+            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
+            // SAFETY: the zone's floats, in the arena, until this message is advanced past.
+            unsafe {
+                sched.markers.set_zone(
+                    &mut world,
+                    &mut sched.draw,
+                    at,
+                    zone.length() as u32 / 7,
+                    zone.as_slice().as_ptr() as usize,
+                    number_at(&f, 4)?,
+                    number_at(&f, 5)?,
+                )
+            };
         }
-        Cmd::LOAD_DELETE => {
-            pxl_kernel::io::load::load_rejected(load_at(&fields(pkt)?, 0)?);
-            Ok(Some(0))
-        }
-        Cmd::GPU_CREATE => {
+        Cmd::PUCK_BEACON => {
             let f = fields(pkt)?;
-            pxl_render::gpu::renderer::gpu_created(u32_at(&f, 0)?, bool_at(&f, 1)?);
-            pxl_kernel::world::change::request_world_tick();
-            Ok(Some(0))
+            sched.markers.set_beacon([number_at(&f, 0)?, number_at(&f, 1)?], bool_at(&f, 2)?);
         }
-        Cmd::GPU_DELETE => {
-            pxl_render::gpu::renderer::gpu_lost();
-            Ok(Some(0))
+        Cmd::PUCK_DELETE => sched.markers.clear(&mut world, &mut sched.draw),
+        Cmd::BILLBOARD_CREATE => {
+            let order = u32_at(&fields(pkt)?, 0)?;
+            return Ok(Some((sched.billboards.new_set(order) as i32, None)));
         }
-        Cmd::SURFACE_CREATE => {
-            let handle = pxl_render::gpu::surface::surface_create(u32_at(&fields(pkt)?, 0)?);
-            if handle != 0 {
-                pxl_kernel::world::change::request_world_tick();
+        Cmd::BILLBOARD_UPDATE => {
+            let lane = floats_at(&fields(pkt)?, 0, 10)?;
+            // SAFETY: the instances' floats, in the arena, until this message is advanced past.
+            unsafe { sched.billboards.write(&mut world, &mut sched.draw, tag, lane.length() as u32 / 10, lane.as_slice().as_ptr() as usize) };
+        }
+        Cmd::BILLBOARD_PLACE => {
+            let f = fields(pkt)?;
+            sched.billboards.place(tag, [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?]);
+        }
+        Cmd::BILLBOARD_FOLLOW => {
+            let f = fields(pkt)?;
+            sched.billboards.follow(tag, u32_at(&f, 0)?, number_at(&f, 1)?);
+        }
+        Cmd::BILLBOARD_DELETE => sched.billboards.remove(&mut world, &mut sched.draw, tag),
+        Cmd::ACTOR_CREATE => {
+            let model = u32_at(&fields(pkt)?, 0)?;
+            return Ok(Some((sched.models.new_actor(&mut world, &mut sched.draw, model).map_or(-1, |a| a as i32), None)));
+        }
+        Cmd::ACTOR_UPDATE => {
+            let f = fields(pkt)?;
+            let (at, rotation_z, visible) = ([number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?], number_at(&f, 3)?, bool_at(&f, 4)?);
+            if let Some(a) = sched.models.actor(tag) {
+                a.at = at;
+                a.rotation_z = rotation_z as f32;
+                a.visible = visible;
             }
-            Ok(Some(handle as i32))
         }
-        Cmd::SURFACE_UPDATE => {
+        Cmd::ACTOR_PLAY => {
             let f = fields(pkt)?;
-            if pxl_render::gpu::surface::surface_update(u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, number_at(&f, 3)?) {
-                pxl_kernel::world::change::request_world_tick();
-            }
-            Ok(Some(0))
+            sched.models.play(tag, u32_at(&f, 0)?, number_at(&f, 1)? as f32);
         }
-        Cmd::SURFACE_DELETE => {
-            if let Some(closed) = pxl_render::gpu::surface::surface_delete(u32_at(&fields(pkt)?, 0)?) {
-                pxl_render::gpu::renderer::surface_closed(closed);
-            }
-            Ok(Some(0))
+        Cmd::ACTOR_DELETE => sched.models.remove_actor(&mut world, &mut sched.draw, tag),
+        Cmd::DEBUG_UPDATE => {
+            let f = fields(pkt)?;
+            let vertices = floats_at(&f, 3, 6)?;
+            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
+            // SAFETY: the vertices' floats, in the arena, until this message is advanced past.
+            unsafe { sched.debug.set(&mut world, &mut sched.draw, at, vertices.length() as u32 / 6, vertices.as_slice().as_ptr() as usize) };
         }
-        Cmd::WORLD_SNAPSHOT | Cmd::SENSOR_CREATE | Cmd::SENSOR_DELETE | Cmd::FETCH_CREATE | Cmd::FETCH_DELETE | Cmd::LOAD_CREATE => Ok(None),
+        Cmd::ENV_UPDATE => {
+            let lane = floats_at(&fields(pkt)?, 0, pxl_core::world::environment::THEME_FLOATS)?;
+            let theme = <[f32; pxl_core::world::environment::THEME_FLOATS]>::try_from(lane.as_slice())
+                .map_err(|_| MarshalError::new(Errno::EBADMSG, Some(&format!("a theme of {} floats", lane.length())), None))?;
+            sched.environment.set_theme(&theme);
+        }
+        Cmd::ENV_OBSERVE => {
+            let f = fields(pkt)?;
+            sched.environment.observe(number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?);
+        }
+        Cmd::MODEL_CREATE => {
+            let f = fields(pkt)?;
+            let Some((id, at)) = sched.models.new_model(&mut world, u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?) else {
+                return Ok(Some((-1, None)));
+            };
+            return Ok(Some((
+                id as i32,
+                Some(packet(&mut |b| {
+                    b.u32(Some(at as u32));
+                })),
+            )));
+        }
+        Cmd::MODEL_READ => {
+            let model = u32_at(&fields(pkt)?, 0)?;
+            return Ok(Some((sched.models.mesh(model).map_or(0, |m| m.handle) as i32, None)));
+        }
+        Cmd::MODEL_JOINT => {
+            let f = fields(pkt)?;
+            let pose = floats_at(&f, 2, 42)?;
+            let p = pose.as_slice();
+            if p.len() != 42 {
+                return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("a joint of {} floats, not 42", p.len())), None));
+            }
+            let (mut rest, mut pre, mut ib) = ([0.0; 10], [0.0; 16], [0.0; 16]);
+            rest.copy_from_slice(&p[0..10]);
+            pre.copy_from_slice(&p[10..26]);
+            ib.copy_from_slice(&p[26..42]);
+            sched.models.joint(tag, u32_at(&f, 0)?, i32_at(&f, 1)?, rest, pre, ib);
+        }
+        Cmd::MODEL_CLIP => {
+            // A query's tag is its call's, so the model is in the packet.
+            let f = fields(pkt)?;
+            return Ok(Some((sched.models.clip(u32_at(&f, 0)?, number_at(&f, 1)? as f32) as i32, None)));
+        }
+        Cmd::MODEL_CHANNEL => {
+            let f = fields(pkt)?;
+            let path = u32_at(&f, 2)?;
+            let (times, values) = (floats_at(&f, 4, 1)?, floats_at(&f, 5, if path == 1 { 4 } else { 3 })?);
+            let width = if path == 1 { 4 } else { 3 };
+            if values.length() != times.length() * width {
+                return Err(MarshalError::new(
+                    Errno::EBADMSG,
+                    Some(&format!("{} keys and {} values of width {width}", times.length(), values.length())),
+                    None,
+                ));
+            }
+            // SAFETY: the keys' floats, in the arena, until this message is
+            // advanced past; the channel copies them.
+            unsafe {
+                sched.models.channel(
+                    core::ptr::null(),
+                    tag,
+                    u32_at(&f, 0)?,
+                    u32_at(&f, 1)?,
+                    path as u8,
+                    bool_at(&f, 3)?,
+                    times.length() as u32,
+                    times.as_slice().as_ptr() as usize,
+                    values.as_slice().as_ptr() as usize,
+                )
+            };
+        }
+        Cmd::CHUNK_BUILD => sched.build_now(&mut world, tag, &now, &mut emit),
+        Cmd::CHUNK_TICK => {
+            let f = fields(pkt)?;
+            let order = f.at(0)?.get_array::<u32>()?;
+            let budget_ms = number_at(&f, 1)?;
+            sched.builder.tick(&mut world, order.as_slice(), budget_ms, &now, &mut |e| emit(Event::Build(e)));
+        }
+        Cmd::CHUNK_DECOR => {
+            let show = bool_at(&fields(pkt)?, 0)?;
+            sched.decor_now(&mut world, tag, show, &mut emit);
+        }
+        Cmd::ENV_READ => {
+            let f = fields(pkt)?;
+            sched.environment.daylight(number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?);
+            let d = sched.environment.daylight;
+            return Ok(Some((
+                0,
+                Some(packet(&mut |b| {
+                    b.f64(Some(d[0])).f64(Some(d[1]));
+                })),
+            )));
+        }
+        // Signals: the kernel raises these, and a shell submitting one is
+        // asking for something no handler does.
+        Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
     }
+    Ok(Some((0, None)))
 }
 
 /// Applies every submission waiting. What they make goes into the completion
@@ -733,296 +1371,139 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
 /// (`ACKREQ`), and to what failed — a command nobody numbers, a packet that
 /// does not read — since a command's effect is otherwise its signals.
 fn drain(s: &mut State) -> u32 {
-    let tail = s.outbox.cq.tail();
-    s.outbox.flush();
+    let mut posted = flush(s);
     loop {
-        if !s.outbox.has_room() {
-            // Backpressure rather than a panic: what is left stays in the
-            // submission ring, in order, and the shell reads the completions
-            // before it is drained again.
-            break;
-        }
         let at = s.sq.peek();
         if at < 0 {
             break;
         }
         let at = at as u32;
         let (tag, number, flags) = (s.sq.tag(at), s.sq.cmd(at), s.sq.flags(at));
-        let result = match s.sq.packet(at) {
-            Ok(pkt) => match apply(s, number, &pkt) {
-                Ok(Some(value)) => Ok(value),
-                Ok(None) => Err(Errno::ENOSYS as i32),
-                Err(e) => Err(e.errno as i32),
+        let (result, reply) = match s.sq.packet(at) {
+            Ok(pkt) => match apply(s, tag, number, &pkt) {
+                Ok(Some((value, reply))) => (Ok(value), reply),
+                Ok(None) => (Err(Errno::ENOSYS as i32), None),
+                Err(e) => (Err(e.errno as i32), None),
             },
-            Err(e) => Err(e.errno as i32),
+            Err(e) => (Err(e.errno as i32), None),
         };
         s.sq.advance();
         if flags & FrameFlag::ACKREQ as u32 != 0 || result.is_err() {
-            s.outbox.post(tag, number, FrameFlag::RES as u32, result.unwrap_or_else(|errno| errno), None);
+            // Queued rather than pushed: a reply's packet may not fit the
+            // arena this turn, and a reply is never dropped.
+            s.replies.push_back((tag, number, result.unwrap_or_else(|errno| errno), reply));
         }
+        posted += flush(s);
     }
-    s.outbox.cq.tail().wrapping_sub(tail)
+    // The rows the glue reads by address (the build stat, the census) are
+    // as of the last command, as they are of the last tick.
+    after(s);
+    posted
 }
 
-// ---- The host's hooks (pxl_kernel::sys::host, pxl_kernel::sys::global) ----
-
-extern "C" {
-    /// `localStorage.getItem(key)`'s length in UTF-8 bytes, or -1 for none.
-    #[link_name = "storage_len"]
-    fn host_storage_len(key: *const u8, key_len: usize) -> i32;
-    /// Copies the item's UTF-8 bytes into `dst`, at most `cap` of them.
-    #[link_name = "storage_get"]
-    fn host_storage_get(key: *const u8, key_len: usize, dst: *mut u8, cap: usize);
-    /// `localStorage.setItem(key, value)`.
-    #[link_name = "storage_set"]
-    fn host_storage_set(key: *const u8, key_len: usize, value: *const u8, value_len: usize);
-    /// Writes the local wall clock's five doubles at `out`: unix ms, hours,
-    /// minutes, seconds, and the local day's start in unix ms.
-    #[link_name = "local_time"]
-    fn host_local_time(out: *mut f64);
-    /// A canvas context's `measureText(text).width` in `font`.
-    #[link_name = "measure_text"]
-    fn host_measure_text(font: *const u8, font_len: usize, text: *const u8, text_len: usize) -> f64;
-    /// 32 random bits.
-    #[link_name = "entropy"]
-    fn host_entropy() -> u32;
-    /// Copies the body the host holds as `body` into `dst`, `len` bytes, and
-    /// lets it go; a `len` of 0 only lets it go.
-    #[link_name = "body_read"]
-    fn host_body_read(body: u32, dst: *mut u8, len: usize);
+/// The state split into what a build, a tick or a raycast borrows at once:
+/// the world the core reads and writes, and the parts that drive it.
+struct Parts<'a> {
+    world: World<'a>,
+    events: &'a mut std::collections::VecDeque<Event>,
+    sched: &'a mut Scheduler,
+    raycast: &'a mut Raycast,
 }
 
-// ---- The host's WebGPU (pxl_render::gpu::api, apps/web/src/device/gpu.ts) ----
-
-extern "C" {
-    #[link_name = "gpu_reset"]
-    fn host_gpu_reset();
-    #[link_name = "gpu_buffer"]
-    fn host_gpu_buffer(id: u32, size: u32, usage: u32);
-    #[link_name = "gpu_texture"]
-    fn host_gpu_texture(id: u32, width: u32, height: u32, layers: u32, format: u32, mips: u32, samples: u32, usage: u32);
-    #[link_name = "gpu_image_texture"]
-    fn host_gpu_image_texture(id: u32, image: u32) -> u32;
-    #[link_name = "gpu_view"]
-    fn host_gpu_view(id: u32, texture: u32, dimension: u32, base_mip: u32, mips: u32, base_layer: u32, layers: u32);
-    #[link_name = "gpu_sampler"]
-    fn host_gpu_sampler(id: u32, mag: u32, min: u32, mipmap: u32, address: u32, compare: u32, anisotropy: u32);
-    #[link_name = "gpu_shader"]
-    fn host_gpu_shader(id: u32, code: *const u8, len: usize);
-    #[link_name = "gpu_layout"]
-    fn host_gpu_layout(id: u32, entries: *const u32, words: usize, samples: u32);
-    #[link_name = "gpu_pipeline"]
-    fn host_gpu_pipeline(id: u32, record: *const u32, words: usize, layouts: *const u32, count: usize, module: u32, format: u32, samples: u32);
-    #[link_name = "gpu_bind_group"]
-    fn host_gpu_bind_group(id: u32, layout: u32, entries: *const u32, words: usize);
-    #[link_name = "gpu_destroy"]
-    fn host_gpu_destroy(id: u32);
-    #[link_name = "gpu_write_buffer"]
-    fn host_gpu_write_buffer(id: u32, offset: u32, bytes: *const u8, len: usize);
-    #[link_name = "gpu_write_texture"]
-    fn host_gpu_write_texture(id: u32, layer: u32, width: u32, height: u32, bytes: *const u8, len: usize);
-    #[link_name = "gpu_encoder"]
-    fn host_gpu_encoder(id: u32);
-    #[link_name = "gpu_pass"]
-    fn host_gpu_pass(id: u32, encoder: u32, desc: *const u32, words: usize);
-    #[link_name = "gpu_set_pipeline"]
-    fn host_gpu_set_pipeline(pass: u32, pipeline: u32);
-    #[link_name = "gpu_set_bind_group"]
-    fn host_gpu_set_bind_group(pass: u32, index: u32, group: u32, offsets: *const u32, count: usize);
-    #[link_name = "gpu_set_vertex_buffer"]
-    fn host_gpu_set_vertex_buffer(pass: u32, slot: u32, buffer: u32, offset: u32, size: u32);
-    #[link_name = "gpu_set_index_buffer"]
-    fn host_gpu_set_index_buffer(pass: u32, buffer: u32, offset: u32, size: u32);
-    #[link_name = "gpu_draw"]
-    fn host_gpu_draw(pass: u32, vertices: u32, instances: u32, first_vertex: u32, first_instance: u32);
-    #[link_name = "gpu_draw_indexed"]
-    fn host_gpu_draw_indexed(pass: u32, indices: u32, instances: u32, first_index: u32, first_instance: u32);
-    #[link_name = "gpu_end"]
-    fn host_gpu_end(pass: u32);
-    #[link_name = "gpu_submit"]
-    fn host_gpu_submit(encoder: u32);
-    #[link_name = "gpu_configure"]
-    fn host_gpu_configure(surface: u32);
-    #[link_name = "gpu_resize"]
-    fn host_gpu_resize(surface: u32, width: u32, height: u32);
-    #[link_name = "gpu_current"]
-    fn host_gpu_current(surface: u32, view: u32);
-    #[link_name = "gpu_query_set"]
-    fn host_gpu_query_set(id: u32, count: u32);
-    #[link_name = "gpu_timestamps"]
-    fn host_gpu_timestamps(encoder: u32, query_set: u32);
-    #[link_name = "gpu_ms"]
-    fn host_gpu_ms() -> f64;
-    #[link_name = "gpu_paint"]
-    fn host_gpu_paint(ops: *const u32, words: usize);
-    #[link_name = "gpu_paint_copy"]
-    fn host_gpu_paint_copy(texture: u32, x: u32, y: u32, layer: u32, width: u32, height: u32);
-}
-
-/// Hands the renderer the host's WebGPU. Every call passes numbers and the
-/// address and length of what it names, which the host reads during the call.
-fn install_gpu() {
-    use pxl_render::gpu::api::{set_gpu_api, GpuApi};
-    // SAFETY, for every call below: an import that reads its numbers and the
-    // lanes it is given where they lie, and keeps no address past the call.
-    set_gpu_api(GpuApi {
-        reset: || unsafe { host_gpu_reset() },
-        buffer: |id, size, usage| unsafe { host_gpu_buffer(id, size, usage) },
-        texture: |id, width, height, layers, format, mips, samples, usage| unsafe { host_gpu_texture(id, width, height, layers, format, mips, samples, usage) },
-        image_texture: |id, image| unsafe { host_gpu_image_texture(id, image) != 0 },
-        view: |id, texture, dimension, base_mip, mips, base_layer, layers| unsafe { host_gpu_view(id, texture, dimension, base_mip, mips, base_layer, layers) },
-        sampler: |id, mag, min, mipmap, address, compare, anisotropy| unsafe { host_gpu_sampler(id, mag, min, mipmap, address, compare, anisotropy) },
-        shader: |id, code| unsafe { host_gpu_shader(id, code.as_ptr(), code.len()) },
-        layout: |id, entries, samples| unsafe { host_gpu_layout(id, entries.as_ptr(), entries.len(), samples) },
-        pipeline: |id, record, layouts, module, format, samples| unsafe { host_gpu_pipeline(id, record.as_ptr(), record.len(), layouts.as_ptr(), layouts.len(), module, format, samples) },
-        bind_group: |id, layout, entries| unsafe { host_gpu_bind_group(id, layout, entries.as_ptr(), entries.len()) },
-        destroy: |id| unsafe { host_gpu_destroy(id) },
-        write_buffer: |id, offset, bytes| unsafe { host_gpu_write_buffer(id, offset, bytes.as_ptr(), bytes.len()) },
-        write_texture: |id, layer, width, height, bytes| unsafe { host_gpu_write_texture(id, layer, width, height, bytes.as_ptr(), bytes.len()) },
-        encoder: |id| unsafe { host_gpu_encoder(id) },
-        pass: |id, encoder, desc| unsafe { host_gpu_pass(id, encoder, desc.as_ptr(), desc.len()) },
-        set_pipeline: |pass, pipeline| unsafe { host_gpu_set_pipeline(pass, pipeline) },
-        set_bind_group: |pass, index, group, offsets| unsafe { host_gpu_set_bind_group(pass, index, group, offsets.as_ptr(), offsets.len()) },
-        set_vertex_buffer: |pass, slot, buffer, offset, size| unsafe { host_gpu_set_vertex_buffer(pass, slot, buffer, offset, size) },
-        set_index_buffer: |pass, buffer, offset, size| unsafe { host_gpu_set_index_buffer(pass, buffer, offset, size) },
-        draw: |pass, vertices, instances, first_vertex, first_instance| unsafe { host_gpu_draw(pass, vertices, instances, first_vertex, first_instance) },
-        draw_indexed: |pass, indices, instances, first_index, first_instance| unsafe { host_gpu_draw_indexed(pass, indices, instances, first_index, first_instance) },
-        end: |pass| unsafe { host_gpu_end(pass) },
-        submit: |encoder| unsafe { host_gpu_submit(encoder) },
-        configure: |surface| unsafe { host_gpu_configure(surface) },
-        resize: |surface, width, height| unsafe { host_gpu_resize(surface, width, height) },
-        current: |surface, view| unsafe { host_gpu_current(surface, view) },
-        query_set: |id, count| unsafe { host_gpu_query_set(id, count) },
-        timestamps: |encoder, query_set| unsafe { host_gpu_timestamps(encoder, query_set) },
-        gpu_ms: || unsafe { host_gpu_ms() },
-        paint: |ops| unsafe { host_gpu_paint(ops.as_ptr(), ops.len()) },
-        paint_copy: |texture, x, y, layer, width, height| unsafe { host_gpu_paint_copy(texture, x, y, layer, width, height) },
-    });
-}
-
-fn hook_now() -> f64 {
-    // SAFETY: an import with no arguments.
-    unsafe { host_now() }
-}
-
-fn hook_storage_get(key: &str) -> Option<String> {
-    // SAFETY: the host reads `key` where it lies and writes at most the length
-    // it just reported into a buffer of that length.
-    unsafe {
-        let len = host_storage_len(key.as_ptr(), key.len());
-        if len < 0 {
-            return None;
-        }
-        let mut buf = vec![0u8; len as usize];
-        host_storage_get(key.as_ptr(), key.len(), buf.as_mut_ptr(), buf.len());
-        String::from_utf8(buf).ok()
+fn parts(s: &mut State) -> Parts<'_> {
+    Parts {
+        world: World {
+            volumes: opened(&mut s.volumes),
+            pools: &mut s.pools,
+            materials: &s.terrain,
+            store: &s.objects,
+            painter: &mut s.painter,
+        },
+        events: &mut s.events,
+        sched: &mut s.sched,
+        raycast: &mut s.raycast,
     }
 }
 
-fn hook_storage_set(key: &str, value: &str) {
-    // SAFETY: the host reads both strings where they lie.
-    unsafe { host_storage_set(key.as_ptr(), key.len(), value.as_ptr(), value.len()) }
+fn after(s: &mut State) {
+    let st = s.sched.builder.stat;
+    let c = s.sched.builder.bake_context().counters;
+    s.build_stat = [
+        st.direct,
+        st.scans,
+        st.bakes,
+        st.starved,
+        c.total_runs,
+        c.culled,
+        c.faces_possible,
+        c.faces_kept,
+        c.coarse_total,
+        c.coarse_low_fill,
+        ALLOC.used() as u32,
+    ];
+    let k = s.sched.census;
+    s.census = [
+        k.chunks as f64,
+        k.in_frustum as f64,
+        k.settling as f64,
+        k.blend_active as f64,
+        k.pending as f64,
+        k.offscreen_pending as f64,
+        k.oldest_visible_ms,
+        k.oldest_release_ms,
+        k.committed as f64,
+        k.released as f64,
+        k.retained_on,
+        k.retained_off,
+        k.pressure as f64,
+    ];
 }
 
-fn hook_local_time() -> pxl_kernel::sys::host::LocalTime {
-    let mut t = [0.0f64; 5];
-    // SAFETY: the host writes five doubles into `t`.
-    unsafe { host_local_time(t.as_mut_ptr()) };
-    pxl_kernel::sys::host::LocalTime {
-        unix_ms: t[0],
-        hours: t[1],
-        minutes: t[2],
-        seconds: t[3],
-        day_start_ms: t[4],
+/// The frame's turn (Interrupt::TICK): applies the submissions waiting, then
+/// the scheduler's pass over every chunk with the frame the glue wrote at
+/// FRAME_READ's address. 1 when the canvas has something new to draw.
+fn tick(s: &mut State) -> u32 {
+    drain(s);
+    // Events the ring had no room for are posted first; a tick on top of
+    // them would only queue more. The glue reads the ring dry and drains
+    // again before the next tick, so this is a frame lost only when it
+    // does not.
+    if !s.events.is_empty() || s.volumes.is_none() {
+        return 1;
     }
+    let f = s.frame;
+    let mut frame = Frame::default();
+    frame.root.copy_from_slice(&f[0..16]);
+    frame.origin.copy_from_slice(&f[16..19]);
+    frame.planes.copy_from_slice(&f[19..43]);
+    frame.camera.copy_from_slice(&f[43..46]);
+    frame.lead.copy_from_slice(&f[46..49]);
+    frame.viewport_h = f[49];
+    frame.fov_deg = f[50];
+    frame.delta_s = f[51];
+    frame.budget_ms = f[52];
+    frame.hard_slack_ms = f[53];
+    frame.pixel_dither = f[54] != 0.0;
+    frame.retain_budget_bytes = f[55];
+    frame.anchor = (f[58] != 0.0).then_some([f[56], f[57]]);
+    frame.render_dist = f[59];
+    frame.range_hysteresis = f[60];
+    frame.show_decor = f[61] != 0.0;
+    let Parts { mut world, events, sched, .. } = parts(s);
+    let draw = sched.tick(&mut world, frame, &now, &mut |e| events.push_back(e));
+    flush(s);
+    after(s);
+    draw as u32
 }
 
-fn hook_measure_text(font: &str, text: &str) -> f64 {
-    // SAFETY: the host reads both strings where they lie.
-    unsafe { host_measure_text(font.as_ptr(), font.len(), text.as_ptr(), text.len()) }
-}
+// ---- The billboards (crates/pxl/core/src/world/billboard.rs) ----
 
-fn hook_body_read(body: u32, dst: &mut [u8]) {
-    // SAFETY: the host writes `dst.len()` bytes at most into `dst`.
-    unsafe { host_body_read(body, dst.as_mut_ptr(), dst.len()) }
-}
+// ---- The shaders and the pipelines (crates/pxl/core/src/render/shader.rs) ----
 
-fn hook_entropy() -> u64 {
-    // SAFETY: an import with no arguments.
-    unsafe { ((host_entropy() as u64) << 32) | host_entropy() as u64 }
-}
+// ---- The dev gizmos (crates/pxl/core/src/world/debug.rs) ----
 
-/// Hands the kernel the host's clock, storage, local time, text measure and
-/// entropy, before anything reads them.
-fn install_host() {
-    pxl_kernel::sys::global::set_clock(hook_now);
-    pxl_kernel::sys::host::set_storage(pxl_kernel::sys::host::Storage {
-        get: hook_storage_get,
-        set: hook_storage_set,
-    });
-    pxl_kernel::sys::host::set_local_time(hook_local_time);
-    pxl_kernel::sys::host::set_measure_text(hook_measure_text);
-    pxl_kernel::sys::host::set_body_read(hook_body_read);
-    xpute_core::kit::rng::set_entropy(hook_entropy);
-    pxl_kernel::sys::host::set_heap_used(|| ALLOC.used());
-    pxl_kernel::sys::host::set_heap_releases(|| ALLOC.releases());
-    pxl_kernel::sys::host::set_heap_live(|| ALLOC.live());
-    pxl_kernel::sys::host::set_heap_bytes(|| ALLOC.range_bytes());
-    pxl_kernel::sys::host::set_heap_refusals(|| ALLOC.refusals());
-    pxl_kernel::sys::host::set_heap_largest_free(|| ALLOC.largest_free());
-    install_gpu();
-}
+// ---- The environment (crates/pxl/core/src/world/environment.rs) ----
 
-/// The ledger, where it lies: the address of READ's words (ledger.json) —
-/// the summary block over the last `window_ms`, an infinite window being the
-/// whole recording, and the frame, task and worst-frame rings, each an address
-/// and a record count.
-///
-/// Read in place rather than sent: this is instrumentation, and
-/// instrumentation does not go out on the control ring, whose failure policy
-/// is that `Outbox::post` asserts when the completion queue and its spill are
-/// both full. Nothing is built for the read either — the rings are the ledger's
-/// own lanes and the summary a block written where it stays — so a reader
-/// allocates nothing from the heap the ledger measures. The addresses are good
-/// until the next turn.
-#[no_mangle]
-pub extern "C" fn ledger_read(window_ms: f64) -> *const u32 {
-    use pxl_kernel::sched::ledger::record::{ledger_frames, ledger_tasks, ledger_worst};
-    use pxl_kernel::sched::ledger::spec::READ;
-    static WORDS: pxl_kernel::sys::global::Global<[u32; READ::WORDS as usize]> = pxl_kernel::sys::global::Global::new();
-    let summary = pxl_kernel::sched::ledger::summary::ledger_summarize(window_ms);
-    let (frames, tasks, worst) = (ledger_frames(), ledger_tasks(), ledger_worst());
-    let w = WORDS.get(|| [0; READ::WORDS as usize]);
-    w[READ::summary_at as usize] = summary.as_ptr() as u32;
-    w[READ::summary_words as usize] = summary.len() as u32;
-    w[READ::frames_at as usize] = frames.as_ptr() as u32;
-    w[READ::frames_count as usize] = frames.len() as u32;
-    w[READ::tasks_at as usize] = tasks.as_ptr() as u32;
-    w[READ::tasks_count as usize] = tasks.len() as u32;
-    w[READ::worst_at as usize] = worst.as_ptr() as u32;
-    w[READ::worst_count as usize] = worst.len() as u32;
-    w.as_ptr()
-}
+// ---- The location puck (crates/pxl/core/src/world/marker.rs) ----
 
-/// What the live stream kept since the shell last cleared it: the address of
-/// LOG's words (ledger.json), the task rows and the frames, each an address
-/// and a count. Zero counts when nothing is waiting, which a shell polling is
-/// asking about most of the time.
-#[no_mangle]
-pub extern "C" fn ledger_log() -> *const u32 {
-    use pxl_kernel::sched::ledger::spec::LOG;
-    static WORDS: pxl_kernel::sys::global::Global<[u32; LOG::WORDS as usize]> = pxl_kernel::sys::global::Global::new();
-    let (tasks, frames) = pxl_kernel::sched::ledger::log::ledger_log_rows();
-    let w = WORDS.get(|| [0; LOG::WORDS as usize]);
-    w[LOG::tasks_at as usize] = tasks.as_ptr() as u32;
-    w[LOG::tasks_count as usize] = tasks.len() as u32;
-    w[LOG::frames_at as usize] = frames.as_ptr() as u32;
-    w[LOG::frames_count as usize] = frames.len() as u32;
-    w.as_ptr()
-}
-
-/// Forgets what the stream kept, once the shell has read it.
-#[no_mangle]
-pub extern "C" fn ledger_log_clear() {
-    pxl_kernel::sched::ledger::log::ledger_log_clear();
-}
+// ---- Models and actors (crates/pxl/core/src/world/model.rs) ----
