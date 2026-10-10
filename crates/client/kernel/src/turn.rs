@@ -57,12 +57,13 @@ fn companion_props() -> Option<CompanionProps> {
     let center = crate::view::frame::coord::to_world(&focus);
     Some(CompanionProps {
         center: [center[0], center[1]],
-        floor: crate::control::navigation::support::floor_of(&focus),
+        floor: crate::control::navigation::support::floor_seen(&focus),
         azimuth: crate::control::camera::controller::azimuth(),
         dragging: crate::control::camera::state::camera_state().camera_status == crate::control::camera::state::CameraStatus::Drag,
         steered: crate::control::camera::input::steering(),
         following: crate::control::navigation::follow_mode::following(),
         eye,
+        tau: crate::chunk::quality::effective().tau(),
     })
 }
 

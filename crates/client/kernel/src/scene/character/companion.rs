@@ -12,8 +12,8 @@ use crate::io::load::{load_image, Load};
 use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
-use crate::query::over;
 use crate::query::World;
+use crate::query::{over, under};
 use crate::scene::character::chat_bubble::chat_bubble_step;
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
@@ -22,7 +22,9 @@ use crate::sched::edge::wake_at;
 use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
 use crate::view::frame::coord::{to_world, world_to_canonical};
+use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
 pub const ACTORS_MAX: usize = Group::ALL.len();
@@ -226,8 +228,8 @@ impl Figure {
         if arrived {
             *stands = arrive_z;
         } else if moved {
-            // Where a column on the way is not resident, it keeps its height.
-            if let Some((to, z)) = walk_to(self.at, *stands, at, &p.eye) {
+            // Where the leaf under it, or a map's `to`, is not held, it goes on at its height.
+            if let Some((to, z)) = walk_to(self.at, *stands, at, p) {
                 (at, *stands) = if follows && gap(to, at) > WALK_EPS { (target, arrive_z) } else { (to, z) };
             }
         }
@@ -236,7 +238,7 @@ impl Figure {
         let Some(held) = &self.held else { return };
         let sched = &mut kernel().scene;
         if let Some(a) = sched.actors.actor(held.actor) {
-            a.at = [at[0], at[1], *stands];
+            a.at = [at[0], at[1], drawn_floor(at, *stands, p)];
             a.rotation_z = self.heading as f32;
             a.visible = true;
         }
@@ -265,8 +267,9 @@ fn companion() -> &'static mut Companion {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompanionProps {
     pub center: [f64; 2],
-    /// The top of the floor under the focus.
-    pub floor: f64,
+    /// The top of the floor the focus is drawn on; none while nothing is
+    /// known there, when the figures hold where they are.
+    pub floor: Option<f64>,
     /// The camera's heading, which the companion turns its back to.
     pub azimuth: f64,
     /// Whether the camera is being dragged, whose release ends a catch-up.
@@ -274,8 +277,10 @@ pub struct CompanionProps {
     /// Whether the keys steer it, and whether the map follows the device.
     pub steered: bool,
     pub following: bool,
-    /// The eye, whose camera grid the walk is judged at.
+    /// The eye, which decides whether it walks or the world is a map, and the
+    /// τ the world is drawn at: what it is drawn standing on.
     pub eye: Pvf3,
+    pub tau: Tau,
 }
 
 fn figure_for<'a>(slot: &'a mut Option<Figure>, variant: &CharacterVariant, target: [f64; 2]) -> &'a mut Figure {
@@ -305,15 +310,22 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);
     let person_target = p.center;
     let person = figure_for(&mut c.person, person_variant, person_target);
-    person.step(ctx, person_target, p.floor, &p);
+    // While nothing is known under the focus each figure holds where it is,
+    // and the rest of it steps on.
+    let hold = |f: &Figure| f.stands_z.map(|z| (f.at, z));
+    if let Some((target, z)) = p.floor.map(|z| (person_target, z)).or_else(|| hold(person)) {
+        person.step(ctx, target, z, &p);
+    }
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
     let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
     // Its own floor beside the person, walked to from the person.
     let reached = |(beside, _): &([f64; 2], f64)| libm::hypot(beside[0] - pet_target[0], beside[1] - pet_target[1]) <= WALK_EPS;
-    let pet_z = walk_to(p.center, p.floor, pet_target, &p.eye).filter(reached).map_or(p.floor, |(_, z)| z);
-    pet.step(ctx, pet_target, pet_z, &p);
+    let walked = |floor: f64| walk_to(p.center, floor, pet_target, &p).filter(reached).map_or(floor, |(_, z)| z);
+    if let Some((target, z)) = p.floor.map(|z| (pet_target, walked(z))).or_else(|| hold(pet)) {
+        pet.step(ctx, target, z, &p);
+    }
 }
 
 /// (model, image handle) for the shell's skinned pass.
@@ -323,12 +335,25 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, u32)> {
 }
 
 /// The world's step-slide from `from`, its floor at `stands`, toward `to`:
-/// where it ends and its floor there; none where a column on the way is not
-/// resident.
-fn walk_to(from: [f64; 2], stands: f64, to: [f64; 2], eye: &Pvf3) -> Option<([f64; 2], f64)> {
+/// where it ends and its floor there, short of a leaf on the way not held;
+/// none where the leaf under `from`, or a map's `to`, is not held.
+fn walk_to(from: [f64; 2], stands: f64, to: [f64; 2], p: &CompanionProps) -> Option<([f64; 2], f64)> {
     let [a, b] = [from, to].map(|[x, y]| world_to_canonical(&[x, y, over(stands)]));
-    let at = to_world(&World::now().step_slide(&a, &b, eye, true)?);
-    Some(([at[0], at[1]], at[2] - over(0.0)))
+    let at = to_world(&World::now().step_slide(&a, &b, &p.eye, true)?);
+    Some(([at[0], at[1]], under(at[2])))
+}
+
+/// The floor `stands` as the chunks compose it under `at`: the world asked at
+/// the zoom the camera grid at `tau` takes there from the eye, as a chunk takes
+/// its own. Not the box a coarse chunk draws, which only summarizes the cells
+/// it folds and can stand off this by up to a grid cell; a folded cell is
+/// struck by nothing. A coarser answer is taken, as a chunk draws its
+/// ancestors' where its own is not held.
+fn drawn_floor(at: [f64; 2], stands: f64, p: &CompanionProps) -> f64 {
+    let center = [at[0], at[1], over(stands)];
+    let eye = to_world(&p.eye);
+    let r = libm::sqrt((0..3).map(|k| (center[k] - eye[k]) * (center[k] - eye[k])).sum());
+    World::now().floor_under(&world_to_canonical(&center), GROUND.z_at(p.tau, r)).value().flatten().unwrap_or(stands)
 }
 
 /// Whether the companion's models have loaded: a live, unpersisted signal

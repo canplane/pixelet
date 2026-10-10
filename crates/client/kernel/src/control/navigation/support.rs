@@ -6,17 +6,16 @@
 //! that floor; a center put over coarser ground keeps its Z unknown and
 //! stands on the finest ground known there until the leaves' is.
 
-use crate::query::over;
+use crate::query::{over, under};
 use pxl_spec::space::coord::pvf3::core::{FRAC_W, IVEC_Z_W};
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::layer::Answer;
 use crate::query::World;
 use crate::setting::store::settings_store;
 use crate::view::frame::coord::{to_world, world_to_canonical};
-use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// The Z lane's floor, under any ground.
 const UNKNOWN_Z: i64 = -(1 << (IVEC_Z_W - 1)) << FRAC_W;
@@ -36,7 +35,7 @@ pub fn is_unknown(at: &Pvf3) -> bool {
 /// A tap names the surface it struck: the center stands in the cell across
 /// that face, on the floor under it.
 pub fn stand(at: &Pvf3) -> Pvf3 {
-    match World::now().floor_under(at) {
+    match World::now().floor_under(at, LEAF_ZOOM) {
         Answer::Exact(Some(top)) => stand_over(at, top),
         // Nothing to stand on: the point keeps its height.
         Answer::Exact(None) => *at,
@@ -46,7 +45,7 @@ pub fn stand(at: &Pvf3) -> Pvf3 {
 
 /// The top of the floor `center` stands over.
 pub fn floor_of(center: &Pvf3) -> f64 {
-    pvf3::to_real(pvf3::Z(center)) - units(GROUND.cell()) / 2.0
+    under(pvf3::to_real(pvf3::Z(center)))
 }
 
 pub fn stand_over(at: &Pvf3, top: f64) -> Pvf3 {
@@ -60,6 +59,15 @@ fn standing(at: &Pvf3) -> Answer<Option<Pvf3>> {
         return Answer::Exact(Some(*at));
     }
     World::now().surface_support(at).map(|top| top.map(|top| stand_over(at, top)))
+}
+
+/// The floor `center` is drawn on: its own, or where its height is not known
+/// the finest ground's there; none where nothing is known.
+pub fn floor_seen(center: &Pvf3) -> Option<f64> {
+    match standing(center) {
+        Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => Some(floor_of(&p)),
+        _ => None,
+    }
 }
 
 /// Where `at` is drawn; at `held`'s height where nothing is known.
@@ -87,9 +95,10 @@ pub fn target(to: &mut Option<Pvf3>, held: V3) -> V3 {
     resolve(&to.unwrap_or(at), held)
 }
 
-/// By the world's step-slide; where a column on the way is not resident, it
-/// goes on with its Z unknown until a leaf gives it.
-/// `lx`, `ly` are the way in units across and up the screen.
+/// By the world's step-slide, the way `lx`, `ly` in units across and up the
+/// screen. It stops at the edge of a leaf on the way not held; where the leaf
+/// under it, or a map's `to`, is not held, it goes on with its Z unknown until
+/// a leaf gives it.
 pub fn pan_to(from: &Pvf3, lx: f64, ly: f64, azimuth: f64, eye: &Pvf3) -> Pvf3 {
     let (s, c) = libm::sincos(azimuth);
     let l = to_world(from);

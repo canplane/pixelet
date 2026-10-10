@@ -155,7 +155,9 @@ pub fn pan(dx: f64, dy: f64) {
     pan_by(-dx * upp, dy * upp);
 }
 
-/// By `cx`, `cy` of the camera grid's cells at the focus, across and up the screen.
+/// By `cx`, `cy` cells at the focus, across and up the screen: the distance
+/// there over SPLIT, the camera grid's cell before `cell_at` quantizes it to
+/// a zoom, so a held key's speed is smooth across zooms and alike at any τ.
 pub fn pan_cells(cx: f64, cy: f64) {
     let cell = across() / SPLIT;
     pan_by(cx * cell, cy * cell);

@@ -14,6 +14,7 @@ use crate::query::{over, World};
 use crate::setting::store::{settings_store, OrbitObstacleMode};
 use crate::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::zoom::{index_of, units};
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewTriple {
@@ -45,7 +46,7 @@ pub fn pose(view: ViewTriple) -> Option<ViewPose> {
 /// floor counts where the eye is in the cave.
 fn required_rise(at: &ViewPose) -> Option<f64> {
     let (_, eye) = eye(at);
-    let ground = World::now().floor_under(&eye).value().flatten()?;
+    let ground = World::now().floor_under(&eye, LEAF_ZOOM).value().flatten()?;
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
@@ -57,12 +58,13 @@ fn climb_rise(at: &ViewPose) -> Option<f64> {
     let floor = index_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
     let from = pvf3::gather(pvf3::X(&center), pvf3::Y(&center), pvf3::from_real(over(floor)));
     let access = World::now();
-    // Where a column on the way is not resident, the ground under the eye.
+    // Near, the eye's way walks the leaves; far, it is a map and goes through.
+    // Where the leaf under the center, or a map's under the eye, is not held, the ground under the eye.
     let walked = access.step_slide(&from, &eye, &eye, false).unwrap_or(eye);
     if pvf3::X(&walked) != pvf3::X(&eye) || pvf3::Y(&walked) != pvf3::Y(&eye) {
         return None;
     }
-    let ground = access.floor_under(&walked).value().flatten()?;
+    let ground = access.floor_under(&walked, LEAF_ZOOM).value().flatten()?;
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
@@ -127,7 +129,7 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
 
 fn in_solid(at: &ViewPose) -> bool {
     let (world, eye) = eye(at);
-    World::now().floor_under(&eye).value().flatten().is_some_and(|top| top > world[2])
+    World::now().floor_under(&eye, LEAF_ZOOM).value().flatten().is_some_and(|top| top > world[2])
 }
 
 /// What lies between the eye and the focus is not asked: that hides the

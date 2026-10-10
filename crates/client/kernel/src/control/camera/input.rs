@@ -152,12 +152,17 @@ fn update_pointer(s: &mut Input, client_x: f64, client_y: f64) {
     s.pointer_y = -((client_y - rect.top) / rect.height) * 2.0 + 1.0;
 }
 
-/// A pan puts the focus by hand, so a pending destination is canceled.
-fn do_pan(dx: f64, dy: f64) {
+/// A pan puts the focus by hand, so a pending destination is canceled;
+/// tracked, nothing pans.
+fn by_hand(pan: impl FnOnce()) {
     if active() != Active::Tracked {
         cancel_destination();
-        crate::control::camera::controller::pan(dx, dy);
+        pan();
     }
+}
+
+fn do_pan(dx: f64, dy: f64) {
+    by_hand(|| crate::control::camera::controller::pan(dx, dy));
 }
 
 /// Azimuth follows the cursor's angle about screen center (arcball), tilt a
@@ -428,10 +433,8 @@ pub fn camera_input_step(drawn: Tau) {
         let cells = KEY_PAN_CELLS_PER_S * (at - s.keys_at) / 1000.0;
         s.keys_at = at;
         // A key moves the view the way it points, the screen's down being the way's up.
-        if active() != Active::Tracked {
-            cancel_destination();
-            crate::control::camera::controller::pan_cells(s.keys[0] * cells, -s.keys[1] * cells);
-        }
+        let way = [s.keys[0] * cells, -s.keys[1] * cells];
+        by_hand(|| crate::control::camera::controller::pan_cells(way[0], way[1]));
         request_world_tick();
     }
     if s.hover_pending {

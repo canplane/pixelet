@@ -18,7 +18,7 @@ mod world;
 
 pub use block::{runs, Blocks, Column, Composer, Surface};
 pub use ray::{Detail, Hit, Ray, Struck};
-pub use support::over;
+pub use support::{over, under};
 pub use world::World;
 
 #[cfg(test)]

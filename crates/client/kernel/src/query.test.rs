@@ -226,7 +226,7 @@ fn a_gap_in_a_stack_is_floored_and_roofed_by_its_cubes() {
     }
     let access = World::new(&residency, &store);
     let gap = world::point(x + 0.5, y + 0.5, 6.5);
-    assert_eq!(access.floor_under(&gap), Answer::Exact(Some(6.0)));
+    assert_eq!(access.floor_under(&gap, LEAF_ZOOM), Answer::Exact(Some(6.0)));
     assert_eq!(access.ceiling_over(&gap), Answer::Exact(Some(7.0)));
     assert_eq!(access.surface_support(&gap), Answer::Exact(Some(6.0)));
 }
