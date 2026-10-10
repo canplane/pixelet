@@ -7,7 +7,7 @@ import { useKernel } from "@/kernel/shell.ts";
 
 import { LABEL, NORTH } from "@platform/palette.ts";
 import { chrome, SECONDARY } from "@/shared/ui/theme.ts";
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 
 const NEEDLE_HALF = 16;
 const NEEDLE_WIDTH = 9;

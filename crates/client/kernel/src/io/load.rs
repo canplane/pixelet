@@ -21,10 +21,10 @@ use crate::io::file::{self, Opened, Owner};
 use crate::io::host::decode_image;
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::sched::edge::{request_world_tick, world_edge};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 use xpute_guest::abi::handle::Slots;
 use xpute_guest::global::Global;
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadKind {

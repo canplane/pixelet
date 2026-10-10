@@ -52,7 +52,7 @@ impl Tau {
 
     /// At least 1: a finer quality than the criterion breaks the reach.
     pub fn of(scale: f64) -> Tau {
-        xpute_kit::ensure!(scale >= 1.0, EINVAL);
+        xpute_core::ensure!(scale >= 1.0, EINVAL);
         Tau(scale)
     }
 

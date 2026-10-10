@@ -30,7 +30,7 @@ import {
   X,
 } from "phosphor-react-native";
 
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { Spin } from "@platform/motion.tsx";
 
 /**

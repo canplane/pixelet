@@ -3,14 +3,14 @@
 import { StyleSheet } from "react-native";
 
 import { Motion } from "@platform/motion.tsx";
-import { useCenterCoordinates, useDivisionLabel } from "@/feature/world/division/center.ts";
+import { useCenterCoordinates, usePlaceLabel } from "@/feature/world/geocode/center.ts";
 import { FADE } from "@/shared/ui/motion/transition.ts";
 import { HaloText } from "@/shared/ui/halo.tsx";
 import { color, textStyle, weight } from "@/shared/ui/theme.ts";
 
 /** Coordinates stand in where the center is in no place (sea, or not yet arrived). */
 export function CurrentAddress() {
-  const label = useDivisionLabel();
+  const label = usePlaceLabel();
   const position = useCenterCoordinates();
 
   const text = label ?? position;

@@ -1,19 +1,19 @@
 // @pxl/web/feature/search/repository.ts
 
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { originGet } from "@platform/origin.ts";
 import { SEARCH_URL } from "@/config/route.spec.ts";
-import type { DivisionPart } from "@/feature/world/division/label.ts";
+import type { PlacePart } from "@/feature/world/geocode/label.ts";
 
 export interface SearchResult {
   gers_id: string;
-  kind: "place" | "division";
+  kind: "poi" | "division";
   name: string;
   category: string;
-  /** Only for `kind: 'division'`; null for places. */
+  /** Only for `kind: 'division'`; null for POIs. */
   common: Record<string, string> | null;
   /** Tells same-named results apart; replaced an address field that could name another city. */
-  context: DivisionPart[];
+  context: PlacePart[];
   lon: f64;
   lat: f64;
 }

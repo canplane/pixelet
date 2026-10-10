@@ -1,15 +1,15 @@
 // pxl-geo/search/overture.rs
 
-//! Forward search over `overture_places` (places) and Overture's divisions.
+//! Forward search over `overture_places` (POI) and the division tables.
 
 use deadpool_postgres::Pool;
 use serde::Serialize;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::Row;
 
-use pxl_spec::division::DivisionPart;
+use pxl_spec::place::PlacePart;
 
-use crate::division;
+use crate::geocode;
 use crate::search::endpoint::Near;
 use pxl_server::db::DbError;
 
@@ -39,15 +39,36 @@ const SEARCH_NEAR_SQL: &str = concat!(
 LIMIT $2"
 );
 
-/// A division is a row of `overture_divisions`, once, whatever areas it has.
+/// Area rows before point rows; the caller keeps the first of each name.
+/// UNION's ORDER BY cannot call `similarity()`, so each branch computes `sim`.
 const DIVISION_SEARCH_SQL: &str = concat!(
-    "SELECT gers_id, name, subtype, ",
+    "
+(
+  SELECT gers_id, name, subtype, ",
     pxl_geo_spec::division_names!("overture_divisions"),
-    " AS names_common,
-  ST_X(ST_Transform(geom, 4326)) AS lon, ST_Y(ST_Transform(geom, 4326)) AS lat
-FROM overture_divisions
-WHERE name <> '' AND name ILIKE '%' || $1 || '%'
-ORDER BY similarity(name, $1) DESC, gers_id
+    " AS names_common, 0 AS is_point, similarity(name, $1) AS sim,
+    ST_X(ST_Centroid(geom)) AS x3857, ST_Y(ST_Centroid(geom)) AS y3857,
+    ST_X(ST_Transform(ST_Centroid(geom), 4326)) AS lon,
+    ST_Y(ST_Transform(ST_Centroid(geom), 4326)) AS lat
+  FROM overture_divisions
+  WHERE name <> '' AND name ILIKE '%' || $1 || '%' AND subtype IN ",
+    pxl_geo_spec::division_areas!(),
+    "
+)
+UNION ALL
+(
+  SELECT gers_id, name, subtype, ",
+    pxl_geo_spec::division_names!("overture_division_points"),
+    " AS names_common, 1 AS is_point, similarity(name, $1) AS sim,
+    ST_X(geom) AS x3857, ST_Y(geom) AS y3857,
+    ST_X(ST_Transform(geom, 4326)) AS lon,
+    ST_Y(ST_Transform(geom, 4326)) AS lat
+  FROM overture_division_points
+  WHERE name <> '' AND name ILIKE '%' || $1 || '%' AND subtype IN ",
+    pxl_geo_spec::division_points!(),
+    "
+)
+ORDER BY is_point ASC, sim DESC
 LIMIT $2"
 );
 
@@ -57,9 +78,9 @@ pub struct SearchResult {
     pub kind: &'static str,
     pub name: String,
     pub category: String,
-    /// Null for a places: Places' `names.common` is ~0% populated for Korean.
+    /// Null for a POI: Places' `names.common` is ~0% populated for Korean.
     pub common: Option<serde_json::Value>,
-    pub context: Vec<DivisionPart>,
+    pub context: Vec<PlacePart>,
     pub lon: f64,
     pub lat: f64,
 }
@@ -79,6 +100,8 @@ struct DivisionRow {
     name: String,
     subtype: String,
     names_common: Option<serde_json::Value>,
+    x3857: f64,
+    y3857: f64,
     lon: f64,
     lat: f64,
 }
@@ -104,32 +127,53 @@ impl DivisionRow {
             name: row.get("name"),
             subtype: row.get("subtype"),
             names_common: row.get("names_common"),
+            x3857: row.get("x3857"),
+            y3857: row.get("y3857"),
             lon: row.get("lon"),
             lat: row.get("lat"),
         }
     }
 }
 
+fn dedupe_divisions_by_name(rows: Vec<DivisionRow>) -> Vec<DivisionRow> {
+    let mut seen: Vec<String> = Vec::new();
+    let mut out: Vec<DivisionRow> = Vec::new();
+    for r in rows {
+        if seen.contains(&r.name) {
+            continue;
+        }
+        seen.push(r.name.clone());
+        out.push(r);
+    }
+    out
+}
+
 pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -> Result<Vec<SearchResult>, DbError> {
     let limit_i64 = limit as i64;
+
+    // Survives the dedupe below dropping a name matched as both area and point.
+    let division_fetch = DIVISION_LIMIT * 2;
 
     let (places_sql, places_params): (&str, Vec<&(dyn ToSql + Sync)>) = match near {
         Some(near) => (SEARCH_NEAR_SQL, vec![&query, &limit_i64, &near.lon, &near.lat]),
         None => (SEARCH_SQL, vec![&query, &limit_i64]),
     };
-    let division_params: Vec<&(dyn ToSql + Sync)> = vec![&query, &DIVISION_LIMIT];
+    let division_params: Vec<&(dyn ToSql + Sync)> = vec![&query, &division_fetch];
 
     let client = pool.get().await?;
     // One checkout: tokio-postgres pipelines both statements on it.
     let (places, divisions) = tokio::join!(client.query(places_sql, &places_params), client.query(DIVISION_SEARCH_SQL, &division_params),);
 
     let place_rows: Vec<PlaceRow> = places?.iter().map(PlaceRow::from_row).collect();
-    let division_rows: Vec<DivisionRow> = divisions?.iter().map(DivisionRow::from_row).collect();
+    let division_rows: Vec<DivisionRow> = dedupe_divisions_by_name(divisions?.iter().map(DivisionRow::from_row).collect())
+        .into_iter()
+        .take(DIVISION_LIMIT as usize)
+        .collect();
     drop(client);
 
     let mut division_results: Vec<SearchResult> = Vec::with_capacity(division_rows.len());
     for r in division_rows {
-        let context = division::ancestors(pool, &r.gers_id).await?;
+        let context = geocode::resolve_broad_context(pool, r.x3857, r.y3857, &r.gers_id).await?;
         division_results.push(SearchResult {
             gers_id: r.gers_id,
             kind: "division",
@@ -146,12 +190,12 @@ pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -
     // "Seoul" sits in 용인, and the field's format varies by contributor.
     let xs: Vec<f64> = place_rows.iter().map(|r| r.x3857).collect();
     let ys: Vec<f64> = place_rows.iter().map(|r| r.y3857).collect();
-    let place_context = division::name_points(pool, &xs, &ys).await?;
+    let poi_context = geocode::resolve_point_context_batch(pool, &xs, &ys).await?;
 
-    let place_results = place_rows.into_iter().zip(place_context).map(|(r, context)| SearchResult {
+    let poi_results = place_rows.into_iter().zip(poi_context).map(|(r, context)| SearchResult {
         gers_id: r.gers_id,
         name: r.name,
-        kind: "place",
+        kind: "poi",
         category: pxl_geo_spec::overture::properties::category_of(&r.properties),
         common: None,
         context,
@@ -159,5 +203,5 @@ pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -
         lat: r.lat,
     });
 
-    Ok(division_results.into_iter().chain(place_results).take(limit as usize).collect())
+    Ok(division_results.into_iter().chain(poi_results).take(limit as usize).collect())
 }

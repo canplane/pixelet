@@ -5,7 +5,7 @@
 //! it takes the target whole, so it ends rather than asking for frames
 //! forever on a remainder no screen shows.
 
-use xpute_kit::math::scalar::wrap;
+use xpute_core::math::scalar::wrap;
 
 /// `1 - e^(-k·delta)`: the same curve at any frame rate.
 pub fn damp_alpha(k: f64, delta: f64) -> f64 {

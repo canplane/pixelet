@@ -3,10 +3,10 @@
 //! A place's names as every bake stores them, whatever the source: its own
 //! name, and `(tag, name)` pairs in the languages it gives. Three leaves.
 
-use xpute_kit::status::error::MarshalError;
+use xpute_core::status::error::MarshalError;
 
 use crate::bake::malformed;
-use xpute_kit::wire::xtp::{BranchCursor, BranchViewImpl, NodeView, Strs};
+use xpute_core::wire::xtp::{BranchCursor, BranchViewImpl, NodeView, Strs};
 
 pub struct NameLanes<'a> {
     /// Where each place's pairs start; one longer than the places.

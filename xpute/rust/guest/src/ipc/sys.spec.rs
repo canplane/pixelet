@@ -43,7 +43,7 @@ pub mod op {
     /// open not yet answered is cancelled, and never answered.
     pub const CLOSE: u32 = 4;
     /// errno, line, column, a (low, high word), b (low, high word), then the file's bytes:
-    /// the broken invariant the guest reports before it stops (xpute-kit status/bug.rs).
+    /// the broken invariant the guest reports before it stops (xpute-core status/bug.rs).
     pub const ABORT: u32 = 5;
     /// The bit every call a program numbers for itself carries.
     pub const PROGRAM: u32 = 2147483648;

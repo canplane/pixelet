@@ -13,7 +13,7 @@ use std::process::ExitCode;
 use sha2::{Digest, Sha256};
 
 use pxl_tool::asset::table::{Pack, Row};
-use pxl_tool::asset::{glb, pack, symbol, table};
+use pxl_tool::asset::{glb, pack, table};
 use pxl_tool::fmt::formatted;
 use pxl_tool::root;
 
@@ -78,13 +78,13 @@ fn run() -> Result<(), String> {
     walk(&asset_dir, &asset_dir, &mut files)?;
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
-    // A look's top ships drawn toward its Carto color; a side, a bottom and a color are not looks.
+    // A look's top ships drawn toward its Carto color; a side, a bottom and a block are not looks.
     let slots = pack::load(&asset_dir.join("cube"))?;
-    let carto = pxl_tool::spec::block::ground_colors()?;
+    let carto = pxl_tool::spec::cell::ground_colors()?;
     let toward: BTreeMap<String, u32> = slots
         .iter()
         .filter_map(|i| match &i.slot {
-            pack::Slot::Top { group, ty } if group == "ground" => carto.get(ty).map(|&c| (format!("cube/{}", i.file), c)),
+            pack::Slot::Top { channel, ty } if channel != "block" => carto.get(ty).map(|&c| (format!("cube/{}", i.file), c)),
             _ => None,
         })
         .collect();
@@ -136,7 +136,7 @@ fn run() -> Result<(), String> {
     if let Some(i) = slots.iter().find(|i| !tiles.contains(&format!("cube/{}", i.file))) {
         return Err(format!("{} names {}, which is not under asset/cube", i.label, i.file));
     }
-    let faces = table::faces(&tile_slots, &pxl_tool::spec::block::catalog()?)?;
+    let faces = table::faces(&tile_slots, &pxl_tool::spec::cell::catalog()?)?;
     let composed = pack::compose(&tiles.iter().map(|t| (t.clone(), shipped[t].as_slice())).collect::<Vec<_>>())?;
     let image_name = named("cube/pack.webp", &hex(&composed.bytes));
     let at = out_dir.join(&image_name);
@@ -152,13 +152,6 @@ fn run() -> Result<(), String> {
         means: composed.means,
         faces,
     };
-
-    // Carto's symbols, which the client draws from its own binary rather than fetches.
-    let symbols = symbol::symbols(&asset_dir.join("place/symbol"))?;
-    let masks: Vec<u8> = symbols.iter().flat_map(|s| s.mask.iter().copied()).collect();
-    std::fs::write(root.join("crates/spec/src/asset/symbol.mask"), &masks).map_err(|e| e.to_string())?;
-    write_formatted(&root.join("crates/spec/src/asset/symbol.spec.rs"), &symbol::render_rs(&symbols))?;
-    write_formatted(&root.join("apps/web/src/feature/search/place-symbol.ts"), &symbol::render_ts(&symbols))?;
 
     write_formatted(&root.join("apps/web/src/catalog/asset/ingested.spec.ts"), &table::render_ts(&rows, &laid))?;
     write_formatted(&root.join("crates/spec/src/asset/ingested.spec.rs"), &table::render_rs(&rows, &laid))?;

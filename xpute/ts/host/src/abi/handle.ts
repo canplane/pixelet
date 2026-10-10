@@ -2,7 +2,7 @@
 
 /** A guest handle is `slot | generation << 16`, as `xpute_guest::abi::handle` hands it out. */
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
 
 const SLOT_MASK = 0xffff;
 

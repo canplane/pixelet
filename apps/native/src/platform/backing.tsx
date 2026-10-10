@@ -12,7 +12,7 @@ import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { type ComponentType, useEffect, useState } from "react";
 import { StyleSheet, View, type ViewProps } from "react-native";
 
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { Motion } from "@platform/motion.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";

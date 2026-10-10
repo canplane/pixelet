@@ -1,17 +1,16 @@
 // @pxl/web/feature/search/modal.tsx
 
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Path, Svg } from "react-native-svg";
-import { round } from "@xpute/kit/math/scalar.ts";
+import { round } from "@xpute/core/math/scalar.ts";
 import { useTranslation } from "react-i18next";
 
 import { Panel } from "@platform/panel.tsx";
 import { PANEL_CONTENT_TOP, PANEL_CONTROL, PANEL_EDGE, PANEL_SECTION_GAP, PanelBar, PanelBody } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { chrome, color, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, textScale, textStyle, weight } from "@/shared/ui/theme.ts";
 import { SectionTitle } from "@/shared/ui/section-title.tsx";
 import { Command, DevicePoseStatus, encode_input_go_to, type LonLat } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_enable_location, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
@@ -21,10 +20,9 @@ import { SYSTEM_CLEAR } from "@platform/text-field.ts";
 import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { THEME } from "./place_theme.spec.ts";
-import { PLACE_SYMBOLS } from "./place-symbol.ts";
-import { assembleLabel, localName, primaryLanguage } from "@/feature/world/division/label.ts";
-import { useCenterCoordinates, useDivisionLabel } from "@/feature/world/division/center.ts";
+import { CATEGORY_BADGE, DEFAULT_BADGE } from "./poi_badge.spec.ts";
+import { assembleLabel, localName, primaryLanguage } from "@/feature/world/geocode/label.ts";
+import { useCenterCoordinates, usePlaceLabel } from "@/feature/world/geocode/center.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 
@@ -51,19 +49,12 @@ function formatDistance(m: f64): string {
 /** Where a result is comes from its coordinates, never a source's address text, which could name another city. */
 function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; lang: string; distance: string | null; onPress: () => void }) {
   const where = result.context.length > 0 ? assembleLabel(result.context, lang) : "";
-  const theme = result.kind === "place" ? placeTheme(result.category) : null;
-  const symbol = theme?.symbol ? PLACE_SYMBOLS[theme.symbol] : undefined;
+  const badge = result.kind === "poi" ? resolvePoiBadge(result.category) : null;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={styles.row}>
-      {theme && (
-        <View style={styles.badge}>
-          {symbol
-            ? (
-              <Svg width={SYMBOL_SIZE} height={SYMBOL_SIZE} viewBox={`0 0 ${symbol.box[0]} ${symbol.box[1]}`}>
-                {symbol.shapes.map(([d, evenOdd], i) => <Path key={i} d={d} fill={theme.fill} fillRule={evenOdd ? "evenodd" : "nonzero"} />)}
-              </Svg>
-            )
-            : <View style={[styles.dot, { backgroundColor: theme.fill }]} />}
+      {badge && (
+        <View style={[styles.badge, { backgroundColor: alpha(badge.color, 0.2) }]}>
+          <Text style={styles.badgeIcon}>{badge.icon}</Text>
         </View>
       )}
       <View style={styles.rowText}>
@@ -81,7 +72,7 @@ function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; 
 
 const SECTIONS = [
   { kind: "division", label: "world.search.section_areas" },
-  { kind: "place", label: "world.search.section_places" },
+  { kind: "poi", label: "world.search.section_places" },
 ] as const;
 
 function poseColor(status: DevicePoseStatus): string {
@@ -117,7 +108,7 @@ function LocateCard() {
 /** Where the search looks from: the focus, which is not the device's location. */
 function MapCenter() {
   const { t } = useTranslation();
-  const place = useDivisionLabel();
+  const place = usePlaceLabel();
   const coordinates = useCenterCoordinates();
   if (coordinates === null) return null;
   return (
@@ -266,14 +257,20 @@ const styles = StyleSheet.create({
   numbers: { fontVariant: ["tabular-nums"] },
   distance: { marginLeft: "auto", flexShrink: 0, fontVariant: ["tabular-nums"] },
   badge: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
+  badgeIcon: { fontSize: textStyle.footnote.fontSize },
 });
 
-/** What Carto draws a place's kind as, as the map does
- * (`place_theme.spec.ts`): its symbol in its fill, or a dot of the fill for
- * a kind with none; nothing for a kind Carto draws no point for. */
-function placeTheme(category: string): { fill: string; symbol?: string | null } | null {
-  return (THEME as Record<string, { fill: string; symbol?: string | null }>)[category] ?? null;
+/**
+ * Category -> badge for a search result, DEFAULT_BADGE for anything unlisted.
+ * Emoji, not glyphs: a thin stroked icon at this size read far worse
+ * (tried and reverted 2026-09-08).
+ */
+
+interface PoiBadge {
+  icon: string;
+  color: string;
 }
 
-const SYMBOL_SIZE = 18;
+function resolvePoiBadge(category: string): PoiBadge {
+  return (CATEGORY_BADGE as Record<string, PoiBadge>)[category] ?? DEFAULT_BADGE;
+}

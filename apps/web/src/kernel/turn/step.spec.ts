@@ -16,6 +16,7 @@ export const EFFECT_NAMES = [
   "follow",
   "destination",
   "view",
+  "geocode",
   "decor",
   "objects",
   "written",

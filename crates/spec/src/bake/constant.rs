@@ -32,6 +32,10 @@ pub const EXTENT_CELL: Zoom = LEAF_ZOOM + EXTENT_SPAN.trailing_zeros() as Zoom;
 
 const _: () = assert!(EXTENT_SPAN.is_power_of_two(), "an index cell is a block of the lattice, a power of two of the unit");
 
+/// A deck cell: two ground cells, about 4 m at the equator, narrower than no
+/// way; at the ground's resolution the lane would cost some 30 MiB of records.
+pub const DECK_CELL: Zoom = GROUND.cell() - 1;
+
 pub use super::object::OBJECT_TIERS;
 
 /// The objects' coarsest tier, a placed block, one unit: the ladder is the

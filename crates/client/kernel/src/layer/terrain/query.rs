@@ -5,7 +5,7 @@
 //! exact where that tile says it, coarser where one over it only draws it.
 
 use pxl_render::mesh::paint::terrain::sample::{TileSource, TileView};
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::format::Terrain;
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
@@ -21,7 +21,7 @@ use crate::layer::{Answer, Bound, Query, Relief};
 /// one of its own.
 #[derive(Clone, Copy)]
 pub struct Source<'a> {
-    pub tile: &'a TerrainTile,
+    pub tile: &'a Terrain,
     pub from: Tile,
     pub origin: [i64; 2],
     pub n: u32,
@@ -38,11 +38,11 @@ impl<'a> Source<'a> {
     }
 }
 
-pub fn tile_view(tile: &TerrainTile) -> TileView<'_> {
+pub fn tile_view(tile: &Terrain) -> TileView<'_> {
     TileView {
         cells: &tile.ground.cells,
         ele: &tile.ele,
-        separation: &tile.separation,
+        decks: &tile.decks,
     }
 }
 
@@ -51,7 +51,7 @@ pub fn tile_view(tile: &TerrainTile) -> TileView<'_> {
 pub(crate) struct Drawn<'a> {
     tile: Tile,
     pub from: Tile,
-    pub body: &'a TerrainTile,
+    pub body: &'a Terrain,
     exact: bool,
 }
 
@@ -65,7 +65,7 @@ impl Drawn<'_> {
     }
 }
 
-impl Residency<TerrainTile> {
+impl Residency<Terrain> {
     /// The resident tile `tile` is drawn from and its body, and whether it
     /// says `tile` exactly: one walk of `tile`'s line.
     pub(crate) fn drawn(&self, tile: Tile) -> Option<Drawn<'_>> {
@@ -91,7 +91,7 @@ fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
     tile_at(read, ancestor_of([at[0], at[1]], u32::from(zoom - read)))
 }
 
-impl Query for Residency<TerrainTile> {
+impl Query for Residency<Terrain> {
     type Record<'a> = Source<'a>;
 
     type Cursor = Line;

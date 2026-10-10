@@ -13,51 +13,48 @@
   "exclude": ["xpute/", "**/.vite/", "**/dist/", "**/node_modules/", "out/", "cache/", "infra/geo/elevation/warped/"],
 
   "tasks": {
-    // Run here. Where the tiles come from, a bakery's three: `dev` has them
-    // delivered, every route the published deployment's, so not for bake work,
-    // its tile prefix frozen; `dev:oven` bakes each on demand; `dev:shelf`
-    // takes each kind's set under ./out. The two local ones run the three
-    // servers beside the client.
+    // Every route is the published deployment's, so not for bake work: its tile prefix is frozen.
     "dev": { "command": "deno task --cwd apps/web dev", "dependencies": ["sync:build-number"] },
-    "dev:oven": { "command": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile) & (deno task --cwd apps/web dev:oven) & wait\"", "dependencies": ["sync:build-number"] },
-    "dev:shelf": {
-      "command": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile --shelf ./out) & (deno task --cwd apps/web dev:shelf) & wait\"",
-      "dependencies": ["sync:build-number"]
-    },
+    "dev:local": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
     // The `server` profile: a debug build's rasterizer is felt on every page.
-    "dev:geo": "./script/with-env.sh cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo --",
-    "dev:api": "./script/with-env.sh cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-api --",
-    "dev:tile": "./script/with-env.sh cargo run --manifest-path crates/Cargo.toml --profile server --features serve --bin serve_tiles --",
+    "dev:geo": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo -- \"$@\"' --",
+    "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-api -- \"$@\"' --",
+    "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --features serve --bin serve_tiles -- \"$@\"' --",
+    "dev:web": { "command": "deno task --cwd apps/web dev:local", "dependencies": ["sync:build-number"] },
+    "dev:web:baked": { "command": "deno task --cwd apps/web dev:baked", "dependencies": ["sync:build-number"] },
+    "dev:baked": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --baked ./out) & (deno task dev:web:baked) & wait\"",
     "dev:native": "deno task --cwd apps/native start",
+    // Only a hand deploy writes apps/web/.build_number, so it is refreshed before vite reads it.
+    "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labeled from the cached number\" >&2'",
     // Measure the client here: the dev server's unbundled modules are not what ships.
     "preview": "deno task --cwd apps/web preview",
-    "preview:oven": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile) & (deno task --cwd apps/web preview:oven) & wait\"",
-    "preview:shelf": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tile --shelf ./out) & (deno task --cwd apps/web preview:shelf) & wait\"",
-    // A purge by command, after a re-ingest or a bake change: the oven's cache
-    // whole; the shelf's sets, each kind named or all three, with what is staged.
-    "clear:oven": "rm -rf cache/tile",
-    "clear:shelf": "sh -c '[ $# -gt 0 ] || set -- terrain place division; for k; do rm -rf \"out/$k\" \"out/$k.stage\" \"out/$k.publish\"; done' --",
+    "preview:local": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task preview:web) & wait\"",
+    "preview:baked": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --baked ./out) & (deno task preview:web) & wait\"",
+    "preview:web": "deno task --cwd apps/web preview:local",
 
-    // Tiles, from db-geo: each bakes the shards it is told (--shard; every one
-    // when none is) into its set.
-    "bake:terrain": "./script/with-env.sh cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_terrain --",
-    "bake:place": "./script/with-env.sh cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_place --",
-    "bake:division": "./script/with-env.sh cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_division --",
+    // Terrain and geocode resume; POI writes one immutable snapshot.
+    "bake:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_tiles -- \"$@\"' --",
+    "bake:poi": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_poi_tiles -- \"$@\"' --",
     "bake:earth": "cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo-bake --bin bake_earth",
+    "bake:geocode": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_geocode_tiles -- \"$@\"' --",
 
-    // Assets. After any change under asset/:
+    // After any change under asset/.
     "ingest:asset": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin ingest_asset",
     // By hand, when a source outside the repository or under apps/web/brand changes.
     "download:pack": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_texture_pack",
     "download:moon": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_moon",
-    "bake:star": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin bake_star --",
+    "bake:stars": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin bake_stars --",
     "render:brand": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin render_brand",
 
-    // Made from the tree: the code generated from spec/, the kernel's module.
-    "spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec -- --write",
     "build:wasm": "deno task --cwd apps/web build:wasm",
+    "build:web": "deno task --cwd apps/web build",
+    // Does not upload what the bucket holds.
+    "deploy": "deno task --cwd apps/web deploy",
+    // Against a running deployment, not a checkout.
+    "smoke": "./script/smoke.ts",
+    // Reads with wrangler's login and hcloud's context.
+    "usage": "./script/usage.ts",
 
-    // The gate, and what it is made of.
     "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:native && deno task check:xpute && deno task check:rust && deno task check:spec",
     "check:diff": "./script/check-diff.ts",
     "check:fmt": "deno fmt --check",
@@ -71,27 +68,21 @@
     "check:toolchain": "./script/check-toolchain.ts",
     "check:rules": "./script/check-rules.ts",
     "check:spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec",
+    "spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec -- --write",
+
     "test": "deno task test:web && deno task test:xpute && deno task test:rust",
     "test:web": "deno task --cwd apps/web test",
     "test:xpute": "deno task --cwd xpute test",
     // pxl-tool holds every model to the committed table, which has been wrong by hand before.
     "test:rust": "cargo test --manifest-path crates/Cargo.toml -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
+
     "lint": "deno lint",
+
+    "export:xpute": "./xpute/script/export.ts",
     "fmt": "deno fmt",
 
-    // The deployment. Does not upload what the bucket holds.
-    "deploy": "deno task --cwd apps/web deploy",
-    // Against a running deployment, not a checkout.
-    "smoke": "./script/smoke.ts",
-    // Reads with wrangler's login and hcloud's context.
-    "usage": "./script/usage.ts",
-    // A bake's publish stage into the bucket under a new name; deploy after.
-    "publish": "./script/publish.ts",
-
-    // The rest.
-    "export:xpute": "./xpute/script/export.ts",
-    // Only a hand deploy writes apps/web/.build_number, so it is refreshed before vite reads it.
-    "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labeled from the cached number\" >&2'"
+    // Named paths only; nothing is found by name and deleted.
+    "reset": "rm -rf node_modules apps/web/node_modules apps/web/dist && deno task check"
   },
 
   "compilerOptions": {
@@ -105,7 +96,7 @@
   },
 
   "imports": {
-    "@xpute/kit/": "./xpute/ts/kit/src/",
+    "@xpute/core/": "./xpute/ts/core/src/",
     "@xpute/host/": "./xpute/ts/host/src/",
     "@xpute/conformance/": "./xpute/ts/conformance/src/",
 
@@ -124,8 +115,8 @@
     "lineWidth": 200,
     "proseWrap": "preserve",
 
-    // The tests read the golden records byte for byte; Carto's symbols stay as Carto ships them.
-    "exclude": ["node_modules/", "dist/", "crates/**/golden/", "asset/place/symbol/"]
+    // The tests read the golden records byte for byte.
+    "exclude": ["node_modules/", "dist/", "crates/**/golden/"]
   },
 
   "lint": {

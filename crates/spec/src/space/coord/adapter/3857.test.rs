@@ -91,3 +91,16 @@ fn epsg3857_tile_bbox_preserves_the_exclusive_positive_world_boundary() {
     let [_, max_geodetic] = epsg4326::get_tile_bbox(Z15, tile_idx);
     assert_almost(max_geodetic[0], 180.0, 1e-10);
 }
+
+#[test]
+fn epsg3857_scale_is_1_at_the_equator_no_mercator_distortion() {
+    assert_almost(scale_factor(0.0), 1.0, 1e-6);
+}
+
+#[test]
+fn epsg3857_scale_grows_away_from_the_equator_mercator_s_characteristic_distortion() {
+    let at_equator = scale_factor(0.0);
+    // About 37.5N.
+    let at_high_lat = scale_factor(u_from_mer(4508140.0));
+    assert!(at_high_lat > at_equator);
+}

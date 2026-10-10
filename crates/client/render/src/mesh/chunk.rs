@@ -6,16 +6,16 @@
 //! blocks of any size (`Step::NeedMesh`, `Step::Full`).
 
 use pxl_spec::space::coord::v3::V3;
-use xpute_kit::math::scalar::round;
+use xpute_core::math::scalar::round;
 
 use crate::look::color::{linear, srgb};
 use crate::mesh::paint::palette::layer_mean;
 use crate::mesh::run::{OwnedRunSet, RunSet, COL_SPAN};
-use crate::mesh::word::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, Side, NO_LAYER, SUB_CELL_NONE};
+use crate::mesh::word::{pack_sub_cell_fraction, taps_of, unpack_sub_cell_fraction, unpack_sub_cell_size, MaterialClasses, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::{grow, Refused};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 const LOW_FILL_THRESHOLD: f64 = 0.25;
 
@@ -114,8 +114,7 @@ impl Default for Heights {
 }
 
 impl Heights {
-    /// In units, from a set whose cells are `z_unit` tall. The floor stands on
-    /// a whole unit, so a texture's repeat is read off the mesh's own heights.
+    /// In units, from a set whose cells are `z_unit` tall.
     fn of(set: &RunSet, z_unit: f64) -> Heights {
         let (mut lo, mut hi) = (i32::MAX, i32::MIN);
         for i in 0..set.count as usize {
@@ -125,10 +124,9 @@ impl Heights {
         if lo > hi {
             return Heights::default();
         }
-        let floor = (lo as f64 * z_unit).floor();
-        let span = hi as f64 * z_unit - floor;
+        let span = (hi - lo) as f64 * z_unit;
         Heights {
-            floor,
+            floor: lo as f64 * z_unit,
             step: (span / Z_STEPS).max(f64::MIN_POSITIVE),
         }
     }
@@ -188,22 +186,9 @@ struct ZBucketAccum {
     vr: f64,
     vg: f64,
     vb: f64,
-    /// The one cell it holds, swatch and taps, while every run in it is that cell.
-    one: Option<([u8; 3], u32)>,
-    mixed: bool,
 }
 
 impl ZBucketAccum {
-    fn meet(&mut self, cell: ([u8; 3], u32)) {
-        self.mixed |= self.one.is_some_and(|o| o != cell);
-        self.one = Some(cell);
-    }
-
-    /// Full of one cell: then it is that cell, drawn as the leaves are, not a summary.
-    fn whole(&self, volume: f64) -> Option<([u8; 3], u32)> {
-        self.one.filter(|_| !self.mixed && self.coverage >= volume)
-    }
-
     fn add(&mut self, volume: f64, faces: f64, rgb: [f64; 3]) {
         self.coverage += volume;
         self.faces += faces;
@@ -311,7 +296,7 @@ impl BakeContext {
     /// chunk's heights, and every step reads the cut set. One bake at a time.
     #[allow(clippy::too_many_arguments)]
     pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, (rows, boxes): (u32, u32), clip: Option<(i32, i32)>) -> Result<(), Refused> {
-        xpute_kit::ensure!(self.open.is_none(), ENOTRECOVERABLE);
+        xpute_core::ensure!(self.open.is_none(), ENOTRECOVERABLE);
         (self.rows, self.boxes) = (rows, boxes);
         self.refused = false;
         match clip {
@@ -329,7 +314,7 @@ impl BakeContext {
             (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, z_unit) } else { Heights::default() })
         };
         self.textured = textured;
-        xpute_kit::ensure!(span <= COL_SPAN, ENOSPC, span, COL_SPAN);
+        xpute_core::ensure!(span <= COL_SPAN, ENOSPC, span, COL_SPAN);
         // Reserved up front: doubling on a dense chunk held the old block and the new together.
         self.surviving.reserve((count as usize) * 6);
         self.done = false;
@@ -343,7 +328,7 @@ impl BakeContext {
         } else {
             let scale = round(unit / z_unit) as u32;
             let inner = span - 2 * apron;
-            xpute_kit::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), EINVAL, lod_step, inner);
+            xpute_core::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), EINVAL, lod_step, inner);
             Open::Coarse(CoarseBake {
                 lod_step,
                 scale,
@@ -410,9 +395,9 @@ impl BakeContext {
     /// `ptr` must address `words` words, 4-aligned, and stay valid and
     /// otherwise untouched until the block is full, or `finish` or `abort`.
     pub unsafe fn provide_mesh(&mut self, ptr: *mut u32, words: u32) {
-        xpute_kit::ensure!(self.mesh_words > 0 && (self.mesh.is_none() || self.full()), ENOTRECOVERABLE);
+        xpute_core::ensure!(self.mesh_words > 0 && (self.mesh.is_none() || self.full()), ENOTRECOVERABLE);
         let left = self.left_words();
-        xpute_kit::ensure!(words >= self.box_words.min(left) && words <= left, ENOTRECOVERABLE, words, left);
+        xpute_core::ensure!(words >= self.box_words.min(left) && words <= left, ENOTRECOVERABLE, words, left);
         let words = words - words % self.box_words;
         self.mesh = Some(MeshTarget {
             ptr,
@@ -422,7 +407,7 @@ impl BakeContext {
     }
 
     pub fn finish(&mut self) -> Mesh {
-        xpute_kit::ensure!(self.done && self.open.is_some(), ENOTRECOVERABLE);
+        xpute_core::ensure!(self.done && self.open.is_some(), ENOTRECOVERABLE);
         self.open = None;
         self.mesh = None;
         self.surviving.clear();
@@ -760,7 +745,7 @@ impl BakeContext {
         let (mut run_z0, run_z1) = (set.z0[i], set.z1[i]);
         // Ground is solid under its surface: the column stops at the chunk's floor
         // only to save runs, and read from there a coarse sea cell was a thousandth full.
-        if i == set.start[col as usize] as usize && set.side[i] != Side::OBJECT {
+        if i == set.start[col as usize] as usize && set.material_class[i] != MaterialClasses::OBJECT {
             run_z0 = run_z0.div_euclid(bucket) * bucket;
         }
         // With the pack drawn a far patch shows its layer's mean color; with it off,
@@ -774,8 +759,7 @@ impl BakeContext {
             // A sub-cell thing: volume the fraction cubed, each face the fraction squared, none hidden.
             let idx = self.find_or_create_bucket(start, cnt, run_z0.div_euclid(bucket));
             let acc = &mut self.buckets[idx as usize];
-            acc.ground |= set.side[i] != Side::OBJECT;
-            acc.mixed = true;
+            acc.ground |= set.material_class[i] != MaterialClasses::OBJECT;
             acc.add(frac * frac * frac * cell as f64, FULL_FACE_CNT as f64 * frac * frac, rgb);
             return cnt.max(idx - start + 1);
         }
@@ -786,8 +770,7 @@ impl BakeContext {
             let idx = self.find_or_create_bucket(start, cnt, bz);
             cnt = cnt.max(idx - start + 1);
             let acc = &mut self.buckets[idx as usize];
-            acc.ground |= set.side[i] != Side::OBJECT;
-            acc.meet((swatch, set.layer_taps[i]));
+            acc.ground |= set.material_class[i] != MaterialClasses::OBJECT;
             acc.add((hi - lo + 1) as f64, exposed_faces(set, col, i, lo, hi), rgb);
         }
         cnt
@@ -823,7 +806,8 @@ impl BakeContext {
             let linear = libm::cbrt(kept);
             // A sparse cell is inset by the cube root of its fill on every axis.
             let inset = (linear < 1.0).then(|| pack_inset(linear));
-            let (rgb, taps) = acc.whole(volume).unwrap_or((acc.color(), taps_of(NO_LAYER as u8)));
+            let rgb = acc.color();
+            let taps = taps_of(NO_LAYER as u8);
             // A shrunk ground box leaves gaps that read as holes from above, so a ground
             // cell lays its full bottom face as a floor. The lowest box also hangs a skirt
             // a cell down, or a step between neighbors' floors showed daylight.
@@ -846,7 +830,7 @@ impl BakeContext {
                 co.g.push(rgb[1]);
                 co.b.push(rgb[2]);
                 co.layer_taps.push(taps);
-                co.side.push(Side::BASE);
+                co.material_class.push(MaterialClasses::LAND);
                 co.sub_s.push(SUB_CELL_NONE);
                 for lane in [&mut co.sub_ox, &mut co.sub_oy, &mut co.sub_oz] {
                     lane.push(0);
@@ -858,10 +842,10 @@ impl BakeContext {
                 continue;
             }
             // A placed-things box hides none of its neighbors' faces and shows its underside.
-            let side = if acc.ground { Side::BASE } else { Side::OBJECT };
+            let class = if acc.ground { MaterialClasses::LAND } else { MaterialClasses::OBJECT };
             let co = &mut self.coarse;
             if let Some(o) = open.filter(|_| inset.is_none() && bucket_lo == last_top + 1) {
-                if [co.r[o], co.g[o], co.b[o]] == rgb && co.layer_taps[o] == taps && co.sub_s[o] == SUB_CELL_NONE && co.side[o] == side {
+                if [co.r[o], co.g[o], co.b[o]] == rgb && co.layer_taps[o] == taps && co.sub_s[o] == SUB_CELL_NONE && co.material_class[o] == class {
                     co.z1[o] = bucket_hi;
                     last_top = bucket_hi;
                     continue;
@@ -874,7 +858,7 @@ impl BakeContext {
             co.g.push(rgb[1]);
             co.b.push(rgb[2]);
             co.layer_taps.push(taps);
-            co.side.push(side);
+            co.material_class.push(class);
             let (offset, scale) = inset.unwrap_or((0, 0));
             co.sub_s.push(if inset.is_none() { SUB_CELL_NONE } else { scale.max(1) });
             co.sub_ox.push(offset);
@@ -887,20 +871,11 @@ impl BakeContext {
 
 /// Every lateral edge a crease, so each shades as a silhouette.
 const LONE_BOX_FACES: u32 = ALL_FACES | ALL_CREASES;
-/// Where a mesh holding a box cornered at `min` stands, and the box in it: on
-/// the whole unit under it, as a chunk's mesh stands, so a texture's repeat is
-/// read off the mesh's own coordinates.
-pub fn on_whole_units(min: V3) -> (V3, V3) {
-    let origin = min.map(f64::floor);
-    (origin, [min[0] - origin[0], min[1] - origin[1], min[2] - origin[2]])
-}
-
-/// The hover ghost's box at `offset` in its mesh (`on_whole_units`), written
-/// as a bake writes one so it is lit and tiled as a placed cube is.
-pub fn write_lone_box(m: &mut [u32], offset: V3, size: f64, rgb: [u8; 3], layer: u8) -> Heights {
-    xpute_kit::ensure!(m.len() == FINE_BOX_WORDS as usize, ENOTRECOVERABLE);
-    let heights = Heights { floor: 0.0, step: (offset[2] + size) / Z_STEPS };
-    write_box(m, offset, [size; 3], rgb, taps_of(layer), LONE_BOX_FACES, size, heights);
+/// The hover ghost's box, written as a bake writes one so it is lit as a placed cube is.
+pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) -> Heights {
+    xpute_core::ensure!(m.len() == FINE_BOX_WORDS as usize, ENOTRECOVERABLE);
+    let heights = Heights { floor: 0.0, step: size / Z_STEPS };
+    write_box(m, [0.0; 3], [size; 3], rgb, taps_of(layer), LONE_BOX_FACES, size, heights);
     heights
 }
 
@@ -1032,7 +1007,7 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
         if covered_to >= z1 {
             rel |= ABUTS_SIDE;
         }
-        if r_z0 <= z0 && r_z1 >= z1 && set.side[i] != Side::OBJECT {
+        if r_z0 <= z0 && r_z1 >= z1 && set.material_class[i] != MaterialClasses::OBJECT {
             rel |= HIDES_SIDE;
         }
         if r_z0 <= above && r_z1 >= above {
@@ -1080,7 +1055,7 @@ fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
     let mask_all = if run_include_bottom(set, col as usize, i) { ALL_FACES } else { OPEN_BOTTOM_FACES };
     if set.sub_s[i] != SUB_CELL_NONE {
         // A coarse box is the ground itself shrunk, so its underside is more ground.
-        let under = if set.side[i] == Side::OBJECT { 0 } else { UNDER_AS_TOP };
+        let under = if set.material_class[i] == MaterialClasses::OBJECT { 0 } else { UNDER_AS_TOP };
         return mask_all | ALL_CREASES | under;
     }
     let mut mask = mask_all;
@@ -1145,7 +1120,7 @@ fn runs_match(set: &RunSet, a: usize, b: usize) -> bool {
         && set.g[a] == set.g[b]
         && set.b[a] == set.b[b]
         && set.layer_taps[a] == set.layer_taps[b]
-        && set.side[a] == set.side[b]
+        && set.material_class[a] == set.material_class[b]
         && set.sub_s[a] == SUB_CELL_NONE
         && set.sub_s[b] == SUB_CELL_NONE
 }

@@ -1,36 +1,9 @@
-# General OS files
 .DS_Store
-Thumbs.db
-
-# Logs
-logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-
-# Dependency directories
 node_modules/
-jspm_packages/
-
-# AI coding tools, each one's own and local.
-# git has no inline comments in .gitignore: a trailing `# ...` becomes part of
-# the pattern, so each sits on its own line.
-.claude/
-.cursor/
-.windsurf/
-.codex/
-.continue/
-.aider*
-
-# Backup files sometimes created by rustfmt/editor tooling
-**/*.rs.bk
-
 # Build output: the Rust workspace's, and the C++'s (script/cpp.ts).
 rust/target/
 target/
-
 # A library's locks are its consumer's to keep.
 rust/Cargo.lock
 deno.lock

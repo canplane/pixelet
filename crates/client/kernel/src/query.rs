@@ -18,8 +18,8 @@ mod world;
 
 pub use ray::{Detail, Hit, Ray, Struck};
 pub use support::over;
-pub use world::Composed;
-pub use world::{covers, Cover, World};
+pub use world::Cube;
+pub use world::{covers, Over, World};
 
 #[cfg(test)]
 #[path = "query.test.rs"]

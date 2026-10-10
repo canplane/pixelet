@@ -12,28 +12,9 @@ pub const NO_SLOT: i32 = -1;
 /// What an entry paints, in logical pixels before the render scale.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DrawSpec {
-    /// A label alone on a pill: a placed billboard's words.
-    Pill {
-        label: String,
-        logical_w: f64,
-    },
-    /// A place as Carto draws it: a dot or its icon in the fill, and under
-    /// it the name, if shown, in the text color.
-    Point {
-        /// Its name as laid out, a line each; none where it is not named.
-        lines: Vec<String>,
-        icon: bool,
-        /// Carto's symbol for it, by its place in `SYMBOLS`; a disc where none.
-        symbol: Option<u16>,
-        fill: u32,
-        text: u32,
-        logical_w: f64,
-    },
-    Bubble {
-        lines: Vec<String>,
-        box_w: f64,
-        box_h: f64,
-    },
+    Cluster { label: String, logical_w: f64 },
+    Place { name: String, icon: &'static str, color: u32, logical_w: f64 },
+    Bubble { lines: Vec<String>, box_w: f64, box_h: f64 },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -55,7 +36,7 @@ const HEIGHT_BUCKET: u32 = 16;
 pub const INITIAL_SIZE: u32 = 1024;
 
 /// 2048 px RGBA is 16 MiB plus mips. A screen holds a few dozen badges (one per
-/// places cell); past the limit an entry waits unshown (`NO_SLOT`).
+/// POI cell); past the limit an entry waits unshown (`NO_SLOT`).
 const MAX_SIZE: u32 = 2048;
 
 /// Transparent margin so a linear or mipmapped sample cannot reach a neighbor.
@@ -177,13 +158,6 @@ impl Sheet {
     pub fn slot_rect(&self, slot: u32) -> [u32; 4] {
         let s = slot as usize;
         [self.x[s], self.y[s], self.w[s], self.h[s]]
-    }
-
-    /// Whether a live slot holds its drawing, which one added or marked
-    /// dirty lacks until a sync paints it.
-    pub fn painted(&self, slot: u32) -> bool {
-        let s = slot as usize;
-        self.state.get(s) == Some(&LIVE) && !self.is_dirty.get(s).copied().unwrap_or(false)
     }
 
     pub fn slot_draw(&self, slot: u32) -> Option<&DrawSpec> {

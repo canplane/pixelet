@@ -2,23 +2,24 @@
 
 //! Baked tile formats shared by the bake and the kernel, so the two cannot drift.
 
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
+use xpute_core::status::errno::Errno;
+use xpute_core::status::error::MarshalError;
 
 pub mod constant;
-pub mod division_tile;
+pub mod deck;
 pub mod earth_tile;
 pub mod fold;
 pub mod format;
+pub mod ground;
 pub mod named;
 #[path = "bake/object.spec.rs"]
 pub mod object;
-#[path = "bake/place_theme.spec.rs"]
-pub mod place_theme;
 pub mod place_tile;
+#[path = "bake/poi_badge.spec.rs"]
+pub mod poi_badge;
+pub mod poi_tile;
 #[path = "bake/published.spec.rs"]
 pub mod published;
-pub mod separation;
 pub mod surface;
 pub mod way;
 

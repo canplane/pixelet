@@ -73,6 +73,13 @@ pub fn walk_order<const D: usize>(at: [u32; D], steps: u32) -> u64 {
     (0..steps).rev().fold(0, |order, l| (order << D) | slot_of(at.map(|v| i64::from(v >> l))) as u64)
 }
 
+pub fn at_walk_order<const D: usize>(order: u64, steps: u32) -> [u32; D] {
+    (0..steps).rev().fold([0; D], |at, l| {
+        let slot = ((order >> (l as usize * D)) & ((1 << D) - 1)) as usize;
+        child_of(at.map(i64::from), slot).map(|v| v as u32)
+    })
+}
+
 #[cfg(test)]
 #[path = "tree.test.rs"]
 mod test;

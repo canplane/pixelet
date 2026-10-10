@@ -6,7 +6,7 @@
 
 use core::f64::consts::FRAC_1_SQRT_2;
 
-use xpute_kit::math::scalar::round;
+use xpute_core::math::scalar::round;
 
 /// Half a way's width, in whole cells.
 pub fn half_cells(width: f64) -> i32 {

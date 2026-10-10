@@ -1,7 +1,7 @@
 // @pxl/web/platform/web/image.ts
 
-import type { U8Array } from "@xpute/kit/abi/array.ts";
-import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { U8Array } from "@xpute/core/abi/array.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
 import { registerImage } from "@/platform/web/webgpu.ts";
 
 /** False for a file the browser does not decode. Top row first, no color conversion, not premultiplied. */

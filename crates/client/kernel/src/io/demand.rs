@@ -3,7 +3,7 @@
 //! One deferrable read for the request scheduler (io/request.rs). The scheduler
 //! orders and cancels; the shell does the transport.
 
-use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::bake::published::BakeKind;
 
 pub use crate::io::spec::TaskPhaseName;
 use core::cmp::Ordering;
@@ -47,19 +47,19 @@ impl Phases {
     }
 }
 
-/// A stream of demands (spec `STREAM_NAMES`). An asset shares the
+/// A stream of demands (spec `CATEGORY_NAMES`). An asset shares the
 /// tiles' credits but is never withdrawn: it is wanted until it arrives.
-pub use crate::io::spec::StreamName as Stream;
+pub use crate::io::spec::CategoryName as Category;
 
-impl Stream {
+impl Category {
     /// An asset belongs to no bake and is asked for by its own command.
-    pub fn bake(self) -> Option<BaseLayer> {
+    pub fn bake(self) -> Option<BakeKind> {
         match self {
-            Stream::terrain => Some(BaseLayer::terrain),
-            Stream::place => Some(BaseLayer::place),
-            Stream::earth => Some(BaseLayer::earth),
-            Stream::division => Some(BaseLayer::division),
-            Stream::asset => None,
+            Category::terrain => Some(BakeKind::terrain),
+            Category::poi => Some(BakeKind::poi),
+            Category::earth => Some(BakeKind::earth),
+            Category::geocode | Category::geocode_dict => Some(BakeKind::geocode),
+            Category::asset => None,
         }
     }
 }
@@ -67,13 +67,13 @@ impl Stream {
 /// `subject` is a tile's coordinate, or nothing for a stream of one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DemandKey {
-    pub stream: Stream,
+    pub category: Category,
     pub subject: u64,
 }
 
 impl DemandKey {
-    pub fn new(stream: Stream, subject: u64) -> DemandKey {
-        DemandKey { stream, subject }
+    pub fn new(category: Category, subject: u64) -> DemandKey {
+        DemandKey { category, subject }
     }
 }
 
@@ -96,7 +96,7 @@ pub struct Ask {
 }
 
 impl Ask {
-    /// A want with no place in the view, ordered by its stream alone.
+    /// A want with no place in the view, ordered by its category alone.
     pub const PLAIN: Ask = Ask { why: Why::Demand, order: Order::LAST };
 
     /// The stronger reason and the earlier place, taken separately: how a tile

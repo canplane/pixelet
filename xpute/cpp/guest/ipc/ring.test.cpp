@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
-#include "../../kit/test.hpp"
-#include "../../kit/wire/xtp/cursor.hpp"
-#include "../../kit/wire/xtp/encode.hpp"
+#include "../../core/test.hpp"
+#include "../../core/wire/xtp/cursor.hpp"
+#include "../../core/wire/xtp/encode.hpp"
 
 using namespace xpute;
 

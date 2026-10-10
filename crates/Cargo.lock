@@ -33,12 +33,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrayref"
-version = "0.3.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76a2e8124351fda1ef8aaaa3bbd7ebbcb486bbcd4225aca0aa0d84bb2db8fecb"
-
-[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -166,12 +160,6 @@ name = "bit-vec"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b71798fca2c1fe1086445a7258a4bc81e6e49dcd24c8d0dd9a1e57395b603f51"
-
-[[package]]
-name = "bitflags"
-version = "1.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
@@ -408,12 +396,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "data-url"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
-
-[[package]]
 name = "deadpool"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -464,7 +446,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38"
 dependencies = [
- "bitflags 2.13.2",
+ "bitflags",
  "objc2",
 ]
 
@@ -542,15 +524,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "euclid"
-version = "0.22.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1a05365e3b1c6d1650318537c7460c6923f1abdd272ad6842baa2b509957a06"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -581,12 +554,6 @@ dependencies = [
  "miniz_oxide 0.9.1",
  "zlib-rs",
 ]
-
-[[package]]
-name = "float-cmp"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
 
 [[package]]
 name = "fnv"
@@ -965,7 +932,7 @@ dependencies = [
  "byteorder-lite",
  "moxcms",
  "num-traits",
- "png 0.18.1",
+ "png",
  "zune-core",
  "zune-jpeg",
 ]
@@ -979,12 +946,6 @@ dependencies = [
  "byteorder-lite",
  "quick-error",
 ]
-
-[[package]]
-name = "imagesize"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edcd27d72f2f071c64249075f42e205ff93c9a4c5f6c6da53e79ed9f9832c285"
 
 [[package]]
 name = "indexmap"
@@ -1049,17 +1010,6 @@ dependencies = [
  "cfg-if",
  "futures-util",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "kurbo"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c62026ae44756f8a599ba21140f350303d4f08dcdcc71b5ad9c9bb8128c13c62"
-dependencies = [
- "arrayvec",
- "euclid",
- "smallvec",
 ]
 
 [[package]]
@@ -1260,7 +1210,7 @@ checksum = "a616d2fb8c89516ac2723a581f69d6c18576046bed761bd6b305e5618e6ae130"
 dependencies = [
  "arrayvec",
  "bit-set",
- "bitflags 2.13.2",
+ "bitflags",
  "cfg-if",
  "cfg_aliases",
  "codespan-reporting",
@@ -1343,7 +1293,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
 dependencies = [
- "bitflags 2.13.2",
+ "bitflags",
  "dispatch2",
  "objc2",
 ]
@@ -1372,7 +1322,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 dependencies = [
- "bitflags 2.13.2",
+ "bitflags",
  "objc2",
  "objc2-core-foundation",
 ]
@@ -1383,7 +1333,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d"
 dependencies = [
- "bitflags 2.13.2",
+ "bitflags",
  "objc2",
  "objc2-core-foundation",
 ]
@@ -1394,7 +1344,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0125f776a10d00af4152d74616409f0d4a2053a6f57fa5b7d6aa2854ac04794"
 dependencies = [
- "bitflags 2.13.2",
+ "bitflags",
  "block2",
  "objc2",
  "objc2-foundation",
@@ -1406,7 +1356,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96c1358452b371bf9f104e21ec536d37a650eb10f7ee379fff67d2e08d537f1f"
 dependencies = [
- "bitflags 2.13.2",
+ "bitflags",
  "objc2",
  "objc2-core-foundation",
  "objc2-core-graphics",
@@ -1487,12 +1437,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pico-args"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
-
-[[package]]
 name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1506,24 +1450,11 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "png"
-version = "0.17.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82151a2fc869e011c153adc57cf2789ccb8d9906ce52c0b39a6b5697749d7526"
-dependencies = [
- "bitflags 1.3.2",
- "crc32fast",
- "fdeflate",
- "flate2",
- "miniz_oxide 0.8.9",
-]
-
-[[package]]
-name = "png"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60769b8b31b2a9f263dae2776c37b1b28ae246943cf719eb6946a1db05128a61"
 dependencies = [
- "bitflags 2.13.2",
+ "bitflags",
  "crc32fast",
  "fdeflate",
  "flate2",
@@ -1675,7 +1606,7 @@ dependencies = [
  "tokio",
  "ureq",
  "webp",
- "xpute-kit",
+ "xpute-core",
  "zstd",
 ]
 
@@ -1699,8 +1630,8 @@ dependencies = [
  "libm",
  "pxl-render",
  "pxl-spec",
+ "xpute-core",
  "xpute-guest",
- "xpute-kit",
 ]
 
 [[package]]
@@ -1713,8 +1644,8 @@ dependencies = [
  "pxl-kernel",
  "pxl-render",
  "wgpu",
+ "xpute-core",
  "xpute-guest",
- "xpute-kit",
 ]
 
 [[package]]
@@ -1724,12 +1655,12 @@ dependencies = [
  "image-webp",
  "libm",
  "naga",
- "png 0.18.1",
+ "png",
  "pollster",
  "pxl-spec",
  "wgpu",
+ "xpute-core",
  "xpute-guest",
- "xpute-kit",
 ]
 
 [[package]]
@@ -1753,7 +1684,7 @@ dependencies = [
  "libm",
  "serde",
  "serde_json",
- "xpute-kit",
+ "xpute-core",
 ]
 
 [[package]]
@@ -1765,7 +1696,6 @@ dependencies = [
  "libm",
  "mozjpeg",
  "regex",
- "resvg",
  "serde",
  "serde_json",
  "sha2",
@@ -1778,8 +1708,8 @@ name = "pxl-wasm"
 version = "0.0.0"
 dependencies = [
  "pxl-kernel",
+ "xpute-core",
  "xpute-guest",
- "xpute-kit",
 ]
 
 [[package]]
@@ -1844,7 +1774,7 @@ version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
 dependencies = [
- "bitflags 2.13.2",
+ "bitflags",
 ]
 
 [[package]]
@@ -1883,20 +1813,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
-name = "resvg"
-version = "0.45.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8928798c0a55e03c9ca6c4c6846f76377427d2c1e1f7e6de3c06ae57942df43"
-dependencies = [
- "log",
- "pico-args",
- "rgb",
- "svgtypes",
- "tiny-skia",
- "usvg",
-]
-
-[[package]]
 name = "rgb"
 version = "0.8.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1918,12 +1834,6 @@ dependencies = [
  "untrusted",
  "windows-sys 0.52.0",
 ]
-
-[[package]]
-name = "roxmltree"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rustc-hash"
@@ -2099,15 +2009,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
 
 [[package]]
-name = "simplecss"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a9c6883ca9c3c7c90e888de77b7a5c849c779d25d74a1269b0218b14e8b136c"
-dependencies = [
- "log",
-]
-
-[[package]]
 name = "siphasher"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2141,7 +2042,7 @@ version = "0.4.0+sdk-1.4.341.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9571ea910ebd84c86af4b3ed27f9dbdc6ad06f17c5f96146b2b671e2976744f"
 dependencies = [
- "bitflags 2.13.2",
+ "bitflags",
 ]
 
 [[package]]
@@ -2155,15 +2056,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "strict-num"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
-dependencies = [
- "float-cmp",
-]
 
 [[package]]
 name = "stringprep"
@@ -2187,16 +2079,6 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
-
-[[package]]
-name = "svgtypes"
-version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68c7541fff44b35860c1a7a47a7cadf3e4a304c457b58f9870d9706ece028afc"
-dependencies = [
- "kurbo",
- "siphasher",
-]
 
 [[package]]
 name = "syn"
@@ -2264,32 +2146,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ad99c4c6d32803332c548b1af0540b357b3f5fc0be8f6c6bfe8b2e6ae784070"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "tiny-skia"
-version = "0.11.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83d13394d44dae3207b52a326c0c85a8bf87f1541f23b0d143811088497b09ab"
-dependencies = [
- "arrayref",
- "arrayvec",
- "bytemuck",
- "cfg-if",
- "log",
- "png 0.17.16",
- "tiny-skia-path",
-]
-
-[[package]]
-name = "tiny-skia-path"
-version = "0.11.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c9e7fc0c2e86a30b117d0462aa261b72b7a99b7ebd7deb3a14ceda95c5bdc93"
-dependencies = [
- "arrayref",
- "bytemuck",
- "strict-num",
 ]
 
 [[package]]
@@ -2398,7 +2254,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08a05a66a4fdd61cbbe0a1d755ffe0ca6aba159dd4820936a0ff8a8278245b9c"
 dependencies = [
  "async-compression",
- "bitflags 2.13.2",
+ "bitflags",
  "bytes",
  "futures-core",
  "http",
@@ -2559,28 +2415,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "usvg"
-version = "0.45.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80be9b06fbae3b8b303400ab20778c80bbaf338f563afe567cf3c9eea17b47ef"
-dependencies = [
- "base64 0.22.1",
- "data-url",
- "flate2",
- "imagesize",
- "kurbo",
- "log",
- "pico-args",
- "roxmltree",
- "simplecss",
- "siphasher",
- "strict-num",
- "svgtypes",
- "tiny-skia-path",
- "xmlwriter",
-]
-
-[[package]]
 name = "utf8_iter"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2715,7 +2549,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "527ccdf43dd5b2e8676eed9984ce00e2bbb0a1b85b70c1969dcb6cd2eb55ab9e"
 dependencies = [
  "arrayvec",
- "bitflags 2.13.2",
+ "bitflags",
  "bytemuck",
  "cfg-if",
  "cfg_aliases",
@@ -2741,7 +2575,7 @@ dependencies = [
  "arrayvec",
  "bit-set",
  "bit-vec",
- "bitflags 2.13.2",
+ "bitflags",
  "bytemuck",
  "cfg_aliases",
  "document-features",
@@ -2792,7 +2626,7 @@ dependencies = [
  "android_system_properties",
  "arrayvec",
  "ash",
- "bitflags 2.13.2",
+ "bitflags",
  "block2",
  "bytemuck",
  "cfg-if",
@@ -2842,7 +2676,7 @@ version = "30.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99dad6f1fbdbbdb4c278a6508b059d44688f5cebddf78d005a46a31340269286"
 dependencies = [
- "bitflags 2.13.2",
+ "bitflags",
  "bytemuck",
  "log",
  "naga-types",
@@ -3068,22 +2902,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
-name = "xmlwriter"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
+name = "xpute-core"
+version = "0.0.0"
 
 [[package]]
 name = "xpute-guest"
 version = "0.0.0"
 dependencies = [
  "indexmap",
- "xpute-kit",
+ "xpute-core",
 ]
-
-[[package]]
-name = "xpute-kit"
-version = "0.0.0"
 
 [[package]]
 name = "yoke"

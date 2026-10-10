@@ -13,7 +13,7 @@
 // Uppercase as the notation these macro-like helpers are written in.
 #![allow(non_snake_case)]
 
-use xpute_kit::abi::word::{as_int_n64, field_mask64};
+use xpute_core::abi::word::{as_int_n64, field_mask64};
 
 use crate::space::coord::v3::V3;
 

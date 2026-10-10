@@ -7,9 +7,9 @@ use crate::mesh::word::{taps_of, unpack_material, SUB_CELL_NONE};
 use crate::mesh::{grow, try_push, Refused};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::zoom::count;
-use pxl_spec::space::layer::lattice::GROUND_FOLD;
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use pxl_spec::space::layer::lattice::GROUND;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// The ring of neighbor columns a run set carries. Without it the face mask
 /// read every chunk seam as open air, losing occlusion, creases and culling
@@ -17,7 +17,7 @@ use xpute_kit::status::errno::Errno;
 pub const APRON: u32 = 1;
 
 /// The widest set: a chunk's columns where they fold into its cells, and its apron.
-pub const COL_SPAN: u32 = CHUNK_CELLS * count(GROUND_FOLD, 0) + 2 * APRON;
+pub const COL_SPAN: u32 = CHUNK_CELLS * count(GROUND.fold(), 0) + 2 * APRON;
 const COLUMN_CNT: usize = (COL_SPAN * COL_SPAN) as usize;
 
 /// Column `(cx, cy)` of the chunk's own in a set `span` wide.
@@ -33,7 +33,7 @@ struct Run {
     r: u8,
     g: u8,
     b: u8,
-    side: u8,
+    material_class: u8,
 }
 
 pub struct RunWriter {
@@ -69,7 +69,7 @@ impl RunWriter {
         if self.open {
             return false;
         }
-        xpute_kit::ensure!(span <= COL_SPAN, EINVAL, span);
+        xpute_core::ensure!(span <= COL_SPAN, EINVAL, span);
         self.runs.clear();
         self.open = true;
         self.span = span;
@@ -80,7 +80,7 @@ impl RunWriter {
 
     pub fn column(&mut self, col: u32) {
         let next = self.next_col.or_bug(Errno::ENOTRECOVERABLE);
-        xpute_kit::ensure!(col < self.span * self.span, ENOSPC);
+        xpute_core::ensure!(col < self.span * self.span, ENOSPC);
         for c in next..=col {
             self.starts[c as usize] = self.runs.len() as u32;
         }
@@ -88,7 +88,7 @@ impl RunWriter {
     }
 
     pub fn run(&mut self, z0: i32, z1: i32, material: u32, layer_idx: u8) -> Result<(), Refused> {
-        xpute_kit::ensure!(self.next_col.is_some_and(|n| n > 0), ENOTRECOVERABLE);
+        xpute_core::ensure!(self.next_col.is_some_and(|n| n > 0), ENOTRECOVERABLE);
         try_push(&mut self.runs, run_of(z0, z1, material, layer_idx))
     }
 
@@ -108,9 +108,9 @@ impl RunWriter {
     /// `ptr` must address at least the bytes asked for, 4-aligned, and be
     /// the caller's to write.
     pub unsafe fn provide_set(&mut self, ptr: *mut u8, bytes: u32) {
-        xpute_kit::ensure!(self.open && self.next_col.is_none() && !self.packed, ENOTRECOVERABLE);
+        xpute_core::ensure!(self.open && self.next_col.is_none() && !self.packed, ENOTRECOVERABLE);
         let need = self.set_bytes();
-        xpute_kit::ensure!(bytes >= need, ENOTRECOVERABLE, bytes, need);
+        xpute_core::ensure!(bytes >= need, ENOTRECOVERABLE, bytes, need);
         let n = self.runs.len();
         let mut at = ptr;
         let mut words = |len: usize| {
@@ -128,7 +128,7 @@ impl RunWriter {
             at = at.add(len);
             core::slice::from_raw_parts_mut(p, len)
         };
-        let (r, g, b, side) = (lane(n), lane(n), lane(n), lane(n));
+        let (r, g, b, class) = (lane(n), lane(n), lane(n), lane(n));
         let (ox, oy, oz, size) = (lane(n), lane(n), lane(n), lane(n));
         for (i, run) in self.runs.iter().enumerate() {
             z0[i] = run.z0 as u32;
@@ -137,7 +137,7 @@ impl RunWriter {
             r[i] = run.r;
             g[i] = run.g;
             b[i] = run.b;
-            side[i] = run.side;
+            class[i] = run.material_class;
             // A written run fills its cells; only a summary shrinks one.
             (ox[i], oy[i], oz[i], size[i]) = (0, 0, 0, SUB_CELL_NONE);
         }
@@ -145,7 +145,7 @@ impl RunWriter {
     }
 
     pub fn finish(&mut self) -> u32 {
-        xpute_kit::ensure!(self.open && self.packed, ENOTRECOVERABLE);
+        xpute_core::ensure!(self.open && self.packed, ENOTRECOVERABLE);
         self.open = false;
         self.runs.len() as u32
     }
@@ -158,7 +158,7 @@ impl RunWriter {
 }
 
 fn run_of(z0: i32, z1: i32, material: u32, layer_idx: u8) -> Run {
-    let (side, [r, g, b]) = unpack_material(material);
+    let (material_class, [r, g, b]) = unpack_material(material);
     Run {
         z0,
         z1,
@@ -166,7 +166,7 @@ fn run_of(z0: i32, z1: i32, material: u32, layer_idx: u8) -> Run {
         r,
         g,
         b,
-        side,
+        material_class,
     }
 }
 
@@ -183,7 +183,7 @@ pub struct RunSet<'a> {
     pub r: &'a [u8],
     pub g: &'a [u8],
     pub b: &'a [u8],
-    pub side: &'a [u8],
+    pub material_class: &'a [u8],
     pub sub_ox: &'a [u8],
     pub sub_oy: &'a [u8],
     pub sub_oz: &'a [u8],
@@ -202,8 +202,8 @@ impl<'a> RunSet<'a> {
     /// Alignment and length are checked, so a wrong block panics rather than misreads.
     pub fn carve(bytes: &'a [u8], count: u32, span: u32, apron: u32) -> RunSet<'a> {
         let need = run_set_bytes(count, span) as usize;
-        xpute_kit::ensure!(bytes.len() >= need, EINVAL, bytes.len(), need);
-        xpute_kit::ensure!((bytes.as_ptr() as usize).is_multiple_of(4), EINVAL);
+        xpute_core::ensure!(bytes.len() >= need, EINVAL, bytes.len(), need);
+        xpute_core::ensure!((bytes.as_ptr() as usize).is_multiple_of(4), EINVAL);
         let base = bytes.as_ptr();
         let n = count as usize;
         let cols = (span * span + 1) as usize;
@@ -236,7 +236,7 @@ impl<'a> RunSet<'a> {
             r: lane(),
             g: lane(),
             b: lane(),
-            side: lane(),
+            material_class: lane(),
             sub_ox: lane(),
             sub_oy: lane(),
             sub_oz: lane(),
@@ -256,7 +256,7 @@ pub struct OwnedRunSet {
     pub r: Vec<u8>,
     pub g: Vec<u8>,
     pub b: Vec<u8>,
-    pub side: Vec<u8>,
+    pub material_class: Vec<u8>,
     pub sub_ox: Vec<u8>,
     pub sub_oy: Vec<u8>,
     pub sub_oz: Vec<u8>,
@@ -273,7 +273,7 @@ impl OwnedRunSet {
             &mut self.r,
             &mut self.g,
             &mut self.b,
-            &mut self.side,
+            &mut self.material_class,
             &mut self.sub_ox,
             &mut self.sub_oy,
             &mut self.sub_oz,
@@ -304,7 +304,7 @@ impl OwnedRunSet {
                 self.r.push(set.r[i]);
                 self.g.push(set.g[i]);
                 self.b.push(set.b[i]);
-                self.side.push(set.side[i]);
+                self.material_class.push(set.material_class[i]);
                 self.sub_ox.push(set.sub_ox[i]);
                 self.sub_oy.push(set.sub_oy[i]);
                 self.sub_oz.push(set.sub_oz[i]);
@@ -323,7 +323,7 @@ impl OwnedRunSet {
             &mut self.r,
             &mut self.g,
             &mut self.b,
-            &mut self.side,
+            &mut self.material_class,
             &mut self.sub_ox,
             &mut self.sub_oy,
             &mut self.sub_oz,
@@ -346,7 +346,7 @@ impl OwnedRunSet {
             r: &self.r,
             g: &self.g,
             b: &self.b,
-            side: &self.side,
+            material_class: &self.material_class,
             sub_ox: &self.sub_ox,
             sub_oy: &self.sub_oy,
             sub_oz: &self.sub_oz,

@@ -12,7 +12,7 @@
 // knows and passes over the rest, the way a process reads its ELF auxiliary vector, so
 // a directory that grows an entry is still read by a host that predates it.
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
 
 /** "XPUT" as four bytes read little-endian: what tells a directory from memory nothing wrote. */
 export const MAGIC: u32 = 1414877272 as number;

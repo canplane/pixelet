@@ -7,19 +7,17 @@
 
 use base64::Engine;
 use pxl_spec::space::hierarchy::morton::key_of;
+use xpute_core::status::errno::Errno;
+use xpute_core::status::error::MarshalError;
+use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::sched::edge::{notified, Notify};
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use crate::io::file::{self, Kept, KeptFile};
 use crate::kernel;
-use crate::layer::object::ext::Ext;
 use crate::layer::object::store::{apply, written, Write};
 use crate::sched::edge::wake_at;
-use pxl_spec::block::ext::{class_of, Class};
 
 struct State {
     save_due_ms: Option<f64>,
@@ -33,33 +31,21 @@ fn store_state() -> &'static mut State {
     STATE.get(|| State { save_due_ms: None, loaded: false })
 }
 
-// Kept as one blob of every leaf as the write that made it, `<key, id, ext>`:
-// [key_hi u64[], key_lo u64[], id u32[]], then a class's records, each its
-// leaf's row and its fields as lanes: a marker's words [row u32[], text strs].
-// The layout's version is in the storage key; a blob of another layout is
-// never read.
+// Kept as one blob of every leaf as the write that made it, `<key, id>`:
+// [key_hi u64[], key_lo u64[], id u32[]]. The layout's version is in the
+// storage key; a blob of another layout is never read.
 
 fn encode() -> Result<String, MarshalError> {
     let (mut hi, mut lo, mut id) = (Vec::new(), Vec::new(), Vec::new());
-    let (mut text_rows, mut texts) = (Vec::new(), Vec::new());
-    let objects = &kernel().objects;
-    objects.each(&mut |e| {
+    kernel().objects.each(&mut |e| {
         let key = key_of(e.zoom, e.at);
-        match objects.ext(e) {
-            Some(Ext::MarkerText(t)) => {
-                text_rows.push(id.len() as u32);
-                texts.push(t.clone());
-            }
-            None => {}
-        }
         hi.push((key >> 64) as u64);
         lo.push(key as u64);
         id.push(e.state);
     });
-    let texts: Vec<&str> = texts.iter().map(String::as_str).collect();
     let mut tree = TreeView::new();
     tree.branch(Some(&mut |b| {
-        b.u64_array(Some(&hi)).u64_array(Some(&lo)).u32_array(Some(&id)).u32_array(Some(&text_rows)).strs(Some(&texts));
+        b.u64_array(Some(&hi)).u64_array(Some(&lo)).u32_array(Some(&id));
     }));
     let pkt = encoder().encode(
         &tree,
@@ -75,23 +61,12 @@ fn decode(blob: &str) -> Result<(), MarshalError> {
     let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(blob).map_err(|_| MarshalError::new(Errno::EINVAL))?;
     let root = TreeReader::new(&bytes)?.read_branch()?;
     let (hi, lo, id) = (root.at(0)?.get_array::<u64>()?, root.at(1)?.get_array::<u64>()?, root.at(2)?.get_array::<u32>()?);
-    let (text_rows, texts) = (root.at(3)?.get_array::<u32>()?, root.at(4)?.get_strs()?);
-    if hi.len() != lo.len() || hi.len() != id.len() || text_rows.len() != texts.len() as usize {
+    if hi.len() != lo.len() || hi.len() != id.len() {
         return Err(MarshalError::new(Errno::EINVAL));
-    }
-    let mut ext: Vec<Option<Ext>> = vec![None; id.len()];
-    for (r, t) in text_rows.iter().zip(texts.iter()) {
-        let r = *r as usize;
-        // A record is its leaf's class's, or the blob is not this layout.
-        if id.get(r).and_then(|&v| class_of(v)) != Some(Class::marker_text) {
-            return Err(MarshalError::new(Errno::EINVAL));
-        }
-        ext[r] = Some(Ext::MarkerText(t.to_string()));
     }
     apply((0..id.len()).map(|r| Write {
         key: (u128::from(hi[r]) << 64) | u128::from(lo[r]),
         id: id[r],
-        ext: ext[r].take(),
     }));
     Ok(())
 }

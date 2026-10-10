@@ -2,7 +2,7 @@
 
 use super::*;
 
-use crate::block::cube::ground;
+use crate::cell::cube_types::ground;
 use crate::space::layer::tile::{neighborhood, Tile, LEAF_ZOOM};
 
 const SPAN: usize = TILE_CELLS as usize;
@@ -55,6 +55,14 @@ fn a_feature_two_cells_wide_survives_a_fold() {
     let empty = plane(|_, _| 0);
     let out = fold([&road, &empty, &empty, &empty], LEAF_ZOOM - 1);
     assert!((0..SPAN / 2).all(|py| out[py * SPAN + 5] == 3));
+}
+
+#[test]
+fn ties_alternate_their_corner_by_zoom() {
+    // Every block ties 2:2 across the diagonal: (0, 0) wins a step up from the leaves, (1, 1) the next.
+    let columns = plane(|x, _| if x % 2 == 0 { ground::parking } else { ground::aeroway });
+    assert!(fold([&columns, &columns, &columns, &columns], LEAF_ZOOM - 1).iter().all(|&v| v == ground::parking));
+    assert!(fold([&columns, &columns, &columns, &columns], LEAF_ZOOM - 2).iter().all(|&v| v == ground::aeroway));
 }
 
 #[test]
@@ -158,9 +166,9 @@ fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
 }
 
 /// The open ocean: flat water at sea level, no tile.
-fn zero_tile() -> TerrainTile {
+fn zero_tile() -> Terrain {
     let cells = vec![ground::water; SPAN * SPAN];
-    let mut t = TerrainTile::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default());
+    let mut t = Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default());
     t.index.occupancy = Occupancy::ZERO;
     t
 }

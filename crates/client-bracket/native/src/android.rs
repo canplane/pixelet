@@ -1,7 +1,7 @@
 // pxl-native/android.rs
 
-//! The kernel as an Android app reaches it. Kotlin's `PxlGuest`
-//! (apps/native/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlGuest.kt)
+//! The kernel as an Android app reaches it. Kotlin's `PxlCore`
+//! (apps/native/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlCore.kt)
 //! declares these as `external` functions, and each is the C ABI's call an
 //! iPhone's Swift makes (lib.rs, surface.rs, image.rs) under the name JNI
 //! looks for. Only JNI's own values cross: a number, an array, the memory as
@@ -16,8 +16,8 @@ use std::sync::Mutex;
 use jni_sys::{jbyteArray, jclass, jdouble, jint, jintArray, jobject, JNIEnv, JNINativeInterface_};
 use ndk_sys::{ANativeWindow, ANativeWindow_fromSurface, ANativeWindow_release};
 use wgpu::rwh::{AndroidDisplayHandle, AndroidNdkWindowHandle, RawDisplayHandle, RawWindowHandle};
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// The native window each bound surface draws through, by the kernel's
 /// handle: acquired when a view's surface is bound and released once it is
@@ -35,7 +35,7 @@ unsafe fn jni<'e>(env: *mut JNIEnv) -> &'e JNINativeInterface_ {
 
 /// A turn of `quota_ms` (lib.rs `pxl_interrupt`).
 #[no_mangle]
-pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_interrupt(_env: *mut JNIEnv, _class: jclass, quota_ms: jdouble) -> jdouble {
+pub extern "system" fn Java_me_plei_pixelet_platform_PxlCore_interrupt(_env: *mut JNIEnv, _class: jclass, quota_ms: jdouble) -> jdouble {
     crate::pxl_interrupt(quota_ms)
 }
 
@@ -44,7 +44,7 @@ pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_interrupt(_env: *m
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_memory(env: *mut JNIEnv, _class: jclass) -> jobject {
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlCore_memory(env: *mut JNIEnv, _class: jclass) -> jobject {
     let mut bytes = 0u32;
     // SAFETY: our own word.
     let at = unsafe { crate::pxl_memory(&raw mut bytes) };
@@ -59,7 +59,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_memory(env:
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(env: *mut JNIEnv, _class: jclass) -> jintArray {
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlCore_gpuOpen(env: *mut JNIEnv, _class: jclass) -> jintArray {
     let (mut align, mut timestamps) = (0u32, 0u32);
     // SAFETY: our own words.
     if unsafe { crate::surface::pxl_gpu_open(&raw mut align, &raw mut timestamps) } != 0 {
@@ -83,7 +83,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_gpuOpen(env
 /// # Safety
 /// Called by JNI.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_imageHold(env: *mut JNIEnv, _class: jclass, handle: jint, file: jbyteArray) -> jint {
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlCore_imageHold(env: *mut JNIEnv, _class: jclass, handle: jint, file: jbyteArray) -> jint {
     // SAFETY: the environment JNI called with.
     let table = unsafe { jni(env) };
     // SAFETY: `file` is the byte array the call was given, copied whole.
@@ -105,7 +105,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_imageHold(e
 /// Called by JNI, with a live `android.view.Surface`, which its view keeps
 /// until it has unbound it.
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceBind(env: *mut JNIEnv, _class: jclass, handle: jint, surface: jobject) -> jint {
+pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlCore_surfaceBind(env: *mut JNIEnv, _class: jclass, handle: jint, surface: jobject) -> jint {
     let handle = handle as u32;
     // SAFETY: the environment and the surface the call was given; a window
     // made this way is ours until released.
@@ -134,7 +134,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceBind
 /// Lets `handle`'s surface go, and the window it drew through
 /// (surface.rs `pxl_surface_unbind`).
 #[no_mangle]
-pub extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceUnbind(_env: *mut JNIEnv, _class: jclass, handle: jint) {
+pub extern "system" fn Java_me_plei_pixelet_platform_PxlCore_surfaceUnbind(_env: *mut JNIEnv, _class: jclass, handle: jint) {
     let handle = handle as u32;
     crate::surface::pxl_surface_unbind(handle);
     let window = WINDOWS.lock().or_bug(Errno::ENOTRECOVERABLE).as_mut().and_then(|w| w.remove(&handle));

@@ -19,8 +19,8 @@ use std::cell::Cell;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::{Mutex, OnceLock};
 
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// The kernel's stack: the main thread's default on Linux and macOS. Not
 /// derived — how deep wgpu's internals go has no bound this crate can state.

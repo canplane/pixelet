@@ -1,23 +1,22 @@
 // pxl-kernel/layer.rs
 
-//! What is in the world, in layers. A layer owns its store and knows
-//! nothing of its neighbours.
+//! What is in the world, by kind. A layer owns its store and knows nothing
+//! of its neighbours.
 
 mod answer;
 use pxl_spec::bake::format::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Lattice;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-use crate::io::demand::{Phases, Stream};
+use crate::io::demand::{Category, Phases};
 use crate::io::failure::Failure;
 use residency::Residency;
 
-pub mod division;
 pub mod earth;
+pub mod geocode;
 pub mod instance;
 pub mod object;
-pub mod place;
+pub mod poi;
 mod query;
 pub mod residency;
 pub mod terrain;
@@ -25,19 +24,8 @@ pub mod terrain;
 pub use answer::{Answer, Ground, Relief};
 pub use query::{Bound, Query};
 
-/// What a layer asks for of the view.
-#[derive(Clone, Copy)]
-pub enum Asks {
-    /// The floor alone.
-    Floor,
-    /// A destination's line alone.
-    Line,
-    /// The floor, a destination's line and the view's misses with theirs.
-    View,
-}
-
-pub trait Base: Clone + 'static {
-    const STREAM: Stream;
+pub trait Layer: Clone + 'static {
+    const CATEGORY: Category;
 
     /// Which of its children are tiles of their own, as the bake wrote it.
     fn occupancy(&self) -> Occupancy;
@@ -45,11 +33,9 @@ pub trait Base: Clone + 'static {
     /// Its tiles' cells, which say what of the grid a tile at each zoom draws.
     const LATTICE: Lattice;
 
-    /// The zoom its tiles are made at, as the bake's `Base::LEAF`.
-    const LEAF: Zoom = LEAF_ZOOM;
-
-    /// What it asks of the view; its residency is sized so.
-    const ASKS: Asks = Asks::View;
+    /// False for a layer that holds only the floor: it asks for no miss and no
+    /// destination, and its residency is sized so.
+    const DEMANDS: bool = true;
 
     /// The coarsest zoom the layer's own source supplies whole, where one
     /// differs from the ground's declared top (`floor::top`). Its floor is

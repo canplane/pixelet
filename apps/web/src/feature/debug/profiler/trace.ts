@@ -6,8 +6,8 @@
  * as a file, since the clipboard handles that size badly.
  */
 
-import type { f64, u32 } from "@xpute/kit/abi/word.ts";
-import { round } from "@xpute/kit/math/scalar.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import { round } from "@xpute/core/math/scalar.ts";
 
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { saveFile } from "@platform/save.ts";
@@ -66,14 +66,14 @@ function profilerTraceJson(): string {
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
-  // ---- task spans, one thread per stream ----
+  // ---- task spans, one thread per category ----
   const catTid = new Map<string, u32>();
   for (const r of tasks) {
-    let tid = catTid.get(r.stream);
+    let tid = catTid.get(r.category);
     if (tid === undefined) {
       tid = TID_TASK_BASE + catTid.size;
-      catTid.set(r.stream, tid);
-      events.push(threadName(tid, `task: ${r.stream}`));
+      catTid.set(r.category, tid);
+      events.push(threadName(tid, `task: ${r.category}`));
     }
     const args: Args = {
       outcome: r.outcome,
@@ -87,7 +87,7 @@ function profilerTraceJson(): string {
       if (r.at !== null) args.at = r.at;
     }
     for (const [k, v] of r.phases) args[k] = v;
-    events.push(event(`${r.stream}:${r.subject}`, `task,${r.outcome}`, "X", us(r.enqueue_ms), us(Math.max(0, r.end_ms - r.enqueue_ms)), tid, args));
+    events.push(event(`${r.category}:${r.subject}`, `task,${r.outcome}`, "X", us(r.enqueue_ms), us(Math.max(0, r.end_ms - r.enqueue_ms)), tid, args));
   }
 
   // ---- per-frame counters (Perfetto graphs these) ----

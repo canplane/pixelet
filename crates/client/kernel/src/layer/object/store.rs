@@ -1,13 +1,10 @@
 // pxl-kernel/layer/object/store.rs
 
 //! Placed objects, kept as their one record: each leaf's catalog value at its
-//! node and the handle of what it carries beyond it (`ext.rs`), in one sparse
-//! tree a shard (`space/hierarchy/sparse_tree.rs`). A write arrives as
-//! `<key, id, ext>` (`morton::key_of`). What a node at any zoom shows is read
-//! from the leaves over and under it, folding by the objects' majority, and
-//! never kept. A leaf that carries a record is never joined, its handle its
-//! own, and is never split: a placement takes an empty cell and an erase
-//! takes the whole leaf.
+//! node, in one sparse tree a column (`space/hierarchy/sparse_tree.rs`). A
+//! write arrives as `<key, id>` (`morton::key_of`). What a node at any zoom
+//! shows is read from the leaves over and under it, folding by the objects'
+//! majority, and never kept.
 
 use std::collections::HashMap;
 use xpute_guest::global::Global;
@@ -18,8 +15,8 @@ use std::collections::TryReserveError;
 pub use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::fold::majority;
-use pxl_spec::block::object::{cube_of, decor_id_from_num, object_value_is_decor, object_value_is_marker, object_value_is_voxel, Cube};
-use pxl_spec::block::{cube, DecorId};
+use pxl_spec::cell::object::{decor_id_from_num, object_value_is_decor, object_value_is_voxel, placeable_cube_of, PlaceableCube};
+use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::world::{node_near, wrap_index, REACH};
@@ -27,30 +24,25 @@ use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, unit
 use pxl_spec::space::hierarchy::morton::{child_cube, key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
 use pxl_spec::space::hierarchy::tree::{first_descendant_of, region, Node};
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 use crate::kernel;
-use crate::layer::object::ext::{Ext, Pools, NONE};
 use crate::layer::{Answer, Bound, Query};
 use crate::sched::edge::request_world_tick;
-use pxl_spec::block::ext::class_of;
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Block {
-    Cube { cube: Cube },
+pub enum EntryKind {
+    Solid { cube: PlaceableCube },
     Decor { decor_id: DecorId },
-    Marker,
 }
 
-/// A leaf as an asker meets it: its cube, X in the asker's frame, and the
-/// handle of its record in its class's pool.
+/// A leaf as an asker meets it: its cube, X in the asker's frame.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Entry {
     pub zoom: Zoom,
     pub at: [i64; 3],
     pub state: u32,
-    pub ext: u16,
 }
 
 impl Entry {
@@ -70,18 +62,16 @@ impl Entry {
         cube(self.zoom, self.at)
     }
 
-    /// What it is, by its kind; not for air, which is the eraser's mark.
-    pub fn block(&self) -> Block {
-        if object_value_is_marker(self.state) {
-            Block::Marker
-        } else if object_value_is_decor(self.state) {
-            Block::Decor {
+    /// Not for air, which is the eraser's marker.
+    pub fn kind(&self) -> EntryKind {
+        if object_value_is_decor(self.state) {
+            EntryKind::Decor {
                 decor_id: decor_id_from_num(self.state),
             }
         } else {
-            Block::Cube {
+            EntryKind::Solid {
                 // Every value the store writes is one the catalog gives out.
-                cube: cube_of(self.state).or_bug(Errno::ENOTRECOVERABLE),
+                cube: placeable_cube_of(self.state).or_bug(Errno::ENOTRECOVERABLE),
             }
         }
     }
@@ -109,26 +99,19 @@ pub fn take_written(out: &mut Vec<Aabb>) {
     core::mem::swap(out, WRITTEN.get(Vec::new));
 }
 
-pub const VOID: u32 = cube::sentinel::void as u32;
-pub const AIR: u32 = cube::object::air as u32;
-pub const UNKNOWN: u32 = cube::sentinel::unknown as u32;
+pub const VOID: u32 = cube_types::sentinel::void as u32;
+pub const AIR: u32 = cube_types::object::air as u32;
+pub const UNKNOWN: u32 = cube_types::sentinel::unknown as u32;
 const _: () = assert!(VOID == 0);
 
-/// What a tree's leaf holds: the catalog value, and its record's handle.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Leaf {
-    pub id: u16,
-    pub ext: u16,
-}
-
-const EMPTY: Leaf = Leaf { id: VOID as u16, ext: NONE };
+const EMPTY: u16 = VOID as u16;
 
 fn key(zoom: Zoom, at: [i64; 3]) -> u128 {
     key_of::<3>(zoom, at)
 }
 
-/// The shard a node is under.
-fn shard(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
+/// The column, a node at `SHARD_ZOOM`, a node is under.
+fn column(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
     [at[0] >> (zoom - SHARD_ZOOM), at[1] >> (zoom - SHARD_ZOOM), 0]
 }
 
@@ -136,16 +119,15 @@ fn shard(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
 /// and a non-voxel value as empty, so a lone cube goes at the first fold and
 /// a wall keeps whole cells.
 fn fold_cell(children: [u16; 8], zoom: Zoom) -> u16 {
-    majority(children.map(|v| if object_value_is_voxel(u32::from(v)) { v } else { EMPTY.id }), zoom)
+    majority(children.map(|v| if object_value_is_voxel(u32::from(v)) { v } else { EMPTY }), zoom)
 }
 
-/// One leaf written: `<key, id, ext>`, its node, its catalog value and what
-/// it carries. VOID erases.
-#[derive(Clone, Debug)]
+/// One leaf written: `<key, id>`, its node and its catalog value. VOID
+/// erases.
+#[derive(Clone, Copy, Debug)]
 pub struct Write {
     pub key: u128,
     pub id: u32,
-    pub ext: Option<Ext>,
 }
 
 impl Write {
@@ -156,43 +138,33 @@ impl Write {
         Write {
             key: key(zoom, index_of(zoom, coord)),
             id,
-            ext: None,
         }
-    }
-
-    pub fn carrying(self, ext: Ext) -> Write {
-        Write { ext: Some(ext), ..self }
     }
 }
 
-/// The placed objects: one tree of leaves a shard, nothing kept of what a
+/// The placed objects: one tree of leaves a column, nothing kept of what a
 /// branch holds.
 #[derive(Default)]
 pub struct Store {
-    shards: HashMap<u128, Tree, FnvBuildHasher>,
-    ext: Pools,
+    columns: HashMap<u128, Tree, FnvBuildHasher>,
 }
 
-type Tree = SparseTree<Leaf, 3>;
+type Tree = SparseTree<u16, 3>;
 
 /// A node met in a descent: its zoom, its index and cube in the asker's frame,
 /// its value if it is a leaf; whether to go under it.
-type Enter<'a> = dyn FnMut(Zoom, [i64; 3], &Aabb, Option<Leaf>) -> bool + 'a;
+type Enter<'a> = dyn FnMut(Zoom, [i64; 3], &Aabb, Option<u16>) -> bool + 'a;
 
-/// Where a node stands in its shard's tree: the node or the leaf over it.
+/// Where a node stands in its column's tree: the node or the leaf over it.
 struct Found<'a> {
     tree: &'a Tree,
     zoom: Zoom,
-    slot: Slot<Leaf>,
+    slot: Slot<u16>,
 }
 
 impl Store {
     fn find(&self, zoom: Zoom, at: [i64; 3]) -> Option<Found<'_>> {
-        let tree = self.shards.get(&key(SHARD_ZOOM, shard(zoom, at)))?;
-        // The shard itself is its tree's root, whose children are the first block.
-        if zoom == SHARD_ZOOM {
-            return Some(Found { tree, zoom, slot: Slot::Branch(0) });
-        }
+        let tree = self.columns.get(&key(SHARD_ZOOM, column(zoom, at)))?;
         let (depth, slot) = tree.get(u32::from(zoom - SHARD_ZOOM), at);
         Some(Found {
             tree,
@@ -202,12 +174,12 @@ impl Store {
     }
 
     /// What a node shows: a leaf's value, or its children folded.
-    fn fold(&self, tree: &Tree, slot: Slot<Leaf>, zoom: Zoom, at: [i64; 3], hide: Option<u128>) -> u16 {
+    fn fold(&self, tree: &Tree, slot: Slot<u16>, zoom: Zoom, at: [i64; 3], hide: Option<u128>) -> u16 {
         match slot {
-            Slot::Leaf(v) if hide == Some(key(zoom, at)) && v != EMPTY => EMPTY.id,
-            Slot::Leaf(v) => v.id,
+            Slot::Leaf(v) if hide == Some(key(zoom, at)) && v != EMPTY => EMPTY,
+            Slot::Leaf(v) => v,
             Slot::Branch(block) => {
-                let mut kids = [EMPTY.id; 8];
+                let mut kids = [EMPTY; 8];
                 for (k, s) in tree.block(block).enumerate() {
                     kids[k] = self.fold(tree, s, zoom + 1, child_cube(zoom, at, k), hide);
                 }
@@ -220,33 +192,33 @@ impl Store {
     /// frame, a node entered where `enter` says so: its zoom, its index and
     /// cube there, and its value if it is a leaf.
     fn descend(&self, about: f64, enter: &mut Enter) {
-        for (&k, tree) in &self.shards {
+        for (&k, tree) in &self.columns {
             self.walk_column(tree, node_of::<3>(k).1, about, enter);
         }
     }
 
-    /// As `descend`, over only the shards `region` meets, edges included:
+    /// As `descend`, over only the columns `region` meets, edges included:
     /// what is read is as large as what is asked, not as the world's edits.
     fn descend_in(&self, region: &Aabb, enter: &mut Enter) {
         let side = units(SHARD_ZOOM);
         let across = |k: usize| (region.min[k] / side).floor() as i64..=(region.max[k] / side).floor() as i64;
         for y in across(1) {
             for x in across(0) {
-                let shard = [wrap_index(SHARD_ZOOM, x), y, 0];
-                if let Some(tree) = self.shards.get(&key(SHARD_ZOOM, shard)) {
-                    self.walk_column(tree, shard, about(region), enter);
+                let col = [wrap_index(SHARD_ZOOM, x), y, 0];
+                if let Some(tree) = self.columns.get(&key(SHARD_ZOOM, col)) {
+                    self.walk_column(tree, col, about(region), enter);
                 }
             }
         }
     }
 
-    fn walk_column(&self, tree: &Tree, shard: [i64; 3], about: f64, enter: &mut Enter) {
+    fn walk_column(&self, tree: &Tree, col: [i64; 3], about: f64, enter: &mut Enter) {
         for (s, slot) in tree.block(0).enumerate() {
-            self.walk(tree, slot, CUBE_ZOOM, child_cube(SHARD_ZOOM, shard, s), about, enter);
+            self.walk(tree, slot, CUBE_ZOOM, child_cube(SHARD_ZOOM, col, s), about, enter);
         }
     }
 
-    fn walk(&self, tree: &Tree, slot: Slot<Leaf>, zoom: Zoom, at: [i64; 3], about: f64, enter: &mut Enter) {
+    fn walk(&self, tree: &Tree, slot: Slot<u16>, zoom: Zoom, at: [i64; 3], about: f64, enter: &mut Enter) {
         let leaf = match slot {
             Slot::Leaf(EMPTY) => return,
             Slot::Leaf(v) => Some(v),
@@ -267,7 +239,7 @@ impl Store {
     pub fn each(&self, visit: &mut dyn FnMut(&Entry)) {
         self.descend(f64::NAN, &mut |zoom, at, _, leaf| {
             if let Some(v) = leaf {
-                visit(&Entry::of(zoom, at, v));
+                visit(&Entry { zoom, at, state: u32::from(v) });
             }
             true
         });
@@ -280,7 +252,7 @@ impl Store {
                 return false;
             }
             if let Some(v) = leaf {
-                visit(&Entry::of(zoom, at, v));
+                visit(&Entry { zoom, at, state: u32::from(v) });
             }
             true
         });
@@ -292,10 +264,14 @@ impl Store {
         let about = about(&cube(zoom, at));
         match f.slot {
             Slot::Leaf(EMPTY) => {}
-            Slot::Leaf(v) => visit(&Entry::of(f.zoom, node_near(f.zoom, at.map(|c| c >> (zoom - f.zoom)), about), v)),
+            Slot::Leaf(v) => visit(&Entry {
+                zoom: f.zoom,
+                at: node_near(f.zoom, at.map(|c| c >> (zoom - f.zoom)), about),
+                state: u32::from(v),
+            }),
             branch => self.walk(f.tree, branch, zoom, at, about, &mut |zoom, at, _, leaf| {
                 if let Some(v) = leaf {
-                    visit(&Entry::of(zoom, at, v));
+                    visit(&Entry { zoom, at, state: u32::from(v) });
                 }
                 true
             }),
@@ -328,8 +304,8 @@ impl Store {
                 return true;
             }
             let v = u32::from(match leaf {
-                Some(v) => v.id,
-                None => self.find(zoom, at).map_or(EMPTY.id, |f| self.fold(f.tree, f.slot, f.zoom, at, hide)),
+                Some(v) => v,
+                None => self.find(zoom, at).map_or(EMPTY, |f| self.fold(f.tree, f.slot, f.zoom, at, hide)),
             });
             if !object_value_is_voxel(v) {
                 return false;
@@ -354,17 +330,23 @@ impl Store {
     /// The leaf holding the cube at `zoom`, X in the asker's frame, or the
     /// cube itself as its eight fold to, and whether it is that fold.
     pub fn node(&self, zoom: Zoom, at: [i64; 3]) -> (Entry, bool) {
-        let empty = (Entry { zoom, at, state: VOID, ext: NONE }, false);
+        let empty = (Entry { zoom, at, state: VOID }, false);
         let Some(f) = self.find(zoom, at) else { return empty };
         match f.slot {
             Slot::Leaf(EMPTY) => empty,
-            Slot::Leaf(v) => (Entry::of(f.zoom, at.map(|c| c >> (zoom - f.zoom)), v), false),
+            Slot::Leaf(v) => (
+                Entry {
+                    zoom: f.zoom,
+                    at: at.map(|c| c >> (zoom - f.zoom)),
+                    state: u32::from(v),
+                },
+                false,
+            ),
             branch => (
                 Entry {
                     zoom,
                     at,
                     state: u32::from(self.fold(f.tree, branch, zoom, at, None)),
-                    ext: NONE,
                 },
                 true,
             ),
@@ -372,100 +354,43 @@ impl Store {
     }
 
     /// The value placed at exactly this node, if one is.
-    pub(crate) fn placed(&self, zoom: Zoom, at: [i64; 3]) -> Option<Entry> {
+    pub(crate) fn placed(&self, zoom: Zoom, at: [i64; 3]) -> Option<u16> {
         let f = self.find(zoom, at)?;
         match f.slot {
-            Slot::Leaf(v) if f.zoom == zoom && v != EMPTY => Some(Entry::of(zoom, at, v)),
+            Slot::Leaf(v) if f.zoom == zoom && v != EMPTY => Some(v),
             _ => None,
         }
     }
 
-    /// What a leaf carries beyond its id, if anything.
-    pub fn ext(&self, e: &Entry) -> Option<&Ext> {
-        self.ext.get(class_of(e.state)?, e.ext)
-    }
-
-    /// A marker's words, as put up; none for anything else.
-    pub fn words(&self, e: &Entry) -> Option<&str> {
-        match self.ext(e)? {
-            Ext::MarkerText(t) => Some(t),
-        }
-    }
-
-    /// Applies every write; the cubes that changed. A write whose record its
-    /// pool has no room for is left out, as if never sent.
+    /// Applies every write; the cubes that changed.
     pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> Vec<Aabb> {
         let mut changed = Vec::new();
-        for Write { key: k, id, ext } in writes {
+        for Write { key: k, id } in writes {
             let (zoom, at) = node_of::<3>(k);
-            xpute_kit::ensure!((CUBE_ZOOM..=OBJECT_FINEST).contains(&zoom), ENOTRECOVERABLE, zoom);
-            let id16 = u16::try_from(id).or_bug(Errno::EOVERFLOW);
-            // A record is the shape its id's class names, or none.
-            xpute_kit::ensure!(ext.as_ref().map(Ext::class) == ext.as_ref().and(class_of(id)), EINVAL, id);
-            self.release(zoom, at);
-            let handle = match ext {
-                Some(ext) => match self.ext.keep(ext) {
-                    Some(h) => h,
-                    None => continue,
-                },
-                None => NONE,
-            };
-            let value = Leaf { id: id16, ext: handle };
-            let shard = key(SHARD_ZOOM, shard(zoom, at));
-            let tree = match self.shards.get_mut(&shard) {
+            xpute_core::ensure!((CUBE_ZOOM..=OBJECT_FINEST).contains(&zoom), ENOTRECOVERABLE, zoom);
+            let value = u16::try_from(id).or_bug(Errno::EOVERFLOW);
+            let col = key(SHARD_ZOOM, column(zoom, at));
+            let tree = match self.columns.get_mut(&col) {
                 Some(tree) => tree,
                 None if value == EMPTY => continue,
-                None => self.shards.entry(shard).or_insert_with(|| Tree::new(EMPTY)),
+                None => self.columns.entry(col).or_insert_with(|| Tree::new(EMPTY)),
             };
             if tree.set(u32::from(zoom - SHARD_ZOOM), at, value) {
                 changed.push(cube(zoom, at));
             }
             if tree.uniform() == Some(EMPTY) {
-                self.shards.remove(&shard);
+                self.columns.remove(&col);
             }
         }
         changed
-    }
-
-    /// Frees the records of the leaves the node at `zoom` replaces: a leaf
-    /// at it or under it. One over it with a record is never split.
-    fn release(&mut self, zoom: Zoom, at: [i64; 3]) {
-        let mut freed = Vec::new();
-        if let Some(f) = self.find(zoom, at) {
-            if let Slot::Leaf(v) = f.slot {
-                xpute_kit::ensure!(f.zoom == zoom || v.ext == NONE, ENOTRECOVERABLE, f.zoom);
-            }
-        }
-        self.each_in(zoom, at, &mut |e| {
-            if e.ext != NONE {
-                freed.push((e.state, e.ext));
-            }
-        });
-        for (id, h) in freed {
-            if let Some(class) = class_of(id) {
-                self.ext.free(class, h);
-            }
-        }
     }
 
     /// Empties the store; the cubes that held anything.
     pub fn clear(&mut self) -> Vec<Aabb> {
         let mut held = Vec::new();
         self.each(&mut |e| held.push(e.cube()));
-        self.shards.clear();
-        self.ext.clear();
+        self.columns.clear();
         held
-    }
-}
-
-impl Entry {
-    fn of(zoom: Zoom, at: [i64; 3], leaf: Leaf) -> Entry {
-        Entry {
-            zoom,
-            at,
-            state: u32::from(leaf.id),
-            ext: leaf.ext,
-        }
     }
 }
 
@@ -491,7 +416,7 @@ pub struct Cells<'a> {
 }
 
 impl Cells<'_> {
-    /// The cells, X and Y at the asked zoom, of the node's shard and `apron`
+    /// The cells, X and Y at the asked zoom, of the node's column and `apron`
     /// more on each side.
     pub fn column_cells(&self, apron: i64) -> ([i64; 2], [i64; 2]) {
         let (zoom, at) = self.node;
@@ -500,7 +425,7 @@ impl Cells<'_> {
         ([x - apron, y - apron], [x + n + apron, y + n + apron])
     }
 
-    /// What the objects fold to over the node's shard and `apron` more cells
+    /// What the objects fold to over the node's column and `apron` more cells
     /// on each side, at the asked zoom, with `hide` left out.
     pub fn fold(&self, apron: i64, hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
         let (from, to) = self.column_cells(apron);
@@ -518,7 +443,7 @@ impl Cells<'_> {
         if zoom >= SHARD_ZOOM {
             return self.store.each_in(zoom, at, visit);
         }
-        // Over a tree's root: the leaves of every shard under it, those
+        // Over a tree's root: the leaves of every column under it, those
         // only touching its faces left out.
         let whole = cube(zoom, at);
         self.store.entries_in(&whole, &mut |e| {
@@ -533,8 +458,8 @@ impl Cells<'_> {
         self.store.holds(self.node.0, self.node.1)
     }
 
-    /// The leaf placed at exactly the node, if one is.
-    pub fn placed(&self) -> Option<Entry> {
+    /// The value placed at exactly the node, if one is.
+    pub fn placed(&self) -> Option<u16> {
         self.store.placed(self.node.0, self.node.1)
     }
 }
@@ -559,7 +484,7 @@ impl Query for Store {
             }))
         };
         let whole = region(node);
-        // One tree holds a cube under a shard's root; else its shards' leaves.
+        // One tree holds a cube under a column's root; else its columns' leaves.
         let Some(at) = (D == 3 && node.0 >= SHARD_ZOOM).then(|| [node.1[0], node.1[1], node.1[2]]) else {
             self.entries_in(&whole, &mut |e| {
                 if let Some(b) = e.cube().meet(whole) {

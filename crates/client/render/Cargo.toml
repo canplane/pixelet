@@ -10,7 +10,7 @@ path = "src/lib.rs"
 [dependencies]
 libm.workspace = true
 xpute-guest = { path = "../../../xpute/rust/guest" }
-xpute-kit = { path = "../../../xpute/rust/kit" }
+xpute-core = { path = "../../../xpute/rust/core" }
 pxl-spec = { path = "../../spec" }
 
 # The device's GPU, where the kernel draws itself (gpu/api/device.rs): what the

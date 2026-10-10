@@ -3,13 +3,13 @@
 /**
  * The keys the shell answers, each sent to whatever owns what it does: the
  * movement keys' direction to the kernel; a digit, a tool, a size, the dock's
- * mode and the drawer to the shell's own stores. A key has no place on the screen to
+ * turn and the drawer to the shell's own stores. A key has no place on the screen to
  * route it as a pointer's has, so this is that routing: a sheet in front takes
  * every key but Escape, which closes it, and a field takes every key but Tab.
  * Keys are named by `code`, the key's place, so any layout works the same.
  */
 
-import type { i32 } from "@xpute/kit/abi/word.ts";
+import type { i32 } from "@xpute/core/abi/word.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_keys } from "@/kernel/shell.ts";
 import { closeModal, modalOpen, openModal } from "@/app/modal.tsx";
@@ -44,16 +44,15 @@ function sendMove(): void {
 }
 
 function pickSlot(slot: number): void {
-  const { recentPicks, selectCube, selectDecor, selectMarker, cueSwatch } = useUiStore.getState();
+  const { recentPicks, selectCube, selectDecor, cueSwatch } = useUiStore.getState();
   const pick = recentPicks[slot];
   if (pick.tool === ActiveTool.Decor) return selectDecor(pick.kind);
-  if (pick.tool === ActiveTool.Marker) return selectMarker();
   selectCube(pick.cube);
   cueSwatch(pick.cube, false);
 }
 
 /** Whether the key is one the shell answers, so a driver can leave the rest alone. */
-export function keyDown(code: string, { inField }: { inField: boolean }): boolean {
+export function keyDown(code: string, { shift, inField }: { shift: boolean; inField: boolean }): boolean {
   if (code === "Escape") {
     if (!modalOpen()) return false;
     closeModal();
@@ -61,7 +60,7 @@ export function keyDown(code: string, { inField }: { inField: boolean }): boolea
   }
   if (modalOpen()) return false;
   if (code === "Tab") {
-    useUiStore.getState().switchDockMode();
+    useUiStore.getState().turnDock(shift ? -1 : 1);
     return true;
   }
   if (inField) return false;

@@ -4,12 +4,12 @@
 //! scaled into the model's frame, met against its triangles. Before its model
 //! arrives it is not drawn, and nothing strikes it.
 
-use pxl_spec::block::decor::Decor;
-use pxl_spec::block::DecorId;
+use pxl_spec::cell::decor::DecorKind;
+use pxl_spec::cell::DecorId;
 use pxl_spec::space::coord::v3::{cross3, dot3, sub3, V3};
 use xpute_guest::mem::base::ptr_at;
 
-use crate::decor::assets::{decor_assets, decor_assets_for};
+use crate::decor::assets::{decor_assets_for, kind_assets};
 use crate::layer::instance::{Instance, Meta};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::terrain::scatter::SCALE_JITTER;
@@ -18,7 +18,7 @@ use crate::model::registry::Models;
 /// How far past where it stands any decor reaches: the largest loaded
 /// model's bounding radius at the largest size a decor is drawn at.
 pub fn reach(models: &Models) -> f64 {
-    let radius = decor_assets()
+    let radius = kind_assets()
         .iter()
         .flat_map(|e| e.models.iter().copied())
         .flatten()
@@ -32,8 +32,8 @@ pub fn reach(models: &Models) -> f64 {
 /// `limit`; hidden or not, since what an eraser is over is what it hid.
 pub fn strike(models: &Models, i: &Instance, o: V3, d: V3, limit: f64) -> Option<f64> {
     let Meta::Decor(m) = i.meta;
-    let decor = Decor::of(DecorId::of(i.id)?);
-    let mesh = decor_assets_for(decor)?.models.get(m.variant as usize).copied().flatten().and_then(|h| models.mesh(h))?;
+    let kind = DecorKind::of(DecorId::of(i.id)?);
+    let mesh = decor_assets_for(kind)?.models.get(m.variant as usize).copied().flatten().and_then(|h| models.mesh(h))?;
     // SAFETY: the model's block, positions first, indices past the vertex words.
     let (positions, indices) = unsafe {
         (

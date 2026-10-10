@@ -9,8 +9,8 @@ use std::fs;
 use std::sync::Arc;
 
 use pxl_geo_bake::coverage::{Coverage, Overture};
+use pxl_geo_bake::deck::{self, source::Disk};
 use pxl_geo_bake::elevation::Raster;
-use pxl_geo_bake::separation::{self, source::Disk};
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_spec::bake::format::encode_terrain;
@@ -24,18 +24,23 @@ fn main() {
     let raster = Arc::new(Raster::open(&mut client).expect("raster"));
     let repo = TerrainRepository::prepare(&mut client, raster).expect("prepare");
     let memo = std::env::temp_dir().join("pxl-source");
+    let mut flat = 0;
 
     for tile in tiles {
         let idx = tile.parse().expect("tile_idx");
         assert!(coverage.contains(idx), "{tile} is not a tile of the coverage");
-        let reader = &mut separation::Reader {
+        let reader = &mut deck::Reader {
             client: &mut client,
             repo: &repo,
             store: &mut Disk(&memo),
         };
-        let terrain = bake_leaf(reader, idx).expect("bake");
+        let (terrain, off_raster) = bake_leaf(reader, idx).expect("bake");
         let bytes = encode_terrain(&terrain).expect("encode");
         fs::write(format!("{dir}/{tile}.db.tile"), &bytes).expect("write");
+        flat += usize::from(off_raster);
         println!("{tile}\t{}", bytes.len());
+    }
+    if flat > 0 {
+        eprintln!("[bake] no elevation on {flat} tile(s)");
     }
 }

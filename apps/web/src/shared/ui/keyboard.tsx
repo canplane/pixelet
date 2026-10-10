@@ -6,10 +6,9 @@ import { Keyboard, StyleSheet, View, type ViewProps } from "react-native";
 let kept = false;
 
 /**
- * Spread on a view a touch may start in and leave the keyboard as it is,
- * up or put away by the view itself. A kept view marks the touch during
- * capture and takes nothing; position is never asked, since a view may be
- * lifted by a transform no measure sees.
+ * Spread on a view a touch may start in and leave the keyboard up. A kept
+ * view marks the touch during capture and takes nothing; position is never
+ * asked, since a view may be lifted by a transform no measure sees.
  */
 export const KEEPS_KEYBOARD: ViewProps = { onStartShouldSetResponderCapture: () => keepKeyboard() };
 
@@ -19,14 +18,12 @@ export function keepKeyboard(): false {
   return false;
 }
 
-/** A touch starting anywhere but a kept view puts the keyboard away, and `onAway` is told. */
-export function KeyboardAway({ children, onAway }: { children: ReactNode; onAway?: () => void }) {
+/** A touch starting anywhere but a kept view puts the keyboard away. */
+export function KeyboardAway({ children }: { children: ReactNode }) {
   const onTouch = () => {
     kept = false;
     queueMicrotask(() => {
-      if (kept) return;
-      Keyboard.dismiss();
-      onAway?.();
+      if (!kept) Keyboard.dismiss();
     });
     return false;
   };

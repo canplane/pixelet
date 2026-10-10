@@ -21,10 +21,10 @@ use xpute_guest::global::Global;
 use crate::mem::MB;
 use crate::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use pxl_spec::asset::ingested::Asset;
-use xpute_kit::math::scalar::round;
+use xpute_core::math::scalar::round;
 
 use crate::billboard::sheet::billboard_sheet;
-use crate::decor::assets::decor_assets;
+use crate::decor::assets::kind_assets;
 use crate::io::host::handheld;
 use crate::io::load::{load_image, Load};
 use crate::io::text::text_raster;
@@ -44,7 +44,7 @@ const EARTH: Asset = Asset::sky_earth_07_webp;
 
 use crate::view::frame::pose::{sea_under_eye, view};
 
-const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the earth layer holds");
+const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");
 
 pub fn stage_write() {
     let v = view();
@@ -60,6 +60,8 @@ pub fn stage_write() {
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
     s[STAGE_AT::FOV] = v.fov;
+    s[STAGE_AT::NEAR] = v.near;
+    s[STAGE_AT::FAR] = v.far;
     // The camera grid's cell angle: the largest drawn cell per unit of
     // distance, since a cell is drawn from its split distance on.
     s[STAGE_AT::LOD_CELL] = crate::view::sight::cell_angle(crate::chunk::quality::effective().tau());
@@ -67,8 +69,7 @@ pub fn stage_write() {
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
     s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
-    // In the pixels the world is drawn at, which the resolution steps.
-    s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH * crate::view::frame::resolution::world_ratio();
+    s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { crate::param::RIM_INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
 }
@@ -81,9 +82,9 @@ pub fn stage_render() {
     let lists = kernel().draw.take();
     let models = &kernel().models;
     let mut decor = [(0u32, None, [0.0f32; 3]); GROUPS];
-    let variants = decor_assets().iter().flat_map(|entry| {
+    let variants = kind_assets().iter().flat_map(|entry| {
         (0..entry.models.len()).map(move |v| {
-            let extent = entry.decor.variants.get(v).and_then(|a| a.model.ingested().extent).unwrap_or([0.0; 3]);
+            let extent = entry.kind.variants.get(v).and_then(|a| a.model.ingested().extent).unwrap_or([0.0; 3]);
             (entry.models[v], entry.skin(v), extent.map(|e| e as f32))
         })
     });
@@ -195,7 +196,7 @@ pub fn visible_step(ctx: &mut TickContext) {
         }
         let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
         k.scene.begin(&mut k.draw, &k.models, frame.eye);
-        crate::scene::indicator::camera_gizmo::draw(&mut k.draw, settings_store().camera_gizmo);
+        crate::scene::marker::camera_gizmo::draw(&mut k.draw, settings_store().camera_gizmo);
         k.sched.draw(&frame, &mut k.draw);
         moving || animating
     });
@@ -204,7 +205,7 @@ pub fn visible_step(ctx: &mut TickContext) {
         let k = kernel();
         let edits = crate::chunk::source::previewed();
         let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
-        crate::chunk::decor::cell::step(&pxl_spec::block::decor::DECORS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
+        crate::chunk::decor::cell::step(&pxl_spec::cell::decor::KINDS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
     }
     crate::chunk::place::step(ctx);
     let k = kernel();

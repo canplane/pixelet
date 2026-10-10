@@ -7,11 +7,11 @@
 //! (door/layout.rs), which hands each owner its own at boot; a range is read
 //! only through `lane` and `Section::at`, which check its end.
 
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::section::Section;
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
 
 /// One owner's range, handed in once at boot; asking before is a bug.
 pub struct Held(Global<Option<Section>>);
@@ -44,7 +44,7 @@ impl Held {
 /// a valid `T` (zeroed, for the plain numbers every lane here holds).
 pub unsafe fn lane<T>(s: Section, off: u32, n: usize) -> &'static mut [T] {
     let at = u32::try_from(n * size_of::<T>()).ok().and_then(|bytes| s.at(off, bytes)).or_bug(Errno::ENOTRECOVERABLE);
-    xpute_kit::ensure!((at as usize).is_multiple_of(align_of::<T>()), ENOTRECOVERABLE, at);
+    xpute_core::ensure!((at as usize).is_multiple_of(align_of::<T>()), ENOTRECOVERABLE, at);
     // SAFETY: inside `s`, aligned, and the caller's alone.
     unsafe { core::slice::from_raw_parts_mut(ptr_at::<T>(at as usize), n) }
 }

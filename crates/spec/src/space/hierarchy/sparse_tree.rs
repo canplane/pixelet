@@ -55,7 +55,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     /// The node `depth` levels under the root holding `at`, its index at that
     /// depth: its slot and how deep it is, or the leaf above it and its depth.
     pub fn get(&self, depth: u32, at: [i64; D]) -> (u32, Slot<T>) {
-        xpute_kit::ensure!(depth >= 1, EINVAL, depth);
+        xpute_core::ensure!(depth >= 1, EINVAL, depth);
         let mut base = 0;
         for d in 1..=depth {
             match self.slot(base + toward(at, depth - d)) {
@@ -63,13 +63,13 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
                 s => return (d, s),
             }
         }
-        xpute_kit::bug!(EINVAL, depth)
+        xpute_core::bug!(EINVAL, depth)
     }
 
     /// Makes the node `depth` levels under the root holding `at` one leaf of
     /// `value`; whether anything changed.
     pub fn set(&mut self, depth: u32, at: [i64; D], value: T) -> bool {
-        xpute_kit::ensure!((1..=32).contains(&depth), EINVAL, depth);
+        xpute_core::ensure!((1..=32).contains(&depth), EINVAL, depth);
         let mut path = [0usize; 32];
         let mut base = 0;
         for d in 1..depth {

@@ -4,7 +4,7 @@
 
 /// What each bake is published as, read by the client for the path it
 /// requests: `v<format>.<date>.<n>`, the format the client reads it in, and
-/// the UTC day it was published with that day's count, 1 for the first. What it was
+/// the day it was baked with that day's count, 1 for the first. What it was
 /// baked from and by is its manifest's to say, not its name's.
 ///
 /// A published folder is immutable, so a cache never holds a tile another
@@ -13,69 +13,75 @@
 /// bumps the format. Setting a name here is the whole change.
 pub struct PublishedVersion {
     pub terrain: &'static str,
-    pub place: &'static str,
-    pub division: &'static str,
+    pub poi: &'static str,
+    pub geocode: &'static str,
     pub earth: &'static str,
 }
 
 pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {
     terrain: "v7.2026-10-04.1",
-    place: "v9.2026-10-04.2",
-    division: "v5.2026-10-04.1",
+    poi: "v9.2026-10-04.2",
+    geocode: "v5.2026-10-04.1",
     earth: "v1.2026-10-05.1",
 };
 
-/// The format each bake writes now, which a published name begins with.
-/// Bumped only by a change to how the client reads a tile.
+/// The format each bake writes now, which a bake's folder is named by with
+/// its day. Bumped only by a change to how the client reads a tile.
 pub struct Format {
     pub terrain: u32,
-    pub place: u32,
-    pub division: u32,
+    pub poi: u32,
+    pub geocode: u32,
     pub earth: u32,
 }
 
 pub const FORMAT: Format = Format {
     terrain: 8,
-    place: 10,
-    division: 7,
+    poi: 9,
+    geocode: 5,
     earth: 1,
 };
 
-/// The base layers a version is published for: the fields of `PUBLISHED_VERSION`,
+/// A bake's folder and published name: its format, the day it was baked
+/// (`YYYY-MM-DD`, UTC) and that day's count of bakes of its kind, from 1.
+pub fn version_name(format: u32, day: &str, n: u32) -> String {
+    format!("v{format}.{day}.{n}")
+}
+
+/// The kinds a version is published for: the fields of `PUBLISHED_VERSION`,
 /// numbered in their order.
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum BaseLayer {
+pub enum BakeKind {
     terrain,
-    place,
-    division,
+    poi,
+    geocode,
     earth,
 }
 
-impl BaseLayer {
-    pub const ALL: [BaseLayer; 4] = [BaseLayer::terrain, BaseLayer::place, BaseLayer::division, BaseLayer::earth];
+impl BakeKind {
+    pub const ALL: [BakeKind; 4] = [BakeKind::terrain, BakeKind::poi, BakeKind::geocode, BakeKind::earth];
 
-    /// The layer a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<BaseLayer> {
-        BaseLayer::ALL.into_iter().find(|k| *k as u32 == number)
+    /// The kind a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<BakeKind> {
+        BakeKind::ALL.into_iter().find(|k| *k as u32 == number)
     }
 }
 
 impl PublishedVersion {
-    /// `PUBLISHED_VERSION[layer]`.
-    pub fn of(&self, layer: BaseLayer) -> &'static str {
-        match layer {
-            BaseLayer::terrain => self.terrain,
-            BaseLayer::place => self.place,
-            BaseLayer::division => self.division,
-            BaseLayer::earth => self.earth,
+    /// `PUBLISHED_VERSION[kind]`.
+    pub fn of(&self, kind: BakeKind) -> &'static str {
+        match kind {
+            BakeKind::terrain => self.terrain,
+            BakeKind::poi => self.poi,
+            BakeKind::geocode => self.geocode,
+            BakeKind::earth => self.earth,
         }
     }
 }
 
 /// What the published bake declares of itself to the client: `top_z`, the
-/// coarsest zoom of the pyramid it supplies whole, terrain and places alike. The
+/// coarsest zoom of the pyramid it supplies whole, terrain and POI alike. The
 /// client's floor is held there, all around the eye, and the far edge is where
 /// that zoom ends (pxl-kernel layer/residency/floor.rs). The dev tile server
 /// answers the same object at the tile root's `source`, its `--folds` zooms

@@ -6,15 +6,14 @@
  * layer arrives after mount. The world's view is also the app's input driver.
  */
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
-import { round } from "@xpute/kit/math/scalar.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { round } from "@xpute/core/math/scalar.ts";
 import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { AppState, type GestureResponderEvent, type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, StyleSheet, type ViewProps } from "react-native";
 
-import { PointerPhase, PointerType } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_open, kernel_rect, kernel_visible } from "@/kernel/control/input.ts";
-import { worldPointer } from "@/app/store/pointer.ts";
+import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_open, kernel_pointer, kernel_rect, kernel_visible } from "@/kernel/control/input.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { surface_close, surface_open, surface_size } from "@/kernel/render/surface.ts";
 import { request_frame, type Viewport } from "@/kernel/sched.ts";
@@ -88,7 +87,7 @@ export function WorldSurface() {
   };
 
   const touches = (phase: PointerPhase) => (e: GestureResponderEvent) => {
-    for (const t of e.nativeEvent.changedTouches) worldPointer(phase, PointerType.Touch, Number(t.identifier), 0, t.locationX, t.locationY);
+    for (const t of e.nativeEvent.changedTouches) kernel_pointer(phase, PointerKind.Touch, Number(t.identifier), 0, t.locationX, t.locationY);
   };
 
   return (
@@ -99,7 +98,7 @@ export function WorldSurface() {
       onTouchStart={touches(PointerPhase.Down)}
       onTouchMove={touches(PointerPhase.Move)}
       onTouchEnd={touches(PointerPhase.Up)}
-      onTouchCancel={touches(PointerPhase.Cancel)}
+      onTouchCancel={touches(PointerPhase.Up)}
     />
   );
 }

@@ -16,7 +16,7 @@ const web = path.join(root, "apps/web/src");
 /** An import-map prefix and the directory it names. */
 const PREFIXES = [
   ["@/", web + "/"],
-  ["@xpute/kit/", path.join(root, "xpute/ts/kit/src/")],
+  ["@xpute/core/", path.join(root, "xpute/ts/core/src/")],
   ["@xpute/host/", path.join(root, "xpute/ts/host/src/")],
 ];
 

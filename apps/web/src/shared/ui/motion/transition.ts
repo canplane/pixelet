@@ -6,7 +6,7 @@
  * thread's frame, so a per-frame curve would stutter while loading.
  */
 
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 
 /** Samples from 0 to 1 at evenly spaced moments (past 1 where a spring overshoots). */
 export interface Transition {

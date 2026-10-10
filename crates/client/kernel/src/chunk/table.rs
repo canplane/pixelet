@@ -45,15 +45,15 @@ use crate::param;
 use crate::setting::store::settings_store;
 use crate::Build;
 use pxl_spec::space::coord::zoom::{units, Zoom};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 use xpute_guest::global::Global;
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
 
 use crate::chunk::domain::{self, Domain};
 use crate::chunk::Chunk;
 use crate::io::demand::Order;
-use crate::layer::Base as _;
-use pxl_spec::bake::format::TerrainTile;
+use crate::layer::Layer as _;
+use pxl_spec::bake::format::Terrain;
 
 /// `.fixed.mounts`, handed in at boot.
 pub static MOUNTS_RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
@@ -273,7 +273,7 @@ impl Env for Pieces<'_> {
     }
 
     fn buildable(&self, c: Chunk) -> bool {
-        TerrainTile::residency().read(c.node(), c.cell_zoom()).value().is_some()
+        Terrain::residency().read(c.node(), c.cell_zoom()).value().is_some()
     }
 
     fn order(&self, c: Chunk) -> Order {
@@ -392,6 +392,17 @@ impl Scheduler {
     pub fn cells_at(&self, p: &Pvf3) -> Option<Zoom> {
         let s = self.drawn_slot(p)?;
         s.layout.map(|_| s.chunk.cell_zoom())
+    }
+
+    /// The finest drawn chunk holding `p`, as tile zooms, as the gauge reads
+    /// them: its own tile's, its cells', and the one it is read from.
+    pub fn drawn_at(&self, p: &Pvf3) -> Option<(i32, Option<i32>, Option<i32>)> {
+        let s = self.drawn_slot(p)?;
+        Some((
+            GROUND.read_zoom(s.chunk.cell_zoom()) as i32,
+            s.layout.map(|_| GROUND.tile_zoom(s.chunk.cell_zoom())),
+            s.sources.read_from.map(|z| z as i32),
+        ))
     }
 
     /// Whether the last frame drew any ground on screen.
@@ -590,7 +601,7 @@ impl Scheduler {
             self.view_dirty = true;
         }
         for &k in &plan.start {
-            xpute_kit::ensure!(self.find(&k).is_none(), ENOTRECOVERABLE);
+            xpute_core::ensure!(self.find(&k).is_none(), ENOTRECOVERABLE);
             self.add(k);
             self.counts.added += 1;
         }
@@ -691,7 +702,7 @@ impl Scheduler {
             let Some(t) = s.tier(generation) else { continue };
             // Slots are recycled between chunks, so a chunk must draw only from a slot
             // it holds; otherwise it can draw another chunk's ground.
-            xpute_kit::ensure!(holder[t.slot.index] == Nth::of(s.id as usize), ENOTRECOVERABLE);
+            xpute_core::ensure!(holder[t.slot.index] == Nth::of(s.id as usize), ENOTRECOVERABLE);
             if t.box_cnt == 0 {
                 continue;
             }

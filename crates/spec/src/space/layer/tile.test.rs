@@ -159,6 +159,13 @@ fn every_tile_survives_its_name_at_every_zoom() {
     }
 }
 
+/// An index past the seam names the tile it stands on.
+#[test]
+fn the_seam_wraps_rather_than_falling_outside() {
+    let n = 1i64 << LEAF_ZOOM;
+    assert_eq!(Tile::new(LEAF_ZOOM, ivec::gather(n / 2, 0, 0)).name(), Tile::new(LEAF_ZOOM, ivec::gather(-n / 2, 0, 0)).name());
+}
+
 #[test]
 fn what_is_not_a_held_tile_s_name_is_refused() {
     assert_eq!(Tile::of_name(""), None);

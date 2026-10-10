@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run -A
-// Builds the guest's module (crates/client-bracket/wasm) to where
-// src/platform/web/guest.ts loads it.
+// Builds the Rust core's module (crates/client-bracket/wasm) to where
+// src/platform/web/core.ts loads it.
 //
 //   deno run -A script/build-wasm.ts [--published]
 
@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 const CRATES = new URL("../../../crates/", import.meta.url);
 const TARGET = "wasm32-unknown-unknown";
 const BUILT = new URL(`target/${TARGET}/release/pxl_wasm.wasm`, CRATES);
-const OUT = new URL("../src/kernel/guest.wasm", import.meta.url);
+const OUT = new URL("../src/kernel/kernel.wasm", import.meta.url);
 /** The source path each number in a published module's panics stands for; kept by the deploy, never bundled. */
-const PATHS = new URL("../src/kernel/guest.paths.json", import.meta.url);
+const PATHS = new URL("../src/kernel/kernel.paths.json", import.meta.url);
 
 /** Panic locations survive `strip` and carry the home directory, so the
  * prefixes are remapped. The repo goes first since it lies under home. */
@@ -43,16 +43,14 @@ const WASM_OPT = [
   "--strip-target-features",
 ];
 
-/** A step that failed, and the code the build exits with. */
-class Failed extends Error {
-  constructor(readonly code: number, message = "") {
-    super(message);
-  }
+/** Per-run files, renamed into place at the end: a dev server's build and a check's ran at once. */
+function staged(step: string): URL {
+  return new URL(`kernel.${Deno.pid}.${step}.wasm`, OUT);
 }
 
-async function optimized(from: string, out: string): Promise<void> {
+async function optimized(from: URL, out: URL): Promise<void> {
   const wasmOpt = new Deno.Command("wasm-opt", {
-    args: [...WASM_OPT, from, "-o", out],
+    args: [...WASM_OPT, fileURLToPath(from), "-o", fileURLToPath(out)],
     stdout: "inherit",
     stderr: "inherit",
   });
@@ -60,9 +58,11 @@ async function optimized(from: string, out: string): Promise<void> {
   try {
     done = await wasmOpt.output();
   } catch {
-    throw new Failed(1, "[build-wasm] wasm-opt did not run. The module is finished by Binaryen: brew install binaryen (or your platform's package).");
+    console.error("[build-wasm] wasm-opt did not run. The module is finished by Binaryen: brew install binaryen (or your platform's package).");
+    Deno.exit(1);
   }
-  if (!done.success) throw new Failed(done.code || 1);
+  await Deno.remove(from);
+  if (!done.success) Deno.exit(done.code || 1);
 }
 
 /** embassy and critical-section export their `#[no_mangle]` symbols; only these stay. */
@@ -76,7 +76,7 @@ async function finish(...args: string[]): Promise<string> {
     stdout: "piped",
     stderr: "inherit",
   }).output();
-  if (!done.success) throw new Failed(done.code || 1);
+  if (!done.success) Deno.exit(done.code || 1);
   return new TextDecoder().decode(done.stdout).trim();
 }
 
@@ -94,40 +94,24 @@ let status: Deno.CommandStatus;
 try {
   status = await cargo.output();
 } catch (err) {
-  console.error(`[build-wasm] cargo did not run (${err}). The guest needs a Rust toolchain with the ${TARGET} target: rustup target add ${TARGET}`);
+  console.error(`[build-wasm] cargo did not run (${err}). The core needs a Rust toolchain with the ${TARGET} target: rustup target add ${TARGET}`);
   Deno.exit(1);
 }
 if (!status.success) Deno.exit(status.code);
 
 // Finishing an unchanged module again would reload every open dev page.
 if (modified(BUILT) === before && exists(OUT) && modified(OUT) >= before) {
-  console.log("[build-wasm] up to date -> src/kernel/guest.wasm");
+  console.log("[build-wasm] up to date -> src/kernel/kernel.wasm");
   Deno.exit(0);
 }
 
-// One directory a run under cargo's target, removed whole: a failed run leaves
-// nothing beside the module, a killed one leaves it where cargo clean takes
-// it, and a dev server's build and a check's never share a file. On the
-// module's volume, so what it holds is renamed into place.
-const work = await Deno.makeTempDir({ dir: fileURLToPath(new URL("target/", CRATES)), prefix: "pxl-build-wasm-" });
-try {
-  const linkedFile = `${work}/linked.wasm`;
-  const done = `${work}/done.wasm`;
-  await Deno.copyFile(BUILT, linkedFile);
-  const linked = (await Deno.stat(linkedFile)).size;
-  await finish("exports", linkedFile, ...EXPORTS);
-  await optimized(linkedFile, done);
-  const numbered = `${work}/paths.json`;
-  const paths = published ? Number(await finish("number", done, numbered)) : 0;
-  // The module last: it is what a reader keys on.
-  if (published) await Deno.rename(numbered, PATHS);
-  await Deno.rename(done, OUT);
-  const said = (published ? ", without the dev-only settings" : "") + (paths > 0 ? `, and ${paths} source paths numbered` : "");
-  console.log(`[build-wasm] ${linked} -> ${(await Deno.stat(OUT)).size} bytes, stripped${said} -> src/kernel/guest.wasm`);
-} catch (err) {
-  if (!(err instanceof Failed)) throw err;
-  if (err.message) console.error(err.message);
-  Deno.exitCode = err.code;
-} finally {
-  await Deno.remove(work, { recursive: true });
-}
+const linkedFile = staged("linked");
+const done = staged("done");
+await Deno.copyFile(BUILT, linkedFile);
+const linked = (await Deno.stat(linkedFile)).size;
+await finish("exports", fileURLToPath(linkedFile), ...EXPORTS);
+await optimized(linkedFile, done);
+const paths = published ? Number(await finish("number", fileURLToPath(done), fileURLToPath(PATHS))) : 0;
+await Deno.rename(done, OUT);
+const said = (published ? ", without the dev-only settings" : "") + (paths > 0 ? `, and ${paths} source paths numbered` : "");
+console.log(`[build-wasm] ${linked} -> ${(await Deno.stat(OUT)).size} bytes, stripped${said} -> src/kernel/kernel.wasm`);

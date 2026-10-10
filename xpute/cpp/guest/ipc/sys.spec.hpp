@@ -46,7 +46,7 @@ inline constexpr std::uint32_t WRITE = 3u;
 inline constexpr std::uint32_t CLOSE = 4u;
 
 // errno, line, column, a (low, high word), b (low, high word), then the file's bytes:
-// the broken invariant the guest reports before it stops (xpute-kit status/bug.rs).
+// the broken invariant the guest reports before it stops (xpute-core status/bug.rs).
 inline constexpr std::uint32_t ABORT = 5u;
 
 // The bit every call a program numbers for itself carries.

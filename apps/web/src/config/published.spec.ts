@@ -5,7 +5,7 @@
 /**
  * What each bake is published as, read by the client for the path it
  * requests: `v<format>.<date>.<n>`, the format the client reads it in, and
- * the UTC day it was published with that day's count, 1 for the first. What it was
+ * the day it was baked with that day's count, 1 for the first. What it was
  * baked from and by is its manifest's to say, not its name's.
  *
  * A published folder is immutable, so a cache never holds a tile another
@@ -15,26 +15,15 @@
  */
 export const PUBLISHED_VERSION = {
   terrain: "v7.2026-10-04.1",
-  place: "v9.2026-10-04.2",
-  division: "v5.2026-10-04.1",
+  poi: "v9.2026-10-04.2",
+  geocode: "v5.2026-10-04.1",
   earth: "v1.2026-10-05.1",
 } as const;
 
-export type BaseLayer = keyof typeof PUBLISHED_VERSION;
+export type BakeKind = keyof typeof PUBLISHED_VERSION;
 
-/** The base layers by the number the kernel names one by: the root a bake's objects are opened below (xpute's OPENAT). */
-export const BASE_LAYERS: readonly BaseLayer[] = ["terrain", "place", "division", "earth"];
-
-/**
- * The format each bake writes now, which a published name begins with.
- * Bumped only by a change to how the client reads a tile.
- */
-export const FORMAT: Record<BaseLayer, number> = {
-  terrain: 8,
-  place: 10,
-  division: 7,
-  earth: 1,
-};
+/** The kinds by the number the kernel names one by: the root a bake's objects are opened below (xpute's OPENAT). */
+export const BAKE_KINDS: readonly BakeKind[] = ["terrain", "poi", "geocode", "earth"];
 
 /** What a tile source declares of itself: SOURCE's shape, which the dev tile
  * server answers too. */
@@ -44,7 +33,7 @@ export interface TileSource {
 
 /**
  * What the published bake declares of itself to the client: `top_z`, the
- * coarsest zoom of the pyramid it supplies whole, terrain and places alike. The
+ * coarsest zoom of the pyramid it supplies whole, terrain and POI alike. The
  * client's floor is held there, all around the eye, and the far edge is where
  * that zoom ends (pxl-kernel layer/residency/floor.rs). The dev tile server
  * answers the same object at the tile root's `source`, its `--folds` zooms

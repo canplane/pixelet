@@ -22,8 +22,8 @@ declare global {
    * one thing about them the build knows and the source cannot. */
   const __PUBLISHED_TILES__: boolean;
 
-  /** Where the tiles come from: `delivery`, the deployment's, or the servers
-   * of `dev:oven` or `dev:shelf`, named as the task is. */
+  /** Where a dev server's routes go: `remote`, or the servers of `dev:local`
+   * or `dev:baked`, named as the task is. */
   const __DEV_SOURCE__: string;
 }
 

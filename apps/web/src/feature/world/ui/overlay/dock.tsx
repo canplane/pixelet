@@ -5,8 +5,8 @@ import { useTranslation } from "react-i18next";
 import { Keyboard, PanResponder, PixelRatio, Pressable, ScrollView, StyleSheet, type TextInput, View } from "react-native";
 import { PAN_X } from "@platform/gesture.ts";
 
-import type { f64, u32, u8 } from "@xpute/kit/abi/word.ts";
-import { round } from "@xpute/kit/math/scalar.ts";
+import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
+import { round } from "@xpute/core/math/scalar.ts";
 import { Backing } from "@platform/backing.tsx";
 import type { GlyphName } from "@platform/icon.tsx";
 import { BackingPlace } from "@/shared/ui/backing.ts";
@@ -14,7 +14,7 @@ import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
-import { cardPose, deckSwipe, peekBelow } from "@/shared/ui/deck.ts";
+import { cardPose, deckDepth, deckSwipe, peekBelow, useTurnedBack } from "@/shared/ui/deck.ts";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { FADE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
@@ -22,12 +22,12 @@ import { TextField } from "@/shared/ui/text-field.tsx";
 import { touches } from "@/shared/ui/touch.ts";
 import { alpha, chrome, color, disabledContent, material, shadow } from "@/shared/ui/theme.ts";
 import { openModal } from "@/app/modal.tsx";
-import { cancelMarker, chatFits, DockMode, draftMarkerWords, holdTier, holdTool, markerTextFits, putMarker, useInHand, useUiStore } from "@/app/store/ui.ts";
-import { kernel_snapshot, useKernel } from "@/kernel/shell.ts";
+import { chatFits, holdTier, holdTool, useInHand, useUiStore } from "@/app/store/ui.ts";
+import { useKernel } from "@/kernel/shell.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
-import { type Cube, cubeId } from "@/catalog/block/mod.ts";
+import { type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
-import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/block/swatch.tsx";
+import { cubeLabel, CubeSwatch, decorGlyph, decorLabel, heldRing } from "@/catalog/cell/swatch.tsx";
 
 const PEEK_PX = 10;
 
@@ -55,8 +55,12 @@ const enum Gesture {
   Drag = 2,
 }
 
-/** The dock's cards, one a mode. */
-const MODES = 2;
+/** The dock's cards, in deck order. */
+const enum Pane {
+  Message = 0,
+  Palette = 1,
+}
+const PANES: readonly Pane[] = [Pane.Message, Pane.Palette];
 
 /** A dot whose area halves per tier, so the finest stays visible: 28, 20, 14, 10. */
 const MARK_COARSEST = 28;
@@ -185,7 +189,7 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
   return responder.current.panHandlers;
 }
 
-function SwatchButton({ cube, sizes }: { cube: Cube; sizes: Omit<SizeGesture, "tap"> }) {
+function SwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<SizeGesture, "tap"> }) {
   const { t } = useTranslation();
   const selectCube = useUiStore.getState().selectCube;
   const selected = useInHand({ tool: ActiveTool.Object, cube });
@@ -229,22 +233,6 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   );
 }
 
-function MarkerButton() {
-  const { t } = useTranslation();
-  const selectMarker = useUiStore.getState().selectMarker;
-  const active = useInHand({ tool: ActiveTool.Marker });
-
-  return (
-    <Pressable onPress={selectMarker} accessibilityRole="button" accessibilityLabel={t("blocks.marker")} style={styles.slot}>
-      <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
-        <View style={[styles.decorDisc, active ? styles.swatchSelected : styles.swatchIdle]}>
-          <Glyph glyph="bubble.left" size={16} color={active ? STRIP.glyphOn : STRIP.glyph} />
-        </View>
-      </Motion>
-    </Pressable>
-  );
-}
-
 function ToolButton({ label, glyph, active, onPress }: { label: string; glyph: GlyphName; active?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.slot}>
@@ -261,18 +249,17 @@ function ToolButton({ label, glyph, active, onPress }: { label: string; glyph: G
 
 export function Dock() {
   const { t } = useTranslation();
-  const mode = useUiStore((s) => s.dockMode);
-  // A swipe either way switches the mode; swatches open their sizes on a
+  const rotation = Pane.Palette + useUiStore((s) => s.dockTurn);
+  const turnedBack = useTurnedBack(rotation);
+  // A vertical drag on the bar turns the deck; swatches open their sizes on a
   // hold, so the two never compete.
   const swipe = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponderCapture: (_e, s) => Math.abs(s.dy) > DRAG_PX && Math.abs(s.dy) > Math.abs(s.dx),
-      ...deckSwipe(() => useUiStore.getState().switchDockMode(), { press: keepKeyboard }),
+      ...deckSwipe(useUiStore.getState().turnDock, { press: keepKeyboard }),
     }),
   ).current;
   const activeTool = useKernel((s) => s.holding.tool);
-  // A marker waiting for its words turns the message card to wording it.
-  const wording = useKernel((s) => s.holding.marker);
   const recentPicks = useUiStore((s) => s.recentPicks);
   const appendChatLine = useUiStore.getState().appendChatLine;
   const [messageText, setMessageText] = useState("");
@@ -286,43 +273,22 @@ export function Dock() {
   const inputRef = useRef<TextInput | null>(null);
   const bar = useRef<View | null>(null);
 
-  // The message mode is typing: the keyboard comes and goes with it, and a
-  // marker waiting for its words lives only inside it.
+  const front = PANES.find((pane) => deckDepth(pane, rotation, PANES.length) === 0);
+  // The message card in front is for typing; turned away, the keyboard goes with it.
   useEffect(() => {
-    if (mode === DockMode.Message) inputRef.current?.focus();
-    else {
-      Keyboard.dismiss();
-      if (wording) cancelMarker();
-    }
-  }, [mode]);
-
-  // A marker starts waiting: the message comes up with its words, which from
-  // then on are the field's, sent as typed; done, the field is the chat's again.
-  useEffect(() => {
-    setMessageText(wording ? kernel_snapshot().holding.words : "");
-    if (wording) useUiStore.getState().setDockMode(DockMode.Message);
-  }, [wording]);
-
-  function changeText(text: string) {
-    setMessageText(text);
-    if (wording && markerTextFits(text.trim())) draftMarkerWords(text.trim());
-  }
+    if (front === Pane.Message) inputRef.current?.focus();
+    else Keyboard.dismiss();
+  }, [front]);
 
   function sendMessage() {
     const text = messageText.trim();
     if (!canSend || !fits || isSending) return;
     setIsSending(true);
     setTimeout(() => {
+      appendChatLine(text);
       setMessageText("");
       setIsSending(false);
-      if (!wording) {
-        appendChatLine(text);
-        inputRef.current?.focus();
-        return;
-      }
-      putMarker();
-      // Put up, the palette comes back for the next.
-      useUiStore.getState().setDockMode(DockMode.Palette);
+      inputRef.current?.focus();
     }, FADE.durationMs);
   }
 
@@ -359,21 +325,23 @@ export function Dock() {
     },
   };
 
-  const shownFlyout = mode === DockMode.Palette ? flyout : null;
+  const shownFlyout = front === Pane.Palette ? flyout : null;
   // Every card is as wide as the palette's tools; whole pixels, where a page's pill cuts its shadow cleanly.
   const width = Math.min(stripWidth, barWidth);
   const x = PixelRatio.roundToNearestPixel((barWidth - width) / 2);
   const canSend = messageText.trim() !== "";
   // A line too long for the kernel is refused whole, never cut.
-  const fits = wording ? markerTextFits(messageText.trim()) : chatFits(messageText.trim());
+  const fits = chatFits(messageText.trim());
 
-  const card = (pane: DockMode, fill: string, content: React.ReactNode, { tint, onContentWidth }: { tint?: string; onContentWidth?: (w: f64) => void } = {}) => {
-    const depth = pane === mode ? 0 : 1;
+  const card = (pane: Pane, fill: string, content: React.ReactNode, { tint, onContentWidth }: { tint?: string; onContentWidth?: (w: f64) => void } = {}) => {
+    const depth = deckDepth(pane, rotation, PANES.length);
     const pose = cardPose(depth, PEEK_PX);
-    // However it was chosen, the chosen card comes forward from behind.
+    const fromAbove = depth === 0 && turnedBack;
     return (
       <Motion
         key={pane}
+        from={fromAbove ? pose.above : pose.rest}
+        replay={fromAbove ? rotation : null}
         to={pose.rest}
         transition={SETTLE}
         style={[styles.card, depth === 0 ? touches.pass : touches.block, { zIndex: pose.zIndex }]}
@@ -390,7 +358,7 @@ export function Dock() {
           fade={pose.fade}
           fadeTransition={SETTLE}
           touch={depth === 0 ? BAR_TOUCH : undefined}
-          touchBelow={depth === 0 ? peekBelow(MODES, PEEK_PX) : 0}
+          touchBelow={depth === 0 ? peekBelow(PANES.length, PEEK_PX) : 0}
           onContentWidth={onContentWidth}
         >
           {content}
@@ -404,7 +372,7 @@ export function Dock() {
       {barWidth > 0 && (
         <>
           {card(
-            DockMode.Message,
+            Pane.Message,
             color.ground,
             <View style={[styles.message, { width }]}>
               <View style={styles.messageIcon}>
@@ -414,9 +382,9 @@ export function Dock() {
                 <TextField
                   ref={inputRef}
                   value={messageText}
-                  onChangeText={changeText}
+                  onChangeText={setMessageText}
                   onSubmit={sendMessage}
-                  placeholder={wording ? t("world.dock.marker_placeholder") : t("world.dock.message_placeholder")}
+                  placeholder={t("world.dock.message_placeholder")}
                   placeholderTextColor={LABEL.placeholder}
                   style={styles.messageInput}
                 />
@@ -426,17 +394,17 @@ export function Dock() {
                   onPress={sendMessage}
                   disabled={isSending || !fits}
                   accessibilityRole="button"
-                  accessibilityLabel={wording ? t("world.dock.marker_done") : t("world.dock.send")}
-                  style={({ pressed }) => [styles.send, wording && styles.confirm, pressed && styles.sendPressed, !fits && styles.sendRefused]}
+                  accessibilityLabel={t("world.dock.send")}
+                  style={({ pressed }) => [styles.send, pressed && styles.sendPressed, !fits && styles.sendRefused]}
                 >
-                  <Glyph glyph={wording ? "checkmark" : "arrow.up"} size={chrome.glyph} weight="bold" color={color.white} />
+                  <Glyph glyph="arrow.up" size={chrome.glyph} weight="bold" color={color.white} />
                 </Pressable>
               </Presence>
             </View>,
           )}
 
           {card(
-            DockMode.Palette,
+            Pane.Palette,
             STRIP.ground,
             <View style={[styles.strip, { maxWidth: barWidth }]}>
               <View style={styles.group}>
@@ -454,11 +422,7 @@ export function Dock() {
                 contentContainerStyle={styles.picksContent}
               >
                 {recentPicks.map((pick) =>
-                  pick.tool === ActiveTool.Object
-                    ? <SwatchButton key={cubeId(pick.cube)} cube={pick.cube} sizes={sizes} />
-                    : pick.tool === ActiveTool.Decor
-                    ? <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
-                    : <MarkerButton key="marker" />
+                  pick.tool === ActiveTool.Object ? <SwatchButton key={placeableCubeId(pick.cube)} cube={pick.cube} sizes={sizes} /> : <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
                 )}
               </ScrollView>
 
@@ -504,7 +468,6 @@ const styles = StyleSheet.create({
   fieldFill: { flex: 1, minWidth: 0 },
   messageInput: { width: "100%", color: LABEL.primary },
   send: { width: chrome.selection, height: chrome.selection, borderRadius: chrome.selection / 2, alignItems: "center", justifyContent: "center", backgroundColor: color.send },
-  confirm: { backgroundColor: color.confirm },
   sendPressed: { opacity: 0.7 },
   sendRefused: { opacity: disabledContent },
 

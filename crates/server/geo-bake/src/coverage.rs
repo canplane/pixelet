@@ -1,10 +1,10 @@
 // pxl-geo-bake/coverage.rs
 
-//! What the bakes publish — the shards `infra/geo/coverage.json`
+//! What the bakes publish — the shards `infra/geo/elevation/metadata.json`
 //! names, a tile at `SHARD_ZOOM` each — which are what the ingests take, and the
 //! one door to the DB.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
 use postgres::{Client, NoTls};
@@ -14,31 +14,17 @@ use pxl_spec::space::coord::zoom::{count, shamt, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-const COVERAGE: &str = include_str!("../../../../infra/geo/coverage.json");
+const METADATA: &str = include_str!("../../../../infra/geo/elevation/metadata.json");
 
 /// A shard, by its index at `SHARD_ZOOM`.
 pub type Shard = [i64; 2];
 
-/// What an edge may be off by, in units: a ground cell, the finest thing a
-/// bake tells apart, and more than the meter a shard's edges and a feature's
-/// extent are each rounded to.
-pub const EPS: f64 = units(GROUND.cell());
-
-/// How far past a leaf any bake reads, in units: a z13 tile, four terrain
-/// leaves. A terrain leaf's reads stay within its 2-ring (AGENTS.md); a
-/// divisions leaf looks this far for the point of a division with no area,
-/// past the gap between such points nearly everywhere (99% of Korea's
-/// neighbourhoods, most of its villages, measured 2026-10-08).
-pub const BAKE_REACH: f64 = units(LEAF_ZOOM - 2);
-
-const _: () = assert!(2.0 * units(LEAF_ZOOM) <= BAKE_REACH, "a terrain leaf's 2-ring reads past the bakes' reach");
-
-/// How far past its edges a shard holds, in units: the bakes' reach and
-/// `EPS`, so every leaf bakes from its shard alone. A read past `BAKE_REACH` is a
-/// violation, never a reason to grow this.
-pub const SHARD_APRON: f64 = BAKE_REACH + EPS;
+/// How far past its edges a shard holds, in units: a leaf, as far as any
+/// read past a leaf's own reaches (a structure's 3×3, the drawn reach, the
+/// elevation's padding), so a shard's leaves bake from the shard alone.
+pub const SHARD_APRON: f64 = units(LEAF_ZOOM);
 
 /// A node of the hierarchy at or above the shards: its zoom and index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -63,13 +49,6 @@ impl Node {
         [x, y, x + side, y + side]
     }
 
-    /// Its tiles at `zoom`, at or under it.
-    pub fn tiles(self, zoom: Zoom) -> Vec<IVec> {
-        let shift = u32::from(zoom - self.zoom);
-        let (n, [x0, y0]) = (1i64 << shift, first_descendant_of(self.at, shift));
-        (y0..y0 + n).flat_map(|y| (x0..x0 + n).map(move |x| ivec::gather(x, y, 0))).collect()
-    }
-
     /// What a shard holds: its rect grown by `SHARD_APRON`.
     pub fn held(self) -> [f64; 4] {
         let [x0, y0, x1, y1] = self.rect();
@@ -85,14 +64,21 @@ pub struct Coverage {
 static SOURCE: LazyLock<Result<Coverage, String>> = LazyLock::new(Coverage::derive);
 
 impl Coverage {
+    pub fn new(shards: impl IntoIterator<Item = Shard>) -> Coverage {
+        Coverage { shards: shards.into_iter().collect() }
+    }
+
     pub fn of_source() -> Result<Coverage, String> {
         SOURCE.clone()
     }
 
     fn derive() -> Result<Coverage, String> {
-        let bad = |why: String| format!("infra/geo/coverage.json: {why}");
-        let coverage: serde_json::Value = serde_json::from_str(COVERAGE).map_err(|e| bad(e.to_string()))?;
-        let names = coverage["shards"].as_array().ok_or_else(|| bad("no shards".into()))?;
+        let bad = |why: String| format!("infra/geo/elevation/metadata.json: {why}");
+        let entries: serde_json::Value = serde_json::from_str(METADATA).map_err(|e| bad(e.to_string()))?;
+        let Some([entry]) = entries.as_array().map(Vec::as_slice) else {
+            return Err(bad("want an array of exactly one entry".into()));
+        };
+        let names = entry["shards"].as_array().ok_or_else(|| bad("no shards".into()))?;
         let shards = names
             .iter()
             .map(|n| {
@@ -138,16 +124,46 @@ impl Coverage {
 
     /// Every leaf held.
     pub fn tiles(&self) -> Vec<IVec> {
-        self.shards().flat_map(|s| s.tiles(LEAF_ZOOM)).collect()
+        let n = i64::from(count(LEAF_ZOOM, SHARD_ZOOM));
+        let mut out = Vec::with_capacity(self.shards.len() * (n * n) as usize);
+        for &s in &self.shards {
+            let [x0, y0] = first_descendant_of(s, u32::from(LEAF_ZOOM - SHARD_ZOOM));
+            for y in y0..y0 + n {
+                for x in x0..x0 + n {
+                    out.push(ivec::gather(x, y, 0));
+                }
+            }
+        }
+        out
+    }
+
+    /// The shards not held under a top tile that is: what the pyramid's
+    /// coarsest tiles show past the coverage.
+    pub fn beyond(&self) -> Vec<Tile> {
+        let up = u32::from(SHARD_ZOOM - GROUND.top());
+        let tops: BTreeSet<[i64; 2]> = self.shards.iter().map(|&s| ancestor_of(s, up)).collect();
+        let n = i64::from(count(SHARD_ZOOM, GROUND.top()));
+        let mut out = Vec::new();
+        for top in tops {
+            let [x0, y0] = first_descendant_of(top, up);
+            for y in y0..y0 + n {
+                for x in x0..x0 + n {
+                    if !self.shards.contains(&[x, y]) {
+                        out.push(Tile::new(SHARD_ZOOM, ivec::gather(x, y, 0)));
+                    }
+                }
+            }
+        }
+        out
     }
 
     pub fn shards(&self) -> impl Iterator<Item = Node> + '_ {
         self.shards.iter().map(|&at| Node { zoom: SHARD_ZOOM, at })
     }
 
-    /// The shard a tile's bake reads: its own, which holds its apron.
-    pub fn around(&self, zoom: Zoom, tile: IVec) -> BTreeSet<Node> {
-        let at = Self::shard_of(zoom, tile);
+    /// The shard a leaf's bake reads: its own, which holds its apron.
+    pub fn around(&self, leaf: IVec) -> BTreeSet<Node> {
+        let at = Self::shard_of(LEAF_ZOOM, leaf);
         self.shards.contains(&at).then_some(Node { zoom: SHARD_ZOOM, at }).into_iter().collect()
     }
 }
@@ -182,12 +198,14 @@ pub fn tables_of<'a>(reads: &[&[&'a str]]) -> Vec<&'a str> {
 }
 
 /// The geo DB, opened only when every table a bake reads holds the shards it
-/// needs and nothing past the coverage's.
+/// needs, nothing past the coverage's, all of one release. A whole bake needs
+/// every shard, since some of its reads are unbounded (the place dictionary).
 pub struct Overture {
     url: String,
+    pub release: String,
 }
 
-const INGEST: &str = "run ./infra/geo/overture/ingest.rs";
+const INGEST: &str = "run ./infra/geo/overture/script/ingest.rs";
 
 impl Overture {
     /// For a bake whose statements are `reads` over the shards `need`.
@@ -198,17 +216,26 @@ impl Overture {
         let want: BTreeSet<String> = need.iter().map(|n| n.name()).collect();
         let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
         let rows = client
-            .query(&format!("SELECT table_name, shard FROM {CATALOG} WHERE table_name = ANY($1)"), &[&tables])
+            .query(&format!("SELECT file_name, node, data_date FROM {CATALOG} WHERE file_name = ANY($1)"), &[&tables])
             .map_err(|e| format!("{CATALOG}: {e}: {INGEST}"))?;
+        let mut release: Option<(String, String)> = None;
         for &table in &tables {
-            let have: BTreeSet<&str> = rows.iter().filter(|r| r.get::<_, &str>(0) == table).map(|r| r.get(1)).collect();
-            let missing = want.iter().filter(|n| !have.contains(n.as_str())).count();
-            let extra = have.iter().filter(|n| !held.contains(**n)).count();
+            let have: BTreeMap<&str, &str> = rows.iter().filter(|r| r.get::<_, &str>(0) == table).map(|r| (r.get(1), r.get(2))).collect();
+            let missing = want.iter().filter(|n| !have.contains_key(n.as_str())).count();
+            let extra = have.keys().filter(|n| !held.contains(**n)).count();
             if missing + extra > 0 {
                 return Err(format!("{table} lacks {missing} of the shards needed and holds {extra} past the coverage's: {INGEST}"));
             }
+            for date in have.values() {
+                match &release {
+                    None => release = Some((table.to_string(), date.to_string())),
+                    Some((first, r)) if r != date => return Err(format!("{table} holds release {date} and {first} {r}: one bake reads one release; {INGEST}")),
+                    Some(_) => {}
+                }
+            }
         }
-        Ok((Overture { url }, client))
+        let (_, release) = release.ok_or("a bake that reads no Overture table")?;
+        Ok((Overture { url, release }, client))
     }
 
     pub fn connect(&self) -> Result<Client, String> {
@@ -216,9 +243,9 @@ impl Overture {
     }
 }
 
-/// What the geo DB holds for `reads`, which a set's manifest says it was
-/// made from: each source by the `version` and `accessed_at` the DB records
-/// for it, each Overture table with its counts.
+/// What the geo DB holds for `reads`, the one description of a bake's source:
+/// each Overture table it names, the elevation and the coastline. A manifest
+/// records it and the dev cache is named by it; an ingest changes it.
 pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Value, String> {
     let tables = tables_of(reads);
     let text = |client: &mut Client, sql: &str, params: &[&(dyn postgres::types::ToSql + Sync)]| -> Result<Vec<Vec<Option<String>>>, String> {
@@ -227,22 +254,11 @@ pub fn holdings(client: &mut Client, reads: &[&[&str]]) -> Result<serde_json::Va
     };
     let overture = text(
         client,
-        &format!(
-            "SELECT table_name, version, accessed_at::text, sum(total_count)::text FROM {CATALOG} WHERE table_name = ANY($1) GROUP BY table_name, version, accessed_at ORDER BY table_name, version"
-        ),
+        &format!("SELECT file_name, max(data_date), max(imported_at)::text, sum(total_count)::text FROM {CATALOG} WHERE file_name = ANY($1) GROUP BY file_name ORDER BY file_name"),
         &[&tables],
     )?;
-    let elevation = text(
-        client,
-        "SELECT version, accessed_at::text, count(*)::text FROM elevation_catalog GROUP BY version, accessed_at ORDER BY version",
-        &[],
-    )?;
-    let coastline = text(client, "SELECT obj_description(to_regclass('osm_land_polygons'), 'pg_class')", &[])?;
+    let elevation = text(client, "SELECT shard, data_date::text, file_name, status, imported_at::text FROM elevation_catalog ORDER BY shard", &[])?;
+    // The coastline keeps no catalog; its import makes the table anew.
+    let coastline = text(client, "SELECT pg_relation_filenode(to_regclass('osm_land_polygons'))::text", &[])?;
     Ok(serde_json::json!({ "overture": overture, "elevation": elevation, "coastline": coastline }))
-}
-
-/// `holdings`, for a set's manifest.
-pub fn source_of(reads: &[&[&str]]) -> Result<serde_json::Value, String> {
-    let (_, mut client) = Overture::reading(reads, &BTreeSet::new())?;
-    holdings(&mut client, reads)
 }

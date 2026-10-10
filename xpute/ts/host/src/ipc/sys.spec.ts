@@ -19,7 +19,7 @@
 // A program's own calls go in the same stream, numbered with the PROGRAM bit, and a host
 // that is not the program's refuses them.
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
 
 /** Words before the first record: END, then a word kept at 0. */
 export const HEAD: u32 = 2 as number;
@@ -37,7 +37,7 @@ export const op = {
    * open not yet answered is cancelled, and never answered. */
   CLOSE: 4 as number,
   /** errno, line, column, a (low, high word), b (low, high word), then the file's bytes:
-   * the broken invariant the guest reports before it stops (xpute-kit status/bug.rs). */
+   * the broken invariant the guest reports before it stops (xpute-core status/bug.rs). */
   ABORT: 5 as number,
   /** The bit every call a program numbers for itself carries. */
   PROGRAM: 2147483648 as number,

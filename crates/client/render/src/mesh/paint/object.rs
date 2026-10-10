@@ -3,18 +3,18 @@
 //! The object store's records as voxels of a chunk: the materials its values
 //! are drawn as, by the catalog.
 
-use pxl_spec::block::cube;
-use pxl_spec::block::object::{cube_id, decor_ids, decor_num_id, ALL_CUBES};
+use pxl_spec::cell::cube_types;
+use pxl_spec::cell::object::{decor_ids, decor_num_id, placeable_cube_num_id, placeable_cubes};
 
 use crate::mesh::paint::palette::rgb255;
 use crate::mesh::paint::palette::LAYER_IDX;
 use crate::mesh::word::NO_LAYER;
-use crate::mesh::word::{pack_material, Side};
-use pxl_spec::block::object::{cube_rgb, Cube};
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use crate::mesh::word::{pack_material, MaterialClasses};
+use pxl_spec::cell::object::{placeable_cube_rgb, PlaceableCube};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
-const AIR: u32 = cube::object::air as u32;
+const AIR: u32 = cube_types::object::air as u32;
 
 /// Decor renders as instanced geometry, not a cell.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -44,9 +44,9 @@ impl Painter {
             materials: Vec::new(),
             layers: Vec::new(),
         };
-        for &cube in ALL_CUBES.iter() {
+        for &cube in placeable_cubes.iter() {
             let (material, layer) = solid_material(cube);
-            p.set(cube_id(cube), Kind::Solid, material, layer);
+            p.set(placeable_cube_num_id(cube), Kind::Solid, material, layer);
         }
         p.set(AIR, Kind::Air, 0, NO_LAYER as u8);
         for &id in decor_ids.iter() {
@@ -88,9 +88,9 @@ impl Painter {
 /// Its material word and texture layer. A cube of a look takes its ground's
 /// color and layer, but the class stays OBJECT: a terrain class would stop the
 /// cube shielding what is beneath it from occlusion culling.
-pub fn solid_material(cube: Cube) -> (u32, u8) {
-    let rgb = rgb255(cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE));
-    (pack_material(Side::OBJECT, rgb), LAYER_IDX(cube) as u8)
+pub fn solid_material(cube: PlaceableCube) -> (u32, u8) {
+    let rgb = rgb255(placeable_cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE));
+    (pack_material(MaterialClasses::OBJECT, rgb), LAYER_IDX(cube) as u8)
 }
 
 #[cfg(test)]

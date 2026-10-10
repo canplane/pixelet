@@ -9,23 +9,22 @@ mod executor;
 pub mod layout;
 
 use crate::abi::cmd::{Command, Sensor, SensorStartSignal, WorldSnapshotSignal};
-use crate::io::demand::Stream;
+use crate::io::demand::Category;
 use crate::io::host::HeapStat;
 use crate::kernel;
 use crate::layer::earth::Earth;
 use crate::layer::residency::Residency;
 use crate::mem::section;
 use layout::DOOR_LAYOUT;
-use pxl_spec::bake::division_tile::DivisionTile;
-use pxl_spec::bake::format::TerrainTile;
-use pxl_spec::bake::place_tile::PlaceTile;
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::poi_tile::PoiTile;
+use xpute_core::status::errno::Errno;
+use xpute_core::wire::xtp::PacketWriter;
 use xpute_guest::global::Global;
 use xpute_guest::ipc::directory::{directory_words, quantum_entries, spec::key, write_directory, Entry};
 use xpute_guest::ipc::door::Door;
 use xpute_guest::ipc::ring::Ring;
 use xpute_guest::mem::base::{off_of, off_of_slice, ptr_at};
-use xpute_kit::status::errno::Errno;
-use xpute_kit::wire::xtp::PacketWriter;
 
 pub struct Bracket {
     pub given: u32,
@@ -105,7 +104,7 @@ fn boot(b: &Bracket) {
     crate::io::host::set_last_words(b.last_words);
     executor::install();
     // Named invariants report through `bug!`; a core panic reports only its location.
-    xpute_kit::status::bug::set_report(crate::io::host::host_bug);
+    xpute_core::status::bug::set_report(crate::io::host::host_bug);
     std::panic::set_hook(Box::new(|info| {
         if crate::io::host::stopped() {
             return;
@@ -150,10 +149,9 @@ fn lay_out(b: &Bracket) -> u32 {
     kernel().laid_out = true;
     // A layer asks for no more tiles than its residency frames.
     crate::io::request::open(|c| match c {
-        Stream::terrain => Residency::<TerrainTile>::FRAMES,
-        Stream::place => Residency::<PlaceTile>::FRAMES,
-        Stream::earth => Residency::<Earth>::FRAMES,
-        Stream::division => Residency::<DivisionTile>::FRAMES,
+        Category::terrain => Residency::<Terrain>::FRAMES,
+        Category::poi => Residency::<PoiTile>::FRAMES,
+        Category::earth => Residency::<Earth>::FRAMES,
         _ => 0,
     });
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, zeroed, each the
@@ -239,8 +237,8 @@ fn post_shell(s: &mut State) {
         raise(Command::WORLD_SNAPSHOT, WorldSnapshotSignal::FIELDS, |w| signal.write(w));
     }
     // The key is an opaque handle to the shell.
-    take_started(|credit, stream, subject| match stream.bake() {
-        Some(_) => crate::io::fetch::start(credit, stream, subject),
+    take_started(|credit, category, subject| match category.bake() {
+        Some(_) => crate::io::fetch::start(credit, category, subject),
         None => {
             if let Some((kind, load)) = crate::io::load::of_subject(subject) {
                 crate::io::load::open_asset(credit, kind, load);

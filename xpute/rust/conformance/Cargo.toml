@@ -10,5 +10,5 @@ path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-xpute-kit = { path = "../kit" }
+xpute-core = { path = "../core" }
 xpute-guest = { path = "../guest" }

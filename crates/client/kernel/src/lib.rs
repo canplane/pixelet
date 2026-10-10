@@ -114,5 +114,9 @@ pub fn serial() -> std::sync::MutexGuard<'static, ()> {
 }
 
 #[cfg(test)]
+#[path = "allocations.test.rs"]
+pub mod allocations;
+
+#[cfg(test)]
 #[path = "fixture.test.rs"]
 pub(crate) mod fixture;

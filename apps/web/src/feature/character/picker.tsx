@@ -87,7 +87,7 @@ function PetPicker(props: PetPickerProps) {
   return (
     <PickerCard label={t("drawer.character.pet_label")} selected={selected}>
       <View style={styles.chips}>
-        {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`pets.${v.key}`)} active={v.number === selected.number} onPress={() => onSelect(v)} />)}
+        {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer.character.pets.${v.key}`)} active={v.number === selected.number} onPress={() => onSelect(v)} />)}
       </View>
     </PickerCard>
   );

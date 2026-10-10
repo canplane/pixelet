@@ -7,7 +7,7 @@
 // Uppercase as the notation these macro-like helpers are written in.
 #![allow(non_snake_case)]
 
-use xpute_kit::abi::word::{field_mask32, field_mask64};
+use xpute_core::abi::word::{field_mask32, field_mask64};
 
 pub const IVEC_WORD_W: u32 = 64;
 pub const IVEC_WORD_MASK: u64 = field_mask64(IVEC_WORD_W, 0);

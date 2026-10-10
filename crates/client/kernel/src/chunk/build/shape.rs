@@ -3,7 +3,7 @@
 //! A chunk's runs: the zoom they are written at, the cells they fold and how wide a column of them is.
 
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
-use pxl_spec::space::layer::lattice::{GROUND, GROUND_FOLD};
+use pxl_spec::space::layer::lattice::GROUND;
 
 use pxl_render::mesh::run::APRON;
 
@@ -14,11 +14,11 @@ use crate::chunk::Chunk as PyramidChunk;
 use pxl_spec::space::coord::zoom::{count, units, Zoom};
 
 /// The zoom a chunk's runs are written at: the records its cells fold
-/// (`GROUND_FOLD` finer) where anything is held finer than its cells, else its
+/// (`GROUND`'s fold finer) where anything is held finer than its cells, else its
 /// cells, which then fold nothing.
 pub(super) fn runs_zoom(c: PyramidChunk, finest: Zoom) -> Zoom {
     match c.cell_zoom() {
-        cell if cell < finest => cell + GROUND_FOLD,
+        cell if cell < finest => cell + GROUND.fold(),
         cell => cell,
     }
 }

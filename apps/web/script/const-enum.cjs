@@ -63,7 +63,7 @@ function readEnums(roots) {
 function aliases(root) {
   return [
     ["@/", path.join(root, "apps/web/src/")],
-    ["@xpute/kit/", path.join(root, "xpute/ts/kit/src/")],
+    ["@xpute/core/", path.join(root, "xpute/ts/core/src/")],
     ["@xpute/host/", path.join(root, "xpute/ts/host/src/")],
     ["@xpute/conformance/", path.join(root, "xpute/ts/conformance/src/")],
   ];

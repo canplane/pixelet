@@ -5,7 +5,7 @@
 import { useEffect, useRef } from "react";
 import type { PanResponderCallbacks } from "react-native";
 
-import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
 
 const DEPTH = 2;
 /** In peeks: where a card turned back to the front starts. */

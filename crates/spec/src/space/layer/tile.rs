@@ -119,12 +119,6 @@ impl Tile {
     }
 }
 
-/// The coarsest tile of a layer made at `leaf` when the source supplies
-/// terrain whole from `top`: as many zooms over its leaves.
-pub fn top_over(leaf: Zoom, top: Zoom) -> Zoom {
-    top.saturating_sub(LEAF_ZOOM - leaf).max(GROUND.top())
-}
-
 /// The 4×4 tiles a zoom finer around a tile's children, each at
 /// `neighbor_index`; X wraps and a tile past Y's edge has no object.
 pub fn neighborhood(p: Tile) -> [Tile; 16] {

@@ -11,7 +11,7 @@
 // A trace names no production number. These are the fixture's, chosen so that a trace
 // can make a turn's output outgrow its room without knowing how a guest reserves it.
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
 
 /** The room a guest's shared range asks for: the directory, both rings, a stream and its
  * own state, with room to spare. Where the range begins, and so where the directory is,

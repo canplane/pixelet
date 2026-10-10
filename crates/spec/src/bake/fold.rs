@@ -9,11 +9,11 @@
 
 use crate::space::layer::lattice::{EXTENT, GROUND, TILE_CELLS};
 use crate::space::layer::tile::{neighbor_index, CHILDREN};
-use xpute_kit::math::scalar::round;
+use xpute_core::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
-use super::format::{join, Ground, Index, Occupancy, TerrainTile};
-use super::separation::fold_separation;
+use super::deck::fold_decks;
+use super::format::{join, Ground, Index, Occupancy, Terrain};
 use super::surface::extent_of;
 use crate::space::coord::zoom::Zoom;
 
@@ -99,17 +99,17 @@ pub fn fold_index(children: [&Index; 4], own: Vec<[i16; 2]>) -> Index {
 /// A parent from the 4×4 tiles around its children; None if any of its own
 /// four is missing. A missing ring tile only degrades the padding, so a zoom
 /// out folds from what the client already holds.
-pub fn fold_terrain(around: [Option<&TerrainTile>; 16], zoom: Zoom) -> Option<TerrainTile> {
+pub fn fold_terrain(around: [Option<&Terrain>; 16], zoom: Zoom) -> Option<Terrain> {
     let child = |q: usize| around[CHILDREN[q]];
     let children = [child(0)?, child(1)?, child(2)?, child(3)?];
     let ground = fold_ground(children.map(|t| &t.ground), zoom);
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
-    let separation = fold_separation(children.map(|t| &t.separation), zoom);
-    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &separation));
-    Some(TerrainTile {
+    let decks = fold_decks(children.map(|t| &t.decks), zoom);
+    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &decks));
+    Some(Terrain {
         ground,
-        separation,
+        decks,
         ele: ele.into(),
         index,
     })

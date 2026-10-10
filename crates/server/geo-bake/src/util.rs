@@ -1,9 +1,11 @@
 // pxl-geo-bake/util.rs
 
+use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 
-use xpute_kit::math::scalar::round;
+use pxl_spec::bake::published::version_name;
+use xpute_core::math::scalar::round;
 
 /// The `Content-Encoding` every baked tile is uploaded with, so the transport decodes it.
 pub const CONTENT_ENCODING: &str = "zstd";
@@ -27,18 +29,57 @@ pub enum Level {
 }
 
 const ZSTD_MAGIC: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
+const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 
 pub fn pack(raw: &[u8], level: Level) -> std::io::Result<Vec<u8>> {
     zstd::bulk::compress(raw, level as i32)
 }
 
-/// Whether the bytes are packed as a bake stores them, not served as is.
-pub fn is_packed(stored: &[u8]) -> bool {
-    stored.starts_with(&ZSTD_MAGIC)
+pub fn encoding_of(stored: &[u8]) -> Option<&'static str> {
+    if stored.starts_with(&ZSTD_MAGIC) {
+        Some("zstd")
+    } else if stored.starts_with(&GZIP_MAGIC) {
+        Some("gzip")
+    } else {
+        None
+    }
 }
 
+/// Told apart by bytes, not by a manifest: older sets are gzip.
 pub fn unpack(stored: &[u8]) -> std::io::Result<Vec<u8>> {
-    zstd::stream::decode_all(stored)
+    match encoding_of(stored) {
+        Some("zstd") => zstd::stream::decode_all(stored),
+        Some(_) => {
+            let mut raw = Vec::new();
+            flate2::read::GzDecoder::new(stored).read_to_end(&mut raw)?;
+            Ok(raw)
+        }
+        None => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "neither zstd nor gzip")),
+    }
+}
+
+/// An upload gives a directory one Content-Encoding, so a resumed bake must
+/// not mix encodings.
+pub fn refuse_mixed(dir: &Path) -> Result<(), String> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return Ok(()) };
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !entry.file_type().map_err(|e| e.to_string())?.is_file() || name.ends_with(".part") || name.ends_with(".empty") {
+            continue;
+        }
+        let mut head = [0u8; 4];
+        let n = std::fs::File::open(entry.path()).and_then(|mut f| f.read(&mut head)).map_err(|e| e.to_string())?;
+        return match encoding_of(&head[..n]) {
+            Some(CONTENT_ENCODING) => Ok(()),
+            other => Err(format!(
+                "{} holds {} objects and this bake writes {CONTENT_ENCODING}: bake into a fresh directory, or pass --force to rewrite every object",
+                dir.display(),
+                other.unwrap_or("unrecognized")
+            )),
+        };
+    }
+    Ok(())
 }
 
 pub fn fmt_bytes(n: f64) -> String {
@@ -59,6 +100,20 @@ pub fn fmt_dur(ms: f64) -> String {
     } else {
         format!("{m}m{}s", s % 60)
     }
+}
+
+/// The code a bake runs, named by its binary: what a baked object is made
+/// by, whichever commit or tree that was built from.
+pub fn code_id() -> Result<String, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let binary = std::fs::read(&exe).map_err(|e| format!("{}: {e}", exe.display()))?;
+    Ok(format!("{:016x}", fnv1a(&binary)))
+}
+
+/// What baked objects are a function of: the code that made them and what
+/// the DB held for their reads (`coverage.rs` `holdings`).
+pub fn source_id(code: &str, holdings: &serde_json::Value) -> String {
+    format!("{:016x}", fnv1a(format!("{code} {holdings}").as_bytes()))
 }
 
 /// HEAD, and where the working tree differs, `+` its tree (untracked files
@@ -85,6 +140,16 @@ pub fn now_iso8601() -> String {
     let rem = secs % 86_400;
     let (h, m, s) = (rem / 3600, (rem % 3600) / 60, rem % 60);
     format!("{}T{h:02}:{m:02}:{s:02}.000Z", day_of(secs / 86_400))
+}
+
+/// A bake's next version under `dir`: today's UTC day, numbered past that
+/// day's folders of `format` already there.
+pub fn next_version(dir: &str, format: u32) -> std::path::PathBuf {
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("after the epoch").as_secs();
+    let day = day_of(secs / 86_400);
+    let at = |n: u32| Path::new(dir).join(version_name(format, &day, n));
+    let n = (1..).find(|&n| !at(n).exists()).expect("a free number");
+    at(n)
 }
 
 /// The civil date of a day count from the epoch, Howard Hinnant's algorithm.
@@ -115,10 +180,11 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::rename(&part, path)
 }
 
-/// A set's manifest at `path`: `fields`, and what every set says of itself;
-/// `built` is the `git_sha` the bake started at.
-pub fn write_manifest(path: &Path, built: Option<&str>, fields: serde_json::Value) -> Result<(), String> {
+/// A set's manifest beside its version directory: `fields`, and what every
+/// set says of itself; `built` is the `git_sha` the bake started at.
+pub fn write_manifest(root: &Path, built: Option<&str>, fields: serde_json::Value) -> Result<(), String> {
     let mut manifest = serde_json::json!({
+        "version": root.file_name().map(|n| n.to_string_lossy().to_string()),
         "updated_at": now_iso8601(),
         "git_sha": built,
         "content_encoding": CONTENT_ENCODING,
@@ -126,9 +192,24 @@ pub fn write_manifest(path: &Path, built: Option<&str>, fields: serde_json::Valu
     if let (Some(out), serde_json::Value::Object(fields)) = (manifest.as_object_mut(), fields) {
         out.extend(fields);
     }
-    std::fs::write(path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let path = root.join("../manifest.json");
+    std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     println!("[bake] manifest -> {}", path.display());
     Ok(())
+}
+
+pub fn measure_output(dir: &Path) -> std::io::Result<(u64, u64)> {
+    let (mut count, mut bytes) = (0u64, 0u64);
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !entry.file_type()?.is_file() || name.ends_with(".part") || name.ends_with(".empty") {
+            continue;
+        }
+        count += 1;
+        bytes += entry.metadata()?.len();
+    }
+    Ok((count, bytes))
 }
 
 #[cfg(test)]

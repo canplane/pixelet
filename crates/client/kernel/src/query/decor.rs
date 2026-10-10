@@ -7,7 +7,7 @@
 //! it. The walk follows the detail rule, not the chunk the view chose, which
 //! may differ at a chunk's edge.
 
-use pxl_spec::block::decor::{Decor, DECORS};
+use pxl_spec::cell::decor::{DecorKind, KINDS};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
@@ -16,7 +16,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use super::ray::{Detail, Ray};
-use super::world::{covers, Cover, World};
+use super::world::{covers, Over, World};
 use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Source};
 use crate::layer::object::meta::placed;
@@ -27,7 +27,7 @@ use crate::model::registry::Models;
 
 /// How decor is struck: against its models, where the chunks drawing at `tau` hold it.
 #[derive(Clone, Copy)]
-pub(super) struct Grown<'a> {
+pub(super) struct Decor<'a> {
     pub(super) models: &'a Models,
     pub(super) tau: Tau,
 }
@@ -48,12 +48,12 @@ pub(super) struct Strike<'a> {
 }
 
 impl<'a> World<'a> {
-    /// What the ground grows of `decor` standing in the leaf cell `at` lies
+    /// What the ground grows of `kind` standing in the leaf cell `at` lies
     /// in; none where it grows nothing there or its leaf tile is not resident.
-    pub fn grown(&self, decor: &Decor, at: &Pvf3) -> Option<Instance> {
+    pub fn grown(&self, kind: &DecorKind, at: &Pvf3) -> Option<Instance> {
         let [x, y, z] = index_of(GROUND.cell(), at);
         let (source, place) = self.leaf_source([x, y])?;
-        grown_at(decor, &source.view(), [x, y], place).filter(|i| i.grown_in().is_some_and(|c| c[2] == z))
+        grown_at(kind, &source.view(), [x, y], place).filter(|i| i.grown_in().is_some_and(|c| c[2] == z))
     }
 
     /// The leaf tile holding the leaf cell `cell`, and the cell's place in it.
@@ -65,7 +65,7 @@ impl<'a> World<'a> {
 
     /// The strike a ray carries, where decor is struck at all.
     pub(super) fn strike(&self, ray: &Ray) -> Option<Strike<'a>> {
-        let Grown { models, tau } = self.decor?;
+        let Decor { models, tau } = self.decor?;
         let held = match Detail::Distance(tau).at(0.0) {
             (LEAF_ZOOM, _, until) => until.min(ray.reach),
             _ => return None,
@@ -120,11 +120,11 @@ impl<'a> World<'a> {
             }
         };
         let view = source.view();
-        for decor in &DECORS {
-            let Some(i) = grown_at(decor, &view, cell, leaf.in_tile()) else { continue };
+        for kind in &KINDS {
+            let Some(i) = grown_at(kind, &view, cell, leaf.in_tile()) else { continue };
             let Source::Ground(at) = i.source else { continue };
-            let any = self.objects.read((GROUND.cell(), at), GROUND.cell()).value().is_some_and(|c| c.holds());
-            if !covers(Cover::Leaf { any }) {
+            let held = self.objects.read((GROUND.cell(), at), GROUND.cell()).value().is_some_and(|c| c.holds());
+            if !covers(Over::Leaf { held }) {
                 meet(s, ray, i);
             }
         }

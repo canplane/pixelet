@@ -9,7 +9,6 @@ asset/
 ├── actor/      character and companion models (Kenney)
 ├── cube/       the texture pack: terrain/ and block/ at 256², original/ at source size
 ├── decor/      trees, boats, cars, trains (Kenney)
-├── place/      symbol/: the place icons (openstreetmap-carto `symbols/`, CC0)
 └── sky/        the Moon's near side and the Earth's twelve months (NASA)
 ```
 
@@ -70,5 +69,5 @@ deno task bake:earth
 It fetches Blue Marble Next Generation's July of 2004 and the Black Marble's
 lights of 2016 (NASA's Earth Observatory) and makes both forms of the Earth's
 picture from them: `sky/earth/07.webp`, the global one at 2048 × 1024, and the
-earth layer's pages under `out/earth/<version>/`, which publish as a bake does.
+Earth layer's pages under `out/earth/<version>/`, which publish as a bake does.
 Run the ingest afterward.

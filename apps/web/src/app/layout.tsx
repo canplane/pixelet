@@ -6,13 +6,11 @@ import { StyleSheet, View } from "react-native";
 import { useBooted } from "./bootstrap.ts";
 import { Modals } from "./modal.tsx";
 import { KeyboardAway } from "@/shared/ui/keyboard.tsx";
-import { DockMode, useUiStore } from "@/app/store/ui.ts";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const booted = useBooted();
   return (
-    // A touch elsewhere puts the typing away with the keyboard.
-    <KeyboardAway onAway={() => useUiStore.getState().setDockMode(DockMode.Palette)}>
+    <KeyboardAway>
       <View style={styles.page}>{booted && children}</View>
       <Modals />
     </KeyboardAway>

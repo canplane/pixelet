@@ -49,8 +49,7 @@ impl Face {
 }
 
 pub struct TileFace {
-    /// The catalog's group, `ground` or `object`.
-    pub group: String,
+    pub channel: String,
     pub ty: String,
     pub face: Face,
     pub tile: u32,
@@ -58,19 +57,19 @@ pub struct TileFace {
 
 /// A slot naming no catalog type is an error: a renamed type once left its
 /// blocks untextured silently.
-pub fn faces(slots: &[Slot], groups: &[(String, Vec<String>)]) -> Result<Vec<TileFace>, String> {
+pub fn faces(slots: &[Slot], channels: &[(String, Vec<String>)]) -> Result<Vec<TileFace>, String> {
     let mut out = Vec::new();
     for (n, slot) in slots.iter().enumerate() {
         let (face, ty, wanted) = match slot {
-            Slot::Top { group, ty } => (Face::Top, ty, Some(group.as_str())),
+            Slot::Top { channel, ty } => (Face::Top, ty, Some(channel.as_str())),
             Slot::Side { ty } => (Face::Side, ty, None),
             Slot::Bottom { ty } => (Face::Bottom, ty, None),
         };
         let before = out.len();
-        for (group, types) in groups.iter().filter(|(g, _)| wanted.is_none_or(|w| w == *g)) {
+        for (channel, types) in channels.iter().filter(|(ch, _)| wanted.is_none_or(|w| w == *ch)) {
             if types.contains(ty) {
                 out.push(TileFace {
-                    group: group.clone(),
+                    channel: channel.clone(),
                     ty: ty.clone(),
                     face,
                     tile: n as u32,
@@ -78,7 +77,7 @@ pub fn faces(slots: &[Slot], groups: &[(String, Vec<String>)]) -> Result<Vec<Til
             }
         }
         if out.len() == before {
-            return Err(format!("the manifest's {slot:?} is no cube in spec/spec/block/cube.json"));
+            return Err(format!("the manifest's {slot:?} is no cube type in spec/spec/cell/cube_type.json"));
         }
     }
     Ok(out)
@@ -131,7 +130,7 @@ export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
 
 /** The texture pack as one image: `columns` tiles of `cell` pixels per
  * row, tile n at column n % columns and row n / columns, `tiles` the asset
- * path each holds, and `faces` the cube face — group, type, face — each
+ * path each holds, and `faces` the cube face — channel, type, face — each
  * tile is. */
 export const PACK = {
 "#,
@@ -146,7 +145,7 @@ export const PACK = {
     }
     out.push_str("  ],\n  faces: [\n");
     for f in &pack.faces {
-        let _ = writeln!(out, "    [\"{}\", \"{}\", \"{}\", {}],", f.group, f.ty, f.face.name(), f.tile);
+        let _ = writeln!(out, "    [\"{}\", \"{}\", \"{}\", {}],", f.channel, f.ty, f.face.name(), f.tile);
     }
     out.push_str("  ],\n} as const;\n");
     out
@@ -165,8 +164,8 @@ pub fn render_rs(rows: &[Row], pack: &Pack) -> String {
 
 #![allow(non_camel_case_types)]
 
-use crate::block::cube;
-use crate::block::object::Cube;
+use crate::cell::cube_types;
+use crate::cell::object::PlaceableCube;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]
@@ -234,7 +233,7 @@ pub struct Pack {
     pub bytes: u64,
     pub cell: u32,
     pub columns: u32,
-    pub tiles: &'static [(Cube, CubeFace, u32)],
+    pub tiles: &'static [(PlaceableCube, CubeFace, u32)],
     /// What each tile reads as from far enough away that the tile itself is
     /// gone: its own mean color, taken in linear light. A mesh that
     /// summarizes a patch of ground takes its color from here rather than
@@ -251,9 +250,10 @@ pub const PACK: Pack = Pack {
     let _ = writeln!(out, "    columns: {},", pack.columns);
     out.push_str("    tiles: &[\n");
     for f in &pack.faces {
-        let variant = if f.group == "object" { "Object" } else { "Ground" };
+        // A placed color is a block; every other tile is a look of the ground.
+        let variant = if f.channel == "block" { "Block" } else { "Ground" };
         let face = f.face.member();
-        let _ = writeln!(out, "        (Cube::{variant}(cube::{variant}::{}), CubeFace::{face}, {}),", f.ty, f.tile);
+        let _ = writeln!(out, "        (PlaceableCube::{variant}(cube_types::{variant}::{}), CubeFace::{face}, {}),", f.ty, f.tile);
     }
     out.push_str("    ],\n    means: &[\n");
     for m in &pack.means {

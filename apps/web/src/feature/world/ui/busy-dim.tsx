@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 
-import { HANDHELD } from "@platform/device.ts";
+import { HANDHELD } from "@platform/core.ts";
 import { Motion } from "@platform/motion.tsx";
 import { useKernel } from "@/kernel/shell.ts";
 import { Dim } from "@/shared/ui/motion/veil.ts";

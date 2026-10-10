@@ -5,10 +5,10 @@
 use super::{post_shell, State};
 use crate::abi::cmd::{self as abi, Command};
 use pxl_spec::space::coord::zoom::Zoom;
+use xpute_core::status::errno::Errno;
+use xpute_core::status::error::MarshalError;
 use xpute_guest::abi::cmd as xpute_cmd;
 use xpute_guest::mem::base::{off_of, off_of_slice};
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
 
 fn packet<'a>(pkt: &Option<&'a [u8]>) -> Result<&'a [u8], MarshalError> {
     or_refuse(*pkt, Errno::EBADMSG)
@@ -115,51 +115,35 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         Command::INPUT_POINTER => {
             let p = abi::InputPointer::read(packet(pkt)?)?;
             match p.phase {
-                abi::PointerPhase::Down => camera_pointer_down(p.pointer_type, p.id, p.button, p.x, p.y),
-                abi::PointerPhase::Move => camera_pointer_move(p.pointer_type, p.id, p.x, p.y),
+                abi::PointerPhase::Down => camera_pointer_down(p.kind, p.id, p.button, p.x, p.y),
+                abi::PointerPhase::Move => camera_pointer_move(p.kind, p.id, p.x, p.y),
                 abi::PointerPhase::Up => {
-                    if let Some([x, y]) = camera_pointer_up(p.pointer_type, p.id) {
+                    if let Some([x, y]) = camera_pointer_up(p.kind, p.id) {
                         tap_at(x, y);
                     }
                 }
                 abi::PointerPhase::Out => camera_pointer_out(),
-                abi::PointerPhase::Cancel => {
-                    camera_pointer_up(p.pointer_type, p.id);
-                }
             }
             Ok(Some(0))
         }
         Command::INPUT_HOLD => {
-            use pxl_spec::block::object::cube_of;
-            use pxl_spec::block::DecorId;
+            use pxl_spec::cell::object::placeable_cube_of;
+            use pxl_spec::cell::DecorId;
             let p = abi::InputHold::read(packet(pkt)?)?;
             let mut holding = holding();
             holding.active_tool = p.tool;
             holding.object_tier = p.tier;
             match p.tool {
                 abi::ActiveTool::Object => {
-                    holding.object_cube = or_refuse(cube_of(p.value), Errno::EINVAL)?;
+                    holding.object_cube = or_refuse(placeable_cube_of(p.value), Errno::EINVAL)?;
                 }
                 abi::ActiveTool::Decor => {
                     holding.decor_id = or_refuse(u16::try_from(p.value).ok().and_then(DecorId::of), Errno::EINVAL)?;
                 }
-                abi::ActiveTool::Pointer | abi::ActiveTool::Eraser | abi::ActiveTool::Marker => {}
+                abi::ActiveTool::Pointer | abi::ActiveTool::Eraser => {}
             }
             hold(holding);
             camera_rehover();
-            Ok(Some(0))
-        }
-        Command::INPUT_MARKER_WORDS => {
-            let text = abi::InputMarkerWords::read(packet(pkt)?)?.text;
-            or_refuse(crate::control::interaction::edit::draft_words(text).ok(), Errno::EMSGSIZE)?;
-            Ok(Some(0))
-        }
-        Command::INPUT_MARKER_PUT => {
-            crate::control::interaction::edit::put_marker();
-            Ok(Some(0))
-        }
-        Command::INPUT_MARKER_CANCEL => {
-            crate::control::interaction::edit::cancel_marker();
             Ok(Some(0))
         }
         Command::INPUT_WHEEL => {
@@ -414,17 +398,13 @@ fn profiler_take(s: &mut State) -> u32 {
 #[path = "apply.test.rs"]
 mod test;
 
-/// A badge takes a tap before the ground under it: the pointer goes to it,
-/// the eraser takes away a marker someone put up, and the marker tool has the
-/// waiting marker stand there.
+/// A badge takes a tap before the ground under it, with the pointer tool only.
 fn tap_at(x: f64, y: f64) {
     use crate::chunk::place::Went;
-    use crate::control::interaction::ActiveTool;
-    use crate::control::navigation::destination::go_to_place;
-    match (crate::control::interaction::holding().active_tool, crate::chunk::place::tap(x, y)) {
-        (ActiveTool::Pointer, Some(Went::To(at) | Went::Marker(_, at))) => go_to_place(at),
-        (ActiveTool::Eraser, Some(Went::Marker(e, _))) => crate::control::interaction::edit::remove(e),
-        (ActiveTool::Marker, Some(Went::Marker(e, _))) => crate::control::interaction::edit::wait_at(e),
-        _ => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
+    use crate::control::navigation::destination::{go_into_place, go_to_place};
+    match crate::control::interaction::taps_badges().then(|| crate::chunk::place::tap(x, y)).flatten() {
+        Some(Went::To(at)) => go_to_place(at),
+        Some(Went::Into(at)) => go_into_place(at),
+        None => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
     }
 }

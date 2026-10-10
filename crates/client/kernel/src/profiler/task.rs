@@ -12,7 +12,7 @@ use crate::profiler::word::{words, Words};
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TaskRow {
-    pub stream: f64,
+    pub category: f64,
     pub subject: u64,
     pub priority: f64,
     pub enqueue_ms: f64,
@@ -32,7 +32,7 @@ pub struct TaskRow {
 }
 
 words!(TaskRow, TASK::WORDS,
-    stream => TASK::stream, subject => TASK::subject, priority => TASK::priority, enqueue_ms => TASK::enqueue_ms,
+    category => TASK::category, subject => TASK::subject, priority => TASK::priority, enqueue_ms => TASK::enqueue_ms,
     start_ms => TASK::start_ms, end_ms => TASK::end_ms, outcome => TASK::outcome,
     fail => TASK::fail, detail => TASK::detail,
     at_file => TASK::at_file, at_file_bytes => TASK::at_file_bytes, at_line => TASK::at_line, phase_count => TASK::phase_count, phase_ids => TASK::phase_ids, phase_values => TASK::phase_values,

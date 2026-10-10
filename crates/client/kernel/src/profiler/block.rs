@@ -7,7 +7,7 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::io::spec::{STREAM_NAMES, TASK_PHASE_NAMES};
+use crate::io::spec::{CATEGORY_NAMES, TASK_PHASE_NAMES};
 use crate::profiler::frame::{FrameSample, CENSUS_LEN, GPU_SPANS, ZOOMS};
 use crate::profiler::spec::{FRAME, LIMITS, SPREAD, STEP, SUMMARY, TASK_SUMMARY};
 use crate::profiler::word::{words, Words};
@@ -16,7 +16,7 @@ use xpute_guest::sched::tick::PHASES;
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 pub const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
-const CATEGORIES: usize = STREAM_NAMES.len();
+const CATEGORIES: usize = CATEGORY_NAMES.len();
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -247,8 +247,9 @@ pub struct ViewBlock {
     pub hover_lon: f64,
     pub hover_lat: f64,
     pub hover_alt: f64,
-    pub cell_want: f64,
-    pub cell_drawn: f64,
+    pub chunk_zoom: f64,
+    pub tier_zoom: f64,
+    pub read_zoom: f64,
 }
 
 words!(ViewBlock, SUMMARY::view::WORDS,
@@ -256,7 +257,7 @@ words!(ViewBlock, SUMMARY::view::WORDS,
     center_lon => SUMMARY::view::center_lon, center_lat => SUMMARY::view::center_lat, center_z => SUMMARY::view::center_z,
     hover_x => SUMMARY::view::hover_x, hover_y => SUMMARY::view::hover_y, hover_z => SUMMARY::view::hover_z,
     hover_lon => SUMMARY::view::hover_lon, hover_lat => SUMMARY::view::hover_lat, hover_alt => SUMMARY::view::hover_alt,
-    cell_want => SUMMARY::view::cell_want, cell_drawn => SUMMARY::view::cell_drawn,
+    chunk_zoom => SUMMARY::view::chunk_zoom, tier_zoom => SUMMARY::view::tier_zoom, read_zoom => SUMMARY::view::read_zoom,
 );
 
 words!(QualityBlock, SUMMARY::quality::WORDS,

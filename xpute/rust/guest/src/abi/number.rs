@@ -4,8 +4,8 @@
 //! checked here, so nothing past the door meets a NaN, an infinity or an
 //! integer cast into range.
 
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
+use xpute_core::status::errno::Errno;
+use xpute_core::status::error::MarshalError;
 
 /// A number an enum does not give out, where the enum has no member it reads as.
 #[track_caller]

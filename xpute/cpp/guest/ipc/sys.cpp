@@ -5,7 +5,7 @@
 #include <array>
 #include <cstring>
 
-#include "../../kit/status/bug.hpp"
+#include "../../core/status/bug.hpp"
 
 namespace xpute {
 

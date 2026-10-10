@@ -14,8 +14,8 @@ use xpute_guest::mem::heap::{alloc, free};
 use crate::chunk::source::draws;
 
 use pxl_spec::space::coord::zoom::{units, Zoom};
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 use super::*;
 
@@ -168,7 +168,7 @@ impl Builder {
             self.refuse(id);
             return Progress::Blocked;
         }
-        xpute_kit::ensure!(self.direct.begin(span), ENOTRECOVERABLE);
+        xpute_core::ensure!(self.direct.begin(span), ENOTRECOVERABLE);
         self.runs_job = Some(RunsJob { id, zoom: target, row: 0, next: 0 });
         Progress::Busy
     }
@@ -227,7 +227,7 @@ impl Builder {
 
     pub(super) fn run_set(runs: &Runs, span: u32) -> RunSet<'static> {
         let bytes = pxl_render::mesh::run::run_set_bytes(runs.count, span) as usize;
-        xpute_kit::ensure!(bytes as u32 <= runs.block.1, ENOTRECOVERABLE);
+        xpute_core::ensure!(bytes as u32 <= runs.block.1, ENOTRECOVERABLE);
         // SAFETY: the chunk's own block, held until its runs are let go.
         unsafe { RunSet::carve(core::slice::from_raw_parts(ptr_at::<u8>(runs.block.0), bytes), runs.count, span, APRON) }
     }

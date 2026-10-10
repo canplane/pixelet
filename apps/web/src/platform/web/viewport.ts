@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 
 const SETTLE_MS = 250;
 

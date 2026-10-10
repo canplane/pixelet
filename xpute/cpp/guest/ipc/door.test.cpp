@@ -4,8 +4,8 @@
 
 #include <vector>
 
-#include "../../kit/test.hpp"
-#include "../../kit/wire/xtp/cursor.hpp"
+#include "../../core/test.hpp"
+#include "../../core/wire/xtp/cursor.hpp"
 
 using namespace xpute;
 

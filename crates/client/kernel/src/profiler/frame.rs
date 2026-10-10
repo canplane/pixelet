@@ -69,7 +69,7 @@ pub struct MountSample {
 pub struct TileSample {
     pub total: f64,
     pub by_zoom: [f64; ZOOMS],
-    pub place: f64,
+    pub poi: f64,
 }
 
 #[repr(C)]
@@ -133,9 +133,9 @@ pub struct FrameSample {
     pub heap: HeapSample,
     pub rings: RingSample,
     pub work: WorkSample,
-    // Queued plus in-flight requests, per stream.
+    // Queued plus in-flight requests, per category.
     pub q_terrain: f64,
-    pub q_place: f64,
+    pub q_poi: f64,
     pub stale: StaleSample,
     pub cap: CapSample,
     pub turn: TurnSample,
@@ -218,7 +218,7 @@ pub struct FramePeak {
     pub draw_calls: f64,
     pub triangles: f64,
     pub q_terrain: f64,
-    pub q_place: f64,
+    pub q_poi: f64,
     pub chunks: f64,
     pub in_frustum: f64,
     pub pending: f64,
@@ -241,12 +241,12 @@ words!(FrameSample, FRAME::WORDS,
     lod.offscreen_pending => FRAME::lod_offscreen_pending,
     lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms,
     mounts.added => FRAME::mounts_added, mounts.removed => FRAME::mounts_removed, mounts.layouts => FRAME::mounts_layouts,
-    tiles.total => FRAME::tiles_total, tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
+    tiles.total => FRAME::tiles_total, tiles.by_zoom => FRAME::zoom_tiles, tiles.poi => FRAME::tiles_poi,
     heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.run_mb => FRAME::heap_run_mb,
     heap.slot_mb => FRAME::heap_slot_mb, heap.range_mb => FRAME::heap_range_mb,
     heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
     rings.cq_peak => FRAME::ring_cq_peak, rings.held_peak => FRAME::ring_held_peak,
-    work.runs => FRAME::work_runs, work.bakes => FRAME::work_bakes, work.fine_peak => FRAME::work_fine_peak, work.coarse_peak => FRAME::work_coarse_peak, q_terrain => FRAME::q_terrain, q_place => FRAME::q_place,
+    work.runs => FRAME::work_runs, work.bakes => FRAME::work_bakes, work.fine_peak => FRAME::work_fine_peak, work.coarse_peak => FRAME::work_coarse_peak, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
     stale.hidden => FRAME::stale_hidden, stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready,
     stale.slot_waits => FRAME::slot_waits, stale.wait_zooms => FRAME::slot_wait_zooms,
     stale.chained => FRAME::slot_chained,
@@ -263,7 +263,7 @@ words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has
 words!(FramePeak, SUMMARY::peak::WORDS,
     present => SUMMARY::peak::present, dt_ms => SUMMARY::peak::dt_ms, sched_ms => SUMMARY::peak::sched_ms,
     chunks_ms => SUMMARY::peak::chunks_ms, gpu_ms => SUMMARY::peak::gpu_ms, draw_calls => SUMMARY::peak::draw_calls,
-    triangles => SUMMARY::peak::triangles, q_terrain => SUMMARY::peak::q_terrain, q_place => SUMMARY::peak::q_place,
+    triangles => SUMMARY::peak::triangles, q_terrain => SUMMARY::peak::q_terrain, q_poi => SUMMARY::peak::q_poi,
     chunks => SUMMARY::peak::chunks, in_frustum => SUMMARY::peak::in_frustum, pending => SUMMARY::peak::pending,
     settling => SUMMARY::peak::settling,
     offscreen_pending => SUMMARY::peak::offscreen_pending, oldest_release_ms => SUMMARY::peak::oldest_release_ms,

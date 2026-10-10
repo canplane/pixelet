@@ -5,7 +5,7 @@
  * place from the summary block the report is built from. Read-only.
  */
 
-import { round } from "@xpute/kit/math/scalar.ts";
+import { round } from "@xpute/core/math/scalar.ts";
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -77,7 +77,7 @@ export function ProfilerView({ v }: { v: Gauge["view"] }) {
       <Row k="hover (u)" v={hovering ? `${Math.floor(v.hover_x)}, ${Math.floor(v.hover_y)}, ${Math.floor(v.hover_z)}` : "-"} />
       <Row k="hover" v={geo(v.hover_lat, v.hover_lon)} />
       <Row k="hover altitude" v={metres(v.hover_alt)} />
-      <Row k="cells wanted/drawn" v={hovering ? `${zoomName(v.cell_want)}/${zoomName(v.cell_drawn)}` : "-"} warn={v.cell_drawn < v.cell_want} />
+      <Row k="chunk/tier/tile" v={hovering ? `${zoomName(v.chunk_zoom)}/${zoomName(v.tier_zoom)}/${zoomName(v.read_zoom)}` : "-"} warn={v.read_zoom < v.chunk_zoom} />
     </>
   );
 }
@@ -177,12 +177,12 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
       )}
 
       <Head>requests</Head>
-      {f !== null && <Row k="queued terrain/place" v={`${f.last.q_terrain}/${f.last.q_place}`} warn={f.last.q_terrain + f.last.q_place > 12} />}
+      {f !== null && <Row k="queued terrain/poi" v={`${f.last.q_terrain}/${f.last.q_poi}`} warn={f.last.q_terrain + f.last.q_poi > 12} />}
       {f !== null && <Row k="ring answers/held peak" v={`${f.last.ring_cq_peak}/${f.last.ring_held_peak}`} warn={f.last.ring_held_peak > 0} />}
       {g.tasks.length === 0 && <Note>none in the window</Note>}
       {g.tasks.map((t) => (
-        <View key={t.stream}>
-          <Row k={`${t.stream}${BOUND[t.stream] ? ` (${BOUND[t.stream]})` : ""} p50/p95`} v={`${n1(t.lat.p50)}/${n1(t.lat.p95)} ms`} />
+        <View key={t.category}>
+          <Row k={`${t.category}${BOUND[t.category] ? ` (${BOUND[t.category]})` : ""} p50/p95`} v={`${n1(t.lat.p50)}/${n1(t.lat.p95)} ms`} />
           <Row k="  ok/aborted/failed" v={`${t.ok}/${t.aborted}/${t.error}`} warn={t.error > 0} />
           {t.reasons.length > 0 && <Row k="  top failure" v={`${failText(t.reasons[0].fail, t.reasons[0].detail)} ×${t.reasons[0].n}`} warn />}
         </View>

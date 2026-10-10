@@ -27,6 +27,8 @@ impl Default for Limits {
 #[derive(Serialize, Deserialize)]
 pub enum Job {
     Tile { kind: super::Kind, subject: u64, cache: PathBuf },
+    Dictionary,
+    Geocode { group: u64, dictionary: PathBuf },
 }
 
 pub struct Runner {
@@ -98,6 +100,11 @@ impl Workers {
     }
 }
 
+pub(super) enum Publication {
+    Packet(String),
+    Directory { source: String, target: String },
+}
+
 struct Staging(PathBuf);
 impl Drop for Staging {
     fn drop(&mut self) {
@@ -105,17 +112,25 @@ impl Drop for Staging {
     }
 }
 impl Staging {
-    /// The packet, or its absence, under `name`.
-    fn publish(&self, data: &Dataset, name: &str) -> Result<(), String> {
-        let mut target = data.cache.root.join(name);
-        let source = if self.0.join("empty").is_file() {
-            target.set_extension("empty");
-            self.0.join("empty")
-        } else {
-            self.0.join("packet")
-        };
-        std::fs::create_dir_all(target.parent().unwrap()).map_err(|e| e.to_string())?;
-        std::fs::rename(source, target).map_err(|e| e.to_string())
+    fn publish(&self, data: &Dataset, publication: Publication) -> Result<(), String> {
+        match publication {
+            Publication::Packet(name) => {
+                let mut target = data.cache.root.join(name);
+                let source = if self.0.join("empty").is_file() {
+                    target.set_extension("empty");
+                    self.0.join("empty")
+                } else {
+                    self.0.join("packet")
+                };
+                std::fs::create_dir_all(target.parent().unwrap()).map_err(|e| e.to_string())?;
+                std::fs::rename(source, target).map_err(|e| e.to_string())
+            }
+            Publication::Directory { source, target } => {
+                let target = data.cache.root.join(target);
+                std::fs::create_dir_all(target.parent().unwrap()).map_err(|e| e.to_string())?;
+                std::fs::rename(self.0.join(source), target).map_err(|e| e.to_string())
+            }
+        }
     }
 }
 
@@ -133,7 +148,7 @@ impl Runner {
         })
     }
 
-    pub(super) async fn run(&self, job: Job, data: Arc<Dataset>, lease: Lease, name: String) -> Result<(), Failure> {
+    pub(super) async fn run(&self, job: Job, data: Arc<Dataset>, lease: Lease, publication: Publication) -> Result<(), Failure> {
         let _worker = self.workers.acquire(&lease).await?;
         let deadline = lease.deadline;
         static SERIAL: AtomicU64 = AtomicU64::new(0);
@@ -152,7 +167,7 @@ impl Runner {
         if tokio::time::Instant::now() >= deadline {
             return Err(Failure::Limited("demand generation deadline"));
         }
-        out.publish(&data, &name).map_err(Failure::from)
+        out.publish(&data, publication).map_err(Failure::from)
     }
 }
 
@@ -192,10 +207,12 @@ pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {
             let p = pxl_spec::space::layer::tile::Tile::of_subject(subject);
             match kind {
                 super::Kind::Terrain => super::terrain::execute(p, &cache, out, seconds),
-                super::Kind::Place => super::place::execute(p, &cache, out, seconds),
-                super::Kind::Division => super::division::execute(p, &cache, out, seconds),
+                super::Kind::Poi => super::poi::execute(p, &cache, out, seconds),
+                super::Kind::Geocode => Err("geocode is not held as a pyramid".into()),
             }
         }
+        Job::Dictionary => super::geocode::dictionary(out, seconds),
+        Job::Geocode { group, dictionary } => super::geocode::execute(group, &dictionary, out, seconds),
     }
 }
 

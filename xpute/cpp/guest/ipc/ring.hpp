@@ -8,8 +8,8 @@
 #include <optional>
 #include <span>
 
-#include "../../kit/status/errno.spec.hpp"
-#include "../../kit/status/error.hpp"
+#include "../../core/status/errno.spec.hpp"
+#include "../../core/status/error.hpp"
 #include "../mem/memory.hpp"
 #include "frame.hpp"
 #include "ring.spec.hpp"

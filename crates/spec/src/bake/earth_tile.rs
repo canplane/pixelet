@@ -10,8 +10,8 @@
 use crate::bake::malformed;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_core::status::error::MarshalError;
+use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 /// The Earth's one zoom: the ground's top. Its tiles are the ground's lattice,
 /// a ground cell a texel, so the tile follows the grid as the ground does.

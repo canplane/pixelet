@@ -7,12 +7,12 @@
 //! `water.mss`, `buildings.mss`, `roads.mss`, `project.mml`); a class Carto
 //! draws no fill for paints nothing, and the land under it shows.
 
-use pxl_spec::bake::format::GroundId;
-use pxl_spec::block::cube::ground as g;
+use pxl_spec::bake::format::GroundCell;
+use pxl_spec::cell::cube_types::ground as g;
 use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
+use crate::deck::Drawn;
 use crate::segment::Segment;
-use crate::separation::Drawn;
 use crate::terrain::pipeline::feature::{closes, Feature, Layer, Rank};
 use crate::terrain::pipeline::overture::between::{merged, uncovered, Line};
 use crate::terrain::pipeline::overture::role::Role;
@@ -22,7 +22,7 @@ use crate::wkb::wkb_to_geometries;
 
 /// A way's look: Carto's `highway` and `railway` values, its white roads one
 /// look told apart by width, `path` and `steps` footways.
-pub fn segment_type(subtype: &str, class: Option<&str>) -> GroundId {
+pub fn segment_type(subtype: &str, class: Option<&str>) -> GroundCell {
     let c = class.unwrap_or("");
     if subtype == "rail" {
         return match c {
@@ -54,7 +54,7 @@ pub fn segment_type(subtype: &str, class: Option<&str>) -> GroundId {
 const MAJOR_BUILDING_CLASSES: [&str; 9] = ["cathedral", "chapel", "church", "mosque", "religious", "shrine", "synagogue", "temple", "train_station"];
 
 /// What a Base row paints: its look, Carto's layer, and Carto's `feature`.
-type Paint = (GroundId, Layer, &'static str);
+type Paint = (GroundCell, Layer, &'static str);
 
 /// `landuse`, `leisure`, `amenity` and the like, as Overture's land use
 /// classes carry them.

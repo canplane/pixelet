@@ -198,3 +198,7 @@ pub fn extent(bytes: &[u8]) -> Result<[f64; 3], String> {
     let round = |v: f64| (v * 100.0).round_ties_even() / 100.0;
     Ok([round(bounds.hi[0] - bounds.lo[0]), round(bounds.hi[2] - bounds.lo[2]), round(bounds.hi[1] - bounds.lo[1])])
 }
+
+#[cfg(test)]
+#[path = "glb.test.rs"]
+mod test;

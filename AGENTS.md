@@ -43,16 +43,16 @@ The tree is grouped by where a thing runs (`xpute/`, `crates/{spec,client,server
 README.md has the map. Three lines erode by accident:
 
 - **xpute holds no domain.** No coordinates, terrain, tiles or Overture in
-  `xpute-kit` or `@xpute/kit`; those are `pxl-spec`'s. The view
+  `xpute-core` or `@xpute/core`; those are `pxl-spec`'s. The view
   (`pxl-render`) knows the model and nothing of the kernel (`pxl-kernel`).
-- **`kit` is taken as it is; `guest` and `host` ask you to run their way**
+- **`core` is taken as it is; `guest` and `host` ask you to run their way**
   — a turn on a doorbell, a quota from the frame, I/O asked of the host.
-  Both depend on `kit`, never the reverse. `kit` is symmetric across every
+  Both depend on `core`, never the reverse. `core` is symmetric across every
   language xpute is written in, held to it by the golden records under
   `xpute/spec/golden/`. `guest` and `host` are the two ends of one
   arrangement, named by role, not language: a module missing on one side is
   no gap, only the format must agree, and the guests in different languages
-  are symmetric as `kit` is, each in its own language's shape. Never number the languages, hosts or
+  are symmetric as `core` is, each in its own language's shape. Never number the languages, hosts or
   guests: the count is stale the day one more arrives.
 - **`pxl-spec` is the one model and has no TypeScript twin.** The shell reads
   a tile through the kernel, never by decoding one; what it holds — the cell
@@ -97,7 +97,7 @@ tiles from the leaves at z15 to z5, where it stops for now and not by any
 limit. **Every size is a zoom**: the X lane is one world of 2^24 units, so a
 thing the world over 2^z wide is at zoom z, and a bigger zoom is finer
 (`pxl-spec space/coord/zoom.rs`). A cell, a chunk and a tile are each named by it:
-terrain's cell is z24, a unit, and the object layer's finest z27; a chunk is
+terrain's cell is z24, a unit, and objects' finest z27; a chunk is
 `CHUNK_STEPS` zooms coarser than the camera grid's cells it draws (32 a
 side, `space/camera/grid.rs`); a tile holds a layer's own count
 of cells a side, the same at every zoom (`Lattice`), so terrain's z24 cells
@@ -134,12 +134,11 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   `observe`), which are held residency's (`layer/residency.rs`), when they are
   fetched the scheduler's (`io/request.rs`), and a tile is folded only by the
   bake's `build` (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not
-  data — terrain folds by majority and average, places by what shows from
-  the parent's zoom on.
+  data — terrain folds by majority and average, POI by sum.
 - **The view is 3D; storage is not.** A chunk is a cube, addressed by zoom
   and x, y, z (`chunk.rs`); a cube that holds nothing is no
-  chunk. The terrain and place layers are tiles, a 2D heightfield and the places shown; placed
-  objects are resident in their store, a sparse tree a shard (`SHARD_ZOOM`). Each layer,
+  chunk. Terrain and POI are tiles, a 2D heightfield and a 2D count; placed
+  objects are resident in their store, a sparse tree a z8 column. Each layer,
   and the world composed of them, is read through one query
   (`layer/query.rs` `Query`): what a node holds and its records, at a cell
   zoom the asker states; a point or a ray is asked of the world's
@@ -150,7 +149,7 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   (`majority`, `pxl-spec bake/fold.rs`).
 - **2.5D is how ground is stored, not how anything behaves.** What the view
   selects, orders, budgets, occludes and draws is 3D, height no different
-  from the rest, for the terrain, place and object layers alike. A 2.5D shortcut (a
+  from the rest, for terrain, places and objects alike. A 2.5D shortcut (a
   height read off the raster, `ground_ele_at`) is an optimization where it
   behaves exactly as the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`Cell::center`), at the height of the
@@ -163,8 +162,8 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   sees an error cross a cell, alike on every axis, and something under it
   is held finer. What lies inside a cell is its layer's to fold into one,
   never a second rule outside it: terrain's by majority and average in the
-  bake, the object layer's by `majority`, the place layer's to a cell an icon wide at Carto's
-  zoom, one place a cell (decision/20261009-places-follow-carto.md). A chunk draws a cell from what is composed there one zoom finer
+  bake, objects' by `majority`, places' to a lattice sixty-four ground cells
+  wide. A chunk draws a cell from what is composed there one zoom finer
   (`space/layer/lattice.rs` `Lattice::fold`, the ground's `GROUND`) as its
   surfaces' mean color and its fill's volume (`pxl-render
   mesh/chunk.rs`); past a layer's data it draws its finest. What is folded is a summary, so nothing
@@ -173,7 +172,7 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   `--folds` zooms over the leaves, the whole guard for every layer. A source declares the
   coarsest zoom it supplies whole — the published version in its metadata,
   the tile server at `/tile/source` — and the floor is that zoom.
-- **The terrain, place and object layers are audited side by side** before a change is
+- **Terrain, POI and objects are audited side by side** before a change is
   done: anything one does its own way is removed or explained.
 
 ## What the bake paints
@@ -190,17 +189,6 @@ column was empty, and much of `width_rules` is an import's width classes.
 What a chunk can make when drawn — a deck's slab, a tunnel's mouth — is the
 client's; the bake carries only what the client cannot work out
 ([decision/20261001-ways-off-the-ground.md](./decision/20261001-ways-off-the-ground.md)).
-
-**A leaf reads its 1-ring and no further — an invariant, never a default.**
-A terrain leaf's bake reads at most itself and its eight neighbours: a
-query, a search radius or a way's geometry past them is a violation,
-however small. Reading a neighbour's own derived data (its padded
-elevation) carries that neighbour's reach along, and even so nothing
-reaches past the source's 2-ring. Every bake, the divisions' z12 leaves
-too, reads no farther past its leaf than one reach (`pxl-geo-bake
-coverage.rs` `BAKE_REACH`, a z13 tile), which the shard's apron holds; a rule
-that wants more, a structure that runs on, is cut there, not given a
-wider read.
 
 **A read is scoped by the policy that consumes it.** What the bake asks of
 the database is what its paint policy uses: the policy's own tables are the
@@ -261,7 +249,7 @@ that needs none — a `const`, a `LazyLock`, associated constants.
 **A file's name is its language's**: `snake_case` in Rust, C++ and
 `packages/`, `kebab-case` in `apps/`, `script/` and for a file of no
 language. Generated from `spec/` carries `.spec.` on both sides
-(`cube.spec.rs`, `cube.spec.ts`) and is regenerated, never edited;
+(`cube_type.spec.rs`, `cube_type.spec.ts`) and is regenerated, never edited;
 a test carries `.test.`; a Rust module reaches either through `#[path]`.
 **Directories are singular**, named for the concept they hold, except where an
 ecosystem fixes the name (`node_modules/`, `apps/`, `crates/`), and a file
@@ -287,7 +275,7 @@ for a millisecond or coordinate; `u64` for a key; `i32` for what can be
 platform's, which `crates/clippy.toml` refuses.
 
 **`pxl` is for code, `pixelet` for infrastructure.** Import paths and storage
-keys abbreviate (`@xpute/kit`, `pxl:lang`); provisioned resources spell it
+keys abbreviate (`@xpute/core`, `pxl:lang`); provisioned resources spell it
 out (`pixelet-db-geo`, `pixelet-tiles`).
 
 **Comments are few and short**: a few words at the line they explain, saying
@@ -356,8 +344,8 @@ already does what is wanted; the change makes it say so once, by extending
 the structure that holds the fact, not by inventing mechanism beside it.
 
 **Identity, not revision.** A tile's content is fixed by its name within a
-version, and a published version is named by the source and the code that
-made it; what changes is
+version, and a version is named by the source and the code that made it
+(the dev cache is; a published version must be made to be); what changes is
 which identity answers a node. Keys compare identities, and the one change event left
 carries identities, not a counter — only content that mutates under a fixed
 key, the objects' edits, needs its own. An extremal summary (max, OR, a

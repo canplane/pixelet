@@ -78,27 +78,13 @@ fn exported_only(bytes: &[u8], keep: &[String]) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// The workspace's members, as crates/Cargo.toml lists them: Cargo hands rustc
-/// a member's paths relative to the workspace, so no prefix remap reaches them.
-/// Included, so a change to the list rebuilds this tool.
-fn members() -> Result<Vec<String>, String> {
-    const MANIFEST: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../Cargo.toml"));
-    let list = regex::Regex::new(r"(?ms)^\s*members\s*=\s*\[([^\]]*)\]").map_err(|e| e.to_string())?;
-    let comment = regex::Regex::new(r"(?m)#.*$").map_err(|e| e.to_string())?;
-    let quoted = regex::Regex::new(r#""([^"]+)""#).map_err(|e| e.to_string())?;
-    let body = list.captures(MANIFEST).ok_or("crates/Cargo.toml: no workspace members")?;
-    let body = comment.replace_all(&body[1], "");
-    Ok(quoted.captures_iter(&body).map(|c| format!("{}/src/", &c[1])).collect())
-}
-
 /// Rust embeds caller paths for `#[track_caller]` panics with no stable way
 /// out. They are overwritten in place, same length, as `...#n`; a `&'static
 /// str` keeps its length apart, so the module runs the same. Returns the
 /// paths in the order they were numbered.
 fn numbered(bytes: &mut [u8]) -> Result<Vec<String>, String> {
     let path = Regex::new(r"(?-u)[A-Za-z0-9_/.-]*\.rs\b").map_err(|e| e.to_string())?;
-    let source_root = Regex::new(r"(?-u)(?:^|[^A-Za-z0-9_])xpute/|/library/|/registry/|^/rustc/|^/rust/deps/|\.rustup/").map_err(|e| e.to_string())?;
-    let members = members()?;
+    let source_root = Regex::new(r"(?-u)(?:^|[^A-Za-z0-9_])(?:pxl|xpute)/|/library/|/registry/|^/rustc/|^/rust/deps/|\.rustup/").map_err(|e| e.to_string())?;
     let found: Vec<(usize, usize)> = path.find_iter(bytes).map(|m| (m.start(), m.end())).collect();
     let mut numbers: Vec<String> = Vec::new();
     for (start, end) in found {
@@ -106,7 +92,7 @@ fn numbered(bytes: &mut [u8]) -> Result<Vec<String>, String> {
         if !text.contains('/') {
             continue;
         }
-        if !source_root.is_match(text.as_bytes()) && !members.iter().any(|m| text.starts_with(m.as_str())) {
+        if !source_root.is_match(text.as_bytes()) {
             // Never overwrite on a guess: it could be a format string.
             return Err(format!("{text:?} ends in .rs but is under no source root — widen the source roots or leave it alone"));
         }

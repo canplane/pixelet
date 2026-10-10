@@ -6,9 +6,9 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::control::interaction::edit::{holds_entry, objects_at};
 use crate::layer::object::size::DECOR_SIZE;
-use crate::layer::object::store::{Block, Entry};
+use crate::layer::object::store::{Entry, EntryKind};
 use crate::query::World;
-use pxl_spec::block::decor::DECORS;
+use pxl_spec::cell::decor::KINDS;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{base_of, index_of, of_side, units};
 
@@ -23,21 +23,20 @@ pub fn find_overlapping_object(corner: &Pvf3, size: f64) -> Option<Entry> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlacementTool {
     Object,
-    /// A decor or a marker: one cell, and nothing stands on it.
-    Instance,
+    Decor,
 }
 
 /// The shared check for the placement commit and its hover preview.
 pub fn is_placement_blocked(tool: PlacementTool, corner: &Pvf3, object_size: f64) -> bool {
-    let size = if tool == PlacementTool::Instance { DECOR_SIZE } else { object_size };
-    find_overlapping_object(corner, size).is_some() || tool == PlacementTool::Instance && instance_under(corner)
+    let size = if tool == PlacementTool::Decor { DECOR_SIZE } else { object_size };
+    find_overlapping_object(corner, size).is_some() || tool == PlacementTool::Decor && decor_under(corner)
 }
 
-/// Placed or scattered. An instance is stood on nowhere, so nothing is placed on it.
-fn instance_under(corner: &Pvf3) -> bool {
+/// Placed or scattered. Decor is stood on nowhere, so nothing is placed on it.
+fn decor_under(corner: &Pvf3) -> bool {
     let under = pvf3::add(corner, &base_of(GROUND.cell(), [0, 0, -1]));
-    let placed = objects_at(&under).iter().any(|o| matches!(o.block(), Block::Decor { .. } | Block::Marker));
-    placed || !holds_entry(&under) && DECORS.iter().any(|k| World::now().grown(k, &under).is_some())
+    let placed = objects_at(&under).iter().any(|o| matches!(o.kind(), EntryKind::Decor { .. }));
+    placed || !holds_entry(&under) && KINDS.iter().any(|k| World::now().grown(k, &under).is_some())
 }
 
 /// The center of the cell a hover anchor (a min corner) points at: where a

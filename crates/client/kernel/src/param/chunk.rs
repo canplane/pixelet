@@ -70,6 +70,20 @@ pub const STARTS_PER_FRAME: u32 = TILE_CHUNKS * TILE_CHUNKS;
 
 pub const COMMITS_PER_FRAME: u32 = 8;
 
+// ---- places' zooms ----
+
+/// Every place where a logical pixel spans a z14 pixel or less, a zoom of
+/// 256-pixel tiles: OpenMapTiles' `poi` layer holds every point POI from z14
+/// (`etl_layer_points`), and Google and Naver hide businesses below about it.
+pub const POI_ALL_ZOOM: i32 = 14;
+
+/// From z12, only ranks up to `POI_MAJOR_RANK`: OpenMapTiles shows stations
+/// and ferry terminals at z12–13 and nothing under z12.
+pub const POI_MAJOR_ZOOM: i32 = 12;
+
+/// OpenMapTiles' `poi_class_rank` for a railway station.
+pub const POI_MAJOR_RANK: u16 = 40;
+
 // ---- a bake's slices ----
 
 /// Rows a bake writes or meshes a step, so one chunk never takes a turn's

@@ -1,14 +1,14 @@
 // pxl-kernel/layer/object/store.test.rs
 
-use pxl_spec::block::cube::Object;
+use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
-use pxl_spec::block::object::{cube_id, Cube};
+use pxl_spec::cell::object::{placeable_cube_num_id, PlaceableCube};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use xpute_kit::math::rng::SplitMix64;
+use xpute_core::math::rng::SplitMix64;
 
 fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
     Pvf3 { i: ivec::gather(x, y, z), f: 0 }
@@ -18,13 +18,7 @@ fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
 fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
     let mut store = Store::default();
     for at in [[8, 16, 24], [-3, 5, -7]] {
-        assert!(!store
-            .write([Write {
-                key: key(OBJECT_COARSEST, at),
-                id: 3,
-                ext: None
-            }])
-            .is_empty());
+        assert!(!store.write([Write { key: key(OBJECT_COARSEST, at), id: 3 }]).is_empty());
         assert_eq!(
             store.node(OBJECT_FINEST, first_descendant_of(at, u32::from(OBJECT_FINEST - OBJECT_COARSEST))).0.state,
             3,
@@ -32,19 +26,10 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
         );
         let mut met = Vec::new();
         store.each_in(OBJECT_COARSEST, at, &mut |e| met.push(*e));
-        assert_eq!(
-            met,
-            vec![Entry {
-                zoom: OBJECT_COARSEST,
-                at,
-                state: 3,
-                ext: 0
-            }]
-        );
+        assert_eq!(met, vec![Entry { zoom: OBJECT_COARSEST, at, state: 3 }]);
         store.write([Write {
             key: key(OBJECT_COARSEST, at),
             id: VOID,
-            ext: None,
         }]);
         let mut left = 0;
         store.each(&mut |_| left += 1);
@@ -53,8 +38,7 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
             store
                 .write([Write {
                     key: key(OBJECT_COARSEST, at),
-                    id: VOID,
-                    ext: None,
+                    id: VOID
                 }])
                 .is_empty(),
             "erasing nothing changes nothing"
@@ -90,7 +74,6 @@ fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (HashMap<[i64; 3], u32>
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
         key: key(OBJECT_COARSEST, [base[0] + x, base[1] + y, z]),
         id: state,
-        ext: None,
     }));
     let target = GROUND.cell_zoom(zoom);
     let corner = base.map(|v| v >> (GROUND.cell() - target));
@@ -101,7 +84,7 @@ fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (HashMap<[i64; 3], u32>
 }
 
 fn red() -> u32 {
-    cube_id(Cube::Object(Object::red))
+    placeable_cube_num_id(PlaceableCube::Block(Block::red))
 }
 
 #[test]
@@ -132,14 +115,58 @@ fn air_is_a_value_and_folds_like_one() {
     assert_eq!(out.get(&[x, y, 0]), Some(&AIR));
 }
 
+fn entry_boxes(store: &Store) -> Vec<Aabb> {
+    let all = Aabb {
+        min: [-1e7, -1e7, REACH.min[2]],
+        max: [1e7, 1e7, REACH.max[2]],
+    };
+    let mut out = Vec::new();
+    store.entries_in(&all, &mut |e| {
+        if e.state != VOID {
+            out.push(e.cube());
+        }
+    });
+    out
+}
+
 fn cube_at(store: &mut Store, [x, y, z]: [i64; 3], state: u32) {
     store.write([Write::at(&corner(x, y, z), 1.0, state)]);
+}
+
+/// The index may give a box with only air in it, never none where an entry
+/// is; checked after every edit, over boxes of every size across zero.
+#[test]
+fn where_the_objects_in_a_box_are_is_never_missed_and_never_past_it() {
+    let mut rng = Rng(SplitMix64::new(0x5851_f42d_4c95_7f2d));
+    let mut store = Store::default();
+    let red = placeable_cube_num_id(PlaceableCube::Block(Block::red));
+    let mut met = 0;
+    for step in 0..200 {
+        let at = [0, 1, 2].map(|_| (rng.next() % 400) as i64 - 200);
+        cube_at(&mut store, at, rng.pick(&[red, red, AIR, VOID]));
+        let boxes = entry_boxes(&store);
+        for _ in 0..20 {
+            let node = some_node(&mut rng, 250.0);
+            let query = region(node);
+            // A node is half-open: a cube that only touches it is not in it.
+            let truth = boxes.iter().filter_map(|b| b.meet(query)).filter(|m| (0..3).all(|k| m.min[k] < m.max[k])).reduce(Aabb::join);
+            let given = store.bounds(node, node.0).value().flatten().map(|b| b.aabb);
+            met += truth.is_some() as u32;
+            match (truth, given) {
+                (Some(t), Some(g)) => assert!(g.contains(t) && query.contains(g), "step {step}: {t:?} in {g:?} in {query:?}"),
+                (Some(t), None) => panic!("step {step}: {t:?} in {query:?} missed"),
+                (None, Some(g)) => assert!(query.contains(g), "step {step}: {g:?} past {query:?}"),
+                (None, None) => {}
+            }
+        }
+    }
+    assert!(met > 1_000, "only {met} boxes held an entry");
 }
 
 #[test]
 fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
     let mut rng = Rng(SplitMix64::new(0x2c1b_3c6d_a5b4_9f1e));
-    let red = cube_id(Cube::Object(Object::red));
+    let red = placeable_cube_num_id(PlaceableCube::Block(Block::red));
     let turn = |[x, y, z]: [i64; 3]| [y, z, x];
     let turn_box = |b: Aabb| Aabb {
         min: [b.min[1], b.min[2], b.min[0]],
@@ -160,76 +187,4 @@ fn turning_the_axes_turns_where_the_objects_are_and_nothing_else() {
         assert_eq!(bound(&stores[1], (zoom, turn(at))), given.map(turn_box), "{at:?} at z{zoom}");
         assert_eq!(bound(&stores[2], (zoom, turn(turn(at)))), given.map(|b| turn_box(turn_box(b))), "{at:?} at z{zoom}");
     }
-}
-
-fn words(text: &str) -> Option<Ext> {
-    Some(Ext::MarkerText(text.to_string()))
-}
-
-#[test]
-fn a_leaf_keeps_its_words_and_an_erase_frees_them() {
-    use pxl_spec::block::object::MARKER;
-    let mut store = Store::default();
-    let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
-    store.write([Write {
-        key: key(zoom, at),
-        id: MARKER,
-        ext: words("cafe"),
-    }]);
-    let e = store.placed(zoom, at).expect("placed");
-    assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
-    store.write([Write {
-        key: key(zoom, at),
-        id: VOID,
-        ext: None,
-    }]);
-    assert!(store.placed(zoom, at).is_none());
-    // The freed slot is the next one kept: nothing outlived its leaf.
-    store.write([Write {
-        key: key(zoom, at),
-        id: MARKER,
-        ext: words("bar"),
-    }]);
-    let e = store.placed(zoom, at).expect("placed again");
-    assert_eq!(e.ext, 1);
-    assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
-}
-
-#[test]
-fn eight_markers_filling_a_cell_stay_eight() {
-    use pxl_spec::block::object::MARKER;
-    let mut store = Store::default();
-    let parent = [4, 4, 2];
-    let writes: Vec<Write> = (0..8)
-        .map(|k| Write {
-            key: key(OBJECT_COARSEST + 1, child_cube(OBJECT_COARSEST, parent, k)),
-            id: MARKER,
-            ext: words(&format!("m{k}")),
-        })
-        .collect();
-    store.write(writes);
-    let mut met = 0;
-    store.each(&mut |e| {
-        assert_eq!(e.zoom, OBJECT_COARSEST + 1);
-        met += 1;
-    });
-    assert_eq!(met, 8);
-}
-
-#[test]
-fn a_column_read_whole_meets_its_leaves() {
-    let mut store = Store::default();
-    let at = [5, 7, 2];
-    store.write([Write {
-        key: key(OBJECT_COARSEST, at),
-        id: 3,
-        ext: None,
-    }]);
-    // The node of a whole shard: its tree's root, read through the region.
-    let shard = [at[0] >> (OBJECT_COARSEST - SHARD_ZOOM), at[1] >> (OBJECT_COARSEST - SHARD_ZOOM), 0];
-    let mut met = 0;
-    store.read((SHARD_ZOOM, shard), SHARD_ZOOM).value().expect("read").entries(&mut |_| met += 1);
-    assert_eq!(met, 1);
-    assert!(store.bounds::<3>((SHARD_ZOOM, shard), SHARD_ZOOM).value().flatten().is_some());
-    assert!(store.holds(SHARD_ZOOM, shard));
 }

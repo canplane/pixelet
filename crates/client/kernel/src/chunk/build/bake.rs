@@ -19,8 +19,8 @@ use crate::setting::store::settings_store;
 use crate::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES};
 use pxl_spec::space::coord::world::around;
 use pxl_spec::space::coord::zoom::{base_of, count, index_of, units, Zoom};
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 use super::*;
 

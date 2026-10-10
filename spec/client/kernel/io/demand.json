@@ -4,10 +4,11 @@
     "its run came to an end, and the phases a run reports its time in. The profiler",
     "records and reports them by these names (spec/client/kernel/profiler/profiler.json)."
   ],
-  "STREAM_NAMES": [
+  "CATEGORY_NAMES": [
     "terrain",
-    "place",
-    "division",
+    "poi",
+    "geocode",
+    "geocode_dict",
     "asset",
     "earth"
   ],

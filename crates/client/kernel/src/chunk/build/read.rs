@@ -3,7 +3,7 @@
 //! What a chunk reads of the terrain, through the query: its tile and the
 //! tiles its apron reaches beside it.
 
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::offset_in;
@@ -14,10 +14,10 @@ use pxl_render::mesh::run::APRON;
 
 use crate::chunk::Chunk as PyramidChunk;
 use crate::layer::terrain::Source;
-use crate::layer::Base as _;
+use crate::layer::Layer as _;
 use crate::layer::{Answer, Query};
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 use super::*;
 
@@ -42,7 +42,7 @@ impl Read {
 /// The ground a chunk is built from, as the terrain answers it; what a build
 /// reads and what it is keyed by are this one reading.
 pub(crate) fn ground_of(leaf: PyramidChunk) -> (Answer<Source<'static>>, [Option<Source<'static>>; 8]) {
-    let terrain = TerrainTile::residency();
+    let terrain = Terrain::residency();
     let mut beside = [None; 8];
     for ([qx, qy], p) in GROUND.read_beside(leaf.column(), leaf.cell_zoom(), APRON) {
         // A tile is read at its own cells.

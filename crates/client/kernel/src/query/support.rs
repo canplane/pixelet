@@ -6,7 +6,7 @@ use super::world::World;
 use crate::layer::object::store::VOID;
 use crate::layer::Query;
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::block::object::{object_value_is_air, object_value_is_voxel};
+use pxl_spec::cell::object::{object_value_is_air, object_value_is_voxel};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::world::REACH;
 use pxl_spec::space::layer::lattice::GROUND;

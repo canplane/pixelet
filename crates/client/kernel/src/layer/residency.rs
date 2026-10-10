@@ -17,16 +17,18 @@ use std::collections::HashMap;
 
 use fnv::FnvBuildHasher;
 
-use pxl_spec::space::layer::demand::reach_tiles;
+use pxl_spec::space::layer::demand::REACH_TILES;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use floor::{Fallback, Floor};
 
 use crate::io::demand::{Ask, Why};
-use crate::layer::{Asks, Base};
+use crate::layer::Layer;
 
 /// Only the eye. Another point observer would add its own misses.
 const OBSERVERS: u32 = 1;
+
+pub const ZOOM_DEMAND_TILES: u32 = REACH_TILES;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Hold {
@@ -71,7 +73,7 @@ impl<L> Entry<L> {
     }
 }
 
-pub struct Residency<L: Base> {
+pub struct Residency<L: Layer> {
     tiles: HashMap<Tile, Entry<L>, FnvBuildHasher>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
@@ -86,33 +88,23 @@ pub struct Residency<L: Base> {
 }
 
 /// What a layer's residency holds at once, from what it asks for. A layer
-/// holds only what it asks for (`Base::ASKS`).
-impl<L: Base> Residency<L> {
+/// that asks only for the floor (`Layer::DEMANDS` false) asks for no miss, no
+/// line over one and no destination.
+impl<L: Layer> Residency<L> {
     /// The zooms the layer's pyramid holds, its leaves to its lattice's top.
-    pub const ZOOMS: u32 = (L::LEAF - L::LATTICE.top() + 1) as u32;
+    pub const ZOOMS: u32 = (LEAF_ZOOM - L::LATTICE.top() + 1) as u32;
 
     /// A destination's line from its leaf to the top.
     pub const DESTINATION_TILES: u32 = Self::ZOOMS;
 
-    /// The most of its tiles a zoom's demand names, by its lattice.
-    pub const ZOOM_DEMAND_TILES: u32 = reach_tiles(L::LATTICE);
-
-    const DEMAND_TILES: u32 = if matches!(L::ASKS, Asks::View) { OBSERVERS * Self::ZOOM_DEMAND_TILES * Self::ZOOMS } else { 0 };
+    const DEMAND_TILES: u32 = if L::DEMANDS { OBSERVERS * ZOOM_DEMAND_TILES * Self::ZOOMS } else { 0 };
 
     /// The lines over the misses, every zoom's but the finest.
-    const ANCESTOR_TILES: u32 = if matches!(L::ASKS, Asks::View) {
-        OBSERVERS * Self::ZOOM_DEMAND_TILES * (Self::ZOOMS - 1)
-    } else {
-        0
-    };
+    const ANCESTOR_TILES: u32 = if L::DEMANDS { OBSERVERS * ZOOM_DEMAND_TILES * (Self::ZOOMS - 1) } else { 0 };
 
     /// Held hard apart from the view: the floor and a destination's line. A new
     /// consumer that cannot take a coarser answer would declare its tiles here.
-    const PINNED_TILES: u32 = match L::ASKS {
-        Asks::Floor => Floor::<L>::TILES,
-        Asks::Line => Self::DESTINATION_TILES,
-        Asks::View => Floor::<L>::TILES + Self::DESTINATION_TILES,
-    };
+    const PINNED_TILES: u32 = Floor::TILES + if L::DEMANDS { Self::DESTINATION_TILES } else { 0 };
 
     /// What is held hard at most.
     const HARD_TILES: u32 = Self::PINNED_TILES + Self::ANCESTOR_TILES;
@@ -120,7 +112,7 @@ impl<L: Base> Residency<L> {
     /// A frame for a tile nothing holds hard to land in. The floor alone holds
     /// every tile it asks for hard, and asks for at most `Floor::TILES`, so a
     /// tile it asks for finds a frame free or held only as cache.
-    const WORKSPACE: u32 = matches!(L::ASKS, Asks::View) as u32;
+    const WORKSPACE: u32 = L::DEMANDS as u32;
 
     /// Convergence: the misses and their lines share each zoom's ring, so a tile
     /// the view reads never gives up another the view reads.
@@ -133,7 +125,7 @@ impl<L: Base> Residency<L> {
     const SAFE: () = assert!(Self::FRAMES >= Self::HARD_TILES + Self::WORKSPACE, "safety: no frame for a tile nothing holds hard to land in");
 }
 
-impl<L: Base> Default for Residency<L> {
+impl<L: Layer> Default for Residency<L> {
     fn default() -> Self {
         let () = Self::SAFE;
         Residency {
@@ -201,7 +193,7 @@ impl Line {
     }
 }
 
-impl<L: Base> Residency<L> {
+impl<L: Layer> Residency<L> {
     fn entry(&self, p: Tile) -> Option<&Entry<L>> {
         self.tiles.get(&p)
     }
@@ -210,7 +202,7 @@ impl<L: Base> Residency<L> {
     fn entry_mut(&mut self, p: Tile) -> &mut Entry<L> {
         let full = self.tiles.len() >= Self::ENTRIES as usize;
         self.tiles.entry(p).or_insert_with(|| {
-            xpute_kit::ensure!(!full, ENOTRECOVERABLE, p.zoom);
+            xpute_core::ensure!(!full, ENOTRECOVERABLE, p.zoom);
             Entry::NONE
         })
     }
@@ -310,7 +302,7 @@ impl<L: Base> Residency<L> {
     /// they cost no frame, so nothing would ever evict them. Framed tiles are
     /// left to normal turnover.
     pub fn ask(&mut self, asks: &HashMap<Tile, Ask>) {
-        xpute_kit::ensure!(asks.len() <= Self::FRAMES as usize, ENOTRECOVERABLE, asks.len());
+        xpute_core::ensure!(asks.len() <= Self::FRAMES as usize, ENOTRECOVERABLE, asks.len());
         for (&p, e) in &mut self.tiles {
             e.ask = asks.get(&p).copied();
             if e.ask.is_none() && core::mem::take(&mut e.answered) {
@@ -368,7 +360,7 @@ impl<L: Base> Residency<L> {
         // Sorted, so the policy sees the same list for the same state.
         candidates.sort_unstable_by_key(|c| c.tile);
         let Some(at) = victim.victim(&candidates) else {
-            xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
+            xpute_core::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
             self.refused += 1;
             return None;
         };

@@ -1,15 +1,16 @@
 // pxl-geo-bake/bin/decode_tile.rs
 
 //! A baked terrain tile read back the way the kernel reads it, checked
-//! against the bake's contract. A byte that is no look draws nothing, so
-//! one is a fault unless it is the unknown past the coverage. Run `--all` after
-//! `deno task bake:terrain`; one tile also writes PNGs for the eye.
+//! against the bake's contract. A byte that is no look draws as unknown
+//! ground, so it is checked here. Run `--all` after
+//! `deno task bake:tiles`; one tile also writes PNGs for the eye.
 //!
-//!   decode_tile 010330210000113              # one tile by name: summary + PNGs
-//!   decode_tile 010330210000113 --out /tmp/tile
-//!   decode_tile out/terrain/0103302          # a path works too
-//!   decode_tile --all                        # every tile of the set, checked
-//!   decode_tile --all --set out/terrain.publish
+//!   decode_tile 12720250262323200                # one leaf: summary + PNGs
+//!   decode_tile 3179787687624704 --z 14          # a tile at a coarser zoom
+//!   decode_tile 12720250262323200 --out /tmp/tile
+//!   decode_tile out/terrain/v8/z15/12720250262323200  # a path works too
+//!   decode_tile --all                            # every tile of every zoom, checked
+//!   decode_tile --all --version v7
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -19,62 +20,52 @@ use std::process::ExitCode;
 use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
 use pxl_geo_bake::cli::Flags;
-use pxl_geo_bake::coverage::Coverage;
-use pxl_geo_bake::pyramid::TileSet;
-use pxl_geo_bake::util::{is_packed, unpack};
+use pxl_geo_bake::util::{encoding_of, unpack};
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
+use pxl_spec::bake::deck::{Decks, Form};
 use pxl_spec::bake::format::decode_terrain;
-use pxl_spec::bake::format::{GroundId, Occupancy};
-use pxl_spec::bake::separation::{Form, Separation};
+use pxl_spec::bake::format::{GroundCell, Occupancy};
+use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::surface::extent_of;
-use pxl_spec::block::color;
-use pxl_spec::block::cube::{ground, sentinel, Ground};
-use pxl_spec::space::coord::zoom::idx;
-use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::tile::{Tile as Placed, LEAF_ZOOM};
-use xpute_kit::math::scalar::round;
-use xpute_kit::wire::xtp::{HDR_SZ, WORD_SZ};
+use pxl_spec::cell::color;
+use pxl_spec::cell::cube_types::{ground, Ground};
+use pxl_spec::space::layer::lattice::TILE_CELLS;
+use xpute_core::math::scalar::round;
+use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
 
 /// Packed as a bake stores it, or identity from a deployment.
 fn read_tile(path: &Path) -> Result<Vec<u8>, String> {
     let raw = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    if is_packed(&raw) {
-        unpack(&raw).map_err(|e| e.to_string())
-    } else {
-        Ok(raw)
+    match encoding_of(&raw) {
+        Some(_) => unpack(&raw).map_err(|e| e.to_string()),
+        None => Ok(raw),
     }
 }
 
 struct Tile {
     ele: Vec<i16>,
-    cells: Vec<GroundId>,
+    cells: Vec<GroundCell>,
     extent: Vec<[i16; 2]>,
     occupancy: Occupancy,
-    separation: Separation,
+    decks: Decks,
 }
 
 fn decode(pkt: &[u8]) -> Result<Tile, String> {
     let t = decode_terrain(pkt).map_err(|e| format!("not a tile: {e:?}"))?;
-    let (ele, cells, extent, occupancy, separation) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent().to_vec(), t.index.occupancy, t.separation);
+    let (ele, cells, extent, occupancy, decks) = (t.ele.into_owned(), t.ground.cells.into_owned(), t.index.extent().to_vec(), t.index.occupancy, t.decks);
     // Nothing may follow the tree: the decoder only checks the payload is there.
     let at = WORD_SZ as usize;
     let payload = u32::from_le_bytes(pkt[at..at + 4].try_into().expect("a header word")) as usize;
     if payload + HDR_SZ as usize != pkt.len() {
         return Err(format!("packet is {} bytes, header says {}", pkt.len(), payload + HDR_SZ as usize));
     }
-    Ok(Tile {
-        ele,
-        cells,
-        extent,
-        occupancy,
-        separation,
-    })
+    Ok(Tile { ele, cells, extent, occupancy, decks })
 }
 
-fn name_of(cell: GroundId) -> &'static str {
+fn name_of(cell: GroundCell) -> &'static str {
     ground::ENTRIES.iter().find(|(_, n)| *n == cell).map_or("?", |(name, _)| name)
 }
 
@@ -84,12 +75,11 @@ struct Summary {
     mean: f64,
     extent: [i16; 2],
     occupancy: Occupancy,
-    counts: BTreeMap<GroundId, u32>,
+    counts: BTreeMap<GroundCell, u32>,
     faults: Vec<String>,
 }
 
-/// `at`: where the tile lies, which says which of its cells are past the coverage.
-fn summarize(tile: &Tile, at: Option<Placed>) -> Summary {
+fn summarize(tile: &Tile) -> Summary {
     let (min, max) = tile.ele.iter().fold((i16::MAX, i16::MIN), |(lo, hi), &h| (lo.min(h), hi.max(h)));
     let mean = tile.ele.iter().map(|&h| h as f64).sum::<f64>() / tile.ele.len() as f64;
     let mut counts = BTreeMap::new();
@@ -97,26 +87,11 @@ fn summarize(tile: &Tile, at: Option<Placed>) -> Summary {
         *counts.entry(cell).or_insert(0) += 1;
     }
     let mut faults = Vec::new();
-    let coverage = Coverage::of_source().ok();
-    let past_coverage = |i: usize| match (at, &coverage) {
-        (Some(p), Some(c)) => !c.contains(idx(LEAF_ZOOM, GROUND.cell_at(p, i as u32).base().i)),
-        _ => false,
-    };
-    let mut stray = BTreeMap::new();
-    for (i, &cell) in tile.cells.iter().enumerate() {
-        if Ground::of(cell).is_none() && !(cell == sentinel::unknown && past_coverage(i)) {
-            *stray.entry(cell).or_insert(0u32) += 1;
-        }
-    }
-    let past: Vec<String> = stray.iter().map(|(c, n)| format!("{c}×{n}")).collect();
+    let past: Vec<String> = counts.iter().filter(|(&c, _)| Ground::of(c).is_none()).map(|(c, n)| format!("{c}×{n}")).collect();
     if !past.is_empty() {
         faults.push(format!("byte(s) that are no look — {}", past.join(", ")));
     }
-    let short = extent_of(&tile.ele, &tile.separation)
-        .iter()
-        .zip(&tile.extent)
-        .filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi)
-        .count();
+    let short = extent_of(&tile.ele, &tile.decks).iter().zip(&tile.extent).filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi).count();
     if short > 0 {
         faults.push(format!("{short} index cell(s) narrower than the tile's own surface"));
     }
@@ -140,13 +115,13 @@ fn print_summary(name: &str, s: &Summary) {
     println!("  ground    {}", list.join(", "));
 }
 
-fn print_tunnels(tile: &Tile) {
-    let tunnels: Vec<_> = tile.separation.iter().filter(|d| d.form == Form::Tunnel).collect();
-    if tunnels.is_empty() {
+fn print_bores(tile: &Tile) {
+    let bores: Vec<_> = tile.decks.iter().filter(|d| d.form == Form::Bore).collect();
+    if bores.is_empty() {
         return;
     }
     let (mut under, mut points) = (0, 0);
-    for d in &tunnels {
+    for d in &bores {
         for i in 0..d.points.len() {
             let [x, y] = d.point(i);
             points += 1;
@@ -155,14 +130,14 @@ fn print_tunnels(tile: &Tile) {
             }
         }
     }
-    println!("  tunnels   {}, {points} points, {under} under the surface", tunnels.len());
+    println!("  bores     {}, {points} points, {under} under the surface", bores.len());
 }
 
-fn print_separation(separation: &Separation) {
-    let tops = separation.tops.iter().fold([i16::MAX, i16::MIN], |[lo, hi], &t| [lo.min(t), hi.max(t)]);
-    match separation.len() {
-        0 => println!("  separation     none"),
-        n => println!("  separation     {n}, {} points, tops {}..{}", separation.points.len(), tops[0], tops[1]),
+fn print_decks(decks: &Decks) {
+    let tops = decks.tops.iter().fold([i16::MAX, i16::MIN], |[lo, hi], &t| [lo.min(t), hi.max(t)]);
+    match decks.len() {
+        0 => println!("  decks     none"),
+        n => println!("  decks     {n}, {} points, tops {}..{}", decks.points.len(), tops[0], tops[1]),
     }
 }
 
@@ -204,7 +179,7 @@ fn heights_png(tile: &Tile, s: &Summary) -> Vec<u8> {
     png(ELE_PADDED_SPAN, ELE_PADDED_SPAN, 1, &gray)
 }
 
-fn rgb_of(cell: GroundId) -> u32 {
+fn rgb_of(cell: GroundCell) -> u32 {
     color::ground(cell).map_or(MAGENTA, |s| s.rgb)
 }
 
@@ -220,11 +195,11 @@ fn ground_png(tile: &Tile) -> Vec<u8> {
     png(TILE_CELLS, TILE_CELLS, 3, &px)
 }
 
-fn separation_png(tile: &Tile) -> Vec<u8> {
+fn decks_png(tile: &Tile) -> Vec<u8> {
     let n = TILE_CELLS as i64;
     let mut top = vec![f64::NEG_INFINITY; (n * n) as usize];
     let mut px = vec![0u8; (n * n * 3) as usize];
-    tile.separation.crossing_grid(None, [0.0, 0.0], 1.0, [n, n], |x, y, _, over| {
+    tile.decks.over_grid(None, [0.0, 0.0], 1.0, [n, n], |x, y, _, over| {
         let i = (y * n + x) as usize;
         if over.top < top[i] {
             return;
@@ -236,17 +211,26 @@ fn separation_png(tile: &Tile) -> Vec<u8> {
     png(TILE_CELLS, TILE_CELLS, 3, &px)
 }
 
-fn check_all(tiles: &Path) -> ExitCode {
-    let set = TileSet::new(tiles);
-    let paths: Vec<PathBuf> = match set.by_zoom() {
-        Ok(listed) => listed.into_values().flatten().map(|p| set.path(p)).collect(),
-        Err(e) => {
-            eprintln!("[decode_tile] {e} — bake first, or name the set");
-            return ExitCode::FAILURE;
+fn stored_tiles(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            stored_tiles(&path, out)?;
+        } else if !matches!(path.extension().and_then(|e| e.to_str()), Some("part" | "empty")) {
+            out.push(path);
         }
-    };
+    }
+    Ok(())
+}
+
+fn check_all(tiles: &Path) -> ExitCode {
+    let mut paths = Vec::new();
+    if let Err(e) = stored_tiles(tiles, &mut paths) {
+        eprintln!("[decode_tile] {}: {e} — bake first, or name the version", tiles.display());
+        return ExitCode::FAILURE;
+    }
     if paths.is_empty() {
-        eprintln!("[decode_tile] no tiles under {} — bake first, or name the set", tiles.display());
+        eprintln!("[decode_tile] no tiles under {} — bake first, or name the version", tiles.display());
         return ExitCode::FAILURE;
     }
     let mut bad = Vec::new();
@@ -254,7 +238,7 @@ fn check_all(tiles: &Path) -> ExitCode {
         let name = path.strip_prefix(tiles).unwrap_or(path).display().to_string();
         match read_tile(path).and_then(|pkt| decode(&pkt)) {
             Ok(tile) => {
-                let s = summarize(&tile, path.file_name().and_then(|n| Placed::of_name(&n.to_string_lossy())));
+                let s = summarize(&tile);
                 if !s.faults.is_empty() {
                     bad.push(format!("{name}: {}", s.faults.join("; ")));
                 }
@@ -278,11 +262,11 @@ fn check_all(tiles: &Path) -> ExitCode {
 
 fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     let tile = decode(&read_tile(path)?)?;
-    let s = summarize(&tile, path.file_name().and_then(|n| Placed::of_name(&n.to_string_lossy())));
+    let s = summarize(&tile);
     let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
     print_summary(&name, &s);
-    print_separation(&tile.separation);
-    print_tunnels(&tile);
+    print_decks(&tile.decks);
+    print_bores(&tile);
     for line in &s.faults {
         eprintln!("[decode_tile] {line}");
     }
@@ -290,20 +274,21 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     let write = |file: String, bytes: Vec<u8>| std::fs::write(dir.join(&file), bytes).map_err(|e| format!("{file}: {e}"));
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     write("heights.png".into(), heights_png(&tile, &s))?;
-    write("separation.png".into(), separation_png(&tile))?;
+    write("decks.png".into(), decks_png(&tile))?;
     write("ground.png".into(), ground_png(&tile))?;
-    println!("[decode_tile] wrote heights.png, ground.png and separation.png under {}", dir.display());
+    println!("[decode_tile] wrote heights.png, ground.png and decks.png under {}", dir.display());
     Ok(s.faults.is_empty())
 }
 
 fn main() -> ExitCode {
-    const USAGE: &str = "usage: decode_tile <name | path> [--set dir] [--out dir] | --all [--set dir]";
-    let (mut set, mut out, mut all, mut target) = (PathBuf::from("out/terrain"), None, false, None);
+    const USAGE: &str = "usage: decode_tile <key | path> [--z n] [--version v6] [--out dir] | --all [--version v6]";
+    let (mut version, mut z, mut out, mut all, mut target) = (PUBLISHED_VERSION.terrain.to_string(), "16".to_string(), None, false, None);
     let mut flags = Flags::from_env();
     let read = (|| {
         while let Some(arg) = flags.arg() {
             match arg.as_str() {
-                "--set" => set = PathBuf::from(flags.value()?),
+                "--version" => version = flags.value()?,
+                "--z" => z = flags.value()?,
                 "--out" => out = Some(PathBuf::from(flags.value()?)),
                 "--all" => all = true,
                 _ if target.is_none() && !arg.starts_with("--") => target = Some(arg),
@@ -316,16 +301,18 @@ fn main() -> ExitCode {
         eprintln!("{e}\n{USAGE}");
         return ExitCode::from(2);
     }
+    let tiles = Path::new("out/terrain").join(&version);
     if all {
-        return check_all(&set);
+        return check_all(&tiles);
     }
     let Some(target) = target else {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     };
-    let path = match Placed::of_name(&target) {
-        Some(p) => TileSet::new(set).path(p),
-        None => PathBuf::from(target),
+    let path = if target.bytes().all(|b| b.is_ascii_digit()) {
+        tiles.join(format!("z{z}")).join(target)
+    } else {
+        PathBuf::from(target)
     };
     match one(&path, out) {
         Ok(true) => ExitCode::SUCCESS,

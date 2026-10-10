@@ -1,21 +1,18 @@
 // pxl-render/gpu/pass/badges.rs
 
-//! Billboards in two passes after the world: their regions, each as its
-//! billboard's number, into a target of their own, then the billboards whose
-//! number is the one at their anchor, with the world's depth attached
-//! read-only (badge.wgsl). The sheet is premultiplied so its mips
+//! Billboards in a pass after the world, with the world's depth attached
+//! read-only and bound as a texture. The sheet is premultiplied so its mips
 //! filter without a dark fringe; without mips a badge minified slightly against
 //! the supersampled sheet crawls with every camera micro-movement.
 
 use crate::frame::draw::{uniform_of, PIPELINE_BADGE};
-use crate::frame::shader::record::PIPELINE_BADGE_REGION;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{Blocks, Draws};
 use crate::gpu::sheet::shelf::{DrawSpec, Sheet};
-use crate::gpu::sheet::{Align, Halo, SheetPainter, Sketch, SHEET_SCALE};
+use crate::gpu::sheet::{Align, SheetPainter, Sketch};
 use crate::gpu::text::{Font, TextOf};
 
 const BADGE_FLOATS: usize = 40;
@@ -31,15 +28,19 @@ const BLACK: u32 = 0x000000ff;
 const WHITE: u32 = 0xffffffff;
 
 pub const BADGE_FONT: Font = Font { weight: REGULAR, px: 12.0 };
-const PILL_INNER: f32 = 20.0;
+const ICON_FONT: Font = Font { weight: REGULAR, px: 13.0 };
+const ICON_SIZE: f32 = 20.0;
 const PAD_X: f32 = 10.0;
+const GAP: f32 = 6.0;
 const PAD_Y: f32 = 7.0;
 const DOT_DIAM: f32 = 6.0;
 const DOT_GAP: f32 = 4.0;
 const DOT_BORDER: f32 = 1.0;
-const PILL_H: f32 = PILL_INNER + PAD_Y;
+const PILL_H: f32 = ICON_SIZE + PAD_Y;
 const PILL_R: f32 = PILL_H / 2.0;
 const DOT_CY: f32 = PILL_H + DOT_GAP + DOT_DIAM / 2.0;
+/// Past the icon, which is concentric with the pill's left cap.
+const TEXT_X: f32 = PILL_R + ICON_SIZE / 2.0 + GAP;
 
 fn pill(p: &mut Sketch, logical_w: f32) {
     p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, 0x14141ab8);
@@ -50,89 +51,24 @@ fn anchor_dot(p: &mut Sketch, logical_w: f32) {
     p.ring(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, DOT_BORDER, 0xffffff40);
 }
 
-pub fn badge_width(text_w: f64) -> f64 {
-    (text_w + 2.0 * PAD_X as f64).max(PILL_H as f64)
-}
-
-// A place as a map app draws one: its symbol white on a disc of its
-// category's fill, rimmed white so it holds on any ground, lit from above and
-// casting a soft shadow, or before its icon's zoom a small disc of the same; the name under it in its category's
-// color, semibold, in a near-opaque white halo. Which places and when are
-// Carto's (`pxl-spec bake/place_theme.spec.rs`); how they look is not.
-
-pub const POINT_FONT: Font = Font { weight: SEMIBOLD, px: 12.0 };
-/// A symbol's disc across: the symbol (`SYMBOL_PX` at the sheet's scale, 14)
-/// with four pixels of fill round it.
-const POINT_DISC: f32 = 22.0;
-const POINT_DOT: f32 = 8.0;
-const POINT_RIM: f32 = 1.5;
-const POINT_RIM_FILL: u32 = 0xffffffe6;
-/// The fill lighter at the disc's top and darker at its foot by this much.
-const POINT_SHADE: f32 = 0.18;
-/// A shadow as wide as the disc and a little more, dropped and blurred, and
-/// the room it takes round the disc.
-const POINT_SHADOW_DY: f32 = 1.5;
-const POINT_SHADOW_BLUR: f32 = 3.0;
-const POINT_SHADOW_FILL: u32 = 0x00000059;
-const POINT_PAD: f32 = 3.0;
-/// From the mark's foot to the name's first line.
-const POINT_GAP: f32 = 2.0;
-const POINT_HALO: f32 = 2.0;
-const POINT_HALO_FILL: u32 = 0xfffffff2;
-/// Under the halo as under the disc: dropped, and soft past the halo's edge.
-const POINT_TEXT_HALO: Halo = Halo {
-    color: POINT_HALO_FILL,
-    radius: POINT_HALO,
-    shadow: 0x00000038,
-    shadow_radius: POINT_HALO + 1.5,
-    shadow_dy: 1.0,
-};
-/// A line, the font's size and its halo above and below.
-const POINT_LINE: f32 = POINT_FONT.px + 2.0 * POINT_HALO;
-/// From one line to the next, as Mapnik sets it (text_line.cpp): the face's
-/// own line height plus Carto's @standard-line-spacing-size, −0.15 em. The
-/// face is the system's, whose metrics the sheet does not read; 1.2 em is
-/// CSS's `line-height: normal` at its high end (CSS 2.1 §10.8.1).
-const POINT_PITCH: f32 = (1.2 - 0.15) * POINT_FONT.px;
-
-/// The disc's side and the shadow's room round it.
-fn point_mark(icon: bool) -> f32 {
-    2.0 * POINT_PAD + if icon { POINT_DISC } else { POINT_DOT }
-}
-
-/// A point's sprite, its mark an icon's or a dot's, for a name laid out in
-/// `lines` as wide as `text_w`, or none: its width, height and where the
-/// place is, down from its top.
-pub fn point_size(icon: bool, text: Option<(f64, usize)>) -> [f64; 3] {
-    let mark = f64::from(point_mark(icon));
-    match text {
-        None => [mark, mark, mark / 2.0],
-        Some((w, lines)) => {
-            // The last line's shadow reaches past its halo.
-            let shadow = f64::from(POINT_TEXT_HALO.shadow_radius - POINT_HALO + POINT_TEXT_HALO.shadow_dy);
-            let h = mark - f64::from(POINT_PAD) + f64::from(POINT_GAP) + f64::from(POINT_PITCH) * (lines.max(1) - 1) as f64 + f64::from(POINT_LINE) + shadow;
-            [(w + 2.0 * f64::from(POINT_TEXT_HALO.shadow_radius)).ceil().max(mark), h.ceil(), mark / 2.0]
-        }
+pub fn badge_width(text_w: f64, icon: bool) -> f64 {
+    if icon {
+        (TEXT_X + PAD_X) as f64 + text_w
+    } else {
+        (text_w + 2.0 * PAD_X as f64).max(PILL_H as f64)
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn point(p: &mut Sketch, lines: &[String], icon: bool, symbol: Option<u16>, fill: u32, text: u32, logical_w: f32) {
-    let (cx, cy) = (logical_w / 2.0, point_mark(icon) / 2.0);
-    let r = cy - POINT_PAD;
-    p.soft_circle(cx, cy + POINT_SHADOW_DY, r + 0.5, POINT_SHADOW_BLUR, 0.0, POINT_SHADOW_FILL);
-    p.circle(cx, cy, r, POINT_RIM_FILL);
-    p.soft_circle(cx, cy, r - POINT_RIM, 1.0 / SHEET_SCALE as f32, POINT_SHADE, fill);
-    if let (true, Some(s)) = (icon, symbol) {
-        p.icon(usize::from(s), WHITE, cx, cy);
-    }
-    for (k, line) in lines.iter().enumerate() {
-        let ty = 2.0 * cy - POINT_PAD + POINT_GAP + POINT_LINE / 2.0 + POINT_PITCH * k as f32;
-        p.haloed_text(POINT_FONT, text, POINT_TEXT_HALO, line, cx, ty, Align::Center);
-    }
+fn place(p: &mut Sketch, name: &str, icon: &str, color: u32, logical_w: f32) {
+    pill(p, logical_w);
+    let (cx, cy) = (PILL_R, PILL_H / 2.0);
+    p.circle(cx, cy, ICON_SIZE / 2.0, color);
+    p.text(ICON_FONT, WHITE, icon, cx, cy + 1.0, Align::Center);
+    p.text(BADGE_FONT, WHITE, name, TEXT_X, PILL_H / 2.0 + 1.0, Align::Left);
+    anchor_dot(p, logical_w);
 }
 
-fn labeled_pill(p: &mut Sketch, label: &str, logical_w: f32) {
+fn cluster(p: &mut Sketch, label: &str, logical_w: f32) {
     pill(p, logical_w);
     p.text(BADGE_FONT, WHITE, label, logical_w / 2.0, PILL_H / 2.0 + 1.0, Align::Center);
     anchor_dot(p, logical_w);
@@ -170,27 +106,16 @@ fn bubble(p: &mut Sketch, lines: &[String], box_w: f32, box_h: f32) {
     }
 }
 
-/// A set's uniform and block, bound twice: its regions read the world's
-/// depth, its billboards the regions.
 #[derive(Clone, Copy, Default)]
 struct Set {
     uniform: u32,
     group: u32,
-    region_group: u32,
     block: u32,
     depth: u32,
-    numbers: u32,
 }
 
 pub struct BadgePass {
     built: Built,
-    region_built: Built,
-    /// The regions' numbers and their depth, the world's size.
-    numbers: u32,
-    numbers_view: u32,
-    regions: u32,
-    regions_view: u32,
-    regions_size: (u32, u32),
     painter: SheetPainter,
     sampler: u32,
     sheet: u32,
@@ -205,6 +130,8 @@ pub struct BadgePass {
     pub view: [f32; 16],
     pub proj: [f32; 16],
     pub px_k: f32,
+    pub near: f32,
+    pub far: f32,
 }
 
 impl BadgePass {
@@ -216,12 +143,6 @@ impl BadgePass {
         g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
         BadgePass {
             built,
-            region_built: pipelines.build(g, PIPELINE_BADGE_REGION, format::RGBA8),
-            numbers: 0,
-            numbers_view: 0,
-            regions: 0,
-            regions_view: 0,
-            regions_size: (0, 0),
             frame_group,
             painter: SheetPainter::new(g, pipelines),
             sampler,
@@ -236,6 +157,8 @@ impl BadgePass {
             view: [0.0; 16],
             proj: [0.0; 16],
             px_k: 1.0,
+            near: 0.1,
+            far: 1000.0,
         }
     }
 
@@ -286,15 +209,8 @@ impl BadgePass {
             let Some(spec) = sheet.slot_draw(slot) else { continue };
             let mut p = Sketch::default();
             match spec {
-                DrawSpec::Pill { label, logical_w } => labeled_pill(&mut p, label, *logical_w as f32),
-                DrawSpec::Point {
-                    lines,
-                    icon,
-                    symbol,
-                    fill,
-                    text,
-                    logical_w,
-                } => point(&mut p, lines, *icon, *symbol, *fill, *text, *logical_w as f32),
+                DrawSpec::Cluster { label, logical_w } => cluster(&mut p, label, *logical_w as f32),
+                DrawSpec::Place { name, icon, color, logical_w } => place(&mut p, name, icon, *color, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w, box_h } => bubble(&mut p, lines, *box_w as f32, *box_h as f32),
             }
             if self.painter.paint(g, encoder, self.sheet, sheet.slot_rect(slot), &p, text, &mut made) {
@@ -314,25 +230,11 @@ impl BadgePass {
         }
     }
 
-    /// The regions' depth at the world's size, and each set's uniform and
-    /// groups, made here so drawing makes nothing that outlives its frame.
-    pub fn prepare(&mut self, g: &Gpu, depth: u32, size: (u32, u32), draws: &Draws, blocks: &Blocks) {
+    /// Each set's uniform and group, made here so drawing makes nothing that
+    /// outlives its frame: a set's group holds its block and the depth it reads.
+    pub fn prepare(&mut self, g: &Gpu, depth: u32, draws: &Draws, blocks: &Blocks) {
         if self.sheet_group == 0 {
             return;
-        }
-        if self.regions_size != size {
-            for id in [self.numbers_view, self.numbers, self.regions_view, self.regions] {
-                release(id);
-            }
-            self.numbers = object();
-            g.texture(self.numbers, size.0, size.1, 1, format::RGBA8, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
-            self.numbers_view = object();
-            g.view(self.numbers_view, self.numbers, dimension::D2, 0, 1, 0, 1);
-            self.regions = object();
-            g.texture(self.regions, size.0, size.1, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
-            self.regions_view = object();
-            g.view(self.regions_view, self.regions, dimension::D2, 0, 1, 0, 1);
-            self.regions_size = size;
         }
         let placed = draws.of(PIPELINE_BADGE).filter(|d| d[1] > 0).filter_map(|d| blocks.get(d[0]));
         for (set, (block, _, _)) in self.sets.iter_mut().zip(placed) {
@@ -340,21 +242,16 @@ impl BadgePass {
                 set.uniform = object();
                 g.buffer(set.uniform, word_bytes(BADGE_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             }
-            if set.block != block || set.depth != depth || set.numbers != self.numbers_view || set.group == 0 {
-                let bound = |layout: u32, before: u32| {
-                    let group = object();
-                    let mut e = [0u32; 15];
-                    e[..5].copy_from_slice(&buffer_entry(0, set.uniform));
-                    e[5..10].copy_from_slice(&buffer_entry(1, block));
-                    e[10..].copy_from_slice(&[2, resource::VIEW, before, 0, 0]);
-                    g.bind_group(group, layout, &e);
-                    group
-                };
+            if set.block != block || set.depth != depth || set.group == 0 {
                 release(set.group);
-                release(set.region_group);
-                set.group = bound(self.built.layouts[1], self.numbers_view);
-                set.region_group = bound(self.region_built.layouts[1], depth);
-                (set.block, set.depth, set.numbers) = (block, depth, self.numbers_view);
+                set.group = object();
+                let mut e = [0u32; 15];
+                e[..5].copy_from_slice(&buffer_entry(0, set.uniform));
+                e[5..10].copy_from_slice(&buffer_entry(1, block));
+                e[10..].copy_from_slice(&[2, resource::VIEW, depth, 0, 0]);
+                g.bind_group(set.group, self.built.layouts[1], &e);
+                set.block = block;
+                set.depth = depth;
             }
         }
     }
@@ -364,45 +261,30 @@ impl BadgePass {
         if self.sheet_group == 0 {
             return;
         }
-        let placed = || draws.of(PIPELINE_BADGE).filter(|d| d[1] > 0).filter(|d| blocks.get(d[0]).is_some());
-        if placed().next().is_none() {
-            return;
-        }
+        let mut pass = 0;
+        let placed = draws.of(PIPELINE_BADGE).filter(|d| d[1] > 0).filter(|d| blocks.get(d[0]).is_some());
         // A uniform buffer a set: every write to one buffer lands before the pass, so
         // a shared one would place every set where the last is.
-        // Numbered on from the sets before, so no two billboards share one.
-        let mut before = 0;
-        for (set, d) in self.sets.iter().zip(placed()) {
+        for (set, d) in self.sets.iter().zip(placed) {
             let s = &mut self.uniform;
             s[..16].copy_from_slice(&self.view);
             s[16..32].copy_from_slice(&self.proj);
             s[32..35].copy_from_slice(&uniform_of(uniforms, d)[..3]);
-            s[35] = self.px_k;
-            s[36] = before as f32;
+            s[35..40].copy_from_slice(&[self.px_k, self.near, self.far, 0.0, 0.0]);
             g.write_buffer(set.uniform, 0, bytes(s));
-            before += d[1];
-        }
-        // Cleared to no number, and reversed depth to the far plane.
-        let pass = object();
-        g.pass(pass, encoder, &pass_desc(self.numbers_view, load::CLEAR, self.regions_view, load::CLEAR, 0.0, stamp.pass()));
-        g.set_pipeline(pass, self.region_built.pipeline);
-        g.set_bind_group(pass, 0, self.frame_group, &[]);
-        for (set, d) in self.sets.iter().zip(placed()) {
-            g.set_bind_group(pass, 1, set.region_group, &[]);
-            g.draw(pass, 4, d[1], 0, 0);
-        }
-        g.end(pass);
-        release(pass);
-        let pass = object();
-        g.pass(pass, encoder, &pass_desc(color, load::LOAD, depth, load::READ_ONLY, 0.0, stamp.pass()));
-        g.set_pipeline(pass, self.built.pipeline);
-        g.set_bind_group(pass, 0, self.frame_group, &[]);
-        g.set_bind_group(pass, 2, self.sheet_group, &[]);
-        for (set, d) in self.sets.iter().zip(placed()) {
+            if pass == 0 {
+                pass = object();
+                g.pass(pass, encoder, &pass_desc(color, load::LOAD, depth, load::READ_ONLY, 0.0, stamp.pass()));
+                g.set_pipeline(pass, self.built.pipeline);
+                g.set_bind_group(pass, 0, self.frame_group, &[]);
+                g.set_bind_group(pass, 2, self.sheet_group, &[]);
+            }
             g.set_bind_group(pass, 1, set.group, &[]);
             g.draw(pass, 4, d[1], 0, 0);
         }
-        g.end(pass);
-        release(pass);
+        if pass != 0 {
+            g.end(pass);
+            release(pass);
+        }
     }
 }

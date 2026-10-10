@@ -6,10 +6,10 @@
  * place by the time the kernel reads it.
  */
 
-import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
-import type { u32 } from "@xpute/kit/abi/word.ts";
-import { td, te } from "@xpute/kit/codec/encoding.ts";
-import { Errno, strerror } from "@xpute/kit/status/errno.spec.ts";
+import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { td, te } from "@xpute/core/codec/encoding.ts";
+import { Errno, strerror } from "@xpute/core/status/errno.spec.ts";
 import { text_of } from "@xpute/host/ipc/stream.ts";
 import { Command as XputeCommand, encode_sys_opened } from "@xpute/host/abi/cmd.spec.ts";
 import { FileError, Sys } from "@xpute/host/ipc/sys.ts";
@@ -107,12 +107,13 @@ function program(code: u32, w: U32Array, a: u32): void {
 
 type Open = (path: string, signal: AbortSignal) => U8Array | Promise<U8Array>;
 
-/** STORAGE's files, each kept under its path, so a path's version is its key's. */
-const STORAGE_PATHS: readonly string[] = [SETTINGS_PATH, OBJECTS_PATH];
+/** Where STORAGE's files are kept: the keys they had before the kernel named them. */
+const STORAGE_KEYS: Record<string, string> = { [SETTINGS_PATH]: "pxl:settings", [OBJECTS_PATH]: "pxl:object:v14" };
 
 function storage_key(path: string): string {
-  if (!STORAGE_PATHS.includes(path)) throw new FileError(Errno.ENOENT);
-  return `pxl:${path.replaceAll("/", ":")}`;
+  const key = STORAGE_KEYS[path];
+  if (key === undefined) throw new FileError(Errno.ENOENT);
+  return key;
 }
 
 /** A STORAGE file's text, or null where none is kept. */

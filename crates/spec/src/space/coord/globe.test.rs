@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::space::coord::v3::sub3;
-use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
+use xpute_core::math::rng::{u32_to_unit, SplitMix64};
 
 const SEOUL: f64 = 37.5665 * core::f64::consts::PI / 180.0;
 
@@ -44,6 +44,15 @@ fn every_point_lies_on_the_sphere_at_its_height() {
         let lat = 2.0 * libm::atan(globe.e0 * libm::exp(d[1] / MERCATOR_RADIUS_U)) - core::f64::consts::FRAC_PI_2;
         let want = r + d[2] * libm::cos(lat) / globe.cos_lat;
         assert!((from_center - want).abs() < 1e-3, "{d:?}: {from_center} vs {want}");
+    }
+}
+
+#[test]
+fn unplace_takes_a_placed_point_back_to_the_map() {
+    let globe = Globe::at(SEOUL);
+    for d in [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0], [3e4, -2e4, 700.0], [-4e5, 3e5, 0.0], [2e5, 1e5, 2000.0]] {
+        let back = globe.unplace(globe.place(d));
+        assert!((back[0] - d[0]).abs() < 1e-2 && (back[1] - d[1]).abs() < 1e-2, "{d:?} came back as {back:?}");
     }
 }
 

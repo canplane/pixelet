@@ -1,7 +1,7 @@
 // pxl-geo-bake/wkb.rs
 
 //! Minimal WKB decoder: Point, LineString, Polygon, MultiPolygon; EWKB flags
-//! and ISO dimensions. SRID is ignored (3857 assumed); Z is kept as a line's top.
+//! and ISO dimensions. SRID is ignored (3857 assumed); Z is kept as a deck's top.
 
 use pxl_spec::space::coord::adapter::epsg3857::G3857;
 

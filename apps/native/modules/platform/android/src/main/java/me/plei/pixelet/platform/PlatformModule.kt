@@ -22,9 +22,9 @@ import expo.modules.kotlin.typedarray.Uint8Array
  * system, under the same names.
  *
  * The kernel's memory is handed over as one ArrayBuffer over the region the
- * guest took — no copy, so a ring the shell writes is the ring the kernel
+ * core took — no copy, so a ring the shell writes is the ring the kernel
  * reads. The shell calls on the JavaScript thread, one call at a time; the
- * guest runs each on its own thread while this one waits
+ * core runs each on its own thread while this one waits
  * (crates/client-bracket/native/src/thread.rs), and an image's decode runs off both.
  */
 class PlatformModule : Module() {
@@ -34,22 +34,22 @@ class PlatformModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PxlPlatform")
 
-    // ---- the kernel (platform/guest.ts, gpu.ts, image.ts) ----
+    // ---- the kernel (platform/core.ts, gpu.ts, image.ts) ----
 
-    // The region is the guest's for the app's life: nothing is let go when
+    // The region is the core's for the app's life: nothing is let go when
     // the buffer is.
-    Function("memory") { NativeArrayBuffer(PxlGuest.memory()) }
+    Function("memory") { NativeArrayBuffer(PxlCore.memory()) }
 
-    Function("interrupt") { quotaMs: Double -> PxlGuest.interrupt(quotaMs) }
+    Function("interrupt") { quotaMs: Double -> PxlCore.interrupt(quotaMs) }
 
     /** The device's uniform offset alignment and whether it times its
      * passes, or null where the system has no GPU. */
-    Function("gpuOpen") { PxlGuest.gpuOpen()?.toList() }
+    Function("gpuOpen") { PxlCore.gpuOpen()?.toList() }
 
     /** Decodes a PNG or a WebP and holds it for the renderer: its handle, or 0
      * when it does not decode. Async, so it runs off the JavaScript thread: a
      * large image costs no turn. */
-    AsyncFunction("imageHold") { handle: Int, file: ByteArray -> PxlGuest.imageHold(handle, file) }
+    AsyncFunction("imageHold") { handle: Int, file: ByteArray -> PxlCore.imageHold(handle, file) }
 
     // ---- storage (platform/storage.ts) ----
     //

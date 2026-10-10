@@ -4,8 +4,8 @@
 //! pointer, so it means the same on every host and fits a `u32`. The base is
 //! 0 on wasm32 and in a native test; a native build sets its region's start.
 
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::global::Global;

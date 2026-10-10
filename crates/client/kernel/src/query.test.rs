@@ -6,14 +6,14 @@
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::bake::format::Ground;
-use pxl_spec::block::cube::{self, ground, sentinel};
-use pxl_spec::block::object::{cube_id, Cube};
+use pxl_spec::cell::cube_types::{self, ground, sentinel};
+use pxl_spec::cell::object::{placeable_cube_num_id, PlaceableCube};
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 
 use super::*;
 use crate::layer::Answer;
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
@@ -43,7 +43,7 @@ fn top() -> Tile {
     Tile::new(LEAF_ZOOM - 1, ivec::gather(40, -20, 0))
 }
 
-fn resident(held: &[(Tile, TerrainTile)]) -> Residency<TerrainTile> {
+fn resident(held: &[(Tile, Terrain)]) -> Residency<Terrain> {
     let mut residency = Residency::default();
     for (p, tile) in held {
         residency.admit(*p, &Keep, |_| Ok::<_, ()>(tile.clone())).unwrap();
@@ -68,7 +68,6 @@ fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
     store.write([Write {
         key: pxl_spec::space::hierarchy::morton::key_of::<3>(side, index_of(side, &at)),
         id: state,
-        ext: None,
     }]);
 }
 
@@ -76,7 +75,7 @@ fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
 fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
     let _g = serial();
     let leaf = top().children()[0];
-    let void = TerrainTile::leaf(
+    let void = Terrain::leaf(
         vec![0; PADDED * PADDED],
         Ground {
             cells: vec![sentinel::void; SPAN * SPAN].into(),
@@ -94,7 +93,7 @@ fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
     assert_eq!(access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).value().flatten(), None);
 
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
     write(&mut store, [x0 + 10.0, y0 + 10.0, 5.0], OBJECT_COARSEST, red);
     let access = World::new(&residency, &store);
     assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(6.0)));
@@ -106,17 +105,17 @@ fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
 /// the query meets its slab where the renderer draws it.
 #[test]
 fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
-    use pxl_spec::bake::separation::{Builder, Form, POINT_SCALE};
+    use pxl_spec::bake::deck::{Builder, Form, POINT_SCALE};
     let _g = serial();
     let leaf = top().children()[0];
-    let mut separation = Builder::default();
-    separation.push([([0.0, 10.5], 10), ([40.0, 10.5], 10)], 4 * POINT_SCALE as u8, ground::residential_road, Form::Bridge, 0);
-    let void = TerrainTile::leaf(
+    let mut decks = Builder::default();
+    decks.push([([0.0, 10.5], 10), ([40.0, 10.5], 10)], 4 * POINT_SCALE as u8, ground::residential_road, Form::Deck, 0);
+    let void = Terrain::leaf(
         vec![0; PADDED * PADDED],
         Ground {
             cells: vec![sentinel::void; SPAN * SPAN].into(),
         },
-        separation.finish(),
+        decks.finish(),
     );
     let residency = resident(&[(leaf, void)]);
     let (x0, y0, _) = leaf.rect();
@@ -136,7 +135,7 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let n = pxl_spec::space::coord::world::around(LEAF_ZOOM);
     let flat = || {
         let cells = vec![ground::land; SPAN * SPAN];
-        TerrainTile::leaf(vec![5; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
+        Terrain::leaf(vec![5; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
     };
     let tile = |x: i64| pxl_spec::space::layer::tile::tile_at(LEAF_ZOOM, [x, 0]);
     let residency = resident(&[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())]);
@@ -144,7 +143,7 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let top = World::new(&residency, &Store::default()).at(&point(-seam + 20.5, 100.5), LEAF_ZOOM).value().unwrap().top().unwrap();
 
     let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
+    let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
     write(&mut store, [-seam + 40.0, 100.0, top], OBJECT_COARSEST, red);
     let access = World::new(&residency, &store);
 

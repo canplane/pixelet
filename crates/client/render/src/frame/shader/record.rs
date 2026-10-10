@@ -31,8 +31,7 @@ pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_CLOUD_COMPOSITE: u32 = 23;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 24;
 pub const SHADER_CAMERA_GRID: u32 = 25;
-pub const SHADER_BADGE_REGION: u32 = 26;
-pub const SHADERS: u32 = 27;
+pub const SHADERS: u32 = 26;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -101,8 +100,7 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_PUCK_ZONE => wgsl!("frame", "globe", "encode", "finish", "puck", "puck_zone"),
         SHADER_PUCK_BEACON => wgsl!("frame", "globe", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "place", "puck", "puck_beacon"),
-        SHADER_BADGE => wgsl!("frame", "globe", "encode", "badge", "badge_sprite"),
-        SHADER_BADGE_REGION => wgsl!("frame", "globe", "encode", "badge", "badge_region"),
+        SHADER_BADGE => wgsl!("frame", "globe", "encode", "depth", "badge_depth", "badge"),
         SHADER_SKY => wgsl!(
             "frame",
             "globe",
@@ -192,8 +190,31 @@ pub fn source(kind: u32) -> &'static str {
 }
 
 pub const FRAME_FLOATS: usize = 92;
-/// Frame uniform field offsets in floats, in frame.wgsl's order.
+/// Frame uniform field offsets in floats, in frame.wgsl's order; a test holds it to the struct.
 pub const FRAME_AT: [usize; 20] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84, 87, 88];
+#[cfg(test)]
+const FRAME_FIELDS: [&str; 20] = [
+    "view_proj",
+    "camera_pos",
+    "edge_strength",
+    "sun_dir",
+    "low_spec",
+    "edge_width",
+    "rim_intensity",
+    "viewport",
+    "shadow_strength",
+    "shadow_texel",
+    "vignette",
+    "ao_strength",
+    "screen_ao",
+    "light_view_proj",
+    "other_dir",
+    "planet",
+    "globe",
+    "up",
+    "cell",
+    "gizmo",
+];
 
 /// Pipelines past draw.rs's, which a frame runs on its own.
 pub const PIPELINE_CHUNK_DEPTH: u32 = 10;
@@ -222,9 +243,7 @@ pub const PIPELINE_SHEET: u32 = 33;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 35;
 pub const PIPELINE_CLOUD_MARCH: u32 = 36;
 pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 37;
-/// The billboards' regions, numbered, into a target of their own (pass/badges.rs).
-pub const PIPELINE_BADGE_REGION: u32 = 39;
-pub const PIPELINES: u32 = 40;
+pub const PIPELINES: u32 = 39;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -326,12 +345,6 @@ const fn prepass(shader: u32, cull: u32) -> Head {
         depth_bias_slope: 0,
         ..depth_only(shader)
     }
-}
-
-/// A billboard set's uniform and instances, and what its pass reads at an
-/// anchor: the world's depth for the regions, the regions for the sprites.
-fn badge_group(read: u32) -> Vec<u32> {
-    group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, read]])
 }
 
 const fn screen(shader: u32) -> Head {
@@ -506,18 +519,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_BADGE, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[frame(BOTH), badge_group(TEXTURE_UNFILTERED), group(&SKIN)],
-        ),
-        PIPELINE_BADGE_REGION => record(
-            Head {
-                topology: STRIP,
-                depth_write: true,
-                depth_compare: GREATER_EQUAL,
-                blend: OPAQUE,
-                ..blended(SHADER_BADGE_REGION, CULL_NONE, 0, 0.0)
-            },
-            &[],
-            &[frame(BOTH), badge_group(DEPTH)],
+            &[frame(BOTH), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, DEPTH]]), group(&SKIN)],
         ),
         PIPELINE_DEBUG => record(
             Head {
@@ -689,3 +691,68 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         _ => Vec::new(),
     }
 }
+
+#[cfg(test)]
+pub type Buffer = (u32, u32, Vec<(u32, u32, u32)>);
+
+#[cfg(test)]
+pub struct Record {
+    pub shader: u32,
+    pub fragment: bool,
+    pub topology: u32,
+    pub cull: u32,
+    pub depth_write: bool,
+    pub depth_compare: u32,
+    pub depth_bias: i32,
+    pub depth_bias_slope: f32,
+    pub blend: u32,
+    pub vertex: u32,
+    pub buffers: Vec<Buffer>,
+    pub groups: Vec<Vec<(u32, u32, u32)>>,
+}
+
+#[cfg(test)]
+impl Record {
+    pub fn read(words: &[u32]) -> Record {
+        let mut at = HEAD as usize;
+        let mut next = || {
+            at += 1;
+            words[at - 1]
+        };
+        let n = next();
+        let buffers = (0..n)
+            .map(|_| {
+                let stride = next();
+                let step = next();
+                let m = next();
+                (stride, step, (0..m).map(|_| (next(), next(), next())).collect())
+            })
+            .collect();
+        let g = next();
+        let groups = (0..g)
+            .map(|_| {
+                let e = next();
+                (0..e).map(|_| (next(), next(), next())).collect()
+            })
+            .collect();
+        xpute_core::ensure!(at == words.len(), ENOTRECOVERABLE);
+        Record {
+            shader: words[0],
+            fragment: words[1] != 0,
+            topology: words[2],
+            cull: words[3],
+            depth_write: words[4] != 0,
+            depth_compare: words[5],
+            depth_bias: words[6] as i32,
+            depth_bias_slope: f32::from_bits(words[7]),
+            blend: words[8],
+            vertex: words[9],
+            buffers,
+            groups,
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "record.test.rs"]
+mod test;

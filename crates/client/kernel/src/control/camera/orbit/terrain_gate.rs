@@ -6,7 +6,7 @@
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::{add3, V3};
 use pxl_spec::space::layer::lattice::GROUND;
-use xpute_kit::math::scalar::wrap;
+use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::orbit::orbit_eye_offset;
 use crate::control::navigation::support::{in_cell, passage, Passage};

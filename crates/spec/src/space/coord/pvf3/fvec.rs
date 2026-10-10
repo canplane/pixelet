@@ -12,7 +12,7 @@
 // Uppercase as the notation these macro-like helpers are written in.
 #![allow(non_snake_case)]
 
-use xpute_kit::abi::word::field_mask32;
+use xpute_core::abi::word::field_mask32;
 
 use super::core::{EQ, GT, LT, MAX, MIN};
 use super::core::{FRAC_W, FVEC_WORD_MASK as WORD_MASK, ONE, ONE_MASK};

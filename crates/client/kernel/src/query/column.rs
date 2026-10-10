@@ -1,14 +1,14 @@
 // pxl-kernel/query/column.rs
 
-//! What stands in a ground cell's column: the surface, tunnels, bridges and piers, and what is placed there.
+//! What stands in a ground cell's column: the surface, bores, decks and piers, and what is placed there.
 
 use super::world::World;
 use crate::layer::terrain::Drawn;
 use crate::layer::Query;
 use pxl_spec::bake::constant::OBJECT_FINEST;
+use pxl_spec::bake::deck::Occupies;
 use pxl_spec::bake::fold::majority;
-use pxl_spec::bake::separation::Occupies;
-use pxl_spec::block::object::object_value_is_decor;
+use pxl_spec::cell::object::object_value_is_decor;
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::space::coord::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::tree::child_of;
@@ -16,16 +16,16 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Cell, LEAF_ZOOM};
 
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
-use xpute_kit::math::scalar::round;
+use xpute_core::math::scalar::round;
 
 use super::ground::*;
 use crate::layer::*;
 
-/// Bridges and a tunnel over a cell, in whole leaf cells, each `lo..hi`.
+/// Decks and a bore over a cell, in whole leaf cells, each `lo..hi`.
 #[derive(Default)]
 pub(super) struct Lines {
     pub(super) boxes: Vec<[i64; 2]>,
-    pub(super) under: Option<[i64; 2]>,
+    pub(super) air: Option<[i64; 2]>,
 }
 
 /// A column as the chunk paints its ground, at any zoom: its cell's
@@ -44,7 +44,7 @@ impl Composed {
     /// in a deck's slab or pier.
     pub(super) fn ground_at(&self, cz: i64) -> bool {
         let inside = |[lo, hi]: [i64; 2]| (lo..hi).contains(&cz);
-        (self.top.is_some_and(|t| cz < t) && !self.lines.under.is_some_and(inside)) || self.lines.boxes.iter().copied().any(inside)
+        (self.top.is_some_and(|t| cz < t) && !self.lines.air.is_some_and(inside)) || self.lines.boxes.iter().copied().any(inside)
     }
 
     /// The first cell over all the ground fills.
@@ -105,8 +105,8 @@ impl<'a> World<'a> {
         c.ground_at(cz) && (c.zoom < LEAF_ZOOM || !self.taken(c.cell, cz))
     }
 
-    /// Bridges and tunnel air over a cell, as the chunk paints them
-    /// (`Crossing::occupies`), its tile drawn as `d` says.
+    /// Decks and bore air over a cell, as the chunk paints them
+    /// (`Over::occupies`), its tile drawn as `d` says.
     pub(super) fn lines_in(&self, cell: Cell, d: &Drawn, ground_height: f64) -> Lines {
         let mut lines = Lines::default();
         let (src, body) = (d.from, d.body);
@@ -119,16 +119,16 @@ impl<'a> World<'a> {
         let cell_per_m = u_per_m(tile.corner[1]) / cell_u;
         let [tx, ty] = at.map(|v| v as u32);
         let look = body.ground.cells[GROUND.cell_index(tx, ty) as usize];
-        for o in body.separation.crossing_point(frame, at, side) {
+        for o in body.decks.over_point(frame, at, side) {
             match o.occupies(ground, cell_per_m) {
                 Occupies::Grade => {}
-                Occupies::Over { slab, pier } => {
+                Occupies::Above { slab, pier } => {
                     lines.boxes.push(cells(slab));
-                    if let Some(pier) = pier.and_then(|p| pier_stands(p, look, body.separation.crossing_point(frame, at, side), ground, cell_per_m)) {
+                    if let Some(pier) = pier.and_then(|p| pier_stands(p, look, body.decks.over_point(frame, at, side), ground, cell_per_m)) {
                         lines.boxes.push(cells(pier));
                     }
                 }
-                Occupies::Under { span } => lines.under = Some(cells(span)),
+                Occupies::Through { air } => lines.air = Some(cells(air)),
             }
         }
         lines

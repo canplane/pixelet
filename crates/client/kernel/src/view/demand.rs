@@ -7,23 +7,24 @@
 //! the fallback's tiles and a destination's, the best reason per tile.
 //! Nothing drawn enters them but what the turn hands in: the goal the chunks
 //! last published and the quality's τ, decided first. Where a tile marks a
-//! child as no tile (`Base::occupancy`), its ground is the tile's and the
+//! child as no tile (`Layer::occupancy`), its ground is the tile's and the
 //! child is never asked for.
 
 use pxl_spec::bake::earth_tile::EARTH_REACH;
-use pxl_spec::bake::format::TerrainTile;
-use pxl_spec::bake::place_tile::PlaceTile;
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::poi_tile::PoiTile;
 use xpute_guest::global::Global;
 
-use crate::io::demand::Stream;
+use crate::io::demand::Category;
 use crate::io::fetch::{answer_settled, body, next_answered, release, Answered};
 use crate::io::request::attempt_of;
 use crate::layer::earth::{self, Earth};
-use crate::layer::{Asks, Base};
+use crate::layer::poi::MAJOR_UNITS_PER_PX;
+use crate::layer::Layer;
 use crate::sched::edge::world_edge;
-use pxl_spec::bake::division_tile::DivisionTile;
+use crate::view::frame::pose::units_per_px_at;
+use xpute_core::status::errno::Errno;
 use xpute_guest::mem::heap::Block;
-use xpute_kit::status::errno::Errno;
 
 use std::collections::HashMap;
 
@@ -37,13 +38,13 @@ use crate::io::demand::{Ask, Phases, Why};
 use crate::io::failure::Failure;
 use crate::io::request::declare;
 use crate::layer::residency::floor::{self, Fallback, Floor};
-use crate::layer::residency::{Candidate, Residency, Victim};
+use crate::layer::residency::{Candidate, Residency, Victim, ZOOM_DEMAND_TILES};
 use crate::view::observation::{observation, ByFootprints};
 use crate::view::sight::Footprint;
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// A layer as the view asks of it: its demand, held beside its records.
-pub trait Observed: Base {
+pub trait Observed: Layer {
     fn demand() -> &'static mut Demand<Self>;
 
     /// How far from the eye the layer draws anything; past it nothing of it
@@ -53,26 +54,23 @@ pub trait Observed: Base {
     }
 }
 
-static TERRAIN: Global<Demand<TerrainTile>> = Global::new();
-static PLACE: Global<Demand<PlaceTile>> = Global::new();
+static TERRAIN: Global<Demand<Terrain>> = Global::new();
+static POI: Global<Demand<PoiTile>> = Global::new();
 static EARTH: Global<Demand<Earth>> = Global::new();
-static DIVISION: Global<Demand<DivisionTile>> = Global::new();
 
-impl Observed for TerrainTile {
-    fn demand() -> &'static mut Demand<TerrainTile> {
+impl Observed for Terrain {
+    fn demand() -> &'static mut Demand<Terrain> {
         TERRAIN.get(Demand::default)
     }
 }
 
-impl Observed for PlaceTile {
-    fn demand() -> &'static mut Demand<PlaceTile> {
-        PLACE.get(Demand::default)
+impl Observed for PoiTile {
+    fn demand() -> &'static mut Demand<PoiTile> {
+        POI.get(Demand::default)
     }
-}
 
-impl Observed for DivisionTile {
-    fn demand() -> &'static mut Demand<DivisionTile> {
-        DIVISION.get(Demand::default)
+    fn reach() -> f64 {
+        MAJOR_UNITS_PER_PX / units_per_px_at(1.0)
     }
 }
 
@@ -91,7 +89,7 @@ impl Observed for Earth {
 #[derive(PartialEq)]
 struct Seen {
     o: Option<Observation>,
-    floor: Vec<Tile>,
+    floor: [Option<Tile>; Floor::TILES as usize],
     destination: Option<Tile>,
     tau: Tau,
     /// The published goal's.
@@ -166,7 +164,7 @@ impl<L: Observed> Demand<L> {
 
     /// The floor's tiles as last observed.
     pub fn floor(&self) -> impl Iterator<Item = Tile> + Clone + '_ {
-        self.last.iter().flat_map(|seen| seen.floor.iter().copied())
+        self.last.iter().flat_map(|seen| seen.floor.iter().flatten().copied())
     }
 
     pub fn demand(&self) -> &[Tile] {
@@ -178,7 +176,7 @@ impl<L: Observed> Demand<L> {
         self.asks.keys().all(|&p| L::residency().has_answer(p))
     }
 
-    /// No object for `p`: the tile over it says its ground; at the source's top, `Base::empty`.
+    /// No object for `p`: the tile over it says its ground; at the source's top, `Layer::empty`.
     pub fn absent(&mut self, p: Tile) {
         let top = L::TOP.or(floor::top()).unwrap_or(L::LATTICE.top());
         match L::empty() {
@@ -212,7 +210,7 @@ impl<L: Observed> Demand<L> {
         };
         let order = |o: &Observation, p: Tile| crate::view::observation::order_of_tile(o, L::LATTICE, p);
         if let Some(o) = o {
-            if matches!(L::ASKS, Asks::View) {
+            if L::DEMANDS {
                 estimator.requirements(o, &mut |p| demand.push(p));
             }
             demand.sort_unstable();
@@ -241,16 +239,14 @@ impl<L: Observed> Demand<L> {
             for p in asks.keys() {
                 read[p.zoom as usize] += 1;
             }
-            xpute_kit::ensure!(read.iter().all(|&n| n <= Residency::<L>::ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
-            if !matches!(L::ASKS, Asks::Line) {
-                let mut floor = 0u32;
-                let f = floor_at.unwrap_or(o);
-                Floor::<L>::floor(f, top, |p| {
-                    floor += 1;
-                    ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
-                });
-                xpute_kit::ensure!(floor <= Floor::<L>::TILES, ENOTRECOVERABLE, floor);
-            }
+            xpute_core::ensure!(read.iter().all(|&n| n <= ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
+            let mut floor = 0u32;
+            let f = floor_at.unwrap_or(o);
+            Floor::floor(f, top, |p| {
+                floor += 1;
+                ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
+            });
+            xpute_core::ensure!(floor <= Floor::TILES, ENOTRECOVERABLE, floor);
         }
         // The whole line, not only the finest tile: which one says the ground is
         // known only once those above are, and asking one at a time would cost a
@@ -267,7 +263,7 @@ impl<L: Observed> Demand<L> {
                 },
             );
         }
-        xpute_kit::ensure!(named <= if matches!(L::ASKS, Asks::Floor) { 0 } else { Residency::<L>::DESTINATION_TILES }, ENOTRECOVERABLE, named);
+        xpute_core::ensure!(named <= if L::DEMANDS { Residency::<L>::DESTINATION_TILES } else { 0 }, ENOTRECOVERABLE, named);
 
         self.wants.clear();
         self.wants.extend(
@@ -305,21 +301,18 @@ impl<L: Observed> Demand<L> {
         };
         let live = observation().map(own);
         let seen_from = live.map(|live| published.as_ref().map_or(live, |d| own(*d.observation)));
-        let mut now = self.now.take().unwrap_or_else(|| Seen {
-            o: None,
-            floor: Vec::new(),
-            destination: None,
-            tau,
-            footprints: Vec::new(),
-            lacks: Vec::new(),
-        });
         // the floor follows the live eye, so a jump asks for it at once
-        now.floor.clear();
+        let mut floor_now = [None; Floor::TILES as usize];
         if let Some(l) = &live {
-            Floor::<L>::floor(l, top, |p| now.floor.push(p));
+            let mut n = 0;
+            Floor::floor(l, top, |p| {
+                if n < floor_now.len() {
+                    floor_now[n] = Some(p);
+                }
+                n += 1;
+            });
         }
         if seen_from.is_none() && destination.is_none() {
-            self.now = Some(now);
             return;
         }
         let tau = match seen_from {
@@ -327,7 +320,15 @@ impl<L: Observed> Demand<L> {
             None => Tau::FINEST,
         };
         let o = seen_from.map(|o| Observation { reach: o.reach.min(L::reach()), ..o });
-        (now.o, now.destination, now.tau) = (o, destination, tau);
+        let mut now = self.now.take().unwrap_or_else(|| Seen {
+            o: None,
+            floor: [None; Floor::TILES as usize],
+            destination: None,
+            tau,
+            footprints: Vec::new(),
+            lacks: Vec::new(),
+        });
+        (now.o, now.floor, now.destination, now.tau) = (o, floor_now, destination, tau);
         now.footprints.clear();
         now.footprints.extend_from_slice(published.as_ref().map_or(&[], |d| d.footprints));
         now.lacks.clear();
@@ -351,7 +352,7 @@ impl<L: Observed> Demand<L> {
         } else {
             self.now = Some(now);
         }
-        declare(L::STREAM, &self.wants);
+        declare(L::CATEGORY, &self.wants);
     }
 
     /// What it reads moved: its own tiles', the ground's, or the objects'.
@@ -364,7 +365,7 @@ impl<L: Observed> Demand<L> {
         self.wants.clear();
         self.asks.clear();
         L::residency().ask(&self.asks);
-        declare(L::STREAM, &[]);
+        declare(L::CATEGORY, &[]);
         self.last = None;
     }
 }
@@ -376,11 +377,11 @@ pub fn admit_arrived() {
     while first || !world_edge().spent() {
         let Some(Answered {
             key,
-            stream,
+            category,
             subject,
             block,
             mut phases,
-        }) = next_answered(&[Stream::terrain, Stream::place, Stream::earth, Stream::division])
+        }) = next_answered(&[Category::terrain, Category::poi, Category::earth])
         else {
             return;
         };
@@ -391,12 +392,11 @@ pub fn admit_arrived() {
             release(block);
             continue;
         }
-        let result = match (stream, block) {
-            (Stream::terrain, block) => arrived::<TerrainTile>(tile, block, &mut phases),
-            (Stream::place, block) => arrived::<PlaceTile>(tile, block, &mut phases),
-            (Stream::division, block) => arrived::<DivisionTile>(tile, block, &mut phases),
-            (Stream::earth, None) => arrived::<Earth>(tile, None, &mut phases),
-            (Stream::earth, Some(b)) => {
+        let result = match (category, block) {
+            (Category::terrain, block) => arrived::<Terrain>(tile, block, &mut phases),
+            (Category::poi, block) => arrived::<PoiTile>(tile, block, &mut phases),
+            (Category::earth, None) => arrived::<Earth>(tile, None, &mut phases),
+            (Category::earth, Some(b)) => {
                 let mut framed = None;
                 let result = Earth::demand().admit(tile, |record| {
                     let earth = Earth::receive(record, body(b), &mut phases)?;

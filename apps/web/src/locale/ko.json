@@ -20,7 +20,7 @@
       },
       "textures": {
         "label": "텍스처",
-        "description": "큐브 표면에 단색 대신 텍스처를 표시합니다."
+        "description": "블록 표면에 단색 대신 텍스처를 표시합니다."
       },
       "resolution": {
         "label": "해상도",
@@ -66,7 +66,7 @@
       "section_title": "조명과 그림자",
       "section_caption": "빛과 그림자의 표현을 설정합니다.",
       "edge_shade": {
-        "label": "큐브 외곽선",
+        "label": "블록 외곽선",
         "description": "허공과 맞닿은 모서리만 어둡게 하여 평지는 매끄럽게 이어지고, 높낮이가 바뀌는 곳만 선으로 드러나게 합니다."
       },
       "ao": {
@@ -77,7 +77,7 @@
         },
         "corner": {
           "label": "모서리",
-          "description": "큐브가 땅과 맞닿는 곳과 안쪽 모서리를 어둡게 해 땅에 놓인 느낌을 줍니다. 부담이 적습니다."
+          "description": "블록이 땅과 맞닿는 곳과 안쪽 모서리를 어둡게 해 땅에 놓인 느낌을 줍니다. 부담이 적습니다."
         },
         "screen": {
           "label": "정밀 (SSAO)",
@@ -90,7 +90,7 @@
       },
       "rim_light": {
         "label": "림 라이트",
-        "description": "큐브와 데코, 캐릭터의 윤곽에 은은한 하이라이트를 더해 배경과 선명하게 구분합니다."
+        "description": "블록과 데코, 캐릭터의 윤곽에 은은한 하이라이트를 더해 배경과 선명하게 구분합니다."
       }
     },
     "debug": {
@@ -128,32 +128,52 @@
   "drawer": {
     "title": "서랍",
     "tabs": {
-      "cube": "큐브",
+      "cube": "블록",
       "decor": "데코",
-      "marker": "마커",
       "character": "캐릭터"
     },
     "sections": {
-      "cube": {
-        "colors": "색",
-        "landcover": "땅",
-        "water": "물",
-        "water_features": "물가 시설",
-        "buildings": "건물",
-        "roads": "도로",
-        "aeroways": "공항"
-      },
-      "decor": {
-        "nature": "자연",
-        "vehicle": "탈것"
-      },
-      "marker": "마커"
+      "block": "색",
+      "land": "땅",
+      "water": "물",
+      "structure": "건물",
+      "transport": "교통"
+    },
+    "decor_sections": {
+      "nature": "자연",
+      "vehicle": "탈것"
     },
     "character": {
       "person_label": "캐릭터",
       "female_label": "여성",
       "male_label": "남성",
-      "pet_label": "펫"
+      "pet_label": "펫",
+      "pets": {
+        "beaver": "비버",
+        "bee": "꿀벌",
+        "bunny": "토끼",
+        "cat": "고양이",
+        "caterpillar": "애벌레",
+        "chick": "병아리",
+        "cow": "소",
+        "crab": "게",
+        "deer": "사슴",
+        "dog": "강아지",
+        "elephant": "코끼리",
+        "fish": "물고기",
+        "fox": "여우",
+        "giraffe": "기린",
+        "hog": "멧돼지",
+        "koala": "코알라",
+        "lion": "사자",
+        "monkey": "원숭이",
+        "panda": "판다",
+        "parrot": "앵무새",
+        "penguin": "펭귄",
+        "pig": "돼지",
+        "polar": "북극곰",
+        "tiger": "호랑이"
+      }
     }
   },
   "device": {
@@ -182,9 +202,7 @@
       "pointer": "포인터",
       "eraser": "지우개",
       "message_placeholder": "메시지 입력…",
-      "marker_placeholder": "이 마커에 쓸 말…",
       "send": "전송",
-      "marker_done": "마커 세우기",
       "drawer_tooltip": "서랍 열기",
       "object_size": "크기 {{n}}"
     },

@@ -4,10 +4,10 @@
 //! tile. The interpolant lives here because the index lane's bound is true
 //! only of the function that draws it.
 
-use xpute_kit::math::scalar::round;
+use xpute_core::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, EXTENT_CELL, TILE_ELE_SPAN};
-use super::separation::Separation;
+use super::deck::Decks;
 use crate::space::layer::lattice::{EXTENT, GROUND, TILE_CELLS};
 
 const CELL_STEP: f64 = TILE_CELLS as f64 / TILE_ELE_SPAN as f64;
@@ -73,19 +73,19 @@ pub fn bound(tile_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
     [lo, hi]
 }
 
-/// Per `EXTENT` cell, the lowest and highest of the surface, any bridge top
-/// and any tunnel floor. Saturates at i16, about 78 km.
-pub fn extent_of(tile_ele: &[i16], separation: &Separation) -> Vec<[i16; 2]> {
+/// Per `EXTENT` cell, the lowest and highest of the surface, any deck top
+/// and any bore floor. Saturates at i16, about 78 km.
+pub fn extent_of(tile_ele: &[i16], decks: &Decks) -> Vec<[i16; 2]> {
     let n = crate::space::coord::zoom::count(GROUND.cell(), EXTENT_CELL) as f64;
     let side = EXTENT.tile_cells();
     (0..side * side)
         .map(|index| {
             let [ex, ey] = EXTENT.in_tile(index).map(|v| v as f64 * n);
             let [lo, hi] = bound(tile_ele, [ex, ex + n], [ey, ey + n]);
-            let high = separation.highest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MIN, i32::from);
-            let low = separation.lowest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MAX, i32::from);
+            let deck = decks.highest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MIN, i32::from);
+            let bore = decks.lowest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MAX, i32::from);
             let clamp = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
-            [clamp(lo.min(low)), clamp(hi.max(high))]
+            [clamp(lo.min(bore)), clamp(hi.max(deck))]
         })
         .collect()
 }

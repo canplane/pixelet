@@ -9,9 +9,9 @@
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
 import { fromFileUrl, join, resolve } from "@std/path";
 
-import { Golden } from "@xpute/kit/golden.ts";
-import { encoder, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { Golden } from "@xpute/core/golden.ts";
+import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { Command } from "@xpute/host/abi/cmd.spec.ts";
 import { handle_slot } from "@xpute/host/abi/handle.ts";
 import { Directory } from "@xpute/host/ipc/directory.ts";

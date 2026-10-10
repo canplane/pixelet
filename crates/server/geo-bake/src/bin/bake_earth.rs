@@ -4,7 +4,7 @@
 //! Generation, July 2004 (21600 × 10800, 2 km, the sea a flat blue), as
 //! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
 //! eight tiles). Each is averaged in linear light over what a texel covers.
-//!  - The earth layer's tiles (pxl-spec bake/earth_tile.rs) at its top zoom, a
+//!  - The Earth layer's tiles (pxl-spec bake/earth_tile.rs) at its top zoom, a
 //!    ground cell a texel, to `./out/earth/<version>/<name>`. A tile that is one
 //!    color says nothing the global picture does not, and has no object.
 //!  - The global picture every tile falls back to, 2048 × 1024, to
@@ -301,11 +301,7 @@ fn run() -> Result<(), String> {
     }
     let objects = written.into_inner();
     println!("[earth] {objects} tiles -> {}", out.display());
-    write_manifest(
-        &out.join("../manifest.json"),
-        git_sha().as_deref(),
-        serde_json::json!({ "version": out.file_name().map(|n| n.to_string_lossy().to_string()), "objects": objects, "z": EARTH_ZOOM }),
-    )
+    write_manifest(&out, git_sha().as_deref(), serde_json::json!({ "objects": objects, "z": EARTH_ZOOM }))
 }
 
 fn main() -> ExitCode {

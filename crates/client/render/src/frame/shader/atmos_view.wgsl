@@ -95,7 +95,7 @@ struct Air {
   ground: bool,
   // The ground past the terrain is lit on its own slope of the sphere.
   normal: vec3f,
-  // Its distance from the eye against the earth layer's reach, in octaves.
+  // Its distance from the eye against the Earth layer's reach, in octaves.
   octaves: f32,
 };
 
@@ -171,7 +171,7 @@ fn city_shown(lights: f32, up: vec3f) -> vec3f {
 const EARTH_GAIN: f32 = 2.0;
 
 // Lit by the terrain's own light, so the drawn edge is no seam; no shadow map
-// reaches it. It comes in over the octave to the earth layer's reach, where
+// reaches it. It comes in over the octave to the Earth layer's reach, where
 // the terrain ends seen from the globe; nearer, the ground is the voxels' or
 // the air's alone.
 fn beyond(air: Air) -> vec3f {

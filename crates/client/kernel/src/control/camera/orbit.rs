@@ -10,7 +10,7 @@ pub mod terrain_gate;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 
 use pxl_spec::space::coord::v3::{add3, V3};
-use xpute_kit::math::scalar::clamp;
+use xpute_core::math::scalar::clamp;
 
 use crate::approach::{approach_angle, approach_scalar, approach_vec};
 use crate::control::camera::controller::{camera, focus, focus_world, look_dir, look_domain, set_eye_world};

@@ -5,7 +5,7 @@
  * every script and draws color emoji as the page does.
  */
 
-import type { f32, u32 } from "@xpute/kit/abi/word.ts";
+import type { f32, u32 } from "@xpute/core/abi/word.ts";
 
 let family: string | null = null;
 

@@ -1,11 +1,9 @@
 // One billboard sheet entry: shapes by signed distance, text as the platform's
 // pixels. Stored premultiplied; badge.wgsl divides it out.
 
-// kind: 0 filled rounded rect, 1 stroked, 2 triangle, 3 text, 4 a text's halo.
-// `p`: radius and a fill's edge width or a stroke's, a triangle's first two
-// points, or text layer and coverage, and a halo's radius. `q`: a triangle's
-// third point, a fill's shade, lighter at its top by as much as darker at
-// its foot, or how far in from its radius a halo fades.
+// kind: 0 filled rounded rect, 1 stroked, 2 triangle, 3 text. `p`: radius and
+// stroke, a triangle's first two points, or text layer and coverage. `q`: a
+// triangle's third point.
 struct Shape {
   rect: vec4f,
   color: vec4f,
@@ -65,39 +63,15 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let center = (s.rect.xy + s.rect.zw) * 0.5;
   let half = (s.rect.zw - s.rect.xy) * 0.5;
   var d: f32;
-  var rgb = s.color.rgb;
-  var edge = 1.0;
   switch s.kind.x {
     case 0u: {
       d = round_box(i.at - center, half, s.p.x);
-      edge = max(s.p.y, 1.0);
-      let down = (i.at.y - s.rect.y) / max(s.rect.w - s.rect.y, 1.0);
-      rgb = rgb * (1.0 + s.q.x * (1.0 - 2.0 * down));
     }
     case 1u: {
       d = abs(round_box(i.at - center, half, s.p.x)) - s.p.y * 0.5;
     }
     case 2u: {
       d = triangle(i.at, s.p.xy, s.p.zw, s.q.xy);
-    }
-    case 4u: {
-      // The glyphs' coverage grown by the radius: the most of it within reach,
-      // each texel weighed by how much of it the disc covers.
-      let size = vec2i(s.rect.zw - s.rect.xy);
-      let base = vec2i(floor(i.at - s.rect.xy));
-      let r = s.p.w;
-      let n = i32(ceil(r));
-      var a = 0.0;
-      for (var dy = -n; dy <= n; dy++) {
-        for (var dx = -n; dx <= n; dx++) {
-          let w = clamp((r + 0.5 - length(vec2f(f32(dx), f32(dy)))) / max(s.q.x, 1.0), 0.0, 1.0);
-          let q = base + vec2i(dx, dy);
-          if (w > 0.0 && all(q >= vec2i(0)) && all(q < size)) {
-            a = max(a, textureLoad(text, q, u32(s.p.x), 0).a * w);
-          }
-        }
-      }
-      return vec4f(s.color.rgb, s.color.a * a);
     }
     default: {
       let uv = (i.at - s.rect.xy) / (s.rect.zw - s.rect.xy) * s.p.yz;
@@ -106,5 +80,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
       return select(vec4f(0.0), texel, inside);
     }
   }
-  return vec4f(rgb, s.color.a * clamp(0.5 - d / edge, 0.0, 1.0));
+  return vec4f(s.color.rgb, s.color.a * clamp(0.5 - d, 0.0, 1.0));
 }

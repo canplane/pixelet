@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/abi/cmd.json — do not edit.
 
-//! Every program's commands, by number (kit abi/cmd: `major << 8 | minor`), and the
+//! Every program's commands, by number (core abi/cmd: `major << 8 | minor`), and the
 //! packet each carries — an XTP branch whose children are its fields, in order. A
 //! command with no fields carries no packet. The majors below PROGRAM_MAJOR are xpute's;
 //! a program numbers its own from there, in a table of its own that names this one as
@@ -20,8 +20,8 @@
 use core::fmt::Display;
 
 use crate::abi::number::{finite, integer, unknown};
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{PacketWriter, TreeReader};
+use xpute_core::status::error::MarshalError;
+use xpute_core::wire::xtp::{PacketWriter, TreeReader};
 
 /// What a command is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,3 +110,7 @@ impl SysOpened {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "cmd.test.rs"]
+mod test;

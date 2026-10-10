@@ -1,0 +1,61 @@
+[
+  {
+    "data_date": "2025-06-11",
+    "provider": {
+      "name": "OpenGeoHub / OpenLandMap (GEDTM30 v1.2)",
+      "url": "https://s3.opengeohub.org/global/dtm/v1.2/gedtm_rf_m_30m_s_20060101_20151231_go_epsg.4326.3855_v1.2.tif",
+      "doi": "https://doi.org/10.5281/zenodo.15689805"
+    },
+    "coordinate_system": "EPSG:4326",
+    "vertical_datum": "EGM2008 (EPSG:3855)",
+    "description": "GEDTM30 v1.2 (CC-BY 4.0) — global ensemble bare-earth DTM (ICESat-2/GEDI-fused, strips the building/canopy noise GLO-30's surface model bakes into ground elevation). Distributed as one global Cloud-Optimized GeoTIFF; cropped to South Korea's coverage bbox directly from the remote file via gdalwarp -te over HTTP range requests (/vsicurl/), no manual per-tile portal download the way GLO-30 needed.",
+    "acquisition": {
+      "automated": true,
+      "note": "provider.url is a real, directly fetchable COG (unlike GLO-30's OpenTopography source, an interactive portal page) — the setup script warps straight from it, no local raw-file staging step."
+    },
+    "shards": [
+      "01033000",
+      "01033001",
+      "01033010",
+      "01033011",
+      "01033100",
+      "01033101",
+      "01033002",
+      "01033003",
+      "01033012",
+      "01033013",
+      "01033102",
+      "01033103",
+      "01033020",
+      "01033021",
+      "01033030",
+      "01033031",
+      "01033120",
+      "01033121",
+      "01033022",
+      "01033023",
+      "01033032",
+      "01033033",
+      "01033122",
+      "01033123",
+      "01033200",
+      "01033201",
+      "01033210",
+      "01033211",
+      "01033300",
+      "01033301",
+      "01033202",
+      "01033203",
+      "01033212",
+      "01033213",
+      "01033302",
+      "01033303",
+      "01033220",
+      "01033221",
+      "01033230",
+      "01033231",
+      "01033320",
+      "01033321"
+    ]
+  }
+]

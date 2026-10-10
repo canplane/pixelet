@@ -1,13 +1,12 @@
 #!/usr/bin/env -S deno run -A
-// Every block and pet the catalogs give out has its one English name, which
-// every locale shows, and every drawer section a name in every locale; every
-// name is still given out. i18next renders a missing key as the key itself,
-// so this link is otherwise silent.
+// Every cube and decor the catalogs give out has its one English name, which
+// every locale shows, and every section a name in every locale; every name is
+// still given out. i18next renders a missing key as the key itself, so this
+// link is otherwise silent.
 
 import { dirname, join } from "@std/path";
 
-import { allCubes, cubeId, cubeSection, decorIds, decorName, decorSection } from "../src/catalog/block/mod.ts";
-import { groups } from "../src/feature/character/variant.spec.ts";
+import { decorKinds, decorName, decorSection, placeableCubeId, placeableCubes, placeableCubeSection } from "../src/catalog/cell/mod.ts";
 
 const web = dirname(dirname(new URL(import.meta.url).pathname));
 const LOCALES = ["en", "ko"];
@@ -31,24 +30,17 @@ function branch(locale: string, doc: Catalog, name: string, want: string[]): voi
   }
 }
 
-const cubeIds = allCubes.map(cubeId);
-const sections = [...new Set(allCubes.map(cubeSection))];
-const decorSections = [...new Set(decorIds.map(decorSection))];
-
-const node = (doc: Catalog, name: string): Catalog => {
-  const n = doc[name];
-  return typeof n === "object" ? n : {};
-};
+const cubeIds = placeableCubes.map(placeableCubeId);
+const sections = [...new Set(placeableCubes.map(placeableCubeSection))];
+const decorSections = [...new Set(decorKinds.map(decorSection))];
 
 for (const locale of LOCALES) {
   const doc: Catalog = JSON.parse(await Deno.readTextFile(join(web, `src/locale/${locale}.json`)));
-  const en = locale === "en";
-  branch(locale, doc, "blocks", en ? [...cubeIds.map((id) => `cube.${id}`), ...decorIds.map((k) => `decor.${decorName(k)}`), "marker"] : []);
-  branch(locale, doc, "pets", en ? Object.keys(groups.pet.keys) : []);
-  const drawerSections = node(node(doc, "drawer"), "sections");
-  branch(locale, drawerSections, "cube", sections);
-  branch(locale, drawerSections, "decor", decorSections);
-  if (typeof drawerSections["marker"] !== "string") problems.push(`${locale}.json: drawer.sections.marker has no name`);
+  branch(locale, doc, "cubes", locale === "en" ? cubeIds : []);
+  branch(locale, doc, "decor", locale === "en" ? decorKinds.map(decorName) : []);
+  const drawer = doc["drawer"];
+  branch(locale, typeof drawer === "object" ? drawer : {}, "sections", sections);
+  branch(locale, typeof drawer === "object" ? drawer : {}, "decor_sections", decorSections);
 }
 
 if (problems.length > 0) {
@@ -56,4 +48,4 @@ if (problems.length > 0) {
   console.error(`locale: ${problems.length} problem${problems.length === 1 ? "" : "s"}`);
   Deno.exit(1);
 }
-console.log(`locale: every block and pet is named once, and every section in ${LOCALES.length} locales`);
+console.log(`locale: every cube and decor is named once, and every section in ${LOCALES.length} locales`);

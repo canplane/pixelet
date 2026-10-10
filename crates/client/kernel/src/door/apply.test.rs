@@ -1,7 +1,7 @@
 // pxl-kernel/door/apply.test.rs
 
 use super::*;
-use xpute_kit::wire::xtp::PacketWriter;
+use xpute_core::wire::xtp::PacketWriter;
 
 fn top_z(n: f64) -> Result<u32, Errno> {
     let mut buf = [0u8; 64];

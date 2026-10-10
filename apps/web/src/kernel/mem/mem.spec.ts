@@ -12,10 +12,9 @@
 //   crates/client/kernel/src/mem/section.rs   the map — the fixed ranges and the heap
 //   crates/client/kernel/src/door/layout.rs   the front — the rings and the directory
 //   crates/client-bracket/wasm/build.rs               the linker flags for the module
-//   apps/web/src/kernel/mem.ts                 the reservation the host makes in a tab
-//   crates/client-bracket/native/src/memory.rs the region a device is given
+//   apps/web/src/kernel/mem.ts                 the reservation the shell makes
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
 
 /** Messages the submission ring holds, and so payloads: one a slot
  * (decision/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which

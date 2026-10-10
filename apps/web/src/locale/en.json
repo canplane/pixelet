@@ -20,7 +20,7 @@
       },
       "textures": {
         "label": "Textures",
-        "description": "Textures cube faces instead of a flat color."
+        "description": "Textures block faces instead of a flat color."
       },
       "resolution": {
         "label": "Resolution",
@@ -66,7 +66,7 @@
       "section_title": "Light and shadow",
       "section_caption": "Light, shadow and outlines",
       "edge_shade": {
-        "label": "Cube Outlines",
+        "label": "Block Outlines",
         "description": "Darkens only edges exposed to open air, keeping flat ground seamless while outlining changes in height."
       },
       "ao": {
@@ -77,7 +77,7 @@
         },
         "corner": {
           "label": "Corners",
-          "description": "Darkens contact areas and inside corners so cubes look grounded instead of floating. Light on performance."
+          "description": "Darkens contact areas and inside corners so blocks look grounded instead of floating. Light on performance."
         },
         "screen": {
           "label": "Detailed (SSAO)",
@@ -90,7 +90,7 @@
       },
       "rim_light": {
         "label": "Rim Light",
-        "description": "Adds a subtle highlight around the edges of cubes, decor and characters to make them stand out from the background."
+        "description": "Adds a subtle highlight around the edges of blocks, decor and characters to make them stand out from the background."
       }
     },
     "debug": {
@@ -125,146 +125,137 @@
       "section_caption": "How the view moves when you drag it"
     }
   },
-  "blocks": {
-    "cube": {
-      "ground": {
-        "land": "Land",
-        "bare_ground": "Bare Ground",
-        "sand": "Sand",
-        "beach": "Beach",
-        "heath": "Heath",
-        "scrub": "Scrub",
-        "grass": "Grass",
-        "park": "Park",
-        "leisure": "Leisure",
-        "pitch": "Pitch",
-        "forest": "Forest",
-        "orchard": "Orchard",
-        "allotments": "Allotments",
-        "farmland": "Farmland",
-        "farmyard": "Farmyard",
-        "campsite": "Campsite",
-        "cemetery": "Cemetery",
-        "residential": "Residential",
-        "garages": "Garages",
-        "retail": "Retail",
-        "commercial": "Commercial",
-        "industrial": "Industrial",
-        "power": "Power",
-        "landfill": "Landfill",
-        "quarry": "Quarry",
-        "societal_amenities": "Societal Amenities",
-        "place_of_worship": "Place of Worship",
-        "transportation_area": "Transportation Area",
-        "parking": "Parking",
-        "apron": "Apron",
-        "glacier": "Glacier",
-        "water": "Water",
-        "dam": "Dam",
-        "breakwater": "Breakwater",
-        "building": "Building",
-        "building_major": "Major Building",
-        "footway": "Footway",
-        "cycleway": "Cycleway",
-        "bridleway": "Bridleway",
-        "track": "Track",
-        "pedestrian": "Pedestrian Street",
-        "living_street": "Living Street",
-        "residential_road": "Residential Road",
-        "road": "Road",
-        "secondary": "Secondary Road",
-        "primary": "Primary Road",
-        "trunk": "Trunk Road",
-        "motorway": "Motorway",
-        "platform": "Platform",
-        "tram": "Tram",
-        "light_rail": "Light Rail",
-        "subway": "Subway",
-        "monorail": "Monorail",
-        "rail": "Railway",
-        "aeroway": "Runway"
-      },
-      "object": {
-        "white": "White",
-        "grey": "Grey",
-        "dark_grey": "Dark Grey",
-        "black": "Black",
-        "red": "Red",
-        "orange": "Orange",
-        "brown": "Brown",
-        "yellow": "Yellow",
-        "green": "Green",
-        "dark_green": "Dark Green",
-        "cyan": "Cyan",
-        "blue": "Blue",
-        "violet": "Violet",
-        "magenta": "Magenta",
-        "pink": "Pink"
-      }
+  "cubes": {
+    "ground": {
+      "land": "Land",
+      "bare_ground": "Bare Ground",
+      "sand": "Sand",
+      "beach": "Beach",
+      "heath": "Heath",
+      "scrub": "Scrub",
+      "grass": "Grass",
+      "park": "Park",
+      "leisure": "Leisure",
+      "pitch": "Pitch",
+      "forest": "Forest",
+      "orchard": "Orchard",
+      "allotments": "Allotments",
+      "farmland": "Farmland",
+      "farmyard": "Farmyard",
+      "campsite": "Campsite",
+      "cemetery": "Cemetery",
+      "residential": "Residential",
+      "garages": "Garages",
+      "retail": "Retail",
+      "commercial": "Commercial",
+      "industrial": "Industrial",
+      "power": "Power",
+      "landfill": "Landfill",
+      "quarry": "Quarry",
+      "societal_amenities": "Societal Amenities",
+      "place_of_worship": "Place of Worship",
+      "transportation_area": "Transportation Area",
+      "parking": "Parking",
+      "apron": "Apron",
+      "glacier": "Glacier",
+      "water": "Water",
+      "dam": "Dam",
+      "breakwater": "Breakwater",
+      "building": "Building",
+      "building_major": "Major Building",
+      "footway": "Footway",
+      "cycleway": "Cycleway",
+      "bridleway": "Bridleway",
+      "track": "Track",
+      "pedestrian": "Pedestrian Street",
+      "living_street": "Living Street",
+      "residential_road": "Residential Road",
+      "road": "Road",
+      "secondary": "Secondary Road",
+      "primary": "Primary Road",
+      "trunk": "Trunk Road",
+      "motorway": "Motorway",
+      "platform": "Platform",
+      "tram": "Tram",
+      "light_rail": "Light Rail",
+      "subway": "Subway",
+      "monorail": "Monorail",
+      "rail": "Railway",
+      "aeroway": "Runway"
     },
-    "decor": {
-      "tree": "Tree",
-      "boat": "Boat",
-      "car": "Car",
-      "train": "Train"
-    },
-    "marker": "Marker"
+    "object": {
+      "white": "White",
+      "grey": "Grey",
+      "dark_grey": "Dark Grey",
+      "black": "Black",
+      "red": "Red",
+      "orange": "Orange",
+      "brown": "Brown",
+      "yellow": "Yellow",
+      "green": "Green",
+      "dark_green": "Dark Green",
+      "cyan": "Cyan",
+      "blue": "Blue",
+      "violet": "Violet",
+      "magenta": "Magenta",
+      "pink": "Pink"
+    }
   },
-  "pets": {
-    "beaver": "Beaver",
-    "bee": "Bee",
-    "bunny": "Bunny",
-    "cat": "Cat",
-    "caterpillar": "Caterpillar",
-    "chick": "Chick",
-    "cow": "Cow",
-    "crab": "Crab",
-    "deer": "Deer",
-    "dog": "Dog",
-    "elephant": "Elephant",
-    "fish": "Fish",
-    "fox": "Fox",
-    "giraffe": "Giraffe",
-    "hog": "Wild Boar",
-    "koala": "Koala",
-    "lion": "Lion",
-    "monkey": "Monkey",
-    "panda": "Panda",
-    "parrot": "Parrot",
-    "penguin": "Penguin",
-    "pig": "Pig",
-    "polar": "Polar Bear",
-    "tiger": "Tiger"
+  "decor": {
+    "tree": "Tree",
+    "boat": "Boat",
+    "car": "Car",
+    "train": "Train"
   },
   "drawer": {
     "title": "Drawer",
     "tabs": {
-      "cube": "Cube",
+      "cube": "Block",
       "decor": "Decor",
-      "marker": "Marker",
       "character": "Character"
     },
     "sections": {
-      "cube": {
-        "colors": "Colors",
-        "landcover": "Land",
-        "water": "Water",
-        "water_features": "Water Features",
-        "buildings": "Buildings",
-        "roads": "Roads",
-        "aeroways": "Airports"
-      },
-      "decor": {
-        "nature": "Nature",
-        "vehicle": "Vehicles"
-      },
-      "marker": "Markers"
+      "block": "Colors",
+      "land": "Land",
+      "water": "Water",
+      "structure": "Buildings",
+      "transport": "Transport"
+    },
+    "decor_sections": {
+      "nature": "Nature",
+      "vehicle": "Vehicles"
     },
     "character": {
       "person_label": "Character",
       "female_label": "Female",
       "male_label": "Male",
-      "pet_label": "Pet"
+      "pet_label": "Pet",
+      "pets": {
+        "beaver": "Beaver",
+        "bee": "Bee",
+        "bunny": "Bunny",
+        "cat": "Cat",
+        "caterpillar": "Caterpillar",
+        "chick": "Chick",
+        "cow": "Cow",
+        "crab": "Crab",
+        "deer": "Deer",
+        "dog": "Dog",
+        "elephant": "Elephant",
+        "fish": "Fish",
+        "fox": "Fox",
+        "giraffe": "Giraffe",
+        "hog": "Wild Boar",
+        "koala": "Koala",
+        "lion": "Lion",
+        "monkey": "Monkey",
+        "panda": "Panda",
+        "parrot": "Parrot",
+        "penguin": "Penguin",
+        "pig": "Pig",
+        "polar": "Polar Bear",
+        "tiger": "Tiger"
+      }
     }
   },
   "device": {
@@ -293,9 +284,7 @@
       "pointer": "Pointer",
       "eraser": "Eraser",
       "message_placeholder": "Type a message…",
-      "marker_placeholder": "Words for this marker…",
       "send": "Send",
-      "marker_done": "Put Up Marker",
       "drawer_tooltip": "Open Drawer",
       "object_size": "Size {{n}}"
     },

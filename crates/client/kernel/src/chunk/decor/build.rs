@@ -19,11 +19,11 @@ use crate::layer::instance::{Meta, Source};
 use crate::layer::object::meta::placed;
 use crate::layer::object::store::{EntryAt, Store};
 use crate::layer::terrain::scatter::grow;
-use crate::query::{covers, Cover};
-use pxl_spec::block::decor::Decor;
+use crate::query::{covers, Over};
+use pxl_spec::cell::decor::DecorKind;
 use pxl_spec::space::coord::zoom::{index, units, Zoom};
 
-/// A decor is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
+/// A kind is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
 /// down to `DECOR_SPRITE_PX`. No fade: the edge is per instance, so it staggers.
 pub fn decor_gone_px() -> f64 {
     crate::param::DECOR_MODEL_PX
@@ -33,7 +33,7 @@ pub fn decor_sprite_px() -> f64 {
     crate::param::DECOR_SPRITE_PX
 }
 
-/// Whether a decor `extent_u` wide is a sprite's worth anywhere a chunk of
+/// Whether a kind `extent_u` wide is a sprite's worth anywhere a chunk of
 /// `cell_zoom` is drawn: its cell is `target_cell_px` where it begins.
 fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
     extent_u / units(cell_zoom) * target_cell_px() >= decor_sprite_px()
@@ -82,25 +82,25 @@ impl<'s> DecorBuild<'s> {
     #[allow(clippy::too_many_arguments)]
     /// Only what stands in `chunk`, the region of the chunk drawing it; the
     /// ground may be a coarser chunk's over it.
-    pub fn build(scratch: &'s mut DecorScratch, decors: &[Decor], ground: Option<&Ground>, hide: Option<DecorHide>, store: &Store, grows: bool, at: PyramidChunk) -> Option<DecorBuild<'s>> {
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[DecorKind], ground: Option<&Ground>, hide: Option<DecorHide>, store: &Store, decor: bool, at: PyramidChunk) -> Option<DecorBuild<'s>> {
         let (cell_zoom, chunk) = (at.cell_zoom(), at.region());
         scratch.clear();
-        for decor in decors {
-            if decor.variant_count() == 0 {
+        for kind in kinds {
+            if kind.variant_count() == 0 {
                 continue;
             }
-            // Past what a block holds, the decors after have none.
+            // Past what a block holds, the kinds after have none.
             let first = scratch.group_count;
-            if first + decor.variant_count() as usize > DECOR_GROUPS {
+            if first + kind.variant_count() as usize > DECOR_GROUPS {
                 break;
             }
-            scratch.group_count += decor.variant_count() as usize;
-            if !decor_shown(decor.extent(), cell_zoom) {
+            scratch.group_count += kind.variant_count() as usize;
+            if !decor_shown(kind.extent(), cell_zoom) {
                 continue;
             }
-            Self::placed(scratch, decor, first, store, at).ok()?;
-            if let Some(ground) = ground.filter(|_| grows) {
-                Self::grown(scratch, decor, first, ground, store, chunk).ok()?;
+            Self::placed(scratch, kind, first, store, at).ok()?;
+            if let Some(ground) = ground.filter(|_| decor) {
+                Self::grown(scratch, kind, first, ground, store, chunk).ok()?;
             }
         }
         Some(DecorBuild {
@@ -111,12 +111,12 @@ impl<'s> DecorBuild<'s> {
     }
 
     /// Only what stands in `chunk`.
-    fn placed(scratch: &mut DecorScratch, decor: &Decor, first: usize, store: &Store, at: PyramidChunk) -> Result<(), TryReserveError> {
+    fn placed(scratch: &mut DecorScratch, kind: &DecorKind, first: usize, store: &Store, at: PyramidChunk) -> Result<(), TryReserveError> {
         let chunk = at.region();
         let Some(objects) = store.read(at.node(), at.cell_zoom()).value() else { return Ok(()) };
         let mut refused = Ok(());
         objects.entries(&mut |e| {
-            let Some(i) = placed(e).filter(|i| i.id == decor.value()) else { return };
+            let Some(i) = placed(e).filter(|i| i.id == kind.value()) else { return };
             let stands = (0..3).all(|k| (chunk.min[k]..chunk.max[k]).contains(&i.at[k]));
             let Meta::Decor(m) = i.meta;
             if stands && refused.is_ok() {
@@ -127,11 +127,11 @@ impl<'s> DecorBuild<'s> {
     }
 
     /// What the ground grows here, less what the objects over it cover.
-    fn grown(scratch: &mut DecorScratch, decor: &Decor, first: usize, ground: &Ground, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
+    fn grown(scratch: &mut DecorScratch, kind: &DecorKind, first: usize, ground: &Ground, store: &Store, chunk: Aabb) -> Result<(), TryReserveError> {
         let own = GROUND.cell_zoom(ground.zoom);
         let mut candidates = core::mem::take(&mut scratch.candidates);
         let grew = grow(
-            decor,
+            kind,
             &ground.source,
             ground.zoom,
             [ground.x0, ground.y0],
@@ -141,13 +141,13 @@ impl<'s> DecorBuild<'s> {
             &mut candidates,
             |i| {
                 let (Source::Ground(cell), Meta::Decor(m)) = (i.source, i.meta) else { return Ok(()) };
-                let cover = match ground.folded {
-                    None => Cover::Leaf {
-                        any: store.read((GROUND.cell(), cell), GROUND.cell()).value().is_some_and(|c| c.holds()),
+                let over = match ground.folded {
+                    None => Over::Leaf {
+                        held: store.read((GROUND.cell(), cell), GROUND.cell()).value().is_some_and(|c| c.holds()),
                     },
-                    Some(f) => Cover::Folded(f.get(&cell.map(|c| index(own, c))).copied()),
+                    Some(f) => Over::Folded(f.get(&cell.map(|c| index(own, c))).copied()),
                 };
-                if covers(cover) {
+                if covers(over) {
                     return Ok(());
                 }
                 scratch.push(first + m.variant as usize, i)

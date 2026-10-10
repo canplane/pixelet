@@ -6,7 +6,7 @@
  * a timer of the host's own.
  */
 
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 import type { Doorbell } from "../ipc/doorbell.ts";
 import { type Grant, Quantum, type QuantumPolicy } from "./quantum.ts";
 

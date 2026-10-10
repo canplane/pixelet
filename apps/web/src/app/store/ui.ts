@@ -2,11 +2,10 @@
 
 import { create } from "zustand";
 
-import type { i32, u16, u32 } from "@xpute/kit/abi/word.ts";
-import { cube } from "@/catalog/block/cube.spec.ts";
-import { allCubes, type Cube, decorIds } from "@/catalog/block/mod.ts";
-import { ActiveTool, Command, encode_chat_send, encode_input_marker_words } from "@/kernel/abi/cmd.spec.ts";
-import { MARKER_TEXT_CHARS } from "@/catalog/block/ext.spec.ts";
+import type { i32, u16, u32 } from "@xpute/core/abi/word.ts";
+import { cube_types } from "@/catalog/cell/cube_type.spec.ts";
+import { decorKinds, type PlaceableCube, placeableCubes } from "@/catalog/cell/mod.ts";
+import { ActiveTool, Command, encode_chat_send } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_fits, kernel_hold, kernel_snapshot, useKernel } from "@/kernel/shell.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { OBJECT_TIERS } from "@/config/object.spec.ts";
@@ -20,19 +19,17 @@ const MAX_CHAT_LINES = 10;
 let nextChatLineId = 0;
 
 // The hotbar's MRU list, across cube and decor; the tool says which catalog a pick's number is in.
-type RecentPick = { tool: ActiveTool.Object; cube: Cube } | { tool: ActiveTool.Decor; kind: u16 } | { tool: ActiveTool.Marker };
+type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u16 };
 
 function isSamePick(a: RecentPick, b: RecentPick): boolean {
   if (a.tool === ActiveTool.Object) return b.tool === ActiveTool.Object && a.cube === b.cube;
-  if (a.tool === ActiveTool.Decor) return b.tool === ActiveTool.Decor && a.kind === b.kind;
-  return b.tool === ActiveTool.Marker;
+  return b.tool === ActiveTool.Decor && a.kind === b.kind;
 }
 
 // A stored pick may name something the catalog no longer gives out.
 function isKnownPick(pick: RecentPick): boolean {
-  if (pick.tool === ActiveTool.Object) return allCubes.includes(pick.cube);
-  if (pick.tool === ActiveTool.Decor) return decorIds.includes(pick.kind);
-  return pick.tool === ActiveTool.Marker;
+  if (pick.tool === ActiveTool.Object) return placeableCubes.includes(pick.cube);
+  return pick.tool === ActiveTool.Decor && decorKinds.includes(pick.kind);
 }
 
 // Only a new pick joins, at the front: slots reshuffling under the finger disorient.
@@ -41,52 +38,43 @@ function touchRecent(recentPicks: readonly RecentPick[], pick: RecentPick): Rece
   return [pick, ...recentPicks].slice(0, RECENT_PICKS);
 }
 
-/** What the dock is for. */
-export const enum DockMode {
-  Palette = 0,
-  Message = 1,
-}
-
 /** What the pointer holds is the kernel's; the shell says what changes and reads it back. */
 interface UiState {
   // Advanced only by selectCube/selectDecor, which also switch the tool.
   recentPicks: RecentPick[];
-  selectCube: (cube: Cube) => void;
+  selectCube: (cube: PlaceableCube) => void;
   selectDecor: (kind: u16) => void;
-  selectMarker: () => void;
 
   chatLines: ChatLine[];
   appendChatLine: (text: string) => void;
 
-  /** What the dock is for: picking, at rest, or typing, which the keyboard follows. */
-  dockMode: DockMode;
-  setDockMode: (mode: DockMode) => void;
-  /** A swipe either way or Tab: the other mode. */
-  switchDockMode: () => void;
+  /** How far the dock's deck has turned, by a swipe or a key; the dock says which card that is. */
+  dockTurn: i32;
+  turnDock: (delta: i32) => void;
 
   /** A key's pick or size step, which the dock shows over the cube's swatch as a press would: its seed, or the sizes open. */
   swatchCue: SwatchCue;
-  cueSwatch: (cube: Cube, open: boolean) => void;
+  cueSwatch: (cube: PlaceableCube, open: boolean) => void;
   stepSize: (delta: i32) => void;
 }
 
 interface SwatchCue {
   /** Counts the cues, so the same one twice still shows. */
   n: u32;
-  cube: Cube | null;
+  cube: PlaceableCube | null;
   open: boolean;
 }
 
 // One per placeable genre, so a fresh hotbar hints at everything placeable; as many as the hotbar holds.
 const SEED: readonly RecentPick[] = [
-  { tool: ActiveTool.Object, cube: cube.object.white },
-  { tool: ActiveTool.Object, cube: cube.ground.land },
-  { tool: ActiveTool.Object, cube: cube.ground.water },
-  { tool: ActiveTool.Object, cube: cube.ground.building },
-  { tool: ActiveTool.Object, cube: cube.ground.residential_road },
-  { tool: ActiveTool.Object, cube: cube.object.red },
-  { tool: ActiveTool.Object, cube: cube.object.blue },
-  { tool: ActiveTool.Decor, kind: decorIds[0] },
+  { tool: ActiveTool.Object, cube: cube_types.object.white },
+  { tool: ActiveTool.Object, cube: cube_types.ground.land },
+  { tool: ActiveTool.Object, cube: cube_types.ground.water },
+  { tool: ActiveTool.Object, cube: cube_types.ground.building },
+  { tool: ActiveTool.Object, cube: cube_types.ground.residential_road },
+  { tool: ActiveTool.Object, cube: cube_types.object.red },
+  { tool: ActiveTool.Object, cube: cube_types.object.blue },
+  { tool: ActiveTool.Decor, kind: decorKinds[0] },
 ];
 
 /** The hotbar's slots, always full: the seed fills it, and a new pick pushes the last out. */
@@ -143,14 +131,9 @@ export const useUiStore = create<UiState>()((set) => ({
     kernel_hold(ActiveTool.Decor, kind, kernel_snapshot().holding.tier);
     set((state) => ({ recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Decor, kind }) }));
   },
-  selectMarker: () => {
-    holdTool(ActiveTool.Marker);
-    set((state) => ({ recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Marker }) }));
-  },
 
-  dockMode: DockMode.Palette,
-  setDockMode: (dockMode) => set({ dockMode }),
-  switchDockMode: () => set((state) => ({ dockMode: state.dockMode === DockMode.Message ? DockMode.Palette : DockMode.Message })),
+  dockTurn: 0,
+  turnDock: (delta) => set((state) => ({ dockTurn: state.dockTurn + delta })),
 
   swatchCue: { n: 0, cube: null, open: false },
   cueSwatch: (cube, open) => set((state) => ({ swatchCue: { n: state.swatchCue.n + 1, cube, open } })),
@@ -175,32 +158,8 @@ export function chatFits(text: string): boolean {
   return kernel_fits(encode_chat_send({ text }));
 }
 
-/** The waiting marker's words as typed, which it is drawn with. */
-export function draftMarkerWords(text: string): void {
-  kernel_command(Command.INPUT_MARKER_WORDS, encode_input_marker_words({ text }));
-}
-
-/** The waiting marker put up with its words. */
-export function putMarker(): void {
-  kernel_command(Command.INPUT_MARKER_PUT);
-}
-
-/** The waiting marker is let go. */
-export function cancelMarker(): void {
-  kernel_command(Command.INPUT_MARKER_CANCEL);
-}
-
-/** Words past the cap are refused whole, never cut. */
-export function markerTextFits(text: string): boolean {
-  return [...text].length <= MARKER_TEXT_CHARS;
-}
-
 export function useInHand(pick: RecentPick): boolean {
-  return useKernel(({ holding: h }) => {
-    if (pick.tool === ActiveTool.Object) return h.tool === ActiveTool.Object && h.cube === pick.cube;
-    if (pick.tool === ActiveTool.Decor) return h.tool === ActiveTool.Decor && h.decor === pick.kind;
-    return h.tool === ActiveTool.Marker;
-  });
+  return useKernel(({ holding: h }) => pick.tool === ActiveTool.Object ? h.tool === ActiveTool.Object && h.cube === pick.cube : h.tool === ActiveTool.Decor && h.decor === pick.kind);
 }
 
 useUiStore.subscribe((s, prev) => {

@@ -51,6 +51,30 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
     }
 }
 
+/// Wherever an observation hits, the tile it asks for is within that zoom's reach.
+#[test]
+fn a_hit_asks_for_a_tile_inside_the_fault_bound() {
+    for zoom in GROUND.top()..=LEAF_ZOOM {
+        for foot in feet(zoom) {
+            let tiles = demands(zoom, foot);
+            for height in [0.0, 3.0, 1000.0] {
+                for k in 0..64 {
+                    let angle = k as f64 * 0.37;
+                    for run in [0.5, 7.0, 100.0, 383.9, 900.0, 5_000.0, 40_000.0, 300_000.0] {
+                        let at = [foot[0] + run * libm::cos(angle), foot[1] + run * libm::sin(angle)];
+                        let asked = zoom_at(libm::hypot(run, height)).min(LEAF_ZOOM as i32);
+                        if asked != zoom as i32 {
+                            continue;
+                        }
+                        let [x, y] = [at[0] / units(zoom), at[1] / units(zoom)].map(|c| c.floor() as i64);
+                        assert!(tiles.contains(&tile_at(zoom, [x, y])), "z{zoom}: a hit {run} along the ground from {foot:?}");
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// The reach is exactly where a zoom stops being asked for.
 #[test]
 fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {

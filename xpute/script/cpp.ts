@@ -41,7 +41,7 @@ function sources(dir: string): string[] {
 }
 
 function testOnly(path: string): boolean {
-  return path.endsWith(".test.cpp") || path === "cpp/kit/test.cpp" || path === "cpp/kit/golden.cpp";
+  return path.endsWith(".test.cpp") || path === "cpp/core/test.cpp" || path === "cpp/core/golden.cpp";
 }
 
 async function run(cmd: string, args: string[]): Promise<void> {

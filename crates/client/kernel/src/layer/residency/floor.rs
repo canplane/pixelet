@@ -9,19 +9,17 @@
 //! what fails. Until declared, nothing is observed.
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::layer::demand::{reach_tiles, tiles_within};
+use pxl_spec::space::layer::demand::{tiles_within, REACH_TILES};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::global::Global;
 
-use crate::layer::Base;
-
 static DECLARED: Global<Option<Zoom>> = Global::new();
 
 pub fn declare(top_z: Zoom) {
-    xpute_kit::ensure!(top_z >= GROUND.top(), EINVAL, top_z);
+    xpute_core::ensure!(top_z >= GROUND.top(), EINVAL, top_z);
     *DECLARED.get(Default::default) = Some(top_z);
 }
 
@@ -40,13 +38,12 @@ pub trait Fallback {
 /// hold every observed piece of ground. An eye higher than the edge holds none:
 /// a pixel there covers more than the top's cell, and the view has gone over to
 /// the Earth's picture.
-pub struct TopRing<L>(core::marker::PhantomData<L>);
+pub struct TopRing;
 
-impl<L: Base> Fallback for TopRing<L> {
+impl Fallback for TopRing {
     /// The far edge is at most the top's reach, and a sphere's cut by the
-    /// ground is no wider, so these are at most the tiles a miss can name
-    /// there, in the layer's own tiles.
-    const TILES: u32 = reach_tiles(L::LATTICE);
+    /// ground is no wider, so these are at most the tiles a miss can name there.
+    const TILES: u32 = REACH_TILES;
 
     fn floor(o: &Observation, top: Zoom, each: impl FnMut(Tile)) {
         let over = (o.eye[2] - o.ground).max(0.0);
@@ -56,4 +53,4 @@ impl<L: Base> Fallback for TopRing<L> {
     }
 }
 
-pub type Floor<L> = TopRing<L>;
+pub type Floor = TopRing;

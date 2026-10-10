@@ -8,8 +8,8 @@
 
 use core::marker::PhantomData;
 
-use xpute_kit::alloc::buddy_tree::Range;
-use xpute_kit::alloc::slab::SlabMalloc;
+use xpute_core::alloc::buddy_tree::Range;
+use xpute_core::alloc::slab::SlabMalloc;
 
 use crate::mem::base::{off_of, ptr_at};
 

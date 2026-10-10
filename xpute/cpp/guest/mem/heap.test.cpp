@@ -4,8 +4,8 @@
 
 #include <cstdlib>
 
-#include "../../kit/alloc/slab.hpp"
-#include "../../kit/test.hpp"
+#include "../../core/alloc/slab.hpp"
+#include "../../core/test.hpp"
 
 using namespace xpute;
 

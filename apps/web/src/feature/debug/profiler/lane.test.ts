@@ -3,7 +3,7 @@
 import { assertEquals } from "@std/assert";
 
 import { FRAME, FRAME_GROUPS } from "./profiler.spec.ts";
-import { frameAt, GROUPS, isList, LANES, LIST_NAMES } from "./lane.ts";
+import { frameAt, GROUPS, isList, label, LANES, LIST_NAMES, valueText } from "./lane.ts";
 
 Deno.test("FRAME_GROUPS - every lane is printed, in one group", () => {
   const grouped = GROUPS.flatMap((g) => FRAME_GROUPS[g] as readonly string[]);
@@ -24,4 +24,13 @@ Deno.test("frameAt - reads each lane at its word", () => {
   assertEquals(f.gpu_ms, FRAME.gpu_ms);
   assertEquals(f.zoom_tiles[2], FRAME.zoom_tiles + 2);
   assertEquals(f.census[1], [FRAME.census + 2, FRAME.census + 3]);
+});
+
+Deno.test("label and valueText - a lane's name says its unit", () => {
+  assertEquals(label("lod", "lod_oldest_release_ms"), "oldest_release");
+  assertEquals(label("heap", "heap_used_mb"), "used");
+  assertEquals(label("slot", "slot_wait_zooms"), "wait_zooms");
+  assertEquals(valueText("lod_oldest_release_ms", 12.34), "12.3ms");
+  assertEquals(valueText("slot_wait_zooms", 0b1001), "z0,z3");
+  assertEquals(valueText("triangles", 12_400), "12k");
 });

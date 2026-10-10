@@ -6,26 +6,22 @@ import { StyleSheet, Text, View } from "react-native";
 import { Prose, Section, settingText } from "@/feature/setting/row.tsx";
 import { BrandSymbol } from "@/shared/ui/brand-symbol.tsx";
 import { textStyle } from "@/shared/ui/theme.ts";
-import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE, PUBLISHED_TILES } from "@/config/deploy.ts";
-import { BASE_LAYERS, FORMAT, PUBLISHED_VERSION } from "@/config/published.spec.ts";
+import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/config/deploy.ts";
+import { PUBLISHED_VERSION } from "@/config/published.spec.ts";
 import { OBJECTS_PATH } from "@/kernel/abi/host.spec.ts";
 import { LABEL } from "@platform/palette.ts";
 
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
 
-/** `dev`, or the task that served it: `dev:oven`, `dev:shelf`. */
+/** `dev`, or the task that served it: `dev:local`, `dev:baked`. */
 function envLabel(): string {
   const env = ENV_SHORT[APP_ENV] ?? APP_ENV;
-  return DEV_SOURCE === "delivery" ? env : `${env}:${DEV_SOURCE}`;
+  return DEV_SOURCE === "remote" ? env : `${env}:${DEV_SOURCE}`;
 }
 
-/**
- * Each bake a line, as what is read: the published name, or in dev the
- * format of the unnamed tiles the dev server serves — but the Earth's, which
- * is baked under its published name.
- */
+/** Each bake by the name it is published as, a line each, since each is baked on its own. */
 function bakeLines(): string[] {
-  return BASE_LAYERS.map((layer) => `${layer}/${PUBLISHED_TILES || layer === "earth" ? PUBLISHED_VERSION[layer] : `v${FORMAT[layer]}`}`);
+  return Object.entries(PUBLISHED_VERSION).map(([kind, name]) => `${kind}/${name}`);
 }
 
 /** The objects one has placed, kept on the device: their store's format. */

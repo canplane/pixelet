@@ -4,7 +4,7 @@ use super::*;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::pvf3::pvf3;
 use pxl_spec::space::coord::world::ROUND;
-use xpute_kit::math::rng::SplitMix64;
+use xpute_core::math::rng::SplitMix64;
 
 /// Taken back by its cell, a point the floats leave a hair under itself
 /// would fall a 256th of a unit each trip; on whichever lap it is read.

@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "../../kit/status/bug.hpp"
+#include "../../core/status/bug.hpp"
 
 namespace xpute {
 

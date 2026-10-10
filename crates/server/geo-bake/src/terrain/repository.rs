@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use postgres::types::ToSql;
-use postgres::{Client, Statement};
+use postgres::{Client, Statement, ToStatement};
 use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, BBox3857};
 
 use crate::elevation::Raster;
@@ -33,7 +33,7 @@ WHERE t.geom && env.e"
 
 /// How far past a tile what is drawn on it can come from: half the widest line.
 pub const DRAWN_REACH_U: f64 = carto_u(WIDEST_LINE) / 2.0;
-const _: () = assert!(DRAWN_REACH_U <= crate::coverage::BAKE_REACH, "a tile's rows come from past the bakes' reach");
+const _: () = assert!(DRAWN_REACH_U <= crate::coverage::SHARD_APRON, "a tile's rows come from past its shard's apron");
 
 /// A tile's bbox grown by `DRAWN_REACH_U`, the area its rows are read from; what
 /// is baked is still the tile's own cells.
@@ -60,7 +60,7 @@ SELECT 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way
 
 /// The tile's land from OSM's land polygons (`infra/geo/coastline`), taken
 /// whole: empty means pure ocean, the whole envelope means all land, both dropped.
-const COAST_SQL: &str = "WITH env AS (
+pub const COAST_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 ),
 land_union AS (
@@ -107,7 +107,7 @@ pub struct CoastRow {
 }
 
 pub struct TileSource {
-    pub ele: Vec<i16>,
+    pub ele: Option<Vec<i16>>,
     pub building_rows: Vec<BuildingRow>,
     pub segment_rows: Vec<Segment>,
     pub base_rows: Vec<BaseRow>,
@@ -141,11 +141,6 @@ impl TerrainRepository {
         })
     }
 
-    /// A tile's elevation grid.
-    pub fn ele(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<Vec<i16>, postgres::Error> {
-        self.raster.tile_grid(client, tile_bbox)
-    }
-
     pub fn fetch_tile_source(&self, client: &mut Client, tile_bbox: BBox3857) -> Result<TileSource, postgres::Error> {
         let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(tile_bbox);
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
@@ -176,14 +171,19 @@ impl TerrainRepository {
                     geom_wkb: wkb(row),
                 })
                 .collect(),
-            coast_rows: client
-                .query(&self.coast, &bbox)?
-                .iter()
-                .map(|row| CoastRow {
-                    geom_wkb: wkb(row),
-                    covers_tile: row.get("covers_tile"),
-                })
-                .collect(),
+            coast_rows: coast(client, &self.coast, &bbox)?,
         })
     }
+}
+
+/// The coast's rows over an envelope, `[minx, miny, maxx, maxy]`.
+pub fn coast(client: &mut Client, statement: &(impl ToStatement + ?Sized), bbox: &[&(dyn ToSql + Sync); 4]) -> Result<Vec<CoastRow>, postgres::Error> {
+    Ok(client
+        .query(statement, bbox)?
+        .iter()
+        .map(|row| CoastRow {
+            geom_wkb: row.get::<_, &[u8]>("geom_wkb").into(),
+            covers_tile: row.get("covers_tile"),
+        })
+        .collect())
 }

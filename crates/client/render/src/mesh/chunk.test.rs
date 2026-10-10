@@ -25,7 +25,7 @@ fn set_of(span: u32, columns: &[Vec<Run>]) -> OwnedRunSet {
             set.g.push(run.rgb[1]);
             set.b.push(run.rgb[2]);
             set.layer_taps.push(run.layer);
-            set.side.push(Side::BASE);
+            set.material_class.push(MaterialClasses::LAND);
             set.sub_s.push(SUB_CELL_NONE);
             for lane in [&mut set.sub_ox, &mut set.sub_oy, &mut set.sub_oz] {
                 lane.push(0);
@@ -38,6 +38,32 @@ fn set_of(span: u32, columns: &[Vec<Run>]) -> OwnedRunSet {
 
 fn ground(z1: i32) -> Vec<Run> {
     vec![Run { z0: 0, z1, rgb: [0, 0, 0], layer: 0 }]
+}
+
+#[test]
+fn a_cell_walled_in_on_every_side_shows_only_its_top_and_its_bottom() {
+    let columns: Vec<Vec<Run>> = (0..9).map(|_| ground(3)).collect();
+    let set = set_of(3, &columns);
+    let view = set.view();
+    let faces = exposed_faces(&view, 4, 0, 0, 3);
+    assert_eq!(faces, 2.0, "a buried run keeps its top and its bottom alone");
+}
+
+#[test]
+fn a_wall_shows_the_side_it_stands_above() {
+    let columns: Vec<Vec<Run>> = (0..9).map(|k| ground(if k == 4 { 4 } else { 0 })).collect();
+    let set = set_of(3, &columns);
+    let view = set.view();
+    assert_eq!(exposed_faces(&view, 4, 0, 0, 4), 2.0 + 4.0 * 4.0);
+}
+
+#[test]
+fn a_column_off_the_sets_edge_is_air_and_leaves_the_side_open() {
+    let columns: Vec<Vec<Run>> = (0..9).map(|_| ground(0)).collect();
+    let set = set_of(3, &columns);
+    let view = set.view();
+    // A corner column: two of its four sides have no column beyond them.
+    assert_eq!(exposed_faces(&view, 0, 0, 0, 0), 2.0 + 2.0);
 }
 
 fn bake_in_blocks(set: &OwnedRunSet, lod_step: u32, block: u32) -> Vec<u32> {
@@ -152,37 +178,5 @@ fn an_edge_wall_reaches_down_to_the_ground_beside_it() {
         let faces = east_faces(&set, lod_step);
         // To within a step of the heights' encoding.
         assert!(covers(&faces, 1.0 + 1e-3, 20.0), "step {lod_step}: east faces {faces:?} leave the drop to the ground beside open");
-    }
-}
-
-/// A fold's fixed point: a cell full of one leaf folds to that leaf, its
-/// swatch and its texture, not a summary of it.
-#[test]
-fn a_cell_full_of_one_leaf_folds_to_that_leaf() {
-    let (span, taps) = (10, taps_of(5));
-    let columns: Vec<Vec<Run>> = (0..span * span).map(|_| vec![Run { z0: 0, z1: 7, rgb: [10, 20, 30], layer: taps }]).collect();
-    let set = set_of(span, &columns);
-    let mut bake = BakeContext::default();
-    let view = set.view();
-    assert!(bake.begin(&view, 2, 1.0, 1.0, true, true, (8, 512), None).is_ok());
-    let mut buf: Vec<u32> = Vec::new();
-    loop {
-        match bake.step(&view) {
-            Step::Working => {}
-            Step::NeedMesh(n) => {
-                buf = vec![0; n as usize];
-                // SAFETY: `buf`, untouched until the bake is done.
-                unsafe { bake.provide_mesh(buf.as_mut_ptr(), n) };
-            }
-            Step::Full => panic!("one block holds the mesh"),
-            Step::Refused => panic!("the heap refused a test bake"),
-            Step::Done => break,
-        }
-    }
-    let mesh = bake.finish();
-    let boxes = &buf[..(mesh.box_cnt * FINE_BOX_WORDS) as usize];
-    assert!(!boxes.is_empty());
-    for m in boxes.chunks(FINE_BOX_WORDS as usize) {
-        assert_eq!((m[3].to_le_bytes(), m[4]), ([10, 20, 30, 0], taps));
     }
 }

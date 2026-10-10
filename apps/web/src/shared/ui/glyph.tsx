@@ -3,7 +3,7 @@
 import { StyleSheet, View } from "react-native";
 import { Line, Svg } from "react-native-svg";
 
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { Icon, type IconProps } from "@platform/icon.tsx";
 
 /**

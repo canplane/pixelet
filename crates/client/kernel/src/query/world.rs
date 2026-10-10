@@ -8,49 +8,49 @@ use crate::layer::residency::Line;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 use crate::layer::object::store::Cells;
 
-use super::decor::Grown;
+use super::decor::Decor;
 use crate::kernel;
 use crate::layer::object::store::{Store, AIR};
 use crate::layer::residency::Residency;
 use crate::layer::terrain::Source;
 use crate::layer::Answer;
-use crate::layer::Base as _;
+use crate::layer::Layer as _;
 use crate::layer::{Bound, Query};
-use pxl_spec::bake::format::TerrainTile;
+use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::camera::grid::Tau;
 
 /// The world's query: the resident ground and the placed objects, read
 /// as one.
 #[derive(Clone, Copy)]
 pub struct World<'a> {
-    pub(super) terrain: &'a Residency<TerrainTile>,
+    pub(super) terrain: &'a Residency<Terrain>,
     pub(super) objects: &'a Store,
     /// How decor is struck; none, and a ray passes through decor.
-    pub(super) decor: Option<Grown<'a>>,
+    pub(super) decor: Option<Decor<'a>>,
     pub(super) visits: Option<&'a std::cell::Cell<u64>>,
 }
 
 impl World<'static> {
     pub fn now() -> World<'static> {
         let objects: &'static Store = &kernel().objects;
-        World::new(TerrainTile::residency(), objects)
+        World::new(Terrain::residency(), objects)
     }
 
     /// As `now`, and decor is struck too, where the chunks drawing at `tau`
     /// hold it: the pointer's pick, which alone asks what a decor thing is.
     pub fn striking_decor(self, tau: Tau) -> World<'static> {
-        let decor = Grown { models: &kernel().models, tau };
+        let decor = Decor { models: &kernel().models, tau };
         World { decor: Some(decor), ..self }
     }
 }
 
 impl<'a> World<'a> {
-    pub fn new(terrain: &'a Residency<TerrainTile>, objects: &'a Store) -> World<'a> {
+    pub fn new(terrain: &'a Residency<Terrain>, objects: &'a Store) -> World<'a> {
         World {
             terrain,
             objects,
@@ -73,7 +73,7 @@ impl<'a> World<'a> {
 /// A node's cells as the world holds them: the ground they stand on and the
 /// objects placed in them.
 #[derive(Clone, Copy)]
-pub struct Composed<'a> {
+pub struct Cube<'a> {
     pub ground: Source<'a>,
     pub objects: Cells<'a>,
 }
@@ -90,7 +90,7 @@ fn join(a: Option<Bound>, b: Option<Bound>) -> Option<Bound> {
 
 impl Query for World<'_> {
     type Record<'b>
-        = Composed<'b>
+        = Cube<'b>
     where
         Self: 'b;
 
@@ -109,9 +109,9 @@ impl Query for World<'_> {
         self.terrain.bound(at, node, cell).map(|ground| join(ground, objects))
     }
 
-    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Composed<'_>> {
+    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Cube<'_>> {
         let objects = self.objects.read(node, cell).value();
-        self.terrain.read(node, cell).map(|ground| Composed {
+        self.terrain.read(node, cell).map(|ground| Cube {
             ground,
             // Objects are all resident: their answer is always exact.
             objects: objects.or_bug(Errno::ENOTRECOVERABLE),
@@ -121,8 +121,8 @@ impl Query for World<'_> {
 
 /// What the objects hold over a ground cell, as the composer reads them: at
 /// a leaf's cells whether anything is held, over a fold what it folds to.
-pub enum Cover {
-    Leaf { any: bool },
+pub enum Over {
+    Leaf { held: bool },
     Folded(Option<u32>),
 }
 
@@ -130,9 +130,9 @@ pub enum Cover {
 /// so it is neither drawn nor struck: at a leaf's cells anything held does,
 /// air included, so erasing a grown tree is placing air over it; over a fold
 /// only a fill does.
-pub fn covers(cover: Cover) -> bool {
-    match cover {
-        Cover::Leaf { any } => any,
-        Cover::Folded(state) => state.is_some_and(|s| s != AIR),
+pub fn covers(over: Over) -> bool {
+    match over {
+        Over::Leaf { held } => held,
+        Over::Folded(state) => state.is_some_and(|s| s != AIR),
     }
 }

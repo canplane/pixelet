@@ -6,10 +6,10 @@
  * whatever they name in guest memory is written before the guest reads it.
  */
 
-import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
-import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
-import { InvariantError } from "@xpute/kit/status/error.ts";
+import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
+import type { i32, u32 } from "@xpute/core/abi/word.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { InvariantError } from "@xpute/core/status/error.ts";
 import { each_record, text_of } from "./stream.ts";
 import { flag, HEAD, op } from "./sys.spec.ts";
 

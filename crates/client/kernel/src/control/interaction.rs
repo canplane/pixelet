@@ -8,8 +8,8 @@ pub mod edit;
 pub mod ghost;
 pub mod pick;
 
-use pxl_spec::block::object::Cube;
-use pxl_spec::block::{cube, DecorId};
+use pxl_spec::cell::object::PlaceableCube;
+use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -17,7 +17,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 pub use crate::abi::cmd::ActiveTool;
 use crate::control::interaction::collision::{anchor_center, object_aabb};
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
-use crate::control::interaction::edit::{place, place_air, place_decor, remove, wait_to_put};
+use crate::control::interaction::edit::{place, place_air, place_decor, remove};
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;
@@ -32,7 +32,7 @@ use xpute_guest::global::Global;
 pub struct Holding {
     pub active_tool: ActiveTool,
     /// A placed color or a ground look.
-    pub object_cube: Cube,
+    pub object_cube: PlaceableCube,
     /// The object size by its tier (`object_size_of`).
     pub object_tier: u32,
     pub decor_id: DecorId,
@@ -42,7 +42,7 @@ impl Default for Holding {
     fn default() -> Holding {
         Holding {
             active_tool: ActiveTool::Pointer,
-            object_cube: Cube::Object(cube::Object::red),
+            object_cube: PlaceableCube::Block(cube_types::Block::red),
             object_tier: 0,
             decor_id: DecorId::tree,
         }
@@ -62,9 +62,6 @@ pub struct Hover {
 struct Interaction {
     holding: Holding,
     hover: Hover,
-    /// Where the pointer stands on the screen, in NDC, whatever it can strike:
-    /// the gauge casts its own ray there.
-    pointed: Option<[f64; 2]>,
 }
 
 static INTERACTION: Global<Interaction> = Global::new();
@@ -73,7 +70,6 @@ fn interaction() -> &'static mut Interaction {
     INTERACTION.get(|| Interaction {
         holding: Holding::default(),
         hover: Hover::default(),
-        pointed: None,
     })
 }
 
@@ -91,12 +87,6 @@ pub fn hover() -> Hover {
 
 pub(crate) fn clear_hover() {
     interaction().hover = Hover::default();
-    interaction().pointed = None;
-}
-
-/// Where the pointer stands on the screen, in NDC, while it is over it.
-pub fn pointed() -> Option<[f64; 2]> {
-    interaction().pointed
 }
 
 /// A gesture under way points at nothing to place.
@@ -136,24 +126,21 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     view_ray(ndc_x, ndc_y, &mut origin, &mut direction);
 
     let ui = interaction().holding;
-    interaction().pointed = Some([ndc_x, ndc_y]);
     let Some(pick) = ray_pick(origin, direction, drawn) else {
-        interaction().hover = Hover::default();
-        return;
+        return clear_hover();
     };
     let hit = pick.hit;
     let hover = &mut interaction().hover;
     // A folded cell is a summary, not what is held: nothing in it is struck.
     if folded_at(&hit) {
-        *hover = Hover::default();
-        return;
+        return clear_hover();
     }
 
-    if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker) {
+    if matches!(ui.active_tool, ActiveTool::Object | ActiveTool::Decor) {
         hover.object_at = None;
         hover.scattered = None;
         hover.approach = None;
-        let placement_size = if ui.active_tool == ActiveTool::Object { object_size_of(ui.object_tier) } else { DECOR_SIZE };
+        let placement_size = if ui.active_tool == ActiveTool::Decor { DECOR_SIZE } else { object_size_of(ui.object_tier) };
         // A decor met in front of the pick is what the new cube goes flush against.
         let precise_box = resolve_hit_target(&hit).map(|o| object_aabb(&o));
         hover.coord = Some(world_adjacent_corner(&hit, placement_size, precise_box.as_ref()));
@@ -192,6 +179,11 @@ fn folded_at(hit: &Hit) -> bool {
     crate::with_parts(|_, sched, _| sched.cells_at(&at)).flatten().is_some_and(|cells| cells < held)
 }
 
+/// Whether a tap may be a badge's: the pointer tool's only.
+pub fn taps_badges() -> bool {
+    interaction().holding.active_tool == ActiveTool::Pointer
+}
+
 /// A tap at `ndc_x`, `ndc_y` with the tool held, on the world drawn at `drawn`.
 pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
     hover_at(ndc_x, ndc_y, drawn);
@@ -221,20 +213,13 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
                 (None, None) => place_air(&hovered, units(GROUND.cell())),
             }
         }
-        // The slot may have filled since the last hover update.
-        ActiveTool::Decor => {
-            if !is_placement_blocked(PlacementTool::Instance, &hovered, object_size) {
-                place_decor(&hovered, DECOR_SIZE, ui.decor_id);
-            }
-        }
-        // It waits there for its words, which the shell asks for.
-        ActiveTool::Marker => {
-            if !is_placement_blocked(PlacementTool::Instance, &hovered, object_size) {
-                wait_to_put(&hovered);
-            }
-        }
-        ActiveTool::Object => {
-            if !is_placement_blocked(PlacementTool::Object, &hovered, object_size) {
+        ActiveTool::Decor | ActiveTool::Object => {
+            // The slot may have filled since the last hover update.
+            if ui.active_tool == ActiveTool::Decor {
+                if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size) {
+                    place_decor(&hovered, DECOR_SIZE, ui.decor_id);
+                }
+            } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size) {
                 place(&hovered, object_size, ui.object_cube);
             }
         }

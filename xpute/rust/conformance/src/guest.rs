@@ -6,6 +6,10 @@
 //! memory and `env.now`, and its range starts past what the linker placed.
 //! Pointers are made from addresses: `ptr::add` from wasm's base 0 is UB.
 
+use xpute_core::math::scalar::round;
+use xpute_core::status::errno::Errno;
+use xpute_core::status::error::MarshalError;
+use xpute_core::wire::xtp::TreeReader;
 use xpute_guest::abi::cmd::{Command, SysOpened};
 use xpute_guest::abi::handle::HandleTable;
 use xpute_guest::ipc::directory::{directory_words, spec::key, write_directory};
@@ -15,10 +19,6 @@ use xpute_guest::ipc::ring::{ring_bytes, slots_bytes};
 use xpute_guest::ipc::stream::Stream;
 use xpute_guest::ipc::sys::Sys;
 use xpute_guest::sched::quantum::NO_WAKE;
-use xpute_kit::math::scalar::round;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::TreeReader;
 
 use crate::spec;
 
@@ -187,7 +187,7 @@ mod module {
     pub extern "C" fn xpute_conformance_boot() -> u32 {
         let range = range_at();
         // A host that sized the memory for another guest.
-        xpute_kit::ensure!(range as u64 + spec::MEMORY_BYTES as u64 <= given(), ENOMEM, range);
+        xpute_core::ensure!(range as u64 + spec::MEMORY_BYTES as u64 <= given(), ENOMEM, range);
         // SAFETY: the module's memory, from address 0, and the range inside
         // it past what the linker placed.
         unsafe { boot(core::ptr::null_mut(), range, now) }

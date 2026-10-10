@@ -26,7 +26,7 @@ struct DataSpec {
     cpp: Option<(&'static str, &'static str)>,
 }
 
-const DATA_SPECS: [DataSpec; 21] = [
+const DATA_SPECS: [DataSpec; 19] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         uses: &[],
@@ -38,40 +38,20 @@ const DATA_SPECS: [DataSpec; 21] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/spec/block/ext.json",
-        uses: &[],
-        ts: Some("apps/web/src/catalog/block/ext.spec.ts"),
-        rs: Some("crates/spec/src/block/ext.spec.rs"),
-        module: Some("ext"),
-        enums: Enums::All,
-        ts_names: Some(&["MARKER_TEXT_CHARS"]),
-        cpp: None,
-    },
-    DataSpec {
-        json: "spec/spec/block/marker.json",
+        json: "spec/spec/cell/id.json",
         uses: &[],
         ts: None,
-        rs: Some("crates/spec/src/block/marker.spec.rs"),
-        module: Some("marker"),
-        enums: Enums::None,
-        ts_names: None,
-        cpp: None,
-    },
-    DataSpec {
-        json: "spec/spec/block/id.json",
-        uses: &[],
-        ts: None,
-        rs: Some("crates/spec/src/block/id.spec.rs"),
+        rs: Some("crates/spec/src/cell/id.spec.rs"),
         module: Some("id"),
         enums: Enums::All,
         ts_names: None,
         cpp: None,
     },
     DataSpec {
-        json: "spec/spec/division.json",
+        json: "spec/spec/place.json",
         uses: &[],
-        ts: Some("apps/web/src/feature/world/division/division.spec.ts"),
-        rs: Some("crates/spec/src/division.spec.rs"),
+        ts: Some("apps/web/src/feature/world/geocode/place.spec.ts"),
+        rs: Some("crates/spec/src/place.spec.rs"),
         module: Some("spec"),
         enums: Enums::None,
         ts_names: None,
@@ -148,9 +128,9 @@ const DATA_SPECS: [DataSpec; 21] = [
         cpp: None,
     },
     DataSpec {
-        json: "spec/spec/bake/place_theme.json",
+        json: "spec/spec/bake/poi_badge.json",
         uses: &[],
-        ts: Some("apps/web/src/feature/search/place_theme.spec.ts"),
+        ts: Some("apps/web/src/feature/search/poi_badge.spec.ts"),
         rs: None,
         module: None,
         enums: Enums::None,
@@ -193,7 +173,7 @@ const DATA_SPECS: [DataSpec; 21] = [
         ts: Some("apps/web/src/kernel/io/demand.spec.ts"),
         rs: Some("crates/client/kernel/src/io/demand.spec.rs"),
         module: Some("spec"),
-        enums: Enums::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
+        enums: Enums::Named(&["CATEGORY_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
         ts_names: None,
         cpp: None,
     },
@@ -524,7 +504,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             }
             if !words.is_empty() {
                 words.sort();
-                ts.extend([String::new(), format!("import type {{ {} }} from \"@xpute/kit/abi/word.ts\";", words.join(", "))]);
+                ts.extend([String::new(), format!("import type {{ {} }} from \"@xpute/core/abi/word.ts\";", words.join(", "))]);
             }
             ts.extend(body);
             outputs.push(Output::new(ts_path, file(&ts)));

@@ -9,7 +9,7 @@
 import { useRef } from "react";
 import { LayoutAnimation, type LayoutAnimationConfig, StyleSheet, View } from "react-native";
 
-import type { f64 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { Backing } from "@platform/backing.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { type PillProps, touchReach } from "@/shared/ui/pill.ts";

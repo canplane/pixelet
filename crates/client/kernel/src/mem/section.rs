@@ -2,8 +2,7 @@
 
 //! Which sections the memory has and where each begins:
 //!
-//!   module    stack first (an overflow traps), the rings, then the linker's data;
-//!             on a device the stack's and the data's ranges stand empty
+//!   module    stack first (an overflow traps), the rings, then the linker's data
 //!   .fixed    ranges sized at compile time, never freed (fixed.rs)
 //!   heap      everything left, one allocator
 //!
@@ -37,7 +36,7 @@ pub fn fixed_at(data_end: u32) -> u32 {
 pub fn lay_out(bytes: u32, data_end: u32, fixed_bytes: u32) -> Map {
     let regions = bytes / REGION_BYTES;
     let heap = fixed_at(data_end) + fixed_bytes;
-    xpute_kit::ensure!(heap + MIN_HEAP_BYTES <= regions * REGION_BYTES, ENOMEM, heap, bytes);
+    xpute_core::ensure!(heap + MIN_HEAP_BYTES <= regions * REGION_BYTES, ENOMEM, heap, bytes);
     Map {
         fixed: Section {
             offset: fixed_at(data_end),

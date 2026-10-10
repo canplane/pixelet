@@ -259,7 +259,7 @@ const remoteOriginDefault = "https://plei.me";
 // anti-HMR. The shell's kernel glue is here too: its modules hold the one
 // kernel's memory and device, and a hot-swapped copy ran beside them — a
 // second device beside the renderer's objects on the first.
-const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
+const corePathIncludes = ["/xpute/ts/core/", "/xpute/ts/host/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
 function fullReloadOnCoreChange() {
   function isCoreFile(file: string): boolean {
     const p = file.replaceAll("\\", "/");
@@ -291,7 +291,7 @@ function fullReloadOnCoreChange() {
       if (isCoreFile(file)) {
         // Invalidate by hand, because Vite cannot make the connection
         // itself. The deno plugin resolves a core import to a virtual id —
-        // `\0deno::TypeScript::@xpute/kit/...::/abs/path.ts` — and the
+        // `\0deno::TypeScript::@xpute/core/...::/abs/path.ts` — and the
         // module graph is keyed by resolved id while onFileChange looks up
         // by file path, so a changed core file would leave its transform
         // cached under a name nothing matches, and the full-reload below
@@ -387,21 +387,20 @@ export default defineConfig(({ mode }) => {
   const tileBase = env.VITE_TILE_BASE_URL || tileBaseDefault;
   const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;
 
-  //   delivery (default) — an already-published deployment, so no local
-  //                          API, database or Docker. `deno task dev`, and
-  //                          what a deployed build is.
-  //   oven               — the servers above, baking on demand.
-  //                          `deno task dev:oven`.
-  //   shelf              — the same, the tiles from the last bakes under
-  //                          ./out. `deno task dev:shelf`.
-  const devSource = env.VITE_DEV_SOURCE || "delivery";
-  const delivery = devSource === "delivery";
+  //   remote (default) — an already-published deployment, so no local API,
+  //                        database or Docker. `deno task dev`.
+  //   local             — the servers above, baking on demand.
+  //                        `deno task dev:local`.
+  //   baked             — the same, the tiles from finished bakes.
+  //                        `deno task dev:baked`.
+  const devSource = env.VITE_DEV_SOURCE || "remote";
+  const remote = devSource === "remote";
 
   // Injected as __PUBLISHED_TILES__: route.ts builds every tile path from
   // it, config/deploy.ts reads it for what a 404 means.
-  const published = delivery;
+  const published = mode === "production" || remote;
 
-  const remoteOrigin = delivery ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
+  const remoteOrigin = remote ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
   // What the proxy hands the page is never stored. The objects behind it are
   // `immutable` for a year, which a deployment means; here a restart of this
   // server cuts a body in flight, and a browser kept the empty one as the
@@ -421,7 +420,7 @@ export default defineConfig(({ mode }) => {
   ]));
 
   return {
-    // Root `deno task dev:oven` runs the three servers and this in one
+    // Root `deno task dev:local` runs the three servers and this in one
     // terminal, and Vite's default clearScreen would wipe the whole of it —
     // the servers' output too — on every restart or error.
     clearScreen: false,
@@ -516,7 +515,7 @@ export default defineConfig(({ mode }) => {
     },
 
     // The production bundle served here, against the same routes: with
-    // `VITE_DEV_SOURCE=delivery`, the deployment's data under the built
+    // `VITE_DEV_SOURCE=remote`, the deployment's data under the built
     // client, which is what a measurement of the client alone wants —
     // the dev server's unbundled modules and hooks are not in it.
     preview: { proxy },
