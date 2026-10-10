@@ -7,6 +7,9 @@ pub use crate::abi::cmd::GeolocationErrorCode;
 use crate::abi::cmd::Message;
 use crate::control::sensor::reading::{device_location_store, Pose};
 use crate::sched::edge::wake_at;
+use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
@@ -94,8 +97,13 @@ pub fn geolocation_permission_granted(supported: bool) {
     }
 }
 
+/// `altitude` is the ellipsoid's, as GPS gives it; kept over sea level, the
+/// terrain's, by the geoid at the base of the leaf tile it falls in.
 pub fn geolocation_fix(longitude: f64, latitude: f64, altitude: Option<f64>, accuracy: f64, course: Option<f64>) {
-    device_location_store().set_location([longitude, latitude, altitude.unwrap_or(0.0)], accuracy, course);
+    let (x0, y0, _) = GROUND.cell_of(LEAF_ZOOM, &epsg4326::project(&[longitude, latitude, 0.0])).tile().rect();
+    let [lng, lat, _] = epsg4326::from_mercator(&[epsg3857::mer_from_u(x0), epsg3857::mer_from_u(y0), 0.0]);
+    let altitude = altitude.map(|h| h - epsg4326::geoid_m(lng, lat));
+    device_location_store().set_location([longitude, latitude], altitude, accuracy, course);
 }
 
 /// The shell stops the watch before this: a dead watch keeps calling back

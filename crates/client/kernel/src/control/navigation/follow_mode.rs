@@ -99,8 +99,8 @@ pub fn follow_mode_step() {
         return;
     }
 
-    // No EMA here: the smooth move is the one smoothing stage. On the ground, since
-    // the fix's Z is altitude.
+    // No EMA here: the smooth move is the one smoothing stage. On the floor nearest
+    // the fix's altitude.
     if let Some(device) = device_coord.filter(|d| entered || Some(*d) != f.last_device) {
         go_to_ground(device, Motion::Smooth);
     }

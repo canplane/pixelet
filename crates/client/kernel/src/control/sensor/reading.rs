@@ -3,8 +3,6 @@
 //! The device's GPS and compass readings, and which changes are significant
 //! enough to keep.
 
-use pxl_spec::space::coord::adapter::epsg4326::G4326;
-
 use crate::abi::cmd::Message;
 pub use crate::abi::cmd::{DevicePoseStatus, PermissionAnswer};
 use xpute_guest::clock::now;
@@ -12,8 +10,10 @@ use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeviceLocation {
-    /// Longitude, latitude, altitude.
-    pub coords: G4326,
+    /// Longitude, latitude.
+    pub coords: [f64; 2],
+    /// Meters over sea level; none where the device gives none.
+    pub altitude: Option<f64>,
     /// Meters.
     pub accuracy: f64,
     /// Course over ground, 0-360 degrees.
@@ -95,10 +95,16 @@ pub struct DeviceLocationStore {
 
 impl DeviceLocationStore {
     /// Updates only on a significant change.
-    pub fn set_location(&mut self, coords: G4326, accuracy: f64, course: Option<f64>) {
+    pub fn set_location(&mut self, coords: [f64; 2], altitude: Option<f64>, accuracy: f64, course: Option<f64>) {
         let timestamp = now();
         let Some(prev) = self.location else {
-            self.location = Some(DeviceLocation { coords, accuracy, course, timestamp });
+            self.location = Some(DeviceLocation {
+                coords,
+                altitude,
+                accuracy,
+                course,
+                timestamp,
+            });
             self.pose = Pose::Ready;
             return;
         };
@@ -112,8 +118,7 @@ impl DeviceLocationStore {
         // Dead zone: ~1.1 m horizontally, 0.5 m in altitude.
         let lng_diff = (prev.coords[0] - coords[0]).abs();
         let lat_diff = (prev.coords[1] - coords[1]).abs();
-        let alt_diff = (prev.coords[2] - coords[2]).abs();
-        let is_significant_change = lat_diff > 0.00001 || lng_diff > 0.00001 || alt_diff > 0.5;
+        let is_significant_change = lat_diff > 0.00001 || lng_diff > 0.00001 || is_delta_over(prev.altitude, altitude, 0.5);
 
         if !is_significant_change && prev.accuracy == accuracy && prev.course == course {
             return;
@@ -122,6 +127,7 @@ impl DeviceLocationStore {
         // Without movement the metadata still refreshes, so the UI has the freshest signal.
         self.location = Some(DeviceLocation {
             coords: if is_significant_change { coords } else { prev.coords },
+            altitude: if is_significant_change { altitude } else { prev.altitude },
             accuracy,
             course,
             timestamp,

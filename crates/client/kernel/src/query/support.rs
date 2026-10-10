@@ -100,6 +100,22 @@ impl<'a> World<'a> {
         })
     }
 
+    /// The floor in the leaf column under `at` nearest its height, across the
+    /// whole ground cell as a walker is: the top of a solid with a cell clear
+    /// over it, or the column's surface; none where nothing stands.
+    pub fn support_nearest(&self, at: &Pvf3) -> Answer<Option<f64>> {
+        let (z, cell) = (pvf3::to_real(pvf3::Z(at)), units(GROUND.cell()));
+        self.cell(GROUND.cell_of(LEAF_ZOOM, at).node().1, LEAF_ZOOM, |c| {
+            let runs = c.all();
+            let open = |top: f64| !filled(runs).any(|r| r.lo < top + cell && r.hi > top);
+            filled(runs)
+                .map(|r| r.hi)
+                .filter(|&top| open(top))
+                .chain(c.surface_top())
+                .min_by(|a, b| (a - z).abs().total_cmp(&(b - z).abs()))
+        })
+    }
+
     /// The bottom of the first solid over `at`, across the whole ground cell;
     /// none under open sky.
     pub fn ceiling_over(&self, at: &Pvf3) -> Answer<Option<f64>> {

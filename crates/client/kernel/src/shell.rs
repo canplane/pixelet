@@ -126,8 +126,8 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
 pub fn tracking_action(tracking: Tracking) {
     match tracking {
         Tracking::Recenter => {
-            // A fix's Z is altitude, absent on most and never the ground's height;
-            // the distance is kept.
+            // On the floor nearest the fix's altitude, or the surface where it has
+            // none; the distance is kept.
             if let Some(device) = off_center().device_coord {
                 go_to_ground(device, Motion::Snap);
             }

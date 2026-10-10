@@ -51,6 +51,22 @@ pub fn Y_TO_LAT(y: f64) -> f64 {
     lat_rad * RAD_TO_DEG
 }
 
+/// The geoid's height over the WGS84 ellipsoid at `lng`, `lat` (EGM2008,
+/// `geoid.spec.rs`), bilinear: what a GPS height, the ellipsoid's, is over
+/// sea level, the terrain's. One value for a whole tile is its base's, as
+/// the Mercator scale is.
+pub fn geoid_m(lng: f64, lat: f64) -> f64 {
+    use crate::space::coord::geoid::{GEOID_M, GEOID_STEP_DEG};
+    let cols = (360.0 / GEOID_STEP_DEG) as usize;
+    let rows = GEOID_M.len() / cols;
+    let (r, c) = ((90.0 - CLAMP_LAT(lat)) / GEOID_STEP_DEG, (NORMALIZE_LNG(lng) + 360.0) % 360.0 / GEOID_STEP_DEG);
+    let (r0, c0) = ((r as usize).min(rows - 2), c as usize);
+    let (fr, fc) = (r - r0 as f64, c - c0 as f64);
+    let at = |r: usize, c: usize| f64::from(GEOID_M[r * cols + c % cols]);
+    let row = |r: usize| at(r, c0) * (1.0 - fc) + at(r, c0 + 1) * fc;
+    row(r0) * (1.0 - fr) + row(r0 + 1) * fr
+}
+
 /// Longitude wraps, latitude clamps, altitude passes through.
 pub fn to_mercator(src: &G4326) -> G3857 {
     [LNG_TO_X(src[0]), LAT_TO_Y(src[1]), src[2]]
