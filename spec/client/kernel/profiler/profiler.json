@@ -14,7 +14,7 @@
     "chunk",
     "decor",
     "ghost_box",
-    "ghost_coplanar",
+    "ghost_box_coplanar",
     "ghost_decor",
     "skinned",
     "puck_zone",

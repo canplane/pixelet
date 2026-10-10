@@ -16,6 +16,7 @@ use crate::scene::indicator::gizmo_spec::frame;
 use crate::sched::edge::request_world_tick;
 use crate::view::frame::coord::to_world;
 use pxl_render::look::color::linear_rgb;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_guest::global::Global;
 
 /// Half the cross a point is drawn as.
@@ -23,7 +24,10 @@ const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
 const RING_SEGMENTS: u32 = 64;
 
-/// Segments as pairs of vertices: position about `about`, then color.
+/// Segments as pairs of vertices: position about `about`, then color. Outlines
+/// only, with no faces: a ring is an outline, and a cube's faces would hide the
+/// focus inside it.
+#[derive(PartialEq)]
 struct Sketch {
     about: V3,
     lines: Vec<f32>,
@@ -71,15 +75,17 @@ impl Sketch {
     }
 }
 
-fn sketch(focus: &Pvf3, heading: Option<f64>) -> Sketch {
+/// Into `s`, its lines cleared first.
+fn sketch(s: &mut Sketch, focus: &Pvf3, heading: Option<f64>) {
     let center = to_world(focus);
-    let mut s = Sketch { about: center, lines: Vec::new() };
-    let ground = World::now().floor_under(focus).value().flatten();
+    s.about = center;
+    s.lines.clear();
+    let ground = World::now().floor_under(focus, LEAF_ZOOM).value().flatten();
     let cell = floor3(&[center[0], center[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
     s.cube(cell, units(GROUND.cell()));
     s.point(center, linear_rgb(frame::focus::rgb));
     // First person the eye is the focus, and nothing about it is seen.
-    let Some(azimuth) = heading else { return s };
+    let Some(azimuth) = heading else { return };
     let (sin, cos) = libm::sincos(azimuth);
     let (east, north, up) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
     let (right, forward) = ([cos, -sin, 0.0], [sin, cos, 0.0]);
@@ -90,31 +96,32 @@ fn sketch(focus: &Pvf3, heading: Option<f64>) -> Sketch {
     s.point(tip(forward), linear_rgb(frame::forward::rgb));
     s.point(tip(north), linear_rgb(frame::north::rgb));
     s.point(tip(up), linear_rgb(frame::up::rgb));
-    s
 }
 
-/// What is drawn: the lines and what they are about.
-static GIZMOS: Global<Option<(V3, Vec<f32>)>> = Global::new();
+/// What is drawn, whether it is, and the next sketch, kept so a step allocates nothing.
+static GIZMOS: Global<(Sketch, bool, Sketch)> = Global::new();
 
-fn set_lines(at: V3, vertices: &[f32]) {
+fn set_lines(at: V3, lines: &[f32]) {
     let Some((_, _, scene, draw)) = kernel().parts() else { return };
-    scene.debug.set(draw, at, vertices);
+    scene.debug.set(draw, at, lines, lines.len());
 }
 
 /// `heading` is the camera's azimuth third person, none first person.
 pub fn frame_gizmo_step(show: bool, focus: Option<Pvf3>, heading: Option<f64>) {
-    let drawn = GIZMOS.get(|| None);
+    let empty = || Sketch { about: [0.0; 3], lines: Vec::new() };
+    let (drawn, shown, next) = GIZMOS.get(|| (empty(), false, empty()));
     let Some(center) = focus.filter(|_| show) else {
-        if drawn.take().is_some() {
+        if core::mem::take(shown) {
             set_lines([0.0; 3], &[]);
         }
         return;
     };
-    let s = sketch(&center, heading);
-    if drawn.as_ref().is_some_and(|(about, lines)| *about == s.about && *lines == s.lines) {
+    sketch(next, &center, heading);
+    if *shown && drawn == next {
         return;
     }
-    set_lines(s.about, &s.lines);
-    *drawn = Some((s.about, s.lines));
+    set_lines(next.about, &next.lines);
+    core::mem::swap(drawn, next);
+    *shown = true;
     request_world_tick();
 }

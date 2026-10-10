@@ -39,14 +39,6 @@ function Row(props: { k: string; v: string; warn?: boolean }) {
 
 const Note = ({ children }: { children: string }) => <Text style={[gauge.text, gauge.key]}>{children}</Text>;
 
-/** One of the panel's two groups, above its sections. */
-export const Title = ({ children, end, first }: { children: string; end?: ReactNode; first?: boolean }) => (
-  <View style={[gauge.title, first && gauge.titleFirst]}>
-    <Text style={[gauge.text, gauge.titleText]}>{children}</Text>
-    {end}
-  </View>
-);
-
 export const Head = ({ children, end }: { children: string; end?: ReactNode }) => (
   <View style={gauge.head}>
     <Text style={[gauge.text, gauge.headText]}>{children}</Text>
@@ -214,7 +206,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           />
           <Row k="kernel memory" v={`${round(kernel_memory().byteLength / 1048576)} MB`} />
           <Row k="buffers/arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}/${valueText("_mb", f.last.arena_mb)}`} />
-          <Row k="shadow/layers" v={`${f.last.tex_shadow_mb}/${f.last.tex_layers_mb} MB`} />
+          <Row k="depth/shadow/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_shadow_mb}/${f.last.tex_layers_mb} MB`} />
           {g.sheet.entries > 0 && <Row k="sheet" v={`${g.sheet.size}px ${g.sheet.entries} ${sheetPct}%`} warn={g.sheet.size > g.sheet.initial && sheetPct < ATLAS_SPARSE_PCT} />}
         </>
       )}
@@ -235,8 +227,5 @@ export const gauge = StyleSheet.create({
   recState: { flexDirection: "row", alignItems: "center", gap: 6 },
   recDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: alpha(color.white, 0.25) },
   recDotOn: { backgroundColor: color.profilerHalt },
-  title: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10, paddingBottom: 3, borderBottomWidth: 1, borderBottomColor: alpha(color.white, 0.2) },
-  titleFirst: { marginTop: 0 },
-  titleText: { fontSize: 11, fontWeight: "600", color: alpha(color.white, 0.75) },
   headLine: { flex: 1, borderTopWidth: 1, borderTopColor: alpha(color.white, 0.1) },
 });

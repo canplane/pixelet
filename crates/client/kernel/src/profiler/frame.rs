@@ -9,12 +9,33 @@ use xpute_guest::sched::tick::PHASES;
 
 use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, SUMMARY, WORST};
 use crate::profiler::word::{words, Words};
+use pxl_render::frame::draw::{
+    PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
+    PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
+};
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
 
 /// (draws, triangles) per pipeline, in CENSUS_TAGS' order.
 pub type DrawCensus = [[f64; 2]; CENSUS_LEN];
+
+/// The pipeline each tag counts, the tag its name: one a tag, so a tag added
+/// without its pipeline does not compile.
+pub const CENSUS_PIPELINES: [u32; CENSUS_LEN] = [
+    PIPELINE_CHUNK,
+    PIPELINE_DECOR,
+    PIPELINE_GHOST_BOX,
+    PIPELINE_GHOST_BOX_COPLANAR,
+    PIPELINE_GHOST_DECOR,
+    PIPELINE_SKINNED,
+    PIPELINE_PUCK_ZONE,
+    PIPELINE_PUCK_BEACON,
+    PIPELINE_BADGE,
+    PIPELINE_DEBUG,
+    PIPELINE_CHUNK_COARSE,
+    PIPELINE_IMPOSTOR,
+];
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

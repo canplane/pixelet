@@ -7,13 +7,13 @@
 
 import { CaretDown, CaretUp } from "phosphor-react-native";
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { create } from "zustand";
 
 import { alpha, color } from "@/shared/ui/theme.ts";
-import { Title } from "./profiler/gauge.tsx";
+import { gauge } from "./profiler/gauge.tsx";
 
-export type FoldName = "gizmo" | "view" | "performance";
+export type FoldName = "view" | "performance" | "world_gizmo" | "camera_gizmo";
 
 export const useOpenFold = create<{ open: FoldName | null }>(() => ({ open: null }));
 
@@ -22,22 +22,18 @@ const toggle = (name: FoldName) => useOpenFold.setState(({ open }) => ({ open: o
 export const HINT_INK = alpha(color.white, 0.55);
 
 /** A panel whose title opens and closes it; `end` sits by the caret. */
-export function Fold({ name, title, end, children }: { name: FoldName; title: string; end?: ReactNode; children: ReactNode }) {
+export function Fold({ name, title, end, children }: { name: FoldName; title: string; end?: ReactNode; children?: ReactNode }) {
   const open = useOpenFold((s) => s.open === name);
   return (
     <View style={styles.panel}>
       <Pressable onPress={() => toggle(name)} accessibilityRole="button" aria-expanded={open}>
-        <Title
-          first
-          end={
-            <View style={styles.end}>
-              {open && end}
-              {open ? <CaretUp size={12} color={HINT_INK} /> : <CaretDown size={12} color={HINT_INK} />}
-            </View>
-          }
-        >
-          {title}
-        </Title>
+        <View style={styles.title}>
+          <Text style={[gauge.text, styles.titleText]}>{title}</Text>
+          <View style={styles.end}>
+            {open && end}
+            {open ? <CaretUp size={12} color={HINT_INK} /> : <CaretDown size={12} color={HINT_INK} />}
+          </View>
+        </View>
       </Pressable>
       {open && children}
     </View>
@@ -55,5 +51,7 @@ const styles = StyleSheet.create({
     backgroundColor: alpha(color.black, 0.72),
     pointerEvents: "box-none",
   },
+  title: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  titleText: { fontSize: 11, fontWeight: "600", color: alpha(color.white, 0.75) },
   end: { flexDirection: "row", alignItems: "center", gap: 6 },
 });

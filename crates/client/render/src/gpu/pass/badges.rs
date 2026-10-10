@@ -208,6 +208,11 @@ pub struct BadgePass {
 }
 
 impl BadgePass {
+    /// Its regions' depth's bytes, one f32 a pixel.
+    pub fn depth_bytes(&self) -> f64 {
+        self.regions_size.0 as f64 * self.regions_size.1 as f64 * 4.0
+    }
+
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> BadgePass {
         let sampler = object();
         g.sampler(sampler, filter::NEAREST, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);

@@ -17,7 +17,8 @@ import { coverage, frame } from "./gizmo.spec.ts";
 
 interface Look {
   rgb: number;
-  dashed: boolean;
+  alpha?: number;
+  dashed?: boolean;
 }
 
 const FRAME: Record<keyof typeof frame, string> = {
@@ -28,22 +29,25 @@ const FRAME: Record<keyof typeof frame, string> = {
   up: "up",
 };
 
-// Highest first: a shared stretch is drawn in the highest.
 const COVERAGE: Record<keyof typeof coverage, string> = {
-  shard: "a drawn piece's shard",
-  tile: "a drawn piece's tile",
-  no_tile: "goal, no tile on its line",
-  floor_only: "goal, only the floor's tile",
-  unbuilt: "goal, mesh not built",
-  drawn_from_floor: "drawn from the floor's tile",
   drawn: "drawn",
+  drawn_from_floor: "drawn from the floor's tile",
+  unbuilt: "goal, mesh not built",
+  floor_only: "goal, only the floor's tile",
+  no_tile: "goal, no tile on its line",
+  tile: "a drawn piece's tile",
+  shard: "a drawn piece's shard",
 };
 
-function Rows<K extends string>({ looks, labels }: { looks: Record<K, Look>; labels: Record<K, string> }) {
-  return (Object.keys(labels) as K[]).map((k) => (
+const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0")}`;
+
+/** In the spec's order, or `reversed` to list the one drawn over the rest first. */
+function Rows<K extends string>({ looks, labels, reversed }: { looks: Record<K, Look>; labels: Record<K, string>; reversed?: boolean }) {
+  const keys = Object.keys(looks) as K[];
+  return (reversed ? keys.reverse() : keys).map((k) => (
     <View key={k} style={styles.row}>
       <View style={styles.chip}>
-        <View style={[styles.swatch, { borderColor: `#${looks[k].rgb.toString(16).padStart(6, "0")}`, borderStyle: looks[k].dashed ? "dashed" : "solid" }]} />
+        <View style={[styles.swatch, { borderColor: hex(looks[k].rgb), borderStyle: looks[k].dashed ? "dashed" : "solid", opacity: looks[k].alpha ?? 1 }]} />
       </View>
       <Text style={gauge.text}>{labels[k]}</Text>
     </View>
@@ -54,18 +58,18 @@ export function GizmoLegend() {
   const show = useKernel((s) => s.settings[SETTINGS.world_gizmo.key] === 1);
   if (!show) return null;
   return (
-    <Fold name="gizmo" title="World gizmo">
+    <Fold name="world_gizmo" title="World Gizmo">
       <Head>Frame</Head>
       <Rows looks={frame} labels={FRAME} />
       <Head>Coverage</Head>
-      <Rows looks={coverage} labels={COVERAGE} />
+      <Rows looks={coverage} labels={COVERAGE} reversed />
     </Fold>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  // The lines are drawn over the world, so a swatch stands on a light ground, where black reads too.
-  chip: { width: 28, height: 12, justifyContent: "center", paddingHorizontal: 3, borderRadius: 2, backgroundColor: alpha(color.white, 0.55) },
+  // A mid gray, where both the black marks and the faint white one read.
+  chip: { width: 28, height: 12, justifyContent: "center", paddingHorizontal: 3, borderRadius: 2, backgroundColor: "#808080" },
   swatch: { borderTopWidth: 2 },
 });

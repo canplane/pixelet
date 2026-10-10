@@ -223,7 +223,9 @@ pub const PIPELINE_CLOUD_MARCH: u32 = 36;
 pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 37;
 /// The billboards' regions, numbered, into a target of their own (pass/badges.rs).
 pub const PIPELINE_BADGE_REGION: u32 = 39;
-pub const PIPELINES: u32 = 40;
+/// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
+pub const PIPELINE_DEBUG_FACE: u32 = 40;
+pub const PIPELINES: u32 = 41;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -518,14 +520,26 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[],
             &[frame(BOTH), badge_group(DEPTH)],
         ),
-        // Hidden where the world stands nearer, pulled toward the eye as the
-        // coplanar ghost is, so a line laid on the ground stays over it.
+        // Against the gizmos' own faces, not the world's depth.
         PIPELINE_DEBUG => record(
             Head {
                 blend: ALPHA,
-                ..blended(SHADER_DEBUG, CULL_NONE, 8, 2.0)
+                ..blended(SHADER_DEBUG, CULL_NONE, 0, 0.0)
             },
             &[vec![56, PER_INSTANCE, 3, 0, 0, F32X3, 1, 12, F32X4, 2, 28, F32X3]],
+            &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM]])],
+        ),
+        // Pushed back by their slope as a rasterizer's polygon offset is, so
+        // the lines that bound a face stay in front of it.
+        PIPELINE_DEBUG_FACE => record(
+            Head {
+                cull: CULL_NONE,
+                depth_compare: GREATER,
+                depth_bias: i(-8),
+                depth_bias_slope: f(-2.0),
+                ..depth_only(SHADER_DEBUG)
+            },
+            &[lane(12, 0, F32X3)],
             &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM]])],
         ),
         PIPELINE_CAMERA_GRID => record(

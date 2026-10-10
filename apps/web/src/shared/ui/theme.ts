@@ -136,8 +136,8 @@ export const textScale = { chrome: 1.2, mark: 1 } as const;
 
 export const sectionTitle = { ...textStyle.caption, fontWeight: weight.medium, letterSpacing: 0.6, textTransform: "uppercase" } as const;
 
-/** The map screen's layers, back to front: the dock and toasts, the scrim, the top chrome, a sheet. */
-export const layer = { bottom: 40, scrim: 49, chrome: 50, sheet: 70 } as const;
+/** The map screen's layers, back to front: the dock and toasts, the scrim, the top chrome, the debug panels, a sheet. */
+export const layer = { bottom: 40, scrim: 49, chrome: 50, debug: 51, sheet: 70 } as const;
 
 export const chrome = {
   inset: 16,

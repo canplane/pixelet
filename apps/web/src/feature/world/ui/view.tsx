@@ -73,7 +73,7 @@ export function WorldView() {
 
 const styles = StyleSheet.create({
   root: { overflow: "hidden", backgroundColor: "black" },
-  between: { position: "absolute", left: chrome.inset, zIndex: layer.chrome, alignItems: "flex-start", pointerEvents: "box-none" },
+  between: { position: "absolute", left: chrome.inset, zIndex: layer.debug, alignItems: "flex-start", pointerEvents: "box-none" },
   // The dock's width chain needs a real ancestor width to grow into.
   bottom: { width: "100%", minWidth: 0, alignItems: "center" },
 });

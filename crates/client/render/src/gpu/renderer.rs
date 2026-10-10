@@ -17,7 +17,9 @@ use crate::frame::draw::{
     uniform_of, Lists, CHUNK_UNIT, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX,
     PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
-use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
+use crate::frame::shader::record::{
+    FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_DEBUG_FACE, PIPELINE_SKY,
+};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, frame_begin, frame_commit, frame_room, gpu, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
@@ -90,6 +92,7 @@ const SPAN_PREPASS: usize = GpuSpanName::prepass as usize;
 const SPAN_AO: usize = GpuSpanName::ao as usize;
 const SPAN_WORLD: usize = GpuSpanName::world as usize;
 const SPAN_BADGES: usize = GpuSpanName::badges as usize;
+const SPAN_DEBUG: usize = GpuSpanName::debug as usize;
 const SPAN_CASES: usize = GpuSpanName::cases as usize;
 
 type Frame = [f32; FRAME_FLOATS];
@@ -574,10 +577,16 @@ pub fn surface_closed(s: Surface) {
     }
 }
 
-/// Each set of lines takes its own translation, so a buffer and a group a set,
-/// grown to the most sets a frame has drawn. The camera grid follows them.
+/// The dev gizmos, over the finished world in passes of their own: their
+/// faces into the world's depth, cleared once the world is done with it, then
+/// their lines against those faces alone, so a gizmo hides gizmos and nothing
+/// of the world hides one; the camera grid follows them.
+///
+/// Each set takes its own translation, so a buffer and a group a set, grown
+/// to the most sets a frame has drawn.
 struct DebugPass {
     built: Built,
+    faces: Built,
     frame_group: u32,
     sets: Vec<(u32, u32)>,
     grid: Built,
@@ -587,6 +596,7 @@ struct DebugPass {
 impl DebugPass {
     fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> DebugPass {
         let built = pipelines.build(g, PIPELINE_DEBUG, format::CANVAS);
+        let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, format::CANVAS);
         let frame_group = object();
         g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
         let grid = pipelines.build(g, PIPELINE_CAMERA_GRID, format::CANVAS);
@@ -597,6 +607,7 @@ impl DebugPass {
         g.bind_group(grid_group, grid.layouts[0], &entries);
         DebugPass {
             built,
+            faces,
             frame_group,
             sets: Vec::new(),
             grid,
@@ -616,31 +627,57 @@ impl DebugPass {
         }
     }
 
-    fn draw(&self, g: &Gpu, pass: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks) {
-        let mut bound = false;
-        for (k, d) in draws.of(PIPELINE_DEBUG).enumerate() {
-            let (Some((block, _, _)), count) = (blocks.get(d[0]), d[1]) else { continue };
-            if count == 0 {
-                continue;
-            }
-            let (buffer, group) = self.sets[k];
-            let u = uniform_of(uniforms, d);
-            g.write_buffer(buffer, 0, bytes(&[u[0], u[1], u[2], 0.0]));
-            if !bound {
-                g.set_pipeline(pass, self.built.pipeline);
-                g.set_bind_group(pass, 0, self.frame_group, &[]);
-                bound = true;
-            }
-            g.set_bind_group(pass, 1, group, &[]);
-            g.set_vertex_buffer(pass, 0, block, 0, count * 28);
-            // A segment an instance: its two vertices, read as one.
-            g.draw(pass, 6, count / 2, 0, 0);
+    /// `depth` is the world's, which nothing reads after this.
+    #[allow(clippy::too_many_arguments)]
+    fn draw(&self, g: &Gpu, encoder: u32, canvas: u32, depth: u32, draws: &Draws, uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) {
+        let grid = draws.of(PIPELINE_CAMERA_GRID).len() > 0;
+        if draws.of(PIPELINE_DEBUG).len() == 0 && !grid {
+            return;
         }
-        if draws.of(PIPELINE_CAMERA_GRID).len() > 0 {
+        // Each set held: its own uniform and bind group, its line vertices and its face vertices.
+        let sets = || {
+            draws.of(PIPELINE_DEBUG).enumerate().filter_map(|(k, d)| {
+                let (block, _, _) = blocks.get(d[0])?;
+                (d[1] > 0).then_some((k, d, block, d[1], d[2]))
+            })
+        };
+        for (k, d, ..) in sets() {
+            let u = uniform_of(uniforms, d);
+            g.write_buffer(self.sets[k].0, 0, bytes(&[u[0], u[1], u[2], 0.0]));
+        }
+        // With no faces the lines' pass clears the depth itself.
+        let faced = sets().any(|s| s.4 > 0);
+        if faced {
+            let pass = object();
+            g.pass(pass, encoder, &pass_desc(0, load::CLEAR, depth, load::CLEAR, 0.0, stamp.pass()));
+            g.set_pipeline(pass, self.faces.pipeline);
+            g.set_bind_group(pass, 0, self.frame_group, &[]);
+            for (k, _, block, lines, faces) in sets().filter(|s| s.4 > 0) {
+                g.set_bind_group(pass, 1, self.sets[k].1, &[]);
+                g.set_vertex_buffer(pass, 0, block, lines * 28, faces * 12);
+                g.draw(pass, faces, 1, 0, 0);
+            }
+            g.end(pass);
+            release(pass);
+        }
+        let pass = object();
+        let depth_load = if faced { load::LOAD } else { load::CLEAR };
+        g.pass(pass, encoder, &pass_desc(canvas, load::LOAD, depth, depth_load, 0.0, stamp.pass()));
+        g.set_pipeline(pass, self.built.pipeline);
+        g.set_bind_group(pass, 0, self.frame_group, &[]);
+        for (k, _, block, lines, _) in sets() {
+            g.set_bind_group(pass, 1, self.sets[k].1, &[]);
+            g.set_vertex_buffer(pass, 0, block, 0, lines * 28);
+            // A segment an instance: its two vertices, read as one.
+            g.draw(pass, 6, lines / 2, 0, 0);
+        }
+        if grid {
             g.set_pipeline(pass, self.grid.pipeline);
             g.set_bind_group(pass, 0, self.grid_group, &[]);
             g.draw(pass, 3, 1, 0, 0);
         }
+        g.end(pass);
+        release(pass);
     }
 }
 
@@ -1058,10 +1095,10 @@ impl Renderer {
         self.draw_meshes(g, pass, &draws, PIPELINE_GHOST_BOX_COPLANAR, Some(self.ghost[1].pipeline), None);
         let mut bound = 0;
         self.decor.draw_ghosts(g, pass, &draws, b, (self.models.frame, &mut bound));
-        self.debug.draw(g, pass, &draws, uniforms, b);
         g.end(pass);
         release(pass);
         self.badges.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_BADGES]);
+        self.debug.draw(g, encoder, canvas_view, world.depth_view, &draws, uniforms, b, &mut stamps[SPAN_DEBUG]);
         self.draw_cases(g, encoder, &draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
         let (mut gpu_ms, mut gpu_spans) = (0.0, [0.0; GPU_SPAN_NAMES.len()]);
         if q != 0 {
@@ -1160,6 +1197,8 @@ impl Renderer {
                 PIPELINE_PUCK_ZONE => 12 * d[1],
                 PIPELINE_PUCK_BEACON => 8,
                 PIPELINE_BADGE => 2 * d[1],
+                // Two a segment, and the faces'.
+                PIPELINE_DEBUG => d[1] + d[2] / 3,
                 _ => 0,
             };
             triangles += tris;
@@ -1175,7 +1214,8 @@ impl Renderer {
             triangles: triangles as f64,
             buffers: b.count as f64,
             buffer_bytes: b.bytes as f64,
-            depth_mb: round(px * 4.0 / MB),
+            // The depth targets at the world's size: its own, one f32 a pixel, AO's and the badges' regions'.
+            depth_mb: round((px * 4.0 + self.ao.depth_bytes() + self.badges.depth_bytes()) / MB),
             shadow_mb: round(self.shadow.bytes as f64 / MB),
             layers_mb: round(self.layers.bytes as f64 / MB),
             px,
