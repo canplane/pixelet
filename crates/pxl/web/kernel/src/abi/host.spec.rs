@@ -59,4 +59,4 @@ pub const SETTINGS_PATH: &str = "settings";
 /// The placed objects' file below STORAGE. It carries the encoding's version: a blob of
 /// an older one is not read, so bump it whenever a change makes an older entry mean
 /// something other than it meant when it was written (layer/object/store.rs).
-pub const OBJECTS_PATH: &str = "object/v11";
+pub const OBJECTS_PATH: &str = "object/v10";

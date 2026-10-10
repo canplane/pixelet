@@ -1,7 +1,7 @@
 // pxl-render/mesh/paint/terrain/adapter.rs
 
 //! A terrain page's chunk as the render pipeline reads it: per cell one
-//! material, its look's, and one top, painted as a column
+//! material (the last non-void channel wins) and one top, painted as a column
 //! from a floor shared by the chunk. Decks stand off the column as runs of
 //! their own; a bore or a cutting takes the air over its floor out of the
 //! column.
@@ -10,18 +10,16 @@
 
 use pxl_spec::bake::constant::{BAND_CELLS, U_PER_CELL};
 use pxl_spec::bake::deck::{Decks, Occupies, Over};
-use pxl_spec::bake::format::GroundCell;
-use pxl_spec::cell::color;
-use pxl_spec::cell::cube::cube_types::{ground, sentinel, Ground};
-use pxl_spec::cell::cube::Kind;
-use pxl_spec::cell::object::PlaceableCube;
+use pxl_spec::bake::format::{ch_index, GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::bake::ground::{shown_ground, ShownGround, BASE};
+use pxl_spec::bake::pack::{unpack, GroundCell};
+use pxl_spec::cell::cube::cube_types;
 use pxl_spec::procedural::{pier_stands, Frame};
 use pxl_spec::space::adapter::epsg3857::u_per_m;
 use pxl_spec::space::hierarchy::{ancestor_of, offset_in};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 
-use crate::mesh::paint::palette::shader_meta::rgb255;
-use crate::mesh::paint::palette::tex_array::LAYER_IDX;
+use crate::mesh::paint::palette::shader_meta::{rgb255, GROUND_LAYER_META};
 use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use crate::mesh::volume::{pack_material, MaterialClasses, Volumes, Voxel, NO_LAYER};
 use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
@@ -31,45 +29,75 @@ use std::sync::LazyLock;
 const TERRAIN_Z_MARGIN: i32 = 4;
 const COL_SPAN2: usize = (COL_SPAN * COL_SPAN) as usize;
 
-/// Each byte's material word and layer: a look's, or unknown's for a byte
-/// that is none.
+/// In `GROUND_CH_KEYS`' order, which is the paint order: a later non-void type wins.
+pub const CHANNELS: usize = GROUND_CH_KEYS.len();
+
+const VOID: u8 = 0;
+
+/// Flat arrays rather than a map: the per-cell decode was dominated by map
+/// lookups. `has` is separate because [0,0,0] and layer 0 are real.
+#[derive(Clone, Copy)]
+pub struct Channel {
+    pub rgb: [[u8; 3]; 256],
+    pub layer: [u8; 256],
+    pub has: [bool; 256],
+    pub class: u8,
+}
+
+impl Default for Channel {
+    fn default() -> Self {
+        Channel {
+            rgb: [[0; 3]; 256],
+            layer: [0; 256],
+            has: [false; 256],
+            class: 0,
+        }
+    }
+}
+
 pub struct Materials {
-    looks: [Option<(u32, u8)>; 256],
-    unknown: (u32, u8),
+    pub channels: [Channel; CHANNELS],
+    pub base_rgb: [u8; 3],
+    pub base_layer: u8,
+    pub base_class: u8,
 }
 
 pub static MATERIALS: LazyLock<Materials> = LazyLock::new(Materials::of_palette);
 
-fn class_of(kind: Kind) -> u8 {
-    match kind {
-        Kind::Land => MaterialClasses::LAND,
-        Kind::Water => MaterialClasses::WATER,
-        Kind::Structure => MaterialClasses::STRUCTURE,
-        Kind::Transport => MaterialClasses::TRANSPORT,
+fn class_of(ch: GroundChannelKey) -> u8 {
+    match ch {
+        GroundChannelKey::LAND => MaterialClasses::LAND,
+        GroundChannelKey::WATER => MaterialClasses::WATER,
+        GroundChannelKey::STRUCTURE => MaterialClasses::STRUCTURE,
+        GroundChannelKey::TRANSPORT => MaterialClasses::TRANSPORT,
     }
 }
 
 impl Materials {
-    /// Packed `0xCC_RRGGBB`; none for a byte that is no look.
-    pub fn of(&self, cell: GroundCell) -> Option<(u32, u8)> {
-        self.looks[cell as usize]
-    }
-
-    /// What a cell draws as: a byte that is no look as unknown.
-    pub fn drawn(&self, cell: GroundCell) -> (u32, u8) {
-        self.of(cell).unwrap_or(self.unknown)
+    /// Packed `0xCC_RRGGBB`; none for a type the palette gives no color.
+    pub fn of(&self, ch: GroundChannelKey, t: u8) -> Option<(u32, u8)> {
+        let c = &self.channels[ch_index(ch)];
+        let t = t as usize;
+        c.has[t].then(|| (pack_material(c.class, c.rgb[t]), c.layer[t]))
     }
 
     fn of_palette() -> Materials {
-        let mut looks = [None; 256];
-        for g in Ground::ALL {
-            let rgb = color::ground(g as u8).map_or([0; 3], |s| rgb255(s.rgb));
-            looks[g as usize] = Some((pack_material(class_of(g.kind()), rgb), LAYER_IDX(PlaceableCube::Ground(g)) as u8));
+        let mut channels = [Channel::default(); CHANNELS];
+        for (dst, ch) in channels.iter_mut().zip(GROUND_CH_KEYS) {
+            dst.class = class_of(ch);
         }
-        let rgb = color::sentinel(sentinel::unknown).map_or([0; 3], |s| rgb255(s.rgb));
+        for m in GROUND_LAYER_META.iter() {
+            let (dst, t) = (&mut channels[ch_index(m.ch_key)], m.type_id as usize);
+            (dst.rgb[t], dst.layer[t], dst.has[t]) = (rgb255(m.rgb), m.layer_index as u8, true);
+        }
+        let base = &channels[ch_index(BASE.channel)];
+        let t = BASE.type_id as usize;
+        let (base_rgb, base_layer) = if base.has[t] { (base.rgb[t], base.layer[t]) } else { ([0; 3], NO_LAYER as u8) };
         Materials {
-            looks,
-            unknown: (pack_material(MaterialClasses::LAND, rgb), NO_LAYER as u8),
+            channels,
+            base_rgb,
+            base_layer,
+            base_class: class_of(BASE.channel),
         }
     }
 }
@@ -93,14 +121,19 @@ fn collect_decks(over: &mut Vec<(usize, usize, Over)>, s: &PageSource, corner: [
 }
 
 /// A building's concrete: nothing in the catalog is a pier's own.
-const PIER: GroundCell = ground::building;
+const PIER: (GroundChannelKey, u8) = (GroundChannelKey::STRUCTURE, cube_types::structure::building);
 
 #[derive(Clone, Copy)]
 pub struct PageView<'a> {
     pub cells: &'a [GroundCell],
     pub ele: &'a [i16],
     pub decks: &'a Decks,
+    /// Where the source has nothing at all: no ground is drawn from it.
+    pub void: bool,
 }
+
+/// A column's height where its page is void: it has no ground.
+const NO_GROUND: i16 = i16::MIN;
 
 /// The page drawn in place of this one (its own, or a coarser one whose cell
 /// stands for `n` × `n` of its cells until its own comes).
@@ -140,8 +173,8 @@ pub struct ChunkSample {
     pub spans: Vec<Span>,
     /// `[lo, hi)`, empty where none does.
     pub bore: Vec<Bore>,
-    /// Each column's look: where a pier stands is the data's, and a void one has no ground.
-    look: Vec<GroundCell>,
+    /// Each column's shown ground, nothing hidden: where a pier stands is the data's.
+    shown: Vec<ShownGround>,
     over: Vec<(usize, usize, Over)>,
 }
 
@@ -171,7 +204,7 @@ impl Default for ChunkSample {
             span_at: vec![0; COL_SPAN2 + 1],
             spans: Vec::new(),
             bore: vec![Bore::default(); COL_SPAN2],
-            look: vec![ground::BASE; COL_SPAN2],
+            shown: vec![BASE; COL_SPAN2],
             over: Vec::new(),
         }
     }
@@ -202,30 +235,45 @@ impl ChunkSample {
                 let (x, y) = (source.origin[0] + x, source.origin[1] + y);
                 let (tx, ty) = (x.div_euclid(n as i64) as i32, y.div_euclid(n as i64) as i32);
                 // Only the elevation is padded past the page. An apron cell off it keeps its
-                // height, all the face mask reads, and the base look nothing draws.
+                // height, all the face mask reads, and a base material nothing draws.
                 let on_page = (0..=last).contains(&tx) && (0..=last).contains(&ty);
-                let cell = if on_page { page.cells[GROUND.cell_index(tx as u32, ty as u32) as usize] } else { ground::BASE };
-                self.look[i] = cell;
-                (self.material[i], self.layer_idx[i]) = tables.drawn(cell);
+                let types = if on_page {
+                    unpack(page.cells[GROUND.cell_index(tx as u32, ty as u32) as usize])
+                } else {
+                    [VOID; 4]
+                };
+                self.shown[i] = shown_ground(|k| u32::from(types[ch_index(k)]));
 
-                // An apron cell off the page has no look and takes the raw height.
+                let (mut material, mut layer) = (pack_material(tables.base_class, tables.base_rgb), tables.base_layer);
+                for (ch, &t) in types.iter().enumerate() {
+                    if t == VOID {
+                        continue;
+                    }
+                    if let Some(m) = tables.of(GROUND_CH_KEYS[ch], t) {
+                        (material, layer) = m;
+                    }
+                }
+                self.material[i] = material;
+                self.layer_idx[i] = layer;
+
+                // An apron cell off the page has no channels and takes the raw height.
                 let lanes = on_page.then_some(GroundLanes { cells: page.cells });
                 let center = |v: i64| (v as f64 + 0.5) / n as f64;
+                if page.void {
+                    self.ele[i] = NO_GROUND;
+                    continue;
+                }
                 let ele = ground_ele_at(page.ele, lanes, center(x), center(y)) as i32;
                 self.ele[i] = ele as i16;
                 // The floor is the chunk's own: a neighbor's valley must not drop it.
-                if inner && cell != sentinel::void {
+                if inner {
                     min_ele = min_ele.min(ele);
                 }
             }
         }
         self.read_decks(around, first)?;
         let bored = self.bore.iter().filter(|b| b.air[0] < b.air[1]).map(|b| b.air[0] - 1).min().unwrap_or(i32::MAX);
-        // A chunk with no surface has no floor: nothing of it is drawn from one.
-        self.floor = match min_ele.min(bored) {
-            i32::MAX => i32::MIN,
-            lowest => (lowest - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32,
-        };
+        self.floor = (min_ele.min(bored) - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
         Ok(())
     }
 
@@ -273,7 +321,7 @@ impl ChunkSample {
             while i < over.len() && over[i].0 == col {
                 let o = over[i].2;
                 i += 1;
-                let Some((slab, slab_layer)) = tables.of(o.kind) else { continue };
+                let Some((slab, slab_layer)) = tables.of(GroundChannelKey::TRANSPORT, o.kind) else { continue };
                 let ground = self.ele[col] as i32;
                 let (slab_at, pier_at) = match o.occupies(ground, cell_per_m) {
                     Occupies::Grade => {
@@ -303,7 +351,7 @@ impl ChunkSample {
                     },
                 )?;
                 let column = over[col_from..].iter().take_while(|c| c.0 == col).map(|c| c.2);
-                if let (Some([lo, hi]), Some((pier, pier_layer))) = (pier_at.and_then(|p| pier_stands(p, self.look[col], column, ground, cell_per_m)), tables.of(PIER)) {
+                if let (Some([lo, hi]), Some((pier, pier_layer))) = (pier_at.and_then(|p| pier_stands(p, self.shown[col], column, ground, cell_per_m)), tables.of(PIER.0, PIER.1)) {
                     try_push(
                         &mut self.spans,
                         Span {
@@ -338,13 +386,8 @@ impl ChunkSample {
     /// The column's ground as inclusive runs: a top face at `ele` is cells up to
     /// `ele − 1` (`hi − 1` below). Through a bore: the ground under its floor,
     /// the way on the floor's cell, and the ground standing over its air.
-    /// Whether column `i` has ground: a void cell's terrain gives no surface.
-    pub fn has_ground(&self, i: usize) -> bool {
-        self.look[i] != sentinel::void
-    }
-
     pub fn ground_runs<E>(&self, i: usize, from: i32, to: i32, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
-        if !self.has_ground(i) {
+        if self.ele[i] == NO_GROUND {
             return Ok(());
         }
         let top = (self.ele[i] as i32).min(to);
@@ -385,7 +428,3 @@ impl ChunkSample {
         true
     }
 }
-
-#[cfg(test)]
-#[path = "adapter.test.rs"]
-mod test;

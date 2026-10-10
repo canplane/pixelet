@@ -38,7 +38,7 @@ use crate::gpu::shadow::Shadow;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
-use crate::look::environment::{ENV_AIR, ENV_FOG_FAR, ENV_FOG_NEAR, ENV_OTHER_LIGHT, ENV_STARS};
+use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -59,12 +59,11 @@ const SHADOW_TEXEL: usize = FRAME_AT[9];
 const VIGNETTE: usize = FRAME_AT[10];
 const AO_STRENGTH: usize = FRAME_AT[11];
 const SCREEN_AO: usize = FRAME_AT[12];
-const EARTH_SHARE: usize = FRAME_AT[13];
-const LIGHT_VIEW_PROJ: usize = FRAME_AT[14];
-const OTHER: usize = FRAME_AT[15];
-pub(crate) const PLANET: usize = FRAME_AT[16];
-pub(crate) const GLOBE: usize = FRAME_AT[17];
-const UP: usize = FRAME_AT[18];
+const LIGHT_VIEW_PROJ: usize = FRAME_AT[13];
+const OTHER: usize = FRAME_AT[14];
+pub(crate) const PLANET: usize = FRAME_AT[15];
+pub(crate) const GLOBE: usize = FRAME_AT[16];
+const UP: usize = FRAME_AT[17];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_FLOATS: usize = 16;
@@ -682,7 +681,7 @@ impl Renderer {
         g.buffer(sky_buffer, word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let shadow = Shadow::new(g, handheld);
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buffer);
-        let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer, sky_buffer);
+        let atmosphere = Atmosphere::new(g, &mut pipelines, frame_buffer);
         let air = atmosphere.entries();
         let stars = StarPass::new(g, &mut pipelines, frame_buffer);
         let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
@@ -844,7 +843,6 @@ impl Renderer {
         u[AO_STRENGTH] = s[STAGE_AT::AO_STRENGTH] as f32;
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
-        u[EARTH_SHARE] = s[STAGE_AT::EARTH_SHARE] as f32;
         if self.screen_ao {
             self.ao.lay_out(g, &proj, width, height);
         }
@@ -1079,9 +1077,6 @@ impl Renderer {
             u[CAMERA_POS] = (CASE_EYE[0] + actor[0]) as f32;
             u[CAMERA_POS + 1] = (CASE_EYE[1] + actor[1]) as f32;
             u[CAMERA_POS + 2] = (CASE_EYE[2] + actor[2]) as f32;
-            // No fog: near and far pushed out of reach.
-            u[ENV + ENV_FOG_NEAR] = 1e9;
-            u[ENV + ENV_FOG_FAR] = 2e9;
             u[VIEWPORT] = s.width as f32;
             u[VIEWPORT + 1] = s.height as f32;
             u[SHADOW_STRENGTH] = 0.0;

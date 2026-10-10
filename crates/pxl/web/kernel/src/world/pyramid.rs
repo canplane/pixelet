@@ -138,15 +138,14 @@ impl<L: Layer> Pyramid<L> {
 
     /// Whether every page the view needs has its answer; speculation aside.
     pub fn answered(&self) -> bool {
-        self.asks.iter().all(|(&p, a)| a.why == Why::Hint || self.paging.answered(p))
+        self.asks.iter().all(|(&p, a)| a.why == Why::Hint || self.paging.has_answer(p))
     }
 
     pub fn adopt(&mut self, p: Page, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
         self.admit(p, |record| L::receive(record, pkt, phases))
     }
 
-    /// The bucket has no object for `p`: the page over it says its ground,
-    /// and at the source's top, where none is over it, `Layer::empty`.
+    /// No object for `p`: the page over it says its ground; at the source's top, `Layer::empty`.
     pub fn absent(&mut self, p: Page) {
         let top = L::TOP.or(floor::top()).unwrap_or(TOP_Z);
         match L::empty() {

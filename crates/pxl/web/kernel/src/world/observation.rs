@@ -44,7 +44,7 @@ pub fn observation() -> Option<Observation> {
     Some(Observation {
         eye,
         frustum: Some(frustum_of_view()),
-        far: reach_at(height).min(fault_radius(top)),
+        far: reach_at(eye[2]).min(fault_radius(top)),
         top,
         planet: globe().radius_u(),
         ground: eye[2] - height,

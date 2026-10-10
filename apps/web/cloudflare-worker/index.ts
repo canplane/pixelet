@@ -71,8 +71,8 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * in how long a name they have and which shared object they keep beside it:
  *
  * - `terrain/<version>/<quadkey>`, 5 to 15 digits, a page at every zoom of
- *   the pyramid from z16 up to `TOP_Z`. A page with nothing drawn in it is
- *   no object.
+ *   the pyramid from z16 up to `TOP_Z`. Plus the shared
+ *   `_ocean` page every zoom's open water reads.
  * - `poi/<version>/<quadkey>`, 5 to 15 digits, a page at every zoom of the
  *   pyramid as terrain's are: how many places stand in each of its cells. A
  *   page with none is no object.
@@ -113,7 +113,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
 const VERSION = String.raw`v\d{1,3}(?:\.\d{4}-\d{2}-\d{2}\.\d+)?`;
 const KEY_RE = new RegExp(
   String
-    .raw`^(?:terrain\/${VERSION}\/[0-3]{5,15}|poi\/${VERSION}\/[0-3]{5,15}|geocode\/${VERSION}\/(?:_dict|[0-3]{11})|earth\/${VERSION}\/[0-3]{5}|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$`,
+    .raw`^(?:terrain\/${VERSION}\/(?:_ocean|[0-3]{5,15})|poi\/${VERSION}\/[0-3]{5,15}|geocode\/${VERSION}\/(?:_dict|[0-3]{11})|earth\/${VERSION}\/[0-3]{5}|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$`,
 );
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
@@ -224,12 +224,13 @@ export default {
     // Rejected before R2 is touched — see KEY_RE. Same 404 a real miss
     // returns, deliberately: a distinct status would tell a prober which of
     // its guesses were the right shape, and the client cannot act on the
-    // difference anyway (the kernel draws a missing terrain page from the one
-    // over it, and layer/poi.rs takes it as an empty page).
+    // difference anyway (the kernel's layer/terrain/page.rs turns any 404
+    // into the ocean tile, and layer/poi.rs into an empty page).
     if (!KEY_RE.test(key)) return new Response("not found", { status: 404 });
 
     // A missing object is not an error here: open-ocean pages are never
-    // baked, and the client draws them from the page over them.
+    // baked, and the client turns this 404 into its shared `_ocean` tile.
+    // See the kernel's layer/terrain/page.rs.
     const cache = caches.default;
     if (request.method === "GET") {
       const cached = await cache.match(request);

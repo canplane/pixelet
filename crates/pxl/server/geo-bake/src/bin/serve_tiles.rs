@@ -17,6 +17,7 @@ use pxl_geo_bake::demand::{
     Failure, Kind, Server,
 };
 use pxl_geo_bake::pyramid::PageSet;
+use pxl_geo_bake::terrain::leaf::OCEAN_KEY;
 use pxl_geo_bake::util::CONTENT_ENCODING;
 use pxl_server::admin_auth::admin_auth;
 use pxl_spec::bake::published::{PUBLISHED_TOP_Z, PUBLISHED_VERSION};
@@ -114,6 +115,7 @@ async fn baked(dir: &std::path::Path, kind: Kind, version: &str, name: &str) -> 
     let root = dir.join(kind.name()).join(version);
     // A pyramid's pages are on disk as `z<zoom>/<page index>` until the publish renames them.
     let path = match kind {
+        Kind::Terrain if name == OCEAN_KEY => root.join(name),
         Kind::Terrain | Kind::Poi => match page_of_name(name) {
             Some(p) => PageSet::new(root).path(p),
             None => return StatusCode::NOT_FOUND.into_response(),

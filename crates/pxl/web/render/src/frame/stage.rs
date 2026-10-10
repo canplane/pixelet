@@ -5,7 +5,7 @@
 
 use xpute_runtime::global::Global;
 
-pub const STAGE_WORDS: usize = 80;
+pub const STAGE_WORDS: usize = STAGE_AT::RESOLUTION + 1;
 
 /// Where each value sits in the lane.
 #[allow(non_snake_case)]
@@ -35,8 +35,6 @@ pub mod STAGE_AT {
     pub const ORIGIN: usize = 67;
     /// Device pixels per CSS pixel the world is drawn at this frame.
     pub const RESOLUTION: usize = 69;
-    /// How far the view has gone over to the Earth's picture, 0 to 1.
-    pub const EARTH_SHARE: usize = 70;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

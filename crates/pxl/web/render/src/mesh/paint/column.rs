@@ -48,8 +48,7 @@ pub fn write_column_runs(
     for i in 0..columns {
         direct.direct_column(i as u32);
         let ground = |direct: &mut ScanContext, from: i32, to: i32| sample.ground_runs(i, from, to, |lo, hi, m, l| direct.direct_run(lo, hi, m, l));
-        // Under the floor a stand is inside the ground; where there is none, nothing hides it.
-        let mut z = if sample.has_ground(i) { sample.floor } else { i32::MIN };
+        let mut z = sample.floor;
         while next < stands.len() && stands[next].0 == i as u32 {
             let (lo, hi, stand) = stands[next].1;
             next += 1;

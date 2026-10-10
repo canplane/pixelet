@@ -51,7 +51,7 @@ pub fn pose(view: ViewTriple) -> Option<ViewPose> {
 /// floor counts where the eye is in the cave.
 fn required_rise(at: &ViewPose) -> Option<f64> {
     let (_, eye) = eye(at);
-    let ground = local_height(Access::now().floor_under(&eye).value().flatten()?, at.origin);
+    let ground = local_height(Access::now().floor_under(&eye).value()?, at.origin);
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
@@ -66,8 +66,8 @@ fn climb_rise(at: &ViewPose) -> Option<f64> {
         Passage::Blocked => return None,
     };
     let ground = match ground {
-        Answer::Exact(Some(top)) | Answer::Coarser(Some(top), _) => top,
-        Answer::Exact(None) | Answer::Coarser(None, _) | Answer::Nothing(_) => return None,
+        Answer::Exact(top) | Answer::Coarser(top, _) => top,
+        Answer::Nothing(_) => return None,
     };
     Some(local_height(ground, at.origin) + EYE_CLEARANCE_U - at.target[2])
 }
@@ -135,7 +135,7 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
 
 fn in_solid(at: &ViewPose) -> bool {
     let (local, eye) = eye(at);
-    Access::now().floor_under(&eye).value().flatten().is_some_and(|top| local_height(top, at.origin) > local[2])
+    Access::now().floor_under(&eye).value().is_some_and(|top| local_height(top, at.origin) > local[2])
 }
 
 /// What lies between the eye and the map center is not asked: that hides the

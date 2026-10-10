@@ -296,11 +296,15 @@ pub fn page_rows(z: u32) -> std::ops::Range<i64> {
     -n / 2..n / 2
 }
 
-/// An X index of `side`'s cells as PVF3 names it: round the world, the
-/// copy the lane holds. A key made from an index goes through it.
+/// An X index of `side`'s cells as the lane holds it; every key goes through it.
 pub fn wrap_index(side: Scale, x: i64) -> i64 {
     let across = around(side);
     (x + across / 2).rem_euclid(across) - across / 2
+}
+
+/// A cell of `side` named as `wrap_index` names its X.
+pub fn wrap_cell(side: Scale, [x, y, z]: [i64; 3]) -> [i64; 3] {
+    [wrap_index(side, x), y, z]
 }
 
 /// The page at `z` at (x, y), X wrapped around the world.

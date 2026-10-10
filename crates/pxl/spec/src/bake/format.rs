@@ -11,6 +11,7 @@ use super::constant::ELE_PADDED_SPAN;
 use super::deck::{self, Decks};
 use super::ground::SHIFT_RANGE;
 use super::malformed;
+use super::pack::{channel_of, GroundCell};
 use super::surface::extent_of;
 use crate::space::pyramid::{EXTENT, PAGE_CELLS};
 
@@ -20,17 +21,47 @@ pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 pub const EXTENT_LANE: usize = (EXTENT.page_cells() * EXTENT.page_cells()) as usize;
 pub const BLOCK_LANE: usize = EXTENT.page_blocks() as usize;
 
-/// A ground cell: one look of the Carto palette, a byte (`cell/cube_type.json`).
-pub type GroundCell = u8;
+pub use crate::cell::cube_type::GroundChannelKey;
 
-/// A page's ground: one look a cell, the same shape from the bake through the
-/// wire to the client.
+/// The ground channels' order, which is also paint order: a later channel's
+/// non-void type wins. Structure paints last because a small building that
+/// loses its street-facing cells to a road can stop existing.
+pub const GROUND_CH_KEYS: [GroundChannelKey; 4] = [GroundChannelKey::LAND, GroundChannelKey::WATER, GroundChannelKey::TRANSPORT, GroundChannelKey::STRUCTURE];
+
+pub const fn ch_index(key: GroundChannelKey) -> usize {
+    let mut i = 0;
+    while i < GROUND_CH_KEYS.len() {
+        if GROUND_CH_KEYS[i] as u8 == key as u8 {
+            return i;
+        }
+        i += 1;
+    }
+    panic!()
+}
+
+const _: () = {
+    let mut id = 0;
+    while id < GROUND_CH_KEYS.len() as u32 {
+        match GroundChannelKey::from_id(id) {
+            Some(k) => assert!(GROUND_CH_KEYS[ch_index(k)] as u8 == k as u8),
+            None => panic!("an identity with no channel"),
+        }
+        id += 1;
+    }
+};
+
+/// A page's ground: one packed word a cell (`bake/pack.rs`), the same shape
+/// from the bake through the wire to the client.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ground {
     pub cells: Cow<'static, [GroundCell]>,
 }
 
 impl Ground {
+    pub fn channel(&self, i: usize, key: GroundChannelKey) -> u8 {
+        channel_of(self.cells[i], key)
+    }
+
     pub fn len(&self) -> usize {
         self.cells.len()
     }
@@ -94,6 +125,9 @@ pub struct Block {
     pub hi: i16,
     pub span: u16,
 }
+
+/// The object every page of open water resolves to.
+pub const OCEAN_KEY: &str = "_ocean";
 
 /// A partial version's list, beside its pages: the full version it overlays
 /// and the pages it writes or removes over it, by quadkey. A version without
@@ -188,21 +222,23 @@ pub struct Terrain {
 
 // Made on first use: a constant array of zeros would ship in the module's data.
 static VOID_ELE: std::sync::LazyLock<Vec<i16>> = std::sync::LazyLock::new(|| vec![0; ELE_LANE]);
-static VOID_CELLS: std::sync::LazyLock<Vec<GroundCell>> = std::sync::LazyLock::new(|| vec![crate::cell::cube::cube_types::sentinel::void; GROUND_LANE]);
+static VOID_CELLS: std::sync::LazyLock<Vec<GroundCell>> = std::sync::LazyLock::new(|| vec![0; GROUND_LANE]);
 
 impl Terrain {
-    /// Where the source has nothing at all: void cells, which give no surface,
-    /// so nothing is drawn while the ground is still known and stays asked
-    /// for, and no child, so none is asked for under it.
+    /// Where the source has nothing: sea level, so the ground stays known and
+    /// nothing is drawn, and no child to ask for.
     pub fn void() -> Terrain {
         Terrain {
-            ground: Ground {
-                cells: Cow::Borrowed(&VOID_CELLS[..]),
-            },
+            ground: Ground { cells: Cow::Borrowed(&VOID_CELLS[..]) },
             decks: Decks::default(),
             ele: Cow::Borrowed(&VOID_ELE[..]),
             index: Index::new(vec![[0, 0]; EXTENT_LANE], Occupancy::ZERO),
         }
+    }
+
+    /// The source's nothing, which draws nothing.
+    pub fn is_void(&self) -> bool {
+        !self.index.occupancy.is_page()
     }
 
     /// A z16 page, its index taken from its own surface and decks.
@@ -222,7 +258,7 @@ pub fn encode_terrain(page: &Terrain) -> Result<Vec<u8>, MarshalError> {
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
         b.i16_array(Some(&page.ele))
-            .u8_array(Some(&page.ground.cells))
+            .u16_array(Some(&page.ground.cells))
             .i16_array(Some(page.index.extent.as_flattened()))
             .u8(Some(page.index.occupancy.bits()));
         deck::write_branch(&page.decks, b);

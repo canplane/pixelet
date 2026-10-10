@@ -4,14 +4,14 @@ import { Image, type StyleProp, View, type ViewStyle } from "react-native";
 
 import type { u8 } from "@xpute/core/abi/word.ts";
 import type { DecorId } from "@/catalog/cell/decor.spec.ts";
-import { decorName, type PlaceableCube, placeableCubeHex, placeableCubeId, placeableCubeSection, placeableCubeType } from "@/catalog/cell/mod.ts";
+import { decorName, type PlaceableCube, placeableCubeChannel, placeableCubeHex, placeableCubeId, placeableCubeType } from "@/catalog/cell/mod.ts";
 import { shippedTopTextureKey } from "@/catalog/asset/texture.ts";
 import type { GlyphName } from "@platform/icon.tsx";
 import { ORIGIN } from "@platform/origin.ts";
 import { assetUrl } from "@/config/route.ts";
 
 function placeableCubeTextureUrl(cube: PlaceableCube): string | null {
-  const key = shippedTopTextureKey(placeableCubeSection(cube), placeableCubeType(cube));
+  const key = shippedTopTextureKey(placeableCubeChannel(cube), placeableCubeType(cube));
   return key ? `${ORIGIN}${assetUrl(key)}` : null;
 }
 

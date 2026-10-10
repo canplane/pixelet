@@ -5,7 +5,8 @@
 //! road, since a random heading reads as a crash.
 
 use pxl_spec::asset::ingested::Asset;
-use pxl_spec::cell::cube_types::ground as g;
+use pxl_spec::bake::format::GroundChannelKey;
+use pxl_spec::cell::cube_types::Transport;
 use pxl_spec::cell::decor_types::Decor;
 
 use crate::layer::decor::build::DecorVariantAsset;
@@ -42,7 +43,16 @@ pub const DEF: Kind = Kind {
         density: 0.004,
         orientation: DecorOrientationMode::AlignTransport,
     },
-    rules: DecorRules::on(&[g::motorway, g::trunk, g::primary, g::secondary, g::tertiary]),
+    rules: DecorRules::on(
+        GroundChannelKey::TRANSPORT,
+        &[
+            Transport::road_motorway as u8,
+            Transport::road_trunk as u8,
+            Transport::road_primary as u8,
+            Transport::road_secondary as u8,
+            Transport::road_tertiary as u8,
+        ],
+    ),
     variants: &VARIANTS,
     decor_id: Some(Decor::car),
 };

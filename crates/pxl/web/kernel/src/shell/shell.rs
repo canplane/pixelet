@@ -4,7 +4,7 @@
 //! only when changed) and the commands it applies to the stores.
 
 use pxl_spec::bake::place_page::leaf_slot;
-use pxl_spec::cell::object::{decor_num_id, placeable_cube_num_id};
+use pxl_spec::cell::object::{decor_num_id, placeable_cube_parts};
 use pxl_spec::space::adapter::epsg4326;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -72,6 +72,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
     });
     let values = SettingKey::ALL.map(|key| settings.get(key));
     let held = holding();
+    let (held_channel, held_cube) = placeable_cube_parts(held.object_cube);
     let mut previews = [0u32; CASES_MAX];
     let mut preview_cnt = 0;
     for (slot, (surface, _, _)) in previews.iter_mut().zip(preview_rows()) {
@@ -89,6 +90,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             },
             is_off_center: map_navigation().is_off_center,
             center,
+            outside: at.is_some_and(|c| crate::layer::terrain::page::void_under(&c)),
         },
         location: LocationState {
             status: location.pose.status(),
@@ -101,7 +103,8 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         },
         holding: HoldingState {
             tool: held.active_tool,
-            cube: placeable_cube_num_id(held.object_cube),
+            channel: held_channel,
+            cube: held_cube as u32,
             decor: decor_num_id(held.decor_id),
             tier: held.object_tier,
         },

@@ -16,6 +16,11 @@ fn a_leaf_and_a_zoom_coarser_land_on_their_tiles() {
 }
 
 #[test]
+fn what_is_named_rather_than_keyed_is_carried_across() {
+    assert_eq!(rename("_ocean"), Ok("_ocean".to_string()));
+}
+
+#[test]
 fn what_cannot_be_read_is_an_error_rather_than_a_skip() {
     assert!(rename(PAGE).is_err(), "a page without its zoom");
     assert!(rename(&format!("z2/{PAGE}")).is_err(), "a zoom past the pyramid");

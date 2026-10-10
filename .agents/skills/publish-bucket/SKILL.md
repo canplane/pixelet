@@ -17,7 +17,7 @@ how it gets there and how you know it arrived.
 
 | Prefix                  | Object                      | Named by               | Policy                                                        |
 | ----------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
-| `terrain/<version>/`    | packed XTP page             | quadkey, 5–15          | immutable; a re-bake is a new version                         |
+| `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15          | immutable; a re-bake is a new version                         |
 | `poi/<version>/`        | XTP count page              | quadkey, 5–15          | immutable; a re-bake is a new version                         |
 | `geocode/<version>/`    | XTP group page, `_dict`     | quadkey, 11            | immutable; a re-bake is a new version                         |
 | `asset/`                | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
@@ -219,6 +219,9 @@ deploy`'s bundle check fails if a model or image byte is back in the bundle.
 ```bash
 # object count should match the bake's manifest `objects`
 aws s3 ls s3://pixelet-tiles/terrain/<version>/ --profile r2 --endpoint-url $R2 --recursive | wc -l
+
+# the shared ocean tile must exist
+aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/_ocean --profile r2 --endpoint-url $R2
 
 # metadata must have survived: expect the manifest's ContentEncoding on a page,
 # ContentType model/gltf-binary and no ContentEncoding on a glb

@@ -11,14 +11,13 @@ use pxl_spec::space::adapter::epsg3857::{to_db, BBox3857};
 use crate::elevation::Raster;
 use crate::segment::Segment;
 use crate::terrain::pipeline::corridor::GAP;
-use crate::terrain::pipeline::overture::policy::INFRASTRUCTURE;
 
 // Buildings and roads are not clipped: a naive bbox clip broke ring closure.
 // Water and coast are clipped, since their rows reach hundreds of thousands of points.
 const OVERTURE_BUILDINGS_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT gers_id, class, subtype, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb
+SELECT class, subtype, ST_AsBinary(geom) AS geom_wkb
 FROM overture_buildings, env
 WHERE geom && env.e";
 
@@ -48,18 +47,18 @@ pub fn drawn_from([min, max]: BBox3857) -> BBox3857 {
 const OVERTURE_BASE_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )
-SELECT 'land_use' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land_use, env WHERE geom && env.e
+SELECT 'land_use' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land_use, env WHERE geom && env.e
 UNION ALL
 -- Some water rows are country-scale (up to 444,626 points); clip to the page envelope first. ST_IsEmpty guards && 's bbox-only false positives.
-SELECT 'water' AS source, gers_id, subtype, class, way_area, ST_AsBinary(clipped) AS geom_wkb FROM (
-  SELECT gers_id, subtype, class, ST_Area(geom) AS way_area, ST_Intersection(geom, env.e) AS clipped
+SELECT 'water' AS source, subtype, class, ST_AsBinary(clipped) AS geom_wkb FROM (
+  SELECT subtype, class, ST_Intersection(geom, env.e) AS clipped
   FROM overture_base_water, env
   WHERE geom && env.e
 ) w WHERE NOT ST_IsEmpty(clipped)
 UNION ALL
-SELECT 'land' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land, env WHERE geom && env.e
+SELECT 'land' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_land, env WHERE geom && env.e
 UNION ALL
-SELECT 'infrastructure' AS source, gers_id, subtype, class, ST_Area(geom) AS way_area, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class = ANY($5)";
+SELECT 'infrastructure' AS source, subtype, class, ST_AsBinary(geom) AS geom_wkb FROM overture_base_infrastructure, env WHERE geom && env.e AND class IN ('parking', 'helipad')";
 
 /// Overture's ocean polygons inverted into a land polygon for the page: empty
 /// means pure ocean, the whole envelope means all land, both dropped.
@@ -86,9 +85,6 @@ WHERE NOT ST_IsEmpty(g)";
 pub const READS: [&str; 4] = [OVERTURE_BUILDINGS_SQL, OVERTURE_TRANSPORTATION_SQL, OVERTURE_BASE_SQL, OVERTURE_COAST_SQL];
 
 pub struct BuildingRow {
-    pub gers_id: String,
-    /// The whole source's, before a page clips it or its parts are split.
-    pub way_area: f64,
     pub subtype: Option<String>,
     pub class: Option<String>,
     pub geom_wkb: Box<[u8]>,
@@ -97,9 +93,6 @@ pub struct BuildingRow {
 pub struct BaseRow {
     /// Which table: "land_use", "water", "land" or "infrastructure".
     pub source: String,
-    pub gers_id: String,
-    /// The whole source's, before a page clips it or its parts are split.
-    pub way_area: f64,
     pub subtype: Option<String>,
     pub class: Option<String>,
     pub geom_wkb: Box<[u8]>,
@@ -126,8 +119,6 @@ pub struct TerrainRepository {
     segments: Statement,
     base: Statement,
     coast: Statement,
-    /// The base query's `$5`.
-    infrastructure: Vec<&'static str>,
 }
 
 impl TerrainRepository {
@@ -139,7 +130,6 @@ impl TerrainRepository {
             segments: segments?,
             base: base?,
             coast: coast?,
-            infrastructure: INFRASTRUCTURE.iter().map(|(class, _)| *class).collect(),
         })
     }
 
@@ -153,8 +143,6 @@ impl TerrainRepository {
                 .query(&self.buildings, &bbox)?
                 .iter()
                 .map(|row| BuildingRow {
-                    gers_id: row.get("gers_id"),
-                    way_area: row.get("way_area"),
                     subtype: row.get("subtype"),
                     class: row.get("class"),
                     geom_wkb: wkb(row),
@@ -162,12 +150,10 @@ impl TerrainRepository {
                 .collect(),
             segment_rows: client.query(&self.segments, &bbox)?.iter().map(Segment::of).collect(),
             base_rows: client
-                .query(&self.base, &[bbox[0], bbox[1], bbox[2], bbox[3], &self.infrastructure])?
+                .query(&self.base, &bbox)?
                 .iter()
                 .map(|row| BaseRow {
                     source: row.get("source"),
-                    gers_id: row.get("gers_id"),
-                    way_area: row.get("way_area"),
                     subtype: row.get("subtype"),
                     class: row.get("class"),
                     geom_wkb: wkb(row),

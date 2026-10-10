@@ -1,7 +1,7 @@
 // pxl-kernel/layer/environment/state.rs
 
 //! The environment: where the map is and the wall clock as inputs; the sun
-//! and moon placed, and the light, fog and sky they give.
+//! and moon placed, and the light and sky they give.
 
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_render::look::globe::Globe;
@@ -13,7 +13,7 @@ use crate::control::navigation::bootstrap::FALLBACK_G4326;
 use crate::host::wall_now;
 use crate::kernel::kernel;
 use crate::layer::environment::celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
-use crate::layer::environment::fog::{band_at, eye_ground, eye_height, reach_at};
+use crate::layer::environment::fog::eye_ground;
 use crate::world::change::wake_at;
 use crate::world::chunk::table::Frame;
 use crate::world::frame::view::globe_anchor;
@@ -149,17 +149,11 @@ impl EnvironmentDraw {
         let km_per_u = km_per_u();
         let r = globe().radius_u();
         let over = len3(&[frame.camera[0], frame.camera[1], frame.camera[2] + r]) - r;
-        let height = eye_height();
-        // The ground pyramid's last observation, read rather than remade per frame.
-        let drawn = crate::world::pyramid::domain::current().map(|d| d.observation().far);
-        let band = band_at(height, drawn.unwrap_or_else(|| reach_at(height)));
         let light = Light {
             sun: self.sun,
             moon: self.moon,
             stars: self.stars,
             time: self.time,
-            fog_near: band.0,
-            fog_far: band.1,
             altitude_km: (frame.center_z + over) * km_per_u,
             ground_km: eye_ground() * km_per_u,
             km_per_u,

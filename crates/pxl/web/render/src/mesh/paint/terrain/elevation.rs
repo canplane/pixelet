@@ -3,8 +3,9 @@
 //! Page elevation in cells (1 cell = 1 texel). Prefixes: c chunk index,
 //! d loop delta, t texel, s padded source sample.
 
-use pxl_spec::bake::format::{Ground, GroundCell};
+use pxl_spec::bake::format::{Ground, GroundChannelKey};
 use pxl_spec::bake::ground::cell_shift;
+use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::space::pyramid::GROUND;
 
@@ -25,12 +26,13 @@ impl<'a> GroundLanes<'a> {
         GroundLanes { cells: &ground.cells }
     }
 
-    pub fn get(&self, i: usize) -> GroundCell {
-        self.cells[i]
+    pub fn get(&self, key: GroundChannelKey, i: usize) -> u8 {
+        channel_of(self.cells[i], key)
     }
 
-    /// The look's shift in units, so a shoreline steps down to the water. A
-    /// real height every consumer takes through `ground_ele`.
+    /// The type's shift in units, so a shoreline steps down to the water. A real
+    /// height every consumer takes through `ground_ele`, so it is asked with no
+    /// channel hidden.
     pub fn shift(&self, i: usize) -> i16 {
         cell_shift(self.cells[i])
     }

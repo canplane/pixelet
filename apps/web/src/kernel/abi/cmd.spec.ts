@@ -29,6 +29,7 @@ import type { BranchCursor, NodeCursor } from "@xpute/core/wire/xtp/mod.ts";
 import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, i32, u32, u8 } from "@xpute/core/abi/word.ts";
 import { packet } from "@xpute/runtime/ipc/doorbell.ts";
+import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 
 /** What a command is about. */
 export const enum Major {
@@ -395,10 +396,12 @@ export interface MapState {
   is_off_center: boolean;
   /** The map center in degrees: what the search measures distance from. */
   center: LonLat | null;
+  /** The source has nothing at all under the map center: the page over it at the source's top was absent. */
+  outside: boolean;
 }
 
 export function read_map_state(b: BranchCursor): MapState {
-  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat) };
+  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat), outside: b.at(3).get<boolean>() };
 }
 
 export interface LonLat {
@@ -433,14 +436,16 @@ export function read_companion_state(b: BranchCursor): CompanionState {
 /** What the pointer holds, as INPUT_HOLD set it: the cube and the decor are each remembered whichever tool is held. */
 export interface HoldingState {
   tool: ActiveTool;
-  /** The held cube, by its number in the catalog's one value space. */
+  /** The held cube's ground channel; absent for a flat color. */
+  channel: GroundChannelKey | null;
+  /** The held cube's type in its channel. */
   cube: u32;
   decor: u32;
   tier: u32;
 }
 
 export function read_holding_state(b: BranchCursor): HoldingState {
-  return { tool: b.at(0).get<ActiveTool>(), cube: b.at(1).get<u32>(), decor: b.at(2).get<u32>(), tier: b.at(3).get<u32>() };
+  return { tool: b.at(0).get<ActiveTool>(), channel: b.at(1).get<GroundChannelKey | null>(), cube: b.at(2).get<u32>(), decor: b.at(3).get<u32>(), tier: b.at(4).get<u32>() };
 }
 
 export interface OrientationState {
@@ -638,14 +643,16 @@ export function encode_input_pointer(p: InputPointer): U8Array {
 /** Command.INPUT_HOLD's packet. */
 export interface InputHold {
   tool: ActiveTool;
-  /** The held cube or decor kind, by its number in the catalog's one value space (cube_type.json). */
+  /** The ground channel the held cube stands in for; absent for a flat color, a decor kind or nothing. */
+  channel: GroundChannelKey | null;
+  /** The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive. */
   value: u32;
   /** The object size, by its tier: 0 the cell, each next its half (pxl-spec bake/object.spec.rs). */
   tier: u32;
 }
 
 export function encode_input_hold(p: InputHold): U8Array {
-  return packet((b) => b.u32(p.tool).u32(p.value).u32(p.tier));
+  return packet((b) => b.u32(p.tool).u32(p.channel).u32(p.value).u32(p.tier));
 }
 
 /** Command.INPUT_WHEEL's packet. */

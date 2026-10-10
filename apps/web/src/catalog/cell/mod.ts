@@ -5,54 +5,53 @@
  * kernel's numbers; names are looked up only for display.
  */
 
-import type { u16 } from "@xpute/core/abi/word.ts";
+import type { u8 } from "@xpute/core/abi/word.ts";
 import palette from "./color.spec.ts";
-import { cube_types, ground_kind, type Kind } from "./cube_type.spec.ts";
+import { cube_types, ground_pack, type GroundChannelKey } from "./cube_type.spec.ts";
 import { decor_types, type DecorId } from "./decor.spec.ts";
 
-/** A cube by its number in the catalog's one value space: a ground look or a placed color. */
-export type PlaceableCube = u16;
-
-/** The catalog's group a cube's name is in. */
-type Group = "ground" | "object";
-
-/** The drawer's grouping, and the texture pack's prefix: a look by its kind, a color as a block. */
-export type CubeSection = Kind | "block";
-
-function groupOf(cube: PlaceableCube): Group {
-  return cube in ground_kind ? "ground" : "object";
+export interface PlaceableCube {
+  readonly channel: GroundChannelKey | null;
+  readonly type: u8;
 }
 
-export function placeableCubeSection(cube: PlaceableCube): CubeSection {
-  return ground_kind[cube] ?? "block";
+export function sameCube(a: PlaceableCube, b: PlaceableCube): boolean {
+  return a.channel === b.channel && a.type === b.type;
 }
 
-const NAME = Object.fromEntries(Object.entries(cube_types).flatMap(([, values]) => Object.entries(values).map(([name, n]) => [n, name]))) as Record<number, string>;
+export type ChannelName = keyof typeof cube_types;
+
+export function placeableCubeChannel(cube: PlaceableCube): ChannelName {
+  return cube.channel === null ? "block" : ground_pack.channels[cube.channel];
+}
+
+const TYPE_NAME = Object.fromEntries(
+  Object.entries(cube_types).map(([channel, types]) => [channel, Object.fromEntries(Object.entries(types).map(([name, n]) => [n, name]))]),
+) as Record<ChannelName, Record<number, string>>;
 
 export function placeableCubeType(cube: PlaceableCube): string {
-  return NAME[cube];
+  return TYPE_NAME[placeableCubeChannel(cube)][cube.type];
 }
 
 export function placeableCubeId(cube: PlaceableCube): string {
-  return `${groupOf(cube)}.${placeableCubeType(cube)}`;
+  return `${placeableCubeChannel(cube)}.${placeableCubeType(cube)}`;
 }
 
 export function placeableCubeHex(cube: PlaceableCube): string | null {
-  const entries = palette[groupOf(cube)] as Record<string, { hex: string } | undefined>;
-  return entries[placeableCubeType(cube)]?.hex ?? null;
+  const entries = (palette as unknown as Record<string, Record<string, { hex: string }> | undefined>)[placeableCubeChannel(cube)];
+  return entries?.[placeableCubeType(cube)]?.hex ?? null;
 }
 
-/** The placed colors first, then the looks in paint order. */
 export const placeableCubes: readonly PlaceableCube[] = [
-  ...Object.values(cube_types.object).filter((n) => n !== cube_types.object.air),
-  ...Object.values(cube_types.ground),
+  ...Object.values(cube_types.block).sort((a, b) => a - b).map((type) => ({ channel: null, type })),
+  ...ground_pack.channels.flatMap((name, channel) => Object.values(cube_types[name]).map((type) => ({ channel: channel as GroundChannelKey, type }))),
 ];
 
 const DECOR_NAME = Object.fromEntries(Object.entries(decor_types).map(([name, n]) => [n, name])) as Record<number, DecorId>;
 
-export const decorKinds: readonly u16[] = Object.values(decor_types).sort((a, b) => a - b);
+export const decorKinds: readonly u8[] = Object.values(decor_types).sort((a, b) => a - b);
 
-export function decorName(kind: u16): DecorId {
+export function decorName(kind: u8): DecorId {
   return DECOR_NAME[kind];
 }
 
@@ -61,6 +60,6 @@ const DECOR_SECTION = { tree: "nature", boat: "vehicle", car: "vehicle", train: 
 
 export type DecorSection = (typeof DECOR_SECTION)[DecorId];
 
-export function decorSection(kind: u16): DecorSection {
+export function decorSection(kind: u8): DecorSection {
   return DECOR_SECTION[decorName(kind)];
 }

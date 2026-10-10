@@ -4,7 +4,8 @@
 //! to the rail, since one lying across it reads as derailed.
 
 use pxl_spec::asset::ingested::Asset;
-use pxl_spec::cell::cube_types::ground as g;
+use pxl_spec::bake::format::GroundChannelKey;
+use pxl_spec::cell::cube_types::Transport;
 use pxl_spec::cell::decor_types::Decor;
 
 use crate::layer::decor::build::DecorVariantAsset;
@@ -37,7 +38,7 @@ pub const DEF: Kind = Kind {
         density: 0.004,
         orientation: DecorOrientationMode::AlignTransport,
     },
-    rules: DecorRules::on(&[g::rail, g::subway]),
+    rules: DecorRules::on(GroundChannelKey::TRANSPORT, &[Transport::rail_main as u8, Transport::rail_subway as u8]),
     variants: &VARIANTS,
     decor_id: Some(Decor::train),
 };

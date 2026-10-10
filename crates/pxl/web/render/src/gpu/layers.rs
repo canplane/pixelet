@@ -7,12 +7,14 @@
 //! Without the mip chain the far ground crawls as the camera moves.
 
 use pxl_spec::asset::texture::{shipped_texture_tile, CubeFace, TileOrigin, SHIPPED_SHEET};
+use pxl_spec::cell::object::{block_cubes, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
 use crate::frame::shader::record::PIPELINE_MIPS;
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, release, texture_usage, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::pipeline::Pipelines;
-use crate::mesh::paint::palette::tex_array::{palette, LAYERS};
+use crate::mesh::paint::palette::shader_meta::GROUND_LAYER_META;
+use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 
 pub const LAYER_TEX_SZ: u32 = SHIPPED_SHEET.cell;
 
@@ -71,6 +73,19 @@ impl Mips {
     }
 }
 
+/// A ground type no cube stands for has no tile.
+fn each_layer(mut f: impl FnMut(Option<PlaceableCube>, u32, u32)) {
+    for m in GROUND_LAYER_META.iter() {
+        f(terrain_style_cube_for(m.ch_key, m.type_id as u32), m.layer_index, m.rgb);
+    }
+    for block in block_cubes() {
+        let cube = PlaceableCube::Block(block);
+        if let (Some(layer), Some(rgb)) = (OBJECT_LAYER_IDX(block), placeable_cube_rgb(cube)) {
+            f(Some(cube), layer, rgb);
+        }
+    }
+}
+
 /// Ten bits, past any array WebGPU gives (maxTextureArrayLayers is 256).
 const NO_SLOT: u32 = 0x3ff;
 const SLOT_BITS: u32 = 10;
@@ -93,16 +108,19 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
         }
     }
     let mut slots: Vec<TileOrigin> = Vec::new();
-    let table = palette()
-        .map(|cube| {
-            let top = shipped_texture_tile(cube, CubeFace::Top);
-            // No side of its own means one image on every face, as Minecraft's cube_all.
-            // The pack has no side without a bottom.
-            let side = shipped_texture_tile(cube, CubeFace::Side).or(top);
-            let bottom = shipped_texture_tile(cube, CubeFace::Bottom).or(top);
-            slot_word(slot_of(&mut slots, top), slot_of(&mut slots, side), slot_of(&mut slots, bottom))
-        })
-        .collect();
+    let mut table: Vec<u32> = Vec::new();
+    each_layer(|cube, layer, _| {
+        let top = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Top));
+        // No side of its own means one image on every face, as Minecraft's cube_all.
+        // The pack has no side without a bottom.
+        let side = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Side)).or(top);
+        let bottom = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Bottom)).or(top);
+        let word = slot_word(slot_of(&mut slots, top), slot_of(&mut slots, side), slot_of(&mut slots, bottom));
+        if table.len() <= layer as usize {
+            table.resize(layer as usize + 1, NO_SLOTS);
+        }
+        table[layer as usize] = word;
+    });
     (slots, table)
 }
 
@@ -134,7 +152,7 @@ impl Layers {
         let sampler = object();
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 4);
         let table = object();
-        let blank: Vec<u32> = vec![NO_SLOTS; LAYERS];
+        let blank: Vec<u32> = vec![NO_SLOTS; table_len()];
         g.buffer(table, (blank.len() * 4) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(table, 0, bytes(&blank));
         // A chain is under four thirds of its first level.
@@ -171,4 +189,8 @@ impl Layers {
         g.write_buffer(self.table, 0, bytes(&table));
         self.loaded = true;
     }
+}
+
+fn table_len() -> usize {
+    GROUND_LAYER_META.len() + block_cubes().len()
 }

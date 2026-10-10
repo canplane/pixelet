@@ -33,6 +33,7 @@ fn main() {
             client: &mut client,
             repo: &repo,
             store: &mut Disk(&memo),
+            memo: &memo.join("structure"),
         };
         let (terrain, off_raster) = bake_leaf(reader, idx).expect("bake");
         let tile = encode_terrain(&terrain).expect("encode");

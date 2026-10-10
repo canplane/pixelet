@@ -4,26 +4,28 @@
 //
 // [Layer: objects] User-placed decor kind catalog — the cube catalog's own sibling, non-cube content (GLB instances, not a meshed box).
 //
-// Numbered past the ground's byte and the object's own colors, so a placed
-// leaf's value says which catalog it is from: an object value is a u16.
+// Numbered well clear of the cube catalog's own values (128, 130-144, 255) even
+// though the two never collide in practice (each placed leaf holds one
+// value from exactly one of the two catalogs) — just so a raw byte's value
+// alone still hints at which catalog it came from during debugging.
 //
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
 // case them the way Rust would is to rename the protocol.
 #[allow(non_upper_case_globals, non_camel_case_types)]
 pub mod decor_types {
-    pub const tree: u16 = 512;
-    pub const boat: u16 = 513;
-    pub const car: u16 = 514;
-    pub const train: u16 = 515;
+    pub const tree: u8 = 228;
+    pub const boat: u8 = 229;
+    pub const car: u8 = 230;
+    pub const train: u8 = 231;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    #[repr(u16)]
+    #[repr(u8)]
     pub enum Decor {
-        tree = 512,
-        boat = 513,
-        car = 514,
-        train = 515,
+        tree = 228,
+        boat = 229,
+        car = 230,
+        train = 231,
     }
 
     impl Decor {
@@ -32,8 +34,8 @@ pub mod decor_types {
 
         /// The kind a number names, or none for a number the catalog does not
         /// give out.
-        pub fn of(value: u16) -> Option<Decor> {
-            Decor::ALL.into_iter().find(|t| *t as u16 == value)
+        pub fn of(value: u8) -> Option<Decor> {
+            Decor::ALL.into_iter().find(|t| *t as u8 == value)
         }
     }
 }

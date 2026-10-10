@@ -409,6 +409,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let n = normalize(select(i.normal, vec3f(i.normal.xy, -i.normal.z), under));
   let k = frame_ao_strength() * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
   let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
-  let color = shade(base, n, i.world_pos, i.clip.xy, sun_lit(i.world_pos, n), open * screen_open(i.clip.xy), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
+  let color = shade(base, n, i.world_pos, sun_lit(i.world_pos, n), open * screen_open(i.clip.xy), Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)));
   return vec4f(finish(color, i.clip.xy), i.opacity);
 }

@@ -17,11 +17,11 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes
 
-| Kind    | Tool                     | Reads                                           | Output                                                             | Empty page |
-| ------- | ------------------------ | ----------------------------------------------- | ------------------------------------------------------------------ | ---------- |
-| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page                                      | no object  |
-| poi     | `deno task bake:poi`     | Overture places                                 | XTP counts, where a crowd splits                                   | no object  |
-| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | XTP: a dictionary, and one per group of 16 × 16 pages with a label | no object  |
+| Kind    | Tool                     | Reads                                           | Output                                                             | Empty page      |
+| ------- | ------------------------ | ----------------------------------------------- | ------------------------------------------------------------------ | --------------- |
+| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page                                      | shared `_ocean` |
+| poi     | `deno task bake:poi`     | Overture places                                 | XTP counts, where a crowd splits                                   | no object       |
+| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | XTP: a dictionary, and one per group of 16 × 16 pages with a label | no object       |
 
 Every tool writes to `./out/<kind>/<version>`. The version is
 `v<format>.<day>.<n>`: the kind's `FORMAT` in
@@ -146,6 +146,12 @@ removes over it, so the bucket holds only those
 A region baked over a partial version lists its changes over that one's
 full base, earlier partial's included.
 
+Under `--build` beside `leaf/`, `structure/` keeps each
+solved structure so the pages it crosses solve it once: a cache nothing
+reads as a fact, deleted by `--force` and safe to delete any time. A run
+resumed after a change to the solve must be `--force`d, or it reuses
+structures the old solve made.
+
 What it produces, beside `leaf/` under `--build` with a `leaf.json` of what
 built it:
 
@@ -154,13 +160,14 @@ built it:
 - `z15/`, `z14/`, … each zoom folded from the one below it until a zoom is a
   single page or `z6`, refolded whole on every run (they are a function of the leaves,
   so a resumed run never leaves a stale pyramid over them)
+- one `_ocean` object beside the zooms, the shared fallback every open-ocean
+  page resolves to at every zoom; the run aborts if folding it does not give
+  it back
 - `manifest.json` and `land_pages.json` in the directory above the version's
 
 Open-ocean pages are deliberately not baked. Roughly two thirds of the
-coverage bbox is open sea, and a page with no object is drawn from the one
-over it. The fold reads a page it has no object for as open sea inside the
-coverage and as void past it, a page with no surface, and a coarser one as the
-fold of those under it (`terrain/absent.rs`). A page counts as open ocean only when nothing is drawn in it:
+coverage bbox is open sea, and the client turns a 404 into the shared
+`_ocean` tile. A page counts as open ocean only when nothing is drawn in it:
 a bridge or an undersea tunnel over open water makes its pages leaves. The
 classification is cached in `land_pages.json`, keyed by the page size, the
 coverage, the release and the rule that classified it (`terrain/leaf.rs`
@@ -196,7 +203,11 @@ that, worked back from how far each thing draws:
    padded window only partly leaves the raster is not flat: its grid has the
    ground where there is any. A large number means the coverage and the
    raster disagree.
-3. **Spot-check pages against the dev tile server, at more than one zoom.**
+3. **The ocean tile stayed page-independent.** The tool bakes an empty source
+   at three different pages and aborts if the bytes differ. If it ever does,
+   the single-fallback design no longer holds — stop and re-read the
+   discussion doc rather than working around it.
+4. **Spot-check pages against the dev tile server, at more than one zoom.**
    The dev server demand-pages terrain out of the same functions this tool
    runs (`terrain/leaf.rs` for a leaf, `pyramid.rs` for a page above),
    so a page it serves holds the packet this tool wrote. It packs at zstd's
@@ -220,7 +231,7 @@ that, worked back from how far each thing draws:
 
 The dev tile server serves a page from its cache when the page's file is
 there and bakes it only when it is not, and its cache is laid out as a
-baked set is: `<cache>/terrain/z<zoom>/<page_idx>`, zstd as the
+baked set is: `<cache>/terrain/z<zoom>/<page_idx>` and `_ocean`, zstd as the
 bake writes them (`demand.rs`, `--cache`, `./out/dev` by default). So a
 finished bake is looked at in the app, with nothing uploaded, by putting it
 where the cache is:

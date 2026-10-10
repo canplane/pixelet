@@ -1,14 +1,14 @@
 // pxl-geo-bake/bin/decode_tile.rs
 
 //! A baked terrain page read back the way the kernel reads it, checked
-//! against the bake's contract. A byte that is no look draws as unknown
-//! ground, so it is checked here. Run `--all` after
+//! against the bake's contract. A packed field past its row clamps on read
+//! and draws wrong ground silently, so it is checked here. Run `--all` after
 //! `deno task bake:tiles`; one page also writes PNGs for the eye.
 //!
 //!   decode_tile 12720250262323200                # one leaf: summary + PNGs
 //!   decode_tile 3179787687624704 --z 14          # a page at a coarser zoom
 //!   decode_tile 12720250262323200 --out /tmp/page
-//!   decode_tile out/terrain/v8/z16/12720250262323200  # a path works too
+//!   decode_tile out/terrain/v7/_ocean            # a path works too
 //!   decode_tile --all                            # every page of every zoom, checked
 //!   decode_tile --all --version v7
 
@@ -24,12 +24,13 @@ use pxl_geo_bake::util::{encoding_of, unpack};
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::deck::{Decks, Form};
 use pxl_spec::bake::format::decode_terrain;
-use pxl_spec::bake::format::{GroundCell, Occupancy};
+use pxl_spec::bake::format::{GroundChannelKey, Occupancy};
+use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::surface::bicubic;
 use pxl_spec::bake::surface::extent_of;
-use pxl_spec::cell::color;
-use pxl_spec::cell::cube::cube_types::{ground, Ground};
+use pxl_spec::cell::cube::ground_pack;
+use pxl_spec::cell::{color, cube_types};
 use pxl_spec::space::pyramid::PAGE_CELLS;
 use xpute_core::math::scalar::round;
 use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
@@ -65,8 +66,17 @@ fn decode(pkt: &[u8]) -> Result<Page, String> {
     Ok(Page { ele, cells, extent, occupancy, decks })
 }
 
-fn name_of(cell: GroundCell) -> &'static str {
-    ground::ENTRIES.iter().find(|(_, n)| *n == cell).map_or("?", |(name, _)| name)
+fn index_of(cell: GroundCell, f: usize) -> usize {
+    ((cell as u32 >> ground_pack::SHIFT[f]) & ((1 << ground_pack::BITS[f]) - 1)) as usize
+}
+
+fn name_of(channel: &str, number: u8) -> &'static str {
+    cube_types::CHANNELS
+        .iter()
+        .filter(|(c, _)| *c == channel || *c == "common")
+        .flat_map(|(_, entries)| entries.iter())
+        .find(|(_, n)| *n == number)
+        .map_or("?", |(name, _)| name)
 }
 
 struct Summary {
@@ -75,21 +85,37 @@ struct Summary {
     mean: f64,
     extent: [i16; 2],
     occupancy: Occupancy,
-    counts: BTreeMap<GroundCell, u32>,
+    counts: Vec<BTreeMap<&'static str, u32>>,
     faults: Vec<String>,
 }
 
 fn summarize(page: &Page) -> Summary {
     let (min, max) = page.ele.iter().fold((i16::MAX, i16::MIN), |(lo, hi), &h| (lo.min(h), hi.max(h)));
     let mean = page.ele.iter().map(|&h| h as f64).sum::<f64>() / page.ele.len() as f64;
-    let mut counts = BTreeMap::new();
+    let mut counts = vec![BTreeMap::new(); ground_pack::CHANNELS.len()];
+    let mut past = vec![BTreeMap::<usize, u32>::new(); ground_pack::CHANNELS.len()];
+    let mut high = 0u32;
     for &cell in &page.cells {
-        *counts.entry(cell).or_insert(0) += 1;
+        if cell as u32 >> ground_pack::CELL_BITS != 0 {
+            high += 1;
+        }
+        for (f, channel) in ground_pack::CHANNELS.iter().enumerate() {
+            let i = index_of(cell, f);
+            match ground_pack::NUMBER[f].get(i) {
+                Some(&n) => *counts[f].entry(name_of(channel, n)).or_insert(0) += 1,
+                None => *past[f].entry(i).or_insert(0) += 1,
+            }
+        }
     }
     let mut faults = Vec::new();
-    let past: Vec<String> = counts.iter().filter(|(&c, _)| Ground::of(c).is_none()).map(|(c, n)| format!("{c}×{n}")).collect();
-    if !past.is_empty() {
-        faults.push(format!("byte(s) that are no look — {}", past.join(", ")));
+    for (f, channel) in ground_pack::CHANNELS.iter().enumerate() {
+        if !past[f].is_empty() {
+            let list: Vec<String> = past[f].iter().map(|(i, n)| format!("{i}×{n}")).collect();
+            faults.push(format!("{channel}: index(es) past the pack's row — {}", list.join(", ")));
+        }
+    }
+    if high > 0 {
+        faults.push(format!("{high} cell(s) with bits set past the pack's {} bits", ground_pack::CELL_BITS));
     }
     let short = extent_of(&page.ele, &page.decks).iter().zip(&page.extent).filter(|([lo, hi], [ilo, ihi])| ilo > lo || ihi < hi).count();
     if short > 0 {
@@ -111,8 +137,10 @@ fn print_summary(name: &str, s: &Summary) {
     println!("page {name}");
     println!("  ele  min {} max {} mean {:.2}{}", s.min, s.max, s.mean, if s.min == s.max { " (flat)" } else { "" });
     println!("  index  lowest {} highest {} occupancy {:#07b}", s.extent[0], s.extent[1], s.occupancy.bits());
-    let list: Vec<String> = s.counts.iter().map(|(&c, n)| format!("{} {n}", name_of(c))).collect();
-    println!("  ground    {}", list.join(", "));
+    for (f, channel) in ground_pack::CHANNELS.iter().enumerate() {
+        let list: Vec<String> = s.counts[f].iter().map(|(name, n)| format!("{name} {n}")).collect();
+        println!("  {channel:<9} {}", list.join(", "));
+    }
 }
 
 fn print_bores(page: &Page) {
@@ -179,11 +207,13 @@ fn heights_png(page: &Page, s: &Summary) -> Vec<u8> {
     png(ELE_PADDED_SPAN, ELE_PADDED_SPAN, 1, &gray)
 }
 
-fn rgb_of(cell: GroundCell) -> u32 {
-    color::ground(cell).map_or(MAGENTA, |s| s.rgb)
-}
-
-fn ground_png(page: &Page) -> Vec<u8> {
+fn channel_png(page: &Page, f: usize) -> Vec<u8> {
+    let channel = GroundChannelKey::from_id(f as u32).expect("a packed field is a ground channel");
+    let rgb_of = |cell: GroundCell| match ground_pack::NUMBER[f].get(index_of(cell, f)) {
+        None => MAGENTA,
+        Some(&n) if n == cube_types::common::void => 0,
+        Some(&n) => color::ground(channel, n).map_or(MAGENTA, |s| s.rgb),
+    };
     let px: Vec<u8> = page
         .cells
         .iter()
@@ -205,7 +235,7 @@ fn decks_png(page: &Page) -> Vec<u8> {
             return;
         }
         top[i] = over.top;
-        let v = rgb_of(over.kind);
+        let v = color::ground(GroundChannelKey::TRANSPORT, over.kind).map_or(MAGENTA, |s| s.rgb);
         px[i * 3..i * 3 + 3].copy_from_slice(&[(v >> 16) as u8, (v >> 8) as u8, v as u8]);
     });
     png(PAGE_CELLS, PAGE_CELLS, 3, &px)
@@ -275,8 +305,10 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     write("heights.png".into(), heights_png(&page, &s))?;
     write("decks.png".into(), decks_png(&page))?;
-    write("ground.png".into(), ground_png(&page))?;
-    println!("[decode_tile] wrote heights.png, ground.png and decks.png under {}", dir.display());
+    for (f, channel) in ground_pack::CHANNELS.iter().enumerate() {
+        write(format!("{channel}.png"), channel_png(&page, f))?;
+    }
+    println!("[decode_tile] wrote heights.png and a PNG a channel under {}", dir.display());
     Ok(s.faults.is_empty())
 }
 

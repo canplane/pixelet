@@ -13,7 +13,11 @@ use pxl_spec::bake::constant::{
     band_cell_z, band_of, in_cell, pack_pos, unpack_pos, BandZ, CellZ, BAND, BAND_CELL_SHAMT, BAND_UNITS, CELL, OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, STEP_UNITS, U_PER_CELL,
 };
 use pxl_spec::bake::fold::majority;
-use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, PlaceableCube};
+use pxl_spec::bake::ground::shown_ground;
+use pxl_spec::bake::pack::channel_of;
+use pxl_spec::cell::object::{
+    decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, object_value_is_voxel, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube,
+};
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::hierarchy::{ancestor_of, at_walk_order, child_of, first_descendant_of, offset_in, parent_of, walk_order, Scale};
@@ -22,7 +26,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
 use pxl_spec::space::pvf3::{REACH, ROUND};
-use pxl_spec::space::pyramid::{around, span_of, wrap_index, GROUND, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{around, span_of, wrap_cell, wrap_index, GROUND, GROUND_Z, TOP_Z};
 use pxl_spec::space::sparse_tree::mem;
 use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree};
 use pxl_spec::space::v3::{Aabb, V3};
@@ -522,18 +526,20 @@ fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
     }
 }
 
-/// Whether a whole-cell pick of a look only undoes a carve: the terrain must
-/// show that look there, and the cell must already hold an AIR leaf (the look
-/// is per column, so without this every cube stacked on matching ground was
-/// dropped).
+/// Whether a whole-cell terrain-styled pick only undoes a carve: the terrain
+/// must *show* that ground there (shown_ground, as the shader resolves it;
+/// matching a channel alone turned a bare-ground cube into road), and the
+/// cell must already hold an AIR leaf (ground type is per column, so without
+/// this every cube stacked on matching ground was dropped).
 fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube) -> bool {
     if size < U_PER_CELL {
         return false;
     }
-    let PlaceableCube::Ground(look) = cube else { return false };
+    let Some(source) = terrain_style_cube_source(cube) else { return false };
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
     let Some(ground) = Access::now().at(at, GROUND_Z).exact() else { return false };
-    if ground.cell != look as u8 {
+    let shown = shown_ground(|ch| channel_of(ground.cell, ch) as u32);
+    if shown.channel != source.channel || shown.type_id != source.terrain_num_id {
         return false;
     }
     object_value_is_air(read_state(at))
@@ -560,7 +566,7 @@ pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Dra
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
 /// baked terrain, which has no leaf of its own to delete.
 pub fn place_air(at: &Pvf3, size: f64) {
-    write_object_value(at, size, cube_types::object::air as u32);
+    write_object_value(at, size, cube_types::common::air as u32);
 }
 
 pub fn remove(at: EntryAt) {
@@ -591,9 +597,9 @@ fn band_is_empty(tree: &SparseTree<u16>) -> bool {
     empty
 }
 
-pub const VOID: u32 = cube_types::sentinel::void as u32;
-pub const AIR: u32 = cube_types::object::air as u32;
-pub const UNKNOWN: u32 = cube_types::sentinel::unknown as u32;
+pub const VOID: u32 = cube_types::common::void as u32;
+pub const AIR: u32 = cube_types::common::air as u32;
+pub const UNKNOWN: u32 = cube_types::common::unknown as u32;
 const _: () = assert!(VOID == 0);
 
 pub(crate) struct Column {
@@ -686,24 +692,11 @@ fn fold_cell(children: &[u16], scale: Scale) -> u16 {
 
 const TOP_CELL: Scale = GROUND.side_at(TOP_Z);
 
-/// A top cube's X as the index keys it, and how many rounds of the world the
-/// asker's frame stands from it: a query or a ray across the antimeridian is
-/// moved to the stored copy, and what it meets moved back.
+/// A top cube's X as keyed, and the rounds of the world the asker stands from
+/// it: a query is moved to the stored copy, and what it meets moved back.
 fn named_top(x: i64) -> (i64, i64) {
     let named = wrap_index(INDEX_TOP, x);
     (named, (x - named) / around(INDEX_TOP))
-}
-
-/// A cell of `side` as the folds key it.
-fn named(side: Scale, [x, y, z]: [i64; 3]) -> [i64; 3] {
-    [wrap_index(side, x), y, z]
-}
-
-fn moved(b: &Aabb, dx: f64) -> Aabb {
-    Aabb {
-        min: [b.min[0] + dx, b.min[1], b.min[2]],
-        max: [b.max[0] + dx, b.max[1], b.max[2]],
-    }
 }
 
 /// The coarsest cube the index keeps: as tall as `REACH` and as wide as the
@@ -827,8 +820,8 @@ impl Store {
                 for x in range(0) {
                     let (named, round) = named_top(x);
                     let (dx, cells) = (round as f64 * ROUND, |s: Scale| round * around(s));
-                    let q = moved(query, -dx);
-                    go(self, &q, finest, INDEX_TOP, [named, y, z], &mut |s, [cx, cy, cz], bound| enter(s, [cx + cells(s), cy, cz], &moved(bound, dx)));
+                    let q = query.moved([-dx, 0.0, 0.0]);
+                    go(self, &q, finest, INDEX_TOP, [named, y, z], &mut |s, [cx, cy, cz], bound| enter(s, [cx + cells(s), cy, cz], &bound.moved([dx, 0.0, 0.0])));
                 }
             }
         }
@@ -960,7 +953,7 @@ impl Store {
                 max: [to[0] as f64 * side, to[1] as f64 * side, REACH.max[2]],
             };
             self.visit_in(&query, target, &mut |at, _| {
-                if let Some(&v) = self.folds.get(&(target, named(target, at))).filter(|_| inside(at[0], at[1])) {
+                if let Some(&v) = self.folds.get(&(target, wrap_cell(target, at))).filter(|_| inside(at[0], at[1])) {
                     if refused.is_ok() {
                         refused = try_insert(out, at, u32::from(v));
                     }
@@ -1031,7 +1024,7 @@ impl Store {
     /// VOID where nothing; a non-voxel value is returned as is.
     pub fn folded_value(&self, scale: Scale, at: [i64; 3]) -> u16 {
         if scale >= BAND {
-            return self.folds.get(&(scale, named(scale, at))).copied().unwrap_or(VOID as u16);
+            return self.folds.get(&(scale, wrap_cell(scale, at))).copied().unwrap_or(VOID as u16);
         }
         let steps = BAND.above(scale) as u32;
         let [x, y, band] = ancestor_of(at, steps);

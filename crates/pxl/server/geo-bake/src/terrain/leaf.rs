@@ -8,18 +8,20 @@ use std::path::Path;
 
 use postgres::types::ToSql;
 use postgres::Client;
-use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::format::{decode_terrain, encode_terrain, Occupancy, Terrain, ELE_LANE};
 use pxl_spec::space::adapter::epsg3857::{self, to_db};
 use pxl_spec::space::indexer::L3;
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pvf3::ivec::{self, IVec};
 
 use crate::coverage::Coverage;
 use crate::deck::{self, source::Store};
-use crate::terrain::bake::assemble;
+use crate::terrain::bake::{assemble, bake_surface};
 use crate::terrain::pipeline::deck::bake_decks;
-use crate::terrain::repository::{self, DRAWN_REACH_U};
+use crate::terrain::repository::{self, PageSource, DRAWN_REACH_U};
 use crate::terrain::source::fetch_surface;
 use crate::util::fnv1a;
+
+pub use pxl_spec::bake::format::OCEAN_KEY;
 
 /// Whether anything is drawn in a page: land or a building in it, or a way
 /// (not a ferry) within `DRAWN_REACH_U`. `CASE` fixes the order, which
@@ -68,10 +70,56 @@ pub fn has_ground(client: &mut Client, pages: &[IVec]) -> Result<Vec<bool>, post
 /// A leaf: its decks solved, its surface painted around their lines, the two
 /// one page; and whether it lies off the elevation raster, so flat.
 pub fn bake_leaf(r: &mut deck::Reader<impl Store>, page: IVec) -> Result<(Terrain, bool), String> {
-    let (solved, _) = deck::solve_page(r, page)?;
+    let solved = deck::solve_page(r, page)?;
     let (surface, flat) = fetch_surface(r.repo, r.client, page, &solved.drawn)?;
     let lines = bake_decks(&solved.lines, epsg3857::get_page_bbox(page)[0]).ok_or("a page's decks overflow a record")?;
     Ok((assemble(surface, lines), flat))
+}
+
+/// Synthesized rather than read, so the ocean page does not depend on which
+/// offshore page was sampled.
+fn empty_source() -> PageSource {
+    PageSource {
+        ele: None,
+        building_rows: Vec::new(),
+        segment_rows: Vec::new(),
+        base_rows: Vec::new(),
+        coast_rows: Vec::new(),
+    }
+}
+
+/// Checked to be page-independent: readers keep one decoded copy, which is
+/// sound only if the empty source bakes to identical bytes at any latitude.
+pub fn bake_ocean(samples: &[IVec]) -> Result<Vec<u8>, String> {
+    let src = empty_source();
+    let baked: Vec<Vec<u8>> = samples
+        .iter()
+        .map(|p| encode_terrain(&assemble(bake_surface(*p, vec![0; ELE_LANE], &src, &[]), Default::default())).expect("ocean bake"))
+        .collect();
+    for (i, page) in baked.iter().enumerate().skip(1) {
+        if page != &baked[0] {
+            return Err(format!(
+                "the ocean page is NOT page-independent: page {} and {} baked to different bytes ({} vs {}). \
+                 The shared-fallback plan does not hold; ocean pages would each need their own object.",
+                ivec::repr(samples[0]),
+                ivec::repr(samples[i]),
+                baked[0].len(),
+                page.len()
+            ));
+        }
+    }
+    let mut ocean = decode_terrain(&baked[0]).map_err(|e| format!("{e:?}"))?;
+    ocean.index.occupancy = Occupancy::ZERO;
+    encode_terrain(&ocean).map_err(|e| format!("{e:?}"))
+}
+
+pub fn ocean_samples(coverage: &Coverage) -> [IVec; 3] {
+    let mid = (coverage.x.0 + coverage.x.1) / 2;
+    [
+        ivec::gather(coverage.x.0, coverage.y.0, 0),
+        ivec::gather(mid, (coverage.y.0 + coverage.y.1) / 2, 0),
+        ivec::gather(coverage.x.1, coverage.y.1, 0),
+    ]
 }
 
 /// The pages `has_ground` found, kept for the geocode bake and later stages;

@@ -66,7 +66,7 @@ pub fn faces(slots: &[Slot], channels: &[(String, Vec<String>)]) -> Result<Vec<T
             Slot::Bottom { ty } => (Face::Bottom, ty, None),
         };
         let before = out.len();
-        for (channel, types) in channels.iter().filter(|(ch, _)| wanted.is_none_or(|w| w == *ch)) {
+        for (channel, types) in channels.iter().filter(|(ch, _)| *ch != "common" && wanted.is_none_or(|w| w == *ch)) {
             if types.contains(ty) {
                 out.push(TileFace {
                     channel: channel.clone(),
@@ -250,10 +250,10 @@ pub const SHEET: Sheet = Sheet {
     let _ = writeln!(out, "    columns: {},", sheet.columns);
     out.push_str("    tiles: &[\n");
     for f in &sheet.faces {
-        // A placed color is a block; every other tile is a look of the ground.
-        let variant = if f.channel == "block" { "Block" } else { "Ground" };
+        let mut c = f.channel.chars();
+        let upper: String = c.next().map(|first| first.to_ascii_uppercase().to_string() + c.as_str()).unwrap_or_default();
         let face = f.face.member();
-        let _ = writeln!(out, "        (PlaceableCube::{variant}(cube_types::{variant}::{}), CubeFace::{face}, {}),", f.ty, f.tile);
+        let _ = writeln!(out, "        (PlaceableCube::{upper}(cube_types::{upper}::{}), CubeFace::{face}, {}),", f.ty, f.tile);
     }
     out.push_str("    ],\n    means: &[\n");
     for m in &sheet.means {

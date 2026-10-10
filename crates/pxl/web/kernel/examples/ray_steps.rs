@@ -240,7 +240,7 @@ fn main() {
         }
         p = p.parent();
     }
-    let ground = Access::new(&pages.paging, &store).at(&point(x, y), GROUND_Z).value().and_then(|g| g.top()).unwrap_or(0.0);
+    let ground = Access::new(&pages.paging, &store).at(&point(x, y), GROUND_Z).value().map_or(0.0, |g| g.top);
     println!("at {lon}, {lat}: ground {ground:.1} u, pages from {}", pages.server);
 
     for view in VIEWS {

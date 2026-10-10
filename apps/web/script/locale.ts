@@ -6,7 +6,7 @@
 
 import { dirname, join } from "@std/path";
 
-import { decorKinds, decorName, decorSection, placeableCubeId, placeableCubes, placeableCubeSection } from "../src/catalog/cell/mod.ts";
+import { decorKinds, decorName, decorSection, placeableCubeChannel, placeableCubeId, placeableCubes } from "../src/catalog/cell/mod.ts";
 
 const web = dirname(dirname(new URL(import.meta.url).pathname));
 const LOCALES = ["en", "ko"];
@@ -31,7 +31,7 @@ function branch(locale: string, doc: Catalog, name: string, want: string[]): voi
 }
 
 const cubeIds = placeableCubes.map(placeableCubeId);
-const sections = [...new Set(placeableCubes.map(placeableCubeSection))];
+const channels = [...new Set(placeableCubes.map(placeableCubeChannel))];
 const decorSections = [...new Set(decorKinds.map(decorSection))];
 
 for (const locale of LOCALES) {
@@ -39,7 +39,7 @@ for (const locale of LOCALES) {
   branch(locale, doc, "cubes", locale === "en" ? cubeIds : []);
   branch(locale, doc, "decor", locale === "en" ? decorKinds.map(decorName) : []);
   const drawer = doc["drawer"];
-  branch(locale, typeof drawer === "object" ? drawer : {}, "sections", sections);
+  branch(locale, typeof drawer === "object" ? drawer : {}, "sections", channels);
   branch(locale, typeof drawer === "object" ? drawer : {}, "decor_sections", decorSections);
 }
 

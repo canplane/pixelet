@@ -9,9 +9,7 @@ use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 use xpute_core::math::scalar::round;
 
 use crate::bake::deck::{Occupies, Over};
-use crate::bake::format::GroundCell;
-use crate::cell::cube::cube_types::{sentinel, Ground};
-use crate::cell::cube::Kind;
+use crate::bake::ground::{GroundChannelKey, ShownGround};
 use crate::space::adapter::epsg3857::u_per_m;
 use crate::space::pvf3::ivec::gather;
 use crate::space::pyramid::{Page, GROUND, GROUND_Z, PAGE_CELLS, TOP_Z};
@@ -148,16 +146,11 @@ pub fn pier_covers(frame: Frame, width: f64, a: [f64; 2], d: [f64; 2], near: [f6
 }
 
 /// None on a way or a building at grade (Arnis `support_blocked`, OSM2World),
-/// none over a lower deck or ramp (Arnis), none where the terrain gives no
-/// surface to stand on; water stops none.
-pub fn pier_stands(pier: [i32; 2], cell: GroundCell, column: impl IntoIterator<Item = Over>, ground: i32, cell_per_m: f64) -> Option<[i32; 2]> {
-    if cell == sentinel::void || Ground::of(cell).is_some_and(|g| matches!(g.kind(), Kind::Transport | Kind::Structure)) {
+/// none over a lower deck or ramp (Arnis); water stops none.
+pub fn pier_stands(pier: [i32; 2], shown: ShownGround, column: impl IntoIterator<Item = Over>, ground: i32, cell_per_m: f64) -> Option<[i32; 2]> {
+    if matches!(shown.channel, GroundChannelKey::TRANSPORT | GroundChannelKey::STRUCTURE) {
         return None;
     }
     let lower = column.into_iter().any(|o| matches!(o.occupies(ground, cell_per_m), Occupies::Above { slab, .. } if slab[1] <= pier[1]));
     (!lower).then_some(pier)
 }
-
-#[cfg(test)]
-#[path = "procedural.test.rs"]
-mod test;

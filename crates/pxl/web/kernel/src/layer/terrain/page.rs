@@ -6,9 +6,11 @@
 //! open water; at the source's top, it is void.
 
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
-use pxl_spec::bake::format::GroundCell;
 use pxl_spec::bake::format::{decode_terrain_into, Block, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
-use pxl_spec::space::pyramid::Page;
+use pxl_spec::bake::pack::GroundCell;
+use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pyramid::{Page, GROUND_Z};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::mem::base::ptr_at;
@@ -82,11 +84,16 @@ unsafe fn room_of(record: u32) -> PageRoom {
                 width: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(3)), MAX_DECKS),
                 kind: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(4)), MAX_DECKS),
                 form: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(5)), MAX_DECKS),
-                clear: core::slice::from_raw_parts_mut(ptr_at::<u8>(deck_lane(6)), MAX_DECKS),
-                boxes: core::slice::from_raw_parts_mut(ptr_at::<[i16; 4]>(deck_lane(7)), MAX_BOXES),
+                boxes: core::slice::from_raw_parts_mut(ptr_at::<[i16; 4]>(deck_lane(6)), MAX_BOXES),
             },
         }
     }
+}
+
+/// The source has nothing under `at`: the finest page held over it is void.
+pub fn void_under(at: &Pvf3) -> bool {
+    let paging = Terrain::pyramid().paging();
+    paging.drawn_from(Page::over(GROUND_Z, L3_IDX(at.i))).and_then(|q| paging.get(q)).is_some_and(Terrain::is_void)
 }
 
 pub fn terrain_step() {

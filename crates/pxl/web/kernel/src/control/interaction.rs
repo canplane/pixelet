@@ -27,7 +27,8 @@ use xpute_runtime::global::Global;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Holding {
     pub active_tool: ActiveTool,
-    /// A placed color or a ground look.
+    /// The hotbar only ever sets this to a flat color, but the drawer picks
+    /// terrain-styled cubes too.
     pub object_cube: PlaceableCube,
     /// The object size by its tier (`object_size_of`).
     pub object_tier: u32,

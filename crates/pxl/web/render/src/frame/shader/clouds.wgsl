@@ -114,10 +114,10 @@ const CIRRUS: Sheet = Sheet(9.0, 1u, 4.0, 0.45, 0x0c1cu);
 const CUMULUS_SALT: u32 = 0x0c0cu;
 
 struct Layer {
-  // Linear light times opacity, through the air to it.
+  // Linear light times opacity, before the air to it.
   color: vec3f,
   opacity: f32,
-  // How far along the ray, in km.
+  // How far along the ray it is seen, in km.
   t: f32,
 };
 
@@ -140,7 +140,7 @@ fn sheet(s: Sheet, dir: vec3f, t: f32, footprint: f32, lit: vec3f, reach: f32) -
   // Read a whole number of units off, so each layer has its own clouds.
   let field = cloud_opacity_finer(p + vec2f(f32(s.salt % CLOUD_TILE_UNITS)), footprint * s.softer, s.finer);
   out.opacity = s.opacity * field * weather(p, s.salt) * reach_fade(t, reach);
-  out.color = aerial(CLOUD_ALBEDO * lit, world) * out.opacity;
+  out.color = CLOUD_ALBEDO * lit * out.opacity;
   return out;
 }
 
@@ -181,9 +181,10 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
 
   // The lights where the ray meets the layer, as any point's are; inside it
   // light comes from every side, the sky's over it and the ground's under it.
-  let at = light_of(frame_camera_pos() + dir * (max(t0, 0.0) / atmos_km_per_u()));
+  let entry = frame_camera_pos() + dir * (max(t0, 0.0) / atmos_km_per_u());
+  let at = light_of(entry);
   let light = lit_by(frame_sun_dir(), dir, at.sun) + lit_by(frame_other_dir(), dir, at.other);
-  let around = 0.5 * (at.fill + ground_bounce(at)) / PI;
+  let around = 0.5 * (at.fill + ground_bounce(up_at(entry), at)) / PI;
 
   // The cumulus, marched. A column holds the flat layer's optical depth, risen as
   // high as it is dense, so a full cloud fills the slab and a thin one stays near the base.
@@ -221,8 +222,8 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
     let opacity = 1.0 - through;
     if (opacity > 0.002) {
       low.opacity = opacity * reach_fade(t0, reach);
-      let world = frame_camera_pos() + dir * (seen_at / opacity / atmos_km_per_u());
-      low.color = aerial(color / opacity, world) * low.opacity;
+      low.t = seen_at / opacity;
+      low.color = color / opacity * low.opacity;
     }
   }
 
@@ -235,6 +236,11 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   if (b.t < a.t) { let x = a; a = b; b = x; }
   if (c.t < b.t) { let x = b; b = c; c = x; }
   if (b.t < a.t) { let x = a; a = b; b = x; }
+  // The air to all three in one gather along the ray.
+  let air = air_segments(dir, clamp(vec3f(a.t, b.t, c.t), vec3f(0.0), vec3f(reach)));
+  a.color = a.color * air[0].through + air[0].scattered * exposure() * a.opacity;
+  b.color = b.color * air[1].through + air[1].scattered * exposure() * b.opacity;
+  c.color = c.color * air[2].through + air[2].scattered * exposure() * c.opacity;
   let all = over_layer(a, over_layer(b, c));
   let alpha = all.opacity * cloud_shown();
   if (alpha <= 0.002) {

@@ -51,7 +51,7 @@ impl Layer for Earth {
 static UPLOADS: Global<Vec<Option<Block>>> = Global::new();
 
 fn uploads() -> &'static mut Vec<Option<Block>> {
-    UPLOADS.get(|| vec![None; Paging::<Earth>::RECORDS as usize])
+    UPLOADS.get(|| vec![None; Paging::<Earth>::FRAMES as usize])
 }
 
 fn view<'a>((at, bytes): Block) -> &'a [u8] {

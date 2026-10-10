@@ -6,8 +6,7 @@ struct Sky {
   mapped: f32,
 };
 
-// Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process.
+// Field by field, never as a struct: a struct lost Safari's WebGPU its GPU process.
 @group(0) @binding(1) var<uniform> sky_words: array<vec4f, 4>;
 
 fn sky_ray() -> mat3x3f { return mat3x3f(sky_words[0].xyz, sky_words[1].xyz, sky_words[2].xyz); }

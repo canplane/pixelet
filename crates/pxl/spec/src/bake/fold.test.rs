@@ -2,7 +2,8 @@
 
 use super::*;
 
-use crate::cell::cube::cube_types::ground;
+use crate::bake::format::GroundChannelKey;
+use crate::cell::cube::cube_types;
 
 const SPAN: usize = PAGE_CELLS as usize;
 const PADDED: usize = ELE_PADDED_SPAN as usize;
@@ -18,33 +19,34 @@ fn an_area_keeps_what_fills_half_its_four_and_ties_alternate_corners() {
     assert_eq!(majority([7, 7, 1, 1], 14), 1);
 }
 
-/// A page whose cell is `f` of it.
+/// A page whose transport channel is `f` of the cell, every other channel void.
 fn plane(f: impl Fn(usize, usize) -> u8) -> Ground {
     Ground {
-        cells: (0..SPAN * SPAN).map(|i| f(i % SPAN, i / SPAN)).collect::<Vec<_>>().into(),
+        cells: (0..SPAN * SPAN).map(|i| with_channel(0, GroundChannelKey::TRANSPORT, f(i % SPAN, i / SPAN))).collect::<Vec<_>>().into(),
     }
 }
 
 fn fold(children: [&Ground; 4], z: u32) -> Vec<u8> {
-    fold_ground(children, z).cells.to_vec()
+    let out = fold_ground(children, z);
+    (0..SPAN * SPAN).map(|i| out.channel(i, GroundChannelKey::TRANSPORT)).collect()
 }
 
 #[test]
 fn a_uniform_page_folds_to_itself() {
-    let p = plane(|_, _| ground::subway);
-    assert!(fold([&p, &p, &p, &p], 15).iter().all(|&v| v == ground::subway));
+    let p = plane(|_, _| cube_types::transport::rail_subway);
+    assert!(fold([&p, &p, &p, &p], 15).iter().all(|&v| v == cube_types::transport::rail_subway));
 }
 
 #[test]
 fn an_area_one_cell_wide_is_a_tie_and_a_dot_goes() {
     // A one-cell strip ties 2:2 in every parent, so z15's south-west tie
     // child keeps it only where x is even.
-    let lot = plane(|x, _| if x == 10 { ground::parking } else { 0 });
+    let lot = plane(|x, _| if x == 10 { cube_types::transport::parking } else { 0 });
     let empty = plane(|_, _| 0);
-    assert_eq!(fold([&lot, &empty, &empty, &empty], 15)[5], ground::parking);
-    let odd = plane(|x, _| if x == 11 { ground::parking } else { 0 });
+    assert_eq!(fold([&lot, &empty, &empty, &empty], 15)[5], cube_types::transport::parking);
+    let odd = plane(|x, _| if x == 11 { cube_types::transport::parking } else { 0 });
     assert_eq!(fold([&odd, &empty, &empty, &empty], 15)[5], 0);
-    let dot = plane(|x, y| if (x, y) == (10, 10) { ground::parking } else { 0 });
+    let dot = plane(|x, y| if (x, y) == (10, 10) { cube_types::transport::parking } else { 0 });
     assert!(fold([&dot, &empty, &empty, &empty], 15).iter().all(|&v| v == 0));
 }
 
@@ -59,9 +61,9 @@ fn a_feature_two_cells_wide_survives_a_fold() {
 #[test]
 fn ties_alternate_their_corner_by_zoom() {
     // Every block ties 2:2 across the diagonal: (0, 0) wins on odd zooms, (1, 1) on even.
-    let columns = plane(|x, _| if x % 2 == 0 { ground::parking } else { ground::aeroway });
-    assert!(fold([&columns, &columns, &columns, &columns], 15).iter().all(|&v| v == ground::parking));
-    assert!(fold([&columns, &columns, &columns, &columns], 14).iter().all(|&v| v == ground::aeroway));
+    let columns = plane(|x, _| if x % 2 == 0 { cube_types::transport::parking } else { cube_types::transport::runway });
+    assert!(fold([&columns, &columns, &columns, &columns], 15).iter().all(|&v| v == cube_types::transport::parking));
+    assert!(fold([&columns, &columns, &columns, &columns], 14).iter().all(|&v| v == cube_types::transport::runway));
 }
 
 #[test]
@@ -166,7 +168,7 @@ fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
 
 /// The open ocean: flat water at sea level, no page.
 fn zero_page() -> Terrain {
-    let cells = vec![ground::water; SPAN * SPAN];
+    let cells = vec![with_channel(0, GroundChannelKey::LAND, cube_types::land::sea); SPAN * SPAN];
     let mut t = Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default());
     t.index.occupancy = Occupancy::ZERO;
     t

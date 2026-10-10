@@ -6,7 +6,7 @@
 
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::deck::{self, Builder, Decks, POINT_SCALE};
-use pxl_spec::space::adapter::epsg3857::{from_db, G3857};
+use pxl_spec::space::adapter::epsg3857::{from_db, u_per_m, G3857};
 use pxl_spec::space::pyramid::PAGE_CELLS;
 use xpute_core::math::scalar::round;
 
@@ -16,20 +16,22 @@ use crate::terrain::pipeline::overture::policy::segment_type;
 /// None where they do not fit a record: refused rather than cut, since a
 /// missing deck is a gap in a road.
 pub fn bake_decks(lines: &[Line], page_min: G3857) -> Option<Decks> {
+    let cell_per_m = u_per_m(from_db(page_min[1])) / U_PER_CELL;
     let mut decks = Builder::default();
     for row in lines {
         let kind = segment_type(&row.subtype, row.class.as_deref());
-        let width_code = round(row.width_cells * POINT_SCALE).clamp(1.0, f64::from(u8::MAX)) as u8;
+        let width = row.width_m * cell_per_m;
+        let width_code = round(width * POINT_SCALE).clamp(1.0, f64::from(u8::MAX)) as u8;
         let local: Vec<([f64; 2], i16)> = row
             .points
             .iter()
             .map(|p| {
                 let at = [from_db(p[0] - page_min[0]) / U_PER_CELL, from_db(p[1] - page_min[1]) / U_PER_CELL];
-                (at, round(p[2]) as i16)
+                (at, round(p[2] * cell_per_m) as i16)
             })
             .collect();
-        for [a, b] in runs_within(&local, deck::footprint(row.width_cells)) {
-            decks.push(local[a..=b].iter().copied(), width_code, kind, row.form, row.clear);
+        for [a, b] in runs_within(&local, deck::footprint(width)) {
+            decks.push(local[a..=b].iter().copied(), width_code, kind, row.form);
         }
     }
     decks.fits().then(|| decks.finish())

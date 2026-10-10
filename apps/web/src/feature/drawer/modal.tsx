@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { f64, u8 } from "@xpute/core/abi/word.ts";
-import { decorKinds, decorSection, type PlaceableCube, placeableCubeId, placeableCubes, placeableCubeSection } from "@/catalog/cell/mod.ts";
+import { decorKinds, decorSection, type PlaceableCube, placeableCubeChannel, placeableCubeId, placeableCubes } from "@/catalog/cell/mod.ts";
 
 import { useInHand, useUiStore } from "@/app/store/ui.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
@@ -25,7 +25,7 @@ function sectioned<S, T>(items: readonly T[], sectionOf: (item: T) => S): Map<S,
   for (const item of items) sections.set(sectionOf(item), [...(sections.get(sectionOf(item)) ?? []), item]);
   return sections;
 }
-const SECTIONS = sectioned(placeableCubes, placeableCubeSection);
+const SECTIONS = sectioned(placeableCubes, placeableCubeChannel);
 const DECOR_SECTIONS = sectioned(decorKinds, decorSection);
 
 // A press lands on 44 at least (decision/20260928-three-sizes-of-a-control.md); a circle cut a block's texture away, so a rounded square.

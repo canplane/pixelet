@@ -3,67 +3,90 @@
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
 @group(0) @binding(16) var earth_map: texture_2d_array<f32>;
 @group(0) @binding(17) var earth_pages: texture_2d_array<f32>;
-@group(0) @binding(19) var aerial_lut: texture_2d<f32>;
 
-fn shown() -> vec3f {
-  return atmos_white() * exposure();
-}
 
-// The lights where a point stands, exposed: each through the air above it, and
-// the sky's on an up-facing face there. A fact of the point, wherever the eye is.
-struct Light {
-  sun: vec3f,
-  other: vec3f,
-  fill: vec3f,
-};
-
-fn light_at(r: f32, up: vec3f) -> Light {
-  let e = exposure();
-  var l: Light;
-  l.sun = frame_sun_color() * sun_transmittance(r, dot(up, frame_sun_dir())) * e;
-  l.other = frame_other_color() * sun_transmittance(r, dot(up, frame_other_dir())) * e;
-  let sky = sky_ground(r, dot(up, atmos_sun_dir())).rgb + sky_ground(r, dot(up, atmos_moon_dir())).rgb * atmos_moon_light();
-  l.fill = (sky * atmos_white() + atmos_night_sky()) * e;
-  return l;
-}
+/* where a point stands */
 
 fn planet_center() -> vec3f {
   return vec3f(frame_planet().xy, frame_planet().w - frame_planet().z);
 }
 
-// A world point's radius, from the eye's: the frame's units are exact near it.
+// Straight up at a point; with no planet, the frame's.
+fn up_at(world_pos: vec3f) -> vec3f {
+  return select(vec3f(0.0, 0.0, 1.0), normalize(world_pos - planet_center()), frame_planet().z > 0.0);
+}
+
+// From the eye's radius: the frame's units are exact near it.
 fn radius_of(world_pos: vec3f) -> f32 {
   let c = planet_center();
   return max(camera_r() + (length(world_pos - c) - length(frame_camera_pos() - c)) * atmos_km_per_u(), atmos_bottom_radius());
 }
 
-fn light_of(world_pos: vec3f) -> Light {
-  return light_at(radius_of(world_pos), normalize(world_pos - planet_center()));
-}
 
-// What the ground below gives a down-facing face: what lights an up-facing one,
-// at the Earth's mean albedo.
-fn ground_bounce(l: Light) -> vec3f {
-  return atmos_ground_albedo() * (l.sun * max(frame_sun_dir().z, 0.0) + l.other * max(frame_other_dir().z, 0.0) + l.fill);
+/* lights */
+
+fn shown() -> vec3f {
+  return atmos_white() * exposure();
 }
 
 fn moon_shown() -> vec3f {
   return shown() * atmos_moon_light();
 }
 
-fn moon_view(dir: vec3f) -> vec3f {
-  return table_view(moon_view_lut, dir, atmos_moon_dir());
+// Each light through the air above a point, and the sky's on an up-facing face there.
+struct Light {
+  sun: vec3f,
+  other: vec3f,
+  fill: vec3f,
+};
+
+// Before the eye: what the exposure meters.
+fn light_unexposed(r: f32, up: vec3f) -> Light {
+  let sky = sky_ground(r, dot(up, atmos_sun_dir())).rgb + sky_ground(r, dot(up, atmos_moon_dir())).rgb * atmos_moon_light();
+  return Light(
+    frame_sun_color() * sun_transmittance(r, dot(up, frame_sun_dir())),
+    frame_other_color() * sun_transmittance(r, dot(up, frame_other_dir())),
+    sky * atmos_white() + atmos_night_sky(),
+  );
 }
 
-// Bruneton: a ratio of two lookups to the top, reversed for a ray that meets
-// the ground.
-fn transmittance_along(r: f32, mu: f32, d: f32, ground: bool) -> vec3f {
-  let rd = clamp(sqrt(d * d + 2.0 * r * mu * d + r * r), atmos_bottom_radius(), atmos_top_radius());
-  let mud = clamp((r * mu + d) / rd, -1.0, 1.0);
-  if (ground) {
-    return min(transmittance_to_top(rd, -mud) / max(transmittance_to_top(r, -mu), vec3f(1e-6)), vec3f(1.0));
-  }
-  return min(transmittance_to_top(r, mu) / max(transmittance_to_top(rd, mud), vec3f(1e-6)), vec3f(1.0));
+fn light_at(r: f32, up: vec3f) -> Light {
+  let l = light_unexposed(r, up);
+  let e = exposure();
+  return Light(l.sun * e, l.other * e, l.fill * e);
+}
+
+fn light_of(world_pos: vec3f) -> Light {
+  return light_at(radius_of(world_pos), up_at(world_pos));
+}
+
+// The ground under a down-facing face, at the Earth's mean albedo.
+fn ground_bounce(up: vec3f, l: Light) -> vec3f {
+  return atmos_ground_albedo() * (l.sun * max(dot(up, frame_sun_dir()), 0.0) + l.other * max(dot(up, frame_other_dir()), 0.0) + l.fill);
+}
+
+// The share that keeps its direction; the rest, an up-facing face's, reaches
+// every face alike. Directed alone, a wall turned from the sun read as a toy's.
+const DIRECTED: f32 = 0.25;
+// What a cast shadow takes of the sun; all of it left the shade as dark.
+const SHADOW_DEPTH: f32 = 0.5;
+
+// A matte face of albedo one, over pi, Lambert as three's standard material at
+// roughness 1: every lit pass's, and the Earth's past the terrain.
+fn surface_light(n: vec3f, up: vec3f, lit: f32, l: Light) -> vec3f {
+  // Turned from the sun, a face reads no shadow map.
+  let shaded = select(1.0, mix(1.0, lit, SHADOW_DEPTH), dot(n, frame_sun_dir()) > 0.0);
+  let alike = l.sun * max(dot(up, frame_sun_dir()), 0.0) * shaded + l.other * max(dot(up, frame_other_dir()), 0.0) + l.fill;
+  let hemi = mix(ground_bounce(up, l), l.fill, dot(n, up) * 0.5 + 0.5);
+  let directed = l.sun * max(dot(n, frame_sun_dir()), 0.0) * lit + l.other * max(dot(n, frame_other_dir()), 0.0) + hemi;
+  return mix(alike, directed, DIRECTED) / PI;
+}
+
+
+/* sky */
+
+fn moon_view(dir: vec3f) -> vec3f {
+  return table_view(moon_view_lut, dir, atmos_moon_dir());
 }
 
 struct Air {
@@ -72,6 +95,8 @@ struct Air {
   ground: bool,
   // The ground past the terrain is lit on its own slope of the sphere.
   normal: vec3f,
+  // Its distance from the eye against the Earth layer's reach, in octaves.
+  octaves: f32,
 };
 
 fn air_along(dir: vec3f) -> Air {
@@ -85,21 +110,25 @@ fn air_along(dir: vec3f) -> Air {
   air.ground = meets_land(r, mu);
   air.normal = frame_up();
   if (air.ground) {
+    // The light is the sky view's, gathered to the ground along this ray.
     let d = to_land(r, mu);
-    air.end = transmittance_along(r, mu, d, true);
+    let low = ray_low(r, mu, d);
+    air.end = exp(depth_along(r, mu, low, 0.0) - depth_along(r, mu, low, d));
     air.normal = normalize(frame_up() * r + dir * d);
+    air.octaves = log2(d / atmos_km_per_u() / atmos_earth_reach());
   } else {
     air.end = transmittance_to_top(r, mu);
   }
   return air;
 }
 
-// The Earth's face where a ray meets the ground past the terrain, `n` the
-// ground's up there in the map center's east, north and up: its reflectance,
-// and in alpha its lights' square root. The global picture is the sphere's,
-// read at the point's latitude and longitude; the pages are the flat map's,
-// read at the point the globe's own inverse gives, where the kernel holds them.
-fn earth_face(n: vec3f) -> vec4f {
+
+/* the Earth past the terrain */
+
+// Reflectance, and in alpha its lights' square root, where `n` is the ground's up
+// in the map center's east, north and up. The global picture is read at the
+// point's latitude and longitude, a held page at the globe's inverse of it.
+fn earth_face(n: vec3f, octaves: f32) -> vec4f {
   let sin_lat = frame_globe().y;
   let cos_lat = frame_globe().z;
   let center_lon = atmos_center_lon();
@@ -111,14 +140,9 @@ fn earth_face(n: vec3f) -> vec4f {
   let global = textureSampleLevel(earth_map, atmos_sampler, uv, 0, 0.0);
   let flat = off_globe_of(planet_center() + n * frame_planet().z, frame_planet(), frame_globe());
   let mercator = vec2f(center_lon, log(frame_globe().x)) + flat / frame_globe().w;
-  // The Earth layer's page there, a z6 pixel a texel, where the window holds
-  // one, taking over from the global picture, a z3 one, over the octave in
-  // which a pixel goes from covering a z5 cell, at the pages' reach, to a z6
-  // one. The floor's distance alone decides it, as it decides what is held; a
-  // page not held yet leaves the global picture.
-  let eye = off_globe_of(frame_camera_pos(), frame_planet(), frame_globe());
-  let over = (atmos_camera_altitude() - atmos_land_altitude_km()) / atmos_km_per_u();
-  let share = clamp(log2(atmos_earth_reach() / max(length(vec3f(flat - eye, over)), 1e-6)), 0.0, 1.0);
+  // A page, a z6 pixel a texel, takes over from the global picture's z3 over
+  // the octave a pixel goes from a z5 cell, at the pages' reach, to a z6 one.
+  let share = clamp(-octaves, 0.0, 1.0);
   if (share <= 0.0) {
     return global;
   }
@@ -137,94 +161,59 @@ fn earth_face(n: vec3f) -> vec4f {
   return global;
 }
 
-// The lights come on as the eye opens: by day the night eye's gain on them
-// would show every city lit at noon.
-fn city_shown(lights: f32) -> vec3f {
-  let night = (exposure() / atmos_exposure() - 1.0) / (atmos_max_adaptation() - 1.0);
-  return atmos_city_light() * lights * lights * exposure() * clamp(night, 0.0, 1.0);
+// On where night falls on them, as the sky's night falls (look/environment.rs).
+fn city_shown(lights: f32, up: vec3f) -> vec3f {
+  return atmos_city_light() * lights * lights * exposure() * (1.0 - smoothstep(-0.1, 0.0, dot(up, atmos_sun_dir())));
 }
 
-// The share of the light that keeps its direction; the rest, what an up-facing
-// face takes, reaches every face alike. Lit by the sun's direction alone, a
-// matte wall turned from it fell to a fifth of the ground and read as a toy's.
-const DIRECTED: f32 = 0.25;
-// What a cast shadow takes of the sun in the light that reaches every face:
-// all of it left the shade lit by the sky alone, as dark as the toy's.
-const SHADOW_DEPTH: f32 = 0.5;
+// Doubled, picked by eye beside the original; the cities are not its to scale.
+const EARTH_GAIN: f32 = 2.0;
 
-// What a matte face of albedo one takes, over pi: shade.wgsl's for every lit
-// pass, and the Earth's past the terrain (`beyond`), so the two meet unseamed.
-fn surface_light(n: vec3f, lit: f32, l: Light) -> vec3f {
-  // A face turned from the sun reads no shadow map, and is not its own shade.
-  let shaded = select(1.0, mix(1.0, lit, SHADOW_DEPTH), dot(n, frame_sun_dir()) > 0.0);
-  let up = l.sun * max(frame_sun_dir().z, 0.0) * shaded + l.other * max(frame_other_dir().z, 0.0) + l.fill;
-  // three's standard material at roughness 1, metalness 0: Lambert, albedo over pi.
-  let hemi = mix(ground_bounce(l), l.fill, n.z * 0.5 + 0.5);
-  let directed = l.sun * max(dot(n, frame_sun_dir()), 0.0) * lit + l.other * max(dot(n, frame_other_dir()), 0.0) + hemi;
-  return mix(up, directed, DIRECTED) / PI;
-}
-
-// Past the terrain the ground is lit by the terrain's own light, so the drawn
-// edge is no seam; no shadow map reaches it.
+// Lit by the terrain's own light, so the drawn edge is no seam; no shadow map
+// reaches it. It comes in over the octave to the Earth layer's reach, where
+// the terrain ends seen from the globe; nearer, the ground is the voxels' or
+// the air's alone.
 fn beyond(air: Air) -> vec3f {
   var light = air.light;
-  if (air.ground) {
+  let shown = clamp(air.octaves + 1.0, 0.0, 1.0);
+  if (air.ground && shown > 0.0) {
     let n = air.normal;
-    let face = earth_face(n);
-    light += air.end * (face.rgb * surface_light(n, 1.0, light_at(land_radius(), n)) + city_shown(face.a));
+    let face = earth_face(n, air.octaves);
+    light += air.end * shown * (EARTH_GAIN * face.rgb * surface_light(n, n, 1.0, light_at(land_radius(), n)) + city_shown(face.a, n));
   }
   return light;
 }
 
-struct Veil {
-  through: vec3f,
-  scattered: vec3f,
-};
 
-// What the air between the eye and a point leaves of it and lays over it: the
-// tables' transmittance, as the Earth past the terrain is dimmed, and the light
-// the aerial perspective gathered to that distance along that ray.
-fn air_to(world_pos: vec3f) -> Veil {
-  var v: Veil;
-  let to = world_pos - frame_camera_pos();
-  let du = length(to);
-  if (du < 1e-4) {
-    v.through = vec3f(1.0);
-    v.scattered = vec3f(0.0);
-    return v;
+/* the air before a point */
+
+// The light per unit of depth bends sharply only in the ozone: under it three
+// knots err less than eight do from over it, a percent or two. Crossing the
+// line, the whole frame steps by that much at once and shows no flicker.
+fn air_knots() -> i32 {
+  return select(8, 3, atmos_camera_altitude() < atmos_ozone_center() - atmos_ozone_half_width());
+}
+
+// The points `d` km along `dir`, nearest first, unexposed.
+fn air_segments(dir: vec3f, d: vec3f) -> array<Veil, 3> {
+  var v = gather(camera_r(), frame_up(), dir, d, atmos_sun_dir(), atmos_moon_dir(), atmos_moon_light(), air_knots());
+  for (var i = 0; i < 3; i++) {
+    v[i].scattered *= atmos_white();
   }
-  let r = camera_r();
-  let mu = dot(to / du, frame_up());
-  let d = du * atmos_km_per_u();
-  v.through = transmittance_along(r, mu, d, meets_ground(r, mu));
-  v.scattered = aerial_at(world_pos, r, mu, d) * exposure();
   return v;
 }
 
-// The aerial perspective where a point falls on the screen, between the two
-// slices about its distance; nearer than the first, a share of it.
-fn aerial_at(world_pos: vec3f, r: f32, mu: f32, d: f32) -> vec3f {
-  let clip = frame_view_proj() * vec4f(world_pos, 1.0);
-  let ndc = clamp(clip.xy / max(clip.w, 1e-6), vec2f(-1.0), vec2f(1.0));
-  let x = coord_of(ndc.x * 0.5 + 0.5, AERIAL_SIZE.x);
-  let y = coord_of(ndc.y * 0.5 + 0.5, AERIAL_SIZE.y);
-  let s = sqrt(clamp(d / max(air_path(r, mu), 1e-6), 0.0, 1.0)) * AERIAL_SIZE.z - 1.0;
-  let k = clamp(floor(s), 0.0, AERIAL_SIZE.z - 1.0);
-  let near = textureSampleLevel(aerial_lut, atmos_sampler, vec2f((k + x) / AERIAL_SIZE.z, y), 0.0).rgb;
-  if (s < 0.0) {
-    return near * (s + 1.0);
+fn air_to(world_pos: vec3f) -> Veil {
+  let to = world_pos - frame_camera_pos();
+  let du = length(to);
+  if (du < 1e-4) {
+    return Veil(vec3f(1.0), vec3f(0.0));
   }
-  let far = textureSampleLevel(aerial_lut, atmos_sampler, vec2f((min(k + 1.0, AERIAL_SIZE.z - 1.0) + x) / AERIAL_SIZE.z, y), 0.0).rgb;
-  return mix(near, far, s - k);
+  let v = air_segments(to / du, vec3f(du * atmos_km_per_u()))[2];
+  return Veil(v.through, v.scattered * exposure());
 }
 
-fn aerial(color: vec3f, world_pos: vec3f) -> vec3f {
-  let v = air_to(world_pos);
-  return color * v.through + v.scattered;
-}
-
-// Computed per vertex: every term varies slowly across a face, and it saves
-// the table reads per fragment.
+// Per vertex: every term varies slowly across a face.
 struct Seen {
   through: f32,
   scattered: vec3f,
@@ -232,24 +221,24 @@ struct Seen {
 };
 
 fn seen_from_eye(world_pos: vec3f) -> Seen {
-  let light = light_of(world_pos);
   let v = air_to(world_pos);
   var s: Seen;
-  // A lit pass's color is authored, not reflectance, so the air dims it alike
-  // at every wavelength: dimmed by wavelength, a light sea's blue went and its
-  // green stayed. The air's own light, and what is reflectance — the Earth's
-  // picture, a cloud — keep the air's color.
+  // An authored color is dimmed alike at every wavelength: by wavelength, a
+  // light sea's blue went and its green stayed.
   s.through = dot(v.through, LUMA);
   s.scattered = v.scattered;
-  s.light = light;
+  s.light = light_of(world_pos);
   return s;
 }
 
-// Spencer et al. 1995 point-spread halo. The strength is a camera's: ISO 9358
-// veiling glare is 1-10%, GLARE_VEIL is its middle. Drawn over the sky only.
+
+/* glare */
+
+// Spencer et al. 1995's halo; ISO 9358 veiling glare is 1-10%, GLARE_VEIL its middle.
 const GLARE_HALO_SHARE: f32 = 0.6205;
 const GLARE_VEIL: f32 = 0.03;
 
+// Over the sky only.
 fn glare(dir: vec3f) -> vec3f {
   let s = atmos_sun_dir();
   let theta = degrees(atan2(length(cross(dir, s)), dot(dir, s))) + 0.02;

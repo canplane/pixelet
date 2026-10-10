@@ -22,8 +22,6 @@ use crate::io::demand::{Ask, Why};
 use crate::world::pyramid::Layer;
 use floor::{Fallback, Floor};
 
-/// The record of a page held without a frame: an empty page, its body its own.
-pub const ABSENT: u32 = u32::MAX;
 
 /// The zooms the pyramid holds, z16 to its top.
 pub const PYRAMID_ZOOMS: u32 = GROUND_Z - TOP_Z + 1;
@@ -55,10 +53,11 @@ pub trait Victim {
     fn victim(&self, candidates: &[Candidate]) -> Option<usize>;
 }
 
-/// `settles`: which of its four children it says the ground of.
+/// `settles`: which of its four children it says the ground of. No frame
+/// for an empty page, whose body is its own.
 struct Held<L> {
     body: L,
-    record: u32,
+    frame: Option<u32>,
     settles: [bool; 4],
 }
 
@@ -118,8 +117,6 @@ impl<L: Layer> Paging<L> {
     /// the view reads never gives up another the view reads.
     pub const FRAMES: u32 = Self::PINNED_PAGES + Self::DEMAND_PAGES;
 
-    pub const RECORDS: u32 = Self::FRAMES;
-
     /// A fault's line is among the demand's asks; speculation takes at most the frames.
     pub const ASKS: u32 = Self::PINNED_PAGES + Self::DEMAND_PAGES + if L::DEMANDS { Self::FRAMES } else { 0 };
 
@@ -135,7 +132,7 @@ impl<L: Layer> Default for Paging<L> {
         Paging {
             pages: HashMap::with_capacity(Self::ENTRIES as usize),
             // Lowest first, as the frames are taken.
-            free: (0..Self::RECORDS).rev().collect(),
+            free: (0..Self::FRAMES).rev().collect(),
             going: Vec::with_capacity(Self::ENTRIES as usize),
             revision: 0,
             refused: 0,
@@ -173,12 +170,12 @@ impl<L: Layer> Paging<L> {
 
     /// Held in a frame of its own, not as an empty page.
     fn framed(&self, p: Page) -> bool {
-        self.held_as(p).is_some_and(|h| h.record != ABSENT)
+        self.held_as(p).is_some_and(|h| h.frame.is_some())
     }
 
     /// The frame a held page is in; none for an empty one.
     pub fn frame(&self, p: Page) -> Option<u32> {
-        self.held_as(p).map(|h| h.record).filter(|&r| r != ABSENT)
+        self.held_as(p)?.frame
     }
 
     pub fn get(&self, p: Page) -> Option<&L> {
@@ -255,7 +252,7 @@ impl<L: Layer> Paging<L> {
         going.extend(
             self.pages
                 .iter()
-                .filter(|&(_, e)| e.ask.is_none() && e.held.as_ref().is_some_and(|h| h.record == ABSENT))
+                .filter(|&(_, e)| e.ask.is_none() && e.held.as_ref().is_some_and(|h| h.frame.is_none()))
                 .map(|(&p, _)| p),
         );
         for &p in &going {
@@ -339,7 +336,7 @@ impl<L: Layer> Paging<L> {
         match receive(record) {
             Ok(page) => {
                 self.admitted = self.admitted.wrapping_add(1);
-                self.put(p, page, record);
+                self.put(p, page, Some(record));
                 Ok(())
             }
             Err(e) => {
@@ -357,11 +354,11 @@ impl<L: Layer> Paging<L> {
         if let Some(record) = self.remove(p) {
             self.free.push(record);
         }
-        self.put(p, page, ABSENT);
+        self.put(p, page, None);
     }
 
     /// Held, or answered by the page over it: nothing more will come for it.
-    pub fn answered(&self, p: Page) -> bool {
+    pub fn has_answer(&self, p: Page) -> bool {
         self.resident(p) || self.entry(p).is_some_and(|e| e.answered)
     }
 
@@ -375,9 +372,9 @@ impl<L: Layer> Paging<L> {
         }
     }
 
-    fn put(&mut self, p: Page, body: L, record: u32) {
+    fn put(&mut self, p: Page, body: L, frame: Option<u32>) {
         let settles = if p.z < GROUND_Z { p.children().map(|c| body.settles(p, c)) } else { [false; 4] };
-        self.entry_mut(p).held = Some(Held { body, record, settles });
+        self.entry_mut(p).held = Some(Held { body, frame, settles });
         self.revision = self.revision.wrapping_add(1);
         L::changed(p, true);
     }
@@ -391,7 +388,7 @@ impl<L: Layer> Paging<L> {
         }
         self.revision = self.revision.wrapping_add(1);
         L::changed(p, false);
-        (held.record != ABSENT).then_some(held.record)
+        held.frame
     }
 }
 

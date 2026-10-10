@@ -4,13 +4,15 @@
 //
 // [Layer: objects] User-placed decor kind catalog — the cube catalog's own sibling, non-cube content (GLB instances, not a meshed box).
 //
-// Numbered past the ground's byte and the object's own colors, so a placed
-// leaf's value says which catalog it is from: an object value is a u16.
+// Numbered well clear of the cube catalog's own values (128, 130-144, 255) even
+// though the two never collide in practice (each placed leaf holds one
+// value from exactly one of the two catalogs) — just so a raw byte's value
+// alone still hints at which catalog it came from during debugging.
 export const decor_types = {
-  tree: 512,
-  boat: 513,
-  car: 514,
-  train: 515,
+  tree: 228,
+  boat: 229,
+  car: 230,
+  train: 231,
 } as const satisfies Record<string, number>;
 
 export type DecorId = keyof typeof decor_types;

@@ -28,7 +28,7 @@ const DEV_MARKERS = ["dev/test", "development"];
 const SENTINELS = ["/geo/search", "/tile"];
 // Kept empty: the generator fails if this list is missing.
 const KERNEL_ROUTE_SENTINELS = [] as string[];
-const KERNEL_SENTINELS = ["_dict"];
+const KERNEL_SENTINELS = ["_ocean"];
 
 function leaves(o: unknown, path = ""): [string, string][] {
   if (o !== null && typeof o === "object") {

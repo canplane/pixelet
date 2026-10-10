@@ -10,6 +10,6 @@ pub(super) fn execute(p: Page, cache: &std::path::Path, out: &std::path::Path, s
         cache,
         out,
         || Ok(crate::poi::leaves(&mut job::connect(&[&crate::poi::READS], seconds)?.1, &crate::coverage::Coverage::of_source()?, Some(p.page))?.remove(&p.page)),
-        &PoiPage::default(),
+        || Ok(PoiPage::default()),
     )
 }

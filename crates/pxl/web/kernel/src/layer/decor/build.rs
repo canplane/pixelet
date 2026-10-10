@@ -26,8 +26,8 @@ use crate::world::pyramid::Layer as _;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::constant::CELL;
 use pxl_spec::bake::deck::Decks;
-use pxl_spec::bake::format::GroundCell;
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::math::scalar::round;
 
@@ -171,7 +171,7 @@ pub fn scatters_at(value: u32, at: &Pvf3) -> Option<Draw> {
     let ground = Access::now().at(at, GROUND_Z).exact()?;
     let [ix, iy, iz] = CELL.index_of(at);
     let candidate = scatter_at(kind.seed.tag, kind.seed.density, [ix, iy])?;
-    (ground.top().map(|top| round(top / CELL.side()) as i64) == Some(iz)).then(|| draw(kind, candidate, &page.ground.cells, &page.decks, z16.in_page()))?
+    (iz == round(ground.top / CELL.side()) as i64).then(|| draw(kind, candidate, &page.ground.cells, &page.decks, z16.in_page()))?
 }
 
 impl<'s> DecorBuild<'s> {
