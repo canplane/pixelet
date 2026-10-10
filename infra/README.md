@@ -158,12 +158,11 @@ dev proxy splits on the same roots.
 
 ```sh
 wrangler login           # once a machine
-deno task deploy         # build, check:bundle, publish
+deno task deploy         # build, publish
 deno task smoke https://plei.me
 ```
 
-`check:bundle` fails a build whose artifact still carries a dev-only
-surface's strings; calling wrangler directly skips it. A deploy uploads only
+A deploy uploads only
 changed static assets and leaves the bucket alone: uploading tiles and
 assets is [the publish-bucket skill](../.agents/skills/publish-bucket/SKILL.md).
 

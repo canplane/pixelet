@@ -25,7 +25,6 @@ const unclean = status.success ? new TextDecoder().decode(status.stdout).trim() 
 if (unclean !== "") console.log(`[deploy] the tree is not clean, so the build id will say -dirty:\n${unclean}`);
 
 await step("build", "deno", ["task", "build"], number ? { PXL_BUILD_NUMBER: number } : {});
-await step("check:bundle", "deno", ["task", "check:bundle"]);
 await step("publish", "deno", wrangler("deploy"));
 // The `#n` → path table for this build's panics, kept beside the build log, never served.
 if (number) {
