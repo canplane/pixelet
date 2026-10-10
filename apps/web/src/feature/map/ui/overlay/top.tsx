@@ -40,7 +40,7 @@ export function TopOverlays() {
               {SCRIM_EASE.map(([at, k]) => <Stop key={at} offset={at} stopColor={color.black} stopOpacity={SCRIM_OPACITY * (1 - k)} />)}
             </LinearGradient>
             <LinearGradient id="scrim-across" gradientUnits="userSpaceOnUse" x1={from} y1={0} x2={width - from} y2={0}>
-              {[...SCRIM_EASE.map(([at, k]) => [ramp * at, k] as const), ...[...SCRIM_EASE].reverse().map(([at, k]) => [1 - ramp * at, k] as const)].map(([at, k], i) => (
+              {[...SCRIM_EASE.map(([at, k]) => [ramp * at, k] as const), ...SCRIM_EASE.toReversed().map(([at, k]) => [1 - ramp * at, k] as const)].map(([at, k], i) => (
                 <Stop key={i} offset={at} stopColor={color.white} stopOpacity={k} />
               ))}
             </LinearGradient>

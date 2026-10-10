@@ -2,6 +2,10 @@
 
 @group(0) @binding(10) var sky_view_lut: texture_2d<f32>;
 
+fn table_at(lut: texture_2d<f32>, mu: f32, light_cos: f32) -> vec3f {
+  return textureSampleLevel(lut, atmos_sampler, sky_view_uv(camera_r(), mu, light_cos), 0.0).rgb;
+}
+
 fn table_view(lut: texture_2d<f32>, dir: vec3f, toward: vec3f) -> vec3f {
   let up = frame_up();
   let mu = dot(dir, up);
@@ -13,7 +17,7 @@ fn table_view(lut: texture_2d<f32>, dir: vec3f, toward: vec3f) -> vec3f {
   if (h_dir > 1e-4 && h_light > 1e-4) {
     light_cos = dot(dir_h, light_h) / (h_dir * h_light);
   }
-  return textureSampleLevel(lut, atmos_sampler, sky_view_uv(camera_r(), mu, light_cos), 0.0).rgb;
+  return table_at(lut, mu, light_cos);
 }
 
 fn sky_view(dir: vec3f, sun: vec3f) -> vec3f {

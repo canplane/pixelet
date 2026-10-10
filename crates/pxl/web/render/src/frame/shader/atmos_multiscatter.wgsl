@@ -22,7 +22,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
       let s = sqrt(max(1.0 - mu * mu, 0.0));
       let dir = vec3f(s * cos(phi), s * sin(phi), mu);
       let ground = meets_ground(r, mu);
-      let d = air_path(r, mu);
+      let d = select(to_top(r, mu), to_ground(r, mu), ground);
       let dt = d / f32(MULTISCATTER_STEPS);
       var through = vec3f(1.0);
       for (var i = 0; i < MULTISCATTER_STEPS; i++) {

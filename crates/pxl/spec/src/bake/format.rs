@@ -107,11 +107,11 @@ impl Occupancy {
     }
 }
 
-/// What a ray and a fetch need before the pages under one are held. At every
-/// zoom, the leaf too, so a page has one contract.
+/// What a ray and a fetch need before the pages under one are held. On every
+/// level, the leaf too, so a page has one contract.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Index {
-    extent: Cow<'static, [[i16; 2]]>, // lo, hi for each `EXTENT` cell, over this zoom and all finer: a ray above hi misses them
+    extent: Cow<'static, [[i16; 2]]>, // lo, hi for each `EXTENT` cell, over this level and all below: a ray above hi misses them
     blocks: Cow<'static, [Block]>,    // `extent` joined over 2^j squares: rebuilt from it, never on the wire
     pub occupancy: Occupancy,         // which children are pages: none is asked for that is not
 }
@@ -220,28 +220,8 @@ pub struct Terrain {
     pub index: Index,             // bounds over the page and all under it: no one page holds them
 }
 
-// Made on first use: a constant array of zeros would ship in the module's data.
-static VOID_ELE: std::sync::LazyLock<Vec<i16>> = std::sync::LazyLock::new(|| vec![0; ELE_LANE]);
-static VOID_CELLS: std::sync::LazyLock<Vec<GroundCell>> = std::sync::LazyLock::new(|| vec![0; GROUND_LANE]);
-
 impl Terrain {
-    /// Where the source has nothing: sea level, so the ground stays known and
-    /// nothing is drawn, and no child to ask for.
-    pub fn void() -> Terrain {
-        Terrain {
-            ground: Ground { cells: Cow::Borrowed(&VOID_CELLS[..]) },
-            decks: Decks::default(),
-            ele: Cow::Borrowed(&VOID_ELE[..]),
-            index: Index::new(vec![[0, 0]; EXTENT_LANE], Occupancy::ZERO),
-        }
-    }
-
-    /// The source's nothing, which draws nothing.
-    pub fn is_void(&self) -> bool {
-        !self.index.occupancy.is_page()
-    }
-
-    /// A z16 page, its index taken from its own surface and decks.
+    /// A finest-level page, its index taken from its own surface and decks.
     pub fn leaf(ele: Vec<i16>, ground: Ground, decks: Decks) -> Terrain {
         let extent = extent_of(&ele, &decks);
         Terrain {

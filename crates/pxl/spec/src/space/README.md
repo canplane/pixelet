@@ -112,15 +112,10 @@ cell is one unit — and any cell's zoom follows from its size alone
 ([`adapter/3857.rs`](./adapter/3857.rs) `zoom_of`). A page is no part of it: a page only bundles cells into a
 file, and its name's length follows its size, never a zoom.
 
-**A zoom names a cell's resolution, never an extent.** A z16 cell is the
-standard's z16 pixel; a z16 chunk is 64 × 64 z16 cells and a z16 page
-512 × 512, each its own count of cells. So a page at z is not the standard's
-z tile: it is two of them a side, a z6 page as wide as a z5 tile.
-
 ## The pyramid is not a tier
 
-A terrain page is fetched at several resolutions, z16 to z6, and those
-zooms are **not** tiers of this ladder.
+A terrain page is fetched at several resolutions, and those levels are
+**not** tiers of this ladder.
 
 ```
 z16            z15
@@ -131,17 +126,17 @@ z16            z15
 └────┴────┘    └─────────┘
 ```
 
-A page at z holds the same record a z16 one does — 512 cells a side — over
-2^(16 − z) z16 pages a side, so its cells are 2^(16 − z) units. Its key is a
-z16 key shifted down 16 − z, and a key alone does not say by how much, so a
-page is named by its zoom and a key together (`Page`, `pxl-spec
+A level-k page holds the same record a leaf does — 512 cells a side — over
+2^k leaves a side, so its cells are 2^k units. Its key is a leaf key shifted
+down k, and a key alone does not say by how much, so a page coarser than z16 is
+named by a level and a key together (`LevelPage`, `pxl-spec
 space/pyramid.rs`). `L3_IDX` always answers the leaf question: which
 512u square.
 
-The two ladders meet at one number. A page's cells are its zoom's, and the
-kernel's mesher measures its own step against the same scale, so the
-mesher's step, the zoom a page is held at and a web map's zoom are one
-quantity (`decision/20260921-the-mesh-step-and-the-zoom-are-one-number.md`).
+The two ladders meet at one number. A level-k page's cells are z(16 − k), and
+the kernel's mesher measures its own step against the same scale, so the
+mesher's step, the level a page is held at and a web map's zoom are one
+quantity (`decision/20260921-level-step-and-zoom-are-one-number.md`).
 
 ## The trees share their geometry and nothing else
 
@@ -161,12 +156,12 @@ represents:
 | the objects' folds (pxl-kernel layer/object/store.rs) | 3      | whole                        | the majority of its eight                 | in a band's tree under a band, a map over it       | one read a cell                                    |
 | the objects' bounds (the same)                        | 3      | whole                        | the box of everything under it            | a map, from a band up to the widest box asked      | down by a box, or along a ray nearest first        |
 
-The pyramid is a tree across zooms: every page holds a summary of the
+The pyramid is a tree across levels: every page holds a summary of the
 ground under it — terrain's cells voted and averaged, places summed — so a
-far view draws a coarse zoom as it is, the way a mipmap is read. Placed
+far view draws a coarse level as it is, the way a mipmap is read. Placed
 objects need a tree of another kind: they are all resident, mostly empty
-space, and three-dimensional, so what matters is storing one zoom without
-its empty cells. That is the **sparse tree**, a tree inside one zoom whose
+space, and three-dimensional, so what matters is storing one level without
+its empty cells. That is the **sparse tree**, a tree inside one level whose
 inner nodes are the way down and, where the caller asks, a summary too: a
 folded write (`set_folded`, in `sparse_tree/mem.rs`) refolds every branch it
 passed through by the caller's fold, and a walk can stop at a depth and read
@@ -181,9 +176,9 @@ a crowd needs, and a layer whose fold is lossy, like terrain's vote, never
 settles one.
 
 They stay two because one is paged and the other is not. Objects keep their
-coarse zooms stored all the same, refolded along a write's path rather than
+coarse levels stored all the same, refolded along a write's path rather than
 folded again when a chunk is built: inside a band in its tree's branches, and
-past a band in the object store's own records a zoom. Were objects ever
+past a band in the object store's own records a level. Were objects ever
 paged, those records would be a layer of the pyramid, and their octree's
 collapse its `settles`.
 
@@ -203,7 +198,7 @@ prunes nothing.
 | [`adapter/`](./adapter/)         | where a unit gets a meaning                                                                            |
 | `hierarchy.rs`                   | `Scale`, the one form a size takes, and parent and child in any number of axes                         |
 | `indexer.rs`                     | the tiers, and the four questions each answers                                                         |
-| `lod.rs`                         | the zoom a distance is drawn at, and the pages of a zoom an observation can fault on                   |
+| `lod.rs`                         | the level a distance is drawn at, and the pages of a level an observation can fault on                 |
 | [`lattice/`](./lattice/)         | structures over the lattice: one address hash, points bucketed in 3D, rectangles indexed on the screen |
 | [`sparse_tree/`](./sparse_tree/) | an octree in two flat lanes, storing what differs from the default                                     |
 | `xy.rs`                          | `TO_XY`, which drops Z to give the key every 2D map surface is keyed by                                |

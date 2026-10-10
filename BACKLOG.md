@@ -35,13 +35,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **Subway bores.** Every tunnel flag is a bore now, so a subway's lines are
   drawn underground and stretch each chunk's bounds down; whether that cost
   stays is not decided.
-- **Past the coverage, a coarse page is baked as sea.** A page over the
-  coverage's edge folds the children outside it as ocean (`pxl-spec
-  bake/fold.rs` `fold_ele`), which the client cannot tell from real water;
-  folding them as VOID needs only the edge's pages baked again.
-- **The bake's `_ocean` page.** The client no longer reads it (a missing
-  page is drawn from the one over it), but the fold and the tile server
-  still make it (`geo-bake terrain/leaf.rs` `bake_ocean`, `demand.rs`).
+
+## P3
+
+- **Clouds with a thickness.** A slab a kilometer or two deep, sampled a few
+  times a pixel, for the volume a side view misses — as a quality setting,
+  since it is several times today's cost; volumetric clouds proper are out
+  while the client draws at rest every two seconds
+  ([the sky is the air](./decision/20260922-the-sky-is-the-air.md)).
 
 ## Parked, with the reason on file
 

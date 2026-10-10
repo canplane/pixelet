@@ -89,9 +89,6 @@ export async function acquireDevice(lost: () => void): Promise<DeviceInfo | null
     device = null;
     objects.length = 0;
     stamps = null;
-    // The kernel forgets its images with the device and loads them again.
-    for (const bitmap of images.values()) bitmap.close();
-    images.clear();
     lost();
   });
   d.onuncapturederror = (e) => console.error(`[gpu] ${e.error.message}`);
@@ -348,9 +345,6 @@ function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
       });
       d.queue.copyExternalImageToTexture({ source: bitmap }, { texture }, [bitmap.width, bitmap.height]);
-      // The texture is the image now; the kernel uploads each image once.
-      bitmap.close();
-      images.delete(w[a + 1]);
       put(w[a], texture);
       break;
     }

@@ -15,10 +15,13 @@ use crate::gpu::atmosphere::AIR_WORDS;
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_ray;
-use crate::look::environment::{ENV_AIR, ENV_SKY};
+use crate::look::atmosphere::light_at;
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_SUN};
 
 /// The ray, and the sun's and moon's light at the layer.
-pub(crate) const CLOUDS_FLOATS: usize = 12;
+pub(crate) const CLOUDS_FLOATS: usize = 12 + 8;
+pub(crate) const SUN_AT: usize = 12;
+pub(crate) const MOON_AT: usize = 16;
 pub struct CloudField {
     pub base: [u32; 2],
     pub frac: [f32; 2],
@@ -146,10 +149,16 @@ impl CloudPass {
         release(pass);
     }
 
-    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, eye: &V3, env: &[f32]) {
+    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, eye: &V3, env: &[f32], up: &V3) {
         put_ray(&mut self.words, 0, view_proj, eye);
         self.over = env[ENV_AIR] as f64 > ALTITUDE_KM;
         self.gone = env[ENV_AIR] as f64 >= GONE_KM;
+        for (at, toward) in [(SUN_AT, ENV_SUN), (MOON_AT, ENV_MOON)] {
+            let mu = (0..3).map(|k| env[toward + k] as f64 * up[k]).sum();
+            for (w, v) in self.words[at..at + 3].iter_mut().zip(light_at(ALTITUDE_KM, mu)) {
+                *w = v as f32;
+            }
+        }
         g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
 

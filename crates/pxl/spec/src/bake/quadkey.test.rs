@@ -1,6 +1,7 @@
 // pxl-spec/bake/quadkey.test.rs
 
 use super::*;
+use crate::space::pyramid::TOP_LEVEL;
 
 /// A Bundang page, (11569, 3671), whose grid place is (27953, 12712); written
 /// out because the northward flip is what can be silently wrong.
@@ -14,29 +15,28 @@ fn the_known_page_is_the_tile_it_stands_on() {
     assert_eq!(tile_of(BUNDANG, PAGE_KEY_DEPTH), (27953, 12712));
 }
 
-/// One prefix is one region at every zoom.
+/// One prefix is one region at every level.
 #[test]
 fn a_coarser_page_is_named_by_a_prefix_of_the_leaf_over_it() {
     let leaf = quadkey_of(PAGE_KEY_DEPTH, BUNDANG).to_string();
-    assert_eq!(depth_at(GROUND_Z), PAGE_KEY_DEPTH, "a z16 page is a leaf");
-    for z in TOP_Z..GROUND_Z {
-        let coarse = page_name(Page::over(z, BUNDANG)).to_string();
-        assert_eq!(coarse.len(), depth_at(z) as usize, "a zoom is its length");
-        assert!(leaf.starts_with(&coarse), "z{z} {coarse} is not a prefix of {leaf}");
+    for level in 1..=TOP_LEVEL {
+        let coarse = quadkey_of(PAGE_KEY_DEPTH - level, ivec::sh(BUNDANG, -(level as i32))).to_string();
+        assert_eq!(coarse.len(), (PAGE_KEY_DEPTH - level) as usize, "a level is its length");
+        assert!(leaf.starts_with(&coarse), "level {level} {coarse} is not a prefix of {leaf}");
     }
 }
 
 #[test]
-fn every_page_survives_the_round_trip_at_every_zoom() {
+fn every_page_survives_the_round_trip_at_every_level() {
     let n = 1i64 << PAGE_KEY_DEPTH;
     for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
         for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
-            for z in TOP_Z..=GROUND_Z {
-                let depth = depth_at(z);
-                let idx = Page::over(z, ivec::gather(x, y, 0)).page;
+            for level in 0..=TOP_LEVEL {
+                let depth = PAGE_KEY_DEPTH - level;
+                let idx = ivec::sh(ivec::gather(x, y, 0), -(level as i32));
                 let key = quadkey_of(depth, idx).to_string();
                 assert_eq!(key.len(), depth as usize);
-                assert_eq!(index_of(&key), Some((depth, idx)), "({x}, {y}) at z{z}");
+                assert_eq!(index_of(&key), Some((depth, idx)), "({x}, {y}) at level {level}");
             }
         }
     }
@@ -60,12 +60,12 @@ fn what_is_not_a_name_is_refused() {
     assert!(index_of(&"0".repeat(PAGE_KEY_DEPTH as usize)).is_some(), "a leaf is");
 }
 
-/// A name round-trips at every zoom of the pyramid, and a name no zoom holds is no page.
+/// A name round-trips at every pyramid level, and a name no level holds is no page.
 #[test]
-fn a_page_s_name_reads_back_as_the_page_and_only_a_held_zoom_is_one() {
-    for z in TOP_Z..=GROUND_Z {
-        let p = Page::new(z, ivec::gather(-3, 5, 0));
-        assert_eq!(page_of_name(&page_name(p).to_string()), Some(p), "z{z}");
+fn a_page_s_name_reads_back_as_the_page_and_only_a_held_level_is_one() {
+    for level in 0..=TOP_LEVEL {
+        let p = LevelPage::new(level, ivec::gather(-3, 5, 0));
+        assert_eq!(page_of_name(&page_name(p).to_string()), Some(p), "level {level}");
     }
-    assert_eq!(page_of_name("0"), None, "a one-digit name is coarser than the top");
+    assert_eq!(page_of_name("0"), None, "zoom 1 is past the top level");
 }

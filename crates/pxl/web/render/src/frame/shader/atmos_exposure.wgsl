@@ -1,18 +1,29 @@
-// The eye, adapted to the light on the land under it: an up-facing face of
-// albedo one, against the same at sea level under a sun overhead. A fall from
-// noon shows as SHOWN_FALL of it down to NIGHT_STOPS under; the eye takes back
-// the rest. In stops, which an opened night eye needs.
+// Eye adaptation: exposure from horizontal illuminance against a sun overhead
+// at sea level (1 after white balance). Texel 0: exposure and zenith sky;
+// texel 1: the sky's irradiance on an up-facing face.
 
-fn noon() -> f32 {
-  let r = atmos_bottom_radius();
-  return dot((sun_transmittance(r, 1.0) + sky_ground(r, 1.0).rgb) * atmos_white(), LUMA) / PI;
-}
+const EXPOSURE_RINGS: i32 = 8;
+const EXPOSURE_BEARINGS: i32 = 16;
 
 @fragment
 fn fs(v: TableOut) -> @location(0) vec4f {
-  let up = frame_up();
-  let land = dot(surface_light(up, up, 1.0, light_unexposed(land_radius(), up)), LUMA);
-  let stops = log2(max(land, 1e-30) / noon());
-  let shown = clamp(stops * atmos_shown_fall(), -atmos_night_stops(), 0.0);
-  return vec4f(log2(atmos_exposure()) + shown - stops, 0.0, 0.0, 1.0);
+  let mu_s = clamp(dot(atmos_sun_dir(), frame_up()), -1.0, 1.0);
+  // Cosine-weighted rings, evenly spaced in sin² of the zenith angle, so the sum
+  // is pi times their mean.
+  var sky = vec3f(0.0);
+  for (var i = 0; i < EXPOSURE_RINGS; i++) {
+    let mu = sqrt(1.0 - (f32(i) + 0.5) / f32(EXPOSURE_RINGS));
+    for (var j = 0; j < EXPOSURE_BEARINGS; j++) {
+      let phi = TAU * (f32(j) + 0.5) / f32(EXPOSURE_BEARINGS);
+      sky += table_at(sky_view_lut, mu, cos(phi));
+    }
+  }
+  sky *= PI / f32(EXPOSURE_RINGS * EXPOSURE_BEARINGS);
+  let direct = sun_transmittance(camera_r(), mu_s) * max(mu_s, 0.0);
+  let light = dot((sky + direct) * atmos_white(), LUMA);
+  let adapted = clamp(pow(1.0 / max(light, 1e-6), atmos_adaptation()), 1.0, atmos_max_adaptation());
+  if (v.clip.x >= 1.0) {
+    return vec4f(sky, 1.0);
+  }
+  return vec4f(atmos_exposure() * adapted, table_at(sky_view_lut, 1.0, 1.0));
 }

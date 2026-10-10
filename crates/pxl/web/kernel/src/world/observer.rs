@@ -243,11 +243,11 @@ pub type OnTile<'a> = dyn FnMut(usize, Option<Footprint>, Lacks) + 'a;
 
 pub type Lacks = [Option<Requirement>; 4];
 
-/// A lack is given as a requirement (zoom and ground), never as a page,
+/// A lack is given as a requirement (level and ground), never as a page,
 /// which is the layer's to name.
 pub type Met = (Option<(V3, f64)>, Option<Requirement>);
 
-/// Corner rays against what is resident, at the target quality's zooms, so
+/// Corner rays against what is resident, at the target quality's levels, so
 /// the answer is the same whichever step is in force.
 pub struct EdgeRays<'a>(pub Access<'a>, pub Tau);
 
@@ -261,7 +261,10 @@ impl Observer for EdgeRays<'_> {
             &mut |direction| {
                 let ray = Ray { origin: eye, direction, reach: far };
                 let answer = self.0.first_hit(&ray, Detail::Distance(self.1));
-                let lack = answer.lack().map(|l| Requirement { z: l.page.z, region: l.page.region() });
+                let lack = answer.lack().map(|l| Requirement {
+                    level: l.page.level,
+                    region: l.page.region(),
+                });
                 let hit = answer.value().flatten().map(|hit| (std::array::from_fn(|k| hit.point[k] - hit.normal[k] * INSIDE), hit.t));
                 (hit, lack)
             },

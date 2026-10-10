@@ -38,7 +38,7 @@ use crate::gpu::shadow::Shadow;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
-use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
+use crate::look::environment::{ENV_AIR, ENV_FOG_FAR, ENV_FOG_NEAR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -59,11 +59,12 @@ const SHADOW_TEXEL: usize = FRAME_AT[9];
 const VIGNETTE: usize = FRAME_AT[10];
 const AO_STRENGTH: usize = FRAME_AT[11];
 const SCREEN_AO: usize = FRAME_AT[12];
-const LIGHT_VIEW_PROJ: usize = FRAME_AT[13];
-const OTHER: usize = FRAME_AT[14];
-pub(crate) const PLANET: usize = FRAME_AT[15];
-pub(crate) const GLOBE: usize = FRAME_AT[16];
-const UP: usize = FRAME_AT[17];
+const EARTH_SHARE: usize = FRAME_AT[13];
+const LIGHT_VIEW_PROJ: usize = FRAME_AT[14];
+const OTHER: usize = FRAME_AT[15];
+pub(crate) const PLANET: usize = FRAME_AT[16];
+pub(crate) const GLOBE: usize = FRAME_AT[17];
+const UP: usize = FRAME_AT[18];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_FLOATS: usize = 16;
@@ -192,28 +193,21 @@ pub fn frame_group(g: &Gpu, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32
     id
 }
 
-/// Each skin image as one texture's view, made the first time a skin binds it:
-/// the host lets a decoded image go as it uploads it (`Gpu::image_texture`), so
-/// a skin made again, or by another pass, binds what is here. As many as the
-/// skins the asset table names.
-static SKIN_VIEWS: Global<Vec<(u32, u32)>> = Global::new();
-
-fn skin_view(g: &Gpu, image: u32) -> u32 {
-    let views = SKIN_VIEWS.get(Vec::new);
-    if let Some(&(_, view)) = views.iter().find(|&&(i, _)| i == image) {
-        return view;
-    }
-    let (texture, view) = (object(), object());
+/// Returns the texture, its view and the group.
+pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> [u32; 3] {
+    let texture = object();
     g.image_texture(texture, image);
+    let view = object();
     g.view(view, texture, dimension::D2, 0, 1, 0, 1);
-    views.push((image, view));
-    view
+    let group = object();
+    g.bind_group(group, layout, &[0, resource::VIEW, view, 0, 0, 1, resource::SAMPLER, sampler, 0, 0]);
+    [texture, view, group]
 }
 
-pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> u32 {
-    let group = object();
-    g.bind_group(group, layout, &[0, resource::VIEW, skin_view(g, image), 0, 0, 1, resource::SAMPLER, sampler, 0, 0]);
-    group
+pub fn release_skin(ids: [u32; 3]) {
+    for id in ids.into_iter().rev() {
+        release(id);
+    }
 }
 
 /// Records sorted by pipeline with a stable counting sort, so a pass walks
@@ -526,7 +520,6 @@ pub fn device_ready() -> bool {
 pub fn gpu_lost() {
     DEVICE.set(None);
     RENDERER.set(None);
-    SKIN_VIEWS.set(Vec::new());
     forget_objects();
     blocks().lose();
     arena_lose();
@@ -729,7 +722,7 @@ impl Renderer {
             decor: DecorPass::new(g, &mut pipelines, device.align),
             impostor: ImpostorPass::new(g, &mut pipelines, device.align),
             skinned: SkinnedPass::new(g, &mut pipelines, device.align),
-            puck: PuckPass::new(g, &mut pipelines, frame_buffer, air),
+            puck: PuckPass::new(g, &mut pipelines, frame_buffer),
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer),
             pipelines,
@@ -821,7 +814,7 @@ impl Renderer {
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let up = norm3(&sub3(&eye, &planet_center));
-        self.clouds.lay_out(g, &m, &eye, env);
+        self.clouds.lay_out(g, &m, &eye, env, &up);
         self.atmosphere.set_clouds(&clouds::field(origin, [eye_local[0], eye_local[1]], env));
         self.stars.lay_out(g, &m, env, width);
         put_ray(&mut self.sky, 0, &m, &eye);
@@ -843,6 +836,7 @@ impl Renderer {
         u[AO_STRENGTH] = s[STAGE_AT::AO_STRENGTH] as f32;
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
+        u[EARTH_SHARE] = s[STAGE_AT::EARTH_SHARE] as f32;
         if self.screen_ao {
             self.ao.lay_out(g, &proj, width, height);
         }
@@ -1077,6 +1071,9 @@ impl Renderer {
             u[CAMERA_POS] = (CASE_EYE[0] + actor[0]) as f32;
             u[CAMERA_POS + 1] = (CASE_EYE[1] + actor[1]) as f32;
             u[CAMERA_POS + 2] = (CASE_EYE[2] + actor[2]) as f32;
+            // No fog: near and far pushed out of reach.
+            u[ENV + ENV_FOG_NEAR] = 1e9;
+            u[ENV + ENV_FOG_FAR] = 2e9;
             u[VIEWPORT] = s.width as f32;
             u[VIEWPORT + 1] = s.height as f32;
             u[SHADOW_STRENGTH] = 0.0;

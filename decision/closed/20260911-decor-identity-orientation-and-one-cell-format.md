@@ -374,7 +374,7 @@ would reach the fourth.
 — 3D Tiles refine on screen-space error, which is this criterion applied
 per tile — and the altitude rule in the follow-up above is that formula
 solved for distance. Google Maps' vector buildings are not this: they
-switch on at a zoom regardless of a building's size, z15 to z16,
+switch on at a zoom level regardless of a building's size, z15 to z16,
 which at Seoul's latitude is 5 to 10 pixels for a twenty-meter building.
 Twelve was chosen against six by eye and by the phone: it draws less, and
 the phone is the target. It was not measured from Earth, where a building

@@ -1,7 +1,7 @@
 // @pxl/web/kernel/io/source.ts
 
 /**
- * The tile source's declaration (its coarsest whole zoom), handed to the
+ * The tile source's declaration (its coarsest whole level), handed to the
  * kernel once: published.json's `SOURCE` in a published build, else asked of
  * the dev server until it answers. The kernel observes nothing until then.
  */
@@ -19,8 +19,8 @@ async function asked(): Promise<TileSource | null> {
   try {
     const res = await originGet(TILE_SOURCE_ROUTE);
     if (!res.ok) return null;
-    const top: unknown = ((await res.json()) as Partial<TileSource> | null)?.top_z;
-    return typeof top === "number" && Number.isInteger(top) && top >= 0 ? { top_z: top } : null;
+    const top: unknown = ((await res.json()) as Partial<TileSource> | null)?.top_level;
+    return typeof top === "number" && Number.isInteger(top) && top >= 0 ? { top_level: top } : null;
   } catch (err) {
     console.warn(`[source] ${err instanceof Error ? err.message : String(err)}`);
     return null;
@@ -33,5 +33,5 @@ export async function declare_source(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ASK_AGAIN_MS));
     source = await asked();
   }
-  send_next(Command.WORLD_SOURCE, encode_world_source({ top_z: source.top_z }));
+  send_next(Command.WORLD_SOURCE, encode_world_source({ top_level: source.top_level }));
 }

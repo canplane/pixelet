@@ -12,10 +12,12 @@ use pxl_render::gpu::surface::SURFACES;
 
 use crate::sched::profiler::record::MB;
 use pxl_spec::asset::ingested::Asset;
+use pxl_spec::space::adapter::epsg3857::zoom_of;
 use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::pyramid::GROUND_Z;
+use pxl_spec::space::pyramid::GROUND;
 use xpute_core::math::scalar::round;
 
+use crate::control::camera::controller::{dist, units_per_px_at};
 use crate::host::handheld;
 use crate::io::load::{load_image, Load};
 use crate::kernel::kernel;
@@ -31,12 +33,23 @@ use crate::text::text_raster;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::stage::set_host_frame_stat;
 use crate::world::frame::resolution::resolution_observe;
+use crate::world::paging::floor;
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
 /// season, as Google Earth and Cesium keep one mosaic.
 const EARTH: Asset = Asset::sky_earth_07_webp;
 
 use crate::world::frame::view::{globe_anchor_local, view};
+
+/// How far the view has gone over to the Earth's picture: none while the map
+/// center's pixel is finer than the coarsest level's cell a zoom up, all once
+/// it is as coarse as that cell, the data's coarsest (z6 for a top of 10).
+fn earth_share() -> f64 {
+    let Some(top) = floor::level() else { return 0.0 };
+    let zoom = f64::from(zoom_of(GROUND.scale(0))) - libm::log2(units_per_px_at(dist()));
+    let top_zoom = f64::from(zoom_of(GROUND.scale(top)));
+    (top_zoom + 1.0 - zoom).clamp(0.0, 1.0)
+}
 
 const _: () = assert!(EARTH_FRAMES == EARTH_LAYERS, "a GPU layer for each frame the Earth layer holds");
 
@@ -59,9 +72,9 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::NEAR] = v.near;
     s[STAGE_AT::FAR] = v.far;
     // Largest drawn cell per unit of distance, for the badge occlusion test:
-    // past a split distance cells are drawn 2 × 2, so twice the zoom's cell
+    // past a split distance cells are drawn 2 × 2, so twice the level's cell
     // over the distance.
-    s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(GROUND_Z as i32);
+    s[STAGE_AT::LOD_CELL] = 2.0 / crate::world::quality::effective().tau().split_distance(0);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { edge_cfg::STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { ao_cfg::STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
@@ -70,6 +83,7 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { rim_cfg::INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
     s[STAGE_AT::RESOLUTION] = resolution;
+    s[STAGE_AT::EARTH_SHARE] = earth_share();
 }
 
 pub fn stage_render() {
@@ -83,7 +97,7 @@ pub fn stage_render() {
     let variants = kind_assets().iter().flat_map(|entry| {
         (0..entry.models.len()).map(move |v| {
             let extent = entry.kind.variants.get(v).and_then(|a| a.model.ingested().extent).unwrap_or([0.0; 3]);
-            (entry.models[v], entry.skin(v), extent.map(|e| e as f32))
+            (entry.models[v], entry.skins.get(v).copied().flatten(), extent.map(|e| e as f32))
         })
     });
     for (slot, (model, image, extent)) in decor.iter_mut().zip(variants) {

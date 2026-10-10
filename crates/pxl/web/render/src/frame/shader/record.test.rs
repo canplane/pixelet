@@ -142,8 +142,8 @@ fn the_skys_layouts_match_their_structs() {
             ("ground_albedo", a::GROUND_ALBEDO),
             ("sun_angular_radius", a::SUN_ANGULAR_RADIUS),
             ("exposure", a::EXPOSURE),
-            ("night_stops", a::NIGHT_STOPS),
-            ("shown_fall", a::SHOWN_FALL),
+            ("max_adaptation", a::MAX_ADAPTATION),
+            ("adaptation", a::ADAPTATION),
             ("moon_dir", a::MOON_DIR),
             ("moon_light", a::MOON_LIGHT),
             ("sun_seen", a::SUN_SEEN),
@@ -156,14 +156,15 @@ fn the_skys_layouts_match_their_structs() {
             ("cloud_count", a::CLOUD_COUNT),
             ("cloud_altitude_km", a::CLOUD_ALTITUDE),
             ("cloud_gone_km", a::CLOUD_GONE),
+            ("haze_extinction", a::HAZE_EXTINCTION),
+            ("haze_scale_height", a::HAZE_SCALE_HEIGHT),
             ("city_light", a::CITY_LIGHT),
-            ("earth_reach", a::EARTH_REACH),
             ("earth_window", a::EARTH_WINDOW),
             ("earth_pages", a::EARTH_PAGES),
         ],
     );
     holds(SHADER_SKY, "Sky", r::SKY_FLOATS, &[("ray", 0), ("pole", r::SKY_POLE), ("mapped", r::SKY_MAPPED)]);
-    holds(SHADER_CLOUDS, "Clouds", c::CLOUDS_FLOATS, &[("ray", 0)]);
+    holds(SHADER_CLOUDS, "Clouds", c::CLOUDS_FLOATS, &[("ray", 0), ("sun_at", c::SUN_AT), ("moon_at", c::MOON_AT)]);
     holds(
         SHADER_STARS,
         "Stars",
@@ -178,12 +179,7 @@ fn the_skys_layouts_match_their_structs() {
             ("moon", s::MOON),
         ],
     );
-    for (name, k) in [
-        ("TRANSMITTANCE_SIZE", a::TRANSMITTANCE),
-        ("MULTISCATTER_SIZE", a::MULTISCATTER),
-        ("SKY_VIEW_SIZE", a::SKY_VIEW),
-        ("IRRADIANCE_SIZE", a::IRRADIANCE),
-    ] {
+    for (name, k) in [("TRANSMITTANCE_SIZE", a::TRANSMITTANCE), ("MULTISCATTER_SIZE", a::MULTISCATTER), ("SKY_VIEW_SIZE", a::SKY_VIEW)] {
         let (w, h) = a::SIZES[k];
         assert_eq!(constant(SHADER_SKY, name), [w as f64, h as f64], "{name}");
     }

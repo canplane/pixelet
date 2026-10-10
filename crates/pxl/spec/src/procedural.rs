@@ -12,31 +12,31 @@ use crate::bake::deck::{Occupies, Over};
 use crate::bake::ground::{GroundChannelKey, ShownGround};
 use crate::space::adapter::epsg3857::u_per_m;
 use crate::space::pvf3::ivec::gather;
-use crate::space::pyramid::{Page, GROUND, GROUND_Z, PAGE_CELLS, TOP_Z};
+use crate::space::pyramid::{LevelPage, GROUND, PAGE_CELLS, TOP_LEVEL};
 
 /// Changing it reshuffles everything scattered.
 pub const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
 
 // ---- scatter: a Poisson process on the z16 cell lattice ----
 
-const BLOCK: i64 = 16; // a block's side, in its birth zoom's cells
-const KEPT: f64 = 0.25; // a zoom keeps one in four of the next finer's
+const BLOCK: i64 = 16; // a block's side, in its birth level's cells
+const KEPT: f64 = 0.25; // a level keeps one in four of the next finer's
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Candidate {
-    pub cell: [i64; 2], // the z16 cell it stands at, at every zoom
-    pub born: u32,      // the coarsest zoom it stands at
+    pub cell: [i64; 2], // the z16 cell it stands at, on every level
+    pub born: u32,      // the coarsest level it stands at
     pub seed: u64,      // its own draws: variant, heading, size
 }
 
-/// A Poisson process, never a grid: a block at zoom m bears a Poisson count
+/// A Poisson process, never a grid: a block of level m bears a Poisson count
 /// of candidates born there, each at a uniform z16 cell, and a candidate born
-/// at m stands at every zoom from m finer. A cell at any zoom then holds `density`.
-fn each_candidate(tag: u64, density: f64, z: u32, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
+/// at m stands at every level up to m. A level-L cell then holds `density`.
+fn each_candidate(tag: u64, density: f64, level: u32, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
     let kind = derive_seed_u64(MASTER_SEED, tag);
-    for born in (TOP_Z..=z).rev() {
-        let side = BLOCK * i64::from(GROUND.finest_in(born));
-        let share = if born == TOP_Z { 1.0 } else { 1.0 - KEPT };
+    for born in level..=TOP_LEVEL {
+        let side = BLOCK * i64::from(GROUND.scale(0).count_in(GROUND.scale(born)));
+        let share = if born == TOP_LEVEL { 1.0 } else { 1.0 - KEPT };
         let mean = density * (BLOCK * BLOCK) as f64 * share;
         let blocks = |k: usize| min[k].div_euclid(side)..=(max[k] - 1).div_euclid(side);
         for by in blocks(1) {
@@ -71,18 +71,18 @@ fn poisson(mean: f64, u: f64) -> u64 {
     k
 }
 
-/// What stands at `z` in `region` (z16 cells, `[min, max)`), one a cell:
+/// What stands at `level` in `region` (z16 cells, `[min, max)`), one a cell:
 /// of two on one cell the coarser stays, so a zoom keeps what it had.
-pub fn scatter(tag: u64, density: f64, z: u32, region: [[i64; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
+pub fn scatter(tag: u64, density: f64, level: u32, region: [[i64; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
     out.clear();
     let mut grown = Ok(());
-    each_candidate(tag, density, z, region, |c| {
+    each_candidate(tag, density, level, region, |c| {
         if grown.is_ok() {
             grown = out.try_reserve(1).map(|()| out.push(c));
         }
     });
     grown?;
-    out.sort_unstable_by(|a, b| a.cell.cmp(&b.cell).then(a.born.cmp(&b.born)).then(a.seed.cmp(&b.seed)));
+    out.sort_unstable_by(|a, b| a.cell.cmp(&b.cell).then(b.born.cmp(&a.born)).then(a.seed.cmp(&b.seed)));
     out.dedup_by_key(|c| c.cell);
     Ok(())
 }
@@ -90,8 +90,8 @@ pub fn scatter(tag: u64, density: f64, z: u32, region: [[i64; 2]; 2], out: &mut 
 /// What stands in one z16 cell at z16, as `scatter` keeps it.
 pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2]) -> Option<Candidate> {
     let mut best: Option<Candidate> = None;
-    each_candidate(tag, density, GROUND_Z, [cell, [cell[0] + 1, cell[1] + 1]], |c| {
-        if best.is_none_or(|b| (c.born, c.seed) < (b.born, b.seed)) {
+    each_candidate(tag, density, 0, [cell, [cell[0] + 1, cell[1] + 1]], |c| {
+        if best.is_none_or(|b| (c.born, std::cmp::Reverse(c.seed)) > (b.born, std::cmp::Reverse(b.seed))) {
             best = Some(c);
         }
     });
@@ -114,7 +114,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn of(page: Page) -> Frame {
+    pub fn of(page: LevelPage) -> Frame {
         let (x0, y0, side) = page.rect();
         Frame {
             corner: [x0, y0],

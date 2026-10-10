@@ -1,8 +1,6 @@
-# The mesh step and the zoom are one number
+# Level, step and zoom are one number
 
-> Current terms: AGENTS.md "One spatial model", `pxl-spec space/README.md`. A
-> zoom names only a cell's scale; a page's key depth (15 for a 512-cell page)
-> is no zoom.
+> **Superseded in its words (2026-10-04).** A zoom names only a cell's scale; a page's key depth (15 for a 512-cell page) is no zoom, and the 512-pixel "zoom 15 − k" convention below is retired. "Level 0" is z16. Current terms: AGENTS.md "One spatial model", `pxl-spec space/README.md`.
 
 **2026-09-21** — a design conversation, built since; what the building
 changed is at the end, under "Where this stands". It starts from
@@ -13,35 +11,36 @@ not what that note said it was.
 A terrain page is one resolution, and the client folds it down at build time
 whenever a chunk is far enough away to want less. So three separate ladders
 describe how coarse a thing is — the mesher's `lod_step`, the single
-`KEEP_DIST` a page is held within, and the zoom a pyramid would give a page —
+`KEEP_DIST` a page is held within, and the level a pyramid would give a page —
 and none of them knows about the others. The proposal is that they are one
-number, and that the number is Web Mercator's zoom.
+number, and that the number is also Web Mercator's zoom.
 
 ## The identity
 
 Make a page 512 cells on a side. Then, because the X lane of a coordinate is
-one full EPSG:3857 world (`space/adapter/3857.rs`) and a z16 cell is one unit:
+one full EPSG:3857 world (`space/adapter/3857.rs`) and a cell is one unit:
 
 ```text
-world           2^24 u   = 40,075,016.68557849 m = 2π · 6378137
-cell at z       2^(16 − z) u
-page at z       512 · 2^(16 − z) u
-pages across    2^24 / (512 · 2^(16 − z)) = 2^(z − 1)
+world            2^24 u   = 40,075,016.68557849 m = 2π · 6378137
+page at level k  512 · 2^k u
+pages across     2^24 / (512 · 2^k) = 2^(15 − k)
 ```
 
-A z16 cell is 2.3887 m, which is the standard z16 pixel exactly and not
+A level-0 cell is 2.3887 m, which is the standard z16 pixel exactly and not
 nearly: that pixel is `156543.03392804097 / 2^16`, and the constant is the
 world's width over 256, so both are the same division of the same number. A
 512-cell page is 2×2 of the 256-pixel tiles that OGC's `WebMercatorQuad`
-defines, and our finest resolution is z16.
+defines, which is one tile of the 512-pixel convention Mapbox uses. Counting
+in that convention, **level `k` is zoom `15 − k`**; counting in the
+standard's, our finest resolution is z16.
 
-| z   | cell   | page      | South Korea spans |
-| --- | ------ | --------- | ----------------- |
-| z16 | 2.4 m  | 1.2 km    | 209,293 cells     |
-| z12 | 38 m   | 19.6 km   | 13,081 cells      |
-| z10 | 153 m  | 78.3 km   | 3,270 cells       |
-| z6  | 2.4 km | 1,252 km  | 204 cells         |
-| z1  | 78 km  | 40,081 km | 6 cells           |
+| level | cell   | page      | z (512px) | South Korea spans |
+| ----- | ------ | --------- | --------- | ----------------- |
+| 0     | 2.4 m  | 1.2 km    | 15        | 209,293 cells     |
+| 4     | 38 m   | 19.6 km   | 11        | 13,081 cells      |
+| 6     | 153 m  | 78.3 km   | 9         | 3,270 cells       |
+| 10    | 2.4 km | 1,252 km  | 5         | 204 cells         |
+| 15    | 78 km  | 40,081 km | 0         | 6 cells           |
 
 The alignment is not inherited. The projection is a standard and the tiling
 scheme is a separate one, but the lattice under them is this project's own:
@@ -65,25 +64,26 @@ What it buys:
 - The transfer unit drops from 4.2 MB to 1 MB, against a first load on a phone
   measured at p50 9.7 s from request to adopt, of which the network was
   1.4–1.9 s and the rest was queue wait behind `MAX_INFLIGHT` 6 (BACKLOG).
-- The grid and the zoom land on the web map convention at once.
+- The grid, the zoom number and the tile size all land on the web map
+  convention at once.
 
 Elevation density is unchanged: `PAGE_ELE_SPAN` is `1 << (L3_SHAMT + 1 - 5)`,
 so a 512-cell page carries 32 inner samples and a page still has one sample
-per 16 cells — 38 m at z16, which is the 30 m source's own resolution. The
+per 16 cells — 38 m at level 0, which is the 30 m source's own resolution. The
 two-sample skirt still reaches 32 cells past the page's own span at every
-zoom.
+level.
 
 `L3_SHAMT` becomes 9, and L3 is the unit of more than terrain: POI pages and
 the object store's saved form are keyed by it too, so they re-bake and
 re-version with it.
 
-## Terrain stops at z16; finer is the object tree
+## Terrain stops at z16; below it is the object tree
 
 Terrain is a 2.5D raster at exactly one finest resolution, and nothing under a
 cell belongs to it. What is finer is the object layer's sparse tree, whose
-`OBJECT_LAYOUT` already reaches three zooms finer than the cell —
-`OBJECT_SIZES` is `[1.0, 0.5, 0.25, 0.125]`, which is z16 through z19. So the
-zoom axis is one axis with two owners and no overlap:
+`OBJECT_LAYOUT` already reaches three levels below the cell — `OBJECT_SIZES`
+is `[1.0, 0.5, 0.25, 0.125]`, which is z16 through z19. So the level axis is
+one axis with two owners and no overlap:
 
 ```text
 z19   1/8 cell   0.30 m   ┐
@@ -91,7 +91,7 @@ z18   1/4 cell   0.60 m   ├ object, a sparse tree per band
 z17   1/2 cell   1.19 m   ┘
 z16   1 cell     2.39 m   ← terrain's floor, the tree's root
 z15   2 cells    4.78 m   ┐
-z14   4 cells    9.55 m   ├ terrain, a record per zoom
+z14   4 cells    9.55 m   ├ terrain, a record per level
  …                        ┘
 ```
 
@@ -103,26 +103,26 @@ as coverage.
 
 ## Counting in cells, measuring in units
 
-One rule decides which things a zoom may rescale:
+One rule decides which things a level may rescale:
 
 > What the world is divided into is counted in cells. What exists in the world
-> has a size in units. A zoom changes only the exchange rate,
-> `1 cell = 2^(16 − z) u`.
+> has a size in units. A level changes only the exchange rate, `1 cell = 2^k
+> u`.
 
-Counted in cells, and so the same at every zoom: the page (512), the chunk
+Counted in cells, and so the same at every level: the page (512), the chunk
 (64), a band's height (64), the elevation's sample spacing (16) and its skirt
 (2 samples), an object entry's ceiling (1 cell). Measured in units, and so not:
 a tree's extent, a placed cube's footprint, the camera's distance, the fog.
 
-The rule decides what may be coarser than z16 at all, and it has one immediate
+The rule decides what may have levels at all, and it has one immediate
 consequence. Decoration is drawn while `extent / step ≥ 2`, so a kind of
 extent `E` reaches `96 · E` units. The ingested models run 0.77 u to 4.74 u,
 which puts every kind inside 455 u of the camera. That is past where the
-leaves themselves are drawn, which ends at 384 u, so a z15 chunk can carry
+leaves themselves are drawn, which ends at 384 u, so a level-1 chunk can carry
 decoration too, and it scatters it from the leaves under it rather than from
-its own record. **Decoration is always a function of the z16 ground**,
+its own record. **Decoration is always a function of the level-0 ground**,
 which is why it needs no aggregation of its own. What holds it there is that
-the leaves are resident wherever it reaches: z16 is held while any ground
+the leaves are resident wherever it reaches: level 0 is held while any ground
 within 512 u of the view center is in view, which is how far the leaves' ring
 draws (below), and an assert holds `96 · max_extent` inside those 512 u.
 
@@ -136,37 +136,37 @@ band's area goes as `r · dr` and a cell's as `r²`, so the cells in it are
 `dr/r`, and an octave integrates to `ln 2` whichever octave it is. In three
 dimensions the shell goes as `r² · dr` and a cell as `r³`, and the answer is
 the same. **Every octave of distance costs one constant** — which is the
-counting behind the complexity below, and the reason a zoom holds a fixed
+counting behind the complexity below, and the reason a level holds a fixed
 number of pages rather than a radius.
 
-Each zoom keeps a ring of pages around the view: 5×5 held, 3×3 rendered,
-which guarantees one page of radius at that zoom. Geometry clipmaps are the
+Each level keeps a ring of pages around the view: 5×5 held, 3×3 rendered,
+which guarantees one page of radius at that level. Geometry clipmaps are the
 precedent, and `terrain/fixed.rs` already calls its single range "the way a
-clipmap addresses its ring" — this is that arrangement at more than one zoom.
+clipmap addresses its ring" — this is that arrangement at more than one level.
 
-A zoom is drawn one step coarser than its own cells: its cells averaged 2×2,
-so z draws step `2^(17 − z)`, and only the leaves are also drawn as they
-are, for step 1 ([below](#a-zoom-is-drawn-one-step-coarser) says why). The
+A level is drawn one step coarser than its own cells: its cells averaged 2×2,
+so level `k` draws step `2^(k+1)`, and only the leaves are also drawn as they
+are, for step 1 ([below](#a-level-is-drawn-one-step-coarser) says why). The
 ladder and the page widths both double, so their ratio does not:
 
 ```text
-step 2^(17 − z) is wanted out to  384 · 2^(16 − z)
-ring z draws past the view        512 · 2^(16 − z)
-margin                            512 / 384 = 1.33, at every zoom
+step 2^(k+1) is wanted out to  384 · 2^k    (REFERENCE_THRESHOLD_0 · 2^(k+1))
+ring k draws past the view     512 · 2^k
+margin                         512 / 384 = 1.33, at every level
 ```
 
-Two things follow. The zoom a chunk wants is resident with the same slack at
-every zoom. And **the client always holds data one zoom finer than it
+Two things follow. The level a chunk wants is resident with the same slack at
+every level. And **the client always holds data one level finer than it
 draws**, by construction, since what it draws is that data averaged.
 
 Chebyshev distance, not Euclidean: a square ring under a radial criterion
-wastes its corners, and the corner of a ring is 1.41× its edge. Measured as
-L∞ the ring _is_ the zoom's domain. The tier criterion stays Euclidean from
+wastes its corners, and the corner of ring `k` is 1.41× its edge. Measured as
+L∞ the ring _is_ the level's domain. The tier criterion stays Euclidean from
 the eye, and the two do not fight: a chunk at a ring's corner is further from
 the eye than one at its edge and wants a coarser step, which the next ring out
 supplies.
 
-Zooms are not all resident at once. Only the zooms a screen shows
+Levels are not all resident at once. Only the levels a screen shows
 simultaneously are, and that count is the projection's, not the world's:
 
 ```text
@@ -184,60 +184,61 @@ W = log2( sin(θ + 25°) / sin(θ − 25°) )     50° vertical field of view
 At 25° the top ray grazes the horizon. So `W = 5` covers everything down to a
 tilt of 27°, and below that how far to draw is a choice rather than a
 measurement — the coarsest ring is where the haze is. The window slides with
-the camera instead of growing: its finest zoom is
+the camera instead of growing: its base is
 
 ```text
 r_near = d · sinθ / sin(θ + 25°)
-z_fine = min( 16, 16 − ⌈ log2(r_near / 192) ⌉ + 1 )
+b      = max( 0, ⌈ log2(r_near / 192) ⌉ − 1 )
 ```
 
-one finer because a zoom draws the step coarser than its own, clamped at z16
-because terrain has nothing finer, and held at z16 while any ground inside the
+less one because a level draws the step above its own, clamped at 0 because
+terrain has no level below it, and held at 0 while any ground inside the
 leaves' drawn ring is in view, which is where decoration reaches. Memory is
-then constant in the camera's distance. `.fixed` holds a group of records per
-zoom modulo the window's width, so a zoom entering the window takes the group
-of the one that left — the layout stays settled at compile time.
+then constant in zoom. `.fixed` holds a group of records per level modulo the
+window's width, so a level entering the window takes the group of the one
+that left — the layout stays settled at compile time.
 
-Its coarse end is the zoom the farthest ground wants, and at least the zoom
-whose ring covers all the ground in view. The slack is only a third, and a wide
+Its top is the level the farthest ground wants, and at least the level whose
+ring covers all the ground in view. The slack is only a third, and a wide
 screen's upper corners see further than its middle, so the first can fall
 short. The ground in view is measured from the view center at the frustum's
 four corners on the ground — a frustum meets a plane in a convex footprint, so
 its farthest point is a corner — or, where a corner meets no ground before fog,
 on fog's circle around the eye's foot as far round as that corner's bearing.
 The half of that circle behind the eye is not in view, and counting it would
-hold a tilted view at the farthest distance a zoom too coarse: z13, for
+hold a tilted view at the farthest zoom a level too coarse: level 3, for
 ground that reaches 1,100 u.
 
 The camera's orbit runs from `MIN_DIST` 2 u to `MAX_DIST` 1,024 u, which at a
-1080-pixel viewport is 0.0017 to 0.88 units a pixel, a 256-pixel tile's z24.2
-down to z15.2: a pixel is never larger than a leaf cell, so every zoom coarser
-than z16 on screen is the ladder's coarsening rather than the screen's
-resolution. The cap is not arbitrary: at `MAX_DIST` one terrain cell covers
-1.13 pixels, so pulling back sits exactly where the data runs out of
-resolution, which is the condition a coarser zoom answers.
+1080-pixel viewport is 0.0017 to 0.88 units a pixel, or z24.2 down to z15.2:
+a pixel is never larger than a leaf cell, so every level above 0 on screen is
+the ladder's coarsening rather than the screen's resolution. The cap is not
+arbitrary: at `MAX_DIST` one terrain cell covers 1.13 pixels, so zooming out
+sits exactly where the data runs out of resolution, which is the condition a
+coarser level answers.
 
-Every zoom holds its ring whole, the middle the finer ring covers included. A
-clipmap renders hollow rings but keeps every ring's data whole, and for the
-reason that holds here: the middle is what is drawn where the finer page under
-it has not come, so the ground coarsens there rather than opening. Leaving it
-out saves one page of the twenty-five or four, as where the view stands in its
-page decides, and `.fixed` has a record for each anyway.
+Every level holds its ring whole, the middle the ring below covers
+included. A clipmap renders hollow rings but keeps every level's data whole,
+and for the reason that holds here: the middle is what is drawn where the
+finer page under it has not come, so the ground coarsens there rather than
+opening. Leaving it out saves one page of the twenty-five or four, as where
+the view stands in its page decides, and `.fixed` has a record for each
+anyway.
 
 Three rules fall out for the stream:
 
 - **Coarse first.** A coarse record is the fallback a fine one refines, so it
   is worth more early. Every page drawn from comes before any rim page, and
-  within each the order is by zoom, coarsest first, then by distance, which
+  within each the order is by level, coarsest first, then by distance, which
   is what progressive refinement means.
 - **A fine page is dropped only once something else draws its ground** — the
-  page over it, or the four under it. Per zoom one ring decides fetch, keep
+  page over it, or the four under it. Per level one ring decides fetch, keep
   and record together, so a page cannot be evicted from under its own request;
-  across zooms this is the rule that replaces a hole with a blurrier answer.
+  across levels this is the rule that replaces a hole with a blurrier answer.
   A page kept past its ring goes when another page takes its record.
-- **A coarse request is not canceled by moving closer.** It is small, it stays
-  valid far longer than a fine one, and pulling back again draws it first. It
-  is kept while it runs, and only while its zoom's record group is one the
+- **A coarse request is not canceled by a zoom in.** It is small, it stays
+  valid far longer than a fine one, and a zoom back out draws it first. It is
+  kept while it runs, and only while its level's record group is one the
   window leaves free: arriving, it would otherwise take a held page's record,
   and a page that does arrive into a held record is dropped. A pan keeps a
   running request the same way, one page past the ring; a jump withdraws.
@@ -253,50 +254,50 @@ than a cover.
 `R` is the reach, `P` the page span, `A` the ring's side in pages, `N` the leaf
 page count.
 
-|                  | z16 alone | window of `W`                   |
+|                  | one level | window of `W`                   |
 | ---------------- | --------- | ------------------------------- |
 | resident space   | **Θ(R²)** | **Θ(P²A²)** — constant in reach |
 | build per frame  | **Θ(R²)** | **Θ(1)**                        |
 | cold fetch       | Θ(R²/P²)  | Θ(1)                            |
 | bake and storage | Θ(N)      | Θ(N) · 4/3                      |
 
-Space is quadratic with z16 alone because every page is the same size and the
+Space is quadratic with one level because every page is the same size and the
 held set grows with the radius: doubling the reach costs four times the
 memory. A ring holds a fixed page count and the reach is exponential in the
-zoom, so the total is the window's width and nothing else.
+level, so the total is the window's width and nothing else.
 
 The frame cost is the same argument from the other side. A chunk is 64 cells
-at every zoom, so it covers `(64 · 2^(16 − z))²` of ground, and the ladder
-picks `z` to keep a chunk's projected area roughly constant. The count on
-screen is therefore constant. With z16 alone a chunk was 64 units wide at every
-tier, so a wide view put a thousand of them on screen at ~3.1 ms a scan
+whatever its level, so it covers `(64 · 2^k)²` of ground, and the ladder picks
+`k` to keep a chunk's projected area roughly constant. The count on screen is
+therefore constant. With one level a chunk was 64 units wide at every tier,
+so a wide zoom put a thousand of them on screen at ~3.1 ms a scan
 ([20260912-coarse-tiers-need-a-larger-unit.md](./closed/20260912-coarse-tiers-need-a-larger-unit.md)),
 and that cost read as constant only because `RENDER_DIST` capped `R`.
 
 Panning is the one that looks like it should get worse and does not. Moving
-`δ` crosses `δ / (P · 2^(16 − z))` page columns at z, each `A` pages of `P²`
+`δ` crosses `δ / (P · 2^k)` page columns at level `k`, each `A` pages of `P²`
 cells:
 
 ```text
-at z        A · P · δ / 2^(16 − z)  cells
-all zooms   A · P · δ · Σ 2^(z − 16)  =  2 · A · P · δ
+level k     A · P · δ / 2^k  cells
+all levels  A · P · δ · Σ 2^-k  =  2 · A · P · δ
 ```
 
-The series converges at twice the base ring, so five zooms cost less than
-z16 alone did in 1,024-cell pages: `2 × 5 × 512 = 5,120·δ` against
+The series converges at twice the base ring, so five levels cost less than the
+single level of 1,024-cell pages did: `2 × 5 × 512 = 5,120·δ` against
 `7 × 1,024 = 7,168·δ`, 29% less.
 
 Storage is the only axis that grows, and it grows by a constant. Folding
-terrain v4's 167,499 land pages gives 43,681 at z15, 11,646 at z14, 3,172 at
-z13, 902 at z12 and 274 at z11, down to one page at z6 — **227,309 in total,
+terrain v4's 167,499 land pages gives 43,681 at level 1, 11,646 at 2, 3,172 at
+3, 902 at 4 and 274 at 5, down to one page at level 10 — **227,309 in total,
 1.357× the leaves**. The fan-in is 3.83 rather than 4 because a coarse page
-with one land child is still a page, and it falls to 3.29 by z11 as the
+with one land child is still a page, and it falls to 3.29 by level 5 as the
 coverage thins against the coarse cell. Bytes are not the same ratio: a coarse
 page is denser in content per cell than a leaf. The leaves measure 1.1 KB at
 the minimum, 6.6 KB at the median and 62.4 KB at the maximum, gzipped, for
-1.30 GB, and the zooms above add 0.81 GB, 62% more. A page's bytes are
+1.30 GB, and the levels above add 0.81 GB, 62% more. A page's bytes are
 bounded above by the densest leaf's, since the format and the decoded size are
-the same at every zoom. R2's free tier is 10 GB and the binding ceiling is
+the same at every level. R2's free tier is 10 GB and the binding ceiling is
 the Workers plan's 100k requests a day
 ([20260816-deployment-hosting.md](./20260816-deployment-hosting.md)), so the
 storage is not the constraint; the request count is, and a smaller fine ring
@@ -309,12 +310,12 @@ One rule, and every channel runs it:
 ```text
 parent cell = the type that fills at least half the four children
               a tie, or no majority, takes the nearest child
-              (the sample alternates (0,0)/(1,1) by zoom, or it drifts
+              (the sample alternates (0,0)/(1,1) by level, or it drifts
                half a coarse cell toward the origin)
 ```
 
 It is Earth Engine's `MODE` pyramiding policy with one change. Earth
-Engine builds each zoom from 2×2 pixels of the one finer and takes their
+Engine builds each level from 2×2 pixels of the level below and takes their
 most frequent value, or the upper-left pixel when there is none — which is
 this rule for three agreeing, for two against one and one, and for a tie
 (Importing Raster Data, developers.google.com/earth-engine/guides/image_upload).
@@ -324,14 +325,14 @@ by the mask and a masked pixel does not vote; here nothing is masked, and a
 channel's VOID votes like a type, or one road cell in three empty ones would
 be road.
 
-The rule is an approximation above z15, as Earth Engine's is. A mode is
+The rule is an approximation above level 1, as Earth Engine's is. A mode is
 holistic: nothing of fixed size summarizes a block so that the mode of the
 union follows. A mode of modes therefore sees each child as wholly its
-winner, and a line one leaf wide that wins the tie at z15 is half of a
-z14 cell rather than the quarter it is, and may win again; in the worst
+winner, and a line one leaf wide that wins the tie at level 1 is half of a
+level-2 cell rather than the quarter it is, and may win again; in the worst
 shape, three quarters of three quarters, a type filling 27 of 64 leaves takes
-a z13 cell. "Narrower than half a cell rounds away" holds of the zoom one
-finer, not of the leaves. Contiguous features only differ from exact at their
+a level-3 cell. "Narrower than half a cell rounds away" holds of the level
+below, not of the leaves. Contiguous features only differ from exact at their
 edges, which is where the error stays.
 
 No channel knows it is a channel. There is no per-type table, no rank, no
@@ -352,9 +353,9 @@ really a channel's business: `is_water_family` checks `land.sea` separately
 "because cube.rs models it as land.sea", so water-family already crosses the
 channel boundary and is a property of the type.
 
-The composite does not vary with the zoom either. The channels are painted
+The composite does not vary with the level either. The channels are painted
 in one order, a later one's non-void type winning, at every zoom — so the code
-that draws z16 draws z10 unchanged. What is missing at a coarse zoom is
+that draws z16 draws z10 unchanged. What is missing at a coarse level is
 missing because its cells lost the majority, not because anything switched a
 channel off, and `shown_ground` already steps over a channel that reads void.
 
@@ -366,30 +367,30 @@ A building is an area and a road is a line, so the half falls at a different
 width for each: a building of extent `b` covers `(b/c)²` of the cell it sits
 in, a road of width `w` covers `w/c` of every cell it runs through.
 
-|           | extent or width | gone at |
-| --------- | --------------- | ------- |
-| building  | ~15 m = 6.3 u   | z12     |
-| road      | ~12 m = 5.0 u   | z12     |
-| river     | ~100 m = 42 u   | z9      |
-| lake, sea | km              | never   |
-| land use  | covers the cell | never   |
+|           | extent or width | level |
+| --------- | --------------- | ----- |
+| building  | ~15 m = 6.3 u   | 4     |
+| road      | ~12 m = 5.0 u   | 4     |
+| river     | ~100 m = 42 u   | 7     |
+| lake, sea | km              | never |
+| land use  | covers the cell | never |
 
 **Nothing in the rule orders one layer against another.** Which goes first is
 whichever is smaller against the cell, feature by feature, and the widths
 above are representative rather than a rule — swap the two figures and the two
 rows swap with them. At these sizes both survive 8 u and neither survives 16,
-so they go at the same zoom. An explicit order was written down while this
+so they go at the same level. An explicit order was written down while this
 was being worked out — buildings, then roads, then water, then land — and then
 dropped: an order per layer is a policy to keep in step, and the fold answers
 the question without one.
 
-Nor does a layer switch off at a zoom, because its features are not one size.
-An 8 m house goes at z13 and a 40 m warehouse at z11; a 6 m alley goes at z13
-and a 30 m motorway at z11. So `structure` and `transport` thin across the
-same zooms and interleave while they do it, and each row above is one feature
-of that size rather than a channel. The land channel carries `residential`,
+Nor does a layer switch off at a level, because its features are not one size.
+An 8 m house goes at level 3 and a 40 m warehouse at 5; a 6 m alley goes at 3
+and a 30 m motorway at 5. So `structure` and `transport` thin across the same
+levels and interleave while they do it, and each row above is one feature of
+that size rather than a channel. The land channel carries `residential`,
 `commercial`, `industrial`, `education`, `medical` and `public`, so a city
-that has lost both still reads as a city. Past z12 the world is terrain,
+that has lost both still reads as a city. Past level 4 the world is terrain,
 water and land use — which is what a terrain view at that scale should be, and
 not what a map at that scale is.
 
@@ -402,82 +403,82 @@ integer — and here it earns its place twice over: the mean of four integers is
 a half exactly a quarter of the time, so rounding half up would drift `+0.125`
 u per fold and about `+0.75` u over six.
 
-The elevation lane stays in units at every zoom, not in the zoom's own
+The elevation lane stays in units at every level, not in the level's own
 cells. Store it in coarse cells and the rounding eats the fraction; keep it in
 units and an `i16` still covers ±78 km.
 
-That fraction is kept by drawing the height in units at every zoom. Only a
-column's footprint coarsens: a coarse page's column, and a coarse tier's, is a
-run from the floor to the mean height of the ground under it, in units, so its
+That fraction is kept by drawing the height in units at every level. Only a
+column's footprint coarsens: a level-k column, and a coarse tier's, is a run
+from the floor to the mean height of the ground under it, in units, so its
 volume is the ground's and nothing is a coarse cell part filled. A part cell
 was first drawn as a cube inset by the cube root of its fill, the way the
 coarse pack draws a sparse cell of objects, and that is right for a volume
 and wrong for a height field: the ground covers the whole cell and is only
 thin, and a cube of the same volume leaves a gap on every side. Where the
-ground is thin against a coarse cell — anywhere flat, a few zooms past z16 —
-the view turned to cubes standing apart, and each cube, merging with
+ground is thin against a coarse cell — anywhere flat, at any level past a few
+— the view turned to cubes standing apart, and each cube, merging with
 nothing and hiding no face, cost a mesh four times its fine tier's.
 
 The cost of the rule is that a road has no thin-and-connected regime. A fold
 that takes the maximum keeps a line one cell wide far longer, which is what a
 map wants; half-or-nothing drops it at once. This project is not a map.
 
-## A zoom is drawn one step coarser
+## A level is drawn one step coarser
 
-z10 is not shown as the z10 page but as z11 averaged. Step `2^(17 − z)` is
-always z's cells averaged 2×2 — a coarse tier of the mesher, which averages
-color, volume, objects and textures alike, as every coarse tier did before
-there was a pyramid — and only the leaves are also drawn as they are, for
+z10 is not shown as the z10 page but as z11 averaged. Step `2^(k+1)` is
+always level `k`'s cells averaged 2×2 — a coarse tier of the mesher, which
+averages color, volume, objects and textures alike, as every coarse tier did
+before there were levels — and only the leaves are also drawn as they are, for
 step 1.
 
 A page is data, and a view is a picture of it. The fold quantizes: a vote is
-what keeps a zoom a function of the one finer, and a vote is what makes a
-thin thing vanish at one zoom or swell at the next. Averaged one zoom down,
+what keeps a level a function of the one below, and a vote is what makes a
+thin thing vanish at one level or swell at the next. Averaged one level down,
 what reaches the screen is what a pixel of that ground would show — a road a
 tint rather than a cell or nothing — and the vote's quantization sits under a
 mean, where it reads as texture.
 
-Drawn at its own cells, a zoom would also disagree with the one finer. It
-would show step `2^(17 − z)` as the vote, where the zoom finer shows the same
-step as the mean of the same four cells, and every zoom's edge would change
+Drawn at its own cells, a level would also disagree with the one below it. It
+would show step `2^(k+1)` as the vote, where the level below shows the same
+step as the mean of the same four cells, and every level's edge would change
 color. With one rule each step is drawn one way, and a split or a merge moves
-between adjacent steps drawn from adjacent zooms, each the mean of its own.
+between adjacent steps drawn from adjacent levels, each the mean of its own.
 
 What it costs is the ring's slack, which drops from 2.67 to 1.33, and the
-window, which moves one zoom finer
+window, which moves one level finer
 ([Rings, and the window](#rings-and-the-window)). Elevation is the one thing
 that agreed either way: it folds by mean, and a mean of means is the mean.
 
 ## Objects fold too, one dimension up
 
 A placed cube is a real thing with a real size, so its address does not move
-with the view: its column stays the z16 64-unit column, and a chunk at z asks
-the `4^(16 − z)` columns and `2^(16 − z)` bands under it — `8^(16 − z)` z16
-bands — what they hold. What does move with the zoom is the same fold, with
-one more axis:
+with the view: its column stays the level-0 64-unit column, and a level-`k`
+chunk asks the `4^k` columns and `2^k` bands under it — `8^k` level-0 bands —
+what they hold. What does move with the level is the same fold, with one more
+axis:
 
 ```text
 terrain   2×2   → 1      half of four children
 objects   2×2×2 → 1      half of eight
 ```
 
-And the pyramid is already there. `sparse_tree` runs from its finest entry
-to a band's root, so its internal nodes _are_ the coarse zooms: nothing has
-to be built, only decided — what an internal node reads as when its children
-disagree, which is the rule above. Past a band, 2×2×2 bands make one, and
-that is the same containment.
+And the pyramid is already there. `sparse_tree` runs from `MIN_LEVEL` to
+`CELL_LEVEL + BAND_SHAMT`, so its internal nodes _are_ the coarse levels:
+nothing has to be built, only decided — what an internal node reads as when
+its children disagree, which is the rule above. Past a band, 2×2×2 bands make
+one, and that is the same `8^k` containment.
 
 Being local is what lets this work on a layer that changes. A terrain fold is
 offline; an object fold has to survive an edit, and a 2×2×2 fold means one
 write invalidates its own ancestors and nothing else — six steps to the band's
-root, then one a zoom — against re-baking a page. The unit it is invalidated
+root, then one a level — against re-baking a page. The unit it is invalidated
 by is the change log's `(topic, key)`, which is already there.
 
-What the rule has to get right is what a coarse zoom should show, and it
-does. A lone 1 u cube is an eighth of a z15 cell and goes at the first
+What the rule has to get right is what a coarse level should show, and it
+does. A lone 1 u cube is an eighth of a level-1 cell and goes at the first
 fold; a wall or a tower keeps whole cells and stays. **Scattered blocks go and
 built things stay**, decided by size, with nothing saying objects stop at a
-zoom.
+level.
 
 The composite gains one step and loses nothing — `land`, `water`, `transport`,
 `structure`, then objects — which is the order the chunk build already paints
@@ -493,23 +494,24 @@ The cost is storage rather than rules. A `sparse_tree` slot is a branch
 pointer when its high bit is set and a leaf value when it is not, so it cannot
 be both: an internal node carrying the majority of its children wants a lane
 of its own. And `col_idx = L2_IDX(...)` keys the render chunk and the object
-column with one number today, which a chunk carrying its zoom separates.
+column with one number today, which a level-relative chunk separates.
 
 **Decoration is what does not fold.** It has no address at all — a pure
-function of the z16 ground, a seed and the object layer's occupancy — and
+function of the level-0 ground, a seed and the object layer's occupancy — and
 the extent argument above keeps it inside the innermost ring. It is a consumer
 of the unit system rather than a participant in it.
 
 ## The bake
 
-Bake z16 from PostGIS once, as today, and fold upward — z15 from z16, z14 from
-z15 — to z6. No query runs above the leaves.
+Bake z16 from PostGIS once, as today, and fold upward — level 1 from level 0,
+level 2 from level 1 — to the projection ceiling. No query runs above the
+leaves.
 
 Building incrementally is what makes the fold rule free. The bake and the
-client compose the same one-zoom function the same number of times, so any
+client compose the same one-level function the same number of times, so any
 deterministic rule agrees between them; a rule would have to be a homomorphism
-only if some zoom were produced by a different route, which is what
-re-rasterizing per zoom would have been. Verification follows from the same
+only if some level were produced by a different route, which is what
+re-rasterizing per level would have been. Verification follows from the same
 fact: a parent must equal the fold of its children **byte for byte**, and the
 check is Rust's (`pxl-geo-bake terrain/pyramid.test.rs`), since the model has
 no TypeScript twin to hold it to.
@@ -519,8 +521,8 @@ not: a parent's two-sample skirt reaches 64 child cells past the block and a
 child carries only 32, so the fold reads a rim from the neighbors. Offline
 that is a window over a sorted key space. In the client it means a page is
 folded only where the sixteen pages around its children are held, not just
-the four under it — so pulling back is served without the network where the
-held rings reach that far, and moving closer never is.
+the four under it — so zooming out is served without the network where the
+held rings reach that far, and zooming in never is.
 
 ## Roads and buildings
 
@@ -554,7 +556,7 @@ changing it is a re-bake.
 
 ## Roads not taken
 
-**Re-rasterizing each zoom from the source.** Proposed to keep roads alive:
+**Re-rasterizing each level from the source.** Proposed to keep roads alive:
 draw the features again at the coarse scale with the bake's existing rank
 order and its `round(width_cell * 0.5).max(1.0)` floor, which is a minimum
 width rule already. It would have kept a road network to continental scales,
@@ -565,19 +567,19 @@ construction. It also assumed this project wants what a map wants.
 
 **Requiring the fold to be a homomorphism.** With re-rasterizing gone, a
 thresholded maximum by rank was proposed instead, because
-`threshold(max(·))` composes and so a fold over several zooms is the one-zoom
-fold composed exactly. The proof holds, and the requirement turned out to be
-unnecessary: once the bake is incremental, both sides compose the same
-function and only determinism is needed.
+`threshold(max(·))` composes and so `fold_k = fold_1 ∘ … ∘ fold_1` exactly.
+The proof holds, and the requirement turned out to be unnecessary: once the
+bake is incremental, both sides compose the same function and only determinism
+is needed.
 
-**A per-type table of zooms.** Measured by folding real pages with a
+**A per-type table of levels.** Measured by folding real pages with a
 per-type OR and finding where each type's coverage passes half — building at
-z15, `road_default` at z13, `pedestrian` z12, `parking` z11, `road_secondary`
-z10, `road_primary`, `road_motorway` and `rail_main` past z8. The hierarchy is
-the one cartographic generalization produces, and the measurement was an
-artifact of the rule being measured: a maximum spreads a type, which is why
-buildings saturated at z15. Under half-or-nothing nothing spreads, and the
-table is not needed.
+1, `road_default` at 3, `pedestrian` 4, `parking` 5, `road_secondary` 6,
+`road_primary`, `road_motorway` and `rail_main` past 8. The hierarchy is the
+one cartographic generalization produces, and the measurement was an artifact
+of the rule being measured: a maximum spreads a type, which is why buildings
+saturated at level 1. Under half-or-nothing nothing spreads, and the table is
+not needed.
 
 **Majority against nearest-neighbor for the land channel.** Both were run
 over real pages. Area error after six folds: 2.23% for nearest-neighbor,
@@ -588,20 +590,20 @@ wash. Area fidelity does not choose between them, so the tie rule is what
 survived into the rule above.
 
 **Ties to the background.** Sending a tie to VOID (round half down, the
-strict majority of ArcGIS's Majority Filter) ends the one-leaf line at z15,
-but does not make the mode exact — the strict majority compounds too, to
-27/64 at z13 — has no background to go to in the land channel, whose
+strict majority of ArcGIS's Majority Filter) ends the one-leaf line at level
+1, but does not make the mode exact — the strict majority compounds too, to
+27/64 at level 3 — has no background to go to in the land channel, whose
 every cell is some type, and leans every channel toward empty on top of the
 bias a majority already has against rare types. The alternating corner keeps
 what Earth Engine does.
 
 **Counting instead of voting.** Per-type counts sum, so carried through the
-pyramid they make the mode exact at every zoom. Carried in the page they are
-32 types a cell and 4^10 leaves deep, four bytes each, which is 32 MiB a page
+levels they make the mode exact at every one. Carried in the page they are 32
+types a cell and 4^10 leaves deep, four bytes each, which is 32 MiB a page
 against the record's one, and a coverage lane per channel alone would add
 500 MiB to `.fixed` at u32. Carried in the bake only, the page is unchanged
 but a parent stops being a function of its children, and the client could
-fold z15 and no further. Neither is worth an exactness a view at that
+fold level 1 and no further. Neither is worth an exactness a view at that
 distance does not show.
 
 **Vector tiles.** The basemap world moved to them in 2013 and kept raster
@@ -628,9 +630,13 @@ document is about what the record is named and how it composes.
 
 ## What this does not do
 
-- It does not switch projection. The globe is a vertex transform over the
-  same tiles — Mapbox reprojects the same Web Mercator tiles on the client
-  and drapes raster ones over a mesh — not a different data model.
+- It does not switch projection. Web Mercator on a plane is honest to about
+  level 10, which is where the page spans 8.93° of latitude and the
+  page-constant vertical scale is 12% off. That is also where Mapbox's globe
+  hands over to Mercator, arrived at from the other direction. Going past it
+  is a vertex transform over the same tiles — Mapbox reprojects the same Web
+  Mercator tiles on the client and drapes raster ones over a mesh — not a
+  different data model. The grid here does not block it.
 - It does not change what a record holds, only which record exists.
 - It does not touch POI, which shares L3 and so re-bakes with the page size,
   but whose own generalization is its `rank` lane and a separate question.
@@ -658,55 +664,56 @@ Findings from reading, not decisions:
 - `bake/format.rs` opens with "each ground channel a sparse tree, encoded as
   words". `encode_terrain` writes four dense `u8` arrays.
 - `WATER_RECESS_CELLS` is one cell, applied after the fold at the shared
-  elevation query. Read as one unit it needs no zoom-dependent handling — it
-  is 1/16 of a cell at z12 and quantizes away — but the name says cells,
-  which stops being unambiguous once cells come in more than one size.
+  elevation query. Read as one unit it needs no level-dependent handling — it
+  is 1/16 of a cell at level 4 and quantizes away — but the name says cells,
+  which stops being unambiguous once there are levels.
 
 ## Where this stands
 
 Updated 2026-09-22. Built:
 
 - **The bake.** Terrain v4 is 512-cell pages with the pyramid folded up from
-  them to z6, the channels in one order, the elevation in units. The fold is
-  pxl-spec's and a parent exists exactly where one of its children does. The
-  dev tile server demand-pages the same functions, so what it serves unpacks
-  to what the bake writes, at every zoom.
-- **The rings and the window.** The client holds a 5 × 5 ring of every zoom
+  them to PAGE_TOP_LEVEL, level 10, the channels in one order, the elevation
+  in units. The fold is pxl-spec's and a parent exists exactly where one of
+  its children does. The dev tile server demand-pages the same functions, so
+  what it serves unpacks to what the bake writes, at every level.
+- **The rings and the window.** The client holds a 5 × 5 ring of every level
   of its window and draws from the inner 3 × 3, fetched and kept by the three
-  rules above. `.fixed` is 125 records, a group a zoom, addressed by zoom
-  modulo five. The window runs one zoom finer than the steps the ground in
-  view wants, its coarse end at least the zoom whose ring covers that ground
-  and its fine end at z16 while decoration can reach any of it: looking down
-  at a street it is the leaves alone, and five is only its widest.
-- **Chunks at every zoom.** A chunk is 64 cells of its zoom. The mount pass
-  walks from the coarsest zoom's drawn ring inward, drawing a chunk whole or
-  as its four children where it lies whole inside the ring the zoom finer
-  draws and the page under it has come. The rings nest as a clipmap's do, so
-  a zoom's chunks lie inside its own drawn ring and nowhere else, whatever the
-  eye does. A coarsest page not yet here is a hole until it comes, and it
-  comes first. A coarse chunk's runs are its page's columns,
-  `2^(16 − z)` units across and as tall as the elevation in units, and the
-  objects folded to its zoom over them, which its coarse tier then averages
-  2×2 ([A zoom is drawn one step coarser](#a-zoom-is-drawn-one-step-coarser)).
-- **The objects fold.** By an eight-way majority, the terrain's rule one
-  dimension up, from the finest entry to the chunk's zoom, empty and air
-  counted as states.
+  rules above. `.fixed` is 125 records, a group a level, addressed by level modulo
+  five. The window runs one level finer than the steps the ground in view
+  wants, its top at least the level whose ring covers that ground and its
+  base at 0 while decoration can reach any of it: looking down at a street it
+  is the leaves alone, and five is only its widest.
+- **Level chunks.** A chunk is 64 cells of its level. The mount pass walks
+  from the top level's drawn ring down, drawing a chunk whole or as its four
+  children where it lies whole inside the ring the level below draws and
+  the page under it has come. The rings nest as a clipmap's do, so a level's
+  chunks lie inside its own drawn ring and nowhere else, whatever the eye
+  does. A top page not yet here is a hole until it comes, and it comes
+  first. A level chunk's runs are
+  its page's columns, 2^k units across and as tall as the elevation in
+  units, and the objects folded to its level over them, which its coarse
+  tier then averages 2×2
+  ([A level is drawn one step coarser](#a-level-is-drawn-one-step-coarser)).
+- **The objects fold.** By `majority8`, the terrain's rule one dimension up,
+  from the finest entry level to the chunk's, empty and air counted as
+  states.
 
 Decided while building, on top of the above:
 
-- **Only the leaves have two tiers.** A z16 chunk builds step 1 and step
-  2, and the existing dither blends between them; a coarser chunk builds only
+- **Only the leaves have two tiers.** A level-0 chunk builds step 1 and step
+  2, and the existing dither blends between them; a chunk above builds only
   its coarse tier, so every handoff above step 2 is a split or a merge, and
   it falls at the edge of a ring rather than at a distance from the eye.
-  z starts at least a page of z + 1 past the anchor's page,
-  `256 · 2^(16 − z)` units, where the ladder would have handed off at
-  `192 · 2^(16 − z)`: the ground is never coarser than the ladder asks. A
-  split by the eye's distance put a zoom's chunks wherever the eye's reach
-  did, past its ring, and the mesh slots below need them inside it.
+  Level k starts at least a page of level k−1 past the anchor's page,
+  256·2^k units, where the ladder would have handed off at 192·2^k: the
+  ground is never coarser than the ladder asks. A split by the eye's
+  distance put a level's chunks wherever the eye's reach did, past its ring,
+  and the mesh slots below need them inside it.
 - **A mesh lives on the device, in a slot of its own.** The renderer keeps a
   fixed storage buffer a group, and a chunk's tier is a slot in it by the
   chunk's coordinate modulo its drawn ring's 24 chunks — `.fixed.terrain`'s
-  addressing, one step down. A bake writes into `.fixed.bake`, 1 MiB, and is
+  addressing, one level down. A bake writes into `.fixed.bake`, 1 MiB, and is
   sent to its slot when it is done, cut to the slot's capacity. A slot is
   taken over only once the chunk holding it is no longer drawn, so a mesh
   outlives its page's record and there is nothing to free, and no mesh is in
@@ -714,7 +721,7 @@ Decided while building, on top of the above:
 
   The numbers moved twice after this was written, both under
   [a coarse cell is isotropic](./closed/20260923-a-coarse-cell-is-isotropic.md).
-  There are six groups, not five: a group is a zoom of the window modulo
+  There are six groups, not five: a group is a level of the window modulo
   five, and the leaves' own tier has one to itself, because a group is one
   storage binding and with both in one what either could hold was what the
   other left. Measured under the isotropic rule, a slot holds 2,730 boxes
@@ -739,36 +746,36 @@ Decided while building, on top of the above:
   drawn until every chunk replacing it has a layout; the replacements wait
   under it. One rule serves both directions and the view moving on.
 - **The object fold is made, not kept.** It is the same function whether
-  held in the band trees' internal nodes or computed when a coarse chunk is
-  built, so it is computed, with a coarse chunk's revision the sum of the
+  held in the band trees' internal nodes or computed when a level chunk is
+  built, so it is computed, with a level chunk's revision the sum of the
   columns under it. Holding it is a cache, for when edits or counts make
   the computation show.
 - **The raycast reads the leaves.** It composes the leaf at a position from
   the resident leaf page whether or not a leaf chunk is drawn there, so the
-  pointer reaches ground drawn at any zoom wherever its leaf is held.
-- **The minimap reads z12.** A minimap pixel is 16 units, which is a
-  z12 cell, so the minimap draws that zoom's page a cell a pixel instead
+  pointer reaches ground drawn at any level wherever its leaf is held.
+- **The minimap reads level 4.** A minimap pixel is 16 units, which is a
+  level-4 cell, so the minimap draws that level's page a cell a pixel instead
   of every sixteenth leaf cell.
-- **The client folds what it holds.** A page whose sixteen pages a zoom finer
+- **The client folds what it holds.** A page whose sixteen pages a level down
   are all resident is folded by the client with the bake's fold rather than
-  fetched, a zoom at a time from the finest; the leaves a pull-back has just
-  left the window with are what z15 is made of. A page it cannot make is one
-  fetch of the coarse page, never the fine pages gathered to make it — a page
-  at z stands for `4^(16 − z)` leaves. The pages it makes are the bake's byte
-  for byte: 606 parents across z15 to z12 of terrain v4, 150 of them beside
-  ocean, folded from their sixteen as the client reads them.
-- **Fog follows the camera.** The band, the clip planes and the sky grew with
+  fetched, a level at a time from the finest; the leaves a zoom out has just
+  left the window with are what the first level up is made of. A page it
+  cannot make is one fetch of the coarse page, never the fine pages gathered
+  to make it — a level-k page stands for 4^k leaves. The pages it makes are
+  the bake's byte for byte: 606 parents across levels 1 to 4 of terrain v4,
+  150 of them beside ocean, folded from their sixteen as the client reads them.
+- **Fog follows the zoom.** The band, the clip planes and the sky grew with
   the camera's distance past 1,024 u of its pivot, `FOG_PER_DIST` = 1.5 of
   it. Superseded the same week by
   [the ground runs to the horizon](./closed/20260923-the-ground-runs-to-the-horizon.md):
-  the reach is no longer a number tuned against the distance but the nearer of
+  the reach is no longer a number tuned against the zoom but the nearer of
   the planet's own horizon and the distance the haze takes the ground, both
   read off the camera's height, and the band and the planes are read off
   that. What is unchanged is the consequence — the window and the rings
   follow the reach without being told.
-- **The camera reaches the pyramid's top.** `MAX_DIST` is 2^18 u, where a view
-  straight down wants step 2^11, which z6 draws. The on-demand dev tile
-  server makes nothing coarser than `--top-z` (z13 unless told), answering 503
-  rather than the 404 the client would paint as sea, since a z6 page is
+- **The zoom reaches the pyramid's top.** `MAX_DIST` is 2^18 u, where a view
+  straight down wants step 2^11, which level 10 draws. The on-demand dev tile
+  server makes nothing past `--top-level` (3 unless told), answering 503
+  rather than the 404 the client would paint as sea, since a level-10 page is
   a million leaves; `deno task dev:baked` serves the finished bake instead,
-  every zoom at once.
+  every level at once.

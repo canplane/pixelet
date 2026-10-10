@@ -65,7 +65,7 @@ cannot pass on the kernel's behalf.
   and the moon are and the easing toward the theme, and hands the view a
   `Light` each tick.
 - **An object entry's layout moved to the model** (`bake::constant`): the band,
-  the packed position and its tiers are the object store's record format, and
+  the packed position and its levels are the object store's record format, and
   the view paints a column's entries as lanes (`layer::object::adapter::Entries`)
   rather than reading the store.
 - **Left in the kernel:** the chunk ranges a fetcher and the scheduler hold,

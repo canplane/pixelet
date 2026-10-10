@@ -13,6 +13,13 @@ use pxl_spec::space::pyramid::PAGE_CHUNKS;
 /// asking finer is held at `SPLIT`.
 pub const CENTER_CELL_LOGICAL_PX: f64 = 6.0;
 
+// ---- the view's reach ----
+
+/// Most doublings of distance drawn past the ground under the eye: the fog's
+/// far edge, about 12 km on the ground and 32 km from 1 km up. Bounds the
+/// levels a view draws whatever the horizon allows.
+pub const VIEW_LEVELS: u32 = 5;
+
 // ---- what refinement observes ----
 
 /// The estimator's tile side, in radians (about 10°, 77 rays on a 16:9
@@ -26,15 +33,15 @@ pub const REUSE_SHIFT: f64 = 0.25;
 
 // ---- temporal smoothness of the quality ----
 
-/// One quality step: half a zoom of every split distance, so a step reads
-/// as ground drawn a little farther out rather than a zoom jumping.
+/// One quality step: half a level of every split distance, so a step reads
+/// as ground drawn a little farther out rather than a level jumping.
 pub const TAU_STEP: f64 = core::f64::consts::SQRT_2;
 
-/// Twelve half-zooms; coarser than that a view is its top zoom and saves nothing.
+/// Twelve half-levels; coarser than that a view is its top level and saves nothing.
 pub const TAU_STEPS: usize = 12;
 
 /// How long a finer step must have had room before it is taken, so a pan
-/// does not build and discard a zoom each time. Coarser is immediate.
+/// does not build and discard a level each time. Coarser is immediate.
 pub const QUALITY_WAIT_MS: f64 = 1_000.0;
 
 /// Share of each pool kept free before a finer step, so the next eye move

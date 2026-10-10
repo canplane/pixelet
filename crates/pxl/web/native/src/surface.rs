@@ -7,39 +7,12 @@
 //! window and has a surface to show, and unbinds it before it lets it go, so
 //! it is only ever drawn into while its view keeps it. The kernel's thread
 //! (thread.rs) makes every call here, whichever thread the view is on, and
-//! every frame is drawn and shown inside a turn. On an iPhone a surface is
-//! configured on the main thread instead, since that sets its layer's
-//! properties, which UIKit allows there alone.
+//! every frame is drawn and shown inside a turn.
 
 #[cfg(target_vendor = "apple")]
 use std::ffi::c_void;
 
-use pxl_render::gpu::api::ConfigureAt;
-
 use crate::thread::on_kernel;
-#[cfg(target_vendor = "apple")]
-use crate::thread::while_kernel_idle;
-
-/// An iPhone's layer is the main thread's, an Android window anyone's.
-#[cfg(target_vendor = "apple")]
-const CONFIGURE_SURFACES: ConfigureAt = ConfigureAt::Elsewhere(configure_on_main);
-#[cfg(not(target_vendor = "apple"))]
-const CONFIGURE_SURFACES: ConfigureAt = ConfigureAt::Here;
-
-/// Asks the main queue to configure what is stale, once the kernel is idle;
-/// asking again before it has run configures nothing twice.
-#[cfg(target_vendor = "apple")]
-fn configure_on_main() {
-    unsafe extern "C" {
-        static _dispatch_main_q: c_void;
-        fn dispatch_async_f(queue: *const c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
-    }
-    extern "C" fn work(_: *mut c_void) {
-        while_kernel_idle(pxl_render::gpu::api::surfaces_configure);
-    }
-    // SAFETY: libdispatch's main queue, which lives as long as the process.
-    unsafe { dispatch_async_f(&raw const _dispatch_main_q, core::ptr::null_mut(), work) };
-}
 
 /// Opens the device: its uniform offset alignment and whether it times its
 /// passes, written through the two words. 0 when it is open, -1 when the
@@ -49,9 +22,7 @@ fn configure_on_main() {
 /// `align` and `timestamps` point at words the caller owns.
 #[no_mangle]
 pub unsafe extern "C" fn pxl_gpu_open(align: *mut u32, timestamps: *mut u32) -> i32 {
-    let Some(info) = on_kernel(|| pxl_render::gpu::api::open_device(CONFIGURE_SURFACES)) else {
-        return -1;
-    };
+    let Some(info) = on_kernel(pxl_render::gpu::api::open_device) else { return -1 };
     // SAFETY: the caller's words.
     unsafe {
         *align = info.align;

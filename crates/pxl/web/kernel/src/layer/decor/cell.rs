@@ -1,7 +1,7 @@
 // pxl-kernel/layer/decor/cell.rs
 
 //! Decor as a payload of the chunks the terrain materializes: each mounted
-//! chunk holds the decor standing inside it, built over its zoom's page and
+//! chunk holds the decor standing inside it, built over its level's page and
 //! the object store, and drawn while the chunk is. A block is immutable once
 //! built; how each instance is drawn (`present`) is decided per frame and
 //! rebuilds nothing.
@@ -13,7 +13,7 @@ use pxl_render::mesh::paint::terrain::adapter::{Around, ChunkSample, PageSource}
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, GROUND_Z};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 use pxl_spec::space::v3::{len3, sub3, V3};
 use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
@@ -60,7 +60,7 @@ impl Block {
 /// What a population depends on beyond its page and the seed.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Sources {
-    /// The zoom of the page it is built from, coarser until its own comes.
+    /// The level of the page it is built from, coarser until its own comes.
     read_from: u32,
     revision: u32,
     shown: bool,
@@ -117,10 +117,10 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
             let o = FROM_L2_IDX(at.col_idx);
             inside(ivec::X(o), ivec::Y(o))
         }
-        DecorHide::Scattered([x, y, _]) => chunk.z() == GROUND_Z && inside(x, y),
+        DecorHide::Scattered([x, y, _]) => chunk.level() == 0 && inside(x, y),
     });
     Some(Sources {
-        read_from: Terrain::pyramid().paging().drawn_from(chunk.page())?.z,
+        read_from: Terrain::pyramid().paging().drawn_from(chunk.page())?.level,
         revision,
         shown: settings_store().decor,
         hide,
@@ -129,14 +129,14 @@ fn sources_of(chunk: Chunk, store: &Store, cols: &mut Vec<IVec>, hide: Option<De
 
 fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut DrawList, sources: Sources) -> Option<Block> {
     let pages = Terrain::pyramid();
-    // The page the terrain draws the chunk from, read over the chunk of its zoom.
+    // The page the terrain draws the chunk from, read over the chunk of its level.
     let src = pages.paging().drawn_from(chunk.page())?;
     let page = pages.paging().get(src)?;
     let mut over = chunk;
-    while over.z() > src.z {
+    while over.level() < src.level {
         over = over.parent()?;
     }
-    let z = over.z();
+    let level = over.level();
     let (cx0, cy0, _) = chunk.rect();
     let (x0, y0, _) = over.rect();
     let (x0, y0) = (x0 as i64, y0 as i64);
@@ -162,28 +162,28 @@ fn build(c: &mut Cells, chunk: Chunk, kinds: &[&Kind], store: &Store, draw: &mut
             col_idx,
             ox: ivec::X(o) as f64 - cx0,
             oy: ivec::Y(o) as f64 - cy0,
-            hittable: chunk.z() == GROUND_Z,
+            hittable: chunk.level() == 0,
         }
     }));
-    let target = GROUND.side_at(z);
+    let target = GROUND.scale(level);
     let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
-    match z < GROUND_Z && sources.shown {
+    match level > 0 && sources.shown {
         true => store.fold_at(target, [cx, cy], [cx + span, cy + span], sources.hide.and_then(DecorHide::placed), &mut c.folded).ok()?,
         false => c.folded.clear(),
     }
     let ground = Ground {
         page: &view,
         sample: &c.sample,
-        z,
+        level,
         x0,
         y0,
         tx0,
         ty0,
-        col_idx: (z == GROUND_Z).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
-        folded: (z < GROUND_Z).then_some(&c.folded),
+        col_idx: (level == 0).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
+        folded: (level > 0).then_some(&c.folded),
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
-    let step = GROUND.finest_in(z);
+    let step = GROUND.scale(0).count_in(target.max(GROUND.scale(0)));
     let built = DecorBuild::build(scratch, kinds, Some(&ground), &c.placed, sources.hide, store, step, sources.shown, chunk.region())?;
     let index = built.bytes();
     let heights = built.heights();

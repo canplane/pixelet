@@ -90,8 +90,8 @@ reference.
 
 Words go double without anyone noticing. In one document `lane` was both a
 field packed into a word and a structure-of-arrays column; `frame` was a drawn
-frame, an animation frame and a frame of reference; `page` was a square of the
-pyramid and a browser tab; `bake` was the offline terrain bake and the second
+frame, an animation frame and a frame of reference; `page` was a level of the
+hierarchy and a browser tab; `bake` was the offline terrain bake and the second
 stage of a chunk build.
 
 Where the code itself uses one word for both, do not rename it in the

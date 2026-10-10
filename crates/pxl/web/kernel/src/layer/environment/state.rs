@@ -1,19 +1,19 @@
 // pxl-kernel/layer/environment/state.rs
 
 //! The environment: where the map is and the wall clock as inputs; the sun
-//! and moon placed, and the light and sky they give.
+//! and moon placed, and the light, fog and sky they give.
 
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_render::look::globe::Globe;
-use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::adapter::epsg4326::G4326;
+use pxl_spec::space::adapter::{epsg3857, epsg4326};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{len3, V3};
 
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
 use crate::host::wall_now;
 use crate::kernel::kernel;
 use crate::layer::environment::celestial_position::{equatorial_to_local, j2000_days, moon_position, sun_position};
-use crate::layer::environment::fog::eye_ground;
+use crate::layer::environment::fog::{band_at, eye_ground, eye_height, reach_at};
 use crate::world::change::wake_at;
 use crate::world::chunk::table::Frame;
 use crate::world::frame::view::globe_anchor;
@@ -25,7 +25,7 @@ use xpute_runtime::global::Global;
 const ENV_CLOCK_FRAME_MS: f64 = 2000.0;
 
 struct Environment {
-    observed_center: Option<G4326>,
+    observed_center: Option<Pvf3>,
     observed_lat: f64,
     observed_lon: f64,
     clock_frame_at: f64,
@@ -61,7 +61,8 @@ pub fn map_environment_step() {
     let center = globe_anchor();
     if center != e.observed_center {
         e.observed_center = center;
-        if let Some(g) = center {
+        if let Some(c) = center {
+            let g = epsg4326::unproject(c.i, c.f);
             e.observed_lon = g[0];
             e.observed_lat = g[1];
         }
@@ -149,11 +150,17 @@ impl EnvironmentDraw {
         let km_per_u = km_per_u();
         let r = globe().radius_u();
         let over = len3(&[frame.camera[0], frame.camera[1], frame.camera[2] + r]) - r;
+        let height = eye_height();
+        // The ground pyramid's last observation, read rather than remade per frame.
+        let drawn = crate::world::pyramid::domain::current().map(|d| d.observation().far);
+        let band = band_at(height, drawn.unwrap_or_else(|| reach_at(height)));
         let light = Light {
             sun: self.sun,
             moon: self.moon,
             stars: self.stars,
             time: self.time,
+            fog_near: band.0,
+            fog_far: band.1,
             altitude_km: (frame.center_z + over) * km_per_u,
             ground_km: eye_ground() * km_per_u,
             km_per_u,

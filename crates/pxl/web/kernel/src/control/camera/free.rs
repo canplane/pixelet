@@ -5,6 +5,7 @@
 //! drawn eye eases to it, so a step comes as every other move does.
 
 use pxl_spec::space::lod::Tau;
+use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{add3, V3};
 
@@ -20,7 +21,7 @@ use xpute_runtime::global::Global;
 
 /// The first resident thing it meets, else the sea, else `fallback` along it.
 pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
-    let frame = view().chart();
+    let frame = ivec::to_v3(view().origin);
     let ray = Ray {
         origin: add3(&eye, &frame),
         direction: forward,

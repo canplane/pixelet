@@ -1,6 +1,20 @@
 // The sky: one triangle at the far plane, drawn after the opaque world, with
 // the sun's and moon's discs through the air.
 
+struct Sky {
+  ray: mat3x3f,
+  pole: vec3f,
+  mapped: f32,
+};
+
+// Read field by field from vec4 words, never as a struct: a struct here lost
+// Safari's WebGPU its GPU process.
+@group(0) @binding(1) var<uniform> sky_words: array<vec4f, 4>;
+
+fn sky_ray() -> mat3x3f { return mat3x3f(sky_words[0].xyz, sky_words[1].xyz, sky_words[2].xyz); }
+fn sky_pole() -> vec3f { return sky_words[3].xyz; }
+fn sky_mapped() -> f32 { return sky_words[3].w; }
+
 @group(0) @binding(2) var moon_map: texture_2d_array<f32>;
 @group(0) @binding(3) var moon_sampler: sampler;
 
@@ -90,7 +104,7 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let across = (dir - dot(dir, atmos_moon_dir()) * atmos_moon_dir()) / (MOON_ANGULAR_RADIUS * DISC_SCALE);
   let moon_a = length(across);
   let moon_w = max(fwidth(moon_a), 1e-4);
-  var color = beyond(air_along(dir)) + sun_disc(dir, r, sun_a, sun_w) + moon_disc(dir, r, across, moon_a, moon_w) + glare(dir);
+  var color = beyond(air_along(dir), sky_fill()) + sun_disc(dir, r, sun_a, sun_w) + moon_disc(dir, r, across, moon_a, moon_w) + glare(dir);
   // On the encoded value, where a step is one step at every brightness.
   return vec4f(finish(color, v.clip.xy) + (hash(v.clip.xy) - 0.5) / 255.0, 1.0);
 }

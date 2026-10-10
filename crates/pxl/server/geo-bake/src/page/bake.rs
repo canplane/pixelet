@@ -13,7 +13,7 @@ pub struct Bake<'a> {
     pub kind: &'a str,
     pub out: PathBuf,
     pub every: u64,
-    /// Zooms coarser than a page one object covers; zero is one object a page.
+    /// Levels above a page one object covers; zero is one object a page.
     pub group_shamt: u32,
     pub content_type: &'a str,
     pub format: Option<&'a str>,

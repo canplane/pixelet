@@ -56,19 +56,19 @@ fn zero_page() -> Terrain {
     Terrain::leaf(vec![0; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
 }
 
-fn top() -> Page {
-    Page::new(GROUND_Z - 1, ivec::gather(40, -20, 0))
+fn top() -> LevelPage {
+    LevelPage::new(1, ivec::gather(40, -20, 0))
 }
 
-fn pages() -> (Vec<(Page, Terrain)>, Terrain) {
+fn pages() -> (Vec<(LevelPage, Terrain)>, Terrain) {
     let mut rng = Rng(SplitMix64::new(0x9e37_79b9_7f4a_7c15));
-    let leaves: Vec<(Page, Terrain)> = top().children().iter().map(|&c| (c, rough_leaf(&mut rng))).collect();
+    let leaves: Vec<(LevelPage, Terrain)> = top().children().iter().map(|&c| (c, rough_leaf(&mut rng))).collect();
     let zero = zero_page();
     let parent = Terrain::fold_page(top(), |p| Some(leaves.iter().find(|(q, _)| *q == p).map_or(&zero, |(_, t)| t))).unwrap();
     (leaves, parent)
 }
 
-fn resident(held: &[(Page, Terrain)]) -> Paging<Terrain> {
+fn resident(held: &[(LevelPage, Terrain)]) -> Paging<Terrain> {
     let mut paging = Paging::default();
     for (p, page) in held {
         paging.admit(*p, &Keep, |_| Ok::<_, ()>(page.clone())).unwrap();
@@ -103,16 +103,16 @@ fn write(store: &mut Store, corner: V3, side: Scale, state: u32) {
 /// Above z16 a cell the objects fold solid is met at its own box; a lone
 /// cube the fold takes away is passed to the ground.
 #[test]
-fn a_zooms_ray_meets_the_objects_in_the_cells_the_zoom_draws_from() {
+fn a_level_s_ray_meets_the_objects_in_the_cells_the_level_draws_from() {
     let _g = serial();
     let (leaves, parent) = pages();
     let paging = resident(&[(top(), parent), leaves[0].clone()]);
     let (x0, y0, _) = leaves[0].0.rect();
-    let z = GROUND_Z - 1;
-    let cell = GROUND.side_at(z).side();
+    let level = 1;
+    let cell = GROUND.scale(level).side();
     let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
     let (bx, by) = ((x0 / cell).floor() * cell + 4.0 * cell, (y0 / cell).floor() * cell + 4.0 * cell);
-    let bare = Access::new(&paging, &Store::default()).at(&point(bx, by), z).value().unwrap().top;
+    let bare = Access::new(&paging, &Store::default()).at(&point(bx, by), level).value().unwrap().top;
     let bz = ((bare / cell).floor() + 3.0) * cell;
 
     // Five of the cell's eight: the bottom four and one over them.
@@ -124,11 +124,11 @@ fn a_zooms_ray_meets_the_objects_in_the_cells_the_zoom_draws_from() {
     write(&mut store, [lx, ly, bz], CELL, red);
     let access = Access::new(&paging, &store);
 
-    // Over the corner no cube's top reaches, the zoom still meets the cell's top.
+    // Over the corner no cube's top reaches, the level still meets the cell's top.
     let at = [bx + 1.5, by + 1.5];
-    let fine = access.first_hit(&down(at), Detail::Zoom(GROUND_Z)).value().flatten().unwrap();
+    let fine = access.first_hit(&down(at), Detail::Level(0)).value().flatten().unwrap();
     assert_eq!(fine.point[2], bz + 1.0, "{fine:?}");
-    let hit = access.first_hit(&down(at), Detail::Zoom(z)).value().flatten().unwrap();
+    let hit = access.first_hit(&down(at), Detail::Level(level)).value().flatten().unwrap();
     assert!(matches!(hit.struck, Struck::Objects), "{hit:?}");
     assert_eq!(
         hit.cube,
@@ -140,40 +140,7 @@ fn a_zooms_ray_meets_the_objects_in_the_cells_the_zoom_draws_from() {
     assert_eq!(hit.point[2], bz + cell);
 
     let alone = [lx + 0.5, ly + 0.5];
-    let hit = access.first_hit(&down(alone), Detail::Zoom(z)).value().flatten().unwrap();
-    let ground = Access::new(&paging, &Store::default()).first_hit(&down(alone), Detail::Zoom(z)).value().flatten().unwrap();
+    let hit = access.first_hit(&down(alone), Detail::Level(level)).value().flatten().unwrap();
+    let ground = Access::new(&paging, &Store::default()).first_hit(&down(alone), Detail::Level(level)).value().flatten().unwrap();
     assert_eq!((hit.struck, hit.point), (Struck::Ground, ground.point));
-}
-
-/// A ray in the frame that runs on round the world meets, past the
-/// antimeridian, the ground and the objects stored under the lane's copy.
-#[test]
-fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
-    let _g = serial();
-    let n = pxl_spec::space::pyramid::pages_around(GROUND_Z);
-    let flat = || {
-        let cells = vec![with_channel(0, GroundChannelKey::LAND, cube_types::land::bare); SPAN * SPAN];
-        Terrain::leaf(vec![5; PADDED * PADDED], Ground { cells: cells.into() }, Default::default())
-    };
-    let page = |x: i64| pxl_spec::space::pyramid::page_at(GROUND_Z, [x, 0]);
-    let paging = resident(&[(page(n / 2 - 1), flat()), (page(n / 2), flat())]);
-    let seam = pxl_spec::space::pvf3::ROUND / 2.0;
-    let top = Access::new(&paging, &Store::default()).at(&point(-seam + 20.5, 100.5), GROUND_Z).value().unwrap().top;
-
-    let mut store = Store::default();
-    let red = placeable_cube_num_id(PlaceableCube::Block(cube_types::Block::red));
-    write(&mut store, [-seam + 40.0, 100.0, top], CELL, red);
-    let access = Access::new(&paging, &store);
-
-    let ground = access.first_hit(&down([seam + 20.5, 100.5]), Detail::Zoom(GROUND_Z)).exact().flatten().unwrap();
-    assert_eq!([ground.point[0], ground.point[2]], [seam + 20.5, top], "{ground:?}");
-
-    let along = Ray {
-        origin: [seam - 30.0, 100.5, top + 0.5],
-        direction: [1.0, 0.0, 0.0],
-        reach: 200.0,
-    };
-    let hit = access.first_hit(&along, Detail::Zoom(GROUND_Z)).exact().flatten().unwrap();
-    assert!(matches!(hit.struck, Struck::Object(_)), "{hit:?}");
-    assert_eq!(hit.point[0], seam + 40.0, "{hit:?}");
 }

@@ -14,7 +14,7 @@
 //!
 //! Pages come from a running tile server, as the client's do: rays are cast,
 //! the pages they lacked are fetched, and they are cast again until nothing
-//! they lack can be had. A page past the server's top zoom is not served,
+//! they lack can be had. A page past the server's top level is not served,
 //! and a ray that needs one answers coarser, as the client's would.
 //!
 //! Each view's steps are also written as a heatmap in screen coordinates
@@ -31,15 +31,14 @@ use std::collections::HashSet;
 use std::process::Command;
 
 use pxl_kernel::layer::object::store::Store;
-use pxl_kernel::world::access::{Access, Answer, Detail, Ray};
+use pxl_kernel::world::access::{Access, Answer, Detail, Ray, FINEST};
 use pxl_kernel::world::paging::{Candidate, Paging, Victim};
 use pxl_spec::bake::format::{decode_terrain, Terrain};
 use pxl_spec::bake::quadkey::page_name;
 use pxl_spec::space::adapter::epsg4326;
 use pxl_spec::space::lod::Tau;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::GROUND_Z;
-use pxl_spec::space::pyramid::{Page, GROUND};
+use pxl_spec::space::pyramid::{LevelPage, GROUND};
 
 /// The phone the experiment is set on: an iPhone 13 mini's screen in
 /// points, drawn at the two ratios it names.
@@ -97,12 +96,12 @@ impl Victim for Keep {
 struct Pages {
     server: String,
     paging: Paging<Terrain>,
-    tried: HashSet<Page>,
+    tried: HashSet<LevelPage>,
 }
 
 impl Pages {
     /// `p`, fetched and held, once; false where it cannot be had.
-    fn fetch(&mut self, p: Page) -> bool {
+    fn fetch(&mut self, p: LevelPage) -> bool {
         if !self.tried.insert(p) {
             return false;
         }
@@ -157,7 +156,7 @@ struct Tally {
     hit: usize,
 }
 
-fn cast(pages: &Pages, store: &Store, rays: &[Ray]) -> (Tally, Vec<Page>) {
+fn cast(pages: &Pages, store: &Store, rays: &[Ray]) -> (Tally, Vec<LevelPage>) {
     let mut t = Tally {
         steps: Vec::with_capacity(rays.len()),
         exact: 0,
@@ -231,16 +230,16 @@ fn main() {
         tried: HashSet::new(),
     };
     // The eye's own column first, so it can stand on the ground.
-    let leaf = GROUND.cell_of(GROUND_Z, &point(x, y)).page();
+    let leaf = GROUND.cell_of(FINEST, &point(x, y)).page();
     let mut p = leaf;
     loop {
         pages.fetch(p);
-        if p.z == pxl_spec::space::pyramid::TOP_Z {
+        if p.level == pxl_spec::space::pyramid::TOP_LEVEL {
             break;
         }
         p = p.parent();
     }
-    let ground = Access::new(&pages.paging, &store).at(&point(x, y), GROUND_Z).value().map_or(0.0, |g| g.top);
+    let ground = Access::new(&pages.paging, &store).at(&point(x, y), FINEST).value().map_or(0.0, |g| g.top);
     println!("at {lon}, {lat}: ground {ground:.1} u, pages from {}", pages.server);
 
     for view in VIEWS {

@@ -2,7 +2,7 @@
 
 //! What a cell looks like drawn: terrain, placed objects, and their palette.
 
-pub mod column;
+pub mod level;
 pub mod object;
 pub mod palette;
 pub mod terrain;

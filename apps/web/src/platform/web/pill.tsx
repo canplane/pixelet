@@ -35,13 +35,9 @@ export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, f
         {...veil.motion}
         style={[styles.fade, { width: span + 2 * SHADOW_ROOM, height: height + 2 * SHADOW_ROOM }]}
       >
-        {
-          // Never flattened: as `touch` came and went, Android's Fabric lost the
-          // unflattened box's create and died adding the pill into it.
-        }
-        <View collapsable={false} style={styles.corner}>
-          <View collapsable={false} {...touch} style={[touch ? styles.reach : styles.box, { left: -reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach + touchBelow }]}>
-            <View collapsable={false} style={[styles.box, { left: reach, top: reach, width, height }]}>
+        <View style={styles.corner}>
+          <View {...touch} style={[touch ? styles.reach : styles.box, { left: -reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach + touchBelow }]}>
+            <View style={[styles.box, { left: reach, top: reach, width, height }]}>
               {shadow && (
                 <>
                   <View style={[styles.clip, clipLeft]}>

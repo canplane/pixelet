@@ -6,9 +6,9 @@
 
 use xpute_core::math::scalar::round;
 
-use super::constant::{ele_index, CELL, ELE_PAD, ELE_PADDED_SPAN, EXTENT_CELL, PAGE_ELE_SPAN};
+use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::deck::Decks;
-use crate::space::pyramid::{EXTENT, PAGE_CELLS};
+use crate::space::pyramid::{EXTENT, GROUND, PAGE_CELLS};
 
 const CELL_STEP: f64 = PAGE_CELLS as f64 / PAGE_ELE_SPAN as f64;
 
@@ -85,7 +85,7 @@ pub fn bound(page_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
 /// Per `EXTENT` cell, the lowest and highest of the surface (overshoot
 /// included), any deck top and any bore floor. Saturates at i16, about 78 km.
 pub fn extent_of(page_ele: &[i16], decks: &Decks) -> Vec<[i16; 2]> {
-    let n = CELL.count_in(EXTENT_CELL) as f64;
+    let n = GROUND.scale(0).count_in(EXTENT.scale(0)) as f64;
     let side = EXTENT.page_cells();
     (0..side * side)
         .map(|index| {

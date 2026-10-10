@@ -2,7 +2,7 @@
 
 Decided 2026-10-01. Decor was built inside a terrain chunk's build, held by
 the chunk's slot and drawn or dropped with it, and how it was drawn was read
-off the chunk's zoom: a kind's largest model projected at the far edge of
+off the chunk's level: a kind's largest model projected at the far edge of
 the chunk's band. The impostor tier (gpu/pass/impostor.rs) made the seam
 plain — what a tree is drawn as is its own size at its own distance, which
 the ground's cube has nothing to say about — so decor becomes a layer of its
@@ -11,11 +11,11 @@ pages as its only tie to the terrain.
 
 ## The population is multiresolution, and has to be
 
-A scattered kind at z draws at most one candidate a cell of z: the cell's
+A scattered kind at level L draws at most one candidate an L cell: the cell's
 channels, folded by majority, decide whether the kind may stand there, and a
 descent keyed to the kind and the node alone picks one z16 cell under it,
 whose own stream decides the rest (layer/decor/build.rs `representative`).
-Moving the eye keeps the instances it had and adds or drops a quarter a zoom.
+A zoom keeps the instances it had and adds or drops a quarter a level.
 
 One z16 population everywhere is not on offer, for two reasons:
 
@@ -23,26 +23,26 @@ One z16 population everywhere is not on offer, for two reasons:
   near the eye are resident; far away only coarse pages are. Pulling far z16
   pages for decor breaks the view's bound — what is held is bounded by the
   screen, not by the world.
-- A cell at z covers `4^(16 − z)` z16 cells. The thinning is what keeps instances a
-  screen area about constant; without it the count grows fourfold a zoom
+- An L cell covers 4^L z16 cells. The thinning is what keeps instances a
+  screen area about constant; without it the count grows fourfold a level
   out.
 
-So a decor cell is a cell of the pyramid, `(z, cell)`, and its
-population is z's scatter over z's page and the seed.
+So a decor cell is a cell of the pyramid, `(level, cell)`, and its
+population is the level-L scatter over the level-L page and the seed.
 
 ## Invariants
 
 1. **The decor frontier draws no cell and its ancestor at once.** It is an
    antichain over the ground in view, as the terrain's is, decided by decor
-   from the eye with the shared rule (`Tau::z_at`), never read off the
-   terrain's frontier. One region holds a cell at z or its children.
-2. **Population LOD and presentation LOD are separate.** Which zoom a cell
-   is at decides what its block holds, and a change of zoom is a new block.
+   from the eye with the shared rule (`Tau::level`), never read off the
+   terrain's frontier. One region holds a level-L cell or its children.
+2. **Population LOD and presentation LOD are separate.** Which level a cell
+   is decides what its block holds, and a change of level is a new block.
    Whether an instance is drawn as its model, its sprite or not at all is its
    actual distance, its actual scale and its variant's extent, chosen a frame
    at a time into transient index lanes; it never rebuilds a block.
 3. **Decor depends on the terrain's pages and nothing past them.** A cell
-   asks for the page at its zoom it scatters over; no chunk, mesh or
+   asks for the level-L page it scatters over; no chunk, mesh or
    materialization state is read — an instance's height is the query's
    (world/access.rs), not the drawn surface's.
 
@@ -53,7 +53,7 @@ population is z's scatter over z's page and the seed.
               │
      decor frontier (own antichain)
               │
-          cells at z  
+         level-L cells
        ┌──────┴──────┐
 page + seed       object store
 (scattered)        (placed)

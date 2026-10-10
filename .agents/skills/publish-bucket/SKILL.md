@@ -26,12 +26,12 @@ how it gets there and how you know it arrived.
 
 A page is named by its **quadkey**: the Web Mercator tile key at the zoom the
 page is held at, one base-4 digit a zoom, coarsest first (pxl-spec
-bake/quadkey.rs). The length is the zoom, so nothing writes a zoom down, and
+bake/quadkey.rs). The length is the level, so nothing writes a level down, and
 the three bakes differ only in how long a name they have — terrain and POI 5
 to 15 digits for the pyramid they share, geocode 11 because a group covers 16
 pages a side. They land in one space, so
 `terrain/<v>/13211032`, `poi/<v>/13211032` and `geocode/<v>/13211032` are the
-same ground, and **one prefix is one region across all three at every zoom**.
+same ground, and **one prefix is one region across all three at every level**.
 That is what a later split of the bucket would be: a prefix match, not a
 second re-keying.
 
@@ -78,7 +78,7 @@ copy is the same one. The free month has a million, and nothing stops at it:
 the guarantee that the bucket cannot bill covers its reads, which all pass
 the Worker's fail-closed plan, and not its writes. A new terrain version is
 every page of the pyramid — the sum of `objects` over the bake manifest's
-`zooms`, 227,310 for v6 — and a POI version likewise, so four terrain
+`levels`, 227,310 for v6 — and a POI version likewise, so four terrain
 publishes in a month, or one rename done twice, is past it. September 2026
 went to 1.67M on bakes re-published and the quadkey rename run twice.
 
@@ -97,9 +97,9 @@ partial version names it as its base.
 ### Terrain
 
 Terrain and POI are the bakes whose disk layout is not the bucket's. They keep
-`z<zoom>/<page index>` because the pyramid's fold (`geo-bake/src/pyramid.rs`) clears a zoom's directory so
-that a parent cannot outlive a child it no longer has, and clears the zooms
-past the top so that a zoom a run did not fold is not part of the set — both
+`<level>/<page index>` because the pyramid's fold (`geo-bake/src/pyramid.rs`) clears a level's directory so
+that a parent cannot outlive a child it no longer has, and clears the levels
+past the top so that a level a run did not fold is not part of the set — both
 invariants a flat tree would have to restate as a rule about name lengths. So
 the names are translated on the way out, by hard links, which costs no bytes:
 
@@ -175,7 +175,7 @@ the layer is switched on there.
 
 ### Geocode
 
-Geocode writes bucket names directly, without terrain's zoom directories.
+Geocode writes bucket names directly, without terrain's level directories.
 
 ```bash
 aws s3 sync ./out/geocode/<version> s3://pixelet-tiles/geocode/<version> \

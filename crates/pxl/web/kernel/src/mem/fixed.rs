@@ -5,7 +5,7 @@
 //! (glTF, PNG) have no predictable bound and stay in the heap. Ranges are
 //! reached only through `range`, `at` or `lane`, which check the range's end.
 //!
-//!   .fixed.terrain   resident terrain, one record per framed page
+//!   .fixed.terrain   resident terrain, one record per page; record 0 is `ABSENT`
 //!   .fixed.bake      the one open bake's mesh, before it goes to its slot
 //!   .fixed.mounts    the chunk table's lanes
 //!   .fixed.blocks    the renderer's block table

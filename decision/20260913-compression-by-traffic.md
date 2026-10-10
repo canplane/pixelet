@@ -75,7 +75,7 @@ before.
 
 ## 2026-09-22: measured again, at 512 cells
 
-Asked again once terrain v4 was baked — 512-cell pages with the
+Asked again once terrain v4 was baked — 512-cell pages with the level
 pyramid on them, gzip as before. Three things have moved since the first
 round: the page, Safari, and whether the kernel stays in a browser.
 
@@ -166,7 +166,7 @@ Streaming decode buys nothing either way: the kernel reads a body whole
 gzip stays. The switch is a batch job whenever it is taken up: every baked
 object is gunzipped and recompressed, which is lossless and needs no
 database, so the bake need not run again for it — terrain v4's 227,310
-objects are 2.11 GB under gzip (1.30 GB of leaves, 0.81 GB of the zooms above),
+objects are 2.11 GB under gzip (1.30 GB of leaves, 0.81 GB of levels above),
 about half an hour at zstd -19 and three hours at -22 on eight threads.
 What moves with it: the bake's `util::gzip` and the pyramid's `gunzip`, the
 kernel's decode or the Worker's encoding (whichever the open question
@@ -185,7 +185,7 @@ decoding is that host's job. The kernel and the shell see a page's packet and
 never its codec, which is the line the first round drew. What decided it was
 the layering; a dictionary, the one thing only the kernel could carry, was
 measured and does not pay: trained on 1,726 leaves, it takes 5% off a leaf
-and nothing off z15 to z13 — the pages are a megabyte raw and already
+and nothing off levels 1–3 — the pages are a megabyte raw and already
 repetitive enough inside — for 110 KB of dictionary the client would load.
 
 **Only what the bucket holds.** Terrain, POI and geocode pages are baked once
@@ -202,7 +202,7 @@ mobile half of that gap closes when the mobile client is an app.
 regular levels: on v4's leaves 39% under gzip -6 at four times its
 compression time and the same decode. The dev tile server packs what it
 makes while someone waits at zstd's default, 3. The two packings of one page
-unpack to the same packet — measured at z16 to z13 against v4 — so the
+unpack to the same packet — measured at levels 0 to 3 against v4 — so the
 dev server is checked against a bake by packet, not by object.
 
 Measured again on 2026-09-22, asked whether 3 would serve a view better for
@@ -218,8 +218,8 @@ metadata its upload sets, so gzip and zstd versions can share the bucket and
 a prefix rewritten in place can hold both mid-sync. The upload therefore takes
 the encoding from the bake's manifest (`content_encoding`), never from a
 constant, and a bake refuses to resume into a directory whose objects are in
-the other encoding. Readers inside the bake — the pyramid reading the zoom
-finer, `decode-tile.ts` — tell the two apart by their first bytes.
+the other encoding. Readers inside the bake — the pyramid reading the level
+below, `decode-tile.ts` — tell the two apart by their first bytes.
 
 ## 2026-09-24: what the gap costs, and the codec asked again
 

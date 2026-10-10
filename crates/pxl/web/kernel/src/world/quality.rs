@@ -16,7 +16,7 @@
 //! `QUALITY_WAIT_MS` with `QUALITY_MARGIN` to spare.
 
 use pxl_render::look::globe::MERCATOR_RADIUS_U;
-use pxl_spec::bake::published::PUBLISHED_TOP_Z;
+use pxl_spec::bake::published::PUBLISHED_TOP_LEVEL;
 use pxl_spec::space::lod::{Tau, SPLIT};
 
 use crate::kernel::kernel;
@@ -32,7 +32,7 @@ const _: () = assert!(param::TAU_STEP > 1.0, "a step that is not coarser");
 // The cover's pool holds every piece it can have, and the headroom fits
 // the other pools, so the floor's answer is always drawn.
 const _: () = assert!(
-    cover_pieces(PUBLISHED_TOP_Z, MERCATOR_RADIUS_U) <= ARENA[Pool::Cover as usize],
+    cover_pieces(PUBLISHED_TOP_LEVEL, MERCATOR_RADIUS_U) <= ARENA[Pool::Cover as usize],
     "the published source's cover does not fit its pool: ground it answers could stay unresolved"
 );
 const _: () = assert!(

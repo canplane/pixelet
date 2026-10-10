@@ -2,7 +2,6 @@
 
 use super::*;
 use crate::space::adapter::epsg4326;
-use crate::space::pvf3::core::FRAC_W;
 use crate::space::pvf3::{fvec, ivec, pvf3};
 
 // The round trip goes through the fixed-point lattice; 0.5 is far looser
@@ -10,7 +9,7 @@ use crate::space::pvf3::{fvec, ivec, pvf3};
 const ROUND_TRIP_TOL: f64 = 0.5;
 
 fn half_world() -> f64 {
-    to_db(ROUND / 2.0)
+    to_db(U_TOTAL_X / 2.0)
 }
 
 fn assert_almost(a: f64, b: f64, tol: f64) {
@@ -48,7 +47,7 @@ fn epsg3857_project_unproject_round_trips_a_nonzero_altitude_mercator_corrected_
 
 #[test]
 fn epsg3857_project_wraps_x_across_the_antimeridian_instead_of_growing_unbounded() {
-    let p = project(to_db(ROUND) * 1.5 + 1000.0, 0.0, 0.0);
+    let p = project(to_db(U_TOTAL_X) * 1.5 + 1000.0, 0.0, 0.0);
     let out = unproject(p.i, p.f);
     // 1.5 world widths east wraps to -0.5.
     assert_almost(out[0], -half_world() + 1000.0, ROUND_TRIP_TOL);

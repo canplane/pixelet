@@ -64,16 +64,16 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
 /**
  * Object keys this Worker is willing to ask R2 for.
  *
- * A baked page is named by its **quadkey**: its place in its zoom's page
+ * A baked page is named by its **quadkey**: its place in its level's page
  * grid, one base-4 digit a halving, coarsest first (pxl-spec
  * bake/quadkey.rs). Nothing else is written — the number of digits says the
- * zoom, and the digits are the index — so the three bakes differ only
+ * level, and the digits are the index — so the three bakes differ only
  * in how long a name they have and which shared object they keep beside it:
  *
- * - `terrain/<version>/<quadkey>`, 5 to 15 digits, a page at every zoom of
- *   the pyramid from z16 up to `TOP_Z`. Plus the shared
- *   `_ocean` page every zoom's open water reads.
- * - `poi/<version>/<quadkey>`, 5 to 15 digits, a page at every zoom of the
+ * - `terrain/<version>/<quadkey>`, 5 to 15 digits, a page at every level of
+ *   the pyramid from the leaf up to `TOP_LEVEL`. Plus the shared
+ *   `_ocean` page every level's open water reads.
+ * - `poi/<version>/<quadkey>`, 5 to 15 digits, a page at every level of the
  *   pyramid as terrain's are: how many places stand in each of its cells. A
  *   page with none is no object.
  * - `geocode/<version>/<quadkey>`, 11 digits, because a reverse-geocode object
@@ -102,8 +102,8 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * need a real zone rather than a workers.dev hostname.
  *
  * What it has to sieve is now almost nothing. The old shape spelled a page as
- * a decimal index of up to twenty digits under a zoom of up to two digits, so
- * the key space was some 10^20 strings a zoom and all but a handful named
+ * a decimal index of up to twenty digits under a level of up to two, so the
+ * key space was some 10^20 strings a level and all but a handful named
  * nothing. A quadkey of a given length is a page and there are no others, so
  * the key space here *is* the address space and this pattern turns away only
  * what was never an address. An asset is the one key nothing computes — the

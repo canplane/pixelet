@@ -1,6 +1,6 @@
 # Coarse tiers: what the field does, and why the block was the wrong cut
 
-> Current terms: AGENTS.md "One spatial model". A zoom names only a cell's scale.
+> **Superseded in its words (2026-10-04).** "Level 0" is z16; a zoom names only a cell's scale. Current terms: AGENTS.md "One spatial model".
 
 Written after a day spent building a "block" — a unit of 4×4 chunks scanned
 and baked as one — and finding on measurement that it reduced draw calls and
@@ -21,11 +21,11 @@ province later. What is the general rule for the coarse end?
 ### CDLOD (Strugar 2010) — heightmap terrain, the closest match
 
 Structure: a quadtree over the heightmap of constant depth; a node stores the
-min and max height of the area it covers. Every node covers four
-times the area of a node a depth finer and is drawn with **the same grid
-mesh**, so each coarser depth has four times fewer nodes and the on-screen
-triangle density stays roughly even. LOD ranges double per depth; a node is
-selected when it falls in its depth's range and none of its children are in
+min and max height of the area it covers. Every level's node covers four
+times the area of the level below and is drawn with **the same grid mesh**,
+so each successive level has four times fewer nodes and the on-screen
+triangle density stays roughly even. LOD ranges double per level; a node is
+selected when it falls in its level's range and none of its children are in
 theirs, and a morph over the last 15–30% of each range blends a node into its
 parent's resolution before the swap.
 
@@ -39,32 +39,32 @@ a coarser stride**. It is not built from a finer mesh. Nothing is folded.
 
 Structure: a spatial hierarchy (quadtree, octree, k-d) where every tile has
 its own content at its own detail. Selection is by geometric error projected
-to screen-space error against a pixel threshold, not by zoom. Tiles at
-every depth are **precomputed offline** by conversion tools; the client never
+to screen-space error against a pixel threshold, not by zoom level. Tiles at
+every level are **precomputed offline** by conversion tools; the client never
 derives a parent from its children at runtime. Refinement is either
 replacement (the parent's content is swapped for the children's) or additive
 (children add to the parent).
 
 ### Slippy-map tile pyramids — the web map standard for twenty years
 
-Every zoom is a full, independent set of same-sized tiles; z+1
-has four times the tiles of z. Each zoom is **resampled from the source**
+Every zoom level is a full, independent set of same-sized tiles; level z+1
+has four times the tiles of z. Each level is **resampled from the source**
 and cut into tiles. A zoomed-out view reads coarse tiles; it never assembles
 them from fine ones. This is how every web map shows a district, a city and
 a country with the same code path.
 
 ## What they have in common
 
-1. **Coarse zooms come from the source at a coarser sampling, not from
-   folding the fine zoom.** All three. It is the whole reason the coarse
-   end is cheap: a z12 node costs the same as a z16 node, because
+1. **Coarse levels come from the source at a coarser sampling, not from
+   folding the fine level.** All three. It is the whole reason the coarse
+   end is cheap: a level-4 node costs the same as a level-0 node, because
    both are one grid read from the source at their own stride.
-2. **The unit grows with the zoom, and the cost per unit is flat.** Four
-   times the area per zoom, the same mesh, the same work.
-3. **One selection rule across all zooms, distance- or error-based**, with
+2. **The unit grows with the level, and the cost per unit is flat.** Four
+   times the area per level, the same mesh, the same work.
+3. **One selection rule across all levels, distance- or error-based**, with
    a blend at the boundary. Every system selects nodes top-down from the
-   coarsest zoom and only descends where the range demands it.
-4. **The finest zoom is the only one that has to be exact.** Coarse zooms
+   coarsest level and only descends where the range demands it.
+4. **The finest level is the only one that has to be exact.** Coarse levels
    are approximations by design; their job is a stable silhouette and the
    right color at the right size on screen.
 
@@ -132,12 +132,12 @@ What this preserves:
 
 What it gives up: at coarse tiers, a cell's color is a nearest or majority
 sample rather than the exact four-material average the fold produces. The
-field accepts this everywhere — coarse zooms are approximations by design —
+field accepts this everywhere — coarse levels are approximations by design —
 and at the distances where step 8 applies a cell is a few pixels wide.
 
 And the general case the question asked about: a city or a province is the
 same rule at a larger stride. A step-64 unit reads one sample per chunk. The
-units per zoom fall by four each zoom, the cost per unit is flat, and the
+units per level fall by four each level, the cost per unit is flat, and the
 range grows without the work growing with it. That is what the tile pyramid
 has always been.
 

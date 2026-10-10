@@ -51,7 +51,7 @@ function windowSection(r: ProfilerReport): string[] {
   const c = r.sections.counters;
   const bands = c.bands_reused + c.bands_allocated;
   const spans = f.gpu_spans.filter((s) => s.spread.max > 0).map((s) => `${s.name} ${n1(s.spread.p95)}`).join("  ");
-  const zooms = f.zoom_tris.map((t, z) => [z, t] as const).filter(([, t]) => t > 0).map(([z, t]) => `${zoomName(z)} ${tris(t)}`).join("  ");
+  const levels = f.zoom_tris.map((t, z) => [z, t] as const).filter(([, t]) => t > 0).map(([z, t]) => `${zoomName(z)} ${tris(t)}`).join("  ");
   const steps = r.steps.length === 0 ? "none" : [...r.steps].sort((a, b) => b.ms / b.count - a.ms / a.count).map((s) => `${s.phase}/${s.name} ${n1(s.ms / s.count)}/${n1(s.max_ms)}`).join("  ");
 
   return [
@@ -68,7 +68,7 @@ function windowSection(r: ProfilerReport): string[] {
     // Per step: a cooperative scheduler is only as cooperative as its longest step.
     `  steps   ${steps}   (ms per frame, max)`,
     `  by tag  ${f.census.map((t) => `${t.tag} ${round(t.draws)}/${tris(t.tris)}`).join("  ")}   (draws/tris a frame, mean)`,
-    `  by zoom ${zooms || "-"}   (terrain tris a frame, mean)`,
+    `  by lvl  ${levels || "-"}   (terrain tris a frame, mean)`,
     `  build   ${c.built_direct} direct  ${c.built_scans} scans  ${c.built_bakes} bakes  ${c.built_starved} refused a block`,
     `  per     chunks/bake ${f.chunks_per_bake === null ? "-" : n1(f.chunks_per_bake)}ms   (workload-normalized; comparable across sessions)`,
     `  rate    ${n1(f.perS[1])} bakes/s  ${n1(f.perS[0])} scans/s   while backlog ${n1(f.backlogPerS[1])} bakes/s  ${n1(f.backlogPerS[0])} scans/s over ${n1(f.backlog_s)}s`,

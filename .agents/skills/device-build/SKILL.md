@@ -231,7 +231,15 @@ adb emu geo fix 127.0437 37.2741
 ```
 
 Its location is off until turned on, and it has no network provider, so the
-position is only what `geo fix` gives. There it has named the place.
+position is only what `geo fix` gives.
+
+**It crashes there, and nothing has found why.** Within seconds of the first
+position the app dies in React Native's Fabric, `IllegalStateException:
+Unable to find View for tag: …` from
+`SurfaceMountingManager.updateOverflowInset`, every launch. With location
+off it runs, and the `mobile` flavor of the same commit runs on a phone. A
+position with no heading is the one state only a Quest is in; a Debug build
+against Metro is where to find the view.
 
 ### What has gone wrong
 
@@ -246,9 +254,3 @@ position is only what `geo fix` gives. There it has named the place.
 - **`Surface::configure` refuses `Bgra8Unorm`**: Android's Vulkan surfaces
   offer RGBA. The device backend takes the system's preferred format
   (pxl-render `gpu/api/device.rs`), as the page takes the browser's.
-- **`Unable to find View for tag: …` from `updateOverflowInset`, seconds in**:
-  Fabric never made a view it later reaches, its trace in logcat a
-  `MissingViewState` soft exception at the first mount. It was a plain view
-  whose flattening changed as a toast's touch came and went (`collapsable`
-  in `web/src/platform/web/pill.tsx`); the mount state logged before the
-  crash shows what the missing tag holds.

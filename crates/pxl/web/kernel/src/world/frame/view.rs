@@ -7,19 +7,17 @@
 use pxl_spec::space::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_mul, mat4_perspective, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4};
 use pxl_spec::space::observation::Frustum;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::adapter::epsg4326::{self, G4326};
-use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::pvf3::nearest;
-use pxl_spec::space::pvf3::{projection, ROUND};
-use xpute_core::math::scalar::round;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pvf3::{projection, REACH};
 use pxl_spec::space::v3::{add3, V3};
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::controller::{pose, rebase};
+use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
-use crate::world::frame::coord::origin_for;
+use crate::world::frame::coord::{local_world_to_canonical, origin_for};
 use pxl_spec::space::lod;
-use pxl_spec::space::pyramid::{GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::TOP_LEVEL;
 use xpute_runtime::global::Global;
 
 /// `rotation` turns the world's axes to the camera's (right, up, back), rotation alone.
@@ -31,10 +29,7 @@ pub struct ObserverPose {
 
 pub struct View {
     pub pose: ObserverPose,
-    /// The floating origin, stored as PVF3 names it.
     pub origin: IVec,
-    /// Rounds the origin has gone: the view's frame runs on across the antimeridian.
-    lap: i64,
 
     pub width: f64,
     pub height: f64,
@@ -58,13 +53,11 @@ impl View {
                 rotation: mat4(),
             },
             origin: 0,
-            lap: 0,
             width: 1.0,
             height: 1.0,
             fov: camera_cfg::projection::FOV,
             near: camera_cfg::projection::NEAR,
-            // Set with the camera; reversed depth takes an endless far until then.
-            far: f64::INFINITY,
+            far: render_cfg::FAR_CLIP,
             view_matrix: mat4(),
             inv_view_matrix: mat4(),
             proj: mat4(),
@@ -76,19 +69,14 @@ impl View {
 }
 
 impl View {
-    /// The origin in the view's frame: X counted on round the world.
-    pub fn chart(&self) -> V3 {
-        let [x, y, z] = ivec::to_v3(self.origin);
-        [x + self.lap as f64 * ROUND, y, z]
-    }
-
     pub fn eye_at(&self) -> V3 {
-        add3(&self.chart(), &self.pose.eye)
+        let (o, e) = (ivec::to_v3(self.origin), self.pose.eye);
+        add3(&o, &e)
     }
 
-    /// The zoom the origin's cell is sized for (`origin_for`).
-    pub fn anchor_z(&self) -> u32 {
-        lod::z_at(height_at(self.eye_at())).clamp(TOP_Z as i32, GROUND_Z as i32) as u32
+    /// The level the origin's cell is sized for (`origin_for`).
+    pub fn anchor_level(&self) -> u32 {
+        lod::level(height_at(self.eye_at())).clamp(0, TOP_LEVEL as i32) as u32
     }
 
     /// Eye-relative matrices, as the GPU's points are (`DrawList::translation`):
@@ -113,12 +101,11 @@ pub fn globe_anchor_local() -> V3 {
     [v.pose.eye[0], v.pose.eye[1], -ivec::to_real(ivec::Z(v.origin))]
 }
 
-/// None before the camera stands somewhere. From the doubles: past the north or
-/// south edge the lattice would hold the eye at it.
-pub fn globe_anchor() -> Option<G4326> {
+/// None before the camera stands somewhere.
+pub fn globe_anchor() -> Option<Pvf3> {
     crate::control::camera::controller::camera().eye?;
-    let [x, y, _] = add3(&view().chart(), &globe_anchor_local());
-    Some(epsg4326::from_mercator(&[epsg3857::to_db(nearest(x, 0.0)), epsg3857::to_db(y), 0.0]))
+    let out = local_world_to_canonical(&globe_anchor_local(), view().origin);
+    Some(out)
 }
 
 pub fn view_resize(width: f64, height: f64) {
@@ -137,15 +124,13 @@ pub fn view_resize(width: f64, height: f64) {
 pub fn view_compose() {
     let v = view();
     v.pose = pose();
-    // Past the lattice's edges, against the edge cell.
+    // The lattice only reaches so high: an eye above it is written against the
+    // highest cell, the eye itself being doubles.
     let e = v.eye_at();
-    let at = projection::project(e[0], e[1], e[2]);
-    let want = origin_for(at.i, v.anchor_z());
+    let at = projection::project(e[0], e[1], e[2].clamp(REACH.min[2], REACH.max[2] - 1.0));
+    let want = origin_for(at.i, v.anchor_level());
     if want != v.origin {
-        let by = crate::world::frame::coord::offset(want, v.origin);
-        let x = v.chart()[0] + by[0];
-        v.lap = round((x - ivec::to_real(ivec::X(want))) / ROUND) as i64;
-        rebase(by);
+        rebase(crate::world::frame::coord::offset(want, v.origin));
         v.origin = want;
         v.pose = pose();
     }
@@ -155,10 +140,10 @@ pub fn view_compose() {
     mat4_mul(&mut v.view_matrix, &v.pose.rotation, &to_eye);
     let vm = v.view_matrix;
     mat4_invert(&mut v.inv_view_matrix, &vm);
-    // Read the eye from the view in hand: `eye()` would borrow the view again.
-    let altitude = v.eye_at()[2];
-    v.near = near_clip_at(altitude);
-    v.far = far_clip_at(altitude);
+    // Read the height from the view in hand: `eye()` would borrow the view again.
+    let height = height_at(v.eye_at());
+    v.near = near_clip_at(height);
+    v.far = far_clip_at(height);
     mat4_perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near, v.far);
     let proj = v.proj;
     mat4_mul(&mut v.local_view_proj, &proj, &vm);

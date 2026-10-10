@@ -22,8 +22,8 @@ use xpute_runtime::global::Global;
 
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pvf3::{nearest, projection, REACH};
-use pxl_spec::space::pyramid::{Cell, GROUND, GROUND_Z};
+use pxl_spec::space::pvf3::{ivec, projection, REACH};
+use pxl_spec::space::pyramid::{Cell, GROUND};
 use pxl_spec::space::v3::len3;
 use std::collections::HashSet;
 
@@ -66,7 +66,7 @@ fn shown_at(units_per_px: f64) -> Option<Shown> {
 }
 
 /// None where nothing over it is known.
-fn top_at(at: &Pvf3, z: u32) -> Option<f64> {
+fn top_at(at: &Pvf3, level: u32) -> Option<f64> {
     let xy = projection::unproject(at.i, at.f);
     let (high, low) = (REACH.max[2], REACH.min[2]);
     let ray = Ray {
@@ -74,7 +74,7 @@ fn top_at(at: &Pvf3, z: u32) -> Option<f64> {
         direction: [0.0, 0.0, -1.0],
         reach: high - low,
     };
-    let hit = Access::now().first_hit(&ray, Detail::Zoom(z)).value().flatten()?;
+    let hit = Access::now().first_hit(&ray, Detail::Level(level)).value().flatten()?;
     Some(high - hit.t)
 }
 
@@ -90,7 +90,7 @@ pub fn step(ctx: &mut TickContext) {
         return;
     }
     let origin = view().origin;
-    let base = view().chart();
+    let base = ivec::to_v3(origin);
     let pages = PoiPage::pyramid();
     if crate::world::pyramid::domain::current().is_none() {
         return;
@@ -110,10 +110,10 @@ pub fn step(ctx: &mut TickContext) {
         let Some(poi) = pages.paging().get(src) else { continue };
         // Where the source cell is wider than the chunk, its place counts only if it
         // stands on the chunk's ground.
-        let (side, cell) = (chunk.column().0, POI_LATTICE.side_at(src.z));
+        let (side, cell) = (chunk.column().0, POI_LATTICE.scale(src.level));
         let m = if cell <= side { cell.count_in(side) } else { 0 };
-        let [x0, y0] = POI_LATTICE.cell_of(src.z, &Pvf3 { i: chunk.corner(), f: 0 }).in_page();
-        let (h0, h1) = chunk.z_range();
+        let [x0, y0] = POI_LATTICE.cell_of(src.level, &Pvf3 { i: chunk.corner(), f: 0 }).in_page();
+        let (z0, z1) = chunk.z_range();
         for ty in y0..y0 + m.max(1) {
             let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + m.max(1), ty));
             let from = poi.cells.partition_point(|c| c.cell < lo);
@@ -122,29 +122,28 @@ pub fn step(ctx: &mut TickContext) {
                 // Near, a place or a count; farther, only a prominent enough place.
                 // A count stands at its cell's middle.
                 let all = match (c.count, poi.shown(c).next()) {
-                    (1, Some((place, _, at))) => (Label::Place { page: src, place }, cell.inner_at(GROUND, GROUND_Z, at)),
-                    _ => (Label::Count(c.count, c.partial), GROUND.cell_of(GROUND_Z, &cell.mid())),
+                    (1, Some((place, _, at))) => (Label::Place { page: src, place }, cell.inner_at(GROUND, 0, at)),
+                    _ => (Label::Count(c.count, c.partial), GROUND.cell_of(0, &cell.mid())),
                 };
                 let major = poi
                     .shown(c)
                     .map(|(i, p, at)| (i, rank_of(p.kind), at))
                     .filter(|s| s.1 <= POI_MAJOR_RANK)
                     .min_by_key(|s| s.1)
-                    .map(|(place, _, at)| (Label::Place { page: src, place }, cell.inner_at(GROUND, GROUND_Z, at)));
+                    .map(|(place, _, at)| (Label::Place { page: src, place }, cell.inner_at(GROUND, 0, at)));
                 let mid = cell.mid();
                 let mid = projection::unproject(mid.i, mid.f);
-                let mid = [nearest(mid[0], chunk.rect().0), mid[1]];
                 for (shown, (label, ground)) in [(Shown::All, all)].into_iter().chain(major.map(|m| (Shown::Major, m))) {
-                    if m == 0 && Chunk::of(chunk.z(), &ground.mid()).column() != chunk.named().column() {
+                    if m == 0 && Chunk::of(chunk.level(), &ground.mid()).column() != chunk.column() {
                         continue;
                     }
                     // Counted only by the chunk the top of what stands there is in, so a
                     // column's several chunks do not repeat it.
-                    let Some(top) = top_at(&ground.mid(), chunk.z()) else { continue };
-                    if top - 1.0 < h0 || top - 1.0 >= h1 {
+                    let Some(top) = top_at(&ground.mid(), chunk.level()) else { continue };
+                    if top - 1.0 < z0 || top - 1.0 >= z1 {
                         continue;
                     }
-                    found.push((POI_LATTICE.cell_of(chunk.z(), &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
+                    found.push((POI_LATTICE.cell_of(chunk.level(), &ground.mid()), label, ground, top, shown, [mid[0], mid[1], top]));
                 }
             }
         }

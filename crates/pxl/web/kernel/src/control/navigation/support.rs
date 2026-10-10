@@ -10,11 +10,10 @@ use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::pvf3::core::{FRAC_W, IVEC_Z_W};
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::GROUND_Z;
 use pxl_spec::space::v3::V3;
 
 use crate::shell::setting::store::settings_store;
-use crate::world::access::{Access, Answer, Detail, Ray};
+use crate::world::access::{Access, Answer, Detail, Ray, FINEST};
 use crate::world::frame::coord::{canonical_to_local, local_world_to_canonical};
 use crate::world::frame::view::view;
 
@@ -150,7 +149,7 @@ pub fn passage(from: &Pvf3, way: [f64; 2], start: i64) -> Passage {
             direction: [dir[0], dir[1], 0.0],
             reach: length - t,
         };
-        match access.first_hit(&ray, Detail::Zoom(GROUND_Z)) {
+        match access.first_hit(&ray, Detail::Level(FINEST)) {
             Answer::Exact(None) => return Passage::Open(cz),
             Answer::Exact(Some(hit)) => {
                 let p = ray.at(hit.t + side / 2.0);

@@ -52,7 +52,7 @@ impl Category {
     /// An asset belongs to no bake and is asked for by its own command.
     pub fn bake(self) -> Option<BakeKind> {
         match self {
-            Category::terrain => Some(BakeKind::terrain),
+            Category::terrain | Category::ocean => Some(BakeKind::terrain),
             Category::poi => Some(BakeKind::poi),
             Category::earth => Some(BakeKind::earth),
             Category::geocode | Category::geocode_dict => Some(BakeKind::geocode),
@@ -81,7 +81,7 @@ pub enum Why {
     /// On the line over a destination, which the camera waits for exactly.
     Destination,
     /// On the line over a fault, so a coarser answer is held wherever the view
-    /// looks and leaving a zoom shows its parent at once (Cesium's `preloadAncestors`).
+    /// looks and leaving a level shows its parent at once (Cesium's `preloadAncestors`).
     Ancestor,
     Fault,
     Hint,

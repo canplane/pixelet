@@ -53,7 +53,7 @@ const fn bound(category: Category) -> usize {
         Category::poi => Paging::<PoiPage>::FRAMES as usize,
         Category::earth => Paging::<Earth>::FRAMES as usize,
         Category::asset => 2 * LOADS,
-        Category::geocode | Category::geocode_dict => 1,
+        Category::ocean | Category::geocode | Category::geocode_dict => 1,
     }
 }
 
@@ -225,7 +225,7 @@ impl<S: Serve> RequestScheduler<S> {
     /// has spoken, or the first producer would fill every slot.
     pub fn pump(&mut self, at: f64) {
         // Stop abandoned work in the turn it is abandoned: after a zoom out and
-        // back in, credits must not sit on the zoom passed through.
+        // back in, credits must not sit on the level passed through.
         for slot in 0..self.attempt.len() {
             if self.attempt[slot].is_some_and(|a| self.find(a.category, a.subject).is_none()) {
                 self.stop(slot, at);

@@ -5,7 +5,7 @@
 //!
 //! The drawn pieces are an antichain of the chunk tree covering the goal with
 //! no gap. They move only by whole moves, made once everything they bring is
-//! ready: a refinement (a piece replaced by its children, a zoom at a time),
+//! ready: a refinement (a piece replaced by its children, a level at a time),
 //! a coarsening (pieces replaced by their goal parent), or a fill (the
 //! coarsest piece that can be built over a goal piece with nothing drawn on
 //! its line, refined from there as any drawn piece is). Until then the coarser
@@ -18,9 +18,8 @@
 //! unless the arena refused a move last step.
 
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::space::adapter::epsg3857::{side_at_zoom, zoom_of};
 use pxl_spec::space::lod::Tau;
-use pxl_spec::space::pyramid::{chunk_scale, GROUND, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{chunk_scale, GROUND, TOP_LEVEL};
 
 use crate::param::REFINEMENTS_IN_FLIGHT;
 use crate::world::chunk::build::mesh_step;
@@ -41,30 +40,31 @@ pub const RESERVE: Slots = [0, COARSE_TIER_SLOTS, 0];
 /// for each refinement in flight holding the piece it replaces.
 pub const HEADROOM: Slots = [REFINEMENTS_IN_FLIGHT + RESERVE[0], REFINEMENTS_IN_FLIGHT + RESERVE[1], 0];
 
-/// The scale the rule wants at `near`: a zoom coarser than the LOD's, since
-/// terrain draws a zoom's cells averaged 2 × 2. Past z16 it goes on to the
-/// objects' finest tier.
+/// The scale the rule wants at `near`: a level coarser than the LOD level,
+/// since terrain draws a level's cells averaged 2 × 2. Below z16 it goes on
+/// to the objects' finest tier.
 fn wanted_scale(near: f64, tau: Tau) -> Scale {
-    let z = tau.z_at(near).min(zoom_of(OBJECT_FINEST) + 1) - 1;
-    side_at_zoom(z).min(chunk_scale(TOP_Z))
+    let finest = OBJECT_FINEST.above(GROUND.scale(0));
+    let level = tau.level(near).max(finest - 1) + 1;
+    GROUND.scale(0).up(level).min(chunk_scale(TOP_LEVEL))
 }
 
-/// A wanted scale as a chunk at `z` draws it: clamped to its own cells
+/// A wanted scale as a chunk of `level` draws it: clamped to its own cells
 /// averaged 2 × 2, and finer than its cells only at z16 where it holds
 /// objects. The outermost (cover) pieces always take the coarsest scale, one
 /// slot each.
 ///
 /// A chunk read from a coarser page still uses its own scale: drawing it at
 /// that page's cells made blocks over the sea after a jump (2026-09-26).
-fn drawn_scale(scale: Scale, z: u32, outermost: bool, objects: bool) -> Scale {
+fn drawn_scale(scale: Scale, level: u32, outermost: bool, objects: bool) -> Scale {
     if outermost {
-        return chunk_scale(z);
+        return chunk_scale(level);
     }
-    let own = GROUND.side_at(z);
-    let finest = match (z == GROUND_Z, objects) {
-        (true, true) => OBJECT_FINEST,
-        (true, false) => own,
-        (false, _) => own.up(1),
+    let own = GROUND.scale(level);
+    let finest = match (level, objects) {
+        (0, true) => OBJECT_FINEST,
+        (0, false) => own,
+        _ => own.up(1),
     };
     scale.clamp(finest, own.up(1))
 }
@@ -72,11 +72,11 @@ fn drawn_scale(scale: Scale, z: u32, outermost: bool, objects: bool) -> Scale {
 /// The quality alone moves the scale; a mesh too big for one slot fills more
 /// slots and is never drawn coarser for it.
 pub fn scale_of(c: Chunk, outermost: bool, near: f64, tau: Tau, objects: bool) -> Scale {
-    drawn_scale(wanted_scale(near, tau), c.z(), outermost, objects)
+    drawn_scale(wanted_scale(near, tau), c.level(), outermost, objects)
 }
 
 pub fn pool_of(c: Chunk, scale: Scale) -> Pool {
-    Pool::of(c.z(), mesh_step(scale, c.z()))
+    Pool::of(c.level(), mesh_step(scale, c.level()))
 }
 
 /// Slots per pool, counted before allocation. A z16 piece also takes a coarse
@@ -99,7 +99,7 @@ impl<F: Fn(Chunk, Scale) -> u32> Price for Need<F> {
     }
 
     fn split(&self, c: Chunk) -> Slots {
-        if c.z() == GROUND_Z - 1 {
+        if c.level() == 1 {
             [0, 1, 0]
         } else {
             [0; POOLS]

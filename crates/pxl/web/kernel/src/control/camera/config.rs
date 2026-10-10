@@ -23,7 +23,7 @@ pub mod camera_cfg {
         /// Seoul's latitude.
         pub const MIN_DIST: f64 = 2.0;
         /// Looking straight down from here the ground wants step 2^11, which the
-        /// pyramid's top zoom draws (about 24 km on the scale bar); past it no zoom
+        /// pyramid's top level draws (about 24 km on the scale bar); past it no level
         /// is coarse enough.
         pub const MAX_DIST: f64 = 262144.0;
     }

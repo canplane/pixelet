@@ -7,12 +7,12 @@
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
-use crate::gpu::api::{object, release, Gpu};
+use crate::gpu::api::{object, Gpu};
 use crate::gpu::api_spec::{address, compare, filter, format};
 use crate::gpu::pass::impostor::Extent;
 use crate::gpu::pass::model::{draw_models, put_instances, DrawUniforms, ModelDraw, Stage};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{skin_group, Blocks, Draws};
+use crate::gpu::renderer::{release_skin, skin_group, Blocks, Draws};
 
 /// Translation, first lane word, stride, opacity, padding, index list's first word.
 const DRAW_UNIFORM_BYTES: u32 = 32;
@@ -36,7 +36,7 @@ impl Default for Group {
 #[derive(Clone, Copy, Default)]
 struct Skin {
     image: u32,
-    group: u32,
+    ids: [u32; 3],
     uses: u32,
 }
 
@@ -83,7 +83,7 @@ impl DecorPass {
         let (buffer, vertex_cnt, index_cnt) = blocks.get(gr.mesh)?;
         let at = if gr.skin == NO_SKIN { self.take_skin(g, gr.image?)? } else { gr.skin };
         self.groups[group as usize].skin = at;
-        Some((buffer, vertex_cnt, index_cnt, self.skins[at].group))
+        Some((buffer, vertex_cnt, index_cnt, self.skins[at].ids[2]))
     }
 
     fn take_skin(&mut self, g: &Gpu, image: u32) -> Option<usize> {
@@ -92,8 +92,8 @@ impl DecorPass {
             return Some(at);
         }
         let at = self.skins.iter().position(|s| s.uses == 0)?;
-        let group = skin_group(g, self.lit.layouts[2], self.sampler, image);
-        self.skins[at] = Skin { image, group, uses: 1 };
+        let ids = skin_group(g, self.lit.layouts[2], self.sampler, image);
+        self.skins[at] = Skin { image, ids, uses: 1 };
         Some(at)
     }
 
@@ -101,7 +101,7 @@ impl DecorPass {
         let Some(s) = self.skins.get_mut(at) else { return };
         s.uses = s.uses.saturating_sub(1);
         if s.uses == 0 {
-            release(s.group);
+            release_skin(s.ids);
             *s = Skin::default();
         }
     }

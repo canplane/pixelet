@@ -193,18 +193,6 @@ pub fn image_opened(fd: u32, key: u64, res: i32) {
     loader().image[load.number() as usize] = Some(Entry::Arrived(image, 0));
 }
 
-/// The GPU is gone, and with it every image the textures took: each is loaded
-/// again, under a new handle, when it is next asked for.
-pub fn images_lost() {
-    let l = loader();
-    for entry in &mut l.image {
-        if let Some(Entry::Ready(h) | Entry::Arrived(h, _)) = *entry {
-            IMAGES.get(Slots::default).remove(h);
-            *entry = None;
-        }
-    }
-}
-
 /// A file the device cannot decode is the asset's own failure, so it is final.
 pub fn image_decoded(image: u32, res: i32) {
     let l = loader();

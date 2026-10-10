@@ -13,8 +13,12 @@ fn rim(n: vec3f, world_pos: vec3f) -> f32 {
 
 // `open` scales all of the light, the sun's too: no shadow is drawn by default,
 // and over the sky's light alone a corner went unmarked in the sun.
-// Opaque to the drawn edge: where ground is drawn, the Earth's picture never shows through it.
 fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, open: vec3f, seen: Seen) -> vec3f {
-  let color = albedo * surface_light(n, up_at(world_pos), lit, seen.light) * open * (1.0 + rim(n, world_pos));
-  return color * seen.through + seen.scattered;
+  var color = albedo * surface_light(n, lit, seen.fill) * open * (1.0 + rim(n, world_pos));
+  color = color * seen.through + seen.scattered;
+  // A smoothstep on distance from the eye, a sphere, so the band hides the
+  // ground before its drawn edge toward the screen's corners as at its middle;
+  // and the whole view gives way to the Earth past it as it goes over to it.
+  let fade = max(smoothstep(frame_fog_near(), frame_fog_far(), length(world_pos - frame_camera_pos())), frame_earth_share());
+  return mix(color, seen.past, fade);
 }

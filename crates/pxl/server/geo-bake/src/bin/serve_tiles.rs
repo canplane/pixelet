@@ -20,7 +20,7 @@ use pxl_geo_bake::pyramid::PageSet;
 use pxl_geo_bake::terrain::leaf::OCEAN_KEY;
 use pxl_geo_bake::util::CONTENT_ENCODING;
 use pxl_server::admin_auth::admin_auth;
-use pxl_spec::bake::published::{PUBLISHED_TOP_Z, PUBLISHED_VERSION};
+use pxl_spec::bake::published::{PUBLISHED_TOP_LEVEL, PUBLISHED_VERSION};
 use pxl_spec::bake::quadkey::page_of_name;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
 use std::path::PathBuf;
@@ -34,7 +34,7 @@ enum Pages {
 
 struct App {
     pages: Pages,
-    top_z: u32,
+    top_level: u32,
     asset_dir: PathBuf,
     out: PathBuf,
 }
@@ -76,7 +76,7 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
         Ok(Some(bytes)) => packed(bytes),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(Failure::BadName) => (StatusCode::BAD_REQUEST, "bad tile name").into_response(),
-        Err(Failure::Unavailable) => (StatusCode::SERVICE_UNAVAILABLE, "past --top-z").into_response(),
+        Err(Failure::Unavailable) => (StatusCode::SERVICE_UNAVAILABLE, "past --top-level").into_response(),
         Err(Failure::Limited(reason)) => (StatusCode::SERVICE_UNAVAILABLE, reason).into_response(),
         Err(Failure::Bake(e)) => {
             eprintln!("[tile/{name}] {e}");
@@ -113,7 +113,7 @@ async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name))
 
 async fn baked(dir: &std::path::Path, kind: Kind, version: &str, name: &str) -> Response {
     let root = dir.join(kind.name()).join(version);
-    // A pyramid's pages are on disk as `z<zoom>/<page index>` until the publish renames them.
+    // A pyramid's pages are on disk as `<level>/<page index>` until the publish renames them.
     let path = match kind {
         Kind::Terrain if name == OCEAN_KEY => root.join(name),
         Kind::Terrain | Kind::Poi => match page_of_name(name) {
@@ -132,7 +132,7 @@ async fn baked(dir: &std::path::Path, kind: Kind, version: &str, name: &str) -> 
 async fn source(State(app): State<Arc<App>>) -> Response {
     (
         [(header::CONTENT_TYPE, "application/json"), (header::CACHE_CONTROL, "no-store")],
-        serde_json::json!({ "top_z": app.top_z }).to_string(),
+        serde_json::json!({ "top_level": app.top_level }).to_string(),
     )
         .into_response()
 }
@@ -188,7 +188,7 @@ fn run() -> Result<(), String> {
     let mut asset_dir = PathBuf::from("./out/asset");
     let mut workers: usize = 4;
     let mut cache = PathBuf::from("./out/dev");
-    let mut top_z: u32 = 13;
+    let mut top_level: u32 = 3;
     let mut baked: Option<PathBuf> = None;
     let mut out = PathBuf::from("./out");
 
@@ -202,18 +202,18 @@ fn run() -> Result<(), String> {
             "--job-seconds" => limits.seconds = flags.parse()?,
             "--workers" => workers = flags.parse()?,
             "--cache" => cache = PathBuf::from(flags.value()?),
-            "--top-z" => top_z = flags.parse()?,
+            "--top-level" => top_level = flags.parse()?,
             "--baked" => baked = Some(PathBuf::from(flags.value()?)),
             "--out" => out = PathBuf::from(flags.value()?),
             other => return Err(format!("unknown flag: {other}")),
         }
     }
 
-    let (pages, top_z) = match baked {
-        Some(dir) => (Pages::Baked(dir), PUBLISHED_TOP_Z),
-        None => (Pages::Demand(Server::open(workers, cache, top_z, limits)?), top_z),
+    let (pages, top_level) = match baked {
+        Some(dir) => (Pages::Baked(dir), PUBLISHED_TOP_LEVEL),
+        None => (Pages::Demand(Server::open(workers, cache, top_level, limits)?), top_level),
     };
-    let app = Arc::new(App { pages, top_z, asset_dir, out });
+    let app = Arc::new(App { pages, top_level, asset_dir, out });
 
     // Without ADMIN_TOKEN, as in local dev, the internal route is open.
     let mut internal = Router::new().route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate));

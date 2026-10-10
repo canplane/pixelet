@@ -138,7 +138,7 @@ A dense field is a raster: the same memory whatever it holds, a point
 answered by an index, and a fold that is a majority or a mean that the
 client can run on what it holds. A sparse thing is kept in its own shape.
 Moving the ground to vectors would put the fill of thousands of building
-polygons a page on the device at every chunk build, and its coarse zooms
+polygons a page on the device at every chunk build, and its coarse levels
 would need cartographic generalization in place of a majority.
 
 What a deck costs at a chunk build is the decks that cross the chunk: a

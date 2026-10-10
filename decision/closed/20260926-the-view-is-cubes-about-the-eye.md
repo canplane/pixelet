@@ -18,18 +18,18 @@ and a view ordered from anywhere else asks first for ground the eye is not
 closest to. So there is one center, the eye, and the map center orders
 nothing.
 
-It also gave a node as `(z, x, y, band)`, 64 cells across and a band
-high. At z16 that is a cube, but a band is 64 units at every zoom, so a z10
+It also gave a node as `(level, x, y, band)`, 64 cells across and a band
+high. At z16 that is a cube, but a band is 64 units at every level, so a z10
 node would be a slab 65,536 units across and 64 high: not a cell of the
 hierarchy, with no parent or children `space/hierarchy.rs` could name, and
 a view made of them would be a stack of plates rather than a tree. A node is
-a cube of its own zoom instead, 64 cells a side on all three axes, with
-eight children a zoom finer, and the band is where a z16 cube stands in
+a cube of its own level instead, 64 cells a side on all three axes, with
+eight children a level down, and the band is where a z16 cube stands in
 height.
 
 ## Addresses in 3D, storage in 2D
 
-A chunk is its zoom and an x, y and z (world/pyramid/chunk.rs `Chunk`), and nothing
+A chunk is `(level, x, y, z)` (world/pyramid/chunk.rs `Chunk`), and nothing
 more: no table holds one per block, and the storage under it is not touched.
 Terrain stays a 2D page and objects stay columns of bands, and a rebake was
 never part of it. What a chunk is pointed at is its column (`Chunk::column`),
@@ -68,7 +68,7 @@ taken window by window, it reaches only as far as each window moves.
 ## One order
 
 Everything a view asks for is ranked by one key (`Order`): seen before
-unseen, then nearer the eye first — the shells the rule draws its zooms in,
+unseen, then nearer the eye first — the shells the rule draws its levels in,
 from the inside out. The same key ranks the fetch classes of every layer
 (io/policy.rs), the chunks mounted and built (world/chunk/table.rs
 `priority`), and the record given up when a wanted page needs the room, the
@@ -79,15 +79,15 @@ A fetch the view has left is stopped in the turn it leaves (io/sched.rs
 `pump`), all of them at once, and its credit is free that turn; a late
 answer for it is ignored. Before, one was stopped only when something waited
 for its credit, one per host round trip, so a zoom out and straight back in
-left all six credits on the zoom passed through.
+left all six credits on the level passed through.
 
 ## A budget of cubes in the frustum
 
 What a view holds is counted in what it draws: the cubes the rule draws,
 with every ancestor of them, against `VIEW_CHUNKS` (1,024); the pages they
 need, against `VIEW_PAGES` (48); and
-the z16 cubes it sees against the z16 chunks a view over
-flat ground draws — about 330, a disc of the zoom's reach widened by a
+the z16 cubes it sees against `LEVEL_CHUNKS`, the z16 chunks a view over
+flat ground draws — about 330, a disc of the level's reach widened by a
 chunk's diagonal. The last is new with the cube. Flat ground is one cube a
 column, but a slope that crosses a cube's floor or ceiling is two, and a
 mountain's view wants more than flat ground's. Where any of the three is
@@ -112,9 +112,9 @@ and not only its sides. It was on main too, and three causes were found.
 - **A mesh was cut to its slot.** The leaves' slot was sized on flat ground,
   and a slope ran past it; the rows past the slot were lost, which is the
   missing top. A mesh is never cut now.
-- **A peak was cut at its parent's ceiling.** A coarser zoom averages a
-  peak under its ceiling, and the finer zoom's ground past it had no chunk
-  over it. A parent now takes the finer zoom's ground up to its column's
+- **A peak was cut at its parent's ceiling.** A coarser level averages a
+  peak under its ceiling, and the finer level's ground past it had no chunk
+  over it. A parent now takes the finer level's ground up to its column's
   nearest held chunk above or below it, and splits into the chunk that
   ground ends in.
 
@@ -133,19 +133,19 @@ mountain disproves.
 ## The balance pass removed
 
 The terrain had one limit of its own (layer/terrain/present.rs): no two
-chunks that met were more than a zoom apart, since a skirt hides a step of
-one zoom and not two, and meeting it cost a walk up every chunk above and
+chunks that met were more than a level apart, since a skirt hides a step of
+one level and not two, and meeting it cost a walk up every chunk above and
 below each side. It is gone with the layer hook it was the only use of. A
 chunk at its own cells draws the sides of its rim down to its floor whatever
 the apron beside it holds (pxl-render mesh/chunk_mesher.rs), and a coarser
 tier summarizes no ring and so stands open on every side already; two chunks
-that meet may then be any zooms apart and neither is open to the sky.
+that meet may then be any levels apart and neither is open to the sky.
 
 ## Objects live in the cube their band is in
 
 A band is a z16 cube's height, so an object in a band is in exactly one
-chunk a zoom. A write to a band (world/chunk/source.rs `band_written`)
-moves the tiers and decor revisions of the chunk it is in at each zoom —
+chunk a level. A write to a band (world/chunk/source.rs `band_written`)
+moves the tiers and decor revisions of the chunk it is in at each level —
 and, above z16, the chunks beside it whose fold reads its apron — and of no
 other chunk over its column. A chunk draws and carves only the bands it
 holds (`draws_band`). Before, a write moved every chunk over its column, and

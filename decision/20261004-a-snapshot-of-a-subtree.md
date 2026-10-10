@@ -13,16 +13,16 @@ copy-on-write snapshot of the pyramid.
 ## What changes, and nothing more
 
 A region is a quadkey prefix: the bucket names a page by its quadkey, and a
-prefix is one region at every zoom. `bake_tiles --region` bakes the land
-pages under it again and folds again, a zoom at a time, only the parents whose
-`Folds::sources` read a page whose content changed, until a zoom changes
+prefix is one region at every level. `bake_tiles --region` bakes the land
+pages under it again and folds again, level by level, only the parents whose
+`Folds::sources` read a page whose content changed, until a level changes
 nothing. Every page it writes is what a full bake of the same code writes —
 checked against a full assemble over the same leaves, 226,623 pages, none
 differing.
 
 What changed is not the region and its ancestors. A terrain parent reads the
 ring around its children for its elevation's padding, so the parents beside
-an ancestor change too: six at z15 in that check, where the ancestors
+an ancestor change too: six at level 1 in that check, where the ancestors
 alone are one. So a partial snapshot's pages are **listed**, never derived
 from its regions.
 

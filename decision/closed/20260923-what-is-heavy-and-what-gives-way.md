@@ -30,7 +30,7 @@ the frame is worth looking at until it does not dominate.
 
 ## The device holds ten times what it uses
 
-The arena is a fixed grid of slots, one for every zoom and residue a chunk
+The arena is a fixed grid of slots, one for every level and residue a chunk
 can have (`world/chunk/mesh_slot.rs`):
 
 |                                                      | reserved    |
@@ -41,12 +41,12 @@ can have (`world/chunk/mesh_slot.rs`):
 
 What lives in it is 2,304 to 2,964 chunks at about 500 boxes each — 20 to
 30 MiB. The rest is reserved and empty, and it is reserved from the first
-mesh written, whether or not the window ever reaches that zoom.
+mesh written, whether or not the window ever reaches that level.
 
 Two things cannot move it, and both were tried:
 
-- **The ladder cannot.** Its thresholds choose which zoom covers a place,
-  not how many steps a chunk is cut into: `ask` gives every zoom over the
+- **The ladder cannot.** Its thresholds choose which level covers a place,
+  not how many steps a chunk is cut into: `ask` gives every level over the
   leaves the same step 2, so a chunk is always 64 cells at 32×32 whatever
   the zoom. Pushing `TARGET_CELL_PX` from 6 to 12 leaves the arena at 236
   MiB exactly.
@@ -99,22 +99,22 @@ own coordinate. Checking it where the chunk is asked for, rather than where
 its mesh lands, ends the loop — the chunk is parked until the holder leaves
 instead of being baked into the bin.
 
-That alone does not end the wait. **Two zooms share a group when they lie a
-window apart** (`z` modulo the window's width), which a jump that skips the
-zooms between puts on screen together: from z6 to z16 the old zoom is the only
+That alone does not end the wait. **Two levels share a group when they lie a
+window apart** (`level % WINDOW_LEVELS`), which a zoom that skips the levels
+between puts on screen together: from z6 to z16 the old level is the only
 thing covering its ground, so it is drawn; the new one cannot land because
 the old one is drawn; and the old one is not retired because nothing covers
 it. The census counts it — `stale_on_waiter` — and a zoom taken in steps
-never meets it, because the window slides a zoom at a time and each is
+never meets it, because the window slides a level at a time and each is
 covered before the next is wanted.
 
-Two ways out. A rule: when the waiter's zoom would cover the holder's, the
+Two ways out. A rule: when the waiter's level would cover the holder's, the
 holder goes first. Or the grid itself, below.
 
 ## The arena is a grid where it could be a pool
 
 A slot's address is a multiply — `slot_index × capacity` — so every slot is
-the size of the worst chunk, and one exists for every zoom and residue
+the size of the worst chunk, and one exists for every level and residue
 whether anything lives there or not. That is where the ten-fold reservation
 comes from, and where the residue conflicts come from with it.
 
@@ -178,7 +178,7 @@ first.
   desktop's 21.3 ms is the wrong ruler: steering to it leaves the phone
   where it was and coarsens the desktop for nothing. The target wants to be
   a share of the device's own frame, so one constant fits both.
-- **A coarser cell does not divide the pass.** One zoom coarser is a
+- **A coarser cell does not divide the pass.** One level coarser is a
   quarter of the cells, so a quarter of the boxes and a quarter of the
   triangles — but the same pixels are covered, by larger triangles. The pass
   falls to `vertex / 4 + fill`, not to a quarter. The ledger already carries
@@ -188,8 +188,8 @@ first.
   that is what decides whether the ladder reaches 60 Hz at all.
 
 One guard belongs with it. A step of pressure moves the window up, and its
-new top is a zoom nothing is holding yet — a fetch and a bake away. The
-near ground goes coarse at once, from zooms already held, but the far ring
+new top is a level nothing is holding yet — a fetch and a bake away. The
+near ground goes coarse at once, from levels already held, but the far ring
 is blank until it arrives, and a loop reading the frame while that happens
 will read its own lag as load. Pressure wants to be clamped to what the
 window holds.

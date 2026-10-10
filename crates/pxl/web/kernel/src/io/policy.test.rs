@@ -16,12 +16,13 @@ fn before(a: (u8, f64), b: (u8, f64)) -> bool {
 }
 
 #[test]
-fn the_ground_goes_before_what_stands_on_it() {
+fn the_ocean_goes_before_any_page_and_the_ground_before_what_stands_on_it() {
     let page = at(Why::Fault, true, 0.0);
+    let ocean = key(Category::ocean, Ask::PLAIN);
     let terrain = key(Category::terrain, page);
     let asset = key(Category::asset, Ask::PLAIN);
     let places = key(Category::poi, page);
-    assert!(before(terrain, asset) && before(asset, places));
+    assert!(before(ocean, terrain) && before(terrain, asset) && before(asset, places));
 }
 
 #[test]

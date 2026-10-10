@@ -29,8 +29,7 @@ pub const SHADER_SHEET: u32 = 20;
 pub const SHADER_IMPOSTOR: u32 = 21;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_CLOUD_COMPOSITE: u32 = 23;
-pub const SHADER_ATMOS_IRRADIANCE: u32 = 24;
-pub const SHADERS: u32 = 25;
+pub const SHADERS: u32 = 24;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -48,10 +47,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
             "atmos_view",
-            "atmos_ground",
             "shade",
             "finish",
             "shadow",
@@ -67,10 +63,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
             "atmos_view",
-            "atmos_ground",
             "shade",
             "finish",
             "shadow",
@@ -86,10 +79,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
             "atmos_view",
-            "atmos_ground",
             "shade",
             "finish",
             "shadow",
@@ -98,7 +88,7 @@ pub fn source(kind: u32) -> &'static str {
             "skinned"
         ),
         SHADER_PUCK_ZONE => wgsl!("frame", "globe", "encode", "finish", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!("frame", "globe", "encode", "finish", "atmos_medium", "atmos_bind", "atmos_lut", "place", "puck", "puck_beacon"),
+        SHADER_PUCK_BEACON => wgsl!("frame", "globe", "encode", "finish", "place", "puck", "puck_beacon"),
         SHADER_BADGE => wgsl!("frame", "globe", "encode", "depth", "badge_depth", "badge"),
         SHADER_SKY => wgsl!(
             "frame",
@@ -110,11 +100,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
             "atmos_view",
-            "atmos_ground",
-            "sky_words",
             "sky"
         ),
         SHADER_DEBUG => wgsl!("frame", "globe", "encode", "debug"),
@@ -128,10 +114,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
             "atmos_view",
-            "atmos_ground",
             "shade",
             "finish",
             "shadow",
@@ -145,23 +128,8 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_AO_UPSAMPLE => wgsl!("frame", "globe", "ao_view", "ao_upsample"),
         SHADER_ATMOS_TRANSMITTANCE => wgsl!("atmos_medium", "atmos_pass", "atmos_transmittance"),
         SHADER_ATMOS_MULTISCATTER => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_multiscatter"),
-        SHADER_ATMOS_SKY_VIEW => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_march", "atmos_skyview"),
-        SHADER_ATMOS_IRRADIANCE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_march", "atmos_irradiance"),
-        SHADER_ATMOS_EXPOSURE => wgsl!(
-            "frame",
-            "globe",
-            "encode",
-            "atmos_medium",
-            "atmos_bind",
-            "atmos_lut",
-            "atmos_sky",
-            "atmos_eye_unit",
-            "atmos_march",
-            "atmos_view",
-            "atmos_ground",
-            "atmos_pass",
-            "atmos_exposure"
-        ),
+        SHADER_ATMOS_SKY_VIEW => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_skyview"),
+        SHADER_ATMOS_EXPOSURE => wgsl!("frame", "globe", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_pass", "atmos_exposure"),
         SHADER_STARS => wgsl!("frame", "globe", "encode", "stars"),
         SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
         SHADER_CLOUD_COMPOSITE => wgsl!("cloud_composite"),
@@ -175,10 +143,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
-            "atmos_eye",
-            "atmos_march",
             "atmos_view",
-            "atmos_ground",
             "cloud_tile",
             "cloud_field",
             "clouds"
@@ -189,9 +154,9 @@ pub fn source(kind: u32) -> &'static str {
 
 pub const FRAME_FLOATS: usize = 88;
 /// Frame uniform field offsets in floats, in frame.wgsl's order; a test holds it to the struct.
-pub const FRAME_AT: [usize; 18] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 84];
+pub const FRAME_AT: [usize; 19] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 51, 52, 68, 76, 80, 84];
 #[cfg(test)]
-const FRAME_FIELDS: [&str; 18] = [
+const FRAME_FIELDS: [&str; 19] = [
     "view_proj",
     "camera_pos",
     "edge_strength",
@@ -205,6 +170,7 @@ const FRAME_FIELDS: [&str; 18] = [
     "vignette",
     "ao_strength",
     "screen_ao",
+    "earth_share",
     "light_view_proj",
     "other_dir",
     "planet",
@@ -238,8 +204,7 @@ pub const PIPELINE_CHUNK_COARSE_PREPASS: u32 = 31;
 pub const PIPELINE_SHEET: u32 = 33;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 35;
 pub const PIPELINE_CLOUD_MARCH: u32 = 36;
-pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 37;
-pub const PIPELINES: u32 = 38;
+pub const PIPELINES: u32 = 37;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -388,7 +353,7 @@ fn record(h: Head, lanes: &[Vec<u32>], groups: &[Vec<u32>]) -> Vec<u32> {
 }
 
 /// The air's bindings, numbered alike in every pass that reads it.
-const AIR_SLOTS: [[u32; 2]; 10] = [
+const AIR_SLOTS: [[u32; 2]; 8] = [
     [8, UNIFORM],
     [9, TEXTURE],
     [10, TEXTURE],
@@ -397,13 +362,11 @@ const AIR_SLOTS: [[u32; 2]; 10] = [
     [15, TEXTURE],
     [16, TEXTURE_ARRAY],
     [17, TEXTURE_ARRAY],
-    [18, TEXTURE],
-    [12, TEXTURE],
 ];
 
 /// The air's bindings, each seen from the stage at its place in `AIR_SLOTS`.
-const fn air(stages: [u32; 10]) -> [[u32; 3]; 10] {
-    let mut out = [[0; 3]; 10];
+const fn air(stages: [u32; 8]) -> [[u32; 3]; 8] {
+    let mut out = [[0; 3]; 8];
     let mut i = 0;
     while i < out.len() {
         out[i] = [AIR_SLOTS[i][0], stages[i], AIR_SLOTS[i][1]];
@@ -412,14 +375,11 @@ const fn air(stages: [u32; 10]) -> [[u32; 3]; 10] {
     out
 }
 
-const AIR: [[u32; 3]; 10] = air([FRAGMENT; 10]);
-/// Laid out where atmos_view.wgsl declares it and nothing reads it.
-const AIR_UNREAD: [[u32; 3]; 10] = air([NONE; 10]);
-const LIT_FRAME: [[u32; 3]; 14] = {
-    // The air in the vertex stage, where each point's lights and veil are
-    // worked out; a fragment reads only its words. The sky's views and the
-    // Earth's picture are the sky pass's, laid out unread.
-    let a = air([BOTH, VERTEX, NONE, VERTEX, VERTEX, NONE, NONE, NONE, VERTEX, VERTEX]);
+const AIR: [[u32; 3]; 8] = air([FRAGMENT; 8]);
+const LIT_FRAME: [[u32; 3]; 12] = {
+    // Tables in the vertex stage too: a fragment reads the land's color for
+    // the ground bounce and the exposure its lights are shown through.
+    let a = air([BOTH, VERTEX, VERTEX, VERTEX, BOTH, VERTEX, VERTEX, VERTEX]);
     [
         [0, BOTH, UNIFORM],
         [1, FRAGMENT, DEPTH],
@@ -433,14 +393,12 @@ const LIT_FRAME: [[u32; 3]; 14] = {
         a[5],
         a[6],
         a[7],
-        a[8],
-        a[9],
     ]
 };
 const CLOUD_COMPOSITE_GROUP: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
-/// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
-const CLOUD_GROUP: [[u32; 3]; 14] = {
-    let a = air([FRAGMENT, FRAGMENT, NONE, FRAGMENT, FRAGMENT, NONE, NONE, NONE, FRAGMENT, FRAGMENT]);
+/// The transmittance and sky-view tables are laid out unread because the shader declares them.
+const CLOUD_GROUP: [[u32; 3]; 12] = {
+    let a = air([FRAGMENT, NONE, NONE, FRAGMENT, FRAGMENT, FRAGMENT, NONE, NONE]);
     [
         [0, FRAGMENT, UNIFORM],
         [1, FRAGMENT, UNIFORM],
@@ -454,8 +412,6 @@ const CLOUD_GROUP: [[u32; 3]; 14] = {
         a[5],
         a[6],
         a[7],
-        a[8],
-        a[9],
     ]
 };
 const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
@@ -506,7 +462,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_PUCK_BEACON => record(
             lit(SHADER_PUCK_BEACON, CULL_BACK),
             &[lane(12, 0, F32X3), lane(12, 1, F32X3)],
-            &[group(&[[0, BOTH, UNIFORM], AIR[0], AIR[1], AIR[3]]), group(&[[0, BOTH, UNIFORM]])],
+            &[frame(BOTH), group(&[[0, BOTH, UNIFORM]])],
         ),
         PIPELINE_BADGE => record(
             Head {
@@ -555,8 +511,6 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 AIR[5],
                 AIR[6],
                 AIR[7],
-                AIR[8],
-                AIR[9],
             ])],
         ),
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
@@ -628,24 +582,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[],
             &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE], [14, FRAGMENT, UNIFORM]])],
         ),
-        PIPELINE_ATMOS_IRRADIANCE => record(screen(SHADER_ATMOS_IRRADIANCE), &[], &[group(&[AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE]])]),
-        // The light on the land under the eye: the air's words and the tables it is lit by.
-        PIPELINE_ATMOS_EXPOSURE => record(
-            screen(SHADER_ATMOS_EXPOSURE),
-            &[],
-            &[group(&[
-                [0, FRAGMENT, UNIFORM],
-                AIR[0],
-                AIR[1],
-                AIR_UNREAD[2],
-                AIR[3],
-                AIR_UNREAD[5],
-                AIR_UNREAD[6],
-                AIR_UNREAD[7],
-                AIR[8],
-                AIR_UNREAD[9],
-            ])],
-        ),
+        PIPELINE_ATMOS_EXPOSURE => record(screen(SHADER_ATMOS_EXPOSURE), &[], &[group(&[[0, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3]])]),
         PIPELINE_STARS => record(
             Head {
                 topology: STRIP,

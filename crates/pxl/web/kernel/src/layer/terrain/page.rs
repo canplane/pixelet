@@ -1,16 +1,14 @@
 // pxl-kernel/layer/terrain/page.rs
 
 //! Terrain as a layer of the pyramid; a page's record is a room in
-//! `.fixed.terrain`, decoded into straight from the packet. A page the bake
-//! left as no object is drawn from the page over it, whose cells there are
-//! open water; at the source's top, it is void.
+//! `.fixed.terrain`, decoded into straight from the packet. The bake leaves
+//! open ocean (about 65% of the bbox) as no object, so a 404 means water and
+//! every such page shares one decoded tile, fetched under its own category.
 
 use pxl_spec::bake::deck::{self, MAX_BOXES, MAX_DECKS, MAX_POINTS};
 use pxl_spec::bake::format::{decode_terrain_into, Block, PageRoom, Terrain, BLOCK_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::bake::pack::GroundCell;
-use pxl_spec::space::indexer::L3_IDX;
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{Page, GROUND_Z};
+use pxl_spec::space::pyramid::LevelPage;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::mem::base::ptr_at;
@@ -20,23 +18,24 @@ use crate::sched::profiler::record::Failure;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::layer::terrain::fixed::{blocks_off, deck_off, ele_off, extent_off, ground_off, BLOCK_LANE_BYTES, DECK_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::mem::fixed::{at, Range};
-use crate::world::pyramid::{Layer, Pyramid};
+use crate::world::pyramid::{Absent, Layer, Pyramid};
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
+
+pub use pxl_spec::bake::format::OCEAN_KEY;
+
+pub const OCEAN_CATEGORY: Category = Category::ocean;
 
 static TERRAIN: Global<Pyramid<Terrain>> = Global::new();
 
 impl Layer for Terrain {
     const CATEGORY: Category = Category::terrain;
-    // The leaves carry the terrain topic; the zooms above are read through the
+    const ON_ABSENT: Absent = Absent::Shared(OCEAN_CATEGORY);
+    // The leaves carry the terrain topic; the levels above are read through the
     // chunks that draw them.
 
     fn pyramid() -> &'static mut Pyramid<Terrain> {
         TERRAIN.get(Pyramid::default)
-    }
-
-    fn empty() -> Option<Terrain> {
-        Some(Terrain::void())
     }
 
     /// One pass from the packet: nothing page-sized stands between arrival and
@@ -51,7 +50,7 @@ impl Layer for Terrain {
 
     /// The ground under whatever this page is the finest resident one over
     /// changes, so chunks compare their sources next turn.
-    fn changed(_p: Page, _present: bool) {
+    fn changed(_p: LevelPage, _present: bool) {
         crate::world::chunk::source::chunk_sources_changed();
     }
 }
@@ -88,12 +87,6 @@ unsafe fn room_of(record: u32) -> PageRoom {
             },
         }
     }
-}
-
-/// The source has nothing under `at`: the finest page held over it is void.
-pub fn void_under(at: &Pvf3) -> bool {
-    let paging = Terrain::pyramid().paging();
-    paging.drawn_from(Page::over(GROUND_Z, L3_IDX(at.i))).and_then(|q| paging.get(q)).is_some_and(Terrain::is_void)
 }
 
 pub fn terrain_step() {

@@ -16,8 +16,8 @@ fn at(eye: [f64; 3], frustum: Option<Frustum>) -> Observation {
     Observation {
         eye,
         frustum,
-        far: fault_radius(TOP_Z),
-        top: TOP_Z,
+        far: fault_radius(TOP_LEVEL),
+        top: TOP_LEVEL,
         planet: f64::INFINITY,
         ground: 0.0,
     }
@@ -27,7 +27,7 @@ fn the_observation() -> Observation {
     at([30_000.0, -17_000.0, HEIGHT], None)
 }
 
-fn named(o: &Observation) -> Vec<Page> {
+fn named(o: &Observation) -> Vec<LevelPage> {
     let mut out = Vec::new();
     ByBounds { tau: Tau::FINEST }.requirements(o, &Unknown, &mut |r| PoiPage::pages(&r, &mut |p| out.push(p)));
     out.sort_unstable();
@@ -38,7 +38,7 @@ fn named(o: &Observation) -> Vec<Page> {
 struct Flat;
 
 impl Bounds for Flat {
-    fn contents(&self, _z: u32, region: Aabb) -> Contents {
+    fn contents(&self, _level: u32, region: Aabb) -> Contents {
         let ground = Aabb {
             min: [region.min[0], region.min[1], 0.0],
             max: [region.max[0], region.max[1], 0.0],
@@ -48,8 +48,8 @@ impl Bounds for Flat {
 }
 
 /// Asked for first: residency keeps an empty page only while something asks.
-fn hold(pyramid: &mut Pyramid<PoiPage>, pages: impl IntoIterator<Item = (Page, PoiPage)>) {
-    let pages: Vec<(Page, PoiPage)> = pages.into_iter().collect();
+fn hold(pyramid: &mut Pyramid<PoiPage>, pages: impl IntoIterator<Item = (LevelPage, PoiPage)>) {
+    let pages: Vec<(LevelPage, PoiPage)> = pages.into_iter().collect();
     let aside = Ask { why: Why::Fault, order: Order::LAST };
     pyramid.paging.ask(&pages.iter().map(|&(p, _)| (p, aside)).collect());
     for (p, page) in pages {
@@ -57,13 +57,13 @@ fn hold(pyramid: &mut Pyramid<PoiPage>, pages: impl IntoIterator<Item = (Page, P
     }
 }
 
-fn crowded(p: Page) -> PoiPage {
-    if p.z == GROUND_Z {
+fn crowded(p: LevelPage) -> PoiPage {
+    if p.level == 0 {
         return PoiPage::default();
     }
-    let at = |k: Page| POI_LATTICE.cell_base(k, 0, 0);
+    let at = |k: LevelPage| POI_LATTICE.cell_base(k, 0, 0);
     PoiPage::of_places(
-        p.z,
+        p.level,
         p.children().into_iter().flat_map(|k| {
             [
                 (
@@ -95,7 +95,7 @@ fn the_demand_is_the_estimators_and_every_fault_in_it_is_asked_for() {
     let _serial = crate::serial();
     let o = the_observation();
     let mut pyramid = Pyramid::<PoiPage>::default();
-    hold(&mut pyramid, named(&o).into_iter().filter(|p| p.z <= 13 || ivec::X(p.page) % 2 == 0).map(|p| (p, crowded(p))));
+    hold(&mut pyramid, named(&o).into_iter().filter(|p| p.level >= 3 || ivec::X(p.page) % 2 == 0).map(|p| (p, crowded(p))));
     pyramid.observe(Some(&o), None, core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     assert_eq!(pyramid.demand(), named(&o).as_slice(), "the demand is the estimator's");
     let asked: HashSet<u64> = pyramid.wants().iter().map(|(s, _)| *s).collect();
@@ -110,7 +110,7 @@ fn the_demand_is_the_estimators_and_every_fault_in_it_is_asked_for() {
     }
     assert!(faults > 0, "a residency with faults");
     for &(s, _) in pyramid.wants() {
-        let p = Page::of_subject(s);
+        let p = LevelPage::of_subject(s);
         assert!(!pyramid.paging.resident(p) && !pyramid.paging.settled(p), "{p:?} asked for and held or said");
     }
 }
@@ -120,13 +120,13 @@ fn ground_a_page_settles_is_never_asked_for() {
     let _serial = crate::serial();
     let o = the_observation();
     let mut pyramid = Pyramid::<PoiPage>::default();
-    let mut top: Vec<Page> = named(&o).into_iter().map(|p| (TOP_Z..p.z).fold(p, |q, _| q.parent())).collect();
+    let mut top: Vec<LevelPage> = named(&o).into_iter().map(|p| (p.level..TOP_LEVEL).fold(p, |q, _| q.parent())).collect();
     top.sort_unstable();
     top.dedup();
     hold(&mut pyramid, top.into_iter().map(|p| (p, PoiPage::default())));
     pyramid.observe(Some(&o), None, core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
     for &p in pyramid.demand() {
-        assert!(pyramid.paging().source(p).is_some_and(|s| s.z == TOP_Z), "{p:?} is said by the page at the top");
+        assert!(pyramid.paging().source(p).is_some_and(|s| s.level == TOP_LEVEL), "{p:?} is said by the page at the top");
     }
     assert!(pyramid.wants().is_empty(), "{} pages asked for", pyramid.wants().len());
 }
@@ -179,9 +179,9 @@ fn the_line_over_every_demanded_page_is_asked_for() {
     let o = the_observation();
     let mut pyramid = Pyramid::<PoiPage>::default();
     pyramid.observe(Some(&o), None, core::iter::empty(), &Unknown, &ByBounds { tau: Tau::FINEST }, &NoPrefetch, Tau::FINEST, 0);
-    let asked: HashSet<Page> = pyramid.asks.keys().copied().collect();
+    let asked: HashSet<LevelPage> = pyramid.asks.keys().copied().collect();
     for &p in pyramid.demand() {
-        for q in std::iter::successors(Some(p), |q| (q.z > TOP_Z).then(|| q.parent())).skip(1) {
+        for q in std::iter::successors(Some(p), |q| (q.level < TOP_LEVEL).then(|| q.parent())).skip(1) {
             assert!(asked.contains(&q), "{q:?} over {p:?} is asked for");
         }
     }

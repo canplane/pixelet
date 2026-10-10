@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use pxl_spec::space::lod::{fault_radius, Tau};
 use pxl_spec::space::observation::{Bounds, DemandEstimator, Observation, Paged, Requirement, Storage as _};
-use pxl_spec::space::pyramid::{Folds, Page, GROUND_Z, TOP_Z};
+use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 
 use crate::io::demand::{Ask, Category, Phases, Why};
 use crate::io::sched::declare;
@@ -24,20 +24,31 @@ use crate::param;
 use crate::sched::profiler::record::Failure;
 use crate::world::observation::{heights_revision, observation, ByFootprints, Known, Order};
 use crate::world::paging::floor::{self, Fallback, Floor};
-use crate::world::paging::{Candidate, Paging, Victim, DESTINATION_PAGES, ZOOM_DEMAND_PAGES};
+use crate::world::paging::{Candidate, Paging, Victim, ABSENT, DESTINATION_PAGES, LEVEL_DEMAND_PAGES};
 use crate::world::prefetch::{NoPrefetch, Prefetch};
 use crate::world::quality;
 
+/// What answers a page the bucket has no object for.
+pub enum Absent {
+    /// The page over it, which settles it; at the top, `Layer::empty`.
+    Above,
+    /// The one body every such page shares, fetched under the category and
+    /// held in `ABSENT`.
+    Shared(Category),
+}
+
 pub trait Layer: Folds + Clone + 'static {
     const CATEGORY: Category;
+
+    const ON_ABSENT: Absent = Absent::Above;
 
     /// False for a layer that holds only the floor: it asks for no fault, no
     /// destination and nothing speculative, and its residency is sized so.
     const DEMANDS: bool = true;
 
-    /// The coarsest zoom the layer's own source supplies whole, where one
-    /// differs from the ground's declared top (`floor::top`). Its floor is
-    /// then that zoom's whole fault ring about the eye: it is drawn past where
+    /// The coarsest level the layer's own source supplies whole, where one
+    /// differs from the ground's declared top (`floor::level`). Its floor is
+    /// then that level's whole fault ring about the eye: it is drawn past where
     /// the ground stops.
     const TOP: Option<u32> = None;
 
@@ -56,16 +67,16 @@ pub trait Layer: Folds + Clone + 'static {
         None
     }
 
-    fn changed(_p: Page, _present: bool) {}
+    fn changed(_p: LevelPage, _present: bool) {}
 
-    fn pages(r: &Requirement, each: &mut dyn FnMut(Page)) {
+    fn pages(r: &Requirement, each: &mut dyn FnMut(LevelPage)) {
         Paged.pages(r, each);
     }
 }
 
 /// Everything the asks depend on; two turns agreeing on all of it ask for
 /// the same pages, so the second decides nothing.
-type Seen = (Option<Observation>, [Option<Page>; Floor::PAGES as usize], Option<Page>, u32, (u32, u32), Tau, u32);
+type Seen = (Option<Observation>, [Option<LevelPage>; Floor::PAGES as usize], Option<LevelPage>, u32, (u32, u32), Tau, u32);
 
 /// No speculation: the view converges to exact on faults alone, and
 /// speculation would only buy latency.
@@ -84,12 +95,12 @@ impl Victim for Farthest<'_> {
 pub struct Pyramid<L: Layer> {
     paging: Paging<L>,
     observation: Option<Observation>,
-    demand: Vec<Page>,
+    demand: Vec<LevelPage>,
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
     /// Reused across observations so observing stops allocating once warm.
-    asks: HashMap<Page, Ask>,
-    hints: Vec<(Order, Page)>,
+    asks: HashMap<LevelPage, Ask>,
+    hints: Vec<(Order, LevelPage)>,
 }
 
 impl<L: Layer> Default for Pyramid<L> {
@@ -111,11 +122,11 @@ impl<L: Layer> Pyramid<L> {
         &self.paging
     }
 
-    pub fn set(&mut self, p: Page, page: L) {
+    pub fn set(&mut self, p: LevelPage, page: L) {
         self.paging.set(p, page);
     }
 
-    pub fn answer_above(&mut self, p: Page) {
+    pub fn answer_above(&mut self, p: LevelPage) {
         self.paging.answer_above(p);
     }
 
@@ -127,34 +138,36 @@ impl<L: Layer> Pyramid<L> {
         self.observation.as_ref()
     }
 
-    /// The floor's pages as last observed.
-    pub fn floor(&self) -> impl Iterator<Item = Page> + '_ {
-        self.last.iter().flat_map(|seen| seen.1.iter().flatten().copied())
-    }
-
-    pub fn demand(&self) -> &[Page] {
+    pub fn demand(&self) -> &[LevelPage] {
         &self.demand
     }
 
-    /// Whether every page the view needs has its answer; speculation aside.
-    pub fn answered(&self) -> bool {
-        self.asks.iter().all(|(&p, a)| a.why == Why::Hint || self.paging.has_answer(p))
-    }
-
-    pub fn adopt(&mut self, p: Page, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
+    pub fn adopt(&mut self, p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
         self.admit(p, |record| L::receive(record, pkt, phases))
     }
 
-    /// No object for `p`: the page over it says its ground; at the source's top, `Layer::empty`.
-    pub fn absent(&mut self, p: Page) {
-        let top = L::TOP.or(floor::top()).unwrap_or(TOP_Z);
-        match L::empty() {
-            Some(empty) if p.z <= top => self.paging.set(p, empty),
-            _ => self.paging.answer_above(p),
+    /// The body every absent page shares, decoded once into `ABSENT`.
+    pub fn adopt_shared(&mut self, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
+        if self.paging.has_shared() {
+            return Ok(());
+        }
+        let body = L::receive(ABSENT, pkt, phases)?;
+        self.paging.adopt_shared(body);
+        Ok(())
+    }
+
+    /// The bucket has no object for `p`: answered as the layer says.
+    pub fn absent(&mut self, p: LevelPage) {
+        match L::ON_ABSENT {
+            Absent::Shared(_) => self.paging.absent(p),
+            Absent::Above => match L::empty() {
+                Some(empty) if p.level >= TOP_LEVEL => self.paging.set(p, empty),
+                _ => self.paging.answer_above(p),
+            },
         }
     }
 
-    pub fn admit(&mut self, p: Page, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
+    pub fn admit(&mut self, p: LevelPage, receive: impl FnOnce(u32) -> Result<L, Failure>) -> Result<(), Failure> {
         self.paging.admit(p, &Farthest(self.observation.as_ref()), receive)
     }
 
@@ -168,7 +181,7 @@ impl<L: Layer> Pyramid<L> {
         o: Option<&Observation>,
         // the floor's eye, if not `o`'s
         floor_at: Option<&Observation>,
-        destination: impl Iterator<Item = Page>,
+        destination: impl Iterator<Item = LevelPage>,
         bounds: &impl Bounds,
         estimator: &impl DemandEstimator,
         prefetch: &impl Prefetch,
@@ -179,10 +192,10 @@ impl<L: Layer> Pyramid<L> {
         demand.clear();
         let mut asks = core::mem::take(&mut self.asks);
         asks.clear();
-        let ask = |asks: &mut HashMap<Page, Ask>, p: Page, a: Ask| {
+        let ask = |asks: &mut HashMap<LevelPage, Ask>, p: LevelPage, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
-        let order = |o: &Observation, p: Page| Order::of_region(o, bounds, p.z, p.region());
+        let order = |o: &Observation, p: LevelPage| Order::of_region(o, bounds, p.level, p.region());
         if let Some(o) = o {
             if L::DEMANDS {
                 estimator.requirements(o, bounds, &mut |r| L::pages(&r, &mut |p| demand.push(p)));
@@ -193,7 +206,7 @@ impl<L: Layer> Pyramid<L> {
                 let at = self.paging.source(p).unwrap_or(p);
                 ask(&mut asks, at, Ask { why: Why::Fault, order: order(o, p) });
                 // A line already asked is asked to the top.
-                for q in std::iter::successors(Some(at), |q| (q.z > o.top).then(|| q.parent())).skip(1) {
+                for q in std::iter::successors(Some(at), |q| (q.level < o.top).then(|| q.parent())).skip(1) {
                     if asks.get(&q).is_some_and(|a| a.why <= Why::Ancestor) {
                         break;
                     }
@@ -208,15 +221,15 @@ impl<L: Layer> Pyramid<L> {
                 }
             }
             // More demanded than the structure's bound means the capacity is broken too:
-            // a fault's line has ground within its fault radius, so it stays in each zoom's ring.
-            let mut read = [0u32; GROUND_Z as usize + 1];
+            // a fault's line has ground within its fault radius, so it stays in each level's ring.
+            let mut read = [0u32; TOP_LEVEL as usize + 1];
             for p in asks.keys() {
-                read[p.z as usize] += 1;
+                read[p.level as usize] += 1;
             }
-            xpute_core::ensure!(read.iter().all(|&n| n <= ZOOM_DEMAND_PAGES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
+            xpute_core::ensure!(read.iter().all(|&n| n <= LEVEL_DEMAND_PAGES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
             let mut floor = 0u32;
             let f = floor_at.unwrap_or(o);
-            Floor::floor(f, |p| {
+            Floor::floor(f.top, f.eye, f.far, |p| {
                 floor += 1;
                 ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
             });
@@ -224,7 +237,7 @@ impl<L: Layer> Pyramid<L> {
         }
         // The whole line, not only the finest page: which one says the ground is
         // known only once those above are, and asking one at a time would cost a
-        // round trip per zoom.
+        // round trip per level.
         let mut named = 0u32;
         for p in destination {
             named += 1;
@@ -251,7 +264,7 @@ impl<L: Layer> Pyramid<L> {
             });
             hints.sort_unstable();
             hints.dedup_by_key(|h| h.1);
-            // Settled or empty pages take no frame but still count against `ASKS`.
+            // Settled or `ABSENT` pages take no frame but still count against `ASKS`.
             let mut pages = Paging::<L>::ASKS.saturating_sub(asks.len() as u32);
             for &(order, p) in &hints {
                 let new = u32::from(self.paging.takes_frame(p));
@@ -284,8 +297,8 @@ impl<L: Layer> Pyramid<L> {
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground. `far` cuts the
     /// observation where the layer stops being drawn.
-    pub fn step(&mut self, destination: Option<Page>) {
-        let Some(top) = L::TOP.or(floor::top()) else { return };
+    pub fn step(&mut self, destination: Option<LevelPage>) {
+        let Some(top) = L::TOP.or(floor::level()) else { return };
         // demand follows the published goal
         let published = domain::current();
         let own = |o: Observation| match L::TOP {
@@ -298,7 +311,7 @@ impl<L: Layer> Pyramid<L> {
         let mut floor_now = [None; Floor::PAGES as usize];
         if let Some(l) = &live {
             let mut n = 0;
-            Floor::floor(l, |p| {
+            Floor::floor(l.top, l.eye, l.far, |p| {
                 if n < floor_now.len() {
                     floor_now[n] = Some(p);
                 }
@@ -315,7 +328,7 @@ impl<L: Layer> Pyramid<L> {
         let o = seen_from.map(|o| Observation { far: o.far.min(L::reach()), ..o });
         let seen = (o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::revision());
         if self.last != Some(seen) {
-            let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.z > top).then(|| q.parent())));
+            let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.level < top).then(|| q.parent())));
             self.observe(
                 o.as_ref(),
                 live.as_ref(),
@@ -334,6 +347,13 @@ impl<L: Layer> Pyramid<L> {
             self.last = Some((o, floor_now, destination, self.paging.revision(), heights_revision(), tau, domain::revision()));
         }
         declare(L::CATEGORY, &self.wants);
+        self.declare_shared();
+    }
+
+    fn declare_shared(&self) {
+        if let Absent::Shared(category) = L::ON_ABSENT {
+            declare(category, if self.paging.awaits_shared() { &[(0, Ask::PLAIN)] } else { &[] });
+        }
     }
 
     /// A layer the view does not show keeps what it holds and asks for nothing.
@@ -342,6 +362,7 @@ impl<L: Layer> Pyramid<L> {
         self.asks.clear();
         self.paging.ask(&self.asks);
         declare(L::CATEGORY, &[]);
+        self.declare_shared();
         self.last = None;
     }
 }

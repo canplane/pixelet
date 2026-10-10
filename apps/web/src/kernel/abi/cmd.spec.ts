@@ -264,8 +264,8 @@ export const enum Command {
   WORLD_VISIBILITY = 0x1003,
   /** What the tile source declares of itself, once the shell has it (published.json's
    * SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is
-   * observed: the floor is held at the zoom it names, and no view is drawn from a
-   * zoom the source does not supply whole. */
+   * observed: the floor is held at the level it names, and no view is drawn from a
+   * level the source does not supply whole. */
   WORLD_SOURCE = 0x1005,
   /** A permission as the shell's prompt or the browser's change reported it. */
   SENSOR_PERMISSION = 0x1206,
@@ -396,12 +396,10 @@ export interface MapState {
   is_off_center: boolean;
   /** The map center in degrees: what the search measures distance from. */
   center: LonLat | null;
-  /** The source has nothing at all under the map center: the page over it at the source's top was absent. */
-  outside: boolean;
 }
 
 export function read_map_state(b: BranchCursor): MapState {
-  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat), outside: b.at(3).get<boolean>() };
+  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat) };
 }
 
 export interface LonLat {
@@ -596,12 +594,12 @@ export function encode_world_visibility(p: WorldVisibility): U8Array {
 
 /** Command.WORLD_SOURCE's packet. */
 export interface WorldSource {
-  /** The coarsest zoom of the pyramid the source supplies whole. */
-  top_z: u32;
+  /** The coarsest level of the pyramid the source supplies whole. */
+  top_level: u32;
 }
 
 export function encode_world_source(p: WorldSource): U8Array {
-  return packet((b) => b.u32(p.top_z));
+  return packet((b) => b.u32(p.top_level));
 }
 
 /** Command.SENSOR_PERMISSION's packet. */

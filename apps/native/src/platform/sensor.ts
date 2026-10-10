@@ -53,11 +53,6 @@ export function permissionFollow(): () => void {
   return () => back.remove();
 }
 
-/** CoreLocation says "no course" and "no accuracy" as a negative, the page's API as null. */
-function known(v: number | null): number | null {
-  return v !== null && v >= 0 ? v : null;
-}
-
 function recheck(): void {
   if (granted !== false) return;
   void Location.getForegroundPermissionsAsync().then(({ status }) => {
@@ -103,7 +98,7 @@ export function geolocationStart(): void {
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
       (pos) => {
         const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-        kernel_position({ lon: longitude, lat: latitude, altitude, accuracy: known(accuracy), course: known(heading) });
+        kernel_position({ lon: longitude, lat: latitude, altitude, accuracy, course: heading });
       },
       () => geolocationFail(watch, GeolocationErrorCode.PositionUnavailable),
     );

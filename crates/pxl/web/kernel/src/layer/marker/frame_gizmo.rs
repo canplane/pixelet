@@ -6,7 +6,7 @@
 //! color; nothing is labeled.
 
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{floor3n, V3};
 
@@ -119,6 +119,6 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         return;
     }
     *drawn = Some(key);
-    set_lines(crate::world::frame::view::view().chart(), &sketch(&center, map_origin).0);
+    set_lines(ivec::to_v3(map_origin), &sketch(&center, map_origin).0);
     request_world_tick();
 }

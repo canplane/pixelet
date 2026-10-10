@@ -7,8 +7,8 @@ use core::f64::consts::TAU;
 
 use crate::space::hierarchy::Scale;
 use crate::space::indexer::{FROM_L3_IDX, L3_RANGE};
-use crate::space::pvf3::core::IVEC_X_W;
-use crate::space::pvf3::{projection, FVec, IVec, Pvf3, ROUND};
+use crate::space::pvf3::core::{FRAC_W, IVEC_X_W, IVEC_Y_W};
+use crate::space::pvf3::{projection, FVec, IVec, Pvf3};
 
 use super::epsg4326::EARTH_RADIUS_M;
 
@@ -26,12 +26,19 @@ pub const fn side_at_zoom(zoom: i32) -> Scale {
     Scale::of(IVEC_X_W as i32 - 8 - zoom)
 }
 
-const U_PER_DB: f64 = ROUND / (TAU * EARTH_RADIUS_M); // EPSG:3857 spans 2πR
+/// One Mercator world on the 24-bit X lane: overflow crosses the antimeridian.
+pub const U_TOTAL_X: f64 = (1u64 << IVEC_X_W) as f64;
+
+const U_PER_DB: f64 = U_TOTAL_X / (TAU * EARTH_RADIUS_M); // EPSG:3857 spans 2πR
+
+// Y clamps, half-open: +2^23u is the lane's negative end.
+const Y_MIN_U: f64 = -((1u64 << (IVEC_Y_W - 1)) as f64);
+const Y_MAX_U: f64 = (1u64 << (IVEC_Y_W - 1)) as f64 - 1.0 / (1u64 << FRAC_W) as f64;
 
 /// sec φ = cosh(y / R), at the page's base so a page shares one value.
 pub fn scale_at(y_u: f64) -> f64 {
     let base = (y_u / L3_RANGE as f64).floor() * L3_RANGE as f64;
-    libm::cosh(base * TAU / ROUND)
+    libm::cosh(base * TAU / U_TOTAL_X)
 }
 
 pub fn u_per_m(y_u: f64) -> f64 {
@@ -46,14 +53,19 @@ pub fn from_db(db: f64) -> f64 {
     db * U_PER_DB
 }
 
+fn wrap_x(x_u: f64) -> f64 {
+    let half = U_TOTAL_X / 2.0;
+    (((x_u + half) % U_TOTAL_X) + U_TOTAL_X) % U_TOTAL_X - half
+}
+
 pub fn project(x: f64, y: f64, z: f64) -> Pvf3 {
-    let [x, y, _] = projection::within([from_db(x), from_db(y), 0.0]);
-    projection::project(x, y, z * u_per_m(y))
+    let y = Y_MIN_U.max(Y_MAX_U.min(from_db(y)));
+    projection::project(wrap_x(from_db(x)), y, z * u_per_m(y))
 }
 
 pub fn unproject(i: IVec, f: FVec) -> G3857 {
     let [x, y, z] = projection::unproject(i, f);
-    [to_db(x), to_db(y), z / u_per_m(y)]
+    [to_db(wrap_x(x)), to_db(y), z / u_per_m(y)]
 }
 
 pub type BBox3857 = [G3857; 2];

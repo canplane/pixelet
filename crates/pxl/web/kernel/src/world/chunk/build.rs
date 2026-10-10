@@ -4,12 +4,12 @@
 //! decision about a chunk is the table's (table.rs); this acts on what it asks.
 
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::pyramid::{Page, CHUNK_CELLS, GROUND, GROUND_Z};
+use pxl_spec::space::pyramid::{LevelPage, CHUNK_CELLS, GROUND};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_render::mesh::paint::column::{write_column_runs, Stands};
+use pxl_render::mesh::paint::level::{write_level_runs, Stands};
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
 use pxl_render::mesh::paint::terrain::adapter::{beside_index, Around, ChunkSample, PageSource, PageView};
 use pxl_render::mesh::volume::Volumes;
@@ -35,9 +35,9 @@ use pxl_spec::space::hierarchy::Scale;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-/// How many of a zoom's cells a scale spans along an axis (the mesher's step).
-pub fn mesh_step(scale: Scale, z: u32) -> u32 {
-    let own = GROUND.side_at(z);
+/// How many of a level's cells a scale spans along an axis (the mesher's step).
+pub fn mesh_step(scale: Scale, level: u32) -> u32 {
+    let own = GROUND.scale(level);
     own.count_in(scale.max(own))
 }
 
@@ -129,7 +129,7 @@ struct Source {
 
 impl Source {
     /// Found by key, so a page that is gone never yields another page's bytes.
-    fn of(p: Page) -> Option<Source> {
+    fn of(p: LevelPage) -> Option<Source> {
         let pyramid = Terrain::pyramid();
         let src = pyramid.paging().drawn_from(p)?;
         let page = pyramid.paging().get(src)?;
@@ -137,8 +137,8 @@ impl Source {
         Some(Source {
             page,
             frame: Frame::of(src),
-            origin: corner.in_page_above(p.z - src.z),
-            n: GROUND.side_at(p.z).count_in(GROUND.side_at(src.z)),
+            origin: corner.in_page_above(src.level - p.level),
+            n: GROUND.scale(p.level).count_in(GROUND.scale(src.level)),
         })
     }
 
@@ -181,8 +181,8 @@ struct Chunk {
 }
 
 impl Chunk {
-    fn z(&self) -> u32 {
-        self.at.z()
+    fn level(&self) -> u32 {
+        self.at.level()
     }
 
     fn base(&self) -> IVec {
@@ -566,8 +566,8 @@ impl Builder {
             self.abort_scan_of(world, id);
             return Progress::Blocked;
         };
-        if c.z() < GROUND_Z {
-            return self.column_runs(world, id, read);
+        if c.level() > 0 {
+            return self.level_runs(world, id, read);
         }
         let holding = matches!(&self.scan_job, Some(j) if j.id == id);
         // A column with nothing placed is one terrain run per column, the same mesh
@@ -654,7 +654,6 @@ impl Builder {
             cells: &page.ground.cells,
             ele: &page.ele,
             decks: &page.decks,
-            void: page.is_void(),
         }
     }
 
@@ -758,19 +757,19 @@ impl Builder {
         self.close_direct(world, id)
     }
 
-    /// A coarse chunk's runs, written directly from its page's ground and the
-    /// objects folded to its zoom (mesh/paint/column.rs).
-    fn column_runs(&mut self, world: &mut World, id: u32, read: Read) -> Progress {
+    /// A level chunk's runs, written directly from its page's ground and the
+    /// objects folded to its level (mesh/paint/level.rs).
+    fn level_runs(&mut self, world: &mut World, id: u32, read: Read) -> Progress {
         if self.run_set_for(id).is_none() {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
-        let (z, base) = (c.z(), c.base());
+        let (level, base) = (c.level(), c.base());
         if self.sample.read(&read.around(), read.first).is_err() {
             self.refuse(world, id);
             return Progress::Blocked;
         }
-        let target = GROUND.side_at(z);
+        let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         // One cell of apron, which a fold reads (`folds_into`).
         let (cx, cy, span) = (target.index(x0), target.index(y0), CHUNK_CELLS as i64);
@@ -783,13 +782,13 @@ impl Builder {
             return Progress::Blocked;
         }
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
-        let written = write_column_runs(
+        let written = write_level_runs(
             &mut self.direct,
             &self.sample,
             world.painter,
             &self.folded,
             (target.index(x0), target.index(y0)),
-            GROUND.finest_in(z),
+            GROUND.scale(0).count_in(target),
             &mut self.stands,
         );
         if written.is_err() {
@@ -852,7 +851,11 @@ impl Builder {
             // Runs span the whole column; this chunk bakes only its own heights.
             let (z0, z1) = c.at.z_range();
             let clip = Some((z0 as i32, z1 as i32));
-            if self.bake.begin(&set, mesh_step(scale, c.z()), GROUND.finest_in(c.z()), settings_store().textures, clip).is_err() {
+            if self
+                .bake
+                .begin(&set, mesh_step(scale, c.level()), GROUND.finest_in(c.level()), settings_store().textures, clip)
+                .is_err()
+            {
                 self.refuse(world, id);
                 return Progress::Blocked;
             }
@@ -875,8 +878,8 @@ impl Builder {
                 // All slots are held at once or the bake is thrown away: a mesh is never
                 // cut, never baked coarser, and never waits while holding the one bake.
                 let job = self.bake_job.as_ref().unwrap();
-                let step = mesh_step(job.scale, c.z());
-                let (words_a_box, room_a_slot) = (box_words(step), capacity(c.z(), step));
+                let step = mesh_step(job.scale, c.level());
+                let (words_a_box, room_a_slot) = (box_words(step), capacity(c.level(), step));
                 let boxes = words / words_a_box;
                 let asked = BuildEvent::Reserve {
                     id,
@@ -907,7 +910,7 @@ impl Builder {
                 if gpu().is_some() && device_ready() && !room(bytes) {
                     return Progress::Blocked;
                 }
-                let step = mesh_step(job.scale, c.z());
+                let step = mesh_step(job.scale, c.level());
                 let words_a_box = box_words(step);
                 let n = bytes / 4 / words_a_box;
                 emit(BuildEvent::Part {

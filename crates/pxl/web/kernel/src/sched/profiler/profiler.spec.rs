@@ -21,22 +21,24 @@ pub const CENSUS_TAGS: &[&str] = &["chunk", "decor", "ghost_box", "ghost_coplana
 
 pub const PHASE_NAMES: &[&str] = &["interaction", "visible", "content", "cosmetic", "report"];
 
-pub const CATEGORY_NAMES: &[&str] = &["terrain", "poi", "geocode", "geocode_dict", "asset", "earth"];
+pub const CATEGORY_NAMES: &[&str] = &["terrain", "ocean", "poi", "geocode", "geocode_dict", "asset", "earth"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CategoryName {
     terrain = 0,
-    poi = 1,
-    geocode = 2,
-    geocode_dict = 3,
-    asset = 4,
-    earth = 5,
+    ocean = 1,
+    poi = 2,
+    geocode = 3,
+    geocode_dict = 4,
+    asset = 5,
+    earth = 6,
 }
 
 impl CategoryName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [CategoryName; 6] = [
+    pub const ALL: [CategoryName; 7] = [
         CategoryName::terrain,
+        CategoryName::ocean,
         CategoryName::poi,
         CategoryName::geocode,
         CategoryName::geocode_dict,
@@ -559,11 +561,11 @@ pub mod SUMMARY {
     pub mod tasks {
         pub const AT: u32 = 263;
         pub const slots: u32 = 0;
-        pub const WORDS: u32 = 150;
+        pub const WORDS: u32 = 175;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 413;
+        pub const AT: u32 = 438;
         pub const faces_kept: u32 = 0;
         pub const faces_possible: u32 = 1;
         pub const runs_culled: u32 = 2;
@@ -599,7 +601,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod atlas {
-        pub const AT: u32 = 427;
+        pub const AT: u32 = 452;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -609,7 +611,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
     pub mod held {
-        pub const AT: u32 = 432;
+        pub const AT: u32 = 457;
         pub const run_sets: u32 = 0;
         pub const run_set_mb: u32 = 1;
         pub const tiers: u32 = 2;
@@ -620,7 +622,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "run_sets", "run_set_mb", "tiers", "decor_blocks", "decor_instances", "decor_bytes", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 438;
+        pub const AT: u32 = 463;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -628,7 +630,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 441;
+        pub const AT: u32 = 466;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -672,14 +674,14 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 459;
+        pub const AT: u32 = 484;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 620;
+        pub const AT: u32 = 645;
         pub const step: u32 = 0;
         pub const star: u32 = 1;
         pub const frames_held: u32 = 2;
@@ -693,7 +695,7 @@ pub mod SUMMARY {
     }
     /// The heap as the read finds it, recording or not: `used_mb` its top, `requests` the pages it has ever asked for.
     pub mod heap {
-        pub const AT: u32 = 628;
+        pub const AT: u32 = 653;
         pub const used_mb: u32 = 0;
         pub const requests: u32 = 1;
         pub const WORDS: u32 = 2;
@@ -701,7 +703,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none. `chunk_zoom` is the zoom of the drawn chunk's cells under the pointer, `tier_zoom` the zoom its tier is drawn at and `read_zoom` that of the page it is read from.
     pub mod view {
-        pub const AT: u32 = 630;
+        pub const AT: u32 = 655;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -740,7 +742,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 646;
+    pub const WORDS: u32 = 671;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "held", "fetch", "peak", "steps", "quality", "heap", "view", "WORDS"];
 }
 

@@ -73,21 +73,21 @@ fn a_pier_stands_at_each_world_station_and_its_column_keeps_it_unless_blocked() 
 #[test]
 fn a_deck_is_kept_up_the_pyramid_by_its_width_alone() {
     let empty = Decks::default();
-    // Two cells wide: one cell a zoom coarser, kept at its own width.
+    // Two cells wide: one cell a level up, kept at its own width.
     let wide = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 2.0);
-    let up = fold_decks([&wide, &empty, &empty, &empty], 15);
+    let up = fold_decks([&wide, &empty, &empty, &empty], 1);
     assert_eq!(up.len(), 1);
     assert_eq!(up.deck(0).width_cells(), 1.0);
     // Under a cell wide: under half the parent's, and gone, whatever it is.
     let narrow = one(&[[0.0, 0.0], [100.0, 0.0]], &[50, 50], 0.75);
-    assert_eq!(fold_decks([&narrow, &empty, &empty, &empty], 15).len(), 0);
+    assert_eq!(fold_decks([&narrow, &empty, &empty, &empty], 1).len(), 0);
 }
 
 #[test]
-fn a_straight_flat_deck_folds_to_its_ends() {
+fn a_straight_level_deck_folds_to_its_ends() {
     let d = one(&[[0.0, 0.0], [10.0, 0.0], [20.0, 0.0], [30.0, 0.0]], &[40, 40, 40, 40], 4.0);
     let empty = Decks::default();
-    let up = fold_decks([&d, &empty, &empty, &empty], 15);
+    let up = fold_decks([&d, &empty, &empty, &empty], 1);
     assert_eq!(up.deck(0).points.len(), 2);
     assert_eq!(up.deck(0).point(1), [15.0, 0.0]);
 }
@@ -120,7 +120,7 @@ fn a_full_parent_keeps_its_widest_lines_within_both_bounds() {
         line(&mut b, 2, i as f64, if i < 100 { 2.0 } else { 4.0 });
     }
     let child = b.finish();
-    let fold = || fold_decks([&child, &child, &child, &child], 15);
+    let fold = || fold_decks([&child, &child, &child, &child], 1);
     let up = fold();
     assert_eq!(up.len(), MAX_DECKS);
     assert_eq!(up.iter().filter(|d| d.width_cells() == 2.0).count(), 800);

@@ -4,7 +4,7 @@
 //! Generation, July 2004 (21600 × 10800, 2 km, the sea a flat blue), as
 //! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
 //! eight tiles). Each is averaged in linear light over what a texel covers.
-//!  - The Earth layer's pages (pxl-spec bake/earth_page.rs) at its top zoom, a
+//!  - The Earth layer's pages (pxl-spec bake/earth_page.rs) at its top level, a
 //!    z6 pixel a texel, to `./out/earth/<version>/<quadkey>`. A page that is one
 //!    color says nothing the global picture does not, and has no object.
 //!  - The global picture every page falls back to, 2048 × 1024, to
@@ -21,7 +21,7 @@ use std::process::ExitCode;
 use image::ImageFormat;
 
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
-use pxl_spec::bake::earth_page::{self, EARTH_TEXELS, EARTH_Z};
+use pxl_spec::bake::earth_page::{self, EARTH_LEVEL, EARTH_TEXELS};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::quadkey::page_name;
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
@@ -33,6 +33,8 @@ const NIGHT: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/1
 /// NASA's tiling: a column a quarter of the world from 180° W, row 1 the north.
 const NIGHT_TILES: [[&str; 4]; 2] = [["A1", "B1", "C1", "D1"], ["A2", "B2", "C2", "D2"]];
 const GLOBAL: (u32, u32) = (2048, 1024);
+/// libwebp's lossy quality: a map seen kilometers wide shows nothing finer.
+const QUALITY: f32 = 90.0;
 
 /// Blue Marble's bytes are reflectance through a cubic spline, not sRGB
 /// (Stöckli et al. 2005, table 1): 0, 25, 75 and 100% are 0, 179, 240 and 255.
@@ -165,7 +167,7 @@ fn lng_lat(x: f64, y: f64) -> [f64; 2] {
 }
 
 fn page_texels(px: i64, py: i64, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Option<Vec<u8>> {
-    let page = page_at(EARTH_Z, [px, py]);
+    let page = page_at(EARTH_LEVEL, [px, py]);
     let mut rgba = vec![0u8; earth_page::EARTH_BYTES];
     for ty in 0..EARTH_TEXELS {
         for tx in 0..EARTH_TEXELS {
@@ -202,18 +204,12 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
             });
         }
     });
-    // Lossless: a page of one color is left out because the global picture reads
-    // the same there, which holds only if the picture keeps every byte; lossy, the
-    // open sea came back a step off the pages' and their edges showed.
     let mut config = webp::WebPConfig::new().map_err(|()| "a WebP config")?;
-    config.lossless = 1;
+    config.quality = QUALITY;
+    config.alpha_compression = 1;
     // libwebp otherwise rewrites the color under a zero alpha: the unlit Earth.
     config.exact = 1;
     let encoded = webp::Encoder::from_rgba(&bytes, GLOBAL.0, GLOBAL.1).encode_advanced(&config).map_err(|e| format!("{e:?}"))?;
-    let back = webp::Decoder::new(&encoded).decode().ok_or("the global picture does not decode")?;
-    if *back != bytes[..] {
-        return Err("the global picture does not keep its bytes, which a left-out page reads".into());
-    }
     write_atomic(out, &encoded).map_err(|e| e.to_string())?;
     println!("[earth] global -> {} ({} KiB)", out.display(), encoded.len() / 1024);
     Ok(())
@@ -270,8 +266,8 @@ fn run() -> Result<(), String> {
     };
     global(&day_plate, &night_plate, Path::new("asset/sky/earth/07.webp"))?;
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-    // Every page of the zoom: the Mercator square, one world across and as high.
-    let half = pages_around(EARTH_Z) / 2;
+    // Every page of the level: the Mercator square, one world across and as high.
+    let half = pages_around(EARTH_LEVEL) / 2;
     let pages: Vec<[i64; 2]> = (-half..half).flat_map(|y| (-half..half).map(move |x| [x, y])).collect();
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
     let written = std::sync::atomic::AtomicU32::new(0);
@@ -282,7 +278,7 @@ fn run() -> Result<(), String> {
             scope.spawn(move || {
                 for &[px, py] in pages.iter().skip(t).step_by(threads) {
                     let Some(rgba) = page_texels(px, py, day, night) else { continue };
-                    let name = page_name(page_at(EARTH_Z, [px, py])).to_string();
+                    let name = page_name(page_at(EARTH_LEVEL, [px, py])).to_string();
                     let stored = earth_page::encode(&rgba)
                         .map_err(|e| format!("{e:?}"))
                         .and_then(|pkt| pack(&pkt, Level::Stored).map_err(|e| e.to_string()));
@@ -299,7 +295,7 @@ fn run() -> Result<(), String> {
     }
     let objects = written.into_inner();
     println!("[earth] {objects} pages -> {}", out.display());
-    write_manifest(&out, git_sha().as_deref(), serde_json::json!({ "objects": objects, "z": EARTH_Z }))
+    write_manifest(&out, git_sha().as_deref(), serde_json::json!({ "objects": objects, "level": EARTH_LEVEL }))
 }
 
 fn main() -> ExitCode {

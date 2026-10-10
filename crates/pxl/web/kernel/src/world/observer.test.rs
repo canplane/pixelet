@@ -2,7 +2,7 @@
 
 use pxl_spec::space::mat4::{mat4, mat4_frustum_planes, mat4_look_at, mat4_mul, mat4_perspective};
 use pxl_spec::space::observation::Frustum;
-use pxl_spec::space::pyramid::TOP_Z;
+use pxl_spec::space::pyramid::TOP_LEVEL;
 
 use super::*;
 
@@ -18,7 +18,7 @@ fn viewed(eye: V3, target: V3, fov_deg: f64, aspect: f64) -> Observation {
         eye,
         frustum: Some(Frustum { planes }),
         far: 40_000.0,
-        top: TOP_Z,
+        top: TOP_LEVEL,
         planet: f64::INFINITY,
         ground: 0.0,
     }

@@ -57,7 +57,7 @@ impl CameraMode {
 ///   stop    — a control goes as far as it asked or as far as it can.
 ///             Nothing moves on its own; a zoom into a hill stops short.
 ///   climb   — dist is always granted and the *view* pitches up instead,
-///             as far as straight down, so every zoom stays
+///             as far as straight down, so every zoom level stays
 ///             reachable at the cost of an angle nobody asked for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]

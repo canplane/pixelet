@@ -13,7 +13,6 @@ use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::hierarchy::ancestor_of;
 use pxl_spec::space::indexer::{L3_IDX, L3_RANGE};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::GROUND_Z;
 
 use crate::elevation::page_reads;
 use crate::terrain::repository::DRAWN_REACH_U;
@@ -84,10 +83,8 @@ impl Coverage {
         (self.x.0..=self.x.1).contains(&ivec::X(page)) && (self.y.0..=self.y.1).contains(&ivec::Y(page))
     }
 
-    /// Whether the page at `z` and `page` covers any z16 page held.
-    pub fn meets(&self, z: u32, page: IVec) -> bool {
-        let steps = GROUND_Z - z;
-        let ([x0, y0], [x1, y1]) = (ancestor_of([self.x.0, self.y.0], steps), ancestor_of([self.x.1, self.y.1], steps));
+    pub fn meets(&self, level: u32, page: IVec) -> bool {
+        let ([x0, y0], [x1, y1]) = (ancestor_of([self.x.0, self.y.0], level), ancestor_of([self.x.1, self.y.1], level));
         (x0..=x1).contains(&ivec::X(page)) && (y0..=y1).contains(&ivec::Y(page))
     }
 

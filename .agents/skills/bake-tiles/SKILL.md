@@ -34,8 +34,8 @@ commit it was built at. The last path segment of `--out` overrides it.
 The bucket names a page by its **quadkey** and nothing else (publish-bucket).
 Geocode writes that name straight out, so for it the filename _is_ the object
 key. Terrain and POI, the two pyramids, do not: they write
-`z<zoom>/<page index>`, because the fold clears a zoom's directory to redo it
-and drops the zooms a run did not reach. Their names are translated at
+`<level>/<page index>`, because the fold clears a level's directory to redo it
+and drops the levels a run did not reach. Their names are translated at
 publish, by hard links, which is the one step geocode skips.
 
 Terrain goes first for geocode: it does not classify land itself, it
@@ -126,8 +126,8 @@ A fix that reaches one area need not bake every page again. `--region`
 bakes the land pages under a quadkey prefix again, by the code as it is now,
 and assembles a new version from `--base`: the base's pages linked whole, the
 region's leaves in place of the ones that differ, and folded again only the
-pages above whose `Folds::sources` read a page that changed, a zoom at a time,
-until a zoom changes nothing. Minutes, where a full bake is hours:
+pages above whose `Folds::sources` read a page that changed, level by level,
+until a level changes nothing. Minutes, where a full bake is hours:
 
 ```bash
 deno task bake:tiles --region 132110320312 --base ./out/terrain/<version>
@@ -155,15 +155,15 @@ structures the old solve made.
 What it produces, beside `leaf/` under `--build` with a `leaf.json` of what
 built it:
 
-- `z16/`, one packed object per page anything is drawn in — land, or a way,
+- `0/`, one packed object per page anything is drawn in — land, or a way,
   building, deck or bore — the leaves
-- `z15/`, `z14/`, … each zoom folded from the one below it until a zoom is a
-  single page or `z6`, refolded whole on every run (they are a function of the leaves,
+- `1/`, `2/`, … each level folded from the one below it until a level is a
+  single page, refolded whole on every run (they are a function of the leaves,
   so a resumed run never leaves a stale pyramid over them)
-- one `_ocean` object beside the zooms, the shared fallback every open-ocean
-  page resolves to at every zoom; the run aborts if folding it does not give
+- one `_ocean` object beside the levels, the shared fallback every open-ocean
+  page resolves to at every level; the run aborts if folding it does not give
   it back
-- `manifest.json` and `land_pages.json` in the directory above the version's
+- `manifest.json` and `land_pages.json` one level above the version directory
 
 Open-ocean pages are deliberately not baked. Roughly two thirds of the
 coverage bbox is open sea, and the client turns a 404 into the shared
@@ -207,31 +207,31 @@ that, worked back from how far each thing draws:
    at three different pages and aborts if the bytes differ. If it ever does,
    the single-fallback design no longer holds — stop and re-read the
    discussion doc rather than working around it.
-4. **Spot-check pages against the dev tile server, at more than one zoom.**
+4. **Spot-check pages against the dev tile server, at more than one level.**
    The dev server demand-pages terrain out of the same functions this tool
-   runs (`terrain/leaf.rs` for a leaf, `pyramid.rs` for a page above),
+   runs (`terrain/leaf.rs` for a leaf, `pyramid.rs` for a level above),
    so a page it serves holds the packet this tool wrote. It packs at zstd's
    quick level where the bake packs at its stored one, so compare the packets,
    not the objects. With `deno task dev:tiles` up — not `dev`, which proxies
    every route to the live deployment:
 
    The dev server answers the bucket's addresses, so it takes the quadkey
-   while the file on disk is still under its zoom — one page, two names:
+   while the file on disk is still under its level — one page, two names:
 
    ```bash
    curl -s localhost:3001/tile/terrain/<quadkey> | zstd -dcq | shasum
-   zstd -dcq ./out/terrain/<version>/z<zoom>/<page_idx> | shasum   # gunzip -c before zstd
+   zstd -dcq ./out/terrain/<version>/<level>/<page_idx> | shasum   # gunzip -c before zstd
    ```
 
-   A coarse page makes the dev server fault the pages under it first, so the
-   first ask coarser than z13 takes seconds to a minute. A mismatch means the two
+   A level-k page makes the dev server fault the pages under it first, so the
+   first ask above level 3 takes seconds to a minute. A mismatch means the two
    paths have drifted — investigate before publishing.
 
 ### Looking at a bake before it is published
 
 The dev tile server serves a page from its cache when the page's file is
 there and bakes it only when it is not, and its cache is laid out as a
-baked set is: `<cache>/terrain/z<zoom>/<page_idx>` and `_ocean`, zstd as the
+baked set is: `<cache>/terrain/<level>/<page_idx>` and `_ocean`, zstd as the
 bake writes them (`demand.rs`, `--cache`, `./out/dev` by default). So a
 finished bake is looked at in the app, with nothing uploaded, by putting it
 where the cache is:
@@ -246,20 +246,20 @@ deno task dev:local
 `cp -al` links the files rather than copying them, so it takes no space,
 and the cache's purge (`POST …/world/terrain/cache/invalidate`) unlinks the
 links and leaves the bake under `out/terrain/<version>` as it was. A page
-the bake has no object for — open water past the coverage, a zoom coarser
-than the pyramid's top — is still baked on demand into the cache beside the
+the bake has no object for — open water past the coverage, a level above
+the pyramid's top — is still baked on demand into the cache beside the
 linked ones. After a purge the server bakes everything on demand again; link
 the set back in to see the bake.
 
 ## POI
 
-POI is a second layer of terrain's pyramid: the same pages, zooms and names,
+POI is a second layer of terrain's pyramid: the same pages, levels and names,
 holding, per cell (`pxl-spec bake/poi_page.rs`, one XTP tree), a count of
 places and, of each kind, the place of least id with the z16 ground cell it
 stands in — its names, held to 32 code points, the source's own id and its
 kind by name, from a pool of places held once a page. A kind is the place's
 category as the search list names it (`pxl-geo-spec overture/properties.rs`),
-one of `spec/pxl/spec/bake/poi_badge.json`'s. The leaves are counted from `overture_places`, the zooms above are
+one of `spec/pxl/spec/bake/poi_badge.json`'s. The leaves are counted from `overture_places`, the levels above are
 folded by adding, with the same fold driver terrain uses
 (`geo-bake/src/pyramid.rs`), and then every page its parent settles is let go
 (`prune`): where no cell over a page holds two places, the page over it says
@@ -271,7 +271,7 @@ deno task bake:poi --out ./out/poi/<version> --concurrency 8
 
 It is not resumable: a run clears the version directory and bakes it whole,
 which takes the one pass over the table the leaves need. Verify that the
-manifest's `zooms` reach z6 and that a leaf decodes (`poi_page::decode`).
+manifest's `levels` reach level 10 and that a leaf decodes (`poi_page::decode`).
 The client shows it only outside production, behind `poi` in the
 development settings, until a nationwide version is published.
 
@@ -300,7 +300,7 @@ back is naming the version before. **Every bake is a new name**, whatever
 made it — a new Overture release, or a change to how a page is baked — and
 each kind is named on its own, since each is baked again on its own. A
 kind is baked again whole, never the pages that changed: a coarse page is
-folded from the ones under it, so a partial bake would leave the zooms
+folded from the ones under it, so a partial bake would leave the levels
 disagreeing, and a mixed folder would serve pages from two pipelines with no
 way to tell them apart.
 
@@ -326,9 +326,9 @@ stays private until success. A deadline or admission refusal is retryable,
 never an empty page. These are execution/time budgets,
 not a cap on process memory or total cached disk bytes.
 
-`--top-z` (default 13) bounds the pyramid layers, terrain and POI alike: a
-page coarser than it is answered 503, since each one folds the whole zoom
-under it on first request. Geocode groups have a fixed bake footprint.
+`--top-level` (default 3) bounds the pyramid layers, terrain and POI alike: a
+page above it is answered 503, since each one folds the whole level under it
+on first request. Geocode groups have a fixed bake footprint.
 The common job limits apply to all of them and survive cache invalidation.
 A page is cached while its file is in `out/dev/<kind>/`, and a restart keeps
 it. After re-ingest or a bake change, invalidate the affected kind as a whole

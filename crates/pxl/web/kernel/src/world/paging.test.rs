@@ -32,27 +32,27 @@ fn observation_at([x, y]: [f64; 2]) -> Observation {
     Observation {
         eye: [x, y, HEIGHT],
         frustum: None,
-        far: reach_at(HEIGHT).min(fault_radius(TOP_Z)),
-        top: TOP_Z,
+        far: reach_at(HEIGHT).min(fault_radius(TOP_LEVEL)),
+        top: TOP_LEVEL,
         planet: f64::INFINITY,
         ground: 0.0,
     }
 }
 
-fn floor_of(o: &Observation) -> Vec<Page> {
+fn floor_of(o: &Observation) -> Vec<LevelPage> {
     let mut out = Vec::new();
-    Floor::floor(o, |p| out.push(p));
+    Floor::floor(o.top, o.eye, o.far, |p| out.push(p));
     out
 }
 
-/// Settles none of its children, so the tree runs to z16 everywhere.
-fn crowded(p: Page) -> PoiPage {
-    if p.z == GROUND_Z {
+/// Settles none of its children, so the tree runs to the finest level everywhere.
+fn crowded(p: LevelPage) -> PoiPage {
+    if p.level == 0 {
         return PoiPage::default();
     }
-    let at = |k: Page| POI_LATTICE.cell_base(k, 0, 0);
+    let at = |k: LevelPage| POI_LATTICE.cell_base(k, 0, 0);
     PoiPage::of_places(
-        p.z,
+        p.level,
         p.children().into_iter().flat_map(|k| {
             [
                 (
@@ -122,7 +122,7 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
     let mut sched = RequestScheduler::new(serve);
     sched.set_credits(4);
     let mut out: Vec<u64> = Vec::new();
-    let mut resident: HashSet<Page> = HashSet::new();
+    let mut resident: HashSet<LevelPage> = HashSet::new();
     let floor = floor_of(&observation());
     for turn in 0..2_000 {
         let at = turn as f64 * 16.0;
@@ -150,7 +150,7 @@ fn converge_on<S: Serve>(pyramid: &mut Pyramid<PoiPage>, observation: fn() -> Ob
         let answered = out.len().div_ceil(2);
         for key in out.split_off(out.len() - answered).into_iter().rev() {
             let (_, subject) = sched.attempt_of(key).expect("an attempt out");
-            let p = Page::of_subject(subject);
+            let p = LevelPage::of_subject(subject);
             pyramid.admit(p, |_| Ok(crowded(p))).expect("a page is made");
             sched.settle(key, Outcome::ok, None, Failure::default(), at);
         }
@@ -173,4 +173,28 @@ fn the_view_converges_exact_with_the_reach_prefetched_under_every_order() {
         converge(Hostile::Lifo, &reach, allowance);
         converge(Hostile::Nearest, &reach, allowance);
     }
+}
+
+/// A page with no object reads the one body such pages share: held in
+/// `ABSENT` once it comes, never a frame, and kept only while asked.
+#[test]
+fn an_absent_page_reads_the_shared_body_once_it_comes() {
+    use crate::io::demand::Ask;
+    use pxl_spec::space::pvf3::ivec::gather;
+    let (p, q) = (LevelPage::new(0, gather(1, 2, 0)), LevelPage::new(0, gather(3, 4, 0)));
+    let asks = |pages: &[LevelPage]| pages.iter().map(|&k| (k, Ask::PLAIN)).collect::<HashMap<_, _>>();
+    let mut paging = Paging::<PoiPage>::default();
+    paging.ask(&asks(&[p, q]));
+    paging.absent(p);
+    paging.absent(q);
+    assert!(paging.awaits_shared());
+    assert!(paging.get(p).is_none());
+    paging.ask(&asks(&[p]));
+    paging.adopt_shared(PoiPage::default());
+    assert!(paging.get(p).is_some() && paging.get(q).is_none());
+    assert!(!paging.awaits_shared());
+    paging.ask(&asks(&[p, q]));
+    paging.absent(q);
+    assert!(paging.get(q).is_some());
+    assert_eq!(paging.frames_used(), 0);
 }

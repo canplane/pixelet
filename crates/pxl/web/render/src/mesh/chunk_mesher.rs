@@ -21,7 +21,7 @@ const MAX_BAKE_SPAN: usize = COL_SPAN as usize;
 
 const LOW_FILL_THRESHOLD: f64 = 0.25;
 
-/// A coarse cell's children one zoom finer.
+/// A coarse cell's children one level finer.
 const CHILDREN: f64 = pxl_spec::space::hierarchy::children(3) as f64;
 
 const FULL_FACE_CNT: u32 = 6;
@@ -83,8 +83,8 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 /// in u16 mesh steps, sRGB color, four layer taps, face mask.
 ///
 /// The coarse format drops the taps (only leaf cells are textured) and holds
-/// corner and width in a byte an axis: a chunk k zooms coarser than z16 is
-/// never drawn nearer than 192·2^k, so its cell is one to two `target_cell_px` (pxl-spec space/lod.rs) and an eighth of it
+/// corner and width in a byte an axis: a level-k chunk is never drawn nearer
+/// than 192·2^k, so its cell is one to two `target_cell_px` (pxl-spec space/lod.rs) and an eighth of it
 /// is at most 1.5 px; its mesh is at most 32 cells across, so cell index and
 /// eighth fit a byte exactly. 24 and 16 bytes a box, against 84 a vertex once.
 pub const FINE_BOX_WORDS: u32 = 6;
@@ -227,8 +227,8 @@ struct FineBake {
     span: u32,
     /// Read past an edge, never walked or emitted from.
     apron: u32,
-    /// A coarse tier's columns are `lod_step` wide, those of a chunk k zooms
-    /// coarser than z16 2^k; a run's cell is a unit tall at every zoom.
+    /// A coarse tier's columns are `lod_step` wide, a level-k chunk's 2^k; a run's
+    /// cell is a unit tall at every level.
     xy_scale: u32,
     phase: u8,
     row: u32,
@@ -300,7 +300,7 @@ impl BakeContext {
         }
     }
 
-    /// `scale` is 1 for a z16 chunk, 2^k for one k zooms coarser. `clip` cuts a whole-column
+    /// `scale` is 1 for a leaf chunk, 2^k for level k. `clip` cuts a whole-column
     /// set to the chunk's heights, and every step reads the cut set. One bake at a time.
     pub fn begin(&mut self, set: &RunSet, lod_step: u32, scale: u32, textured: bool, clip: Option<(i32, i32)>) -> Result<(), Refused> {
         xpute_core::ensure!(self.open.is_none(), ENOTRECOVERABLE);
@@ -447,7 +447,7 @@ impl BakeContext {
         let span = b.span;
         let (lo, hi) = (b.apron, span - b.apron);
         // Rim sides are drawn whatever the apron holds, down to the floor: the chunk
-        // beside may be another zoom's standing lower, and hiding the side left the step
+        // beside may be another level standing lower, and hiding the side left the step
         // between them open to the sky.
         let rim = |cx: u32, cy: u32| {
             if b.apron == 0 {
@@ -797,7 +797,7 @@ impl BakeContext {
             }
             // Kept in its children's worth, rounded down, a heuristic: a trace too
             // small to fill one child draws no box, where it floated up to a
-            // kilometer over a z6 cell's ground.
+            // kilometer over a top-level cell's ground.
             let kept = (fill * CHILDREN).floor() / CHILDREN;
             if kept == 0.0 && !acc.ground {
                 continue;

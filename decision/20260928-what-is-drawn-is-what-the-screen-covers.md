@@ -16,7 +16,7 @@ reaches the screen is the screen's area: a direction on the sphere about the
 eye shows one thing, the first thing along it, at the size a cell has at
 that distance. So what is drawn has an upper bound before anything is known
 of the world, and the bound is the screen's. Where a piece came from — how
-far along its direction — is its detail, and nothing more.
+far along its direction — is its level of detail, and nothing more.
 
 What is stored is another matter. Terrain is a heightfield in pages of a 2D
 pyramid; placed objects are sparse bands in columns. There is no reason to
@@ -38,13 +38,13 @@ side):
 1. **Drawn cells are bounded by the screen.** Each pixel shows one cell,
    the first hit along its direction, so the cells drawn are at most
    `W · H / (κ_lo τ)²`, whatever the world holds — air, layers stacked, a
-   dense city — and at every zoom at once. Occlusion is not an addition:
+   dense city — and at every level at once. Occlusion is not an addition:
    the first hit is the definition.
-2. **Records wanted are bounded by the screen.** A record at zoom z is
-   asked for where ground at the distance that zoom is drawn at shows,
-   and at that distance it covers a solid angle that does not depend on z.
+2. **Records wanted are bounded by the screen.** A record of level L is
+   asked for where ground at the distance that level is drawn at shows,
+   and at that distance it covers a solid angle that does not depend on L.
    So the records a view touches are a constant set by the screen, plus the
-   ancestors each needs, a fixed count of zooms.
+   ancestors each needs, a fixed count of levels.
 3. **One mechanism fetches for every layer.** A record is wanted because a
    query missed it, and ranked by where on the screen and how near the miss
    was; a layer adds nothing to the order.
@@ -54,9 +54,9 @@ side):
 Two forms, one per thing asked:
 
 - **A direction** → the first hit along it and its distance. This is what
-  decides what is seen and so what is wanted; the zoom a layer answers at
+  decides what is seen and so what is wanted; the level a layer answers at
   follows from the distance.
-- **A point and a zoom** → a layer's value there. This is what a drawn
+- **A point and a level** → a layer's value there. This is what a drawn
   piece is made from, and what a pick, a placement or a raycast asks.
 
 The query is the only place a layer's storage shape is known. Everything
@@ -67,7 +67,7 @@ directions and points.
 
 - **Asking before the data is there.** The first hit along a direction
   needs the data it hits. The known answer is hierarchical: the coarsest
-  zoom is always resident, a query answers from the finest resident
+  level is always resident, a query answers from the finest resident
   record, and the miss under it is what is fetched, so a view refines over
   frames. That is feedback from what is seen, with a frame of lag, and not
   from what memory refused. Motion reveals what was hidden, so what is held
@@ -88,8 +88,8 @@ directions and points.
 ## The earlier ideas, read through this
 
 - **Shells about the eye** are a description, not a mechanism: the
-  distance at which a zoom is drawn. Nothing enumerates them.
-- **The budget's search, `VIEW_CHUNKS`, `VIEW_PAGES`, the per-zoom chunk count, the
+  distance at which a level is drawn. Nothing enumerates them.
+- **The budget's search, `VIEW_CHUNKS`, `VIEW_PAGES`, `LEVEL_CHUNKS`, the
   column bound k, a surface density, air counted or not, and the frustum's
   share** were all ways of bounding a count of 3D nodes. The screen bounds
   what is drawn directly, so each is either a derivation from `W · H` and
@@ -98,7 +98,7 @@ directions and points.
   screen leaves nothing for it to answer. Fitting a device is choosing `τ`
   from the device's budget at boot, which is engineering inside the
   invariant, not a loop.
-- **Overflow drawn a zoom coarser** existed because a node's payload had
+- **Overflow drawn a level coarser** existed because a node's payload had
   no bound. A direction shows one cell; a piece's payload is bounded by the
   pixels it covers.
 - **Conservative min/max over a column** is what a hierarchical first-hit
@@ -125,9 +125,9 @@ Invariant 1 named one bound for three things, and each has its own:
   side from below, not its area, and a cell seen at a grazing angle or
   edge-on covers less than a pixel.
 - **Drawn cells**, rasterized, are bounded by the rule and not by the
-  screen: about 1.5 · θ_h · (P / τ)² a zoom — some 76,500 at the reference
-  screen, the same at every zoom and height in simulation — times the
-  zooms. For terrain that holds whatever the ground is. For objects it
+  screen: about 1.5 · θ_h · (P / τ)² a level — some 76,500 at the reference
+  screen, the same at every level and height in simulation — times the
+  levels. For terrain that holds whatever the ground is. For objects it
   does not: a piece of c³ cells can expose 3c³ faces, so "a piece's
   payload is bounded by the pixels it covers" holds for casting into the
   records and not for rasterized pieces.
@@ -144,12 +144,12 @@ between τ / 2 and τ; 0.317 τ was an artifact of 64-cell nodes.
 ### Records by the reach, not by what is hit
 
 Invariant 2's solid-angle argument fails at a grazing angle, where a page
-subtends almost nothing. The bound is a ratio of lengths. Zoom z is drawn
-where the eye is `[r_z, 2 r_z)` away; cut through the stored ground, that
+subtends almost nothing. The bound is a ratio of lengths. Level L is drawn
+where the eye is `[r_L, 2 r_L)` away; cut through the stored ground, that
 shell is a ring about the eye's foot, and widened by a chunk's diagonal it
-is the zoom's **reach**, at most `474 · 2^(16 − z)` units across against a
-page's `512 · 2^(16 − z)`. So a zoom wants at most 3 × 3 pages, whatever the
-tilt or the relief, and a zoom whose ring the eye is too high for wants none.
+is the level's **reach**, at most `474 · 2^L` units across against a page's
+`512 · 2^L`. So a level wants at most 3 × 3 pages, whatever the tilt or
+the relief, and a level whose ring the eye is too high for wants none.
 The render sees the shell through the screen; the records see the same
 shell in their own coordinates.
 
@@ -166,24 +166,24 @@ reasons:
 - **Motion reveals what was hidden.** What is held by the reach is held
   behind a wall too, so occlusion culls drawing and never residency.
 
-A miss asks for the zoom it wants directly, since a page's address is a
-function of a point and a zoom; refining a zoom at a time multiplies the
-latency by the zooms, which Nanite names as why it does not stream its
+A miss asks for the level it wants directly, since a page's address is a
+function of a point and a level; refining a level at a time multiplies the
+latency by the levels, which Nanite names as why it does not stream its
 hierarchy. The margin motion needs is speed times latency, about the eye.
 
 ### What is still missing
 
-- **The coarsest zoom has no far edge.** Nothing splits it, so it runs to the
+- **The top level has no far edge.** Nothing splits it, so it runs to the
   horizon, and on a flat world without end. The far limit is `2 · r_top`.
-- **Objects have no pyramid.** Bands are the z16 lattice alone, so objects
-  have no reach to be bounded by until they have records a zoom, and,
+- **Objects have no levels.** Bands are the z16 lattice alone, so objects
+  have no reach to be bounded by until they have records a level, and,
   being sparse, a resident map of where they are that is conservative —
   3D Tiles' availability, Google Earth's quadtree packets.
 - **A point query misses too.** A pick, a placement or a physics step can
   ask where the screen does not, and its miss is fetched with a priority
   of its own.
-- **The distance still enters** in the count of zooms, about
-  ½ · log₂(2R / h) from a height h, and in the coarsest zoom's far edge.
+- **The distance still enters** in the count of levels, about
+  ½ · log₂(2R / h) from a height h, and in the top level's far edge.
 
 ### Drawing it
 
@@ -236,7 +236,7 @@ That splits what the kernel holds into four, each with its own bound:
 | Tier            | Holds                                                                                          | Bounded by                                   |
 | --------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | the world       | every record, in its layer's own structure                                                     | nothing of the view — the server, the bucket |
-| the index       | what a record summarizes of what is under it: that something is there, its extent, its version | the reach: a few words a record, 9 a zoom    |
+| the index       | what a record summarizes of what is under it: that something is there, its extent, its version | the reach: a few words a record, 9 a level   |
 | the working set | the full records the view's observations have asked for                                        | what is observed, inside the reach           |
 | the samples     | what the screen shows                                                                          | the screen                                   |
 
@@ -248,8 +248,8 @@ virtual address space is: an observation misses, and the miss is fetched.
 This does not undo the review above; it places it.
 
 - **The reach is the bound, observation is the choice.** Every record an
-  observation can ask for lies in the reach of its zoom, so the working
-  set is a subset of the reach and its bound — 3 × 3 a zoom — still holds.
+  observation can ask for lies in the reach of its level, so the working
+  set is a subset of the reach and its bound — 3 × 3 a level — still holds.
   What is held is no longer all of the reach but what was observed in it.
 - **The index is what makes observation safe.** A miss is made only where
   a query descends, and a query descends only where a coarse record says
@@ -306,13 +306,13 @@ So "perceived" is placed one hop nearer the screen than written above:
 
 The working set is inside the reach only for the eye. A shadow ray leaves
 it toward the sun, by up to `min(H_max / tan e, √(2R · H_max))` at a sun
-elevation e — one to three pages a zoom on the sun's side. A point
+elevation e — one to three pages a level on the sun's side. A point
 observer — the character's physics at the map center, a pick or a placement
-far from the eye — has a reach of its own at the zoom it asks. The bound
+far from the eye — has a reach of its own at the level it asks. The bound
 is the sum of the observers' reaches, still independent of the content.
 
 The floor has two parts, and for physics and placement it is correctness,
-not prefetch: the coarse zooms' records held all around, drawable and not
+not prefetch: the coarse levels' records held all around, drawable and not
 only a summary, and a full-resolution ring about each point observer, as
 wide as its speed times the latency.
 
@@ -323,9 +323,9 @@ wide as its speed times the latency.
   becomes 78k u for a 1,000 m peak. The far limit is the smaller of that
   and `2 · r_top`; cut at the sea-level horizon, far mountains are never
   observed and never fetched.
-- **474 · 2^(16 − z) is the reach's radius, not its width.** Across it is
-  about 949 · 2^(16 − z), 1.85 pages, which straddles at most three a side:
-  3 × 3 a zoom, as written, and one derivation should own the number where
+- **474 · 2^L is the reach's radius, not its width.** Across it is about
+  949 · 2^L, 1.85 pages, which straddles at most three a side: 3 × 3 a
+  level, as written, and one derivation should own the number where
   `VIEW_PAGES`'s comment gives a third.
 
 ### The index
@@ -347,7 +347,7 @@ wide as its speed times the latency.
   without it a query keeps asking past the hit, or takes a round per
   false positive — up to about 30 along a grazing ray.
 - **Objects are local for now,** so their index is folded by the client
-  from its own store — occupancy by OR and the highest top, a zoom at a
+  from its own store — occupancy by OR and the highest top, a level at a
   time — until they are shared from a server.
 
 A new terrain version is 227,310 Class A operations; the month is already
@@ -356,11 +356,11 @@ usage`.
 
 ### What goes and what stays
 
-The domain's search, `VIEW_CHUNKS`, the per-zoom chunk count and the frustum
-in the wish go, for the reaches worked out a zoom at a time; so does the
+The domain's search, `VIEW_CHUNKS`, `LEVEL_CHUNKS` and the frustum in the
+wish go, for the reaches worked out a level at a time; so does the
 pressure. `io/sched.rs`'s wants and credits stay — each observer is a
 producer declaring its reach. `io/policy.rs`'s shells become the eye's
-column at every zoom first, then each reach by zoom and distance, then a
+column at every level first, then each reach by level and distance, then a
 class for point queries. `relief.rs` reads the conservative lane, which
 ends its caveat that a mean lies inside what it averages. The chunk table,
 the slots and the arena wait on how the samples are drawn.
@@ -393,27 +393,27 @@ themselves. Thinking of them together was the mistake; `Pyramid` and
 What is to be drawn is seen through the quantized sphere of directions,
 without r: it is ray casting, as a definition of what is asked, whatever
 draws it. The distance is not an argument; it is what comes back, and it
-is the detail:
+is the level of detail:
 
 ```text
 from_where(θ, φ) → (r, α, source)
 
-z(r, α)      the zoom whose cell a pixel covers at distance r,
+level(r, α)  the level whose cell a pixel covers at distance r,
              seen at an angle α to the surface: r · Δθ / cos α
-source       the layer, zoom and record that answered — an address
+source       the layer, level and record that answered — an address
 ```
 
 A **miss** is one line: the record that answered is coarser than
-`z(r, α)`. What is asked for is that layer's record at that zoom, at
-the hit — the zoom wanted at once, never a zoom at a time.
+`level(r, α)`. What is asked for is that layer's record at that level, at
+the hit — the level wanted at once, never a level at a time.
 
-The circle — `r` needs the data it chooses the zoom of — is held stable
-by the logarithm and by the index being conservative. The zoom is
+The circle — `r` needs the data it chooses the level of — is held stable
+by the logarithm and by the index being conservative. The level is
 `log₂ r`, so `r` has to be right within a factor of two, and a hit read off
 a conservative maximum is no later than the true one, so `r` is
-underestimated and the zoom errs finer, never coarser.
+underestimated and the level errs finer, never coarser.
 
-A pixel chooses its own zoom with no node around it, so a cell drawn
+A pixel chooses its own level with no node around it, so a cell drawn
 covers between τ / 2 and τ.
 
 ### Where it is not a memory hierarchy
@@ -421,8 +421,8 @@ covers between τ / 2 and τ.
 - **A fault does not stall.** A frame cannot wait on a fetch, so a miss is
   answered by the nearest resident ancestor, coarser: a fallback in
   resolution, which a memory hierarchy has no need of. So an access always
-  hits at some zoom, and what makes that true is the floor — the coarse
-  zooms held all around.
+  hits at some level, and what makes that true is the floor — the coarse
+  levels held all around.
 - **The address is not known before the data.** Where a ray first hits
   depends on what is there, so the page table has to be conservative and
   held over at least the range prefetched, before the records it
@@ -473,7 +473,7 @@ request was made: every turn ranks what waits again and drops what has left
 every reach, as `io/sched.rs`'s `declare` and `pump` already do. A record
 waits at most once and only inside a reach, so the queue is bounded by the
 records, and a frame never waits on it, since the floor answers every
-access at some zoom.
+access at some level.
 
 ### What is structure, what is mechanism, what is policy
 
@@ -482,10 +482,10 @@ everything above it. So the parts are kept apart the way an operating
 system keeps mechanism apart from policy:
 
 - **The page's definition** is structure. What a record is — its layer,
-  zoom and address, the index lane it carries, the zero page — and it does
+  level and address, the index lane it carries, the zero page — and it does
   not move with the view.
 - **Demand paging** is mechanism. A fault is a record coarser than
-  `z(r, α)`; it is answered by the resident ancestor and becomes a
+  `level(r, α)`; it is answered by the resident ancestor and becomes a
   request. That is fixed, and correctness rests on it and on the floor.
 - **How the faults are served** is policy: the queue, its two ends, the
   order within each, what is dropped, how much a turn takes on.
@@ -502,7 +502,7 @@ never what is correct once the records are held.
 The third round of the three reviews, and the conversation after it. Two
 things above are corrected here rather than there: "a fault hands the turn
 over" and the queue with two ends mixed scheduling into the model, and
-`z(r, α)` put the surface's angle into the geometry's zoom.
+`level(r, α)` put the surface's angle into the geometry's level.
 
 ### The concerns
 
@@ -514,7 +514,7 @@ over" and the queue with two ends mixed scheduling into the model, and
 | Prefetch   | what will be needed that is not yet                          | speculation    |
 | Scheduling | which of the work waiting runs now, within what budget       | dynamic policy |
 
-**Page.** A layer's record at a zoom, in the layer's own shape — terrain
+**Page.** A layer's record at a level, in the layer's own shape — terrain
 2D, objects sparse 3D — carrying the index lane of what is under it. A
 page is not a drawn chunk.
 
@@ -523,28 +523,28 @@ than asked, it emits a miss and answers from the ancestor, and the caller
 goes on. No order and no priority enter here; a fault is detected and
 answered, and that is all.
 
-- The geometry's zoom is the distance's alone, `z(r)`: a height's
+- The geometry's level is the distance's alone, `level(r)`: a height's
   error shows on screen as `P · ε / r` whatever the angle, and with the
   angle in, the skyline — where `1 / cos α` is largest — was drawn
   coarsest, everything past about 6 km from street level at z6. The angle
   belongs to sampling colour, clamped as anisotropic filtering clamps it.
 - Two hits, not one. A hit on the conservative maximum decides misses: it
-  is no later than the true one, so the zoom errs finer. A hit on the
+  is no later than the true one, so the level errs finer. A hit on the
   drawn surface, which averages, decides what is drawn; it can come later
   than the true one and must never decide a miss.
 - A hit on a bound that is not certified is a miss too — certified when
   the ray passes under the bound's minimum, or the bound is no wider than
   a pixel's footprint. Without it a ray can rest on a coarse box's top
   forever, answered and never asking.
-- A round's error is at most `log₂(1 + 724 / (192 k))` zooms for an index
+- A round's error is at most `log₂(1 + 724 / (192 k))` levels for an index
   of k × k a page, not "a factor of two", and the rounds are one per false
   positive along a ray, some 20 to 30; held in memory, those are frames.
 
 **Residency.** Mechanism, with a replacement policy inside it:
 
-- **The floor** — the coarse zooms held all around — is residency's, not
+- **The floor** — the coarse levels held all around — is residency's, not
   prefetch's. With no prefetch at all an access must still hit at some
-  zoom, and only the floor makes that true.
+  level, and only the floor makes that true.
 - **Ancestor closure.** A record's index is a lane in its parent, so a
   parent is resident whenever a child is; asking for a child asks for its
   ancestors, and a frame with a resident child is never given up.
@@ -565,7 +565,7 @@ the network, but it is a default and not an invariant.
 
 **Scheduling.** Work items — a demand, a prefetch, a decode, a fold, a
 build, an upload — each carrying what the other concerns gave it: the
-observer, how many zooms short, seen or not, how near. The scheduler
+observer, how many levels short, seen or not, how near. The scheduler
 orders them by that and nothing else, and may be a heap, a deque, EDF or
 anything that keeps one condition: **a demand still wanted is served
 eventually.** Correctness rests on convergence, so starvation is the one
@@ -579,11 +579,11 @@ above it.
   An operating system's is fault, `MADV_WILLNEED`, replacement and
   `mlock`. The clipmap (Tanner, Migdal and Jones, 1998) is the reach's
   precedent.
-- Under pressure, shipped systems lower the detail wanted everywhere — a
+- Under pressure, shipped systems lower the level wanted everywhere — a
   bias — rather than evicting harder; replacement alone thrashes.
-- Waiting work is ranked by how many zooms short it is, not by recency: a
+- Waiting work is ranked by how many levels short it is, not by recency: a
   grazing ray touches many pages, and under LRU they all look used.
-- Asking for the zoom wanted at once was Cesium's `skipLevelOfDetail`,
+- Asking for the level wanted at once was Cesium's `skipLevelOfDetail`,
   turned off by default for its seams. Fetching directly is sound; drawing
   a coarse ancestor beside a fine descendant with nothing between needs a
   transition — a blend on arrival and a seam — and that is the cache's.
@@ -619,8 +619,8 @@ above it.
 
 0. The Worker's round trip for an 8 to 20 KB page from the phone, edge
    cached and not.
-1. `pxl-spec`: the reach and `z(r)`, with their laws — at most 3 × 3 a
-   zoom, closed under parent.
+1. `pxl-spec`: the reach and `level(r)`, with their laws — at most 3 × 3 a
+   level, closed under parent.
 2. `pxl-spec`: the index lane and its fold, with its laws — a parent's
    extent holds its children's and every interpolated height — wired into
    the bake over a small area and checked, not published.
@@ -639,13 +639,13 @@ above it.
 The engineering review's plan, redone along the concerns:
 
 - **The reach is two things.** Its bound is structure: any fault the rule
-  can raise names a page within about `474 · 2^(16 − z)` of an observer, so 3 × 3
-  a zoom, used to size capacity and to prove. Asking for all of it is
+  can raise names a page within about `474 · 2^L` of an observer, so 3 × 3
+  a level, used to size capacity and to prove. Asking for all of it is
   prefetch.
 - **The mechanism's demand is the faults and nothing else**: under
   raster, a chunk of the cover drawn from an ancestor or left open, which
   `cover_of` already finds; under casting, the GPU's feedback; for a point,
-  `at(point, z)` answered by an ancestor. "The reach pages that are
+  `at(point, level)` answered by an ancestor. "The reach pages that are
   seen" was policy passing as mechanism.
 - **What is needed carries its kind** — `Floor`, `Pin`, `Fault`, `Hint` —
   and a policy may make only `Hint`s, which get only a frame that may be
@@ -660,7 +660,7 @@ The engineering review's plan, redone along the concerns:
   — random order, last in first out, always preempting, no prefetch, a
   flood of hints — with a resting camera: residency never past its
   capacity, a floor, pin or fault never refused a frame, every access
-  exact at its zoom in the end, no resident page without its ancestors.
+  exact at its level in the end, no resident page without its ancestors.
   Step 4 becomes 4a, the mechanism, and 4b, the policies; with 4a alone
   and no prefetch the view has to converge to exact.
 
@@ -668,11 +668,11 @@ Two corrections to that plan:
 
 - **The floor is held, not asked for.** Adding the top page over an access
   only once it resolves to nothing leaves a hole on every turn toward
-  ground not yet seen when prefetch is off. The coarsest zoom inside the far
+  ground not yet seen when prefetch is off. The top level inside the far
   edge — nine pages at most — is resident whatever is observed, so every
-  access hits at some zoom; only the first moment of a cold start or a
+  access hits at some level; only the first moment of a cold start or a
   jump is without it.
-- **The zoom is `z(r)`**, as above; the angle is not in the
+- **The level is `level(r)`**, as above; the angle is not in the
   structure.
 
 ### Numbers are parameters
@@ -698,7 +698,7 @@ named what the current code needs instead of what the concern is:
   faults. Asking for the reach is prefetch and enters no bound: however
   eager it is, it only pushes itself out of the cache.
 - **The floor is a law, and holding it is one way to keep it.** The law is
-  that every observation has an answer. Coarse zooms held all around keep
+  that every observation has an answer. Coarse levels held all around keep
   it; so could a procedural stand-in or a small root. Residency holds
   whatever the chosen fallback leases.
 - **Closure and pins are contracts handed to residency.** A page says what
@@ -715,7 +715,7 @@ Each concern hands the others a contract and nothing more:
 
 ```text
 page         dependencies(p)
-demand       need(p, z)
+demand       need(p, level)
 residency    resident(p), lease(p), release(p)
 prefetch     speculate(p)
 scheduling   execute(job)
@@ -723,7 +723,7 @@ scheduling   execute(job)
 
 ## Built, and what the merge settled
 
-Built on `observation-paging`: the structure (the zoom, the reach, the
+Built on `observation-paging`: the structure (the level, the reach, the
 page's index lane, terrain v7) and the mechanisms (residency, demand, the
 ledger and its serve policy, prefetch as a policy), merged and through the
 gate. What the conversation settled while it was merged:
@@ -754,8 +754,8 @@ gate. What the conversation settled while it was merged:
   drawn is made from them for the view. A cache of meshes may stay, if it
   can be dropped at any moment and rebuilt, and holds no invariant.
 - **The demand bound is the observation's, not the chunk's.** A sample
-  hitting at `[r_z, 2 r_z)` asks for the page it hit, so the bound is
-  `(⌊4 · SPLIT / PAGE_CELLS⌋ + 2)²` a zoom, a function of the criterion
+  hitting at `[r_L, 2 r_L)` asks for the page it hit, so the bound is
+  `(⌊4 · SPLIT / PAGE_CELLS⌋ + 2)²` a level, a function of the criterion
   and the page alone. The raster cover reaches a chunk's diagonal further,
   and that term is kept apart and marked as the one place the drawing's
   representation still couples to the paging's bound; it goes when demand
@@ -772,9 +772,9 @@ the bounds as they were.
 ### Run: a page depends on nothing over it
 
 Run against the local servers, the built branch drew nothing. Pages of
-z16 to z14 arrived; none was read. Residency held a page as read only
-once its parent was, and the dev server answers nothing coarser than its top,
-so no chain ever closed — and with every zoom served, one ancestor late
+levels 0 to 2 arrived; none was read. Residency held a page as read only
+once its parent was, and the dev server answers nothing past its top level,
+so no chain ever closed — and with every level served, one ancestor late
 would still leave everything under it undrawn. That is the invariant the
 tree states against it: a missing ancestor cannot make a resident
 descendant unreachable.
@@ -787,8 +787,8 @@ nearest resident page. A page of the pyramid depends on nothing, and the
 demand is a fault's own page — the pages over it, held for a better answer
 meanwhile, are prefetch's to ask for, as a policy.
 
-With no dev exception: coarser than the dev server's top the floor is not
-served, so there only what the view asks for at the served zooms answers.
+With no dev exception: past the dev server's top level the floor is not
+served, so there only what the view asks for at the served levels answers.
 
 ## Four sentences before the next step
 
@@ -811,7 +811,7 @@ back into the meaning:
    is scheduling's, and a query never fetches, prefetches or holds.
 4. **An estimator of demand is a conservative superset of the exact
    demand.** The first one works from bounds — a page's box in the frustum
-   and in its zoom's band of distance — and asks for hidden pages too;
+   and in its level's band of distance — and asks for hidden pages too;
    later ones, from hits or the GPU's feedback, are smaller supersets. None
    changes what an observation means or what residency does.
 
@@ -892,7 +892,7 @@ worst case is a ball, r³, and the quality policy would coarsen a steep view
 far more than its screen asks. That count was never the observation's.
 Looking does not take in a volume; a direction answers with its first
 visible surface, what is smaller than a sample is not asked for, and what
-is far is folded by the zoom. What must be drawn at once is bounded by the
+is far is folded by the level. What must be drawn at once is bounded by the
 screen.
 
 So visibility decides depth, not existence:
@@ -912,12 +912,12 @@ So visibility decides depth, not existence:
   sees; a cone, several samples, or the GPU's feedback are better ones, and
   none changes what a cell means. A center ray can miss a sliver between
   two cells; the sliver then stays coarse, which is quality, not a hole.
-- **The cells are derived.** A piece of any zoom covers about the same
+- **The cells are derived.** A piece of any level covers about the same
   size on the screen — its cells times τ — so a cell half that size sees
   every piece at least once; the grid follows τ_eff, and the half is the
   knob.
 
-The frontier then holds `cover + cells × (children × zooms)` at most — a
+The frontier then holds `cover + cells × (children × levels)` at most — a
 bound of the screen, whatever the world holds. What the world's depth still
 costs is the traversal that finds each first hit, not what is held drawn.
 The quality policy, which answered a volume's worst case, becomes the last
@@ -963,7 +963,7 @@ pixel's footprint stretches over many cells, and there the detail is
 averaged into the pixel whatever is held. Across the screen, and at a
 silhouette, it does not stretch: a coarse cell at 100u to 400u is 12 to
 23 pixels wide against τ of 6, and a height's error shows as `P · ε / r`.
-The zoom by distance alone is the choice by the footprint's short axis, as
+The level by distance alone is the choice by the footprint's short axis, as
 anisotropic filtering chooses a mip, so the ground the center ray missed is
 error over τ and must refine; the estimator missed it, the rule did not.
 
@@ -974,9 +974,9 @@ contributes to the cell. That is what the cell covers, not every geometry
 in it; a piece refines only where its error is over τ. A corner's rays, a
 cone, or the GPU's feedback are later estimators of the same thing.
 
-**The floor is the source's.** The floor is the coarsest zoom the source
+**The floor is the source's.** The floor is the coarsest level the source
 supplies whole — the pyramid's top from the bucket, the dev server's
-`--top-z` locally — declared by the source, not guessed from what
+`--top-level` locally — declared by the source, not guessed from what
 fails. It is a property of the storage, not an exception for dev; the law
 is unchanged: once the source's floor is resident, coverage is never lost.
 
@@ -988,7 +988,7 @@ cast again where they are stale — acceleration, not a cache anything rests
 on.
 
 **Decor is its own solver.** Its record is placements over a shared asset;
-what is drawn is instances, each at the asset's detail its
+what is drawn is instances, each at the asset's level of detail its
 footprint needs, and far enough away an impostor. Nanite's clusters fit
 exactly that, and its weakness — aggregates, like a far forest — is where
 the impostor goes. What is common across layers is the observation's
@@ -1039,7 +1039,7 @@ object store's bands. Those are stored flat, and only the answer leaves.
 Contents::Unknown                    nothing over it is resident
 Contents::Empty                      provably nothing in it
 Contents::Holds { bound, error }     all of it inside `bound`; drawn at the
-                                     zoom, off by up to `error` on each axis
+                                     level, off by up to `error` on each axis
 ```
 
 Three points came out of reviewing it.
@@ -1068,9 +1068,9 @@ Three points came out of reviewing it.
   cut to what a position can name (`pxl-spec space/pvf3.rs` `REACH`).
   The number is the observation's alone. Along each axis it is
   ⌊2·far/side⌋ + 2 chunks, or the lane's where the lane ends first
-  (`cover_pieces`). The far edge is `SPLIT` cells of the zoom over the
+  (`cover_pieces`). The far edge is `SPLIT` cells of the level over the
   top and a chunk `CHUNK_CELLS` of the top's own, so `far / side` is
-  2 · `SPLIT` / `CHUNK_CELLS` = 6 at every zoom. That makes 14 a side, and
+  2 · `SPLIT` / `CHUNK_CELLS` = 6 at every level. That makes 14 a side, and
   it moves with the criterion: `SPLIT` 256 would make it 18. Height is where
   the lane ends first today: the 16-bit lane and a chunk of the published
   top are both 65,536 units, which meet two chunks either side of zero.
@@ -1090,23 +1090,23 @@ and the query stays the access primitive it is.
 The estimator asks the same question of the page lattice's cubes. A
 requirement names a region, and a layer's storage maps it to its pages,
 by their squares for the pyramid's. What is required lies nearer than its
-zoom's band's end, so along the ground too, and the fault bound holds as
+level's band's end, so along the ground too, and the fault bound holds as
 it did.
 
 ## A ray passes over what a coarser page already bounds
 
 The query's walk read the ground a region at a time, a region being one
-index cell of the zoom asked: sixteen of its cells across. The criterion
-puts a zoom's band at `SPLIT` of its cells, so a ray crossed about twelve
-regions a zoom, however far over the ground it went. Every page's index
+index cell of the level asked: sixteen of its cells across. The criterion
+puts a level's band at `SPLIT` of its cells, so a ray crossed about twelve
+regions a level, however far over the ground it went. Every page's index
 lane already bounds its whole subtree, so the pages resident over the one
 asked are a max-mipmap of it, and nothing new is stored to use them.
 
 Before a region is read, the resident pages over it are asked, coarsest
 first, whether the ray passes over all they hold (`Access::clear`). The
 first that proves it carries the ray to its cell's far edge. That cell is
-`2^k` of the asked zoom's regions across for a page `k` zooms coarser, and
-never past where the zoom asked changes. What proves it differs by layer:
+`2^k` of the level's regions across for a page `k` levels up, and never
+past where the level asked changes. What proves it differs by layer:
 
 - the ground is solid under its surface, so it is passed only above its
   highest;
@@ -1116,7 +1116,7 @@ never past where the zoom asked changes. What proves it differs by layer:
 A page that is not resident proves nothing and is passed by. It never lets
 the ray skip what it would have held, and the answer, exact, coarser or
 nothing, and the page it lacks are what they were without it. The descent is
-as deep as the zooms over the one asked; what a ray costs is the nodes it
+as deep as the levels over the one asked; what a ray costs is the nodes it
 visits, fewest far over the ground and most along a slope it grazes. No
 bound on a whole ray is claimed.
 
@@ -1178,7 +1178,7 @@ frustum.
 ## Demand from what the tiles reach
 
 The demand was estimated from bounds alone (`ByBounds`): every page whose
-box the frustum can see, in the band of its zoom. That includes ground
+box the frustum can see, in the band of its level. That includes ground
 behind a hill or a wall, which the screen never reaches. From street level
 it asked for about 37 pages where 3 were seen. Materialization already
 refined only where the screen's tiles reach. Demand did not use that, so
@@ -1186,7 +1186,7 @@ the two concerns shared what is known (`Bounds`) but not what is seen.
 
 Now demand reads the same sight (`world/observation.rs` `ByFootprints`).
 Its requirements are the ground each tile's footprint touches, at every
-zoom whose band some of that ground lies in, plus what the tiles' rays
+level whose band some of that ground lies in, plus what the tiles' rays
 lacked. Three rules keep it a demand and not a guess.
 
 - **What a ray lacked is required.** A footprint is what the resident
@@ -1197,7 +1197,7 @@ lacked. Three rules keep it a demand and not a guess.
   cast again, so the requirement grows until it is what the exact records
   make it. An exact answer that meets nothing requires nothing.
 - **The observer names ground, never a page.** A lack travels as a
-  requirement, a zoom and a region, and each layer's storage maps it to
+  requirement, a level and a region, and each layer's storage maps it to
   its own pages. Places are asked for by the same ground the terrain's rays
   lacked.
 - **It is demand, not prefetch.** Only what the current observation reaches
@@ -1205,10 +1205,10 @@ lacked. Three rules keep it a demand and not a guess.
 
 The bands are shared with `ByBounds` (`pxl-spec space/observation.rs`
 `band`), so the fault bound holds as before. A lack asked at a finer
-quality than the effective one is lifted to the zoom that quality puts
+quality than the effective one is lifted to the level that quality puts
 its ground at, so nothing finer is fetched than what is drawn.
 
-Hidden ground is not required at any zoom: the floor answers it. On the
+Hidden ground is not required at any level: the floor answers it. On the
 fixtures, a flat street with boxes, the pages required went from 25 to 21
 at street level, and from 25 to 13 in front of a wall. They went from 28
 to 18 at 40u, and from 24 to 10 at 600u, looking down. A dense grid of
@@ -1291,7 +1291,7 @@ Decor's reading of its tier now covers only the tier's cells averaged
 The arena's assert, the cover and the headroom inside the coarse pool,
 added pieces to slots. That held while a piece was a slot. Once a tier can
 fill several, the cover's 392 pieces could, at worst, be 392 × 15 slots. A
-piece of the top was drawn from the zoom's cells averaged 2 × 2 up to the
+piece of the top was drawn from the level's cells averaged 2 × 2 up to the
 coarsest cube, by distance, so it was not structurally one slot.
 
 The cover's job is only that no ground the floor answers goes undrawn. So
@@ -1300,10 +1300,10 @@ slot, whatever it holds (world/chunk/frontier.rs `drawn_cube`). Detail
 comes from refinement alone. The cover's count is its slots by its
 representation, and the assert is a proof in one unit.
 
-A piece is measured as it is drawn. A zoom's own cell is half the cube
+A piece is measured as it is drawn. A level's own cell is half the cube
 its cells are drawn averaged into — the 2 × 2 is by design, like a
 retina's pitch against its pooling — so the error of a cube is half its
-side across, which for every zoom under the top is the zoom's own cell
+side across, which for every level under the top is the level's own cell
 as before. A piece of the cover is therefore half a chunk across, and up
 the one box's whole height from the layer's bound (world/pyramid/domain.rs
 `look`). Where it is seen that closely it splits; where it is hidden it
@@ -1337,12 +1337,12 @@ screen the long rays lie decides it. Drawn as heatmaps
   group pays about what each of its rays pays, except along a block's
   edge.
 - From above, a disc about the nadir costs more: the finer band of
-  distance, a zoom more under it.
+  distance, a level more under it.
 - At street level the near ground below the horizon is cheap, a few steps a
   ray. What is dear is not a line at the horizon but all that lies above
   the near ground — the far rays and the rays into the sky. Part of that is
-  the dev server's: it serves pages to z13 only, so a ray past what
-  z13 covers finds nothing over it resident, cannot be passed over, and
+  the dev server's: it serves pages to level 3 only, so a ray past what
+  level 3 covers finds nothing over it resident, cannot be passed over, and
   walks region by region to its reach. With the top resident, a ray over
   the highest ground clears there in a few tests. And a ray rising above
   the highest ground in its reach can meet nothing more, an exit the query
@@ -1360,7 +1360,7 @@ Two things this review corrected:
   experiment's to choose. Fixing the primitive at one ray a cell too early
   would fix the representation before the measurement.
 - **A raster is not bound to the world.** Frustum and occlusion culling,
-  detail selection and clusters bound a good raster pipeline near the
+  levels of detail and clusters bound a good raster pipeline near the
   screen too; Nanite is one. What differs is the direction of evaluation: a
   raster materializes the world's visible geometry and then samples it, an
   observation starts at the screen's samples and queries the world. This

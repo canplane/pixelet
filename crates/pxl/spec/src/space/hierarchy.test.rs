@@ -15,22 +15,22 @@ fn a_child_is_its_parent_and_slot_in_two_and_three_dimensions() {
     }
 }
 
-/// Several steps are one step taken as many times.
+/// Several levels are one level taken as many times.
 #[test]
-fn several_steps_are_one_step_taken_as_many_times() {
+fn several_levels_are_one_level_taken_as_many_times() {
     for at in [[5i64, -3], [-1, -1], [0, 8], [-9, 17]] {
-        for steps in 0..5 {
+        for levels in 0..5 {
             let mut up = at;
-            for _ in 0..steps {
+            for _ in 0..levels {
                 up = parent_of(up);
             }
-            assert_eq!(ancestor_of(at, steps), up);
+            assert_eq!(ancestor_of(at, levels), up);
             let mut first = at;
-            for _ in 0..steps {
+            for _ in 0..levels {
                 first = child_of(first, 0);
             }
-            assert_eq!(first_descendant_of(at, steps), first);
-            assert_eq!(ancestor_of(first_descendant_of(at, steps), steps), at);
+            assert_eq!(first_descendant_of(at, levels), first);
+            assert_eq!(ancestor_of(first_descendant_of(at, levels), levels), at);
         }
     }
 }
@@ -65,12 +65,12 @@ fn a_point_lies_in_the_side_whose_corner_is_under_it() {
 fn nodes_share_ground_only_where_one_lies_under_the_other() {
     let at = (Scale::of(4), [3i64, -2]);
     assert!(share(at, at));
-    for steps in 1..4 {
-        let first = (Scale::of(4 - steps), first_descendant_of(at.1, steps as u32));
+    for levels in 1..4 {
+        let first = (Scale::of(4 - levels), first_descendant_of(at.1, levels as u32));
         assert!(share(at, first) && share(first, at));
-        let beside = (Scale::of(4 - steps), first_descendant_of([4, -2], steps as u32));
+        let beside = (Scale::of(4 - levels), first_descendant_of([4, -2], levels as u32));
         assert!(!share(at, beside) && !share(beside, at));
-        assert!(share((Scale::of(4 + steps), ancestor_of(at.1, steps as u32)), at));
+        assert!(share((Scale::of(4 + levels), ancestor_of(at.1, levels as u32)), at));
     }
 }
 

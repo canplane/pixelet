@@ -19,6 +19,7 @@ use crate::io::file::{self, Owner};
 use crate::io::sched::{attempt_of, settle, Credit};
 use crate::layer::earth::{self, Earth};
 use crate::layer::geocode::store as geocode_store;
+use crate::layer::terrain::page::OCEAN_KEY;
 use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::change::world_edge;
 use crate::world::pyramid::Layer;
@@ -26,7 +27,7 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::place_page::{group_name, DICT_OBJECT};
 use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::bake::quadkey::page_name;
-use pxl_spec::space::pyramid::Page;
+use pxl_spec::space::pyramid::LevelPage;
 use xpute_runtime::clock::now;
 use xpute_runtime::global::Global;
 
@@ -36,8 +37,9 @@ impl fmt::Display for DemandName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let key = self;
         match key.0 {
-            Category::terrain => write!(f, "{}", page_name(Page::of_subject(key.1))),
-            Category::poi | Category::earth => write!(f, "{}", page_name(Page::of_subject(key.1))),
+            Category::terrain => write!(f, "{}", page_name(LevelPage::of_subject(key.1))),
+            Category::ocean => f.write_str(OCEAN_KEY),
+            Category::poi | Category::earth => write!(f, "{}", page_name(LevelPage::of_subject(key.1))),
             Category::geocode => write!(f, "{}", group_name(key.1)),
             Category::geocode_dict => f.write_str(DICT_OBJECT),
             // Assets are opened below the assets' root (io/load.rs), never here.
@@ -178,15 +180,17 @@ fn fetch_arrived(Arrival { key, got, net_ms }: Arrival) {
     settle(key, outcome, Some(phases), fail);
 }
 
-/// The page over it for a pyramid page, no label for a geocode group.
+/// Open water for a terrain page, no label for a geocode group. The ocean
+/// tile must exist, so its absence is a fault.
 fn absent(category: Category, subject: u64) -> Result<(), Errno> {
     match category {
-        Category::terrain => Terrain::pyramid().absent(Page::of_subject(subject)),
-        Category::poi => PoiPage::pyramid().absent(Page::of_subject(subject)),
-        Category::earth => Earth::pyramid().absent(Page::of_subject(subject)),
+        Category::terrain => Terrain::pyramid().absent(LevelPage::of_subject(subject)),
+        Category::poi => PoiPage::pyramid().absent(LevelPage::of_subject(subject)),
+        Category::earth => Earth::pyramid().absent(LevelPage::of_subject(subject)),
         Category::geocode => geocode_store::absent_group(subject),
         // A bake with no dictionary names nothing: an answer, so not asked again.
         Category::geocode_dict => geocode_store::absent_dict(),
+        Category::ocean => return Err(Errno::ENOENT),
         Category::asset => return Err(Errno::ENOTRECOVERABLE),
     };
     Ok(())
@@ -198,17 +202,22 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
     let Some(b) = block else { return Err(Errno::EBADMSG.into()) };
     match category {
         Category::terrain => {
-            let result = Terrain::pyramid().adopt(Page::of_subject(subject), view(b), phases);
+            let result = Terrain::pyramid().adopt(LevelPage::of_subject(subject), view(b), phases);
+            release(block);
+            result
+        }
+        Category::ocean => {
+            let result = Terrain::pyramid().adopt_shared(view(b), phases);
             release(block);
             result
         }
         Category::poi => {
-            let result = PoiPage::pyramid().adopt(Page::of_subject(subject), view(b), phases);
+            let result = PoiPage::pyramid().adopt(LevelPage::of_subject(subject), view(b), phases);
             release(block);
             result
         }
         // The texels are kept until the GPU has them.
-        Category::earth => earth::adopt(Page::of_subject(subject), b, phases),
+        Category::earth => earth::adopt(LevelPage::of_subject(subject), b, phases),
         // SAFETY (both): the heap block given for this body alone; the store
         // keeps it, or frees it if it does not open.
         Category::geocode => unsafe { geocode_store::adopt_group(subject, b) }.map_err(Into::into),

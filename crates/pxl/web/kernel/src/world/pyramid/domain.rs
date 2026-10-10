@@ -7,7 +7,7 @@
 //! interval of steps. It runs a slice a turn on the observation it began
 //! with, and is published whole.
 //!
-//! Every chunk at the top within reach that holds anything is a piece (the
+//! Every top-level chunk within reach that holds anything is a piece (the
 //! cover), all around the eye, so ground turned to shows the cover and never
 //! a hole. A chunk splits only where some tile footprint touches it and its
 //! projected error crosses a cell (`Lens::error` against `cell_angle`). A
@@ -20,7 +20,7 @@ use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::lod::{cubes_meeting, fault_radius, Tau};
 use pxl_spec::space::observation::{Bounds, Contents, Observation};
 use pxl_spec::space::pvf3::REACH;
-use pxl_spec::space::pyramid::{chunk_span_of, Page, GROUND_Z};
+use pxl_spec::space::pyramid::{chunk_span_of, LevelPage};
 use pxl_spec::space::v3::Aabb;
 
 use crate::world::access::Access;
@@ -33,10 +33,10 @@ use xpute_runtime::global::Global;
 use super::chunk::Chunk;
 use super::Layer as _;
 
-/// Most pieces the cover can be: every chunk at the top meeting the far
+/// Most pieces the cover can be: every top-level chunk meeting the far
 /// edge's box (`Observation::reach`), clamped to the position lane. An
 /// interval of `d` meets at most ⌊d / side⌋ + 2 chunks, and the reach is
-/// 2 · `SPLIT` / `CHUNK_CELLS` chunks each way at every zoom.
+/// 2 · `SPLIT` / `CHUNK_CELLS` chunks each way at every level.
 pub const fn cover_pieces(top: u32, planet: f64) -> u32 {
     let (far, side) = (fault_radius(top), chunk_span_of(top));
     let reach = [2.0 * far, 2.0 * far, 2.0 * far + far * far / (2.0 * planet)];
@@ -50,10 +50,10 @@ pub const fn cover_pieces(top: u32, planet: f64) -> u32 {
     n
 }
 
-/// How near a chunk at `z` must come for its error to cross a cell:
+/// How near a chunk of `level` must come for its error to cross a cell:
 /// the error is at most its diagonal over its distance less the diagonal.
-fn split_reach(z: u32, tau: Tau) -> f64 {
-    3f64.sqrt() * chunk_span_of(z) * (1.0 + 1.0 / cell_angle(tau))
+fn split_reach(level: u32, tau: Tau) -> f64 {
+    3f64.sqrt() * chunk_span_of(level) * (1.0 + 1.0 / cell_angle(tau))
 }
 
 pub struct Cut {
@@ -244,7 +244,7 @@ impl Domain {
             // A cover piece is drawn one cell per chunk (`drawn_scale`) and measured
             // as drawn: half that cell across, and the box's full height.
             (Contents::Holds { bound, .. }, _) if self.outermost(c) => {
-                let half = chunk_span_of(c.z()) / 2.0;
+                let half = chunk_span_of(c.level()) / 2.0;
                 (bound, [half, half, bound.extent()[2]])
             }
             (Contents::Holds { bound, error }, _) => (bound, error),
@@ -264,7 +264,7 @@ impl Domain {
         let nearest = bound.nearest(self.o.eye);
         let error_angle = self.lens.map_or(0.0, |l| l.error(nearest, error).into_iter().fold(0.0, f64::max));
         let order = Order::of(&self.o, &bound);
-        let mut from_step = if c.z() < GROUND_Z && touching.1 > 0 {
+        let mut from_step = if c.level() > 0 && touching.1 > 0 {
             self.ladder.iter().take_while(|&&tau| error_angle > cell_angle(tau)).count() as u8
         } else {
             0
@@ -285,7 +285,7 @@ impl Domain {
             }
             if any {
                 // Past the rule's reach the derivation, and the quality policy's count, are broken.
-                xpute_core::ensure!(order.near < split_reach(c.z(), self.ladder[splits_to as usize - 1]), ENOTRECOVERABLE, c.z());
+                xpute_core::ensure!(order.near < split_reach(c.level(), self.ladder[splits_to as usize - 1]), ENOTRECOVERABLE, c.level());
             } else {
                 from_step = 0;
             }
@@ -390,7 +390,7 @@ struct Made {
     spare: Option<Domain>,
     key: Option<(Observation, (u32, u32), Tau, u32)>,
     sight: Sight,
-    resident: HashSet<Page>,
+    resident: HashSet<LevelPage>,
     revision: u32,
     /// rays cast and nodes visited since `take_work`
     work: [u32; 2],
@@ -413,12 +413,8 @@ pub fn start(ladder: &[Tau], extra: u32) {
     // a new target or moved objects recast every tile; moved pages the ones over them
     let everything = made.key.is_none_or(|(_, (_, objects), tau, _)| tau != key.2 || objects != key.1 .1);
     made.key = Some(key);
-    let resident: HashSet<Page> = Terrain::pyramid().paging().held().map(|(p, _)| p).collect();
-    let near = |p: &Page| {
-        let r = pxl_spec::space::pvf3::nearest_box(&p.region(), o.eye[0]);
-        (r.min[0], r.min[1], r.max[0] - r.min[0])
-    };
-    let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(near).collect();
+    let resident: HashSet<LevelPage> = Terrain::pyramid().paging().held().map(|(p, _)| p).collect();
+    let moved: Vec<(f64, f64, f64)> = resident.symmetric_difference(&made.resident).map(|p| p.rect()).collect();
     made.work[0] += made.sight.observe(&o, &EdgeRays(Access::now(), ladder[0]), everything, &moved);
     made.resident = resident;
     let mut job = made.spare.take().unwrap_or_else(|| Domain::empty(o, Box::new(Known)));
@@ -465,7 +461,7 @@ pub fn revision() -> u32 {
 
 impl Domain {
     fn contents(&self, c: Chunk) -> Contents {
-        self.known.contents(c.z(), c.region())
+        self.known.contents(c.level(), c.region())
     }
 
     /// Measured from where in `c` anything stands: a bound, not the drawn
@@ -483,7 +479,7 @@ impl Domain {
     }
 
     pub fn outermost(&self, c: Chunk) -> bool {
-        c.z() <= self.o.top
+        c.level() >= self.o.top
     }
 
     pub fn pieces(&self) -> &[Chunk] {
@@ -531,9 +527,9 @@ impl Domain {
         self.in_force().splits.contains(&c)
     }
 
-    /// The chunk over `c`'s ground at the zoom the view draws it, never past the top.
+    /// The chunk over `c`'s ground at the level the view draws it, never above the top.
     pub fn wanted_over(&self, c: Chunk) -> Chunk {
-        std::iter::once(c).chain(c.ancestors()).filter(|k| k.z() >= self.o.top && !self.splits(*k)).last().unwrap_or(c)
+        std::iter::once(c).chain(c.ancestors()).filter(|k| k.level() <= self.o.top && !self.splits(*k)).last().unwrap_or(c)
     }
 }
 

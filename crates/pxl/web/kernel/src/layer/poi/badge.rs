@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::poi_page::{kind_color, kind_icon, Place, PoiPage};
-use pxl_spec::space::pyramid::Page;
+use pxl_spec::space::pyramid::LevelPage;
 
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::text::text_width;
@@ -25,14 +25,14 @@ pub enum Label {
     /// Count, and whether it is a floor.
     Count(u32, bool),
     Place {
-        page: Page,
+        page: LevelPage,
         place: u32,
     },
 }
 
 impl Label {
     /// Nameless once that page has gone.
-    fn place(page: Page, place: u32) -> Place<'static> {
+    fn place(page: LevelPage, place: u32) -> Place<'static> {
         PoiPage::pyramid().paging().get(page).map_or(Place::default(), |p| p.places.get(place))
     }
 

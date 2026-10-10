@@ -59,7 +59,7 @@ shader's is the only one that is a struct inside a `var<storage>` array.
 ## Why every instrument said it was fine
 
 The ledger reported the terrain as drawn: `chunk 51 draws / 315k tris`,
-`zoom_tris [z16 315k]`, every cap at zero, no slot wait, no stale chunk, 24
+`level_tris [L0 315k]`, every cap at zero, no slot wait, no stale chunk, 24
 pages resident, 436 tiers built, nothing refused. The fetch chain, the
 records, the mounts, the builds and the draw list were all clean — and they
 were right. The draws happened. They drew the wrong shape, and a census of

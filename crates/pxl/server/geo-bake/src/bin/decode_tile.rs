@@ -6,10 +6,10 @@
 //! `deno task bake:tiles`; one page also writes PNGs for the eye.
 //!
 //!   decode_tile 12720250262323200                # one leaf: summary + PNGs
-//!   decode_tile 3179787687624704 --z 14          # a page at a coarser zoom
+//!   decode_tile 3179787687624704 --level 2       # a page of a level above
 //!   decode_tile 12720250262323200 --out /tmp/page
 //!   decode_tile out/terrain/v7/_ocean            # a path works too
-//!   decode_tile --all                            # every page of every zoom, checked
+//!   decode_tile --all                            # every page of every level, checked
 //!   decode_tile --all --version v7
 
 use std::collections::BTreeMap;
@@ -313,14 +313,14 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
 }
 
 fn main() -> ExitCode {
-    const USAGE: &str = "usage: decode_tile <key | path> [--z n] [--version v6] [--out dir] | --all [--version v6]";
-    let (mut version, mut z, mut out, mut all, mut target) = (PUBLISHED_VERSION.terrain.to_string(), "16".to_string(), None, false, None);
+    const USAGE: &str = "usage: decode_tile <key | path> [--level n] [--version v6] [--out dir] | --all [--version v6]";
+    let (mut version, mut level, mut out, mut all, mut target) = (PUBLISHED_VERSION.terrain.to_string(), "0".to_string(), None, false, None);
     let mut flags = Flags::from_env();
     let read = (|| {
         while let Some(arg) = flags.arg() {
             match arg.as_str() {
                 "--version" => version = flags.value()?,
-                "--z" => z = flags.value()?,
+                "--level" => level = flags.value()?,
                 "--out" => out = Some(PathBuf::from(flags.value()?)),
                 "--all" => all = true,
                 _ if target.is_none() && !arg.starts_with("--") => target = Some(arg),
@@ -342,7 +342,7 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     };
     let path = if target.bytes().all(|b| b.is_ascii_digit()) {
-        pages.join(format!("z{z}")).join(target)
+        pages.join(&level).join(target)
     } else {
         PathBuf::from(target)
     };

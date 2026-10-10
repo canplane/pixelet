@@ -128,12 +128,7 @@ pub struct PageView<'a> {
     pub cells: &'a [GroundCell],
     pub ele: &'a [i16],
     pub decks: &'a Decks,
-    /// Where the source has nothing at all: no ground is drawn from it.
-    pub void: bool,
 }
-
-/// A column's height where its page is void: it has no ground.
-const NO_GROUND: i16 = i16::MIN;
 
 /// The page drawn in place of this one (its own, or a coarser one whose cell
 /// stands for `n` × `n` of its cells until its own comes).
@@ -259,10 +254,6 @@ impl ChunkSample {
                 // An apron cell off the page has no channels and takes the raw height.
                 let lanes = on_page.then_some(GroundLanes { cells: page.cells });
                 let center = |v: i64| (v as f64 + 0.5) / n as f64;
-                if page.void {
-                    self.ele[i] = NO_GROUND;
-                    continue;
-                }
                 let ele = ground_ele_at(page.ele, lanes, center(x), center(y)) as i32;
                 self.ele[i] = ele as i16;
                 // The floor is the chunk's own: a neighbor's valley must not drop it.
@@ -387,9 +378,6 @@ impl ChunkSample {
     /// `ele − 1` (`hi − 1` below). Through a bore: the ground under its floor,
     /// the way on the floor's cell, and the ground standing over its air.
     pub fn ground_runs<E>(&self, i: usize, from: i32, to: i32, mut run: impl FnMut(i32, i32, u32, u8) -> Result<(), E>) -> Result<(), E> {
-        if self.ele[i] == NO_GROUND {
-            return Ok(());
-        }
         let top = (self.ele[i] as i32).min(to);
         let (m, l) = (self.material[i], self.layer_idx[i]);
         let mut part = |lo: i32, hi: i32, m: u32, l: u8| if lo.max(from) < hi { run(lo.max(from), hi - 1, m, l) } else { Ok(()) };

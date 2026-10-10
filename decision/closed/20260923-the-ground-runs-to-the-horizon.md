@@ -65,8 +65,8 @@ Measured 2026-09-23 on the development machine: Chrome, a 9.2 Mpx canvas on
 a 120 Hz display (8.3 ms a frame), tiles served from the local bake, the
 camera placed exactly and held awake by a nudge under a pixel, one 6-second
 window a point and one run each — not averaged. **A** is the band as it
-ships, a window of 5 zooms. **B** pushes `fog_far` to the horizon above and
-widens the window to 8 zooms, which is what the reach then asks for. GPU
+ships, a window of 5 levels. **B** pushes `fog_far` to the horizon above and
+widens the window to 8 levels, which is what the reach then asks for. GPU
 time is the world pass's own, which the ledger now times apart from the
 frame's other passes.
 
@@ -83,7 +83,7 @@ street level the land fills out to a horizon of hills.
 **C** is what was built from all this, measured the same way that evening:
 the haze, the reach read off it and the planet, ground past the horizon
 culled, and the outermost ring drawn as coarse as the ladder says. The
-window is 5 zooms, as it ships.
+window is 5 levels, as it ships.
 
 | camera           | A gpu p95 | C gpu p95 | A tris | C tris | A dt p95 | C dt p95 |
 | ---------------- | --------- | --------- | ------ | ------ | -------- | -------- |
@@ -135,15 +135,15 @@ its own, read by the aerial perspective, as engines that do this keep it.
 - **The middle zoom is the case that fails.** 13.7 → 38.1 ms for 1.9× the
   triangles. At 518 u up the horizon is 59,000 u away, and reaching it means
   eight rings rather than three.
-- **The cost is linear in zooms, by construction.** A clipmap ring is a
-  fixed 3×3 of pages whatever its zoom, so each zoom added draws about as
-  many chunks as the last: at dist 2,000, B's per-zoom triangles ran 2.36 M,
+- **The cost is linear in levels, by construction.** A clipmap ring is a
+  fixed 3×3 of pages whatever its level, so each level added draws about as
+  many chunks as the last: at dist 2,000, B's per-level triangles ran 2.36 M,
   2.37 M, 0.76 M, 0.55 M, 1.10 M, 0.52 M, 0.47 M, 0.07 M. Distance does not
   make a ring cheaper.
 - **So the meshes are what has to get coarser, not the rings.** A box is 36
   vertices and 12 triangles whether it covers one cell or a thousand, and a
-  coarse zoom's boxes land on a few pixels at the horizon, where the cost is
-  vertices and quad overshading rather than fill. A ring three zooms out
+  coarse level's boxes land on a few pixels at the horizon, where the cost is
+  vertices and quad overshading rather than fill. A ring three levels out
   should be drawing far fewer, far larger boxes than it does.
 - **What a vertex does is a tenth of the pass; how many there are is the
   rest.** The air a vertex takes — four table reads and a dozen
@@ -159,9 +159,9 @@ its own, read by the aerial perspective, as engines that do this keep it.
 
 The band stays until the far rings are cheap, and the order is:
 
-1. **A coarser tier per zoom**, so a ring's mesh shrinks with its distance.
+1. **A coarser tier per level**, so a ring's mesh shrinks with its distance.
    Half done: the outermost ring now follows the ladder as far as it goes,
-   since no zoom over it holds that ground (`relative` in
+   since no level over it holds that ground (`relative` in
    world/chunk/table.rs), which is where most of C's saving came from. The
    rings under it are still drawn one step off their own cells, because the
    ring above is what holds anything coarser —
@@ -185,10 +185,10 @@ The band stays until the far rings are cheap, and the order is:
    left as the ratios they always were.
 
 What is left is the rings under the outermost one and the window's width:
-B's eight zooms are still what drawing to the whole horizon at a middle
+B's eight levels are still what drawing to the whole horizon at a middle
 zoom would take, and they are worth having only once a ring's mesh is
 cheap. The B experiment itself was a throwaway — `fog_far` returned the
-horizon, `fog_near` and `far_clip` followed it, the window went to 8 zooms —
+horizon, `fog_near` and `far_clip` followed it, `WINDOW_LEVELS` went to 8 —
 and nothing of it is in the tree.
 
 One thing the work turned up: asking for a coarse tier overran the two
