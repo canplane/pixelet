@@ -1,19 +1,20 @@
 // pxl-render/gpu/api.rs
 
-//! The WebGPU calls the renderer makes. On wasm32 they are records the page
-//! runs after the turn (api/record.rs); elsewhere wgpu makes them directly
-//! (api/device.rs). Both take the same words, so nothing above knows which.
+//! The WebGPU calls the renderer makes. With the `device` feature, the device
+//! app's, wgpu makes them directly (api/device.rs); without it they are
+//! records the page runs after the turn (api/record.rs), and a test links no
+//! GPU. Both take the same words, so nothing above knows which.
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "device")]
 mod device;
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(feature = "device"))]
 mod record;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "device")]
 pub use device::{frame_begin, frame_commit, frame_room, gpu, gpu_publish, install, room, Gpu};
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "device")]
 pub use device::{hold_image, open_device, surface_bind, surface_unbind, surfaces_configure, BindRefused, ConfigureAt, DeviceInfo};
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(feature = "device"))]
 pub use record::{frame_begin, frame_commit, frame_room, gpu, gpu_publish, install, room, Gpu};
 
 use xpute_guest::abi::handle::HandleTable;

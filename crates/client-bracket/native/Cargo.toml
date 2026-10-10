@@ -18,7 +18,7 @@ doctest = false
 xpute-kit = { path = "../../../xpute/rust/kit" }
 xpute-guest = { path = "../../../xpute/rust/guest" }
 pxl-kernel = { path = "../../client/kernel", default-features = false }
-pxl-render = { path = "../../client/render" }
+pxl-render = { path = "../../client/render", features = ["device"] }
 # The view's layer or window made a surface on (src/surface.rs); the device
 # and every call on it are pxl-render's. Metal on an iPhone, Vulkan on
 # Android; each backend compiles to nothing on the other's system.
