@@ -5,6 +5,7 @@
 //! itself; the focus is that point, derived and never kept. A tracker
 //! overrides either while it holds the pose, since a tracked turn can roll.
 
+use pxl_spec::space::camera::grid::SPLIT;
 use pxl_spec::space::coord::mat4::{mat4, mat4_mul, mat4_rotation_quat, mat4_rotation_z, mat4_transform_point, mat4_transpose, Mat4};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::v3::{add3, sub3, V3};
@@ -141,15 +142,31 @@ fn target_center() -> Option<Pvf3> {
 
 /// First person pans as third person does at `DEFAULT_DIST`, since it has
 /// no zoom distance of its own.
-pub fn pan(dx: f64, dy: f64) {
-    let Some(from) = target_center() else { return };
-    let across = match active() {
+fn across() -> f64 {
+    match active() {
         Active::Orbit => camera_state().intent.dist,
         Active::Free | Active::Tracked => DEFAULT_DIST,
-    };
-    let (azimuth, upp) = (camera().azimuth, units_per_px_at(across));
-    let to = pan_to(&from, dx, dy, upp, azimuth);
-    put_center(to, Motion::Smooth);
+    }
+}
+
+/// By a drag of `dx`, `dy` pixels: the ground follows the pointer.
+pub fn pan(dx: f64, dy: f64) {
+    let upp = units_per_px_at(across());
+    pan_by(-dx * upp, dy * upp);
+}
+
+/// By `cx`, `cy` cells at the focus, across and up the screen: the distance
+/// there over SPLIT, the camera grid's cell before `cell_at` quantizes it to
+/// a zoom, so a held key's speed is smooth across zooms and alike at any τ.
+pub fn pan_cells(cx: f64, cy: f64) {
+    let cell = across() / SPLIT;
+    pan_by(cx * cell, cy * cell);
+}
+
+fn pan_by(lx: f64, ly: f64) {
+    let Some(from) = target_center() else { return };
+    let eye = eye_world().map_or(from, |e| world_to_canonical(&e));
+    put_center(pan_to(&from, lx, ly, camera().azimuth, &eye), Motion::Smooth);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -10,7 +10,7 @@ use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
-use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{tile_at, Tile};
 
 use crate::layer::residency::{Line, Residency};
 
@@ -98,7 +98,7 @@ impl Residency<TerrainTile> {
 /// The tile a node's bound is read from: its cells' tile, within the
 /// pyramid's zooms.
 fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
-    let read = GROUND.tile_zoom_of_grid(cell).clamp(i32::from(GROUND.top()), i32::from(LEAF_ZOOM)) as Zoom;
+    let read = GROUND.read_zoom(cell);
     tile_at(read, ancestor_of([at[0], at[1]], u32::from(zoom - read)))
 }
 

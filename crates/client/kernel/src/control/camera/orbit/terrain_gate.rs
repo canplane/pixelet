@@ -3,19 +3,18 @@
 //! How far the orbit gets toward what the controls ask before terrain is in
 //! the way. The controls keep what was asked; the drawn orbit stops short.
 
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::coord::v3::{add3, V3};
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_kit::math::scalar::wrap;
 
 use crate::control::camera::orbit::orbit_eye_offset;
-use crate::control::navigation::support::{passage, stand_over, Passage};
-use crate::layer::Answer;
 use crate::param::EYE_CLEARANCE_U;
-use crate::query::World;
+use crate::query::{over, World};
 use crate::setting::store::{settings_store, OrbitObstacleMode};
 use crate::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::zoom::{index_of, units};
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewTriple {
@@ -47,25 +46,25 @@ pub fn pose(view: ViewTriple) -> Option<ViewPose> {
 /// floor counts where the eye is in the cave.
 fn required_rise(at: &ViewPose) -> Option<f64> {
     let (_, eye) = eye(at);
-    let ground = World::now().floor_under(&eye).value().flatten()?;
+    let ground = World::now().floor_under(&eye, LEAF_ZOOM).value().flatten()?;
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
-/// Rise to the ground `passage` reaches under the eye; none where blocked.
+/// Rise to the ground under the eye, reached by a step-slide at the eye's
+/// height that climbs and does not fall; none where it is slid short.
 fn climb_rise(at: &ViewPose) -> Option<f64> {
-    let (local, eye) = eye(at);
+    let (_, eye) = eye(at);
     let center = world_to_canonical(&at.target);
-    let access = World::now();
     let floor = index_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
-    let ground = match passage(&center, [local[0] - at.target[0], local[1] - at.target[1]], floor) {
-        Passage::Open(floor) => access.floor_under(&stand_over(&eye, floor)),
-        Passage::Unknown => access.floor_under(&eye),
-        Passage::Blocked => return None,
-    };
-    let ground = match ground {
-        Answer::Exact(Some(top)) | Answer::Coarser(Some(top), _) => top,
-        Answer::Exact(None) | Answer::Coarser(None, _) | Answer::Nothing(_) => return None,
-    };
+    let from = pvf3::gather(pvf3::X(&center), pvf3::Y(&center), pvf3::from_real(over(floor)));
+    let access = World::now();
+    // Near, the eye's way walks the leaves; far, it is a map and goes through.
+    // Where the leaf under the center, or a map's under the eye, is not held, the ground under the eye.
+    let walked = access.step_slide(&from, &eye, &eye, false).unwrap_or(eye);
+    if pvf3::X(&walked) != pvf3::X(&eye) || pvf3::Y(&walked) != pvf3::Y(&eye) {
+        return None;
+    }
+    let ground = access.floor_under(&walked, LEAF_ZOOM).value().flatten()?;
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
@@ -130,7 +129,7 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
 
 fn in_solid(at: &ViewPose) -> bool {
     let (world, eye) = eye(at);
-    World::now().floor_under(&eye).value().flatten().is_some_and(|top| top > world[2])
+    World::now().floor_under(&eye, LEAF_ZOOM).value().flatten().is_some_and(|top| top > world[2])
 }
 
 /// What lies between the eye and the focus is not asked: that hides the

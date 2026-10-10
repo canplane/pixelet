@@ -53,10 +53,17 @@ impl Lattice {
     // and the cell zoom it is drawn at: the tile whose cells fold into those
     // cells, or past the leaves its leaf, and where the node lies in it.
 
-    /// The zoom of the tile cells at `cell` are read from.
+    /// The zoom of the tile cells at `cell` are read from, held to the pyramid's zooms.
     pub const fn read_zoom(self, cell: Zoom) -> Zoom {
         let z = self.tile_zoom_of_grid(cell);
-        (if z < LEAF_ZOOM as i32 { z } else { LEAF_ZOOM as i32 }) as Zoom
+        let top = self.top() as i32;
+        (if z < top {
+            top
+        } else if z < LEAF_ZOOM as i32 {
+            z
+        } else {
+            LEAF_ZOOM as i32
+        }) as Zoom
     }
 
     /// A node's side at `zoom` in the cells of the tile it reads.
@@ -94,7 +101,7 @@ impl Lattice {
 
     /// The tile whose records fold into the grid's cell at `r`; held to the pyramid.
     pub fn z_at(self, tau: Tau, r: f64) -> Zoom {
-        self.tile_zoom_of_grid(tau.cell_at(r)).clamp(self.top() as i32, LEAF_ZOOM as i32) as Zoom
+        self.read_zoom(tau.cell_at(r))
     }
 
     /// How far from an observer's foot a demand at `zoom` can lie: where the

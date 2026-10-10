@@ -205,6 +205,16 @@ pub(super) struct Cell<'s> {
 }
 
 impl Cell<'_> {
+    /// Every sub-column's runs, one after another.
+    pub(super) fn all(&self) -> &[Run] {
+        self.runs
+    }
+
+    /// The highest ground top among its sub-columns; none where none has ground.
+    pub(super) fn surface_top(&self) -> Option<f64> {
+        self.surface.iter().flatten().map(|s| s.top).reduce(f64::max)
+    }
+
     /// The runs and surface of the sub-column over `[x, y]`.
     pub(super) fn under(&self, [x, y]: [f64; 2]) -> (&[Run], Option<Surface>) {
         let index = |v: f64, c: f64| (((v - c) / self.side).floor().max(0.0) as usize).min(self.across - 1);

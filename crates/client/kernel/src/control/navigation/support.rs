@@ -6,18 +6,16 @@
 //! that floor; a center put over coarser ground keeps its Z unknown and
 //! stands on the finest ground known there until the leaves' is.
 
-use crate::query::over;
+use crate::query::{over, under};
 use pxl_spec::space::coord::pvf3::core::{FRAC_W, IVEC_Z_W};
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::layer::Answer;
-use crate::query::{Detail, Ray, World};
+use crate::query::World;
 use crate::setting::store::settings_store;
 use crate::view::frame::coord::{to_world, world_to_canonical};
-use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// The Z lane's floor, under any ground.
 const UNKNOWN_Z: i64 = -(1 << (IVEC_Z_W - 1)) << FRAC_W;
@@ -37,7 +35,7 @@ pub fn is_unknown(at: &Pvf3) -> bool {
 /// A tap names the surface it struck: the center stands in the cell across
 /// that face, on the floor under it.
 pub fn stand(at: &Pvf3) -> Pvf3 {
-    match World::now().floor_under(at) {
+    match World::now().floor_under(at, LEAF_ZOOM) {
         Answer::Exact(Some(top)) => stand_over(at, top),
         // Nothing to stand on: the point keeps its height.
         Answer::Exact(None) => *at,
@@ -47,7 +45,7 @@ pub fn stand(at: &Pvf3) -> Pvf3 {
 
 /// The top of the floor `center` stands over.
 pub fn floor_of(center: &Pvf3) -> f64 {
-    pvf3::to_real(pvf3::Z(center)) - units(GROUND.cell()) / 2.0
+    under(pvf3::to_real(pvf3::Z(center)))
 }
 
 pub fn stand_over(at: &Pvf3, top: f64) -> Pvf3 {
@@ -61,6 +59,15 @@ fn standing(at: &Pvf3) -> Answer<Option<Pvf3>> {
         return Answer::Exact(Some(*at));
     }
     World::now().surface_support(at).map(|top| top.map(|top| stand_over(at, top)))
+}
+
+/// The floor `center` is drawn on: its own, or where its height is not known
+/// the finest ground's there; none where nothing is known.
+pub fn floor_seen(center: &Pvf3) -> Option<f64> {
+    match standing(center) {
+        Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => Some(floor_of(&p)),
+        _ => None,
+    }
 }
 
 /// Where `at` is drawn; at `held`'s height where nothing is known.
@@ -88,9 +95,11 @@ pub fn target(to: &mut Option<Pvf3>, held: V3) -> V3 {
     resolve(&to.unwrap_or(at), held)
 }
 
-/// By `passage`, then down to the floor.
-pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) -> Pvf3 {
-    let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
+/// By the world's step-slide, the way `lx`, `ly` in units across and up the
+/// screen. It stops at the edge of a leaf on the way not held; where the leaf
+/// under it, or a map's `to`, is not held, it goes on with its Z unknown until
+/// a leaf gives it.
+pub fn pan_to(from: &Pvf3, lx: f64, ly: f64, azimuth: f64, eye: &Pvf3) -> Pvf3 {
     let (s, c) = libm::sincos(azimuth);
     let l = to_world(from);
     let way = [lx * c + ly * s, -lx * s + ly * c];
@@ -104,61 +113,5 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) ->
     if way == [0.0, 0.0] {
         return *from;
     }
-    let mut at = to;
-    match passage(from, way, floor_of(from)) {
-        Passage::Open(floor) => at = stand_over(&to, floor),
-        Passage::Unknown => {}
-        Passage::Blocked => return *from,
-    }
-    match World::now().floor_under(&at) {
-        Answer::Exact(Some(top)) => stand_over(&at, top),
-        Answer::Exact(None) => at,
-        _ => unknown_z(&at),
-    }
-}
-
-pub enum Passage {
-    /// The floor it is open over.
-    Open(f64),
-    /// Open sky, way not known exactly.
-    Unknown,
-    Blocked,
-}
-
-/// Lowest open floor from `start` along `way`: over each blocker, under `from`'s ceiling.
-pub fn passage(from: &Pvf3, way: [f64; 2], start: f64) -> Passage {
-    let access = World::now();
-    let Some(ceiling) = access.ceiling_over(from).exact() else { return Passage::Blocked };
-    let length = libm::hypot(way[0], way[1]);
-    let side = units(GROUND.cell());
-    let [x, y] = [pvf3::to_real(pvf3::X(from)), pvf3::to_real(pvf3::Y(from))];
-    let dir = if length > 0.0 { [way[0] / length, way[1] / length] } else { [0.0, 0.0] };
-    let mut floor = start;
-    // Decor is passed.
-    let mut t = 0.0;
-    loop {
-        if ceiling.is_some_and(|top| floor >= top) {
-            return Passage::Blocked;
-        }
-        let ray = Ray {
-            origin: [x + dir[0] * t, y + dir[1] * t, over(floor)],
-            direction: [dir[0], dir[1], 0.0],
-            reach: length - t,
-        };
-        match access.first_hit(&ray, Detail::Zoom(LEAF_ZOOM)) {
-            Answer::Exact(None) => return Passage::Open(floor),
-            Answer::Exact(Some(hit)) => {
-                // Inside the box struck, at the walker's height.
-                let [cx, cy, _] = hit.cube.center();
-                let inside = pvf3::gather(pvf3::from_real(cx), pvf3::from_real(cy), pvf3::from_real(ray.origin[2]));
-                match access.open_from(&inside).exact() {
-                    Some(open) if open > floor => (floor, t) = (open, 0.0),
-                    Some(_) => t += hit.t + side,
-                    None => return Passage::Blocked,
-                }
-            }
-            _ if ceiling.is_none() => return Passage::Unknown,
-            _ => return Passage::Blocked,
-        }
-    }
+    World::now().step_slide(from, &to, eye, true).unwrap_or_else(|| unknown_z(&to))
 }

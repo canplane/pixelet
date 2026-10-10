@@ -2,13 +2,6 @@
 
 //! What is drawn beside the chunks, and how it is lit.
 
-// ---- the companion's figures ----
-
-/// Cells a figure is drawn stepping up as it walks to the focus, and the
-/// pet beside the person; taller holds it. Set by the product owner
-/// (2026-10-02), derived from nothing.
-pub const COMPANION_STEP_CELLS: i64 = 4;
-
 // ---- lighting ----
 
 /// Fresnel rim highlight, applied to everything lit since one shader lights
