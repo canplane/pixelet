@@ -1,7 +1,7 @@
 // pxl-kernel/control/interaction/edit.rs
 
 //! What an edit writes and what it reads to decide: placing, removing and
-//! carving objects, read through the objects' query and written to the store.
+//! carving objects, read through the world's query and written to the store.
 
 use crate::control::interaction::collision::{is_placement_blocked, PlacementTool};
 use crate::control::interaction::{holding, hover, ActiveTool};
@@ -9,56 +9,28 @@ use crate::layer::object::ext::Ext;
 use crate::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
 use crate::layer::object::size::{object_size_of, DECOR_SIZE};
 use crate::layer::object::store::Block;
-use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::block::ext::MARKER_TEXT_CHARS;
-use pxl_spec::block::object::{cube_id, decor_num_id, object_value_is_air, Cube};
+use pxl_spec::block::object::{cube_id, decor_num_id, Cube};
 use pxl_spec::block::object::{object_value_is_marker, MARKER};
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::zoom::{base_of, index_of, of_side, units};
 use pxl_spec::space::hierarchy::morton::key_of;
-use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_guest::global::Global;
-use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::kernel;
 use crate::layer::instance::Instance;
 use crate::layer::object::repository;
-use crate::layer::object::store::{apply, Cells, Entry, EntryAt, Write, VOID};
-use crate::layer::Query;
+use crate::layer::object::store::{apply, Entry, EntryAt, Write, AIR, VOID};
 use crate::query::World;
 use pxl_spec::block::decor::Decor;
 
-/// The objects' cells at a node read whole; all resident, so always answered.
-fn cells(node: Node<3>) -> Cells<'static> {
-    kernel().objects.read(node, node.0).value().or_bug(Errno::ENOTRECOVERABLE)
-}
-
-fn read_state(coord: &Pvf3) -> u32 {
-    cells((OBJECT_FINEST, index_of(OBJECT_FINEST, coord))).node().0.state
-}
-
-/// Whether any leaf, air included, is written in the cell `at` lies in.
-pub fn holds_entry(at: &Pvf3) -> bool {
-    kernel().objects.bounds((OBJECT_COARSEST, index_of(OBJECT_COARSEST, at)), OBJECT_COARSEST).value().flatten().is_some()
-}
-
-/// What stands in the cell `at` lies in, air left out.
-pub fn objects_at(at: &Pvf3) -> Vec<Entry> {
-    let mut out = Vec::new();
-    cells((OBJECT_COARSEST, index_of(OBJECT_COARSEST, at))).entries(&mut |entry| {
-        if !object_value_is_air(entry.state) {
-            out.push(*entry);
-        }
-    });
-    out
-}
-
-pub fn get_placed_object(at: EntryAt) -> Option<Entry> {
-    cells((at.zoom(), at.at())).placed().filter(|e| !object_value_is_air(e.state))
+/// Whether air is written where `at` is: a carve of the ground, or what was
+/// placed there taken back.
+fn carved(at: &Pvf3) -> bool {
+    matches!(World::now().block_of(at).value(), Some(Some(pxl_spec::block::stand::Block::Placed(AIR))))
 }
 
 /// The never-written AIR entry the eraser's preview injects into the drawn
@@ -95,7 +67,7 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: Cube) -> bool {
     if surface.block != look as u8 {
         return false;
     }
-    object_value_is_air(read_state(at))
+    carved(at)
 }
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
@@ -113,7 +85,7 @@ pub fn place_decor(at: &Pvf3, size: f64, decor_id: DecorId) {
 
 /// The decor the ground grows that `place_decor` would bring back, for its preview.
 pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Instance> {
-    (size >= units(GROUND.cell()) && object_value_is_air(read_state(at))).then(|| World::now().grown(Decor::of(decor_id), at))?
+    (size >= units(GROUND.cell()) && carved(at)).then(|| World::now().grown(Decor::of(decor_id), at))?
 }
 
 /// A marker tool's tap at `at`, a place free or holding a marker: the marker
@@ -158,7 +130,7 @@ pub fn draft_words(text: &str) -> Result<(), Errno> {
 pub fn put_marker() {
     let Some(Draft { at, words }) = redraft().take() else { return };
     let (zoom, cell) = (at.zoom(), at.at());
-    let stands = match get_placed_object(at) {
+    let stands = match World::now().placed(at) {
         Some(e) => object_value_is_marker(e.state),
         None => !is_placement_blocked(PlacementTool::Instance, &base_of(zoom, cell), DECOR_SIZE),
     };
@@ -208,7 +180,8 @@ pub fn pending_step() -> RenderEdits {
     let ui = holding();
     let hovered = hover.coord;
     let active_tool = ui.active_tool;
-    let object = hover.object_at.and_then(get_placed_object);
+    let world = World::now();
+    let object = hover.object_at.and_then(|at| world.placed(at));
     let scattered = hover.scattered.is_some();
     let digging = active_tool == ActiveTool::Eraser && object.is_none() && !scattered;
     // A terrain carve is a whole cell: the scan emits nothing for a zero

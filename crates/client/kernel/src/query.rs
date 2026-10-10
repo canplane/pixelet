@@ -11,6 +11,7 @@
 
 mod block;
 mod decor;
+mod placed;
 mod ray;
 mod support;
 mod world;

@@ -12,7 +12,6 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
-use crate::control::interaction::edit::get_placed_object;
 use crate::layer::object::store::Entry;
 use crate::query::{Detail, Hit, Ray, Struck, World};
 use crate::view::frame::coord::world_to_canonical;
@@ -80,7 +79,7 @@ pub fn world_struck_corner(hit: &Hit, size: f64) -> Pvf3 {
 /// The placed object struck: a cube, or a decor someone placed.
 pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
     match hit.struck {
-        Struck::Object(at) | Struck::Decor(Instance { source: Source::Object(at), .. }) => get_placed_object(at),
+        Struck::Object(at) | Struck::Decor(Instance { source: Source::Object(at), .. }) => World::now().placed(at),
         Struck::Ground | Struck::Objects | Struck::Decor(_) => None,
     }
 }
