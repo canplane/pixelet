@@ -9,12 +9,12 @@ use pxl_spec::bake::tile::terrain::Ground;
 use pxl_spec::block::cube::{self, ground, sentinel};
 use pxl_spec::block::object::{cube_id, Cube};
 use pxl_spec::space::coord::pvf3::ivec;
-use pxl_spec::space::layer::lattice::TILE_CELLS;
+use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 
 use super::*;
 use crate::layer::Answer;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -174,9 +174,9 @@ fn flat_at_five() -> (Residency<TerrainTile>, [f64; 2]) {
     (resident(&[(leaf, flat)]), [x0 + 10.0, y0 + 10.0])
 }
 
-/// A quarter of a cell dug a cell deep is stood on and struck at its bottom,
-/// the rest of the cell at the surface: the query answers at what is placed's
-/// own size, as a chunk drawing it as held does.
+/// A quarter of a cell dug a cell deep is struck at its bottom, the rest of
+/// the cell at the surface: a ray meets what is placed at its own size, as a
+/// chunk drawing it as held does, while a walker, a cell wide, stands on top.
 #[test]
 fn a_cell_dug_in_part_is_met_where_each_part_is_drawn() {
     use crate::layer::object::store::AIR;
@@ -188,7 +188,8 @@ fn a_cell_dug_in_part_is_met_where_each_part_is_drawn() {
     }
     let access = World::new(&residency, &store);
     for (at, top) in [([x + 0.25, y + 0.25], 4.0), ([x + 0.75, y + 0.75], 5.0)] {
-        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(top)), "{at:?}");
+        // A walker is the cell's width: it stands on the cell's top.
+        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(5.0)), "{at:?}");
         let hit = access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).exact().flatten().unwrap();
         assert_eq!(hit.point[2], top, "{hit:?}");
     }
@@ -205,7 +206,8 @@ fn a_cell_dug_at_the_finest_is_met_as_held() {
     write(&mut store, [x, y, 5.0 - side], OBJECT_FINEST, AIR);
     let access = World::new(&residency, &store);
     for (at, top) in [([x + side / 2.0, y + side / 2.0], 5.0 - side), ([x + 0.5, y + 0.5], 5.0)] {
-        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(top)), "{at:?}");
+        // A walker is the cell's width: it stands on the cell's top.
+        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(5.0)), "{at:?}");
         let hit = access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).exact().flatten().unwrap();
         assert_eq!(hit.point[2], top, "{hit:?}");
     }
@@ -227,4 +229,53 @@ fn a_gap_in_a_stack_is_floored_and_roofed_by_its_cubes() {
     assert_eq!(access.floor_under(&gap), Answer::Exact(Some(6.0)));
     assert_eq!(access.ceiling_over(&gap), Answer::Exact(Some(7.0)));
     assert_eq!(access.surface_support(&gap), Answer::Exact(Some(6.0)));
+}
+
+/// Quake III's step-slide, a column at a time: blocked, the walker climbs the
+/// blocker as far as its own column is open over its head, then settles; with
+/// a ceiling first it stops there, and an axis that is blocked is slid along.
+#[test]
+fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let mut store = Store::default();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    // A wall three cubes high in the column east of the walker's.
+    for z in [5.0, 6.0, 7.0] {
+        write(&mut store, [x + 1.0, y, z], OBJECT_COARSEST, red);
+    }
+    let from = world::point(x + 0.5, y + 0.5, over(5.0));
+    let floor = |p: Pvf3| pvf3::to_real(pvf3::Z(&p)) - units(GROUND.cell()) / 2.0;
+    let east = world::point(x + 1.5, y + 0.5, 0.0);
+    {
+        let access = World::new(&residency, &store);
+        let to = access.step_slide(&from, &east, &from, true).unwrap();
+        assert_eq!((pvf3::to_real(pvf3::X(&to)), floor(to)), (x + 1.5, 8.0), "climbed onto the wall");
+    }
+    // A roof over the walker two cells up: the climb meets it first.
+    write(&mut store, [x, y, 7.0], OBJECT_COARSEST, red);
+    let access = World::new(&residency, &store);
+    let to = access.step_slide(&from, &east, &from, true).unwrap();
+    assert!(pvf3::to_real(pvf3::X(&to)) < x + 1.0, "stopped at the wall");
+    assert_eq!(floor(to), 5.0);
+    // Going north-east, the east is slid along and the north is walked.
+    let to = access.step_slide(&from, &world::point(x + 1.5, y + 1.5, 0.0), &from, true).unwrap();
+    assert!(pvf3::to_real(pvf3::X(&to)) < x + 1.0, "slid along the wall");
+    assert_eq!((pvf3::to_real(pvf3::Y(&to)), floor(to)), (y + 1.5, 5.0));
+}
+
+/// A walker is a ground cell wide: what is held finer anywhere in a cell, a
+/// thin rail along its far edge, is climbed, not walked through.
+#[test]
+fn a_walker_meets_what_is_held_finer_anywhere_in_a_cell() {
+    let _g = serial();
+    let (residency, [x, y]) = flat_at_five();
+    let mut store = Store::default();
+    let red = cube_id(Cube::Object(cube::Object::red));
+    let side = units(OBJECT_FINEST);
+    write(&mut store, [x + 2.0 - side, y, 5.0], OBJECT_FINEST, red);
+    let access = World::new(&residency, &store);
+    let from = world::point(x + 0.5, y + 0.5, over(5.0));
+    let to = access.step_slide(&from, &world::point(x + 1.5, y + 0.5, 0.0), &from, true).unwrap();
+    assert_eq!(pvf3::to_real(pvf3::Z(&to)), over(5.0 + side), "{to:?}");
 }

@@ -46,9 +46,10 @@ pub const AXIS_LOCK_THRESHOLD_PX: f64 = 12.0;
 /// Real pointers jitter a pixel or two on a still click; gating taps on any
 /// movement swallowed them.
 pub const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
-/// A held movement key pans as a drag this fast would, in CSS pixels:
-/// a wide screen crossed in about two seconds at any zoom.
-pub const KEY_PAN_PX_PER_S: f64 = 600.0;
+/// A held movement key pans this many of the camera grid's cells at the
+/// focus a second: a wide screen crossed in about two seconds at any zoom,
+/// as 600 CSS pixels a second did on the reference view.
+pub const KEY_PAN_CELLS_PER_S: f64 = 50.0;
 
 // ---- smoothing ----
 

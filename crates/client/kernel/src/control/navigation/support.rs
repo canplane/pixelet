@@ -11,10 +11,9 @@ use pxl_spec::space::coord::pvf3::core::{FRAC_W, IVEC_Z_W};
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::layer::Answer;
-use crate::query::{Detail, Ray, World};
+use crate::query::World;
 use crate::setting::store::settings_store;
 use crate::view::frame::coord::{to_world, world_to_canonical};
 use pxl_spec::space::coord::zoom::units;
@@ -88,9 +87,10 @@ pub fn target(to: &mut Option<Pvf3>, held: V3) -> V3 {
     resolve(&to.unwrap_or(at), held)
 }
 
-/// By `passage`, then down to the floor.
-pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) -> Pvf3 {
-    let (lx, ly) = (-dx * units_per_px, dy * units_per_px);
+/// By the world's step-slide; where a column on the way is not resident, it
+/// goes on with its Z unknown until a leaf gives it.
+/// `lx`, `ly` are the way in units across and up the screen.
+pub fn pan_to(from: &Pvf3, lx: f64, ly: f64, azimuth: f64, eye: &Pvf3) -> Pvf3 {
     let (s, c) = libm::sincos(azimuth);
     let l = to_world(from);
     let way = [lx * c + ly * s, -lx * s + ly * c];
@@ -104,61 +104,5 @@ pub fn pan_to(from: &Pvf3, dx: f64, dy: f64, units_per_px: f64, azimuth: f64) ->
     if way == [0.0, 0.0] {
         return *from;
     }
-    let mut at = to;
-    match passage(from, way, floor_of(from)) {
-        Passage::Open(floor) => at = stand_over(&to, floor),
-        Passage::Unknown => {}
-        Passage::Blocked => return *from,
-    }
-    match World::now().floor_under(&at) {
-        Answer::Exact(Some(top)) => stand_over(&at, top),
-        Answer::Exact(None) => at,
-        _ => unknown_z(&at),
-    }
-}
-
-pub enum Passage {
-    /// The floor it is open over.
-    Open(f64),
-    /// Open sky, way not known exactly.
-    Unknown,
-    Blocked,
-}
-
-/// Lowest open floor from `start` along `way`: over each blocker, under `from`'s ceiling.
-pub fn passage(from: &Pvf3, way: [f64; 2], start: f64) -> Passage {
-    let access = World::now();
-    let Some(ceiling) = access.ceiling_over(from).exact() else { return Passage::Blocked };
-    let length = libm::hypot(way[0], way[1]);
-    let side = units(GROUND.cell());
-    let [x, y] = [pvf3::to_real(pvf3::X(from)), pvf3::to_real(pvf3::Y(from))];
-    let dir = if length > 0.0 { [way[0] / length, way[1] / length] } else { [0.0, 0.0] };
-    let mut floor = start;
-    // Decor is passed.
-    let mut t = 0.0;
-    loop {
-        if ceiling.is_some_and(|top| floor >= top) {
-            return Passage::Blocked;
-        }
-        let ray = Ray {
-            origin: [x + dir[0] * t, y + dir[1] * t, over(floor)],
-            direction: [dir[0], dir[1], 0.0],
-            reach: length - t,
-        };
-        match access.first_hit(&ray, Detail::Zoom(LEAF_ZOOM)) {
-            Answer::Exact(None) => return Passage::Open(floor),
-            Answer::Exact(Some(hit)) => {
-                // Inside the box struck, at the walker's height.
-                let [cx, cy, _] = hit.cube.center();
-                let inside = pvf3::gather(pvf3::from_real(cx), pvf3::from_real(cy), pvf3::from_real(ray.origin[2]));
-                match access.open_from(&inside).exact() {
-                    Some(open) if open > floor => (floor, t) = (open, 0.0),
-                    Some(_) => t += hit.t + side,
-                    None => return Passage::Blocked,
-                }
-            }
-            _ if ceiling.is_none() => return Passage::Unknown,
-            _ => return Passage::Blocked,
-        }
-    }
+    World::now().step_slide(from, &to, eye, true).unwrap_or_else(|| unknown_z(&to))
 }

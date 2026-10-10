@@ -9,7 +9,7 @@
 use pxl_spec::space::camera::grid::Tau;
 use std::collections::BTreeMap;
 
-use crate::param::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_PX_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
+use crate::param::{AXIS_LOCK_THRESHOLD_PX, KEY_PAN_CELLS_PER_S, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
 
 pub use crate::abi::cmd::PointerType;
 use crate::control::camera::controller::{active, Active};
@@ -425,10 +425,13 @@ pub fn camera_input_step(drawn: Tau) {
     let s = input();
     if s.keys != [0.0; 2] {
         let at = now();
-        let px = KEY_PAN_PX_PER_S * (at - s.keys_at) / 1000.0;
+        let cells = KEY_PAN_CELLS_PER_S * (at - s.keys_at) / 1000.0;
         s.keys_at = at;
-        // A key moves the view the way it points, as dragging the ground the other way does.
-        do_pan(-s.keys[0] * px, -s.keys[1] * px);
+        // A key moves the view the way it points, the screen's down being the way's up.
+        if active() != Active::Tracked {
+            cancel_destination();
+            crate::control::camera::controller::pan_cells(s.keys[0] * cells, -s.keys[1] * cells);
+        }
         request_world_tick();
     }
     if s.hover_pending {
