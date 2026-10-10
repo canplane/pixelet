@@ -1,8 +1,9 @@
 // pxl-kernel/control/navigation.rs
 
-//! Going to the device, off-center tracking, and the fallback start.
+//! Following the device, off-center tracking, and the fallback start.
 
 pub mod bootstrap;
 pub mod destination;
+pub mod follow_mode;
 pub mod off_center;
 pub mod support;

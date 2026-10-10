@@ -14,7 +14,9 @@ use xpute_guest::sched::edge::{notified, Notify};
 
 use crate::control::camera::input::camera_input_step;
 use crate::control::navigation::bootstrap::map_bootstrap_step;
+use crate::control::navigation::follow_mode::follow_mode_step;
 use crate::control::navigation::off_center::{off_center, off_center_step};
+use crate::control::sensor::device_orientation::{orientation_watchdog_step, OrientationPlatform};
 use crate::control::sensor::geolocation::geolocation_step;
 use crate::io::request::{pump, set_credits};
 use crate::io::text::text_rise;
@@ -42,6 +44,7 @@ use xpute_guest::sched::tick::{Phase, TickReport};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Platform {
     pub geolocation: bool,
+    pub orientation: OrientationPlatform,
 }
 
 /// None while the eye is the focus: then the character is the one looking.
@@ -50,6 +53,7 @@ fn companion_props() -> Option<CompanionProps> {
         return None;
     }
     let focus = crate::control::camera::controller::focus()?;
+    let eye = crate::view::frame::coord::world_to_canonical(&crate::control::camera::controller::eye_world()?);
     let center = crate::view::frame::coord::to_world(&focus);
     Some(CompanionProps {
         center: [center[0], center[1]],
@@ -57,6 +61,8 @@ fn companion_props() -> Option<CompanionProps> {
         azimuth: crate::control::camera::controller::azimuth(),
         dragging: crate::control::camera::state::camera_state().camera_status == crate::control::camera::state::CameraStatus::Drag,
         steered: crate::control::camera::input::steering(),
+        following: crate::control::navigation::follow_mode::following(),
+        eye,
     })
 }
 
@@ -201,6 +207,8 @@ pub fn world_turn() -> f64 {
     effect!(worst, navigation, off_center_step());
     effect!(worst, bootstrap, map_bootstrap_step());
     effect!(worst, geolocation, geolocation_step(platform.geolocation));
+    effect!(worst, orientation, orientation_watchdog_step(platform.orientation));
+    effect!(worst, follow, follow_mode_step());
     effect!(worst, destination, crate::control::navigation::destination::destination_step());
     // After every writer of the focus, before anything observes the view.
     effect!(worst, view, crate::view::frame::pose::view_compose(crate::control::camera::controller::pose()));
@@ -236,7 +244,14 @@ pub fn set_world_platform(platform: Platform) {
 }
 
 pub fn world_platform() -> Platform {
-    PLATFORM.get(|| None).unwrap_or(Platform { geolocation: false })
+    PLATFORM.get(|| None).unwrap_or(Platform {
+        geolocation: false,
+        orientation: OrientationPlatform {
+            supported: false,
+            needs_permission: false,
+            silence_is_loss: false,
+        },
+    })
 }
 
 /// Longest gap still stepped as motion; past it (a hidden tab, a stall) the

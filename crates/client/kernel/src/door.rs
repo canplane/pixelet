@@ -202,6 +202,7 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
 static SNAPSHOT: Global<Vec<u8>> = Global::new();
 
 fn post_shell(s: &mut State) {
+    use crate::control::sensor::device_orientation::{take_orientation_commands, OrientationCommand};
     use crate::control::sensor::geolocation::{take_geolocation_commands, GeolocationCommand};
     use crate::io::request::{take_started, take_stops};
 
@@ -210,6 +211,12 @@ fn post_shell(s: &mut State) {
         match c {
             GeolocationCommand::Start => sensor(Command::SENSOR_START, Sensor::Geolocation),
             GeolocationCommand::Stop => sensor(Command::SENSOR_STOP, Sensor::Geolocation),
+        }
+    }
+    for c in take_orientation_commands() {
+        match c {
+            OrientationCommand::Listen => sensor(Command::SENSOR_START, Sensor::Orientation),
+            OrientationCommand::Remove => sensor(Command::SENSOR_STOP, Sensor::Orientation),
         }
     }
     let buf = SNAPSHOT.get(Vec::new);

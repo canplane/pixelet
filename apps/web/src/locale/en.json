@@ -268,6 +268,11 @@
     }
   },
   "device": {
+    "orientation": {
+      "permission_denied": "Orientation sensor access was denied.",
+      "permission_error": "Something went wrong while requesting orientation sensor access.",
+      "signal_lost": "Orientation sensor signal lost."
+    },
     "geolocation": {
       "unsupported": "Location services aren’t supported in this environment.",
       "generic_error": "Couldn’t get your location.",
@@ -277,8 +282,11 @@
     }
   },
   "toast": {
+    "location_checking": "Checking your location…",
+    "world_loading": "Loading area…",
     "world_ready": "Area loaded.",
-    "companion_loading": "Preparing your companion…"
+    "companion_loading": "Preparing your companion…",
+    "outside": "No Service"
   },
   "world": {
     "dock": {
@@ -294,6 +302,8 @@
     "controls": {
       "reset_orientation": "Face North",
       "move_to_location": "Go to My Location",
+      "start_compass_mode": "Start Compass Mode",
+      "exit_compass_mode": "Exit Compass Mode",
       "first_person": "First Person",
       "third_person": "Third Person",
       "show_places": "Show Places",
@@ -314,12 +324,10 @@
       "focus": "Current location"
     }
   },
-  "status": {
-    "outside": "Outside the service area."
+  "boot": {
+    "failed": "The app could not start. Please reload the page."
   },
-  "load": {
-    "loading": "Loading the area.",
-    "boot_failed": "The app could not start. Please reload the page.",
+  "stall": {
     "gpu_lost": "Reconnecting to the graphics device.",
     "offline": "Waiting for an internet connection.",
     "read_failing": "The server did not send the area. Trying again."

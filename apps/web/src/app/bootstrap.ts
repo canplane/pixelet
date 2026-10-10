@@ -3,10 +3,15 @@
 import { create } from "zustand";
 
 import { boot_kernel } from "@/kernel/boot.ts";
-import { HostTrouble, hostTrouble } from "@/kernel/trouble.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
 
-const useBoot = create(() => ({ booted: false }));
+export const enum Boot {
+  Starting = 0,
+  Started = 1,
+  Failed = 2,
+}
+
+const useBootStore = create(() => ({ boot: Boot.Starting }));
 
 export function bootstrapApp(): void {
   // The locale first: the host's boot messages are in it.
@@ -14,15 +19,15 @@ export function bootstrapApp(): void {
   boot_kernel().then(
     () => {
       console.info("[boot] the kernel started");
-      useBoot.setState({ booted: true });
+      useBootStore.setState({ boot: Boot.Started });
     },
     (err) => {
       console.error("[boot] the kernel did not start:", err);
-      hostTrouble(HostTrouble.BootFailed);
+      useBootStore.setState({ boot: Boot.Failed });
     },
   );
 }
 
-export function useBooted(): boolean {
-  return useBoot((s) => s.booted);
+export function useBoot(): Boot {
+  return useBootStore((s) => s.boot);
 }

@@ -53,10 +53,11 @@ pub fn destination_step() {
 /// A badge's height is its zoom's, coarser than where the center stands, so
 /// the center goes on the surface once it is known exactly.
 pub(crate) fn go_on_ground(target: Pvf3, motion: Motion) {
+    crate::control::navigation::follow_mode::set_following(false);
     go_to_ground(target, motion);
 }
 
-/// A place: a view far out comes in.
+/// A place, as the location button goes to one: a view far out comes in.
 pub fn go_to_place(target: Pvf3) {
     go_on_ground(target, Motion::Smooth);
     crate::control::camera::controller::come_in_to_default();

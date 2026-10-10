@@ -1,19 +1,37 @@
 // @pxl/native/platform/sensor.ts
 
 /**
- * Position through expo-horizon-location, the expo-location fork that reads
- * it without Google Play Services (Horizon OS has none). It crosses as the
- * page's does.
+ * Position and heading through expo-horizon-location, the expo-location fork
+ * that reads position without Google Play Services (Horizon OS has none).
+ * Each crosses as the page's do, the heading where Safari's
+ * `webkitCompassHeading` goes.
  */
 
 import { AppState } from "react-native";
 import * as Location from "expo-horizon-location";
 
 import { GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_permission, kernel_position, kernel_position_error } from "@/kernel/control/sensor.ts";
+import { kernel_orientation, kernel_orientation_lost, kernel_permission, kernel_position, kernel_position_error } from "@/kernel/control/sensor.ts";
+import { PLATFORM } from "./module.ts";
 
 export function geolocationSupported(): boolean {
   return true;
+}
+
+export function orientationSupported(): boolean {
+  return PLATFORM.headingAvailable();
+}
+
+export function orientationNeedsPermission(): boolean {
+  return false;
+}
+
+export function orientationSilenceIsLoss(): boolean {
+  return false;
+}
+
+export function orientationPermit(): Promise<boolean> {
+  return Promise.resolve(true);
 }
 
 let granted: boolean | null = null;
@@ -46,6 +64,7 @@ function recheck(): void {
     if (granted !== false || status !== Location.PermissionStatus.GRANTED) return;
     granted = true;
     kernel_permission({ sensor: Sensor.Geolocation, answer: PermissionAnswer.Granted });
+    kernel_permission({ sensor: Sensor.Orientation, answer: PermissionAnswer.Granted });
   });
 }
 
@@ -96,4 +115,42 @@ export function geolocationStop(): void {
   if (geolocation === null) return;
   watchEnd(geolocation);
   geolocation = null;
+}
+
+let orientation: Watch | null = null;
+
+function orientationFail(watch: Watch, refused: boolean): void {
+  if (orientation !== watch) return;
+  orientationRemove();
+  if (refused) kernel_permission({ sensor: Sensor.Orientation, answer: PermissionAnswer.Denied });
+  else kernel_orientation_lost();
+}
+
+export function orientationListen(): void {
+  if (orientation !== null) return;
+  const watch: Watch = { subscription: null, stopped: false };
+  orientation = watch;
+  void (async () => {
+    if (!(await permitted())) return orientationFail(watch, true);
+    const subscription = await Location.watchHeadingAsync(
+      (h) => {
+        const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
+        kernel_orientation({ webkit_compass_heading: heading, alpha: null, beta: null, gamma: null });
+      },
+      (reason) => {
+        console.error("[sensor] heading:", reason);
+        orientationFail(watch, false);
+      },
+    );
+    watchKeep(watch, subscription);
+  })().catch((err) => {
+    console.error("[sensor] heading:", err);
+    orientationFail(watch, false);
+  });
+}
+
+export function orientationRemove(): void {
+  if (orientation === null) return;
+  watchEnd(orientation);
+  orientation = null;
 }

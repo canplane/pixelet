@@ -5,6 +5,8 @@ package me.plei.pixelet.platform
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorManager
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import expo.modules.kotlin.exception.CodedException
@@ -76,6 +78,16 @@ class PlatformModule : Module() {
      * not premultiplied. */
     Function("textRaster") { weight: Double, px: Double, rgba: Double, text: String, x: Double, width: Int, height: Int, out: Uint8Array ->
       if (out.byteLength >= width * height * 4) textRaster(text, weight, px, rgba.toLong(), x, width, height, out)
+    }
+
+    // ---- the compass (platform/sensor.ts) ----
+
+    /** Whether the device has a compass at all, which expo-horizon-location only says
+     * by failing a watch — and a failed watch reads as a compass lost, not
+     * one never there. */
+    Function("headingAvailable") {
+      val sensors = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+      sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null || sensors.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null
     }
 
     // ---- the safe area (platform/safe-area.ts) ----
