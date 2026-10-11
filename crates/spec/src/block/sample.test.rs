@@ -2,21 +2,30 @@
 
 use crate::bake::constant::ELE_PADDED_SPAN;
 use crate::block::cube::sentinel;
+use crate::space::coord::zoom::units;
 use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use super::*;
 
+/// Caves open over the whole sample, as about an edit everywhere.
+fn open_everywhere(sample: &mut ChunkSample) {
+    let r = units(crate::procedural::CAVE_REGION);
+    let mid = [0, 1].map(|k| ((sample.corner[k] + f64::from(sample.span) * sample.side / 2.0) / r).floor() as i64);
+    sample.open_caves(CaveOpening::about(mid, |_| Some([-1e6, 1e6])));
+}
+
 /// `laid` with the cells column `i` has a cave in taken out, as `ground_runs`
 /// takes them out of all but bedrock.
 fn carved(sample: &ChunkSample, i: usize, laid: &[(i32, i32, GroundId)]) -> Vec<(i32, i32, GroundId)> {
-    if sample.cell < GROUND.cell() {
+    if !caves_in(sample.cell) {
         return laid.to_vec();
     }
+    let rock = crate::block::limit::bedrock(sample.ele[i], sample.scale);
     let (mut out, mut caves) = (Vec::new(), sample.caves(i));
     for &(lo, hi, g) in laid {
         let mut start = None;
         for z in lo..=hi + 1 {
-            let solid = z <= hi && (g == sentinel::unknown || z >= sample.ele[i] - sample.scale || !caves.hollow(sample.cell_z(z)));
+            let solid = z <= hi && (g == sentinel::unknown || z >= sample.ele[i] - sample.scale || z < rock || !caves.hollow(sample.cell_z(z)));
             match (solid, start) {
                 (true, None) => start = Some(z),
                 (false, Some(s)) => {
@@ -132,6 +141,7 @@ fn a_column_is_its_look_over_its_filler_over_stone() {
         };
         let mut sample = ChunkSample::of_span(COL_SPAN);
         sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, cell).unwrap();
+        open_everywhere(&mut sample);
         let i = apron_col(COL_SPAN, 0, 0) as usize;
         let mut laid = Vec::new();
         sample
@@ -193,6 +203,7 @@ fn past_the_leaves_strata_stay_a_leaf_cell_thick() {
     leaf.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
     let mut finer = ChunkSample::of_span(COL_SPAN);
     finer.refine(&leaf, 1, [0, 0], COL_SPAN).unwrap();
+    open_everywhere(&mut finer);
     let mut laid = Vec::new();
     finer
         .ground_runs(apron_col(COL_SPAN, 0, 0) as usize, 0, i32::MAX, |lo, hi, g| {
@@ -243,8 +254,8 @@ fn the_service_area_is_walled_one_cell_thick() {
     assert_eq!(laid(7).last(), Some(&(9, 9, ground::grass)));
 }
 
-/// Caves take the ground where the world has them, last of all: never the
-/// bedrock, the ground's face, nor a column by a way.
+/// Caves take the ground where the world has them, about an edit, last of
+/// all: never the bedrock, the ground's face, nor a column by a way.
 #[test]
 fn caves_come_last() {
     let mut cells = vec![ground::grass; (TILE_CELLS * TILE_CELLS) as usize];
@@ -265,16 +276,28 @@ fn caves_come_last() {
     };
     let mut sample = ChunkSample::of_span(COL_SPAN);
     sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
+    let column = |sample: &ChunkSample, x: u32, y: u32| {
+        let mut laid = Vec::new();
+        sample
+            .ground_runs(apron_col(COL_SPAN, x, y) as usize, -100, i32::MAX, |lo, hi, g| {
+                laid.push((lo, hi, g));
+                Ok::<(), ()>(())
+            })
+            .unwrap();
+        laid
+    };
+    // Shut in rock, a cave is rock: none opens where nothing is placed.
+    for y in 0..COL_SPAN - 2 * APRON {
+        for x in 0..COL_SPAN - 2 * APRON {
+            let laid = column(&sample, x, y);
+            assert!(laid.windows(2).all(|w| w[1].0 == w[0].1 + 1), "a cave with no edit about it at {x}, {y}");
+        }
+    }
+    open_everywhere(&mut sample);
     let mut caved = 0;
     for y in 0..COL_SPAN - 2 * APRON {
         for x in 0..COL_SPAN - 2 * APRON {
-            let mut laid = Vec::new();
-            sample
-                .ground_runs(apron_col(COL_SPAN, x, y) as usize, -100, i32::MAX, |lo, hi, g| {
-                    laid.push((lo, hi, g));
-                    Ok::<(), ()>(())
-                })
-                .unwrap();
+            let laid = column(&sample, x, y);
             assert_eq!(laid.first(), Some(&(-100, -65, sentinel::unknown)), "bedrock at {x}, {y}");
             assert_eq!(laid.last().map(|r| r.1), Some(39), "the face at {x}, {y}");
             let gaps = laid.windows(2).filter(|w| w[1].0 > w[0].1 + 1).count();

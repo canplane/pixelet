@@ -8,7 +8,6 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::block::cube::Ground;
 use pxl_spec::block::limit::bedrock;
 use pxl_spec::block::sample::{TileSource, TileView};
-use pxl_spec::block::stand::z_unit;
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::pvf3::pvf3;
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
@@ -99,18 +98,6 @@ impl Residency<TerrainTile> {
     }
 }
 
-/// Cells of ground drawn under the lowest face about a node, its own or a
-/// column's beside it, so a step down to a neighbour is walled.
-const DRAWN_UNDER: f64 = 4.0;
-
-/// How far under the lowest face about a node its chunks are drawn, in
-/// units, for cells at `cell`: past the leaves a fold's whole cell too, so a
-/// cell shrunk by its fill stands on ground, never on the sky. A chunk
-/// composes whatever heights it is; this decides which are drawn.
-fn drawn_under(cell: Zoom) -> f64 {
-    DRAWN_UNDER * z_unit(cell) + units(cell)
-}
-
 /// The tile a node's bound is read from: its cells' tile, within the
 /// pyramid's zooms.
 fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
@@ -167,8 +154,10 @@ impl Query for Residency<TerrainTile> {
     }
 
     /// From the index lane of the tile it is drawn from, about the node as
-    /// its columns are drawn beside theirs, and down as far as its ground is
-    /// drawn (`drawn_under`). For deciding descent, never for what is drawn. A
+    /// its columns are drawn beside theirs, so a step down to a column beside
+    /// is walled, and a cell at `cell` under its lowest face, so a fold's cell
+    /// shrunk by its fill stands on the cell under it, never on the sky. For
+    /// deciding descent, never for what is drawn. A
     /// node past the service area, no look in it, holds the bedrock walling
     /// the area where ground is beside it (`pxl-spec block/limit.rs` `wall`):
     /// from the bedrock to that ground's face.
@@ -208,7 +197,7 @@ impl Query for Residency<TerrainTile> {
             (lo, hi) = (lo.min(bedrock(face, 1)), hi.max(face));
         }
         let r = Relief {
-            extent: (f64::from(lo) * units(GROUND.cell()) - drawn_under(cell), f64::from(hi) * units(GROUND.cell())),
+            extent: (f64::from(lo) * units(GROUND.cell()) - units(cell), f64::from(hi) * units(GROUND.cell())),
         };
         let r = lack.map_or(Answer::Exact(r), |t| Answer::Coarser(r, t));
         let whole = region((zoom, at));

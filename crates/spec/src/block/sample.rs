@@ -10,7 +10,7 @@ use crate::bake::surface::bicubic;
 use crate::bake::tile::terrain::GroundId;
 use crate::block::cube::{ground, sentinel, Ground};
 use crate::block::limit::{bedrock, wall};
-use crate::procedural::{pier_stands, Caves, Frame};
+use crate::procedural::{caves_in, pier_stands, CaveOpening, Caves, Frame};
 use crate::space::camera::grid::CHUNK_STEPS;
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::{count, Zoom};
@@ -168,6 +168,8 @@ pub struct ChunkSample {
     /// Each column's look: where a pier stands is the data's, and a void one has no ground.
     look: Vec<GroundId>,
     crossing: Vec<(usize, usize, Crossing)>,
+    /// Where caves open about what is placed (`open_caves`): nowhere until said.
+    opening: CaveOpening,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -201,6 +203,7 @@ impl ChunkSample {
             under: vec![Under::default(); n],
             look: vec![ground::BASE; n],
             crossing: Vec::new(),
+            opening: CaveOpening::default(),
         }
     }
 
@@ -394,6 +397,22 @@ impl ChunkSample {
         Ground::of(self.look[i]).is_some() || self.look[i] == sentinel::unknown
     }
 
+    /// Where caves open about what is placed, read by the composer, which
+    /// knows what is placed; a column read anew keeps it till said again.
+    pub fn open_caves(&mut self, opening: CaveOpening) {
+        self.opening = opening;
+    }
+
+    /// The cells of column `i` caves may open in, `[lo, hi)`: those whose
+    /// centers lie in the cubes about an edit (`CaveOpening::over`).
+    fn opened(&self, i: usize) -> Option<[i32; 2]> {
+        let span = self.span as usize;
+        let at = [i % span, i / span].map(|v| v as f64 + 0.5);
+        let [lo, hi] = self.opening.over(self.corner[0] + at[0] * self.side, self.corner[1] + at[1] * self.side)?;
+        let cell = |z: f64| (z * f64::from(self.scale) - 0.5).ceil() as i32;
+        Some([cell(lo), cell(hi)])
+    }
+
     /// The world's caves down column `i`, asked of a cell `z` by its center
     /// (`cell_z`).
     fn caves(&self, i: usize) -> Caves {
@@ -429,7 +448,11 @@ impl ChunkSample {
             return Ok(());
         }
         let top = self.ele[i].min(to);
-        let mut caves = (self.cell >= GROUND.cell() && self.look[i] != sentinel::unknown && !self.by_a_way(i)).then(|| self.caves(i));
+        let open = (caves_in(self.cell) && self.look[i] != sentinel::unknown).then(|| self.opened(i)).flatten();
+        let open = open.filter(|_| !self.by_a_way(i));
+        let mut caves = open.map(|_| self.caves(i));
+        // Never under the bedrock line, whether or not a fold draws bedrock there.
+        let [open_lo, open_hi] = open.map_or([0; 2], |[lo, hi]| [lo.max(bedrock(self.ele[i], self.scale)), hi]);
         let mut part = |lo: i32, hi: i32, g: GroundId| {
             let lo = lo.max(from);
             let Some(caves) = caves.as_mut().filter(|_| g != sentinel::unknown) else {
@@ -452,13 +475,18 @@ impl ChunkSample {
             };
             let mut z = lo;
             while z < hi {
-                if z >= face {
+                if z >= face.min(open_hi) {
                     set(z, false, &mut start)?;
                     break;
                 }
+                if z < open_lo {
+                    set(z, false, &mut start)?;
+                    z = open_lo.min(hi);
+                    continue;
+                }
                 let (end, sure) = caves.stretch(self.cell_z(z));
                 // The first cell whose center is at or past the interval's end.
-                let next = ((end * f64::from(self.scale) - 0.5).ceil() as i32).clamp(z + 1, hi.min(face));
+                let next = ((end * f64::from(self.scale) - 0.5).ceil() as i32).clamp(z + 1, hi.min(face).min(open_hi));
                 match sure {
                     Some(hollow) => set(z, hollow, &mut start)?,
                     None => {
