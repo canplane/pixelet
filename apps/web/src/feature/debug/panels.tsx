@@ -1,6 +1,7 @@
 // @pxl/web/feature/debug/panels.tsx
 
-/** A panel for every debug setting, stacked in the order the settings sheet lists them. */
+/** A panel for every debug setting, stacked in the order the settings sheet lists them: one window
+ * in the corner (`feature/world/ui/corner.tsx`), which the chat's lines give way to while any of it is up. */
 
 import type { ComponentType } from "react";
 
@@ -22,6 +23,11 @@ const PANEL: Partial<Record<SettingName, ComponentType>> = {
 function CameraGizmo() {
   const show = useKernel((s) => s.settings[SETTINGS.camera_gizmo.key] === 1);
   return show && <Fold name="camera_gizmo" title="Camera Gizmo" />;
+}
+
+/** Whether any panel is up, so the corner is the window's. */
+export function useDebugWindow(): boolean {
+  return useKernel((s) => settingsIn("debug").some((name) => PANEL[name] !== undefined && s.settings[SETTINGS[name].key] === 1));
 }
 
 export function DebugPanels() {
