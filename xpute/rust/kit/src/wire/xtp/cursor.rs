@@ -5,11 +5,10 @@
 // Stateless helpers are uppercase, as the C header's macros they mirror.
 #![allow(non_snake_case)]
 
-use crate::abi::word::field_get32;
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
-use super::spec::{AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, WORD_SZ};
+use super::spec::{AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ, GET_DESC, GET_LEN, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, WORD_SZ};
 
 pub type ShallowNodeValue<'a> = NodeValue<'a, BranchCursor<'a>>;
 
@@ -120,7 +119,6 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// Invalid UTF-8 is EBADMSG here, where `get_str` replaces it.
     pub fn get_str_ref(&self) -> Result<&'a str, MarshalError> {
         match self {
             Cursor::Node(c) if c.type_ == SequenceType::STR as u8 => c.str_ref(),
@@ -192,21 +190,18 @@ impl<'a> TreeReader<'a> {
         }
         let hdr_view = &pkt[..HDR_SZ as usize];
 
-        let mut reg = WORD_REG;
-        let [magic, _] = GET_WORD(hdr_view, 0, &mut reg);
-        if magic != MAGIC {
+        if GET_LEN(hdr_view, 0)? != MAGIC {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
 
         // The root's word holds the payload size, not a relative offset.
-        let [payload_sz, desc] = GET_WORD(hdr_view, WORD_SZ, &mut reg);
+        let (payload_sz, type_) = GET_DESC(hdr_view, WORD_SZ)?;
         if payload_sz > pkt.len() as u32 - HDR_SZ {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
-        let type_: NodeType = field_get32(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
 
         let root = if payload_sz != 0 {
-            CURSOR(pkt, HDR_SZ, type_)?
+            CURSOR(&pkt[..(HDR_SZ + payload_sz) as usize], HDR_SZ, type_)?
         } else {
             Cursor::Null(NullCursor::new(pkt, type_))
         };
@@ -309,7 +304,7 @@ impl<'a> NodeCursor<'a> {
                 type_: SequenceType::BITSET,
                 bytes: self.bitset()?.into(),
             }),
-            t if t == SequenceType::STR as u8 => NodeValue::Str(self.str_of()?),
+            t if t == SequenceType::STR as u8 => NodeValue::Str(self.str_ref()?.to_string()),
             t if t == SequenceType::STRS as u8 => NodeValue::List(self.strs()?.iter().map(|s| NodeValue::Str(s.to_string())).collect()),
 
             _ => return Err(MarshalError::new(Errno::EBADMSG)),
@@ -362,8 +357,7 @@ impl<'a> NodeCursor<'a> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
-        let mut reg = WORD_REG;
-        let [len, _] = GET_WORD(self.pkt, self.base, &mut reg);
+        let len = GET_LEN(self.pkt, self.base)?;
         let payload_start = self.base + WORD_SZ;
 
         let elem_sz = core::mem::size_of::<T>() as u32;
@@ -421,8 +415,7 @@ impl<'a> NodeCursor<'a> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
-        let mut reg = WORD_REG;
-        let [len, _] = GET_WORD(self.pkt, self.base, &mut reg);
+        let len = GET_LEN(self.pkt, self.base)?;
         let payload_start = self.base + WORD_SZ;
 
         // A wire length: u64, so a count near 2^32 cannot wrap to a small size.
@@ -442,12 +435,12 @@ impl<'a> NodeCursor<'a> {
         Ok(arr)
     }
 
+    // On the wire a STR has a trailing NUL that `len` excludes.
     fn str_ref(&self) -> Result<&'a str, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
-        let mut reg = WORD_REG;
-        let [nbyte, _] = GET_WORD(self.pkt, self.base, &mut reg);
+        let nbyte = GET_LEN(self.pkt, self.base)?;
         let payload_start = self.base + WORD_SZ;
         if payload_start > self.pkt.len() as u32 || nbyte as u64 + 1 > (self.pkt.len() as u32 - payload_start) as u64 {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -466,8 +459,7 @@ impl<'a> NodeCursor<'a> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(bad());
         }
-        let mut reg = WORD_REG;
-        let [n, _] = GET_WORD(self.pkt, self.base, &mut reg);
+        let n = GET_LEN(self.pkt, self.base)?;
         let start = (self.base + WORD_SZ) as usize;
         let pkt: &'a [u8] = self.pkt;
         // In u64: a count a packet cannot hold must read as one, not wrap.
@@ -490,28 +482,6 @@ impl<'a> NodeCursor<'a> {
             }
         }
         Ok(strs)
-    }
-
-    // On the wire a STR has a trailing NUL that `len` excludes.
-    fn str_of(&self) -> Result<String, MarshalError> {
-        if self.base + WORD_SZ > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG));
-        }
-        let mut reg = WORD_REG;
-        let [nbyte, _] = GET_WORD(self.pkt, self.base, &mut reg);
-        let payload_start = self.base + WORD_SZ;
-
-        if payload_start > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG));
-        }
-        if nbyte as u64 + 1 > (self.pkt.len() as u32 - payload_start) as u64 {
-            return Err(MarshalError::new(Errno::EBADMSG));
-        }
-        if self.pkt[(payload_start + nbyte) as usize] != 0 {
-            return Err(MarshalError::new(Errno::EBADMSG));
-        }
-
-        Ok(String::from_utf8_lossy(&self.pkt[payload_start as usize..(payload_start + nbyte) as usize]).into_owned())
     }
 }
 
@@ -562,8 +532,7 @@ impl<'a> BranchCursor<'a> {
         if base + WORD_SZ > pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
-        let mut reg = WORD_REG;
-        let [len, _] = GET_WORD(pkt, base, &mut reg);
+        let len = GET_LEN(pkt, base)?;
 
         let table_off = base + WORD_SZ;
         if len > (pkt.len() as u32 - table_off) / WORD_SZ {
@@ -623,9 +592,7 @@ impl<'a> BranchCursor<'a> {
         }
         let entry_off = ENTRY_OFF(self.cursor.base, idx);
 
-        let mut reg = WORD_REG;
-        let [rel_off, desc] = GET_WORD(self.cursor.pkt, entry_off, &mut reg);
-        let type_: NodeType = field_get32(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
+        let (rel_off, type_) = GET_DESC(self.cursor.pkt, entry_off)?;
 
         if rel_off == 0 {
             return Ok(Cursor::Null(NullCursor::new(self.cursor.pkt, type_)));
@@ -634,10 +601,22 @@ impl<'a> BranchCursor<'a> {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
         let base = self.cursor.base + rel_off;
-        if base < self.child_start || base >= self.cursor.pkt.len() as u32 {
+        let end = self.end_of(idx);
+        if base < self.child_start || base >= end {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
-        CURSOR(self.cursor.pkt, base, type_)
+        CURSOR(&self.cursor.pkt[..end as usize], base, type_)
+    }
+
+    /// Where child `idx`'s extent ends: the next present sibling's base, or this branch's end.
+    fn end_of(&self, idx: u32) -> u32 {
+        let (pkt, base) = (self.cursor.pkt, self.cursor.base);
+        let end = pkt.len() as u32;
+        let mut reg = WORD_REG;
+        (idx + 1..self.len)
+            .map(|j| GET_WORD(pkt, ENTRY_OFF(base, j), &mut reg)[0])
+            .find(|&rel_off| rel_off != 0)
+            .map_or(end, |rel_off| base.saturating_add(rel_off).min(end))
     }
 
     pub fn at_branch(&self, idx: u32) -> Result<BranchCursor<'a>, MarshalError> {

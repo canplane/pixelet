@@ -1,16 +1,14 @@
 // xpute-kit/wire/xtp/encode.rs
 
-use crate::abi::word::{field_get32, field_set32};
+use crate::abi::word::field_set32;
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
 use super::spec::{
-    AlignUnit, BranchNode, EncodingState, GraftNode, Node, NodeType, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType, SequenceVal, SpecialType, ALIGN, ALIGN_SZ, DESC_TYPE_MASK,
-    DESC_TYPE_SHAMT, ELEM_SZ, GET_WORD, HDR_SZ, MAGIC, MAX_PKT_SZ, NODE_IS_BRANCH, NODE_IS_GRAFT, NODE_IS_LEAF, NODE_IS_NIL, NODE_IS_SEQ, NONE, RESERVED, SET_WORD, WORD_SZ,
+    AlignUnit, BranchNode, EncodingState, GraftNode, Node, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType, SequenceVal, SpecialType, ALIGN, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT,
+    ELEM_SZ, GET_DESC, GET_LEN, HDR_SZ, MAGIC, MAX_PKT_SZ, NODE_IS_BRANCH, NODE_IS_GRAFT, NODE_IS_LEAF, NODE_IS_NIL, NODE_IS_SEQ, RESERVED, SET_WORD, WORD_SZ,
 };
 use super::view::NodeView;
-
-const WORD_REG: [u32; 2] = [NONE, NONE];
 
 #[derive(Default)]
 pub struct TreeEncoderOptions {
@@ -120,17 +118,15 @@ impl TreeEncoder {
         }
         let hdr_view = &pkt[..HDR_SZ as usize];
 
-        let mut reg = WORD_REG;
-        let [magic, _] = GET_WORD(hdr_view, 0, &mut reg);
-        if magic != MAGIC {
+        if GET_LEN(hdr_view, 0)? != MAGIC {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
 
-        let [payload_sz, desc] = GET_WORD(hdr_view, WORD_SZ, &mut reg);
+        let (payload_sz, type_) = GET_DESC(hdr_view, WORD_SZ)?;
         if payload_sz > pkt.len() as u32 - HDR_SZ {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
-        st.type_ = field_get32(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
+        st.type_ = type_;
 
         if payload_sz == 0 {
             return Ok(());
@@ -282,31 +278,14 @@ impl TreeEncoder {
                 }
             }
 
-            // Room is judged in UTF-16 units at four bytes each, as the other
-            // language's encoder must, so both refuse the same strings at a cap.
+            // A string fits where its UTF-8 and the NUL after it do.
             SequenceType::STR => {
                 let SequenceVal::Str(s) = val else { return Err(bad_type()) };
-                let units = s.encode_utf16().count() as u32;
-                let min_needed = units;
-
-                // Past the cap the room wraps to a large u32, and the test fails.
-                if units > (self.max_cap.wrapping_sub(payload_start) >> 2) {
-                    return Err(MarshalError::new(Errno::EOVERFLOW));
-                }
-                let max_needed = units * 4;
-
-                // Signed: the payload may start past the buffer's end.
-                if self.buf.len() as i64 - (payload_start as i64) < min_needed as i64 {
-                    self.ensure(payload_start + min_needed)?;
-                }
-
-                // The growth steps are part of where the cap refuses.
                 let data = s.as_bytes();
-                if data.len() as i64 > self.buf.len() as i64 - payload_start as i64 {
-                    self.ensure(payload_start + max_needed)?;
-                }
-
-                len = data.len() as u32;
+                len = u32::try_from(data.len())
+                    .ok()
+                    .filter(|&n| n < self.max_cap.saturating_sub(payload_start))
+                    .ok_or(MarshalError::new(Errno::EOVERFLOW))?;
                 payload_sz = len + 1;
 
                 self.ensure(payload_start + payload_sz)?;
@@ -487,21 +466,15 @@ impl<'a> PacketWriter<'a> {
     /// Refuses exactly what `TreeEncoder` refuses at the same cap.
     pub fn str(&mut self, s: Option<&str>) -> &mut Self {
         match s {
-            Some(s) if self.utf16_fits(s) => self.seq(SequenceType::STR, s.len() as u32, s.len() as u32 + 1, |out| {
-                out[..s.len()].copy_from_slice(s.as_bytes());
-            }),
-            Some(_) => {
-                self.fits = false;
-                self.entry(None, SequenceType::STR as u8)
-            }
+            Some(s) => match u32::try_from(s.len() + 1) {
+                Ok(bytes) => self.seq(SequenceType::STR, bytes - 1, bytes, |out| out[..s.len()].copy_from_slice(s.as_bytes())),
+                _ => {
+                    self.fits = false;
+                    self.entry(None, SequenceType::STR as u8)
+                }
+            },
             None => self.entry(None, SequenceType::STR as u8),
         }
-    }
-
-    fn utf16_fits(&self, s: &str) -> bool {
-        let payload = align(self.lim, WORD_SZ) as usize + WORD_SZ as usize;
-        let room = self.buf.len().saturating_sub(payload);
-        s.encode_utf16().count() <= room >> 2
     }
 
     pub fn strs<S: AsRef<str>>(&mut self, items: Option<&[S]>) -> &mut Self {
@@ -550,11 +523,6 @@ impl<'a> PacketWriter<'a> {
             self.fits = false;
             return self.entry(None, SequenceType::STR as u8);
         };
-        let written = core::str::from_utf8(&self.buf[payload..payload + len]).unwrap_or_default();
-        if !self.utf16_fits(written) {
-            self.fits = false;
-            return self.entry(None, SequenceType::STR as u8);
-        }
         self.buf[self.lim as usize..payload].fill(0);
         self.buf[payload + len..end].fill(0);
         self.word(base as u32, len as u32, RESERVED);

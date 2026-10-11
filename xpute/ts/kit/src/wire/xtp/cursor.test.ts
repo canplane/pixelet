@@ -54,7 +54,7 @@ Deno.test("the cursor reads what the typescript reads", async () => {
   assertEquals(refused(good.slice(0, 20)), v.s("malformed.truncated_header"));
   assertEquals(refused(`00${good.slice(2)}`), v.s("malformed.bad_magic"));
   assertEquals(refused(good.slice(0, 40)), v.s("malformed.truncated_payload"));
-  v.each("huge", (k) => assertEquals(refused(v.s(`${k}.packet`)), v.s(`${k}.read`), k));
+  v.each("refused", (k) => assertEquals(refused(v.s(`${k}.packet`)), v.s(`${k}.read`), k));
 
   [0x7ffffff9, 0xfffffff8, 0xfffffff9].forEach((n, j) => {
     let got: string;

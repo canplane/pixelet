@@ -12,16 +12,6 @@ constexpr std::uint64_t word_up(std::uint64_t n) noexcept {
     return (n + WORD_SZ - 1) & ~std::uint64_t{WORD_SZ - 1};
 }
 
-// Two units for a character past the basic plane, which UTF-8 encodes in four bytes.
-std::uint32_t utf16_units(std::span<const std::uint8_t> utf8) noexcept {
-    std::uint32_t units = 0;
-    for (std::uint8_t b : utf8) {
-        if ((b & 0xc0) != 0x80) units++;
-        if (b >= 0xf0) units++;
-    }
-    return units;
-}
-
 } // namespace
 
 PacketWriter::PacketWriter(std::span<std::uint8_t> buf) noexcept : buf_(buf.first(std::min<std::size_t>(buf.size(), MAX_PKT_SZ))) {
@@ -86,8 +76,6 @@ std::optional<std::uint32_t> PacketWriter::str_room() noexcept {
 
 std::optional<std::uint32_t> PacketWriter::str_commit(std::uint32_t len) noexcept {
     std::uint32_t payload = str_payload();
-    std::uint32_t room = static_cast<std::uint32_t>(buf_.size() - payload);
-    if (utf16_units(buf_.subspan(payload, len)) > room >> 2) return spoil(Errno::eoverflow);
     std::uint64_t end = word_up(std::uint64_t{payload} + len + 1);
     if (end > buf_.size()) return spoil(Errno::eoverflow);
     std::uint32_t base = payload - WORD_SZ;
@@ -156,11 +144,13 @@ std::optional<std::uint32_t> PacketWriter::branch_close(std::optional<std::uint3
 PacketWriter &PacketWriter::graft(std::span<const std::uint8_t> packet) noexcept {
     std::optional<std::uint32_t> at;
     NodeType type = type_of(SpecialType::nil);
-    if (packet.size() < HDR_SZ || get_word(packet, 0)[0] != MAGIC) {
+    Result<std::uint32_t> magic = packet.size() < HDR_SZ ? marshal_error(Errno::ebadmsg) : get_len(packet, 0);
+    Result<Desc> d = magic && *magic == MAGIC ? get_desc(packet, WORD_SZ) : marshal_error(Errno::ebadmsg);
+    if (!d) {
         spoil(Errno::ebadmsg);
     } else {
-        auto [payload_sz, desc] = get_word(packet, WORD_SZ);
-        type = static_cast<NodeType>(desc & DESC_TYPE_MASK);
+        auto [payload_sz, desc_type] = *d;
+        type = desc_type;
         if (payload_sz > packet.size() - HDR_SZ) {
             spoil(Errno::ebadmsg);
         } else if (payload_sz != 0) {
