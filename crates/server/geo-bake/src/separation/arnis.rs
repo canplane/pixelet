@@ -793,7 +793,8 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         let mut best = 0.0;
         for (i, a) in end_points.iter().enumerate() {
             for b in &end_points[i + 1..] {
-                let d = (a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2);
+                let [dx, dy] = [a[0] - b[0], a[1] - b[1]];
+                let d = dx * dx + dy * dy;
                 if d > best {
                     (best, axis) = (d, (*a, *b));
                 }

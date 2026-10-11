@@ -53,7 +53,7 @@ pub const CITY_COLOR: [f64; 3] = [0.9473, 0.8714, 0.7011];
 /// A half moon gives a tenth of a full one's light, not half.
 pub fn moon_phase_light(alpha: f64) -> f64 {
     let a = alpha.to_degrees().abs();
-    libm::pow(10f64, -0.4 * (0.026 * a + 4e-9 * a.powi(4)))
+    libm::pow(10f64, -0.4 * (0.026 * a + 4e-9 * (a * a) * (a * a)))
 }
 
 const STEPS: u32 = 64;
@@ -66,7 +66,8 @@ fn extinction(h: f64) -> [f64; 3] {
 }
 
 fn horizon_mu(r: f64) -> f64 {
-    -(1.0 - (BOTTOM_RADIUS_KM / r).powi(2)).max(0.0).sqrt()
+    let s = BOTTOM_RADIUS_KM / r;
+    -(1.0 - s * s).max(0.0).sqrt()
 }
 
 /// Zero for a direction the ground stands in.

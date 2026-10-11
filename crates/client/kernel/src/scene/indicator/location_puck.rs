@@ -256,7 +256,8 @@ impl LocationPuck {
         // Hidden past the fog's far edge, as three's puck was.
         let [x, y, z] = frame.world_of([p.center[0] + shown[0], p.center[1] + shown[1], p.center[2] + BEACON_Z_BIAS]);
         let c = frame.camera;
-        p.visible = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2) < view_reach().powi(2);
+        let ([dx, dy, dz], reach) = ([x - c[0], y - c[1], z - c[2]], view_reach());
+        p.visible = dx * dx + dy * dy + dz * dz < reach * reach;
         p.visible
     }
 

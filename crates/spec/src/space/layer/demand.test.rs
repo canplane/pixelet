@@ -65,12 +65,12 @@ fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {
 fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
     let mut last = i32::MAX;
     // Inside the world: no cell is coarser than z0's.
-    for r in (0..).map(|k| 0.01 * 1.01f64.powi(k)).take_while(|r| r * 32.0 < split_distance(0)) {
+    for r in core::iter::successors(Some(0.01), |r| Some(r * 1.01)).take_while(|r| r * 32.0 < split_distance(0)) {
         let z = zoom_at(r);
         assert!(z <= last, "{r}: z{z} after z{last}");
         last = z;
         for n in [-3, 1, 5] {
-            assert_eq!(zoom_at(r * 2f64.powi(n)), z - n, "{r} scaled by 2^{n}");
+            assert_eq!(zoom_at(libm::ldexp(r, n)), z - n, "{r} scaled by 2^{n}");
         }
     }
     for z in GROUND.top() as i32..=LEAF_ZOOM as i32 + 3 {
