@@ -52,6 +52,6 @@ const styles = StyleSheet.create({
     pointerEvents: "box-none",
   },
   title: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  titleText: { fontSize: 11, fontWeight: "600", color: alpha(color.white, 0.75) },
+  titleText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: alpha(color.white, 0.75) },
   end: { flexDirection: "row", alignItems: "center", gap: 6 },
 });
