@@ -21,10 +21,11 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use super::answer::Answer;
 
-/// What a node holds, as far as a descent needs: a box holding what is
-/// stored there, and the finest zoom any of it is held at, read no finer than
-/// one past the cell asked — all a reader of cells can tell apart is whether
-/// something is finer than them.
+/// What of a node can be seen from outside it, as far as a descent needs: a
+/// box holding what may show there — what is stored, down to where everything
+/// about it is solid and nothing past that is seen — and the finest zoom any
+/// of it is held at, read no finer than one past the cell asked — all a reader
+/// of cells can tell apart is whether something is finer than them.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bound {
     pub aabb: Aabb,

@@ -93,8 +93,8 @@ impl Query for World<'_> {
         self.terrain.child(parent, node, cell)
     }
 
-    /// The ground's and what is placed, which a chunk finer under the node
-    /// may draw at any zoom it is asked at.
+    /// What can show of the ground and what is placed, which a chunk finer
+    /// under the node may draw at any zoom it is asked at.
     fn bound<const D: usize>(&self, at: &Line, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let objects = self.objects.bounds(node, cell).value().flatten();
         self.terrain.bound(at, node, cell).map(|ground| Bound::join(ground, objects))
