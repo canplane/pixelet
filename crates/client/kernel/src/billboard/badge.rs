@@ -27,7 +27,8 @@ use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-/// A marker's pill and where it stands, down from its top.
+/// A marker's pill and where it stands, down from its top: the dot under the
+/// pill, which its cell's center is drawn at.
 const MARKER_HEIGHT: f64 = 37.0;
 const MARKER_ANCHOR: f64 = 34.0;
 
