@@ -370,16 +370,16 @@ fn occlusion(local_pos: vec3f, box_scale: vec3f, cell: f32, normal: vec3f, faces
   return 1.0 - open;
 }
 
-// Minecraft's grass over dirt: the surface cell wears top/side/bottom, every
-// cell under it (or under something) wears the bottom image on every face.
-fn face_image(normal: vec3f, below_top: f32, faces: u32) -> u32 {
+// A block's face wears its own image for that face, at any depth: a cell
+// under the surface is its own block, the stratum's.
+fn face_image(normal: vec3f) -> u32 {
   if (normal.z > 0.5) {
     return IMAGE_TOP;
   }
   if (normal.z < -0.5) {
     return IMAGE_BOTTOM;
   }
-  return select(IMAGE_BOTTOM, IMAGE_SIDE, below_top < 1.0 && !face_bit(faces, CAP_PZ));
+  return IMAGE_SIDE;
 }
 
 // Gradients are passed in because the read is inside a branch.
@@ -405,7 +405,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let pixel = sqrt(dpdx(at) * dpdx(at) + dpdy(at) * dpdy(at));
   var taps = i.rgb;
   if (textured) {
-    let image = face_image(i.normal, (0.5 - i.local_pos.z) * i.box_scale.z, i.faces);
+    let image = face_image(i.normal);
     taps = (sample_tap(i.layer_taps.x, image, i.box_uv, ddx, ddy, i.rgb)
       + sample_tap(i.layer_taps.y, image, i.box_uv, ddx, ddy, i.rgb)
       + sample_tap(i.layer_taps.z, image, i.box_uv, ddx, ddy, i.rgb)
