@@ -132,8 +132,9 @@ pub fn opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
         Opened::Bytes(n) => {
             let got = match alloc(n) {
                 Some(block) => {
-                    // SAFETY: a block just acquired, `n` long, and no one else's.
-                    file::read(fd, unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(block.0), n as usize) });
+                    // SAFETY: a block just acquired, `n` long, and no one else's;
+                    // the arrival holds it until `fetch_task` waits out the turn.
+                    unsafe { file::read(fd, core::slice::from_raw_parts_mut(ptr_at::<u8>(block.0), n as usize)) };
                     Got::Read(Some(block))
                 }
                 None => Got::Failed(Errno::ENOMEM.into()),

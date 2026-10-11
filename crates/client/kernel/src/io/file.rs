@@ -119,7 +119,9 @@ fn read_kept(kept: Kept, fd: Fd, bytes: usize) {
         return;
     }
     held.resize(bytes, 0);
-    read(fd, &mut held);
+    // SAFETY: `held` moves into KEPT, its heap buffer with it, and is taken
+    // no sooner than the turn after this one.
+    unsafe { read(fd, &mut held) };
     close(fd);
     kept_read(kept, KeptRead::Reading { bytes: held, asked: turn() });
 }
@@ -160,9 +162,13 @@ pub fn take_kept(kept: Kept) -> Option<KeptFile> {
 }
 
 /// `dst` is filled from the next turn on.
-pub fn read(fd: Fd, dst: &mut [u8]) {
+///
+/// # Safety
+/// As `Sys::read`: `dst` outlives this turn, unmoved and unread.
+pub unsafe fn read(fd: Fd, dst: &mut [u8]) {
     if let Some(sys) = sys() {
-        sys.read(fd, dst);
+        // SAFETY: the caller's.
+        unsafe { sys.read(fd, dst) };
     }
 }
 
