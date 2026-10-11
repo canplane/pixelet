@@ -304,10 +304,40 @@ const SPAGHETTI_WIDTH: f64 = 0.06;
 const CHEESE_SCALE: f64 = 1.0 / 48.0;
 const CHEESE_THRESHOLD: f64 = 0.42;
 
+/// Units between the heights a cave's noise is sampled at, and lerped
+/// between, as Minecraft's `NoiseChunk` samples its cells' corners and
+/// interpolates inside them. The tree's own number: a quarter of the
+/// noises' cost, finer than a tunnel's span.
+const KNOT: f64 = 4.0;
+
+/// One cave noise down a column, sampled at every `KNOT` and lerped between:
+/// the two knots about the last height asked are kept.
+struct Knotted {
+    line: Line,
+    scale: f64,
+    shift: f64,
+    knots: Option<(i64, f64, f64)>,
+}
+
+impl Knotted {
+    fn at(&mut self, z: f64) -> f64 {
+        let t = z / KNOT;
+        let k = t.floor();
+        let (at, kn) = (k as i64, |s: &mut Knotted, k: f64| s.line.at(k * KNOT * s.scale + s.shift));
+        let (lo, hi) = match self.knots {
+            Some((a, lo, hi)) if a == at => (lo, hi),
+            Some((a, _, hi)) if a + 1 == at => (hi, kn(self, k + 1.0)),
+            _ => (kn(self, k), kn(self, k + 1.0)),
+        };
+        self.knots = Some((at, lo, hi));
+        lo + (t - k) * (hi - lo)
+    }
+}
+
 /// The caves down one column, its `x`, `y` in units: `hollow` a cell at a
-/// time, each noise's lattice cube hashed once a stretch of it.
+/// time, each noise sampled at its knots (`KNOT`).
 pub struct Caves {
-    noises: [(Line, f64, f64); 3],
+    noises: [Knotted; 3],
 }
 
 impl Caves {
@@ -318,7 +348,12 @@ impl Caves {
         let noise = |tag: u64, s: [f64; 3]| {
             let seed = derive_seed_u64(MASTER_SEED, tag);
             let shift = |k: u64| u32_to_unit(derive_seed_u64(seed, k) as u32);
-            (Line::new(seed, x * s[0] + shift(0), y * s[1] + shift(1)), s[2], shift(2))
+            Knotted {
+                line: Line::new(seed, x * s[0] + shift(0), y * s[1] + shift(1)),
+                scale: s[2],
+                shift: shift(2),
+                knots: None,
+            }
         };
         Caves {
             noises: [noise(0xca7e_0001, SPAGHETTI_SCALE), noise(0xca7e_0002, SPAGHETTI_SCALE), noise(0xca7e_0003, [CHEESE_SCALE; 3])],
@@ -329,12 +364,11 @@ impl Caves {
     /// bounds it: whatever is laid over it later, bedrock and ways among them, wins.
     pub fn hollow(&mut self, z: f64) -> bool {
         let [a, b, c] = &mut self.noises;
-        let at = |(line, scale, shift): &mut (Line, f64, f64)| line.at(z * *scale + *shift);
         // The second only where the first is near zero, a few cells in a hundred.
-        if at(a).abs() < SPAGHETTI_WIDTH && at(b).abs() < SPAGHETTI_WIDTH {
+        if a.at(z).abs() < SPAGHETTI_WIDTH && b.at(z).abs() < SPAGHETTI_WIDTH {
             return true;
         }
-        at(c) > CHEESE_THRESHOLD
+        c.at(z) > CHEESE_THRESHOLD
     }
 }
 
