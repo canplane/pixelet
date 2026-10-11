@@ -214,7 +214,10 @@ impl<Q: Query> Domain<Q> {
         // Where the eye's rays land is there, whatever the bound holds: a
         // cave the hash opens under a dig is met by them and drawn.
         let region = c.region();
-        let landed = candidates.clone().filter_map(|k| self.footprints[k as usize].landed(&region)).reduce(|a, b| (a.0.min(b.0), a.1.max(b.1)));
+        let landed = candidates
+            .clone()
+            .filter_map(|k| self.footprints[k as usize].landed(&region))
+            .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1)));
         let landed = landed.map(|(lo, hi)| Bound {
             aabb: Aabb {
                 min: [region.min[0], region.min[1], lo],
