@@ -320,9 +320,8 @@ struct Knotted {
 }
 
 impl Knotted {
-    fn at(&mut self, z: f64) -> f64 {
-        let t = z / KNOT;
-        let k = t.floor();
+    /// The noise at the knots under and over the knot interval `k`.
+    fn ends(&mut self, k: f64) -> (f64, f64) {
         let (at, kn) = (k as i64, |s: &mut Knotted, k: f64| s.line.at(k * KNOT * s.scale + s.shift));
         let (lo, hi) = match self.knots {
             Some((a, lo, hi)) if a == at => (lo, hi),
@@ -330,6 +329,13 @@ impl Knotted {
             _ => (kn(self, k), kn(self, k + 1.0)),
         };
         self.knots = Some((at, lo, hi));
+        (lo, hi)
+    }
+
+    fn at(&mut self, z: f64) -> f64 {
+        let t = z / KNOT;
+        let k = t.floor();
+        let (lo, hi) = self.ends(k);
         lo + (t - k) * (hi - lo)
     }
 }
@@ -369,6 +375,31 @@ impl Caves {
             return true;
         }
         c.at(z) > CHEESE_THRESHOLD
+    }
+
+    /// The knot interval `z`, in units, is in: where it ends, and whether every
+    /// cell in it is solid, every one hollow, or neither is sure. Between two
+    /// knots each noise is a line, which lies between its ends, so a
+    /// threshold neither end crosses no cell between them crosses either,
+    /// and a cell is asked alone only where one may.
+    pub fn stretch(&mut self, z: f64) -> (f64, Option<bool>) {
+        // Past lerp's rounding: an end this near a threshold decides nothing.
+        const SURE: f64 = 1e-9;
+        let k = (z / KNOT).floor();
+        let [a, b, c] = &mut self.noises;
+        let beyond = |(lo, hi): (f64, f64), at: f64| (lo > at + SURE && hi > at + SURE, lo < at - SURE && hi < at - SURE);
+        let cheese = beyond(c.ends(k), CHEESE_THRESHOLD);
+        let narrow = |(lo, hi): (f64, f64)| {
+            let (over, _) = beyond((lo, hi), SPAGHETTI_WIDTH);
+            let (_, under) = beyond((lo, hi), -SPAGHETTI_WIDTH);
+            over || under
+        };
+        let sure = match cheese {
+            (true, _) => Some(true),
+            (_, true) if narrow(a.ends(k)) || narrow(b.ends(k)) => Some(false),
+            _ => None,
+        };
+        ((k + 1.0) * KNOT, sure)
     }
 }
 

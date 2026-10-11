@@ -435,18 +435,39 @@ impl ChunkSample {
             let Some(caves) = caves.as_mut().filter(|_| g != sentinel::unknown) else {
                 return if lo < hi { run(lo, hi - 1, g) } else { Ok(()) };
             };
-            // Each stretch of the cells the world leaves solid.
+            // Each stretch of the cells the world leaves solid, a knot interval
+            // at a time where it is sure of all its cells (`Caves::stretch`).
             let mut start = None;
             let face = self.ele[i] - self.scale;
-            for z in lo..hi {
-                match (z < face && caves.hollow(self.cell_z(z)), start) {
-                    (true, Some(s)) => {
-                        run(s, z - 1, g)?;
-                        start = None;
-                    }
-                    (false, None) => start = Some(z),
-                    _ => {}
+            let mut set = |z: i32, hollow: bool, start: &mut Option<i32>| match (hollow, *start) {
+                (true, Some(s)) => {
+                    *start = None;
+                    run(s, z - 1, g)
                 }
+                (false, None) => {
+                    *start = Some(z);
+                    Ok(())
+                }
+                _ => Ok(()),
+            };
+            let mut z = lo;
+            while z < hi {
+                if z >= face {
+                    set(z, false, &mut start)?;
+                    break;
+                }
+                let (end, sure) = caves.stretch(self.cell_z(z));
+                // The first cell whose center is at or past the interval's end.
+                let next = ((end * f64::from(self.scale) - 0.5).ceil() as i32).clamp(z + 1, hi.min(face));
+                match sure {
+                    Some(hollow) => set(z, hollow, &mut start)?,
+                    None => {
+                        for z in z..next {
+                            set(z, caves.hollow(self.cell_z(z)), &mut start)?;
+                        }
+                    }
+                }
+                z = next;
             }
             match start {
                 Some(s) => run(s, hi - 1, g),
