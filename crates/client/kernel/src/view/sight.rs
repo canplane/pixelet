@@ -11,7 +11,7 @@
 //! reused across small moves (`Sight`) as an acceleration only.
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::{Tau, SPLIT};
+use pxl_spec::space::camera::grid::{Tau, CHUNK_ANGLE, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::{dot3, len3, sub3, V3};
 use pxl_spec::space::layer::tile::Tile;
@@ -88,8 +88,9 @@ impl Lens {
     }
 }
 
-/// The screen in patches no wider than `OBSERVED_PATCH`, at equal steps of
-/// angle about the optical axis.
+/// The screen in patches no wider than a chunk at its narrowest
+/// (`CHUNK_ANGLE`), what one is chosen for, at equal steps of angle about
+/// the optical axis.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Grid {
     lens: Lens,
@@ -100,7 +101,7 @@ impl Grid {
     pub fn of(lens: Lens) -> Grid {
         Grid {
             lens,
-            across: lens.tan.map(|t| ((2.0 * libm::atan(t) / param::OBSERVED_PATCH).ceil() as u32).max(1)),
+            across: lens.tan.map(|t| ((2.0 * libm::atan(t) / CHUNK_ANGLE).ceil() as u32).max(1)),
         }
     }
 
@@ -193,6 +194,12 @@ impl Footprint {
             min: [x0, y0, self.z.0],
             max: [x1, y1, self.z.1],
         }
+    }
+
+    /// The heights its rays landed at within `b`, none where they landed
+    /// nowhere in it.
+    pub fn landed(&self, b: &Aabb) -> Option<(f64, f64)> {
+        self.touches(b).then(|| (self.z.0.max(b.min[2]), self.z.1.min(b.max[2])))
     }
 
     /// Separating-axis test: the box's axes, then each hull edge's normal.
@@ -302,7 +309,7 @@ impl Sight {
             return 0;
         };
         let grid = Grid::of(lens);
-        let shift = param::REUSE_SHIFT * param::OBSERVED_PATCH;
+        let shift = param::REUSE_SHIFT * CHUNK_ANGLE;
         let whole = everything
             || self.cast.is_none_or(|(was, across, far)| {
                 let turned = [(was.forward, lens.forward), (was.right, lens.right), (was.up, lens.up)]

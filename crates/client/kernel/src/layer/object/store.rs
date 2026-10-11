@@ -569,12 +569,7 @@ impl Query for Store {
     /// cost is the asker's resolution — one find for a node read whole.
     fn bound<const D: usize>(&self, _: &(), node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let mut out: Option<Bound> = None;
-        let mut hold = |aabb: Aabb, finest: Zoom| {
-            out = Some(out.map_or(Bound { aabb, finest }, |o| Bound {
-                aabb: o.aabb.join(aabb),
-                finest: o.finest.max(finest),
-            }))
-        };
+        let mut hold = |aabb: Aabb, finest: Zoom| out = Bound::join(out, Some(Bound { aabb, finest }));
         let whole = region(node);
         // One tree holds a cube under a shard's root; else its shards' leaves.
         let Some(at) = (D == 3 && node.0 >= SHARD_ZOOM).then(|| [node.1[0], node.1[1], node.1[2]]) else {

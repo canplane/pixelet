@@ -59,7 +59,7 @@ fn the_patches_cover_the_screen_and_none_is_wider_than_a_patch() {
         for i in 0..=nx {
             for next in [[i + 1, j], [i, j + 1]].into_iter().filter(|c| c[0] <= nx && c[1] <= ny) {
                 let apart = libm::acos(dot(grid.corner([i, j]), grid.corner(next)).clamp(-1.0, 1.0));
-                assert!(apart <= param::OBSERVED_PATCH + 1e-9, "[{i}, {j}] is {apart} from {next:?}");
+                assert!(apart <= CHUNK_ANGLE + 1e-9, "[{i}, {j}] is {apart} from {next:?}");
             }
         }
     }

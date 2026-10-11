@@ -31,6 +31,19 @@ pub struct Bound {
     pub finest: Zoom,
 }
 
+impl Bound {
+    /// What two hold together: both boxes, the finer of their finest.
+    pub fn join(a: Option<Bound>, b: Option<Bound>) -> Option<Bound> {
+        match (a, b) {
+            (Some(a), Some(b)) => Some(Bound {
+                aabb: a.aabb.join(b.aabb),
+                finest: a.finest.max(b.finest),
+            }),
+            (a, b) => a.or(b),
+        }
+    }
+}
+
 /// A layer's answers, by the node asked.
 pub trait Query {
     /// A node's cells at the zoom asked: a view over what holds them, never
