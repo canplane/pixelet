@@ -7,7 +7,6 @@
 
 mod chunk;
 mod control;
-mod door;
 mod io;
 mod scene;
 mod sched;
@@ -15,7 +14,6 @@ mod view;
 
 pub use chunk::*;
 pub use control::*;
-pub use door::*;
 pub use io::*;
 pub use scene::*;
 pub use sched::*;
