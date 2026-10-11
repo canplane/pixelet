@@ -6,8 +6,8 @@ fn division(id: &str, subtype: &str, name: &str, parent: Option<&str>) -> (Strin
     (id.to_string(), Division::new(id.into(), subtype, name.into(), None, parent.map(String::from)))
 }
 
-fn lineage() -> HashMap<String, Division> {
-    HashMap::from([
+fn lineage() -> FnvHashMap<String, Division> {
+    FnvHashMap::from_iter([
         division("r", "region", "경기도", Some("k")),
         division("k", "country", "대한민국", None),
         division("c", "county", "성남시", Some("r")),
@@ -32,14 +32,14 @@ fn a_parent_the_lineage_lacks_ends_the_name_and_a_cycle_stops() {
     let mut held = lineage();
     held.remove("r");
     assert_eq!(name("l", false, &held).iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["성남시", "정자동"]);
-    let looped = HashMap::from([division("a", "region", "가", Some("b")), division("b", "county", "나", Some("a"))]);
+    let looped = FnvHashMap::from_iter([division("a", "region", "가", Some("b")), division("b", "county", "나", Some("a"))]);
     assert!(name("a", false, &looped).len() <= Subtype::ALL.len());
     assert!(name("nowhere", false, &held).is_empty());
 }
 
 #[test]
 fn a_subtype_newer_than_this_tree_is_left_out_of_a_name() {
-    let held = HashMap::from([division("x", "galaxy", "은하", Some("k")), division("k", "country", "대한민국", None)]);
+    let held = FnvHashMap::from_iter([division("x", "galaxy", "은하", Some("k")), division("k", "country", "대한민국", None)]);
     assert_eq!(name("x", false, &held).iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["대한민국"]);
 }
 

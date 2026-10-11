@@ -9,7 +9,7 @@
 //! (decision/20261009-places-follow-carto.md). It is one XTP tree, as every
 //! other baked tile is.
 
-use std::collections::HashSet;
+use fnv::FnvHashSet;
 
 use crate::asset::symbol::SYMBOLS;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
@@ -201,7 +201,7 @@ impl PlaceTile {
         let mut order: Vec<usize> = (0..names.len()).collect();
         order.sort_by(|&a, &b| (names[a].1, names[a].3.id, names[a].3.name).cmp(&(names[b].1, names[b].3.id, names[b].3.name)));
         let mut from: Vec<Option<Zoom>> = vec![None; names.len()];
-        let mut taken = HashSet::new();
+        let mut taken = FnvHashSet::default();
         for zoom in PLACE_FIRST..=PLACE_LAST {
             taken.clear();
             for &p in &order {

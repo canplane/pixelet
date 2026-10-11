@@ -9,7 +9,7 @@
 //! as Swift hands it the region — and a view's `Surface`, made the native
 //! window wgpu draws through.
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 use std::ptr::{null_mut, NonNull};
 use std::sync::Mutex;
 
@@ -22,7 +22,7 @@ use xpute_kit::status::errno::Errno;
 /// The native window each bound surface draws through, by the kernel's
 /// handle: acquired when a view's surface is bound and released once it is
 /// not, since the kernel's surface over it is gone by then.
-static WINDOWS: Mutex<Option<HashMap<u32, usize>>> = Mutex::new(None);
+static WINDOWS: Mutex<Option<FnvHashMap<u32, usize>>> = Mutex::new(None);
 
 /// JNI's functions, as the environment a call is given holds them.
 ///
@@ -120,7 +120,7 @@ pub unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlGuest_surfaceBind
     // SAFETY: the window is held until the surface over it is unbound.
     let bound = unsafe { crate::surface::bind(handle, made) };
     let let_go = if bound == 0 {
-        WINDOWS.lock().or_bug(Errno::ENOTRECOVERABLE).get_or_insert_with(HashMap::new).insert(handle, at)
+        WINDOWS.lock().or_bug(Errno::ENOTRECOVERABLE).get_or_insert_with(FnvHashMap::default).insert(handle, at)
     } else {
         Some(at)
     };

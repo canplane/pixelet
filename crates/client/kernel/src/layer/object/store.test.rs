@@ -84,7 +84,7 @@ fn some_node(rng: &mut Rng, reach: f64) -> Node<3> {
 
 /// Whole cells from a corner, and what the store keeps folded at `zoom`'s
 /// cells, with the corner in that zoom's cells.
-fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (HashMap<[i64; 3], u32>, [i64; 2]) {
+fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (FnvHashMap<[i64; 3], u32>, [i64; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
@@ -95,7 +95,7 @@ fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (HashMap<[i64; 3], u32>
     let target = GROUND.cell_zoom(zoom);
     let corner = base.map(|v| v >> (GROUND.cell() - target));
     let per = 64 >> (GROUND.cell() - target);
-    let mut out = HashMap::new();
+    let mut out = FnvHashMap::default();
     store.fold_at(target, corner, [corner[0] + per, corner[1] + per], None, &mut out).unwrap();
     (out, corner)
 }

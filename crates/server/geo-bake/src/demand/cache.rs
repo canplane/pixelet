@@ -2,7 +2,7 @@
 
 use super::Failure;
 use crate::util::{pack, write_atomic, Level};
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 use std::future::Future;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -25,7 +25,7 @@ pub struct Lease {
 
 pub struct Cache {
     pub root: PathBuf,
-    flights: Arc<Mutex<HashMap<String, Arc<Flight>>>>,
+    flights: Arc<Mutex<FnvHashMap<String, Arc<Flight>>>>,
     admission: Arc<Semaphore>,
     deadline: std::time::Duration,
 }
@@ -35,7 +35,7 @@ impl Cache {
         std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
         Ok(Self {
             root,
-            flights: Arc::new(Mutex::new(HashMap::new())),
+            flights: Arc::new(Mutex::new(FnvHashMap::default())),
             admission,
             deadline,
         })

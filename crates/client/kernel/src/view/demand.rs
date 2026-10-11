@@ -25,7 +25,7 @@ use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_guest::mem::heap::Block;
 use xpute_kit::status::errno::Errno;
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
@@ -129,7 +129,7 @@ pub struct Demand<L: Observed> {
     /// What it reads moved since it last observed.
     moved: bool,
     /// Reused across observations so observing stops allocating once warm.
-    asks: HashMap<Tile, Ask>,
+    asks: FnvHashMap<Tile, Ask>,
 }
 
 impl<L: Observed> Default for Demand<L> {
@@ -142,7 +142,7 @@ impl<L: Observed> Default for Demand<L> {
             last: None,
             now: None,
             moved: false,
-            asks: HashMap::with_capacity(Residency::<L>::FRAMES as usize),
+            asks: FnvHashMap::with_capacity_and_hasher(Residency::<L>::FRAMES as usize, Default::default()),
         }
     }
 }
@@ -207,7 +207,7 @@ impl<L: Observed> Demand<L> {
         demand.clear();
         let mut asks = core::mem::take(&mut self.asks);
         asks.clear();
-        let ask = |asks: &mut HashMap<Tile, Ask>, p: Tile, a: Ask| {
+        let ask = |asks: &mut FnvHashMap<Tile, Ask>, p: Tile, a: Ask| {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
         };
         let order = |o: &Observation, p: Tile| crate::view::observation::order_of_tile(o, L::LATTICE, p);

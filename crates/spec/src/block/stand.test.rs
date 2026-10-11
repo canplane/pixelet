@@ -29,7 +29,7 @@ fn ground_under_a_hole_past_the_floor_is_drawn() {
     };
     let mut sample = ChunkSample::of_span(COL_SPAN);
     sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
-    let dug: HashMap<[i64; 3], u32> = (-5..5).map(|z| ([0, 0, z], object::air as u32)).collect();
+    let dug: FnvHashMap<[i64; 3], u32> = (-5..5).map(|z| ([0, 0, z], object::air as u32)).collect();
     let mut stands = Vec::new();
     stands_of(&sample, &dug, (0, 0), GROUND.cell(), &mut stands).unwrap();
     let i = apron_col(COL_SPAN, 0, 0) as usize;

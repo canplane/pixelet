@@ -7,7 +7,8 @@
 //! caller runs the statements with its own client and hands the rows back
 //! here to be read into a name.
 
-use std::collections::{BTreeMap, HashMap};
+use fnv::FnvHashMap;
+use std::collections::BTreeMap;
 
 use pxl_spec::division::{DivisionPart, Subtype};
 use pxl_spec::space::coord::adapter::epsg3857::{mer_from_u, u_from_mer, u_per_m};
@@ -126,7 +127,7 @@ pub fn by_point(points: usize, rows: impl IntoIterator<Item = (i64, String, bool
 /// A division's name, broad to narrow: it and each parent [`LINEAGE_SQL`]
 /// held; only the division itself can be approximate. A walk longer than
 /// there are subtypes is a cycle, and stops.
-pub fn name(id: &str, approx: bool, lineage: &HashMap<String, Division>) -> Vec<DivisionPart> {
+pub fn name(id: &str, approx: bool, lineage: &FnvHashMap<String, Division>) -> Vec<DivisionPart> {
     let mut parts: Vec<DivisionPart> = core::iter::successors(lineage.get(id), |d| d.parent.as_ref().and_then(|p| lineage.get(p)))
         .take(Subtype::ALL.len())
         .enumerate()
