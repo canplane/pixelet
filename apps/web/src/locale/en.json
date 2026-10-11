@@ -18,6 +18,10 @@
         "label": "Decor",
         "description": "Shows the trees, cars and other decor placed on the terrain. Objects you placed are not affected."
       },
+      "clouds": {
+        "label": "Clouds",
+        "description": "Shows the puffy clouds in the sky and the thin cloud layers above them. They fade out as the camera climbs high."
+      },
       "textures": {
         "label": "Textures",
         "description": "Textures cube faces instead of a flat color."

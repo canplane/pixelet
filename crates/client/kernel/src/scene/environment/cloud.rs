@@ -28,6 +28,7 @@ use crate::chunk::table::Frame;
 use crate::io::load::{load_failed, load_gltf, load_image, Load};
 use crate::kernel;
 use crate::model::asset::register_model;
+use crate::setting::store::settings_store;
 use crate::view::frame::pose::{globe, km_per_u, units_per_px_at};
 use crate::view::observation::eye;
 
@@ -111,6 +112,15 @@ fn layer_u() -> f64 {
     CUMULUS_KM / km_per_u()
 }
 
+/// How much of the clouds shows: none where the setting is off, and fading
+/// as the eye climbs to where they are gone.
+pub fn clouds_shown() -> f64 {
+    if !settings_store().clouds {
+        return 0.0;
+    }
+    shown(f64::from(kernel().scene.environment.out[ENV_AIR]))
+}
+
 /// Takes the models as they arrive, keeps the blocks the eye can see a cloud
 /// of, and lists them.
 pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
@@ -122,8 +132,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
     }
     let Some(eye) = eye() else { return };
     let env = &kernel().scene.environment.out;
-    // Fading as the eye climbs; gone, nothing is built or drawn, and what is held waits for the descent.
-    let opacity = shown(f64::from(env[ENV_AIR])) as f32;
+    // None, nothing is built or drawn, and what is held waits.
+    let opacity = clouds_shown() as f32;
     if opacity <= 0.0 {
         return;
     }

@@ -14,7 +14,7 @@ use crate::gpu::atmosphere::AIR_WORDS;
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_ray;
-use crate::look::cloud::{drift, shown, CUMULUS_KM, LATTICE_COUNT, LATTICE_SHAMT, TILE_TEXELS};
+use crate::look::cloud::{drift, CUMULUS_KM, LATTICE_COUNT, LATTICE_SHAMT, TILE_TEXELS};
 use crate::look::environment::{ENV_AIR, ENV_SKY};
 
 /// The ray, its first word's last lane how much of the clouds shows.
@@ -77,9 +77,10 @@ impl CloudPass {
         }
     }
 
-    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, eye: &V3, env: &[f32]) {
+    /// `shown`, how much of the clouds the kernel shows.
+    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, eye: &V3, env: &[f32], shown: f64) {
         put_ray(&mut self.words, 0, view_proj, eye);
-        self.words[SHOWN] = shown(f64::from(env[ENV_AIR])) as f32;
+        self.words[SHOWN] = shown as f32;
         self.over = env[ENV_AIR] as f64 > CUMULUS_KM;
         g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
