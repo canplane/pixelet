@@ -355,8 +355,7 @@
     },
     "kernel_panic": {
       "title": "The app stopped.",
-      "body": "Reload the page.",
-      "code": "Stop code: {{code}}"
+      "body": "Reload the page."
     },
     "server_failed": {
       "title": "The server connection failed.",
@@ -365,6 +364,11 @@
     "gpu_failed": {
       "title": "The WebGPU connection failed.",
       "body": "Please try again in a moment."
-    }
+    },
+    "gpu_lost": {
+      "title": "The WebGPU connection was lost.",
+      "body": "Reload the page."
+    },
+    "stop_code": "Stop code: {{code}}"
   }
 }
