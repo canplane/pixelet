@@ -52,8 +52,12 @@ pub fn target() -> Tau {
 }
 
 pub fn ladder() -> [Tau; param::TAU_STEPS + 1] {
-    let target = target().scale();
-    core::array::from_fn(|k| Tau::of(target * param::TAU_STEP.powi(k as i32)))
+    let mut scale = target().scale();
+    core::array::from_fn(|_| {
+        let tau = Tau::of(scale);
+        scale *= param::TAU_STEP;
+        tau
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

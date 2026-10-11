@@ -35,7 +35,7 @@ pub fn approach_angle(current: f64, target: f64, k: f64, delta: f64, eps: f64) -
 pub fn approach_vec<const N: usize>(current: [f64; N], target: [f64; N], k: f64, delta: f64, eps: f64) -> ([f64; N], bool) {
     let a = damp_alpha(k, delta);
     let next: [f64; N] = std::array::from_fn(|i| current[i] + (target[i] - current[i]) * a);
-    let left = (0..N).map(|i| (target[i] - next[i]).powi(2)).sum::<f64>().sqrt();
+    let left = (0..N).map(|i| (target[i] - next[i]) * (target[i] - next[i])).sum::<f64>().sqrt();
     if left < eps {
         (target, false)
     } else {

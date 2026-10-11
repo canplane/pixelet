@@ -49,6 +49,9 @@ disallowed-methods = [
     { path = "f32::cbrt", replacement = "libm::cbrtf" },
     { path = "f32::hypot", replacement = "libm::hypotf" },
     { path = "f32::sin_cos", replacement = "libm::sincosf" },
+    # Its precision is unspecified, by platform and by call (std's doc).
+    { path = "f64::powi", reason = "write the product out, or libm::pow" },
+    { path = "f32::powi", reason = "write the product out, or libm::powf" },
 ]
 
 # A map's order is the same on every run: std's hasher is seeded per process.

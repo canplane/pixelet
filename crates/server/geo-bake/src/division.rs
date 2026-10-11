@@ -128,7 +128,10 @@ pub fn leaf(client: &mut Client, tile: IVec) -> Result<Option<DivisionTile>, Str
             let nearest = kids
                 .iter()
                 .filter(|(_, id)| ids.number.get(id).is_none_or(|k| !taken.contains(k)))
-                .map(|(p, id)| ((p[0] - center[0]).powi(2) + (p[1] - center[1]).powi(2), id))
+                .map(|(p, id)| {
+                    let [dx, dy] = [p[0] - center[0], p[1] - center[1]];
+                    (dx * dx + dy * dy, id)
+                })
                 .min_by(|a, b| a.0.total_cmp(&b.0));
             let Some((_, id)) = nearest else { break };
             at = ids.of(id);

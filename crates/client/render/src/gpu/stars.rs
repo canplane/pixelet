@@ -84,7 +84,8 @@ impl StarPass {
         // atmos_medium.wgsl's meets_land: the eye's sphere against the land's.
         let eye = BOTTOM_RADIUS_KM + (env[ENV_AIR] as f64).max(0.001);
         let land = BOTTOM_RADIUS_KM + env[ENV_AIR + 3] as f64;
-        u[HORIZON] = -(1.0 - (land / eye).min(1.0).powi(2)).sqrt() as f32;
+        let s = (land / eye).min(1.0);
+        u[HORIZON] = -(1.0 - s * s).sqrt() as f32;
         u[MOON..MOON + 3].copy_from_slice(&env[ENV_MOON..ENV_MOON + 3]);
         g.write_buffer(self.uniform, 0, bytes(u));
     }
@@ -125,7 +126,7 @@ fn star(packed: &[u8; STAR_BYTES]) -> [f32; STAR_FLOATS] {
 /// Up to a constant the color divides out.
 fn planck(lambda: f64, t: f64) -> f64 {
     let l = lambda * 1e-9;
-    1.0 / (l.powi(5) * (libm::exp(1.4388e-2 / (l * t)) - 1.0))
+    1.0 / ((l * l) * (l * l) * l * (libm::exp(1.4388e-2 / (l * t)) - 1.0))
 }
 
 /// Ballesteros 2012 B−V to temperature, relative to 6,500 K white, taken

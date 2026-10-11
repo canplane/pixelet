@@ -242,7 +242,12 @@ fn shadow_reach(records: &[[u32; DRAW_WORDS]], uniforms: &[f32]) -> Option<f64> 
         }
         // The cube's farthest corner from the eye.
         let side = f64::from(u[CHUNK_UNIT]) * f64::from(CHUNK_CELLS);
-        let corner: f64 = (0..3).map(|k| f64::from(u[k]).abs().max((f64::from(u[k]) + side).abs()).powi(2)).sum();
+        let corner: f64 = (0..3)
+            .map(|k| {
+                let d = f64::from(u[k]).abs().max((f64::from(u[k]) + side).abs());
+                d * d
+            })
+            .sum();
         far = far.max(libm::sqrt(corner));
     }
     (far > 0.0).then_some(far)
