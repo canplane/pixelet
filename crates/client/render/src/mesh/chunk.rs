@@ -335,7 +335,8 @@ impl BakeContext {
         } else {
             let scale = round(unit / z_unit) as u32;
             let inner = span - 2 * apron;
-            xpute_kit::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), EINVAL, lod_step, inner);
+            // A fold's cell past each side is packed from the apron, as the chunk's own are.
+            xpute_kit::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step) && apron >= lod_step, EINVAL, lod_step, apron);
             Open::Coarse(CoarseBake {
                 lod_step,
                 scale,
@@ -644,20 +645,23 @@ impl BakeContext {
         if b.phase == 0 {
             // Each cell is packed before the next (its buckets depend on nothing outside
             // it); holding every cell's buckets at once ran to megabytes on a dense chunk.
+            // Its cells and one past each side, from the apron.
+            let span = res + 2;
             if b.row == 0 {
                 self.coarse.clear();
-                self.coarse.span = res;
-                self.coarse.apron = 0;
+                self.coarse.span = span;
+                self.coarse.apron = 1;
             }
-            let row_end = res.min(b.row + (self.rows / lod_step).max(1));
+            let first = set.apron - lod_step;
+            let row_end = span.min(b.row + (self.rows / lod_step).max(1));
             for by in b.row..row_end {
-                for bx in 0..res {
+                for bx in 0..span {
                     let start = self.buckets.len() as u32;
                     let mut cnt = 0u32;
                     for j in 0..lod_step {
-                        let cy = by * lod_step + j + set.apron;
+                        let cy = first + by * lod_step + j;
                         for k in 0..lod_step {
-                            let cx = bx * lod_step + k + set.apron;
+                            let cx = first + bx * lod_step + k;
                             let col = cy * set.span + cx;
                             // Ground and object alike: a coarse cell is what is not air.
                             let end = set.start[col as usize + 1];
@@ -676,7 +680,7 @@ impl BakeContext {
                 }
             }
             b.row = row_end;
-            if row_end < res {
+            if row_end < span {
                 return false;
             }
             let grown = grow(&mut self.coarse.start, 1);
@@ -685,7 +689,7 @@ impl BakeContext {
             }
             self.coarse.start.push(self.coarse.z0.len() as u32);
             self.heights = Heights::of(&self.coarse.view(), b.z_unit, self.window);
-            b.fine = Some(self.begin_fine(res, 0, (lod_step * scale) as f64 * b.z_unit, b.z_unit));
+            b.fine = Some(self.begin_fine(span, 1, (lod_step * scale) as f64 * b.z_unit, b.z_unit));
             b.phase = 2;
             return false;
         }

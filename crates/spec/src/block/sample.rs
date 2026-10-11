@@ -24,10 +24,11 @@ const FILLER_DEPTH: i32 = 3;
 /// Its sandstone under sand: `rand.nextInt(4)`, here its mean rounded up.
 const SANDSTONE_DEPTH: i32 = 2;
 
-/// The ring of neighbor columns a chunk is composed with. Without it the face
-/// mask read every chunk seam as open air, losing occlusion, creases and
-/// culling there. Nothing is emitted from an apron column.
-pub const APRON: u32 = 1;
+/// The ring of neighbor columns a chunk is composed with: one of its own
+/// cells past each side, a fold's where its runs are folded, so the faces at
+/// its rim are decided at its own resolution, as one cell past its floor and
+/// roof decides theirs. Nothing is emitted from an apron column.
+pub const APRON: u32 = 1 << GROUND_FOLD;
 
 /// Columns a row of a node at `zoom` composed at `runs`, the apron's among them.
 pub const fn span(zoom: Zoom, runs: Zoom) -> u32 {
@@ -112,26 +113,27 @@ pub struct TileSource<'a> {
 impl TileSource<'_> {
     /// A cell's look and height as a chunk draws it: the look of the source
     /// cell it lies in, the source surface's height at its own center, so a
-    /// coarser tile invents nothing. `at` is in the drawn tile's cells.
-    pub fn cell_at(&self, at: [i64; 2]) -> (GroundId, i32) {
+    /// coarser tile invents nothing. `at` is in the drawn tile's cells; none
+    /// off the source tile, which knows nothing there.
+    pub fn cell_at(&self, at: [i64; 2]) -> Option<(GroundId, i32)> {
         let last = TILE_CELLS as i32 - 1;
         let (tile, n) = (&self.tile, self.n);
         let (x, y) = (self.origin[0] + at[0], self.origin[1] + at[1]);
         let (tx, ty) = (x.div_euclid(n as i64) as i32, y.div_euclid(n as i64) as i32);
-        // Only the elevation is padded past the tile. An apron cell off it keeps its
-        // height, all the face mask reads, and the base look nothing draws.
-        let on_tile = (0..=last).contains(&tx) && (0..=last).contains(&ty);
-        let cell = if on_tile { tile.cells[GROUND.cell_index(tx as u32, ty as u32) as usize] } else { ground::BASE };
+        if !((0..=last).contains(&tx) && (0..=last).contains(&ty)) {
+            return None;
+        }
         let center = |v: i64| (v as f64 + 0.5) / n as f64;
         // A height h is cells up to h − 1 of ground, its surface at z = h.
-        (cell, bicubic(tile.ele, center(x), center(y)) as i32)
+        Some((tile.cells[GROUND.cell_index(tx as u32, ty as u32) as usize], bicubic(tile.ele, center(x), center(y)) as i32))
     }
 }
 
 pub struct Around<'a> {
     pub own: TileSource<'a>,
     /// None where the apron does not reach or nothing is drawn; those cells are
-    /// read from `own`, whose elevation is padded past its edge.
+    /// `own`'s where it holds them, a coarser tile standing in, and else not
+    /// known, no ground.
     pub beside: [Option<TileSource<'a>>; 8],
 }
 
@@ -223,12 +225,12 @@ impl ChunkSample {
                         None => (&around.own, [x, y]),
                     },
                 };
-                let (cell, ele) = source.cell_at([x, y]);
+                let (cell, ele) = source.cell_at([x, y]).unwrap_or((sentinel::void, 0));
                 (self.look[i], self.block[i]) = (cell, cell);
                 self.ele[i] = ele;
             }
         }
-        // Which cells a source read, not the apron's stand-in past a tile not held.
+        // Which cells a source read, not one past every tile held.
         let read = |i: usize| {
             let (px, py) = (i as i64 % i64::from(span), i as i64 / i64::from(span));
             let at = [first[0] + px - i64::from(APRON), first[1] + py - i64::from(APRON)];
