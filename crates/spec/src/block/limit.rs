@@ -13,10 +13,15 @@
 pub const BEDROCK_DEPTH: i32 = 64;
 pub const HEADROOM: f64 = 128.0;
 
-/// The bedrock's top in a column whose face is at `ele`, both in cells
-/// `per_u` a unit.
-pub const fn bedrock(ele: i32, per_u: i32) -> i32 {
-    (if ele < 0 { ele } else { 0 }) - BEDROCK_DEPTH * per_u
+/// The lowest a block may reach under ground whose face is at `ele`, in
+/// units: the bedrock's top.
+pub fn floor(ele: f64) -> f64 {
+    ele.min(0.0) - f64::from(BEDROCK_DEPTH)
+}
+
+/// `floor` in a column whose face is at `ele`, both in cells `per_u` a unit.
+pub fn bedrock(ele: i32, per_u: i32) -> i32 {
+    (floor(f64::from(ele) / f64::from(per_u)) * f64::from(per_u)) as i32
 }
 
 /// The highest a block may reach over ground whose face is at `ele`, in units.
