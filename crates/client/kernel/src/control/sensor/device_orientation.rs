@@ -37,7 +37,8 @@ pub struct OrientationPlatform {
 struct Orientation {
     last_event_at: Option<f64>,
     watchdog_at: f64,
-    commands: Vec<OrientationCommand>,
+    /// The turn's last; the shell's listener follows it and ignores a repeat.
+    command: Option<OrientationCommand>,
 }
 
 static ORIENTATION: Global<Orientation> = Global::new();
@@ -46,7 +47,7 @@ fn orientation() -> &'static mut Orientation {
     ORIENTATION.get(|| Orientation {
         last_event_at: None,
         watchdog_at: 0.0,
-        commands: Vec::new(),
+        command: None,
     })
 }
 
@@ -56,7 +57,7 @@ pub fn orientation_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>
     if webkit_compass_heading.is_none() && alpha.is_none() && beta.is_none() && gamma.is_none() {
         let o = orientation();
         o.last_event_at = None;
-        o.commands.push(OrientationCommand::Remove);
+        o.command = Some(OrientationCommand::Remove);
         let store = device_orientation_store();
         store.set_is_tracking_orientation(false);
         store.pose = Pose::Unavailable;
@@ -83,7 +84,7 @@ pub fn request_orientation(platform: OrientationPlatform) -> bool {
     }
     store.pose = Pose::Loading;
     let o = orientation();
-    o.commands.push(OrientationCommand::Listen);
+    o.command = Some(OrientationCommand::Listen);
     o.last_event_at = Some(now());
     store.set_is_tracking_orientation(true);
     true
@@ -125,7 +126,7 @@ pub fn orientation_lost() {
 }
 
 pub fn orientation_close() {
-    orientation().commands.push(OrientationCommand::Remove);
+    orientation().command = Some(OrientationCommand::Remove);
     let store = device_orientation_store();
     store.set_is_tracking_orientation(false);
     store.pose = Pose::Idle;
@@ -163,11 +164,11 @@ pub fn orientation_watchdog_step(platform: OrientationPlatform) {
     }
     let Some(last) = o.last_event_at else { return };
     if t - last > WATCHDOG_TIMEOUT_MS {
-        o.commands.push(OrientationCommand::Remove);
+        o.command = Some(OrientationCommand::Remove);
         orientation_lost();
     }
 }
 
-pub fn take_orientation_commands() -> Vec<OrientationCommand> {
-    core::mem::take(&mut orientation().commands)
+pub fn take_orientation_command() -> Option<OrientationCommand> {
+    orientation().command.take()
 }
