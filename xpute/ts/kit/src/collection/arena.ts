@@ -44,14 +44,13 @@ export class Arena<T extends object> {
   }
 
   alloc(): T {
-    if (this._len >= this._cap) this._grow(Math.max(this._cap * 2, 1));
+    if (this._len >= this._cap) this._grow(this._len + 1);
 
     return this.mem[this._len++];
   }
 
   reserve(cnt: u32): void {
-    const req = this._len + cnt;
-    if (req > this._cap) this._grow(Math.max(this._cap * 2, req));
+    this._grow(this._len + cnt);
   }
 
   /** A `new_len` past the current length is a broken invariant, not a clamp. */
@@ -62,9 +61,11 @@ export class Arena<T extends object> {
     this._len = new_len;
   }
 
-  private _grow(new_cap: u32): void {
-    if (new_cap <= this._cap) return;
-    if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
+  // Doubling stops at the cap, so the cap refuses only what does not fit.
+  private _grow(req: u32): void {
+    if (req <= this._cap) return;
+    if (req > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
+    const new_cap = Math.min(Math.max(this._cap * 2, req), this.max_cap);
 
     this.mem.length = new_cap;
     for (let i = this._cap; i < new_cap; i++) this.mem[i] = this._factory();
@@ -115,15 +116,15 @@ export class Vector<T extends AnyTypedArray> {
     return this.mem[idx] as AnyElementOf<T>;
   }
 
+  /** At most one past the length: a gap would hold what a truncate left. */
   set(idx: u32, v: AnyElementOf<T>): void {
-    if (idx >= this._cap) this._grow(Math.max(this._cap * 2, idx + 1));
-
-    this.mem[idx] = v;
-    if (idx >= this._len) this._len = idx + 1;
+    if (idx > this._len) throw new InvariantError(Errno.EINVAL);
+    if (idx === this._len) this.push(v);
+    else this.mem[idx] = v;
   }
 
   push(v: AnyElementOf<T>): u32 {
-    if (this._len >= this._cap) this._grow(Math.max(this._cap * 2, 1));
+    if (this._len >= this._cap) this._grow(this._len + 1);
 
     const i = this._len++;
     this.mem[i] = v;
@@ -131,21 +132,20 @@ export class Vector<T extends AnyTypedArray> {
   }
 
   reserve(cnt: u32): void {
-    const req = this._len + cnt;
-    if (req > this._cap) this._grow(Math.max(this._cap * 2, req));
+    this._grow(this._len + cnt);
   }
 
+  /** A `new_len` past the current length is a broken invariant, not a clamp. */
   truncate(new_len: u32): void {
-    if (new_len > this._len) {
-      console.warn(`[vector] truncate ignored: new_len=${new_len} > len=${this._len}`);
-      return;
-    }
+    if (new_len > this._len) throw new InvariantError(Errno.EINVAL);
     this._len = new_len;
   }
 
-  private _grow(new_cap: u32): void {
-    if (new_cap <= this._cap) return;
-    if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
+  // Doubling stops at the cap, so the cap refuses only what does not fit.
+  private _grow(req: u32): void {
+    if (req <= this._cap) return;
+    if (req > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
+    const new_cap = Math.min(Math.max(this._cap * 2, req), this.max_cap);
 
     const new_mem: T = new this.ctor(new_cap);
     // `set` cannot be typed across the number and bigint array families;

@@ -1,5 +1,6 @@
 // @xpute/kit/collection/heap.ts
 // Binary min/max heaps over a caller-owned array, with no defensive checks.
+// A NaN key breaks the order.
 
 import type { primitive, u32 } from "../abi/word.ts";
 
@@ -82,6 +83,7 @@ export class MinHeap<K extends primitive, T> {
   }
 
   /** Requires a non-empty heap. */
+  /** The heap must not be empty. */
   replace_root(e: Element<K, T>): void {
     this.a[0] = e;
     MinHeap.heapify(this.a, 0, this.a.length);
@@ -162,6 +164,7 @@ export class MaxHeap<K extends primitive, T> {
   }
 
   /** Requires a non-empty heap. */
+  /** The heap must not be empty. */
   replace_root(e: Element<K, T>): void {
     this.a[0] = e;
     MaxHeap.heapify(this.a, 0, this.a.length);
