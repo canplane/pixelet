@@ -63,9 +63,9 @@ A chunk composes its own heights and nothing else (`pxl-spec block/stand.rs`
 `compose`): no floor is kept, so ground, strata and caves run down to the
 bedrock in whatever chunk is drawn, and a cave shows wherever a chunk is.
 Which chunks are drawn is the bound's: a terrain node holds its ground from
-a few cells under the lowest face about it (`pxl-kernel
-layer/terrain/query.rs` `drawn_under`), and the caves opened about an edit
-deeper. A chunk composes the cell under its floor too, and its floor's
+a cell under the lowest face about it, its own or beside (`pxl-kernel
+layer/terrain/query.rs`), and the caves opened about an edit deeper; no
+margin is kept past what shows. A chunk composes the cell under its floor too, and its floor's
 faces are that cell's to decide, as the apron decides its sides: a cave's
 roof over the chunk under shows. Its roof is drawn whatever is over it, and
 a fold decides neither: a summary fills no cell exactly, and a roof hidden
@@ -83,7 +83,7 @@ Two meshes drawing one plane facing one way is what z-fighting is, so no
 cube draws past its own space: the block a coarse cube laid under its lowest
 box and the wall a fine one hung to the ground beside are gone. What they
 covered is the bound's: chunks are drawn under the lowest face about a node,
-its own columns' and those beside (`drawn_under`), so a step down to a
+its own columns' and those beside, so a step down to a
 neighbour is walled by a cube's own ground, and
 past the leaves a whole fold cell under that, so a shrunk cell stands on
 ground: the cube under one draws the plane between them.
