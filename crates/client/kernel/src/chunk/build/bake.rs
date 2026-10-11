@@ -65,6 +65,7 @@ impl Builder {
                     fine,
                     settings_store().textures,
                     (crate::param::BAKE_ROWS_PER_STEP, crate::param::BAKE_BOXES_PER_STEP),
+                    run::window(c.at, runs.zoom),
                 )
                 .is_err()
             {

@@ -43,7 +43,7 @@ fn ground(z1: i32) -> Vec<Run> {
 fn bake_in_blocks(set: &OwnedRunSet, lod_step: u32, block: u32) -> Vec<u32> {
     let mut bake = BakeContext::default();
     let view = set.view();
-    assert!(bake.begin(&view, lod_step, 1.0, 1.0, lod_step == 1, true, (8, 512)).is_ok());
+    assert!(bake.begin(&view, lod_step, 1.0, 1.0, lod_step == 1, true, (8, 512), [i32::MIN, i32::MAX]).is_ok());
     let words_a_box = box_words(lod_step == 1);
     let mut buf = vec![0u32; (block * words_a_box) as usize];
     let mut out: Vec<u32> = Vec::new();
@@ -109,7 +109,7 @@ fn a_cell_full_of_one_leaf_folds_to_that_leaf() {
     let set = set_of(span, &columns);
     let mut bake = BakeContext::default();
     let view = set.view();
-    assert!(bake.begin(&view, 2, 1.0, 1.0, true, true, (8, 512)).is_ok());
+    assert!(bake.begin(&view, 2, 1.0, 1.0, true, true, (8, 512), [i32::MIN, i32::MAX]).is_ok());
     let mut buf: Vec<u32> = Vec::new();
     loop {
         match bake.step(&view) {
@@ -133,9 +133,13 @@ fn a_cell_full_of_one_leaf_folds_to_that_leaf() {
 }
 
 fn bake_whole(set: &OwnedRunSet, z_unit: f64) -> (Vec<u32>, Heights) {
+    bake_window(set, z_unit, [i32::MIN, i32::MAX])
+}
+
+fn bake_window(set: &OwnedRunSet, z_unit: f64, window: [i32; 2]) -> (Vec<u32>, Heights) {
     let mut bake = BakeContext::default();
     let view = set.view();
-    assert!(bake.begin(&view, 1, 1.0, z_unit, true, true, (8, 512)).is_ok());
+    assert!(bake.begin(&view, 1, 1.0, z_unit, true, true, (8, 512), window).is_ok());
     let mut buf: Vec<u32> = Vec::new();
     loop {
         match bake.step(&view) {
@@ -222,4 +226,22 @@ fn stacked_boxes_meet() {
             assert!(next == end || next > end + 1, "boxes at {at:?} meet off a step: {stack:?}");
         }
     }
+}
+
+/// A chunk draws its own heights, the face at its floor as the cell under it
+/// says, hidden where ground goes on and drawn where it stops, so a cave's
+/// roof over the chunk under shows; the face at its roof always, as the chunk
+/// above may draw the cell over it shrunk.
+#[test]
+fn a_chunk_floor_and_roof_show_where_the_ground_past_them_stops() {
+    let bake = |z0: i32, z1: i32| {
+        let columns: Vec<Vec<Run>> = (0..9).map(|k| if k == 4 { vec![Run { z0, z1, rgb: [1, 2, 3], layer: 0 }] } else { Vec::new() }).collect();
+        let (mesh, heights) = bake_window(&set_of(3, &columns), 1.0, [0, 4]);
+        let m = mesh.chunks(FINE_BOX_WORDS as usize).next().map(|m| m.to_vec()).expect("a box");
+        let (min, size) = box_bounds(&m, 1.0, heights);
+        ((min[2], min[2] + size[2]), m[5] & FACE_NZ != 0, m[5] & FACE_PZ != 0)
+    };
+    assert_eq!(bake(-1, 4), ((0.0, 4.0), false, true), "ground through both");
+    assert_eq!(bake(1, 4), ((1.0, 4.0), true, true), "a cave's roof");
+    assert_eq!(bake(-1, 2), ((0.0, 3.0), false, true), "the ground's face");
 }

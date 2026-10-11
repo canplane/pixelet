@@ -24,7 +24,6 @@ const LOW_FILL_THRESHOLD: f64 = 0.25;
 const CHILDREN: f64 = pxl_spec::space::hierarchy::tree::children(3) as f64;
 
 const FULL_FACE_CNT: u32 = 6;
-const OPEN_BOTTOM_FACE_CNT: u32 = FULL_FACE_CNT - 1;
 
 pub const FACE_PX: u32 = 1 << 0;
 pub const FACE_NX: u32 = 1 << 1;
@@ -115,13 +114,15 @@ impl Default for Heights {
 }
 
 impl Heights {
-    /// In units, from a set whose cells are `z_unit` tall. The floor stands on
-    /// a whole unit, so a texture's repeat is read off the mesh's own heights.
-    fn of(set: &RunSet, z_unit: f64) -> Heights {
+    /// In units, from a set whose cells are `z_unit` tall, of what it draws in
+    /// `window`, so a box at its floor or roof is that height exactly. The
+    /// floor stands on a whole unit, so a texture's repeat is read off the
+    /// mesh's own heights.
+    fn of(set: &RunSet, z_unit: f64, window: [i32; 2]) -> Heights {
         let (mut lo, mut hi) = (i32::MAX, i32::MIN);
-        for i in 0..set.count as usize {
-            lo = lo.min(set.z0[i]);
-            hi = hi.max(set.z1[i] + 1);
+        for (z0, z1) in (0..set.count as usize).filter_map(|i| within(set, i, window)) {
+            lo = lo.min(z0);
+            hi = hi.max(z1 + 1);
         }
         if lo > hi {
             return Heights::default();
@@ -270,6 +271,11 @@ pub struct BakeContext {
     /// Rows a step bakes, the asker's to set.
     rows: u32,
     boxes: u32,
+    /// The chunk's own heights, `[lo, hi)` in its runs' cells: what is drawn.
+    /// The set reaches the cell under its floor, which no box is drawn from
+    /// and the faces at the floor are decided by, as the apron decides its
+    /// sides.
+    window: [i32; 2],
     mesh_words: u32,
     box_cnt: u32,
     open: Option<Open>,
@@ -292,6 +298,7 @@ impl Default for BakeContext {
             textured: true,
             rows: 1,
             boxes: 1,
+            window: [i32::MIN, i32::MAX],
             mesh_words: 0,
             box_cnt: 0,
             open: None,
@@ -305,13 +312,14 @@ impl Default for BakeContext {
 impl BakeContext {
     /// `unit` is a column's width and `z_unit` a run's cell's height, in units;
     /// at `lod_step` past 1 the chunk is summarized `lod_step` columns a cell.
-    /// `fine` boxes carry texture taps. One bake at a time.
+    /// `fine` boxes carry texture taps; only what is in `window` is drawn. One
+    /// bake at a time.
     #[allow(clippy::too_many_arguments)]
-    pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, (rows, boxes): (u32, u32)) -> Result<(), Refused> {
+    pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, (rows, boxes): (u32, u32), window: [i32; 2]) -> Result<(), Refused> {
         xpute_kit::ensure!(self.open.is_none(), ENOTRECOVERABLE);
-        (self.rows, self.boxes) = (rows, boxes);
+        (self.rows, self.boxes, self.window) = (rows, boxes, window);
         self.refused = false;
-        let (count, span, apron, heights) = (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, z_unit) } else { Heights::default() });
+        let (count, span, apron, heights) = (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, z_unit, window) } else { Heights::default() });
         self.textured = textured;
         xpute_kit::ensure!(span <= COL_SPAN, ENOSPC, span, COL_SPAN);
         // Reserved up front: doubling on a dense chunk held the old block and the new together.
@@ -470,11 +478,14 @@ impl BakeContext {
                     let mut mergeable: Option<(u32, u32)> = None;
                     for i in set.start[col as usize]..end {
                         let i = i as usize;
+                        if within(set, i, self.window).is_none() {
+                            continue;
+                        }
                         self.counters.total_runs += 1;
-                        let faces = run_faces(set, span, cx, cy, i);
+                        let faces = run_faces(set, span, cx, cy, i, self.window);
                         // A run with no height shows its top alone.
                         let mask = if set.z1[i] >= set.z0[i] { faces | rim(cx, cy) } else { faces & !(ALL_FACES & !FACE_PZ) };
-                        self.counters.faces_possible += if run_include_bottom(set, col as usize, i) { FULL_FACE_CNT } else { OPEN_BOTTOM_FACE_CNT };
+                        self.counters.faces_possible += FULL_FACE_CNT;
                         if mask & ALL_FACES == 0 {
                             self.counters.culled += 1;
                             continue;
@@ -517,7 +528,7 @@ impl BakeContext {
                             break;
                         }
                         let next = col + w;
-                        if !self.merge_run[next].is_some_and(|next_run| runs_match(set, run, next_run as usize)) {
+                        if !self.merge_run[next].is_some_and(|next_run| runs_match(set, run, next_run as usize, self.window)) {
                             break;
                         }
                         if self.merge_mask[next] & !X_BORDER_BITS != mask & !X_BORDER_BITS {
@@ -533,7 +544,7 @@ impl BakeContext {
                                 break 'outer;
                             }
                             let cell = row + k;
-                            if !self.merge_run[cell].is_some_and(|cell_run| runs_match(set, run, cell_run as usize)) {
+                            if !self.merge_run[cell].is_some_and(|cell_run| runs_match(set, run, cell_run as usize, self.window)) {
                                 break 'outer;
                             }
                             if self.merge_mask[cell] & !Y_BORDER_BITS != self.merge_mask[col + k] & !Y_BORDER_BITS {
@@ -583,13 +594,13 @@ impl BakeContext {
             let depth = (set.z1[i] as f64 + 1.0 - set.z0[i] as f64) * z_unit;
             let (min_x, min_y, min_z, size_x, size_y, size_z);
             if sub_s == SUB_CELL_NONE {
-                let z0 = set.z0[i];
+                let (z0, z1) = within(set, i, self.window).unwrap_or((set.z0[i], set.z1[i]));
                 min_x = (cx - apron) * unit;
                 min_y = (cy - apron) * unit;
                 min_z = z0 as f64 * z_unit;
                 size_x = w * unit;
                 size_y = h * unit;
-                size_z = (set.z1[i] as f64 + 1.0 - z0 as f64) * z_unit;
+                size_z = (z1 as f64 + 1.0 - z0 as f64) * z_unit;
             } else {
                 min_x = (cx - apron) * unit + unpack_sub_cell_fraction(set.sub_ox[i]) * unit;
                 min_y = (cy - apron) * unit + unpack_sub_cell_fraction(set.sub_oy[i]) * unit;
@@ -697,7 +708,7 @@ impl BakeContext {
                 return false;
             }
             self.coarse.start.push(self.coarse.z0.len() as u32);
-            self.heights = Heights::of(&self.coarse.view(), b.z_unit);
+            self.heights = Heights::of(&self.coarse.view(), b.z_unit, self.window);
             b.fine = Some(self.begin_fine(res, 0, (lod_step * scale) as f64 * b.z_unit, b.z_unit));
             b.phase = 2;
             return false;
@@ -727,7 +738,7 @@ impl BakeContext {
 
     #[allow(clippy::too_many_arguments)]
     fn accumulate_run(&mut self, start: u32, mut cnt: u32, bucket: i32, cell: u32, set: &RunSet, i: usize, col: u32) -> u32 {
-        let (mut run_z0, run_z1) = (set.z0[i], set.z1[i]);
+        let Some((mut run_z0, run_z1)) = within(set, i, self.window) else { return cnt };
         // Ground is solid under its surface: the column stops at the chunk's floor
         // only to save runs, and read from there a coarse sea cell was a thousandth full.
         if i == set.start[col as usize] as usize && set.side[i] != Side::OBJECT {
@@ -764,6 +775,9 @@ impl BakeContext {
     }
 
     /// Buckets have distinct heights, so sorting visits them lowest first.
+    /// Nothing past the chunk's heights is laid: a summary fills no cell
+    /// exactly, so a face at its floor or roof is never hidden by what is past
+    /// it, where a cell beside it in another chunk may be shrunk.
     fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, step: i32) {
         let grown = self.coarse.grow_runs(2 * cnt as usize);
         if !self.room(grown) {
@@ -988,11 +1002,15 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
     rel
 }
 
-/// Only a column's lowest run rests on the ground; any run over it, a deck's
-/// slab or a placed cube, can be seen from below. A solid cell under it
-/// still hides the face (`run_faces`).
-fn run_include_bottom(set: &RunSet, col: usize, i: usize) -> bool {
-    i != set.start[col] as usize
+/// Run `i` within the chunk's own heights `[lo, hi)`: none where it lies
+/// past them, where it reaches only to decide a face.
+fn within(set: &RunSet, i: usize, [lo, hi]: [i32; 2]) -> Option<(i32, i32)> {
+    let (z0, z1) = (set.z0[i], set.z1[i]);
+    if z1 < z0 {
+        return (lo..hi).contains(&z0).then_some((z0, z1));
+    }
+    let (z0, z1) = (z0.max(lo), z1.min(hi.saturating_sub(1)));
+    (z0 <= z1).then_some((z0, z1))
 }
 
 fn wants_diagonal(mask: u32, a: u32, b: u32) -> bool {
@@ -1015,20 +1033,25 @@ fn side_bits(mut mask: u32, rel: u32, face: u32, crease: u32, rises: u32, dips: 
     mask
 }
 
-fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
+fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize, window: [i32; 2]) -> u32 {
     let col = cy * span + cx;
-    let mask_all = if run_include_bottom(set, col as usize, i) { ALL_FACES } else { OPEN_BOTTOM_FACES };
     if set.sub_s[i] != SUB_CELL_NONE {
-        // A coarse box is the ground itself shrunk, so its underside is more ground.
+        // A coarse box is the ground itself shrunk, so its underside is more
+        // ground, and the lowest of a column rests on it.
+        let mask_all = if i == set.start[col as usize] as usize { OPEN_BOTTOM_FACES } else { ALL_FACES };
         let under = if set.side[i] == Side::OBJECT { 0 } else { UNDER_AS_TOP };
         return mask_all | ALL_CREASES | under;
     }
-    let mut mask = mask_all;
-    let (z0, z1) = (set.z0[i], set.z1[i]);
-    // A filled cell above or below hides the face. Left in, the face between
-    // stacked cubes striped them in the shadow map, which draws both sides.
-    let above = column_covers(set, col, z1 + 1);
-    let below = column_covers(set, col, z0 - 1);
+    let mut mask = ALL_FACES;
+    let (z0, z1) = within(set, i, window).unwrap_or((set.z0[i], set.z1[i]));
+    // A filled cell above or below hides the face. Under the chunk's floor the
+    // cell past it decides (`window`), so a cave's roof shows; over its roof
+    // never, since the chunk above may draw that cell shrunk, folded, and a
+    // roof hidden under it opened the ground to the sky. Left in, the face
+    // between stacked cubes striped them in the shadow map, which draws both
+    // sides.
+    let above = z1 + 1 < window[1] && column_covers(set, col, z1 + 1);
+    let below = set.z0[i] < z0 || column_covers(set, col, z0 - 1);
     if above {
         mask &= !FACE_PZ;
         mask |= CAP_PZ;
@@ -1078,9 +1101,8 @@ fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
     mask
 }
 
-fn runs_match(set: &RunSet, a: usize, b: usize) -> bool {
-    set.z0[a] == set.z0[b]
-        && set.z1[a] == set.z1[b]
+fn runs_match(set: &RunSet, a: usize, b: usize, window: [i32; 2]) -> bool {
+    within(set, a, window) == within(set, b, window)
         && set.r[a] == set.r[b]
         && set.g[a] == set.g[b]
         && set.b[a] == set.b[b]

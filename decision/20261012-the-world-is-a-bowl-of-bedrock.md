@@ -45,15 +45,31 @@ procedural.rs` `hollow`). A cave is a pure function of where a cell is and
 the one seed, so it runs on across chunks with nothing kept, and nothing
 bounds its depth. What wins is an order, first first: bedrock, the ground's
 face, the ways and the ground about them, the caves. So a cave never opens
-the face; it is met by digging.
+the face; it is met by digging. So it is carved only about an edit:
+in a cube of `CAVE_REGION`, a leaf chunk's 32 units, whose column or one
+beside holds something placed, over those columns' edited heights and a
+cube past them (`pxl-spec procedural.rs` `CaveOpening`). Elsewhere a cave is
+shut in rock and drawn as rock, which no one can tell apart, so nearly no
+chunk computes one. Which cubes open is a function of the cube, never of
+who asks, so a chunk and the control query carve alike: both carve where
+the cells composed are the leaves' or finer (`caves_in`), the control query
+composing as the chunk that draws the leaves folded does. An edit remakes
+the chunks of the cube columns beside it (`opened_by`), and the world's
+bound holds the heights opened about it (`pxl-kernel query/world.rs`), so the
+chunks deep in a cave are drawn. Where an edit may go is read off the limits
+(`floor`, `ceiling`), never the runs: a fold draws no bedrock.
 
 A chunk composes its own heights and nothing else (`pxl-spec block/stand.rs`
 `compose`): no floor is kept, so ground, strata and caves run down to the
 bedrock in whatever chunk is drawn, and a cave shows wherever a chunk is.
 Which chunks are drawn is the bound's: a terrain node holds its ground from
 a few cells under the lowest face about it (`pxl-kernel
-layer/terrain/query.rs` `drawn_under`), so a dug hole, whose placed air the
-object layer bounds, draws the chunks it reaches. Composed down to the
+layer/terrain/query.rs` `drawn_under`), and the caves opened about an edit
+deeper. A chunk composes the cell under its floor too, and its floor's
+faces are that cell's to decide, as the apron decides its sides: a cave's
+roof over the chunk under shows. Its roof is drawn whatever is over it, and
+a fold decides neither: a summary fills no cell exactly, and a roof hidden
+under a fold's shrunk cell opened the ground to the sky. Composed down to the
 bedrock before, a column shared by its chunks cost every chunk the whole
 column's caves.
 
