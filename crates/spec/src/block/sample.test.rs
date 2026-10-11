@@ -156,6 +156,7 @@ fn a_column_is_its_look_over_its_filler_over_stone() {
     let leaf = GROUND.cell();
     check(ground::grass, leaf, 10, 0, &[(0, 5, ground::stone), (6, 8, ground::soil), (9, 9, ground::grass)]);
     check(ground::sand, leaf, 10, 0, &[(0, 3, ground::stone), (4, 5, ground::sandstone), (6, 9, ground::sand)]);
+    check(ground::water, leaf, 10, 0, &[(0, 5, ground::stone), (6, 9, ground::water)]);
     // Coarser than the leaves, a cell is a summary of its faces: its look whole.
     for coarser in [leaf - 1, leaf - 5, GROUND.cell_zoom(GROUND.top())] {
         check(ground::grass, coarser, 10, 0, &[(0, 9, ground::grass)]);
