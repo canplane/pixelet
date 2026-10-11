@@ -8,10 +8,11 @@
 // Header: word0 = [magic 32 | reserved 32], word1 = [root_payload_sz 32 | type 8 | reserved 24].
 // Branch: [len slot | child table], each entry [child_rel_off 32 | type 8 | reserved 24].
 // A typed null keeps its type: root_payload_sz == 0 at the root, child_rel_off == 0
-// in a branch. A nonzero child_rel_off must land at or past the table's end and
-// inside the packet, or the packet is malformed.
+// in a branch. A nonzero child_rel_off lands past the table and before the next
+// present sibling, inside its parent's extent, or the packet is malformed.
 
 import type { numeric, primitive, u32, u8 } from "@xpute/kit/abi/word.ts";
+import { FIELD_GET, FIELD_SET } from "@xpute/kit/abi/word.ts";
 import type { BigTypedArray, TypedArray, U8Array } from "@xpute/kit/abi/array.ts";
 import type { Nullable } from "@xpute/kit/lang/type.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
@@ -182,6 +183,37 @@ export const SET_WORD = (buf_view: DataView, off: u32, lo32: u32, hi32: u32): vo
 export const GET_WORD = (buf_view: DataView, off: u32, out: [u32, u32]): [u32, u32] => {
   out[0] = buf_view.getUint32(off, LE);
   out[1] = buf_view.getUint32(off + 4, LE);
+  return out;
+};
+
+/** A type the wire carries: the untyped null, a branch, or a leaf of a width its class has. */
+export const TYPE_IS_KNOWN = (type: u8): boolean => {
+  if (type === SpecialType.NIL || type === SpecialType.BRANCH) return true;
+  if (!TYPE_IS_LEAF(type) || (type & ~(BIT_LEAF | BIT_SEQ | CLASS_MASK | ARG_MASK))) return false;
+  const arg = TYPE_ARG_OF(type);
+  switch (type & CLASS_MASK) {
+    case CLASS_F:
+      return arg === 2 || arg === 3;
+    case CLASS_R:
+      return arg <= (TYPE_IS_SEQ(type) ? 2 : 0);
+    default:
+      return arg <= 3;
+  }
+};
+
+/** A read slot whose high half is reserved, zero on the wire: a len, a size, the magic. */
+export const GET_LEN = (buf_view: DataView, off: u32): u32 => {
+  if (buf_view.getUint32(off + 4, LE) !== RESERVED) throw new MarshalError(Errno.EBADMSG);
+  return buf_view.getUint32(off, LE);
+};
+
+/** A read child entry or root word: its offset or size, and a known type with the rest reserved. */
+export const GET_DESC = (buf_view: DataView, off: u32, out: [u32, NodeType]): [u32, NodeType] => {
+  const desc = buf_view.getUint32(off + 4, LE);
+  const type = FIELD_GET(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
+  if (desc !== FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type) || !TYPE_IS_KNOWN(type)) throw new MarshalError(Errno.EBADMSG);
+  out[0] = buf_view.getUint32(off, LE);
+  out[1] = type;
   return out;
 };
 

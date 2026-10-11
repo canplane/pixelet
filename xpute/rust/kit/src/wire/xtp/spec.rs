@@ -5,6 +5,7 @@
 // Stateless helpers are uppercase, as the C header's macros they mirror.
 #![allow(non_snake_case, non_camel_case_types, clippy::identity_op)]
 
+use crate::abi::word::{field_get32, field_set32};
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 #[derive(Clone, Debug, PartialEq)]
@@ -286,6 +287,40 @@ pub fn GET_WORD(buf: &[u8], off: u32, out: &mut [u32; 2]) -> [u32; 2] {
     out[0] = u32::from_le_bytes(buf[at..at + 4].try_into().unwrap());
     out[1] = u32::from_le_bytes(buf[at + 4..at + 8].try_into().unwrap());
     *out
+}
+
+/// A type the wire carries: the untyped null, a branch, or a leaf of a width its class has.
+pub fn TYPE_IS_KNOWN(type_: u8) -> bool {
+    if type_ == SpecialType::NIL as u8 || type_ == SpecialType::BRANCH as u8 {
+        return true;
+    }
+    if !TYPE_IS_LEAF(type_) || type_ & !(BIT_LEAF | BIT_SEQ | CLASS_MASK | ARG_MASK) != 0 {
+        return false;
+    }
+    let arg = TYPE_ARG_OF(type_);
+    match type_ & CLASS_MASK {
+        CLASS_F => arg == 2 || arg == 3,
+        CLASS_R => arg <= if TYPE_IS_SEQ(type_) { 2 } else { 0 },
+        _ => arg <= 3,
+    }
+}
+
+/// A read slot whose high half is reserved, zero on the wire: a len, a size, the magic.
+pub fn GET_LEN(buf: &[u8], off: u32) -> Result<u32, MarshalError> {
+    match GET_WORD(buf, off, &mut [0; 2]) {
+        [lo, RESERVED] => Ok(lo),
+        _ => Err(MarshalError::new(Errno::EBADMSG)),
+    }
+}
+
+/// A read child entry or root word: its offset or size, and a known type with the rest reserved.
+pub fn GET_DESC(buf: &[u8], off: u32) -> Result<(u32, NodeType), MarshalError> {
+    let [lo, desc] = GET_WORD(buf, off, &mut [0; 2]);
+    let type_ = field_get32(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
+    if desc != field_set32(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type_ as u32) || !TYPE_IS_KNOWN(type_) {
+        return Err(MarshalError::new(Errno::EBADMSG));
+    }
+    Ok((lo, type_))
 }
 
 pub type AlignUnit = u32;

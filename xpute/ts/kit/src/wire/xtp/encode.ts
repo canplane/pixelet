@@ -1,6 +1,6 @@
 // @xpute/kit/wire/xtp/encode.ts
 
-import { BOOL, type f32, type f64, FIELD_GET, FIELD_SET, type i16, type i32, type i64, type i8, type u16, type u32, type u64, type u8 } from "@xpute/kit/abi/word.ts";
+import { BOOL, type f32, type f64, FIELD_SET, type i16, type i32, type i64, type i8, type u16, type u32, type u64, type u8 } from "@xpute/kit/abi/word.ts";
 import type { BigTypedArray, TypedArray, U8Array } from "@xpute/kit/abi/array.ts";
 import * as encoding from "@xpute/kit/codec/encoding.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
@@ -12,7 +12,8 @@ import {
   ALIGN_SZ,
   DESC_TYPE_MASK,
   DESC_TYPE_SHAMT,
-  GET_WORD,
+  GET_DESC,
+  GET_LEN,
   HDR_SZ,
   LE,
   MAGIC,
@@ -32,7 +33,7 @@ import {
 } from "./spec.ts";
 import type { NodeView } from "./view.ts";
 
-const WORD_REG: [u32, u32] = [NONE, NONE];
+const DESC_REG: [u32, NodeType] = [NONE, SpecialType.NIL];
 
 export interface TreeEncoderOptions {
   init_cap?: u32;
@@ -107,12 +108,11 @@ export class TreeEncoder {
     if (pkt.byteLength < HDR_SZ) throw new MarshalError(Errno.EBADMSG);
     const hdr_view = new DataView(pkt.buffer, pkt.byteOffset, HDR_SZ);
 
-    const [magic] = GET_WORD(hdr_view, 0, WORD_REG);
-    if (magic !== MAGIC) throw new MarshalError(Errno.EBADMSG);
+    if (GET_LEN(hdr_view, 0) !== MAGIC) throw new MarshalError(Errno.EBADMSG);
 
-    const [payload_sz, desc] = GET_WORD(hdr_view, WORD_SZ, WORD_REG);
+    const [payload_sz, type] = GET_DESC(hdr_view, WORD_SZ, DESC_REG);
     if (payload_sz > pkt.byteLength - HDR_SZ) throw new MarshalError(Errno.EBADMSG);
-    st.type = FIELD_GET(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
+    st.type = type;
 
     if (payload_sz === 0) return;
 
@@ -270,18 +270,14 @@ export class TreeEncoder {
         break;
       }
 
-      // encodeInto() the free tail first, and on overflow reserve the worst case (4 bytes a UTF-16 unit) and retry once.
+      // encodeInto() the free tail first, and on overflow reserve the worst case (3 bytes a UTF-16 unit) and retry once.
       case SequenceType.STR: {
         const s = val as string;
 
         later = true;
         set_payload = (): void => {
           const min_needed: u32 = s.length;
-
-          if (s.length > ((this.max_cap - payload_start) >>> 2)) {
-            throw new MarshalError(Errno.EOVERFLOW);
-          }
-          const max_needed: u32 = s.length * 4;
+          if (min_needed > this.max_cap - payload_start) throw new MarshalError(Errno.EOVERFLOW);
 
           if (this.buf.byteLength - payload_start < min_needed) {
             this._ensure(payload_start + min_needed);
@@ -291,11 +287,12 @@ export class TreeEncoder {
           let res = encoding.te.encodeInto(s, view);
 
           if (res.read < s.length) {
-            const payload_lim: u32 = payload_start + max_needed;
+            const payload_lim: u32 = payload_start + Math.min(3 * s.length, this.max_cap - payload_start);
             this._ensure(payload_lim);
 
             view = this.buf.subarray(payload_start, payload_lim);
             res = encoding.te.encodeInto(s, view);
+            if (res.read < s.length) throw new MarshalError(Errno.EOVERFLOW);
           }
 
           len = res.written;

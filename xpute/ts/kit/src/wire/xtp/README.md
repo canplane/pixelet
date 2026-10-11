@@ -761,6 +761,11 @@ Branch child rules:
 
 - child offsets are relative to the enclosing branch base
 - `child_rel_off == 0` means physical absence while preserving child type
+- a node's extent holds its children's: a present child starts past the
+  child table and before the next present sibling, and runs no further than
+  that sibling's start, or its parent's end; the root's end is
+  `HDR_SZ + root_payload_sz`. No two nodes share bytes, so a packet's nodes
+  are bounded by its size, and a reader refuses a packet that breaks it
 
 That relative-offset design is what enables:
 
@@ -790,7 +795,9 @@ It throws on:
 
 - malformed packet header
 - malformed payload bounds
-- malformed child offsets
+- malformed child offsets, or a child outside its extent
+- a reserved bit set, or a type byte no node has
+- a `str` or `strs` whose bytes are not UTF-8
 - OOB traversal
 - malformed leaf payloads
 
