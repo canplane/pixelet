@@ -38,8 +38,10 @@ pub struct Stream {
 }
 
 impl Stream {
+    /// A new stream has published nothing, whatever the range held.
     pub fn new(words: &'static mut [u32], head: usize) -> Stream {
         xpute_kit::ensure!(head > END && head < words.len(), EINVAL);
+        words[END] = 0;
         Stream {
             words,
             head,

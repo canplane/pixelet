@@ -22,6 +22,7 @@
 #include "../guest/ipc/ring.hpp"
 #include "../guest/ipc/stream.hpp"
 #include "../guest/ipc/sys.hpp"
+#include "../guest/mem/section.hpp"
 #include "guest.spec.hpp"
 
 #ifdef __wasm__
@@ -36,16 +37,14 @@ __attribute__((import_module("env"), import_name("now"))) double xpute_conforman
 namespace xpute::conformance {
 namespace {
 
-constexpr std::uint32_t PAGE = 4096;
-
 constexpr std::uint32_t page_up(std::uint32_t bytes) {
-    return (bytes + PAGE - 1) / PAGE * PAGE;
+    return align_up(bytes, PAGE_BYTES);
 }
 
 // Deliberately not where another guest puts them, so a host that finds them
 // at all has found them through the directory.
 constexpr std::uint32_t DIRECTORY_AT = 0;
-constexpr std::uint32_t STREAM_AT = PAGE;
+constexpr std::uint32_t STREAM_AT = PAGE_BYTES;
 constexpr std::uint32_t COMPLETION_DESC_AT = STREAM_AT + page_up(STREAM_WORDS * 4);
 constexpr std::uint32_t SUBMISSION_DESC_AT = COMPLETION_DESC_AT + page_up(Ring::bytes(COMPLETION_CAPACITY));
 constexpr std::uint32_t COMPLETION_SLOT_AT = SUBMISSION_DESC_AT + page_up(Ring::bytes(SUBMISSION_CAPACITY));
@@ -188,7 +187,7 @@ using namespace xpute::conformance;
 // The library's allocator is never linked: it grows a memory that never grows,
 // and its failure path prints through WASI.
 struct HeapRange {
-    static constexpr std::size_t MIN_LOG2 = 12;
+    static constexpr std::size_t MIN_LOG2 = std::countr_zero(PAGE_BYTES);
     static constexpr std::size_t MAX_LOG2 = std::countr_zero(HEAP_BYTES);
     static std::uintptr_t base() noexcept { return range_at() + HEAP_AT; }
     static std::uintptr_t end() noexcept { return base() + HEAP_BYTES; }

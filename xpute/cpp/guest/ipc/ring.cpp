@@ -17,8 +17,9 @@ static constexpr std::uint64_t padded(std::uint64_t n) noexcept {
     return (n + 7) / 8 * 8;
 }
 
-Ring::Ring(Memory mem, std::uint32_t at) noexcept : mem_(mem), at_(at) {
-    ensure(power_of_two(capacity()), Errno::einval, capacity(), at);
+Ring::Ring(Memory mem, std::uint32_t at) noexcept
+    : mem_(mem), at_(at), capacity_(header(ring::CAPACITY)), slot_bytes_(header(ring::SLOT_BYTES)), slot_base_(header(ring::SLOT_BASE)) {
+    ensure(power_of_two(capacity_), Errno::einval, capacity_, at);
 }
 
 Ring Ring::init(Memory mem, std::uint32_t at, std::uint32_t capacity, std::uint32_t slot_base, std::uint32_t slot_bytes) noexcept {
@@ -32,12 +33,12 @@ Ring Ring::init(Memory mem, std::uint32_t at, std::uint32_t capacity, std::uint3
 }
 
 std::uint32_t Ring::frame_at(std::uint32_t position) const noexcept {
-    std::uint32_t slot = position & (capacity() - 1);
+    std::uint32_t slot = position & (capacity_ - 1);
     return at_ + 4 * (ring::HEADER_WORDS + slot * frame::WORDS);
 }
 
 std::uint32_t Ring::slot_at(std::uint32_t position) const noexcept {
-    return header(ring::SLOT_BASE) + (position & (capacity() - 1)) * slot_bytes();
+    return slot_base_ + (position & (capacity_ - 1)) * slot_bytes_;
 }
 
 void Ring::pad(std::uint32_t slot, std::uint32_t n) const noexcept {
@@ -84,7 +85,7 @@ std::optional<Ring::Message> Ring::peek() const noexcept {
 
 Result<std::span<const std::uint8_t>> Ring::packet(const Message &m) const noexcept {
     if (m.packet_at == 0) return std::span<const std::uint8_t>();
-    std::uint32_t base = header(ring::SLOT_BASE), slot = slot_bytes();
+    std::uint32_t base = slot_base_, slot = slot_bytes_;
     if (m.packet_at < base) return marshal_error(Errno::ebadmsg);
     std::uint64_t off = m.packet_at - base;
     if (off % slot != 0 || off + 16 > slots_bytes(capacity(), slot)) return marshal_error(Errno::ebadmsg);

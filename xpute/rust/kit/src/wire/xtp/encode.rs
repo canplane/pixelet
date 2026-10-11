@@ -243,7 +243,10 @@ impl TreeEncoder {
             | SequenceType::F64_ARRAY => {
                 let SequenceVal::Array(arr) = val else { return Err(bad_type()) };
                 payload_sz = arr.bytes.len() as u32;
-                len = payload_sz / ELEM_SZ(type_) as u32;
+                if !payload_sz.is_multiple_of(ELEM_SZ(type_)) {
+                    return Err(bad_type());
+                }
+                len = payload_sz / ELEM_SZ(type_);
 
                 if payload_sz as i64 > self.max_cap as i64 - payload_start as i64 {
                     return Err(MarshalError::new(Errno::EOVERFLOW));
@@ -366,8 +369,9 @@ pub struct PacketWriter<'a> {
 
 impl<'a> PacketWriter<'a> {
     pub fn new(buf: &'a mut [u8], count: u32) -> PacketWriter<'a> {
-        let lim = ROOT + WORD_SZ + count * WORD_SZ;
-        let fits = lim as usize <= buf.len();
+        let end = u64::from(ROOT) + u64::from(WORD_SZ) * (1 + u64::from(count));
+        let fits = end <= buf.len() as u64;
+        let lim = if fits { end as u32 } else { ROOT };
         let mut w = PacketWriter {
             buf,
             base: ROOT,
@@ -390,22 +394,21 @@ impl<'a> PacketWriter<'a> {
         self.buf[at + 4..at + 8].copy_from_slice(&hi.to_le_bytes());
     }
 
-    fn reserve(&mut self, unit: u32, bytes: u32) -> Option<usize> {
+    /// In u64, as the C++ writer sizes: a count past what a u32 holds is too
+    /// large, never wrapped small.
+    fn reserve(&mut self, unit: u32, bytes: u64) -> Option<usize> {
         if !self.fits {
             return None;
         }
         let base = align(self.lim, unit);
-        match base.checked_add(bytes) {
-            Some(end) if end as usize <= self.buf.len() => {
-                self.buf[self.lim as usize..end as usize].fill(0);
-                self.lim = end;
-                Some(base as usize)
-            }
-            _ => {
-                self.fits = false;
-                None
-            }
+        let end = u64::from(base) + bytes;
+        if end > self.buf.len() as u64 {
+            self.fits = false;
+            return None;
         }
+        self.buf[self.lim as usize..end as usize].fill(0);
+        self.lim = end as u32;
+        Some(base as usize)
     }
 
     fn entry(&mut self, base: Option<usize>, type_: u8) -> &mut Self {
@@ -420,17 +423,18 @@ impl<'a> PacketWriter<'a> {
 
     fn scalar<const N: usize>(&mut self, type_: ScalarType, bytes: Option<[u8; N]>) -> &mut Self {
         let base = bytes.and_then(|b| {
-            let at = self.reserve(N as u32, N as u32)?;
+            let at = self.reserve(N as u32, N as u64)?;
             self.buf[at..at + N].copy_from_slice(&b);
             Some(at)
         });
         self.entry(base, type_ as u8)
     }
 
-    fn seq(&mut self, type_: SequenceType, len: u32, bytes: u32, fill: impl FnOnce(&mut [u8])) -> &mut Self {
-        let at = self.reserve(WORD_SZ, WORD_SZ + align(bytes, WORD_SZ)).inspect(|&at| {
+    fn seq(&mut self, type_: SequenceType, len: u32, bytes: u64, fill: impl FnOnce(&mut [u8])) -> &mut Self {
+        let at = self.reserve(WORD_SZ, u64::from(WORD_SZ) + bytes.next_multiple_of(u64::from(WORD_SZ))).inspect(|&at| {
             self.word(at as u32, len, RESERVED);
-            fill(&mut self.buf[at + WORD_SZ as usize..at + (WORD_SZ + bytes) as usize]);
+            let payload = at + WORD_SZ as usize;
+            fill(&mut self.buf[payload..payload + bytes as usize]);
         });
         self.entry(at, type_ as u8)
     }
@@ -467,7 +471,7 @@ impl<'a> PacketWriter<'a> {
     pub fn str(&mut self, s: Option<&str>) -> &mut Self {
         match s {
             Some(s) => match u32::try_from(s.len() + 1) {
-                Ok(bytes) => self.seq(SequenceType::STR, bytes - 1, bytes, |out| out[..s.len()].copy_from_slice(s.as_bytes())),
+                Ok(bytes) => self.seq(SequenceType::STR, bytes - 1, u64::from(bytes), |out| out[..s.len()].copy_from_slice(s.as_bytes())),
                 _ => {
                     self.fits = false;
                     self.entry(None, SequenceType::STR as u8)
@@ -480,7 +484,7 @@ impl<'a> PacketWriter<'a> {
     pub fn strs<S: AsRef<str>>(&mut self, items: Option<&[S]>) -> &mut Self {
         match items {
             Some(items) => match u32::try_from(strs_size(items)) {
-                Ok(size) => self.seq(SequenceType::STRS, items.len() as u32, size, |out| strs_payload(items, out)),
+                Ok(size) => self.seq(SequenceType::STRS, items.len() as u32, u64::from(size), |out| strs_payload(items, out)),
                 Err(_) => {
                     self.fits = false;
                     self.entry(None, SequenceType::STRS as u8)
@@ -532,13 +536,13 @@ impl<'a> PacketWriter<'a> {
 
     pub fn u8_array(&mut self, a: Option<&[u8]>) -> &mut Self {
         match a {
-            Some(a) => self.seq(SequenceType::U8_ARRAY, a.len() as u32, a.len() as u32, |out| out.copy_from_slice(a)),
+            Some(a) => self.seq(SequenceType::U8_ARRAY, a.len() as u32, a.len() as u64, |out| out.copy_from_slice(a)),
             None => self.entry(None, SequenceType::U8_ARRAY as u8),
         }
     }
 
     fn array_with<const N: usize>(&mut self, type_: SequenceType, len: u32, mut value: impl FnMut(u32) -> [u8; N]) -> &mut Self {
-        self.seq(type_, len, len * N as u32, |out| {
+        self.seq(type_, len, u64::from(len) * N as u64, |out| {
             for (i, o) in out.as_chunks_mut::<N>().0.iter_mut().enumerate() {
                 *o = value(i as u32);
             }
@@ -575,7 +579,7 @@ impl<'a> PacketWriter<'a> {
     }
 
     pub fn branch(&mut self, count: u32, fill: impl FnOnce(&mut Self)) -> &mut Self {
-        let at = self.reserve(WORD_SZ, WORD_SZ + count * WORD_SZ);
+        let at = self.reserve(WORD_SZ, u64::from(WORD_SZ) * (1 + u64::from(count)));
         if let Some(at) = at {
             self.word(at as u32, count, RESERVED);
         }
