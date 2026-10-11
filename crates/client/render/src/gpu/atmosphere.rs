@@ -54,10 +54,9 @@ pub(crate) const NIGHT_SKY: usize = 36;
 pub(crate) const LAND_ALTITUDE: usize = 39;
 pub(crate) const CLOUD_BASE: usize = 40;
 pub(crate) const CLOUD_FRAC: usize = 42;
-pub(crate) const CLOUD_TIME: usize = 44;
-pub(crate) const CLOUD_COUNT: usize = 45;
-pub(crate) const CLOUD_ALTITUDE: usize = 46;
-pub(crate) const CLOUD_GONE: usize = 47;
+pub(crate) const CLOUD_COUNT: usize = 44;
+pub(crate) const CLOUD_ALTITUDE: usize = 45;
+pub(crate) const CLOUD_DRIFT: usize = 46;
 pub(crate) const CITY_LIGHT: usize = 48;
 pub(crate) const EARTH_REACH: usize = 51;
 pub(crate) const EARTH_WINDOW: usize = 52;
@@ -298,11 +297,10 @@ impl Atmosphere {
         for k in 0..2 {
             w[CLOUD_BASE + k] = f32::from_bits(field.base[k]);
             w[CLOUD_FRAC + k] = field.frac[k];
+            w[CLOUD_DRIFT + k] = field.drift[k];
         }
-        w[CLOUD_TIME] = field.time;
         w[CLOUD_COUNT] = f32::from_bits(field.count);
         w[CLOUD_ALTITUDE] = field.altitude_km;
-        w[CLOUD_GONE] = field.gone_km;
     }
 
     pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) {

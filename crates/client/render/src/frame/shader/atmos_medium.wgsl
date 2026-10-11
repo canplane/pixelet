@@ -34,10 +34,10 @@ struct Atmosphere {
   land_altitude_km: f32,
   cloud_base: vec2u,
   cloud_frac: vec2f,
-  cloud_time: f32,
   cloud_count: u32,
   cloud_altitude_km: f32,
-  cloud_gone_km: f32,
+  // Cells the field has moved under the map.
+  cloud_drift: vec2f,
   // A lit city's radiance where the picture holds all of it.
   city_light: vec3f,
   // In units.
@@ -83,10 +83,9 @@ fn atmos_night_sky() -> vec3f { return atmos_words[9].xyz; }
 fn atmos_land_altitude_km() -> f32 { return atmos_words[9].w; }
 fn atmos_cloud_base() -> vec2u { return bitcast<vec2u>(atmos_words[10].xy); }
 fn atmos_cloud_frac() -> vec2f { return atmos_words[10].zw; }
-fn atmos_cloud_time() -> f32 { return atmos_words[11].x; }
-fn atmos_cloud_count() -> u32 { return bitcast<u32>(atmos_words[11].y); }
-fn atmos_cloud_altitude_km() -> f32 { return atmos_words[11].z; }
-fn atmos_cloud_gone_km() -> f32 { return atmos_words[11].w; }
+fn atmos_cloud_count() -> u32 { return bitcast<u32>(atmos_words[11].x); }
+fn atmos_cloud_altitude_km() -> f32 { return atmos_words[11].y; }
+fn atmos_cloud_drift() -> vec2f { return atmos_words[11].zw; }
 fn atmos_city_light() -> vec3f { return atmos_words[12].xyz; }
 fn atmos_earth_reach() -> f32 { return atmos_words[12].w; }
 fn atmos_earth_window() -> vec4i { return bitcast<vec4i>(atmos_words[13]); }

@@ -33,6 +33,7 @@ use crate::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
 use crate::profiler::report::set_host_frame_stat;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
+use crate::scene::environment::cloud::cloud_groups;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::{settings_store, AoMode};
 use crate::view::demand::Observed as _;
@@ -109,6 +110,9 @@ pub fn stage_render() {
     });
     for (slot, (model, image, extent)) in decor.iter_mut().zip(variants) {
         *slot = (model.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle), image, extent);
+    }
+    for (group, mesh, image, extent) in cloud_groups() {
+        decor[group] = (mesh, image, extent);
     }
     let mut skins = [(0u32, 0u32); 2];
     let mut skin_cnt = 0;
@@ -227,6 +231,7 @@ pub fn visible_step(ctx: &mut TickContext) {
         let edits = crate::chunk::source::previewed();
         let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
         crate::chunk::decor::cell::step(&pxl_spec::block::decor::DECORS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
+        crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
     }
     crate::chunk::place::step(ctx);
     let k = kernel();

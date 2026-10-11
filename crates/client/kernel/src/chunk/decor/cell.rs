@@ -9,7 +9,7 @@
 use crate::layer::Query;
 use std::collections::HashMap;
 
-use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_IMPOSTOR};
+use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::v3::{len3, sub3, V3};
 use pxl_spec::space::coord::world::{nearest, nearest_box};
@@ -35,7 +35,7 @@ use crate::setting::store::settings_store;
 use crate::view::frame::pose::units_per_px_at;
 use crate::view::observation::{eye, observation};
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::block::decor::{Decor, Variant, DECORS};
+use pxl_spec::block::decor::{Decor, DECORS};
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::global::Global;
 
@@ -226,69 +226,98 @@ pub fn step(decors: &[Decor], store: &Store, sched: &Scheduler, draw: &mut DrawL
 /// sprites; the list is re-uploaded only where it changed.
 fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
     let Some(eye) = eye() else { return };
-    let model_px = decor_gone_px();
-    let sprite_px = decor_sprite_px();
     let sprites = &mut c.sprites;
     for (&chunk, block) in c.blocks.iter().filter(|(_, b)| b.drawn) {
         let (x0, y0, side) = chunk.rect();
         let translation = DrawList::translation([nearest(x0, frame_eye[0]), y0, 0.0], frame_eye);
-        let x0 = nearest(x0, eye[0]);
-        let [zlo, zhi] = block.heights.map(f64::from);
-        let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
-        let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
-        let nearest = len3(&[gap(x0, x0 + side, eye[0]), gap(y0, y0 + side, eye[1]), gap(zlo, zhi, eye[2])]).max(1e-3);
-        let farthest = len3(&[reach(x0, x0 + side, eye[0]), reach(y0, y0 + side, eye[1]), reach(zlo, zhi, eye[2])]).max(1e-3);
-        // SAFETY: the chunk's block, `bytes` long, its own to write past `index`.
-        let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block.at as usize), block.bytes as usize / 4) };
-        let (lanes_of, list) = words.split_at_mut(block.index as usize / 4);
-        let mut extents = DECORS.iter().flat_map(|k| k.variants.iter().map(Variant::extent));
-        let (mut at, mut changed) = (0usize, false);
-        for (group, (offset, count)) in decor_groups(lanes_of).enumerate() {
-            let extent = extents.next().unwrap_or(0.0);
-            let lane = lanes(offset, count);
-            let first = at;
-            sprites.clear();
-            // Scattered scales are within the jitter; a placed one's is 1.
-            let (small, large) = (1.0 - SCALE_JITTER, 1.0 + SCALE_JITTER);
-            let gone = extent * large / units_per_px_at(nearest) < sprite_px;
-            let modeled = extent * small / units_per_px_at(farthest) >= model_px;
-            for i in 0..if gone { 0 } else { count as usize } {
-                if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
-                    continue;
-                }
-                if modeled {
-                    changed |= list[at] != i as u32;
-                    list[at] = i as u32;
-                    at += 1;
-                    continue;
-                }
-                let f = |l: usize| f32::from_bits(lanes_of[lane.f32_at(l, i)]) as f64;
-                let d = len3(&[x0 + f(0) - eye[0], y0 + f(1) - eye[1], f(2) - eye[2]]).max(1e-3);
-                let px = extent * f(4) / units_per_px_at(d);
-                if px >= model_px {
-                    changed |= list[at] != i as u32;
-                    list[at] = i as u32;
-                    at += 1;
-                } else if px >= sprite_px {
-                    sprites.push(i as u32);
-                }
+        let shown = Shown {
+            handle: block.handle,
+            at: block.at,
+            index: block.index,
+            bytes: block.bytes,
+            corner: [nearest(x0, eye[0]), y0],
+            side,
+            heights: block.heights,
+        };
+        // Scattered scales are within the jitter; a placed one's is 1.
+        let scales = [1.0 - SCALE_JITTER, 1.0 + SCALE_JITTER];
+        let extents = DECORS.iter().flat_map(|k| k.variants.iter().map(move |v| (v.extent(), scales)));
+        present_block(draw, &shown, translation, eye, (0..).zip(extents), 1.0, sprites);
+    }
+}
+
+/// A block of decor lanes as `present_block` reads it: its square's corner
+/// about the eye's lap, its side, and the heights its instances stand between.
+pub struct Shown {
+    pub handle: u32,
+    pub at: u32,
+    pub index: u32,
+    pub bytes: u32,
+    pub corner: [f64; 2],
+    pub side: f64,
+    pub heights: [f32; 2],
+}
+
+/// Lists one block's instances, model, sprite or nothing each, under the
+/// draw groups `groups` names in the block's order, each with its model's
+/// extent and the least and most scale its instances are drawn at. Under an
+/// `opacity` of one the models are laid over the world blended, and a sprite,
+/// which cannot be, is left out.
+#[allow(clippy::too_many_arguments)]
+pub fn present_block(draw: &mut DrawList, b: &Shown, translation: [f32; 3], eye: V3, groups: impl Iterator<Item = (u32, (f64, [f64; 2]))>, opacity: f32, sprites: &mut Vec<u32>) {
+    let (model_px, sprite_px) = (decor_gone_px(), decor_sprite_px());
+    let [x0, y0] = b.corner;
+    let [zlo, zhi] = b.heights.map(f64::from);
+    let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
+    let reach = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
+    let nearest = len3(&[gap(x0, x0 + b.side, eye[0]), gap(y0, y0 + b.side, eye[1]), gap(zlo, zhi, eye[2])]).max(1e-3);
+    let farthest = len3(&[reach(x0, x0 + b.side, eye[0]), reach(y0, y0 + b.side, eye[1]), reach(zlo, zhi, eye[2])]).max(1e-3);
+    // SAFETY: the block, `bytes` long, its owner's to write past `index`.
+    let words: &mut [u32] = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(b.at as usize), b.bytes as usize / 4) };
+    let (lanes_of, list) = words.split_at_mut(b.index as usize / 4);
+    let (mut at, mut changed) = (0usize, false);
+    for ((offset, count), (group, (extent, [least, most]))) in decor_groups(lanes_of).zip(groups) {
+        let lane = lanes(offset, count);
+        let first = at;
+        sprites.clear();
+        let gone = extent * most / units_per_px_at(nearest) < sprite_px;
+        let modeled = extent * least / units_per_px_at(farthest) >= model_px;
+        for i in 0..if gone { 0 } else { count as usize } {
+            if (lanes_of[lane.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
+                continue;
             }
-            let models = (at - first) as u32;
-            changed |= list[at..at + sprites.len()] != sprites[..];
-            list[at..at + sprites.len()].copy_from_slice(sprites);
-            at += sprites.len();
-            let index = block.index / 4 + first as u32;
-            let group = group as u32;
-            if models > 0 {
-                draw.draw_instances(PIPELINE_DECOR, block.handle, group, models, [offset, count, index], translation, 1.0);
+            if modeled {
+                changed |= list[at] != i as u32;
+                list[at] = i as u32;
+                at += 1;
+                continue;
             }
-            if !sprites.is_empty() {
-                draw.draw_instances(PIPELINE_IMPOSTOR, block.handle, group, sprites.len() as u32, [offset, count, index + models], translation, 1.0);
+            let f = |l: usize| f32::from_bits(lanes_of[lane.f32_at(l, i)]) as f64;
+            let d = len3(&[x0 + f(0) - eye[0], y0 + f(1) - eye[1], f(2) - eye[2]]).max(1e-3);
+            let px = extent * f(4) / units_per_px_at(d);
+            if px >= model_px {
+                changed |= list[at] != i as u32;
+                list[at] = i as u32;
+                at += 1;
+            } else if px >= sprite_px && opacity >= 1.0 {
+                sprites.push(i as u32);
             }
         }
-        if changed {
-            draw.rewrite_part(block.handle, block.at, block.index, at as u32 * 4);
+        let models = (at - first) as u32;
+        changed |= list[at..at + sprites.len()] != sprites[..];
+        list[at..at + sprites.len()].copy_from_slice(sprites);
+        at += sprites.len();
+        let index = b.index / 4 + first as u32;
+        if models > 0 {
+            let pipeline = if opacity < 1.0 { PIPELINE_GHOST_DECOR } else { PIPELINE_DECOR };
+            draw.draw_instances(pipeline, b.handle, group, models, [offset, count, index], translation, opacity);
         }
+        if !sprites.is_empty() {
+            draw.draw_instances(PIPELINE_IMPOSTOR, b.handle, group, sprites.len() as u32, [offset, count, index + models], translation, 1.0);
+        }
+    }
+    if changed {
+        draw.rewrite_part(b.handle, b.at, b.index, at as u32 * 4);
     }
 }
 

@@ -5,6 +5,7 @@
 //! give.
 
 pub mod celestial_position;
+pub mod cloud;
 
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
 use pxl_spec::space::coord::v3::len3;

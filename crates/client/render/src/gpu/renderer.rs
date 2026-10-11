@@ -1017,7 +1017,6 @@ impl Renderer {
         if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
             self.rebind(g);
         }
-        self.clouds.ensure(g, world.width, world.height);
         g.write_buffer(self.sky_buffer, 0, bytes(&self.sky));
         let uniform_bytes = word_bytes(uniforms.len());
         if uniform_bytes > self.draws_bytes {
@@ -1066,7 +1065,6 @@ impl Renderer {
             g.end(pass);
             release(pass);
         }
-        self.clouds.march(g, encoder);
         if self.screen_ao {
             let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
             let chunk = [self.chunk_prepass.pipeline, self.chunk_coarse_prepass.pipeline];
