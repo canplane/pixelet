@@ -30,10 +30,9 @@ fn carved(sample: &ChunkSample, i: usize, laid: &[(i32, i32, GroundId)]) -> Vec<
     out
 }
 
-/// A tile past the coverage gives no surface, so it puts no floor under
-/// what is placed there.
+/// A tile past the coverage gives no surface, and no ground at any height.
 #[test]
-fn a_chunk_with_no_surface_has_no_ground_and_no_floor() {
+fn a_chunk_with_no_surface_has_no_ground() {
     let cells = vec![sentinel::void; (TILE_CELLS * TILE_CELLS) as usize];
     let ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     let separation = Separation::default();
@@ -50,12 +49,11 @@ fn a_chunk_with_no_surface_has_no_ground_and_no_floor() {
     };
     let mut sample = ChunkSample::of_span(COL_SPAN);
     sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
-    assert_eq!(sample.floor, i32::MIN);
     let i = apron_col(COL_SPAN, 0, 0) as usize;
     assert!(!sample.has_ground(i));
     let mut runs = 0;
     sample
-        .ground_runs(i, sample.floor, i32::MAX, |_, _, _| {
+        .ground_runs(i, i32::MIN, i32::MAX, |_, _, _| {
             runs += 1;
             Ok::<(), ()>(())
         })
@@ -243,34 +241,6 @@ fn the_service_area_is_walled_one_cell_thick() {
     assert_eq!(laid(8), [(-100, 9, sentinel::unknown)]);
     assert!(laid(9).is_empty());
     assert_eq!(laid(7).last(), Some(&(9, 9, ground::grass)));
-}
-
-/// A step down to a column beside is walled down to its face: the ground is
-/// composed under the apron's lowest face too, so no open gap is left at the
-/// chunk's edge whatever stands beside it.
-#[test]
-fn the_ground_reaches_under_the_lowest_face_beside() {
-    let cells = vec![ground::grass; (TILE_CELLS * TILE_CELLS) as usize];
-    // Rising to the east, so the apron's west column is the lowest.
-    let ele: Vec<i16> = (0..ELE_PADDED_SPAN * ELE_PADDED_SPAN).map(|k| (k % ELE_PADDED_SPAN) as i16 * 64).collect();
-    let separation = Separation::default();
-    let own = TileSource {
-        tile: TileView {
-            cells: &cells,
-            ele: &ele,
-            separation: &separation,
-        },
-        frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
-        origin: [0, 0],
-        n: 1,
-    };
-    let mut sample = ChunkSample::of_span(COL_SPAN);
-    sample.read(&Around { own, beside: [None; 8] }, [8, 8], COL_SPAN, GROUND.cell()).unwrap();
-    let columns = 0..(COL_SPAN * COL_SPAN) as usize;
-    let lowest = columns.map(|i| sample.ele[i]).min().unwrap();
-    let own_lowest = (0..crate::space::camera::grid::CHUNK_CELLS).map(|y| sample.ele[apron_col(COL_SPAN, 0, y) as usize]).min().unwrap();
-    assert!(lowest < own_lowest);
-    assert_eq!(sample.floor, lowest - (drawn_under(GROUND.cell()) / units(GROUND.cell())) as i32);
 }
 
 /// Caves take the ground where the world has them, last of all: never the

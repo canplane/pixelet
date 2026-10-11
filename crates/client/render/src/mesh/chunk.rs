@@ -260,8 +260,6 @@ pub struct BakeContext {
     merge_mask: Vec<u32>,
     buckets: Vec<ZBucketAccum>,
     coarse: OwnedRunSet,
-    /// Held for the whole bake, since every step reads it.
-    clipped: Option<OwnedRunSet>,
     /// Every word is written before read, so the target is never cleared.
     mesh: Option<MeshTarget>,
     heights: Heights,
@@ -288,7 +286,6 @@ impl Default for BakeContext {
             merge_mask: vec![0; COL_SPAN as usize * COL_SPAN as usize],
             buckets: Vec::with_capacity(1 << 12),
             coarse: OwnedRunSet::default(),
-            clipped: None,
             mesh: None,
             heights: Heights::default(),
             box_words: FINE_BOX_WORDS,
@@ -308,27 +305,13 @@ impl Default for BakeContext {
 impl BakeContext {
     /// `unit` is a column's width and `z_unit` a run's cell's height, in units;
     /// at `lod_step` past 1 the chunk is summarized `lod_step` columns a cell.
-    /// `fine` boxes carry texture taps. `clip` cuts a whole-column set to the
-    /// chunk's heights, and every step reads the cut set. One bake at a time.
+    /// `fine` boxes carry texture taps. One bake at a time.
     #[allow(clippy::too_many_arguments)]
-    pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, (rows, boxes): (u32, u32), clip: Option<(i32, i32)>) -> Result<(), Refused> {
+    pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, (rows, boxes): (u32, u32)) -> Result<(), Refused> {
         xpute_kit::ensure!(self.open.is_none(), ENOTRECOVERABLE);
         (self.rows, self.boxes) = (rows, boxes);
         self.refused = false;
-        match clip {
-            Some((z0, z1)) => {
-                let mut cut = self.clipped.take().unwrap_or_default();
-                let clipped = cut.clip_from(set, z0, z1);
-                self.clipped = Some(cut);
-                clipped?;
-            }
-            None => self.clipped = None,
-        }
-        let (count, span, apron, heights) = {
-            let cut = self.clipped.as_ref().map(OwnedRunSet::view);
-            let set = cut.as_ref().unwrap_or(set);
-            (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, z_unit) } else { Heights::default() })
-        };
+        let (count, span, apron, heights) = (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, z_unit) } else { Heights::default() });
         self.textured = textured;
         xpute_kit::ensure!(span <= COL_SPAN, ENOSPC, span, COL_SPAN);
         // Reserved up front: doubling on a dense chunk held the old block and the new together.
@@ -369,14 +352,10 @@ impl BakeContext {
             return Step::Full;
         }
         let mut open = self.open.take().or_bug(Errno::ENOTRECOVERABLE);
-        let cut = self.clipped.take();
-        let view = cut.as_ref().map(OwnedRunSet::view);
-        let set = view.as_ref().unwrap_or(set);
         self.done = match &mut open {
             Open::Fine(b) => self.step_fine(b, set),
             Open::Coarse(b) => self.step_coarse(b, set),
         };
-        self.clipped = cut;
         self.open = Some(open);
         if self.refused {
             self.abort();

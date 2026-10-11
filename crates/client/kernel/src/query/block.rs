@@ -170,7 +170,7 @@ impl Column<'_> {
             self.objects.carve(apron, carve, folded)?;
         }
         let (from, _) = self.objects.column_cells(apron);
-        stands_of(&mut into.sample, folded, (from[0] + apron, from[1] + apron), self.runs, &mut into.stands)
+        stands_of(&into.sample, folded, (from[0] + apron, from[1] + apron), self.runs, &mut into.stands)
     }
 }
 
@@ -319,7 +319,7 @@ impl<'a> World<'a> {
                     block: sample.block[i],
                 }));
                 let runs = &mut s.runs;
-                let _ = compose(sample, &stands[first..next], i, i32::MIN, |lo, hi, block| {
+                let _ = compose(sample, &stands[first..next], i, [i32::MIN, i32::MAX], |lo, hi, block| {
                     runs.push(Run {
                         lo: f64::from(lo) * unit,
                         hi: f64::from(hi + 1) * unit,

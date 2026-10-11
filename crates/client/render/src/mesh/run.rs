@@ -268,38 +268,6 @@ impl OwnedRunSet {
         }
     }
 
-    /// A chunk is a cube while its column's runs pass through every chunk over it,
-    /// so the set is cut to the chunk's heights; the chunk across a cut face draws the rest.
-    pub fn clip_from(&mut self, set: &RunSet, z0: i32, z1: i32) -> Result<(), Refused> {
-        self.clear();
-        self.span = set.span;
-        self.apron = set.apron;
-        let columns = (set.span * set.span) as usize;
-        grow(&mut self.start, columns + 1)?;
-        self.grow_runs(set.count as usize)?;
-        self.start.push(0);
-        for col in 0..columns {
-            for i in set.start[col] as usize..set.start[col + 1] as usize {
-                if set.z1[i] < z0 || set.z0[i] >= z1 {
-                    continue;
-                }
-                self.z0.push(set.z0[i].max(z0));
-                self.z1.push(set.z1[i].min(z1 - 1));
-                self.layer_taps.push(set.layer_taps[i]);
-                self.r.push(set.r[i]);
-                self.g.push(set.g[i]);
-                self.b.push(set.b[i]);
-                self.side.push(set.side[i]);
-                self.sub_ox.push(set.sub_ox[i]);
-                self.sub_oy.push(set.sub_oy[i]);
-                self.sub_oz.push(set.sub_oz[i]);
-                self.sub_s.push(set.sub_s[i]);
-            }
-            self.start.push(self.z0.len() as u32);
-        }
-        Ok(())
-    }
-
     pub(crate) fn grow_runs(&mut self, n: usize) -> Result<(), Refused> {
         grow(&mut self.z0, n)?;
         grow(&mut self.z1, n)?;

@@ -13,21 +13,9 @@ use crate::block::limit::{bedrock, wall};
 use crate::procedural::{hollow, pier_stands, Frame};
 use crate::space::camera::grid::CHUNK_STEPS;
 use crate::space::coord::adapter::epsg3857::u_per_m;
-use crate::space::coord::zoom::{count, units, Zoom};
+use crate::space::coord::zoom::{count, Zoom};
 use crate::space::hierarchy::tree::{ancestor_of, offset_in};
 use crate::space::layer::lattice::{GROUND, GROUND_FOLD, TILE_CELLS};
-
-/// Cells of ground drawn under a chunk's lowest face, its own or a column's
-/// beside it, so a step down to a neighbor is walled.
-const TERRAIN_Z_MARGIN: i32 = 4;
-
-/// How far under the lowest face about a node its ground is drawn, in units,
-/// for cells at `cell`: the composition's margin (`floor_of`) and a fold's
-/// floor lowered to its cell. The bound a node holds its ground by is this
-/// fact's, so a chunk holding ground is one drawn.
-pub fn drawn_under(cell: Zoom) -> f64 {
-    f64::from(TERRAIN_Z_MARGIN) * crate::block::stand::z_unit(cell) + units(cell)
-}
 
 /// Minecraft Beta's filler under a column's face: `stoneNoise / 3 + 3`, its
 /// noise left out for now.
@@ -159,9 +147,6 @@ pub struct ChunkSample {
     pub block: Vec<GroundId>,
     /// In cells; a column's top is one below it.
     pub ele: Vec<i32>,
-    pub floor: i32,
-    /// The floor of the ground alone, before what is placed lowers it.
-    ground_floor: i32,
     /// Columns a row, its own and the apron's (`apron_col`).
     pub span: u32,
     /// Its cells a leaf cell's side: past the leaves, a way's slab stays a leaf cell thick.
@@ -206,8 +191,6 @@ impl ChunkSample {
         ChunkSample {
             block: vec![ground::BASE; n],
             ele: vec![0; n],
-            floor: 0,
-            ground_floor: 0,
             span,
             scale: 1,
             corner: [0.0; 2],
@@ -254,8 +237,6 @@ impl ChunkSample {
         };
         self.wall_off(read);
         self.read_separation(around, first)?;
-        self.ground_floor = self.floor_of();
-        self.floor = self.ground_floor;
         Ok(())
     }
 
@@ -280,50 +261,6 @@ impl ChunkSample {
             let (look, ele) = wall(faces).map_or((sentinel::void, self.ele[i]), |face| (sentinel::unknown, face));
             (self.look[i], self.block[i], self.ele[i]) = (look, look, ele);
         }
-    }
-
-    /// Under the lowest face of its columns and the apron's, so a step down to
-    /// a column beside is walled down to it, within the chunk's own cube. A
-    /// chunk with no surface has no floor: nothing of it is drawn from one. A
-    /// wall stands from the bedrock up, so it is drawn whole.
-    fn floor_of(&self) -> i32 {
-        // A wall beside walls nothing lower than its face.
-        let low = |i: usize, own: bool| {
-            let ground = match self.look[i] {
-                sentinel::unknown if own => Some(bedrock(self.ele[i], self.scale)),
-                _ if self.has_ground(i) => Some(self.ele[i]),
-                _ => None,
-            };
-            let b = self.under[i];
-            let under = (b.span[0] < b.span[1]).then(|| b.span[0] - self.scale);
-            ground.into_iter().chain(under).min()
-        };
-        let own = |i: usize| {
-            let (px, py) = (i as u32 % self.span, i as u32 / self.span);
-            (APRON..self.span - APRON).contains(&px) && (APRON..self.span - APRON).contains(&py)
-        };
-        let columns = 0..(self.span * self.span) as usize;
-        match columns.clone().filter(|&i| own(i)).find_map(|i| low(i, true)) {
-            None => i32::MIN,
-            Some(_) => columns.filter_map(|i| low(i, own(i))).min().unwrap_or(i32::MAX) - self.under_face(),
-        }
-    }
-
-    /// `drawn_under` in this sample's heights: past the leaves, a fold's whole
-    /// cell under the face, so a coarse cell shrunk by its fill stands on
-    /// ground, never on the sky.
-    fn under_face(&self) -> i32 {
-        let z = units(GROUND.cell()) / f64::from(self.scale);
-        (drawn_under(self.cell) / z).ceil() as i32
-    }
-
-    /// The ground's floor, and under `lowest` too, as under the lowest
-    /// surface: what one composition of what is placed asks of it.
-    pub fn lower_floor(&mut self, lowest: i32) {
-        self.floor = match (self.ground_floor, lowest) {
-            (i32::MIN, _) | (_, i32::MAX) => self.ground_floor,
-            (floor, lowest) => floor.min(lowest - self.under_face()),
-        };
     }
 
     /// Each column's lines from the tile its height is read from (`read`).
@@ -448,8 +385,6 @@ impl ChunkSample {
             }
         }
         self.over_at[(span * span) as usize] = self.over.len() as u32;
-        self.ground_floor = self.floor_of();
-        self.floor = self.ground_floor;
         Ok(())
     }
 

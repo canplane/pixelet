@@ -26,10 +26,14 @@ Every limit is one module, `pxl-spec block/limit.rs`, which every path calls.
   is baked, and nothing keeps it. A node past the area reads the index cells
   about it for the wall's height, as the column reads the columns about it.
 
-Where an edit may go is one function, `pxl-kernel query/edit.rs`
+Where an edit may go is one function, `pxl-kernel query/limit.rs`
 `World::editable`: ground the world knows exactly under it, over its bedrock
 and under its ceiling. The write every edit makes passes it, the placement
 check asks it, and the pointer points at nothing it refuses.
+
+A walker stays in the service area, `World::within` beside it: a column
+past the area, the wall's too, is a wall it slides along, as the step-slide
+meets any.
 
 ## Caves
 
@@ -42,11 +46,15 @@ bounds its depth. What wins is an order, first first: bedrock, the ground's
 face, the ways and the ground about them, the caves. So a cave never opens
 the face; it is met by digging.
 
-A column is still composed from four cells under its lowest face, so a cave
-shows within that, and below it where a hole is dug. Composed down to the
-bedrock, a cube under one cut by sea level held ground and drew its top in
-the plane where the cube over laid the block under its shrunk box; the two
-fought over every low shore. Composing a chunk's own heights alone is next.
+A chunk composes its own heights and nothing else (`pxl-spec block/stand.rs`
+`compose`): no floor is kept, so ground, strata and caves run down to the
+bedrock in whatever chunk is drawn, and a cave shows wherever a chunk is.
+Which chunks are drawn is the bound's: a terrain node holds its ground from
+a few cells under the lowest face about it (`pxl-kernel
+layer/terrain/query.rs` `drawn_under`), so a dug hole, whose placed air the
+object layer bounds, draws the chunks it reaches. Composed down to the
+bedrock before, a column shared by its chunks cost every chunk the whole
+column's caves.
 
 Bedrock is a stratum, a leaf cell's as the others are: a cell coarser than
 the leaves draws its look whole, since one taller than the bedrock's depth
@@ -57,12 +65,10 @@ folded black under every far face.
 Two meshes drawing one plane facing one way is what z-fighting is, so no
 cube draws past its own space: the block a coarse cube laid under its lowest
 box and the wall a fine one hung to the ground beside are gone. What they
-covered is the composition's: a chunk's ground is composed under the lowest
-face of its columns and the apron's (`pxl-spec block/sample.rs`
-`floor_of`), so a step down to a neighbour is walled within the cube, and
+covered is the bound's: chunks are drawn under the lowest face about a node,
+its own columns' and those beside (`drawn_under`), so a step down to a
+neighbour is walled by a cube's own ground, and
 past the leaves a whole fold cell under that, so a shrunk cell stands on
-ground. How far is one function, `drawn_under`, which the terrain bound
-reads too (`pxl-kernel layer/terrain/query.rs`): a cube holding ground is
-one drawn, and the cube under one draws the plane between them.
+ground: the cube under one draws the plane between them.
 
 The Y lane's ends and the X lane's seam are left for later.

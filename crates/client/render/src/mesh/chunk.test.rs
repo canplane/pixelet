@@ -43,7 +43,7 @@ fn ground(z1: i32) -> Vec<Run> {
 fn bake_in_blocks(set: &OwnedRunSet, lod_step: u32, block: u32) -> Vec<u32> {
     let mut bake = BakeContext::default();
     let view = set.view();
-    assert!(bake.begin(&view, lod_step, 1.0, 1.0, lod_step == 1, true, (8, 512), None).is_ok());
+    assert!(bake.begin(&view, lod_step, 1.0, 1.0, lod_step == 1, true, (8, 512)).is_ok());
     let words_a_box = box_words(lod_step == 1);
     let mut buf = vec![0u32; (block * words_a_box) as usize];
     let mut out: Vec<u32> = Vec::new();
@@ -109,7 +109,7 @@ fn a_cell_full_of_one_leaf_folds_to_that_leaf() {
     let set = set_of(span, &columns);
     let mut bake = BakeContext::default();
     let view = set.view();
-    assert!(bake.begin(&view, 2, 1.0, 1.0, true, true, (8, 512), None).is_ok());
+    assert!(bake.begin(&view, 2, 1.0, 1.0, true, true, (8, 512)).is_ok());
     let mut buf: Vec<u32> = Vec::new();
     loop {
         match bake.step(&view) {
@@ -135,7 +135,7 @@ fn a_cell_full_of_one_leaf_folds_to_that_leaf() {
 fn bake_whole(set: &OwnedRunSet, z_unit: f64) -> (Vec<u32>, Heights) {
     let mut bake = BakeContext::default();
     let view = set.view();
-    assert!(bake.begin(&view, 1, 1.0, z_unit, true, true, (8, 512), None).is_ok());
+    assert!(bake.begin(&view, 1, 1.0, z_unit, true, true, (8, 512)).is_ok());
     let mut buf: Vec<u32> = Vec::new();
     loop {
         match bake.step(&view) {
