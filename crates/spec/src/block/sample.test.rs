@@ -12,11 +12,11 @@ fn carved(sample: &ChunkSample, i: usize, laid: &[(i32, i32, GroundId)]) -> Vec<
     if sample.cell < GROUND.cell() {
         return laid.to_vec();
     }
-    let mut out = Vec::new();
+    let (mut out, mut caves) = (Vec::new(), sample.caves(i));
     for &(lo, hi, g) in laid {
         let mut start = None;
         for z in lo..=hi + 1 {
-            let solid = z <= hi && (g == sentinel::unknown || z >= sample.ele[i] - sample.scale || !sample.hollow(i, z));
+            let solid = z <= hi && (g == sentinel::unknown || z >= sample.ele[i] - sample.scale || !caves.hollow(sample.cell_z(z)));
             match (solid, start) {
                 (true, None) => start = Some(z),
                 (false, Some(s)) => {
