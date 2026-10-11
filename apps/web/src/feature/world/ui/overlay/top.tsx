@@ -15,7 +15,6 @@ import { haloGap, HaloIcon } from "@/shared/ui/halo.tsx";
 import { chrome, color, layer } from "@/shared/ui/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { SensorStatus } from "./sensor-status.tsx";
-import { DummyChatText } from "./dummy-chat-text.tsx";
 import { MapScaleBar } from "../control/scale-bar.tsx";
 import { LocationButtons } from "../control/location-buttons.tsx";
 import { ViewButtons } from "../control/view-buttons.tsx";
@@ -55,7 +54,6 @@ export function TopOverlays() {
 
       <BusyDim style={[styles.left, { top }]}>
         <CircularButton glyph="line.3.horizontal" onPress={() => openModal("settings")} label={t("settings.trigger_aria_label")} />
-        {__IS_DEV__ && <DummyChatText />}
       </BusyDim>
 
       <BusyDim style={[styles.center, { top }]}>
