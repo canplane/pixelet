@@ -186,7 +186,7 @@ Every number a person would tune — τ's target, the patch, the arena, the qual
 
 ## Marks
 
-A mark stands at a cell's center (`Cell::center`, `pxl-spec space/layer/tile.rs`), at the height of the surface drawn there. A place is the place layer's mark (`chunk/place.rs`): each drawn chunk reads the tiles whose cells are its grid's cells, an icon wide, each from the tile that says it exactly, and shows what Carto shows at the zoom those cells are drawn at — a place from the zoom it is shown from, as a dot or its icon by its kind's zooms, named from its kind's label zoom once it was shown a zoom before (`badge.rs` `Label::at`, `layer/place.rs` `carto_zoom`). A place stands on what a ray down through its cell's center meets first at the zoom the view draws there (`first_hit`), and where nothing is drawn there is none. A tap on one is its before the ground's (`chunk/place.rs` `tap`). How it is drawn is Drawing's.
+A mark stands at a cell's center (`Cell::center`, `pxl-spec space/layer/tile.rs`), at the height of the surface drawn there. A place is the place layer's mark (`chunk/place.rs`): each drawn chunk reads the tiles whose cells are its grid's cells, an icon wide, each from the tile that says it exactly, and shows what Carto shows at the zoom those cells are drawn at — a place from the zoom it is shown from, as a dot or its icon by its kind's zooms, named from its kind's label zoom once it was shown a zoom before (`billboard/badge.rs` `Label::at`, `layer/place.rs` `carto_zoom`). A place stands on what a ray down through its cell's center meets first at the zoom the view draws there (`first_hit`), and where nothing is drawn there is none. A tap on one is its before the ground's (`chunk/place.rs` `tap`). How it is drawn is Drawing's.
 
 ---
 

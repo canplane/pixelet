@@ -13,10 +13,7 @@ pub const NO_SLOT: i32 = -1;
 #[derive(Clone, Debug, PartialEq)]
 pub enum DrawSpec {
     /// A label alone on a pill: a placed billboard's words.
-    Pill {
-        label: String,
-        logical_w: f64,
-    },
+    Pill { label: String, logical_w: f64 },
     /// A place as Carto draws it: a dot or its icon in the fill, and under
     /// it the name, if shown, in the text color.
     Point {
@@ -29,11 +26,8 @@ pub enum DrawSpec {
         text: u32,
         logical_w: f64,
     },
-    Bubble {
-        lines: Vec<String>,
-        box_w: f64,
-        box_h: f64,
-    },
+    /// A speech bubble over its tail, its words a line each.
+    Bubble { lines: Vec<String>, box_w: f64 },
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

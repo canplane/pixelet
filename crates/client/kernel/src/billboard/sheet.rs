@@ -16,16 +16,12 @@ pub fn billboard_sheet() -> &'static mut Sheet {
     SHEET.get(Sheet::new)
 }
 
-pub fn new_billboard_set(order: BillboardOrder) -> u32 {
-    kernel().billboards.new_set(order as u32)
+pub fn new_billboard_set() -> u32 {
+    kernel().billboards.new_set()
 }
 
 pub fn place_billboard_set(set: u32, origin: V3) {
     kernel().billboards.place(set, origin);
-}
-
-pub fn follow_billboard_set(set: u32, actor: u32, lift: f64) {
-    kernel().billboards.follow(set, actor, lift);
 }
 
 pub fn write_billboard_set(set: u32, lane: &[f32]) {
@@ -38,14 +34,5 @@ pub fn remove_billboard_set(set: u32) {
     k.billboards.remove(&mut k.draw, set);
 }
 
-/// Draw order among billboard sets, only for ties on the same pixels at the
-/// same depth: the transient bubble wins over the badge.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum BillboardOrder {
-    Place = 0,
-    Chat = 1,
-}
-
-/// One set per order, each owner letting its set go before making another.
-pub const SETS_MAX: usize = 2;
+/// One set: the place step lays out every billboard (`chunk/place.rs`).
+pub const SETS_MAX: usize = 1;

@@ -13,7 +13,9 @@
     "$doc": [
       "The zoom a marker shows from: the one every place was shown from before",
       "places followed Carto (OpenMapTiles' `poi` layer holds every point from",
-      "z14), kept for what someone puts up, which Carto has no rule for."
+      "z14), kept for what someone puts up, which Carto has no rule for, and",
+      "for what someone says, the bubble over their character, judged on the",
+      "same lattice where its speaker stands (pxl-kernel chunk/place.rs)."
     ]
   },
   "MARKER_SCALE_STEPS": {

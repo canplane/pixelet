@@ -236,8 +236,7 @@ pub fn visible_step(ctx: &mut TickContext) {
     }
     crate::chunk::place::step(ctx);
     let k = kernel();
-    let actors = &k.scene.actors;
-    k.billboards.draw(&mut k.draw, &|id| actors.actor_ref(id).filter(|a| a.visible).map(|a| a.at), frame.eye);
+    k.billboards.draw(&mut k.draw, frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();
