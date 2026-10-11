@@ -546,8 +546,11 @@ impl ChunkSample {
         }
         let rock = bedrock(self.ele[i], s);
         let face = self.ele[i] - s;
+        // Water's filler is water, as sand's is sand: under a face it is the
+        // same block, never dirt.
         let (filler, sandstone) = match look {
             ground::sand | ground::beach => (ground::sand, SANDSTONE_DEPTH),
+            ground::water => (ground::water, 0),
             _ => (ground::soil, 0),
         };
         let filled = face - FILLER_DEPTH * s;
