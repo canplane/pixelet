@@ -195,3 +195,80 @@ fn a_cell_full_of_one_leaf_folds_to_that_leaf() {
         assert_eq!((m[3].to_le_bytes(), m[4]), ([10, 20, 30, 0], taps));
     }
 }
+
+fn bake_whole(set: &OwnedRunSet, z_unit: f64) -> (Vec<u32>, Heights) {
+    let mut bake = BakeContext::default();
+    let view = set.view();
+    assert!(bake.begin(&view, 1, 1.0, z_unit, true, true, (8, 512), None).is_ok());
+    let mut buf: Vec<u32> = Vec::new();
+    loop {
+        match bake.step(&view) {
+            Step::Working => {}
+            Step::NeedMesh(n) => {
+                buf = vec![0; n as usize];
+                // SAFETY: `buf`, untouched until the bake is done.
+                unsafe { bake.provide_mesh(buf.as_mut_ptr(), n) };
+            }
+            Step::Full => panic!("one block holds the mesh"),
+            Step::Refused => panic!("the heap refused a test bake"),
+            Step::Done => break,
+        }
+    }
+    let mesh = bake.finish();
+    buf.truncate((mesh.box_cnt * FINE_BOX_WORDS) as usize);
+    (buf, mesh.heights)
+}
+
+/// A column laid in strata, a color a column so no box spans two: stone,
+/// soil and its look on top, the face `top` high.
+fn strata_field(span: u32, top: impl Fn(u32) -> i32) -> OwnedRunSet {
+    let none = taps_of(NO_LAYER as u8);
+    let columns: Vec<Vec<Run>> = (0..span * span)
+        .map(|k| {
+            let (t, c) = (top(k), k as u8);
+            vec![
+                Run { z0: 0, z1: t - 4, rgb: [c, 1, 0], layer: none },
+                Run { z0: t - 3, z1: t - 1, rgb: [c, 2, 0], layer: none },
+                Run { z0: t, z1: t, rgb: [c, 3, 0], layer: none },
+            ]
+        })
+        .collect();
+    set_of(span, &columns)
+}
+
+/// A side buried in the ground is no face, however the column beside is laid:
+/// strata meet at heights of each column's own, so no one run of it covers.
+#[test]
+fn a_side_buried_in_strata_is_no_face() {
+    let span = 12;
+    let set = strata_field(span, |k| 8 + ((k * 7919) % 3) as i32);
+    let (mesh, heights) = bake_whole(&set, 1.0);
+    let inner = (span - 2) as f64;
+    // Every column stands 8 high at least: under that, only the rim shows.
+    for m in mesh.chunks(FINE_BOX_WORDS as usize) {
+        let (min, size) = box_bounds(m, 1.0, heights);
+        let rim = min[0] < 1e-3 || min[1] < 1e-3 || min[0] + size[0] > inner - 1e-3 || min[1] + size[1] > inner - 1e-3;
+        let sides = m[5] & (FACE_PX | FACE_NX | FACE_PY | FACE_NY);
+        assert!(rim || sides == 0 || min[2] + size[2] > 8.0 - 1e-3, "a buried side drawn: {min:?} {size:?} {sides:#x}");
+    }
+}
+
+/// Boxes stacked in a column meet at one height step, neither over nor apart,
+/// however their heights round.
+#[test]
+fn stacked_boxes_meet() {
+    let set = strata_field(10, |k| 40 + ((k * 7919) % 7) as i32);
+    let (mesh, _) = bake_whole(&set, 0.37);
+    let mut stacks: std::collections::BTreeMap<(u32, u32), Vec<(u32, u32)>> = Default::default();
+    for m in mesh.chunks(FINE_BOX_WORDS as usize) {
+        stacks.entry((m[0], m[1])).or_default().push((m[2] & 0xffff, m[2] >> 16));
+    }
+    for (at, mut stack) in stacks {
+        stack.sort();
+        // A buried box is culled, leaving a gap of whole cells.
+        for pair in stack.windows(2) {
+            let (end, next) = (pair[0].0 + pair[0].1, pair[1].0);
+            assert!(next == end || next > end + 1, "boxes at {at:?} meet off a step: {stack:?}");
+        }
+    }
+}

@@ -904,7 +904,10 @@ pub fn write_lone_box(m: &mut [u32], offset: V3, size: f64, rgb: [u8; 3], layer:
 
 #[allow(clippy::too_many_arguments)]
 fn write_box(m: &mut [u32], min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, faces: u32, unit: f64, heights: Heights) {
-    let z = steps(min[2] - heights.floor, heights.step) | (steps(size[2], heights.step) << 16);
+    // Both ends rounded, not the size: boxes stacked meet at one step, never
+    // a step over or apart.
+    let (z0, z1) = (steps(min[2] - heights.floor, heights.step), steps(min[2] + size[2] - heights.floor, heights.step));
+    let z = z0 | ((z1 - z0) << 16);
     if m.len() == COARSE_BOX_WORDS as usize {
         let xy = unit / COARSE_XY_STEPS;
         // The byte holds `width − 1`: zero width would be no box, and a whole mesh across fits.
@@ -1013,7 +1016,9 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
     let above = z1 + 1;
     let below = z0 - 1;
     let mut rel = 0;
-    let mut covered_to = z0 - 1;
+    // Covered from `z0` up, by anything and by what hides a face: runs laid
+    // in strata meet at heights of their own, so together, not one alone.
+    let (mut covered_to, mut hidden_to) = (z0 - 1, z0 - 1);
     let end = set.start[col as usize + 1] as usize;
     for i in set.start[col as usize] as usize..end {
         let r_z0 = set.z0[i];
@@ -1027,10 +1032,13 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
         if r_z0 <= covered_to + 1 && r_z1 > covered_to {
             covered_to = r_z1;
         }
+        if r_z0 <= hidden_to + 1 && r_z1 > hidden_to && set.side[i] != Side::OBJECT {
+            hidden_to = r_z1;
+        }
         if covered_to >= z1 {
             rel |= ABUTS_SIDE;
         }
-        if r_z0 <= z0 && r_z1 >= z1 && set.side[i] != Side::OBJECT {
+        if hidden_to >= z1 {
             rel |= HIDES_SIDE;
         }
         if r_z0 <= above && r_z1 >= above {
