@@ -100,8 +100,9 @@ fn markers(chunk: Chunk, found: &mut Vec<(Label, Pvf3, i32)>) {
     });
 }
 
-/// A marker at its cell's center over the floor it stands on, and its base,
-/// its words by their hash, so words changed under one entry are another badge.
+/// A marker at its cell's center, half a cell over the floor it stands on
+/// (`Cell::center`), where the dot under its pill is drawn, and its base; its
+/// words by their hash, so words changed under one entry are another badge.
 fn marker_at(at: EntryAt, words: &str) -> (Label, Pvf3, V3) {
     let c = cube(at.zoom(), at.at());
     let base = [(c.min[0] + c.max[0]) / 2.0, (c.min[1] + c.max[1]) / 2.0, c.min[2]];

@@ -16,8 +16,10 @@
 // skin is its pack's colormap, kept outside the glb.
 //
 // A variant's `size` is the box it claims, in its kind's cells: every cell
-// of it is the decor's. Its model is drawn as made, a glb unit a unit, and
-// may reach a little past it. A
+// of it is the decor's. Its model is drawn as made, a glb unit a unit, its
+// origin at the middle of the box's base, where it stands: no origin is
+// moved, and glTF fixes none, so a model must be made with it there. It may
+// reach a little past the box. A
 // kind's cell is a unit, a z24 cell, `scale_steps` zooms coarser (finer
 // where negative, as a marker's, block/marker.json), one for every variant,
 // since a placement lands on the cell before its variant is drawn. The

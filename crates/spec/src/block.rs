@@ -107,8 +107,8 @@ impl decor::Decor {
     }
 
     /// `variant` turned `turn` with its box's min corner at `corner`, in
-    /// units: where it stands, its base's middle, and what it carries at
-    /// `scale`.
+    /// units: where it stands, its base's middle, which its model's origin is
+    /// put at, and what it carries at `scale`.
     pub fn stand(&self, corner: [f64; 3], variant: u32, turn: u32, scale: f64) -> ([f64; 3], decor::DecorMeta) {
         let [x, y, _] = self.sides(variant, turn);
         let at = [corner[0] + x / 2.0, corner[1] + y / 2.0, corner[2]];
