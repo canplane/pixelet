@@ -6,9 +6,9 @@ import { StyleSheet, View } from "react-native";
 import { Message } from "@/kernel/abi/cmd.spec.ts";
 import { Gpu, useGpu } from "@/kernel/gpu.ts";
 import { useKernel } from "@/kernel/shell.ts";
-import { Boot, useBoot } from "./bootstrap.ts";
+import { Boot, useBoot, useStopCode } from "./bootstrap.ts";
 import { Modals } from "./modal.tsx";
-import { Halt } from "./halt.tsx";
+import { Halt, KernelPanic } from "./halt.tsx";
 import { messageKey } from "@/locale/message-key.ts";
 import { KeyboardAway } from "@/shared/ui/keyboard.tsx";
 import { DockMode, useUiStore } from "@/app/store/ui.ts";
@@ -24,9 +24,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const gpu = useGpu();
   const boot = useBoot();
   const givenUp = useKernel((s) => s.stall === Message.WorldUnavailable);
+  const stopCode = useStopCode();
   useEffect(() => {
     if (givenUp) console.error("[read] a read failed past every retry; the space is given up");
   }, [givenUp]);
+  if (boot === Boot.Stopped) return <KernelPanic code={stopCode} />;
   const halt = haltOf(gpu, boot, givenUp);
   if (halt !== null) return <Halt of={halt} />;
   return (

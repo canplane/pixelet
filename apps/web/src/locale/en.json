@@ -353,6 +353,11 @@
       "title": "Something went wrong.",
       "body": "Please try again in a moment."
     },
+    "kernel_panic": {
+      "title": "The app stopped.",
+      "body": "Reload the page.",
+      "code": "Stop code: {{code}}"
+    },
     "server_failed": {
       "title": "The server connection failed.",
       "body": "Please try again in a moment."
