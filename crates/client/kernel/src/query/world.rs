@@ -5,12 +5,8 @@
 //! ground knows.
 
 use crate::layer::residency::Line;
-use pxl_spec::block::limit::floor;
-use pxl_spec::procedural::{opened_heights, CAVE_REGION};
-use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
-use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::hierarchy::tree::Node;
 
 use super::block::Column;
 use crate::layer::object::store::EntryAt;
@@ -81,16 +77,6 @@ impl<'a> World<'a> {
     }
 }
 
-fn join(a: Option<Bound>, b: Option<Bound>) -> Option<Bound> {
-    match (a, b) {
-        (Some(a), Some(b)) => Some(Bound {
-            aabb: a.aabb.join(b.aabb),
-            finest: a.finest.max(b.finest),
-        }),
-        (a, b) => a.or(b),
-    }
-}
-
 impl Query for World<'_> {
     type Record<'b>
         = Column<'b>
@@ -107,40 +93,15 @@ impl Query for World<'_> {
         self.terrain.child(parent, node, cell)
     }
 
-    /// The ground's, what is placed, and the caves opened about it, which a
-    /// chunk finer under the node may draw at any zoom it is asked at.
+    /// What can show of the ground and what is placed, which a chunk finer
+    /// under the node may draw at any zoom it is asked at.
     fn bound<const D: usize>(&self, at: &Line, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let objects = self.objects.bounds(node, cell).value().flatten();
-        let caves = self.caves(node, cell);
-        self.terrain.bound(at, node, cell).map(|ground| join(join(ground, objects), caves))
+        self.terrain.bound(at, node, cell).map(|ground| Bound::join(ground, objects))
     }
 
     /// A chunk column's records to compose its blocks from.
     fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Column<'_>> {
         self.column(node, cell)
-    }
-}
-
-impl World<'_> {
-    /// Where caves may be carved under `node`: over its columns, between the
-    /// ground's floor and face, at the heights opened about what is placed in
-    /// its cube columns or one beside (`pxl-spec procedural.rs`
-    /// `opened_heights`), the rule the composition opens them by.
-    fn caves<const D: usize>(&self, (zoom, at): Node<D>, cell: Zoom) -> Option<Bound> {
-        let side = zoom.min(CAVE_REGION);
-        let a = ancestor_of([at[0], at[1]], u32::from(zoom - side));
-        let mut edits: Option<Aabb> = None;
-        for dy in -1..=1 {
-            for dx in -1..=1 {
-                if let Some(b) = self.objects.bounds((side, [a[0] + dx, a[1] + dy]), cell).value().flatten() {
-                    edits = Some(edits.map_or(b.aabb, |e| e.join(b.aabb)));
-                }
-            }
-        }
-        let [lo, hi] = opened_heights([edits?.min[2], edits?.max[2]]);
-        let ground = self.terrain.bounds((zoom, [at[0], at[1]]), cell).value().flatten()?.aabb;
-        let mut b = region((zoom, at));
-        (b.min[2], b.max[2]) = (b.min[2].max(lo).max(floor(ground.min[2])), b.max[2].min(hi).min(ground.max[2]));
-        (b.min[2] < b.max[2]).then_some(Bound { aabb: b, finest: GROUND.cell() })
     }
 }

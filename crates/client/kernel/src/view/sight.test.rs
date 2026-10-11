@@ -44,11 +44,12 @@ fn a_lens_is_the_screen_its_frustum_was_made_from() {
     assert_eq!(Lens::of(&around), None, "a screen for an observer that samples every direction");
 }
 
-/// The grid is the same at every quality: it is the estimator's, not the cell's.
+/// The patches are the camera grid's cells at the τ they are cast at.
 #[test]
 fn the_patches_cover_the_screen_and_none_is_wider_than_a_patch() {
     let lens = Lens::of(&viewed([0.0, 0.0, 30.0], [100.0, 20.0, 0.0], 50.0, 16.0 / 9.0)).unwrap();
-    let grid = Grid::of(lens);
+    let patch = Tau::of(param::OBSERVED_TAU);
+    let grid = Grid::of(lens, patch);
     let [nx, ny] = grid.across();
     assert_eq!(grid.count(), nx * ny);
     let screen = |sx: f64, sy: f64| unit(std::array::from_fn(|k| lens.forward[k] + sx * lens.tan[0] * lens.right[k] + sy * lens.tan[1] * lens.up[k])).unwrap();
@@ -59,7 +60,7 @@ fn the_patches_cover_the_screen_and_none_is_wider_than_a_patch() {
         for i in 0..=nx {
             for next in [[i + 1, j], [i, j + 1]].into_iter().filter(|c| c[0] <= nx && c[1] <= ny) {
                 let apart = libm::acos(dot(grid.corner([i, j]), grid.corner(next)).clamp(-1.0, 1.0));
-                assert!(apart <= param::OBSERVED_PATCH + 1e-9, "[{i}, {j}] is {apart} from {next:?}");
+                assert!(apart <= cell_angle(patch) + 1e-9, "[{i}, {j}] is {apart} from {next:?}");
             }
         }
     }

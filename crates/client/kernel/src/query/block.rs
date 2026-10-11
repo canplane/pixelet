@@ -13,12 +13,11 @@ use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::sample::{beside_index, span, Around, ChunkSample, Refused, APRON, COL_SPAN};
 use pxl_spec::block::stand::{compose, stands_of, z_unit, Block, Stand};
-use pxl_spec::procedural::{caves_in, CaveOpening, CAVE_REGION};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
-use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of, offset_in, Node};
+use pxl_spec::space::hierarchy::tree::{ancestor_of, offset_in, Node};
 use pxl_spec::space::layer::lattice::{GROUND, GROUND_FOLD};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_guest::global::Global;
@@ -66,7 +65,6 @@ pub struct Column<'a> {
     objects: Cells<'a>,
     hide: Option<EntryAt>,
     carve: Option<EntryAt>,
-    opening: CaveOpening,
 }
 
 /// What composing a column works in, kept by whoever composes so a settled
@@ -115,7 +113,6 @@ impl<'a> World<'a> {
         let (rz, [rx, ry]) = read;
         // What is placed is all resident: its answer is always exact.
         let objects = self.objects.read((zoom, [x, y, 0]), runs).value().or_bug(Errno::ENOTRECOVERABLE);
-        let opening = self.opening(column, cell);
         self.terrain.read((rz, [rx, ry, 0]), read_cell).map(|ground| Column {
             column,
             cell,
@@ -125,33 +122,6 @@ impl<'a> World<'a> {
             objects,
             hide: self.hide,
             carve: self.carve,
-            opening,
-        })
-    }
-
-    /// Where caves open about what is placed near the column `node` of grid
-    /// cells at `cell`: the heights edited in each cube column about it.
-    /// Past the leaves none is carved, so none is asked; where nothing is
-    /// placed about it, a few coarse asks say so for all of them.
-    fn opening(&self, (zoom, at): Node<2>, cell: Zoom) -> CaveOpening {
-        if !caves_in(cell) {
-            return CaveOpening::default();
-        }
-        // A chunk wider than a cube column reads from its first.
-        let center = match zoom >= CAVE_REGION {
-            true => ancestor_of(at, u32::from(zoom - CAVE_REGION)),
-            false => first_descendant_of(at, u32::from(CAVE_REGION - zoom)),
-        };
-        // Nodes of eight cube columns a side: the reach meets two at most.
-        const UP: u32 = 3;
-        let [lo, hi] = CaveOpening::reach(center).map(|g| g.map(|v| v >> UP));
-        let placed = (lo[1]..=hi[1]).any(|y| (lo[0]..=hi[0]).any(|x| self.objects.bounds((CAVE_REGION - UP as Zoom, [x, y]), CAVE_REGION).value().flatten().is_some()));
-        if !placed {
-            return CaveOpening::default();
-        }
-        CaveOpening::about(center, |g| {
-            let bound = self.objects.bounds((CAVE_REGION, g), CAVE_REGION).value().flatten();
-            bound.map(|b| [b.aabb.min[2], b.aabb.max[2]])
         })
     }
 }
@@ -167,7 +137,6 @@ impl Column<'_> {
     /// Its blocks, into `into`.
     pub fn compose(&self, c: &mut Composer, into: &mut Blocks) -> Result<(), Refused> {
         self.sample(&mut c.leaf, &mut into.sample)?;
-        into.sample.open_caves(self.opening);
         self.stand(&mut c.folded, into)
     }
 

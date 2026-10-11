@@ -16,7 +16,7 @@ use xpute_guest::mem::heap::{alloc, free};
 
 use crate::chunk::source::draws;
 
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{units, Zoom};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -122,9 +122,11 @@ impl Builder {
             return Progress::Blocked;
         };
         let target = column.runs;
-        // And the cell under its floor, which decides the floor's faces.
+        // And one of its own cells past its floor and roof, as the world's one
+        // function answers there, which decides their faces.
         let [lo, hi] = window(c.at, target);
-        let range = [lo - 1, hi];
+        let past = (units(c.at.cell_zoom()) / z_unit(target)).ceil() as i32;
+        let range = [lo - past, hi + past];
         if column.compose(&mut self.composer, &mut self.blocks).is_err() {
             self.refuse(id);
             return Progress::Blocked;
