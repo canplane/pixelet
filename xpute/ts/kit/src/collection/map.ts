@@ -106,7 +106,8 @@ export class IndexedMap<K extends numeric> {
     this._size = 0;
   }
 
-  /** Every position once, in an order fixed by `seed`; mutating during the walk is undefined. */
+  /** Every position once, in an order fixed by `seed`: a stride from a start, not a uniform
+   * shuffle. Mutating during the walk is undefined. */
   *positions_seeded(seed: u64): IterableIterator<u32> {
     const n = this._size;
     if (n === 0) return;
