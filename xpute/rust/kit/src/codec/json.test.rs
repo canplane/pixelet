@@ -42,3 +42,12 @@ fn json_is_what_the_host_s_json_parse_takes() {
         assert_eq!(got, v.s(&format!("{k}.read")), "{k}");
     });
 }
+
+#[test]
+fn a_number_past_the_doubles_reads_as_the_host_reads_it() {
+    let v = Golden::load(GOLDEN);
+    v.each("number", |k| {
+        let n = read_json(v.s(&format!("{k}.text"))).unwrap().as_f64().unwrap();
+        assert_eq!(format!("{:016x}", n.to_bits()), v.s(&format!("{k}.bits")), "{k}");
+    });
+}

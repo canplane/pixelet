@@ -54,6 +54,8 @@ struct List {
     next: *mut List,
 }
 
+/// `repr(C)`: `stat`'s row is these fields in this order.
+#[repr(C)]
 struct Heap<S> {
     /// Bucket 0 is the largest block, the whole address space.
     buckets: [List; MAX_BUCKETS],

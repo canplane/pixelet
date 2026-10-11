@@ -92,7 +92,7 @@ Result<Strs> Cursor::strs() const noexcept {
 }
 
 Result<Strs> Cursor::get_strs() const noexcept {
-    if (type_ != type_of(SequenceType::strs)) return marshal_error(Errno::ebadmsg);
+    if (is_null() || type_ != type_of(SequenceType::strs)) return marshal_error(Errno::ebadmsg);
     return strs();
 }
 
