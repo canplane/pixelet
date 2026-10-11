@@ -33,9 +33,10 @@ fn padded(bytes: usize) -> usize {
     bytes.next_multiple_of(8)
 }
 
-fn packet_bytes(u8: &[u8], at: usize) -> usize {
+/// In u64: a length word near 2^32 must read as too long, not wrap on wasm32.
+fn packet_bytes(u8: &[u8], at: usize) -> u64 {
     let payload = u32::from_le_bytes([u8[at + 8], u8[at + 9], u8[at + 10], u8[at + 11]]);
-    padded(16 + payload as usize)
+    (16 + u64::from(payload)).next_multiple_of(8)
 }
 
 #[derive(Clone)]
@@ -151,7 +152,7 @@ impl Ring {
             return Errno::EAGAIN;
         }
         let start = self.slot_at(self.tail());
-        let Some(n) = write(&mut self.slots()[start..start + self.slot_bytes as usize]) else {
+        let Some(n) = write(&mut self.slots()[start..start + self.slot_bytes as usize]).filter(|&n| n <= self.slot_bytes) else {
             return Errno::EMSGSIZE;
         };
         self.pad(start, n as usize);
@@ -213,9 +214,10 @@ impl Ring {
             return Err(bad());
         }
         let bytes = packet_bytes(self.slots(), off);
-        if bytes > self.slot_bytes as usize {
+        if bytes > u64::from(self.slot_bytes) {
             return Err(bad());
         }
+        let bytes = bytes as usize;
         // SAFETY: the memory `new` was given, as its contract requires.
         Ok(Some(unsafe { core::slice::from_raw_parts(at_of::<u8>(self.mem, self.slot_base as usize + off), bytes) }))
     }

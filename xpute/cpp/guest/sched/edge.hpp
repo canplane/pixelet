@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <coroutine>
 #include <cstddef>
 #include <limits>
@@ -34,7 +35,7 @@ template <std::size_t N> class Edge {
         bool asked = std::exchange(asked_, false) || parked_len_ > 0;
         double at = std::exchange(wake_at_, std::numeric_limits<double>::infinity());
         if (asked) return 0.0;
-        if (at != std::numeric_limits<double>::infinity()) return std::max(at - now(), 0.0);
+        if (std::isfinite(at)) return std::max(at - now(), 0.0);
         return NO_WAKE;
     }
 

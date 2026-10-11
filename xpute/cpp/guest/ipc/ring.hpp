@@ -27,8 +27,8 @@ class Ring {
 
     static Ring init(Memory mem, std::uint32_t at, std::uint32_t capacity, std::uint32_t slot_base, std::uint32_t slot_bytes) noexcept;
 
-    std::uint32_t capacity() const noexcept { return header(ring::CAPACITY); }
-    std::uint32_t slot_bytes() const noexcept { return header(ring::SLOT_BYTES); }
+    std::uint32_t capacity() const noexcept { return capacity_; }
+    std::uint32_t slot_bytes() const noexcept { return slot_bytes_; }
     std::uint32_t head() const noexcept { return header(ring::HEAD); }
     std::uint32_t tail() const noexcept { return header(ring::TAIL); }
     std::uint32_t len() const noexcept { return tail() - head(); }
@@ -77,6 +77,10 @@ class Ring {
 
     Memory mem_;
     std::uint32_t at_;
+    // Read once, when the ring is made: the host's later writes to them are not the ring's.
+    std::uint32_t capacity_;
+    std::uint32_t slot_bytes_;
+    std::uint32_t slot_base_;
 };
 
 } // namespace xpute

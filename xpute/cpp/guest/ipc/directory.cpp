@@ -27,7 +27,7 @@ void write_directory(Memory mem, std::uint32_t at, std::uint32_t words, std::spa
 }
 
 std::array<Entry, 3> quantum_entries(const QuantumPolicy &q) noexcept {
-    auto scaled = [](double v) { return static_cast<std::uint32_t>(round(v * directory::QUANTUM_SCALE)); };
+    auto scaled = [](double v) { return saturate_as<std::uint32_t>(round(v * directory::QUANTUM_SCALE)); };
     return {{
         {directory::key::MARGIN_SHARE, scaled(q.margin_share)},
         {directory::key::BATCH_FRAMES, scaled(q.batch_frames)},

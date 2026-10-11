@@ -367,16 +367,24 @@ fn cpp_number(ty: &str) -> &'static str {
     }
 }
 
+/// A number is checked as the Rust guest's is (`abi/number.rs`), never cast into its type.
 fn cpp_read_one(spec: &Spec, f: &Field, c: &str, to: &str) -> Result<Vec<String>, String> {
-    let (call, conv) = match spec.kind(&f.ty)? {
-        Kind::Number => match f.ty.as_str() {
-            "f64" => (format!("{c}->get_number()"), "*v".to_string()),
-            ty => (format!("{c}->get_number()"), format!("saturate_as<{}>(*v)", cpp_number(ty))),
-        },
-        Kind::Bool => (format!("{c}->get_bool()"), "*v".to_string()),
-        _ => (format!("{c}->get_str_ref()"), "*v".to_string()),
+    let read = |call: String| vec![format!("auto v = {call};"), "if (!v) return v.error();".to_string()];
+    let mut out = match spec.kind(&f.ty)? {
+        Kind::Number => {
+            let mut out = read(format!("{c}->get_number()"));
+            out.push(match f.ty.as_str() {
+                "f64" => "auto n = finite(*v);".to_string(),
+                ty => format!("auto n = integer<{}>(*v);", cpp_number(ty)),
+            });
+            out.extend(["if (!n) return n.error();".to_string(), format!("{to} = *n;")]);
+            return Ok(out);
+        }
+        Kind::Bool => read(format!("{c}->get_bool()")),
+        _ => read(format!("{c}->get_str_ref()")),
     };
-    Ok(vec![format!("auto v = {call};"), "if (!v) return v.error();".to_string(), format!("{to} = {conv};")])
+    out.push(format!("{to} = *v;"));
+    Ok(out)
 }
 
 fn cpp_read(spec: &Spec, f: &Field, i: usize) -> Result<Vec<String>, String> {
@@ -407,10 +415,10 @@ fn cpp(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<String, S
             "#include <string_view>",
             "",
             "#include \"../../kit/abi/cmd.hpp\"",
-            "#include \"../../kit/math/scalar.hpp\"",
             "#include \"../../kit/status/error.hpp\"",
             "#include \"../../kit/wire/xtp/cursor.hpp\"",
             "#include \"../../kit/wire/xtp/encode.hpp\"",
+            "#include \"number.hpp\"",
             "",
             &format!("namespace {namespace} {{"),
         ]

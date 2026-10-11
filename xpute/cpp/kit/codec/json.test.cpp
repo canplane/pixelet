@@ -1,5 +1,8 @@
 // cpp/kit/codec/json.test.cpp
 
+#include <bit>
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -54,6 +57,18 @@ XPUTE_TEST(json_is_what_the_host_s_json_parse_takes) {
     v.each("grammar", [&](const std::string &k) {
         std::string got = read_json(text_of(v, k + ".text")) ? "json" : "refused";
         XPUTE_CHECK_EQ(got, v.s(k + ".read"), "a text judged JSON otherwise than the host judges it");
+    });
+}
+
+XPUTE_TEST(json_a_number_past_the_doubles_reads_as_the_host_reads_it) {
+    Golden v = Golden::load("spec/golden/codec/json.tsv");
+    v.each("number", [&](const std::string &k) {
+        std::optional<double> n = read_json(v.s(k + ".text"))->as_f64();
+        XPUTE_CHECK(n.has_value());
+        auto bits = std::bit_cast<std::uint64_t>(n.value_or(0));
+        std::string got(16, '0');
+        for (int i = 15; i >= 0; i--, bits >>= 4) got[i] = "0123456789abcdef"[bits & 15];
+        XPUTE_CHECK_EQ(got, v.s(k + ".bits"), k.c_str());
     });
 }
 

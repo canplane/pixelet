@@ -2,7 +2,9 @@
 
 #include "json.hpp"
 
+#include <algorithm>
 #include <charconv>
+#include <limits>
 
 namespace xpute {
 
@@ -175,12 +177,37 @@ std::optional<bool> JsonValue::as_bool() const noexcept {
     return std::nullopt;
 }
 
+// Past the doubles, JSON.parse and Rust's `parse` read a magnitude over the
+// largest as an infinity and one under the least as a zero: which, by the
+// place of the leading digit plus the exponent.
+static double beyond_doubles(std::string_view t) noexcept {
+    bool neg = t.front() == '-';
+    std::size_t e = t.find_first_of("eE");
+    std::string_view mant = t.substr(neg ? 1 : 0, e == std::string_view::npos ? std::string_view::npos : e - (neg ? 1 : 0));
+    std::size_t point = std::min(mant.find('.'), mant.size());
+    std::size_t lead = mant.find_first_not_of("0.");
+    long place = static_cast<long>(point) - static_cast<long>(lead) - (lead < point ? 1 : 0);
+    long exp = 0;
+    if (e != std::string_view::npos) {
+        std::size_t i = e + 1;
+        bool exp_neg = t[i] == '-';
+        if (t[i] == '-' || t[i] == '+') i++;
+        // Clamped: past this, any exponent decides alone.
+        for (; i < t.size(); i++) exp = std::min(exp * 10 + (t[i] - '0'), 100000L);
+        if (exp_neg) exp = -exp;
+    }
+    double v = place + exp > 0 ? std::numeric_limits<double>::infinity() : 0.0;
+    return neg ? -v : v;
+}
+
 std::optional<double> JsonValue::as_f64() const noexcept {
     if (type_of() != JsonType::number) return std::nullopt;
     std::string_view t = s_;
     double v = 0;
     auto [end, ec] = std::from_chars(t.data(), t.data() + t.size(), v);
-    if (ec != std::errc() || end != t.data() + t.size()) return std::nullopt;
+    if (end != t.data() + t.size()) return std::nullopt;
+    if (ec == std::errc::result_out_of_range) return beyond_doubles(t);
+    if (ec != std::errc()) return std::nullopt;
     return v;
 }
 
