@@ -2,17 +2,9 @@
 
 use crate::bake::constant::ELE_PADDED_SPAN;
 use crate::block::cube::sentinel;
-use crate::space::coord::zoom::units;
 use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use super::*;
-
-/// Caves open over the whole sample, as about an edit everywhere.
-fn open_everywhere(sample: &mut ChunkSample) {
-    let r = units(crate::procedural::CAVE_REGION);
-    let mid = [0, 1].map(|k| ((sample.corner[k] + f64::from(sample.span) * sample.side / 2.0) / r).floor() as i64);
-    sample.open_caves(CaveOpening::about(mid, |_| Some([-1e6, 1e6])));
-}
 
 /// `laid` with the cells column `i` has a cave in taken out, as `ground_runs`
 /// takes them out of all but bedrock.
@@ -141,7 +133,6 @@ fn a_column_is_its_look_over_its_filler_over_stone() {
         };
         let mut sample = ChunkSample::of_span(COL_SPAN);
         sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, cell).unwrap();
-        open_everywhere(&mut sample);
         let i = apron_col(COL_SPAN, 0, 0) as usize;
         let mut laid = Vec::new();
         sample
@@ -204,7 +195,6 @@ fn past_the_leaves_strata_stay_a_leaf_cell_thick() {
     leaf.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
     let mut finer = ChunkSample::of_span(COL_SPAN);
     finer.refine(&leaf, 1, [0, 0], COL_SPAN).unwrap();
-    open_everywhere(&mut finer);
     let mut laid = Vec::new();
     finer
         .ground_runs(apron_col(COL_SPAN, 0, 0) as usize, 0, i32::MAX, |lo, hi, g| {
@@ -287,14 +277,6 @@ fn caves_come_last() {
             .unwrap();
         laid
     };
-    // Shut in rock, a cave is rock: none opens where nothing is placed.
-    for y in 0..COL_SPAN - 2 * APRON {
-        for x in 0..COL_SPAN - 2 * APRON {
-            let laid = column(&sample, x, y);
-            assert!(laid.windows(2).all(|w| w[1].0 == w[0].1 + 1), "a cave with no edit about it at {x}, {y}");
-        }
-    }
-    open_everywhere(&mut sample);
     let mut caved = 0;
     for y in 0..COL_SPAN - 2 * APRON {
         for x in 0..COL_SPAN - 2 * APRON {
