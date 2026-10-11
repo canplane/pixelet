@@ -6,8 +6,7 @@
 //! walk and every edit asks these, and nothing else decides them.
 
 use pxl_spec::block::cube::sentinel;
-use pxl_spec::block::limit::ceiling;
-use pxl_spec::block::stand::Block;
+use pxl_spec::block::limit::{ceiling, floor};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::units;
@@ -37,9 +36,9 @@ impl World<'_> {
         cells(1).all(|y| {
             cells(0).all(|x| {
                 let center = point((x as f64 + 0.5) * unit, (y as f64 + 0.5) * unit, space.min[2]);
-                let open = self.runs_at(&center, LEAF_ZOOM, |runs, surface| {
-                    let bedrock = runs.iter().filter(|r| r.block == Block::Ground(sentinel::unknown)).all(|r| r.hi <= space.min[2]);
-                    in_area(surface) && surface.is_some_and(|s| space.max[2] <= ceiling(s.top)) && bedrock
+                // From the limits, not the runs: a fold draws no bedrock.
+                let open = self.runs_at(&center, LEAF_ZOOM, |_, surface| {
+                    in_area(surface) && surface.is_some_and(|s| floor(s.top) <= space.min[2] && space.max[2] <= ceiling(s.top))
                 });
                 open.exact() == Some(true)
             })
