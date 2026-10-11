@@ -58,8 +58,11 @@ impl Sys {
         self.stream.record(spec::op::OPENAT, &args, &[], Some(path));
     }
 
-    /// `dst` is filled by the next turn and must live until then.
-    pub fn read(&mut self, fd: Fd, dst: &mut [u8]) {
+    /// `dst` is filled once the host runs the turn's records.
+    ///
+    /// # Safety
+    /// `dst` stays allocated, unmoved and unread until the next rise.
+    pub unsafe fn read(&mut self, fd: Fd, dst: &mut [u8]) {
         let args: [u32; READ_ARGS] = [fd, off_of_slice(&raw mut *dst) as u32, dst.len() as u32];
         self.stream.record(spec::op::READ, &args, &[], None);
     }
