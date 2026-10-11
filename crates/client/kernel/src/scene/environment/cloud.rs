@@ -151,7 +151,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
         let gap = |lo: f64, v: f64| (lo - v).max(v - lo - BLOCK).max(0.0);
         let x0 = nearest(corner[0], eye[0]);
         let dz = (base - eye[2]).max(eye[2] - base - largest).max(0.0);
-        libm::sqrt(gap(x0, eye[0]).powi(2) + gap(corner[1], eye[1]).powi(2) + dz * dz)
+        let [dx, dy] = [gap(x0, eye[0]), gap(corner[1], eye[1])];
+        libm::sqrt(dx * dx + dy * dy + dz * dz)
     };
     c.wanted.clear();
     for y in span(1) {
@@ -190,7 +191,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, budget: &FrameBudget) {
         let corner = [key[0] as f64 * BLOCK - moved[0], key[1] as f64 * BLOCK - moved[1]];
         let [zlo, zhi] = b.heights.map(f64::from);
         let middle = [corner[0] + BLOCK / 2.0, corner[1] + BLOCK / 2.0, (zlo + zhi) / 2.0];
-        let radius = libm::sqrt(2.0 * (BLOCK / 2.0 + largest / 2.0).powi(2) + ((zhi - zlo) / 2.0 + largest / 2.0).powi(2));
+        let [across, up] = [BLOCK / 2.0 + largest / 2.0, (zhi - zlo) / 2.0 + largest / 2.0];
+        let radius = libm::sqrt(2.0 * across * across + up * up);
         if !frame.sees(middle, radius) {
             continue;
         }

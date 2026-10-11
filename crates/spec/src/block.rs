@@ -95,8 +95,8 @@ impl decor::Decor {
         let reach = |v: &decor::Variant| {
             let [ex, ey, ez] = v.model.ingested().extent.unwrap_or([0.0; 3]);
             let [x, y, z] = v.size.map(|n| f64::from(n) * cell);
-            let across = x.max(y).max(ex).max(ey);
-            libm::sqrt(2.0 * across * across + z.max(ez).powi(2))
+            let (across, up) = (x.max(y).max(ex).max(ey), z.max(ez));
+            libm::sqrt(2.0 * across * across + up * up)
         };
         self.variants.iter().map(reach).fold(0.0, largest)
     }
