@@ -151,12 +151,10 @@ impl Figure {
         let (mut at, is_walking);
 
         if follows {
-            at = if self.was_following {
-                let a = damp_alpha(FOLLOW_LERP_K, ctx.delta);
-                std::array::from_fn(|k| self.at[k] + (target[k] - self.at[k]) * a)
-            } else {
-                target
-            };
+            // From where it stands, as the camera eases from where it is: a key moves
+            // the target a step ahead at once, and a jump there started it off apart.
+            let a = damp_alpha(FOLLOW_LERP_K, ctx.delta);
+            at = std::array::from_fn(|k| self.at[k] + (target[k] - self.at[k]) * a);
             if !steered {
                 self.heading = back_to_camera(p.azimuth);
             } else if gap(target, self.at) > WALK_EPS {
