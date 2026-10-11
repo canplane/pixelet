@@ -4,28 +4,18 @@
 //! scaled into the model's frame, met against its triangles. Before its model
 //! arrives it is not drawn, and nothing strikes it.
 
-use pxl_spec::block::decor::Decor;
+use pxl_spec::block::decor::{Decor, DECORS};
 use pxl_spec::block::DecorId;
 use pxl_spec::space::coord::v3::{cross3, dot3, sub3, V3};
 use xpute_guest::mem::base::ptr_at;
 
-use crate::decor::assets::{decor_assets, decor_assets_for};
+use crate::decor::assets::decor_assets_for;
 use crate::layer::instance::{Instance, Meta};
-use crate::layer::object::size::DECOR_SIZE;
-use crate::layer::terrain::scatter::SCALE_JITTER;
 use crate::model::registry::Models;
 
-/// How far past where it stands any decor reaches: the largest loaded
-/// model's bounding radius at the largest size a decor is drawn at.
-pub fn reach(models: &Models) -> f64 {
-    let radius = decor_assets()
-        .iter()
-        .flat_map(|e| e.models.iter().copied())
-        .flatten()
-        .filter_map(|m| models.mesh(m))
-        .map(|m| m.radius as f64 * m.scale as f64)
-        .fold(0.0, f64::max);
-    radius * (1.0 + SCALE_JITTER).max(DECOR_SIZE)
+/// How far any decor, its box or its model, reaches from its box's min corner.
+pub fn reach() -> f64 {
+    DECORS.iter().map(Decor::reach).fold(0.0, f64::max)
 }
 
 /// Where a ray from `o` along `d` first meets `i`'s model, nearer than
@@ -50,7 +40,7 @@ pub fn strike(models: &Models, i: &Instance, o: V3, d: V3, limit: f64) -> Option
         return None;
     }
     // Into the model's frame: spin undone, the stand-up quarter turn about X, scale.
-    let (sn, cs) = libm::sincos(-m.rotation);
+    let (sn, cs) = libm::sincos(-m.spin());
     let unturn = |v: V3| [v[0] * cs - v[1] * sn, v[0] * sn + v[1] * cs, v[2]];
     let to_model = |v: V3| {
         let u = unturn(v);

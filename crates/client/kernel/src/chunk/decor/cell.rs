@@ -27,9 +27,7 @@ use crate::chunk::source::{objects_met, Met};
 use crate::chunk::table::Scheduler;
 use crate::chunk::Chunk;
 use crate::kernel;
-use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::Store;
-use crate::layer::terrain::scatter::SCALE_JITTER;
 use crate::layer::Base;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::units_per_px_at;
@@ -90,8 +88,7 @@ pub const BLOCKS_MAX: usize = OCCUPANCY;
 
 /// What a chunk is admitted by before its block says what it holds.
 fn largest_possible(decors: &[Decor]) -> f64 {
-    let extent = decors.iter().map(|k| k.extent()).fold(0.0, f64::max);
-    extent * (1.0f64 + SCALE_JITTER).max(DECOR_SIZE)
+    decors.iter().map(Decor::extent).fold(0.0, f64::max)
 }
 
 /// Whether anything a chunk could hold is in reach and over the sprite's floor.
@@ -133,22 +130,13 @@ fn build(c: &mut Cells, chunk: Chunk, decors: &[Decor], store: &Store, draw: &mu
     while GROUND.read_side(over.zoom(), over.cell_zoom()) < CHUNK_CELLS || GROUND.read_zoom(over.cell_zoom()) > src.zoom {
         over = over.parent()?;
     }
-    let (zoom, side) = (GROUND.read_zoom(over.cell_zoom()), GROUND.read_side(over.zoom(), over.cell_zoom()));
     let (x0, y0, _) = over.rect();
-    let (x0, y0) = (x0 as i64, y0 as i64);
-    let (tx0, ty0) = GROUND.read_at(over.column(), over.cell_zoom());
-    // Read over `over`, whose tile is `src` itself.
-    let own_view = terrain.read(over.node(), over.cell_zoom()).value()?.view();
     // Interaction reads what is drawn as it is held, never a fold of it.
     let own = draws_as_held(chunk, GROUND.cell());
     let ground = Ground {
-        source: own_view,
-        zoom,
-        x0,
-        y0,
-        tx0,
-        ty0,
-        side,
+        node: over.column(),
+        cell: over.cell_zoom(),
+        origin: [x0 as i64, y0 as i64],
     };
     let scratch = c.scratch.get_or_insert_with(DecorScratch::default);
     let built = DecorBuild::build(scratch, decors, Some(&ground), sources.hide.filter(|_| own), store, sources.shown, chunk)?;
@@ -239,9 +227,8 @@ fn present(c: &mut Cells, draw: &mut DrawList, frame_eye: V3) {
             side,
             heights: block.heights,
         };
-        // Scattered scales are within the jitter; a placed one's is 1.
-        let scales = [1.0 - SCALE_JITTER, 1.0 + SCALE_JITTER];
-        let extents = DECORS.iter().flat_map(|k| k.variants.iter().map(move |v| (v.extent(), scales)));
+        // The ground grows decor at its own scale.
+        let extents = DECORS.iter().flat_map(|k| k.variants.iter().map(|v| (v.extent(), [1.0, 1.0])));
         present_block(draw, &shown, translation, eye, (0..).zip(extents), 1.0, sprites);
     }
 }

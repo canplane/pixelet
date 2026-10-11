@@ -272,7 +272,8 @@ static SCRATCH: Global<Scratch> = Global::new();
 
 impl<'a> World<'a> {
     /// The ground cell `cell` of the tile zoom `zoom`, X in the asker's frame,
-    /// composed as the chunks drawing it as held compose it, unpreviewed. A
+    /// composed as the chunks drawing it as held compose it, as the world is
+    /// previewed (`previewing`). A
     /// leaf cell's runs are at the zoom what is placed in it is held at; past
     /// the leaves' tiles a cell is the chunks' at it, what is placed folded
     /// into it as they fold it. `f` asks the world nothing: it reads the
@@ -288,8 +289,7 @@ impl<'a> World<'a> {
             _ => cell_zoom,
         };
         // As a chunk composing it at `runs` does, of grid cells one fold coarser.
-        let world = World { hide: None, carve: None, ..*self };
-        let answer = world.column((cell_zoom, [x, y, 0]), runs - GROUND_FOLD);
+        let answer = self.column((cell_zoom, [x, y, 0]), runs - GROUND_FOLD);
         let Some(column) = answer.value() else { return Answer::Nothing(at.tile()) };
         let s = SCRATCH.get(|| Scratch {
             composer: Composer::default(),

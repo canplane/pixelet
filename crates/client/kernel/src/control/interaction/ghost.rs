@@ -8,6 +8,7 @@ use pxl_render::look::color::indicator;
 use pxl_spec::block::decor::Decor;
 use pxl_spec::block::object::{cube_id, cube_of, cube_rgb, Cube};
 use pxl_spec::block::DecorId;
+use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -18,7 +19,6 @@ use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::decor::assets::decor_assets_for;
 use crate::layer::instance::Meta;
 use crate::layer::object::meta::user_decor_pick;
-use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::Block;
 use crate::query::World;
 use crate::setting::store::settings_store;
@@ -72,32 +72,33 @@ pub fn ghost() -> Ghost {
     let decor = decor_id.map(Decor::of);
     let decor_assets = decor.and_then(decor_assets_for);
 
-    let decor_pick_i = match (active_tool, &hovered_object) {
-        (ActiveTool::Decor, _) => hovered.map(|h| h.i),
-        (_, Some(o)) if matches!(o.block(), Block::Decor { .. }) => Some(o.corner().i),
+    let decor_corner = match (active_tool, &hovered_object) {
+        (ActiveTool::Decor, _) => hovered,
+        (_, Some(o)) if matches!(o.block(), Block::Decor { .. }) => Some(o.corner()),
         _ => None,
     };
     // Placing back an erased scattered decor restores that instance; the ghost
     // shows it.
     let restored = match (active_tool, &hovered) {
-        (ActiveTool::Decor, Some(h)) => restores_scattered(h, DECOR_SIZE, ui.decor_id),
+        (ActiveTool::Decor, Some(h)) => restores_scattered(h, units(Decor::of(ui.decor_id).cell_zoom()), ui.decor_id),
         _ => None,
     };
-    let decor_pick = match (decor, decor_pick_i, restored) {
+    // Where it would stand, and what it would carry.
+    let decor_pick = match (decor, decor_corner, restored) {
         (Some(_), _, Some(d)) => {
             let Meta::Decor(m) = d.meta;
-            Some((m.variant, m.rotation, m.scale))
+            Some((d.at, m))
         }
-        (Some(b), Some(i), None) => {
-            let (variant, rotation) = user_decor_pick(i, b.variant_count());
-            Some((variant, rotation, 1.0))
+        (Some(b), Some(c), None) => {
+            let (variant, turn) = user_decor_pick(c.i, b.variant_count());
+            Some(b.stand(real(&c), variant, turn, 1.0))
         }
         _ => None,
     };
     // An untextured white silhouette reads as a glitch, so the box ghost stands
     // in until model and skin both arrive.
     let is_decor_ghost = match (decor_assets, decor_pick) {
-        (Some(a), Some((variant, _, _))) => a.models.get(variant as usize).is_some_and(Option::is_some) && a.skin(variant as usize).is_some(),
+        (Some(a), Some((_, m))) => a.models.get(m.variant as usize).is_some_and(Option::is_some) && a.skin(m.variant as usize).is_some(),
         _ => false,
     };
 
@@ -113,7 +114,7 @@ pub fn ghost() -> Ghost {
         Some(Ghost::Decor {
             at: s.at,
             group: decor.first_group() + m.variant,
-            rotation: m.rotation,
+            rotation: m.spin(),
             scale: m.scale,
         })
     });
@@ -121,12 +122,14 @@ pub fn ghost() -> Ghost {
         (Some(g), _, _) => g,
         (None, Some(h), false) => {
             let [x, y, z] = crate::view::frame::coord::to_world(&h);
+            let c = real(&h);
             match (decor, decor_pick) {
-                (Some(decor), Some((variant, rotation, scale))) if is_decor_ghost => Ghost::Decor {
-                    at: [x + preview_size / 2.0, y + preview_size / 2.0, z],
-                    group: decor.first_group() + variant,
-                    rotation,
-                    scale,
+                // Its stand, moved as the hover is into the world's frame.
+                (Some(decor), Some((at, m))) if is_decor_ghost => Ghost::Decor {
+                    at: [at[0] - c[0] + x, at[1] - c[1] + y, z],
+                    group: decor.first_group() + m.variant,
+                    rotation: m.spin(),
+                    scale: m.scale,
                 },
                 _ => Ghost::Box {
                     at: [x, y, z],
@@ -142,4 +145,9 @@ pub fn ghost() -> Ghost {
         }
         _ => Ghost::None,
     }
+}
+
+/// `p` in units, in the canonical frame.
+fn real(p: &Pvf3) -> V3 {
+    [pvf3::to_real(pvf3::X(p)), pvf3::to_real(pvf3::Y(p)), pvf3::to_real(pvf3::Z(p))]
 }

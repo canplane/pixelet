@@ -8,6 +8,7 @@ pub mod edit;
 pub mod ghost;
 pub mod pick;
 
+use pxl_spec::block::decor::Decor;
 use pxl_spec::block::object::Cube;
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::camera::grid::Tau;
@@ -21,7 +22,7 @@ use crate::control::interaction::edit::{place, place_air, place_decor, remove, w
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;
-use crate::layer::object::size::{object_size_of, DECOR_SIZE};
+use crate::layer::object::size::{object_size_of, MARKER_SIZE};
 use crate::layer::object::store::{Entry, EntryAt};
 use crate::query::Hit;
 use crate::view::frame::pose::view_ray;
@@ -153,7 +154,11 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         hover.object_at = None;
         hover.scattered = None;
         hover.approach = None;
-        let placement_size = if ui.active_tool == ActiveTool::Object { object_size_of(ui.object_tier) } else { DECOR_SIZE };
+        let placement_size = match ui.active_tool {
+            ActiveTool::Object => object_size_of(ui.object_tier),
+            ActiveTool::Decor => units(Decor::of(ui.decor_id).cell_zoom()),
+            _ => MARKER_SIZE,
+        };
         // A decor met in front of the pick is what the new cube goes flush against.
         let precise_box = resolve_hit_target(&hit).map(|o| object_aabb(&o));
         hover.coord = Some(world_adjacent_corner(&hit, placement_size, precise_box.as_ref()));
@@ -223,13 +228,13 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         }
         // The slot may have filled since the last hover update.
         ActiveTool::Decor => {
-            if !is_placement_blocked(PlacementTool::Instance, &hovered, object_size) {
-                place_decor(&hovered, DECOR_SIZE, ui.decor_id);
+            if !is_placement_blocked(PlacementTool::Decor(ui.decor_id), &hovered, object_size) {
+                place_decor(&hovered, units(Decor::of(ui.decor_id).cell_zoom()), ui.decor_id);
             }
         }
         // It waits there for its words, which the shell asks for.
         ActiveTool::Marker => {
-            if !is_placement_blocked(PlacementTool::Instance, &hovered, object_size) {
+            if !is_placement_blocked(PlacementTool::Marker, &hovered, object_size) {
                 wait_to_put(&hovered);
             }
         }

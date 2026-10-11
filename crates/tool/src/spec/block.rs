@@ -520,11 +520,12 @@ fn decor_table(spec: &Node, looks: &[String]) -> Result<Vec<String>, String> {
         "    along_transport,",
         "}",
         "",
-        "/// A model and its pack's colormap.",
+        "/// A model, its pack's colormap, and the box it claims in its kind's cells.",
         "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
         "pub struct Variant {",
         "    pub model: crate::asset::ingested::Asset,",
         "    pub skin: crate::asset::ingested::Asset,",
+        "    pub size: [u32; 3],",
         "}",
         "",
         "/// A decor: its id, its models, and how the ground grows it.",
@@ -535,6 +536,8 @@ fn decor_table(spec: &Node, looks: &[String]) -> Result<Vec<String>, String> {
         "    pub density: f64,",
         "    pub orientation: Orientation,",
         "    pub on: &'static [crate::bake::tile::terrain::GroundId],",
+        "    /// Its cell: a unit's zoom, this many coarser.",
+        "    pub scale_steps: i8,",
         "    pub variants: &'static [Variant],",
         "}",
         "",
@@ -573,12 +576,24 @@ fn decor_table(spec: &Node, looks: &[String]) -> Result<Vec<String>, String> {
                     .ok_or(format!("{}: {l:?} is no ground look", at("on")))
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let scale_steps = match k.get("scale_steps") {
+            None => 0.0,
+            Some(n) => n.num().filter(|n| n.fract() == 0.0 && (f64::from(i8::MIN)..=f64::from(i8::MAX)).contains(n)).ok_or(at("scale_steps"))?,
+        };
         let variants = k.get("variants").and_then(Node::arr).ok_or(at("variants"))?;
         let variants = variants
             .iter()
-            .map(|v| match (v.str_at("model"), v.str_at("skin")) {
-                (Some(m), Some(s)) => Ok(format!("Variant {{ model: {ASSET}::{}, skin: {ASSET}::{} }}", rs_ident(m), rs_ident(s))),
-                _ => Err(at("variants")),
+            .map(|v| {
+                let size = v.get("size").and_then(Node::arr).filter(|s| s.len() == 3).map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
+                match (v.str_at("model"), v.str_at("skin"), size.flatten()) {
+                    (Some(m), Some(s), Some(size)) if size.iter().all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u32::MAX)) => Ok(format!(
+                        "Variant {{ model: {ASSET}::{}, skin: {ASSET}::{}, size: [{}] }}",
+                        rs_ident(m),
+                        rs_ident(s),
+                        size.iter().map(|&n| js_num(n)).collect::<Vec<_>>().join(", ")
+                    )),
+                    _ => Err(at("variants")),
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
         rs.extend([
@@ -588,6 +603,7 @@ fn decor_table(spec: &Node, looks: &[String]) -> Result<Vec<String>, String> {
             format!("        density: {},", if density.fract() == 0.0 { format!("{}.0", js_num(density)) } else { js_num(density) }),
             format!("        orientation: Orientation::{orientation},"),
             format!("        on: &[{}],", on.join(", ")),
+            format!("        scale_steps: {},", js_num(scale_steps)),
             "        variants: &[".to_string(),
         ]);
         rs.extend(variants.iter().map(|v| format!("            {v},")));

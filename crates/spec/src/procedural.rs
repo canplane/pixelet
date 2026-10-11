@@ -75,31 +75,67 @@ fn poisson(mean: f64, u: f64) -> u64 {
     k
 }
 
-/// What stands at `z` in `region` (leaf cells, `[min, max)`), one a cell:
-/// of two on one cell the coarser stays, so a zoom keeps what it had.
-pub fn scatter(tag: u64, density: f64, zoom: Zoom, region: [[i64; 2]; 2], out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
+/// Whether `a` stands before `b` where both would claim a cell: the one born
+/// coarser, so a zoom keeps what it had, then the lower seed.
+fn before(a: &Candidate, b: &Candidate) -> bool {
+    (a.born, a.seed) < (b.born, b.seed)
+}
+
+/// Whether the squares `side` gives two candidates, from their cells up, share a cell.
+fn meet(a: &Candidate, b: &Candidate, side: &impl Fn(&Candidate) -> i64) -> bool {
+    let (sa, sb) = (side(a), side(b));
+    (0..2).all(|k| a.cell[k] < b.cell[k] + sb && b.cell[k] < a.cell[k] + sa)
+}
+
+/// What stands at `z` in `region` (leaf cells, `[min, max)`), by its cell.
+/// Each candidate claims the square `side` gives it, from its cell up, which
+/// holds its box however it turns, `widest` the largest; of two whose squares
+/// meet, the one `before` the other stands.
+pub fn scatter(tag: u64, density: f64, zoom: Zoom, region: [[i64; 2]; 2], widest: i64, side: impl Fn(&Candidate) -> i64, out: &mut Vec<Candidate>) -> Result<(), TryReserveError> {
     out.clear();
+    let reach = widest - 1;
+    let around = [region[0].map(|v| v - reach), region[1].map(|v| v + reach)];
     let mut grown = Ok(());
-    each_candidate(tag, density, zoom, region, |c| {
+    each_candidate(tag, density, zoom, around, |c| {
         if grown.is_ok() {
             grown = out.try_reserve(1).map(|()| out.push(c));
         }
     });
     grown?;
     out.sort_unstable_by(|a, b| a.cell.cmp(&b.cell).then(a.born.cmp(&b.born)).then(a.seed.cmp(&b.seed)));
-    out.dedup_by_key(|c| c.cell);
+    // Survivors go past the end, then the whole is let go of.
+    let n = out.len();
+    for i in 0..n {
+        let c = out[i];
+        if !(0..2).all(|k| (region[0][k]..region[1][k]).contains(&c.cell[k])) {
+            continue;
+        }
+        // Only a candidate within `reach` before it on x, or its own side past, can meet it.
+        let from = out[..n].partition_point(|d| d.cell[0] < c.cell[0] - reach);
+        let beaten = out[from..n].iter().take_while(|d| d.cell[0] < c.cell[0] + side(&c)).any(|d| before(d, &c) && meet(d, &c, &side));
+        if !beaten {
+            out.try_reserve(1)?;
+            out.push(c);
+        }
+    }
+    out.drain(..n);
     Ok(())
 }
 
 /// What stands in one leaf cell on the leaves, as `scatter` keeps it.
-pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2]) -> Option<Candidate> {
+pub fn scatter_at(tag: u64, density: f64, cell: [i64; 2], widest: i64, side: impl Fn(&Candidate) -> i64) -> Option<Candidate> {
     let mut best: Option<Candidate> = None;
     each_candidate(tag, density, LEAF_ZOOM, [cell, [cell[0] + 1, cell[1] + 1]], |c| {
-        if best.is_none_or(|b| (c.born, c.seed) < (b.born, b.seed)) {
+        if best.is_none_or(|b| before(&c, &b)) {
             best = Some(c);
         }
     });
-    best
+    let best = best?;
+    let reach = widest - 1;
+    let around = [cell.map(|v| v - reach), cell.map(|v| v + widest)];
+    let mut beaten = false;
+    each_candidate(tag, density, LEAF_ZOOM, around, |d| beaten |= before(&d, &best) && meet(&d, &best, &side));
+    (!beaten).then_some(best)
 }
 
 // ---- piers ----

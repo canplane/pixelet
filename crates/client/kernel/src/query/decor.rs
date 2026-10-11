@@ -9,23 +9,22 @@
 
 use pxl_spec::block::decor::{Decor, DECORS};
 use pxl_spec::block::stand::Block;
+use pxl_spec::block::DecorId;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::zoom::{base_of, index_of, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use super::ray::{Detail, Ray};
+use super::scatter::grown_at;
 use super::support::block_in;
 use super::world::World;
 use crate::decor::strike::{reach, strike};
-use crate::layer::instance::{Instance, Source};
+use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::meta::placed;
-use crate::layer::terrain::scatter::grown_at;
-use crate::layer::terrain::Source as TerrainSource;
-use crate::layer::Query;
 use crate::model::registry::Models;
 
 /// How decor is struck: against its models, where the chunks drawing at `tau` hold it.
@@ -45,38 +44,91 @@ pub(super) struct Strike<'a> {
     pub(super) held: f64,
     /// The column met last, whose neighbors are struck already.
     last: Option<[i64; 2]>,
-    /// The leaf tile read last, which the next cell most likely lies in.
-    tile: Option<(Tile, TerrainSource<'a>)>,
     pub(super) best: Option<(f64, Instance)>,
 }
 
 impl<'a> World<'a> {
-    /// Whether the ground grows `decor` standing in the leaf block `at`, as
-    /// the tile zoom `zoom`'s chunks draw it: the block void, and the one
-    /// under it ground `decor` grows on. Air placed there or under it is no void.
-    pub fn grows(&self, decor: &Decor, [x, y, z]: [i64; 3], zoom: Zoom) -> bool {
-        let half = units(GROUND.cell()) / 2.0;
-        let base = base_of(GROUND.cell(), [x, y, z]);
-        let center = pvf3::gather(pvf3::X(&base) + pvf3::from_real(half), pvf3::Y(&base) + pvf3::from_real(half), pvf3::Z(&base));
-        // The block and the one under it, from one composition of their column.
-        let (at, under) = (pvf3::to_real(pvf3::Z(&base)) + half, pvf3::to_real(pvf3::Z(&base)) - half);
-        let blocks = self.runs_at(&center, zoom, |runs, _| [at, under].map(|z| block_in(runs, z)));
-        matches!(blocks.value(), Some([None, Some(Block::Ground(g))]) if decor.allows(g))
+    /// Whether the ground grows `i`, a candidate of `decor`, as the tile zoom
+    /// `zoom`'s chunks draw it: every block of its box void, and every one
+    /// under its base ground `decor` grows on. Air placed in it or under it is
+    /// no void.
+    pub fn grows(&self, decor: &Decor, i: &Instance, zoom: Zoom) -> bool {
+        let (Source::Ground([x, y, z]), Meta::Decor(m)) = (i.source, i.meta) else { return false };
+        let [w, d, h] = decor.variants[m.variant as usize].cells(m.turn).map(i64::from);
+        let (unit, half) = (units(GROUND.cell()), units(GROUND.cell()) / 2.0);
+        (0..d).all(|j| {
+            (0..w).all(|k| {
+                let base = base_of(GROUND.cell(), [x + k, y + j, z]);
+                let center = pvf3::gather(pvf3::X(&base) + pvf3::from_real(half), pvf3::Y(&base) + pvf3::from_real(half), pvf3::Z(&base));
+                let floor = pvf3::to_real(pvf3::Z(&base)) + half;
+                // The box's blocks and the one under it, from one composition of their column.
+                let footing = self.runs_at(&center, zoom, |runs, _| {
+                    matches!(block_in(runs, floor - unit), Some(Block::Ground(g)) if decor.allows(g)) && (0..h).all(|n| block_in(runs, floor + n as f64 * unit).is_none())
+                });
+                footing.value() == Some(true)
+            })
+        }) && claim(i).is_some_and(|c| self.placed_claim(&c).is_none())
+    }
+
+    /// A placed decor whose box shares room with `space`.
+    pub fn placed_claim(&self, space: &Aabb) -> Option<Instance> {
+        let r = reach();
+        let around = Aabb {
+            min: space.min.map(|v| v - r),
+            max: space.max,
+        };
+        let mut met = None;
+        self.objects.entries_in(&around, &mut |e| {
+            if met.is_none() {
+                met = placed(e).filter(|i| claim(i).is_some_and(|c| shares(&c, space)));
+            }
+        });
+        met
+    }
+
+    /// A decor the ground grows on the leaves whose box shares room with `space`.
+    pub fn grown_claim(&self, space: &Aabb) -> Option<Instance> {
+        let mut met = None;
+        self.each_grown_over(space, |decor, i| {
+            met = Some(i).filter(|i| self.grows(decor, i, LEAF_ZOOM));
+            met.is_some()
+        });
+        met
+    }
+
+    /// Every decor the ground's scatter stands on the leaves whose box shares
+    /// room with `space`, whether or not its footing is there now: what an
+    /// erase took away included.
+    pub fn grown_over(&self, space: &Aabb) -> Vec<Instance> {
+        let mut out = Vec::new();
+        self.each_grown_over(space, |_, i| {
+            out.push(i);
+            false
+        });
+        out
+    }
+
+    /// Until `each` says it has what it wants.
+    fn each_grown_over(&self, space: &Aabb, mut each: impl FnMut(&Decor, Instance) -> bool) {
+        let (r, unit) = (reach(), units(GROUND.cell()));
+        let cells = |k: usize| libm::floor((space.min[k] - r) / unit) as i64..libm::ceil(space.max[k] / unit) as i64;
+        for y in cells(1) {
+            for x in cells(0) {
+                for decor in &DECORS {
+                    let grown = grown_at(self, decor, [x, y]).filter(|i| claim(i).is_some_and(|c| shares(&c, space)));
+                    if grown.is_some_and(|i| each(decor, i)) {
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     /// What the ground grows of `decor` standing in the leaf cell `at` lies
     /// in; none where it grows nothing there or its leaf tile is not resident.
     pub fn grown(&self, decor: &Decor, at: &Pvf3) -> Option<Instance> {
         let [x, y, z] = index_of(GROUND.cell(), at);
-        let (source, place) = self.leaf_source([x, y])?;
-        grown_at(decor, &source.view(), [x, y], place).filter(|i| i.grown_in().is_some_and(|c| c[2] == z))
-    }
-
-    /// The leaf tile holding the leaf cell `cell`, and the cell's place in it.
-    fn leaf_source(&self, [x, y]: [i64; 2]) -> Option<(TerrainSource<'a>, [u32; 2])> {
-        let leaf = GROUND.cell_of(LEAF_ZOOM, &base_of(GROUND.cell(), [x, y, 0]));
-        let (zoom, [tx, ty]) = leaf.tile().node();
-        Some((self.terrain.read((zoom, [tx, ty, 0]), GROUND.grid_zoom(zoom)).exact()?, leaf.in_tile()))
+        grown_at(self, decor, [x, y]).filter(|i| i.grown_in().is_some_and(|c| c[2] == z))
     }
 
     /// The strike a ray carries, where decor is struck at all.
@@ -86,14 +138,13 @@ impl<'a> World<'a> {
             (LEAF_ZOOM, _, until) => until.min(ray.reach),
             _ => return None,
         };
-        let reach = reach(models);
+        let reach = reach();
         Some(Strike {
             models,
             reach,
             around: reach.ceil() as i64,
             held,
             last: None,
-            tile: None,
             best: None,
         })
     }
@@ -116,8 +167,11 @@ impl<'a> World<'a> {
                     min: [x as f64, y as f64, z0],
                     max: [(x + 1) as f64, (y + 1) as f64, z1],
                 };
+                // Met in the column its box's corner is in, once.
                 self.objects.entries_in(&column, &mut |e| {
-                    if let Some(i) = placed(e).filter(|i| column.holds(i.at)) {
+                    let c = e.cube().min;
+                    let own = (0..2).all(|k| (column.min[k]..column.max[k]).contains(&c[k]));
+                    if let Some(i) = placed(e).filter(|_| own && column.holds(c)) {
                         meet(s, ray, i);
                     }
                 });
@@ -126,24 +180,24 @@ impl<'a> World<'a> {
     }
 
     fn grown_near(&self, s: &mut Strike<'a>, ray: &Ray, cell: [i64; 2]) {
-        let leaf = GROUND.cell_of(LEAF_ZOOM, &base_of(GROUND.cell(), [cell[0], cell[1], 0]));
-        let source = match s.tile {
-            Some((t, source)) if t == leaf.tile() => source,
-            _ => {
-                let Some((source, _)) = self.leaf_source(cell) else { return };
-                s.tile = Some((leaf.tile(), source));
-                source
-            }
-        };
-        let view = source.view();
         for decor in &DECORS {
-            let Some(i) = grown_at(decor, &view, cell, leaf.in_tile()) else { continue };
-            let Source::Ground(at) = i.source else { continue };
-            if self.grows(decor, at, LEAF_ZOOM) {
+            let Some(i) = grown_at(self, decor, cell) else { continue };
+            if self.grows(decor, &i, LEAF_ZOOM) {
                 meet(s, ray, i);
             }
         }
     }
+}
+
+/// The box a decor thing claims.
+pub fn claim(i: &Instance) -> Option<Aabb> {
+    let Meta::Decor(m) = i.meta;
+    Some(Decor::of(DecorId::of(i.id)?).claim(i.at, &m))
+}
+
+/// Whether two boxes share room, not only a face.
+pub fn shares(a: &Aabb, b: &Aabb) -> bool {
+    (0..3).all(|k| a.min[k] < b.max[k] && b.min[k] < a.max[k])
 }
 
 fn meet(s: &mut Strike, ray: &Ray, i: Instance) {

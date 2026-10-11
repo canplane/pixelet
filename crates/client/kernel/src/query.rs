@@ -13,11 +13,14 @@ mod block;
 mod decor;
 mod placed;
 mod ray;
+mod scatter;
 mod support;
+mod surface;
 mod world;
 
 pub use block::{runs, Blocks, Column, Composer, Surface};
 pub use ray::{Detail, Hit, Ray, Struck};
+pub use scatter::grow;
 pub use support::{over, under};
 pub use world::World;
 
