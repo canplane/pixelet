@@ -29,7 +29,7 @@ import { bytes_at } from "@/kernel/module.ts";
 import { gpuBoot } from "@platform/gpu.ts";
 import { onlineWatch } from "@platform/online.ts";
 import { HANDHELD } from "@platform/device.ts";
-import { start_sched } from "@/kernel/sched.ts";
+import { start_sched, strobe } from "@/kernel/sched.ts";
 import { set_snapshot } from "@/kernel/snapshot.ts";
 
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
@@ -80,4 +80,12 @@ export async function boot_kernel(): Promise<void> {
   if (booted < 0) throw new Error(`WORLD_BOOT refused: ${strerror(booted)}`);
   // Not awaited: a dev tile server may answer late.
   void declare_source();
+}
+
+/** `listener` hears the kernel stop for good: its turns end with it. */
+export function on_kernel_stop(listener: () => void): void {
+  GUEST_DOORBELL.stopped = () => {
+    strobe.stop();
+    listener();
+  };
 }

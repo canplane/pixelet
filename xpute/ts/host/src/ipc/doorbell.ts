@@ -36,6 +36,8 @@ export class Doorbell {
   private trapped = false;
   signal: SignalListener | null = null;
   wake: ((wake_ms: f64) => void) | null = null;
+  /** Told once, as the guest traps. */
+  stopped: (() => void) | null = null;
 
   constructor(mem: ArrayBufferLike, sq_at: u32, cq_at: u32, private readonly interrupt: Interrupt) {
     this.sq = new Ring(mem, sq_at);
@@ -60,6 +62,7 @@ export class Doorbell {
       wake = this.interrupt(quota_ms);
     } catch (err) {
       this.trapped = true;
+      this.stopped?.();
       throw err;
     }
     this.read();

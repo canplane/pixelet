@@ -52,6 +52,8 @@ export const color = {
   white: "#ffffff",
   black: "#000000",
   ground: GROUND,
+  /** iOS's system blue darkened to read 4.5:1 under white words: the kernel's stop, a blue screen. */
+  panic: "#0069DC",
 
   /** iOS's label gray in light mode. */
   labelGray: "#3C3C43",
