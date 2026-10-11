@@ -139,6 +139,9 @@ fn labeled_pill(p: &mut Sketch, label: &str, logical_w: f32) {
 }
 
 pub const BUBBLE_FONT: Font = Font { weight: SEMIBOLD, px: 14.0 };
+/// The widest a bubble's line runs before it wraps.
+pub const BUBBLE_TEXT_W: f64 = 220.0;
+const PADDING_X: f32 = 11.0;
 const PADDING_Y: f32 = 8.0;
 const LINE_H: f32 = 17.0;
 const BORDER: f32 = 2.0;
@@ -154,7 +157,19 @@ fn notched_rect(p: &mut Sketch, x: f32, y: f32, w: f32, h: f32, notch: f32, fill
     p.rect(x, y + notch, w, (h - notch * 2.0).max(0.0), fill);
 }
 
-fn bubble(p: &mut Sketch, lines: &[String], box_w: f32, box_h: f32) {
+fn bubble_box_h(lines: usize) -> f32 {
+    lines as f32 * LINE_H + PADDING_Y * 2.0
+}
+
+/// A bubble's sprite for `lines` lines as wide as `text_w`: its width,
+/// height with the tail, and where its speaker is, at the tail's tip.
+pub fn bubble_size(text_w: f64, lines: usize) -> [f64; 3] {
+    let h = f64::from(bubble_box_h(lines) + TAIL_H);
+    [text_w.ceil() + f64::from(PADDING_X) * 2.0, h, h]
+}
+
+fn bubble(p: &mut Sketch, lines: &[String], box_w: f32) {
+    let box_h = bubble_box_h(lines.len());
     notched_rect(p, 0.0, 0.0, box_w, box_h, NOTCH, BLACK);
     notched_rect(p, BORDER, BORDER, box_w - BORDER * 2.0, box_h - BORDER * 2.0, (NOTCH - BORDER).max(1.0), WHITE);
     let cx = box_w / 2.0;
@@ -300,7 +315,7 @@ impl BadgePass {
                     text,
                     logical_w,
                 } => point(&mut p, lines, *icon, *symbol, *fill, *text, *logical_w as f32),
-                DrawSpec::Bubble { lines, box_w, box_h } => bubble(&mut p, lines, *box_w as f32, *box_h as f32),
+                DrawSpec::Bubble { lines, box_w } => bubble(&mut p, lines, *box_w as f32),
             }
             if self.painter.paint(g, encoder, self.sheet, sheet.slot_rect(slot), &p, text, &mut made) {
                 drawn = true;
