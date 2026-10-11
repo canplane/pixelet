@@ -10,7 +10,7 @@ use crate::bake::surface::bicubic;
 use crate::bake::tile::terrain::GroundId;
 use crate::block::cube::{ground, sentinel, Ground};
 use crate::block::limit::{bedrock, wall};
-use crate::procedural::{hollow, pier_stands, Frame};
+use crate::procedural::{pier_stands, Caves, Frame};
 use crate::space::camera::grid::CHUNK_STEPS;
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::{count, Zoom};
@@ -394,11 +394,17 @@ impl ChunkSample {
         Ground::of(self.look[i]).is_some() || self.look[i] == sentinel::unknown
     }
 
-    /// Whether the cell `z` of column `i` is where the world has a cave.
-    fn hollow(&self, i: usize, z: i32) -> bool {
+    /// The world's caves down column `i`, asked of a cell `z` by its center
+    /// (`cell_z`).
+    fn caves(&self, i: usize) -> Caves {
         let span = self.span as usize;
         let at = [i % span, i / span].map(|v| v as f64 + 0.5);
-        hollow([self.corner[0] + at[0] * self.side, self.corner[1] + at[1] * self.side, (f64::from(z) + 0.5) / f64::from(self.scale)])
+        Caves::column(self.corner[0] + at[0] * self.side, self.corner[1] + at[1] * self.side)
+    }
+
+    /// The center of the cell `z`, in units.
+    fn cell_z(&self, z: i32) -> f64 {
+        (f64::from(z) + 0.5) / f64::from(self.scale)
     }
 
     /// Whether a way runs in column `i` or one beside it — at grade, through a
@@ -423,17 +429,17 @@ impl ChunkSample {
             return Ok(());
         }
         let top = self.ele[i].min(to);
-        let caves = self.cell >= GROUND.cell() && self.look[i] != sentinel::unknown && !self.by_a_way(i);
+        let mut caves = (self.cell >= GROUND.cell() && self.look[i] != sentinel::unknown && !self.by_a_way(i)).then(|| self.caves(i));
         let mut part = |lo: i32, hi: i32, g: GroundId| {
             let lo = lo.max(from);
-            if !caves || g == sentinel::unknown {
+            let Some(caves) = caves.as_mut().filter(|_| g != sentinel::unknown) else {
                 return if lo < hi { run(lo, hi - 1, g) } else { Ok(()) };
-            }
+            };
             // Each stretch of the cells the world leaves solid.
             let mut start = None;
             let face = self.ele[i] - self.scale;
             for z in lo..hi {
-                match (z < face && self.hollow(i, z), start) {
+                match (z < face && caves.hollow(self.cell_z(z)), start) {
                     (true, Some(s)) => {
                         run(s, z - 1, g)?;
                         start = None;

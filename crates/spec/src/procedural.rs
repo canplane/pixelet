@@ -234,27 +234,65 @@ pub fn pier_stands(pier: [i32; 2], cell: GroundId, column: impl IntoIterator<Ite
 /// lattice point instead, so it needs no table and runs on as far as the world
 /// does. In about [−1, 1]; plain arithmetic, so every platform draws the same.
 pub fn perlin(seed: u64, [x, y, z]: [f64; 3]) -> f64 {
-    let (fx, fy, fz) = (x.floor(), y.floor(), z.floor());
-    let (ix, iy, iz) = (fx as i64, fy as i64, fz as i64);
-    let (x, y, z) = (x - fx, y - fy, z - fz);
-    let fade = |t: f64| t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
-    let lerp = |t: f64, a: f64, b: f64| a + t * (b - a);
-    let grad = |dx: i64, dy: i64, dz: i64| {
-        let h = derive_seed_u64(derive_seed_u64(derive_seed_u64(seed, (ix + dx) as u64), (iy + dy) as u64), (iz + dz) as u64) & 15;
-        let (x, y, z) = (x - dx as f64, y - dy as f64, z - dz as f64);
-        let u = if h < 8 { x } else { y };
-        let v = if h < 4 {
-            y
-        } else if h == 12 || h == 14 {
-            x
-        } else {
-            z
+    Line::new(seed, x, y).at(z)
+}
+
+/// Improved noise down one line of `z` at a fixed `x`, `y`: the gradients of
+/// the lattice cube it is in are hashed once, and again only where `z` leaves
+/// it, which a cell does once in many.
+struct Line {
+    seed: u64,
+    corner: [i64; 2],
+    fraction: [f64; 2],
+    cube: Option<(i64, [u64; 8])>,
+}
+
+impl Line {
+    fn new(seed: u64, x: f64, y: f64) -> Line {
+        let (fx, fy) = (x.floor(), y.floor());
+        Line {
+            seed,
+            corner: [fx as i64, fy as i64],
+            fraction: [x - fx, y - fy],
+            cube: None,
+        }
+    }
+
+    fn at(&mut self, z: f64) -> f64 {
+        let fz = z.floor();
+        let iz = fz as i64;
+        let ([ix, iy], seed) = (self.corner, self.seed);
+        let hashes = match self.cube {
+            Some((at, h)) if at == iz => h,
+            _ => {
+                let h = core::array::from_fn(|k| {
+                    let [dx, dy, dz] = [k & 1, (k >> 1) & 1, k >> 2].map(|d| d as i64);
+                    derive_seed_u64(derive_seed_u64(derive_seed_u64(seed, (ix + dx) as u64), (iy + dy) as u64), (iz + dz) as u64) & 15
+                });
+                self.cube = Some((iz, h));
+                h
+            }
         };
-        (if h & 1 == 0 { u } else { -u }) + (if h & 2 == 0 { v } else { -v })
-    };
-    let (u, v, w) = (fade(x), fade(y), fade(z));
-    let face = |dz: i64| lerp(v, lerp(u, grad(0, 0, dz), grad(1, 0, dz)), lerp(u, grad(0, 1, dz), grad(1, 1, dz)));
-    lerp(w, face(0), face(1))
+        let ([x, y], z) = (self.fraction, z - fz);
+        let fade = |t: f64| t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+        let lerp = |t: f64, a: f64, b: f64| a + t * (b - a);
+        let grad = |k: usize| {
+            let h = hashes[k];
+            let (x, y, z) = (x - (k & 1) as f64, y - ((k >> 1) & 1) as f64, z - (k >> 2) as f64);
+            let u = if h < 8 { x } else { y };
+            let v = if h < 4 {
+                y
+            } else if h == 12 || h == 14 {
+                x
+            } else {
+                z
+            };
+            (if h & 1 == 0 { u } else { -u }) + (if h & 2 == 0 { v } else { -v })
+        };
+        let (u, v, w) = (fade(x), fade(y), fade(z));
+        let face = |dz: usize| lerp(v, lerp(u, grad(4 * dz), grad(4 * dz + 1)), lerp(u, grad(4 * dz + 2), grad(4 * dz + 3)));
+        lerp(w, face(0), face(1))
+    }
 }
 
 /// A cave's tunnels where two noises are both near zero, Minecraft's
@@ -266,22 +304,43 @@ const SPAGHETTI_WIDTH: f64 = 0.06;
 const CHEESE_SCALE: f64 = 1.0 / 48.0;
 const CHEESE_THRESHOLD: f64 = 0.42;
 
-/// Whether the cell centered at `at`, in units, is a cave's air. Nothing
-/// bounds it: whatever is laid over it later, bedrock and ways among them, wins.
-pub fn hollow(at: [f64; 3]) -> bool {
-    // Each noise on a lattice of its own, shifted by its seed: Perlin noise is
-    // zero on its lattice's points, so two on one lattice would both be near
-    // zero there and hollow a grid of pits, not tunnels.
-    let noise = |tag: u64, s: [f64; 3]| {
-        let seed = derive_seed_u64(MASTER_SEED, tag);
-        let shift = |k: u64| u32_to_unit(derive_seed_u64(seed, k) as u32);
-        perlin(seed, [at[0] * s[0] + shift(0), at[1] * s[1] + shift(1), at[2] * s[2] + shift(2)])
-    };
-    // The second only where the first is near zero, a few cells in a hundred.
-    if noise(0xca7e_0001, SPAGHETTI_SCALE).abs() < SPAGHETTI_WIDTH && noise(0xca7e_0002, SPAGHETTI_SCALE).abs() < SPAGHETTI_WIDTH {
-        return true;
+/// The caves down one column, its `x`, `y` in units: `hollow` a cell at a
+/// time, each noise's lattice cube hashed once a stretch of it.
+pub struct Caves {
+    noises: [(Line, f64, f64); 3],
+}
+
+impl Caves {
+    pub fn column(x: f64, y: f64) -> Caves {
+        // Each noise on a lattice of its own, shifted by its seed: Perlin noise is
+        // zero on its lattice's points, so two on one lattice would both be near
+        // zero there and hollow a grid of pits, not tunnels.
+        let noise = |tag: u64, s: [f64; 3]| {
+            let seed = derive_seed_u64(MASTER_SEED, tag);
+            let shift = |k: u64| u32_to_unit(derive_seed_u64(seed, k) as u32);
+            (Line::new(seed, x * s[0] + shift(0), y * s[1] + shift(1)), s[2], shift(2))
+        };
+        Caves {
+            noises: [noise(0xca7e_0001, SPAGHETTI_SCALE), noise(0xca7e_0002, SPAGHETTI_SCALE), noise(0xca7e_0003, [CHEESE_SCALE; 3])],
+        }
     }
-    noise(0xca7e_0003, [CHEESE_SCALE; 3]) > CHEESE_THRESHOLD
+
+    /// Whether the cell centered at `z`, in units, is a cave's air. Nothing
+    /// bounds it: whatever is laid over it later, bedrock and ways among them, wins.
+    pub fn hollow(&mut self, z: f64) -> bool {
+        let [a, b, c] = &mut self.noises;
+        let at = |(line, scale, shift): &mut (Line, f64, f64)| line.at(z * *scale + *shift);
+        // The second only where the first is near zero, a few cells in a hundred.
+        if at(a).abs() < SPAGHETTI_WIDTH && at(b).abs() < SPAGHETTI_WIDTH {
+            return true;
+        }
+        at(c) > CHEESE_THRESHOLD
+    }
+}
+
+/// Whether the cell centered at `at`, in units, is a cave's air (`Caves`).
+pub fn hollow(at: [f64; 3]) -> bool {
+    Caves::column(at[0], at[1]).hollow(at[2])
 }
 
 #[cfg(test)]
