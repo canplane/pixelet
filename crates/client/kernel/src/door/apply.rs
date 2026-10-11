@@ -318,7 +318,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             applied(s)
         }
         Command::CHAT_SEND => {
-            crate::scene::character::chat_bubble::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
+            crate::billboard::chat::append_chat_line(abi::ChatSend::read(packet(pkt)?)?.text);
             applied(s)
         }
         Command::PREVIEW_OPEN => {

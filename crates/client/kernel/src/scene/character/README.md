@@ -17,7 +17,6 @@ phase) rather than by anything the shell holds, at "a few, individually
 distinct" instance count. `companion.rs`'s `Figure` (person + pet) is the
 only instance today.
 
-`chat_bubble.rs` lives here too — it's not itself an Actor (it's a
-world-anchored billboard, a different tier), but its position is entirely
-derived from riding its parent Actor's own transform, so it stays next to the
-thing it's attached to rather than moving to a general billboard directory.
+The person's chat line is no Actor of its own: it is a billboard label as a
+marker's is, laid out with them (`../../chunk/place.rs`), and the companion
+only hands down where it is said from (`../../billboard/chat.rs` `speak_from`).

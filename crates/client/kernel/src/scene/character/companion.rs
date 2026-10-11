@@ -14,7 +14,7 @@ use crate::laid;
 use crate::model::asset::ModelHandle;
 use crate::query::World;
 use crate::query::{over, under};
-use crate::scene::character::chat_bubble::chat_bubble_step;
+use crate::billboard::chat::speak_from;
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::scene::character::variant_spec::IDLE_CLIP;
@@ -52,6 +52,9 @@ fn back_to_camera(azimuth: f64) -> f64 {
 // Under one GPS fix's travel at a walking pace (~0.5u), over the near-zero gap
 // a still map leaves. A rotate or pinch leaves such a gap, and a catch-up
 // across it would play the walk clip in place.
+// A line hangs this far over the model's bounding box: a fixed clearance, not a multiplier of its height.
+const HEAD_CLEARANCE_U: f64 = 0.22;
+
 const WALK_EPS: f64 = 0.03;
 const FOLLOW_WALK_LINGER_S: f64 = 1.5;
 
@@ -300,7 +303,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
                 w.release();
             }
         }
-        chat_bubble_step(None, 0.0);
+        speak_from(None);
         return;
     };
     let settings = settings_store();
@@ -316,7 +319,10 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     if let Some((target, z)) = p.floor.map(|z| (person_target, z)).or_else(|| hold(person)) {
         person.step(ctx, target, z, &p);
     }
-    chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
+    // The person speaks from where it is drawn, its line over its head.
+    let actors = laid().map(|k| &k.scene.actors);
+    let drawn = person.held.as_ref().and_then(|h| actors?.actor_ref(h.actor)).filter(|a| a.visible).map(|a| a.at);
+    speak_from(drawn.map(|at| (world_to_canonical(&at), world_to_canonical(&[at[0], at[1], at[2] + person_variant.height_u + HEAD_CLEARANCE_U]))));
 
     let pet_target = [p.center[0] + PET_OFFSET[0], p.center[1] + PET_OFFSET[1]];
     let pet = figure_for(&mut c.pet, pet_variant, pet_target);
