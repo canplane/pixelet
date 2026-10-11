@@ -135,6 +135,7 @@ impl<'a> World<'a> {
     /// ground's own cells, seen from `eye`, this is a map, not a walk: it goes
     /// to `to` and stands there. That is decided where it starts, and by the
     /// criterion's τ so that the quality a device draws at moves no wall.
+    /// It never leaves the service area (`within`), sliding along its edge.
     /// It stops at the edge of a leaf on the way not held, keeping its walk up
     /// to there; none where the leaf under `from`, or a map's `to`, is not
     /// held, when its caller goes on with the height unknown. `from` is a
@@ -146,6 +147,9 @@ impl<'a> World<'a> {
         let [tx, ty] = [pvf3::X(to), pvf3::Y(to)].map(pvf3::to_real);
         if seen_zoom(from, eye, Tau::FINEST) < LEAF_ZOOM {
             let at = pvf3::gather(pvf3::X(to), pvf3::Y(to), pvf3::Z(from));
+            if !self.within(&at).exact()? {
+                return Some(*from);
+            }
             let stands = if falls {
                 self.surface_support(&at).exact()?.unwrap_or(floor)
             } else {
@@ -198,6 +202,10 @@ impl<'a> World<'a> {
     /// ceiling over it there, none where the ceiling stops it, the outer none
     /// where `to` is not held at the leaf.
     fn step(&self, ceiling: Option<f64>, floor: f64, to: &Pvf3, falls: bool) -> Option<Option<(f64, Option<f64>)>> {
+        // Past the service area is a wall, slid along as any.
+        if !self.within(to).exact()? {
+            return Some(None);
+        }
         let cell = units(GROUND.cell());
         let answer = self.cell_under(to, LEAF_ZOOM, |runs| {
             let mut z = floor;
