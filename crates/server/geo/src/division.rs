@@ -2,7 +2,7 @@
 
 //! Which divisions name a point, broad to fine, resolved from coordinates.
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use deadpool_postgres::Pool;
 use pxl_geo_spec::overture::division::{self, Division, FINEST_SQL, LINEAGE_SQL};
@@ -12,7 +12,7 @@ use tokio_postgres::Client;
 use pxl_server::db::DbError;
 
 /// The divisions `ids` names and every ancestor of each, by id.
-async fn lineage(client: &Client, ids: &[String]) -> Result<HashMap<String, Division>, DbError> {
+async fn lineage(client: &Client, ids: &[String]) -> Result<FnvHashMap<String, Division>, DbError> {
     let rows = client.query(LINEAGE_SQL, &[&ids]).await?;
     Ok(rows
         .iter()

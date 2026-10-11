@@ -7,7 +7,7 @@
 //! cell it is asked of at the zoom what is placed there is held at, so what
 //! it answers is what that chunk draws. Neither reads a layer's storage.
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::GroundId;
@@ -72,14 +72,14 @@ pub struct Column<'a> {
 /// them is refined from, and what is placed as folded.
 pub struct Composer {
     leaf: ChunkSample,
-    folded: HashMap<[i64; 3], u32>,
+    folded: FnvHashMap<[i64; 3], u32>,
 }
 
 impl Default for Composer {
     fn default() -> Composer {
         Composer {
             leaf: ChunkSample::of_span(COL_SPAN),
-            folded: HashMap::new(),
+            folded: FnvHashMap::default(),
         }
     }
 }
@@ -163,7 +163,7 @@ impl Column<'_> {
 
     /// What is placed, folded to its runs as a preview shows it, standing on
     /// `into`'s ground.
-    fn stand(&self, folded: &mut HashMap<[i64; 3], u32>, into: &mut Blocks) -> Result<(), Refused> {
+    fn stand(&self, folded: &mut FnvHashMap<[i64; 3], u32>, into: &mut Blocks) -> Result<(), Refused> {
         let apron = i64::from(APRON);
         self.objects.fold(apron, self.hide, folded)?;
         if let Some(carve) = self.carve {

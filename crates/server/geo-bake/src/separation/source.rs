@@ -2,9 +2,9 @@
 
 //! What a tile's solve reads.
 
+use fnv::FnvHashMap;
 use postgres::Client;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use std::collections::HashMap;
 use std::path::Path;
 
 use postgres::types::ToSql;
@@ -85,7 +85,7 @@ impl Store for Disk<'_> {
 /// eight around it and no more.
 #[derive(Default)]
 pub struct Walk {
-    held: HashMap<IVec, TileRows>,
+    held: FnvHashMap<IVec, TileRows>,
 }
 
 impl Walk {

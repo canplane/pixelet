@@ -4,7 +4,7 @@
 //! cells: the ground, its bridges, tunnels and piers, and what is placed. The
 //! one composition the chunks draw and the world's mechanics answer from.
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use crate::bake::tile::terrain::GroundId;
 use crate::block::object::{cube_of, object_value_is_air};
@@ -49,7 +49,7 @@ pub fn z_unit(runs: Zoom) -> f64 {
 /// What stands in each column of the sample's grid, apron included, lowest
 /// first and none overlapping, from `cells` folded to `runs`. What is painted later wins a cell, as the layers are laid: the
 /// ground, then bridges and tunnels, then what is placed, air included.
-pub fn stands_of(sample: &ChunkSample, cells: &HashMap<[i64; 3], u32>, (cx0, cy0): (i64, i64), runs: Zoom, stands: &mut Vec<(u32, Stand)>) -> Result<(), Refused> {
+pub fn stands_of(sample: &ChunkSample, cells: &FnvHashMap<[i64; 3], u32>, (cx0, cy0): (i64, i64), runs: Zoom, stands: &mut Vec<(u32, Stand)>) -> Result<(), Refused> {
     let span = i64::from(sample.span);
     let apron = APRON as i64;
     // The sample's cells a cell spans upright.

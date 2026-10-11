@@ -50,3 +50,9 @@ disallowed-methods = [
     { path = "f32::hypot", replacement = "libm::hypotf" },
     { path = "f32::sin_cos", replacement = "libm::sincosf" },
 ]
+
+# A map's order is the same on every run: std's hasher is seeded per process.
+disallowed-types = [
+    { path = "std::collections::HashMap", replacement = "fnv::FnvHashMap" },
+    { path = "std::collections::HashSet", replacement = "fnv::FnvHashSet" },
+]

@@ -25,7 +25,7 @@ fn a_column_is_under_a_deck_within_its_reach() {
 #[test]
 fn a_narrow_line_along_a_diagonal_is_one_band() {
     let d = one(&[[0.0, 0.0], [40.0, 40.0]], &[10, 10], 0.5);
-    let mut covered = std::collections::HashSet::new();
+    let mut covered = fnv::FnvHashSet::default();
     d.crossing_grid(None, [0.0, 0.0], 1.0, [40, 40], |x, y, _, _| {
         covered.insert((x, y));
     });

@@ -7,7 +7,7 @@
 //! rebuilds nothing.
 
 use crate::layer::Query;
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
@@ -69,7 +69,7 @@ struct Sources {
 
 #[derive(Default)]
 struct Cells {
-    blocks: HashMap<Chunk, Block>,
+    blocks: FnvHashMap<Chunk, Block>,
     scratch: Option<DecorScratch>,
     /// Kept so a settled turn asks the heap for nothing.
     mounted: Vec<(Chunk, bool, bool)>,

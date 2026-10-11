@@ -3,8 +3,8 @@
 //! One walk of the cut and its result: every quality step's pieces from one
 //! descent over the ground, priced as it goes.
 
+use fnv::FnvHashMap;
 use pxl_spec::space::coord::world::nearest_box;
-use std::collections::HashMap;
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::Tau;
@@ -76,7 +76,7 @@ pub struct Domain<Q: Query = World<'static>> {
     /// What the walk starts from, kept to be reused.
     start: Vec<Chunk>,
     unanswered: u32,
-    seen: HashMap<Chunk, Seen>,
+    seen: FnvHashMap<Chunk, Seen>,
     touching: Vec<u32>,
     open: Vec<Open<Q::Cursor>>,
     ladder: Vec<Tau>,
@@ -98,7 +98,7 @@ impl<Q: Query> Domain<Q> {
             query,
             start: Vec::new(),
             unanswered: 0,
-            seen: HashMap::new(),
+            seen: FnvHashMap::default(),
             touching: Vec::new(),
             open: Vec::new(),
             ladder: Vec::new(),

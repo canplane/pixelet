@@ -10,7 +10,7 @@
 
 use crate::layer::{Answer, Query};
 use crate::view::demand::Observed as _;
-use std::collections::{HashMap, HashSet};
+use fnv::{FnvHashMap, FnvHashSet};
 
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -115,9 +115,9 @@ impl CoverageGizmo {
         let about = [about[0], about[1], 0.0];
         let residency = TerrainTile::residency();
         let top = floor::top().unwrap_or(LEAF_ZOOM);
-        let lined: HashSet<Tile> = TerrainTile::demand().demand().iter().map(|&p| line_top(p, top)).collect();
+        let lined: FnvHashSet<Tile> = TerrainTile::demand().demand().iter().map(|&p| line_top(p, top)).collect();
         let floor_only = |p: Tile| p.zoom <= top && !lined.contains(&p);
-        let over: HashSet<Chunk> = drawn.iter().flat_map(|d| d.ancestors()).collect();
+        let over: FnvHashSet<Chunk> = drawn.iter().flat_map(|d| d.ancestors()).collect();
         let mut lines = Lines::default();
         for &g in goal {
             let covered = drawn.binary_search(&g).is_ok() || over.contains(&g) || g.ancestors().any(|a| drawn.binary_search(&a).is_ok());
@@ -175,7 +175,7 @@ fn line_top(mut p: Tile, top: Zoom) -> Tile {
 /// it crosses the other: each a stretch along it and its mark.
 /// And the pieces' squares, whose faces hide what of the gizmo is behind them.
 #[derive(Default)]
-struct Lines(HashMap<(u8, u64), Vec<Stretch>>, Vec<(f64, f64, f64)>);
+struct Lines(FnvHashMap<(u8, u64), Vec<Stretch>>, Vec<(f64, f64, f64)>);
 
 /// From, to, and what the edge marks.
 type Stretch = (f64, f64, Mark);
@@ -200,7 +200,7 @@ impl Lines {
     /// ground. Then each piece's face, a fan from its center through every cut
     /// on its edges, so its rim is the lines' own. Returns where the faces begin.
     fn lay(&self, lane: &mut Vec<f32>, origin: V3, access: &World) -> usize {
-        let mut grounds: HashMap<(u64, u64), V3> = HashMap::new();
+        let mut grounds: FnvHashMap<(u64, u64), V3> = FnvHashMap::default();
         let mut ends: Vec<(f64, bool, Mark)> = Vec::new();
         // Each point asked once, by the lines and the faces alike.
         let mut ground = |x: f64, y: f64| -> V3 {
@@ -243,7 +243,7 @@ impl Lines {
         // coarse face would hide the finer edges where the ground dips under it.
         let key = |(x, y, side): (f64, f64, f64)| (x.to_bits(), y.to_bits(), side.to_bits());
         let widest = self.1.iter().map(|r| r.2).fold(0.0, f64::max);
-        let mut coarser = HashSet::new();
+        let mut coarser = FnvHashSet::default();
         for &(x0, y0, side) in &self.1 {
             let mut s = side * 2.0;
             while s <= widest {
@@ -251,7 +251,7 @@ impl Lines {
                 s *= 2.0;
             }
         }
-        let mut laid = HashSet::new();
+        let mut laid = FnvHashSet::default();
         for &(x0, y0, side) in self.1.iter().filter(|&&r| !coarser.contains(&key(r)) && laid.insert(key(r))) {
             let (x1, y1) = (x0 + side, y0 + side);
             let center = ground(x0 + side / 2.0, y0 + side / 2.0);

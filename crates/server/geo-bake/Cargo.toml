@@ -13,6 +13,7 @@ doctest = false
 serve = ["dep:axum", "dep:tokio", "dep:pxl-server"]
 
 [dependencies]
+fnv.workspace = true
 libm.workspace = true
 pxl-geo-spec = { path = "../geo-spec" }
 pxl-spec = { path = "../../spec", features = ["serde"] }

@@ -7,7 +7,7 @@
 //! only where it says more than its parent, which a reader that holds the
 //! parent then reads instead.
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
@@ -231,7 +231,7 @@ pub fn decode(pkt: &[u8]) -> Result<DivisionTile, MarshalError> {
 pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
     // every child's divisions under one numbering, by id
     let mut all: Vec<Division> = Vec::new();
-    let mut by_id: HashMap<String, u32> = HashMap::new();
+    let mut by_id: FnvHashMap<String, u32> = FnvHashMap::default();
     let mut local: [Vec<u32>; 4] = Default::default();
     for (q, child) in children.iter().enumerate() {
         local[q] = child
