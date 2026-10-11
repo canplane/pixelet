@@ -4,6 +4,8 @@
 
 use super::{post_shell, State};
 use crate::abi::cmd::{self as abi, Command};
+use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::abi::cmd as xpute_cmd;
 use xpute_guest::mem::base::{off_of, off_of_slice};
@@ -415,17 +417,37 @@ fn profiler_take(s: &mut State) -> u32 {
 #[path = "apply.test.rs"]
 mod test;
 
+/// What a tap on a badge does with the tool held.
+enum BadgeTap {
+    Go(Pvf3),
+    Remove(EntryAt),
+    Wait(EntryAt),
+}
+
 /// A badge takes a tap before the ground under it: the pointer goes to it,
 /// the eraser takes away a marker someone put up, and the marker tool has the
-/// waiting marker stand there.
-fn tap_at(x: f64, y: f64) {
+/// waiting marker stand there. None where no badge there takes it.
+fn badge_tap(x: f64, y: f64) -> Option<BadgeTap> {
     use crate::chunk::place::Went;
     use crate::control::interaction::ActiveTool;
-    use crate::control::navigation::destination::go_to_place;
-    match (crate::control::interaction::holding().active_tool, crate::chunk::place::tap(x, y)) {
-        (ActiveTool::Pointer, Some(Went::To(at) | Went::Marker(_, at))) => go_to_place(at),
-        (ActiveTool::Eraser, Some(Went::Marker(e, _))) => crate::control::interaction::edit::remove(e),
-        (ActiveTool::Marker, Some(Went::Marker(e, _))) => crate::control::interaction::edit::wait_at(e),
-        _ => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
+    match (crate::control::interaction::holding().active_tool, crate::chunk::place::tap(x, y)?) {
+        (ActiveTool::Pointer, Went::To(at) | Went::Marker(_, at)) => Some(BadgeTap::Go(at)),
+        (ActiveTool::Eraser, Went::Marker(e, _)) => Some(BadgeTap::Remove(e)),
+        (ActiveTool::Marker, Went::Marker(e, _)) => Some(BadgeTap::Wait(e)),
+        _ => None,
+    }
+}
+
+/// Whether the pointer is over a badge a tap would act on.
+pub(crate) fn over_badge() -> bool {
+    crate::control::interaction::pointed().is_some_and(|[x, y]| badge_tap(x, y).is_some())
+}
+
+fn tap_at(x: f64, y: f64) {
+    match badge_tap(x, y) {
+        Some(BadgeTap::Go(at)) => crate::control::navigation::destination::go_to_place(at),
+        Some(BadgeTap::Remove(e)) => crate::control::interaction::edit::remove(e),
+        Some(BadgeTap::Wait(e)) => crate::control::interaction::edit::wait_at(e),
+        None => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
     }
 }
