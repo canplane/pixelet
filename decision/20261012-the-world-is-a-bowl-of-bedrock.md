@@ -5,9 +5,10 @@
 The ground was stone without a bottom, the world open past the service area,
 and nothing kept an edit off ground no source describes. The world now ends
 in one material, bedrock, laid as a bowl: a floor under the ground and a wall
-about the service area. Bedrock is the catalog's `unknown`, drawn black — the
+about the service area. Bedrock is the catalog's `unknown`, drawn dark gray — the
 ground the world holds no more of — so the floor, the wall and a byte no bake
-wrote are one fact, not three.
+wrote are one fact, not three. It was black first, and hid: past the area
+nothing is drawn but the air, which follows the hour, black at night.
 
 Every limit is one module, `pxl-spec block/limit.rs`, which every path calls.
 
