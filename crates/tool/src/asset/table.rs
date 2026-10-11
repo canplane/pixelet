@@ -56,11 +56,12 @@ pub struct TileFace {
     pub tile: u32,
 }
 
-/// A slot naming no catalog type is an error: a renamed type once left its
-/// blocks untextured silently.
-pub fn faces(slots: &[Slot], groups: &[(String, Vec<String>)]) -> Result<Vec<TileFace>, String> {
+/// Each slot and the tile it wears; one tile may be several slots'. A slot
+/// naming no catalog type is an error: a renamed type once left its blocks
+/// untextured silently.
+pub fn faces(slots: &[(u32, Slot)], groups: &[(String, Vec<String>)]) -> Result<Vec<TileFace>, String> {
     let mut out = Vec::new();
-    for (n, slot) in slots.iter().enumerate() {
+    for (n, slot) in slots {
         let (face, ty, wanted) = match slot {
             Slot::Top { group, ty } => (Face::Top, ty, Some(group.as_str())),
             Slot::Side { ty } => (Face::Side, ty, None),
@@ -73,7 +74,7 @@ pub fn faces(slots: &[Slot], groups: &[(String, Vec<String>)]) -> Result<Vec<Til
                     group: group.clone(),
                     ty: ty.clone(),
                     face,
-                    tile: n as u32,
+                    tile: *n,
                 });
             }
         }

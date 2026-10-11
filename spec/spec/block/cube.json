@@ -284,6 +284,28 @@
         "$doc": [
           "runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill"
         ]
+      },
+      { "section": "underground" },
+      {
+        "name": "soil",
+        "value": 56,
+        "$doc": [
+          "under a face: Minecraft Beta's filler, dirt; Carto paints nothing under the ground, and no bake writes it"
+        ]
+      },
+      {
+        "name": "sandstone",
+        "value": 57,
+        "$doc": [
+          "under sand's filler: Minecraft Beta's sandstone"
+        ]
+      },
+      {
+        "name": "stone",
+        "value": 58,
+        "$doc": [
+          "under the filler: Minecraft Beta's stone"
+        ]
       }
     ]
   },

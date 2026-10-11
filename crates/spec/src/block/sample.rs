@@ -18,6 +18,13 @@ use crate::space::layer::lattice::{GROUND, GROUND_FOLD, TILE_CELLS};
 
 const TERRAIN_Z_MARGIN: i32 = 4;
 
+/// Minecraft Beta's filler under a column's face: `stoneNoise / 3 + 3`, its
+/// noise left out for now.
+const FILLER_DEPTH: i32 = 3;
+
+/// Its sandstone under sand: `rand.nextInt(4)`, here its mean rounded up.
+const SANDSTONE_DEPTH: i32 = 2;
+
 /// The ring of neighbor columns a chunk is composed with. Without it the face
 /// mask read every chunk seam as open air, losing occlusion, creases and
 /// culling there. Nothing is emitted from an apron column.
@@ -148,6 +155,10 @@ pub struct ChunkSample {
     pub span: u32,
     /// Its cells a leaf cell's side: past the leaves, a way's slab stays a leaf cell thick.
     scale: i32,
+    /// The zoom of the cells drawn from it, which decides whether its ground
+    /// is laid in strata (`strata`): a fold one finer reads the leaves, and
+    /// is a summary all the same.
+    cell: Zoom,
     /// Column `i`'s runs over the ground are `over[over_at[i]..over_at[i + 1]]`,
     /// lowest first, none overlapping; the apron's have none.
     pub over_at: Vec<u32>,
@@ -184,6 +195,7 @@ impl ChunkSample {
             ground_floor: 0,
             span,
             scale: 1,
+            cell: GROUND.cell(),
             over_at: vec![0; n + 1],
             over: Vec::new(),
             under: vec![Under::default(); n],
@@ -201,10 +213,10 @@ impl ChunkSample {
         };
     }
 
-    /// Each cell as its source draws it (`TileSource::cell_at`). `span`
-    /// columns a row, the apron's among them.
-    pub fn read(&mut self, around: &Around, first: [i64; 2], span: u32) -> Result<(), Refused> {
-        (self.span, self.scale) = (span, 1);
+    /// Each cell as its source draws it (`TileSource::cell_at`), for cells
+    /// drawn at `cell`. `span` columns a row, the apron's among them.
+    pub fn read(&mut self, around: &Around, first: [i64; 2], span: u32, cell: Zoom) -> Result<(), Refused> {
+        (self.span, self.scale, self.cell) = (span, 1, cell);
         for py in 0..span {
             for px in 0..span {
                 let i = (py * span + px) as usize;
@@ -345,7 +357,7 @@ impl ChunkSample {
     /// cells. Terrain is drawn as finely as it is held, so nothing is invented.
     pub fn refine(&mut self, leaf: &ChunkSample, k: u32, at: [u32; 2], span: u32) -> Result<(), Refused> {
         let scale = 1i32 << k;
-        (self.span, self.scale) = (span, leaf.scale * scale);
+        (self.span, self.scale, self.cell) = (span, leaf.scale * scale, leaf.cell + k as Zoom);
         let in_leaf = |v: u32, p: u32| (i64::from(v) + i64::from(p) - i64::from(APRON)).div_euclid(i64::from(scale)) + i64::from(APRON);
         self.over.clear();
         for py in 0..span {
@@ -390,16 +402,54 @@ impl ChunkSample {
             return Ok(());
         }
         let top = self.ele[i].min(to);
-        let g = self.block[i];
         let mut part = |lo: i32, hi: i32, g: GroundId| if lo.max(from) < hi { run(lo.max(from), hi - 1, g) } else { Ok(()) };
+        let strata = self.strata(i);
+        // Each stratum's cells in `[lo, hi)`, its own bottom up to the one over
+        // it, lowest first; strata of one look over each other are one, as sand
+        // lies on sand.
+        let layered = |lo: i32, hi: i32, part: &mut dyn FnMut(i32, i32, GroundId) -> Result<(), E>| {
+            let mut k = strata.len();
+            while k > 0 {
+                k -= 1;
+                let mut top = k;
+                while top > 0 && strata[top - 1].1 == strata[k].1 {
+                    top -= 1;
+                }
+                let over = if top == 0 { i32::MAX } else { strata[top - 1].0 };
+                part(lo.max(strata[k].0), hi.min(over), strata[k].1)?;
+                k = top;
+            }
+            Ok(())
+        };
         let b = self.under[i];
         if b.span[0] >= b.span[1] {
-            return part(from, top, g);
+            return layered(from, top, &mut part);
         }
         let floor = b.span[0];
-        part(from, (floor - self.scale).min(top), g)?;
+        layered(from, (floor - self.scale).min(top), &mut part)?;
         part(floor - self.scale, floor.min(top), b.block)?;
-        part(b.span[1], top, g)
+        layered(b.span[1], top, &mut part)
+    }
+
+    /// What column `i`'s ground is from its face down, each stratum's bottom
+    /// and look, as Minecraft Beta lays a column
+    /// (`ChunkProviderGenerate.replaceBlocksForBiome`): its look on top, its
+    /// filler under it, sand over sandstone, and stone under all, every depth
+    /// a leaf cell thick in any zoom's cells. Strata are a leaf cell's: a
+    /// cell coarser than the leaves' is a summary of the faces under it, its
+    /// ground its look whole.
+    fn strata(&self, i: usize) -> [(i32, GroundId); 4] {
+        let (look, s) = (self.block[i], self.scale);
+        if self.cell < GROUND.cell() {
+            return [(i32::MIN, look); 4];
+        }
+        let face = self.ele[i] - s;
+        let (filler, sandstone) = match look {
+            ground::sand | ground::beach => (ground::sand, SANDSTONE_DEPTH),
+            _ => (ground::soil, 0),
+        };
+        let filled = face - FILLER_DEPTH * s;
+        [(face, look), (filled, filler), (filled - sandstone * s, ground::sandstone), (i32::MIN, ground::stone)]
     }
 }
 

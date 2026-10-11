@@ -145,7 +145,8 @@
         "water_features": "물가 시설",
         "buildings": "건물",
         "roads": "도로",
-        "aeroways": "공항"
+        "aeroways": "공항",
+        "underground": "땅속"
       },
       "decor": {
         "nature": "자연",

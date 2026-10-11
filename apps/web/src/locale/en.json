@@ -186,7 +186,10 @@
         "subway": "Subway",
         "monorail": "Monorail",
         "rail": "Railway",
-        "aeroway": "Runway"
+        "aeroway": "Runway",
+        "soil": "Dirt",
+        "sandstone": "Sandstone",
+        "stone": "Stone"
       },
       "object": {
         "white": "White",
@@ -256,7 +259,8 @@
         "water_features": "Water Features",
         "buildings": "Buildings",
         "roads": "Roads",
-        "aeroways": "Airports"
+        "aeroways": "Airports",
+        "underground": "Underground"
       },
       "decor": {
         "nature": "Nature",

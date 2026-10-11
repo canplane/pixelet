@@ -152,10 +152,10 @@ impl Column<'_> {
         let first = [i64::from(x0), i64::from(y0)];
         let span = span(self.column.0, self.runs);
         match finer(self.cell, self.runs) {
-            0 => sample.read(&around, first, span),
+            0 => sample.read(&around, first, span, self.cell),
             k => {
                 let at = offset_in(self.column.1, k).map(|v| v as u32 * (span - 2 * APRON));
-                leaf.read(&around, first, GROUND.read_side(read.0, cell) + 2 * APRON)?;
+                leaf.read(&around, first, GROUND.read_side(read.0, cell) + 2 * APRON, self.cell - k as Zoom)?;
                 sample.refine(leaf, k, at, span)
             }
         }

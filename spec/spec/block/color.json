@@ -60,7 +60,10 @@
     "subway": { "hex": "#999999" },
     "monorail": { "hex": "#777777" },
     "rail": { "hex": "#707070" },
-    "aeroway": { "hex": "#bbbbcc" }
+    "aeroway": { "hex": "#bbbbcc" },
+    "soil": { "hex": "#976d4d", "$doc": "Minecraft's map color DIRT (minecraft.wiki Map_item_format): Carto paints nothing under the ground." },
+    "sandstone": { "hex": "#f7e9a3", "$doc": "Minecraft's map color SAND, which sandstone is drawn as on a map." },
+    "stone": { "hex": "#707070", "$doc": "Minecraft's map color STONE." }
   },
   "object": {
     "white": { "hex": "#f7f7f7" },

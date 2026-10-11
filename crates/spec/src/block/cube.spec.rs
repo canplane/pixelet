@@ -152,6 +152,15 @@ pub mod ground {
     /// runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill
     pub const aeroway: u8 = 55;
 
+    // ---- underground ----
+
+    /// under a face: Minecraft Beta's filler, dirt; Carto paints nothing under the ground, and no bake writes it
+    pub const soil: u8 = 56;
+    /// under sand's filler: Minecraft Beta's sandstone
+    pub const sandstone: u8 = 57;
+    /// under the filler: Minecraft Beta's stone
+    pub const stone: u8 = 58;
+
     pub const ENTRIES: &[(&str, u8)] = &[
         ("land", land),
         ("bare_ground", bare_ground),
@@ -208,6 +217,9 @@ pub mod ground {
         ("monorail", monorail),
         ("rail", rail),
         ("aeroway", aeroway),
+        ("soil", soil),
+        ("sandstone", sandstone),
+        ("stone", stone),
     ];
 
     /// What a cell nothing painted shows.
@@ -298,11 +310,14 @@ pub enum Ground {
     monorail = 53,
     rail = 54,
     aeroway = 55,
+    soil = 56,
+    sandstone = 57,
+    stone = 58,
 }
 
 impl Ground {
     /// Every look, in paint order.
-    pub const ALL: [Ground; 55] = [
+    pub const ALL: [Ground; 58] = [
         Ground::land,
         Ground::bare_ground,
         Ground::sand,
@@ -358,6 +373,9 @@ impl Ground {
         Ground::monorail,
         Ground::rail,
         Ground::aeroway,
+        Ground::soil,
+        Ground::sandstone,
+        Ground::stone,
     ];
 
     /// The look a byte names; none for a sentinel or a number the palette does not give out.
@@ -418,6 +436,9 @@ impl Ground {
             53 => Some(Ground::monorail),
             54 => Some(Ground::rail),
             55 => Some(Ground::aeroway),
+            56 => Some(Ground::soil),
+            57 => Some(Ground::sandstone),
+            58 => Some(Ground::stone),
             _ => None,
         }
     }

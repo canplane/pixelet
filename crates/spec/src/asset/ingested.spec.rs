@@ -760,6 +760,7 @@ pub const PACK: Pack = Pack {
         (Cube::Ground(cube::Ground::commercial), CubeFace::Bottom, 16),
         (Cube::Ground(cube::Ground::forest), CubeFace::Bottom, 17),
         (Cube::Ground(cube::Ground::industrial), CubeFace::Bottom, 18),
+        (Cube::Ground(cube::Ground::soil), CubeFace::Top, 19),
         (Cube::Ground(cube::Ground::land), CubeFace::Bottom, 19),
         (Cube::Ground(cube::Ground::park), CubeFace::Bottom, 20),
         (Cube::Ground(cube::Ground::pitch), CubeFace::Bottom, 21),

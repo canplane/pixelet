@@ -83,6 +83,12 @@ pub const fn ground(t: u8) -> Option<Swatch> {
         cube::ground::monorail => Some(Swatch::new(0x777777)),
         cube::ground::rail => Some(Swatch::new(0x707070)),
         cube::ground::aeroway => Some(Swatch::new(0xbbbbcc)),
+        // Minecraft's map color DIRT (minecraft.wiki Map_item_format): Carto paints nothing under the ground.
+        cube::ground::soil => Some(Swatch::new(0x976d4d)),
+        // Minecraft's map color SAND, which sandstone is drawn as on a map.
+        cube::ground::sandstone => Some(Swatch::new(0xf7e9a3)),
+        // Minecraft's map color STONE.
+        cube::ground::stone => Some(Swatch::new(0x707070)),
         // A sentinel a baked cell can hold.
         _ => sentinel(t),
     }

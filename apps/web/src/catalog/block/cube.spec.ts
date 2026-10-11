@@ -7,7 +7,7 @@
 // that palette and whose range past it is what only an object can be.
 
 /** The catalog's section a placeable cube is listed under, as Carto groups the looks. */
-export type CubeSection = "landcover" | "water" | "water_features" | "buildings" | "roads" | "aeroways" | "colors";
+export type CubeSection = "landcover" | "water" | "water_features" | "buildings" | "roads" | "aeroways" | "underground" | "colors";
 
 export const cube = {
   sentinel: {
@@ -148,6 +148,15 @@ export const cube = {
 
     /** runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill */
     aeroway: 55,
+
+    // ---- underground ----
+
+    /** under a face: Minecraft Beta's filler, dirt; Carto paints nothing under the ground, and no bake writes it */
+    soil: 56,
+    /** under sand's filler: Minecraft Beta's sandstone */
+    sandstone: 57,
+    /** under the filler: Minecraft Beta's stone */
+    stone: 58,
   },
   // What only an object can be: past a byte, so no ground cell holds it. An
   // object's value is a u16 whose byte range is the ground's palette.
@@ -231,6 +240,9 @@ export const cube_section: Readonly<Record<number, CubeSection>> = {
   53: "roads",
   54: "roads",
   55: "aeroways",
+  56: "underground",
+  57: "underground",
+  58: "underground",
   257: "colors",
   258: "colors",
   259: "colors",

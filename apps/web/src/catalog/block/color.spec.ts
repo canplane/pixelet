@@ -241,6 +241,21 @@ export default {
       hex: "#bbbbcc",
       rgb: 12303308,
     },
+    soil: {
+      hex: "#976d4d",
+      "$doc": "Minecraft's map color DIRT (minecraft.wiki Map_item_format): Carto paints nothing under the ground.",
+      rgb: 9923917,
+    },
+    sandstone: {
+      hex: "#f7e9a3",
+      "$doc": "Minecraft's map color SAND, which sandstone is drawn as on a map.",
+      rgb: 16247203,
+    },
+    stone: {
+      hex: "#707070",
+      "$doc": "Minecraft's map color STONE.",
+      rgb: 7368816,
+    },
   },
   object: {
     white: {

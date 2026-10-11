@@ -78,13 +78,15 @@ fn run() -> Result<(), String> {
     walk(&asset_dir, &asset_dir, &mut files)?;
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
-    // A look's top ships drawn toward its Carto color; a side, a bottom and a color are not looks.
+    // A Carto look's top, one its entry paints to a Carto color, ships drawn
+    // toward that color; the underground's looks are no Carto's, and a side,
+    // a bottom and a color are not looks.
     let slots = pack::load(&asset_dir.join("cube"))?;
     let carto = pxl_tool::spec::block::ground_colors()?;
     let toward: BTreeMap<String, u32> = slots
         .iter()
         .filter_map(|i| match &i.slot {
-            pack::Slot::Top { group, ty } if group == "ground" => carto.get(ty).map(|&c| (format!("cube/{}", i.file), c)),
+            pack::Slot::Top { group, ty } if group == "ground" && i.palette_hex.is_some() => carto.get(ty).map(|&c| (format!("cube/{}", i.file), c)),
             _ => None,
         })
         .collect();
@@ -123,16 +125,15 @@ fn run() -> Result<(), String> {
         .filter(|r| r.path.ends_with(".png") && (r.path.starts_with("cube/terrain/") || r.path.starts_with("cube/block/")))
         .map(|r| r.path.clone())
         .collect();
-    let tile_slots = tiles
-        .iter()
-        .map(|t| {
-            slots
-                .iter()
-                .find(|i| format!("cube/{}", i.file) == *t)
-                .map(|i| i.slot.clone())
-                .ok_or(format!("{t} has no entry in asset/cube/manifest.json"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut tile_slots = Vec::new();
+    for (n, t) in tiles.iter().enumerate() {
+        let worn = slots.iter().filter(|i| format!("cube/{}", i.file) == *t).map(|i| (n as u32, i.slot.clone()));
+        let before = tile_slots.len();
+        tile_slots.extend(worn);
+        if tile_slots.len() == before {
+            return Err(format!("{t} has no entry in asset/cube/manifest.json"));
+        }
+    }
     if let Some(i) = slots.iter().find(|i| !tiles.contains(&format!("cube/{}", i.file))) {
         return Err(format!("{} names {}, which is not under asset/cube", i.label, i.file));
     }

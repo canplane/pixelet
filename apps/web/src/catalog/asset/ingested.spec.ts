@@ -298,6 +298,7 @@ export const PACK = {
     ["ground", "commercial", "bottom", 16],
     ["ground", "forest", "bottom", 17],
     ["ground", "industrial", "bottom", 18],
+    ["ground", "soil", "top", 19],
     ["ground", "land", "bottom", 19],
     ["ground", "park", "bottom", 20],
     ["ground", "pitch", "bottom", 21],
