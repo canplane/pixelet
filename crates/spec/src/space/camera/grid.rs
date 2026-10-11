@@ -74,8 +74,3 @@ impl Tau {
 pub const CHUNK_STEPS: Zoom = 5;
 
 pub const CHUNK_CELLS: u32 = 1 << CHUNK_STEPS;
-
-/// The least angle a chunk spans about the eye, at `Tau::FINEST`: its cells
-/// are each `1 / SPLIT` radians where its zoom is drawn nearest and half that
-/// at the band's far edge.
-pub const CHUNK_ANGLE: f64 = CHUNK_CELLS as f64 / (2.0 * SPLIT);

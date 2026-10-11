@@ -11,7 +11,7 @@
 //! reused across small moves (`Sight`) as an acceleration only.
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::{Tau, CHUNK_ANGLE, SPLIT};
+use pxl_spec::space::camera::grid::{Tau, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::{dot3, len3, sub3, V3};
 use pxl_spec::space::layer::tile::Tile;
@@ -88,9 +88,9 @@ impl Lens {
     }
 }
 
-/// The screen in patches no wider than a chunk at its narrowest
-/// (`CHUNK_ANGLE`), what one is chosen for, at equal steps of angle about
-/// the optical axis.
+/// The screen in patches no wider than the camera grid's cell at `tau`
+/// (`cell_angle`), at equal steps of angle about the optical axis; the eye
+/// casts them at `OBSERVED_TAU`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Grid {
     lens: Lens,
@@ -98,10 +98,10 @@ pub struct Grid {
 }
 
 impl Grid {
-    pub fn of(lens: Lens) -> Grid {
+    pub fn of(lens: Lens, tau: Tau) -> Grid {
         Grid {
             lens,
-            across: lens.tan.map(|t| ((2.0 * libm::atan(t) / CHUNK_ANGLE).ceil() as u32).max(1)),
+            across: lens.tan.map(|t| ((2.0 * libm::atan(t) / cell_angle(tau)).ceil() as u32).max(1)),
         }
     }
 
@@ -308,8 +308,9 @@ impl Sight {
             self.eyes.clear();
             return 0;
         };
-        let grid = Grid::of(lens);
-        let shift = param::REUSE_SHIFT * CHUNK_ANGLE;
+        let patch = Tau::of(param::OBSERVED_TAU);
+        let grid = Grid::of(lens, patch);
+        let shift = param::REUSE_SHIFT * cell_angle(patch);
         let whole = everything
             || self.cast.is_none_or(|(was, across, far)| {
                 let turned = [(was.forward, lens.forward), (was.right, lens.right), (was.up, lens.up)]
