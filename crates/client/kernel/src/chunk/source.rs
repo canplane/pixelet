@@ -5,6 +5,7 @@
 
 use crate::layer::Query;
 use pxl_spec::bake::constant::EntryAt;
+use pxl_spec::procedural::opened_by;
 use pxl_spec::space::coord::aabb::Aabb;
 
 use crate::chunk::Chunk as PyramidChunk;
@@ -71,10 +72,11 @@ fn draws_in(k: PyramidChunk, b: &Aabb) -> bool {
 /// Where the objects were written since the chunks last compared their sources.
 static WRITTEN: Global<Vec<Aabb>> = Global::new();
 
-/// The objects were written in `regions`: a chunk that draws any of them is
-/// remade, whether or not what it folds them to changed.
+/// The objects were written in `regions`: a chunk that draws any of them, or
+/// a cave they open or shut (`opened_by`), is remade, whether or not what it
+/// folds them to changed.
 pub fn objects_written(regions: &[Aabb]) {
-    WRITTEN.get(Vec::new).extend_from_slice(regions);
+    WRITTEN.get(Vec::new).extend(regions.iter().map(|&r| opened_by(r)));
     chunk_sources_changed();
 }
 

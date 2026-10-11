@@ -12,10 +12,13 @@ use crate::bake::separation::{slab_depth, Crossing, Occupies, STACKED_DECK_HEADR
 use crate::bake::tile::terrain::GroundId;
 use crate::bake::way::half_cells;
 use crate::block::cube::Ground;
+use crate::space::camera::grid::CHUNK_STEPS;
+use crate::space::coord::aabb::Aabb;
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::pvf3::ivec::gather;
-use crate::space::coord::zoom::Zoom;
-use crate::space::layer::lattice::{GROUND, TILE_CELLS};
+use crate::space::coord::world::REACH;
+use crate::space::coord::zoom::{units, Zoom};
+use crate::space::layer::lattice::{GROUND, GROUND_FOLD, TILE_CELLS};
 use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
 /// Changing it reshuffles everything scattered.
@@ -400,6 +403,102 @@ impl Caves {
             _ => None,
         };
         ((k + 1.0) * KNOT, sure)
+    }
+}
+
+/// The zoom of the cubes that open caves: a leaf chunk's, 32 units. A cave
+/// is carved only about an edit, in its cube or one beside: elsewhere it is
+/// shut in rock and drawn as rock, so it costs nothing.
+pub const CAVE_REGION: Zoom = GROUND.cell() - CHUNK_STEPS;
+
+/// The coarsest grid cells a chunk carves caves in: those composed of the
+/// leaves' cells, a fold one finer (`GROUND_FOLD`), as control composes.
+const CAVE_CELL: Zoom = GROUND.cell() - GROUND_FOLD;
+
+/// Whether a chunk of grid cells at `cell` carves caves, so control meets
+/// the caves the chunks drawn finer show.
+pub const fn caves_in(cell: Zoom) -> bool {
+    cell >= CAVE_CELL
+}
+
+/// Cube columns a side the widest chunk carving caves spans.
+const CHUNK_CUBES: usize = 1 << (CAVE_REGION - (CAVE_CELL - CHUNK_STEPS));
+
+/// Cube columns a side a `CaveOpening` reads from its center, a chunk's
+/// first: the chunk's, the apron's one before and after, and one beside each.
+const OPENING_SIDE: usize = CHUNK_CUBES + 4;
+
+/// The heights caves open over about edits at `[lo, hi]`, in units: the
+/// cubes holding them and one more each way.
+pub fn opened_heights([lo, hi]: [f64; 2]) -> [f64; 2] {
+    let r = units(CAVE_REGION);
+    [(lo / r).floor() * r - r, (hi / r).ceil() * r + r]
+}
+
+/// Where caves open about a column of cubes (`CAVE_REGION`) and the cube
+/// columns about it: each one's edits' heights, none where nothing is
+/// placed. A cave is a function of its cube alone, never of who asks, so
+/// drawing and control carve the same.
+#[derive(Clone, Copy)]
+pub struct CaveOpening {
+    first: [i64; 2],
+    edits: [Option<[f64; 2]>; OPENING_SIDE * OPENING_SIDE],
+}
+
+/// Where an edit in `edit` may open or shut caves: the cube columns beside
+/// its own, at every height, since a column opens over all its edits' heights.
+pub fn opened_by(edit: Aabb) -> Aabb {
+    let r = units(CAVE_REGION);
+    let mut b = REACH;
+    for a in 0..2 {
+        (b.min[a], b.max[a]) = ((edit.min[a] / r).floor() * r - r, (edit.max[a] / r).ceil() * r + r);
+    }
+    b
+}
+
+/// Nowhere open: nothing placed about it.
+impl Default for CaveOpening {
+    fn default() -> CaveOpening {
+        CaveOpening {
+            first: [0; 2],
+            edits: [None; OPENING_SIDE * OPENING_SIDE],
+        }
+    }
+}
+
+impl CaveOpening {
+    /// The cube columns read about the cube column `center`, first and last.
+    pub fn reach(center: [i64; 2]) -> [[i64; 2]; 2] {
+        [center.map(|v| v - 2), center.map(|v| v - 2 + OPENING_SIDE as i64 - 1)]
+    }
+
+    /// For the cube column `center`, its edits read by `edits` for each cube
+    /// column in its reach.
+    pub fn about(center: [i64; 2], mut edits: impl FnMut([i64; 2]) -> Option<[f64; 2]>) -> CaveOpening {
+        let [first, _] = CaveOpening::reach(center);
+        let n = OPENING_SIDE;
+        CaveOpening {
+            first,
+            edits: core::array::from_fn(|k| edits([first[0] + (k % n) as i64, first[1] + (k / n) as i64])),
+        }
+    }
+
+    /// The heights caves open over at `x`, `y`, in units: the cubes about
+    /// the edits in its cube column and the ones beside.
+    pub fn over(&self, x: f64, y: f64) -> Option<[f64; 2]> {
+        let r = units(CAVE_REGION);
+        let g = [x, y].map(|v| (v / r).floor() as i64);
+        let mut hull: Option<[f64; 2]> = None;
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                let ([ix, iy], n) = ([g[0] + dx - self.first[0], g[1] + dy - self.first[1]], OPENING_SIDE as i64);
+                let Some(z) = ((0..n).contains(&ix) && (0..n).contains(&iy)).then(|| self.edits[(iy * n + ix) as usize]).flatten() else {
+                    continue;
+                };
+                hull = Some(hull.map_or(z, |h| [h[0].min(z[0]), h[1].max(z[1])]));
+            }
+        }
+        hull.map(opened_heights)
     }
 }
 
