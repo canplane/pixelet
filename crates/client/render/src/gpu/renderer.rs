@@ -896,7 +896,7 @@ impl Renderer {
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let up = norm3(&sub3(&eye, &planet_center));
-        self.clouds.lay_out(g, &m, &eye, env);
+        self.clouds.lay_out(g, &m, &eye, env, s[STAGE_AT::CLOUDS]);
         self.atmosphere.set_clouds(&clouds::field([eye_world[0], eye_world[1]], env));
         self.stars.lay_out(g, &m, env, width);
         put_ray(&mut self.sky, 0, &m, &eye);

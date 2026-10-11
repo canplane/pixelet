@@ -167,53 +167,58 @@ pub enum SettingKey {
     /// would being decided and not built. The badge is an ordering, and this is
     /// the one to reach for before any shading term.
     decor = 1,
+    /// The cumulus' models and the altocumulus and cirrus sheets
+    /// (crates/client/kernel/src/scene/environment/cloud.rs, crates/client/render/src/gpu/clouds.rs).
+    /// Med as decor is: models in view, and a pass over the screen for the sheets.
+    clouds = 2,
     /// The places' badges over the world, from the published places tiles.
-    place = 2,
+    place = 3,
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
     /// Off by default: the tilt is the one control a view from above is expected to
     /// have, and locking it reads as the app being stuck.
-    tilt_lock = 3,
+    tilt_lock = 4,
     /// Which controller makes the camera's pose; CAMERA_MODES says each. To
     /// first person the person stands at the focus, the eye at its
     /// height over the ground; to third the focus is laid on the ground
     /// and the eye steps back by the radius.
-    camera_mode = 4,
+    camera_mode = 5,
     /// The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck.
-    surface_follow = 5,
+    surface_follow = 6,
     /// What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each.
-    orbit_obstacle = 6,
+    orbit_obstacle = 7,
     /// Darkens cube edges that border open air (crates/client/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
-    edge_shade = 7,
+    edge_shade = 8,
     /// A uniform on an already-compiled shader term; not a pass.
-    rim_light = 8,
+    rim_light = 9,
     /// corner, the occlusion a voxel world gets from its own geometry with no
     /// screen-space pass; screen, N8AO's screen-space pass, the costliest of
     /// the three. AO_MODES says each.
-    ao = 9,
+    ao = 10,
     /// The sun's shadow map (crates/client/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
-    shadows = 10,
+    shadows = 11,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
-    resolution = 11,
+    resolution = 12,
     /// Where the camera and the pointer are, read live (profiler/summary.rs, its view section).
-    view_overlay = 12,
+    view_overlay = 13,
     /// The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`).
-    performance_overlay = 13,
+    performance_overlay = 14,
     /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs).
-    world_gizmo = 14,
+    world_gizmo = 15,
     /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/indicator/camera_gizmo.rs).
-    camera_gizmo = 15,
-    person = 16,
-    pet = 17,
+    camera_gizmo = 16,
+    person = 17,
+    pet = 18,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 18] = [
+    pub const ALL: [SettingKey; 19] = [
         SettingKey::textures,
         SettingKey::decor,
+        SettingKey::clouds,
         SettingKey::place,
         SettingKey::tilt_lock,
         SettingKey::camera_mode,
@@ -241,6 +246,7 @@ impl SettingKey {
         match self {
             SettingKey::textures => SettingKind::Toggle,
             SettingKey::decor => SettingKind::Toggle,
+            SettingKey::clouds => SettingKind::Toggle,
             SettingKey::place => SettingKind::Toggle,
             SettingKey::tilt_lock => SettingKind::Toggle,
             SettingKey::camera_mode => SettingKind::Choice,
@@ -265,6 +271,7 @@ impl SettingKey {
         match self {
             SettingKey::textures => "textures",
             SettingKey::decor => "decor",
+            SettingKey::clouds => "clouds",
             SettingKey::place => "place",
             SettingKey::tilt_lock => "tilt_lock",
             SettingKey::camera_mode => "camera_mode",
@@ -297,7 +304,7 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::textures | SettingKey::decor | SettingKey::surface_follow | SettingKey::camera_gizmo)
+        matches!(self, SettingKey::surface_follow | SettingKey::camera_gizmo)
     }
 
     /// A choice's option a development build only offers.
@@ -319,6 +326,7 @@ impl SettingKey {
 pub struct Settings {
     pub textures: bool,
     pub decor: bool,
+    pub clouds: bool,
     pub place: bool,
     pub tilt_lock: bool,
     pub camera_mode: CameraMode,
@@ -342,6 +350,7 @@ impl Settings {
     pub const DEFAULT: Settings = Settings {
         textures: true,
         decor: true,
+        clouds: true,
         place: false,
         tilt_lock: false,
         camera_mode: CameraMode::orbit,
@@ -366,6 +375,7 @@ impl Settings {
         match key {
             SettingKey::textures => self.textures as u32,
             SettingKey::decor => self.decor as u32,
+            SettingKey::clouds => self.clouds as u32,
             SettingKey::place => self.place as u32,
             SettingKey::tilt_lock => self.tilt_lock as u32,
             SettingKey::camera_mode => self.camera_mode as u32,
@@ -391,6 +401,7 @@ impl Settings {
         match key {
             SettingKey::textures if value <= 1 => self.textures = value == 1,
             SettingKey::decor if value <= 1 => self.decor = value == 1,
+            SettingKey::clouds if value <= 1 => self.clouds = value == 1,
             SettingKey::place if value <= 1 => self.place = value == 1,
             SettingKey::tilt_lock if value <= 1 => self.tilt_lock = value == 1,
             SettingKey::camera_mode => match CameraMode::of(value) {
