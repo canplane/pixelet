@@ -196,7 +196,9 @@ pub fn step(ctx: &mut TickContext) {
     let drafted = draft.map(|d| marker_at(d.at, &d.words)).map(|(label, stands, _)| (label, stands, i32::MAX));
     // The line is its speaker's, judged where it stands, as a marker by the chunk drawing it there.
     let line = shown_line();
-    let said = line.zip(speaker()).and_then(|(label, (feet, over))| Some((label, over, MARKER_LATTICE.tile_zoom_of_grid(sched.cells_at(&feet)?))));
+    let said = line
+        .zip(speaker())
+        .and_then(|(label, (feet, over))| Some((label, over, MARKER_LATTICE.tile_zoom_of_grid(sched.cells_at(&feet)?))));
     let is_drafted = |label: &Label| matches!(label, Label::Marker { at, .. } if Some(*at) == draft.map(|d| d.at));
     let spacing = spacing_px();
     // Laid out last, so a line wins a tie with a badge (the sort's tiebreak).
@@ -240,7 +242,13 @@ pub fn step(ctx: &mut TickContext) {
     });
     p.hits.clear();
     // A line is no place to go to.
-    p.hits.extend(p.drawn.iter().rev().map(|&i| (p.batch.screen[i as usize], labeled[i as usize].0, labeled[i as usize].1)).filter(|h| !matches!(h.1, Label::Chat { .. })));
+    p.hits.extend(
+        p.drawn
+            .iter()
+            .rev()
+            .map(|&i| (p.batch.screen[i as usize], labeled[i as usize].0, labeled[i as usize].1))
+            .filter(|h| !matches!(h.1, Label::Chat { .. })),
+    );
     let mut instances = core::mem::take(&mut p.instances);
     instances.clear();
     // f32 instances, so about the sea under the eye rather than the world's origin.

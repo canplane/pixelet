@@ -8,13 +8,13 @@
 //! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
 
 use crate::approach::damp_alpha;
+use crate::billboard::chat::speak_from;
 use crate::io::load::{load_image, Load};
 use crate::kernel;
 use crate::laid;
 use crate::model::asset::ModelHandle;
 use crate::query::World;
 use crate::query::{over, under};
-use crate::billboard::chat::speak_from;
 use crate::scene::character::path::{heading_to, SettleTracker, WalkPlan};
 use crate::scene::character::variant::{character_variant, model_of, CharacterVariant, Group};
 use crate::scene::character::variant_spec::IDLE_CLIP;
