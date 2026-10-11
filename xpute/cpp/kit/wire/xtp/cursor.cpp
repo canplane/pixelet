@@ -22,9 +22,10 @@ Result<Cursor> Cursor::at(std::span<const std::uint8_t> pkt, std::uint32_t base,
     if (base % *unit != 0) return marshal_error(Errno::ebadmsg);
     if (type != type_of(SpecialType::branch)) return Cursor(pkt, base, type);
     if (std::uint64_t{base} + WORD_SZ > pkt.size()) return marshal_error(Errno::ebadmsg);
-    std::uint32_t len = get_word(pkt, base)[0];
-    if (len > (pkt.size() - base - WORD_SZ) / WORD_SZ) return marshal_error(Errno::ebadmsg);
-    return Cursor(pkt, base, type, len);
+    Result<std::uint32_t> len = get_len(pkt, base);
+    if (!len) return len.error();
+    if (*len > (pkt.size() - base - WORD_SZ) / WORD_SZ) return marshal_error(Errno::ebadmsg);
+    return Cursor(pkt, base, type, *len);
 }
 
 Result<BranchCursor> Cursor::as_branch() const noexcept {
@@ -36,7 +37,9 @@ Result<BranchCursor> Cursor::as_branch() const noexcept {
 Result<Array> Cursor::array(std::uint32_t elem) const noexcept {
     std::uint64_t payload = std::uint64_t{base_} + WORD_SZ;
     if (payload > pkt_.size()) return marshal_error(Errno::ebadmsg);
-    std::uint64_t bytes = std::uint64_t{get_word(pkt_, base_)[0]} * elem;
+    Result<std::uint32_t> len = get_len(pkt_, base_);
+    if (!len) return len.error();
+    std::uint64_t bytes = std::uint64_t{*len} * elem;
     if (bytes > pkt_.size() - payload) return marshal_error(Errno::ebadmsg);
     return Array{static_cast<SequenceType>(type_), pkt_.subspan(payload, bytes)};
 }
@@ -44,47 +47,38 @@ Result<Array> Cursor::array(std::uint32_t elem) const noexcept {
 Result<Bitset> Cursor::bitset() const noexcept {
     std::uint64_t payload = std::uint64_t{base_} + WORD_SZ;
     if (payload > pkt_.size()) return marshal_error(Errno::ebadmsg);
-    std::uint32_t len = get_word(pkt_, base_)[0];
-    std::uint64_t bytes = (std::uint64_t{len} + 7) >> 3;
+    Result<std::uint32_t> len = get_len(pkt_, base_);
+    if (!len) return len.error();
+    std::uint64_t bytes = (std::uint64_t{*len} + 7) >> 3;
     if (bytes > pkt_.size() - payload) return marshal_error(Errno::ebadmsg);
-    return Bitset{pkt_.subspan(payload, bytes), len};
+    return Bitset{pkt_.subspan(payload, bytes), *len};
 }
 
 // The wire carries a NUL after the bytes, which the length leaves out and a
-// string that reads must have.
+// string that reads must have; the bytes are UTF-8 or refused.
 Result<std::string_view> Cursor::str() const noexcept {
     std::uint64_t payload = std::uint64_t{base_} + WORD_SZ;
     if (payload > pkt_.size()) return marshal_error(Errno::ebadmsg);
-    std::uint32_t nbyte = get_word(pkt_, base_)[0];
-    if (std::uint64_t{nbyte} + 1 > pkt_.size() - payload) return marshal_error(Errno::ebadmsg);
-    if (pkt_[payload + nbyte] != 0) return marshal_error(Errno::ebadmsg);
-    return std::string_view(reinterpret_cast<const char *>(pkt_.data() + payload), nbyte);
-}
-
-bool is_utf8(std::span<const std::uint8_t> bytes) noexcept {
-    bool ok = true;
-    Cursor::utf8_lossy(std::string_view(reinterpret_cast<const char *>(bytes.data()), bytes.size()), [&ok](std::string_view piece) {
-        if (piece == "\xef\xbf\xbd") ok = false;
-    });
-    return ok;
-}
-
-Result<std::string_view> Cursor::str_of_type() const noexcept {
-    if (is_null() || type_ != type_of(SequenceType::str)) return marshal_error(Errno::ebadmsg);
-    return str();
+    Result<std::uint32_t> nbyte = get_len(pkt_, base_);
+    if (!nbyte) return nbyte.error();
+    if (std::uint64_t{*nbyte} + 1 > pkt_.size() - payload) return marshal_error(Errno::ebadmsg);
+    if (pkt_[payload + *nbyte] != 0) return marshal_error(Errno::ebadmsg);
+    std::string_view s(reinterpret_cast<const char *>(pkt_.data() + payload), *nbyte);
+    if (!is_utf8(s)) return marshal_error(Errno::ebadmsg);
+    return s;
 }
 
 Result<std::string_view> Cursor::get_str_ref() const noexcept {
-    Result<std::string_view> s = str_of_type();
-    if (!s) return s;
-    if (!is_utf8({reinterpret_cast<const std::uint8_t *>(s->data()), s->size()})) return marshal_error(Errno::ebadmsg);
-    return s;
+    if (is_null() || type_ != type_of(SequenceType::str)) return marshal_error(Errno::ebadmsg);
+    return str();
 }
 
 Result<Strs> Cursor::strs() const noexcept {
     std::uint64_t payload = std::uint64_t{base_} + WORD_SZ;
     if (payload > pkt_.size()) return marshal_error(Errno::ebadmsg);
-    std::uint32_t n = get_word(pkt_, base_)[0];
+    Result<std::uint32_t> len = get_len(pkt_, base_);
+    if (!len) return len.error();
+    std::uint32_t n = *len;
     std::uint64_t blob = payload + 4 * (std::uint64_t{n} + 1);
     if (blob > pkt_.size()) return marshal_error(Errno::ebadmsg);
     auto off = [&](std::uint32_t i) { return load<std::uint32_t>(pkt_.data() + payload + 4 * i); };
@@ -92,7 +86,7 @@ Result<Strs> Cursor::strs() const noexcept {
     if (total > pkt_.size() - blob) return marshal_error(Errno::ebadmsg);
     for (std::uint32_t i = 0; i < n; i++) {
         if (off(i) > off(i + 1) || off(i + 1) > total) return marshal_error(Errno::ebadmsg);
-        if (!is_utf8(pkt_.subspan(blob + off(i), off(i + 1) - off(i)))) return marshal_error(Errno::ebadmsg);
+        if (!is_utf8(std::string_view(reinterpret_cast<const char *>(pkt_.data() + blob + off(i)), off(i + 1) - off(i)))) return marshal_error(Errno::ebadmsg);
     }
     return Strs{pkt_.subspan(payload, 4 * (std::uint64_t{n} + 1)), pkt_.subspan(blob, total), n};
 }
@@ -183,13 +177,24 @@ Result<double> Cursor::get_number() const noexcept {
 
 Result<Cursor> BranchCursor::at(std::uint32_t idx) const noexcept {
     if (idx >= len()) return marshal_error(Errno::efault);
-    auto [rel_off, desc] = get_word(node_.pkt_, base() + WORD_SZ + idx * WORD_SZ);
-    auto type = static_cast<NodeType>(desc & DESC_TYPE_MASK);
+    Result<Desc> d = get_desc(node_.pkt_, base() + WORD_SZ + idx * WORD_SZ);
+    if (!d) return d.error();
+    auto [rel_off, type] = *d;
     if (rel_off == 0) return Cursor(node_.pkt_, 0, type);
     if (rel_off >= node_.pkt_.size() - base()) return marshal_error(Errno::ebadmsg);
     std::uint32_t child = base() + rel_off;
-    if (child < base() + WORD_SZ + len() * WORD_SZ) return marshal_error(Errno::ebadmsg);
-    return Cursor::at(node_.pkt_, child, type);
+    std::uint32_t end = end_of(idx);
+    if (child < base() + WORD_SZ + len() * WORD_SZ || child >= end) return marshal_error(Errno::ebadmsg);
+    return Cursor::at(node_.pkt_.first(end), child, type);
+}
+
+std::uint32_t BranchCursor::end_of(std::uint32_t idx) const noexcept {
+    std::uint64_t end = node_.pkt_.size();
+    for (std::uint32_t j = idx + 1; j < len(); j++) {
+        std::uint32_t rel_off = get_word(node_.pkt_, base() + WORD_SZ + j * WORD_SZ)[0];
+        if (rel_off != 0) return static_cast<std::uint32_t>(std::min(std::uint64_t{base()} + rel_off, end));
+    }
+    return static_cast<std::uint32_t>(end);
 }
 
 Result<BranchCursor> BranchCursor::at_branch(std::uint32_t idx) const noexcept {
@@ -199,12 +204,15 @@ Result<BranchCursor> BranchCursor::at_branch(std::uint32_t idx) const noexcept {
 }
 
 Result<TreeReader> TreeReader::make(std::span<const std::uint8_t> pkt) noexcept {
-    if (pkt.size() < HDR_SZ || get_word(pkt, 0)[0] != MAGIC) return marshal_error(Errno::ebadmsg);
-    auto [payload_sz, desc] = get_word(pkt, WORD_SZ);
+    if (pkt.size() < HDR_SZ) return marshal_error(Errno::ebadmsg);
+    Result<std::uint32_t> magic = get_len(pkt, 0);
+    if (!magic || *magic != MAGIC) return marshal_error(Errno::ebadmsg);
+    Result<Desc> d = get_desc(pkt, WORD_SZ);
+    if (!d) return d.error();
+    auto [payload_sz, type] = *d;
     if (payload_sz > pkt.size() - HDR_SZ) return marshal_error(Errno::ebadmsg);
-    auto type = static_cast<NodeType>(desc & DESC_TYPE_MASK);
     if (payload_sz == 0) return TreeReader(Cursor(pkt, 0, type));
-    Result<Cursor> root = Cursor::at(pkt, HDR_SZ, type);
+    Result<Cursor> root = Cursor::at(pkt.first(HDR_SZ + payload_sz), HDR_SZ, type);
     if (!root) return root.error();
     return TreeReader(*root);
 }

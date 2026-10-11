@@ -167,6 +167,37 @@ inline std::array<std::uint32_t, 2> get_word(std::span<const std::uint8_t> buf, 
     return {load<std::uint32_t>(buf.data() + off), load<std::uint32_t>(buf.data() + off + 4)};
 }
 
+// A type the wire carries: the untyped null, a branch, or a leaf of a width its class has.
+constexpr bool type_is_known(NodeType t) noexcept {
+    if (t == type_of(SpecialType::nil) || t == type_of(SpecialType::branch)) return true;
+    if (!type_is_leaf(t) || (t & ~(BIT_LEAF | BIT_SEQ | CLASS_MASK | ARG_MASK)) != 0) return false;
+    std::uint32_t arg = type_arg_of(t);
+    switch (t & CLASS_MASK) {
+    case CLASS_F: return arg == 2 || arg == 3;
+    case CLASS_R: return arg <= (type_is_seq(t) ? 2u : 0u);
+    default: return arg <= 3;
+    }
+}
+
+// A read slot whose high half is reserved, zero on the wire: a len, a size, the magic.
+inline Result<std::uint32_t> get_len(std::span<const std::uint8_t> buf, std::uint32_t off) noexcept {
+    auto [lo, hi] = get_word(buf, off);
+    if (hi != RESERVED) return marshal_error(Errno::ebadmsg);
+    return lo;
+}
+
+// A read child entry or root word: its offset or size, and a known type with the rest reserved.
+struct Desc {
+    std::uint32_t off;
+    NodeType type;
+};
+inline Result<Desc> get_desc(std::span<const std::uint8_t> buf, std::uint32_t off) noexcept {
+    auto [lo, desc] = get_word(buf, off);
+    auto type = static_cast<NodeType>(desc & DESC_TYPE_MASK);
+    if (desc != type || !type_is_known(type)) return marshal_error(Errno::ebadmsg);
+    return Desc{lo, type};
+}
+
 // `unit` is a power of two no wider than a word.
 inline Result<std::uint32_t> align(std::uint32_t nbyte, std::uint32_t unit) noexcept {
     if (unit == 0 || (unit & (unit - 1)) != 0 || unit > WORD_SZ) return marshal_error(Errno::einval);
