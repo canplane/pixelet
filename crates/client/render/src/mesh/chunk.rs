@@ -445,30 +445,6 @@ impl BakeContext {
     fn step_fine(&mut self, b: &mut FineBake, set: &RunSet) -> bool {
         let span = b.span;
         let (lo, hi) = (b.apron, span - b.apron);
-        // Rim sides are drawn whatever the apron holds, down to the floor: the chunk
-        // beside may be another zoom's standing lower, and hiding the side left the step
-        // between them open to the sky.
-        let rim = |cx: u32, cy: u32| {
-            if b.apron == 0 {
-                return 0;
-            }
-            let x = if cx + 1 == hi {
-                FACE_PX
-            } else if cx == lo {
-                FACE_NX
-            } else {
-                0
-            };
-            let y = if cy + 1 == hi {
-                FACE_PY
-            } else if cy == lo {
-                FACE_NY
-            } else {
-                0
-            };
-            x | y
-        };
-
         if b.phase == 0 {
             let row_end = hi.min(b.row + self.rows);
             for cy in b.row..row_end {
@@ -484,7 +460,7 @@ impl BakeContext {
                         self.counters.total_runs += 1;
                         let faces = run_faces(set, span, cx, cy, i, self.window);
                         // A run with no height shows its top alone.
-                        let mask = if set.z1[i] >= set.z0[i] { faces | rim(cx, cy) } else { faces & !(ALL_FACES & !FACE_PZ) };
+                        let mask = if set.z1[i] >= set.z0[i] { faces } else { faces & !(ALL_FACES & !FACE_PZ) };
                         self.counters.faces_possible += FULL_FACE_CNT;
                         if mask & ALL_FACES == 0 {
                             self.counters.culled += 1;
@@ -738,7 +714,10 @@ impl BakeContext {
 
     #[allow(clippy::too_many_arguments)]
     fn accumulate_run(&mut self, start: u32, mut cnt: u32, bucket: i32, cell: u32, set: &RunSet, i: usize, col: u32) -> u32 {
-        let Some((mut run_z0, run_z1)) = within(set, i, self.window) else { return cnt };
+        // All it is given, the cell past the floor and roof too, packed as the
+        // chunk's own are so the faces there are decided at its own
+        // resolution; only the window is drawn.
+        let (mut run_z0, run_z1) = (set.z0[i], set.z1[i]);
         // Ground is solid under its surface: the column stops at the chunk's floor
         // only to save runs, and read from there a coarse sea cell was a thousandth full.
         if i == set.start[col as usize] as usize && set.side[i] != Side::OBJECT {
@@ -775,9 +754,6 @@ impl BakeContext {
     }
 
     /// Buckets have distinct heights, so sorting visits them lowest first.
-    /// Nothing past the chunk's heights is laid: a summary fills no cell
-    /// exactly, so a face at its floor or roof is never hidden by what is past
-    /// it, where a cell beside it in another chunk may be shrunk.
     fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, step: i32) {
         let grown = self.coarse.grow_runs(2 * cnt as usize);
         if !self.room(grown) {
@@ -1044,13 +1020,11 @@ fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize, window: [i32; 
     }
     let mut mask = ALL_FACES;
     let (z0, z1) = within(set, i, window).unwrap_or((set.z0[i], set.z1[i]));
-    // A filled cell above or below hides the face. Under the chunk's floor the
-    // cell past it decides (`window`), so a cave's roof shows; over its roof
-    // never, since the chunk above may draw that cell shrunk, folded, and a
-    // roof hidden under it opened the ground to the sky. Left in, the face
-    // between stacked cubes striped them in the shadow map, which draws both
-    // sides.
-    let above = z1 + 1 < window[1] && column_covers(set, col, z1 + 1);
+    // A filled cell above or below hides the face, past the chunk's floor and
+    // roof too, as the world answers there at the chunk's own resolution;
+    // what the chunk beside draws is not asked. Left in, the face between
+    // stacked cubes striped them in the shadow map, which draws both sides.
+    let above = column_covers(set, col, z1 + 1);
     let below = set.z0[i] < z0 || column_covers(set, col, z0 - 1);
     if above {
         mask &= !FACE_PZ;

@@ -228,10 +228,8 @@ fn stacked_boxes_meet() {
     }
 }
 
-/// A chunk draws its own heights, the face at its floor as the cell under it
-/// says, hidden where ground goes on and drawn where it stops, so a cave's
-/// roof over the chunk under shows; the face at its roof always, as the chunk
-/// above may draw the cell over it shrunk.
+/// A chunk draws its own heights, the faces at its floor and roof as the
+/// cells past them say: hidden where ground goes on, drawn where it stops.
 #[test]
 fn a_chunk_floor_and_roof_show_where_the_ground_past_them_stops() {
     let bake = |z0: i32, z1: i32| {
@@ -241,7 +239,7 @@ fn a_chunk_floor_and_roof_show_where_the_ground_past_them_stops() {
         let (min, size) = box_bounds(&m, 1.0, heights);
         ((min[2], min[2] + size[2]), m[5] & FACE_NZ != 0, m[5] & FACE_PZ != 0)
     };
-    assert_eq!(bake(-1, 4), ((0.0, 4.0), false, true), "ground through both");
-    assert_eq!(bake(1, 4), ((1.0, 4.0), true, true), "a cave's roof");
+    assert_eq!(bake(-1, 4), ((0.0, 4.0), false, false), "ground through both");
+    assert_eq!(bake(1, 4), ((1.0, 4.0), true, false), "a cave's roof");
     assert_eq!(bake(-1, 2), ((0.0, 3.0), false, true), "the ground's face");
 }
