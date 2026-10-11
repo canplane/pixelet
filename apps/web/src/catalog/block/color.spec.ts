@@ -15,9 +15,9 @@ export default {
   ],
   sentinel: {
     unknown: {
-      hex: "#d9d0cc",
-      "$doc": "A cell whose data is missing or invalid, a visible neutral gray so it reads as not known rather than as whatever drew last.",
-      rgb: 14274764,
+      hex: "#565656",
+      "$doc": "Bedrock, where the world holds no more: a dark gray, so it reads as the world's end against the night's black and the day's haze past it alike, rather than as whatever drew last.",
+      rgb: 5658198,
     },
   },
   ground: {

@@ -51,3 +51,32 @@ fn a_finer_zoom_keeps_what_a_coarser_one_had() {
         assert!(fine.contains(c), "{c:?}");
     }
 }
+
+/// The noise is continuous across its lattice and stays near [−1, 1].
+#[test]
+fn perlin_is_continuous_and_bounded() {
+    let mut last = perlin(7, [0.0, 0.3, 0.7]);
+    for k in 1..2000 {
+        let v = perlin(7, [k as f64 * 0.01, 0.3, 0.7]);
+        assert!(v.abs() <= 1.1, "{v} at {k}");
+        assert!((v - last).abs() < 0.05, "jump at {k}");
+        last = v;
+    }
+    assert_eq!(perlin(7, [3.0, 4.0, 5.0]), 0.0, "zero on the lattice");
+}
+
+/// Caves are some of the ground, not none and not most.
+#[test]
+fn caves_hollow_a_little_of_the_ground() {
+    let mut n = 0;
+    for x in 0..64 {
+        for y in 0..64 {
+            for z in -32..0 {
+                n += usize::from(hollow([x as f64 + 0.5, y as f64 + 0.5, z as f64 + 0.5]));
+            }
+        }
+    }
+    let share = n as f64 / (64.0 * 64.0 * 32.0);
+    eprintln!("cave share {share}");
+    assert!((0.005..0.1).contains(&share), "{share}");
+}

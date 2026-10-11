@@ -14,7 +14,7 @@
 pub mod sentinel {
     /// nothing painted: the ground before a bake writes it, and an object cell no leaf holds
     pub const void: u8 = 0x00;
-    /// the ground past the coverage, which no source here describes, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface
+    /// bedrock, where the world holds no more: the ground past the coverage, which no source here describes, the floor under the ground (`pxl-spec block/limit.rs`), and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; it gives no surface, and nothing is placed in or taken from it
     pub const unknown: u8 = 0xff;
 }
 

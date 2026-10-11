@@ -36,12 +36,13 @@ fn room(tool: PlacementTool, corner: &Pvf3, object_size: f64) -> Aabb {
     }
 }
 
-/// The shared check for the placement commit and its hover preview: nothing
-/// placed, nor a placed decor's box, shares its room. A decor or a marker is
-/// stood on nowhere, so neither is placed on one, grown or placed.
+/// The shared check for the placement commit and its hover preview: its room
+/// is where the world takes an edit (`World::editable`), and nothing placed,
+/// nor a placed decor's box, shares it. A decor or a marker is stood on
+/// nowhere, so neither is placed on one, grown or placed.
 pub fn is_placement_blocked(tool: PlacementTool, corner: &Pvf3, object_size: f64) -> bool {
     let (world, room) = (World::now(), room(tool, corner, object_size));
-    let taken = world.placed_sharing(&room, |_| true).is_some() || world.placed_claim(&room).is_some();
+    let taken = !world.editable(&room) || world.placed_sharing(&room, |_| true).is_some() || world.placed_claim(&room).is_some();
     let under = Aabb {
         min: [room.min[0], room.min[1], room.min[2] - units(GROUND.cell())],
         max: [room.max[0], room.max[1], room.min[2]],

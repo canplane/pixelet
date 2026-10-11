@@ -1,7 +1,8 @@
 // pxl-render/mesh/paint/column.rs
 
 //! A chunk's blocks as runs to draw, a cell a column across with heights in
-//! the sample's cells. A column is a whole run from the floor to the ground:
+//! the sample's cells, within the chunk's own heights. A column is a whole
+//! run through them to the ground:
 //! a part-filled cell would have to be drawn as something inside the cell,
 //! and in flat places the whole zoom turned to cubes standing apart.
 
@@ -57,16 +58,17 @@ fn material(block: Block) -> (u32, u8) {
     }
 }
 
-/// The runs of the grid's `rows`, from `stands` (`stands_of`); `next` is the
-/// first stand of the first row and is left at the next row's.
-pub fn write_rows(direct: &mut RunWriter, sample: &ChunkSample, stands: &[(u32, Stand)], rows: core::ops::Range<u32>, next: &mut usize) -> Result<(), Refused> {
+/// The runs of the grid's `rows` in the heights `range`, from `stands`
+/// (`stands_of`); `next` is the first stand of the first row and is left at
+/// the next row's.
+pub fn write_rows(direct: &mut RunWriter, sample: &ChunkSample, stands: &[(u32, Stand)], rows: core::ops::Range<u32>, range: [i32; 2], next: &mut usize) -> Result<(), Refused> {
     for i in rows.start * sample.span..rows.end * sample.span {
         direct.column(i);
         let first = *next;
         while *next < stands.len() && stands[*next].0 == i {
             *next += 1;
         }
-        compose(sample, &stands[first..*next], i as usize, sample.floor, |lo, hi, block| match block.fills() {
+        compose(sample, &stands[first..*next], i as usize, range, |lo, hi, block| match block.fills() {
             true => {
                 let (m, l) = material(block);
                 direct.run(lo, hi, m, l)

@@ -24,9 +24,9 @@ use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;
 use crate::layer::object::size::{object_size_of, MARKER_SIZE};
 use crate::layer::object::store::{Entry, EntryAt};
-use crate::query::Hit;
+use crate::query::{Hit, World};
 use crate::view::frame::pose::view_ray;
-use pxl_spec::space::coord::zoom::{base_of, of_side, units};
+use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units};
 use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -180,12 +180,24 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         Some(Struck::Grown(cell, _)) => base_of(GROUND.cell(), *cell),
         None => world_adjacent_corner(&hit, units(GROUND.cell()), None),
     });
-    hover.coord = Some(match struck {
-        Some(Struck::Object(o)) => o.corner(),
-        Some(Struck::Grown(cell, _)) => base_of(GROUND.cell(), cell),
+    let (corner, size) = match struck {
+        Some(Struck::Object(o)) => (o.corner(), o.size()),
+        Some(Struck::Grown(cell, _)) => (base_of(GROUND.cell(), cell), units(GROUND.cell())),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
-        None => world_struck_corner(&hit, units(GROUND.cell())),
-    });
+        None => (world_struck_corner(&hit, units(GROUND.cell())), units(GROUND.cell())),
+    };
+    // Past where the world takes an edit, nothing is pointed at.
+    if !editable(&corner, size) {
+        *hover = Hover::default();
+        return;
+    }
+    hover.coord = Some(corner);
+}
+
+/// Whether the cube of `size` cornered at `corner` may hold an edit.
+fn editable(corner: &Pvf3, size: f64) -> bool {
+    let zoom = of_side(size);
+    World::now().editable(&cube(zoom, index_of(zoom, corner)))
 }
 
 /// Whether what `hit` struck is drawn folded: the finest drawn chunk there

@@ -14,6 +14,7 @@ pub mod decor;
 pub mod ext;
 #[path = "block/id.spec.rs"]
 pub mod id;
+pub mod limit;
 #[path = "block/marker.spec.rs"]
 pub mod marker;
 pub mod object;

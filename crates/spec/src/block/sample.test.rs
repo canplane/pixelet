@@ -6,10 +6,33 @@ use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use super::*;
 
-/// A tile past the coverage gives no surface, so it puts no floor under
-/// what is placed there.
+/// `laid` with the cells column `i` has a cave in taken out, as `ground_runs`
+/// takes them out of all but bedrock.
+fn carved(sample: &ChunkSample, i: usize, laid: &[(i32, i32, GroundId)]) -> Vec<(i32, i32, GroundId)> {
+    if sample.cell < GROUND.cell() {
+        return laid.to_vec();
+    }
+    let mut out = Vec::new();
+    for &(lo, hi, g) in laid {
+        let mut start = None;
+        for z in lo..=hi + 1 {
+            let solid = z <= hi && (g == sentinel::unknown || z >= sample.ele[i] - sample.scale || !sample.hollow(i, z));
+            match (solid, start) {
+                (true, None) => start = Some(z),
+                (false, Some(s)) => {
+                    out.push((s, z - 1, g));
+                    start = None;
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
+/// A tile past the coverage gives no surface, and no ground at any height.
 #[test]
-fn a_chunk_with_no_surface_has_no_ground_and_no_floor() {
+fn a_chunk_with_no_surface_has_no_ground() {
     let cells = vec![sentinel::void; (TILE_CELLS * TILE_CELLS) as usize];
     let ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     let separation = Separation::default();
@@ -26,12 +49,11 @@ fn a_chunk_with_no_surface_has_no_ground_and_no_floor() {
     };
     let mut sample = ChunkSample::of_span(COL_SPAN);
     sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
-    assert_eq!(sample.floor, i32::MIN);
     let i = apron_col(COL_SPAN, 0, 0) as usize;
     assert!(!sample.has_ground(i));
     let mut runs = 0;
     sample
-        .ground_runs(i, sample.floor, i32::MAX, |_, _, _| {
+        .ground_runs(i, i32::MIN, i32::MAX, |_, _, _| {
             runs += 1;
             Ok::<(), ()>(())
         })
@@ -93,9 +115,9 @@ fn a_tile_folded_without_its_ring_seams_under_a_cell() {
 fn a_column_is_its_look_over_its_filler_over_stone() {
     use crate::bake::constant::ELE_PADDED_SPAN;
 
-    let column = |look: GroundId, cell: Zoom| {
+    let check = |look: GroundId, cell: Zoom, face: i16, from: i32, strata: &[(i32, i32, GroundId)]| {
         let cells = vec![look; (TILE_CELLS * TILE_CELLS) as usize];
-        let ele = vec![10i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
+        let ele = vec![face; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
         let separation = Separation::default();
         let tile = Tile::new(LEAF_ZOOM, 0);
         let own = TileSource {
@@ -110,25 +132,42 @@ fn a_column_is_its_look_over_its_filler_over_stone() {
         };
         let mut sample = ChunkSample::of_span(COL_SPAN);
         sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, cell).unwrap();
+        let i = apron_col(COL_SPAN, 0, 0) as usize;
         let mut laid = Vec::new();
         sample
-            .ground_runs(apron_col(COL_SPAN, 0, 0) as usize, 0, i32::MAX, |lo, hi, g| {
+            .ground_runs(i, from, i32::MAX, |lo, hi, g| {
                 laid.push((lo, hi, g));
                 Ok::<(), ()>(())
             })
             .unwrap();
-        laid
+        // The strata, where the world has no cave.
+        assert_eq!(laid, carved(&sample, i, strata), "{look} at {cell}, face {face}");
     };
     let leaf = GROUND.cell();
-    assert_eq!(column(ground::grass, leaf), [(0, 5, ground::stone), (6, 8, ground::soil), (9, 9, ground::grass)]);
-    assert_eq!(
-        column(ground::sand, leaf),
-        [(0, 3, ground::stone), (4, 5, ground::sandstone), (6, 9, ground::sand)]
-    );
+    check(ground::grass, leaf, 10, 0, &[(0, 5, ground::stone), (6, 8, ground::soil), (9, 9, ground::grass)]);
+    check(ground::sand, leaf, 10, 0, &[(0, 3, ground::stone), (4, 5, ground::sandstone), (6, 9, ground::sand)]);
     // Coarser than the leaves, a cell is a summary of its faces: its look whole.
     for coarser in [leaf - 1, leaf - 5, GROUND.cell_zoom(GROUND.top())] {
-        assert_eq!(column(ground::grass, coarser), [(0, 9, ground::grass)], "at {coarser}");
+        check(ground::grass, coarser, 10, 0, &[(0, 9, ground::grass)]);
     }
+    // Bedrock under all, `BEDROCK_DEPTH` under sea level, or under a face below it.
+    let unknown = crate::block::cube::sentinel::unknown;
+    check(
+        ground::grass,
+        leaf,
+        10,
+        -200,
+        &[(-200, -65, unknown), (-64, 5, ground::stone), (6, 8, ground::soil), (9, 9, ground::grass)],
+    );
+    check(
+        ground::grass,
+        leaf,
+        -100,
+        -200,
+        &[(-200, -165, unknown), (-164, -105, ground::stone), (-104, -102, ground::soil), (-101, -101, ground::grass)],
+    );
+    // Bedrock is a stratum too: coarser than the leaves, the look whole.
+    check(ground::grass, leaf - 1, 10, -200, &[(-200, 9, ground::grass)]);
 }
 
 /// Past the leaves a cell is finer than a leaf's, so its ground keeps its
@@ -161,5 +200,87 @@ fn past_the_leaves_strata_stay_a_leaf_cell_thick() {
             Ok::<(), ()>(())
         })
         .unwrap();
-    assert_eq!(laid, [(0, 11, ground::stone), (12, 17, ground::soil), (18, 19, ground::grass)]);
+    let i = apron_col(COL_SPAN, 0, 0) as usize;
+    assert_eq!(laid, carved(&finer, i, &[(0, 11, ground::stone), (12, 17, ground::soil), (18, 19, ground::grass)]));
+}
+
+/// The service area is walled one cell thick: the first column past it is
+/// bedrock up to the face beside it, and the one past that stays open.
+#[test]
+fn the_service_area_is_walled_one_cell_thick() {
+    let mut cells = vec![ground::grass; (TILE_CELLS * TILE_CELLS) as usize];
+    for y in 0..TILE_CELLS {
+        for x in 8..TILE_CELLS {
+            cells[GROUND.cell_index(x, y) as usize] = sentinel::unknown;
+        }
+    }
+    let ele = vec![10i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
+    let separation = Separation::default();
+    let own = TileSource {
+        tile: TileView {
+            cells: &cells,
+            ele: &ele,
+            separation: &separation,
+        },
+        frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
+        origin: [0, 0],
+        n: 1,
+    };
+    let mut sample = ChunkSample::of_span(COL_SPAN);
+    sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
+    let laid = |x: u32| {
+        let mut laid = Vec::new();
+        sample
+            .ground_runs(apron_col(COL_SPAN, x, 4) as usize, -100, i32::MAX, |lo, hi, g| {
+                laid.push((lo, hi, g));
+                Ok::<(), ()>(())
+            })
+            .unwrap();
+        laid
+    };
+    assert_eq!(laid(8), [(-100, 9, sentinel::unknown)]);
+    assert!(laid(9).is_empty());
+    assert_eq!(laid(7).last(), Some(&(9, 9, ground::grass)));
+}
+
+/// Caves take the ground where the world has them, last of all: never the
+/// bedrock, the ground's face, nor a column by a way.
+#[test]
+fn caves_come_last() {
+    let mut cells = vec![ground::grass; (TILE_CELLS * TILE_CELLS) as usize];
+    for y in 0..TILE_CELLS {
+        cells[GROUND.cell_index(16, y) as usize] = ground::road;
+    }
+    let ele = vec![40i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
+    let separation = Separation::default();
+    let own = TileSource {
+        tile: TileView {
+            cells: &cells,
+            ele: &ele,
+            separation: &separation,
+        },
+        frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
+        origin: [0, 0],
+        n: 1,
+    };
+    let mut sample = ChunkSample::of_span(COL_SPAN);
+    sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
+    let mut caved = 0;
+    for y in 0..COL_SPAN - 2 * APRON {
+        for x in 0..COL_SPAN - 2 * APRON {
+            let mut laid = Vec::new();
+            sample
+                .ground_runs(apron_col(COL_SPAN, x, y) as usize, -100, i32::MAX, |lo, hi, g| {
+                    laid.push((lo, hi, g));
+                    Ok::<(), ()>(())
+                })
+                .unwrap();
+            assert_eq!(laid.first(), Some(&(-100, -65, sentinel::unknown)), "bedrock at {x}, {y}");
+            assert_eq!(laid.last().map(|r| r.1), Some(39), "the face at {x}, {y}");
+            let gaps = laid.windows(2).filter(|w| w[1].0 > w[0].1 + 1).count();
+            assert!(gaps == 0 || !(15..=17).contains(&x), "a cave by the way at {x}, {y}");
+            caved += usize::from(gaps > 0);
+        }
+    }
+    assert!(caved > 0, "no cave anywhere");
 }
