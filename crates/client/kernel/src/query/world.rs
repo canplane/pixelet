@@ -77,16 +77,6 @@ impl<'a> World<'a> {
     }
 }
 
-fn join(a: Option<Bound>, b: Option<Bound>) -> Option<Bound> {
-    match (a, b) {
-        (Some(a), Some(b)) => Some(Bound {
-            aabb: a.aabb.join(b.aabb),
-            finest: a.finest.max(b.finest),
-        }),
-        (a, b) => a.or(b),
-    }
-}
-
 impl Query for World<'_> {
     type Record<'b>
         = Column<'b>
@@ -103,11 +93,11 @@ impl Query for World<'_> {
         self.terrain.child(parent, node, cell)
     }
 
-    /// The ground's and what is placed, which a chunk finer under the node
-    /// may draw at any zoom it is asked at.
+    /// What can show of the ground and what is placed, which a chunk finer
+    /// under the node may draw at any zoom it is asked at.
     fn bound<const D: usize>(&self, at: &Line, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
         let objects = self.objects.bounds(node, cell).value().flatten();
-        self.terrain.bound(at, node, cell).map(|ground| join(ground, objects))
+        self.terrain.bound(at, node, cell).map(|ground| Bound::join(ground, objects))
     }
 
     /// A chunk column's records to compose its blocks from.

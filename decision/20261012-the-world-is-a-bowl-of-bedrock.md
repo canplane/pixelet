@@ -59,12 +59,14 @@ A chunk asks nothing of a chunk beside (`pxl-kernel chunk/build/run.rs`):
 it composes one of its own cells past its floor and roof, and its apron
 past its sides (`pxl-spec block/sample.rs` `APRON`), from the one function
 the world is, and a face there shows only where that cell is open, at
-whatever zoom the chunk beside is drawn. A fold's rim is drawn whole: the
-apron is a leaf column, less than a fold's cell, and widening it read the
-elevation past its padding. Which chunks are drawn is
-the bound's: a terrain node holds its ground from a cell under the lowest
-face about it, its own or beside (`pxl-kernel layer/terrain/query.rs`), and
-what is placed.
+whatever zoom the chunk beside is drawn. The apron is one of its own cells,
+a fold's where its runs are folded, so a fold decides its rim at its own
+resolution too. A cell past every tile held is not known, no ground, never
+a stand-in read off the chunk's own tile: that read the elevation past its
+padding once the apron was a fold's cell. Which chunks are drawn is the bound's: a
+terrain node holds its ground from a cell under the lowest face about it,
+its own or beside (`pxl-kernel layer/terrain/query.rs`), and what is placed;
+under that every column is solid, seen by no one.
 
 Bedrock is a stratum, a leaf cell's as the others are: a cell coarser than
 the leaves draws its look whole, since one taller than the bedrock's depth
@@ -74,11 +76,16 @@ folded black under every far face.
 
 Two meshes drawing one plane facing one way is what z-fighting is, so no
 cube draws past its own space: the block a coarse cube laid under its lowest
-box and the wall a fine one hung to the ground beside are gone. What they
-covered is the bound's: chunks are drawn under the lowest face about a node,
-its own columns' and those beside, so a step down to a neighbour is walled
-by a cube's own ground, and past the leaves a whole fold cell under that, so
-a shrunk cell stands on ground: the cube under one draws the plane between
-them.
+box and the wall a fine one hung to the ground beside are gone. What a cube
+shows is closed by the cube that holds it, never left to another: under a
+shrunk cell the plane is the top of the ground under it, which that ground's
+own cube draws, since the cell over it is not full. A shrunk cell drawing
+that plane instead, and the cube under leaving its top to it, opened a hole
+wherever the cube over was drawn at another zoom. Chunks are drawn under the lowest face about a node, its own columns' and
+those beside, so a step down to a neighbour is walled by a cube's own
+ground, and wherever the eye's rays land, whatever the bound holds
+(`pxl-kernel chunk/domain/walk.rs`): the rays are cast against the world the
+hash carves, so a cave seen through a dig is met and drawn as deep as they
+go, each chunk of it composed on its own.
 
 The Y lane's ends and the X lane's seam are left for later.

@@ -209,7 +209,20 @@ impl<Q: Query> Domain<Q> {
         if self.seen.contains_key(&c) {
             return;
         }
-        let held = self.query.bound(&cursor, c.node(), c.cell_zoom()).value().flatten();
+        let (first, n) = from.unwrap_or((0, self.footprints.len() as u32));
+        let candidates = (first..first + n).map(|j| if from.is_some() { self.touching[j as usize] } else { j });
+        // Where the eye's rays land is there, whatever the bound holds: a
+        // cave the hash opens under a dig is met by them and drawn.
+        let region = c.region();
+        let landed = candidates.clone().filter_map(|k| self.footprints[k as usize].landed(&region)).reduce(|a, b| (a.0.min(b.0), a.1.max(b.1)));
+        let landed = landed.map(|(lo, hi)| Bound {
+            aabb: Aabb {
+                min: [region.min[0], region.min[1], lo],
+                max: [region.max[0], region.max[1], hi],
+            },
+            finest: GROUND.cell(),
+        });
+        let held = Bound::join(self.query.bound(&cursor, c.node(), c.cell_zoom()).value().flatten(), landed);
         let (bound, error) = match (held, parent) {
             // The chunk's cell, alike on every axis.
             (Some(b), _) => (b.aabb, [units(c.cell_zoom()); 3]),
@@ -218,7 +231,6 @@ impl<Q: Query> Domain<Q> {
             _ => (c.region(), [0.0; 3]),
         };
         let start = self.touching.len() as u32;
-        let (first, n) = from.unwrap_or((0, self.footprints.len() as u32));
         for j in first..first + n {
             let k = if from.is_some() { self.touching[j as usize] } else { j };
             if self.footprints[k as usize].touches(&bound) {
@@ -241,7 +253,8 @@ impl<Q: Query> Domain<Q> {
             let mut any = false;
             for child in c.children() {
                 let cursor = self.query.child(&cursor, child.node(), child.cell_zoom());
-                if !matches!(self.query.bound(&cursor, child.node(), child.cell_zoom()), Answer::Exact(None) | Answer::Coarser(None, _)) {
+                let met = (touching.0..touching.0 + touching.1).any(|j| self.footprints[self.touching[j as usize] as usize].touches(&child.region()));
+                if met || !matches!(self.query.bound(&cursor, child.node(), child.cell_zoom()), Answer::Exact(None) | Answer::Coarser(None, _)) {
                     any = true;
                     self.open.push(Open {
                         c: child,

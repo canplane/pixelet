@@ -88,8 +88,9 @@ impl Lens {
     }
 }
 
-/// The screen in patches no wider than `OBSERVED_PATCH`, at equal steps of
-/// angle about the optical axis.
+/// The screen in patches no wider than the camera grid's cell at `tau`
+/// (`cell_angle`), at equal steps of angle about the optical axis; the eye
+/// casts them at `OBSERVED_TAU`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Grid {
     lens: Lens,
@@ -97,10 +98,10 @@ pub struct Grid {
 }
 
 impl Grid {
-    pub fn of(lens: Lens) -> Grid {
+    pub fn of(lens: Lens, tau: Tau) -> Grid {
         Grid {
             lens,
-            across: lens.tan.map(|t| ((2.0 * libm::atan(t) / param::OBSERVED_PATCH).ceil() as u32).max(1)),
+            across: lens.tan.map(|t| ((2.0 * libm::atan(t) / cell_angle(tau)).ceil() as u32).max(1)),
         }
     }
 
@@ -193,6 +194,12 @@ impl Footprint {
             min: [x0, y0, self.z.0],
             max: [x1, y1, self.z.1],
         }
+    }
+
+    /// The heights its rays landed at within `b`, none where they landed
+    /// nowhere in it.
+    pub fn landed(&self, b: &Aabb) -> Option<(f64, f64)> {
+        self.touches(b).then(|| (self.z.0.max(b.min[2]), self.z.1.min(b.max[2])))
     }
 
     /// Separating-axis test: the box's axes, then each hull edge's normal.
@@ -301,8 +308,9 @@ impl Sight {
             self.eyes.clear();
             return 0;
         };
-        let grid = Grid::of(lens);
-        let shift = param::REUSE_SHIFT * param::OBSERVED_PATCH;
+        let patch = Tau::of(param::OBSERVED_TAU);
+        let grid = Grid::of(lens, patch);
+        let shift = param::REUSE_SHIFT * cell_angle(patch);
         let whole = everything
             || self.cast.is_none_or(|(was, across, far)| {
                 let turned = [(was.forward, lens.forward), (was.right, lens.right), (was.up, lens.up)]

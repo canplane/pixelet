@@ -153,11 +153,11 @@ impl Query for Residency<TerrainTile> {
         }
     }
 
-    /// From the index lane of the tile it is drawn from, about the node as
-    /// its columns are drawn beside theirs, so a step down to a column beside
-    /// is walled, and a cell at `cell` under its lowest face, so a fold's cell
-    /// shrunk by its fill stands on the cell under it, never on the sky. For
-    /// deciding descent, never for what is drawn. A
+    /// From the index lane of the tile it is drawn from: the ground that can
+    /// show, down to a cell at `cell` under the lowest face about the node,
+    /// its own or beside, under which every column is solid; so a step down to
+    /// a column beside is walled, and a fold's cell shrunk by its fill stands
+    /// on the cell under it, never on the sky. A
     /// node past the service area, no look in it, holds the bedrock walling
     /// the area where ground is beside it (`pxl-spec block/limit.rs` `wall`):
     /// from the bedrock to that ground's face.
