@@ -27,11 +27,10 @@ pub const SHADER_CLOUD_FIELD: u32 = 19;
 pub const SHADER_SHEET: u32 = 20;
 pub const SHADER_IMPOSTOR: u32 = 21;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
-pub const SHADER_CLOUD_COMPOSITE: u32 = 23;
-pub const SHADER_ATMOS_IRRADIANCE: u32 = 24;
-pub const SHADER_CAMERA_GRID: u32 = 25;
-pub const SHADER_BADGE_REGION: u32 = 26;
-pub const SHADERS: u32 = 27;
+pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
+pub const SHADER_CAMERA_GRID: u32 = 24;
+pub const SHADER_BADGE_REGION: u32 = 25;
+pub const SHADERS: u32 = 26;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -167,7 +166,6 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_STARS => wgsl!("frame", "globe", "encode", "stars"),
         SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
-        SHADER_CLOUD_COMPOSITE => wgsl!("cloud_composite"),
         SHADER_CLOUDS => wgsl!(
             "frame",
             "globe",
@@ -219,7 +217,6 @@ pub const PIPELINE_CHUNK_COARSE_DEPTH: u32 = 30;
 pub const PIPELINE_CHUNK_COARSE_PREPASS: u32 = 31;
 pub const PIPELINE_SHEET: u32 = 33;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 35;
-pub const PIPELINE_CLOUD_MARCH: u32 = 36;
 pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 37;
 /// The billboards' regions, numbered, into a target of their own (pass/badges.rs).
 pub const PIPELINE_BADGE_REGION: u32 = 39;
@@ -429,7 +426,6 @@ const LIT_FRAME: [[u32; 3]; 14] = {
         a[9],
     ]
 };
-const CLOUD_COMPOSITE_GROUP: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 /// The sky-view and moonlit-sky tables are laid out unread because the shader declares them.
 const CLOUD_GROUP: [[u32; 3]; 14] = {
     let a = air([FRAGMENT, FRAGMENT, NONE, FRAGMENT, FRAGMENT, NONE, NONE, NONE, FRAGMENT, FRAGMENT]);
@@ -681,23 +677,22 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[],
             &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]])],
         ),
-        PIPELINE_CLOUD_MARCH => record(screen(SHADER_CLOUDS), &[], &[group(&CLOUD_GROUP)]),
-        // From under the layer only where the world left the far plane; from over it everywhere.
+        // From under the sheets only where the world left the far plane; from over them everywhere.
         PIPELINE_CLOUDS => record(
             Head {
                 depth_compare: GREATER_EQUAL,
-                ..blended(SHADER_CLOUD_COMPOSITE, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&CLOUD_COMPOSITE_GROUP)],
+            &[group(&CLOUD_GROUP)],
         ),
         PIPELINE_CLOUDS_ABOVE => record(
             Head {
                 depth_compare: ALWAYS,
-                ..blended(SHADER_CLOUD_COMPOSITE, CULL_NONE, 0, 0.0)
+                ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&CLOUD_COMPOSITE_GROUP)],
+            &[group(&CLOUD_GROUP)],
         ),
         PIPELINE_CLOUD_FIELD => record(screen(SHADER_CLOUD_FIELD), &[], &[]),
         _ => Vec::new(),

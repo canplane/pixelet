@@ -1,0 +1,10 @@
+Clouds by Quaternius (quaternius.com), as Poly Pizza serves them in glTF:
+
+	cumulus_1.glb  https://poly.pizza/m/KdFNOVn1Gf
+	cumulus_2.glb  https://poly.pizza/m/pjiBiLJwAl
+	stratus.glb    https://poly.pizza/m/F6DzCxDz6I
+
+License: Public Domain (CC0)
+http://creativecommons.org/publicdomain/zero/1.0/
+
+	white.png      pixelet's own: the skin they are drawn with, the cloud's albedo

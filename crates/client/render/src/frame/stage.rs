@@ -5,7 +5,7 @@
 
 use xpute_guest::global::Global;
 
-pub const STAGE_WORDS: usize = STAGE_AT::SCREEN_AO + 1;
+pub const STAGE_WORDS: usize = STAGE_AT::CLOUDS + 1;
 
 /// Where each value sits in the lane.
 #[allow(non_snake_case)]
@@ -30,6 +30,8 @@ pub mod STAGE_AT {
     pub const SHADOWS: usize = 62;
     pub const AO_STRENGTH: usize = 63;
     pub const SCREEN_AO: usize = 64;
+    /// How much of the clouds shows, none to all.
+    pub const CLOUDS: usize = 65;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

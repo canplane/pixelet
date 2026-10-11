@@ -8,6 +8,7 @@ pub mod edit;
 pub mod ghost;
 pub mod pick;
 
+use pxl_spec::block::decor::Decor;
 use pxl_spec::block::object::Cube;
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::camera::grid::Tau;
@@ -21,11 +22,11 @@ use crate::control::interaction::edit::{place, place_air, place_decor, remove, w
 use crate::control::interaction::pick::{ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner};
 use crate::control::navigation::support::stand;
 use crate::layer::instance::Instance;
-use crate::layer::object::size::{object_size_of, DECOR_SIZE};
+use crate::layer::object::size::{object_size_of, MARKER_SIZE};
 use crate::layer::object::store::{Entry, EntryAt};
-use crate::query::Hit;
+use crate::query::{Hit, World};
 use crate::view::frame::pose::view_ray;
-use pxl_spec::space::coord::zoom::{base_of, of_side, units};
+use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units};
 use xpute_guest::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -153,7 +154,11 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         hover.object_at = None;
         hover.scattered = None;
         hover.approach = None;
-        let placement_size = if ui.active_tool == ActiveTool::Object { object_size_of(ui.object_tier) } else { DECOR_SIZE };
+        let placement_size = match ui.active_tool {
+            ActiveTool::Object => object_size_of(ui.object_tier),
+            ActiveTool::Decor => units(Decor::of(ui.decor_id).cell_zoom()),
+            _ => MARKER_SIZE,
+        };
         // A decor met in front of the pick is what the new cube goes flush against.
         let precise_box = resolve_hit_target(&hit).map(|o| object_aabb(&o));
         hover.coord = Some(world_adjacent_corner(&hit, placement_size, precise_box.as_ref()));
@@ -175,12 +180,24 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         Some(Struck::Grown(cell, _)) => base_of(GROUND.cell(), *cell),
         None => world_adjacent_corner(&hit, units(GROUND.cell()), None),
     });
-    hover.coord = Some(match struck {
-        Some(Struck::Object(o)) => o.corner(),
-        Some(Struck::Grown(cell, _)) => base_of(GROUND.cell(), cell),
+    let (corner, size) = match struck {
+        Some(Struck::Object(o)) => (o.corner(), o.size()),
+        Some(Struck::Grown(cell, _)) => (base_of(GROUND.cell(), cell), units(GROUND.cell())),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
-        None => world_struck_corner(&hit, units(GROUND.cell())),
-    });
+        None => (world_struck_corner(&hit, units(GROUND.cell())), units(GROUND.cell())),
+    };
+    // Past where the world takes an edit, nothing is pointed at.
+    if !editable(&corner, size) {
+        *hover = Hover::default();
+        return;
+    }
+    hover.coord = Some(corner);
+}
+
+/// Whether the cube of `size` cornered at `corner` may hold an edit.
+fn editable(corner: &Pvf3, size: f64) -> bool {
+    let zoom = of_side(size);
+    World::now().editable(&cube(zoom, index_of(zoom, corner)))
 }
 
 /// Whether what `hit` struck is drawn folded: the finest drawn chunk there
@@ -223,13 +240,13 @@ pub fn tap(ndc_x: f64, ndc_y: f64, drawn: Tau) {
         }
         // The slot may have filled since the last hover update.
         ActiveTool::Decor => {
-            if !is_placement_blocked(PlacementTool::Instance, &hovered, object_size) {
-                place_decor(&hovered, DECOR_SIZE, ui.decor_id);
+            if !is_placement_blocked(PlacementTool::Decor(ui.decor_id), &hovered, object_size) {
+                place_decor(&hovered, units(Decor::of(ui.decor_id).cell_zoom()), ui.decor_id);
             }
         }
         // It waits there for its words, which the shell asks for.
         ActiveTool::Marker => {
-            if !is_placement_blocked(PlacementTool::Instance, &hovered, object_size) {
+            if !is_placement_blocked(PlacementTool::Marker, &hovered, object_size) {
                 wait_to_put(&hovered);
             }
         }

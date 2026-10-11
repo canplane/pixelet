@@ -19,6 +19,7 @@ import { send_next } from "@/kernel/sched.ts";
 import { storageGet, storageSet } from "@platform/storage.ts";
 import { textRaster, textWidth } from "@platform/text.ts";
 import { decodeImage } from "@platform/image.ts";
+import { BUILD_NUMBER } from "@/config/deploy.ts";
 import { Command, encode_image_decoded } from "@/kernel/abi/cmd.spec.ts";
 
 const word = new DataView(new ArrayBuffer(4));
@@ -136,6 +137,15 @@ function open(r: u32, path: string, signal: AbortSignal) {
   return bound(path, signal);
 }
 
+let stopCode: string | null = null;
+
+/** The kernel's last report, short as a stop code: its errno's name and the
+ * file and line, a published build's file a number its paths decode by. None
+ * where it stopped without one. */
+export function stop_code(): string | null {
+  return stopCode;
+}
+
 const SYS = new Sys({
   open,
   commit: (r, path, bytes) => {
@@ -143,7 +153,11 @@ const SYS = new Sys({
     storageSet(storage_key(path), td.decode(bytes));
   },
   opened: (fd, res, detail) => send_next(XputeCommand.SYS_OPENED, encode_sys_opened({ fd, res, detail })),
-  abort: ({ errno, file, line, column, a, b }) => console.error(`[kernel] stopped: ${strerror(errno)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`),
+  abort: ({ errno, file, line, column, a, b }) => {
+    console.error(`[kernel] stopped: ${strerror(errno)} at ${file.replace(/^\.+/, "")}:${line}:${column} (${a}, ${b})`);
+    const where = `${file.split("/").pop()}:${line}`;
+    stopCode = `${strerror(errno).split(":")[0]} · ${file.startsWith("#") ? `${where} · ${BUILD_NUMBER}` : where}`;
+  },
   program,
 });
 

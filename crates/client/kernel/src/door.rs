@@ -5,6 +5,7 @@
 //! rings are xpute's (`xpute_guest::ipc::door`).
 
 mod apply;
+pub(crate) use apply::over_badge;
 mod executor;
 pub mod layout;
 
@@ -52,9 +53,13 @@ fn door() -> &'static Door {
     DOOR.get(|| {
         // SAFETY: the module's memory, which never moves and outlives the door;
         // the ranges are the layout's alone.
-        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, crate::param::MOST_SIGNALS, crate::profiler::record::profiler_note_rings) }
+        unsafe { Door::init(ptr_at(0), &DOOR_LAYOUT, SIGNALS, crate::profiler::record::profiler_note_rings) }
     })
 }
+
+/// What a turn raises, all after its drain (`post_shell`): a sensor's start or
+/// stop each, and the snapshot.
+const SIGNALS: u32 = Sensor::ALL.len() as u32 + 1;
 
 fn raise(cmd: Command, count: u32, f: impl Fn(&mut PacketWriter)) {
     door().raise(cmd as u32, count, f);
@@ -202,18 +207,18 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
 static SNAPSHOT: Global<Vec<u8>> = Global::new();
 
 fn post_shell(s: &mut State) {
-    use crate::control::sensor::device_orientation::{take_orientation_commands, OrientationCommand};
-    use crate::control::sensor::geolocation::{take_geolocation_commands, GeolocationCommand};
+    use crate::control::sensor::device_orientation::{take_orientation_command, OrientationCommand};
+    use crate::control::sensor::geolocation::{take_geolocation_command, GeolocationCommand};
     use crate::io::request::{take_started, take_stops};
 
     let sensor = |cmd: Command, sensor: Sensor| raise(cmd, SensorStartSignal::FIELDS, |w| SensorStartSignal { sensor }.write(w));
-    for c in take_geolocation_commands() {
+    if let Some(c) = take_geolocation_command() {
         match c {
             GeolocationCommand::Start => sensor(Command::SENSOR_START, Sensor::Geolocation),
             GeolocationCommand::Stop => sensor(Command::SENSOR_STOP, Sensor::Geolocation),
         }
     }
-    for c in take_orientation_commands() {
+    if let Some(c) = take_orientation_command() {
         match c {
             OrientationCommand::Listen => sensor(Command::SENSOR_START, Sensor::Orientation),
             OrientationCommand::Remove => sensor(Command::SENSOR_STOP, Sensor::Orientation),

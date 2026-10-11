@@ -259,7 +259,8 @@ pub async fn gltf_task() {
                 continue;
             }
             buf.resize(bytes as usize, 0);
-            file::read(fd, &mut buf);
+            // SAFETY: `buf` is held across the turn the host fills it in.
+            unsafe { file::read(fd, &mut buf) };
             file::close(fd);
             // In once the host has run the turn's records.
             next_turn(world_edge).await;

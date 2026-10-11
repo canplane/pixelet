@@ -5,8 +5,11 @@
 //! exact where that tile says it, coarser where one over it only draws it.
 
 use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_spec::block::cube::Ground;
+use pxl_spec::block::limit::bedrock;
 use pxl_spec::block::sample::{TileSource, TileView};
 use pxl_spec::procedural::Frame;
+use pxl_spec::space::coord::pvf3::pvf3;
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
@@ -102,6 +105,36 @@ fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
     tile_at(read, ancestor_of([at[0], at[1]], u32::from(zoom - read)))
 }
 
+/// The index lane's extent over a node within the tile `d` answers, widened
+/// by what is drawn past it (`DRAWN_PAST`).
+fn relief(d: &Drawn, (zoom, at): Node<2>) -> [i16; 2] {
+    let index = EXTENT.cell_zoom(d.from.zoom);
+    let first = EXTENT.cell_of(d.from.zoom, &base_of(zoom, [at[0], at[1], 0]));
+    let across = if zoom < index { count(index, zoom) } else { 1 };
+    d.body.index.over(first.in_tile(), across)
+}
+
+/// Whether the cell at a node's center has a look: the service area's ground.
+/// A node never straddles the area's edge, which runs on shards' edges.
+fn has_look(d: &Drawn, (zoom, at): Node<2>) -> bool {
+    let base = base_of(zoom, [at[0], at[1], 0]);
+    let half = pvf3::from_real(units(zoom) / 2.0);
+    let center = pvf3::gather(pvf3::X(&base) + half, pvf3::Y(&base) + half, 0);
+    let [x, y] = GROUND.cell_of(d.from.zoom, &center).in_tile();
+    Ground::of(d.body.ground.cells[GROUND.cell_index(x, y) as usize]).is_some()
+}
+
+/// The ring of cells at `fine` about a node, or of nodes where it is finer.
+fn ring(fine: Zoom, (zoom, at): Node<2>) -> impl Iterator<Item = Node<2>> {
+    let ring = fine.max(zoom);
+    let k = count(ring, zoom) as i64;
+    let (x0, y0, rows) = (at[0] * k, at[1] * k, 1i64 << ring);
+    (y0 - 1..=y0 + k).filter(move |y| (0..rows).contains(y)).flat_map(move |y| {
+        let step = if y == y0 - 1 || y == y0 + k { 1 } else { k + 1 };
+        (0..).map(move |n| x0 - 1 + n * step).take_while(move |&x| x <= x0 + k).map(move |x| (ring, [x.rem_euclid(rows), y]))
+    })
+}
+
 impl Query for Residency<TerrainTile> {
     type Record<'a> = Source<'a>;
 
@@ -120,22 +153,53 @@ impl Query for Residency<TerrainTile> {
         }
     }
 
-    /// From one block of the index lane of the tile it is drawn from. For
-    /// deciding descent, never for what is drawn.
+    /// From the index lane of the tile it is drawn from, about the node as
+    /// its columns are drawn beside theirs, so a step down to a column beside
+    /// is walled, and a cell at `cell` under its lowest face, so a fold's cell
+    /// shrunk by its fill stands on the cell under it, never on the sky. For
+    /// deciding descent, never for what is drawn. A
+    /// node past the service area, no look in it, holds the bedrock walling
+    /// the area where ground is beside it (`pxl-spec block/limit.rs` `wall`):
+    /// from the bedrock to that ground's face.
     fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
-        let _ = cell;
         let Some(d) = self.drawn_of(line) else {
             return Answer::Nothing(line.tile);
         };
-        let (src, body) = (d.from, d.body);
-        let index = EXTENT.cell_zoom(src.zoom);
-        let first = EXTENT.cell_of(src.zoom, &base_of(zoom, [at[0], at[1], 0]));
-        let across = if zoom < index { count(index, zoom) } else { 1 };
-        let [lo, hi] = body.index.over(first.in_tile(), across);
+        let node = (zoom, [at[0], at[1]]);
+        let [mut lo, mut hi] = relief(&d, node).map(i32::from);
+        let mut lack = (!d.exact).then_some(d.tile);
+        let inside = has_look(&d, node);
+        let mut face = None;
+        let mut last: Option<(Tile, Option<Drawn>)> = None;
+        // The apron is a column of the chunk's cells; the index lane says no finer.
+        for beside in ring(EXTENT.cell_zoom(line.tile.zoom).min(cell), node) {
+            let tile = tile_at(line.tile.zoom, ancestor_of(beside.1, u32::from(beside.0 - line.tile.zoom)));
+            let b = match last {
+                Some((t, b)) if t == tile => b,
+                _ if tile == line.tile => Some(d),
+                _ => self.drawn(tile),
+            };
+            last = Some((tile, b));
+            let Some(b) = b else {
+                lack = lack.or(Some(tile));
+                continue;
+            };
+            lack = lack.or((!b.exact).then_some(b.tile));
+            if has_look(&b, beside) {
+                let [b_lo, b_hi] = relief(&b, beside).map(i32::from);
+                match inside {
+                    true => lo = lo.min(b_lo),
+                    false => face = face.max(Some(b_hi)),
+                }
+            }
+        }
+        if let Some(face) = face {
+            (lo, hi) = (lo.min(bedrock(face, 1)), hi.max(face));
+        }
         let r = Relief {
-            extent: (f64::from(lo) * units(GROUND.cell()), f64::from(hi) * units(GROUND.cell())),
+            extent: (f64::from(lo) * units(GROUND.cell()) - units(cell), f64::from(hi) * units(GROUND.cell())),
         };
-        let r = d.answer(r);
+        let r = lack.map_or(Answer::Exact(r), |t| Answer::Coarser(r, t));
         let whole = region((zoom, at));
         r.map(|r| {
             let (lo, hi) = (r.extent.0.max(whole.min[2]), r.extent.1.min(whole.max[2]));

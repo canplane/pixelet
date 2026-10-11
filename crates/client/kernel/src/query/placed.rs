@@ -5,12 +5,14 @@
 
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::block::object::object_value_is_air;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
 use pxl_spec::space::coord::zoom::index_of;
 use pxl_spec::space::hierarchy::tree::Node;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use super::decor::shares;
 use super::world::World;
 use crate::layer::object::store::{Cells, Entry, EntryAt};
 use crate::layer::Query;
@@ -30,6 +32,17 @@ impl<'a> World<'a> {
             }
         });
         out
+    }
+
+    /// What is placed sharing room with `space`, air left out, that `which` takes.
+    pub fn placed_sharing(&self, space: &Aabb, which: impl Fn(&Entry) -> bool) -> Option<Entry> {
+        let mut met = None;
+        self.objects.entries_in(space, &mut |e| {
+            if met.is_none() && !object_value_is_air(e.state) && shares(&e.cube(), space) && which(e) {
+                met = Some(*e);
+            }
+        });
+        met
     }
 
     /// Whether anything, air included, is written in the coarsest object cell `at` lies in.

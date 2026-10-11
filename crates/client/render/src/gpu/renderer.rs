@@ -242,7 +242,12 @@ fn shadow_reach(records: &[[u32; DRAW_WORDS]], uniforms: &[f32]) -> Option<f64> 
         }
         // The cube's farthest corner from the eye.
         let side = f64::from(u[CHUNK_UNIT]) * f64::from(CHUNK_CELLS);
-        let corner: f64 = (0..3).map(|k| f64::from(u[k]).abs().max((f64::from(u[k]) + side).abs()).powi(2)).sum();
+        let corner: f64 = (0..3)
+            .map(|k| {
+                let d = f64::from(u[k]).abs().max((f64::from(u[k]) + side).abs());
+                d * d
+            })
+            .sum();
         far = far.max(libm::sqrt(corner));
     }
     (far > 0.0).then_some(far)
@@ -896,7 +901,7 @@ impl Renderer {
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let up = norm3(&sub3(&eye, &planet_center));
-        self.clouds.lay_out(g, &m, &eye, env);
+        self.clouds.lay_out(g, &m, &eye, env, s[STAGE_AT::CLOUDS]);
         self.atmosphere.set_clouds(&clouds::field([eye_world[0], eye_world[1]], env));
         self.stars.lay_out(g, &m, env, width);
         put_ray(&mut self.sky, 0, &m, &eye);
@@ -1017,7 +1022,6 @@ impl Renderer {
         if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
             self.rebind(g);
         }
-        self.clouds.ensure(g, world.width, world.height);
         g.write_buffer(self.sky_buffer, 0, bytes(&self.sky));
         let uniform_bytes = word_bytes(uniforms.len());
         if uniform_bytes > self.draws_bytes {
@@ -1066,7 +1070,6 @@ impl Renderer {
             g.end(pass);
             release(pass);
         }
-        self.clouds.march(g, encoder);
         if self.screen_ao {
             let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
             let chunk = [self.chunk_prepass.pipeline, self.chunk_coarse_prepass.pipeline];

@@ -19,8 +19,8 @@ use super::Swatch;
 /// `sentinel`'s color for a value.
 pub const fn sentinel(t: u8) -> Option<Swatch> {
     match t {
-        // A cell whose data is missing or invalid, a visible neutral gray so it reads as not known rather than as whatever drew last.
-        cube::sentinel::unknown => Some(Swatch::new(0xd9d0cc)),
+        // Bedrock, where the world holds no more: a dark gray, so it reads as the world's end against the night's black and the day's haze past it alike, rather than as whatever drew last.
+        cube::sentinel::unknown => Some(Swatch::new(0x565656)),
         _ => None,
     }
 }
@@ -83,6 +83,12 @@ pub const fn ground(t: u8) -> Option<Swatch> {
         cube::ground::monorail => Some(Swatch::new(0x777777)),
         cube::ground::rail => Some(Swatch::new(0x707070)),
         cube::ground::aeroway => Some(Swatch::new(0xbbbbcc)),
+        // Minecraft's map color DIRT (minecraft.wiki Map_item_format): Carto paints nothing under the ground.
+        cube::ground::soil => Some(Swatch::new(0x976d4d)),
+        // Minecraft's map color SAND, which sandstone is drawn as on a map.
+        cube::ground::sandstone => Some(Swatch::new(0xf7e9a3)),
+        // Minecraft's map color STONE.
+        cube::ground::stone => Some(Swatch::new(0x707070)),
         // A sentinel a baked cell can hold.
         _ => sentinel(t),
     }

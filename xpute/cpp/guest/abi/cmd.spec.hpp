@@ -20,10 +20,10 @@
 #include <string_view>
 
 #include "../../kit/abi/cmd.hpp"
-#include "../../kit/math/scalar.hpp"
 #include "../../kit/status/error.hpp"
 #include "../../kit/wire/xtp/cursor.hpp"
 #include "../../kit/wire/xtp/encode.hpp"
+#include "number.hpp"
 
 namespace xpute::abi {
 
@@ -86,7 +86,9 @@ struct Nop {
             if (!c) return c.error();
             auto v = c->get_number();
             if (!v) return v.error();
-            out.value = saturate_as<std::uint32_t>(*v);
+            auto n = integer<std::uint32_t>(*v);
+            if (!n) return n.error();
+            out.value = *n;
         }
         return out;
     }
@@ -110,21 +112,27 @@ struct SysOpened {
             if (!c) return c.error();
             auto v = c->get_number();
             if (!v) return v.error();
-            out.fd = saturate_as<std::uint32_t>(*v);
+            auto n = integer<std::uint32_t>(*v);
+            if (!n) return n.error();
+            out.fd = *n;
         }
         {
             Result<xtp::Cursor> c = f->at(1);
             if (!c) return c.error();
             auto v = c->get_number();
             if (!v) return v.error();
-            out.res = saturate_as<std::int32_t>(*v);
+            auto n = integer<std::int32_t>(*v);
+            if (!n) return n.error();
+            out.res = *n;
         }
         {
             Result<xtp::Cursor> c = f->at(2);
             if (!c) return c.error();
             auto v = c->get_number();
             if (!v) return v.error();
-            out.detail = saturate_as<std::uint32_t>(*v);
+            auto n = integer<std::uint32_t>(*v);
+            if (!n) return n.error();
+            out.detail = *n;
         }
         return out;
     }

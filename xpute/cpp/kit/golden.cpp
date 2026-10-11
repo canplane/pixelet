@@ -5,6 +5,7 @@
 #include <type_traits>
 
 #include <bit>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 
@@ -25,8 +26,10 @@ Golden Golden::load(const char *path) {
         std::size_t end = text.find('\n', at);
         if (end == std::string::npos) end = text.size();
         std::string_view line(text.data() + at, end - at);
+        // As Rust's `lines`: a CR before the LF is the line's end, and a later key wins.
+        if (line.ends_with('\r')) line.remove_suffix(1);
         if (std::size_t tab = line.find('\t'); tab != std::string_view::npos) {
-            g.map_.emplace(std::string(line.substr(0, tab)), std::string(line.substr(tab + 1)));
+            g.map_.insert_or_assign(std::string(line.substr(0, tab)), std::string(line.substr(tab + 1)));
         }
         at = end + 1;
     }
@@ -51,8 +54,9 @@ template <class T> static T parse(const std::string &text, T (*conv)(const char 
     bool digits = text.size() > (sign ? 1u : 0u) && text.find_first_not_of("0123456789", sign ? 1 : 0) == std::string::npos;
     ensure(digits, Errno::einval);
     char *end = nullptr;
+    errno = 0;
     T v = conv(text.c_str(), &end, 10);
-    ensure(*end == '\0', Errno::einval);
+    ensure(*end == '\0' && errno != ERANGE, Errno::einval);
     return v;
 }
 
@@ -82,8 +86,9 @@ double Golden::f64(std::string_view key) const {
     if (hex.starts_with("0x")) hex.remove_prefix(2);
     char *end = nullptr;
     std::string digits(hex);
+    errno = 0;
     std::uint64_t bits = std::strtoull(digits.c_str(), &end, 16);
-    ensure(!digits.empty() && *end == '\0', Errno::einval);
+    ensure(!digits.empty() && *end == '\0' && errno != ERANGE, Errno::einval);
     return std::bit_cast<double>(bits);
 }
 

@@ -31,10 +31,16 @@ Nothing now.
 
 ## P2
 
-- **A notice with the published tiles.** A version is fetchable tile by tile
-  from `plei.me/tile/`; whether ODbL asks for a notice beside it (§4.2, a
-  derivative database) or the app's attribution suffices (§4.3, a produced
-  work) is unsettled, and nothing publishes one (infra/README.md "Licenses").
+- **A query language over what is drawn, for an agent to read.** An agent
+  debugging the view reads the performance overlay off a screenshot: small
+  text misread, past frames gone, and a hole's cause guessed from its color
+  (the bedrock folded black under far faces, 2026-10-12). A query asked of
+  the running kernel and answered as text — what a screen point draws (the
+  chunk's zoom and node, its bound, the column's runs and blocks, the
+  cell's fill), the drawn chunks matching a condition — would let it read
+  the state instead. The AI DSL experiment could start here. First see what
+  the overlay's report already gives
+  (`apps/web/src/feature/debug/profiler/report.ts`).
 
 ## Parked, with the reason on file
 

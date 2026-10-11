@@ -15,9 +15,21 @@
 // a random heading, or along the road or rail its cell lies on. A variant's
 // skin is its pack's colormap, kept outside the glb.
 //
+// A variant's `size` is the box it claims, in its kind's cells: every cell
+// of it is the decor's. Its model is drawn as made, a glb unit a unit, its
+// origin at the middle of the box's base, where it stands: no origin is
+// moved, and glTF fixes none, so a model must be made with it there. It may
+// reach a little past the box. A
+// kind's cell is a unit, a z24 cell, `scale_steps` zooms coarser (finer
+// where negative, as a marker's, block/marker.json), one for every variant,
+// since a placement lands on the cell before its variant is drawn. The
+// ground grows a kind only on its own looks, and no two kinds share one, so
+// two kinds' boxes never meet.
+//
 // A decor thing carries `meta`, the fields its id gives it beside where it
-// stands: which variant of its kind, its heading in radians and its scale. The
-// ground evaluates them from its cell; a placed one's are the placement's.
+// stands: which variant of its kind, its heading in quarter turns (an odd
+// one swaps its box's sides) and its scale. The ground evaluates them from
+// its cell; a placed one's are the placement's.
 export const decor = {
   tree: 1024,
   boat: 1025,

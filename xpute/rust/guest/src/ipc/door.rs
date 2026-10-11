@@ -32,7 +32,7 @@ pub type Applied = Result<Option<i32>, MarshalError>;
 pub struct Door {
     sq: Ring,
     cq: Ring,
-    /// What one command may leave: its signals and its reply.
+    /// What one command may leave: its signals, or the turn's after the drain, and its reply.
     reserve: u32,
     /// Told the completion ring's length and the submissions left unapplied.
     note: fn(u32, u32),
@@ -41,8 +41,8 @@ pub struct Door {
 impl Door {
     /// # Safety
     /// `mem` stays valid and never moves for as long as the door is used, and
-    /// the ranges `layout` names are the door's alone. `most_signals` is what
-    /// one command may raise, the program's bound.
+    /// the ranges `layout` names are the door's alone. `most_signals` is the most
+    /// one command raises, or the turn once its drain is done: the program's bound.
     pub unsafe fn init(mem: *mut u8, layout: &DoorLayout, most_signals: u32, note: fn(u32, u32)) -> Door {
         let ring = |r: &RingLayout| {
             // SAFETY: the caller's memory and ranges.

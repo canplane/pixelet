@@ -15,9 +15,9 @@ export default {
   ],
   sentinel: {
     unknown: {
-      hex: "#d9d0cc",
-      "$doc": "A cell whose data is missing or invalid, a visible neutral gray so it reads as not known rather than as whatever drew last.",
-      rgb: 14274764,
+      hex: "#565656",
+      "$doc": "Bedrock, where the world holds no more: a dark gray, so it reads as the world's end against the night's black and the day's haze past it alike, rather than as whatever drew last.",
+      rgb: 5658198,
     },
   },
   ground: {
@@ -240,6 +240,21 @@ export default {
     aeroway: {
       hex: "#bbbbcc",
       rgb: 12303308,
+    },
+    soil: {
+      hex: "#976d4d",
+      "$doc": "Minecraft's map color DIRT (minecraft.wiki Map_item_format): Carto paints nothing under the ground.",
+      rgb: 9923917,
+    },
+    sandstone: {
+      hex: "#f7e9a3",
+      "$doc": "Minecraft's map color SAND, which sandstone is drawn as on a map.",
+      rgb: 16247203,
+    },
+    stone: {
+      hex: "#707070",
+      "$doc": "Minecraft's map color STONE.",
+      rgb: 7368816,
     },
   },
   object: {

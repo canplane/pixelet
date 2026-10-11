@@ -52,8 +52,6 @@ struct Bitset {
     bool operator[](std::uint32_t i) const noexcept { return (packed[i >> 3] >> (i & 7)) & 1; }
 };
 
-bool is_utf8(std::span<const std::uint8_t> bytes) noexcept;
-
 struct Strs {
     std::span<const std::uint8_t> offs;
     std::span<const std::uint8_t> blob;
@@ -118,18 +116,13 @@ class Cursor {
     Result<std::int64_t> get_i64() const noexcept;
     Result<bool> get_bool() const noexcept;
     Result<std::string_view> get_str_ref() const noexcept;
-    // Invalid UTF-8 becomes U+FFFD, as the host decodes it.
     template <class Alloc = std::allocator<char>> Result<std::basic_string<char, std::char_traits<char>, Alloc>> get_str(const Alloc &alloc = Alloc()) const {
-        Result<std::string_view> raw = str_of_type();
-        if (!raw) return raw.error();
-        std::basic_string<char, std::char_traits<char>, Alloc> out(alloc);
-        utf8_lossy(*raw, [&out](std::string_view piece) { out.append(piece); });
-        return out;
+        Result<std::string_view> s = get_str_ref();
+        if (!s) return s.error();
+        return std::basic_string<char, std::char_traits<char>, Alloc>(*s, alloc);
     }
     Result<Strs> get_strs() const noexcept;
     template <class Alloc = std::allocator<std::byte>> Result<DeepValue<Alloc>> get_deep(const Alloc &alloc = Alloc()) const;
-
-    template <class Put> static void utf8_lossy(std::string_view s, Put &&put);
 
     // Not for 64-bit integers, which a double cannot hold exactly.
     Result<double> get_number() const noexcept;
@@ -148,7 +141,6 @@ class Cursor {
     Result<Array> array(std::uint32_t elem) const noexcept;
     Result<Bitset> bitset() const noexcept;
     Result<std::string_view> str() const noexcept;
-    Result<std::string_view> str_of_type() const noexcept;
     Result<Strs> strs() const noexcept;
 
     std::span<const std::uint8_t> pkt_;
@@ -192,6 +184,9 @@ class BranchCursor {
   private:
     friend class Cursor;
     explicit BranchCursor(Cursor node) noexcept : node_(node) {}
+
+    // Where child `idx`'s extent ends: the next present sibling's base, or this branch's end.
+    std::uint32_t end_of(std::uint32_t idx) const noexcept;
 
     Cursor node_;
 };
@@ -241,10 +236,6 @@ template <class Vec> Result<void> BranchCursor::get(Vec &out) const {
         out.push_back(*v);
     }
     return {};
-}
-
-template <class Put> void Cursor::utf8_lossy(std::string_view s, Put &&put) {
-    ::xpute::utf8_lossy(s, std::forward<Put>(put));
 }
 
 } // namespace xpute::xtp

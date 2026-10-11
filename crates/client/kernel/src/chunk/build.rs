@@ -199,10 +199,9 @@ impl Builder {
         }
     }
 
-    /// The column's runs are shared by every chunk over it, so all of them rebuild.
     fn drop_work(&mut self, id: u32) {
         self.abort_work_of(id);
-        self.drop_runs(id);
+        self.leave_runs(id);
     }
 
     fn abort_work_of(&mut self, id: u32) {
@@ -241,7 +240,7 @@ impl Builder {
         let mut stepped = false;
         let mut worked = false;
         let mut first = [None; 2 + RUN_SETS];
-        let users = self.run_holds.iter().flatten().flat_map(|h| h.users.first().copied());
+        let users = self.run_holds.iter().flatten().map(|h| h.id);
         for (n, id) in self.holders().into_iter().chain(users.map(Some)).enumerate() {
             if !first[..n].contains(&id) {
                 first[n] = id;

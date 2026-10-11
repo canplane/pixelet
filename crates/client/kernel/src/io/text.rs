@@ -5,7 +5,7 @@
 //! only the answers the frame before read. A native test has no host: a text
 //! is one line of fixed width per character and is never drawn.
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use pxl_render::gpu::sheet::SHEET_SCALE;
 use pxl_render::gpu::text::{raster_box, Font, Raster};
@@ -36,8 +36,8 @@ struct RasterAt {
 
 #[derive(Default)]
 struct Text {
-    layouts: HashMap<LayoutKey, Answer<Box<[u32]>>>,
-    rasters: HashMap<RasterKey, Answer<RasterAt>>,
+    layouts: FnvHashMap<LayoutKey, Answer<Box<[u32]>>>,
+    rasters: FnvHashMap<RasterKey, Answer<RasterAt>>,
 }
 
 static TEXT: Global<Text> = Global::new();

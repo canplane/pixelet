@@ -14,7 +14,7 @@
 pub mod sentinel {
     /// nothing painted: the ground before a bake writes it, and an object cell no leaf holds
     pub const void: u8 = 0x00;
-    /// the ground past the coverage, which no source here describes, and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; like void, it gives no surface
+    /// bedrock, where the world holds no more: the ground past the coverage, which no source here describes, the floor under the ground (`pxl-spec block/limit.rs`), and a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; it gives no surface, and nothing is placed in or taken from it
     pub const unknown: u8 = 0xff;
 }
 
@@ -152,6 +152,15 @@ pub mod ground {
     /// runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill
     pub const aeroway: u8 = 55;
 
+    // ---- underground ----
+
+    /// under a face: Minecraft Beta's filler, dirt; Carto paints nothing under the ground, and no bake writes it
+    pub const soil: u8 = 56;
+    /// under sand's filler: Minecraft Beta's sandstone
+    pub const sandstone: u8 = 57;
+    /// under the filler: Minecraft Beta's stone
+    pub const stone: u8 = 58;
+
     pub const ENTRIES: &[(&str, u8)] = &[
         ("land", land),
         ("bare_ground", bare_ground),
@@ -208,6 +217,9 @@ pub mod ground {
         ("monorail", monorail),
         ("rail", rail),
         ("aeroway", aeroway),
+        ("soil", soil),
+        ("sandstone", sandstone),
+        ("stone", stone),
     ];
 
     /// What a cell nothing painted shows.
@@ -298,11 +310,14 @@ pub enum Ground {
     monorail = 53,
     rail = 54,
     aeroway = 55,
+    soil = 56,
+    sandstone = 57,
+    stone = 58,
 }
 
 impl Ground {
     /// Every look, in paint order.
-    pub const ALL: [Ground; 55] = [
+    pub const ALL: [Ground; 58] = [
         Ground::land,
         Ground::bare_ground,
         Ground::sand,
@@ -358,6 +373,9 @@ impl Ground {
         Ground::monorail,
         Ground::rail,
         Ground::aeroway,
+        Ground::soil,
+        Ground::sandstone,
+        Ground::stone,
     ];
 
     /// The look a byte names; none for a sentinel or a number the palette does not give out.
@@ -418,6 +436,9 @@ impl Ground {
             53 => Some(Ground::monorail),
             54 => Some(Ground::rail),
             55 => Some(Ground::aeroway),
+            56 => Some(Ground::soil),
+            57 => Some(Ground::sandstone),
+            58 => Some(Ground::stone),
             _ => None,
         }
     }

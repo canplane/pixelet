@@ -39,7 +39,6 @@ export const SETTINGS = {
     kind: "toggle",
     default: true,
     section: "display",
-    dev: true,
     cost: "low",
   },
   /** Procedurally scattered decor only; what the player placed stays.
@@ -57,12 +56,21 @@ export const SETTINGS = {
     kind: "toggle",
     default: true,
     section: "display",
-    dev: true,
+    cost: "med",
+  },
+  /** The cumulus' models and the altocumulus and cirrus sheets
+   * (crates/client/kernel/src/scene/environment/cloud.rs, crates/client/render/src/gpu/clouds.rs).
+   * Med as decor is: models in view, and a pass over the screen for the sheets. */
+  clouds: {
+    key: 2 as number,
+    kind: "toggle",
+    default: true,
+    section: "display",
     cost: "med",
   },
   /** The places' badges over the world, from the published places tiles. */
   place: {
-    key: 2 as number,
+    key: 3 as number,
     kind: "toggle",
     default: false,
     section: "world",
@@ -72,7 +80,7 @@ export const SETTINGS = {
    * Off by default: the tilt is the one control a view from above is expected to
    * have, and locking it reads as the app being stuck. */
   tilt_lock: {
-    key: 3 as number,
+    key: 4 as number,
     kind: "toggle",
     default: false,
     section: "camera",
@@ -82,7 +90,7 @@ export const SETTINGS = {
    * height over the ground; to third the focus is laid on the ground
    * and the eye steps back by the radius. */
   camera_mode: {
-    key: 4 as number,
+    key: 5 as number,
     kind: "choice",
     default: "orbit",
     options: ["orbit", "free"],
@@ -90,7 +98,7 @@ export const SETTINGS = {
   },
   /** The focus stands on what supports it and a pan takes the lowest way over what is in it (navigation/support.rs). Off, a pan keeps the center's height and passes through anything; a tap still stands it on the surface it struck. */
   surface_follow: {
-    key: 5 as number,
+    key: 6 as number,
     kind: "toggle",
     default: true,
     section: "navigation",
@@ -98,7 +106,7 @@ export const SETTINGS = {
   },
   /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. */
   orbit_obstacle: {
-    key: 6 as number,
+    key: 7 as number,
     kind: "choice",
     default: "climb",
     options: ["through", "stop", "climb"],
@@ -108,7 +116,7 @@ export const SETTINGS = {
   /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
-    key: 7 as number,
+    key: 8 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -116,7 +124,7 @@ export const SETTINGS = {
   },
   /** A uniform on an already-compiled shader term; not a pass. */
   rim_light: {
-    key: 8 as number,
+    key: 9 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -126,7 +134,7 @@ export const SETTINGS = {
    * screen-space pass; screen, N8AO's screen-space pass, the costliest of
    * the three. AO_MODES says each. */
   ao: {
-    key: 9 as number,
+    key: 10 as number,
     kind: "choice",
     default: "corner",
     options: ["off", "corner", "screen"],
@@ -137,7 +145,7 @@ export const SETTINGS = {
    * from the sun each frame, depth only, and a 3x3 compare per fragment;
    * 16 MB of map on a desktop, 4 on a phone. */
   shadows: {
-    key: 10 as number,
+    key: 11 as number,
     kind: "toggle",
     default: false,
     section: "lighting",
@@ -146,7 +154,7 @@ export const SETTINGS = {
   /** The pixels the world is filled at, the GPU's largest cost: two to a
    * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
   resolution: {
-    key: 11 as number,
+    key: 12 as number,
     kind: "choice",
     default: "auto",
     options: ["auto", "fixed", "low"],
@@ -154,41 +162,41 @@ export const SETTINGS = {
   },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
   view_overlay: {
-    key: 12 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
   performance_overlay: {
-    key: 13 as number,
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs). */
   world_gizmo: {
-    key: 14 as number,
+    key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/indicator/camera_gizmo.rs). */
   camera_gizmo: {
-    key: 15 as number,
+    key: 16 as number,
     kind: "toggle",
     default: false,
     section: "debug",
     dev: true,
   },
   person: {
-    key: 16 as number,
+    key: 17 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 17 as number,
+    key: 18 as number,
     kind: "index",
     default: 5 as number,
     section: "character",
@@ -197,9 +205,55 @@ export const SETTINGS = {
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */
 export const SETTINGS_SHIPPED = {
+  /** Ground color from the art pack (four taps of the layer array per
+   * fragment) instead of the flat per-instance average. The chunk shader's
+   * `frame.low_spec` is this, inverted.
+   *
+   * Low because the four taps are all of it: fill rate, which scales with
+   * the screen and not with the world, and nothing else — no geometry, no
+   * pass of its own, and no work off the GPU past an atlas the client
+   * already holds.
+   *
+   * It sources the chunks: the shader samples a leaf's layer or does not,
+   * but a tier over it carries one color and no layer to sample, so which
+   * color that is was baked in (mesh/chunk.rs). */
+  textures: {
+    key: 0 as number,
+    kind: "toggle",
+    default: true,
+    section: "display",
+    cost: "low",
+  },
+  /** Procedurally scattered decor only; what the player placed stays.
+   *
+   * Med because it is models rather than a shading term: a chunk builds its
+   * decor and the frame draws it, so what it costs follows what is in view.
+   * It has been the frame's own bottleneck — 20260912-what-to-render-when.md
+   * reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
+   * frames missing a vsync — and the projected-size criterion holds it to
+   * the nearest tier without making far decor cheap, the impostor tier that
+   * would being decided and not built. The badge is an ordering, and this is
+   * the one to reach for before any shading term. */
+  decor: {
+    key: 1 as number,
+    kind: "toggle",
+    default: true,
+    section: "display",
+    cost: "med",
+  },
+  /** The cumulus' models and the altocumulus and cirrus sheets
+   * (crates/client/kernel/src/scene/environment/cloud.rs, crates/client/render/src/gpu/clouds.rs).
+   * Med as decor is: models in view, and a pass over the screen for the sheets. */
+  clouds: {
+    key: 2 as number,
+    kind: "toggle",
+    default: true,
+    section: "display",
+    cost: "med",
+  },
   /** The places' badges over the world, from the published places tiles. */
   place: {
-    key: 2 as number,
+    key: 3 as number,
     kind: "toggle",
     default: false,
     section: "world",
@@ -209,7 +263,7 @@ export const SETTINGS_SHIPPED = {
    * Off by default: the tilt is the one control a view from above is expected to
    * have, and locking it reads as the app being stuck. */
   tilt_lock: {
-    key: 3 as number,
+    key: 4 as number,
     kind: "toggle",
     default: false,
     section: "camera",
@@ -219,7 +273,7 @@ export const SETTINGS_SHIPPED = {
    * height over the ground; to third the focus is laid on the ground
    * and the eye steps back by the radius. */
   camera_mode: {
-    key: 4 as number,
+    key: 5 as number,
     kind: "choice",
     default: "orbit",
     options: ["orbit", "free"],
@@ -227,7 +281,7 @@ export const SETTINGS_SHIPPED = {
   },
   /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. */
   orbit_obstacle: {
-    key: 6 as number,
+    key: 7 as number,
     kind: "choice",
     default: "climb",
     options: ["through", "stop", "climb"],
@@ -237,7 +291,7 @@ export const SETTINGS_SHIPPED = {
   /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
-    key: 7 as number,
+    key: 8 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -245,7 +299,7 @@ export const SETTINGS_SHIPPED = {
   },
   /** A uniform on an already-compiled shader term; not a pass. */
   rim_light: {
-    key: 8 as number,
+    key: 9 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -255,7 +309,7 @@ export const SETTINGS_SHIPPED = {
    * screen-space pass; screen, N8AO's screen-space pass, the costliest of
    * the three. AO_MODES says each. */
   ao: {
-    key: 9 as number,
+    key: 10 as number,
     kind: "choice",
     default: "corner",
     options: ["off", "corner", "screen"],
@@ -266,7 +320,7 @@ export const SETTINGS_SHIPPED = {
    * from the sun each frame, depth only, and a 3x3 compare per fragment;
    * 16 MB of map on a desktop, 4 on a phone. */
   shadows: {
-    key: 10 as number,
+    key: 11 as number,
     kind: "toggle",
     default: false,
     section: "lighting",
@@ -275,7 +329,7 @@ export const SETTINGS_SHIPPED = {
   /** The pixels the world is filled at, the GPU's largest cost: two to a
    * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
   resolution: {
-    key: 11 as number,
+    key: 12 as number,
     kind: "choice",
     default: "auto",
     options: ["auto", "fixed", "low"],
@@ -283,33 +337,33 @@ export const SETTINGS_SHIPPED = {
   },
   /** Where the camera and the pointer are, read live (profiler/summary.rs, its view section). */
   view_overlay: {
-    key: 12 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** The profiler's panel, with the profiler recording while it is on (profiler/log.rs `profiler_follow`). */
   performance_overlay: {
-    key: 13 as number,
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   /** Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs). */
   world_gizmo: {
-    key: 14 as number,
+    key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
   },
   person: {
-    key: 16 as number,
+    key: 17 as number,
     kind: "index",
     default: 1 as number,
     section: "character",
   },
   pet: {
-    key: 17 as number,
+    key: 18 as number,
     kind: "index",
     default: 5 as number,
     section: "character",

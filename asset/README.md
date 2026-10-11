@@ -10,7 +10,7 @@ asset/
 ├── cube/       the texture pack: terrain/ and block/ at 256², original/ at source size
 ├── decor/      trees, boats, cars, trains (Kenney)
 ├── place/      symbol/: the place icons (openstreetmap-carto `symbols/`, CC0)
-└── sky/        the Moon's near side and the Earth's twelve months (NASA)
+└── sky/        the Moon's near side and the Earth's twelve months (NASA), cloud/: the cumulus (Quaternius, CC0)
 ```
 
 ## What to run, and when

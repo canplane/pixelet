@@ -30,7 +30,8 @@ struct Geolocation {
     open: bool,
     watching: bool,
     retry_at: Option<f64>,
-    commands: Vec<GeolocationCommand>,
+    /// The turn's last; the shell's watch follows it and ignores a repeat.
+    command: Option<GeolocationCommand>,
 }
 
 static GEOLOCATION: Global<Geolocation> = Global::new();
@@ -40,7 +41,7 @@ fn geolocation() -> &'static mut Geolocation {
         open: false,
         watching: false,
         retry_at: None,
-        commands: Vec::new(),
+        command: None,
     })
 }
 
@@ -58,7 +59,7 @@ pub fn start_watching(supported: bool) {
     store.pose = Pose::Loading;
     store.set_is_tracking_location(true);
     g.watching = true;
-    g.commands.push(GeolocationCommand::Start);
+    g.command = Some(GeolocationCommand::Start);
 }
 
 pub fn stop_watching() {
@@ -66,7 +67,7 @@ pub fn stop_watching() {
     g.retry_at = None;
     if g.watching {
         g.watching = false;
-        g.commands.push(GeolocationCommand::Stop);
+        g.command = Some(GeolocationCommand::Stop);
         device_location_store().set_is_tracking_location(false);
     }
 }
@@ -131,6 +132,6 @@ pub fn geolocation_step(supported: bool) {
     }
 }
 
-pub fn take_geolocation_commands() -> Vec<GeolocationCommand> {
-    core::mem::take(&mut geolocation().commands)
+pub fn take_geolocation_command() -> Option<GeolocationCommand> {
+    geolocation().command.take()
 }

@@ -400,6 +400,13 @@
         "file": "terrain/transport_monorail.png",
         "paletteHex": "#777777",
         "style": "cute-painted-fantasy-v1"
+      },
+      "soil": {
+        "sourceCreationId": "4784de86-303d-4de7-a7da-da28f446cbdc",
+        "url": "https://image-assets.jianhua.art/nano_/output/20261002/143575/2672f7de-7685-4529-a599-47935acbd835.png",
+        "file": "terrain/bottom_land.png",
+        "paletteHex": null,
+        "style": "cute-painted-fantasy-v1"
       }
     },
     "side": {

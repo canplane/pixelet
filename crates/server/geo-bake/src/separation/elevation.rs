@@ -5,7 +5,7 @@
 //! look's shift is no part of it, so a line stands on the elevation whatever
 //! is painted under it.
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::surface::bicubic;
@@ -17,7 +17,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 /// Heights at points from the tiles' elevations, in cells, as the client's
 /// `ground_ele_at` reads the elevation; a point's tile must be held.
-pub fn sample_cells(eles: &HashMap<IVec, Vec<i16>>, points: &[[f64; 2]]) -> Result<Vec<i32>, String> {
+pub fn sample_cells(eles: &FnvHashMap<IVec, Vec<i16>>, points: &[[f64; 2]]) -> Result<Vec<i32>, String> {
     points
         .iter()
         .map(|&[x, y]| {

@@ -169,13 +169,17 @@ pub enum Asset {
     decor_kenney_watercraft_pack_boat_sail_a_glb = 152,
     decor_kenney_watercraft_pack_boat_speed_a_glb = 153,
     decor_kenney_watercraft_pack_colormap_png = 154,
-    sky_earth_07_webp = 155,
-    sky_moon_png = 156,
+    sky_cloud_cumulus_1_glb = 155,
+    sky_cloud_cumulus_2_glb = 156,
+    sky_cloud_stratus_glb = 157,
+    sky_cloud_white_png = 158,
+    sky_earth_07_webp = 159,
+    sky_moon_png = 160,
 }
 
 impl Asset {
     /// Every asset, in the table's order.
-    pub const ALL: [Asset; 157] = [
+    pub const ALL: [Asset; 161] = [
         Asset::actor_kenney_cube_pets_beaver_glb,
         Asset::actor_kenney_cube_pets_bee_glb,
         Asset::actor_kenney_cube_pets_bunny_glb,
@@ -331,6 +335,10 @@ impl Asset {
         Asset::decor_kenney_watercraft_pack_boat_sail_a_glb,
         Asset::decor_kenney_watercraft_pack_boat_speed_a_glb,
         Asset::decor_kenney_watercraft_pack_colormap_png,
+        Asset::sky_cloud_cumulus_1_glb,
+        Asset::sky_cloud_cumulus_2_glb,
+        Asset::sky_cloud_stratus_glb,
+        Asset::sky_cloud_white_png,
         Asset::sky_earth_07_webp,
         Asset::sky_moon_png,
     ];
@@ -355,7 +363,7 @@ pub struct IngestedAsset {
 }
 
 /// Each asset's row, at its member's number.
-pub const INGESTED: [IngestedAsset; 157] = [
+pub const INGESTED: [IngestedAsset; 161] = [
     IngestedAsset {
         bytes: 149728,
         extent: Some([1.25, 1.84, 1.5]),
@@ -685,6 +693,19 @@ pub const INGESTED: [IngestedAsset; 157] = [
         extent: Some([1.78, 3.37, 1.5]),
     },
     IngestedAsset { bytes: 8814, extent: None },
+    IngestedAsset {
+        bytes: 27608,
+        extent: Some([2.97, 1.85, 1.63]),
+    },
+    IngestedAsset {
+        bytes: 27608,
+        extent: Some([4.26, 1.75, 2.07]),
+    },
+    IngestedAsset {
+        bytes: 27608,
+        extent: Some([8.1, 1.85, 1.31]),
+    },
+    IngestedAsset { bytes: 72, extent: None },
     IngestedAsset { bytes: 1312828, extent: None },
     IngestedAsset { bytes: 165698, extent: None },
 ];
@@ -739,6 +760,7 @@ pub const PACK: Pack = Pack {
         (Cube::Ground(cube::Ground::commercial), CubeFace::Bottom, 16),
         (Cube::Ground(cube::Ground::forest), CubeFace::Bottom, 17),
         (Cube::Ground(cube::Ground::industrial), CubeFace::Bottom, 18),
+        (Cube::Ground(cube::Ground::soil), CubeFace::Top, 19),
         (Cube::Ground(cube::Ground::land), CubeFace::Bottom, 19),
         (Cube::Ground(cube::Ground::park), CubeFace::Bottom, 20),
         (Cube::Ground(cube::Ground::pitch), CubeFace::Bottom, 21),

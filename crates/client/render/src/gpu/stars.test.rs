@@ -19,7 +19,7 @@ fn the_baked_catalog_reads_back_as_the_catalog_s_brightest_stars() {
         let (ra, dec) = (ra.to_radians(), dec.to_radians());
         let want = [libm::cos(dec) * libm::cos(ra), libm::cos(dec) * libm::sin(ra), libm::sin(dec)];
         // Chord, not acos of the dot: an f32 dot near one cannot tell arcseconds apart.
-        let chord = (0..3).map(|k| (s[k] as f64 - want[k]).powi(2)).sum::<f64>().sqrt();
+        let chord = (0..3).map(|k| (s[k] as f64 - want[k]) * (s[k] as f64 - want[k])).sum::<f64>().sqrt();
         let off = (2.0 * libm::asin(chord / 2.0)).to_degrees() * 3600.0;
         assert!(off < 30.0, "{name} reads {off:.1}″ from where the catalog puts it");
         let read = -2.5 * libm::log10(s[3] as f64);

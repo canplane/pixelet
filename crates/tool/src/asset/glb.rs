@@ -66,7 +66,7 @@ struct Mesh {
 #[derive(Deserialize)]
 struct Primitive {
     #[serde(default)]
-    attributes: std::collections::HashMap<String, usize>,
+    attributes: fnv::FnvHashMap<String, usize>,
 }
 
 #[derive(Deserialize)]

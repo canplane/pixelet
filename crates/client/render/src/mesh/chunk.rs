@@ -24,7 +24,6 @@ const LOW_FILL_THRESHOLD: f64 = 0.25;
 const CHILDREN: f64 = pxl_spec::space::hierarchy::tree::children(3) as f64;
 
 const FULL_FACE_CNT: u32 = 6;
-const OPEN_BOTTOM_FACE_CNT: u32 = FULL_FACE_CNT - 1;
 
 pub const FACE_PX: u32 = 1 << 0;
 pub const FACE_NX: u32 = 1 << 1;
@@ -115,13 +114,15 @@ impl Default for Heights {
 }
 
 impl Heights {
-    /// In units, from a set whose cells are `z_unit` tall. The floor stands on
-    /// a whole unit, so a texture's repeat is read off the mesh's own heights.
-    fn of(set: &RunSet, z_unit: f64) -> Heights {
+    /// In units, from a set whose cells are `z_unit` tall, of what it draws in
+    /// `window`, so a box at its floor or roof is that height exactly. The
+    /// floor stands on a whole unit, so a texture's repeat is read off the
+    /// mesh's own heights.
+    fn of(set: &RunSet, z_unit: f64, window: [i32; 2]) -> Heights {
         let (mut lo, mut hi) = (i32::MAX, i32::MIN);
-        for i in 0..set.count as usize {
-            lo = lo.min(set.z0[i]);
-            hi = hi.max(set.z1[i] + 1);
+        for (z0, z1) in (0..set.count as usize).filter_map(|i| within(set, i, window)) {
+            lo = lo.min(z0);
+            hi = hi.max(z1 + 1);
         }
         if lo > hi {
             return Heights::default();
@@ -260,8 +261,6 @@ pub struct BakeContext {
     merge_mask: Vec<u32>,
     buckets: Vec<ZBucketAccum>,
     coarse: OwnedRunSet,
-    /// Held for the whole bake, since every step reads it.
-    clipped: Option<OwnedRunSet>,
     /// Every word is written before read, so the target is never cleared.
     mesh: Option<MeshTarget>,
     heights: Heights,
@@ -272,6 +271,11 @@ pub struct BakeContext {
     /// Rows a step bakes, the asker's to set.
     rows: u32,
     boxes: u32,
+    /// The chunk's own heights, `[lo, hi)` in its runs' cells: what is drawn.
+    /// The set reaches the cell under its floor, which no box is drawn from
+    /// and the faces at the floor are decided by, as the apron decides its
+    /// sides.
+    window: [i32; 2],
     mesh_words: u32,
     box_cnt: u32,
     open: Option<Open>,
@@ -288,13 +292,13 @@ impl Default for BakeContext {
             merge_mask: vec![0; COL_SPAN as usize * COL_SPAN as usize],
             buckets: Vec::with_capacity(1 << 12),
             coarse: OwnedRunSet::default(),
-            clipped: None,
             mesh: None,
             heights: Heights::default(),
             box_words: FINE_BOX_WORDS,
             textured: true,
             rows: 1,
             boxes: 1,
+            window: [i32::MIN, i32::MAX],
             mesh_words: 0,
             box_cnt: 0,
             open: None,
@@ -308,27 +312,14 @@ impl Default for BakeContext {
 impl BakeContext {
     /// `unit` is a column's width and `z_unit` a run's cell's height, in units;
     /// at `lod_step` past 1 the chunk is summarized `lod_step` columns a cell.
-    /// `fine` boxes carry texture taps. `clip` cuts a whole-column set to the
-    /// chunk's heights, and every step reads the cut set. One bake at a time.
+    /// `fine` boxes carry texture taps; only what is in `window` is drawn. One
+    /// bake at a time.
     #[allow(clippy::too_many_arguments)]
-    pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, (rows, boxes): (u32, u32), clip: Option<(i32, i32)>) -> Result<(), Refused> {
+    pub fn begin(&mut self, set: &RunSet, lod_step: u32, unit: f64, z_unit: f64, fine: bool, textured: bool, (rows, boxes): (u32, u32), window: [i32; 2]) -> Result<(), Refused> {
         xpute_kit::ensure!(self.open.is_none(), ENOTRECOVERABLE);
-        (self.rows, self.boxes) = (rows, boxes);
+        (self.rows, self.boxes, self.window) = (rows, boxes, window);
         self.refused = false;
-        match clip {
-            Some((z0, z1)) => {
-                let mut cut = self.clipped.take().unwrap_or_default();
-                let clipped = cut.clip_from(set, z0, z1);
-                self.clipped = Some(cut);
-                clipped?;
-            }
-            None => self.clipped = None,
-        }
-        let (count, span, apron, heights) = {
-            let cut = self.clipped.as_ref().map(OwnedRunSet::view);
-            let set = cut.as_ref().unwrap_or(set);
-            (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, z_unit) } else { Heights::default() })
-        };
+        let (count, span, apron, heights) = (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, z_unit, window) } else { Heights::default() });
         self.textured = textured;
         xpute_kit::ensure!(span <= COL_SPAN, ENOSPC, span, COL_SPAN);
         // Reserved up front: doubling on a dense chunk held the old block and the new together.
@@ -369,14 +360,10 @@ impl BakeContext {
             return Step::Full;
         }
         let mut open = self.open.take().or_bug(Errno::ENOTRECOVERABLE);
-        let cut = self.clipped.take();
-        let view = cut.as_ref().map(OwnedRunSet::view);
-        let set = view.as_ref().unwrap_or(set);
         self.done = match &mut open {
             Open::Fine(b) => self.step_fine(b, set),
             Open::Coarse(b) => self.step_coarse(b, set),
         };
-        self.clipped = cut;
         self.open = Some(open);
         if self.refused {
             self.abort();
@@ -491,16 +478,19 @@ impl BakeContext {
                     let mut mergeable: Option<(u32, u32)> = None;
                     for i in set.start[col as usize]..end {
                         let i = i as usize;
+                        if within(set, i, self.window).is_none() {
+                            continue;
+                        }
                         self.counters.total_runs += 1;
-                        let faces = run_faces(set, span, cx, cy, i);
+                        let faces = run_faces(set, span, cx, cy, i, self.window);
                         // A run with no height shows its top alone.
                         let mask = if set.z1[i] >= set.z0[i] { faces | rim(cx, cy) } else { faces & !(ALL_FACES & !FACE_PZ) };
-                        self.counters.faces_possible += if run_include_bottom(set, col as usize, i) { FULL_FACE_CNT } else { OPEN_BOTTOM_FACE_CNT };
+                        self.counters.faces_possible += FULL_FACE_CNT;
                         if mask & ALL_FACES == 0 {
                             self.counters.culled += 1;
                             continue;
                         }
-                        if set.sub_s[i] == SUB_CELL_NONE && mergeable.is_none() && hung_floor(set, cx, cy, i).is_none() {
+                        if set.sub_s[i] == SUB_CELL_NONE && mergeable.is_none() {
                             mergeable = Some((i as u32, mask));
                             continue;
                         }
@@ -538,7 +528,7 @@ impl BakeContext {
                             break;
                         }
                         let next = col + w;
-                        if !self.merge_run[next].is_some_and(|next_run| runs_match(set, run, next_run as usize)) {
+                        if !self.merge_run[next].is_some_and(|next_run| runs_match(set, run, next_run as usize, self.window)) {
                             break;
                         }
                         if self.merge_mask[next] & !X_BORDER_BITS != mask & !X_BORDER_BITS {
@@ -554,7 +544,7 @@ impl BakeContext {
                                 break 'outer;
                             }
                             let cell = row + k;
-                            if !self.merge_run[cell].is_some_and(|cell_run| runs_match(set, run, cell_run as usize)) {
+                            if !self.merge_run[cell].is_some_and(|cell_run| runs_match(set, run, cell_run as usize, self.window)) {
                                 break 'outer;
                             }
                             if self.merge_mask[cell] & !Y_BORDER_BITS != self.merge_mask[col + k] & !Y_BORDER_BITS {
@@ -604,13 +594,13 @@ impl BakeContext {
             let depth = (set.z1[i] as f64 + 1.0 - set.z0[i] as f64) * z_unit;
             let (min_x, min_y, min_z, size_x, size_y, size_z);
             if sub_s == SUB_CELL_NONE {
-                let z0 = hung_floor(set, s[0], s[1], i).unwrap_or(set.z0[i]);
+                let (z0, z1) = within(set, i, self.window).unwrap_or((set.z0[i], set.z1[i]));
                 min_x = (cx - apron) * unit;
                 min_y = (cy - apron) * unit;
                 min_z = z0 as f64 * z_unit;
                 size_x = w * unit;
                 size_y = h * unit;
-                size_z = (set.z1[i] as f64 + 1.0 - z0 as f64) * z_unit;
+                size_z = (z1 as f64 + 1.0 - z0 as f64) * z_unit;
             } else {
                 min_x = (cx - apron) * unit + unpack_sub_cell_fraction(set.sub_ox[i]) * unit;
                 min_y = (cy - apron) * unit + unpack_sub_cell_fraction(set.sub_oy[i]) * unit;
@@ -705,17 +695,7 @@ impl BakeContext {
                         return false;
                     }
                     self.coarse.start.push(self.coarse.z0.len() as u32);
-                    let mut low: Option<i32> = None;
-                    for j in 0..lod_step {
-                        for k in 0..lod_step {
-                            let (cx, cy) = (bx * lod_step + k + set.apron, by * lod_step + j + set.apron);
-                            low = match (low, edge_low(set, cx, cy)) {
-                                (Some(a), Some(b)) => Some(a.min(b)),
-                                (a, b) => a.or(b),
-                            };
-                        }
-                    }
-                    self.pack_coarse_cell(start, cnt, lod_step, bucket, low);
+                    self.pack_coarse_cell(start, cnt, lod_step, bucket);
                     self.buckets.truncate(start as usize);
                 }
             }
@@ -728,7 +708,7 @@ impl BakeContext {
                 return false;
             }
             self.coarse.start.push(self.coarse.z0.len() as u32);
-            self.heights = Heights::of(&self.coarse.view(), b.z_unit);
+            self.heights = Heights::of(&self.coarse.view(), b.z_unit, self.window);
             b.fine = Some(self.begin_fine(res, 0, (lod_step * scale) as f64 * b.z_unit, b.z_unit));
             b.phase = 2;
             return false;
@@ -758,7 +738,7 @@ impl BakeContext {
 
     #[allow(clippy::too_many_arguments)]
     fn accumulate_run(&mut self, start: u32, mut cnt: u32, bucket: i32, cell: u32, set: &RunSet, i: usize, col: u32) -> u32 {
-        let (mut run_z0, run_z1) = (set.z0[i], set.z1[i]);
+        let Some((mut run_z0, run_z1)) = within(set, i, self.window) else { return cnt };
         // Ground is solid under its surface: the column stops at the chunk's floor
         // only to save runs, and read from there a coarse sea cell was a thousandth full.
         if i == set.start[col as usize] as usize && set.side[i] != Side::OBJECT {
@@ -795,8 +775,10 @@ impl BakeContext {
     }
 
     /// Buckets have distinct heights, so sorting visits them lowest first.
-    /// `edge_low` is the lowest ground across the chunk's edge, which the block under hangs to.
-    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, step: i32, edge_low: Option<i32>) {
+    /// Nothing past the chunk's heights is laid: a summary fills no cell
+    /// exactly, so a face at its floor or roof is never hidden by what is past
+    /// it, where a cell beside it in another chunk may be shrunk.
+    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, step: i32) {
         let grown = self.coarse.grow_runs(2 * cnt as usize);
         if !self.room(grown) {
             return;
@@ -825,14 +807,12 @@ impl BakeContext {
             // A sparse cell is inset by the cube root of its fill on every axis.
             let inset = (linear < 1.0).then(|| pack_inset(linear));
             let (rgb, taps) = acc.whole(volume).unwrap_or((acc.color(), taps_of(NO_LAYER as u8)));
-            // Under the ground is ground: where a ground box leaves its cell open below,
-            // shrunk or lowest, the block under it is laid, a cell or down to the
-            // neighbors' ground; its top fills the gaps that read as holes, its sides
-            // the steps that showed daylight.
-            let lowest = open.is_none() && last_top == i32::MIN;
+            // Under shrunk ground is ground: the block under it is laid a cell, within
+            // the cube and over what is under it here, its top filling the gap that
+            // reads as a hole. A cube draws only its own: the cube below draws its
+            // ground, so nothing is drawn twice in one plane.
             let floored = last_top == bucket_lo - 1 && open.is_some_and(|o| self.coarse.sub_s[o] == SUB_CELL_NONE);
-            let under =
-                (acc.ground && !floored && (lowest || inset.is_some())).then(|| ((bucket_lo - step).min(edge_low.map_or(i32::MAX, |low| low + 1)).max(last_top.saturating_add(1)), bucket_lo - 1));
+            let under = (acc.ground && !floored && inset.is_some() && last_top != i32::MIN).then(|| ((bucket_lo - step).max(last_top + 1), bucket_lo - 1));
             if let Some((z0, z1)) = under {
                 let co = &mut self.coarse;
                 co.z0.push(z0);
@@ -904,7 +884,10 @@ pub fn write_lone_box(m: &mut [u32], offset: V3, size: f64, rgb: [u8; 3], layer:
 
 #[allow(clippy::too_many_arguments)]
 fn write_box(m: &mut [u32], min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, faces: u32, unit: f64, heights: Heights) {
-    let z = steps(min[2] - heights.floor, heights.step) | (steps(size[2], heights.step) << 16);
+    // Both ends rounded, not the size: boxes stacked meet at one step, never
+    // a step over or apart.
+    let (z0, z1) = (steps(min[2] - heights.floor, heights.step), steps(min[2] + size[2] - heights.floor, heights.step));
+    let z = z0 | ((z1 - z0) << 16);
     if m.len() == COARSE_BOX_WORDS as usize {
         let xy = unit / COARSE_XY_STEPS;
         // The byte holds `width − 1`: zero width would be no box, and a whole mesh across fits.
@@ -922,38 +905,6 @@ fn write_box(m: &mut [u32], min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, fa
     m[3] = u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 0]);
     m[4] = taps;
     m[5] = faces;
-}
-
-/// A wall down to the chunk's floor alone left the plane open below a lower
-/// neighbor (a cliff, or a coarser chunk read at its cell center).
-fn edge_low(set: &RunSet, cx: u32, cy: u32) -> Option<i32> {
-    let (span, apron) = (set.span, set.apron);
-    if apron == 0 {
-        return None;
-    }
-    let (lo, hi) = (apron, span - apron);
-    let top = |x: u32, y: u32| {
-        let col = (y * span + x) as usize;
-        (set.start[col]..set.start[col + 1]).map(|i| set.z1[i as usize]).max()
-    };
-    [
-        (cx + 1 == hi).then(|| top(cx + 1, cy)),
-        (cx == lo).then(|| top(cx - 1, cy)),
-        (cy + 1 == hi).then(|| top(cx, cy + 1)),
-        (cy == lo).then(|| top(cx, cy - 1)),
-    ]
-    .into_iter()
-    .flatten()
-    .flatten()
-    .min()
-}
-
-fn hung_floor(set: &RunSet, cx: u32, cy: u32, run: usize) -> Option<i32> {
-    let col = (cy * set.span + cx) as usize;
-    if set.start[col] as usize != run || set.sub_s[run] != SUB_CELL_NONE {
-        return None;
-    }
-    edge_low(set, cx, cy).map(|low| low + 1).filter(|&z0| z0 < set.z0[run])
 }
 
 fn steps(v: f64, step: f64) -> u32 {
@@ -1013,7 +964,9 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
     let above = z1 + 1;
     let below = z0 - 1;
     let mut rel = 0;
-    let mut covered_to = z0 - 1;
+    // Covered from `z0` up, by anything and by what hides a face: runs laid
+    // in strata meet at heights of their own, so together, not one alone.
+    let (mut covered_to, mut hidden_to) = (z0 - 1, z0 - 1);
     let end = set.start[col as usize + 1] as usize;
     for i in set.start[col as usize] as usize..end {
         let r_z0 = set.z0[i];
@@ -1027,10 +980,13 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
         if r_z0 <= covered_to + 1 && r_z1 > covered_to {
             covered_to = r_z1;
         }
+        if r_z0 <= hidden_to + 1 && r_z1 > hidden_to && set.side[i] != Side::OBJECT {
+            hidden_to = r_z1;
+        }
         if covered_to >= z1 {
             rel |= ABUTS_SIDE;
         }
-        if r_z0 <= z0 && r_z1 >= z1 && set.side[i] != Side::OBJECT {
+        if hidden_to >= z1 {
             rel |= HIDES_SIDE;
         }
         if r_z0 <= above && r_z1 >= above {
@@ -1046,11 +1002,15 @@ fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
     rel
 }
 
-/// Only a column's lowest run rests on the ground; any run over it, a deck's
-/// slab or a placed cube, can be seen from below. A solid cell under it
-/// still hides the face (`run_faces`).
-fn run_include_bottom(set: &RunSet, col: usize, i: usize) -> bool {
-    i != set.start[col] as usize
+/// Run `i` within the chunk's own heights `[lo, hi)`: none where it lies
+/// past them, where it reaches only to decide a face.
+fn within(set: &RunSet, i: usize, [lo, hi]: [i32; 2]) -> Option<(i32, i32)> {
+    let (z0, z1) = (set.z0[i], set.z1[i]);
+    if z1 < z0 {
+        return (lo..hi).contains(&z0).then_some((z0, z1));
+    }
+    let (z0, z1) = (z0.max(lo), z1.min(hi.saturating_sub(1)));
+    (z0 <= z1).then_some((z0, z1))
 }
 
 fn wants_diagonal(mask: u32, a: u32, b: u32) -> bool {
@@ -1073,20 +1033,25 @@ fn side_bits(mut mask: u32, rel: u32, face: u32, crease: u32, rises: u32, dips: 
     mask
 }
 
-fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
+fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize, window: [i32; 2]) -> u32 {
     let col = cy * span + cx;
-    let mask_all = if run_include_bottom(set, col as usize, i) { ALL_FACES } else { OPEN_BOTTOM_FACES };
     if set.sub_s[i] != SUB_CELL_NONE {
-        // A coarse box is the ground itself shrunk, so its underside is more ground.
+        // A coarse box is the ground itself shrunk, so its underside is more
+        // ground, and the lowest of a column rests on it.
+        let mask_all = if i == set.start[col as usize] as usize { OPEN_BOTTOM_FACES } else { ALL_FACES };
         let under = if set.side[i] == Side::OBJECT { 0 } else { UNDER_AS_TOP };
         return mask_all | ALL_CREASES | under;
     }
-    let mut mask = mask_all;
-    let (z0, z1) = (set.z0[i], set.z1[i]);
-    // A filled cell above or below hides the face. Left in, the face between
-    // stacked cubes striped them in the shadow map, which draws both sides.
-    let above = column_covers(set, col, z1 + 1);
-    let below = column_covers(set, col, z0 - 1);
+    let mut mask = ALL_FACES;
+    let (z0, z1) = within(set, i, window).unwrap_or((set.z0[i], set.z1[i]));
+    // A filled cell above or below hides the face. Under the chunk's floor the
+    // cell past it decides (`window`), so a cave's roof shows; over its roof
+    // never, since the chunk above may draw that cell shrunk, folded, and a
+    // roof hidden under it opened the ground to the sky. Left in, the face
+    // between stacked cubes striped them in the shadow map, which draws both
+    // sides.
+    let above = z1 + 1 < window[1] && column_covers(set, col, z1 + 1);
+    let below = set.z0[i] < z0 || column_covers(set, col, z0 - 1);
     if above {
         mask &= !FACE_PZ;
         mask |= CAP_PZ;
@@ -1136,9 +1101,8 @@ fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
     mask
 }
 
-fn runs_match(set: &RunSet, a: usize, b: usize) -> bool {
-    set.z0[a] == set.z0[b]
-        && set.z1[a] == set.z1[b]
+fn runs_match(set: &RunSet, a: usize, b: usize, window: [i32; 2]) -> bool {
+    within(set, a, window) == within(set, b, window)
         && set.r[a] == set.r[b]
         && set.g[a] == set.g[b]
         && set.b[a] == set.b[b]

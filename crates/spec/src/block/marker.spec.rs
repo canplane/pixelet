@@ -19,7 +19,9 @@
 
 /// The zoom a marker shows from: the one every place was shown from before
 /// places followed Carto (OpenMapTiles' `poi` layer holds every point from
-/// z14), kept for what someone puts up, which Carto has no rule for.
+/// z14), kept for what someone puts up, which Carto has no rule for, and
+/// for what someone says, the bubble over their character, judged on the
+/// same lattice where its speaker stands (pxl-kernel chunk/place.rs).
 pub const MARKER_SHOWN_FROM: u8 = 14;
 
 /// A marker's cell on the camera grid, in zooms: −1 spans two of the grid's

@@ -46,8 +46,9 @@ members = [
 # them, so a double is the same bits on the server, in the module and in a
 # test, whichever libm the platform has.
 libm = "=0.2.16"
-# FNV-1a, 64 bits: what a places page keys a record by (id_hash) and the
-# kernel keys a demand by. Over UTF-8 bytes, the same as pxl-tool/spec/data.rs's.
+# FNV-1a, 64 bits: what a places page keys a record by (id_hash), the kernel
+# keys a demand by, and every hash map hashes with, so an order read off one
+# is the same on every run (clippy.toml). Over UTF-8 bytes, the same as pxl-tool/spec/data.rs's.
 fnv = "1"
 # base64url without padding: the blob a placement set is kept under in the
 # shell's storage.
@@ -105,9 +106,6 @@ panic = "abort"
 # target-features sections in one pass, and it has to read the target
 # features before it can take them off — which it cannot do if Cargo has
 # already thrown them away.
-
-[profile.dev]
-panic = "abort"
 
 # What the server and the bake tools are built with. `panic` is a profile
 # setting and a profile is the root manifest's alone, so a member cannot ask

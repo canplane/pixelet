@@ -1,43 +1,54 @@
 // pxl-kernel/control/interaction/collision.rs
 
+use pxl_spec::block::decor::Decor;
+use pxl_spec::block::DecorId;
+use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::hierarchy::tree::share;
+use pxl_spec::space::coord::zoom::{cube, index_of, of_side, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::layer::object::size::DECOR_SIZE;
+use crate::layer::object::meta::user_decor_pick;
+use crate::layer::object::size::MARKER_SIZE;
 use crate::layer::object::store::{Block, Entry};
 use crate::query::World;
-use pxl_spec::block::decor::DECORS;
-use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::zoom::{base_of, index_of, of_side, units};
-
-/// Every cube sits on its own size's lattice, so two share space exactly
-/// when one's node lies under the other's.
-pub fn find_overlapping_object(corner: &Pvf3, size: f64) -> Option<Entry> {
-    let side = of_side(size);
-    let candidate = (side, index_of(side, corner));
-    World::now().placed_in(corner).into_iter().find(|o| share(candidate, (o.zoom, o.at)))
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlacementTool {
     Object,
-    /// A decor or a marker: one cell, and nothing stands on it.
-    Instance,
+    /// Its box, of the variant and turns its corner draws.
+    Decor(DecorId),
+    /// One cell.
+    Marker,
 }
 
-/// The shared check for the placement commit and its hover preview.
+/// The room a placement at `corner` takes, in units.
+fn room(tool: PlacementTool, corner: &Pvf3, object_size: f64) -> Aabb {
+    let cell = |zoom: Zoom| cube(zoom, index_of(zoom, corner));
+    match tool {
+        PlacementTool::Object => cell(of_side(object_size)),
+        PlacementTool::Marker => cell(of_side(MARKER_SIZE)),
+        PlacementTool::Decor(id) => {
+            let decor = Decor::of(id);
+            let (variant, turn) = user_decor_pick(corner.i, decor.variant_count());
+            let (at, m) = decor.stand(cell(decor.cell_zoom()).min, variant, turn, 1.0);
+            decor.claim(at, &m)
+        }
+    }
+}
+
+/// The shared check for the placement commit and its hover preview: its room
+/// is where the world takes an edit (`World::editable`), and nothing placed,
+/// nor a placed decor's box, shares it. A decor or a marker is stood on
+/// nowhere, so neither is placed on one, grown or placed.
 pub fn is_placement_blocked(tool: PlacementTool, corner: &Pvf3, object_size: f64) -> bool {
-    let size = if tool == PlacementTool::Instance { DECOR_SIZE } else { object_size };
-    find_overlapping_object(corner, size).is_some() || tool == PlacementTool::Instance && instance_under(corner)
-}
-
-/// Placed or scattered. An instance is stood on nowhere, so nothing is placed on it.
-fn instance_under(corner: &Pvf3) -> bool {
-    let under = pvf3::add(corner, &base_of(GROUND.cell(), [0, 0, -1]));
-    let world = World::now();
-    let placed = world.placed_in(&under).iter().any(|o| matches!(o.block(), Block::Decor { .. } | Block::Marker));
-    placed || !world.written_in(&under) && DECORS.iter().any(|k| world.grown(k, &under).is_some())
+    let (world, room) = (World::now(), room(tool, corner, object_size));
+    let taken = !world.editable(&room) || world.placed_sharing(&room, |_| true).is_some() || world.placed_claim(&room).is_some();
+    let under = Aabb {
+        min: [room.min[0], room.min[1], room.min[2] - units(GROUND.cell())],
+        max: [room.max[0], room.max[1], room.min[2]],
+    };
+    let on_instance = || world.placed_sharing(&under, |e| e.block() == Block::Marker).is_some() || world.placed_claim(&under).is_some() || world.grown_claim(&under).is_some();
+    taken || tool != PlacementTool::Object && on_instance()
 }
 
 /// The center of the cell a hover anchor (a min corner) points at: where a

@@ -88,7 +88,7 @@ impl<const N: usize> Edge<N> {
                 *slot = Some(waker.clone());
                 self.parked_len += 1;
             }
-            None => std::process::abort(),
+            None => xpute_kit::bug!(ENOSPC, N),
         }
     }
 }

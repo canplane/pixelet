@@ -15,7 +15,7 @@ pub type Task = Pin<&'static mut (dyn Future<Output = ()> + 'static)>;
 pub type Priority = u8;
 
 pub trait Executor {
-    /// False when it has no room.
+    /// False when it has no room, keeping nothing of `task`.
     fn spawn(&self, task: Task, priority: Priority) -> bool;
     /// Never from inside a task.
     fn poll(&self);
@@ -35,8 +35,14 @@ pub fn set_executor(executor: &'static dyn Executor) {
 
 pub fn spawn(future: impl Future<Output = ()> + 'static, priority: Priority) -> bool {
     let Some(e) = executor() else { return false };
-    let task: &'static mut (dyn Future<Output = ()> + 'static) = Box::leak(Box::new(future));
-    e.spawn(Pin::static_mut(task), priority)
+    let raw: *mut (dyn Future<Output = ()> + 'static) = Box::into_raw(Box::new(future));
+    // SAFETY: the box just made, handed out once.
+    let spawned = e.spawn(Pin::static_mut(unsafe { &mut *raw }), priority);
+    if !spawned {
+        // SAFETY: refused, so the executor kept nothing of it; the box is ours again.
+        drop(unsafe { Box::from_raw(raw) });
+    }
+    spawned
 }
 
 pub fn poll() {

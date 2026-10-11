@@ -36,9 +36,10 @@ export const SYSTEM = {
   dark: "#1C1C1E",
 } as const;
 
-/** The mark's coral (#FF865E) darkened in OKLCH to reach 3:1 against white
- * (`base`, filled controls) and 4.5:1 (`deep`, words on the ground). */
+/** The mark's coral (`mark`), and it darkened in OKLCH to reach 3:1 against
+ * white (`base`, filled controls) and 4.5:1 (`deep`, words on the ground). */
 const CORAL = {
+  mark: "#FF865E",
   base: "#E9724B",
   deep: "#C6522A",
 } as const;
@@ -52,6 +53,8 @@ export const color = {
   white: "#ffffff",
   black: "#000000",
   ground: GROUND,
+  /** iOS's system blue darkened to read 4.5:1 under white words: the kernel's stop, a blue screen. */
+  panic: "#0069DC",
 
   /** iOS's label gray in light mode. */
   labelGray: "#3C3C43",
@@ -59,7 +62,8 @@ export const color = {
   send: CORAL.base,
   /** A marker's words set, apart from a chat line sent. */
   confirm: SYSTEM.blue,
-  self: CORAL.deep,
+  /** Who said a line, over the map on its own dark edge: the mark's coral, not one darkened for the light ground. */
+  self: CORAL.mark,
   /** The status hues lightened toward white, for a sensor glyph over the map. */
   pendingGlyph: tint(SYSTEM.orange, 0.6),
   alarmGlyph: tint(SYSTEM.red, 0.6),

@@ -52,10 +52,7 @@ impl Builder {
                 return Progress::Blocked;
             }
             let cell_zoom = c.at.cell_zoom();
-            // Runs span the whole column; this chunk bakes only its own heights, in its runs' cells.
-            let (z0, z1) = c.at.z_range();
             let z = z_unit(runs.zoom);
-            let clip = Some(((z0 / z) as i32, (z1 / z) as i32));
             // Textured where the cells drawn are a leaf's or finer, folded or not.
             let (unit, fine) = (units(runs.zoom), cell_zoom >= GROUND.cell());
             if self
@@ -68,7 +65,7 @@ impl Builder {
                     fine,
                     settings_store().textures,
                     (crate::param::BAKE_ROWS_PER_STEP, crate::param::BAKE_BOXES_PER_STEP),
-                    clip,
+                    run::window(c.at, runs.zoom),
                 )
                 .is_err()
             {

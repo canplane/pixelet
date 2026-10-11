@@ -75,11 +75,13 @@ export const as_ta_ab = <T extends TypedArray>(
   if (is_ta(vals)) {
     const buf = vals.buffer;
 
-    if (is_ab(buf)) return new ctor(buf, vals.byteOffset, vals.length);
+    // The same bytes in `ctor`'s elements, wrapped where they lie, copied out of shared memory.
+    const len = vals.byteLength / ctor.BYTES_PER_ELEMENT;
+    if (is_ab(buf)) return new ctor(buf, vals.byteOffset, len);
 
     if (is_sab(buf)) {
-      const out = new ctor(vals.length);
-      out.set(vals);
+      const out = new ctor(len);
+      new Uint8Array(out.buffer).set(new Uint8Array(buf, vals.byteOffset, vals.byteLength));
       return out;
     }
   }
@@ -154,11 +156,13 @@ export const as_bta_ab = <T extends BigTypedArray>(
   if (is_bta(vals)) {
     const buf = vals.buffer;
 
-    if (is_ab(buf)) return new ctor(buf, vals.byteOffset, vals.length);
+    // The same bytes in `ctor`'s elements, wrapped where they lie, copied out of shared memory.
+    const len = vals.byteLength / ctor.BYTES_PER_ELEMENT;
+    if (is_ab(buf)) return new ctor(buf, vals.byteOffset, len);
 
     if (is_sab(buf)) {
-      const out = new ctor(vals.length);
-      out.set(vals);
+      const out = new ctor(len);
+      new Uint8Array(out.buffer).set(new Uint8Array(buf, vals.byteOffset, vals.byteLength));
       return out;
     }
   }

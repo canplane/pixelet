@@ -1,22 +1,24 @@
-// pxl-kernel/chunk/place/badge.rs
+// pxl-kernel/billboard/badge.rs
 
 //! What a billboard shows, each its own design on the one sheet: a marker
 //! someone put up, its words on a pill; a place, as Carto draws it at the
-//! zoom of Carto's the view is at there.
+//! zoom of Carto's the view is at there; a line said in the chat, in a
+//! bubble. Each is measured, given its slot and painted the same way, and
+//! shows only once painted (`ready`).
 
 use crate::layer::object::preview::words_at;
+use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::bake::constant::EntryAt;
-use std::collections::{HashMap, HashSet};
 
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, LABEL_ZOOM, TEXT};
-use pxl_spec::bake::tile::place::{symbol_of, PlaceTile, Placed, SPACING_CELLS};
-use pxl_spec::space::camera::grid::px_per_unit;
+use pxl_spec::bake::tile::place::{symbol_of, PlaceTile, Placed};
 use pxl_spec::space::layer::tile::Tile;
 
+use crate::billboard::chat::line_said;
 use crate::billboard::sheet::billboard_sheet;
 use crate::io::text::{text_lines, text_width};
 use crate::layer::Base;
-use pxl_render::gpu::pass::badges::{badge_width, point_size, BADGE_FONT, POINT_FONT};
+use pxl_render::gpu::pass::badges::{badge_width, bubble_size, point_size, BADGE_FONT, BUBBLE_FONT, BUBBLE_TEXT_W, POINT_FONT};
 use pxl_render::gpu::sheet::shelf::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::sheet::SHEET_SCALE;
 use pxl_spec::block::marker::MARKER_SHOWN_FROM;
@@ -25,7 +27,8 @@ use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-/// A marker's pill and where it stands, down from its top.
+/// A marker's pill and where it stands, down from its top: the dot under the
+/// pill, which its cell's center is drawn at.
 const MARKER_HEIGHT: f64 = 37.0;
 const MARKER_ANCHOR: f64 = 34.0;
 
@@ -38,11 +41,14 @@ pub struct Look {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Label {
-    /// A place by its index in the tile that holds it, as it looks.
-    Place { tile: Tile, place: u32, look: Look },
+    /// A place by its index in the tile that holds it, as it looks, its name
+    /// wrapped at `wrap` pixels, 0 where it is not named.
+    Place { tile: Tile, place: u32, look: Look, wrap: u32 },
     /// A marker someone put up, or one waiting for its words, by its entry,
     /// and its words by their hash.
     Marker { at: EntryAt, words: u64 },
+    /// The chat's line said at `said`, the host clock's milliseconds' bits.
+    Chat { said: u64 },
 }
 
 impl Label {
@@ -54,11 +60,12 @@ impl Label {
 
     /// As it shows at Carto's `zoom` where it stands, if it does: a place
     /// from the zoom it is shown from, as a dot or its icon by its category's
-    /// zooms, named from its category's label zoom; a marker from its own zoom
+    /// zooms, named from its category's label zoom, its name wrapped at
+    /// `wrap` pixels; a marker, and a line said, from a marker's zoom
     /// (`block/marker.json`).
-    pub fn at(self, zoom: i32) -> Option<Label> {
+    pub fn at(self, zoom: i32, wrap: f64) -> Option<Label> {
         match self {
-            Label::Marker { .. } => (zoom >= i32::from(MARKER_SHOWN_FROM)).then_some(self),
+            Label::Marker { .. } | Label::Chat { .. } => (zoom >= i32::from(MARKER_SHOWN_FROM)).then_some(self),
             Label::Place { tile, place, .. } => {
                 let h = Label::place(tile, place)?;
                 let k = usize::from(h.place.category.checked_sub(1)?);
@@ -72,6 +79,7 @@ impl Label {
                     tile,
                     place,
                     look: Look { icon, named },
+                    wrap: if named { wrap as u32 } else { 0 },
                 })
             }
         }
@@ -84,7 +92,7 @@ impl Label {
     }
 
     /// What it writes: a marker's words cut to `SHOWN_CHARS`; a place's name
-    /// whole, where it is named.
+    /// whole, where it is named; a chat line whole, empty once another is said.
     pub fn text(self) -> String {
         match self {
             Label::Marker { at, .. } => {
@@ -95,8 +103,9 @@ impl Label {
                 }
                 shown
             }
-            Label::Place { tile, place, look } if look.named => Label::place(tile, place).map(|h| h.place.name.to_string()).unwrap_or_default(),
+            Label::Place { tile, place, look, .. } if look.named => Label::place(tile, place).map(|h| h.place.name.to_string()).unwrap_or_default(),
             Label::Place { .. } => String::new(),
+            Label::Chat { said } => line_said(said).unwrap_or_default(),
         }
     }
 }
@@ -105,31 +114,19 @@ impl Label {
 /// Code points, so a non-BMP character is never cut in half.
 const SHOWN_CHARS: usize = 12;
 
-/// The cell a place keeps to itself, as wide as the camera grid's cells are
-/// at the view's own τ: its name wraps to it and its billboard's region is it.
-/// Not the τ in force, which coarsens while the view moves and would lay
-/// every name out again; whole pixels, so only the view's size or angle does.
-pub fn spacing_px() -> f64 {
-    let v = crate::view::frame::pose::view();
-    let cell = crate::view::sight::cell_angle(crate::chunk::quality::target()) * px_per_unit(v.height, v.fov);
-    libm::round(f64::from(SPACING_CELLS) * cell)
-}
-
 struct Badge {
     size: [f64; 3],
-    /// What a place's name was wrapped at.
-    wrap: f64,
-    /// A place's name as it was laid out when sized: the host's layouts are
-    /// a cache it may let go.
+    /// Its words as they were laid out when sized: the host's layouts are a
+    /// cache it may let go.
     lines: Vec<String>,
     slot: i32,
 }
-static BADGES: Global<HashMap<Label, Badge>> = Global::new();
-fn badges() -> &'static mut HashMap<Label, Badge> {
-    BADGES.get(HashMap::new)
+static BADGES: Global<FnvHashMap<Label, Badge>> = Global::new();
+fn badges() -> &'static mut FnvHashMap<Label, Badge> {
+    BADGES.get(FnvHashMap::default)
 }
 
-pub fn retain(labels: &HashSet<Label>) {
+pub fn retain(labels: &FnvHashSet<Label>) {
     let mut dropped = false;
     badges().retain(|label, b| {
         if labels.contains(label) {
@@ -151,27 +148,27 @@ pub fn retain(labels: &HashSet<Label>) {
 /// Its width, height and where it stands down from its top; none until its
 /// words are laid out, which a later turn has.
 pub fn size(label: Label) -> Option<[f64; 3]> {
-    let wrap = if matches!(label, Label::Place { look, .. } if look.named) { spacing_px() } else { 0.0 };
     if let Some(b) = badges().get(&label) {
-        if b.wrap == wrap {
-            return Some(b.size);
-        }
-        if b.slot != NO_SLOT {
-            billboard_sheet().release(b.slot as u32);
-        }
-        badges().remove(&label);
+        return Some(b.size);
     }
     let text = label.text();
+    let laid = |font, wrap| -> Option<(f64, Vec<String>)> {
+        let laid = text_lines(font, wrap, &text)?;
+        Some((laid.iter().map(|&(_, w)| w).fold(0.0, f64::max), laid.iter().map(|&(l, _)| l.trim().to_owned()).collect()))
+    };
     let (size, lines) = match label {
         Label::Marker { .. } => ([badge_width(text_width(BADGE_FONT, &text)?.ceil()), MARKER_HEIGHT, MARKER_ANCHOR], Vec::new()),
         Label::Place { look, .. } if text.is_empty() => (point_size(look.icon, None), Vec::new()),
-        Label::Place { look, .. } => {
-            let laid = text_lines(POINT_FONT, wrap, &text)?;
-            let size = point_size(look.icon, Some((laid.iter().map(|&(_, w)| w).fold(0.0, f64::max), laid.len())));
-            (size, laid.iter().map(|&(l, _)| l.trim().to_owned()).collect())
+        Label::Place { look, wrap, .. } => {
+            let (w, lines) = laid(POINT_FONT, f64::from(wrap))?;
+            (point_size(look.icon, Some((w, lines.len()))), lines)
+        }
+        Label::Chat { .. } => {
+            let (w, lines) = laid(BUBBLE_FONT, BUBBLE_TEXT_W)?;
+            (bubble_size(w, lines.len()), lines)
         }
     };
-    badges().insert(label, Badge { size, wrap, lines, slot: NO_SLOT });
+    badges().insert(label, Badge { size, lines, slot: NO_SLOT });
     Some(size)
 }
 
@@ -193,7 +190,8 @@ pub fn slot(label: Label) -> i32 {
             h * SHEET_SCALE,
             match label {
                 Label::Marker { .. } => DrawSpec::Pill { label: label.text(), logical_w: w },
-                Label::Place { tile, place, look } => {
+                Label::Chat { .. } => DrawSpec::Bubble { lines: b.lines.clone(), box_w: w },
+                Label::Place { tile, place, look, .. } => {
                     let category = Label::place(tile, place).map_or(0, |h| h.place.category);
                     let k = usize::from(category.saturating_sub(1));
                     DrawSpec::Point {

@@ -80,6 +80,30 @@ pub struct Frame {
 }
 
 impl Frame {
+    /// Whether a sphere about `at`, in the world's doubles, may show.
+    pub fn sees(&self, at: V3, radius: f64) -> bool {
+        let [x, y, z] = self.world_of(at);
+        // Cull where the renderer draws it, on the globe; a flat-world cull leaves
+        // holes at the horizon.
+        let [x, y, z] = match self.globe {
+            Some(globe) => globe.place([x, y, z]),
+            None => [x, y, z],
+        };
+        let c = self.camera;
+        // A sphere containing the camera is always visible.
+        if len3(&[c[0] - x, c[1] - y, c[2] - z]) <= radius {
+            return true;
+        }
+        // Horizon cull (Cozzi & Ring): a point is above the eye's horizon while
+        // E·P >= r², from the planet's center, widened by the sphere's radius.
+        self.frustum.sees([x, y, z], radius)
+            && self.globe.is_none_or(|globe| {
+                let r = globe.radius_u();
+                let (e, p) = ([c[0], c[1], c[2] + r], [x, y, z + r]);
+                dot3(&e, &p) + radius * len3(&e) >= r * r
+            })
+    }
+
     /// A point about the anchor, its X on the anchor's lap.
     pub fn world_of(&self, at: V3) -> V3 {
         let x = pxl_spec::space::coord::world::nearest(at[0], self.anchor[0]);
@@ -296,29 +320,7 @@ fn priority(a: &Priority, b: &Priority) -> core::cmp::Ordering {
 
 fn visible(frame: &Frame, s: &Slot) -> bool {
     let (x0, y0) = s.base();
-    let [x, y, z] = frame.world_of([x0 + s.bc[0], y0 + s.bc[1], s.bc[2]]);
-    // Cull where the renderer draws it, on the globe; a flat-world cull leaves
-    // holes at the horizon.
-    let [x, y, z] = match frame.globe {
-        Some(globe) => globe.place([x, y, z]),
-        None => [x, y, z],
-    };
-    let c = frame.camera;
-    // A chunk whose sphere contains the camera is always visible.
-    let mut visible = len3(&[c[0] - x, c[1] - y, c[2] - z]) <= s.radius;
-    if !visible {
-        visible = frame.frustum.sees([x, y, z], s.radius);
-        // Horizon cull (Cozzi & Ring): a point is above the eye's horizon while
-        // E·P >= r², from the planet's center, widened by the chunk's radius.
-        if visible {
-            if let Some(globe) = frame.globe {
-                let r = globe.radius_u();
-                let (e, p) = ([c[0], c[1], c[2] + r], [x, y, z + r]);
-                visible = dot3(&e, &p) + s.radius * len3(&e) >= r * r
-            }
-        }
-    }
-    visible
+    frame.sees([x0 + s.bc[0], y0 + s.bc[1], s.bc[2]], s.radius)
 }
 
 impl Scheduler {

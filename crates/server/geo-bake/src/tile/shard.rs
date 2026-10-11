@@ -17,7 +17,7 @@
 //!   each `.done` last. While a commit is begun, a leaf or a fold is
 //!   refused: it would fold from a set half moved.
 
-use std::collections::HashSet;
+use fnv::FnvHashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -117,7 +117,7 @@ impl Stage {
             self.stage.remove(p)?;
         }
         fill(&self.stage)?;
-        let made: HashSet<Tile> = under(&self.stage)?.into_iter().collect();
+        let made: FnvHashSet<Tile> = under(&self.stage)?.into_iter().collect();
         let held = under(&self.set)?;
         self.write_done(&shard.name(), held.into_iter().filter(|p| !made.contains(p)))
     }
@@ -127,8 +127,8 @@ impl Stage {
         self.not_committing()?;
         self.clear_fold(L::LEAF)?;
         let whole = self.whole()?;
-        let tiles: HashSet<Tile> = whole.iter().copied().map(shard_tile).collect();
-        let mut changed: HashSet<Tile> = self
+        let tiles: FnvHashSet<Tile> = whole.iter().copied().map(shard_tile).collect();
+        let mut changed: FnvHashSet<Tile> = self
             .stage
             .by_zoom()?
             .remove(&L::LEAF)
@@ -136,7 +136,7 @@ impl Stage {
             .into_iter()
             .filter(|&p| tiles.contains(&ancestor(p, SHARD_ZOOM)))
             .collect();
-        let mut leaves_gone = HashSet::new();
+        let mut leaves_gone = FnvHashSet::default();
         for shard in &whole {
             leaves_gone.extend(self.read_done(&shard.name())?);
         }
@@ -206,7 +206,7 @@ impl Stage {
         let skip = if pruned {
             unasked::<L>(&self.set, top_over(L::LEAF, PUBLISHED_TOP_ZOOM).max(GROUND.top()))?
         } else {
-            HashSet::new()
+            FnvHashSet::default()
         };
         for p in self.set.by_zoom()?.into_values().flatten().filter(|p| !skip.contains(p)) {
             fs::hard_link(self.set.path(p), to.join(p.name())).map_err(|e| io(&self.set.path(p), e))?;

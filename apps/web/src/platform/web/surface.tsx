@@ -16,6 +16,7 @@ import { keyDown, keyUp, releaseKeys } from "@/app/store/keyboard.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { surface_close, surface_open, surface_size } from "@/kernel/render/surface.ts";
 import { request_frame } from "@/kernel/sched.ts";
+import { useKernel } from "@/kernel/shell.ts";
 import { bindSurface, unbindSurface } from "@/platform/web/webgpu.ts";
 
 /** A wheel line in CSS pixels: a page's default line height. */
@@ -163,6 +164,8 @@ function drive(canvas: HTMLCanvasElement): () => void {
 
 export function WorldSurface() {
   const ref = useRef<HTMLCanvasElement>(null);
+  // A badge a tap acts on reads as a link does.
+  const overBadge = useKernel((s) => s.over_badge);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -175,7 +178,7 @@ export function WorldSurface() {
     };
   }, []);
 
-  return <canvas ref={ref} style={{ ...FILL, touchAction: "none" }} />;
+  return <canvas ref={ref} style={{ ...FILL, touchAction: "none", cursor: overBadge ? "pointer" : undefined }} />;
 }
 
 export function CaseSurface({ onOpen, openKey }: { onOpen: (surface: u32) => () => void; openKey: string }) {

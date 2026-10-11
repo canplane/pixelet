@@ -1,6 +1,6 @@
 // pxl-kernel/chunk/build/run.rs
 
-//! A column of chunks shares its runs: written once into a heap block, held while any chunk over it bakes.
+//! A chunk's runs, its own heights composed: written once into a heap block, held while it bakes.
 
 use crate::layer::Base as _;
 use crate::layer::Query;
@@ -10,6 +10,7 @@ use pxl_render::mesh::paint::column::write_rows;
 use pxl_render::mesh::run::RunSet;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::block::sample::APRON;
+use pxl_spec::block::stand::z_unit;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
 
@@ -28,11 +29,9 @@ use super::*;
 
 pub(super) const RUN_SETS: usize = 2;
 
-/// A column of chunks one above another shares its runs: they are made once
-/// and each chunk bakes its cut of them.
+/// A chunk's runs, made once and baked into each of its tiers.
 pub(super) struct RunHold {
-    pub(super) column: (Zoom, [i64; 2]),
-    pub(super) users: Vec<u32>,
+    pub(super) id: u32,
     pub(super) runs: Option<Runs>,
 }
 
@@ -59,14 +58,15 @@ pub(super) struct Runs {
 pub(super) struct RunsJob {
     pub(super) id: u32,
     pub(super) zoom: Zoom,
+    /// The chunk's heights, in its runs' cells.
+    pub(super) range: [i32; 2],
     pub(super) row: u32,
     pub(super) next: usize,
 }
 
 impl Builder {
     pub(super) fn hold_of(&self, id: u32) -> Option<usize> {
-        let column = self.chunks.get(&id)?.at.column();
-        self.run_holds.iter().position(|h| h.as_ref().is_some_and(|h| h.column == column))
+        self.run_holds.iter().position(|h| h.as_ref().is_some_and(|h| h.id == id))
     }
 
     pub(super) fn runs_of(&self, id: u32) -> Option<Runs> {
@@ -75,38 +75,17 @@ impl Builder {
 
     pub(super) fn run_set_for(&mut self, id: u32) -> Option<usize> {
         if let Some(set) = self.hold_of(id) {
-            let users = &mut self.run_holds[set].as_mut()?.users;
-            if !users.contains(&id) {
-                users.push(id);
-            }
             return Some(set);
         }
         let set = self.run_holds.iter().position(Option::is_none)?;
-        let column = self.chunks.get(&id)?.at.column();
-        self.run_holds[set] = Some(RunHold { column, users: vec![id], runs: None });
+        self.run_holds[set] = Some(RunHold { id, runs: None });
         Some(set)
     }
 
     pub(super) fn leave_runs(&mut self, id: u32) {
-        for slot in self.run_holds.iter_mut() {
-            if let Some(h) = slot {
-                h.users.retain(|&u| u != id);
-                if h.users.is_empty() {
-                    *slot = None;
-                }
-            }
-        }
-    }
-
-    /// A job writing the column's runs from what it read before is let go too.
-    pub(super) fn drop_runs(&mut self, id: u32) {
-        let column = |b: &Builder, id: u32| b.chunks.get(&id).map(|c| c.at.column());
-        let same = self.runs_job.as_ref().is_some_and(|j| column(self, j.id).is_some() && column(self, j.id) == column(self, id));
-        self.end_runs_job(|_| same);
         if let Some(set) = self.hold_of(id) {
             self.run_holds[set] = None;
         }
-        self.leave_runs(id);
     }
 
     pub(super) fn end_runs_job(&mut self, which: impl Fn(&RunsJob) -> bool) {
@@ -143,12 +122,21 @@ impl Builder {
             return Progress::Blocked;
         };
         let target = column.runs;
+        // And the cell under its floor, which decides the floor's faces.
+        let [lo, hi] = window(c.at, target);
+        let range = [lo - 1, hi];
         if column.compose(&mut self.composer, &mut self.blocks).is_err() {
             self.refuse(id);
             return Progress::Blocked;
         }
         xpute_kit::ensure!(self.direct.begin(self.blocks.sample.span), ENOTRECOVERABLE);
-        self.runs_job = Some(RunsJob { id, zoom: target, row: 0, next: 0 });
+        self.runs_job = Some(RunsJob {
+            id,
+            zoom: target,
+            range,
+            row: 0,
+            next: 0,
+        });
         Progress::Busy
     }
 
@@ -156,7 +144,7 @@ impl Builder {
         let job = self.runs_job.as_mut().or_bug(Errno::ENOTRECOVERABLE);
         let span = self.blocks.sample.span;
         let rows = job.row..span.min(job.row + BAKE_ROWS_PER_STEP);
-        if write_rows(&mut self.direct, &self.blocks.sample, &self.blocks.stands, rows.clone(), &mut job.next).is_err() {
+        if write_rows(&mut self.direct, &self.blocks.sample, &self.blocks.stands, rows.clone(), job.range, &mut job.next).is_err() {
             self.runs_job = None;
             self.direct.abort();
             self.refuse(id);
@@ -210,4 +198,11 @@ impl Builder {
         // SAFETY: the chunk's own block, held until its runs are let go.
         unsafe { RunSet::carve(core::slice::from_raw_parts(ptr_at::<u8>(runs.block.0), bytes), runs.count, span, APRON) }
     }
+}
+
+/// The chunk's own heights, `[lo, hi)`, in the cells of runs at `runs`.
+pub(super) fn window(at: PyramidChunk, runs: Zoom) -> [i32; 2] {
+    let (z0, z1) = at.z_range();
+    let z = z_unit(runs);
+    [(z0 / z) as i32, (z1 / z) as i32]
 }

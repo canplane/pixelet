@@ -7,17 +7,16 @@ use crate::control::interaction::collision::{is_placement_blocked, PlacementTool
 use crate::control::interaction::{holding, hover, ActiveTool};
 use crate::layer::object::ext::Ext;
 use crate::layer::object::preview::{draft, redraft, words_at, Draft, RenderEdits};
-use crate::layer::object::size::{object_size_of, DECOR_SIZE};
+use crate::layer::object::size::{object_size_of, MARKER_SIZE};
 use crate::layer::object::store::Block;
 use pxl_spec::block::ext::MARKER_TEXT_CHARS;
 use pxl_spec::block::object::{cube_id, decor_num_id, Cube};
 use pxl_spec::block::object::{object_value_is_marker, MARKER};
 use pxl_spec::block::{cube, DecorId};
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::zoom::{base_of, index_of, of_side, units};
+use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
@@ -47,27 +46,37 @@ fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
     submit(Write::at(coord, size, val));
 }
 
-/// A write is made here at once and sent to be kept.
+/// A write is made here at once and sent to be kept, where the world takes
+/// an edit (`World::editable`); elsewhere it is refused.
 fn submit(write: Write) {
+    let (zoom, at) = pxl_spec::space::hierarchy::morton::node_of::<3>(write.key);
+    if !World::now().editable(&cube(zoom, at)) {
+        return;
+    }
     repository::send(&write);
     apply([write]);
 }
 
-/// Whether a whole-cell pick of a look only undoes a carve: the terrain must
-/// show that look there, and the cell must already hold an AIR leaf (the look
-/// is per column, so without this every cube stacked on matching ground was
-/// dropped).
+/// Whether a whole-cell pick of a look only undoes a carve: the cell holds
+/// an AIR leaf, and the ground there without it is that look, its stratum's
+/// at that depth (without the carve, every cube stacked on matching ground
+/// was dropped).
 fn place_value_is_redundant(at: &Pvf3, size: f64, cube: Cube) -> bool {
-    if size < units(GROUND.cell()) {
+    if size < units(GROUND.cell()) || !carved(at) {
         return false;
     }
     let Cube::Ground(look) = cube else { return false };
+    let zoom = of_side(size);
+    let entry = EntryAt::new(zoom, index_of(zoom, at));
     // Only the resident finest leaf can say; elsewhere the cube is written as asked.
-    let Some(Some(surface)) = World::now().surface(at, LEAF_ZOOM).exact() else { return false };
-    if surface.block != look as u8 {
-        return false;
-    }
-    carved(at)
+    let ground = World::now().previewing(Some(entry), None).block_of(&middle(entry)).exact();
+    matches!(ground, Some(Some(pxl_spec::block::stand::Block::Ground(g))) if g == look as u8)
+}
+
+/// The middle of the cube `at` names.
+fn middle(at: EntryAt) -> Pvf3 {
+    let (base, half) = (base_of(at.zoom(), at.at()), pvf3::from_real(units(at.zoom()) / 2.0));
+    pvf3::gather(pvf3::X(&base) + half, pvf3::Y(&base) + half, pvf3::Z(&base) + half)
 }
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
@@ -99,7 +108,7 @@ pub fn wait_at(at: EntryAt) {
 
 /// A marker tool's tap on the free cell whose min corner is `corner`.
 pub fn wait_to_put(corner: &Pvf3) {
-    let zoom = of_side(DECOR_SIZE);
+    let zoom = of_side(MARKER_SIZE);
     wait_at(EntryAt::new(zoom, index_of(zoom, corner)));
 }
 
@@ -132,7 +141,7 @@ pub fn put_marker() {
     let (zoom, cell) = (at.zoom(), at.at());
     let stands = match World::now().placed(at) {
         Some(e) => object_value_is_marker(e.state),
-        None => !is_placement_blocked(PlacementTool::Instance, &base_of(zoom, cell), DECOR_SIZE),
+        None => !is_placement_blocked(PlacementTool::Marker, &base_of(zoom, cell), MARKER_SIZE),
     };
     if stands && !words.is_empty() {
         submit(Write {
@@ -149,12 +158,32 @@ pub fn place_air(at: &Pvf3, size: f64) {
     write_object_value(at, size, cube::object::air as u32);
 }
 
+/// The eraser leaves its cell empty: where the ground fills it once the
+/// block is gone, air is written, so a block taken out of a hole leaves the
+/// hole. A decor the ground grew whose box it shared comes back, its erase
+/// given back too.
 pub fn remove(at: EntryAt) {
+    let world = World::now();
+    let erased: Vec<[i64; 3]> = world
+        .grown_over(&cube(at.zoom(), at.at()))
+        .into_iter()
+        .filter_map(|i| i.grown_in())
+        .filter(|&c| carved(&base_of(GROUND.cell(), c)))
+        .collect();
+    // Only the resident finest leaf can say what fills the cube without it, as
+    // `place_value_is_redundant` asks; elsewhere it is emptied as asked.
+    let id = match world.previewing(Some(at), None).block_of(&middle(at)).exact() {
+        Some(Some(pxl_spec::block::stand::Block::Ground(_))) | None => AIR,
+        Some(_) => VOID,
+    };
     submit(Write {
         key: key_of::<3>(at.zoom(), at.at()),
-        id: VOID,
+        id,
         ext: None,
     });
+    for c in erased {
+        write_object_value(&base_of(GROUND.cell(), c), units(GROUND.cell()), VOID);
+    }
 }
 
 /// The edit the pointer would make, decided once a turn: the cursor's ghost
@@ -188,13 +217,18 @@ pub fn pending_step() -> RenderEdits {
     // material whatever its sub-cell bytes, so the cell goes whole anyway.
     let size = match (&object, active_tool) {
         (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size(),
-        (_, ActiveTool::Decor | ActiveTool::Marker) => DECOR_SIZE,
+        (_, ActiveTool::Decor) => units(Decor::of(ui.decor_id).cell_zoom()),
+        (_, ActiveTool::Marker) => MARKER_SIZE,
         _ if digging || scattered => units(GROUND.cell()),
         _ => object_size_of(ui.object_tier),
     };
     let blocked = match (&hovered, active_tool) {
         (Some(h), ActiveTool::Object | ActiveTool::Decor | ActiveTool::Marker) => {
-            let tool = if active_tool == ActiveTool::Object { PlacementTool::Object } else { PlacementTool::Instance };
+            let tool = match active_tool {
+                ActiveTool::Object => PlacementTool::Object,
+                ActiveTool::Decor => PlacementTool::Decor(ui.decor_id),
+                _ => PlacementTool::Marker,
+            };
             is_placement_blocked(tool, h, object_size_of(ui.object_tier))
         }
         _ => false,

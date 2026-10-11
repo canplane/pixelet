@@ -59,7 +59,10 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placed {
   let size = size_px * depth / badge_px_k();
   let drop = size.y * (frac - 0.5);
   let center_view = anchor_view + vec3f(0.0, drop, 0.0);
-  let corner = q * size;
+  // A region reaches a pixel past its sprite above and below, so an anchor on
+  // the sprite's edge, a bubble's tail tip, is inside its own region whatever
+  // the subpixel it falls on; on the edge it flickered as it moved.
+  let corner = q * (size + vec2f(0.0, select(0.0, 2.0, region) * depth / badge_px_k()));
 
   var p: Placed;
   p.clip = badge_proj() * vec4f(center_view + vec3f(corner, 0.0), 1.0);

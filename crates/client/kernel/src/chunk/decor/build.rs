@@ -7,9 +7,10 @@
 use crate::chunk::Chunk as PyramidChunk;
 use crate::layer::Query;
 use pxl_render::gpu::api::word_bytes;
-use pxl_spec::block::sample::TileSource;
 use pxl_spec::space::camera::grid::target_cell_px;
 use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::layer::lattice::GROUND;
 
 use std::collections::TryReserveError;
 
@@ -17,7 +18,7 @@ use crate::chunk::decor::instance::{DecorScratch, GroupLanes, DECOR_GROUPS, HIDD
 use crate::layer::instance::{Meta, Source};
 use crate::layer::object::meta::placed;
 use crate::layer::object::store::{EntryAt, Store};
-use crate::layer::terrain::scatter::grow;
+use crate::query::grow;
 use crate::query::World;
 use pxl_spec::block::decor::Decor;
 use pxl_spec::space::coord::zoom::{units, Zoom};
@@ -45,16 +46,12 @@ pub struct DecorBuild<'s> {
     hide: Option<DecorHide>,
 }
 
-pub struct Ground<'a> {
-    /// The tile the chunk is drawn from, as the terrain answers it.
-    pub source: TileSource<'a>,
-    pub zoom: Zoom,
-    pub x0: i64,
-    pub y0: i64,
-    /// The first tile cell read, in the tile, and how many a side.
-    pub tx0: u32,
-    pub ty0: u32,
-    pub side: u32,
+/// Where the chunk's ground is read: the node over it whose grid cells at
+/// `cell` read the tile it is drawn from, and that node's corner.
+pub struct Ground {
+    pub node: Node<2>,
+    pub cell: Zoom,
+    pub origin: [i64; 2],
 }
 
 /// What the eraser is over, hidden in its block while it is.
@@ -113,7 +110,9 @@ impl<'s> DecorBuild<'s> {
         let mut refused = Ok(());
         objects.entries(&mut |e| {
             let Some(i) = placed(e).filter(|i| i.id == decor.value()) else { return };
-            let stands = (0..3).all(|k| (chunk.min[k]..chunk.max[k]).contains(&i.at[k]));
+            // In the chunk its box's corner is in.
+            let corner = e.cube().min;
+            let stands = (0..3).all(|k| (chunk.min[k]..chunk.max[k]).contains(&corner[k]));
             let Meta::Decor(m) = i.meta;
             if stands && refused.is_ok() {
                 refused = scratch.push(first + m.variant as usize, i);
@@ -126,23 +125,14 @@ impl<'s> DecorBuild<'s> {
     fn grown(scratch: &mut DecorScratch, decor: &Decor, first: usize, ground: &Ground, chunk: Aabb) -> Result<(), TryReserveError> {
         let world = World::now();
         let mut candidates = core::mem::take(&mut scratch.candidates);
-        let grew = grow(
-            decor,
-            &ground.source,
-            ground.zoom,
-            [ground.x0, ground.y0],
-            [ground.tx0, ground.ty0],
-            ground.side,
-            chunk,
-            &mut candidates,
-            |i| {
-                let (Source::Ground(cell), Meta::Decor(m)) = (i.source, i.meta) else { return Ok(()) };
-                if !world.grows(decor, cell, ground.zoom) {
-                    return Ok(());
-                }
-                scratch.push(first + m.variant as usize, i)
-            },
-        );
+        let zoom = GROUND.read_zoom(ground.cell);
+        let grew = grow(&world, decor, ground.node, ground.cell, ground.origin, chunk, &mut candidates, |i| {
+            let Meta::Decor(m) = i.meta;
+            if !world.grows(decor, &i, zoom) {
+                return Ok(());
+            }
+            scratch.push(first + m.variant as usize, i)
+        });
         scratch.candidates = candidates;
         grew
     }
@@ -189,7 +179,7 @@ impl<'s> DecorBuild<'s> {
         for (i, &g) in s.instances.iter().zip(&s.groups) {
             let (lane, r) = (lanes[g as usize], rank[g as usize]);
             let Meta::Decor(m) = i.meta;
-            let local = [i.at[0] - self.corner[0], i.at[1] - self.corner[1], i.at[2], m.rotation, m.scale];
+            let local = [i.at[0] - self.corner[0], i.at[1] - self.corner[1], i.at[2], m.spin(), m.scale];
             for (l, v) in local.into_iter().enumerate() {
                 *words.add(lane.f32_at(l, r)) = (v as f32).to_bits();
             }

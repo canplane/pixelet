@@ -18,6 +18,10 @@
         "label": "데코",
         "description": "지형에 자동으로 배치되는 나무·차량 등의 장식을 표시합니다. 직접 배치한 오브젝트에는 영향을 주지 않습니다."
       },
+      "clouds": {
+        "label": "구름",
+        "description": "하늘에 떠 있는 뭉게구름과 그 위의 엷은 구름층을 표시합니다. 카메라가 높이 올라가면 점점 옅어지다 사라집니다."
+      },
       "textures": {
         "label": "텍스처",
         "description": "큐브 표면에 단색 대신 텍스처를 표시합니다."
@@ -145,7 +149,8 @@
         "water_features": "물가 시설",
         "buildings": "건물",
         "roads": "도로",
-        "aeroways": "공항"
+        "aeroways": "공항",
+        "underground": "땅속"
       },
       "decor": {
         "nature": "자연",
@@ -238,6 +243,10 @@
       "title": "일시적인 오류가 발생했습니다.",
       "body": "잠시 후 다시 시도해 주세요."
     },
+    "kernel_panic": {
+      "title": "앱이 중단되었습니다.",
+      "body": "페이지를 새로고침해 주세요."
+    },
     "server_failed": {
       "title": "서버 연결이 실패했습니다.",
       "body": "잠시 후 다시 시도해 주세요."
@@ -245,6 +254,11 @@
     "gpu_failed": {
       "title": "WebGPU 연결이 실패했습니다.",
       "body": "잠시 후 다시 시도해 주세요."
-    }
+    },
+    "gpu_lost": {
+      "title": "WebGPU 연결이 끊어졌습니다.",
+      "body": "페이지를 새로고침해 주세요."
+    },
+    "stop_code": "중지 코드: {{code}}"
   }
 }

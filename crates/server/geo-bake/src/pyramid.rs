@@ -3,9 +3,10 @@
 //! A layer's pyramid on disk, a directory a zoom, folded by the same
 //! one-zoom function the client runs.
 
+use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::space::layer::lattice::GROUND;
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
 
@@ -118,12 +119,12 @@ pub fn fold_parent<'a, L: Base>(parent: Tile, read: impl Fn(Tile) -> Option<&'a 
     if parent.children().iter().all(|&k| read(k).is_none()) {
         return None;
     }
-    let filled: HashMap<Tile, Cow<'_, L>> = L::sources(parent).into_iter().filter(|&p| read(p).is_none()).map(|p| (p, absent.at(p))).collect();
+    let filled: FnvHashMap<Tile, Cow<'_, L>> = L::sources(parent).into_iter().filter(|&p| read(p).is_none()).map(|p| (p, absent.at(p))).collect();
     L::fold_tile(parent, |p| read(p).or_else(|| filled.get(&p).map(|c| c.as_ref())))
 }
 
 pub fn fold_stored<L: Base>(set: &TileSet, parent: Tile, absent: &impl Absent<L>) -> Result<Option<L>, String> {
-    let mut read = HashMap::new();
+    let mut read = FnvHashMap::default();
     for p in L::sources(parent) {
         if let Some(tile) = set.read::<L>(p)? {
             read.insert(p, tile);
@@ -139,8 +140,8 @@ pub struct Staged<'a> {
     pub base: &'a TileSet,
     pub stage: &'a TileSet,
     pub leaf: Zoom,
-    pub whole: &'a HashSet<Tile>,
-    pub gone: HashSet<Tile>,
+    pub whole: &'a FnvHashSet<Tile>,
+    pub gone: FnvHashSet<Tile>,
 }
 
 impl Staged<'_> {
@@ -175,7 +176,7 @@ pub fn ancestor(mut p: Tile, zoom: Zoom) -> Tile {
 /// parent whose content differs is staged, one that folds to none is gone.
 /// `changed` may hold tiles of any zoom, each taken up at its own: one with
 /// no object is changed when what its absence is has.
-pub fn fold<L: Base>(set: &mut Staged<'_>, mut changed: HashSet<Tile>, absent: &impl Absent<L>, workers: usize) -> Result<(), String> {
+pub fn fold<L: Base>(set: &mut Staged<'_>, mut changed: FnvHashSet<Tile>, absent: &impl Absent<L>, workers: usize) -> Result<(), String> {
     for zoom in (GROUND.top()..L::LEAF).rev() {
         if changed.is_empty() {
             break;
@@ -193,11 +194,11 @@ pub fn fold<L: Base>(set: &mut Staged<'_>, mut changed: HashSet<Tile>, absent: &
 
 /// Every tile its parent marks as no tile (`Base::occupancy`), under
 /// `top`: what a reader never asks for.
-pub fn unasked<L: Base>(set: &TileSet, top: Zoom) -> Result<HashSet<Tile>, String> {
-    let mut out = HashSet::new();
+pub fn unasked<L: Base>(set: &TileSet, top: Zoom) -> Result<FnvHashSet<Tile>, String> {
+    let mut out = FnvHashSet::default();
     let listed = set.by_zoom()?;
     for zoom in top + 1..=L::LEAF {
-        let mut parents: HashMap<Tile, Option<L>> = HashMap::new();
+        let mut parents: FnvHashMap<Tile, Option<L>> = FnvHashMap::default();
         for &p in listed.get(&zoom).into_iter().flatten() {
             let parent = p.parent();
             if let std::collections::hash_map::Entry::Vacant(e) = parents.entry(parent) {
@@ -271,7 +272,7 @@ fn fold_zoom<L: Base>(set: &Staged<'_>, targets: &[Tile], absent: &impl Absent<L
 }
 
 fn fold_band<L: Base>(set: &Staged<'_>, rows: &[&[Tile]], absent: &impl Absent<L>) -> Result<(Vec<Tile>, Vec<Tile>), String> {
-    let mut held: HashMap<Tile, Option<L>> = HashMap::new();
+    let mut held: FnvHashMap<Tile, Option<L>> = FnvHashMap::default();
     let (mut written, mut gone) = (Vec::new(), Vec::new());
     for row in rows {
         let y = ivec::Y(row[0].tile);

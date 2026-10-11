@@ -18,6 +18,10 @@
         "label": "Decor",
         "description": "Shows the trees, cars and other decor placed on the terrain. Objects you placed are not affected."
       },
+      "clouds": {
+        "label": "Clouds",
+        "description": "Shows the puffy clouds in the sky and the thin cloud layers above them. They fade out as the camera climbs high."
+      },
       "textures": {
         "label": "Textures",
         "description": "Textures cube faces instead of a flat color."
@@ -186,7 +190,10 @@
         "subway": "Subway",
         "monorail": "Monorail",
         "rail": "Railway",
-        "aeroway": "Runway"
+        "aeroway": "Runway",
+        "soil": "Dirt",
+        "sandstone": "Sandstone",
+        "stone": "Stone"
       },
       "object": {
         "white": "White",
@@ -256,7 +263,8 @@
         "water_features": "Water Features",
         "buildings": "Buildings",
         "roads": "Roads",
-        "aeroways": "Airports"
+        "aeroways": "Airports",
+        "underground": "Underground"
       },
       "decor": {
         "nature": "Nature",
@@ -349,6 +357,10 @@
       "title": "Something went wrong.",
       "body": "Please try again in a moment."
     },
+    "kernel_panic": {
+      "title": "The app stopped.",
+      "body": "Reload the page."
+    },
     "server_failed": {
       "title": "The server connection failed.",
       "body": "Please try again in a moment."
@@ -356,6 +368,11 @@
     "gpu_failed": {
       "title": "The WebGPU connection failed.",
       "body": "Please try again in a moment."
-    }
+    },
+    "gpu_lost": {
+      "title": "The WebGPU connection was lost.",
+      "body": "Reload the page."
+    },
+    "stop_code": "Stop code: {{code}}"
   }
 }

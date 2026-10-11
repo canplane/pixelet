@@ -44,7 +44,8 @@ function val_to_node(val: NodeValue<NodeView>): Node {
   if (val === null) return NIL_NODE;
 
   if (typeof val === "number") {
-    if (fits_i32(val)) return I32_NODE(val);
+    // -0 is a double's; as an I32 it would come back 0.
+    if (fits_i32(val) && !Object.is(val, -0)) return I32_NODE(val);
     return F64_NODE(val);
   }
   if (typeof val === "bigint") {

@@ -9,10 +9,9 @@
 //! own, and is never split: a placement takes an empty cell and an erase
 //! takes the whole leaf.
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 use xpute_guest::global::Global;
 
-use fnv::FnvBuildHasher;
 use std::collections::TryReserveError;
 
 pub use pxl_spec::bake::constant::EntryAt;
@@ -169,7 +168,7 @@ impl Write {
 /// branch holds.
 #[derive(Default)]
 pub struct Store {
-    shards: HashMap<u128, Tree, FnvBuildHasher>,
+    shards: FnvHashMap<u128, Tree>,
     ext: Pools,
 }
 
@@ -309,7 +308,7 @@ impl Store {
 
     /// What the objects fold to in the cells `from..to` of `target`, at every
     /// height, with `hide` left out.
-    fn fold_at(&self, target: Zoom, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
+    fn fold_at(&self, target: Zoom, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut FnvHashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
         out.clear();
         let mut refused = Ok(());
         let hide = hide.map(|h| key(h.zoom(), h.at()));
@@ -473,7 +472,7 @@ fn about(b: &Aabb) -> f64 {
     (b.min[0] + b.max[0]) / 2.0
 }
 
-fn try_insert(out: &mut HashMap<[i64; 3], u32>, k: [i64; 3], v: u32) -> Result<(), TryReserveError> {
+fn try_insert(out: &mut FnvHashMap<[i64; 3], u32>, k: [i64; 3], v: u32) -> Result<(), TryReserveError> {
     if out.len() == out.capacity() {
         out.try_reserve(out.len().max(16))?;
     }
@@ -502,14 +501,14 @@ impl Cells<'_> {
 
     /// What the objects fold to over the node's shard and `apron` more cells
     /// on each side, at the asked zoom, with `hide` left out.
-    pub fn fold(&self, apron: i64, hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
+    pub fn fold(&self, apron: i64, hide: Option<EntryAt>, out: &mut FnvHashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
         let (from, to) = self.column_cells(apron);
         self.store.fold_at(self.cell, from, to, hide, out)
     }
 
     /// Cuts the cells `carve` covers to air in `out`, as `fold` writes them:
     /// an eraser's preview.
-    pub fn carve(&self, apron: i64, carve: EntryAt, out: &mut HashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
+    pub fn carve(&self, apron: i64, carve: EntryAt, out: &mut FnvHashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
         let (from, _) = self.column_cells(apron);
         let own = carve.zoom();
         let [ix, iy, iz] = index_of(self.cell, &base_of(own, carve.at()));

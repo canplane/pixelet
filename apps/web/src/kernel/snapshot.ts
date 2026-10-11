@@ -16,6 +16,7 @@ const INITIAL: Snapshot = {
   is_follow_mode: false,
   camera_busy: false,
   zooming: false,
+  over_badge: false,
   settings: [],
   m_per_px: 0,
   division: [],

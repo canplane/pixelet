@@ -14,6 +14,10 @@
 
 namespace xpute {
 
+// The unit sections align to and the least block a guest's heap hands out: a
+// 32-bit machine's page, borrowed, not the host's.
+inline constexpr std::uint32_t PAGE_BYTES = 4096;
+
 constexpr std::uint32_t align_up(std::uint32_t n, std::uint32_t unit) noexcept {
     return (n + unit - 1) / unit * unit;
 }

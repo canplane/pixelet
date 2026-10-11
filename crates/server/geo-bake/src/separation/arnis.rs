@@ -27,8 +27,9 @@
 //! What is read is the tile and as much of its 1-ring as the structures
 //! touching it reach, and no further.
 
+use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::{footprint as line_reach, Form, STACKED_DECK_HEADROOM_M};
@@ -99,14 +100,14 @@ impl Units {
 struct Source {
     ring: BTreeSet<IVec>,
     loaded: BTreeSet<IVec>,
-    ground: HashMap<IVec, Vec<i16>>,
+    ground: FnvHashMap<IVec, Vec<i16>>,
     ways: BTreeMap<PartId, Way>,
     water: Vec<(Option<String>, String, Vec<[f64; 2]>)>,
-    water_seen: HashSet<Vec<u8>>,
+    water_seen: FnvHashSet<Vec<u8>>,
     pieces: BTreeMap<PartId, Sampled>,
-    by_end: HashMap<End, Vec<PartId>>,
+    by_end: FnvHashMap<End, Vec<PartId>>,
     /// Every way by its two ends.
-    way_ends: HashMap<End, Vec<PartId>>,
+    way_ends: FnvHashMap<End, Vec<PartId>>,
 }
 
 /// A piece, and once wanted its samples a cell apart along its way inside the ring.
@@ -177,13 +178,13 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: IVec) -> Result<Solved, Stri
     let mut src = Source {
         ring: tiles.into_iter().collect(),
         loaded: BTreeSet::new(),
-        ground: HashMap::new(),
+        ground: FnvHashMap::default(),
         ways: BTreeMap::new(),
         water: Vec::new(),
-        water_seen: HashSet::new(),
+        water_seen: FnvHashSet::default(),
         pieces: BTreeMap::new(),
-        by_end: HashMap::new(),
-        way_ends: HashMap::new(),
+        by_end: FnvHashMap::default(),
+        way_ends: FnvHashMap::default(),
     };
     src.load(r, tile)?;
 
@@ -421,7 +422,7 @@ struct Obstacle {
 
 struct Obstacles {
     list: Vec<Obstacle>,
-    buckets: HashMap<(i64, i64), Vec<usize>>,
+    buckets: FnvHashMap<(i64, i64), Vec<usize>>,
     bucket: f64,
 }
 
@@ -431,7 +432,7 @@ impl Obstacles {
         let cell = |p: [f64; 2]| [u_from_mer(p[0] - origin[0]) / CELL_U, u_from_mer(p[1] - origin[1]) / CELL_U];
         let mut out = Obstacles {
             list: Vec::new(),
-            buckets: HashMap::new(),
+            buckets: FnvHashMap::default(),
             bucket: f64::from(units.c(OBSTACLE_GRID_M).max(1)),
         };
         let add = |out: &mut Obstacles, points: &[[f64; 2]], ends: &[End], half: i32, headroom: i32| {
@@ -543,13 +544,13 @@ fn dist_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
 // ---- road bridges (Arnis `BridgeStructureMap::build`) ----
 
 /// Decks resolved: by cell, the deck's height and layer.
-type Separation = HashMap<(i64, i64), (i32, i64)>;
+type Separation = FnvHashMap<(i64, i64), (i32, i64)>;
 
 struct Bridges {
     ys: Vec<(usize, Vec<i32>)>,
     separation: Separation,
     /// The ways a bridge's ramp took, kept from a tunnel's approach.
-    ramp_ways: HashSet<PartId>,
+    ramp_ways: FnvHashSet<PartId>,
 }
 
 fn cell_key(c: [f64; 2]) -> (i64, i64) {
@@ -729,21 +730,21 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
     let mut groups: Vec<Vec<usize>> = groups.into_values().collect();
     groups.sort_by_key(|g| (g.iter().map(|&q| effective_layer(&runs[q])).max().unwrap_or(0), runs[g[0]].piece.id()));
 
-    let mut bridge_nodes: HashMap<&End, Vec<usize>> = HashMap::new();
+    let mut bridge_nodes: FnvHashMap<&End, Vec<usize>> = FnvHashMap::default();
     for q in (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Bridge) {
         for e in &runs[q].ends {
             bridge_nodes.entry(e).or_default().push(q);
         }
     }
-    let mut separation: Separation = HashMap::new();
-    let mut joints: HashMap<End, i32> = HashMap::new();
-    let mut claimed: HashSet<PartId> = HashSet::new();
+    let mut separation: Separation = FnvHashMap::default();
+    let mut joints: FnvHashMap<End, i32> = FnvHashMap::default();
+    let mut claimed: FnvHashSet<PartId> = FnvHashSet::default();
     let mut out = Vec::new();
     for g in &groups {
-        let mut node_members: HashMap<&End, usize> = HashMap::new();
-        let mut group_nodes: HashSet<&End> = HashSet::new();
+        let mut node_members: FnvHashMap<&End, usize> = FnvHashMap::default();
+        let mut group_nodes: FnvHashSet<&End> = FnvHashSet::default();
         for &q in g {
-            let seen: HashSet<&End> = runs[q].nodes.iter().collect();
+            let seen: FnvHashSet<&End> = runs[q].nodes.iter().collect();
             for n in &seen {
                 *node_members.entry(n).or_default() += 1;
             }
@@ -757,7 +758,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         let total_length: usize = g.iter().map(|&q| runs[q].cell.len() - 1).sum();
 
         // ramps: a way at a free end, raised and no bridge, carries the deck down
-        let mut ramp_ends: HashSet<&End> = HashSet::new();
+        let mut ramp_ends: FnvHashSet<&End> = FnvHashSet::default();
         let mut pending: Vec<(PartId, Vec<[f64; 2]>, End, i32)> = Vec::new();
         for &q in g {
             for e in &runs[q].ends {
@@ -792,7 +793,8 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
         let mut best = 0.0;
         for (i, a) in end_points.iter().enumerate() {
             for b in &end_points[i + 1..] {
-                let d = (a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2);
+                let [dx, dy] = [a[0] - b[0], a[1] - b[1]];
+                let d = dx * dx + dy * dy;
                 if d > best {
                     (best, axis) = (d, (*a, *b));
                 }
@@ -982,7 +984,7 @@ fn bridges(src: &Source, runs: &[Run], obstacles: &Obstacles, units: Units, line
 fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, units: Units) -> Vec<(usize, Vec<i32>)> {
     let rail: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Bridge && runs[q].rail()).collect();
     let mut out = Vec::new();
-    let mut ends_count: HashMap<&End, usize> = HashMap::new();
+    let mut ends_count: FnvHashMap<&End, usize> = FnvHashMap::default();
     for &q in &rail {
         for e in &runs[q].ends {
             *ends_count.entry(e).or_default() += 1;
@@ -1032,7 +1034,7 @@ fn rail_bridges(runs: &[Run], obstacles: &Obstacles, separation: &Separation, un
     }
     // joined through every rail bridge, a carried one included, as Arnis's `rail_uf`
     let mut uf = Uf((0..rail.len()).collect());
-    let mut at_end: HashMap<(&End, i64), usize> = HashMap::new();
+    let mut at_end: FnvHashMap<(&End, i64), usize> = FnvHashMap::default();
     for (i, &q) in rail.iter().enumerate() {
         for e in &runs[q].ends {
             match at_end.get(&(e, effective_layer(&runs[q]))) {
@@ -1126,11 +1128,11 @@ struct Claim {
     run: i32,
 }
 
-fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<PartId>, units: Units, lines: &mut Vec<(Line, Drawn)>) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
+fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &FnvHashSet<PartId>, units: Units, lines: &mut Vec<(Line, Drawn)>) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
     let tunnels: Vec<usize> = (0..runs.len()).filter(|&q| runs[q].piece.form == Form::Tunnel && !runs[q].rail()).collect();
     // a node two tunnels share, or an end the ring cut, stays at depth
-    let mut owner: HashMap<&End, PartId> = HashMap::new();
-    let mut shared: HashSet<&End> = HashSet::new();
+    let mut owner: FnvHashMap<&End, PartId> = FnvHashMap::default();
+    let mut shared: FnvHashSet<&End> = FnvHashSet::default();
     for &q in &tunnels {
         for n in &runs[q].nodes {
             let id = runs[q].piece.id();
@@ -1150,7 +1152,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<PartId>, units: 
 
     // ---- the approaches: ways at grade from a portal, as far as the drop needs and the road goes on;
     // a portal on a bridge's middle has none, so it stays at the terrain under the deck, as in Arnis ----
-    let portal_nodes: HashSet<&End> = tunnels.iter().flat_map(|&q| (0..2).filter(move |&e| !internal(q, e)).map(move |e| &runs[q].ends[e])).collect();
+    let portal_nodes: FnvHashSet<&End> = tunnels.iter().flat_map(|&q| (0..2).filter(move |&e| !internal(q, e)).map(move |e| &runs[q].ends[e])).collect();
     let surface = |part: &PartId| {
         src.ways
             .get(part)
@@ -1167,7 +1169,7 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<PartId>, units: 
         (n as i32, n < cells.len())
     };
     let mut claims: BTreeMap<PartId, Vec<Claim>> = BTreeMap::new();
-    let mut drops: HashMap<End, i32> = HashMap::new();
+    let mut drops: FnvHashMap<End, i32> = FnvHashMap::default();
     for &q in &tunnels {
         let r = &runs[q];
         let want = units.c(TUNNEL_COVER_DROP_M) + layer_extra(r);
@@ -1178,9 +1180,9 @@ fn road_tunnels(src: &Source, runs: &[Run], ramp_ways: &HashSet<PartId>, units: 
                 continue;
             }
             let budget = want * TUNNEL_RAMP_RUN;
-            let mut taken: HashSet<PartId> = HashSet::new();
+            let mut taken: FnvHashSet<PartId> = FnvHashSet::default();
             let mut branches: Vec<Vec<(PartId, bool, i32, i32)>> = Vec::new();
-            let eligible = |at: &End, taken: &HashSet<PartId>, claims: &BTreeMap<PartId, Vec<Claim>>| -> Vec<PartId> {
+            let eligible = |at: &End, taken: &FnvHashSet<PartId>, claims: &BTreeMap<PartId, Vec<Claim>>| -> Vec<PartId> {
                 let mut out: Vec<PartId> = src
                     .way_ends
                     .get(at)

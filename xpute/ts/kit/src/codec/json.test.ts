@@ -20,3 +20,11 @@ Deno.test("the host's JSON.parse takes what the record says is JSON", async () =
     assertEquals(got, v.s(`grammar.${k}.read`), `grammar.${k}`);
   }
 });
+
+Deno.test("the host's JSON.parse reads a number past the doubles as an infinity or a zero", async () => {
+  const v = await Golden.load("golden/codec/json.tsv");
+  for (let k = 0; v.has(`number.${k}.text`); k++) {
+    const bits = new BigUint64Array(new Float64Array([JSON.parse(v.s(`number.${k}.text`))]).buffer)[0];
+    assertEquals(bits.toString(16).padStart(16, "0"), v.s(`number.${k}.bits`), `number.${k}`);
+  }
+});

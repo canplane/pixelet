@@ -1,6 +1,6 @@
 // @pxl/web/vite.config.ts
 
-import { defineConfig, type HmrContext, loadEnv, type Plugin, type ProxyOptions } from "vite";
+import { defineConfig, type HmrContext, loadEnv, type Plugin, type ProxyOptions, type ViteDevServer } from "vite";
 import deno from "@deno/vite-plugin";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -259,6 +259,30 @@ const remoteOriginDefault = "https://plei.me";
 // kernel's memory and device, and a hot-swapped copy ran beside them — a
 // second device beside the renderer's objects on the first.
 const corePathIncludes = ["/xpute/ts/kit/", "/xpute/ts/host/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
+
+// One reload for a change that reaches both sides: while the kernel builds, a
+// core change waits for it, so the page never runs the shell generated from a
+// new spec beside a module built from the old. The wait before a reload lets a
+// build the same write starts claim it: the generator writes the .ts beside
+// the .rs, and Deno's watcher reports the one after Vite's reports the other.
+const RELOAD_SETTLE_MS = 200;
+const kernelBuild = { running: false, held: false };
+let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+
+function reloadOnce(server: ViteDevServer) {
+  kernelBuild.held = true;
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => {
+    if (!kernelBuild.running) sendHeldReload(server);
+  }, RELOAD_SETTLE_MS);
+}
+
+function sendHeldReload(server: ViteDevServer) {
+  if (!kernelBuild.held) return;
+  kernelBuild.held = false;
+  server.ws.send({ type: "full-reload" });
+}
+
 function fullReloadOnCoreChange() {
   function isCoreFile(file: string): boolean {
     const p = file.replaceAll("\\", "/");
@@ -299,7 +323,7 @@ function fullReloadOnCoreChange() {
         for (const mod of ctx.server.moduleGraph.idToModuleMap.values()) {
           if (mod.id?.includes(file)) ctx.server.moduleGraph.invalidateModule(mod);
         }
-        ctx.server.ws.send({ type: "full-reload" });
+        reloadOnce(ctx.server);
         // Vite prints "page reload" for the ones it decides itself and says
         // nothing about this one, so without a line here a core edit looks
         // exactly like a core edit that was never noticed.
@@ -330,13 +354,13 @@ function rebuildKernelOnRustChange(): Plugin {
     configureServer(server) {
       const crates = path.resolve(__dirname, "..", "..", "crates");
       const target = path.join(crates, "target") + path.sep;
-      let [running, again] = [false, false];
+      let again = false;
       const build = async () => {
-        if (running) {
+        if (kernelBuild.running) {
           again = true;
           return;
         }
-        running = true;
+        kernelBuild.running = true;
         do {
           again = false;
           const done = await new Deno.Command("deno", { args: ["run", "-A", "script/build-wasm.ts"], cwd: __dirname }).output();
@@ -344,7 +368,8 @@ function rebuildKernelOnRustChange(): Plugin {
           if (done.success) server.config.logger.info(said.split("\n").at(-1) ?? "", { timestamp: true });
           else server.config.logger.error(`kernel build failed\n${said}`, { timestamp: true });
         } while (again);
-        running = false;
+        kernelBuild.running = false;
+        sendHeldReload(server);
       };
       const watcher = Deno.watchFs(crates);
       server.httpServer?.once("close", () => watcher.close());

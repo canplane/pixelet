@@ -182,6 +182,9 @@ template <class Self, class Alloc> class NodeView {
                     n.str = x;
                     return n;
                 } else if constexpr (std::is_same_v<T, typename V::Array>) {
+                    // A number array of whole elements, or a bitset, as the Rust encoder takes.
+                    bool bitset = x.type == SequenceType::bitset;
+                    if (!bitset && (type_is_nonnum(type_of(x.type)) || x.bytes.size() % elem_sz(x.type) != 0)) return marshal_error(Errno::ebadmsg);
                     Node<Alloc> n(a);
                     n.kind = x.type == SequenceType::bitset ? NodeKind::bitset : NodeKind::array;
                     n.type = type_of(x.type);

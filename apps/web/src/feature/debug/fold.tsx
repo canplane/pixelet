@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { create } from "zustand";
 
+import { cornerPanel } from "@/shared/ui/corner-card.ts";
 import { alpha, color } from "@/shared/ui/theme.ts";
 import { gauge } from "./profiler/gauge.tsx";
 
@@ -41,17 +42,8 @@ export function Fold({ name, title, end, children }: { name: FoldName; title: st
 }
 
 const styles = StyleSheet.create({
-  panel: {
-    flexShrink: 1,
-    width: 300,
-    overflow: "hidden",
-    marginBottom: 8,
-    borderRadius: 8,
-    padding: 10,
-    backgroundColor: alpha(color.black, 0.72),
-    pointerEvents: "box-none",
-  },
+  panel: { ...cornerPanel, flexShrink: 1, overflow: "hidden", pointerEvents: "box-none" },
   title: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  titleText: { fontSize: 11, fontWeight: "600", color: alpha(color.white, 0.75) },
+  titleText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: alpha(color.white, 0.75) },
   end: { flexDirection: "row", alignItems: "center", gap: 6 },
 });

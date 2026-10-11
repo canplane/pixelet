@@ -169,6 +169,10 @@ export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
   "decor/kenney_watercraft_pack/boat-sail-a.glb": { key: "asset/decor/kenney_watercraft_pack/boat-sail-a-35c8e2adae1d.glb", bytes: 35276, extent: [1.78, 3.77, 4.74] },
   "decor/kenney_watercraft_pack/boat-speed-a.glb": { key: "asset/decor/kenney_watercraft_pack/boat-speed-a-d6d5605408e8.glb", bytes: 16520, extent: [1.78, 3.37, 1.5] },
   "decor/kenney_watercraft_pack/colormap.png": { key: "asset/decor/kenney_watercraft_pack/colormap-311138350e74.png", bytes: 8814 },
+  "sky/cloud/cumulus_1.glb": { key: "asset/sky/cloud/cumulus_1-6e6d529a81c2.glb", bytes: 27608, extent: [2.97, 1.85, 1.63] },
+  "sky/cloud/cumulus_2.glb": { key: "asset/sky/cloud/cumulus_2-08a8d12f1a55.glb", bytes: 27608, extent: [4.26, 1.75, 2.07] },
+  "sky/cloud/stratus.glb": { key: "asset/sky/cloud/stratus-1c6b7407824d.glb", bytes: 27608, extent: [8.1, 1.85, 1.31] },
+  "sky/cloud/white.png": { key: "asset/sky/cloud/white-adbbf0299636.png", bytes: 72 },
   "sky/earth/07.webp": { key: "asset/sky/earth/07-eb55c81e573d.webp", bytes: 1312828 },
   "sky/moon.png": { key: "asset/sky/moon-e6977d49922c.png", bytes: 165698 },
 };
@@ -294,6 +298,7 @@ export const PACK = {
     ["ground", "commercial", "bottom", 16],
     ["ground", "forest", "bottom", 17],
     ["ground", "industrial", "bottom", 18],
+    ["ground", "soil", "top", 19],
     ["ground", "land", "bottom", 19],
     ["ground", "park", "bottom", 20],
     ["ground", "pitch", "bottom", 21],

@@ -9,3 +9,74 @@ fn a_pier_stands_on_the_ground_and_not_where_the_terrain_gives_none() {
     assert_eq!(pier_stands([0, 10], sentinel::unknown, [], 0, 1.0), None);
     assert_eq!(pier_stands([0, 10], sentinel::void, [], 0, 1.0), None);
 }
+
+// A square per seed of one to three cells, as a kind of mixed variants claims.
+fn side(c: &Candidate) -> i64 {
+    1 + (c.seed % 3) as i64
+}
+
+const REGION: [[i64; 2]; 2] = [[1000, 2000], [1064, 2064]];
+
+#[test]
+fn no_two_candidates_that_stand_claim_one_cell() {
+    let mut out = Vec::new();
+    scatter(7, 0.2, LEAF_ZOOM, REGION, 3, side, &mut out).unwrap();
+    assert!(out.len() > 50, "{}", out.len());
+    for (i, a) in out.iter().enumerate() {
+        for b in &out[i + 1..] {
+            assert!(!meet(a, b, &side), "{a:?} {b:?}");
+        }
+    }
+}
+
+#[test]
+fn a_region_keeps_on_each_cell_what_the_cell_alone_keeps() {
+    let mut out = Vec::new();
+    scatter(7, 0.2, LEAF_ZOOM, REGION, 3, side, &mut out).unwrap();
+    for y in REGION[0][1]..REGION[1][1] {
+        for x in REGION[0][0]..REGION[1][0] {
+            let at = out.iter().find(|c| c.cell == [x, y]).copied();
+            assert_eq!(at, scatter_at(7, 0.2, [x, y], 3, side), "{x}, {y}");
+        }
+    }
+}
+
+#[test]
+fn a_finer_zoom_keeps_what_a_coarser_one_had() {
+    let (mut coarse, mut fine) = (Vec::new(), Vec::new());
+    scatter(7, 0.2, LEAF_ZOOM - 2, REGION, 3, side, &mut coarse).unwrap();
+    scatter(7, 0.2, LEAF_ZOOM, REGION, 3, side, &mut fine).unwrap();
+    assert!(!coarse.is_empty());
+    for c in &coarse {
+        assert!(fine.contains(c), "{c:?}");
+    }
+}
+
+/// The noise is continuous across its lattice and stays near [−1, 1].
+#[test]
+fn perlin_is_continuous_and_bounded() {
+    let mut last = perlin(7, [0.0, 0.3, 0.7]);
+    for k in 1..2000 {
+        let v = perlin(7, [k as f64 * 0.01, 0.3, 0.7]);
+        assert!(v.abs() <= 1.1, "{v} at {k}");
+        assert!((v - last).abs() < 0.05, "jump at {k}");
+        last = v;
+    }
+    assert_eq!(perlin(7, [3.0, 4.0, 5.0]), 0.0, "zero on the lattice");
+}
+
+/// Caves are some of the ground, not none and not most.
+#[test]
+fn caves_hollow_a_little_of_the_ground() {
+    let mut n = 0;
+    for x in 0..64 {
+        for y in 0..64 {
+            for z in -32..0 {
+                n += usize::from(hollow([x as f64 + 0.5, y as f64 + 0.5, z as f64 + 0.5]));
+            }
+        }
+    }
+    let share = n as f64 / (64.0 * 64.0 * 32.0);
+    eprintln!("cave share {share}");
+    assert!((0.005..0.1).contains(&share), "{share}");
+}

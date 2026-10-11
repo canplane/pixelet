@@ -96,9 +96,11 @@ fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
     let mut slots: Vec<TileOrigin> = Vec::new();
     let table = palette()
         .map(|cube| {
+            // A block wears what the pack ships for it: a side or a bottom of its
+            // own where it has one, its top's image on every face where it has
+            // not, as a cube_all. The dirt under a face is its own block, the
+            // stratum under it (`pxl-spec block/sample.rs` `strata`), never a side.
             let top = shipped_texture_tile(cube, CubeFace::Top);
-            // No side of its own means one image on every face, as Minecraft's cube_all.
-            // The pack has no side without a bottom.
             let side = shipped_texture_tile(cube, CubeFace::Side).or(top);
             let bottom = shipped_texture_tile(cube, CubeFace::Bottom).or(top);
             slot_word(slot_of(&mut slots, top), slot_of(&mut slots, side), slot_of(&mut slots, bottom))

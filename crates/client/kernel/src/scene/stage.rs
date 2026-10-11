@@ -33,6 +33,7 @@ use crate::layer::earth::{earth_upload, earth_window, Earth, EARTH_FRAMES};
 use crate::profiler::report::set_host_frame_stat;
 use crate::scene::character::companion::companion_skins;
 use crate::scene::character::preview::preview_rows;
+use crate::scene::environment::cloud::cloud_groups;
 use crate::sched::edge::request_world_tick;
 use crate::setting::store::{settings_store, AoMode};
 use crate::view::demand::Observed as _;
@@ -91,6 +92,7 @@ pub fn stage_write() {
     s[STAGE_AT::EDGE_WIDTH] = crate::param::EDGE_WIDTH * crate::view::frame::resolution::world_ratio();
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { crate::param::RIM_INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
+    s[STAGE_AT::CLOUDS] = crate::scene::environment::cloud::clouds_shown();
 }
 
 pub fn stage_render() {
@@ -109,6 +111,9 @@ pub fn stage_render() {
     });
     for (slot, (model, image, extent)) in decor.iter_mut().zip(variants) {
         *slot = (model.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle), image, extent);
+    }
+    for (group, mesh, image, extent) in cloud_groups() {
+        decor[group] = (mesh, image, extent);
     }
     let mut skins = [(0u32, 0u32); 2];
     let mut skin_cnt = 0;
@@ -227,11 +232,11 @@ pub fn visible_step(ctx: &mut TickContext) {
         let edits = crate::chunk::source::previewed();
         let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
         crate::chunk::decor::cell::step(&pxl_spec::block::decor::DECORS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
+        crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
     }
     crate::chunk::place::step(ctx);
     let k = kernel();
-    let actors = &k.scene.actors;
-    k.billboards.draw(&mut k.draw, &|id| actors.actor_ref(id).filter(|a| a.visible).map(|a| a.at), frame.eye);
+    k.billboards.draw(&mut k.draw, frame.eye);
     if draw {
         c.draw = true;
         ctx.invalidate();

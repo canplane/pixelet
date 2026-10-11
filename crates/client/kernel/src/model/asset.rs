@@ -7,7 +7,7 @@
 //! transforms baked into the vertices, since the decor pass reads no joint
 //! palette and a wheel would otherwise sit at the model's origin.
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
 use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
@@ -34,7 +34,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
     let still = !skinned && gltf.animations.is_empty();
 
     let mut joint_nodes: Vec<u32> = Vec::new();
-    let mut joint_of: HashMap<u32, u32> = HashMap::new();
+    let mut joint_of: FnvHashMap<u32, u32> = FnvHashMap::default();
     let mut add_joint = |node: u32| {
         if let std::collections::hash_map::Entry::Vacant(e) = joint_of.entry(node) {
             e.insert(joint_nodes.len() as u32);
@@ -141,7 +141,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             i0 += prim.index.len();
         }
 
-        let mut inverse_bind_of: HashMap<u32, [f32; 16]> = HashMap::new();
+        let mut inverse_bind_of: FnvHashMap<u32, [f32; 16]> = FnvHashMap::default();
         if skinned {
             for skin in &gltf.skins {
                 for (k, &j) in skin.joints.iter().enumerate() {

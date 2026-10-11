@@ -20,9 +20,8 @@ pub const OBJECT_SIZES: [f64; OBJECT_TIERS] = {
 
 pub const DEFAULT_OBJECT_SIZE: f64 = OBJECT_SIZES[0];
 
-/// One ground cell, as the scatter assumes. Its own constant, not tied to
-/// the object tool's live size.
-pub const DECOR_SIZE: f64 = units(GROUND.cell());
+/// A marker's place: one ground cell, not tied to the object tool's live size.
+pub const MARKER_SIZE: f64 = units(GROUND.cell());
 
 /// The default for a tier the ladder does not have.
 pub fn object_size_of(tier: u32) -> f64 {

@@ -2,8 +2,7 @@
 
 // Writes a packet in place into bytes the caller holds, with no tree and no
 // allocation; the bytes match the tree encoder's for the same tree. A string
-// is judged against the cap by its UTF-16 units first, four bytes each, as the
-// TypeScript measures, so the same strings are refused on every side.
+// fits where its UTF-8 and the NUL after it do, on every side.
 
 #pragma once
 

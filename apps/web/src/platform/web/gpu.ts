@@ -17,6 +17,9 @@ const TRIES = 10;
 /** So an outage is logged once at start and once at end. */
 let tries = 0;
 
+/** A device answered once: giving up after it is losing the GPU, not lacking one. */
+let had = false;
+
 /** A hidden page draws nothing, so it waits to be shown. */
 function askAgain(): void {
   if (document.visibilityState === "visible") {
@@ -43,18 +46,19 @@ export function gpuBoot(): void {
       if (tries === 1) console.warn(`[gpu] no adapter answered; asking every ${RETRY_MS} ms while the page is shown`);
       if (tries >= TRIES) {
         console.error(`[gpu] no adapter answered in ${tries} requests; nothing can be drawn`);
-        setGpu(Gpu.Missing);
+        setGpu(had ? Gpu.Lost : Gpu.Missing);
         return;
       }
       setGpu(Gpu.Waiting);
       return askAgain();
     }
     setGpu(Gpu.Present);
+    had = true;
     if (tries > 1) console.info(`[gpu] a device answered after ${tries} requests`);
     tries = 0;
     send_next(Command.GPU_READY, encode_gpu_ready({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));
   }, (err) => {
     console.error("[gpu] the device request failed; nothing can be drawn:", err);
-    setGpu(Gpu.Missing);
+    setGpu(had ? Gpu.Lost : Gpu.Missing);
   });
 }
