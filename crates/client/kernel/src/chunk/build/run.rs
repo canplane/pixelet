@@ -122,9 +122,9 @@ impl Builder {
             return Progress::Blocked;
         };
         let target = column.runs;
-        let (z0, z1) = c.at.z_range();
-        let z = z_unit(target);
-        let range = [(z0 / z) as i32, (z1 / z) as i32];
+        // And the cell under its floor, which decides the floor's faces.
+        let [lo, hi] = window(c.at, target);
+        let range = [lo - 1, hi];
         if column.compose(&mut self.composer, &mut self.blocks).is_err() {
             self.refuse(id);
             return Progress::Blocked;
@@ -198,4 +198,11 @@ impl Builder {
         // SAFETY: the chunk's own block, held until its runs are let go.
         unsafe { RunSet::carve(core::slice::from_raw_parts(ptr_at::<u8>(runs.block.0), bytes), runs.count, span, APRON) }
     }
+}
+
+/// The chunk's own heights, `[lo, hi)`, in the cells of runs at `runs`.
+pub(super) fn window(at: PyramidChunk, runs: Zoom) -> [i32; 2] {
+    let (z0, z1) = at.z_range();
+    let z = z_unit(runs);
+    [(z0 / z) as i32, (z1 / z) as i32]
 }
