@@ -132,7 +132,9 @@ pub fn put_center(target: Pvf3, motion: Motion) {
     request_world_tick();
 }
 
-fn target_center() -> Option<Pvf3> {
+/// Where the center is going: the place last put, which a smooth move eases
+/// toward, or where it stands.
+pub fn target_center() -> Option<Pvf3> {
     match active() {
         Active::Orbit => crate::control::camera::orbit::target_center(),
         Active::Free => crate::control::camera::free::target_center(),

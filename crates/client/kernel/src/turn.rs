@@ -52,12 +52,14 @@ fn companion_props() -> Option<CompanionProps> {
     if crate::control::camera::controller::dist() == 0.0 {
         return None;
     }
-    let focus = crate::control::camera::controller::focus()?;
+    // Where the camera is going, not where its easing has got to: walked toward
+    // only once the eased center settled, it set off as the glide's long tail ended.
+    let goal = crate::control::camera::controller::target_center().or_else(crate::control::camera::controller::focus)?;
     let eye = crate::view::frame::coord::world_to_canonical(&crate::control::camera::controller::eye_world()?);
-    let center = crate::view::frame::coord::to_world(&focus);
+    let center = crate::view::frame::coord::to_world(&goal);
     Some(CompanionProps {
         center: [center[0], center[1]],
-        floor: crate::control::navigation::support::floor_seen(&focus),
+        floor: crate::control::navigation::support::floor_seen(&goal),
         azimuth: crate::control::camera::controller::azimuth(),
         dragging: crate::control::camera::state::camera_state().camera_status == crate::control::camera::state::CameraStatus::Drag,
         steered: crate::control::camera::input::steering(),
