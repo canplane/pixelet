@@ -5,6 +5,7 @@
 //! rings are xpute's (`xpute_guest::ipc::door`).
 
 mod apply;
+pub(crate) use apply::over_badge;
 mod executor;
 pub mod layout;
 
