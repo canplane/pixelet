@@ -44,15 +44,14 @@ template <class T, class Alloc> class Arena {
 
     Result<T *> alloc() {
         if (len_ >= cap_) {
-            if (Result<void> r = grow(std::max(saturating_mul2(cap_), 1u)); !r) return r.error();
+            if (Result<void> r = grow(len_ + 1); !r) return r.error();
         }
         return &mem_[len_++];
     }
 
     Result<void> reserve(std::uint32_t cnt) {
         std::uint32_t req = len_ > std::numeric_limits<std::uint32_t>::max() - cnt ? std::numeric_limits<std::uint32_t>::max() : len_ + cnt;
-        if (req > cap_) return grow(std::max(saturating_mul2(cap_), req));
-        return {};
+        return grow(req);
     }
 
     // Past the cursor is a broken invariant, not a resize request.
@@ -81,13 +80,11 @@ template <class T, class Alloc> class Arena {
     Arena(std::uint32_t max_cap, const Alloc &alloc) : mem_(alloc), max_cap_(max_cap) {}
 
     // Saturates, so one past u32 is refused at max_cap rather than wrapping under it.
-    static std::uint32_t saturating_mul2(std::uint32_t x) noexcept {
-        return x > std::numeric_limits<std::uint32_t>::max() / 2 ? std::numeric_limits<std::uint32_t>::max() : x * 2;
-    }
-
-    Result<void> grow(std::uint32_t new_cap) {
-        if (new_cap <= cap_) return {};
-        if (new_cap > max_cap_) return marshal_error(Errno::eoverflow);
+    // Doubling stops at the cap, so the cap refuses only what does not fit.
+    Result<void> grow(std::uint32_t req) {
+        if (req <= cap_) return {};
+        if (req > max_cap_) return marshal_error(Errno::eoverflow);
+        std::uint32_t new_cap = std::clamp(cap_ > max_cap_ / 2 ? max_cap_ : cap_ * 2, req, max_cap_);
         mem_.resize(new_cap);
         cap_ = new_cap;
         return {};
