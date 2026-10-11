@@ -9,11 +9,11 @@ struct Run {
     layer: u32,
 }
 
-/// Every run is whole-cell terrain.
-fn set_of(span: u32, columns: &[Vec<Run>]) -> OwnedRunSet {
+/// Every run is whole-cell terrain, `apron` columns past each side.
+fn set_of(span: u32, apron: u32, columns: &[Vec<Run>]) -> OwnedRunSet {
     let mut set = OwnedRunSet {
         span,
-        apron: 1,
+        apron,
         ..OwnedRunSet::default()
     };
     for column in columns {
@@ -79,9 +79,10 @@ fn bake_in_blocks(set: &OwnedRunSet, lod_step: u32, block: u32) -> Vec<u32> {
 /// A mesh handed a block at a time is the mesh handed whole, whatever the block size.
 #[test]
 fn a_mesh_written_through_blocks_is_the_mesh_written_whole() {
-    let span = 18;
+    // A fold's cell past each side, the widest step's.
+    let span = 24;
     let columns: Vec<Vec<Run>> = (0..span * span).map(|k| ground(1 + ((k * 7919) % 13) as i32)).collect();
-    let set = set_of(span, &columns);
+    let set = set_of(span, 4, &columns);
     for lod_step in [1, 2, 4] {
         let whole = bake_in_blocks(&set, lod_step, u32::MAX / 64);
         assert!(!whole.is_empty(), "nothing baked at step {lod_step}");
@@ -95,7 +96,7 @@ fn a_mesh_written_through_blocks_is_the_mesh_written_whole() {
 /// swatch and its texture, not a summary of it.
 #[test]
 fn a_cell_full_of_one_leaf_folds_to_that_leaf() {
-    let (span, taps) = (10, taps_of(5));
+    let (span, taps) = (12, taps_of(5));
     let columns: Vec<Vec<Run>> = (0..span * span)
         .map(|_| {
             vec![Run {
@@ -106,7 +107,7 @@ fn a_cell_full_of_one_leaf_folds_to_that_leaf() {
             }]
         })
         .collect();
-    let set = set_of(span, &columns);
+    let set = set_of(span, 2, &columns);
     let mut bake = BakeContext::default();
     let view = set.view();
     assert!(bake.begin(&view, 2, 1.0, 1.0, true, true, (8, 512), [i32::MIN, i32::MAX]).is_ok());
@@ -188,7 +189,7 @@ fn strata_field(span: u32, top: impl Fn(u32) -> i32) -> OwnedRunSet {
             ]
         })
         .collect();
-    set_of(span, &columns)
+    set_of(span, 1, &columns)
 }
 
 /// A side buried in the ground is no face, however the column beside is laid:
@@ -228,20 +229,18 @@ fn stacked_boxes_meet() {
     }
 }
 
-/// A chunk draws its own heights, the face at its floor as the cell under it
-/// says, hidden where ground goes on and drawn where it stops, so a cave's
-/// roof over the chunk under shows; the face at its roof always, as the chunk
-/// above may draw the cell over it shrunk.
+/// A chunk draws its own heights, the faces at its floor and roof as the
+/// cells past them say: hidden where ground goes on, drawn where it stops.
 #[test]
 fn a_chunk_floor_and_roof_show_where_the_ground_past_them_stops() {
     let bake = |z0: i32, z1: i32| {
         let columns: Vec<Vec<Run>> = (0..9).map(|k| if k == 4 { vec![Run { z0, z1, rgb: [1, 2, 3], layer: 0 }] } else { Vec::new() }).collect();
-        let (mesh, heights) = bake_window(&set_of(3, &columns), 1.0, [0, 4]);
+        let (mesh, heights) = bake_window(&set_of(3, 1, &columns), 1.0, [0, 4]);
         let m = mesh.chunks(FINE_BOX_WORDS as usize).next().map(|m| m.to_vec()).expect("a box");
         let (min, size) = box_bounds(&m, 1.0, heights);
         ((min[2], min[2] + size[2]), m[5] & FACE_NZ != 0, m[5] & FACE_PZ != 0)
     };
-    assert_eq!(bake(-1, 4), ((0.0, 4.0), false, true), "ground through both");
-    assert_eq!(bake(1, 4), ((1.0, 4.0), true, true), "a cave's roof");
+    assert_eq!(bake(-1, 4), ((0.0, 4.0), false, false), "ground through both");
+    assert_eq!(bake(1, 4), ((1.0, 4.0), true, false), "a cave's roof");
     assert_eq!(bake(-1, 2), ((0.0, 3.0), false, true), "the ground's face");
 }

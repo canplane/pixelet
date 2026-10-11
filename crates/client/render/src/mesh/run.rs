@@ -159,7 +159,7 @@ pub struct RunSet<'a> {
     pub count: u32,
     /// Column `(cx, cy)` is `cy * span + cx`.
     pub span: u32,
-    /// None for a coarse tier's set, which carries no neighbors of its own.
+    /// Columns past each side, which decide the faces at its rim.
     pub apron: u32,
     pub start: &'a [u32],
     pub z0: &'a [i32],
