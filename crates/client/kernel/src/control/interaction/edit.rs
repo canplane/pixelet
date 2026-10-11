@@ -46,8 +46,13 @@ fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
     submit(Write::at(coord, size, val));
 }
 
-/// A write is made here at once and sent to be kept.
+/// A write is made here at once and sent to be kept, where the world takes
+/// an edit (`World::editable`); elsewhere it is refused.
 fn submit(write: Write) {
+    let (zoom, at) = pxl_spec::space::hierarchy::morton::node_of::<3>(write.key);
+    if !World::now().editable(&cube(zoom, at)) {
+        return;
+    }
     repository::send(&write);
     apply([write]);
 }

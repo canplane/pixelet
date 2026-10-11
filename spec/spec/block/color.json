@@ -3,7 +3,7 @@
     "ground: OpenStreetMap Carto (gravitystorm/openstreetmap-carto, style/*.mss), each the value its key names, a derived one computed (darken, lighten, an rgba over @land-color) and a literal named for the feature it paints, a building at z16 and finer as a cell is z16; object: hand-picked; every value #rrggbb"
   ],
   "sentinel": {
-    "unknown": { "hex": "#d9d0cc", "$doc": "A cell whose data is missing or invalid, a visible neutral gray so it reads as not known rather than as whatever drew last." }
+    "unknown": { "hex": "#000000", "$doc": "Bedrock, where the world holds no more: black, so it reads as the world's end rather than as whatever drew last." }
   },
   "ground": {
     "land": { "hex": "#f2efe9" },

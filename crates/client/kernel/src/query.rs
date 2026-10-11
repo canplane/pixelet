@@ -11,6 +11,7 @@
 
 mod block;
 mod decor;
+mod edit;
 mod placed;
 mod ray;
 mod scatter;

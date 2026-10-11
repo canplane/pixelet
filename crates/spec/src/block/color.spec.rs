@@ -19,8 +19,8 @@ use super::Swatch;
 /// `sentinel`'s color for a value.
 pub const fn sentinel(t: u8) -> Option<Swatch> {
     match t {
-        // A cell whose data is missing or invalid, a visible neutral gray so it reads as not known rather than as whatever drew last.
-        cube::sentinel::unknown => Some(Swatch::new(0xd9d0cc)),
+        // Bedrock, where the world holds no more: black, so it reads as the world's end rather than as whatever drew last.
+        cube::sentinel::unknown => Some(Swatch::new(0x000000)),
         _ => None,
     }
 }

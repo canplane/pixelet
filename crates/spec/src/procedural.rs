@@ -227,6 +227,63 @@ pub fn pier_stands(pier: [i32; 2], cell: GroundId, column: impl IntoIterator<Ite
     (!lower).then_some(pier)
 }
 
+// ---- caves: Minecraft 1.18's noise caves ----
+
+/// Ken Perlin's improved noise (SIGGRAPH 2002): the fade 6t⁵ − 15t⁴ + 10t³
+/// and his twelve cube-edge gradients, the permutation table a hash of the
+/// lattice point instead, so it needs no table and runs on as far as the world
+/// does. In about [−1, 1]; plain arithmetic, so every platform draws the same.
+pub fn perlin(seed: u64, [x, y, z]: [f64; 3]) -> f64 {
+    let (fx, fy, fz) = (x.floor(), y.floor(), z.floor());
+    let (ix, iy, iz) = (fx as i64, fy as i64, fz as i64);
+    let (x, y, z) = (x - fx, y - fy, z - fz);
+    let fade = |t: f64| t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+    let lerp = |t: f64, a: f64, b: f64| a + t * (b - a);
+    let grad = |dx: i64, dy: i64, dz: i64| {
+        let h = derive_seed_u64(derive_seed_u64(derive_seed_u64(seed, (ix + dx) as u64), (iy + dy) as u64), (iz + dz) as u64) & 15;
+        let (x, y, z) = (x - dx as f64, y - dy as f64, z - dz as f64);
+        let u = if h < 8 { x } else { y };
+        let v = if h < 4 {
+            y
+        } else if h == 12 || h == 14 {
+            x
+        } else {
+            z
+        };
+        (if h & 1 == 0 { u } else { -u }) + (if h & 2 == 0 { v } else { -v })
+    };
+    let (u, v, w) = (fade(x), fade(y), fade(z));
+    let face = |dz: i64| lerp(v, lerp(u, grad(0, 0, dz), grad(1, 0, dz)), lerp(u, grad(0, 1, dz), grad(1, 1, dz)));
+    lerp(w, face(0), face(1))
+}
+
+/// A cave's tunnels where two noises are both near zero, Minecraft's
+/// spaghetti; its caverns where one is high, its cheese. The scales are a
+/// unit to a block, and these numbers are the tree's own, none of Minecraft's
+/// copied: a tunnel some 2 to 4 units across, a cavern rare.
+const SPAGHETTI_SCALE: [f64; 3] = [1.0 / 24.0, 1.0 / 24.0, 1.0 / 12.0];
+const SPAGHETTI_WIDTH: f64 = 0.06;
+const CHEESE_SCALE: f64 = 1.0 / 48.0;
+const CHEESE_THRESHOLD: f64 = 0.42;
+
+/// Whether the cell centered at `at`, in units, is a cave's air. Nothing
+/// bounds it: whatever is laid over it later, bedrock and ways among them, wins.
+pub fn hollow(at: [f64; 3]) -> bool {
+    // Each noise on a lattice of its own, shifted by its seed: Perlin noise is
+    // zero on its lattice's points, so two on one lattice would both be near
+    // zero there and hollow a grid of pits, not tunnels.
+    let noise = |tag: u64, s: [f64; 3]| {
+        let seed = derive_seed_u64(MASTER_SEED, tag);
+        let shift = |k: u64| u32_to_unit(derive_seed_u64(seed, k) as u32);
+        perlin(seed, [at[0] * s[0] + shift(0), at[1] * s[1] + shift(1), at[2] * s[2] + shift(2)])
+    };
+    // The second only where the first is near zero, a few cells in a hundred.
+    if noise(0xca7e_0001, SPAGHETTI_SCALE).abs() < SPAGHETTI_WIDTH && noise(0xca7e_0002, SPAGHETTI_SCALE).abs() < SPAGHETTI_WIDTH {
+        return true;
+    }
+    noise(0xca7e_0003, [CHEESE_SCALE; 3]) > CHEESE_THRESHOLD
+}
+
 #[cfg(test)]
 #[path = "procedural.test.rs"]
 mod test;
