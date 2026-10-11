@@ -7,7 +7,7 @@
 //! is built once and drawn moved, each instance a model, a sprite or nothing
 //! by its size on the screen (`chunk/decor/cell.rs` `present_block`).
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::pass::decor::GROUPS;
@@ -75,7 +75,7 @@ struct Block {
 #[derive(Default)]
 struct Clouds {
     models: [Option<u32>; VARIANTS.len()],
-    blocks: HashMap<[i64; 2], Block>,
+    blocks: FnvHashMap<[i64; 2], Block>,
     /// Kept so a settled turn asks the heap for nothing.
     wanted: Vec<[i64; 2]>,
     gone: Vec<[i64; 2]>,

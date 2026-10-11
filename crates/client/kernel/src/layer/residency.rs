@@ -12,10 +12,8 @@
 
 pub mod floor;
 
+use fnv::FnvHashMap;
 use pxl_spec::bake::tile::Occupancy;
-use std::collections::HashMap;
-
-use fnv::FnvBuildHasher;
 
 use pxl_spec::space::layer::demand::reach_tiles;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -72,7 +70,7 @@ impl<L> Entry<L> {
 }
 
 pub struct Residency<L: Base> {
-    tiles: HashMap<Tile, Entry<L>, FnvBuildHasher>,
+    tiles: FnvHashMap<Tile, Entry<L>>,
     free: Vec<u32>,
     /// Kept so `ask` allocates nothing.
     going: Vec<Tile>,
@@ -137,7 +135,7 @@ impl<L: Base> Default for Residency<L> {
     fn default() -> Self {
         let () = Self::SAFE;
         Residency {
-            tiles: HashMap::with_capacity_and_hasher(Self::ENTRIES as usize, FnvBuildHasher::default()),
+            tiles: FnvHashMap::with_capacity_and_hasher(Self::ENTRIES as usize, Default::default()),
             // Lowest first, as the frames are taken.
             free: (0..Self::FRAMES).rev().collect(),
             going: Vec::with_capacity(Self::ENTRIES as usize),
@@ -309,7 +307,7 @@ impl<L: Base> Residency<L> {
     /// Empty tiles and tiles answered above are kept only while asked:
     /// they cost no frame, so nothing would ever evict them. Framed tiles are
     /// left to normal turnover.
-    pub fn ask(&mut self, asks: &HashMap<Tile, Ask>) {
+    pub fn ask(&mut self, asks: &FnvHashMap<Tile, Ask>) {
         xpute_kit::ensure!(asks.len() <= Self::FRAMES as usize, ENOTRECOVERABLE, asks.len());
         for (&p, e) in &mut self.tiles {
             e.ask = asks.get(&p).copied();

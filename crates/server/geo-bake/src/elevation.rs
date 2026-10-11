@@ -5,7 +5,8 @@
 //! `ST_Resample(…, 'Bilinear')` (GDAL's warper) value for value; the steps
 //! below name the GDAL/PostGIS function each copies.
 
-use std::collections::{BTreeSet, HashMap};
+use fnv::FnvHashMap;
+use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
 use crate::coverage::Coverage;
@@ -57,7 +58,7 @@ pub struct Raster {
     sx: f64,
     sy: f64,
     raster_tiles: Vec<RasterTileAt>,
-    by_key: HashMap<(i64, i64), usize>,
+    by_key: FnvHashMap<(i64, i64), usize>,
     side: i64,
     held: Mutex<Held>,
 }
@@ -82,7 +83,7 @@ type Slot = Mutex<Option<Arc<RasterTile>>>;
 
 #[derive(Default)]
 struct Held {
-    slots: HashMap<usize, (u64, Arc<Slot>)>,
+    slots: FnvHashMap<usize, (u64, Arc<Slot>)>,
     tick: u64,
 }
 

@@ -24,7 +24,7 @@ struct Image {
 
 /// Keyed by the whole handle, generation included, so a reissued slot names
 /// only its new image. Locked because images decode off the kernel's thread.
-static IMAGES: Mutex<Option<std::collections::HashMap<u32, Image>>> = Mutex::new(None);
+static IMAGES: Mutex<Option<fnv::FnvHashMap<u32, Image>>> = Mutex::new(None);
 
 /// False for a file that does not decode. Runs on any thread.
 pub fn hold_image(handle: u32, file: &[u8]) -> bool {

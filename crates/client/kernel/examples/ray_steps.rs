@@ -26,8 +26,8 @@
 //!
 //!   cargo run --release -p pxl-kernel --example ray_steps -- [lon lat] [server]
 
+use fnv::FnvHashSet;
 use std::cell::Cell;
-use std::collections::HashSet;
 use std::process::Command;
 
 use pxl_kernel::layer::object::store::Store;
@@ -99,7 +99,7 @@ impl Victim for Keep {
 struct Tiles {
     server: String,
     residency: Residency<TerrainTile>,
-    tried: HashSet<Tile>,
+    tried: FnvHashSet<Tile>,
 }
 
 impl Tiles {
@@ -230,7 +230,7 @@ fn main() {
     let mut tiles = Tiles {
         server,
         residency: Residency::default(),
-        tried: HashSet::new(),
+        tried: FnvHashSet::default(),
     };
     // The eye's own column first, so it can stand on the ground.
     let leaf = GROUND.cell_of(LEAF_ZOOM, &point(x, y)).tile();
@@ -252,7 +252,7 @@ fn main() {
         for _ in 0..ROUNDS {
             let (t, lacked) = cast(&tiles, &store, &rays);
             tally = Some(t);
-            let fetched = lacked.into_iter().collect::<HashSet<_>>().into_iter().filter(|&p| tiles.fetch(p)).count();
+            let fetched = lacked.into_iter().collect::<FnvHashSet<_>>().into_iter().filter(|&p| tiles.fetch(p)).count();
             if fetched == 0 {
                 break;
             }

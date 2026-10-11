@@ -8,7 +8,7 @@
 //! Equal distances go to the lesser id, and a division already on the way
 //! down is not taken again.
 
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 use postgres::types::ToSql;
 use postgres::Client;
@@ -58,7 +58,7 @@ pub const READS: [&str; 3] = [AREAS_SQL, POINTS_SQL, RECORDS_SQL];
 #[derive(Default)]
 struct Numbered {
     list: Vec<String>,
-    number: HashMap<String, u32>,
+    number: FnvHashMap<String, u32>,
 }
 
 impl Numbered {
@@ -107,7 +107,7 @@ pub fn leaf(client: &mut Client, tile: IVec) -> Result<Option<DivisionTile>, Str
     // ---- under the areas, the nearest point of a child, within the reach ----
     let reach = mer_from_u(BAKE_REACH);
     let ring: [&(dyn ToSql + Sync); 4] = [&(min[0] - reach), &(min[1] - reach), &(max[0] + reach), &(max[1] + reach)];
-    let mut children: HashMap<String, Vec<([f64; 2], String)>> = HashMap::new();
+    let mut children: FnvHashMap<String, Vec<([f64; 2], String)>> = FnvHashMap::default();
     for r in client.query(POINTS_SQL, &ring).map_err(db)? {
         if let Some(parent) = r.get::<_, Option<String>>("parent") {
             children.entry(parent).or_default().push(([r.get("x"), r.get("y")], r.get("gers_id")));
@@ -142,7 +142,7 @@ pub fn leaf(client: &mut Client, tile: IVec) -> Result<Option<DivisionTile>, Str
 
     // ---- each division a cell names, with its parents ----
     let rows = client.query(RECORDS_SQL, &[&ids.list]).map_err(db)?;
-    let mut records: HashMap<String, (Division, Option<String>)> = HashMap::new();
+    let mut records: FnvHashMap<String, (Division, Option<String>)> = FnvHashMap::default();
     for r in &rows {
         let Some(subtype) = r.get::<_, Option<&str>>("subtype").and_then(Subtype::named) else { continue };
         let names = match r.get::<_, Option<serde_json::Value>>("names_common") {
@@ -164,7 +164,7 @@ pub fn leaf(client: &mut Client, tile: IVec) -> Result<Option<DivisionTile>, Str
     // the divisions in id order, so a tile is the same whatever order its rows came in
     let mut order: Vec<&String> = records.keys().collect();
     order.sort();
-    let at: HashMap<&String, u32> = order.iter().enumerate().map(|(k, id)| (*id, k as u32)).collect();
+    let at: FnvHashMap<&String, u32> = order.iter().enumerate().map(|(k, id)| (*id, k as u32)).collect();
     let divisions: Vec<Division> = order
         .iter()
         .map(|id| {

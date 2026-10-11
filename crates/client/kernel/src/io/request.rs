@@ -22,7 +22,7 @@ use crate::io::load::LOADS;
 use crate::io::policy::Policy;
 use crate::profiler::record::profiler_record;
 use crate::profiler::task::TaskRow;
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::off_of_slice;
@@ -438,12 +438,12 @@ fn record(a: &Attempt, at: f64, ended: Ended, phases: Option<Phases>) {
     });
 }
 
-static FILES: Global<HashMap<usize, Box<str>>> = Global::new();
+static FILES: Global<FnvHashMap<usize, Box<str>>> = Global::new();
 
 /// A location's file name lies outside kernel memory on a device, so rows
 /// name a heap copy; the names are few and kept for good.
 fn file_in_memory(file: &'static str) -> &'static str {
-    FILES.get(HashMap::new).entry(file.as_ptr().addr()).or_insert_with(|| file.into())
+    FILES.get(FnvHashMap::default).entry(file.as_ptr().addr()).or_insert_with(|| file.into())
 }
 
 static SCHED: Global<RequestScheduler<Policy>> = Global::new();

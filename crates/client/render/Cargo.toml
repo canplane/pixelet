@@ -9,6 +9,7 @@ path = "src/lib.rs"
 doctest = false
 
 [dependencies]
+fnv.workspace = true
 libm.workspace = true
 xpute-guest = { path = "../../../xpute/rust/guest" }
 xpute-kit = { path = "../../../xpute/rust/kit" }

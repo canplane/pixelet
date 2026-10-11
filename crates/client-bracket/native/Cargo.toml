@@ -15,6 +15,7 @@ test = false
 doctest = false
 
 [dependencies]
+fnv.workspace = true
 xpute-kit = { path = "../../../xpute/rust/kit" }
 xpute-guest = { path = "../../../xpute/rust/guest" }
 pxl-kernel = { path = "../../client/kernel", default-features = false }
