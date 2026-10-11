@@ -479,7 +479,7 @@ impl BakeContext {
                             self.counters.culled += 1;
                             continue;
                         }
-                        if set.sub_s[i] == SUB_CELL_NONE && mergeable.is_none() && hung_floor(set, cx, cy, i).is_none() {
+                        if set.sub_s[i] == SUB_CELL_NONE && mergeable.is_none() {
                             mergeable = Some((i as u32, mask));
                             continue;
                         }
@@ -583,7 +583,7 @@ impl BakeContext {
             let depth = (set.z1[i] as f64 + 1.0 - set.z0[i] as f64) * z_unit;
             let (min_x, min_y, min_z, size_x, size_y, size_z);
             if sub_s == SUB_CELL_NONE {
-                let z0 = hung_floor(set, s[0], s[1], i).unwrap_or(set.z0[i]);
+                let z0 = set.z0[i];
                 min_x = (cx - apron) * unit;
                 min_y = (cy - apron) * unit;
                 min_z = z0 as f64 * z_unit;
@@ -684,17 +684,7 @@ impl BakeContext {
                         return false;
                     }
                     self.coarse.start.push(self.coarse.z0.len() as u32);
-                    let mut low: Option<i32> = None;
-                    for j in 0..lod_step {
-                        for k in 0..lod_step {
-                            let (cx, cy) = (bx * lod_step + k + set.apron, by * lod_step + j + set.apron);
-                            low = match (low, edge_low(set, cx, cy)) {
-                                (Some(a), Some(b)) => Some(a.min(b)),
-                                (a, b) => a.or(b),
-                            };
-                        }
-                    }
-                    self.pack_coarse_cell(start, cnt, lod_step, bucket, low);
+                    self.pack_coarse_cell(start, cnt, lod_step, bucket);
                     self.buckets.truncate(start as usize);
                 }
             }
@@ -774,8 +764,7 @@ impl BakeContext {
     }
 
     /// Buckets have distinct heights, so sorting visits them lowest first.
-    /// `edge_low` is the lowest ground across the chunk's edge, which the block under hangs to.
-    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, step: i32, edge_low: Option<i32>) {
+    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, step: i32) {
         let grown = self.coarse.grow_runs(2 * cnt as usize);
         if !self.room(grown) {
             return;
@@ -804,14 +793,12 @@ impl BakeContext {
             // A sparse cell is inset by the cube root of its fill on every axis.
             let inset = (linear < 1.0).then(|| pack_inset(linear));
             let (rgb, taps) = acc.whole(volume).unwrap_or((acc.color(), taps_of(NO_LAYER as u8)));
-            // Under the ground is ground: where a ground box leaves its cell open below,
-            // shrunk or lowest, the block under it is laid, a cell or down to the
-            // neighbors' ground; its top fills the gaps that read as holes, its sides
-            // the steps that showed daylight.
-            let lowest = open.is_none() && last_top == i32::MIN;
+            // Under shrunk ground is ground: the block under it is laid a cell, within
+            // the cube and over what is under it here, its top filling the gap that
+            // reads as a hole. A cube draws only its own: the cube below draws its
+            // ground, so nothing is drawn twice in one plane.
             let floored = last_top == bucket_lo - 1 && open.is_some_and(|o| self.coarse.sub_s[o] == SUB_CELL_NONE);
-            let under =
-                (acc.ground && !floored && (lowest || inset.is_some())).then(|| ((bucket_lo - step).min(edge_low.map_or(i32::MAX, |low| low + 1)).max(last_top.saturating_add(1)), bucket_lo - 1));
+            let under = (acc.ground && !floored && inset.is_some() && last_top != i32::MIN).then(|| ((bucket_lo - step).max(last_top + 1), bucket_lo - 1));
             if let Some((z0, z1)) = under {
                 let co = &mut self.coarse;
                 co.z0.push(z0);
@@ -904,38 +891,6 @@ fn write_box(m: &mut [u32], min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, fa
     m[3] = u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 0]);
     m[4] = taps;
     m[5] = faces;
-}
-
-/// A wall down to the chunk's floor alone left the plane open below a lower
-/// neighbor (a cliff, or a coarser chunk read at its cell center).
-fn edge_low(set: &RunSet, cx: u32, cy: u32) -> Option<i32> {
-    let (span, apron) = (set.span, set.apron);
-    if apron == 0 {
-        return None;
-    }
-    let (lo, hi) = (apron, span - apron);
-    let top = |x: u32, y: u32| {
-        let col = (y * span + x) as usize;
-        (set.start[col]..set.start[col + 1]).map(|i| set.z1[i as usize]).max()
-    };
-    [
-        (cx + 1 == hi).then(|| top(cx + 1, cy)),
-        (cx == lo).then(|| top(cx - 1, cy)),
-        (cy + 1 == hi).then(|| top(cx, cy + 1)),
-        (cy == lo).then(|| top(cx, cy - 1)),
-    ]
-    .into_iter()
-    .flatten()
-    .flatten()
-    .min()
-}
-
-fn hung_floor(set: &RunSet, cx: u32, cy: u32, run: usize) -> Option<i32> {
-    let col = (cy * set.span + cx) as usize;
-    if set.start[col] as usize != run || set.sub_s[run] != SUB_CELL_NONE {
-        return None;
-    }
-    edge_low(set, cx, cy).map(|low| low + 1).filter(|&z0| z0 < set.z0[run])
 }
 
 fn steps(v: f64, step: f64) -> u32 {
