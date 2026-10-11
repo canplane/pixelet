@@ -383,6 +383,8 @@ export interface Snapshot {
   camera_busy: boolean;
   /** A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is. */
   zooming: boolean;
+  /** The pointer is over a badge a tap would act on with the tool held: a place to go to, or a marker to erase or word. */
+  over_badge: boolean;
   /** Every setting's value by its SettingKey, as SETTING_SET carries one. */
   settings: u32[];
   /** The meters a logical pixel spans at the focus, at the camera's distance; 0 where the camera stands there. The scale bar and how deep the division is named are the shell's to make of it. */
@@ -407,11 +409,12 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     is_follow_mode: b.at(6).get<boolean>(),
     camera_busy: b.at(7).get<boolean>(),
     zooming: b.at(8).get<boolean>(),
-    settings: Array.from(b.at(9).get<U32Array>()),
-    m_per_px: b.at(10).get<f64>(),
-    division: list(b.at_branch(11), read_division_part),
-    previews: Array.from(b.at(12).get<U32Array>()),
-    stall: b.at(13).get<Message | null>(),
+    over_badge: b.at(9).get<boolean>(),
+    settings: Array.from(b.at(10).get<U32Array>()),
+    m_per_px: b.at(11).get<f64>(),
+    division: list(b.at_branch(12), read_division_part),
+    previews: Array.from(b.at(13).get<U32Array>()),
+    stall: b.at(14).get<Message | null>(),
   };
 }
 

@@ -110,6 +110,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         is_follow_mode: following(),
         camera_busy: camera.camera_status != CameraStatus::Idle,
         zooming: crate::control::camera::controller::zooming(),
+        over_badge: crate::door::over_badge(),
         settings: &values,
         m_per_px: m_per_px(),
         division: &|each| division_parts(at, each),

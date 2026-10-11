@@ -1505,6 +1505,13 @@
           ]
         },
         {
+          "name": "over_badge",
+          "type": "bool",
+          "$doc": [
+            "The pointer is over a badge a tap would act on with the tool held: a place to go to, or a marker to erase or word."
+          ]
+        },
+        {
           "name": "settings",
           "type": "u32",
           "list": true,
