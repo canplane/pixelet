@@ -227,43 +227,90 @@ pub fn pier_stands(pier: [i32; 2], cell: GroundId, column: impl IntoIterator<Ite
     (!lower).then_some(pier)
 }
 
-// ---- caves: a hash pyramid ----
+// ---- caves: a sparse tree of hashes ----
 
 /// The coarsest cube a cave takes, 32 units a side: nothing coarser is
 /// hollow, so every coarser fold of the caves is solid.
 pub const CAVE_COARSEST: Zoom = GROUND.cell() - 5;
 
-/// The chance a cube turns one of its eight children over, the tree's own
-/// number: some 5% of the ground hollow.
-const CAVE_TURN: f64 = 1.0 / 16.0;
+/// The chance a drawing cube turns one of its eight children over, the
+/// tree's own number: with each child drawing again at even odds (one hash
+/// bit), some 6% of the ground hollow.
+const CAVE_TURN: f64 = 1.0 / 4.0;
+
+/// A cube's draws, `c` at `z`: the child it turns over, if it turns one, and
+/// which of its eight draw again, a bit each. A child that does not draw is
+/// its value all through, so the caves are a sparse tree whose nodes are the
+/// cubes that draw, every cube at the root's zoom among them.
+fn draws(z: Zoom, c: [i64; 3]) -> (Option<u64>, u8) {
+    let seed = derive_seed_u64(MASTER_SEED, 0xca7e_0001);
+    let h = [u64::from(z), c[0] as u64, c[1] as u64, c[2] as u64].into_iter().fold(seed, derive_seed_u64);
+    ((u32_to_unit(h as u32) < CAVE_TURN).then_some((h >> 32) & 7), (h >> 40) as u8)
+}
+
+/// A child's place among its parent's eight.
+fn slot(c: [i64; 3]) -> u64 {
+    (c[0] & 1 | (c[1] & 1) << 1 | (c[2] & 1) << 2) as u64
+}
 
 /// Whether the cube at `zoom` holding `at`, in units, is a cave's air. A cube
-/// is its parent's value unless its parent's hash turned it over, and a
-/// parent turns at most one of its eight, so the majority of any cube's
-/// children is the cube: the caves fold to themselves at every zoom. Past
-/// the leaves a cube is its leaf's.
+/// is its parent's value unless its parent turned it, and a parent turns at
+/// most one of its eight, so the majority of any cube's children is the
+/// cube: the caves fold to themselves at every zoom. Past the leaves a cube
+/// is its leaf's.
 pub fn hollow_at(zoom: Zoom, at: [f64; 3]) -> bool {
-    (CAVE_COARSEST..=zoom.min(GROUND.cell())).fold(false, |hollow, z| hollow ^ turned(z, at.map(|v| (v / units(z)).floor() as i64)))
+    let mut hollow = false;
+    for z in CAVE_COARSEST..=zoom.min(GROUND.cell()) {
+        let c = at.map(|v| (v / units(z)).floor() as i64);
+        let (turn, live) = draws(z - 1, c.map(|v| v >> 1));
+        hollow ^= turn == Some(slot(c));
+        if live >> slot(c) & 1 == 0 {
+            break;
+        }
+    }
+    hollow
 }
 
-/// Whether the cube `c` at `z` is turned over from its parent.
-fn turned(z: Zoom, c: [i64; 3]) -> bool {
-    let seed = derive_seed_u64(MASTER_SEED, 0xca7e_0001);
-    let slot = (c[0] & 1) | (c[1] & 1) << 1 | (c[2] & 1) << 2;
-    let h = [u64::from(z), (c[0] >> 1) as u64, (c[1] >> 1) as u64, (c[2] >> 1) as u64].into_iter().fold(seed, derive_seed_u64);
-    u32_to_unit(h as u32) < CAVE_TURN && (h >> 32) % 8 == slot as u64
+/// Every hollow cube meeting `min..max`, in units, no finer than `zoom`: a
+/// cube a cave holds whole, or one at `zoom`, which is the majority of what
+/// is under it. Only cubes that draw are descended, so it costs the caves'
+/// nodes there, not the region's cells.
+pub fn caves(min: [f64; 3], max: [f64; 3], zoom: Zoom, visit: &mut dyn FnMut(Zoom, [i64; 3])) {
+    let (root, finest) = (CAVE_COARSEST - 1, zoom.min(GROUND.cell()));
+    let side = units(root);
+    let [lo, hi] = [min, max].map(|p| p.map(|v| (v / side).floor() as i64));
+    for x in lo[0]..=hi[0] {
+        for y in lo[1]..=hi[1] {
+            for z in lo[2]..=hi[2] {
+                descend(root, [x, y, z], false, true, finest, [min, max], visit);
+            }
+        }
+    }
 }
 
-const CAVE_LEVELS: usize = (GROUND.cell() - CAVE_COARSEST) as usize + 1;
+fn descend(z: Zoom, c: [i64; 3], hollow: bool, live: bool, finest: Zoom, [min, max]: [[f64; 3]; 2], visit: &mut dyn FnMut(Zoom, [i64; 3])) {
+    let side = units(z);
+    if (0..3).any(|k| (c[k] + 1) as f64 * side <= min[k] || c[k] as f64 * side >= max[k]) {
+        return;
+    }
+    if !live || z >= finest {
+        if hollow {
+            visit(z, c);
+        }
+        return;
+    }
+    let (turn, lives) = draws(z, c);
+    for k in 0..8u64 {
+        let child = [0, 1, 2].map(|a| 2 * c[a] + (k >> a & 1) as i64);
+        descend(z + 1, child, hollow ^ (turn == Some(k)), lives >> k & 1 == 1, finest, [min, max], visit);
+    }
+}
 
 /// The caves down one column `side` units wide, its center `x`, `y` in
 /// units: its cubes are the column's own, or past the leaves its leaf's.
-/// Each cube's ancestors are kept as it is asked down the column, so a
-/// cube asks only the zooms whose cube it left.
 pub struct Caves {
     at: [f64; 2],
     zoom: Zoom,
-    chain: [Option<(i64, bool)>; CAVE_LEVELS],
 }
 
 impl Caves {
@@ -271,23 +318,12 @@ impl Caves {
         Caves {
             at: [x, y],
             zoom: of_side(side).min(GROUND.cell()),
-            chain: [None; CAVE_LEVELS],
         }
     }
 
     /// Whether the cell centered at `z`, in units, is a cave's air.
     pub fn hollow(&mut self, z: f64) -> bool {
-        let mut hollow = false;
-        for (l, zoom) in (CAVE_COARSEST..=self.zoom).enumerate() {
-            let side = units(zoom);
-            let c = [self.at[0], self.at[1], z].map(|v| (v / side).floor() as i64);
-            hollow = match self.chain[l] {
-                Some((k, h)) if k == c[2] => h,
-                _ => hollow ^ turned(zoom, c),
-            };
-            self.chain[l] = Some((c[2], hollow));
-        }
-        hollow
+        hollow_at(self.zoom, [self.at[0], self.at[1], z])
     }
 
     /// The cube `z`, in units, is in: where it ends, and whether it is

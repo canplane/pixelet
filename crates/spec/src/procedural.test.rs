@@ -89,3 +89,40 @@ fn a_cave_cube_is_the_majority_of_its_children() {
         }
     }
 }
+
+/// Walking the drawing cubes finds every hollow cube the cubes say, and only
+/// those, at a leaf's zoom and at a coarser one.
+#[test]
+fn the_caves_walked_are_the_cubes_that_are_hollow() {
+    use crate::space::coord::zoom::units;
+    use std::collections::BTreeSet;
+    let (min, max) = ([-40.0, 8.0, -70.0], [24.0, 72.0, 2.0]);
+    for zoom in [GROUND.cell(), GROUND.cell() - 2] {
+        let side = units(zoom);
+        let mut walked = BTreeSet::new();
+        caves(min, max, zoom, &mut |z, c| {
+            let n = 1i64 << (zoom - z);
+            for x in 0..n {
+                for y in 0..n {
+                    for w in 0..n {
+                        walked.insert([c[0] * n + x, c[1] * n + y, c[2] * n + w]);
+                    }
+                }
+            }
+        });
+        let cells = |k: usize| (min[k] / side).floor() as i64..(max[k] / side).ceil() as i64;
+        let mut hollow = BTreeSet::new();
+        for x in cells(0) {
+            for y in cells(1) {
+                for z in cells(2) {
+                    if hollow_at(zoom, [x, y, z].map(|v| (v as f64 + 0.5) * side)) {
+                        hollow.insert([x, y, z]);
+                    }
+                }
+            }
+        }
+        walked.retain(|c| (0..3).all(|k| cells(k).contains(&c[k])));
+        assert!(!hollow.is_empty());
+        assert_eq!(walked, hollow, "z{zoom}");
+    }
+}
