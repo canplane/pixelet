@@ -6,11 +6,10 @@
 # trigger would read its own definition from the default branch and lose the
 # push's context, which is a subtlety worth not owning.
 #
-# The two deploys differ in what they cost to get wrong, and are gated
-# accordingly. They also run in order, the servers first; see deploy-web. Publishing to the edge is idempotent and reversible from the
-# Cloudflare dashboard, so it runs on every green push to deploy. Reaching into
-# the production VM over SSH is neither, so it runs only when something it
-# could possibly change did change.
+# A deploy is whole: every green push to deploy publishes the client and
+# rebuilds the servers from the one commit, so the two never run different
+# commits, and nothing guesses from a diff which half a commit could change.
+# They run in order, the servers first; see deploy-web.
 #
 # Secrets this needs, all repository secrets:
 #   CLOUDFLARE_API_TOKEN   Workers + R2 write. Wrangler publishes the Worker
@@ -48,9 +47,7 @@ name: Check and deploy
 # that matter is nearly the whole tree, so a list of them would be long and
 # would fail the wrong way — a directory added later and left off it would
 # be skipped in silence, where a file type left off this one only costs a
-# run. deploy-web's own scope step is a list of what to include, and should
-# stay one: it answers the narrower question of whether the bundle's input
-# moved.
+# run.
 #
 # What this gives up is a build number for such a push. The counter now
 # counts builds of code rather than pushes to deploy, which is the honest
@@ -192,9 +189,8 @@ jobs:
     needs: [gate, deploy-server]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deploy'
     runs-on: ubuntu-latest
-    # What landed, not what was decided: the scope step says whether to try and
-    # the last step says whether it worked, because a job that fails still
-    # carries its earlier steps' outputs and the build log believed one.
+    # What landed: the last step says whether it worked, because a job that
+    # fails still carries its earlier steps' outputs and the build log believed one.
     outputs:
       published: ${{ steps.landed.outputs.yes }}
     # The gate's group, so that a run cannot publish while the next one is
@@ -204,60 +200,17 @@ jobs:
       group: build-counter
       cancel-in-progress: false
     steps:
-      # The whole history, as deploy-server takes it and for the same reason:
-      # the filter below diffs the push's base rather than its last commit.
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
 
-      # Everything the bundle is built from. A whitelist rather than a list of
-      # what to skip, because the set that does not ship is the one that keeps
-      # growing — `decision/`, `infra/`, `asset/` and the rest — and a root
-      # forgotten from a skip list is a republish nobody asked for.
-      #
-      # It used to run on every green push, which was right while a rebuild
-      # produced the same bytes. It does not any more: the build number is an
-      # input, so a docs-only push would ship a bundle identical but for a
-      # number, take a number for it, and make every edge cache fetch it again.
       - uses: denoland/setup-deno@v2
         with:
           deno-version-file: .tool-versions
 
-      # Against what last went out, by the build log, not the push before: a
-      # run that failed published nothing, so the next push carries its
-      # changes too. No base to be had — an empty log, a sha a rewrite took,
-      # a log that cannot be read — deploys: a republish costs a cached build,
-      # a skip that should not have happened leaves plei.me behind deploy.
-      - name: Decide whether the client changed
-        id: scope
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          BASE=$(./script/build-log.ts --last web) || BASE=
-          if [ -n "${BASE:-}" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            changed=$(git diff --name-only "$BASE" HEAD)
-          else
-            changed="apps/web/"
-          fi
-          # rust-toolchain.toml is in the list because the module is what that
-          # file's compiler emitted, and unlike the servers the client has no
-          # second copy of the version to change alongside it.
-          # crates/tool is the repository's own tooling, which nothing
-          # the bundle holds is built from; what it writes lands elsewhere in
-          # the tree and is caught there.
-          if printf '%s\n' "$changed" | grep -v '^crates/tool/' | grep -qE '^(apps/|crates/|xpute/|spec/|deno\.jsonc|deno\.lock|rust-toolchain\.toml)'; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "nothing the bundle is built from changed — #${{ needs.gate.outputs.build_number }} is counted but not published"
-          fi
-
       # Its own cargo cache: the module and what builds it, not the gate's
       # whole target directory.
       - uses: ./.github/actions/toolchain
-        if: steps.scope.outputs.run == 'true'
         with:
           cache: rust-publish
           binaryen-version: ${{ env.BINARYEN_VERSION }}
@@ -266,7 +219,6 @@ jobs:
       # publishes. apps/web/script/deploy.ts is the same script a hand deploy
       # runs; a hand deploy just has no number to give it.
       - name: Deploy
-        if: steps.scope.outputs.run == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -275,7 +227,6 @@ jobs:
 
       # Last, so a failure anywhere above leaves it unset.
       - id: landed
-        if: steps.scope.outputs.run == 'true'
         run: echo "yes=true" >> "$GITHUB_OUTPUT"
 
   deploy-server:
@@ -283,51 +234,18 @@ jobs:
     needs: gate
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deploy'
     runs-on: ubuntu-latest
-    # As deploy-web: what landed, not what was decided.
+    # As deploy-web: what landed.
     outputs:
       rebuilt: ${{ steps.landed.outputs.yes }}
     concurrency:
       group: deploy-server
       cancel-in-progress: false
     steps:
-      # The whole history, because the filter below diffs the push's base
-      # rather than its last commit: a push of several commits where only a
-      # middle one touched the server would otherwise look like it did not.
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
-
-      # Everything the two images are built from, plus the compose file and the
-      # Caddyfile that place them. A docs-only push does not reach the VM.
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version-file: .tool-versions
-
-      # Against what the VM last ran, by the build log, as the client's scope
-      # is; with no base to be had, deploying is the safe direction again.
-      - name: Decide whether the VM needs this push
-        id: scope
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          BASE=$(./script/build-log.ts --last server) || BASE=
-          if [ -n "${BASE:-}" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            changed=$(git diff --name-only "$BASE" HEAD)
-          else
-            changed="crates/"
-          fi
-          # crates/tool is in no image; see the client's scope above.
-          if printf '%s\n' "$changed" | grep -v '^crates/tool/' | grep -qE '^(crates/|xpute/rust/|infra/prod/|\.dockerignore)'; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "nothing under crates/, xpute/rust/ or infra/prod/ changed — the VM is left alone"
-          fi
 
       - name: Rebuild and restart the stack
-        if: steps.scope.outputs.run == 'true'
         env:
           VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
           VM_HOST: ${{ secrets.VM_HOST }}
@@ -394,7 +312,6 @@ jobs:
 
       # Last, so a failure anywhere above leaves it unset.
       - id: landed
-        if: steps.scope.outputs.run == 'true'
         run: echo "yes=true" >> "$GITHUB_OUTPUT"
 
   # What plei.me answers is the two deploys composed, so it is asked once both
@@ -402,16 +319,9 @@ jobs:
   # /geo/search, is the Worker proxying to the VM: asked from deploy-web it can
   # land while deploy-server is still recreating the stack, and Cloudflare
   # answers 521 for an origin that is merely restarting.
-  #
-  # The outputs rather than the jobs' own conditions, because a job that
-  # decided it had nothing to publish still succeeds, and a docs-only push
-  # should not spend a runner re-asking what no deploy touched. `!cancelled()`
-  # is what lets this run at all — a needs: on a job that skipped would
-  # otherwise skip this one too.
   smoke:
     name: smoke-test the public surface
     needs: [deploy-web, deploy-server]
-    if: ${{ !cancelled() && !failure() && (needs.deploy-web.outputs.published == 'true' || needs.deploy-server.outputs.rebuilt == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
