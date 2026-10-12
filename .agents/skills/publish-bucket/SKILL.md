@@ -39,8 +39,9 @@ That is what a later split of the bucket would be: a prefix match, not a
 second re-keying.
 
 The versions the client requests, and the shards it requests them for, are
-the bucket's `source`, uploaded from `SOURCE` in
-`spec/spec/bake/published.json` and read by the client at boot; the asset keys are the generated table
+the bucket's `source`, which `deno task publish` alone writes and the client
+reads at boot; nothing in the tree records them, so a publish is never a
+commit or a deploy; the asset keys are the generated table
 `apps/web/src/catalog/asset/ingested.spec.ts`. The object
 name carries no extension, so **content-type and content-encoding are
 stored with the object at upload** — that is what every flag below is for.
@@ -101,14 +102,18 @@ less for places and divisions those no reader asks for. It is a copy for the
 upload alone, its manifest beside it. `deno task publish <kind>…` (`script/publish.ts`) uploads it
 under a new name, `v<format>.<UTC day>.<n>` — the format the set's manifest
 says it is in, n past every version of that format and day the bucket
-holds — sets `SOURCE.kind.<kind>` to the version and the format and shards
-the copy's own manifest names (the set's, as it stood when copied), and has `pxl-geo-bake` write the declaration of
-it (`source.rs`, `bin/declare_source.rs`), which refuses what a client
-would: a sharded kind whose manifest names no shards stops it before a byte
-goes up. It then uploads the copy, checks the stored count, removes the copy
-and uploads `source`: each kind's version and format, and the shards every kind
-holds. A client's next boot reads it: a publish needs no deploy. After an
-`override` is written by hand, `deno task publish source` uploads it alone.
+holds. What is served it reads out of the bucket alone: `source` names each
+kind's version, and each version holds its own `manifest.json` beside its
+tiles, the format and shards the copy's manifest named. It has `pxl-geo-bake`
+write the declaration with the new version in it (`source.rs`,
+`bin/declare_source.rs`), which refuses what a client would: a sharded kind
+whose manifest names no shards stops it before a byte goes up. It then
+uploads the copy, checks the stored count, uploads the manifest last, removes
+the copy and uploads `source`: each kind's version and format, and the shards
+every kind holds. A client's next boot reads it. `deno task publish serve <kind> <version>`
+serves a version the bucket holds again, as going back is; `deno task publish override
+<shard> <kind> <version>` serves a version for one shard and the tiles under
+it, `-` dropping it.
 
 ```bash
 deno task bake <kind> --stage publish    # terrain, place or division

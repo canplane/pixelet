@@ -32,17 +32,24 @@ interface Check {
 
 const BROWSER_ENCODINGS = "gzip, deflate, br, zstd";
 
-/** Each kind's published version, as published.json says a publish left it: the declaration is the kernel's to read. */
-const PUBLISHED: Record<string, { version: string }> = JSON.parse(Deno.readTextFileSync(new URL("../spec/spec/bake/published.json", import.meta.url))).SOURCE.kind;
+/** Each kind's version as the deployment's own `source` serves it. */
+async function servedVersions(base: string): Promise<Record<string, string>> {
+  try {
+    const res = await fetch(`${base}${TILE_ROOT}/source?_smoke=${crypto.randomUUID()}`);
+    return res.ok ? (await res.json()).version ?? {} : {};
+  } catch {
+    return {};
+  }
+}
 
-function edgeChecks(): Check[] {
-  const terrain = `${TILE_ROOT}/terrain/${tileObject(PUBLISHED.terrain.version, PAGE)}`;
+function edgeChecks(version: Record<string, string>): Check[] {
+  const terrain = `${TILE_ROOT}/terrain/${tileObject(version.terrain, PAGE)}`;
   return [
     { path: "/", want: 200, why: "the app itself, from the Worker's static assets" },
     { path: `${TILE_ROOT}/source`, want: 200, why: "the source's declaration, out of the bucket" },
     { path: `${SEARCH_URL}?q=${encodeURIComponent("강남")}`, want: 200, why: "pxl-geo, the one geo query with no page to bake" },
     { path: terrain, want: 200, why: "a terrain page, out of the bucket" },
-    { path: `${TILE_ROOT}/division/${tileObject(PUBLISHED.division.version, DIVISION_TOP)}`, want: 200, why: "the divisions' top page over PAGE" },
+    { path: `${TILE_ROOT}/division/${tileObject(version.division, DIVISION_TOP)}`, want: 200, why: "the divisions' top page over PAGE" },
     { path: `/${ASSET_KEY}`, want: 200, why: "a content-addressed asset, its own root" },
     ...commonChecks(),
   ];
@@ -72,7 +79,7 @@ if (!base) {
   Deno.exit(2);
 }
 
-const checks = originOnly ? originChecks() : edgeChecks();
+const checks = originOnly ? originChecks() : edgeChecks(await servedVersions(base));
 console.log(`[smoke] ${base}${originOnly ? " (origin, behind the edge)" : ""} — ${checks.length} checks\n`);
 
 let failed = 0;

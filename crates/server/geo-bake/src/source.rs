@@ -3,9 +3,10 @@
 //! The tile source's declaration, the one writer of what pxl-kernel
 //! io/source.rs reads: the coarsest zoom supplied whole, each kind's format
 //! and version, and the shards every kind holds, four siblings written as their
-//! parent, with each override's version. The published one is made from
-//! published.json's `SOURCE` (bin/declare_source.rs, which script/publish.ts
-//! uploads), a dev tile server's from what it serves (bin/serve_tiles.rs).
+//! parent, with each override's version. The published one is made from a
+//! record of what the bucket serves (bin/declare_source.rs, which
+//! script/publish.ts gathers out of the bucket and uploads), a dev tile
+//! server's from what it serves (bin/serve_tiles.rs).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -122,37 +123,31 @@ pub fn of_set(set: &Path, version: &str) -> Result<Kind, String> {
     })
 }
 
-/// The published declaration from published.json's `SOURCE`: each kind's
-/// version as it was published, and the overrides written by hand.
-pub fn published(spec: &Value) -> Result<Value, String> {
-    let source = &spec["SOURCE"];
+/// The published declaration from a record of what the bucket serves:
+/// `kind`, each kind's version and what its manifest says of it, its
+/// `format` and `shard`; `override`, a kind's version for a shard.
+pub fn recorded(record: &Value) -> Result<Value, String> {
     let kind = |l: BaseLayer| -> Result<Kind, String> {
-        let k = &source["kind"][l.name()];
-        let at = |field: &str| format!("published.json: SOURCE.kind.{}.{field}", l.name());
+        let k = &record["kind"][l.name()];
+        let at = |field: &str| format!("kind.{}.{field}", l.name());
         Ok(Kind {
             format: k["format"].as_u64().ok_or_else(|| at("format"))? as u32,
             version: k["version"].as_str().ok_or_else(|| at("version"))?.to_string(),
-            shard: match k["shard"].as_array() {
-                Some(names) => Some(tiles(names.iter().filter_map(Value::as_str))?),
-                None => None,
-            },
+            shard: held(k)?,
         })
     };
     let kinds = try_kinds(kind)?;
     let mut overrides = Overrides::new();
-    for (name, versions) in source["override"].as_object().into_iter().flatten() {
-        let tile = key(name).ok_or(format!("published.json: SOURCE.override.{name}: no shard's name"))?;
+    for (name, versions) in record["override"].as_object().into_iter().flatten() {
+        let tile = key(name).ok_or(format!("override.{name}: no shard's name"))?;
         let mut own = Vec::new();
         for (kind, version) in versions.as_object().into_iter().flatten() {
-            let layer = BaseLayer::ALL
-                .into_iter()
-                .find(|l| l.name() == kind)
-                .ok_or(format!("published.json: SOURCE.override.{name}.{kind}: no kind"))?;
-            own.push((layer, version.as_str().ok_or(format!("published.json: SOURCE.override.{name}.{kind}: no version"))?.to_string()));
+            let layer = BaseLayer::ALL.into_iter().find(|l| l.name() == kind).ok_or(format!("override.{name}.{kind}: no kind"))?;
+            own.push((layer, version.as_str().ok_or(format!("override.{name}.{kind}: no version"))?.to_string()));
         }
         overrides.insert(tile, own);
     }
-    declaration(GROUND.top(), &kinds, &overrides).map_err(|e| format!("published.json: SOURCE: {e}"))
+    declaration(GROUND.top(), &kinds, &overrides)
 }
 
 #[cfg(test)]

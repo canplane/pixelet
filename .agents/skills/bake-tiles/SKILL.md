@@ -214,9 +214,11 @@ coverage included.
 
 ## Versions, and when the bake logic changes
 
-`SOURCE.kind` in `spec/spec/bake/published.json`, uploaded as the
-bucket's `source`, is what the client requests. Setting one there to a
-version's name and uploading it is the whole change on the client's side.
+The bucket's `source` is what the client requests, and `deno task publish`
+is its one writer (publish-bucket). Serving a version is the whole change on
+the client's side, and going back is serving the version before, which the
+bucket still holds with its manifest: `deno task publish serve <kind>
+<version>`.
 
 A published version is immutable, for every kind: a tile is never
 rewritten under a name a cache or an open client already holds, and going

@@ -1,7 +1,7 @@
 // @pxl/web/kernel/io/source.ts
 
 /**
- * The tile source's declaration (published.json's `SOURCE`), asked of the
+ * The tile source's declaration (script/publish.ts writes the bucket's), asked of the
  * tile root until it answers and handed to the kernel unread: the published
  * bake's out of the bucket, or a dev tile server's. The kernel observes
  * nothing until then.
