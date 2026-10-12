@@ -899,11 +899,13 @@ pub struct DivisionPart<'a> {
     /// Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the
     /// subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java).
     pub prominence: u8,
+    /// Held by an area the point is in; one without is the nearest found by its point.
+    pub area: bool,
 }
 
 impl DivisionPart<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 4;
+    pub const FIELDS: u32 = 5;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u8(Some(self.subtype));
@@ -916,6 +918,7 @@ impl DivisionPart<'_> {
             })
         });
         w.u8(Some(self.prominence));
+        w.bool(Some(self.area));
     }
 }
 

@@ -23,8 +23,9 @@ import { BackingPlace } from "@/shared/ui/backing.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { THEME } from "./place_theme.spec.ts";
 import { PLACE_SYMBOLS } from "./place-symbol.ts";
-import { assembleLabel, localName, primaryLanguage } from "@/feature/world/division/label.ts";
+import { assembleLabel, type DivisionPart, localName, primaryLanguage } from "@/feature/world/division/label.ts";
 import { useCenterCoordinates, useDivisionLabel } from "@/feature/world/division/center.ts";
+import { DIVISION_SUBTYPE } from "@/feature/world/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 import { EARTH_RADIUS_M } from "@/config/earth.spec.ts";
 
@@ -48,9 +49,11 @@ function formatDistance(m: f64): string {
   return `${round(m / 1000).toLocaleString()}km`;
 }
 
-/** Where a result is comes from its coordinates, never a source's address text, which could name another city. */
+/** Where a result is comes from its coordinates, never a source's address text, which could name another city.
+ * The country is its section's title, so the row leaves it out. */
 function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; lang: string; distance: string | null; onPress: () => void }) {
-  const where = result.context.length > 0 ? assembleLabel(result.context, lang) : "";
+  const within = result.context.filter((p) => p.subtype !== DIVISION_SUBTYPE.COUNTRY);
+  const where = within.length > 0 ? assembleLabel(within, lang) : "";
   const theme = result.kind === "place" ? placeTheme(result.category) : null;
   const symbol = theme?.symbol ? PLACE_SYMBOLS[theme.symbol] : undefined;
   return (
@@ -79,10 +82,31 @@ function ResultRow({ result, lang, distance, onPress }: { result: SearchResult; 
   );
 }
 
-const SECTIONS = [
-  { kind: "division", label: "world.search.section_areas" },
-  { kind: "place", label: "world.search.section_places" },
-] as const;
+/** The country a result is in, or is; null for one no country holds, at sea or past the divisions. */
+function countryOf(result: SearchResult): DivisionPart | null {
+  if (result.kind === "division" && result.category === "country") return { name: result.name, names: result.common };
+  return result.context.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY) ?? null;
+}
+
+interface CountrySection {
+  country: DivisionPart | null;
+  rows: SearchResult[];
+}
+
+/** By country, a country by the provider's own name: the focus's first, as
+ * the API ranks it, then each where its best result ranked, none last. */
+function byCountry(results: SearchResult[], home: string | null): CountrySection[] {
+  const sections = new Map<string | null, CountrySection>();
+  for (const result of results) {
+    const country = countryOf(result);
+    const key = country?.name ?? null;
+    const section = sections.get(key) ?? { country, rows: [] };
+    section.rows.push(result);
+    sections.set(key, section);
+  }
+  const rank = ({ country }: CountrySection) => country === null ? 2 : country.name === home ? 0 : 1;
+  return [...sections.values()].sort((a, b) => rank(a) - rank(b));
+}
 
 function poseColor(status: DevicePoseStatus): string {
   switch (status) {
@@ -131,12 +155,13 @@ function MapCenter() {
   );
 }
 
-/** Distances are measured from the point the query ran at, so they agree
- * with the API's order while the camera drifts. */
+/** Distances and the focus's country are taken where the query ran, so they
+ * agree with the API's order while the camera drifts. */
 interface Found {
   query: string;
   results: SearchResult[];
   origin: LonLat | null;
+  home: string | null;
 }
 
 /** Forward search, always live: nothing is baked for it. */
@@ -145,7 +170,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   const lang = primaryLanguage(i18n.language);
 
   const [query, setQuery] = useState("");
-  const [found, setFound] = useState<Found>({ query: "", results: [], origin: null });
+  const [found, setFound] = useState<Found>({ query: "", results: [], origin: null, home: null });
   const q = query.trim();
   const results = q === "" ? [] : found.results;
   const loading = q !== "" && found.query !== q;
@@ -154,10 +179,12 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     if (q === "") return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      const near = kernel_snapshot().focus.center ?? undefined;
+      const snapshot = kernel_snapshot();
+      const near = snapshot.focus.center ?? undefined;
+      const home = snapshot.division.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY)?.name ?? null;
       fetchSearch(q, { near, signal: controller.signal })
-        .then((results) => controller.signal.aborted || setFound({ query: q, results, origin: near ?? null }))
-        .catch(() => controller.signal.aborted || setFound({ query: q, results: [], origin: null }));
+        .then((results) => controller.signal.aborted || setFound({ query: q, results, origin: near ?? null, home }))
+        .catch(() => controller.signal.aborted || setFound({ query: q, results: [], origin: null, home: null }));
     }, DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
@@ -209,16 +236,12 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           {q === "" && <MapCenter />}
           {q !== "" && results.length === 0 && <Text style={styles.empty}>{loading ? t("world.search.loading") : t("world.search.no_results")}</Text>}
 
-          {SECTIONS.map(({ kind, label }) => {
-            const rows = results.filter((r) => r.kind === kind);
-            if (rows.length === 0) return null;
-            return (
-              <View key={kind}>
-                <SectionTitle style={styles.sectionHeader}>{t(label)}</SectionTitle>
-                {rows.map((r) => <ResultRow key={r.gers_id} result={r} lang={lang} distance={distanceOf(r)} onPress={() => select(r)} />)}
-              </View>
-            );
-          })}
+          {byCountry(results, found.home).map(({ country, rows }) => (
+            <View key={country?.name ?? ""}>
+              <SectionTitle style={styles.sectionHeader}>{country === null ? t("world.search.section_elsewhere") : localName(country, lang)}</SectionTitle>
+              {rows.map((r) => <ResultRow key={r.gers_id} result={r} lang={lang} distance={distanceOf(r)} onPress={() => select(r)} />)}
+            </View>
+          ))}
         </ScrollView>
       </PanelBody>
 

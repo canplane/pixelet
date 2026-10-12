@@ -15,7 +15,9 @@ export function useDivisionLabel(): string | null {
   return useKernel((s) => {
     const zoom = webZoom(s.m_per_px, s.focus.center?.lat ?? 0);
     const parts = s.division.filter((p) => shownFrom(p) <= zoom);
-    return parts.length === 0 ? null : assembleLabel(parts.map((p) => ({ name: p.name, names: Object.fromEntries(p.names.map((n) => [n.lang, n.name])) })), primaryLanguage(i18n.language));
+    return parts.length === 0
+      ? null
+      : assembleLabel(parts.map((p) => ({ name: p.name, names: Object.fromEntries(p.names.map((n) => [n.lang, n.name])), subtype: p.subtype, area: p.area })), primaryLanguage(i18n.language));
   });
 }
 

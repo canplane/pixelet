@@ -3,7 +3,14 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { originGet } from "@platform/origin.ts";
 import { SEARCH_URL } from "@/config/route.spec.ts";
-import type { DivisionPart } from "@/feature/world/division/label.ts";
+import type { DivisionPart, NamePart } from "@/feature/world/division/label.ts";
+import { DIVISION_SUBTYPE } from "@/feature/world/division/division.spec.ts";
+
+/** A part as the API writes it: Overture's subtype by its word, and `approx` where no area holds the point. */
+interface WirePart extends DivisionPart {
+  subtype: string;
+  approx?: boolean;
+}
 
 export interface SearchResult {
   gers_id: string;
@@ -13,7 +20,7 @@ export interface SearchResult {
   /** Only for `kind: 'division'`; null for places. */
   common: Record<string, string> | null;
   /** Tells same-named results apart; replaced an address field that could name another city. */
-  context: DivisionPart[];
+  context: NamePart[];
   lon: f64;
   lat: f64;
 }
@@ -25,5 +32,12 @@ export async function fetchSearch(query: string, opts?: { near?: { lon: f64; lat
 
   const res = await originGet(`${SEARCH_URL}?${params.toString()}`, opts?.signal);
   if (!res.ok) throw new Error(`[search] http ${res.status}`);
-  return await res.json() as SearchResult[];
+  const results = await res.json() as (Omit<SearchResult, "context"> & { context: WirePart[] })[];
+  return results.map((r) => ({ ...r, context: r.context.flatMap(namePart) }));
+}
+
+/** None for a subtype newer than this client. */
+function namePart({ subtype, approx, ...named }: WirePart): NamePart[] {
+  const number = (DIVISION_SUBTYPE as Record<string, number>)[subtype.toUpperCase()];
+  return number === undefined ? [] : [{ ...named, subtype: number, area: !approx }];
 }

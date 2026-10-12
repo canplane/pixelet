@@ -45,6 +45,7 @@ fn division_parts(at: Option<Pvf3>, each: &mut dyn FnMut(&DivisionPart<'_>)) {
             name: &part.name,
             names: &names,
             prominence: part.prominence,
+            area: part.area,
         });
     });
 }

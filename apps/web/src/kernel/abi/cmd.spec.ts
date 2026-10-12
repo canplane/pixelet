@@ -502,10 +502,12 @@ export interface DivisionPart {
   /** Overture's cartography.prominence, 1 to 100; 0 where it gives none. With the
    * subtype, the zoom its name shows from (overture-tiles profiles/Divisions.java). */
   prominence: u8;
+  /** Held by an area the point is in; one without is the nearest found by its point. */
+  area: boolean;
 }
 
 export function read_division_part(b: BranchCursor): DivisionPart {
-  return { subtype: b.at(0).get<u8>(), name: b.at(1).get<string>(), names: list(b.at_branch(2), read_lang_name), prominence: b.at(3).get<u8>() };
+  return { subtype: b.at(0).get<u8>(), name: b.at(1).get<string>(), names: list(b.at_branch(2), read_lang_name), prominence: b.at(3).get<u8>(), area: b.at(4).get<boolean>() };
 }
 
 export interface LangName {

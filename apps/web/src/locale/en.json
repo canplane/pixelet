@@ -333,8 +333,7 @@
       "clear_aria_label": "Clear search",
       "loading": "Searching…",
       "no_results": "No results found",
-      "section_areas": "Areas",
-      "section_places": "Places",
+      "section_elsewhere": "Elsewhere",
       "focus": "Current location"
     }
   },
