@@ -29,8 +29,12 @@ export function Toaster() {
   const order: Key[] = entries.map((e) => e.id);
   const arrivals = new Set<Key>(order.filter((key) => !lastOrder.current.includes(key)));
   const arrived = arrivals.size;
+  // Behind the card it was behind, and behind any that came in there: a new card goes in by rank, not only in front.
   for (const key of list.filter((c) => !c.present).map((c) => c.key).sort((a, b) => lastOrder.current.indexOf(a) - lastOrder.current.indexOf(b))) {
-    order.splice(Math.min(Math.max(0, lastOrder.current.indexOf(key)) + arrived, order.length), 0, key);
+    const ahead = lastOrder.current.slice(0, Math.max(0, lastOrder.current.indexOf(key))).findLast((k) => order.includes(k));
+    let at = ahead === undefined ? 0 : order.indexOf(ahead) + 1;
+    while (at < order.length && arrivals.has(order[at])) at++;
+    order.splice(at, 0, key);
   }
   useEffect(() => {
     lastOrder.current = order;

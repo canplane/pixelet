@@ -15,8 +15,16 @@ export interface ToastSpec {
 }
 
 interface Entry extends ToastSpec {
-  /** The caller's numbering: a report shown again replaces itself. */
+  /** The caller's numbering: a report shown again replaces itself, and of
+   * one tone the lower outranks the higher. */
   id: u32;
+}
+
+/** Where a new card comes in: an error before a wait, a wait before news. */
+const SEVERITY: Record<ToastTone, u32> = { [ToastTone.Error]: 0, [ToastTone.Loading]: 1, [ToastTone.Ready]: 2 };
+
+function outranks(a: Entry, b: Entry): boolean {
+  return SEVERITY[a.tone] !== SEVERITY[b.tone] ? SEVERITY[a.tone] < SEVERITY[b.tone] : a.id < b.id;
 }
 
 interface ToastState {
@@ -42,14 +50,21 @@ function toFront(id: u32): void {
 
 export function toastShow(id: u32, spec: ToastSpec): void {
   const { entries, dragging } = get();
-  if (entries.some((e) => e.id === id)) {
+  const shown = entries.find((e) => e.id === id);
+  // Said again as it is, as a toast kept past its cause is: no card to bring forward.
+  if (shown !== undefined && shown.message === spec.message && shown.tone === spec.tone) return;
+  if (shown !== undefined) {
     set({ entries: entries.map((e) => (e.id === id ? { id, ...spec } : e)) });
     // Reshuffling mid-drag would move the held card out of front.
     if (dragging) set({ pending: id });
     else toFront(id);
     return;
   }
-  set({ entries: [{ id, ...spec }, ...entries] });
+  // Over the front card if it outranks it, else before the first behind it that it outranks.
+  const entry = { id, ...spec };
+  const k = entries.findIndex((e) => outranks(entry, e));
+  const at = k < 0 ? entries.length : k;
+  set({ entries: [...entries.slice(0, at), entry, ...entries.slice(at)] });
 }
 
 export function toastDismiss(id: u32): void {

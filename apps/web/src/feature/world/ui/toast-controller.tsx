@@ -11,13 +11,15 @@ import { useKernel } from "@/kernel/shell.ts";
 
 import { toastDismiss, toastShow, ToastTone } from "@/shared/ui/toast/store.ts";
 
+/** Each report's toast; of one tone, by rank: a cause before what it holds
+ * up, the device's before the server's, the world's before a sensor's. */
 const enum Report {
-  Location = 0,
-  Orientation = 1,
-  World = 2,
-  Gpu = 3,
-  Network = 4,
-  Server = 5,
+  Gpu = 0,
+  Network = 1,
+  Server = 2,
+  World = 3,
+  Location = 4,
+  Orientation = 5,
 }
 
 /** The ready word: said once, as the first world and its companions are on screen. */
@@ -28,6 +30,11 @@ const enum Greeting {
 }
 
 const READY_MS = 3000;
+
+/** How long the server's toast stays once its cause clears: a server failing
+ * one read and answering the next would show and hide it each turn, the
+ * stack trading its front card. A product number. */
+const SERVER_HOLD_MS = 3000;
 
 /** A toast's words, as a locale key. */
 interface Said {
@@ -43,15 +50,23 @@ function useWords(): (key: string) => string {
   return useRef((key: string) => tRef.current(key)).current;
 }
 
-/** A state's toast: shown while `said` is, gone with it. */
-function useSaid(id: Report, said: Said | null): void {
+/** A state's toast: shown while `said` is, gone with it, `holdMs` later. */
+function useSaid(id: Report, said: Said | null, holdMs = 0): void {
   const words = useWords();
   const key = said?.key ?? null;
   const tone = said?.tone ?? null;
   useEffect(() => {
-    if (key === null || tone === null) toastDismiss(id);
-    else toastShow(id, { message: words(key), tone });
-  }, [id, key, tone, words]);
+    if (key !== null && tone !== null) {
+      toastShow(id, { message: words(key), tone });
+      return;
+    }
+    if (holdMs === 0) {
+      toastDismiss(id);
+      return;
+    }
+    const timer = setTimeout(() => toastDismiss(id), holdMs);
+    return () => clearTimeout(timer);
+  }, [id, key, tone, words, holdMs]);
 }
 
 const error = (key: string): Said => ({ key, tone: ToastTone.Error });
@@ -93,7 +108,7 @@ export function ToastController() {
   const stall = useKernel((s) => s.stall);
   useSaid(Report.Gpu, gpuError(gpu));
   useSaid(Report.Network, useOnline() ? null : error("toast.network_unstable"));
-  useSaid(Report.Server, serverError(stall));
+  useSaid(Report.Server, serverError(stall), SERVER_HOLD_MS);
 
   const outside = useKernel((s) => s.focus.outside);
   const shown = useKernel((s) => s.focus.status === GroundStatus.Success);
