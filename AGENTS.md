@@ -423,12 +423,19 @@ inspire what happens inside a cell or a chunk, never the structure.
   representation — and prefer a structure they follow from. A sweep, an
   eventual drain, generous capacity, a retry, a timing assumption, "this
   cannot normally happen" or a green test run proves nothing.
-- **Tests carry semantics, not architecture.** They test what is externally
-  meaningful — the algebraic laws (a fold's fixed point, the lattice), the
-  wire and storage contracts, the invariants — and one that encodes an
-  implementation detail goes with the detail. No API exists for a test
-  alone. The order is invariant, architecture, implementation,
-  verification, then the tests worth keeping.
+- **Tests come last and count for little.** A passing test is a hundred
+  black pigeons seen, not proof that every pigeon is black: it shows the
+  cases tried and nothing of the rest. What makes code right is structure —
+  time complexity, memory isolation, decoupling through interfaces,
+  orthogonality, single responsibility, a state space too small to hold the
+  bug — never a test count. While the structure is being turned over, a
+  test pinned to it is in the way: it is deleted or rewritten against the
+  new interface, never a reason to keep the old shape. A test is worth
+  having only for what has set — the wire and storage contracts, an
+  algebraic law (a fold's fixed point, the lattice), a stated invariant —
+  and is never added unasked, run by reflex, or cited as evidence that
+  code is right. No API exists for a test alone. The order is invariant,
+  architecture, implementation, verification, then the tests worth keeping.
 - **Remove work before adding machinery to speed it up.** Before a cache,
   ordering, index or retained state, find the work that can go. A **free
   reduction** — behavior-equivalent, nothing kept, nothing else spent:
@@ -466,6 +473,18 @@ inspire what happens inside a cell or a chunk, never the structure.
   gates and agent fan-outs are overhead, skipped unless asked.
 - **Done is reviewed against the new invariant**, over every path that
   produces the symptom: what exists only for the old architecture, what shim
+- **A guarantee is either precisely defined or not claimed.** State exactly
+  what is guaranteed, under which assumptions, and what is not.
+  Approximations are valid when their guarantees and limitations are
+  explicit. Never present a heuristic or partial check as a stronger
+  guarantee than it actually provides.
+- **A compromise is called garbage, not design.** Where a deadline or a
+  missing structure forces a heuristic — a guess from a directory name, a
+  check that proves less than its name, everything retested because what a
+  change reaches is unknown — it is said to be one, with what it stands in
+  for, and never promoted to a principle by its usefulness or by what the
+  industry habitually does. A discussion of principle is not an order to
+  implement it, and a fact stays stated when agreeing would be easier.
   can go, what representation is still duplicated, what cleanup could be
   made impossible, what correctness still rests on capacity or timing, what
   was kept only because a test leaned on it. If, designing it today, you
