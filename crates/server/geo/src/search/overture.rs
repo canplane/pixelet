@@ -29,25 +29,57 @@ FROM overture_places WHERE name <> '' AND name ILIKE '%' || $1 || '%'
 
 const SEARCH_SQL: &str = concat!(places_matching!(), "ORDER BY similarity(name, $1) DESC, name\nLIMIT $2");
 
-/// Ranked against `near`. Similarity is rounded to two decimals so distance
-/// decides among near-equal names; on the raw score, one trigram outranked a
-/// thousand kilometres.
+/// The country division `near` (`$3`, `$4`) lies in; null at sea or past the
+/// divisions.
+macro_rules! home {
+    () => {
+        "(SELECT s.properties->>'division_id' FROM overture_division_areas s
+  WHERE s.subtype = 'country' AND ST_Contains(s.geom, ST_Transform(ST_SetSRID(ST_MakePoint($3, $4), 4326), 3857))
+  ORDER BY s.gers_id LIMIT 1)"
+    };
+}
+
+/// Ranked against `near`: its country's places first, as Google's Places
+/// API biases suggestions to the request's `regionCode`, so another country's
+/// fill only what room is left. Similarity is rounded to two decimals so
+/// distance decides among near-equal names; on the raw score, one trigram
+/// outranked a thousand kilometres.
 const SEARCH_NEAR_SQL: &str = concat!(
+    "WITH home AS (SELECT geom FROM overture_division_areas WHERE properties->>'division_id' = ",
+    home!(),
+    ")\n",
     places_matching!(),
-    "ORDER BY round(similarity(name, $1)::numeric, 2) DESC,
+    "ORDER BY EXISTS (SELECT 1 FROM home WHERE ST_Intersects(home.geom, overture_places.geom)) DESC,
+  round(similarity(name, $1)::numeric, 2) DESC,
   geom <-> ST_Transform(ST_SetSRID(ST_MakePoint($3, $4), 4326), 3857) ASC
 LIMIT $2"
 );
 
 /// A division is a row of `overture_divisions`, once, whatever areas it has.
-const DIVISION_SEARCH_SQL: &str = concat!(
-    "SELECT gers_id, name, subtype, ",
-    pxl_geo_spec::division_names!("overture_divisions"),
-    " AS names_common,
+macro_rules! divisions_matching {
+    () => {
+        concat!(
+            "SELECT gers_id, name, subtype, ",
+            pxl_geo_spec::division_names!("overture_divisions"),
+            " AS names_common,
   ST_X(ST_Transform(geom, 4326)) AS lon, ST_Y(ST_Transform(geom, 4326)) AS lat
 FROM overture_divisions
 WHERE name <> '' AND name ILIKE '%' || $1 || '%'
-ORDER BY similarity(name, $1) DESC, gers_id
+"
+        )
+    };
+}
+
+const DIVISION_SEARCH_SQL: &str = concat!(divisions_matching!(), "ORDER BY similarity(name, $1) DESC, gers_id\nLIMIT $2");
+
+/// `near`'s country, and the divisions its lineage holds, first.
+const DIVISION_SEARCH_NEAR_SQL: &str = concat!(
+    "WITH home AS (SELECT ",
+    home!(),
+    " AS id)\n",
+    divisions_matching!(),
+    "ORDER BY (SELECT gers_id = home.id OR properties->'hierarchies'->0 @> jsonb_build_array(jsonb_build_object('division_id', home.id)) FROM home) DESC NULLS LAST,
+  similarity(name, $1) DESC, gers_id
 LIMIT $2"
 );
 
@@ -117,11 +149,14 @@ pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -
         Some(near) => (SEARCH_NEAR_SQL, vec![&query, &limit_i64, &near.lon, &near.lat]),
         None => (SEARCH_SQL, vec![&query, &limit_i64]),
     };
-    let division_params: Vec<&(dyn ToSql + Sync)> = vec![&query, &DIVISION_LIMIT];
+    let (division_sql, division_params): (&str, Vec<&(dyn ToSql + Sync)>) = match near {
+        Some(near) => (DIVISION_SEARCH_NEAR_SQL, vec![&query, &DIVISION_LIMIT, &near.lon, &near.lat]),
+        None => (DIVISION_SEARCH_SQL, vec![&query, &DIVISION_LIMIT]),
+    };
 
     let client = pool.get().await?;
     // One checkout: tokio-postgres pipelines both statements on it.
-    let (places, divisions) = tokio::join!(client.query(places_sql, &places_params), client.query(DIVISION_SEARCH_SQL, &division_params),);
+    let (places, divisions) = tokio::join!(client.query(places_sql, &places_params), client.query(division_sql, &division_params),);
 
     let place_rows: Vec<PlaceRow> = places?.iter().map(PlaceRow::from_row).collect();
     let division_rows: Vec<DivisionRow> = divisions?.iter().map(DivisionRow::from_row).collect();
