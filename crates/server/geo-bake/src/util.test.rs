@@ -7,8 +7,7 @@ fn tile() -> Vec<u8> {
 }
 
 #[test]
-fn a_packed_tile_is_labeled_what_it_is_and_unpacks_to_itself() {
+fn a_packed_tile_unpacks_to_itself() {
     let packed = pack(&tile(), Level::Stored).unwrap();
-    assert!(is_packed(&packed));
     assert_eq!(unpack(&packed).unwrap(), tile());
 }

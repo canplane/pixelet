@@ -25,9 +25,6 @@ zstd = "0.13"
 # The Earth's picture: its sources are JPEG, its global form WebP.
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 webp = "0.3"
-ureq = "2"
-# The reader for tile sets baked before zstd, which are gzip.
-flate2 = "1"
 serde = { version = "1", features = ["derive"] }
 # `raw_value`: jsonb keeps numbers as `numeric`, so re-rendering a parsed double
 # changes the stored value. `float_roundtrip`: the default parser misrounded

@@ -38,20 +38,14 @@
     "clear:oven": "rm -rf cache/tile",
     "clear:shelf": "sh -c '[ $# -gt 0 ] || set -- terrain place division; for k; do rm -rf \"out/$k\" \"out/$k.stage\" \"out/$k.publish\"; done' --",
 
-    // Tiles, from db-geo: each bakes the shards it is told (--shard; every one
-    // when none is) into its set.
-    "bake:terrain": "./script/with-env.sh cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_terrain --",
-    "bake:place": "./script/with-env.sh cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_place --",
-    "bake:division": "./script/with-env.sh cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_division --",
-    "bake:earth": "cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo-bake --bin bake_earth",
-
-    // Assets. After any change under asset/:
+    // What makes the repository's data, a binary each (script/tool.ts):
+    // `bake <terrain|place|division|earth|star|geoid>`, `download <pack|moon|earth>`.
+    // A tile bake takes the shards it is told (--shard; every one when none is).
+    "bake": "./script/tool.ts bake",
+    "download": "./script/tool.ts download",
+    // After any change under asset/content/:
     "ingest:asset": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin ingest_asset",
-    // By hand, when a source outside the repository or under apps/web/brand changes.
-    "download:pack": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_texture_pack",
-    "download:moon": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_moon",
-    "bake:star": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin bake_star --",
-    "bake:geoid": "cargo run --release --manifest-path crates/Cargo.toml -p pxl-tool --bin bake_geoid --",
+    // By hand, when apps/web/brand changes.
     "render:brand": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin render_brand",
 
     // Made from the tree: the code generated from spec/, the kernel's module.
@@ -130,7 +124,7 @@
     "proseWrap": "preserve",
 
     // The tests read the golden records byte for byte; Carto's symbols stay as Carto ships them.
-    "exclude": ["node_modules/", "dist/", "crates/**/golden/", "asset/place/symbol/"]
+    "exclude": ["node_modules/", "dist/", "crates/**/golden/", "asset/raw/place/symbol/"]
   },
 
   "lint": {

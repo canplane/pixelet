@@ -1,6 +1,7 @@
 // pxl-tool/lib.rs
 
 pub mod asset;
+pub mod fetch;
 pub mod fmt;
 pub mod spec;
 

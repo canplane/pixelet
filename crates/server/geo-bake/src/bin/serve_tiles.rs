@@ -23,7 +23,7 @@ use pxl_geo_bake::source::{self, Overrides};
 use pxl_geo_bake::util::CONTENT_ENCODING;
 use pxl_spec::bake::published::FORMAT;
 use pxl_spec::bake::source::sharded;
-use pxl_spec::route::{tile_object_parts, ASSET_ROOT, TILE_ROOT};
+use pxl_spec::route::{tile_object_parts, ASSET_ROOT, TILE_ROOT, TILE_SPHERE};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -53,7 +53,7 @@ struct App {
 const EARTH: &str = "earth";
 
 async fn earth(app: &App, name: &str) -> Response {
-    if Tile::of_name(name).is_none() {
+    if Tile::of_name(name).is_none() && name != TILE_SPHERE {
         return StatusCode::NOT_FOUND.into_response();
     }
     match tokio::fs::read(app.out.join(EARTH).join(name)).await {

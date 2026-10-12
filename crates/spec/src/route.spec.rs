@@ -33,7 +33,9 @@ pub const API_ROOT: &str = "/api";
 
 /// Baked tiles by kind, version and name: under the root a kind's own,
 /// and under that its `object`, the version its source declares and the
-/// tile's name. Its own root for the reason the asset root is: the bake
+/// tile's name; beside the Earth's tiles, under its version, `sphere`, its
+/// picture whole, the sphere's and no tile of the pyramid. Its own root for
+/// the reason the asset root is: the bake
 /// puts them in the bucket and the edge serves them, so neither server
 /// answers them, and the edge tells them from the geo server's routes by
 /// the root alone.
@@ -69,6 +71,9 @@ pub const ASSET_PREFIX: &str = "/asset/";
 pub fn tile_object(version: &str, name: &str) -> String {
     format!("{version}/{name}")
 }
+
+/// The Earth's picture whole, in place of a tile's name under the earth layer's version: the sphere's, no tile of the pyramid.
+pub const TILE_SPHERE: &str = "sphere";
 
 /// `tile_object`'s version and name, none for what it never writes.
 pub fn tile_object_parts(object: &str) -> Option<(&str, &str)> {

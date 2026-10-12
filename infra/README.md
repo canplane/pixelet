@@ -18,7 +18,8 @@ server stands in for the bucket.
 infra/
 ├── local/    the two databases for development
 ├── prod/     the VM's stack: compose and Caddy
-└── geo/      what fills db-geo
+├── geo/      what fills db-geo
+└── earth/    the Earth's picture, NASA's, which the earth bake reads as files
 ```
 
 ## 1. Databases

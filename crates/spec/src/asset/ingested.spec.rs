@@ -173,13 +173,12 @@ pub enum Asset {
     sky_cloud_cumulus_2_glb = 156,
     sky_cloud_stratus_glb = 157,
     sky_cloud_white_png = 158,
-    sky_earth_07_webp = 159,
-    sky_moon_png = 160,
+    sky_moon_png = 159,
 }
 
 impl Asset {
     /// Every asset, in the table's order.
-    pub const ALL: [Asset; 161] = [
+    pub const ALL: [Asset; 160] = [
         Asset::actor_kenney_cube_pets_beaver_glb,
         Asset::actor_kenney_cube_pets_bee_glb,
         Asset::actor_kenney_cube_pets_bunny_glb,
@@ -339,7 +338,6 @@ impl Asset {
         Asset::sky_cloud_cumulus_2_glb,
         Asset::sky_cloud_stratus_glb,
         Asset::sky_cloud_white_png,
-        Asset::sky_earth_07_webp,
         Asset::sky_moon_png,
     ];
 
@@ -363,7 +361,7 @@ pub struct IngestedAsset {
 }
 
 /// Each asset's row, at its member's number.
-pub const INGESTED: [IngestedAsset; 161] = [
+pub const INGESTED: [IngestedAsset; 160] = [
     IngestedAsset {
         bytes: 149728,
         extent: Some([1.25, 1.84, 1.5]),
@@ -706,7 +704,6 @@ pub const INGESTED: [IngestedAsset; 161] = [
         extent: Some([8.1, 1.85, 1.31]),
     },
     IngestedAsset { bytes: 72, extent: None },
-    IngestedAsset { bytes: 1312828, extent: None },
     IngestedAsset { bytes: 165698, extent: None },
 ];
 

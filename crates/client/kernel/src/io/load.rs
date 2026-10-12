@@ -20,7 +20,10 @@ use crate::io::failure::Ended;
 use crate::io::file::{self, Opened, Owner};
 use crate::io::host::decode_image;
 use crate::io::request::{attempt_of, settle, Credit};
+use crate::io::source;
 use crate::sched::edge::{request_world_tick, world_edge};
+use pxl_spec::bake::published::BaseLayer;
+use pxl_spec::route::{tile_object, TILE_SPHERE};
 use xpute_guest::abi::handle::Slots;
 use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -32,11 +35,13 @@ pub enum LoadKind {
     Image = 1,
 }
 
-/// The texture pack's image is written beside the asset table, not as a row of it.
+/// The texture pack's image is written beside the asset table, not as a row of
+/// it; the Earth's picture whole is the earth layer's, under its version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Load {
     Asset(Asset),
     Pack,
+    Sphere,
 }
 
 impl Load {
@@ -44,14 +49,17 @@ impl Load {
         match self {
             Load::Asset(a) => a as u32,
             Load::Pack => Asset::ALL.len() as u32,
+            Load::Sphere => Asset::ALL.len() as u32 + 1,
         }
     }
 
     pub fn of(number: u32) -> Option<Load> {
-        if number == Asset::ALL.len() as u32 {
-            return Some(Load::Pack);
+        match number.checked_sub(Asset::ALL.len() as u32) {
+            Some(0) => Some(Load::Pack),
+            Some(1) => Some(Load::Sphere),
+            Some(_) => None,
+            None => u16::try_from(number).ok().and_then(Asset::of).map(Load::Asset),
         }
-        u16::try_from(number).ok().and_then(Asset::of).map(Load::Asset)
     }
 }
 
@@ -68,7 +76,8 @@ enum Entry<T> {
     Failed,
 }
 
-pub const LOADS: usize = Asset::ALL.len() + 1;
+/// Every asset, the pack and the sphere.
+pub const LOADS: usize = Asset::ALL.len() + 2;
 
 struct Loader {
     gltf: Vec<Option<Entry<Rc<Gltf>>>>,
@@ -132,6 +141,10 @@ pub fn load_wants() -> &'static [(u64, Ask)] {
     l.wants.clear();
     for n in 0..LOADS {
         let load = Load::of(n as u32).or_bug(Errno::ENOTRECOVERABLE);
+        // The Earth's is opened under the version its source declares.
+        if load == Load::Sphere && source::top().is_none() {
+            continue;
+        }
         if matches!(l.gltf[n], Some(Entry::Pending)) {
             l.wants.push((subject_of(LoadKind::Gltf, load), Ask::PLAIN));
         }
@@ -173,7 +186,10 @@ pub fn open_asset(credit: Credit, kind: LoadKind, load: Load) {
         LoadKind::Gltf => Owner::Model { key },
         LoadKind::Image => Owner::Image { key },
     };
-    file::open(credit, root::ASSET, &load.number().to_string(), owner);
+    match load {
+        Load::Sphere => file::open(credit, BaseLayer::earth as u32, &tile_object(source::whole(BaseLayer::earth), TILE_SPHERE), owner),
+        _ => file::open(credit, root::ASSET, &load.number().to_string(), owner),
+    };
 }
 
 pub fn cancel_asset(key: u64) -> bool {

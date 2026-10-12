@@ -19,9 +19,9 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 | Kind     | Tool                      | Reads                                           | Output                                      | Empty tile |
 | -------- | ------------------------- | ----------------------------------------------- | ------------------------------------------- | ---------- |
-| terrain  | `deno task bake:terrain`  | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land tile               | no object  |
-| place    | `deno task bake:place`    | Overture places                                 | XTP counts, where a crowd splits            | no object  |
-| division | `deno task bake:division` | Overture divisions                              | XTP: per cell the division it is in, z12 up | no object  |
+| terrain  | `deno task bake terrain`  | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land tile               | no object  |
+| place    | `deno task bake place`    | Overture places                                 | XTP counts, where a crowd splits            | no object  |
+| division | `deno task bake division` | Overture divisions                              | XTP: per cell the division it is in, z12 up | no object  |
 
 Every tool writes its kind's set, `./out/<kind>/`, with a manifest of the
 Overture release its tables were ingested from, the commit it was built at,
@@ -114,8 +114,8 @@ their ends) and its surface (ground and elevation), which paints a way only
 where no line draws it.
 
 ```bash
-deno task bake:terrain --shard 01033210 --stage leaf
-deno task bake:terrain --stage fold --stage commit
+deno task bake terrain --shard 01033210 --stage leaf
+deno task bake terrain --stage fold --stage commit
 ```
 
 A shard's leaves are its tiles anything is drawn in — land, or a way,
@@ -189,7 +189,7 @@ occupancy marks none (`unasked`): where no cell over a tile holds two places,
 the tile over it says all of its ground, so the tree stops there.
 
 ```bash
-deno task bake:place
+deno task bake place
 ```
 
 A shard's leaves are its places, read by the shard's bbox. Verify that the
@@ -200,7 +200,7 @@ default, is on.
 ## Divisions
 
 ```bash
-deno task bake:division
+deno task bake division
 ```
 
 Its leaves are z12 (`tile/division.rs` `DIVISION_LEAF`), a shard's every

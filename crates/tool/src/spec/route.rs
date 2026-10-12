@@ -42,6 +42,11 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         return Err(format!("{JSON}: TILE_ROOT.object {object:?} is not {{version}}/{{name}}"));
     }
     let object_doc = [format!("A kind's tile under `TILE_PREFIX` and the kind, `{object}`.")];
+    let sphere = roots.iter().find(|(n, _)| *n == "TILE_ROOT").and_then(|(_, r)| r.str_at("sphere")).ok_or(format!("{JSON}: TILE_ROOT has no sphere"))?;
+    if sphere.is_empty() || !sphere.bytes().all(|b| b.is_ascii_lowercase()) || sphere.bytes().all(|b| (b'0'..=b'3').contains(&b)) {
+        return Err(format!("{JSON}: TILE_ROOT.sphere {sphere:?} is no name a tile could have"));
+    }
+    let sphere_doc = "The Earth's picture whole, in place of a tile's name under the earth layer's version: the sphere's, no tile of the pyramid.";
 
     // Every root, so none is answered by the static-asset fallback with
     // index.html, which reads as the app loading rather than as no route.
@@ -78,6 +83,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "pub fn tile_object(version: &str, name: &str) -> String {".to_string(),
         format!("    format!({})", json_str(object)),
         "}".into(),
+        String::new(),
+        format!("/// {sphere_doc}"),
+        format!("pub const TILE_SPHERE: &str = {};", json_str(sphere)),
         String::new(),
         "/// `tile_object`'s version and name, none for what it never writes.".into(),
         "pub fn tile_object_parts(object: &str) -> Option<(&str, &str)> {".into(),
@@ -128,6 +136,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let pattern = object.replace("{version}", "[^/]+").replace("{name}", "[0-3]+").replace('/', "\\/");
     worker.extend(ts_doc(&[format!("A tile's object under its kind, `{object}`, as a pattern.")], ""));
     worker.extend([format!("export const TILE_OBJECT = String.raw`{pattern}`;"), String::new()]);
+    worker.extend(ts_doc(&[sphere_doc.to_string()], ""));
+    worker.extend([format!("export const TILE_SPHERE = {};", json_str(sphere)), String::new()]);
 
     Ok(vec![
         Output::new("crates/spec/src/route.spec.rs", rs.join("\n")),

@@ -60,8 +60,9 @@ pub fn screen_lost() {
 }
 
 /// Blue Marble's July of 2004: one picture of the Earth at every hour and
-/// season, as Google Earth and Cesium keep one mosaic.
-const EARTH: Asset = Asset::sky_earth_07_webp;
+/// season, as Google Earth and Cesium keep one mosaic; the earth layer's, under
+/// its version.
+const EARTH: Load = Load::Sphere;
 
 use crate::view::frame::pose::{sea_under_eye, view};
 
@@ -97,7 +98,7 @@ pub fn stage_write() {
 
 pub fn stage_render() {
     // Nothing is drawn before the floor: its arrival asks for the next turn.
-    if load_image(Load::Asset(EARTH)).is_none() {
+    if load_image(EARTH).is_none() {
         return;
     }
     let lists = kernel().draw.take();
@@ -136,7 +137,7 @@ pub fn stage_render() {
         cases: &cases[..case_cnt],
         pack: || load_image(Load::Pack),
         moon: || load_image(Load::Asset(Asset::sky_moon_png)),
-        earth: || load_image(Load::Asset(EARTH)),
+        earth: || load_image(EARTH),
         earth_tiles: EarthTiles {
             window,
             layers: &layers,

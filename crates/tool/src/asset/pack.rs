@@ -1,7 +1,8 @@
 // pxl-tool/asset/pack.rs
 
-//! The texture pack: its manifest, and the one image it ships as. Originals are cached under
-//! `asset/cube/original/` and re-fetched only when an entry's URL changes.
+//! The texture pack: its manifest and originals, `asset/raw/cube/`, an original
+//! re-fetched only when its entry's URL changes; the tiles it ships,
+//! `asset/content/cube/`; and the one image they ship as.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -71,10 +72,9 @@ pub struct Item {
     pub style: Style,
 }
 
-pub fn load(cube_dir: &Path) -> Result<Vec<Item>, String> {
-    let text = std::fs::read_to_string(cube_dir.join("manifest.json")).map_err(|e| format!("manifest.json: {e}"))?;
+pub fn load(raw: &Path, content: &Path) -> Result<Vec<Item>, String> {
+    let text = std::fs::read_to_string(raw.join("manifest.json")).map_err(|e| format!("manifest.json: {e}"))?;
     let manifest: Manifest = serde_json::from_str(&text).map_err(|e| format!("manifest.json: {e}"))?;
-    let originals = cube_dir.join("original");
 
     let mut items = Vec::new();
     let mut push = |label: String, slot: Slot, e: &Entry| {
@@ -83,8 +83,8 @@ pub fn load(cube_dir: &Path) -> Result<Vec<Item>, String> {
             slot,
             url: e.url.clone(),
             file: e.file.clone(),
-            dest: cube_dir.join(&e.file),
-            original: originals.join(&e.file),
+            dest: content.join(&e.file),
+            original: raw.join(&e.file),
             palette_hex: e.palette_hex.clone(),
             style: e.style,
         });

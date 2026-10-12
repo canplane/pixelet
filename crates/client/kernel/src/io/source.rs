@@ -69,6 +69,12 @@ pub fn past_at([x, y]: [f64; 2]) -> bool {
     declared().is_some_and(|s| !s.covers(GROUND.cell_of(LEAF_ZOOM, &world::point(x, y, 0.0)).tile()))
 }
 
+/// The kind's own version, over every shard's: an object no shard holds
+/// (`pxl-spec route` `TILE_SPHERE`) is opened under it.
+pub fn whole(layer: BaseLayer) -> &'static str {
+    &declared().or_bug(Errno::ENOTRECOVERABLE).version[layer as usize]
+}
+
 /// The version `p` is opened under. No tile is asked for before the source
 /// is declared: nothing is observed until then (view/observation.rs).
 pub fn version(layer: BaseLayer, p: Tile) -> &'static str {

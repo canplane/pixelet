@@ -1664,7 +1664,6 @@ name = "pxl-geo-bake"
 version = "0.0.0"
 dependencies = [
  "axum",
- "flate2",
  "fnv",
  "image",
  "libm",
@@ -1675,7 +1674,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "ureq",
  "webp",
  "xpute-kit",
  "zstd",

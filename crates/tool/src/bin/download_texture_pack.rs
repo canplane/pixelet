@@ -1,9 +1,10 @@
 // pxl-tool/bin/download_texture_pack.rs
 
-//! Fetches each `asset/cube/manifest.json` entry not already cached and
-//! normalizes it to a `TILE_SIZE` opaque PNG. Follow with `ingest:asset`.
+//! Fetches each `asset/raw/cube/manifest.json` entry not already cached there
+//! and normalizes it to a `TILE_SIZE` opaque PNG in `asset/content/cube/`.
+//! Follow with `ingest:asset`.
 //!
-//!   deno task download:pack
+//!   deno task download pack
 
 use std::process::ExitCode;
 
@@ -112,9 +113,9 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<usize, String> {
-    let cube = root().join("asset/cube");
-    let items = pack::load(&cube)?;
-    let mut state = pack::read_state(&cube);
+    let (raw, content) = (root().join("asset/raw/cube"), root().join("asset/content/cube"));
+    let items = pack::load(&raw, &content)?;
+    let mut state = pack::read_state(&raw);
     println!("[pack] {} entries", items.len());
 
     let (mut cached, mut fetched, mut failed) = (0, 0, 0);
@@ -128,7 +129,7 @@ fn run() -> Result<usize, String> {
             }
         }
     }
-    pack::write_state(&cube, &state)?;
+    pack::write_state(&raw, &state)?;
     println!("[pack] {cached} from cached originals, {fetched} fetched, {failed} failed");
     Ok(failed)
 }

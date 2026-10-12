@@ -5,7 +5,7 @@
 //! height is the ellipsoid's and the terrain's is EGM2008's (GEDTM30, EPSG:3855);
 //! the geoid is between them.
 //!
-//!   deno task bake:geoid egm2008-5.pgm
+//!   deno task bake geoid egm2008-5.pgm
 //!
 //! The grid is egm2008-5.tar.bz2 from
 //! https://sourceforge.net/projects/geographiclib/files/geoids-distrib/,

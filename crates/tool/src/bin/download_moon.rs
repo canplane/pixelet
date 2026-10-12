@@ -1,11 +1,12 @@
 // pxl-tool/bin/download_moon.rs
 
 //! The moon's face for sky.wgsl: NASA SVS's CGI Moon Kit map cut to the near
-//! side, as linear-light luminance in 8-bit sRGB, to `asset/sky/moon.png`.
+//! side, as linear-light luminance in 8-bit sRGB, to `asset/content/sky/moon.png`,
+//! the map kept in `asset/raw/sky/moon/`.
 //! The printed mean reflectance must equal sky.wgsl's MOON_MAP_MEAN.
 //! Credit: NASA's Scientific Visualization Studio.
 //!
-//!   deno task download:moon
+//!   deno task download moon
 
 use std::process::ExitCode;
 
@@ -31,8 +32,7 @@ fn to_srgb(v: f64) -> u8 {
 }
 
 fn run() -> Result<(), String> {
-    let mut body = Vec::new();
-    ureq::get(SOURCE).call().map_err(|e| e.to_string())?.into_reader().read_to_end(&mut body).map_err(|e| e.to_string())?;
+    let body = pxl_tool::fetch::kept(SOURCE, &root().join("asset/raw/sky/moon"))?;
     let map = image::load_from_memory_with_format(&body, ImageFormat::Jpeg).map_err(|e| e.to_string())?.to_rgb8();
     let (w, h) = map.dimensions();
     let (x0, side) = (w / 4, w / 2);
@@ -50,7 +50,7 @@ fn run() -> Result<(), String> {
             face.put_pixel(x, y, Luma([to_srgb(l)]));
         }
     }
-    let out = root().join("asset/sky/moon.png");
+    let out = root().join("asset/content/sky/moon.png");
     std::fs::create_dir_all(out.parent().expect("a directory")).map_err(|e| e.to_string())?;
     face.save_with_format(&out, ImageFormat::Png).map_err(|e| e.to_string())?;
     println!("[moon] {side}x{h} -> {}; the face's mean reflectance, MOON_MAP_MEAN: {:.4}", out.display(), sum / weight);

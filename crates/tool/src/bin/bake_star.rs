@@ -1,10 +1,10 @@
 // pxl-tool/bin/bake_star.rs
 
-//! The night sky's stars from the Yale Bright Star Catalog (V/50, CDS), into
-//! the 8-byte records pxl-render's gpu/stars.rs reads, brightest first.
+//! The night sky's stars from the Yale Bright Star Catalog (V/50, CDS), kept
+//! in `asset/raw/sky/star/`, into the 8-byte records pxl-render's
+//! gpu/stars.rs reads, brightest first.
 //!
-//!   deno task bake:star                  # fetch the catalog from CDS
-//!   deno task bake:star catalog.gz       # or read one already here
+//!   deno task bake star
 
 use std::io::Read;
 use std::process::ExitCode;
@@ -24,15 +24,8 @@ struct Star {
     bv: f64,
 }
 
-fn catalog(path: Option<&str>) -> Result<String, String> {
-    let packed = match path {
-        Some(path) => std::fs::read(path).map_err(|e| format!("{path}: {e}"))?,
-        None => {
-            let mut body = Vec::new();
-            ureq::get(SOURCE).call().map_err(|e| e.to_string())?.into_reader().read_to_end(&mut body).map_err(|e| e.to_string())?;
-            body
-        }
-    };
+fn catalog() -> Result<String, String> {
+    let packed = pxl_tool::fetch::kept(SOURCE, &root().join("asset/raw/sky/star"))?;
     let mut text = String::new();
     GzDecoder::new(packed.as_slice()).read_to_string(&mut text).map_err(|e| format!("catalog: {e}"))?;
     Ok(text)
@@ -60,8 +53,7 @@ fn round(x: f64) -> f64 {
 }
 
 fn run() -> Result<(), String> {
-    let arg = std::env::args().nth(1);
-    let text = catalog(arg.as_deref())?;
+    let text = catalog()?;
     let mut stars = Vec::new();
     for line in text.lines() {
         stars.extend(star(line)?);

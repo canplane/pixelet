@@ -85,7 +85,8 @@ a binary — the asset ingest, the stars, the Moon, the brand, the code
 generated from `spec/` — is a binary of `pxl-tool` (`crates/tool`) and
 links no crate it writes into. The shell's build is `apps/web/script/`; the
 tree's checks and what reaches a deployment or a bucket are
-`script/`; a script under `infra/` makes a database's state.
+`script/`; a script under `infra/` makes a database's state, or keeps what
+a bake reads as files (`infra/earth/`).
 
 **On an iPhone, a control a touch lands on is UIKit's.** SwiftUI (`@expo/ui`)
 draws the sheet and nothing inside React Native's views that takes a touch:

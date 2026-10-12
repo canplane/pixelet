@@ -3,19 +3,22 @@
 //! The Earth's picture, both its forms from one source: NASA's Blue Marble Next
 //! Generation, July 2004 (21600 × 10800, 2 km, the sea a flat blue), as
 //! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
-//! eight tiles). Each is averaged in linear light over what a texel covers.
+//! eight tiles), as `infra/earth/source.json` names them and `deno task
+//! download earth` keeps them. Each is averaged in linear light over what a
+//! texel covers.
 //!  - The earth layer's tiles (pxl-spec bake/tile/earth.rs) at its top zoom, a
 //!    ground cell a texel, to its set, `./out/earth/<name>`, as every kind's is
 //!    flat under its tiles' names. A tile that is one color says nothing the
 //!    global picture does not, and has no object.
 //!    Its upload's copy, `./out/earth.publish/`, beside it (script/publish.ts).
-//!  - The global picture every tile falls back to, 2048 × 1024, to
-//!    `asset/sky/earth/07.webp`.
+//!  - The global picture every tile falls back to, 2048 × 1024, the sphere's
+//!    and no tile of the pyramid, beside the tiles under its own name
+//!    (`TILE_SPHERE`), packed as they are, and published with them.
 //!
 //! Credit: NASA's Earth Observatory (Reto Stöckli; Miguel Román and the Black
 //! Marble team).
 //!
-//!   deno task bake:earth
+//!   deno task bake earth
 
 use pxl_spec::space::coord::world::around;
 use std::path::{Path, PathBuf};
@@ -27,16 +30,16 @@ use pxl_geo_bake::pyramid::{TileSet, MANIFEST};
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
 use pxl_spec::bake::published::FORMAT;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
+use pxl_spec::route::TILE_SPHERE;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::pvf3::pvf3;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::tile::tile_at;
 
-const DAY: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74393/world.topo.200407.3x21600x10800.jpg";
-const NIGHT: &str = "https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144897/BlackMarble_2016_";
-/// NASA's tiling: a column a quarter of the world from 180° W, row 1 the north.
-const NIGHT_TILES: [[&str; 4]; 2] = [["A1", "B1", "C1", "D1"], ["A2", "B2", "C2", "D2"]];
+/// What it reads, and where `deno task download earth` keeps it.
+const SOURCE: &str = "infra/earth/source.json";
+const RAW: &str = "infra/earth/raw";
 const GLOBAL: (u32, u32) = (2048, 1024);
 
 /// Blue Marble's bytes are reflectance through a cubic spline, not sRGB
@@ -108,22 +111,10 @@ fn lights_byte(v: f32) -> u8 {
     (libm::sqrt(v.clamp(0.0, 1.0) as f64) * 255.0).round_ties_even() as u8
 }
 
-/// Kept beside the bake, so a second run reads it from disk.
-fn source(url: &str, dir: &Path) -> Result<Vec<u8>, String> {
-    let path = dir.join(url.rsplit('/').next().ok_or("a file name")?);
-    if let Ok(bytes) = std::fs::read(&path) {
-        return Ok(bytes);
-    }
-    let mut body = Vec::new();
-    ureq::get(url)
-        .call()
-        .map_err(|e| format!("{url}: {e}"))?
-        .into_reader()
-        .read_to_end(&mut body)
-        .map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    write_atomic(&path, &body).map_err(|e| e.to_string())?;
-    Ok(body)
+/// A file `SOURCE` names, as `download earth` kept it.
+fn source(url: &str) -> Result<Vec<u8>, String> {
+    let path = Path::new(RAW).join(url.rsplit('/').next().ok_or("a file name")?);
+    std::fs::read(&path).map_err(|e| format!("{}: {e} — run `deno task download earth`", path.display()))
 }
 
 /// An equirectangular raster read in linear light.
@@ -219,22 +210,24 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
     if *back != bytes[..] {
         return Err("the global picture does not keep its bytes, which a left-out tile reads".into());
     }
-    write_atomic(out, &encoded).map_err(|e| e.to_string())?;
+    // Packed as every object of the set is, so a version is labeled one way.
+    write_atomic(out, &pack(&encoded, Level::Stored).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     println!("[earth] global -> {} ({} KiB)", out.display(), encoded.len() / 1024);
     Ok(())
 }
 
 /// The Black Marble's eight tiles as one raster.
-fn night_mosaic(sources: &Path) -> Result<(Vec<u8>, usize, usize), String> {
+/// The night's tiles, `rows` of NASA's tiling, put back into one plate.
+fn night_mosaic(rows: &[Vec<&str>]) -> Result<(Vec<u8>, usize, usize), String> {
     let mut mosaic = Vec::new();
     let (mut tile, mut width) = (0, 0);
-    for (row, names) in NIGHT_TILES.iter().enumerate() {
+    for (row, names) in rows.iter().enumerate() {
         for (col, name) in names.iter().enumerate() {
-            let t = decode(&source(&format!("{NIGHT}{name}_gray.jpg"), sources)?)?.to_luma8();
+            let t = decode(&source(name)?)?.to_luma8();
             if mosaic.is_empty() {
                 tile = t.width() as usize;
                 width = tile * names.len();
-                mosaic = vec![0u8; width * tile * NIGHT_TILES.len()];
+                mosaic = vec![0u8; width * tile * rows.len()];
             }
             if t.width() as usize != tile || t.height() as usize != tile {
                 return Err(format!("{name}: {}×{}, not {tile}²", t.width(), t.height()));
@@ -245,7 +238,7 @@ fn night_mosaic(sources: &Path) -> Result<(Vec<u8>, usize, usize), String> {
             }
         }
     }
-    Ok((mosaic, width, tile * NIGHT_TILES.len()))
+    Ok((mosaic, width, tile * rows.len()))
 }
 
 /// A source is larger than the decoder's default limit allows.
@@ -257,9 +250,16 @@ fn decode(jpeg: &[u8]) -> Result<image::DynamicImage, String> {
 
 fn run() -> Result<(), String> {
     let out = PathBuf::from("./out/earth");
-    let sources = out.join("source");
-    let day = decode(&source(DAY, &sources)?)?.to_rgb8();
-    let (night, night_width, night_height) = night_mosaic(&sources)?;
+    let text = std::fs::read_to_string(SOURCE).map_err(|e| format!("{SOURCE}: {e}"))?;
+    let named: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{SOURCE}: {e}"))?;
+    let day = decode(&source(named["day"].as_str().ok_or(format!("{SOURCE}: no day"))?)?)?.to_rgb8();
+    let rows: Vec<Vec<&str>> = named["night"]
+        .as_array()
+        .ok_or(format!("{SOURCE}: no night"))?
+        .iter()
+        .map(|r| r.as_array().into_iter().flatten().filter_map(serde_json::Value::as_str).collect())
+        .collect();
+    let (night, night_width, night_height) = night_mosaic(&rows)?;
     let day_plate = Plate::<3> {
         width: day.width() as usize,
         height: day.height() as usize,
@@ -272,8 +272,8 @@ fn run() -> Result<(), String> {
         bytes: &night,
         decode: shown(),
     };
-    global(&day_plate, &night_plate, Path::new("asset/sky/earth/07.webp"))?;
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    global(&day_plate, &night_plate, &out.join(TILE_SPHERE))?;
     // The set is made whole each time: a tile now one color has no object.
     let set = TileSet::new(&out);
     for p in set.by_zoom()?.into_values().flatten() {
@@ -309,7 +309,7 @@ fn run() -> Result<(), String> {
     write_manifest(
         &out.join(MANIFEST),
         git_sha().as_deref(),
-        serde_json::json!({ "objects": objects, "z": EARTH_ZOOM, "format": FORMAT.earth }),
+        serde_json::json!({ "objects": objects + 1, "z": EARTH_ZOOM, "format": FORMAT.earth }),
     )?;
     // The copy an upload takes (script/publish.ts), its manifest with it, as the other bakes' `publish` stage makes one.
     let copy = PathBuf::from("./out/earth.publish");
@@ -320,7 +320,9 @@ fn run() -> Result<(), String> {
     for p in set.by_zoom()?.into_values().flatten() {
         std::fs::hard_link(set.path(p), copy.join(p.name())).map_err(|e| format!("{}: {e}", set.path(p).display()))?;
     }
-    std::fs::copy(out.join(MANIFEST), copy.join(MANIFEST)).map_err(|e| e.to_string())?;
+    for name in [TILE_SPHERE, MANIFEST] {
+        std::fs::copy(out.join(name), copy.join(name)).map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 

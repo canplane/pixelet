@@ -1,8 +1,9 @@
 // pxl-tool/bin/ingest_asset.rs
 
-//! Every shipped asset into the bucket's form, named by its path with a hash
-//! of its bytes in the stem: assets are served with a year's `max-age` and no
-//! purge, so a changed file must get a new name.
+//! Every shipped asset, `asset/content/`, into the bucket's form, named by the
+//! SHA-256 of its bytes alone: served with a year's `max-age` and no purge, a
+//! changed file gets a new name, and where a file lies names nothing. What a
+//! catalog calls it, its path under `asset/content/`, is the table's to map.
 //!
 //!   deno task ingest:asset
 
@@ -20,11 +21,6 @@ use pxl_tool::root;
 /// Mirrored by the Worker's `KEY_RE` and the shell's `asset_url`.
 const KEY_PREFIX: &str = "asset/";
 
-/// 48 bits, as Vite gives a chunk; the path is in the name, so this only has
-/// to tell one file's versions apart.
-const KEY_HEX: usize = 12;
-
-/// `cube/original/` is the resize source, never fetched by the client, so it is skipped.
 fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
     let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     for entry in entries.flatten() {
@@ -34,7 +30,7 @@ fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(),
             continue;
         }
         let rel = path.strip_prefix(base).map_err(|e| e.to_string())?.to_string_lossy().replace('\\', "/");
-        if (rel.ends_with(".glb") || rel.ends_with(".png") || rel.ends_with(".webp")) && !rel.starts_with("cube/original/") {
+        if rel.ends_with(".glb") || rel.ends_with(".png") || rel.ends_with(".webp") {
             out.push((rel, path));
         }
     }
@@ -44,14 +40,13 @@ fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(),
 fn hex(bytes: &[u8]) -> String {
     let mut h = Sha256::new();
     h.update(bytes);
-    h.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>()[..KEY_HEX].to_string()
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn named(rel: &str, hex: &str) -> String {
-    match rel.rsplit_once('.') {
-        Some((stem, ext)) => format!("{stem}-{hex}.{ext}"),
-        None => format!("{rel}-{hex}"),
-    }
+/// The bytes' name in the bucket: their hash, and the extension their type is read by.
+fn named(rel: &str, bytes: &[u8]) -> String {
+    let ext = rel.rsplit_once('.').map_or("", |(_, ext)| ext);
+    format!("{}.{ext}", hex(bytes))
 }
 
 fn write_formatted(path: &Path, text: &str) -> Result<(), String> {
@@ -71,7 +66,7 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), String> {
     let root = root();
-    let asset_dir = root.join("asset");
+    let (raw_dir, asset_dir) = (root.join("asset/raw"), root.join("asset/content"));
     let out_dir = root.join("out/asset");
 
     let mut files = Vec::new();
@@ -81,7 +76,7 @@ fn run() -> Result<(), String> {
     // A Carto look's top, one its entry paints to a Carto color, ships drawn
     // toward that color; the underground's looks are no Carto's, and a side,
     // a bottom and a color are not looks.
-    let slots = pack::load(&asset_dir.join("cube"))?;
+    let slots = pack::load(&raw_dir.join("cube"), &asset_dir.join("cube"))?;
     let carto = pxl_tool::spec::block::ground_colors()?;
     let toward: BTreeMap<String, u32> = slots
         .iter()
@@ -101,12 +96,11 @@ fn run() -> Result<(), String> {
             None => read,
         };
         let is_model = rel.ends_with(".glb");
-        let name = named(rel, &hex(&bytes));
+        let name = named(rel, &bytes);
         let extent = if is_model { Some(glb::extent(&bytes).map_err(|e| format!("{rel}: {e}"))?) } else { None };
 
-        let at = out_dir.join(&name);
-        std::fs::create_dir_all(at.parent().ok_or("an asset has a parent")?).map_err(|e| e.to_string())?;
-        std::fs::write(&at, &bytes).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+        std::fs::write(out_dir.join(&name), &bytes).map_err(|e| e.to_string())?;
 
         total += bytes.len() as u64;
         rows.push(Row {
@@ -131,18 +125,16 @@ fn run() -> Result<(), String> {
         let before = tile_slots.len();
         tile_slots.extend(worn);
         if tile_slots.len() == before {
-            return Err(format!("{t} has no entry in asset/cube/manifest.json"));
+            return Err(format!("{t} has no entry in asset/raw/cube/manifest.json"));
         }
     }
     if let Some(i) = slots.iter().find(|i| !tiles.contains(&format!("cube/{}", i.file))) {
-        return Err(format!("{} names {}, which is not under asset/cube", i.label, i.file));
+        return Err(format!("{} names {}, which is not under asset/content/cube", i.label, i.file));
     }
     let faces = table::faces(&tile_slots, &pxl_tool::spec::block::catalog()?)?;
     let composed = pack::compose(&tiles.iter().map(|t| (t.clone(), shipped[t].as_slice())).collect::<Vec<_>>())?;
-    let image_name = named("cube/pack.webp", &hex(&composed.bytes));
-    let at = out_dir.join(&image_name);
-    std::fs::create_dir_all(at.parent().ok_or("the pack has a parent")?).map_err(|e| e.to_string())?;
-    std::fs::write(&at, &composed.bytes).map_err(|e| e.to_string())?;
+    let image_name = named("pack.webp", &composed.bytes);
+    std::fs::write(out_dir.join(&image_name), &composed.bytes).map_err(|e| e.to_string())?;
 
     let laid = Pack {
         key: format!("{KEY_PREFIX}{image_name}"),
@@ -155,7 +147,7 @@ fn run() -> Result<(), String> {
     };
 
     // Carto's symbols, which the client draws from its own binary rather than fetches.
-    let symbols = symbol::symbols(&asset_dir.join("place/symbol"))?;
+    let symbols = symbol::symbols(&raw_dir.join("place/symbol"))?;
     let masks: Vec<u8> = symbols.iter().flat_map(|s| s.mask.iter().copied()).collect();
     std::fs::write(root.join("crates/spec/src/asset/symbol.mask"), &masks).map_err(|e| e.to_string())?;
     write_formatted(&root.join("crates/spec/src/asset/symbol.spec.rs"), &symbol::render_rs(&symbols))?;
@@ -165,7 +157,7 @@ fn run() -> Result<(), String> {
     write_formatted(&root.join("crates/spec/src/asset/ingested.spec.rs"), &table::render_rs(&rows, &laid))?;
 
     println!(
-        "[ingest] {} assets, {:.1} MiB, pack {} tiles {:.0} KiB -> out/asset/{{glb,png,webp}}, tables written",
+        "[ingest] {} assets, {:.1} MiB, pack {} tiles {:.0} KiB -> out/asset/, tables written",
         rows.len(),
         total as f64 / 1024.0 / 1024.0,
         laid.tiles.len(),

@@ -26,15 +26,8 @@ pub enum Level {
     Live = 3,
 }
 
-const ZSTD_MAGIC: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
-
 pub fn pack(raw: &[u8], level: Level) -> std::io::Result<Vec<u8>> {
     zstd::bulk::compress(raw, level as i32)
-}
-
-/// Whether the bytes are packed as a bake stores them, not served as is.
-pub fn is_packed(stored: &[u8]) -> bool {
-    stored.starts_with(&ZSTD_MAGIC)
 }
 
 pub fn unpack(stored: &[u8]) -> std::io::Result<Vec<u8>> {

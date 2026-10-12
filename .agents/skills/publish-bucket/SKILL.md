@@ -15,17 +15,17 @@ how it gets there and how you know it arrived.
 
 ## What the bucket holds
 
-| Prefix                  | Object                                          | Named by               | Policy                                                           |
-| ----------------------- | ----------------------------------------------- | ---------------------- | ---------------------------------------------------------------- |
-| `terrain/<version>/`    | packed XTP tile                                 | name, 5–15             | immutable; a re-bake is a new version                            |
-| `place/<version>/`      | XTP count tile                                  | name, 5–15             | immutable; a re-bake is a new version                            |
-| `division/<version>/`   | XTP division tile                               | name, 5–12             | immutable; a re-bake is a new version                            |
-| `earth/<version>/`      | packed earth tile                               | name, 5                | immutable; a re-bake is a new version                            |
-| `asset/`                | glb, png, webp — not packed                     | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever    |
-| `source`                | the source's declaration, JSON                  | fixed name             | mutable; written by `publish`, `no-cache`, revalidated each boot |
-| `_meta/build-counter`   | the official build count                        | fixed name             | mutable; taken and written by CI's gate, never by hand           |
-| `_meta/build-log.jsonl` | a line a published build                        | fixed name             | appended by CI's `record` (`script/build-log.ts`)                |
-| `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number           | written by `deno task deploy` under a build number; never served |
+| Prefix                  | Object                                          | Named by                 | Policy                                                           |
+| ----------------------- | ----------------------------------------------- | ------------------------ | ---------------------------------------------------------------- |
+| `terrain/<version>/`    | packed XTP tile                                 | name, 5–15               | immutable; a re-bake is a new version                            |
+| `place/<version>/`      | XTP count tile                                  | name, 5–15               | immutable; a re-bake is a new version                            |
+| `division/<version>/`   | XTP division tile                               | name, 5–12               | immutable; a re-bake is a new version                            |
+| `earth/<version>/`      | packed earth tile; `sphere`, its picture whole  | name, 5                  | immutable; a re-bake is a new version                            |
+| `asset/`                | glb, png, webp — not packed                     | the SHA-256 of its bytes | immutable by construction; unreferenced keys deleted whenever    |
+| `source`                | the source's declaration, JSON                  | fixed name               | mutable; written by `publish`, `no-cache`, revalidated each boot |
+| `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's gate, never by hand           |
+| `_meta/build-log.jsonl` | a line a published build                        | fixed name               | appended by CI's `record` (`script/build-log.ts`)                |
+| `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number             | written by `deno task deploy` under a build number; never served |
 
 A tile is named by its 2D Morton key at the zoom the tile is held at, one
 base-4 digit a zoom, coarsest first, rows counted from the south (pxl-spec
@@ -111,7 +111,7 @@ holds. A client's next boot reads it: a publish needs no deploy. After an
 `override` is written by hand, `deno task publish source` uploads it alone.
 
 ```bash
-deno task bake:<kind> --stage publish    # terrain, place or division
+deno task bake <kind> --stage publish    # terrain, place or division
 deno task publish <kind>
 ```
 
@@ -133,21 +133,21 @@ it, so a missing tile is never an error to repair.
 
 ### Earth
 
-The Earth's picture publishes as the other kinds do: `deno task bake:earth`
-makes its set, `out/earth/`, its upload's copy, `out/earth.publish/`, and the
-global picture `asset/sky/earth/07.webp`; then
+The Earth's picture publishes as the other kinds do: `deno task
+download earth` fetches its source into `infra/earth/raw/`, and `deno task
+bake earth` makes its set, `out/earth/` — its tiles and its picture whole,
+`sphere` (`pxl-spec route` `TILE_SPHERE`) — and its upload's copy,
+`out/earth.publish/`; then
 
 ```bash
 deno task publish earth
 ```
 
-and `deno task ingest:asset` and the asset upload below, for the picture.
-
 ### Assets
 
 ```bash
 deno task ingest:asset
-# -> ./out/asset/<path>/<stem>-<12 hex>.<ext>, the tree the bucket holds, and
+# -> ./out/asset/<sha256>.<ext>, as the bucket holds them, and
 #    regenerates crates/spec/src/asset/ingested.spec.rs and
 #    apps/web/src/catalog/asset/ingested.spec.ts
 
@@ -160,7 +160,7 @@ done
 ```
 
 One sync per type so the content-type is stored with the object, selected by
-extension now that the tree mirrors `asset/` rather than being split by type.
+the extension a key keeps for it.
 Not gzipped — glb, png and webp are already compressed — so no
 `Content-Encoding`. A re-run uploads only what changed, since a changed file
 has a new name.
@@ -179,7 +179,7 @@ aws s3 ls s3://pixelet-tiles/terrain/<version>/ --profile r2 --endpoint-url $R2 
 # metadata must have survived: expect the manifest's ContentEncoding on a tile,
 # ContentType model/gltf-binary and no ContentEncoding on a glb
 aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<name> --profile r2 --endpoint-url $R2
-aws s3api head-object --bucket pixelet-tiles --key asset/<path>/<stem>-<12 hex>.<ext> --profile r2 --endpoint-url $R2
+aws s3api head-object --bucket pixelet-tiles --key asset/<sha256>.<ext> --profile r2 --endpoint-url $R2
 ```
 
 ## Deploy

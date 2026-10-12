@@ -62,7 +62,7 @@ export type Env = {
   GEO_ORIGIN: string;
 };
 
-import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_OBJECT, TILE_PREFIX } from "./route.spec.ts";
+import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_OBJECT, TILE_PREFIX, TILE_SPHERE } from "./route.spec.ts";
 import { BASE_LAYERS } from "../src/config/published.spec.ts";
 
 /**
@@ -71,13 +71,13 @@ import { BASE_LAYERS } from "../src/config/published.spec.ts";
  * the free plan's daily cap (decision/20260816-deployment-hosting.md).
  *
  * - `<kind>/<object>`: a baked page, a kind of `BASE_LAYERS` and the object
- *   spec/spec/route.json shapes under it (`TILE_OBJECT`). Which versions and
+ *   spec/spec/route.json shapes under it (`TILE_OBJECT`), and the Earth's
+ *   picture whole beside its tiles (`TILE_SPHERE`). Which versions and
  *   names exist is the declaration's and the tiles' to say, not this file's.
- * - `asset/<path>/<stem>-<12 hex>.<ext>`: a model or an image under the tree
- *   it lives in, with a hash of its bytes in the stem, the way a bundler names
- *   a chunk. pxl-tool's ingest_asset writes them and the catalogs name them
- *   by path: a changed file is a new name, which is what makes `immutable`
- *   true of it, and the hash is what makes the shape worth matching.
+ * - `asset/<sha256>.<ext>`: a model or an image named by its bytes alone
+ *   (pxl-tool's ingest_asset); a catalog names it by its path and the shipped
+ *   table maps that to the key. A changed file is a new name, which is what
+ *   makes `immutable` true of it.
  * - `source`: the source's declaration (pxl-geo-bake source.rs), the one
  *   object that changes under its key.
  */
@@ -85,7 +85,7 @@ const SOURCE_KEY = "source";
 
 const KINDS = BASE_LAYERS.join("|");
 const KEY_RE = new RegExp(
-  String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
+  String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|earth\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
 );
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the

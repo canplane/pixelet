@@ -1,6 +1,6 @@
 // @pxl/web/feature/search/place-symbol.ts
 //
-// Written by `deno task ingest:asset` from asset/place/symbol/ — do not edit.
+// Written by `deno task ingest:asset` from asset/raw/place/symbol/ — do not edit.
 //
 // Carto's place symbols (openstreetmap-carto `symbols/`, CC0) as outlines,
 // by the path Carto gives each: its box, and each shape's path data and
