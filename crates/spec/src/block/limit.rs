@@ -7,8 +7,10 @@
 //! held from sea level here so a shore below it is not buried. Under the floor
 //! is bedrock, the unknown the world holds no more of
 //! (`spec/spec/block/cube.json` `unknown`), and the service area is walled by
-//! it: a column with no ground beside one with ground is bedrock up to that
-//! ground's face (`wall`), one cell thick at every zoom.
+//! it from inside: a leaf column with ground beside one past the area is
+//! bedrock up to its own face, a block of the leaves as any is, so the wall's
+//! outer face stands on the area's edge at every zoom (`pxl-spec
+//! block/sample.rs` `wall_off`).
 
 pub const BEDROCK_DEPTH: i32 = 64;
 pub const HEADROOM: f64 = 128.0;
@@ -29,9 +31,10 @@ pub fn ceiling(ele: f64) -> f64 {
     ele.max(0.0) + HEADROOM
 }
 
-/// The face of the wall in a column with no ground, from the faces of the
-/// columns beside it that have ground: the highest, so nothing steps over it.
-/// None where none has ground, and the column stays open.
-pub fn wall(beside: impl Iterator<Item = i32>) -> Option<i32> {
-    beside.max()
+/// Whether a leaf column is the area's edge or past it: it or one of the eight
+/// about it is past, `past` asked of each by its offset in leaf columns. The
+/// wall is laid on the edge's ground, and a walker keeps off the edge, so it
+/// neither leaves the area nor stands on the wall.
+pub fn at_edge(past: impl Fn(i64, i64) -> bool) -> bool {
+    (-1..=1).any(|dy| (-1..=1).any(|dx| past(dx, dy)))
 }

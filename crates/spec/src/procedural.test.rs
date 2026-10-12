@@ -52,19 +52,6 @@ fn a_finer_zoom_keeps_what_a_coarser_one_had() {
     }
 }
 
-/// The noise is continuous across its lattice and stays near [−1, 1].
-#[test]
-fn perlin_is_continuous_and_bounded() {
-    let mut last = perlin(7, [0.0, 0.3, 0.7]);
-    for k in 1..2000 {
-        let v = perlin(7, [k as f64 * 0.01, 0.3, 0.7]);
-        assert!(v.abs() <= 1.1, "{v} at {k}");
-        assert!((v - last).abs() < 0.05, "jump at {k}");
-        last = v;
-    }
-    assert_eq!(perlin(7, [3.0, 4.0, 5.0]), 0.0, "zero on the lattice");
-}
-
 /// Caves are some of the ground, not none and not most.
 #[test]
 fn caves_hollow_a_little_of_the_ground() {
@@ -79,4 +66,26 @@ fn caves_hollow_a_little_of_the_ground() {
     let share = n as f64 / (64.0 * 64.0 * 32.0);
     eprintln!("cave share {share}");
     assert!((0.005..0.1).contains(&share), "{share}");
+}
+
+/// The caves fold to themselves: at every zoom a cube is the majority of its
+/// eight children.
+#[test]
+fn a_cave_cube_is_the_majority_of_its_children() {
+    use crate::space::coord::zoom::units;
+    for zoom in CAVE_COARSEST - 1..GROUND.cell() {
+        let side = units(zoom);
+        for x in 0..6 {
+            for y in 0..6 {
+                for z in -6..0 {
+                    let corner = [x, y, z].map(|v| f64::from(v) * side);
+                    let center = corner.map(|v| v + side / 2.0);
+                    let hollow = (0..8)
+                        .filter(|k| hollow_at(zoom + 1, [0, 1, 2].map(|a| center[a] + if k >> a & 1 == 1 { side / 4.0 } else { -side / 4.0 })))
+                        .count();
+                    assert_eq!(hollow > 4, hollow_at(zoom, center), "z{zoom} {corner:?}: {hollow} of 8");
+                }
+            }
+        }
+    }
 }

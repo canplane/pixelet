@@ -4,14 +4,27 @@ use crate::bake::constant::ELE_PADDED_SPAN;
 use crate::block::cube::sentinel;
 use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
+use std::cell::Cell;
+
 use super::*;
+
+thread_local! {
+    /// Where a test's service area begins, in units: `Around::past` is a plain `fn`.
+    static PAST_TO: Cell<f64> = const { Cell::new(f64::NEG_INFINITY) };
+}
+
+/// Its own tile alone, all of it in the service area.
+fn alone(own: TileSource<'_>) -> Around<'_> {
+    Around {
+        own,
+        beside: [None; 8],
+        past: |_| false,
+    }
+}
 
 /// `laid` with the cells column `i` has a cave in taken out, as `ground_runs`
 /// takes them out of all but bedrock.
 fn carved(sample: &ChunkSample, i: usize, laid: &[(i32, i32, GroundId)]) -> Vec<(i32, i32, GroundId)> {
-    if !caves_in(sample.cell) {
-        return laid.to_vec();
-    }
     let rock = crate::block::limit::bedrock(sample.ele[i], sample.scale);
     let (mut out, mut caves) = (Vec::new(), sample.caves(i));
     for &(lo, hi, g) in laid {
@@ -47,10 +60,9 @@ fn a_chunk_with_no_surface_has_no_ground() {
         frame: Frame::of(tile),
         origin: [0, 0],
         n: 1,
-        past: None,
     };
     let mut sample = ChunkSample::of_span(COL_SPAN);
-    sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
+    sample.read(&alone(own), [0, 0], COL_SPAN, GROUND.cell()).unwrap();
     let i = apron_col(COL_SPAN, 0, 0) as usize;
     assert!(!sample.has_ground(i));
     let mut runs = 0;
@@ -131,10 +143,9 @@ fn a_column_is_its_look_over_its_filler_over_stone() {
             frame: Frame::of(tile),
             origin: [0, 0],
             n: 1,
-            past: None,
         };
         let mut sample = ChunkSample::of_span(COL_SPAN);
-        sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, cell).unwrap();
+        sample.read(&alone(own), [0, 0], COL_SPAN, cell).unwrap();
         let i = apron_col(COL_SPAN, 0, 0) as usize;
         let mut laid = Vec::new();
         sample
@@ -192,10 +203,9 @@ fn past_the_leaves_strata_stay_a_leaf_cell_thick() {
         frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
         origin: [0, 0],
         n: 1,
-        past: None,
     };
     let mut leaf = ChunkSample::of_span(COL_SPAN);
-    leaf.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
+    leaf.read(&alone(own), [0, 0], COL_SPAN, GROUND.cell()).unwrap();
     let mut finer = ChunkSample::of_span(COL_SPAN);
     finer.refine(&leaf, 1, [0, 0], COL_SPAN).unwrap();
     let mut laid = Vec::new();
@@ -209,44 +219,45 @@ fn past_the_leaves_strata_stay_a_leaf_cell_thick() {
     assert_eq!(laid, carved(&finer, i, &[(0, 11, ground::stone), (12, 17, ground::soil), (18, 19, ground::grass)]));
 }
 
-/// The service area is walled one cell thick: the first column past it is
-/// bedrock up to the face beside it, and the one past that stays open.
+/// The service area is walled from inside, a leaf column thick: the last
+/// column in it is bedrock up to its own face, and past it is open. A column
+/// coarser than the leaves folds the wall away, as it does any leaf block.
 #[test]
-fn the_service_area_is_walled_one_cell_thick() {
-    let mut cells = vec![ground::grass; (TILE_CELLS * TILE_CELLS) as usize];
-    for y in 0..TILE_CELLS {
-        for x in 8..TILE_CELLS {
-            cells[GROUND.cell_index(x, y) as usize] = sentinel::unknown;
-        }
-    }
+fn the_service_area_is_walled_a_leaf_column_thick_from_inside() {
+    let cells = vec![ground::grass; (TILE_CELLS * TILE_CELLS) as usize];
     let ele = vec![10i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     let separation = Separation::default();
-    let own = TileSource {
-        tile: TileView {
-            cells: &cells,
-            ele: &ele,
-            separation: &separation,
-        },
-        frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
-        origin: [0, 0],
-        n: 1,
-        past: None,
-    };
-    let mut sample = ChunkSample::of_span(COL_SPAN);
-    sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
-    let laid = |x: u32| {
+    let laid = |zoom: Zoom, x: i64| {
+        let frame = Frame::of(Tile::new(zoom, 0));
+        let own = TileSource {
+            tile: TileView {
+                cells: &cells,
+                ele: &ele,
+                separation: &separation,
+            },
+            frame,
+            origin: [0, 0],
+            n: 1,
+        };
+        // Past the area west of the tile, on a shard's edge as the area's are.
+        PAST_TO.with(|p| p.set(frame.corner[0]));
+        let past = |at: [f64; 2]| PAST_TO.with(|p| at[0] < p.get());
+        let mut sample = ChunkSample::of_span(COL_SPAN);
+        sample.read(&Around { past, ..alone(own) }, [0, 0], COL_SPAN, GROUND.cell_zoom(zoom)).unwrap();
         let mut laid = Vec::new();
         sample
-            .ground_runs(apron_col(COL_SPAN, x, 4) as usize, -100, i32::MAX, |lo, hi, g| {
+            .ground_runs((4 + APRON as i64) as usize * COL_SPAN as usize + (x + APRON as i64) as usize, -100, i32::MAX, |lo, hi, g| {
                 laid.push((lo, hi, g));
                 Ok::<(), ()>(())
             })
             .unwrap();
         laid
     };
-    assert_eq!(laid(8), [(-100, 9, sentinel::unknown)]);
-    assert!(laid(9).is_empty());
-    assert_eq!(laid(7).last(), Some(&(9, 9, ground::grass)));
+    assert!(laid(LEAF_ZOOM, -1).is_empty());
+    assert_eq!(laid(LEAF_ZOOM, 0), [(-100, 9, sentinel::unknown)]);
+    assert_eq!(laid(LEAF_ZOOM, 1).last(), Some(&(9, 9, ground::grass)));
+    assert!(laid(LEAF_ZOOM - 1, -1).is_empty());
+    assert_eq!(laid(LEAF_ZOOM - 1, 0).last().map(|r| (r.1, r.2)), Some((9, ground::grass)));
 }
 
 /// Caves take the ground where the world has them, about an edit, last of
@@ -268,10 +279,9 @@ fn caves_come_last() {
         frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
         origin: [0, 0],
         n: 1,
-        past: None,
     };
     let mut sample = ChunkSample::of_span(COL_SPAN);
-    sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
+    sample.read(&alone(own), [0, 0], COL_SPAN, GROUND.cell()).unwrap();
     let column = |sample: &ChunkSample, x: u32, y: u32| {
         let mut laid = Vec::new();
         sample
@@ -296,14 +306,14 @@ fn caves_come_last() {
     assert!(caved > 0, "no cave anywhere");
 }
 
-/// Past the service area a cell is nothing, whatever the tile folded there:
-/// land read as `unknown`, the bedrock a wall is made of.
+/// Past the service area a cell is nothing, whatever the tile folded there,
+/// asked of the area, not of any tile: a tile past it is never held.
 #[test]
 fn a_cell_past_the_service_area_is_no_ground_whatever_the_tile_holds() {
     let cells = vec![ground::land; (TILE_CELLS * TILE_CELLS) as usize];
     let ele = vec![5i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     let separation = Separation::default();
-    let source = |past: Option<fn([f64; 2]) -> bool>| TileSource {
+    let own = TileSource {
         tile: TileView {
             cells: &cells,
             ele: &ele,
@@ -312,9 +322,8 @@ fn a_cell_past_the_service_area_is_no_ground_whatever_the_tile_holds() {
         frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
         origin: [0, 0],
         n: 1,
-        past,
     };
-    assert_eq!(source(None).look(3, 4), ground::land);
-    assert_eq!(source(Some(|_| true)).look(3, 4), sentinel::unknown);
-    assert_eq!(source(Some(|_| true)).cell_at([3, 4]).map(|(look, _)| look), Some(sentinel::unknown));
+    let mut sample = ChunkSample::of_span(COL_SPAN);
+    sample.read(&Around { past: |_| true, ..alone(own) }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
+    assert!((0..(COL_SPAN * COL_SPAN) as usize).all(|i| !sample.has_ground(i)));
 }

@@ -19,22 +19,33 @@ Every limit is one module, `pxl-spec block/limit.rs`, which every path calls.
   so whatever is carved later, caves among it, bedrock wins.
 - **The ceiling** is `HEADROOM`, 128 units, over the ground or sea level,
   whichever is higher: `max(0, face) + 128`.
-- **The wall** is one cell thick, just past the service area: a column with
-  no ground beside one with ground is bedrock up to that ground's face
-  (`wall`), the highest beside it. The service area is not sent: a tile says
-  it cell by cell, every cell inside it a look and every one past it none
-  (`pxl-geo-bake terrain/absent.rs`), so the wall moves with the area as more
-  is baked, and nothing keeps it. A node past the area reads the index cells
-  about it for the wall's height, as the column reads the columns about it.
+- **The wall** is a leaf column thick, just inside the service area: a leaf
+  column with ground beside one past the area is bedrock up to its own face
+  (`pxl-spec block/sample.rs` `wall_off`), and past the area is void. Bedrock
+  is a block of the leaves as the strata are, so a column coarser than the
+  leaves folds the wall away as it does any leaf block, and no rule of its
+  own makes it a cell of whatever zoom draws it. Laid one cell past the
+  area, it was that cell thick, its outer face moving out with every fold
+  and its height the highest face about it; inside, its outer face stands on
+  the area's edge, a shard's, at every zoom. The service area is the shards
+  the source serves (`pxl-kernel io/source.rs` `past_at`), asked of each
+  column and node, never of a tile, since a tile past the area is never held
+  and one standing in for it may be none: a cell past it reads as `unknown`
+  whatever a tile folded there, so the wall moves with
+  the area as more is served, and nothing keeps it. A node past the area
+  holds nothing; one beside it holds its ground down to the bedrock, so the
+  wall is drawn whole.
 
 Where an edit may go is one function, `pxl-kernel query/limit.rs`
 `World::editable`: ground the world knows exactly under it, over its bedrock
-and under its ceiling. The write every edit makes passes it, the placement
+and under its ceiling, and no column of the wall: what is `unknown` is
+neither placed on nor taken. The write every edit makes passes it, the placement
 check asks it, and the pointer points at nothing it refuses.
 
-A walker stays in the service area, `World::within` beside it: a column
-past the area, the wall's too, is a wall it slides along, as the step-slide
-meets any.
+A walker stays in the service area and off its edge, `World::within` beside
+it: the edge is the wall's columns, one rule for both (`pxl-spec
+block/limit.rs` `at_edge`), so it slides along the wall's inner face, as the
+step-slide meets any wall, and never stands on the wall.
 
 ## Caves
 

@@ -11,6 +11,8 @@ use fnv::FnvHashMap;
 
 use pxl_spec::bake::constant::{EntryAt, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::GroundId;
+use pxl_spec::block::cube::sentinel;
+use pxl_spec::block::limit::floor;
 use pxl_spec::block::sample::{beside_index, span, Around, ChunkSample, Refused, APRON, COL_SPAN};
 use pxl_spec::block::stand::{compose, stands_of, z_unit, Block, Stand};
 use pxl_spec::space::coord::aabb::Aabb;
@@ -26,6 +28,7 @@ use xpute_kit::status::errno::Errno;
 
 use super::ray::{hit, Hit, Ray, Struck};
 use super::world::World;
+use crate::io::source;
 use crate::layer::object::store::{Cells, Store};
 use crate::layer::terrain::Source;
 use crate::layer::Answer;
@@ -146,6 +149,7 @@ impl Column<'_> {
         let around = Around {
             own: self.ground.view(),
             beside: self.beside.map(|b| b.map(|s| s.view())),
+            past: source::past_at,
         };
         let (read, cell) = read_of(self.column, self.cell, self.runs);
         let (x0, y0) = GROUND.read_at(read, cell);
@@ -280,6 +284,30 @@ impl<'a> World<'a> {
     /// query's one scratch.
     pub(super) fn cell<R>(&self, cell: [i64; 2], zoom: Zoom, f: impl FnOnce(&Cell) -> R) -> Answer<R> {
         let cell_zoom = GROUND.cell_zoom(zoom);
+        // Past the service area no tile is held: the ground is the Earth's,
+        // solid to sea level, the datum, where it is drawn, with nothing on it.
+        // A cell lies in one shard, so its middle answers for all of it.
+        let side = units(cell_zoom);
+        let corner = cell.map(|v| v as f64 * side);
+        if source::past_at(corner.map(|c| c + side / 2.0)) {
+            let runs = [Run {
+                lo: floor(0.0),
+                hi: 0.0,
+                block: Block::Ground(sentinel::unknown),
+                fills: true,
+            }];
+            let surface = [Some(Surface { top: 0.0, block: sentinel::unknown })];
+            let c = Cell {
+                corner,
+                side,
+                across: 1,
+                unit: z_unit(cell_zoom),
+                at: &[0, 1],
+                runs: &runs,
+                surface: &surface,
+            };
+            return Answer::Exact(f(&c));
+        }
         let at = GROUND.cell_of(zoom, &base_of(cell_zoom, [cell[0], cell[1], 0]));
         let [x, y] = at.node().1;
         // Asked at the finest, so a bound one past its cells caps nothing.

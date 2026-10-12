@@ -9,11 +9,11 @@ use crate::bake::separation::{Crossing, Occupies, Separation};
 use crate::bake::surface::bicubic;
 use crate::bake::tile::terrain::GroundId;
 use crate::block::cube::{ground, sentinel, Ground};
-use crate::block::limit::{bedrock, wall};
-use crate::procedural::{caves_in, pier_stands, Caves, Frame};
+use crate::block::limit::{at_edge, bedrock};
+use crate::procedural::{pier_stands, Caves, Frame};
 use crate::space::camera::grid::CHUNK_STEPS;
 use crate::space::coord::adapter::epsg3857::u_per_m;
-use crate::space::coord::zoom::{count, Zoom};
+use crate::space::coord::zoom::{count, units, Zoom, SHARD_ZOOM};
 use crate::space::hierarchy::tree::{ancestor_of, offset_in};
 use crate::space::layer::lattice::{GROUND, GROUND_FOLD, TILE_CELLS};
 
@@ -108,9 +108,6 @@ pub struct TileSource<'a> {
     pub frame: Frame,
     pub origin: [i64; 2],
     pub n: u32,
-    /// Where the service area ends, by a cell's center in units; none where
-    /// the tile lies in it whole. A cell past it is no ground the tile holds.
-    pub past: Option<fn([f64; 2]) -> bool>,
 }
 
 impl TileSource<'_> {
@@ -131,14 +128,9 @@ impl TileSource<'_> {
         Some((self.look(tx as u32, ty as u32), bicubic(tile.ele, center(x), center(y)) as i32))
     }
 
-    /// The look of the tile's own cell: `unknown`, nothing, past the service
-    /// area, whatever the tile folded there.
+    /// The look of the tile's own cell.
     pub fn look(&self, tx: u32, ty: u32) -> GroundId {
-        let center = |t: u32, k: usize| self.frame.corner[k] + (f64::from(t) + 0.5) * self.frame.cell;
-        match self.past {
-            Some(past) if past([center(tx, 0), center(ty, 1)]) => sentinel::unknown,
-            _ => self.tile.cells[GROUND.cell_index(tx, ty) as usize],
-        }
+        self.tile.cells[GROUND.cell_index(tx, ty) as usize]
     }
 }
 
@@ -148,6 +140,11 @@ pub struct Around<'a> {
     /// `own`'s where it holds them, a coarser tile standing in, and else not
     /// known, no ground.
     pub beside: [Option<TileSource<'a>>; 8],
+    /// Whether a point, in units, is past the service area: the one
+    /// judgement (pxl-kernel io/source.rs `past_at`), asked of every column
+    /// whatever tile it is read from, or none, since a tile past the area is
+    /// never held.
+    pub past: fn([f64; 2]) -> bool,
 }
 
 pub const fn beside_index(qx: i64, qy: i64) -> usize {
@@ -220,12 +217,17 @@ impl ChunkSample {
     }
 
     /// Each cell as its source draws it (`TileSource::cell_at`), for cells
-    /// drawn at `cell`. `span` columns a row, the apron's among them.
+    /// drawn at `cell`, and `unknown`, nothing, past the service area,
+    /// whatever a tile folded there. `span` columns a row, the apron's among them.
     pub fn read(&mut self, around: &Around, first: [i64; 2], span: u32, cell: Zoom) -> Result<(), Refused> {
         (self.span, self.scale, self.cell) = (span, 1, cell);
         let own = &around.own;
         self.side = own.frame.cell / f64::from(own.n);
         self.corner = [0, 1].map(|k| own.frame.corner[k] + (own.origin[k] + first[k] - i64::from(APRON)) as f64 * self.side);
+        // The area runs on shards' edges, which no column straddles: asked
+        // once a shard.
+        let shard = units(SHARD_ZOOM);
+        let mut asked: Option<([i64; 2], bool)> = None;
         for py in 0..span {
             for px in 0..span {
                 let i = (py * span + px) as usize;
@@ -239,43 +241,47 @@ impl ChunkSample {
                     },
                 };
                 let (cell, ele) = source.cell_at([x, y]).unwrap_or((sentinel::void, 0));
+                let center = [0, 1].map(|k| self.corner[k] + (f64::from([px, py][k]) + 0.5) * self.side);
+                let key = center.map(|v| (v / shard).floor() as i64);
+                let past = match asked {
+                    Some((k, past)) if k == key => past,
+                    _ => {
+                        let past = (around.past)(center);
+                        asked = Some((key, past));
+                        past
+                    }
+                };
+                let cell = if past { sentinel::unknown } else { cell };
                 (self.look[i], self.block[i]) = (cell, cell);
                 self.ele[i] = ele;
             }
         }
-        // Which cells a source read, not one past every tile held.
-        let read = |i: usize| {
-            let (px, py) = (i as i64 % i64::from(span), i as i64 / i64::from(span));
-            let at = [first[0] + px - i64::from(APRON), first[1] + py - i64::from(APRON)];
-            let [qx, qy] = ancestor_of(at, GROUND.tile_cell_shamt());
-            (qx, qy) == (0, 0) || around.beside[beside_index(qx, qy)].is_some()
-        };
-        self.wall_off(read);
+        self.wall_off();
         self.read_separation(around, first)?;
         Ok(())
     }
 
-    /// Each column with no ground walled where ground is beside it (`wall`):
-    /// bedrock, `unknown`, up to that ground's face, and any other left void.
-    /// A wall is no ground beside another, so one pass lays it one cell thick.
-    /// Only what a source `read` is known: a stand-in neither walls nor is.
-    fn wall_off(&mut self, read: impl Fn(usize) -> bool) {
+    /// The service area walled from inside: where the columns are the
+    /// leaves', each one with ground beside one past the area is bedrock,
+    /// `unknown`, up to its own face, a block of the leaves as strata are,
+    /// which a coarser column folds away; past the area is void at every zoom.
+    fn wall_off(&mut self) {
+        // Composed of the leaves' columns, as a stratum is laid in.
+        let leaf = self.side <= units(GROUND.cell());
         let span = self.span as i64;
-        for i in 0..(span * span) as usize {
-            if !read(i) || Ground::of(self.look[i]).is_some() {
-                continue;
-            }
+        let n = (span * span) as usize;
+        // Read off `block`, still what each source gave, so a wall laid is
+        // never read as past the area.
+        for i in 0..n {
             let (x, y) = (i as i64 % span, i as i64 / span);
-            let beside = (-1..=1)
-                .flat_map(|dy| (-1..=1).map(move |dx| (x + dx, y + dy)))
-                .filter(|&(bx, by)| (0..span).contains(&bx) && (0..span).contains(&by));
-            let faces = beside
-                .map(|(bx, by)| (by * span + bx) as usize)
-                .filter(|&j| read(j) && Ground::of(self.look[j]).is_some())
-                .map(|j| self.ele[j]);
-            let (look, ele) = wall(faces).map_or((sentinel::void, self.ele[i]), |face| (sentinel::unknown, face));
-            (self.look[i], self.block[i], self.ele[i]) = (look, look, ele);
+            let past = |(bx, by): (i64, i64)| (0..span).contains(&bx) && (0..span).contains(&by) && self.block[(by * span + bx) as usize] == sentinel::unknown;
+            self.look[i] = match self.block[i] {
+                sentinel::unknown => sentinel::void,
+                g if leaf && Ground::of(g).is_some() && at_edge(|dx, dy| past((x + dx, y + dy))) => sentinel::unknown,
+                g => g,
+            };
         }
+        self.block[..n].copy_from_slice(&self.look[..n]);
     }
 
     /// Each column's lines from the tile its height is read from (`read`).
@@ -322,7 +328,8 @@ impl ChunkSample {
             while i < crossing.len() && crossing[i].0 == col {
                 let o = crossing[i].2;
                 i += 1;
-                if Ground::of(o.kind).is_none() {
+                // Bedrock wins over a way, as it does over the ground's face.
+                if Ground::of(o.kind).is_none() || self.look[col] == sentinel::unknown {
                     continue;
                 }
                 let ground = self.ele[col];
@@ -404,9 +411,51 @@ impl ChunkSample {
     }
 
     /// Whether column `i` has ground: a look, or the bedrock walling the
-    /// service area (`wall_off`); a void column gives no surface.
+    /// service area from inside (`wall_off`); a void column gives no surface.
     pub fn has_ground(&self, i: usize) -> bool {
         Ground::of(self.look[i]).is_some() || self.look[i] == sentinel::unknown
+    }
+
+    /// Its cells a leaf cell's side, upright.
+    pub fn scale(&self) -> i32 {
+        self.scale
+    }
+
+    /// Cell `i`'s decks and piers, lowest first, none overlapping.
+    pub fn over_in(&self, i: usize) -> &[Over] {
+        &self.over[self.over_at[i] as usize..self.over_at[i + 1] as usize]
+    }
+
+    /// What cell `i`'s ground is at the height `z`, by its depth under the face
+    /// (`strata`); none over the face, or where it has no ground.
+    pub fn ground_at(&self, i: usize, z: i32) -> Option<GroundId> {
+        if !self.has_ground(i) || z >= self.ele[i] {
+            return None;
+        }
+        self.strata(i).into_iter().find(|&(bottom, _)| z >= bottom).map(|(_, g)| g)
+    }
+
+    /// The caves' air in cell `i` within `[lo, hi)`, each stretch `[a, b)`:
+    /// only under its face and over its bedrock, never by a way or in the
+    /// bedrock walling the area (`by_a_way`), so a cave opens neither the
+    /// surface nor a way.
+    pub fn caves_in(&self, i: usize, [lo, hi]: [i32; 2], mut air: impl FnMut(i32, i32)) {
+        if !self.has_ground(i) || self.look[i] == sentinel::unknown || self.by_a_way(i) {
+            return;
+        }
+        let face = self.ele[i] - self.scale;
+        let (from, to) = (lo.max(bedrock(self.ele[i], self.scale)), hi.min(face));
+        let mut caves = self.caves(i);
+        let mut z = from;
+        while z < to {
+            let (end, hollow) = caves.stretch(self.cell_z(z));
+            // The first cell whose center is at or past the cube's end.
+            let next = ((end * f64::from(self.scale) - 0.5).ceil() as i32).clamp(z + 1, to);
+            if hollow {
+                air(z, next);
+            }
+            z = next;
+        }
     }
 
     /// The world's caves down column `i`, asked of a cell `z` by its center
@@ -414,7 +463,7 @@ impl ChunkSample {
     fn caves(&self, i: usize) -> Caves {
         let span = self.span as usize;
         let at = [i % span, i / span].map(|v| v as f64 + 0.5);
-        Caves::column(self.corner[0] + at[0] * self.side, self.corner[1] + at[1] * self.side)
+        Caves::column(self.corner[0] + at[0] * self.side, self.corner[1] + at[1] * self.side, self.side)
     }
 
     /// The center of the cell `z`, in units.
@@ -435,8 +484,8 @@ impl ChunkSample {
     /// The column's ground as inclusive runs: a top face at `ele` is cells up to
     /// `ele − 1` (`hi − 1` below). Through a bore: the ground under its floor,
     /// the way on the floor's cell, and the ground standing over its air.
-    /// Caves are taken out of it where the world has them (`hollow`), in a
-    /// leaf's cells or finer as strata are, last of all: bedrock, the ground's
+    /// Caves are taken out of it where the world has them (`hollow_at`), at
+    /// every zoom, its cubes the column's, last of all: bedrock, the ground's
     /// face and the ways win over them, so a cave never opens the face, takes
     /// bedrock or comes by a way.
     pub fn ground_runs<E>(&self, i: usize, from: i32, to: i32, mut run: impl FnMut(i32, i32, GroundId) -> Result<(), E>) -> Result<(), E> {
@@ -444,7 +493,7 @@ impl ChunkSample {
             return Ok(());
         }
         let top = self.ele[i].min(to);
-        let carves = caves_in(self.cell) && self.look[i] != sentinel::unknown && !self.by_a_way(i);
+        let carves = self.look[i] != sentinel::unknown && !self.by_a_way(i);
         let mut caves = carves.then(|| self.caves(i));
         // Never under the bedrock line, whether or not a fold draws bedrock there.
         let rock = bedrock(self.ele[i], self.scale);
@@ -453,8 +502,8 @@ impl ChunkSample {
             let Some(caves) = caves.as_mut().filter(|_| g != sentinel::unknown) else {
                 return if lo < hi { run(lo, hi - 1, g) } else { Ok(()) };
             };
-            // Each stretch of the cells the world leaves solid, a knot interval
-            // at a time where it is sure of all its cells (`Caves::stretch`).
+            // Each stretch of the cells the world leaves solid, a cube of the
+            // caves at a time (`Caves::stretch`).
             let mut start = None;
             let face = self.ele[i] - self.scale;
             let mut set = |z: i32, hollow: bool, start: &mut Option<i32>| match (hollow, *start) {
@@ -479,17 +528,10 @@ impl ChunkSample {
                     z = rock.min(hi);
                     continue;
                 }
-                let (end, sure) = caves.stretch(self.cell_z(z));
-                // The first cell whose center is at or past the interval's end.
+                let (end, hollow) = caves.stretch(self.cell_z(z));
+                // The first cell whose center is at or past the cube's end.
                 let next = ((end * f64::from(self.scale) - 0.5).ceil() as i32).clamp(z + 1, hi.min(face));
-                match sure {
-                    Some(hollow) => set(z, hollow, &mut start)?,
-                    None => {
-                        for z in z..next {
-                            set(z, caves.hollow(self.cell_z(z)), &mut start)?;
-                        }
-                    }
-                }
+                set(z, hollow, &mut start)?;
                 z = next;
             }
             match start {

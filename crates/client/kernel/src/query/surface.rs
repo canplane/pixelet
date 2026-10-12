@@ -16,6 +16,7 @@ use xpute_guest::global::Global;
 
 use super::block::Surface;
 use super::world::World;
+use crate::io::source;
 use crate::layer::{Answer, Query};
 
 /// A node's cells and the ring around them, in its tile's cells.
@@ -69,6 +70,7 @@ impl World<'_> {
         let around = Around {
             own: own.view(),
             beside: beside.map(|b| b.map(|s| s.view())),
+            past: source::past_at,
         };
         let (x0, y0) = GROUND.read_at(node, cell);
         let span = GROUND.read_side(node.0, cell) + 2 * ring;

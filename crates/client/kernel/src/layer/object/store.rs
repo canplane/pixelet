@@ -16,7 +16,6 @@ use std::collections::TryReserveError;
 
 pub use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::bake::fold::majority;
 use pxl_spec::block::object::{cube_of, decor_id_from_num, object_value_is_decor, object_value_is_marker, object_value_is_voxel, Cube};
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
@@ -131,11 +130,35 @@ fn shard(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
     [at[0] >> (zoom - SHARD_ZOOM), at[1] >> (zoom - SHARD_ZOOM), 0]
 }
 
-/// Majority over the 2×2×2 children (pxl-spec bake/fold.rs), empty counted as a value
-/// and a non-voxel value as empty, so a lone cube goes at the first fold and
-/// a wall keeps whole cells.
-fn fold_cell(children: [u16; 8], zoom: Zoom) -> u16 {
-    majority(children.map(|v| if object_value_is_voxel(u32::from(v)) { v } else { EMPTY.id }), zoom)
+/// The 2×2×2 children folded (pxl-spec bake/fold.rs): the share of the cube
+/// filled, the mean of theirs, and the kind most of that fill is, a tie to
+/// the corner `majority`'s alternates to. A non-voxel value fills nothing.
+fn fold_cell(children: [(u16, f64); 8], zoom: Zoom) -> (u16, f64) {
+    let fill = children.iter().map(|c| c.1).sum::<f64>() / 8.0;
+    let of = |kind: u16| children.iter().filter(|c| c.0 == kind).map(|c| c.1).sum::<f64>();
+    let mut order = children;
+    if zoom & 1 == 0 {
+        order.reverse();
+    }
+    let mut best = (EMPTY.id, 0.0);
+    for c in order {
+        let w = of(c.0);
+        if c.1 > 0.0 && w > best.1 {
+            best = (c.0, w);
+        }
+    }
+    (best.0, fill)
+}
+
+/// What a folded cube shows: its kind where it is half full or more, so a
+/// lone cube goes at the first fold and a wall keeps whole cells, and the
+/// volume is rounded once, where it is drawn, not at every zoom on the way.
+fn shown((kind, fill): (u16, f64)) -> u16 {
+    if fill >= 0.5 {
+        kind
+    } else {
+        EMPTY.id
+    }
 }
 
 /// One leaf written: `<key, id, ext>`, its node, its catalog value and what
@@ -200,13 +223,14 @@ impl Store {
         })
     }
 
-    /// What a node shows: a leaf's value, or its children folded.
-    fn fold(&self, tree: &Tree, slot: Slot<Leaf>, zoom: Zoom, at: [i64; 3], hide: Option<u128>) -> u16 {
+    /// What a node holds: a leaf's value and whether it fills its cube, or
+    /// its children folded.
+    fn fold(&self, tree: &Tree, slot: Slot<Leaf>, zoom: Zoom, at: [i64; 3], hide: Option<u128>) -> (u16, f64) {
         match slot {
-            Slot::Leaf(v) if hide == Some(key(zoom, at)) && v != EMPTY => EMPTY.id,
-            Slot::Leaf(v) => v.id,
+            Slot::Leaf(v) if v == EMPTY || hide == Some(key(zoom, at)) || !object_value_is_voxel(u32::from(v.id)) => (EMPTY.id, 0.0),
+            Slot::Leaf(v) => (v.id, 1.0),
             Slot::Branch(block) => {
-                let mut kids = [EMPTY.id; 8];
+                let mut kids = [(EMPTY.id, 0.0); 8];
                 for (k, s) in tree.block(block).enumerate() {
                     kids[k] = self.fold(tree, s, zoom + 1, child_cube(zoom, at, k), hide);
                 }
@@ -328,7 +352,7 @@ impl Store {
             }
             let v = u32::from(match leaf {
                 Some(v) => v.id,
-                None => self.find(zoom, at).map_or(EMPTY.id, |f| self.fold(f.tree, f.slot, f.zoom, at, hide)),
+                None => self.find(zoom, at).map_or(EMPTY.id, |f| shown(self.fold(f.tree, f.slot, f.zoom, at, hide))),
             });
             if !object_value_is_voxel(v) {
                 return false;
@@ -362,7 +386,7 @@ impl Store {
                 Entry {
                     zoom,
                     at,
-                    state: u32::from(self.fold(f.tree, branch, zoom, at, None)),
+                    state: u32::from(shown(self.fold(f.tree, branch, zoom, at, None))),
                     ext: NONE,
                 },
                 true,

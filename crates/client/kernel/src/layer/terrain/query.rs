@@ -4,13 +4,14 @@
 //! from, or the nearest resident tile over it, at that tile's cells; it is
 //! exact where that tile says it, coarser where one over it only draws it.
 
-use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile};
 use pxl_spec::block::cube::Ground;
 use pxl_spec::block::limit::bedrock;
 use pxl_spec::block::sample::{TileSource, TileView};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::pvf3::pvf3;
-use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::world::point;
+use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
 use pxl_spec::space::layer::tile::{tile_at, Tile};
@@ -38,9 +39,6 @@ impl<'a> Source<'a> {
             frame: Frame::of(self.from),
             origin: self.origin,
             n: self.n,
-            // Only a served shard's tiles are asked for, so one at a shard or
-            // finer lies in the area whole; one over shards may fold some past it.
-            past: (self.from.zoom < SHARD_ZOOM).then_some(source::past_at as fn([f64; 2]) -> bool),
         }
     }
 }
@@ -118,14 +116,23 @@ fn relief(d: &Drawn, (zoom, at): Node<2>) -> [i16; 2] {
     d.body.index.over(first.in_tile(), across)
 }
 
-/// Whether the cell at a node's center has a look: the service area's ground.
-/// A node never straddles the area's edge, which runs on shards' edges.
-fn has_look(d: &Drawn, (zoom, at): Node<2>) -> bool {
+/// A node's center, in units.
+fn center_of((zoom, at): Node<2>) -> [f64; 2] {
     let base = base_of(zoom, [at[0], at[1], 0]);
-    let half = pvf3::from_real(units(zoom) / 2.0);
-    let center = pvf3::gather(pvf3::X(&base) + half, pvf3::Y(&base) + half, 0);
-    let [x, y] = GROUND.cell_of(d.from.zoom, &center).in_tile();
-    Ground::of(d.source().view().look(x, y)).is_some()
+    [pvf3::X(&base), pvf3::Y(&base)].map(|v| pvf3::to_real(v) + units(zoom) / 2.0)
+}
+
+/// Whether a node is past the service area. It never straddles the area's
+/// edge, which runs on shards' edges.
+fn past(node: Node<2>) -> bool {
+    source::past_at(center_of(node))
+}
+
+/// The look of the cell at a node's center in the tile `d` answers.
+fn look_at(d: &Drawn, node: Node<2>) -> GroundId {
+    let [x, y] = center_of(node);
+    let [x, y] = GROUND.cell_of(d.from.zoom, &point(x, y, 0.0)).in_tile();
+    d.source().view().look(x, y)
 }
 
 /// The ring of cells at `fine` about a node, or of nodes where it is finer.
@@ -162,21 +169,28 @@ impl Query for Residency<TerrainTile> {
     /// its own or beside, under which every column is solid; so a step down to
     /// a column beside is walled, and a fold's cell shrunk by its fill stands
     /// on the cell under it, never on the sky. A
-    /// node past the service area, no look in it, holds the bedrock walling
-    /// the area where ground is beside it (`pxl-spec block/limit.rs` `wall`):
-    /// from the bedrock to that ground's face.
+    /// node past the service area, no look in it, holds nothing; one beside
+    /// it holds the bedrock walling the area from inside down to its floor
+    /// (`pxl-spec block/sample.rs` `wall_off`), so the wall is seen whole.
     fn bound<const D: usize>(&self, line: &Line, (zoom, at): Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+        let node = (zoom, [at[0], at[1]]);
+        // Known before any of its ground arrives.
+        if past(node) {
+            return Answer::Exact(None);
+        }
         let Some(d) = self.drawn_of(line) else {
             return Answer::Nothing(line.tile);
         };
-        let node = (zoom, [at[0], at[1]]);
-        let [mut lo, mut hi] = relief(&d, node).map(i32::from);
+        let [mut lo, hi] = relief(&d, node).map(i32::from);
         let mut lack = (!d.exact).then_some(d.tile);
-        let inside = has_look(&d, node);
-        let mut face = None;
+        let mut edge = false;
         let mut last: Option<(Tile, Option<Drawn>)> = None;
         // The apron is a column of the chunk's cells; the index lane says no finer.
         for beside in ring(EXTENT.cell_zoom(line.tile.zoom).min(cell), node) {
+            if past(beside) {
+                edge = true;
+                continue;
+            }
             let tile = tile_at(line.tile.zoom, ancestor_of(beside.1, u32::from(beside.0 - line.tile.zoom)));
             let b = match last {
                 Some((t, b)) if t == tile => b,
@@ -189,16 +203,12 @@ impl Query for Residency<TerrainTile> {
                 continue;
             };
             lack = lack.or((!b.exact).then_some(b.tile));
-            if has_look(&b, beside) {
-                let [b_lo, b_hi] = relief(&b, beside).map(i32::from);
-                match inside {
-                    true => lo = lo.min(b_lo),
-                    false => face = face.max(Some(b_hi)),
-                }
+            if Ground::of(look_at(&b, beside)).is_some() {
+                lo = lo.min(i32::from(relief(&b, beside)[0]));
             }
         }
-        if let Some(face) = face {
-            (lo, hi) = (lo.min(bedrock(face, 1)), hi.max(face));
+        if edge {
+            lo = lo.min(bedrock(lo, 1));
         }
         let r = Relief {
             extent: (f64::from(lo) * units(GROUND.cell()) - units(cell), f64::from(hi) * units(GROUND.cell())),

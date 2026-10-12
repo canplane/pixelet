@@ -10,6 +10,15 @@ use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use super::*;
 
+/// Its own tile alone, all of it in the service area.
+fn alone(own: TileSource<'_>) -> Around<'_> {
+    Around {
+        own,
+        beside: [None; 8],
+        past: |_| false,
+    }
+}
+
 /// Ground dug deeper than the chunk's floor is still drawn under the hole:
 /// the floor goes under what is placed.
 #[test]
@@ -26,10 +35,9 @@ fn ground_under_a_hole_past_the_floor_is_drawn() {
         frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
         origin: [0, 0],
         n: 1,
-        past: None,
     };
     let mut sample = ChunkSample::of_span(COL_SPAN);
-    sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
+    sample.read(&alone(own), [0, 0], COL_SPAN, GROUND.cell()).unwrap();
     let dug: FnvHashMap<[i64; 3], u32> = (-5..5).map(|z| ([0, 0, z], object::air as u32)).collect();
     let mut stands = Vec::new();
     stands_of(&sample, &dug, (0, 0), GROUND.cell(), &mut stands).unwrap();
