@@ -6,7 +6,6 @@
 //
 //   ./script/build-log.ts                      every build, newest first
 //   ./script/build-log.ts --record 18 --web --server --smoke success     append one (CI)
-//   ./script/build-log.ts --last web                                       the sha the client went out from
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
@@ -126,14 +125,9 @@ if (args[0] === "--record") {
   if (!Number.isSafeInteger(n) || n < 0) die(`--record wants a build number, not ${JSON.stringify(args[1])}`);
   const at = args.indexOf("--smoke");
   await record(n, args.includes("--web"), args.includes("--server"), smokeOf(at < 0 ? undefined : args[at + 1]));
-} else if (args[0] === "--last") {
-  const half = args[1];
-  if (half !== "web" && half !== "server") die(`--last wants web or server, not ${JSON.stringify(half)}`);
-  const { entries } = await read();
-  console.log(entries.findLast((e) => e[half])?.sha ?? "");
 } else if (args.length === 0) {
   const { entries } = await read();
   for (const entry of entries.slice().reverse()) show(entry);
 } else {
-  die(`takes no argument but --record or --last: ${JSON.stringify(args[0])}`);
+  die(`takes no argument but --record: ${JSON.stringify(args[0])}`);
 }

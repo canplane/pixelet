@@ -177,13 +177,13 @@ pull requests, never on main: main carries work between machines, compiling
 or not. **Publishing is `git push origin main:deploy`**, forced once main has
 been rewritten. Why each job is as it is lives in the workflow's comments.
 
-| Job             | When                  | What                                                                                                |
-| :-------------- | :-------------------- | :-------------------------------------------------------------------------------------------------- |
-| `gate`          | always                | `check:ship` and the tests over what changed since the last deploy; on deploy, takes a build number |
-| `deploy-server` | gate green            | ssh, reset to the run's commit, `docker compose up -d --build --force-recreate`                     |
-| `deploy-web`    | after `deploy-server` | `deno task deploy` under the build number                                                           |
-| `smoke`         | after both deployed   | `deno task smoke https://plei.me`                                                                   |
-| `record`        | after either deployed | appends the build to the log                                                                        |
+| Job             | When                  | What                                                                                                                                                                                            |
+| :-------------- | :-------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gate`          | always                | `check:ship` over the whole commit: the shipped TypeScript type-checks, the shipped crates pass clippy, the generated files match `spec/`; nothing of behavior; on deploy, takes a build number |
+| `deploy-server` | gate green            | ssh, reset to the run's commit, `docker compose up -d --build --force-recreate`                                                                                                                 |
+| `deploy-web`    | after `deploy-server` | `deno task deploy` under the build number                                                                                                                                                       |
+| `smoke`         | after both deployed   | `deno task smoke https://plei.me`                                                                                                                                                               |
+| `record`        | after either deployed | appends the build to the log                                                                                                                                                                    |
 
 A deploy is whole: the client and the servers go out from the one commit,
 every time, so they never run different ones. The servers go first because an

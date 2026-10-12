@@ -24,9 +24,11 @@ skills in [.agents/skills/](./.agents/skills/).
 root; README.md lists the tasks. The one `package.json` is the device app's
 (`apps/native`), where Expo and Metro find packages as npm lays them out.
 
-**A push to `deploy` waits on `check:ship` and the tests** over what changed
-since the last deploy ([infra/README.md](./infra/README.md) §5), which is
-how publishing happens. `deno task check` is everything — style, the device,
+**A push to `deploy` waits on `check:ship` over the whole commit**
+([infra/README.md](./infra/README.md) §5), which is how publishing happens:
+it guarantees only that the web entry and the Worker type-check, the shipped
+crates pass clippy with warnings denied and the generated files match
+`spec/` — nothing of behavior, nor of what does not ship. `deno task check` is everything — style, the device,
 the bakes, xpute too — run before a commit or when asked; `check:diff` is it
 over what changed. A kernel change reaches the running
 dev server through `deno task build:wasm`. main is not built by CI.
@@ -471,8 +473,6 @@ inspire what happens inside a cell or a chunk, never the structure.
   both — the invariant, the state space, the machinery that goes and
   arrives, runtime, memory and migration cost. Plan documents, approval
   gates and agent fan-outs are overhead, skipped unless asked.
-- **Done is reviewed against the new invariant**, over every path that
-  produces the symptom: what exists only for the old architecture, what shim
 - **A guarantee is either precisely defined or not claimed.** State exactly
   what is guaranteed, under which assumptions, and what is not.
   Approximations are valid when their guarantees and limitations are
@@ -485,6 +485,8 @@ inspire what happens inside a cell or a chunk, never the structure.
   for, and never promoted to a principle by its usefulness or by what the
   industry habitually does. A discussion of principle is not an order to
   implement it, and a fact stays stated when agreeing would be easier.
+- **Done is reviewed against the new invariant**, over every path that
+  produces the symptom: what exists only for the old architecture, what shim
   can go, what representation is still duplicated, what cleanup could be
   made impossible, what correctness still rests on capacity or timing, what
   was kept only because a test leaned on it. If, designing it today, you

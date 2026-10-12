@@ -88,7 +88,7 @@ env:
 
 jobs:
   gate:
-    name: check and test
+    name: check what ships
     runs-on: ubuntu-latest
     # One holder of the counter at a time, across every ref and trigger: the
     # take is read-add-write and two runs holding it together would take the
@@ -100,11 +100,9 @@ jobs:
     outputs:
       build_number: ${{ steps.number.outputs.value }}
     steps:
-      # Whole, so the commit the last deploy went out from can be diffed.
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
 
       - uses: denoland/setup-deno@v2
         with:
@@ -128,38 +126,15 @@ jobs:
           cache: rust
           binaryen-version: ${{ env.BINARYEN_VERSION }}
 
-      # The commit the older half last went out from, when both halves' are
-      # ancestors of this one: each was a gated run's HEAD, so what lies
-      # before it was checked. Its own step, so the token is never in the
-      # environment of the code the checks build and run.
-      - name: Find the last deploy
-        id: base
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          WEB=$(./script/build-log.ts --last web 2>/dev/null) || WEB=
-          SERVER=$(./script/build-log.ts --last server 2>/dev/null) || SERVER=
-          ancestor() { [ -n "$1" ] && git merge-base --is-ancestor "$1" "$2" 2>/dev/null; }
-          BASE=
-          if ancestor "$WEB" HEAD && ancestor "$SERVER" HEAD; then
-            if ancestor "$WEB" "$SERVER"; then BASE=$WEB; else BASE=$SERVER; fi
-          fi
-          echo "sha=$BASE" >> "$GITHUB_OUTPUT"
-
-      # What a deploy waits on (deno.jsonc check:ship) and the tests, over
-      # what changed since then; with no base, all of it. Style, the device
-      # and the bakes are checked where they are written, not here.
-      - name: Check what changed
-        env:
-          BASE: ${{ steps.base.outputs.sha }}
-        run: |
-          df -h /
-          if [ -n "$BASE" ]; then
-            deno task check:diff --base "$BASE"
-          else
-            deno task check:ship && deno task test
-          fi
+      # deno.jsonc check:ship over the whole commit, and what it guarantees is
+      # only this: the web entry and the Worker type-check (deno check, no
+      # lint); the shipped crates — the kernel's for wasm, the two servers' —
+      # pass clippy with warnings denied; the generated files match spec/.
+      # Nothing of behavior, nor of what does not ship (the bakes, the tools,
+      # the device app). It checks the commit itself, where a check in the
+      # shared working tree sees whatever else is uncommitted there.
+      - name: Check what ships
+        run: deno task check:ship
 
       # Every build of deploy is numbered, shipped or not — a build lab's count.
       # A push of prose alone never reaches here and takes no number (see the

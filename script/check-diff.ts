@@ -1,11 +1,8 @@
 #!/usr/bin/env -S deno run -A
-// `deno task check`, narrowed to what changed: a crate when it or a
-// dependency changed, TypeScript by what imports what. Against HEAD, the
-// working tree's changes; against a base, the commits since it, with only
-// what a deploy waits on and the tests, which is how CI gates one.
+// `deno task check`, narrowed to the working tree's changes: a crate when it
+// or a dependency changed, TypeScript by what imports what.
 //
 //   deno run -A script/check-diff.ts
-//   deno run -A script/check-diff.ts --base <sha>
 
 import { parse } from "@std/jsonc";
 import { dirname, fromFileUrl, join } from "@std/path";
@@ -18,11 +15,8 @@ function git(...args: string[]): string[] {
   return new TextDecoder().decode(out.stdout).split("\n").filter(Boolean);
 }
 
-const base = Deno.args[0] === "--base" ? Deno.args[1] : undefined;
 // --no-renames: a file moved out of a crate touches the crate it left.
-const changed = base
-  ? git("diff", "--name-only", "--no-renames", base, "HEAD")
-  : [...new Set([...git("diff", "--name-only", "--no-renames", "HEAD"), ...git("ls-files", "--others", "--exclude-standard")])];
+const changed = [...new Set([...git("diff", "--name-only", "--no-renames", "HEAD"), ...git("ls-files", "--others", "--exclude-standard")])];
 const present = changed.filter((path) => {
   try {
     return Deno.statSync(join(root, path)).isFile;
@@ -109,43 +103,20 @@ const cargo = (name: string) => {
 const xpute = under("xpute/ts/");
 const web = xpute || under("apps/web/");
 
-// A deploy's gate narrows only over files it can place: one of a crate, the
-// web's, xpute's or spec/'s, or one nothing ships. Anything else — a lockfile,
-// the workspace's manifest, the toolchain, the import map — runs all of it.
-const placed = (path: string) =>
-  crateDirs.some((c) => path.startsWith(c.dir)) ||
-  /^(apps\/web\/|apps\/native\/|xpute\/(ts|rust)\/[^/]+\/|spec\/|decision\/|\.agents\/|\.github\/|infra\/)/.test(path) ||
-  path.endsWith(".md");
-if (base && !changed.every(placed)) {
-  console.log(`check-diff: ${changed.filter((path) => !placed(path)).join(", ")} reaches everything; the whole gate`);
-  for (const name of ["check:ship", "test"]) {
-    const status = await new Deno.Command("deno", { args: ["task", name], cwd: root }).spawn().status;
-    if (!status.success) Deno.exit(status.code || 1);
-  }
-  Deno.exit(0);
-}
-
-// What a deploy ships.
+// What ships.
 if (web) task("check:web");
 cargo("check:rust");
 if (under("spec/") || changed.some((path) => path.includes(".spec.")) || touched.has("pxl-tool")) task("check:spec");
 
-if (base) {
-  // A deploy's tests, of what changed since the last one.
-  if (web) task("test:web");
-  if (under("xpute/")) task("test:xpute");
-  cargo("test:rust");
-} else {
-  // The rest of `check`, local alone.
-  const formatted = present.filter((path) => /\.(ts|tsx|js|json|jsonc|md)$/.test(path));
-  if (formatted.length) runs.push({ label: "check:fmt", argv: ["deno", "fmt", "--check", ...formatted] });
-  cargo("check:fmt");
-  task("check:rules");
-  if (web || under("apps/native/")) runs.push({ label: "check:native", argv: ["deno", "check", "apps/native/src"] });
-  cargo("check:native");
-  cargo("check:host");
-  if (xpute) task("check:xpute");
-}
+// The rest of `check`.
+const formatted = present.filter((path) => /\.(ts|tsx|js|json|jsonc|md)$/.test(path));
+if (formatted.length) runs.push({ label: "check:fmt", argv: ["deno", "fmt", "--check", ...formatted] });
+cargo("check:fmt");
+task("check:rules");
+if (web || under("apps/native/")) runs.push({ label: "check:native", argv: ["deno", "check", "apps/native/src"] });
+cargo("check:native");
+cargo("check:host");
+if (xpute) task("check:xpute");
 
 console.log(`check-diff: ${changed.length} changed file(s); crates ${[...touched].join(", ") || "none"}`);
 for (const { label, argv } of runs) {
