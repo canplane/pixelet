@@ -26,12 +26,13 @@ use std::path::{Path, PathBuf};
 use crate::cli::Flags;
 use crate::coverage::{source_of, Coverage, Node};
 use crate::pyramid::{ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet, MANIFEST};
+use crate::source;
 use crate::util::git_sha;
-use pxl_spec::bake::published::PUBLISHED_TOP_ZOOM;
+use pxl_spec::bake::published::FORMAT;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{top_over, Tile};
+use pxl_spec::space::layer::tile::Tile;
 
 /// The fold's unit in the stage, and the same once its commit has begun; no
 /// shard is named so.
@@ -97,20 +98,16 @@ impl Stage {
         Ok(Coverage::of_source()?.shards().filter(|s| self.done(&s.name()).exists()).collect())
     }
 
-    /// The shards the set holds, as its manifest names them: none where it
-    /// holds tiles and its manifest names no shards, which nothing then knows.
-    pub fn held(&self) -> Result<Option<BTreeSet<String>>, String> {
-        let path = self.set.root.join(MANIFEST);
-        let manifest: serde_json::Value = match fs::read_to_string(&path) {
-            Ok(text) => serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::Value::Null,
-            Err(e) => return Err(io(&path, e)),
+    /// The shards the set holds once what is staged is in: those its
+    /// manifest names and those staged whole. None where it holds tiles and
+    /// its manifest names no shards, which nothing then knows.
+    fn will_hold(&self) -> Result<Option<BTreeSet<Tile>>, String> {
+        let held = match source::manifest(&self.set.root)?.as_ref().map(source::held).transpose()?.flatten() {
+            Some(held) => held,
+            None if self.set.by_zoom()?.is_empty() => BTreeSet::new(),
+            None => return Ok(None),
         };
-        Ok(match manifest["shard"].as_array() {
-            Some(names) => Some(names.iter().filter_map(|n| n.as_str().map(String::from)).collect()),
-            None if self.set.by_zoom()?.is_empty() => Some(BTreeSet::new()),
-            None => None,
-        })
+        Ok(Some(held.into_iter().chain(self.whole()?.into_iter().map(shard_tile)).collect()))
     }
 
     /// The fold's unit let go, so a fold runs again from the set as it is.
@@ -180,11 +177,10 @@ impl Stage {
             }
             // Before anything moves: a commit begun is finished, never undone, so
             // the set will hold these, and a commit cut short leaves them said.
-            if let Some(mut held) = self.held()? {
-                held.extend(self.whole()?.iter().map(|s| s.name()));
+            if let Some(held) = self.will_hold()? {
                 let path = self.set.root.join(MANIFEST);
-                let mut manifest: serde_json::Value = fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
-                manifest["shard"] = serde_json::json!(held);
+                let mut manifest = source::manifest(&self.set.root)?.unwrap_or_else(|| serde_json::json!({}));
+                manifest["shard"] = serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
                 crate::util::write_atomic(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?.as_bytes()).map_err(|e| io(&path, e))?;
             }
@@ -230,15 +226,14 @@ impl Stage {
             fs::remove_dir_all(to).map_err(|e| io(to, e))?;
         }
         fs::create_dir_all(to).map_err(|e| io(to, e))?;
-        // A reader starts at the published source's top over these leaves, so no tile there goes.
-        let skip = if pruned {
-            unasked::<L>(&self.set, top_over(L::LEAF, PUBLISHED_TOP_ZOOM).max(GROUND.top()))?
-        } else {
-            FnvHashSet::default()
-        };
+        // A reader starts at the pyramid's top, so no tile there goes.
+        let skip = if pruned { unasked::<L>(&self.set, GROUND.top())? } else { FnvHashSet::default() };
         for p in self.set.by_zoom()?.into_values().flatten().filter(|p| !skip.contains(p)) {
             fs::hard_link(self.set.path(p), to.join(p.name())).map_err(|e| io(&self.set.path(p), e))?;
         }
+        // What the copy is, which the set may stop being once it changes again.
+        let manifest = self.set.root.join(MANIFEST);
+        fs::copy(&manifest, to.join(MANIFEST)).map_err(|e| io(&manifest, e))?;
         println!("[bake] {}: {} tiles no reader asks for left out", to.display(), skip.len());
         Ok(())
     }
@@ -292,17 +287,29 @@ impl Run {
         })
     }
 
+    /// The shards the set holds once what is staged is in: what its fold
+    /// reads as baked, and nothing else.
+    pub fn baked(&self) -> Result<Coverage, String> {
+        let held = self
+            .stage
+            .will_hold()?
+            .ok_or(format!("{}: its manifest names no shards it holds, so which are baked is unknown", self.stage.set.root.display()))?;
+        Ok(Coverage::of_shards(held))
+    }
+
     /// Every stage after the leaves; the set's manifest says what it was
     /// made from once it is committed.
-    pub fn finish<L: Base>(&self, absent: &impl Absent<L>, reads: &[&[&str]], pruned: bool) -> Result<(), String> {
+    /// `absent` is asked only by a fold.
+    pub fn finish<L: Base, A: Absent<L>>(&self, absent: impl FnOnce(&Run) -> Result<A, String>, reads: &[&[&str]], pruned: bool) -> Result<(), String> {
         if self.fold {
-            self.stage.fold::<L>(absent, self.concurrency)?;
+            self.stage.fold::<L>(&absent(self)?, self.concurrency)?;
         }
         if self.commit {
             self.stage.commit::<L>()?;
-            let mut fields = serde_json::json!({ "source": source_of(reads)? });
-            if let Some(held) = self.stage.held()? {
-                fields["shard"] = serde_json::json!(held);
+            let mut fields = serde_json::json!({ "source": source_of(reads)?, "format": FORMAT.of(L::LAYER) });
+            // The commit wrote them before it moved anything.
+            if let Some(held) = source::manifest(&self.stage.set.root)?.as_ref().map(source::held).transpose()?.flatten() {
+                fields["shard"] = serde_json::json!(held.iter().map(|t| t.name()).collect::<Vec<_>>());
             }
             write_manifest(&self.stage.set, GROUND.top(), git_sha().as_deref(), fields)?;
         }

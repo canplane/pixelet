@@ -20,7 +20,7 @@ use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
-use pxl_geo_bake::coverage::{Coverage, Overture};
+use pxl_geo_bake::coverage::Overture;
 use pxl_geo_bake::elevation::Raster;
 use pxl_geo_bake::separation;
 use pxl_geo_bake::terrain::absent::Absence;
@@ -71,7 +71,6 @@ fn land(client: &mut Client, candidates: &[IVec]) -> Result<Vec<IVec>, String> {
 
 fn run() -> Result<(), String> {
     let run = Run::parse("terrain")?;
-    let coverage = Coverage::of_source()?;
     if run.leaf {
         let (source, mut client) = Overture::reading(&leaf::READS, &run.shards.iter().copied().collect())?;
         let raster = Arc::new(Raster::open(&mut client)?);
@@ -112,7 +111,7 @@ fn run() -> Result<(), String> {
             })?;
         }
     }
-    run.finish::<TerrainTile>(&Absence::new(coverage.clone()), &leaf::READS, false)
+    run.finish::<TerrainTile, _>(|run| Ok(Absence::new(run.baked()?)), &leaf::READS, false)
 }
 
 fn main() -> ExitCode {

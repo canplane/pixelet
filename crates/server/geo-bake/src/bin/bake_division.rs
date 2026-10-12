@@ -55,7 +55,7 @@ fn run() -> Result<(), String> {
             })?;
         }
     }
-    run.finish::<DivisionTile>(&DivisionTile::default(), &[&READS], true)
+    run.finish::<DivisionTile, _>(|_| Ok(DivisionTile::default()), &[&READS], true)
 }
 
 fn main() -> ExitCode {

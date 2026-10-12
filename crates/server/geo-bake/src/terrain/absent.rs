@@ -1,8 +1,8 @@
 // pxl-geo-bake/terrain/absent.rs
 
-//! What a terrain tile the set holds no object for is. A leaf inside the
-//! coverage is left unbaked only when nothing is drawn in it, so it is open
-//! sea; past the coverage nothing is known, sea or land, so it is unknown,
+//! What a terrain tile the set holds no object for is. A leaf inside a shard
+//! the set holds (`Run::baked`) is left unbaked only when nothing is drawn in
+//! it, so it is open sea; past them nothing is known, sea or land, so it is unknown,
 //! which gives no surface and leaves the planet's picture under it to be
 //! seen. A coarser tile is the fold of the four under it, as every stored
 //! tile is.

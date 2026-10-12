@@ -31,11 +31,12 @@ pub const GEO_ROOT: &str = "/geo";
 /// shape rather than assembling one on the day it is written.
 pub const API_ROOT: &str = "/api";
 
-/// Baked tiles — terrain, place and division — by kind, version and
-/// name. Its own root for the reason the asset root is: the bake puts
-/// them in the bucket and the edge serves them, so neither server answers
-/// them, and the edge tells them from the geo server's routes by the root
-/// alone.
+/// Baked tiles by kind, version and name: under the root a kind's own,
+/// and under that its `object`, the version its source declares and the
+/// tile's name. Its own root for the reason the asset root is: the bake
+/// puts them in the bucket and the edge serves them, so neither server
+/// answers them, and the edge tells them from the geo server's routes by
+/// the root alone.
 pub const TILE_ROOT: &str = "/tile";
 
 /// Models and textures, by the sha256 of their bytes. Its own root because
@@ -63,6 +64,18 @@ pub const API_PREFIX: &str = "/api/";
 pub const TILE_PREFIX: &str = "/tile/";
 
 pub const ASSET_PREFIX: &str = "/asset/";
+
+/// A kind's tile under `TILE_PREFIX` and the kind, `{version}/{name}`.
+pub fn tile_object(version: &str, name: &str) -> String {
+    format!("{version}/{name}")
+}
+
+/// `tile_object`'s version and name, none for what it never writes.
+pub fn tile_object_parts(object: &str) -> Option<(&str, &str)> {
+    let mut segment = object.split('/');
+    let (version, name) = (segment.next()?, segment.next()?);
+    segment.next().is_none().then_some((version, name))
+}
 
 /// Every root, as the edge claims them.
 pub const WORKER_FIRST: [&str; 4] = ["/geo/*", "/api/*", "/tile/*", "/asset/*"];

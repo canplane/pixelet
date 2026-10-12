@@ -8,16 +8,12 @@
  */
 
 import { Command, encode_world_source } from "@/kernel/abi/cmd.spec.ts";
-import type { BaseLayer } from "@/config/published.spec.ts";
 import { TILE_SOURCE_ROUTE } from "@/config/route.ts";
 import { originGet } from "@platform/origin.ts";
 import { GUEST_DOORBELL } from "@/kernel/mem.ts";
 import { send_next } from "@/kernel/sched.ts";
 
 const ASK_AGAIN_MS = 2_000;
-
-/** Each kind's path as declared, its published version, for showing; none from a dev server. */
-export let declared_path: Partial<Record<BaseLayer, string>> = {};
 
 async function asked(): Promise<string | null> {
   try {
@@ -39,11 +35,6 @@ export async function declare_source(): Promise<void> {
   if (!GUEST_DOORBELL.fits(pkt)) {
     console.error(`[source] the declaration, ${source.length} bytes, is more than a command carries`);
     return;
-  }
-  try {
-    declared_path = (JSON.parse(source) as { path?: Partial<Record<BaseLayer, string>> }).path ?? {};
-  } catch {
-    // The kernel refuses what does not parse, and says so.
   }
   send_next(Command.WORLD_SOURCE, pkt);
 }

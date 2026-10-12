@@ -30,6 +30,19 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     let worker_first: Vec<String> = roots.iter().map(|(n, _)| format!("{}/*", path(n))).collect();
 
+    // A tile's object under its kind: the one place its segments are ordered.
+    let object = roots
+        .iter()
+        .find(|(n, _)| *n == "TILE_ROOT")
+        .and_then(|(_, r)| r.str_at("object"))
+        .ok_or(format!("{JSON}: TILE_ROOT has no object"))?;
+    let segments: Vec<&str> = object.split('/').map(|s| s.strip_prefix('{').and_then(|s| s.strip_suffix('}')).unwrap_or_default()).collect();
+    // A version is a folder its tiles go up in whole (script/publish.ts), so it comes first.
+    if segments != ["version", "name"] {
+        return Err(format!("{JSON}: TILE_ROOT.object {object:?} is not {{version}}/{{name}}"));
+    }
+    let object_doc = [format!("A kind's tile under `TILE_PREFIX` and the kind, `{object}`.")];
+
     // Every root, so none is answered by the static-asset fallback with
     // index.html, which reads as the app loading rather than as no route.
     let wrangler_path = "apps/web/wrangler.jsonc";
@@ -60,6 +73,20 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         rs.extend(doc(name).unwrap_or_default().iter().map(|l| if l.is_empty() { "///".to_string() } else { format!("/// {l}") }));
         rs.extend([format!("pub const {name}: &str = {};", json_str(value)), String::new()]);
     }
+    rs.extend(object_doc.iter().map(|l| format!("/// {l}")));
+    rs.extend([
+        "pub fn tile_object(version: &str, name: &str) -> String {".to_string(),
+        format!("    format!({})", json_str(object)),
+        "}".into(),
+        String::new(),
+        "/// `tile_object`'s version and name, none for what it never writes.".into(),
+        "pub fn tile_object_parts(object: &str) -> Option<(&str, &str)> {".into(),
+        "    let mut segment = object.split('/');".into(),
+        format!("    let ({}) = ({});", segments.join(", "), segments.iter().map(|_| "segment.next()?").collect::<Vec<_>>().join(", ")),
+        "    segment.next().is_none().then_some((version, name))".into(),
+        "}".into(),
+        String::new(),
+    ]);
     rs.extend([
         "/// Every root, as the edge claims them.".to_string(),
         format!(
@@ -76,6 +103,14 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ts.extend([format!("export const {name} = {};", json_str(value)), String::new()]);
     }
 
+    ts.extend(ts_doc(&object_doc, ""));
+    ts.extend([
+        "export function tileObject(version: string, name: string): string {".to_string(),
+        format!("  return `{}`;", object.replace('{', "${")),
+        "}".into(),
+        String::new(),
+    ]);
+
     let mut worker = head("@pxl/web/cloudflare-worker/route.spec.ts");
     worker.extend(
         [
@@ -89,6 +124,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     );
     worker.extend(all.iter().filter(|(n, _)| n.ends_with("_PREFIX")).map(|(n, v)| format!("export const {n} = {};", json_str(v))));
     worker.push(String::new());
+    // A version is any one segment the declaration names; a name, a digit a zoom (pxl-spec space/hierarchy/morton.rs).
+    let pattern = object.replace("{version}", "[^/]+").replace("{name}", "[0-3]+").replace('/', "\\/");
+    worker.extend(ts_doc(&[format!("A tile's object under its kind, `{object}`, as a pattern.")], ""));
+    worker.extend([format!("export const TILE_OBJECT = String.raw`{pattern}`;"), String::new()]);
 
     Ok(vec![
         Output::new("crates/spec/src/route.spec.rs", rs.join("\n")),

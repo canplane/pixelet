@@ -5,11 +5,10 @@ import type { BaseLayer } from "./published.spec.ts";
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
 
-/** `<tile>/<layer>/[<version>/]<name>`: the kernel names the path, the
- * version the source declares serving it before the name (a dev server's
- * tiles have none). */
-export function tileUrl(layer: BaseLayer, path: string): string {
-  return `${TILE_ROOT}/${layer}/${path}`;
+/** `<tile>/<layer>/<version>/<name>`: the kernel names the object under the
+ * version its source declares serving it. */
+export function tileUrl(layer: BaseLayer, object: string): string {
+  return `${TILE_ROOT}/${layer}/${object}`;
 }
 
 /** The source's declaration: the bucket's `source`, or a dev tile server's. */

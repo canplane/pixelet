@@ -31,11 +31,12 @@ export const GEO_ROOT = "/geo";
  * shape rather than assembling one on the day it is written. */
 export const API_ROOT = "/api";
 
-/** Baked tiles — terrain, place and division — by kind, version and
- * name. Its own root for the reason the asset root is: the bake puts
- * them in the bucket and the edge serves them, so neither server answers
- * them, and the edge tells them from the geo server's routes by the root
- * alone. */
+/** Baked tiles by kind, version and name: under the root a kind's own,
+ * and under that its `object`, the version its source declares and the
+ * tile's name. Its own root for the reason the asset root is: the bake
+ * puts them in the bucket and the edge serves them, so neither server
+ * answers them, and the edge tells them from the geo server's routes by
+ * the root alone. */
 export const TILE_ROOT = "/tile";
 
 /** Models and textures, by the sha256 of their bytes. Its own root because
@@ -63,3 +64,8 @@ export const API_PREFIX = "/api/";
 export const TILE_PREFIX = "/tile/";
 
 export const ASSET_PREFIX = "/asset/";
+
+/** A kind's tile under `TILE_PREFIX` and the kind, `{version}/{name}`. */
+export function tileObject(version: string, name: string): string {
+  return `${version}/${name}`;
+}

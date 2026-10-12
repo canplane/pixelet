@@ -15,6 +15,7 @@ pub mod place_theme;
 #[path = "bake/published.spec.rs"]
 pub mod published;
 pub mod separation;
+pub mod source;
 pub mod surface;
 pub mod tile;
 pub mod way;

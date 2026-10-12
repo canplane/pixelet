@@ -24,10 +24,12 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 | division | `deno task bake:division` | Overture divisions                              | XTP: per cell the division it is in, z12 up | no object  |
 
 Every tool writes its kind's set, `./out/<kind>/`, with a manifest of the
-Overture release its tables were ingested from and the commit it was built
-at. A version is the set uploaded under a name, `v<format>.<day>.<n>`: the
-kind's `FORMAT` in `spec/spec/bake/published.json`, the day it was
-published (UTC) and that day's count, from 1 — `v7.2026-10-04.1`.
+Overture release its tables were ingested from, the commit it was built at,
+the `format` it is written in (the kind's `FORMAT` in
+`spec/spec/bake/published.json`) and, from a commit on, the `shard`s it
+holds. A version is the set uploaded under a name, `v<format>.<day>.<n>`:
+that format, the day it was published (UTC) and that day's count, from 1 —
+`v7.2026-10-04.1`.
 
 A tile is named by its 2D Morton key written a digit a zoom, and every bake
 writes that name straight out, flat in its set: the filename _is_ the
@@ -157,7 +159,7 @@ that, worked back from how far each thing draws:
    The set holds a tile flat under the name the dev server is asked by:
 
    ```bash
-   curl -s localhost:3001/tile/terrain/<name> | zstd -dcq | shasum
+   curl -s localhost:3001/tile/terrain/dev/<name> | zstd -dcq | shasum
    zstd -dcq ./out/terrain/<name> | shasum
    ```
 

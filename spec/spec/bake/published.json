@@ -17,30 +17,24 @@
   },
   "SOURCE": {
     "$doc": [
-      "What the published bake is, which script/publish.ts uploads as the",
-      "bucket's `source` for the kernel to read at boot (pxl-kernel io/source.rs),",
-      "in the shape the dev tile server answers too (pxl-geo-bake bin/serve_tiles.rs):",
+      "What the published bake is: script/publish.ts uploads it as the bucket's",
+      "`source`, the declaration pxl-geo-bake source.rs writes and the kernel",
+      "reads at boot (pxl-kernel io/source.rs).",
       "",
-      "`top_zoom`: the coarsest zoom of the pyramid it supplies whole, where the",
-      "client's floor is held (pxl-kernel layer/residency/floor.rs).",
+      "`kind`: each kind's published `version`, `v<format>.<date>.<n>` — the",
+      "format the client reads it in, then which update of the data it is, the",
+      "UTC day and that day's count — and the `format` and the shards, `shard`,",
+      "its copy's manifest named when it was published. A published folder is",
+      "immutable, so a cache never holds a tile another replaced and going back",
+      "is naming the folder before.",
       "",
-      "`kind`: each kind's published version, `path`, `v<format>.<date>.<n>`, and",
-      "the shards it holds, `shard`, as its set's manifest named them when it was",
-      "published. A published folder is immutable, so a cache never holds a tile",
-      "another replaced and going back is naming the folder before.",
-      "",
-      "`override`: a kind's path for a shard and the tiles under it, over its",
-      "kind's, written by hand.",
-      "",
-      "The upload says each kind's `path` and its `format`, read off the name; and",
-      "as `shard` the shards every kind holds, four siblings written as their",
-      "parent, with each override's `path`. A tile no key is over or under is",
-      "never asked for."
+      "`override`: a kind's version for a shard and the tiles under it, over its",
+      "kind's, written by hand."
     ],
-    "top_zoom": 5,
     "kind": {
       "terrain": {
-        "path": "v8.2026-10-09.1",
+        "version": "v8.2026-10-09.1",
+        "format": 8,
         "shard": [
           "01033000",
           "01033001",
@@ -87,7 +81,8 @@
         ]
       },
       "place": {
-        "path": "v10.2026-10-09.1",
+        "version": "v10.2026-10-09.1",
+        "format": 10,
         "shard": [
           "01033000",
           "01033001",
@@ -134,7 +129,8 @@
         ]
       },
       "division": {
-        "path": "v7.2026-10-09.1",
+        "version": "v7.2026-10-09.1",
+        "format": 7,
         "shard": [
           "01033000",
           "01033001",
@@ -181,7 +177,8 @@
         ]
       },
       "earth": {
-        "path": "v1.2026-10-05.1"
+        "version": "v1.2026-10-05.1",
+        "format": 1
       }
     },
     "override": {}

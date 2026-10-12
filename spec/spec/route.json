@@ -40,12 +40,14 @@
     },
     "TILE_ROOT": {
       "path": "/tile",
+      "object": "{version}/{name}",
       "$doc": [
-        "Baked tiles — terrain, place and division — by kind, version and",
-        "name. Its own root for the reason the asset root is: the bake puts",
-        "them in the bucket and the edge serves them, so neither server answers",
-        "them, and the edge tells them from the geo server's routes by the root",
-        "alone."
+        "Baked tiles by kind, version and name: under the root a kind's own,",
+        "and under that its `object`, the version its source declares and the",
+        "tile's name. Its own root for the reason the asset root is: the bake",
+        "puts them in the bucket and the edge serves them, so neither server",
+        "answers them, and the edge tells them from the geo server's routes by",
+        "the root alone."
       ]
     },
     "ASSET_ROOT": {

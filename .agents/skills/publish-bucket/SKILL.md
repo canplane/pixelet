@@ -98,16 +98,17 @@ version costs a pyramid's worth. Deleting an old version is free.
 A version is uploaded from `out/<kind>.publish/`, which the bake's
 `publish` stage makes from the set (`tile/shard.rs` `publish`): every tile,
 less for places and divisions those no reader asks for. It is a copy for the
-upload alone. `deno task publish <kind>…` (`script/publish.ts`) uploads it
-under a new name, `v<format>.<UTC day>.<n>` — the format is
-`spec/spec/bake/published.json`'s `FORMAT`, set by hand, and n is past every
-version of that format and day the bucket holds — checks the stored count,
-sets `SOURCE.kind.<kind>` to the version and the shards its set's manifest
-holds (the bake's commit writes them; a manifest naming none stops it),
-regenerates, removes the copy and uploads `source`: each kind's path, its
-`format` read off the name, and the shards every kind holds. A client's next
-boot reads it: a publish needs no deploy. After an edit of `SOURCE` by hand —
-an `override`, the Earth's path — `deno task publish source` uploads it alone.
+upload alone, its manifest beside it. `deno task publish <kind>…` (`script/publish.ts`) uploads it
+under a new name, `v<format>.<UTC day>.<n>` — the format the set's manifest
+says it is in, n past every version of that format and day the bucket
+holds — sets `SOURCE.kind.<kind>` to the version and the format and shards
+the copy's own manifest names (the set's, as it stood when copied), and has `pxl-geo-bake` write the declaration of
+it (`source.rs`, `bin/declare_source.rs`), which refuses what a client
+would: a sharded kind whose manifest names no shards stops it before a byte
+goes up. It then uploads the copy, checks the stored count, removes the copy
+and uploads `source`: each kind's version and format, and the shards every kind
+holds. A client's next boot reads it: a publish needs no deploy. After an
+`override` is written by hand, `deno task publish source` uploads it alone.
 
 ```bash
 deno task bake:<kind> --stage publish    # terrain, place or division
@@ -132,26 +133,15 @@ it, so a missing tile is never an error to repair.
 
 ### Earth
 
-`publish` does not take earth: `bake_earth` writes under the name the
-generated `PUBLISHED_PATH.earth` already holds. A new version, in order:
+The Earth's picture publishes as the other kinds do: `deno task bake:earth`
+makes its set, `out/earth/`, its upload's copy, `out/earth.publish/`, and the
+global picture `asset/sky/earth/07.webp`; then
 
-1. Set `SOURCE.kind.earth.path` in `spec/spec/bake/published.json` to a
-   `v<FORMAT>.<UTC day>.<n>` the bucket does not hold (`aws s3 ls
-   s3://pixelet-tiles/earth/`), then `deno task spec` — the bake reads the
-   generated constant, and without it overwrites the live version.
-2. `deno task bake:earth`, which writes `out/earth/<version>/` and the
-   global picture `asset/sky/earth/07.webp`.
-3. Upload, then hold the stored count to the files:
+```bash
+deno task publish earth
+```
 
-   ```bash
-   aws s3 sync out/earth/<version> s3://pixelet-tiles/earth/<version> \
-     --profile r2 --endpoint-url $R2 --exclude "*.part" \
-     --content-type application/octet-stream --content-encoding zstd \
-     --cache-control "public, max-age=31536000, immutable"
-   ```
-
-4. `deno task ingest:asset` and the asset upload below, for the picture.
-5. `deno task publish source`.
+and `deno task ingest:asset` and the asset upload below, for the picture.
 
 ### Assets
 

@@ -195,6 +195,8 @@ pub fn leaf(client: &mut Client, tile: IVec) -> Result<Option<DivisionTile>, Str
 }
 
 impl crate::pyramid::Base for DivisionTile {
+    const LAYER: pxl_spec::bake::published::BaseLayer = pxl_spec::bake::published::BaseLayer::division;
+
     const LEAF: pxl_spec::space::coord::zoom::Zoom = DIVISION_LEAF;
 
     fn encode(&self) -> Result<Vec<u8>, String> {

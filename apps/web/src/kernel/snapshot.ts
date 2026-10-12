@@ -22,6 +22,7 @@ const INITIAL: Snapshot = {
   division: [],
   previews: [],
   stall: null,
+  source: [],
 };
 
 let snapshot: Snapshot = INITIAL;

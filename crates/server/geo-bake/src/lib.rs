@@ -12,6 +12,7 @@ pub mod place;
 pub mod pyramid;
 pub mod segment;
 pub mod separation;
+pub mod source;
 pub mod terrain;
 pub mod tile;
 pub mod util;

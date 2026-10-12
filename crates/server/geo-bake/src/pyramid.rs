@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
 
+use pxl_spec::bake::published::BaseLayer;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -22,6 +23,9 @@ use crate::util::{pack, unpack, write_atomic, Level};
 /// from the next finer one's; a parent reads its four children unless
 /// `sources` says otherwise.
 pub trait Base: Clone + PartialEq + Send + Sync + 'static {
+    /// The kind it is published as, whose `FORMAT` it is written in.
+    const LAYER: BaseLayer;
+
     /// The zoom its tiles are made at; every coarser one is folded.
     const LEAF: Zoom = LEAF_ZOOM;
 
@@ -228,7 +232,7 @@ pub fn write_manifest(set: &TileSet, top: Zoom, built: Option<&str>, layer: serd
         (objects, bytes) = (objects + n, bytes + b);
         zooms.push(serde_json::json!({ "z": zoom, "objects": n, "bytes": b }));
     }
-    let mut fields = serde_json::json!({ "objects": objects, "bytes": bytes, "zooms": zooms, "content_type": "application/octet-stream" });
+    let mut fields = serde_json::json!({ "objects": objects, "bytes": bytes, "zooms": zooms });
     if let (Some(out), serde_json::Value::Object(layer)) = (fields.as_object_mut(), layer) {
         out.extend(layer);
     }

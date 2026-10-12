@@ -122,6 +122,7 @@ pub fn write_manifest(path: &Path, built: Option<&str>, fields: serde_json::Valu
         "updated_at": now_iso8601(),
         "git_sha": built,
         "content_encoding": CONTENT_ENCODING,
+        "content_type": "application/octet-stream",
     });
     if let (Some(out), serde_json::Value::Object(fields)) = (manifest.as_object_mut(), fields) {
         out.extend(fields);

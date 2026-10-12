@@ -396,6 +396,9 @@ export interface Snapshot {
   previews: u32[];
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say. */
   stall: Message | null;
+  /** Each kind's version as the tile source declared it: a published one, or a dev
+   * server's; empty until declared. */
+  source: SourceVersion[];
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {
@@ -415,6 +418,7 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     division: list(b.at_branch(12), read_division_part),
     previews: Array.from(b.at(13).get<U32Array>()),
     stall: b.at(14).get<Message | null>(),
+    source: list(b.at_branch(15), read_source_version),
   };
 }
 
@@ -511,6 +515,15 @@ export interface LangName {
 
 export function read_lang_name(b: BranchCursor): LangName {
   return { lang: b.at(0).get<string>(), name: b.at(1).get<string>() };
+}
+
+export interface SourceVersion {
+  kind: string;
+  version: string;
+}
+
+export function read_source_version(b: BranchCursor): SourceVersion {
+  return { kind: b.at(0).get<string>(), version: b.at(1).get<string>() };
 }
 
 /** Command.SENSOR_START's signal. */

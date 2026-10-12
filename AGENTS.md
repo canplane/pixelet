@@ -173,8 +173,8 @@ two copies of one fact, and no fold carries the pyramid onto the sphere.
   in a folded cell is struck, hidden or cut by a preview.
 - **Dev is guarded like terrain.** The tile server answers no tile more than
   `--folds` zooms over the leaves, the whole guard for every layer. A source declares the
-  coarsest zoom it supplies whole — the published version in its metadata,
-  the tile server at `/tile/source` — and the floor is that zoom.
+  coarsest zoom it supplies whole at the tile root's `source` — the bucket's
+  and the tile server's alike — and the floor is that zoom.
 - **The terrain, place and object layers are audited side by side** before a change is
   done: anything one does its own way is removed or explained.
 

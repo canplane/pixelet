@@ -29,3 +29,6 @@ export const GEO_PREFIX = "/geo/";
 export const API_PREFIX = "/api/";
 export const TILE_PREFIX = "/tile/";
 export const ASSET_PREFIX = "/asset/";
+
+/** A tile's object under its kind, `{version}/{name}`, as a pattern. */
+export const TILE_OBJECT = String.raw`[^\/]+\/[0-3]+`;

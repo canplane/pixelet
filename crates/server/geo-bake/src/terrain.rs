@@ -18,6 +18,8 @@ use pxl_spec::space::layer::tile::{neighborhood, Tile};
 pub const CELL_U: f64 = units(GROUND.cell());
 
 impl crate::pyramid::Base for TerrainTile {
+    const LAYER: pxl_spec::bake::published::BaseLayer = pxl_spec::bake::published::BaseLayer::terrain;
+
     fn encode(&self) -> Result<Vec<u8>, String> {
         terrain::encode(self).map_err(|e| format!("{e:?}"))
     }

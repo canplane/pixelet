@@ -6,14 +6,3 @@
 export const BASE_LAYERS = ["terrain", "place", "division", "earth"] as const;
 
 export type BaseLayer = typeof BASE_LAYERS[number];
-
-/**
- * The format each bake writes now, which a published name begins with.
- * Bumped only by a change to how the client reads a tile.
- */
-export const FORMAT: Record<BaseLayer, number> = {
-  terrain: 8,
-  place: 10,
-  division: 7,
-  earth: 1,
-};

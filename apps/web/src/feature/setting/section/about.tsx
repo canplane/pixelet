@@ -7,8 +7,8 @@ import { Prose, Section, settingText } from "@/feature/setting/row.tsx";
 import { BrandSymbol } from "@/shared/ui/brand-symbol.tsx";
 import { textStyle } from "@/shared/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/config/deploy.ts";
-import { BASE_LAYERS, FORMAT } from "@/config/published.spec.ts";
-import { declared_path } from "@/kernel/io/source.ts";
+import type { Snapshot } from "@/kernel/abi/cmd.spec.ts";
+import { useKernel } from "@/kernel/snapshot.ts";
 import { OBJECTS_PATH } from "@/kernel/abi/host.spec.ts";
 import { LABEL } from "@platform/palette.ts";
 
@@ -20,12 +20,9 @@ function envLabel(): string {
   return DEV_SOURCE === "delivery" ? env : `${env}:${DEV_SOURCE}`;
 }
 
-/**
- * Each bake a line, as what is read: the name the source declares, or the
- * format of the unnamed tiles a dev server serves.
- */
-function bakeLines(): string[] {
-  return BASE_LAYERS.map((layer) => `${layer}/${declared_path[layer] ?? `v${FORMAT[layer]}`}`);
+/** Each bake a line, as the source declares where it is read from. */
+function bakeLines(source: Snapshot["source"]): string[] {
+  return source.map((s) => `${s.kind}/${s.version}`);
 }
 
 /** The objects one has placed, kept on the device: their store's format. */
@@ -43,6 +40,7 @@ function buildLabel(): string {
 
 export function AboutSection() {
   const { t } = useTranslation();
+  const source = useKernel((s) => s.source);
   return (
     <Section title={t("settings.about.section_title")}>
       <Prose>
@@ -61,7 +59,7 @@ export function AboutSection() {
             {APP_ENV !== "production" && ` (${envLabel()})`}
             {` · ${buildLabel()}`}
           </Text>
-          {bakeLines().map((line) => <Text key={line} style={settingText.faint}>{line}</Text>)}
+          {bakeLines(source).map((line) => <Text key={line} style={settingText.faint}>{line}</Text>)}
           <Text style={settingText.faint}>{objectLabel()}</Text>
         </View>
       </Prose>

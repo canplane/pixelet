@@ -14,6 +14,8 @@ use pxl_spec::space::coord::zoom::idx;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 impl crate::pyramid::Base for PlaceTile {
+    const LAYER: pxl_spec::bake::published::BaseLayer = pxl_spec::bake::published::BaseLayer::place;
+
     fn encode(&self) -> Result<Vec<u8>, String> {
         place::encode(self).map_err(|e| e.to_string())
     }

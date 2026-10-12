@@ -14,9 +14,9 @@ use crate::io::failure::Failure;
 use crate::io::host::{answered, heap_stat, sys, turn};
 use crate::io::load::LOADS;
 use crate::io::request::Credit;
-use crate::io::source::SOURCE_PATH_BYTES;
 use crate::mem::spec::MIN_HEAP_BYTES;
 use crate::sched::edge::request_world_tick;
+use pxl_spec::bake::source::VERSION_BYTES;
 use xpute_guest::global::Global;
 use xpute_kit::status::errno::Errno;
 
@@ -40,10 +40,10 @@ impl Kept {
 }
 
 /// The longest name the kernel opens: a leaf's name, a digit a zoom, under
-/// the source's path, an asset's number or a kept file's path. A longer one is a bug, so the host
+/// its version, an asset's number or a kept file's path. A longer one is a bug, so the host
 /// stream's reserve can count on it.
 pub const PATH_BYTES: usize = {
-    let mut most = SOURCE_PATH_BYTES + 1 + LEAF_ZOOM as usize;
+    let mut most = VERSION_BYTES + 1 + LEAF_ZOOM as usize;
     let names = [LOADS.ilog10() as usize + 1];
     let mut i = 0;
     while i < names.len() + Kept::ALL.len() {

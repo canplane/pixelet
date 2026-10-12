@@ -62,64 +62,30 @@ export type Env = {
   GEO_ORIGIN: string;
 };
 
-import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.ts";
+import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_OBJECT, TILE_PREFIX } from "./route.spec.ts";
+import { BASE_LAYERS } from "../src/config/published.spec.ts";
 
 /**
- * Object keys this Worker is willing to ask R2 for.
+ * Object keys this Worker is willing to ask R2 for, by shape alone, so what
+ * was never an address does not reach the bucket; what bounds the reads is
+ * the free plan's daily cap (decision/20260816-deployment-hosting.md).
  *
- * A baked page is named by its 2D Morton key, written one base-4 digit a
- * halving, coarsest first (pxl-spec space/hierarchy/morton.rs `write_name`). Nothing else is written — the number of digits says the
- * zoom, and the digits are the index — so the three bakes differ only
- * in how long a name they have and which shared object they keep beside it:
- *
- * - `terrain/<version>/<name>`, 5 to 15 digits, a page at every zoom of
- *   the pyramid from z15 up to the ground's top (`GROUND.top()`). A page
- *   with nothing drawn in it is no object.
- * - `place/<version>/<name>`, 5 to 15 digits, a page at every zoom of the
- *   pyramid as terrain's are: how many places stand in each of its cells. A
- *   page with none is no object.
- * - `division/<version>/<name>`, 5 to 12 digits, the divisions' pyramid,
- *   whose leaves are z12 (pxl-spec bake/tile/division.rs `DIVISION_LEAF`):
- *   per cell the division it is in. A page that says no more than its
- *   parent is no object, and the kernel's layer/division/ reads the parent.
- * - `asset/<path>/<stem>-<12 hex>.<ext>` — a model or an image under the tree
+ * - `<kind>/<object>`: a baked page, a kind of `BASE_LAYERS` and the object
+ *   spec/spec/route.json shapes under it (`TILE_OBJECT`). Which versions and
+ *   names exist is the declaration's and the tiles' to say, not this file's.
+ * - `asset/<path>/<stem>-<12 hex>.<ext>`: a model or an image under the tree
  *   it lives in, with a hash of its bytes in the stem, the way a bundler names
- *   a chunk. pxl-tool's ingest_asset writes them and the catalogs name
- *   them by path. No version segment and none wanted: a changed file is a new
- *   name, which is what makes `immutable` true of it.
- * - `source` — the source's declaration (published.json's `SOURCE`), the
- *   one object that changes under its key: the versions and shards a client
- *   reads at boot.
- *
- * The version is `v<format>.<YYYY-MM-DD>.<n>`, a format and the day it was
- * baked, and this pattern does not read which one: the client asks for
- * whatever `source` says, so a new one is an upload and never a deploy of
- * this file. A bare `v<format>` is a client from before bakes were
- * named by day, still open in a tab.
- *
- * **This exists for cost, not correctness.** A miss is still a billed R2
- * class-B operation, so without it anyone can walk the tile root and charge
- * this account one read per request while every single one 404s. Matching the
- * shape first means a scraper's garbage never reaches the bucket at all. It is
- * not rate limiting and does not pretend to be — that needs WAF rules, which
- * need a real zone rather than a workers.dev hostname.
- *
- * What it has to sieve is now almost nothing. The old shape spelled a page as
- * a decimal index of up to twenty digits under a zoom of up to two digits, so
- * the key space was some 10^20 strings a zoom and all but a handful named
- * nothing. A name of a given length is a page and there are no others, so
- * the key space here *is* the address space and this pattern turns away only
- * what was never an address. An asset is the one key nothing computes — the
- * shell looks it up in a table it ships — so its shape is all there is to
- * match, and the hash in the stem is what makes that shape worth matching.
+ *   a chunk. pxl-tool's ingest_asset writes them and the catalogs name them
+ *   by path: a changed file is a new name, which is what makes `immutable`
+ *   true of it, and the hash is what makes the shape worth matching.
+ * - `source`: the source's declaration (pxl-geo-bake source.rs), the one
+ *   object that changes under its key.
  */
-/** The source's declaration, answered by `declaration`. */
 const SOURCE_KEY = "source";
 
-const VERSION = String.raw`v\d{1,3}(?:\.\d{4}-\d{2}-\d{2}\.\d+)?`;
+const KINDS = BASE_LAYERS.join("|");
 const KEY_RE = new RegExp(
-  String
-    .raw`^(?:terrain\/${VERSION}\/[0-3]{5,15}|place\/${VERSION}\/[0-3]{5,15}|division\/${VERSION}\/[0-3]{5,12}|earth\/${VERSION}\/[0-3]{5}|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
+  String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
 );
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
@@ -182,7 +148,7 @@ async function declaration(request: Request, env: Env): Promise<Response> {
 }
 
 /** A baked page's key: a kind, a version and a page name. */
-const BAKE_KEY = /^(terrain|place|division|earth)\/[^/]+\/.+$/;
+const BAKE_KEY = new RegExp(String.raw`^(?:${KINDS})\/`);
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

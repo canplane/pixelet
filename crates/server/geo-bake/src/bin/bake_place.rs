@@ -37,7 +37,7 @@ fn run() -> Result<(), String> {
             println!("[bake/place/{}] {} leaves", shard.name(), tiles.len());
         }
     }
-    run.finish::<PlaceTile>(&PlaceTile::default(), &[&place::READS], true)
+    run.finish::<PlaceTile, _>(|_| Ok(PlaceTile::default()), &[&place::READS], true)
 }
 
 fn main() -> std::process::ExitCode {

@@ -10,7 +10,7 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { INGESTED } from "../apps/web/src/catalog/asset/ingested.spec.ts";
 
-import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route.spec.ts";
+import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT, tileObject } from "../apps/web/src/config/route.spec.ts";
 
 /** A land page in Bundang: the zoom-15 tile's name. */
 const PAGE = "010332102130223";
@@ -32,24 +32,17 @@ interface Check {
 
 const BROWSER_ENCODINGS = "gzip, deflate, br, zstd";
 
-/** The paths the deployment's own declaration names, which its tiles are asked under. */
-async function declared(base: string): Promise<Record<string, string>> {
-  try {
-    const res = await fetch(`${base}${TILE_ROOT}/source`);
-    return res.ok ? ((await res.json()).path ?? {}) : {};
-  } catch {
-    return {};
-  }
-}
+/** Each kind's published version, as published.json says a publish left it: the declaration is the kernel's to read. */
+const PUBLISHED: Record<string, { version: string }> = JSON.parse(Deno.readTextFileSync(new URL("../spec/spec/bake/published.json", import.meta.url))).SOURCE.kind;
 
-function edgeChecks(path: Record<string, string>): Check[] {
-  const terrain = `${TILE_ROOT}/terrain/${path.terrain}/${PAGE}`;
+function edgeChecks(): Check[] {
+  const terrain = `${TILE_ROOT}/terrain/${tileObject(PUBLISHED.terrain.version, PAGE)}`;
   return [
     { path: "/", want: 200, why: "the app itself, from the Worker's static assets" },
     { path: `${TILE_ROOT}/source`, want: 200, why: "the source's declaration, out of the bucket" },
     { path: `${SEARCH_URL}?q=${encodeURIComponent("강남")}`, want: 200, why: "pxl-geo, the one geo query with no page to bake" },
     { path: terrain, want: 200, why: "a terrain page, out of the bucket" },
-    { path: `${TILE_ROOT}/division/${path.division}/${DIVISION_TOP}`, want: 200, why: "the divisions' top page over PAGE" },
+    { path: `${TILE_ROOT}/division/${tileObject(PUBLISHED.division.version, DIVISION_TOP)}`, want: 200, why: "the divisions' top page over PAGE" },
     { path: `/${ASSET_KEY}`, want: 200, why: "a content-addressed asset, its own root" },
     ...commonChecks(),
   ];
@@ -79,7 +72,7 @@ if (!base) {
   Deno.exit(2);
 }
 
-const checks = originOnly ? originChecks() : edgeChecks(await declared(base));
+const checks = originOnly ? originChecks() : edgeChecks();
 console.log(`[smoke] ${base}${originOnly ? " (origin, behind the edge)" : ""} — ${checks.length} checks\n`);
 
 let failed = 0;

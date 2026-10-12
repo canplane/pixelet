@@ -1,33 +1,40 @@
 #!/usr/bin/env -S deno run -A
-// Uploads each kind's `out/<kind>.publish/` as a new version, sets it and the
-// shards its set's manifest holds in published.json's `SOURCE.kind`, and
-// uploads `SOURCE` as the bucket's `source`, which clients read at boot: a
-// publish needs no deploy. The name
-// is `v<format>.<UTC day>.<n>`: the format is published.json's `FORMAT`, set
-// by hand; n is past every version of that format and day the bucket holds,
-// so no version is written over. `source` alone uploads `SOURCE` as it
-// stands, after an edit by hand (an override, the Earth's path). Uses the AWS CLI's `r2` profile and `$R2`,
-// the bucket's S3 endpoint (publish-bucket).
+// Uploads each kind's `out/<kind>.publish/` as a new version and sets it, with
+// the format and shards its set's manifest names, in published.json's
+// `SOURCE.kind`; then uploads the declaration pxl-geo-bake writes of `SOURCE`
+// as the bucket's `source`, which clients read at boot: a publish needs no
+// deploy. A version the declaration would refuse goes up not at all. The
+// name is `v<format>.<UTC day>.<n>`, n past every version of that format and
+// day the bucket holds, so no version is written over. `source` alone uploads
+// the declaration as `SOURCE` stands, after an override is written by hand.
+// Uses the AWS CLI's `r2` profile and `$R2`, the bucket's S3 endpoint
+// (publish-bucket).
 //
-//   ./script/publish.ts <terrain|place|division|source>…
+//   ./script/publish.ts <terrain|place|division|earth|source>…
+
+import { tileObject } from "../apps/web/src/config/route.spec.ts";
 
 const BUCKET = "pixelet-tiles";
 const PUBLISHED = "spec/spec/bake/published.json";
-const KINDS = ["terrain", "place", "division"];
+const KINDS = ["terrain", "place", "division", "earth"];
 const SOURCE = "source";
 
+/** Thrown, so what is open is closed on the way out; said once at the top. */
+class Refused extends Error {}
+
 function die(message: string): never {
-  console.error(`[publish] ${message}`);
-  Deno.exit(1);
+  throw new Refused(message);
 }
 
-const endpoint = Deno.env.get("R2") || die("no $R2: export the bucket's S3 endpoint (publish-bucket)");
+function endpoint(): string {
+  return Deno.env.get("R2") || die("no $R2: export the bucket's S3 endpoint (publish-bucket)");
+}
 // AWS CLI v2 sends checksum headers R2 refuses.
 const env = { AWS_REQUEST_CHECKSUM_CALCULATION: "when_required" };
 
 async function aws(args: string[], inherit = false, none = false): Promise<string> {
   const out = await new Deno.Command("aws", {
-    args: [...args, "--profile", "r2", "--endpoint-url", endpoint],
+    args: [...args, "--profile", "r2", "--endpoint-url", endpoint()],
     env,
     stdout: inherit ? "inherit" : "piped",
     stderr: inherit ? "inherit" : "piped",
@@ -38,12 +45,15 @@ async function aws(args: string[], inherit = false, none = false): Promise<strin
   return inherit ? "" : new TextDecoder().decode(out.stdout);
 }
 
+/** Beside a copy's tiles, what it is: never uploaded. */
+const MANIFEST = "manifest.json";
+
 /** The files under `dir`, as the sync uploads them. */
 function files(dir: string): number {
   let n = 0;
   for (const e of Deno.readDirSync(dir)) {
     if (e.isDirectory) n += files(`${dir}/${e.name}`);
-    else if (!e.name.endsWith(".part")) n += 1;
+    else if (!e.name.endsWith(".part") && e.name !== MANIFEST) n += 1;
   }
   return n;
 }
@@ -61,28 +71,56 @@ async function nextName(kind: string, format: number, day: string): Promise<stri
   return `${prefix}${Math.max(0, ...taken) + 1}`;
 }
 
+/** `bytes` in a file for `use`, gone after however `use` ends. */
+async function withFile<T>(bytes: Uint8Array, use: (file: string) => Promise<T>): Promise<T> {
+  const file = await Deno.makeTempFile({ suffix: ".json" });
+  try {
+    Deno.writeFileSync(file, bytes);
+    return await use(file);
+  } finally {
+    Deno.removeSync(file);
+  }
+}
+
+/** The declaration pxl-geo-bake writes of a published.json (bin/declare_source.rs), refusing what a client would. */
+async function declared(published: string): Promise<Uint8Array> {
+  const out = await new Deno.Command("cargo", {
+    args: ["run", "-q", "--manifest-path", "crates/Cargo.toml", "-p", "pxl-geo-bake", "--bin", "declare_source", "--", published],
+    stderr: "inherit",
+  }).output();
+  return out.success ? out.stdout : die("declare_source refused it");
+}
+
 async function publish(kind: string): Promise<void> {
   const dir = `out/${kind}.publish`;
   try {
     Deno.statSync(dir);
   } catch {
-    die(`${kind}: no ${dir}: run \`deno task bake:${kind} --stage publish\``);
+    die(`${kind}: no ${dir}: run \`deno task bake:${kind}\` (with \`--stage publish\` where it has stages)`);
   }
-  const manifest = JSON.parse(Deno.readTextFileSync(`out/${kind}/manifest.json`));
-  if (!Array.isArray(manifest.shard)) die(`out/${kind}/manifest.json names no shards the set holds: what this version would serve is unknown`);
-  const format: number = JSON.parse(Deno.readTextFileSync(PUBLISHED)).FORMAT[kind];
+  // What the version is, fixed with it: the copy as its own manifest says.
+  const manifest = JSON.parse(Deno.readTextFileSync(`${dir}/${MANIFEST}`));
+  const { format, shard } = manifest;
+  if (!Number.isInteger(format)) die(`${dir}/${MANIFEST} names no format the set is in`);
   const name = await nextName(kind, format, new Date().toISOString().slice(0, 10));
+  const published = JSON.parse(Deno.readTextFileSync(PUBLISHED));
+  published.SOURCE.kind[kind] = { version: name, format, ...(shard ? { shard } : {}) };
+  const text = `${JSON.stringify(published, null, 2)}\n`;
+  // Refused before a byte goes up: a version no declaration can name serves no one.
+  await withFile(new TextEncoder().encode(text), declared);
+
   const objects = files(dir);
   console.log(`[publish/${kind}] ${objects} objects to ${kind}/${name}`);
-
   // Packed already: the encoding goes with each object (publish-bucket "Upload").
   await aws([
     "s3",
     "sync",
     dir,
-    `s3://${BUCKET}/${kind}/${name}`,
+    `s3://${BUCKET}/${kind}/${tileObject(name, "")}`,
     "--exclude",
     "*.part",
+    "--exclude",
+    MANIFEST,
     "--content-type",
     manifest.content_type,
     "--content-encoding",
@@ -91,69 +129,28 @@ async function publish(kind: string): Promise<void> {
     "public, max-age=31536000, immutable",
   ], true);
 
-  const stored = (await aws(["s3", "ls", `s3://${BUCKET}/${kind}/${name}/`, "--recursive"])).split("\n").filter((l) => l.trim()).length;
+  const stored = (await aws(["s3", "ls", `s3://${BUCKET}/${kind}/${tileObject(name, "")}`, "--recursive"])).split("\n").filter((l) => l.trim()).length;
   if (stored !== objects) die(`${kind}/${name}: ${stored} objects stored of ${objects}; re-run the sync by hand before pointing the client at it`);
 
-  const published = JSON.parse(Deno.readTextFileSync(PUBLISHED));
-  published.SOURCE.kind[kind] = { path: name, shard: manifest.shard };
-  Deno.writeTextFileSync(PUBLISHED, `${JSON.stringify(published, null, 2)}\n`);
+  Deno.writeTextFileSync(PUBLISHED, text);
   Deno.removeSync(dir, { recursive: true });
-  console.log(`[publish/${kind}] SOURCE.kind.${kind}.path = ${name}, ${manifest.shard.length} shards`);
+  console.log(`[publish/${kind}] SOURCE.kind.${kind}.version = ${name}`);
 }
 
-/** Four siblings all named, written as their parent, down to `top`'s length: a name is a digit a zoom. */
-function folded(shards: string[], top: number): string[] {
-  const keys = new Set(shards);
-  for (let len = Math.max(0, ...shards.map((s) => s.length)); len > top; len--) {
-    for (const parent of new Set([...keys].filter((k) => k.length === len).map((k) => k.slice(0, -1)))) {
-      const children = ["0", "1", "2", "3"].map((d) => parent + d);
-      if (children.every((c) => keys.has(c))) {
-        children.forEach((c) => keys.delete(c));
-        keys.add(parent);
-      }
-    }
-  }
-  return [...keys].sort();
-}
-
-interface Kind {
-  path: string;
-  shard?: string[];
-}
-
-/**
- * `SOURCE` as the client reads it (pxl-kernel io/source.rs), revalidated on
- * every boot so a publish is seen at once. Each kind's format is read off its
- * version's name, which is this script's to write and the client reads none;
- * the shards served are those every kind holds.
- */
+/** Revalidated on every boot, so a publish is seen at once. */
 async function publishSource(): Promise<void> {
-  const { top_zoom, kind, override } = JSON.parse(Deno.readTextFileSync(PUBLISHED)).SOURCE as {
-    top_zoom: number;
-    kind: Record<string, Kind>;
-    override: Record<string, Record<string, string>>;
-  };
-  const kinds = Object.entries(kind);
-  const path = Object.fromEntries(kinds.map(([k, v]) => [k, v.path]));
-  const format = Object.fromEntries(kinds.map(([k, v]) => {
-    const n = Number(/^v(\d+)\./.exec(v.path)?.[1]);
-    return Number.isInteger(n) ? [k, n] : die(`${PUBLISHED}: SOURCE.kind.${k}.path ${v.path} is no v<format>.<day>.<n>`);
-  }));
-  const held = kinds.flatMap(([, v]) => v.shard ? [new Set(v.shard)] : []);
-  const every = [...(held[0] ?? [])].filter((s) => held.every((h) => h.has(s)));
-  const shard: Record<string, { path?: Record<string, string> }> = Object.fromEntries(folded(every, top_zoom).map((k) => [k, {}]));
-  for (const [key, paths] of Object.entries(override)) shard[key] = { path: paths };
-  const source = { top_zoom, format, path, shard };
-  const file = await Deno.makeTempFile({ suffix: ".json" });
-  Deno.writeTextFileSync(file, JSON.stringify(source));
-  await aws(["s3", "cp", file, `s3://${BUCKET}/${SOURCE}`, "--content-type", "application/json", "--cache-control", "no-cache"], true);
-  Deno.removeSync(file);
-  console.log(`[publish] ${SOURCE}: ${JSON.stringify(path)}, ${Object.keys(shard).length} keys`);
+  await withFile(await declared(PUBLISHED), (file) => aws(["s3", "cp", file, `s3://${BUCKET}/${SOURCE}`, "--content-type", "application/json", "--cache-control", "no-cache"], true));
+  console.log(`[publish] ${SOURCE} uploaded`);
 }
 
-const asked = Deno.args;
-if (asked.length === 0 || asked.some((k) => !KINDS.includes(k) && k !== SOURCE)) die(`usage: ./script/publish.ts <${[...KINDS, SOURCE].join("|")}>…`);
-for (const kind of asked.filter((k) => k !== SOURCE)) await publish(kind);
-const spec = await new Deno.Command("deno", { args: ["task", "spec"], stdout: "inherit", stderr: "inherit" }).output();
-if (!spec.success) die("deno task spec failed");
-await publishSource();
+try {
+  const asked = Deno.args;
+  if (asked.length === 0 || asked.some((k) => !KINDS.includes(k) && k !== SOURCE)) die(`usage: ./script/publish.ts <${[...KINDS, SOURCE].join("|")}>…`);
+  endpoint();
+  for (const kind of asked.filter((k) => k !== SOURCE)) await publish(kind);
+  await publishSource();
+} catch (e) {
+  if (!(e instanceof Refused)) throw e;
+  console.error(`[publish] ${e.message}`);
+  Deno.exit(1);
+}

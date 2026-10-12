@@ -10,7 +10,7 @@ use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 use xpute_kit::wire::xtp::PacketWriter;
 
 pub use crate::abi::cmd::Tracking;
-use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, Message, OrientationState, Snapshot};
+use crate::abi::cmd::{CompanionState, DivisionPart, FocusState, GroundStatus, HoldingState, LangName, LocationState, LonLat, Message, OrientationState, Snapshot, SourceVersion};
 use crate::control::camera::controller::{dist, focus, Motion};
 use crate::control::camera::state::{camera_state, CameraStatus, IntentPatch};
 use crate::control::interaction::holding;
@@ -116,6 +116,14 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         division: &|each| division_parts(at, each),
         previews: &previews[..preview_cnt],
         stall: stall(),
+        source: &|each| {
+            crate::io::source::versions(&mut |kind, version| {
+                each(&SourceVersion {
+                    kind: &kind.name(),
+                    version: &version,
+                })
+            })
+        },
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);

@@ -1550,6 +1550,15 @@
           "$doc": [
             "Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the host's to say."
           ]
+        },
+        {
+          "name": "source",
+          "type": "SourceVersion",
+          "list": true,
+          "$doc": [
+            "Each kind's version as the tile source declared it: a published one, or a dev",
+            "server's; empty until declared."
+          ]
         }
       ]
     },
@@ -1729,6 +1738,19 @@
         },
         {
           "name": "name",
+          "type": "str"
+        }
+      ]
+    },
+    {
+      "name": "SourceVersion",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "str"
+        },
+        {
+          "name": "version",
           "type": "str"
         }
       ]

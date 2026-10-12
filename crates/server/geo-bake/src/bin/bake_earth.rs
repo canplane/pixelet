@@ -5,8 +5,10 @@
 //! reflectance, and the Black Marble's lights of 2016 (86400 × 43200, 500 m, in
 //! eight tiles). Each is averaged in linear light over what a texel covers.
 //!  - The earth layer's tiles (pxl-spec bake/tile/earth.rs) at its top zoom, a
-//!    ground cell a texel, to `./out/earth/<version>/<name>`. A tile that is one
-//!    color says nothing the global picture does not, and has no object.
+//!    ground cell a texel, to its set, `./out/earth/<name>`, as every kind's is
+//!    flat under its tiles' names. A tile that is one color says nothing the
+//!    global picture does not, and has no object.
+//!    Its upload's copy, `./out/earth.publish/`, beside it (script/publish.ts).
 //!  - The global picture every tile falls back to, 2048 × 1024, to
 //!    `asset/sky/earth/07.webp`.
 //!
@@ -21,8 +23,9 @@ use std::process::ExitCode;
 
 use image::ImageFormat;
 
+use pxl_geo_bake::pyramid::{TileSet, MANIFEST};
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
-use pxl_spec::bake::published::PUBLISHED_PATH;
+use pxl_spec::bake::published::FORMAT;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::pvf3::pvf3;
@@ -253,9 +256,8 @@ fn decode(jpeg: &[u8]) -> Result<image::DynamicImage, String> {
 }
 
 fn run() -> Result<(), String> {
-    let root = PathBuf::from("./out/earth");
-    let sources = root.join("source");
-    let out = root.join(PUBLISHED_PATH.earth);
+    let out = PathBuf::from("./out/earth");
+    let sources = out.join("source");
     let day = decode(&source(DAY, &sources)?)?.to_rgb8();
     let (night, night_width, night_height) = night_mosaic(&sources)?;
     let day_plate = Plate::<3> {
@@ -272,6 +274,11 @@ fn run() -> Result<(), String> {
     };
     global(&day_plate, &night_plate, Path::new("asset/sky/earth/07.webp"))?;
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    // The set is made whole each time: a tile now one color has no object.
+    let set = TileSet::new(&out);
+    for p in set.by_zoom()?.into_values().flatten() {
+        set.remove(p)?;
+    }
     // Every tile of the zoom: the Mercator square, one world across and as high.
     let half = around(EARTH_ZOOM) / 2;
     let tiles: Vec<[i64; 2]> = (-half..half).flat_map(|y| (-half..half).map(move |x| [x, y])).collect();
@@ -300,10 +307,21 @@ fn run() -> Result<(), String> {
     let objects = written.into_inner();
     println!("[earth] {objects} tiles -> {}", out.display());
     write_manifest(
-        &out.join("../manifest.json"),
+        &out.join(MANIFEST),
         git_sha().as_deref(),
-        serde_json::json!({ "version": out.file_name().map(|n| n.to_string_lossy().to_string()), "objects": objects, "z": EARTH_ZOOM }),
-    )
+        serde_json::json!({ "objects": objects, "z": EARTH_ZOOM, "format": FORMAT.earth }),
+    )?;
+    // The copy an upload takes (script/publish.ts), its manifest with it, as the other bakes' `publish` stage makes one.
+    let copy = PathBuf::from("./out/earth.publish");
+    if copy.exists() {
+        std::fs::remove_dir_all(&copy).map_err(|e| format!("{}: {e}", copy.display()))?;
+    }
+    std::fs::create_dir_all(&copy).map_err(|e| e.to_string())?;
+    for p in set.by_zoom()?.into_values().flatten() {
+        std::fs::hard_link(set.path(p), copy.join(p.name())).map_err(|e| format!("{}: {e}", set.path(p).display()))?;
+    }
+    std::fs::copy(out.join(MANIFEST), copy.join(MANIFEST)).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn main() -> ExitCode {

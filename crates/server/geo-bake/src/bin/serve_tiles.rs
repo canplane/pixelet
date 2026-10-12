@@ -19,9 +19,11 @@ use pxl_geo_bake::demand::{
     job::{self, Limits},
     Failure, Kind, Server,
 };
+use pxl_geo_bake::source::{self, Overrides};
 use pxl_geo_bake::util::CONTENT_ENCODING;
-use pxl_spec::bake::published::{BaseLayer, FORMAT, PUBLISHED_PATH, PUBLISHED_TOP_ZOOM};
-use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
+use pxl_spec::bake::published::FORMAT;
+use pxl_spec::bake::source::sharded;
+use pxl_spec::route::{tile_object_parts, ASSET_ROOT, TILE_ROOT};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -36,10 +38,13 @@ enum Tiles {
     Shelf(PathBuf),
 }
 
+/// The version it declares its tiles under: it serves one thing, so the
+/// version names nothing and is never read.
+const VERSION: &str = "dev";
+
 struct App {
     tiles: Tiles,
-    /// The source's declaration, published.json's `SOURCE` with no paths: a
-    /// dev server's tiles are named by none.
+    /// The source's declaration (pxl-geo-bake source.rs).
     source: String,
     asset_dir: PathBuf,
     out: PathBuf,
@@ -47,11 +52,11 @@ struct App {
 
 const EARTH: &str = "earth";
 
-async fn earth(app: &App, version: &str, name: &str) -> Response {
+async fn earth(app: &App, name: &str) -> Response {
     if Tile::of_name(name).is_none() {
         return StatusCode::NOT_FOUND.into_response();
     }
-    match tokio::fs::read(app.out.join(EARTH).join(version).join(name)).await {
+    match tokio::fs::read(app.out.join(EARTH).join(name)).await {
         Ok(bytes) => packed(bytes),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
@@ -69,9 +74,13 @@ fn packed(bytes: Vec<u8>) -> Response {
         .into_response()
 }
 
-async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, String)>) -> Response {
+async fn tile(State(app): State<Arc<App>>, Path((kind, object)): Path<(String, String)>) -> Response {
+    let Some((_, name)) = tile_object_parts(&object) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let name = name.to_string();
     if kind == EARTH {
-        return earth(&app, PUBLISHED_PATH.earth, &name).await;
+        return earth(&app, &name).await;
     }
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
     let demand = match &app.tiles {
@@ -89,25 +98,6 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
-}
-
-/// The bucket's address, `<kind>/<version>/<name>`, as a production build
-/// asks for it; the shelf answers any version from the kind's set.
-async fn tile_versioned(State(app): State<Arc<App>>, Path((kind, version, name)): Path<(String, String, String)>) -> Response {
-    // A published name's shape, v<format>.<day>.<n>: no other name reaches the disk
-    if !version
-        .strip_prefix('v')
-        .is_some_and(|n| n.bytes().next().is_some_and(|b| b.is_ascii_digit()) && n.bytes().all(|b| b.is_ascii_digit() || b == b'.' || b == b'-'))
-    {
-        return StatusCode::NOT_FOUND.into_response();
-    }
-    if kind == EARTH {
-        return earth(&app, &version, &name).await;
-    }
-    let (Tiles::Shelf(dir), Some(kind)) = (&app.tiles, Kind::parse(&kind)) else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-    from_shelf(dir, kind, &name).await
 }
 
 async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
@@ -188,20 +178,31 @@ fn run() -> Result<(), String> {
     }
 
     let (tiles, top_zoom) = match shelf {
-        Some(dir) => (Tiles::Shelf(dir), PUBLISHED_TOP_ZOOM),
+        Some(dir) => (Tiles::Shelf(dir), GROUND.top()),
         None => {
             let top_zoom = LEAF_ZOOM.checked_sub(folds).filter(|&z| z >= GROUND.top()).ok_or("--folds past the pyramid's top")?;
             (Tiles::Oven(Server::open(workers, cache, top_zoom, limits)?), top_zoom)
         }
     };
-    // The coverage's shards, which the oven bakes from and the shelf's sets were baked over.
-    let shard: serde_json::Map<String, serde_json::Value> = Coverage::of_source()?.shards().map(|s| (s.name(), serde_json::json!({}))).collect();
-    let mut declared = serde_json::json!({ "top_zoom": top_zoom, "shard": shard });
-    // The oven bakes in the formats this code writes; what the shelf's sets were baked in, nothing records.
-    if matches!(tiles, Tiles::Oven(_)) {
-        declared["format"] = BaseLayer::ALL.map(|l| (l.name().to_string(), serde_json::json!(FORMAT.of(l)))).into_iter().collect();
-    }
-    let declared = declared.to_string();
+    // What it serves: a shelf's sets as their manifests say, the oven the
+    // coverage in the formats this code writes; the Earth's picture its bake's.
+    let coverage: Vec<String> = Coverage::of_source()?.shards().map(|s| s.name()).collect();
+    let kinds = source::try_kinds(|l| match &tiles {
+        _ if !sharded(l) => Ok(source::Kind {
+            shard: None,
+            ..source::of_set(&out.join(EARTH), VERSION)?
+        }),
+        Tiles::Shelf(dir) => match source::of_set(&dir.join(l.name()), VERSION)? {
+            k if k.shard.is_some() => Ok(k),
+            _ => Err(format!("{}: its manifest names no shards the set holds", dir.join(l.name()).display())),
+        },
+        Tiles::Oven(_) => Ok(source::Kind {
+            format: FORMAT.of(l),
+            version: VERSION.into(),
+            shard: Some(source::tiles(coverage.iter().map(String::as_str))?),
+        }),
+    })?;
+    let declared = source::declaration(top_zoom, &kinds, &Overrides::new())?.to_string();
     let app = Arc::new(App {
         tiles,
         source: declared,
@@ -211,8 +212,7 @@ fn run() -> Result<(), String> {
 
     let router = Router::new()
         .route(&format!("{TILE_ROOT}/source"), get(source))
-        .route(&format!("{TILE_ROOT}/{{kind}}/{{name}}"), get(tile))
-        .route(&format!("{TILE_ROOT}/{{kind}}/{{version}}/{{name}}"), get(tile_versioned))
+        .route(&format!("{TILE_ROOT}/{{kind}}/{{*object}}"), get(tile))
         .route(&format!("{ASSET_ROOT}/{{*name}}"), get(asset))
         .with_state(app.clone());
 

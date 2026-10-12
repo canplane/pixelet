@@ -1,6 +1,6 @@
 // pxl-kernel/io/fetch.rs
 
-//! The world's reads. The kernel names an object (its bake, the path the
+//! The world's reads. The kernel names an object (its bake, the version the
 //! source serves it under and its name, `DemandName`) and opens it as a file; the host
 //! alone knows the address and protocol. What an absent object means is decided here per stream.
 //! Every body is a heap block released in the command that decodes it,
@@ -21,6 +21,7 @@ use crate::io::file::{self, Opened, Owner};
 use crate::io::request::{attempt_of, settle, Credit};
 use crate::io::source;
 use crate::sched::edge::{request_world_tick, world_edge};
+use pxl_spec::route::tile_object;
 use pxl_spec::space::hierarchy::morton::write_name;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::clock::now;
@@ -41,11 +42,7 @@ impl fmt::Display for DemandName {
 
 pub fn start(credit: Credit, stream: Stream, subject: u64) {
     let Some(bake) = stream.bake() else { return };
-    let name = DemandName(stream, subject);
-    let name = match source::path(bake, Tile::of_subject(subject)) {
-        Some(path) => format!("{path}/{name}"),
-        None => name.to_string(),
-    };
+    let name = tile_object(source::version(bake, Tile::of_subject(subject)), &DemandName(stream, subject).to_string());
     let owner = Owner::Fetch { key: credit.key(), at_ms: now() };
     file::open(credit, bake as u32, &name, owner);
 }
