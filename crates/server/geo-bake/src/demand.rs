@@ -97,10 +97,10 @@ pub struct Server {
     _owner: std::fs::File,
     runner: Arc<Runner>,
     datasets: [Arc<Dataset>; 3],
-    top_z: Zoom,
+    top_zoom: Zoom,
 }
 impl Server {
-    pub fn open(workers: usize, base: PathBuf, top_z: Zoom, limits: Limits) -> Result<Self, String> {
+    pub fn open(workers: usize, base: PathBuf, top_zoom: Zoom, limits: Limits) -> Result<Self, String> {
         let owner = claim(&base)?;
         let runner = Arc::new(Runner::new(workers, limits)?);
         let datasets = [Kind::Terrain, Kind::Place, Kind::Division].map(|k| {
@@ -113,14 +113,14 @@ impl Server {
             _owner: owner,
             runner,
             datasets: [t?, p?, g?],
-            top_z,
+            top_zoom,
         })
     }
 
     pub async fn get(&self, kind: Kind, name: &str) -> Result<Option<Vec<u8>>, Failure> {
         let data = self.datasets[kind as usize].clone();
         let runner = self.runner.clone();
-        let path = pyramid::resolve(data.clone(), runner, kind, name, kind.top(self.top_z)).await?;
+        let path = pyramid::resolve(data.clone(), runner, kind, name, kind.top(self.top_zoom)).await?;
         let Some(path) = path else { return Ok(None) };
         data.cache.read(&path).await.map_err(Failure::Bake)
     }

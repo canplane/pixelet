@@ -26,9 +26,12 @@ type R2Object = {
   httpEtag: string;
   writeHttpMetadata(headers: Headers): void;
 };
+/** What R2 answers without the body: a `head`, or a `get` whose precondition failed. */
+type R2Head = Pick<R2Object, "httpEtag" | "writeHttpMetadata">;
 type R2Bucket = {
   get(key: string): Promise<R2Object | null>;
-  head(key: string): Promise<Omit<R2Object, "body"> | null>;
+  get(key: string, options: { onlyIf: Headers }): Promise<R2Object | R2Head | null>;
+  head(key: string): Promise<R2Head | null>;
 };
 
 /** Cloudflare's ResponseInit extension: "manual" suppresses the runtime's
@@ -84,11 +87,14 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  *   a chunk. pxl-tool's ingest_asset writes them and the catalogs name
  *   them by path. No version segment and none wanted: a changed file is a new
  *   name, which is what makes `immutable` true of it.
+ * - `source` — the source's declaration (published.json's `SOURCE`), the
+ *   one object that changes under its key: the versions and shards a client
+ *   reads at boot.
  *
  * The version is `v<format>.<YYYY-MM-DD>.<n>`, a format and the day it was
  * baked, and this pattern does not read which one: the client asks for
- * whatever `published.json` says, so a new one is a client change and never a
- * deploy of this file. A bare `v<format>` is a client from before bakes were
+ * whatever `source` says, so a new one is an upload and never a deploy of
+ * this file. A bare `v<format>` is a client from before bakes were
  * named by day, still open in a tab.
  *
  * **This exists for cost, not correctness.** A miss is still a billed R2
@@ -107,10 +113,13 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * shell looks it up in a table it ships — so its shape is all there is to
  * match, and the hash in the stem is what makes that shape worth matching.
  */
+/** The source's declaration, answered by `declaration`. */
+const SOURCE_KEY = "source";
+
 const VERSION = String.raw`v\d{1,3}(?:\.\d{4}-\d{2}-\d{2}\.\d+)?`;
 const KEY_RE = new RegExp(
   String
-    .raw`^(?:terrain\/${VERSION}\/[0-3]{5,15}|place\/${VERSION}\/[0-3]{5,15}|division\/${VERSION}\/[0-3]{5,12}|earth\/${VERSION}\/[0-3]{5}|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$`,
+    .raw`^(?:terrain\/${VERSION}\/[0-3]{5,15}|place\/${VERSION}\/[0-3]{5,15}|division\/${VERSION}\/[0-3]{5,12}|earth\/${VERSION}\/[0-3]{5}|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
 );
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
@@ -155,6 +164,23 @@ function left(): Response {
   return new Response(null, { status: 204 });
 }
 
+/**
+ * The declaration changes under its one key, so no copy of it is kept at the
+ * edge: every boot revalidates it against R2, a read the daily cap bounds, and
+ * a publish is seen by the next boot. A client whose copy is current gets 304.
+ */
+async function declaration(request: Request, env: Env): Promise<Response> {
+  const object = await env.TILES.get(SOURCE_KEY, { onlyIf: request.headers });
+  if (object === null) return new Response("not found", { status: 404 });
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  // A precondition that failed leaves no body: the client holds the current one.
+  if (!("body" in object)) return new Response(null, { status: 304, headers });
+  // Whole, so its length is known, as `fetch` below reads a page.
+  return new Response(request.method === "HEAD" ? null : await object.arrayBuffer(), { headers });
+}
+
 /** A baked page's key: a kind, a version and a page name. */
 const BAKE_KEY = /^(terrain|place|division|earth)\/[^/]+\/.+$/;
 
@@ -189,6 +215,7 @@ export default {
     const key = bucket;
     // Rejected before R2 is touched — see KEY_RE.
     if (!KEY_RE.test(key)) return new Response("not found", { status: 404 });
+    if (key === SOURCE_KEY) return declaration(request, env);
 
     // A page a version holds no object for is one its bake leaves out — open
     // sea, or a child its parent already says — and so is answered empty,

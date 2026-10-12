@@ -6,7 +6,6 @@ use super::{post_shell, State};
 use crate::abi::cmd::{self as abi, Command};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::abi::cmd as xpute_cmd;
 use xpute_guest::mem::base::{off_of, off_of_slice};
 use xpute_kit::status::errno::Errno;
@@ -96,11 +95,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::WORLD_SOURCE => {
             let p = abi::WorldSource::read(packet(pkt)?)?;
-            refuse_unless(
-                p.top_z >= u32::from(pxl_spec::space::layer::lattice::GROUND.top()) && p.top_z <= u32::from(pxl_spec::space::layer::tile::LEAF_ZOOM),
-                Errno::EINVAL,
-            )?;
-            crate::layer::residency::floor::declare(p.top_z as Zoom);
+            refuse_unless(crate::io::source::declare(p.source).is_ok(), Errno::EINVAL)?;
             Ok(Some(0))
         }
         Command::INPUT_RECT => {

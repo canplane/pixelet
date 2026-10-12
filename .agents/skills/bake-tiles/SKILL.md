@@ -212,8 +212,9 @@ coverage included.
 
 ## Versions, and when the bake logic changes
 
-`PUBLISHED_VERSION` is what the client requests. Setting one there to a
-version's name is the whole change on the client's side.
+`SOURCE.kind` in `spec/spec/bake/published.json`, uploaded as the
+bucket's `source`, is what the client requests. Setting one there to a
+version's name and uploading it is the whole change on the client's side.
 
 A published version is immutable, for every kind: a tile is never
 rewritten under a name a cache or an open client already holds, and going

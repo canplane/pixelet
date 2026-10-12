@@ -5,28 +5,19 @@
 //! asked for with every observation, not only when one finds nothing, or
 //! every turn toward new ground would leave a hole for a round trip.
 //!
-//! Its zoom is the source's declared top (`declare`), never guessed from
+//! Its zoom is the source's declared top (io/source.rs), never guessed from
 //! what fails. Until declared, nothing is observed.
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::layer::demand::{reach_tiles, tiles_within};
-use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 
 use pxl_spec::space::coord::zoom::Zoom;
-use xpute_guest::global::Global;
 
 use crate::layer::Base;
 
-static DECLARED: Global<Option<Zoom>> = Global::new();
-
-pub fn declare(top_z: Zoom) {
-    xpute_kit::ensure!(top_z >= GROUND.top(), EINVAL, top_z);
-    *DECLARED.get(Default::default) = Some(top_z);
-}
-
 pub fn top() -> Option<Zoom> {
-    *DECLARED.get(Default::default)
+    crate::io::source::top()
 }
 
 pub trait Fallback {

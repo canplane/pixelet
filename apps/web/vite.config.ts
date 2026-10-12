@@ -421,10 +421,6 @@ export default defineConfig(({ mode }) => {
   const devSource = env.VITE_DEV_SOURCE || "delivery";
   const delivery = devSource === "delivery";
 
-  // Injected as __PUBLISHED_TILES__: route.ts builds every tile path from
-  // it, config/deploy.ts reads it for what a 404 means.
-  const published = delivery;
-
   const remoteOrigin = delivery ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
   // What the proxy hands the page is never stored. The objects behind it are
   // `immutable` for a year, which a deployment means; here a restart of this
@@ -552,7 +548,6 @@ export default defineConfig(({ mode }) => {
       // make can set too (config/bundle.ts).
       __DEV_BUNDLE__: JSON.stringify(mode !== "production"),
 
-      __PUBLISHED_TILES__: JSON.stringify(published),
       __DEV_SOURCE__: JSON.stringify(devSource),
 
       // react-native-web's Animated reads React Native's `global`, which a

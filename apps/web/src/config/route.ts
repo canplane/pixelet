@@ -1,17 +1,18 @@
 // @pxl/web/config/route.ts
 
 // By path, not alias: vite.config.ts imports this and its bundler knows no aliases.
-import { type BaseLayer, PUBLISHED_VERSION } from "./published.spec.ts";
+import type { BaseLayer } from "./published.spec.ts";
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
 
-/** `<tile>/<layer>[/<version>]/<name>`: the kernel names the object, the
- * version is a deployment fact (a dev server bakes on demand, unversioned). */
-export function tileUrl(layer: BaseLayer, name: string, published: boolean): string {
-  return published ? `${TILE_ROOT}/${layer}/${PUBLISHED_VERSION[layer]}/${name}` : `${TILE_ROOT}/${layer}/${name}`;
+/** `<tile>/<layer>/[<version>/]<name>`: the kernel names the path, the
+ * version the source declares serving it before the name (a dev server's
+ * tiles have none). */
+export function tileUrl(layer: BaseLayer, path: string): string {
+  return `${TILE_ROOT}/${layer}/${path}`;
 }
 
-/** A dev tile server's declaration; a published one is in the bundle (`PUBLISHED_SOURCE`). */
+/** The source's declaration: the bucket's `source`, or a dev tile server's. */
 export const TILE_SOURCE_ROUTE = `${TILE_ROOT}/source`;
 
 /** The route root and the bucket prefix are the same word on purpose: the

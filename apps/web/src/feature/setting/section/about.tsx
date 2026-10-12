@@ -6,8 +6,9 @@ import { StyleSheet, Text, View } from "react-native";
 import { Prose, Section, settingText } from "@/feature/setting/row.tsx";
 import { BrandSymbol } from "@/shared/ui/brand-symbol.tsx";
 import { textStyle } from "@/shared/ui/theme.ts";
-import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE, PUBLISHED_TILES } from "@/config/deploy.ts";
-import { BASE_LAYERS, FORMAT, PUBLISHED_VERSION } from "@/config/published.spec.ts";
+import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/config/deploy.ts";
+import { BASE_LAYERS, FORMAT } from "@/config/published.spec.ts";
+import { declared_path } from "@/kernel/io/source.ts";
 import { OBJECTS_PATH } from "@/kernel/abi/host.spec.ts";
 import { LABEL } from "@platform/palette.ts";
 
@@ -20,12 +21,11 @@ function envLabel(): string {
 }
 
 /**
- * Each bake a line, as what is read: the published name, or in dev the
- * format of the unnamed tiles the dev server serves — but the Earth's, which
- * is baked under its published name.
+ * Each bake a line, as what is read: the name the source declares, or the
+ * format of the unnamed tiles a dev server serves.
  */
 function bakeLines(): string[] {
-  return BASE_LAYERS.map((layer) => `${layer}/${PUBLISHED_TILES || layer === "earth" ? PUBLISHED_VERSION[layer] : `v${FORMAT[layer]}`}`);
+  return BASE_LAYERS.map((layer) => `${layer}/${declared_path[layer] ?? `v${FORMAT[layer]}`}`);
 }
 
 /** The objects one has placed, kept on the device: their store's format. */

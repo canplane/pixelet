@@ -22,6 +22,7 @@ how it gets there and how you know it arrived.
 | `division/<version>/`   | XTP division tile                               | name, 5–12             | immutable; a re-bake is a new version                            |
 | `earth/<version>/`      | packed earth tile                               | name, 5                | immutable; a re-bake is a new version                            |
 | `asset/`                | glb, png, webp — not packed                     | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever    |
+| `source`                | the source's declaration, JSON                  | fixed name             | mutable; written by `publish`, `no-cache`, revalidated each boot |
 | `_meta/build-counter`   | the official build count                        | fixed name             | mutable; taken and written by CI's gate, never by hand           |
 | `_meta/build-log.jsonl` | a line a published build                        | fixed name             | appended by CI's `record` (`script/build-log.ts`)                |
 | `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number           | written by `deno task deploy` under a build number; never served |
@@ -37,8 +38,9 @@ same ground, and **one prefix is one region across all three at every zoom**.
 That is what a later split of the bucket would be: a prefix match, not a
 second re-keying.
 
-The versions the client requests are `PUBLISHED_VERSION` in
-`spec/spec/bake/published.json`; the asset keys are the generated table
+The versions the client requests, and the shards it requests them for, are
+the bucket's `source`, uploaded from `SOURCE` in
+`spec/spec/bake/published.json` and read by the client at boot; the asset keys are the generated table
 `apps/web/src/catalog/asset/ingested.spec.ts`. The object
 name carries no extension, so **content-type and content-encoding are
 stored with the object at upload** — that is what every flag below is for.
@@ -100,7 +102,12 @@ upload alone. `deno task publish <kind>…` (`script/publish.ts`) uploads it
 under a new name, `v<format>.<UTC day>.<n>` — the format is
 `spec/spec/bake/published.json`'s `FORMAT`, set by hand, and n is past every
 version of that format and day the bucket holds — checks the stored count,
-sets `PUBLISHED_VERSION`, regenerates, and removes the copy.
+sets `SOURCE.kind.<kind>` to the version and the shards its set's manifest
+holds (the bake's commit writes them; a manifest naming none stops it),
+regenerates, removes the copy and uploads `source`: each kind's path, its
+`format` read off the name, and the shards every kind holds. A client's next
+boot reads it: a publish needs no deploy. After an edit of `SOURCE` by hand —
+an `override`, the Earth's path — `deno task publish source` uploads it alone.
 
 ```bash
 deno task bake:<kind> --stage publish    # terrain, place or division
@@ -108,7 +115,7 @@ deno task publish <kind>
 ```
 
 **Never overwrite an existing version in place**, of any kind — publish a new
-prefix and point the app at it.
+prefix and point `source` at it.
 
 **Objects are stored already packed, so the upload sets the
 `Content-Encoding` they were packed in** — the manifest's `content_encoding`,
@@ -126,9 +133,9 @@ it, so a missing tile is never an error to repair.
 ### Earth
 
 `publish` does not take earth: `bake_earth` writes under the name the
-generated `PUBLISHED_VERSION.earth` already holds. A new version, in order:
+generated `PUBLISHED_PATH.earth` already holds. A new version, in order:
 
-1. Set `PUBLISHED_VERSION.earth` in `spec/spec/bake/published.json` to a
+1. Set `SOURCE.kind.earth.path` in `spec/spec/bake/published.json` to a
    `v<FORMAT>.<UTC day>.<n>` the bucket does not hold (`aws s3 ls
    s3://pixelet-tiles/earth/`), then `deno task spec` — the bake reads the
    generated constant, and without it overwrites the live version.
@@ -144,6 +151,7 @@ generated `PUBLISHED_VERSION.earth` already holds. A new version, in order:
    ```
 
 4. `deno task ingest:asset` and the asset upload below, for the picture.
+5. `deno task publish source`.
 
 ### Assets
 
@@ -186,7 +194,7 @@ aws s3api head-object --bucket pixelet-tiles --key asset/<path>/<stem>-<12 hex>.
 
 ## Deploy
 
-With `PUBLISHED_VERSION` set by the publish:
+A publish is not a deploy; a change to the app or the Worker is:
 
 ```bash
 deno task deploy
@@ -250,5 +258,3 @@ zone's overview page in the dashboard, which also offers the same two
 purges under Caching → Configuration. Both reach entries the Worker put
 there through the Cache API. `cache.delete(request)` inside the Worker
 would not: it clears the one colo that ran it.
-
-`publish` removes a kind's older versions as it goes, keeping the new one, the one it replaces and the one `deploy`'s tree names.

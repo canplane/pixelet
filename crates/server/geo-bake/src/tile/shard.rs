@@ -12,18 +12,20 @@
 //! - `fold` folds again what the whole shards change, reading the set as it
 //!   will be, and stages the parents that changed, then `fold.done`, those
 //!   that folded to none;
-//! - `commit`, only once folded, turns `fold.done` into `commit.done`, moves
+//! - `commit`, only once folded, turns `fold.done` into `commit.done`,
+//!   writing the shards the set will hold into its manifest first, moves
 //!   what is staged into the set and takes away what each `.done` lists,
 //!   each `.done` last. While a commit is begun, a leaf or a fold is
 //!   refused: it would fold from a set half moved.
 
 use fnv::FnvHashSet;
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::cli::Flags;
 use crate::coverage::{source_of, Coverage, Node};
-use crate::pyramid::{ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet};
+use crate::pyramid::{ancestor, fold, unasked, write_manifest, Absent, Base, Staged, TileSet, MANIFEST};
 use crate::util::git_sha;
 use pxl_spec::bake::published::PUBLISHED_TOP_ZOOM;
 use pxl_spec::space::coord::pvf3::ivec;
@@ -95,6 +97,22 @@ impl Stage {
         Ok(Coverage::of_source()?.shards().filter(|s| self.done(&s.name()).exists()).collect())
     }
 
+    /// The shards the set holds, as its manifest names them: none where it
+    /// holds tiles and its manifest names no shards, which nothing then knows.
+    pub fn held(&self) -> Result<Option<BTreeSet<String>>, String> {
+        let path = self.set.root.join(MANIFEST);
+        let manifest: serde_json::Value = match fs::read_to_string(&path) {
+            Ok(text) => serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::Value::Null,
+            Err(e) => return Err(io(&path, e)),
+        };
+        Ok(match manifest["shard"].as_array() {
+            Some(names) => Some(names.iter().filter_map(|n| n.as_str().map(String::from)).collect()),
+            None if self.set.by_zoom()?.is_empty() => Some(BTreeSet::new()),
+            None => None,
+        })
+    }
+
     /// The fold's unit let go, so a fold runs again from the set as it is.
     fn clear_fold(&self, leaf: Zoom) -> Result<(), String> {
         self.remove_done(FOLD)?;
@@ -159,6 +177,16 @@ impl Stage {
         if !self.done(COMMIT).exists() {
             if !self.done(FOLD).exists() {
                 return Err(format!("{}: nothing folded; run --stage fold first", self.stage.root.display()));
+            }
+            // Before anything moves: a commit begun is finished, never undone, so
+            // the set will hold these, and a commit cut short leaves them said.
+            if let Some(mut held) = self.held()? {
+                held.extend(self.whole()?.iter().map(|s| s.name()));
+                let path = self.set.root.join(MANIFEST);
+                let mut manifest: serde_json::Value = fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
+                manifest["shard"] = serde_json::json!(held);
+                fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
+                crate::util::write_atomic(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?.as_bytes()).map_err(|e| io(&path, e))?;
             }
             fs::rename(self.done(FOLD), self.done(COMMIT)).map_err(|e| io(&self.done(FOLD), e))?;
         }
@@ -272,7 +300,11 @@ impl Run {
         }
         if self.commit {
             self.stage.commit::<L>()?;
-            write_manifest(&self.stage.set, GROUND.top(), git_sha().as_deref(), serde_json::json!({ "source": source_of(reads)? }))?;
+            let mut fields = serde_json::json!({ "source": source_of(reads)? });
+            if let Some(held) = self.stage.held()? {
+                fields["shard"] = serde_json::json!(held);
+            }
+            write_manifest(&self.stage.set, GROUND.top(), git_sha().as_deref(), fields)?;
         }
         if self.publish {
             let mut to = self.stage.set.root.clone().into_os_string();

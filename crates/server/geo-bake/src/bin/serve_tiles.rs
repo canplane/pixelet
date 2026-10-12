@@ -14,12 +14,13 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
 use pxl_geo_bake::cli::Flags;
+use pxl_geo_bake::coverage::Coverage;
 use pxl_geo_bake::demand::{
     job::{self, Limits},
     Failure, Kind, Server,
 };
 use pxl_geo_bake::util::CONTENT_ENCODING;
-use pxl_spec::bake::published::{PUBLISHED_TOP_ZOOM, PUBLISHED_VERSION};
+use pxl_spec::bake::published::{BaseLayer, FORMAT, PUBLISHED_PATH, PUBLISHED_TOP_ZOOM};
 use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -37,7 +38,9 @@ enum Tiles {
 
 struct App {
     tiles: Tiles,
-    top_z: Zoom,
+    /// The source's declaration, published.json's `SOURCE` with no paths: a
+    /// dev server's tiles are named by none.
+    source: String,
     asset_dir: PathBuf,
     out: PathBuf,
 }
@@ -68,7 +71,7 @@ fn packed(bytes: Vec<u8>) -> Response {
 
 async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, String)>) -> Response {
     if kind == EARTH {
-        return earth(&app, PUBLISHED_VERSION.earth, &name).await;
+        return earth(&app, PUBLISHED_PATH.earth, &name).await;
     }
     let Some(kind) = Kind::parse(&kind) else { return StatusCode::NOT_FOUND.into_response() };
     let demand = match &app.tiles {
@@ -122,11 +125,7 @@ async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
 }
 
 async fn source(State(app): State<Arc<App>>) -> Response {
-    (
-        [(header::CONTENT_TYPE, "application/json"), (header::CACHE_CONTROL, "no-store")],
-        serde_json::json!({ "top_z": app.top_z }).to_string(),
-    )
-        .into_response()
+    ([(header::CONTENT_TYPE, "application/json"), (header::CACHE_CONTROL, "no-store")], app.source.clone()).into_response()
 }
 
 const ASSET_TYPES: [(&str, &str); 3] = [("glb", "model/gltf-binary"), ("png", "image/png"), ("webp", "image/webp")];
@@ -188,14 +187,27 @@ fn run() -> Result<(), String> {
         }
     }
 
-    let (tiles, top_z) = match shelf {
+    let (tiles, top_zoom) = match shelf {
         Some(dir) => (Tiles::Shelf(dir), PUBLISHED_TOP_ZOOM),
         None => {
-            let top_z = LEAF_ZOOM.checked_sub(folds).filter(|&z| z >= GROUND.top()).ok_or("--folds past the pyramid's top")?;
-            (Tiles::Oven(Server::open(workers, cache, top_z, limits)?), top_z)
+            let top_zoom = LEAF_ZOOM.checked_sub(folds).filter(|&z| z >= GROUND.top()).ok_or("--folds past the pyramid's top")?;
+            (Tiles::Oven(Server::open(workers, cache, top_zoom, limits)?), top_zoom)
         }
     };
-    let app = Arc::new(App { tiles, top_z, asset_dir, out });
+    // The coverage's shards, which the oven bakes from and the shelf's sets were baked over.
+    let shard: serde_json::Map<String, serde_json::Value> = Coverage::of_source()?.shards().map(|s| (s.name(), serde_json::json!({}))).collect();
+    let mut declared = serde_json::json!({ "top_zoom": top_zoom, "shard": shard });
+    // The oven bakes in the formats this code writes; what the shelf's sets were baked in, nothing records.
+    if matches!(tiles, Tiles::Oven(_)) {
+        declared["format"] = BaseLayer::ALL.map(|l| (l.name().to_string(), serde_json::json!(FORMAT.of(l)))).into_iter().collect();
+    }
+    let declared = declared.to_string();
+    let app = Arc::new(App {
+        tiles,
+        source: declared,
+        asset_dir,
+        out,
+    });
 
     let router = Router::new()
         .route(&format!("{TILE_ROOT}/source"), get(source))

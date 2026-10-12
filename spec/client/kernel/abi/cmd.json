@@ -941,17 +941,17 @@
           "name": "WORLD_SOURCE",
           "value": 4101,
           "$doc": [
-            "What the tile source declares of itself, once the shell has it (published.json's",
-            "SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is",
-            "observed: the floor is held at the zoom it names, and no view is drawn from a",
-            "zoom the source does not supply whole."
+            "What the tile source declares of itself, once the shell has it: the tile root's",
+            "`source`, the published one out of the bucket or the dev tile server's. Until it",
+            "comes nothing is observed: the floor is held at the zoom it names, and no tile is",
+            "asked for that no shard it serves is over or under (pxl-kernel io/source.rs)."
           ],
           "packet": [
             {
-              "name": "top_z",
-              "type": "u32",
+              "name": "source",
+              "type": "str",
               "$doc": [
-                "The coarsest zoom of the pyramid the source supplies whole."
+                "The declaration as the source serves it, handed over unread."
               ]
             }
           ]

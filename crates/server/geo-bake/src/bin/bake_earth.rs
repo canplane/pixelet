@@ -22,7 +22,7 @@ use std::process::ExitCode;
 use image::ImageFormat;
 
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
-use pxl_spec::bake::published::PUBLISHED_VERSION;
+use pxl_spec::bake::published::PUBLISHED_PATH;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::pvf3::pvf3;
@@ -255,7 +255,7 @@ fn decode(jpeg: &[u8]) -> Result<image::DynamicImage, String> {
 fn run() -> Result<(), String> {
     let root = PathBuf::from("./out/earth");
     let sources = root.join("source");
-    let out = root.join(PUBLISHED_VERSION.earth);
+    let out = root.join(PUBLISHED_PATH.earth);
     let day = decode(&source(DAY, &sources)?)?.to_rgb8();
     let (night, night_width, night_height) = night_mosaic(&sources)?;
     let day_plate = Plate::<3> {

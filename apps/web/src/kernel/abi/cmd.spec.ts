@@ -276,10 +276,10 @@ export const enum Command {
   /** The tab's visibility; the host rings the doorbell for it at once, since a hidden
    * page gets no frame and hiding is the save's last sure moment. */
   WORLD_VISIBILITY = 0x1003,
-  /** What the tile source declares of itself, once the shell has it (published.json's
-   * SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is
-   * observed: the floor is held at the zoom it names, and no view is drawn from a
-   * zoom the source does not supply whole. */
+  /** What the tile source declares of itself, once the shell has it: the tile root's
+   * `source`, the published one out of the bucket or the dev tile server's. Until it
+   * comes nothing is observed: the floor is held at the zoom it names, and no tile is
+   * asked for that no shard it serves is over or under (pxl-kernel io/source.rs). */
   WORLD_SOURCE = 0x1005,
   /** A permission as the shell's prompt or the browser's change reported it. */
   SENSOR_PERMISSION = 0x1206,
@@ -628,12 +628,12 @@ export function encode_world_visibility(p: WorldVisibility): U8Array {
 
 /** Command.WORLD_SOURCE's packet. */
 export interface WorldSource {
-  /** The coarsest zoom of the pyramid the source supplies whole. */
-  top_z: u32;
+  /** The declaration as the source serves it, handed over unread. */
+  source: string;
 }
 
 export function encode_world_source(p: WorldSource): U8Array {
-  return packet((b) => b.u32(p.top_z));
+  return packet((b) => b.str(p.source));
 }
 
 /** Command.SENSOR_PERMISSION's packet. */

@@ -18,10 +18,6 @@ declare global {
    * says why). Absent where no bundler ran: Deno's tests. */
   const __DEV_BUNDLE__: boolean | undefined;
 
-  /** Whether tiles come from a published bake rather than a live API — the
-   * one thing about them the build knows and the source cannot. */
-  const __PUBLISHED_TILES__: boolean;
-
   /** Where the tiles come from: `delivery`, the deployment's, or the servers
    * of `dev:oven` or `dev:shelf`, named as the task is. */
   const __DEV_SOURCE__: string;

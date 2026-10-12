@@ -118,8 +118,6 @@ module.exports = (api) => {
     __IS_DEV__: !production,
     __DEV_BUNDLE__: !production,
     __APP_ENV__: production ? "production" : "development",
-    // Every route a dev server forwards is the published deployment's.
-    __PUBLISHED_TILES__: true,
     __DEV_SOURCE__: "delivery",
   };
 

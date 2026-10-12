@@ -36,6 +36,7 @@ use crate::io::demand::Order;
 use crate::io::demand::{Ask, Phases, Why};
 use crate::io::failure::Failure;
 use crate::io::request::declare;
+use crate::io::source;
 use crate::layer::residency::floor::{self, Fallback, Floor};
 use crate::layer::residency::{Candidate, Residency, Victim};
 use crate::view::observation::{observation, ByFootprints};
@@ -269,13 +270,18 @@ impl<L: Observed> Demand<L> {
         }
         xpute_kit::ensure!(named <= if matches!(L::ASKS, Asks::Floor) { 0 } else { Residency::<L>::DESTINATION_TILES }, ENOTRECOVERABLE, named);
 
-        self.wants.clear();
-        self.wants.extend(
-            asks.iter()
-                .filter(|(p, _)| !L::residency().resident(**p) && !L::residency().settled(**p))
-                .map(|(p, &a)| (p.subject(), a)),
-        );
         L::residency().ask(&asks);
+        // A tile no served shard is over or under is answered as its absence is, and never asked for.
+        let unanswered = |p: Tile| !L::residency().resident(p) && !L::residency().settled(p);
+        if let Some(layer) = L::STREAM.bake() {
+            for &p in asks.keys() {
+                if unanswered(p) && !source::serves(layer, p) {
+                    self.absent(p);
+                }
+            }
+        }
+        self.wants.clear();
+        self.wants.extend(asks.iter().filter(|(p, _)| unanswered(**p)).map(|(p, &a)| (p.subject(), a)));
         self.asks = asks;
 
         self.observation = o.copied();

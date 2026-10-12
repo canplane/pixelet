@@ -570,10 +570,10 @@ pub enum Command {
     /// The tab's visibility; the host rings the doorbell for it at once, since a hidden
     /// page gets no frame and hiding is the save's last sure moment.
     WORLD_VISIBILITY = 0x1003,
-    /// What the tile source declares of itself, once the shell has it (published.json's
-    /// SOURCE, or the dev tile server's answer in the same form). Until it comes nothing is
-    /// observed: the floor is held at the zoom it names, and no view is drawn from a
-    /// zoom the source does not supply whole.
+    /// What the tile source declares of itself, once the shell has it: the tile root's
+    /// `source`, the published one out of the bucket or the dev tile server's. Until it
+    /// comes nothing is observed: the floor is held at the zoom it names, and no tile is
+    /// asked for that no shard it serves is over or under (pxl-kernel io/source.rs).
     WORLD_SOURCE = 0x1005,
     /// A permission as the shell's prompt or the browser's change reported it.
     SENSOR_PERMISSION = 0x1206,
@@ -1131,17 +1131,15 @@ impl WorldVisibility {
 
 /// Command::WORLD_SOURCE's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct WorldSource {
-    /// The coarsest zoom of the pyramid the source supplies whole.
-    pub top_z: u32,
+pub struct WorldSource<'a> {
+    /// The declaration as the source serves it, handed over unread.
+    pub source: &'a str,
 }
 
-impl WorldSource {
-    pub fn read(pkt: &[u8]) -> Result<WorldSource, MarshalError> {
+impl<'a> WorldSource<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<WorldSource<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(WorldSource {
-            top_z: integer::<u32>(f.at(0)?.get_number()?)?,
-        })
+        Ok(WorldSource { source: f.at(0)?.get_str_ref()? })
     }
 }
 
