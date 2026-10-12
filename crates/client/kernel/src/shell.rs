@@ -28,7 +28,6 @@ use crate::setting::store::{settings_store, SettingKey};
 use crate::turn::world_platform;
 use crate::view::frame::pose::units_per_px_at;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_kit::status::errno::Errno;
 
 /// The focus's division and each above it, broad to narrow. Every language
@@ -83,7 +82,7 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             },
             is_off_center: off_center().is_off_center,
             center,
-            outside: at.is_some_and(|c| void_under(&c)),
+            outside: at.is_some_and(|c| crate::io::source::past_at([pvf3::X(&c), pvf3::Y(&c)].map(pvf3::to_real))),
         },
         location: LocationState {
             status: location.pose.status(),
@@ -199,10 +198,4 @@ fn stall() -> Option<Message> {
 fn m_per_px() -> f64 {
     let y_u = focus().map_or(0.0, |c| pvf3::to_real(pvf3::Y(&c)));
     units_per_px_at(dist()) / epsg3857::u_per_m(y_u)
-}
-
-/// The source has nothing under `at`: the ground cell there, as the finest
-/// tile held over it gives it, is void.
-fn void_under(at: &Pvf3) -> bool {
-    crate::query::World::now().surface(at, LEAF_ZOOM).value().is_some_and(|s| s.is_none())
 }

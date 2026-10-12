@@ -108,6 +108,9 @@ pub struct TileSource<'a> {
     pub frame: Frame,
     pub origin: [i64; 2],
     pub n: u32,
+    /// Where the service area ends, by a cell's center in units; none where
+    /// the tile lies in it whole. A cell past it is no ground the tile holds.
+    pub past: Option<fn([f64; 2]) -> bool>,
 }
 
 impl TileSource<'_> {
@@ -125,7 +128,17 @@ impl TileSource<'_> {
         }
         let center = |v: i64| (v as f64 + 0.5) / n as f64;
         // A height h is cells up to h − 1 of ground, its surface at z = h.
-        Some((tile.cells[GROUND.cell_index(tx as u32, ty as u32) as usize], bicubic(tile.ele, center(x), center(y)) as i32))
+        Some((self.look(tx as u32, ty as u32), bicubic(tile.ele, center(x), center(y)) as i32))
+    }
+
+    /// The look of the tile's own cell: `unknown`, nothing, past the service
+    /// area, whatever the tile folded there.
+    pub fn look(&self, tx: u32, ty: u32) -> GroundId {
+        let center = |t: u32, k: usize| self.frame.corner[k] + (f64::from(t) + 0.5) * self.frame.cell;
+        match self.past {
+            Some(past) if past([center(tx, 0), center(ty, 1)]) => sentinel::unknown,
+            _ => self.tile.cells[GROUND.cell_index(tx, ty) as usize],
+        }
     }
 }
 

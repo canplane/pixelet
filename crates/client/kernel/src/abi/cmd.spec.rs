@@ -778,7 +778,7 @@ pub struct FocusState {
     pub is_off_center: bool,
     /// The focus in degrees: what the search measures distance from.
     pub center: Option<LonLat>,
-    /// The source has nothing at all under the focus: the tile over it at the source's top was absent.
+    /// The focus is past the service area: the source serves no shard over it (pxl-kernel io/source.rs).
     pub outside: bool,
 }
 

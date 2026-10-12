@@ -427,7 +427,7 @@ export interface FocusState {
   is_off_center: boolean;
   /** The focus in degrees: what the search measures distance from. */
   center: LonLat | null;
-  /** The source has nothing at all under the focus: the tile over it at the source's top was absent. */
+  /** The focus is past the service area: the source serves no shard over it (pxl-kernel io/source.rs). */
   outside: boolean;
 }
 

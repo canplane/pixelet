@@ -10,11 +10,12 @@ use pxl_spec::block::limit::bedrock;
 use pxl_spec::block::sample::{TileSource, TileView};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::pvf3::pvf3;
-use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
+use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
 use pxl_spec::space::layer::tile::{tile_at, Tile};
 
+use crate::io::source;
 use crate::layer::residency::{Line, Residency};
 
 use crate::layer::{Answer, Bound, Query, Relief};
@@ -37,6 +38,9 @@ impl<'a> Source<'a> {
             frame: Frame::of(self.from),
             origin: self.origin,
             n: self.n,
+            // Only a served shard's tiles are asked for, so one at a shard or
+            // finer lies in the area whole; one over shards may fold some past it.
+            past: (self.from.zoom < SHARD_ZOOM).then_some(source::past_at as fn([f64; 2]) -> bool),
         }
     }
 }
@@ -121,7 +125,7 @@ fn has_look(d: &Drawn, (zoom, at): Node<2>) -> bool {
     let half = pvf3::from_real(units(zoom) / 2.0);
     let center = pvf3::gather(pvf3::X(&base) + half, pvf3::Y(&base) + half, 0);
     let [x, y] = GROUND.cell_of(d.from.zoom, &center).in_tile();
-    Ground::of(d.body.ground.cells[GROUND.cell_index(x, y) as usize]).is_some()
+    Ground::of(d.source().view().look(x, y)).is_some()
 }
 
 /// The ring of cells at `fine` about a node, or of nodes where it is finer.

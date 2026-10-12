@@ -147,7 +147,7 @@ impl<'a> World<'a> {
         let [tx, ty] = [pvf3::X(to), pvf3::Y(to)].map(pvf3::to_real);
         if seen_zoom(from, eye, Tau::FINEST) < LEAF_ZOOM {
             let at = pvf3::gather(pvf3::X(to), pvf3::Y(to), pvf3::Z(from));
-            if !self.within(&at).exact()? {
+            if !self.within(&at) {
                 return Some(*from);
             }
             let stands = if falls {
@@ -203,7 +203,7 @@ impl<'a> World<'a> {
     /// where `to` is not held at the leaf.
     fn step(&self, ceiling: Option<f64>, floor: f64, to: &Pvf3, falls: bool) -> Option<Option<(f64, Option<f64>)>> {
         // Past the service area is a wall, slid along as any.
-        if !self.within(to).exact()? {
+        if !self.within(to) {
             return Some(None);
         }
         let cell = units(GROUND.cell());

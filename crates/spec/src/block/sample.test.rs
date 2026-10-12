@@ -47,6 +47,7 @@ fn a_chunk_with_no_surface_has_no_ground() {
         frame: Frame::of(tile),
         origin: [0, 0],
         n: 1,
+        past: None,
     };
     let mut sample = ChunkSample::of_span(COL_SPAN);
     sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
@@ -130,6 +131,7 @@ fn a_column_is_its_look_over_its_filler_over_stone() {
             frame: Frame::of(tile),
             origin: [0, 0],
             n: 1,
+            past: None,
         };
         let mut sample = ChunkSample::of_span(COL_SPAN);
         sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, cell).unwrap();
@@ -190,6 +192,7 @@ fn past_the_leaves_strata_stay_a_leaf_cell_thick() {
         frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
         origin: [0, 0],
         n: 1,
+        past: None,
     };
     let mut leaf = ChunkSample::of_span(COL_SPAN);
     leaf.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
@@ -227,6 +230,7 @@ fn the_service_area_is_walled_one_cell_thick() {
         frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
         origin: [0, 0],
         n: 1,
+        past: None,
     };
     let mut sample = ChunkSample::of_span(COL_SPAN);
     sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
@@ -264,6 +268,7 @@ fn caves_come_last() {
         frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
         origin: [0, 0],
         n: 1,
+        past: None,
     };
     let mut sample = ChunkSample::of_span(COL_SPAN);
     sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();
@@ -289,4 +294,27 @@ fn caves_come_last() {
         }
     }
     assert!(caved > 0, "no cave anywhere");
+}
+
+/// Past the service area a cell is nothing, whatever the tile folded there:
+/// land read as `unknown`, the bedrock a wall is made of.
+#[test]
+fn a_cell_past_the_service_area_is_no_ground_whatever_the_tile_holds() {
+    let cells = vec![ground::land; (TILE_CELLS * TILE_CELLS) as usize];
+    let ele = vec![5i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
+    let separation = Separation::default();
+    let source = |past: Option<fn([f64; 2]) -> bool>| TileSource {
+        tile: TileView {
+            cells: &cells,
+            ele: &ele,
+            separation: &separation,
+        },
+        frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
+        origin: [0, 0],
+        n: 1,
+        past,
+    };
+    assert_eq!(source(None).look(3, 4), ground::land);
+    assert_eq!(source(Some(|_| true)).look(3, 4), sentinel::unknown);
+    assert_eq!(source(Some(|_| true)).cell_at([3, 4]).map(|(look, _)| look), Some(sentinel::unknown));
 }

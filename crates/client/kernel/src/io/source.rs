@@ -9,6 +9,7 @@
 
 use pxl_spec::bake::published::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{is_version, key, sharded};
+use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -58,21 +59,37 @@ pub fn top() -> Option<Zoom> {
 
 /// Whether a served shard is over or under `p`, of a kind held by shards.
 pub fn serves(layer: BaseLayer, p: Tile) -> bool {
-    !sharded(layer) || declared().is_some_and(|s| s.shard.iter().any(|k| over(k.tile, p) || over(p, k.tile)))
+    !sharded(layer) || declared().is_some_and(|s| s.covers(p))
 }
 
-/// The version `p` is opened under: the finest key over it that names one for
-/// `layer`, else the source's. No tile is asked for before the source is
-/// declared: nothing is observed until then (view/observation.rs).
+/// Whether the ground at `[x, y]`, in units, is past the service area: the
+/// source is declared and serves no shard over its leaf. The one judgement of
+/// where the area ends, for what is drawn, walked, edited and said alike.
+pub fn past_at([x, y]: [f64; 2]) -> bool {
+    declared().is_some_and(|s| !s.covers(GROUND.cell_of(LEAF_ZOOM, &world::point(x, y, 0.0)).tile()))
+}
+
+/// The version `p` is opened under. No tile is asked for before the source
+/// is declared: nothing is observed until then (view/observation.rs).
 pub fn version(layer: BaseLayer, p: Tile) -> &'static str {
-    let s = declared().or_bug(Errno::ENOTRECOVERABLE);
-    let own = s
-        .shard
-        .iter()
-        .filter(|k| sharded(layer) && over(k.tile, p))
-        .filter_map(|k| Some((k.tile.zoom, k.version[layer as usize].as_deref()?)))
-        .max_by_key(|&(zoom, _)| zoom);
-    own.map_or(&s.version[layer as usize], |(_, v)| v)
+    declared().or_bug(Errno::ENOTRECOVERABLE).version_of(layer, p)
+}
+
+impl Source {
+    fn covers(&self, p: Tile) -> bool {
+        self.shard.iter().any(|k| over(k.tile, p) || over(p, k.tile))
+    }
+
+    /// The finest key over `p` that names one for `layer`, else the source's.
+    fn version_of(&self, layer: BaseLayer, p: Tile) -> &str {
+        let own = self
+            .shard
+            .iter()
+            .filter(|k| sharded(layer) && over(k.tile, p))
+            .filter_map(|k| Some((k.tile.zoom, k.version[layer as usize].as_deref()?)))
+            .max_by_key(|&(zoom, _)| zoom);
+        own.map_or(&self.version[layer as usize], |(_, v)| v)
+    }
 }
 
 /// Each kind's version as declared, the one over every shard's own; none

@@ -26,6 +26,7 @@ fn ground_under_a_hole_past_the_floor_is_drawn() {
         frame: Frame::of(Tile::new(LEAF_ZOOM, 0)),
         origin: [0, 0],
         n: 1,
+        past: None,
     };
     let mut sample = ChunkSample::of_span(COL_SPAN);
     sample.read(&Around { own, beside: [None; 8] }, [0, 0], COL_SPAN, GROUND.cell()).unwrap();

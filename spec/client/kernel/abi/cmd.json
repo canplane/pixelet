@@ -1585,7 +1585,7 @@
           "name": "outside",
           "type": "bool",
           "$doc": [
-            "The source has nothing at all under the focus: the tile over it at the source's top was absent."
+            "The focus is past the service area: the source serves no shard over it (pxl-kernel io/source.rs)."
           ]
         }
       ]
