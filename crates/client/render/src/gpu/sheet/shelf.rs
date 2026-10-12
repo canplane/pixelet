@@ -14,6 +14,8 @@ pub const NO_SLOT: i32 = -1;
 pub enum DrawSpec {
     /// A label alone on a pill: a placed billboard's words.
     Pill { label: String, logical_w: f64 },
+    /// A count of the markers one cell holds, on a pill of its own.
+    Count { label: String, logical_w: f64 },
     /// A place as Carto draws it: a dot or its icon in the fill, and under
     /// it the name, if shown, in the text color.
     Point {

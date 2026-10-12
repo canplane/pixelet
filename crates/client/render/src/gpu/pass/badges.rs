@@ -138,6 +138,13 @@ fn labeled_pill(p: &mut Sketch, label: &str, logical_w: f32) {
     anchor_dot(p, logical_w);
 }
 
+/// A marker's pill turned over, so a count does not read as words that are a number.
+fn count_pill(p: &mut Sketch, label: &str, logical_w: f32) {
+    p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, 0xffffffe6);
+    p.text(BADGE_FONT, 0x14141aff, label, logical_w / 2.0, PILL_H / 2.0 + 1.0, Align::Center);
+    anchor_dot(p, logical_w);
+}
+
 pub const BUBBLE_FONT: Font = Font { weight: SEMIBOLD, px: 14.0 };
 /// The widest a bubble's line runs before it wraps.
 pub const BUBBLE_TEXT_W: f64 = 220.0;
@@ -307,6 +314,7 @@ impl BadgePass {
             let mut p = Sketch::default();
             match spec {
                 DrawSpec::Pill { label, logical_w } => labeled_pill(&mut p, label, *logical_w as f32),
+                DrawSpec::Count { label, logical_w } => count_pill(&mut p, label, *logical_w as f32),
                 DrawSpec::Point {
                     lines,
                     icon,

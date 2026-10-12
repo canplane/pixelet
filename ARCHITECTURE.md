@@ -375,7 +375,7 @@ Badges are one instanced quad (`billboard/field.rs`) drawn from one sheet (`pxl-
 
 An entry of the sheet is drawn on the GPU once, when what it shows changes (`gpu/sheet.rs`, `frame/shader/sheet.wgsl`): its shapes — rounded rectangles, circles, rings, a bubble's tail — as signed distances, and its text as lines the platform drew, into a texture of the entry's size copied into its rectangle. Text is asked of the platform a line at a time (Below the view), so kerning, joining, bidirectional runs, fallback and emoji are the platform engine's on every target: a tab's canvas, an iPhone's CoreText, Android's `Canvas` ([the sheet on the GPU, and text by the line](./decision/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
 
-A marker someone puts up is drawn by the same pass, beside the places: the object layer's marker kind (`spec/spec/block/id.json`), read through their query in each drawn chunk and shown whether or not the place layer is on. Its words are one for every marker until each keeps its own ([BACKLOG.md](./BACKLOG.md)).
+A marker someone puts up is drawn by the same pass, beside the places: the object layer's marker kind (`spec/spec/block/id.json`), read through their query in each drawn chunk and shown whether or not the place layer is on. Where more than one stands in a marker's cell, the cell shows their count at its middle instead, counted from the records each time the chunk is read and never kept: unlike places, which keep one a cell as Carto does, markers are of one kind, so their number says something. A marker's words are one for every marker until each keeps its own ([BACKLOG.md](./BACKLOG.md)).
 
 ---
 

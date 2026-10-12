@@ -1,17 +1,20 @@
 // pxl-kernel/billboard/badge.rs
 
 //! What a billboard shows, each its own design on the one sheet: a marker
-//! someone put up, its words on a pill; a place, as Carto draws it at the
+//! someone put up, its words on a pill, or the count of a cell's markers
+//! where more than one stands in it; a place, as Carto draws it at the
 //! zoom of Carto's the view is at there; a line said in the chat, in a
 //! bubble. Each is measured, given its slot and painted the same way, and
 //! shows only once painted (`ready`).
 
 use crate::layer::object::preview::words_at;
+use crate::layer::place::carto_zoom;
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::bake::constant::EntryAt;
 
 use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, LABEL_ZOOM, TEXT};
 use pxl_spec::bake::tile::place::{symbol_of, PlaceTile, Placed};
+use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::tile::Tile;
 
 use crate::billboard::chat::line_said;
@@ -21,7 +24,7 @@ use crate::layer::Base;
 use pxl_render::gpu::pass::badges::{badge_width, bubble_size, point_size, BADGE_FONT, BUBBLE_FONT, BUBBLE_TEXT_W, POINT_FONT};
 use pxl_render::gpu::sheet::shelf::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::sheet::SHEET_SCALE;
-use pxl_spec::block::marker::MARKER_SHOWN_FROM;
+use pxl_spec::block::object::marker_shows;
 use xpute_guest::global::Global;
 
 use xpute_kit::status::bug::OrBug;
@@ -47,6 +50,8 @@ pub enum Label {
     /// A marker someone put up, or one waiting for its words, by its entry,
     /// and its words by their hash.
     Marker { at: EntryAt, words: u64 },
+    /// The `n` markers in one marker's cell (`marker_cell`), by the cell.
+    Count { cell: (Zoom, [i64; 3]), n: u32 },
     /// The chat's line said at `said`, the host clock's milliseconds' bits.
     Chat { said: u64 },
 }
@@ -58,15 +63,16 @@ impl Label {
         (place < placed.len()).then(|| placed.get(place))
     }
 
-    /// As it shows at Carto's `zoom` where it stands, if it does: a place
-    /// from the zoom it is shown from, as a dot or its icon by its category's
-    /// zooms, named from its category's label zoom, its name wrapped at
-    /// `wrap` pixels; a marker, and a line said, from a marker's zoom
-    /// (`block/marker.json`).
-    pub fn at(self, zoom: i32, wrap: f64) -> Option<Label> {
+    /// As it shows where the camera grid's cell is at `cell_zoom`, if it
+    /// does: a place at Carto's zoom there, from the zoom it is shown from,
+    /// as a dot or its icon by its category's zooms, named from its
+    /// category's label zoom, its name wrapped at `wrap` pixels; a marker, a
+    /// count of them and a line said, by a marker's cell (`marker_shows`).
+    pub fn at(self, cell_zoom: Zoom, wrap: f64) -> Option<Label> {
         match self {
-            Label::Marker { .. } | Label::Chat { .. } => (zoom >= i32::from(MARKER_SHOWN_FROM)).then_some(self),
+            Label::Marker { .. } | Label::Count { .. } | Label::Chat { .. } => marker_shows(cell_zoom).then_some(self),
             Label::Place { tile, place, .. } => {
+                let zoom = carto_zoom(cell_zoom);
                 let h = Label::place(tile, place)?;
                 let k = usize::from(h.place.category.checked_sub(1)?);
                 let from = |z: u8| z != 0 && zoom >= i32::from(z);
@@ -91,7 +97,7 @@ impl Label {
         words_at(at).unwrap_or_default().to_string()
     }
 
-    /// What it writes: a marker's words cut to `SHOWN_CHARS`; a place's name
+    /// What it writes: a marker's words cut to `SHOWN_CHARS`; a count; a place's name
     /// whole, where it is named; a chat line whole, empty once another is said.
     pub fn text(self) -> String {
         match self {
@@ -103,6 +109,7 @@ impl Label {
                 }
                 shown
             }
+            Label::Count { n, .. } => n.to_string(),
             Label::Place { tile, place, look, .. } if look.named => Label::place(tile, place).map(|h| h.place.name.to_string()).unwrap_or_default(),
             Label::Place { .. } => String::new(),
             Label::Chat { said } => line_said(said).unwrap_or_default(),
@@ -157,7 +164,7 @@ pub fn size(label: Label) -> Option<[f64; 3]> {
         Some((laid.iter().map(|&(_, w)| w).fold(0.0, f64::max), laid.iter().map(|&(l, _)| l.trim().to_owned()).collect()))
     };
     let (size, lines) = match label {
-        Label::Marker { .. } => ([badge_width(text_width(BADGE_FONT, &text)?.ceil()), MARKER_HEIGHT, MARKER_ANCHOR], Vec::new()),
+        Label::Marker { .. } | Label::Count { .. } => ([badge_width(text_width(BADGE_FONT, &text)?.ceil()), MARKER_HEIGHT, MARKER_ANCHOR], Vec::new()),
         Label::Place { look, .. } if text.is_empty() => (point_size(look.icon, None), Vec::new()),
         Label::Place { look, wrap, .. } => {
             let (w, lines) = laid(POINT_FONT, f64::from(wrap))?;
@@ -190,6 +197,7 @@ pub fn slot(label: Label) -> i32 {
             h * SHEET_SCALE,
             match label {
                 Label::Marker { .. } => DrawSpec::Pill { label: label.text(), logical_w: w },
+                Label::Count { .. } => DrawSpec::Count { label: label.text(), logical_w: w },
                 Label::Chat { .. } => DrawSpec::Bubble { lines: b.lines.clone(), box_w: w },
                 Label::Place { tile, place, look, .. } => {
                     let category = Label::place(tile, place).map_or(0, |h| h.place.category);

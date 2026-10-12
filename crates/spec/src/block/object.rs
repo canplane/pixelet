@@ -10,14 +10,15 @@
 
 use std::sync::LazyLock;
 
+use crate::bake::constant::EntryAt;
 use crate::block::color;
 use crate::block::cube::{object, Ground, Object};
 use crate::block::id::{Kind, SHAPE_BITS};
-use crate::block::marker::MARKER_SCALE_STEPS;
+use crate::block::marker::{MARKER_SCALE_STEPS, MARKER_SHOWN_FROM};
 use crate::block::DecorId;
+use crate::space::camera::grid::CHUNK_STEPS;
 use crate::space::coord::zoom::Zoom;
-use crate::space::layer::lattice::Lattice;
-use crate::space::layer::tile::LEAF_ZOOM;
+use crate::space::hierarchy::tree::ancestor_of;
 
 /// Explicit air: retains the leaf and erases lower layers.
 pub fn object_value_is_air(value: u32) -> bool {
@@ -41,9 +42,25 @@ pub const MARKER: u32 = (Kind::marker as u32) << SHAPE_BITS;
 /// finer than the tile, the cell Carto keeps its 14-pixel icons apart in.
 pub const MARK_STEPS: Zoom = 4;
 
-/// The marker's cells, at its scale on the camera grid (`block/marker.json`):
-/// its zoom is the tile zoom of the grid's cell there.
-pub const MARKER_LATTICE: Lattice = Lattice::new(LEAF_ZOOM + MARK_STEPS).scaled(MARKER_SCALE_STEPS);
+/// A marker's cell where the camera grid's cell is at `cell`: its scale on
+/// the grid (`block/marker.json`).
+pub const fn marker_cell(cell: Zoom) -> i32 {
+    cell as i32 + MARKER_SCALE_STEPS as i32
+}
+
+/// The marker's cell holding a marker at `at` where the camera grid's cell
+/// is at `cell`, which counts the markers in it as one; the marker's own
+/// where it is finer.
+pub fn marker_cell_of(cell: Zoom, at: EntryAt) -> (Zoom, [i64; 3]) {
+    let z = (marker_cell(cell).max(0) as Zoom).min(at.zoom());
+    (z, ancestor_of(at.at(), u32::from(at.zoom() - z)))
+}
+
+/// Whether a marker shows where the camera grid's cell is at `cell`: its
+/// chunk no coarser than `MARKER_SHOWN_FROM`.
+pub const fn marker_shows(cell: Zoom) -> bool {
+    cell as i32 - CHUNK_STEPS as i32 >= MARKER_SHOWN_FROM as i32
+}
 
 pub fn object_value_is_marker(value: u32) -> bool {
     kind_of(value) == Some(Kind::marker)
