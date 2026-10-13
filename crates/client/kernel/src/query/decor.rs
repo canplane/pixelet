@@ -15,8 +15,7 @@ use pxl_spec::block::Block;
 use pxl_spec::block::DecorId;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::pvf3::pvf3;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world::wrap_cell;
 use pxl_spec::space::coord::zoom::{base_of, cube, index_of, units};
 use pxl_spec::space::hierarchy::tree::Node;
@@ -73,7 +72,7 @@ impl<'a> World<'a> {
         (0..d).all(|j| {
             (0..w).all(|k| {
                 let base = base_of(GROUND.cell(), [x + k, y + j, z]);
-                let [bx, by, floor] = [pvf3::X(&base), pvf3::Y(&base), pvf3::Z(&base)].map(pvf3::to_real).map(|v| v + unit / 2.0);
+                let [bx, by, floor] = [i64::from(base[0]), i64::from(base[1]), i64::from(base[2])].map(q3::to_real).map(|v| v + unit / 2.0);
                 // The base's cell up and down: the box's blocks void, and
                 // the one under it ground the decor grows on.
                 let [cx, cy] = [bx, by].map(block);
@@ -181,7 +180,7 @@ impl<'a> World<'a> {
 
     /// What the ground grows of `decor` standing in the leaf cell `at` lies
     /// in; none where it grows nothing there or its leaf tile is not resident.
-    pub fn grown(&self, decor: &Decor, at: &Pvf3) -> Option<Instance> {
+    pub fn grown(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
         let [x, y, z] = index_of(GROUND.cell(), at);
         let mut met = None;
         self.grown_in([x, y], |_, d, i| {

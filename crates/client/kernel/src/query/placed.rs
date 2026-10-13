@@ -6,7 +6,7 @@
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::block::object::object_value_is_air;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::index_of;
 use pxl_spec::space::hierarchy::tree::Node;
 use xpute_kit::status::bug::OrBug;
@@ -34,7 +34,7 @@ impl<'a> World<'a> {
     }
 
     /// Whether anything, air included, is written in the coarsest object cell `at` lies in.
-    pub fn written_in(&self, at: &Pvf3) -> bool {
+    pub fn written_in(&self, at: &Q3) -> bool {
         self.cells((OBJECT_COARSEST, index_of(OBJECT_COARSEST, at))).holds()
     }
 

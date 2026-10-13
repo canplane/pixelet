@@ -5,7 +5,7 @@
 //! one through north. The view's forward, its up and north are told apart by
 //! the spec's colors (`gizmo_spec::frame`), which the shell's legend reads.
 
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{floor3, V3};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -76,7 +76,7 @@ impl Sketch {
 }
 
 /// Into `s`, its lines cleared first.
-fn sketch(s: &mut Sketch, focus: &Pvf3, heading: Option<f64>) {
+fn sketch(s: &mut Sketch, focus: &Q3, heading: Option<f64>) {
     let center = to_world(focus);
     s.about = center;
     s.lines.clear();
@@ -107,7 +107,7 @@ fn set_lines(at: V3, lines: &[f32]) {
 }
 
 /// `heading` is the camera's azimuth third person, none first person.
-pub fn frame_gizmo_step(show: bool, focus: Option<Pvf3>, heading: Option<f64>) {
+pub fn frame_gizmo_step(show: bool, focus: Option<Q3>, heading: Option<f64>) {
     let empty = || Sketch { about: [0.0; 3], lines: Vec::new() };
     let (drawn, shown, next) = GIZMOS.get(|| (empty(), false, empty()));
     let Some(center) = focus.filter(|_| show) else {

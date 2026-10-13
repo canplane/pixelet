@@ -7,7 +7,7 @@ fn leaf() -> Tile {
 }
 
 /// The middle of ground leaf cell (x, y) of `leaf()`.
-fn point(x: u32, y: u32) -> Pvf3 {
+fn point(x: u32, y: u32) -> Q3 {
     let first = GROUND.cell_at(leaf(), 0);
     first.up(0).inner_at(GROUND, LEAF_ZOOM, [x, y]).mid()
 }

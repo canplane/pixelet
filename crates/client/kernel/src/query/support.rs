@@ -8,7 +8,8 @@
 
 use pxl_spec::block::Block;
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{REACH, ROUND};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
@@ -36,15 +37,15 @@ pub fn under(z: f64) -> f64 {
 
 /// The tile zoom the camera grid at `tau` draws the ground at, at `at` seen
 /// from `eye`.
-fn seen_zoom(at: &Pvf3, eye: &Pvf3, tau: Tau) -> Zoom {
-    let [a, e] = [at, eye].map(|p| [pvf3::X(p), pvf3::Y(p), pvf3::Z(p)].map(pvf3::to_real));
+fn seen_zoom(at: &Q3, eye: &Q3, tau: Tau) -> Zoom {
+    let [a, e] = [at, eye].map(|p| [i64::from(p[0]), i64::from(p[1]), i64::from(p[2])].map(q3::to_real));
     let d = [wrap(a[0] - e[0], -ROUND / 2.0, ROUND / 2.0), a[1] - e[1], a[2] - e[2]];
     GROUND.z_at(tau, libm::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2])).min(LEAF_ZOOM)
 }
 
 /// A point's place on the ground, in units.
-fn xy(at: &Pvf3) -> [f64; 2] {
-    [pvf3::to_real(pvf3::X(at)), pvf3::to_real(pvf3::Y(at))]
+fn xy(at: &Q3) -> [f64; 2] {
+    [q3::to_real(i64::from(at[0])), q3::to_real(i64::from(at[1]))]
 }
 
 /// What a walker meets straight up and down the cell over `xy` at the tile
@@ -130,16 +131,16 @@ impl<'w, 'a> Upright<'w, 'a> {
 impl<'a> World<'a> {
     /// The ground's surface under `at`, as the tile zoom `zoom`'s chunks draw
     /// it; none where the cell has no ground.
-    pub fn surface(&self, at: &Pvf3, zoom: Zoom) -> Answer<Option<Surface>> {
+    pub fn surface(&self, at: &Q3, zoom: Zoom) -> Answer<Option<Surface>> {
         let (cell, c) = GROUND.cell_of(zoom, at).node();
         self.surface_of(cell, c)
     }
 
     /// What is in the leaf block at `at`, as the chunks draw it; none where
     /// it is void.
-    pub fn block_of(&self, at: &Pvf3) -> Answer<Option<Block>> {
+    pub fn block_of(&self, at: &Q3) -> Answer<Option<Block>> {
         let side = units(GROUND.cell());
-        let p = [pvf3::X(at), pvf3::Y(at), pvf3::Z(at)].map(pvf3::to_real);
+        let p = [i64::from(at[0]), i64::from(at[1]), i64::from(at[2])].map(q3::to_real);
         self.block((GROUND.cell(), p.map(|v| (v / side).floor() as i64)))
     }
 
@@ -147,7 +148,7 @@ impl<'a> World<'a> {
     /// (a fix, a search result): up out of what fills it, else down onto
     /// the first solid under it; none where nothing stands, a cell with no
     /// surface and nothing placed.
-    pub fn surface_support(&self, at: &Pvf3) -> Answer<Option<f64>> {
+    pub fn surface_support(&self, at: &Q3) -> Answer<Option<f64>> {
         let mut c = Upright::new(self, xy(at), LEAF_ZOOM);
         let [lo, hi] = [REACH.min[2], REACH.max[2]];
         let surface = c.surface();
@@ -163,8 +164,8 @@ impl<'a> World<'a> {
     /// From the center `at` down to the first solid's top, or up out of what
     /// fills it, as the tile zoom `zoom`'s chunks draw it; none where
     /// nothing stands under `at`.
-    pub fn floor_under(&self, at: &Pvf3, zoom: Zoom) -> Answer<Option<f64>> {
-        let start = pvf3::to_real(pvf3::Z(at));
+    pub fn floor_under(&self, at: &Q3, zoom: Zoom) -> Answer<Option<f64>> {
+        let start = q3::to_real(i64::from(at[2]));
         let mut c = Upright::new(self, xy(at), zoom);
         let stands = match c.lift(start) {
             z if z > start => Some(z.min(REACH.max[2])),
@@ -176,8 +177,8 @@ impl<'a> World<'a> {
     /// The floor under `at` nearest its height: the top of a solid with
     /// room over it, under `at` or over it, or the cell's surface; none
     /// where nothing stands.
-    pub fn support_nearest(&self, at: &Pvf3) -> Answer<Option<f64>> {
-        let z = pvf3::to_real(pvf3::Z(at));
+    pub fn support_nearest(&self, at: &Q3) -> Answer<Option<f64>> {
+        let z = q3::to_real(i64::from(at[2]));
         let mut c = Upright::new(self, xy(at), LEAF_ZOOM);
         let down = match c.lift(z) {
             t if t > z => Some(t.min(REACH.max[2])),
@@ -189,8 +190,8 @@ impl<'a> World<'a> {
     }
 
     /// The bottom of the first solid over `at`; none under open sky.
-    pub fn ceiling_over(&self, at: &Pvf3) -> Answer<Option<f64>> {
-        let z = pvf3::to_real(pvf3::Z(at));
+    pub fn ceiling_over(&self, at: &Q3) -> Answer<Option<f64>> {
+        let z = q3::to_real(i64::from(at[2]));
         let mut c = Upright::new(self, xy(at), LEAF_ZOOM);
         let over = c.above(z);
         c.done(over)
@@ -213,13 +214,13 @@ impl<'a> World<'a> {
     /// to there; none where the leaf under `from`, or a map's `to`, is not
     /// held, when its caller goes on with the height unknown. `from` is a
     /// center whose height is known.
-    pub fn step_slide(&self, from: &Pvf3, to: &Pvf3, eye: &Pvf3, falls: bool) -> Option<Pvf3> {
-        let [sx, sy, sz] = [pvf3::X(from), pvf3::Y(from), pvf3::Z(from)].map(pvf3::to_real);
+    pub fn step_slide(&self, from: &Q3, to: &Q3, eye: &Q3, falls: bool) -> Option<Q3> {
+        let [sx, sy, sz] = [i64::from(from[0]), i64::from(from[1]), i64::from(from[2])].map(q3::to_real);
         let mut floor = under(sz);
-        let gather = |x: f64, y: f64, floor: f64| pvf3::gather(pvf3::from_real(x), pvf3::from_real(y), pvf3::from_real(over(floor)));
-        let [tx, ty] = [pvf3::X(to), pvf3::Y(to)].map(pvf3::to_real);
+        let gather = |x: f64, y: f64, floor: f64| world::at(q3::from_real(x), q3::from_real(y), q3::from_real(over(floor)));
+        let [tx, ty] = [i64::from(to[0]), i64::from(to[1])].map(q3::to_real);
         if seen_zoom(from, eye, Tau::FINEST) < LEAF_ZOOM {
-            let at = pvf3::gather(pvf3::X(to), pvf3::Y(to), pvf3::Z(from));
+            let at = world::at(i64::from(to[0]), i64::from(to[1]), i64::from(from[2]));
             if !self.within(&at) {
                 return Some(*from);
             }
@@ -230,7 +231,7 @@ impl<'a> World<'a> {
             };
             return Some(gather(tx, ty, stands));
         }
-        // The short way round the X lane, across the antimeridian too.
+        // The short way round the world, across the antimeridian too.
         let way = [wrap(tx - sx, -ROUND / 2.0, ROUND / 2.0), ty - sy];
         let s = units(GROUND.cell());
         let center = |c: [f64; 2]| [(c[0] + 0.5) * s, (c[1] + 0.5) * s];
@@ -258,7 +259,7 @@ impl<'a> World<'a> {
             }
             let mut into = at;
             into[k] += way[k].signum();
-            // Short of the edge by less than PVF3's fraction, so the cell it ends in is this one.
+            // Short of the edge by less than a position's fraction, so the cell it ends in is this one.
             let short = edge(k) - way[k].signum() * s * 1e-6;
             match self.step(ceiling, floor, center(into), falls) {
                 Some(Some((top, over))) => (at, floor, ceiling) = (into, top, over),
@@ -281,7 +282,7 @@ impl<'a> World<'a> {
     /// where `to` is not held at the leaf.
     fn step(&self, ceiling: Option<f64>, floor: f64, to: [f64; 2], falls: bool) -> Option<Option<(f64, Option<f64>)>> {
         // Past the service area is a wall, slid along as any.
-        if !self.within(&pvf3::gather(pvf3::from_real(to[0]), pvf3::from_real(to[1]), 0)) {
+        if !self.within(&world::at(q3::from_real(to[0]), q3::from_real(to[1]), 0)) {
             return Some(None);
         }
         let cell = units(GROUND.cell());

@@ -7,7 +7,7 @@
 
 use core::f64::consts::TAU;
 
-use crate::space::coord::pvf3::{pack, FVec, IVec, Pvf3};
+use crate::space::coord::q3::{unpack, Q3};
 use crate::space::coord::world;
 use crate::space::coord::world::ROUND;
 use crate::space::coord::zoom::{units, Zoom};
@@ -48,13 +48,13 @@ pub fn u_from_mer(mer: f64) -> f64 {
     mer * U_PER_MER
 }
 
-pub fn project(x: f64, y: f64, z: f64) -> Pvf3 {
+pub fn project(x: f64, y: f64, z: f64) -> Q3 {
     let [x, y, _] = world::within([u_from_mer(x), u_from_mer(y), 0.0]);
     world::point(x, y, z * u_per_m(y))
 }
 
-pub fn unproject(i: IVec, f: FVec) -> G3857 {
-    let [x, y, z] = pack::unpack(i, f);
+pub fn unproject(q: &Q3) -> G3857 {
+    let [x, y, z] = unpack(q);
     [mer_from_u(x), mer_from_u(y), z / u_per_m(y)]
 }
 

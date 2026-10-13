@@ -1,7 +1,8 @@
 // pxl-kernel/layer/object/store.test.rs
 
 use pxl_spec::block::cube::Object;
-use pxl_spec::space::coord::pvf3::ivec;
+use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::coord::zoom::{base_of, UNIT_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;
@@ -12,8 +13,8 @@ use pxl_spec::block::object::{cube_id, Cube};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_kit::math::rng::SplitMix64;
 
-fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
-    Pvf3 { i: ivec::gather(x, y, z), f: 0 }
+fn corner(x: i64, y: i64, z: i64) -> Q3 {
+    base_of(UNIT_ZOOM, [x, y, z])
 }
 
 #[test]

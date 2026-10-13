@@ -1,6 +1,6 @@
 // pxl-kernel/control/navigation/follow_mode.rs
 
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use xpute_kit::math::scalar::wrap;
 
 use crate::control::camera::controller::Motion;
@@ -26,7 +26,7 @@ struct Follow {
     on: bool,
     smoothed_azimuth: Option<f64>,
     was_following: bool,
-    last_device: Option<Pvf3>,
+    last_device: Option<Q3>,
     last_heading: Option<f64>,
     /// The give-up deadline, and the location status it was set for.
     grace_due: Option<f64>,

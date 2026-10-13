@@ -143,7 +143,7 @@ filled by the bakes, offline
 
 The four roots are written in one file, `spec/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
 
-Two formats were made here: **PVF3**, pixelet's packed fixed-point coordinate, and **XTP**, xpute's relocatable binary tree, read without copying.
+One format was made here: **XTP**, xpute's relocatable binary tree, read without copying.
 
 ---
 
@@ -194,21 +194,21 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 
 **What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the servers, the bakes and the asset ingest compile the model, so they are crates; the Overture and elevation ingests put a provider's data into Postgres sharing nothing with the model, so they are scripts under `infra/geo/`. The host and the shell are TypeScript because neither decides anything about the world; what they need of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is generated from.
 
-| Crate / package | What it is                                                                                                                               |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `pxl-spec`      | The model: PVF3, the zooms and lattices, the block catalog, the command numbers, the tile formats, the asset tables. One implementation. |
-| `pxl-render`    | The view: the mesher, glTF, the badge sheet, the draw list, the shaders, the renderer. It knows no kernel.                               |
-| `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                    |
-| `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.               |
-| `pxl-native`    | The guest on a device: a static library that runs every call on a thread of its own and exports `pxl_interrupt` through the C ABI.       |
-| `apps/web`      | The kernel's host and its shell, both apps'; and the Cloudflare Worker that serves it all.                                               |
-| `apps/native`   | The device app: the same host and shell run by Metro, what only a device does, and the native module that links the kernel.              |
-| `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                              |
-| `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                 |
-| `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                               |
-| `pxl-api`       | The application's server.                                                                                                                |
-| `pxl-geo-bake`  | The bakes — terrain, place, division, earth — and, behind a feature, the dev tile server.                                                |
-| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables; generates code from `spec/`; bakes the stars, the Moon, the brand.  |
+| Crate / package | What it is                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pxl-spec`      | The model: the position, the zooms and lattices, the block catalog, the command numbers, the tile formats, the asset tables. One implementation. |
+| `pxl-render`    | The view: the mesher, glTF, the badge sheet, the draw list, the shaders, the renderer. It knows no kernel.                                       |
+| `pxl-kernel`    | The kernel: the chain from the scene down to the reads, the turn, the memory's tenants, the profiler.                                            |
+| `pxl-wasm`      | The guest in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                       |
+| `pxl-native`    | The guest on a device: a static library that runs every call on a thread of its own and exports `pxl_interrupt` through the C ABI.               |
+| `apps/web`      | The kernel's host and its shell, both apps'; and the Cloudflare Worker that serves it all.                                                       |
+| `apps/native`   | The device app: the same host and shell run by Metro, what only a device does, and the native module that links the kernel.                      |
+| `pxl-server`    | What both servers need before answering: the environment, the database pool, the gate over internal routes.                                      |
+| `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                         |
+| `pxl-geo`       | The world's server: forward search, the one route that queries a database at request time.                                                       |
+| `pxl-api`       | The application's server.                                                                                                                        |
+| `pxl-geo-bake`  | The bakes — terrain, place, division, earth — and, behind a feature, the dev tile server.                                                        |
+| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables; generates code from `spec/`; bakes the stars, the Moon, the brand.          |
 
 A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat. The kernel's are named as the chain is:
 

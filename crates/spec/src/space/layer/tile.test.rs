@@ -1,18 +1,15 @@
 // pxl-spec/space/layer/tile.test.rs
 
 use super::*;
-use crate::space::coord::pvf3::ivec;
 use crate::space::coord::world::{around, nearest, ROUND};
+use crate::space::coord::zoom::UNIT_ZOOM;
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::lattice::*;
 
 /// A cell's center and the coarser cell's over it are one computation: the cell `up` zooms coarser.
 #[test]
 fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
-    let point = Pvf3 {
-        i: ivec::gather(-1234, 5678, 0),
-        ..Default::default()
-    };
+    let point = base_of(UNIT_ZOOM, [-1234, 5678, 0]);
     for zoom in [LEAF_ZOOM, LEAF_ZOOM - 3, LEAF_ZOOM - 7] {
         let cell = GROUND.cell_of(zoom, &point);
         assert_eq!(cell.tile_zoom(), zoom);
@@ -20,11 +17,11 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
         assert_eq!(cell.up(2), GROUND.cell_of(zoom - 2, &point), "the cell over it");
         let side = cell.side();
         let c = cell.center(10.0);
-        let at = pack::unpack(c.i, c.f);
+        let at = q3::unpack(&c);
         let base = cell.base();
         assert_eq!(at[2], 10.0 + side / 2.0);
-        assert_eq!(at[0], pvf3::to_real(pvf3::X(&base)) + side / 2.0);
-        assert_eq!(at[1], pvf3::to_real(pvf3::Y(&base)) + side / 2.0);
+        assert_eq!(at[0], q3::to_real(i64::from(base[0])) + side / 2.0);
+        assert_eq!(at[1], q3::to_real(i64::from(base[1])) + side / 2.0);
     }
 }
 
@@ -33,10 +30,7 @@ fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
 fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
     let coarse = Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 2);
     for (x, y) in [(-1234, 5678), (0, 0), (97, -3)] {
-        let point = Pvf3 {
-            i: ivec::gather(x, y, 0),
-            ..Default::default()
-        };
+        let point = base_of(UNIT_ZOOM, [x, y, 0]);
         let fine = GROUND.cell_of(LEAF_ZOOM, &point);
         for zoom in [LEAF_ZOOM, 12, GROUND.top()] {
             let outer = coarse.cell_of(zoom, &point);
@@ -51,10 +45,7 @@ fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
 #[test]
 fn a_cells_place_in_a_tile_above_lies_in_the_tile_cell_over_it() {
     for (x, y) in [(-1234, 5678), (0, 0), (97, -3), (400_000, -250_000)] {
-        let point = Pvf3 {
-            i: ivec::gather(x, y, 0),
-            ..Default::default()
-        };
+        let point = base_of(UNIT_ZOOM, [x, y, 0]);
         for zoom in [LEAF_ZOOM, 13] {
             let cell = GROUND.cell_of(zoom, &point);
             let [tx, ty] = cell.in_tile();
@@ -74,10 +65,7 @@ fn a_cells_place_in_a_tile_above_lies_in_the_tile_cell_over_it() {
 #[test]
 fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {
     let coarse = Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 2);
-    let point = Pvf3 {
-        i: ivec::gather(-1234, 5678, 0),
-        ..Default::default()
-    };
+    let point = base_of(UNIT_ZOOM, [-1234, 5678, 0]);
     for zoom in [LEAF_ZOOM, 13] {
         let (a, b) = (coarse.cell_of(zoom, &point), GROUND.cell_of(zoom - 2, &point));
         assert_eq!(a.side(), b.side());

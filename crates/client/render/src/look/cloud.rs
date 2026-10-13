@@ -6,13 +6,13 @@
 //! (`frame/shader/cloud_bake.wgsl`); the cumulus (`pxl-kernel
 //! scene/environment/cloud.rs`) draws its cells from the hash alone.
 
-use pxl_spec::space::coord::pvf3::core::{IVEC_X_W, IVEC_Y_W};
+use pxl_spec::space::coord::world::EXTENT;
 
 /// A lattice unit is 2^12 cells, about 8 km at mid latitudes; a power of two
 /// so the clouds wrap with the map.
 pub const LATTICE_SHAMT: u32 = 12;
-pub const LATTICE_COUNT: u32 = 1 << (IVEC_X_W - LATTICE_SHAMT);
-const _: () = assert!(IVEC_X_W == IVEC_Y_W, "one lattice count for both axes");
+pub const LATTICE_COUNT: u32 = 1 << (EXTENT[0] - LATTICE_SHAMT);
+const _: () = assert!(EXTENT[0] == EXTENT[1], "one lattice count for both axes");
 const _: () = assert!(LATTICE_COUNT.is_multiple_of(TILE_UNITS), "the world is whole tiles");
 
 /// The sheets' tile, one fetch a pixel and a mip chain in place of eight

@@ -37,7 +37,7 @@ use pxl_kernel::query::{Detail, Ray, World};
 use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::adapter::epsg4326;
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
@@ -120,7 +120,7 @@ impl Tiles {
     }
 }
 
-fn point(x: f64, y: f64) -> Pvf3 {
+fn point(x: f64, y: f64) -> Q3 {
     pxl_spec::space::coord::world::point(x, y, 0.0)
 }
 
@@ -224,7 +224,7 @@ fn main() {
     };
     let server = args.get(2).cloned().unwrap_or_else(|| "http://localhost:3001".into());
     let at = epsg4326::project(&[lon, lat, 0.0]);
-    let (x, y) = (pvf3::to_real(pvf3::X(&at)), pvf3::to_real(pvf3::Y(&at)));
+    let (x, y) = (q3::to_real(i64::from(at[0])), q3::to_real(i64::from(at[1])));
 
     let store = Store::default();
     let mut tiles = Tiles {

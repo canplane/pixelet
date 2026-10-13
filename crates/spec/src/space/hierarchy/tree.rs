@@ -12,7 +12,7 @@ use crate::space::coord::zoom::{units, Zoom};
 pub type Node<const D: usize> = (Zoom, [i64; D]);
 
 /// The box a node stands for: a cube in three axes, and in fewer the column
-/// over every axis it does not name, as far as the lanes reach.
+/// over every axis it does not name, as far as the world reaches.
 pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
     let side = units(zoom);
     let mut b = REACH;
@@ -23,7 +23,7 @@ pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
     b
 }
 
-/// A floor on the signed lanes.
+/// A floor on the signed axes.
 pub fn parent_of<const D: usize>(at: [i64; D]) -> [i64; D] {
     at.map(|v| v.div_euclid(2))
 }

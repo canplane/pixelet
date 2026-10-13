@@ -32,7 +32,7 @@ use pxl_spec::bake::published::FORMAT;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::route::TILE_SPHERE;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
-use pxl_spec::space::coord::pvf3::pvf3;
+use pxl_spec::space::coord::q3;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::tile::tile_at;
@@ -168,7 +168,7 @@ fn tile_texels(px: i64, py: i64, day: &Plate<'_, 3>, night: &Plate<'_, 1>) -> Op
             let index = GROUND.cell_index(tx, ty);
             let cell = GROUND.cell_at(tile, index);
             let (base, side) = (cell.base(), cell.side());
-            let (x, y) = (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)));
+            let (x, y) = (q3::to_real(i64::from(base[0])), q3::to_real(i64::from(base[1])));
             let ([lng0, lat0], [lng1, lat1]) = (lng_lat(x, y), lng_lat(x + side, y + side));
             let [r, g, b] = day.mean([lng0, lng1], [lat0, lat1]).map(to_srgb);
             let at = index as usize * 4;

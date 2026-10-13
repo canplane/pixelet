@@ -7,7 +7,7 @@
 
 use pxl_spec::space::camera::grid::SPLIT;
 use pxl_spec::space::coord::mat4::{mat4, mat4_mul, mat4_rotation_quat, mat4_rotation_z, mat4_transform_point, mat4_transpose, Mat4};
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{add3, sub3, V3};
 
 use crate::control::camera::orbit::orbit;
@@ -106,7 +106,7 @@ pub fn focus_world() -> Option<V3> {
     Some(std::array::from_fn(|k| e[k] + d[k] * r))
 }
 
-pub fn focus() -> Option<Pvf3> {
+pub fn focus() -> Option<Q3> {
     let at = focus_world()?;
     let c = world_to_canonical(&at);
     Some(c)
@@ -121,7 +121,7 @@ pub enum Motion {
 }
 
 /// A tracker's pose ignores it; no base under it moves in its place.
-pub fn put_center(target: Pvf3, motion: Motion) {
+pub fn put_center(target: Q3, motion: Motion) {
     let snap = motion == Motion::Snap;
     match active() {
         Active::Tracked => return,
@@ -134,7 +134,7 @@ pub fn put_center(target: Pvf3, motion: Motion) {
 
 /// Where the center is going: the place last put, which a smooth move eases
 /// toward, or where it stands.
-pub fn target_center() -> Option<Pvf3> {
+pub fn target_center() -> Option<Q3> {
     match active() {
         Active::Orbit => crate::control::camera::orbit::target_center(),
         Active::Free => crate::control::camera::free::target_center(),

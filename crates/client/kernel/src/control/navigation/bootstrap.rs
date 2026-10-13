@@ -3,8 +3,7 @@
 use pxl_spec::space::coord::adapter::epsg4326;
 
 use crate::param::FALLBACK_G4326;
-use pxl_spec::space::coord::pvf3::core::FRAC_W;
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{FRAC_W, Q3};
 
 use crate::control::camera::controller::focus;
 use crate::control::camera::controller::Motion;
@@ -14,20 +13,20 @@ use crate::control::navigation::support::unknown_z;
 use crate::control::sensor::reading::{device_location_store, DevicePoseStatus};
 use xpute_guest::global::Global;
 
-fn fallback_seed() -> Pvf3 {
+fn fallback_seed() -> Q3 {
     // A place, not a height: it stands on the surface.
     unknown_z(&epsg4326::project(&FALLBACK_G4326))
 }
 
 /// Within a cell: the focus comes back through the camera's floats, not
 /// to the bit.
-fn is_at(a: &Pvf3, b: &Pvf3) -> bool {
+fn is_at(a: &Q3, b: &Q3) -> bool {
     let cell = 1i64 << FRAC_W;
-    (pvf3::X(a) - pvf3::X(b)).abs() < cell && (pvf3::Y(a) - pvf3::Y(b)).abs() < cell
+    (i64::from(a[0]) - i64::from(b[0])).abs() < cell && (i64::from(a[1]) - i64::from(b[1])).abs() < cell
 }
 
 struct Bootstrap {
-    last: Option<(Option<Pvf3>, DevicePoseStatus)>,
+    last: Option<(Option<Q3>, DevicePoseStatus)>,
 }
 
 static BOOTSTRAP: Global<Bootstrap> = Global::new();

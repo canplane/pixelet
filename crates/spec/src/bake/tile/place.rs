@@ -15,7 +15,7 @@ use crate::asset::symbol::SYMBOLS;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
 use crate::bake::tile::{occupancy_of, Occupancy};
 use crate::block::object::MARK_STEPS;
-use crate::space::coord::pvf3::pvf3::Pvf3;
+use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{Lattice, GROUND};
 use crate::space::layer::tile::{Cell, Tile, LEAF_ZOOM};
@@ -192,7 +192,7 @@ impl PlaceTile {
     /// A leaf from the places standing in it: those of a category Carto draws,
     /// placed at every zoom from the coarsest through Carto's last, a cell
     /// an icon wide keeping its first; names cut to `NAME_CHARS`.
-    pub fn leaf<'a>(tile: Tile, places: impl IntoIterator<Item = (Pvf3, Place<'a>)>) -> PlaceTile {
+    pub fn leaf<'a>(tile: Tile, places: impl IntoIterator<Item = (Q3, Place<'a>)>) -> PlaceTile {
         let names: Vec<(Cell, Zoom, String, Place<'a>)> = places
             .into_iter()
             .filter_map(|(point, place)| Some((GROUND.cell_of(LEAF_ZOOM, &point), shown(place.category)?, cut_name(place.name), place)))

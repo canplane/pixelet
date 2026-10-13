@@ -36,7 +36,7 @@ pub const DECK_THICKNESS_M: f64 = 2.0;
 /// `STACKED_DECK_HEADROOM`.
 pub const STACKED_DECK_HEADROOM_M: f64 = 6.0;
 
-/// A deck's slab in the Z lane's units, at least one.
+/// A deck's slab in units of height, at least one.
 pub fn slab_depth(u_per_m: f64) -> i32 {
     (round(DECK_THICKNESS_M * u_per_m) as i32).max(1)
 }
@@ -158,7 +158,7 @@ pub enum Occupies {
 }
 
 impl Crossing {
-    /// `u_per_m`: the Z lane's units a ground metre on the column's tile.
+    /// `u_per_m`: units of height a ground metre on the column's tile.
     pub fn occupies(&self, ground: i32, u_per_m: f64) -> Occupies {
         // all the surface sweeps across the column, so a slab or a bore steps down to the
         // next column's without a gap however steep it runs

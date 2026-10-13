@@ -17,7 +17,8 @@
 
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{Tau, CHUNK_STEPS};
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{index_of, Zoom};
 use xpute_guest::global::Global;
 
@@ -48,7 +49,7 @@ impl Domain {
         // The block each ray stopped on, in the chunk whose cells it is.
         self.seen.clear();
         for stop in s.stops() {
-            let at = pvf3::gather(pvf3::from_real(stop.at[0]), pvf3::from_real(stop.at[1]), pvf3::from_real(stop.at[2]));
+            let at = world::at(q3::from_real(stop.at[0]), q3::from_real(stop.at[1]), q3::from_real(stop.at[2]));
             let c = holding(stop.zoom - CHUNK_STEPS, &at);
             self.seen.push((c, index_of(c.cell_zoom(), &at)));
         }
@@ -90,7 +91,7 @@ impl Domain {
 }
 
 /// The chunk at `zoom` holding `at`, by its one name round the world.
-fn holding(zoom: Zoom, at: &Pvf3) -> Chunk {
+fn holding(zoom: Zoom, at: &Q3) -> Chunk {
     Chunk::holding(zoom, at).named()
 }
 

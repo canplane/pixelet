@@ -5,7 +5,7 @@
 //! drawn eye eases to it, so a step comes as every other move does.
 
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 
 use crate::approach::{approach_angle, approach_scalar, approach_vec};
@@ -35,9 +35,9 @@ pub fn look_point(eye: V3, forward: V3, fallback: f64) -> V3 {
 }
 
 /// Canonical, so it holds still as the eye goes round the world. None until first put.
-static TO: Global<Option<Pvf3>> = Global::new();
+static TO: Global<Option<Q3>> = Global::new();
 
-fn to() -> &'static mut Option<Pvf3> {
+fn to() -> &'static mut Option<Q3> {
     TO.get(|| None)
 }
 
@@ -46,11 +46,11 @@ const EYE_EPS: f64 = 0.001;
 const LOOK_EPS: f64 = 0.0001;
 
 /// First person, the eye's target is the focus.
-pub(crate) fn target_center() -> Option<Pvf3> {
+pub(crate) fn target_center() -> Option<Q3> {
     to().or_else(focus)
 }
 
-pub(crate) fn put(at: Pvf3, snap: bool) {
+pub(crate) fn put(at: Q3, snap: bool) {
     *to() = Some(at);
     if snap {
         set_eye_world(&target(to(), eye_world().unwrap_or_default()));

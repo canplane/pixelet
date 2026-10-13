@@ -13,13 +13,24 @@ use crate::bake::tile::terrain::GroundId;
 use crate::bake::way::half_cells;
 use crate::block::cube::Ground;
 use crate::space::coord::adapter::epsg3857::u_per_m;
-use crate::space::coord::pvf3::ivec::gather;
 use crate::space::coord::zoom::Zoom;
+use crate::space::hierarchy::tree::Node;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
 /// Changing it reshuffles everything scattered.
-pub const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
+const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
+
+/// A node's seed for one use: `tag` names the use, and the node's zoom and
+/// each of its indices are folded in, in order. Every procedural draw seeds
+/// by it, each use under a tag of its own, so no two uses draw one stream.
+pub fn node_seed<const D: usize>(tag: u64, (zoom, at): Node<D>) -> u64 {
+    let seed = derive_seed_u64(MASTER_SEED, tag);
+    at.iter().fold(derive_seed_u64(seed, u64::from(zoom)), |h, &v| derive_seed_u64(h, v as u64))
+}
+
+/// The caves' tag (`node_seed`).
+const CAVES: u64 = 0xca7e_0001;
 
 // ---- scatter: a Poisson process on the leaf cell lattice ----
 
@@ -37,7 +48,6 @@ pub struct Candidate {
 /// of candidates born there, each at a uniform leaf cell, and a candidate born
 /// at m stands at every zoom from m finer. A cell at any zoom then holds `density`.
 fn each_candidate(tag: u64, density: f64, zoom: Zoom, [min, max]: [[i64; 2]; 2], mut each: impl FnMut(Candidate)) {
-    let kind = derive_seed_u64(MASTER_SEED, tag);
     for born in (GROUND.top()..=zoom).rev() {
         let side = BLOCK * i64::from(GROUND.finest_in(born));
         let share = if born == GROUND.top() { 1.0 } else { 1.0 - KEPT };
@@ -45,7 +55,7 @@ fn each_candidate(tag: u64, density: f64, zoom: Zoom, [min, max]: [[i64; 2]; 2],
         let blocks = |k: usize| min[k].div_euclid(side)..=(max[k] - 1).div_euclid(side);
         for by in blocks(1) {
             for bx in blocks(0) {
-                let block = derive_seed_u64(derive_seed_u64(kind, gather(bx, by, 0)), u64::from(born));
+                let block = node_seed(tag, (born, [bx, by]));
                 let mut draws = SplitMix64::new(block);
                 let mut unit = || u32_to_unit(draws.next_u32());
                 for i in 0..poisson(mean, unit()) {
@@ -243,8 +253,7 @@ const CAVE_TURN: f64 = 1.0 / 4.0;
 /// its value all through, so the caves are a sparse tree whose nodes are the
 /// cubes that draw, every cube at the root's zoom among them.
 fn draws(z: Zoom, c: [i64; 3]) -> (Option<u64>, u8) {
-    let seed = derive_seed_u64(MASTER_SEED, 0xca7e_0001);
-    let h = [u64::from(z), c[0] as u64, c[1] as u64, c[2] as u64].into_iter().fold(seed, derive_seed_u64);
+    let h = node_seed(CAVES, (z, c));
     ((u32_to_unit(h as u32) < CAVE_TURN).then_some((h >> 32) & 7), (h >> 40) as u8)
 }
 

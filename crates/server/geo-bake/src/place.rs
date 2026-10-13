@@ -8,7 +8,7 @@ use pxl_geo_spec::overture::properties::CATEGORY_SQL;
 use pxl_spec::bake::tile::place::{self, category_of, Place, PlaceTile};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::index_of;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
@@ -47,7 +47,7 @@ pub fn leaves(client: &mut Client, coverage: &Coverage, within: Tile) -> Result<
     let rows = client
         .query(&format!("{select} WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)"), &[&x0, &y0, &x1, &y1])
         .map_err(|e| e.to_string())?;
-    let mut places: BTreeMap<Tile, Vec<(Pvf3, String, u16, String)>> = BTreeMap::new();
+    let mut places: BTreeMap<Tile, Vec<(Q3, String, u16, String)>> = BTreeMap::new();
     for row in rows {
         let at = epsg3857::project(row.get(0), row.get(1), 0.0);
         let [x, y, _] = index_of(LEAF_ZOOM, &at);

@@ -7,7 +7,7 @@
 
 use pxl_spec::bake::tile::division::{self, Division, DivisionTile, DIVISION_LEAF};
 use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::space::coord::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{index_of, Zoom};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -41,7 +41,7 @@ impl Base for DivisionTile {
 }
 
 /// The finest tile of the focus's line, which demand asks for with the line.
-pub fn line(focus: Option<Pvf3>) -> Option<Tile> {
+pub fn line(focus: Option<Q3>) -> Option<Tile> {
     focus.map(|at| {
         let [x, y, _] = index_of(LEAF_ZOOM, &at);
         Tile::over(DivisionTile::LEAF, [x, y])
@@ -51,7 +51,7 @@ pub fn line(focus: Option<Pvf3>) -> Option<Tile> {
 /// The divisions of the cell `at` is in, broad to narrow, from the deepest
 /// tile held over it: the held parent names the point while the tile under
 /// it is on its way.
-pub fn named(at: &Pvf3, mut each: impl FnMut(&Division)) {
+pub fn named(at: &Q3, mut each: impl FnMut(&Division)) {
     let held = DivisionTile::residency();
     let Some(from) = line(Some(*at)).and_then(|p| held.drawn_from(p)) else { return };
     if let Some(tile) = held.get(from) {

@@ -12,7 +12,7 @@ use pxl_spec::block::decor::Decor;
 use pxl_spec::block::object::Cube;
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::lattice::GROUND;
 
 pub use crate::abi::cmd::ActiveTool;
@@ -52,12 +52,12 @@ impl Default for Holding {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Hover {
-    pub coord: Option<Pvf3>,
+    pub coord: Option<Q3>,
     pub object_at: Option<EntryAt>,
     /// A decor the ground grew, which has no entry.
     pub scattered: Option<Instance>,
     /// Where the focus sent there starts from.
-    pub approach: Option<Pvf3>,
+    pub approach: Option<Q3>,
 }
 
 struct Interaction {
@@ -195,7 +195,7 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64, drawn: Tau) {
 }
 
 /// Whether the cube of `size` cornered at `corner` may hold an edit.
-fn editable(corner: &Pvf3, size: f64) -> bool {
+fn editable(corner: &Q3, size: f64) -> bool {
     let zoom = of_side(size);
     World::now().editable(&cube(zoom, index_of(zoom, corner)))
 }

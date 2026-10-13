@@ -33,7 +33,7 @@ use pxl_spec::space::coord::globe::Globe;
 use crate::profiler::frame::ZOOMS;
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{dot3, len3, V3};
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::sched::edge::Notify;
@@ -391,7 +391,7 @@ impl Scheduler {
         out.extend(self.slots.iter().map(|s| (s.chunk, s.role == Role::Drawn, s.in_frustum)));
     }
 
-    fn drawn_slot(&self, p: &Pvf3) -> Option<&Slot> {
+    fn drawn_slot(&self, p: &Q3) -> Option<&Slot> {
         self.slots
             .iter()
             .filter(|s| s.role == Role::Drawn && s.chunk.named() == Chunk::holding(s.chunk.zoom(), p))
@@ -399,7 +399,7 @@ impl Scheduler {
     }
 
     /// The cells the finest drawn chunk holding `p` is drawn in.
-    pub fn cells_at(&self, p: &Pvf3) -> Option<Zoom> {
+    pub fn cells_at(&self, p: &Q3) -> Option<Zoom> {
         let s = self.drawn_slot(p)?;
         s.layout.map(|_| s.chunk.cell_zoom())
     }

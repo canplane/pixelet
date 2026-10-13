@@ -7,7 +7,7 @@
 use crate::layer::instance::{Instance, Source};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -40,7 +40,7 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// cell the hit point falls in. `precise_box` overrides the hit's box (a
 /// decor met in front of it).
 #[allow(clippy::needless_range_loop)]
-pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb>) -> Pvf3 {
+pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb>) -> Q3 {
     let Aabb { min: box_min, max: box_max } = precise_box.copied().unwrap_or(hit.cube);
     let mut out: V3 = [0.0; 3];
 
@@ -61,7 +61,7 @@ pub fn world_adjacent_corner(hit: &Hit, new_size: f64, precise_box: Option<&Aabb
 /// The `size` voxel `hit` struck, for the eraser's terrain dig: as
 /// world_adjacent_corner but staying inside the struck box on the normal axis.
 #[allow(clippy::needless_range_loop)]
-pub fn world_struck_corner(hit: &Hit, size: f64) -> Pvf3 {
+pub fn world_struck_corner(hit: &Hit, size: f64) -> Q3 {
     let mut out: V3 = [0.0; 3];
     for axis in 0..3 {
         let n = hit.normal[axis];

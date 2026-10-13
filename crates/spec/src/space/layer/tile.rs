@@ -7,9 +7,7 @@
 
 use super::lattice::{Lattice, GROUND};
 use crate::space::coord::aabb::Aabb;
-use crate::space::coord::pvf3::core::FRAC_W;
-use crate::space::coord::pvf3::pack;
-use crate::space::coord::pvf3::pvf3::{self, Pvf3};
+use crate::space::coord::q3::{self, FRAC_W, Q3};
 use crate::space::coord::world::{self, around, wrap_index};
 use crate::space::coord::zoom::{base_of, shamt, units, Zoom};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
@@ -92,7 +90,7 @@ impl Tile {
     pub fn rect(self) -> (f64, f64, f64) {
         let (zoom, [x, y]) = self.node();
         let base = base_of(zoom, [x, y, 0]);
-        (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), units(zoom))
+        (q3::to_real(i64::from(base[0])), q3::to_real(i64::from(base[1])), units(zoom))
     }
 
     /// The tile as a box of the world: its square, every height.
@@ -194,14 +192,14 @@ impl Cell {
         offset_in(self.at, self.shamt()).map(|v| v as u32)
     }
 
-    pub fn base(self) -> Pvf3 {
+    pub fn base(self) -> Q3 {
         base_of(self.zoom, [self.at[0], self.at[1], 0])
     }
 
-    pub fn mid(self) -> Pvf3 {
+    pub fn mid(self) -> Q3 {
         let base = self.base();
         let half = 1i64 << (FRAC_W as i32 + shamt(self.zoom()) - 1);
-        pvf3::gather(pvf3::X(&base) + half, pvf3::Y(&base) + half, 0)
+        world::at(i64::from(base[0]) + half, i64::from(base[1]) + half, 0)
     }
 
     pub fn side(self) -> f64 {
@@ -240,9 +238,8 @@ impl Cell {
 
     /// The point every layer stands a thing at: the XY center, half a side above
     /// `ground`, since a zoom's cells are as tall as they are wide.
-    pub fn center(self, ground: f64) -> Pvf3 {
-        let flat = self.mid();
-        let at = pack::unpack(flat.i, flat.f);
+    pub fn center(self, ground: f64) -> Q3 {
+        let at = q3::unpack(&self.mid());
         world::point(at[0], at[1], ground + self.side() / 2.0)
     }
 }

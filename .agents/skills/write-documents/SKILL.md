@@ -63,7 +63,7 @@ Never introduce a term inside a parenthetical or an em-dash aside. An aside is
 the mark of something a reader may skip, and a definition is not skippable.
 
 Only a name this tree invented needs earning. `strobe`, `doorbell`, `ring`,
-`change`, `handle`, `band`, `run`, `XTP` and `PVF3` were made here, and nobody
+`change`, `handle`, `band`, `run` and `XTP` were made here, and nobody
 can look them up. `arena`, `deque`, `errno`, `buddy`, `slab`, `golden records`,
 `virtio` belong to the world, and a reader either knows one or can find it.
 Explaining those is padding. Paraphrasing one away is worse: `recorded output`
@@ -112,7 +112,7 @@ things that are not diagrams:
 - **A glossary with borders.** Boxes of label-and-description, one per term.
   Delete the box-drawing characters and nothing is lost, which means nothing
   was there.
-- **A type signature in a code fence.** `PVF3 = { i: IVec, f: FVec }` names
+- **A type signature in a code fence.** `Tile = { zoom: Zoom, at: [i64; 2] }` names
   three things and shows none of them.
 
 Draw a shape: a bit layout across two words, a flow from a provider's rows to

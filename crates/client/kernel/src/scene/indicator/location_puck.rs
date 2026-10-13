@@ -6,7 +6,7 @@
 use crate::laid;
 use pxl_render::frame::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use pxl_render::gpu::api::word_bytes;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{add3, center3, floor3, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::units;
@@ -65,7 +65,7 @@ struct Puck {
     samples: Vec<ZoneSample>,
     /// Holds across a GPS dropout: rebuilding the zone on a blip caused a
     /// stacked-cube glitch after tab-away-and-back.
-    last_known_device_coord: Option<Pvf3>,
+    last_known_device_coord: Option<Q3>,
     /// None until grounded, rather than drawing at a guessed height.
     last_known_center_z: Option<f64>,
     /// What is drawn: the zone's center and its instances, so grounding it
@@ -79,7 +79,7 @@ struct Puck {
 
 static PUCK: Global<Puck> = Global::new();
 
-pub fn location_puck_step(device_coord: Option<Pvf3>) {
+pub fn location_puck_step(device_coord: Option<Q3>) {
     let p = PUCK.get(|| Puck {
         samples: zone_samples(),
         last_known_device_coord: None,

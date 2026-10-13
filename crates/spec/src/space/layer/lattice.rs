@@ -6,7 +6,7 @@
 use super::tile::{tile_at, tile_rows, Cell, Tile, LEAF_ZOOM};
 use crate::bake::constant::EXTENT_CELL;
 use crate::space::camera::grid::{split_distance, Tau, CHUNK_CELLS, CHUNK_STEPS};
-use crate::space::coord::pvf3::Pvf3;
+use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{count, index_of, Zoom, FINEST_ZOOM, SHARD_ZOOM};
 use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, slot_of};
 
@@ -153,7 +153,7 @@ impl Lattice {
     }
 
     /// The cell at `z` a point stands in; a point, since a cell may be finer than a unit.
-    pub fn cell_of(self, zoom: Zoom, at: &Pvf3) -> Cell {
+    pub fn cell_of(self, zoom: Zoom, at: &Q3) -> Cell {
         let zoom = self.cell_zoom(zoom);
         let [x, y, _] = index_of(zoom, at);
         Cell { lattice: self, zoom, at: [x, y] }

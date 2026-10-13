@@ -18,7 +18,7 @@ use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::block::object::{cube_of, decor_id_from_num, object_value_is_decor, object_value_is_marker, Cube};
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_index};
 use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{child_cube, key_of, node_of};
@@ -60,7 +60,7 @@ impl Entry {
         units(self.zoom)
     }
 
-    pub fn corner(&self) -> Pvf3 {
+    pub fn corner(&self) -> Q3 {
         base_of(self.zoom, self.at)
     }
 
@@ -173,7 +173,7 @@ pub struct Write {
 impl Write {
     /// `id` at the cube of `size` holding `coord`. Size is a power of two by
     /// construction; the nearest zoom only guards against float noise.
-    pub fn at(coord: &Pvf3, size: f64, id: u32) -> Write {
+    pub fn at(coord: &Q3, size: f64, id: u32) -> Write {
         let zoom = of_side(size);
         Write {
             key: key(zoom, index_of(zoom, coord)),

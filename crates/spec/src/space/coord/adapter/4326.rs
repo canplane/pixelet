@@ -5,7 +5,7 @@
 // Uppercase as the notation these macro-like helpers are written in.
 #![allow(non_snake_case)]
 
-use crate::space::coord::pvf3::{FVec, IVec, Pvf3};
+use crate::space::coord::q3::Q3;
 use crate::space::coord::world::REACH;
 use crate::space::coord::world::ROUND;
 use crate::space::coord::zoom::Zoom;
@@ -76,13 +76,13 @@ pub fn from_mercator(src: &G3857) -> G4326 {
     [X_TO_LNG(src[0]), Y_TO_LAT(src[1]), src[2]]
 }
 
-pub fn project(src: &G4326) -> Pvf3 {
+pub fn project(src: &G4326) -> Q3 {
     let [x, y, z] = to_mercator(src);
     epsg3857::project(x, y, z)
 }
 
-pub fn unproject(i: IVec, f: FVec) -> G4326 {
-    from_mercator(&epsg3857::unproject(i, f))
+pub fn unproject(q: &Q3) -> G4326 {
+    from_mercator(&epsg3857::unproject(q))
 }
 
 /// Great-circle ground distance in metres (haversine), ignoring altitude.

@@ -7,7 +7,7 @@
 
 pub mod terrain_gate;
 
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 
 use pxl_spec::space::coord::v3::{add3, V3};
 use xpute_kit::math::scalar::clamp;
@@ -28,7 +28,7 @@ use xpute_guest::global::Global;
 pub struct OrbitState {
     pub dist: f64,
     /// None until first put.
-    to: Option<Pvf3>,
+    to: Option<Q3>,
     pinch_from: Anchor,
 }
 
@@ -119,11 +119,11 @@ pub fn zoom_to(dist: f64) -> f64 {
     .dist
 }
 
-pub(crate) fn target_center() -> Option<Pvf3> {
+pub(crate) fn target_center() -> Option<Q3> {
     orbit().to.or_else(focus)
 }
 
-pub(crate) fn put(at: Pvf3, snap: bool) {
+pub(crate) fn put(at: Q3, snap: bool) {
     orbit().to = Some(at);
     if snap {
         let (o, cam) = (orbit(), camera());

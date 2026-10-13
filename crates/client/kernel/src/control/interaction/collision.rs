@@ -3,7 +3,8 @@
 use pxl_spec::block::decor::Decor;
 use pxl_spec::block::DecorId;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{cube, index_of, of_side, units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 
@@ -22,14 +23,14 @@ pub enum PlacementTool {
 }
 
 /// The room a placement at `corner` takes, in units.
-fn room(tool: PlacementTool, corner: &Pvf3, object_size: f64) -> Aabb {
+fn room(tool: PlacementTool, corner: &Q3, object_size: f64) -> Aabb {
     let cell = |zoom: Zoom| cube(zoom, index_of(zoom, corner));
     match tool {
         PlacementTool::Object => cell(of_side(object_size)),
         PlacementTool::Marker => cell(of_side(MARKER_SIZE)),
         PlacementTool::Decor(id) => {
             let decor = Decor::of(id);
-            let (variant, turn) = user_decor_pick(corner.i, decor.variant_count());
+            let (variant, turn) = user_decor_pick(corner, decor.variant_count());
             let (at, m) = decor.stand(cell(decor.cell_zoom()).min, variant, turn, 1.0);
             decor.claim(at, &m)
         }
@@ -40,7 +41,7 @@ fn room(tool: PlacementTool, corner: &Pvf3, object_size: f64) -> Aabb {
 /// is where the world takes an edit (`World::editable`), and nothing placed,
 /// nor a placed decor's box, shares it. A decor or a marker is stood on
 /// nowhere, so neither is placed on one, grown or placed.
-pub fn is_placement_blocked(tool: PlacementTool, corner: &Pvf3, object_size: f64) -> bool {
+pub fn is_placement_blocked(tool: PlacementTool, corner: &Q3, object_size: f64) -> bool {
     let (world, room) = (World::now(), room(tool, corner, object_size));
     let taken = !world.editable(&room) || world.placed_sharing(&room, |_| true).is_some() || world.placed_claim(&room).is_some();
     let under = Aabb {
@@ -53,9 +54,9 @@ pub fn is_placement_blocked(tool: PlacementTool, corner: &Pvf3, object_size: f64
 
 /// The center of the cell a hover anchor (a min corner) points at: where a
 /// tap recenters, which is where the ghost box is drawn.
-pub fn anchor_center(anchor: &Pvf3) -> Pvf3 {
-    let half = pvf3::from_real(units(GROUND.cell()) / 2.0);
-    pvf3::gather(pvf3::X(anchor) + half, pvf3::Y(anchor) + half, pvf3::Z(anchor) + half)
+pub fn anchor_center(anchor: &Q3) -> Q3 {
+    let half = q3::from_real(units(GROUND.cell()) / 2.0);
+    world::at(i64::from(anchor[0]) + half, i64::from(anchor[1]) + half, i64::from(anchor[2]) + half)
 }
 
 /// In the world's doubles, the space the pick works in.

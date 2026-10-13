@@ -23,7 +23,7 @@ use crate::sched::tick::TickContext;
 use crate::setting::store::settings_store;
 use crate::view::frame::coord::{to_world, world_to_canonical};
 use pxl_spec::space::camera::grid::Tau;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
@@ -280,7 +280,7 @@ pub struct CompanionProps {
     pub following: bool,
     /// The eye, which decides whether it walks or the world is a map, and the
     /// τ the world is drawn at: what it is drawn standing on.
-    pub eye: Pvf3,
+    pub eye: Q3,
     pub tau: Tau,
 }
 

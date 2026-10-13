@@ -13,7 +13,8 @@ use pxl_spec::block::ext::MARKER_TEXT_CHARS;
 use pxl_spec::block::object::{cube_id, decor_num_id, Cube};
 use pxl_spec::block::object::{object_value_is_marker, MARKER};
 use pxl_spec::block::{cube, DecorId};
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -28,13 +29,13 @@ use pxl_spec::block::decor::Decor;
 
 /// Whether air is written where `at` is: a carve of the ground, or what was
 /// placed there taken back.
-fn carved(at: &Pvf3) -> bool {
+fn carved(at: &Q3) -> bool {
     matches!(World::now().block_of(at).value(), Some(Some(pxl_spec::block::Block::Placed(AIR))))
 }
 
 /// The never-written AIR entry the eraser's preview injects into the drawn
 /// build where it hovers bare terrain: the cube of `size` holding `at`.
-pub fn carve_entry(at: &Pvf3, size: f64) -> EntryAt {
+pub fn carve_entry(at: &Q3, size: f64) -> EntryAt {
     let zoom = of_side(size);
     EntryAt::new(zoom, index_of(zoom, at))
 }
@@ -42,7 +43,7 @@ pub fn carve_entry(at: &Pvf3, size: f64) -> EntryAt {
 // ---- Mutations ----
 
 /// A write of VOID collapses its path back, so a redundant record never sits in a save.
-fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
+fn write_object_value(coord: &Q3, size: f64, val: u32) {
     submit(Write::at(coord, size, val));
 }
 
@@ -61,7 +62,7 @@ fn submit(write: Write) {
 /// an AIR leaf, and the ground there without it is that look, its stratum's
 /// at that depth (without the carve, every cube stacked on matching ground
 /// was dropped).
-fn place_value_is_redundant(at: &Pvf3, size: f64, cube: Cube) -> bool {
+fn place_value_is_redundant(at: &Q3, size: f64, cube: Cube) -> bool {
     if size < units(GROUND.cell()) || !carved(at) {
         return false;
     }
@@ -74,26 +75,26 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: Cube) -> bool {
 }
 
 /// The middle of the cube `at` names.
-fn middle(at: EntryAt) -> Pvf3 {
-    let (base, half) = (base_of(at.zoom(), at.at()), pvf3::from_real(units(at.zoom()) / 2.0));
-    pvf3::gather(pvf3::X(&base) + half, pvf3::Y(&base) + half, pvf3::Z(&base) + half)
+fn middle(at: EntryAt) -> Q3 {
+    let (base, half) = (base_of(at.zoom(), at.at()), q3::from_real(units(at.zoom()) / 2.0));
+    world::at(i64::from(base[0]) + half, i64::from(base[1]) + half, i64::from(base[2]) + half)
 }
 
 /// A redundant re-paint of a carve writes VOID, as remove() does.
-pub fn place(at: &Pvf3, size: f64, cube: Cube) {
+pub fn place(at: &Q3, size: f64, cube: Cube) {
     let val = if place_value_is_redundant(at, size, cube) { VOID } else { cube_id(cube) };
     write_object_value(at, size, val);
 }
 
 /// Placing the decor a scatter stands in a cell an erase emptied writes
 /// VOID, so the scattered instance returns as it was.
-pub fn place_decor(at: &Pvf3, size: f64, decor_id: DecorId) {
+pub fn place_decor(at: &Q3, size: f64, decor_id: DecorId) {
     let value = if restores_scattered(at, size, decor_id).is_some() { VOID } else { decor_num_id(decor_id) };
     write_object_value(at, size, value);
 }
 
 /// The decor the ground grows that `place_decor` would bring back, for its preview.
-pub fn restores_scattered(at: &Pvf3, size: f64, decor_id: DecorId) -> Option<Instance> {
+pub fn restores_scattered(at: &Q3, size: f64, decor_id: DecorId) -> Option<Instance> {
     (size >= units(GROUND.cell()) && carved(at)).then(|| World::now().grown(Decor::of(decor_id), at))?
 }
 
@@ -107,7 +108,7 @@ pub fn wait_at(at: EntryAt) {
 }
 
 /// A marker tool's tap on the free cell whose min corner is `corner`.
-pub fn wait_to_put(corner: &Pvf3) {
+pub fn wait_to_put(corner: &Q3) {
     let zoom = of_side(MARKER_SIZE);
     wait_at(EntryAt::new(zoom, index_of(zoom, corner)));
 }
@@ -154,7 +155,7 @@ pub fn put_marker() {
 
 /// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
 /// baked terrain, which has no leaf of its own to delete.
-pub fn place_air(at: &Pvf3, size: f64) {
+pub fn place_air(at: &Q3, size: f64) {
     write_object_value(at, size, cube::object::air as u32);
 }
 

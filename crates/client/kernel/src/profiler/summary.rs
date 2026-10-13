@@ -23,7 +23,7 @@ use crate::sched::tick::tick_step_stats;
 use crate::{kernel, with_parts};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg4326;
-use pxl_spec::space::coord::pvf3::pack;
+use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
@@ -262,9 +262,9 @@ fn side(out: &mut [f64]) {
             Some((crate::view::frame::coord::world_to_canonical(&hit.point), tau.cell_at(hit.t)))
         });
     let (hover, cell_want) = (met.map(|m| m.0), met.map(|m| m.1));
-    let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| pack::unpack(p.i, p.f));
-    let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
-    let [center_lon, center_lat, center_z] = controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(p.i, p.f));
+    let [hover_x, hover_y, hover_z] = hover.map_or([f64::NAN; 3], |p| q3::unpack(&p));
+    let [hover_lon, hover_lat, hover_alt] = hover.map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
+    let [center_lon, center_lat, center_z] = controller::focus().map_or([f64::NAN; 3], |p| epsg4326::unproject(&p));
     let cell_drawn = hover.and_then(|p| with_parts(|_, sched, _| sched.cells_at(&p)).flatten());
     let zoom = |z: Option<Zoom>| z.map_or(f64::NAN, f64::from);
     put(

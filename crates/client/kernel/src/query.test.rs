@@ -13,7 +13,7 @@ use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use super::*;
 use crate::layer::Answer;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -71,7 +71,7 @@ fn resident(held: &[(Tile, TerrainTile)]) -> Residency<TerrainTile> {
     residency
 }
 
-fn point(x: f64, y: f64) -> Pvf3 {
+fn point(x: f64, y: f64) -> Q3 {
     world::point(x, y, 0.0)
 }
 
@@ -149,7 +149,7 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
 }
 
 /// A ray in the frame that runs on round the world meets, past the
-/// antimeridian, the ground and the objects stored under the lane's copy.
+/// antimeridian, the ground and the objects stored under the world's name for them.
 #[test]
 fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let _g = serial();
@@ -253,23 +253,23 @@ fn a_walker_climbs_what_blocks_it_under_open_sky_and_slides_under_a_ceiling() {
         write(&mut store, [x + 1.0, y, z], OBJECT_COARSEST, red);
     }
     let from = world::point(x + 0.5, y + 0.5, over(5.0));
-    let floor = |p: Pvf3| pvf3::to_real(pvf3::Z(&p)) - units(GROUND.cell()) / 2.0;
+    let floor = |p: Q3| q3::to_real(i64::from(p[2])) - units(GROUND.cell()) / 2.0;
     let east = world::point(x + 1.5, y + 0.5, 0.0);
     {
         let access = World::new(&residency, &store);
         let to = access.step_slide(&from, &east, &from, true).unwrap();
-        assert_eq!((pvf3::to_real(pvf3::X(&to)), floor(to)), (x + 1.5, 8.0), "climbed onto the wall");
+        assert_eq!((q3::to_real(i64::from(to[0])), floor(to)), (x + 1.5, 8.0), "climbed onto the wall");
     }
     // A roof over the walker two cells up: the climb meets it first.
     write(&mut store, [x, y, 7.0], OBJECT_COARSEST, red);
     let access = World::new(&residency, &store);
     let to = access.step_slide(&from, &east, &from, true).unwrap();
-    assert!(pvf3::to_real(pvf3::X(&to)) < x + 1.0, "stopped at the wall");
+    assert!(q3::to_real(i64::from(to[0])) < x + 1.0, "stopped at the wall");
     assert_eq!(floor(to), 5.0);
     // Going north-east, the east is slid along and the north is walked.
     let to = access.step_slide(&from, &world::point(x + 1.5, y + 1.5, 0.0), &from, true).unwrap();
-    assert!(pvf3::to_real(pvf3::X(&to)) < x + 1.0, "slid along the wall");
-    assert_eq!((pvf3::to_real(pvf3::Y(&to)), floor(to)), (y + 1.5, 5.0));
+    assert!(q3::to_real(i64::from(to[0])) < x + 1.0, "slid along the wall");
+    assert_eq!((q3::to_real(i64::from(to[1])), floor(to)), (y + 1.5, 5.0));
 }
 
 /// A height picks the floor nearest it: the ground under a deck, or the deck,

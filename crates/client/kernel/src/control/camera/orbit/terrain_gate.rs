@@ -3,8 +3,9 @@
 //! How far the orbit gets toward what the controls ask before terrain is in
 //! the way. The controls keep what was asked; the drawn orbit stops short.
 
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::{add3, V3};
+use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_kit::math::scalar::wrap;
 
@@ -56,12 +57,12 @@ fn climb_rise(at: &ViewPose) -> Option<f64> {
     let (_, eye) = eye(at);
     let center = world_to_canonical(&at.target);
     let floor = index_of(GROUND.cell(), &eye)[2] as f64 * units(GROUND.cell());
-    let from = pvf3::gather(pvf3::X(&center), pvf3::Y(&center), pvf3::from_real(over(floor)));
+    let from = world::at(i64::from(center[0]), i64::from(center[1]), q3::from_real(over(floor)));
     let access = World::now();
     // Near, the eye's way walks the leaves; far, it is a map and goes through.
     // Where the leaf under the center, or a map's under the eye, is not held, the ground under the eye.
     let walked = access.step_slide(&from, &eye, &eye, false).unwrap_or(eye);
-    if pvf3::X(&walked) != pvf3::X(&eye) || pvf3::Y(&walked) != pvf3::Y(&eye) {
+    if i64::from(walked[0]) != i64::from(eye[0]) || i64::from(walked[1]) != i64::from(eye[1]) {
         return None;
     }
     let ground = access.floor_under(&walked, LEAF_ZOOM).value().flatten()?;
@@ -74,7 +75,7 @@ fn penetration(at: &ViewPose) -> Option<f64> {
 }
 
 /// The eye, local and canonical.
-fn eye(at: &ViewPose) -> (V3, Pvf3) {
+fn eye(at: &ViewPose) -> (V3, Q3) {
     let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
     let world: V3 = add3(&at.target, &offset);
     (world, world_to_canonical(&world))

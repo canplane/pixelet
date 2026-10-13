@@ -6,7 +6,7 @@
 //! altitude picks the floor nearest it; with none, the surface. A place
 //! named with its own height is put as it is (`go_to`).
 
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
@@ -14,21 +14,21 @@ use crate::control::camera::controller::{put_center, Motion};
 use crate::control::navigation::support::{exact, is_unknown, nearest, unknown_z};
 use xpute_guest::global::Global;
 
-static DESTINATION: Global<Option<(Pvf3, Motion)>> = Global::new();
+static DESTINATION: Global<Option<(Q3, Motion)>> = Global::new();
 
-fn destination() -> &'static mut Option<(Pvf3, Motion)> {
+fn destination() -> &'static mut Option<(Q3, Motion)> {
     DESTINATION.get(|| None)
 }
 
 /// A later destination or a `go_to` replaces it. `at`'s Z, where known, is
 /// the height whose nearest floor it stands on; unknown, the surface.
-pub fn go_to_ground(at: Pvf3, motion: Motion) {
+pub fn go_to_ground(at: Q3, motion: Motion) {
     *destination() = Some((at, motion));
     crate::sched::edge::request_world_tick();
 }
 
 /// A pending destination is dropped: this was asked last.
-pub fn go_to(at: Pvf3, motion: Motion) {
+pub fn go_to(at: Q3, motion: Motion) {
     cancel();
     put_center(at, motion);
 }
@@ -54,13 +54,13 @@ pub fn destination_step() {
 
 /// A badge's height is its zoom's, coarser than where the center stands, so
 /// the center goes on the surface once it is known exactly.
-pub(crate) fn go_on_ground(target: Pvf3, motion: Motion) {
+pub(crate) fn go_on_ground(target: Q3, motion: Motion) {
     crate::control::navigation::follow_mode::set_following(false);
     go_to_ground(unknown_z(&target), motion);
 }
 
 /// A place, as the location button goes to one: a view far out comes in.
-pub fn go_to_place(target: Pvf3) {
+pub fn go_to_place(target: Q3) {
     go_on_ground(target, Motion::Smooth);
     crate::control::camera::controller::come_in_to_default();
 }

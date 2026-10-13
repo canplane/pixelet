@@ -4,7 +4,7 @@
 //! as a marker is, standing over the speaker's head rather than on a cell
 //! (`chunk/place.rs` lays both out).
 
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
@@ -27,7 +27,7 @@ struct Chat {
     line: Option<Line>,
     /// Where the speaker stands, and the point over its head a line hangs
     /// from, as the scene hands them down this turn.
-    speaker: Option<(Pvf3, Pvf3)>,
+    speaker: Option<(Q3, Q3)>,
 }
 
 static CHAT: Global<Chat> = Global::new();
@@ -56,10 +56,10 @@ pub fn line_said(said: u64) -> Option<String> {
 }
 
 /// None while there is no one to speak.
-pub fn speak_from(speaker: Option<(Pvf3, Pvf3)>) {
+pub fn speak_from(speaker: Option<(Q3, Q3)>) {
     chat().speaker = speaker;
 }
 
-pub fn speaker() -> Option<(Pvf3, Pvf3)> {
+pub fn speaker() -> Option<(Q3, Q3)> {
     chat().speaker
 }

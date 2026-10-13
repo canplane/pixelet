@@ -17,10 +17,9 @@ pub mod table;
 
 use pxl_spec::space::camera::grid::CHUNK_STEPS;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::pvf3::ivec::IVec;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::wrap_cell;
-use pxl_spec::space::coord::zoom::{base_of, index_of, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{index_of, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::{child_of, parent_of};
 
 pub const CHILDREN: usize = 8;
@@ -33,7 +32,7 @@ pub struct Chunk {
 
 impl Chunk {
     /// The chunk at `zoom` holding `at`.
-    pub fn holding(zoom: Zoom, at: &Pvf3) -> Chunk {
+    pub fn holding(zoom: Zoom, at: &Q3) -> Chunk {
         Chunk { zoom, at: index_of(zoom, at) }
     }
 
@@ -42,7 +41,7 @@ impl Chunk {
     }
 
     /// As the bounds of a range in chunk order.
-    pub fn column_holding(zoom: Zoom, at: &Pvf3) -> std::ops::RangeInclusive<Chunk> {
+    pub fn column_holding(zoom: Zoom, at: &Q3) -> std::ops::RangeInclusive<Chunk> {
         let [x, y, _] = index_of(zoom, at);
         Chunk { zoom, at: [x, y, i64::MIN] }..=Chunk { zoom, at: [x, y, i64::MAX] }
     }
@@ -64,18 +63,12 @@ impl Chunk {
         self.zoom + CHUNK_STEPS
     }
 
-    /// The lane's copy, as `holding` makes it: one name for every round of the world.
+    /// The world's name for it, as `holding` makes it: one name for every round of the world.
     pub fn named(self) -> Chunk {
         Chunk {
             zoom: self.zoom,
             at: wrap_cell(self.zoom, self.at),
         }
-    }
-
-    /// The corner at no height, as the 2D stores key it; where it stands is `rect`'s.
-    pub fn corner(self) -> IVec {
-        let [x, y, _] = self.at;
-        base_of(self.zoom, [x, y, 0]).i
     }
 
     /// From the index, which runs on round the world as the view's frame does.

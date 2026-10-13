@@ -1,14 +1,13 @@
 // pxl-spec/bake/constant.rs
 
-use crate::space::coord::pvf3::core::IVEC_Z_W;
-use crate::space::coord::world::wrap_cell;
+use crate::space::coord::world::{wrap_cell, EXTENT};
 use crate::space::coord::zoom::{shamt, Zoom, UNIT_ZOOM};
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::tile::LEAF_ZOOM;
 
 // Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL
 // resample and the client's bicubic, and stored as i16 ground cells.
-const _: () = assert!(IVEC_Z_W == i16::BITS && GROUND.cell() == UNIT_ZOOM, "a height in i16 ground cells is the Z lane");
+const _: () = assert!(EXTENT[2] == i16::BITS && GROUND.cell() == UNIT_ZOOM, "a height in i16 ground cells is the world's height");
 /// Inner elevation samples across one leaf tile: a tile is about twice its
 /// side in units in meters wide and the source is about 30 m, rounded to 32 m.
 pub const TILE_ELE_SPAN: u32 = 1 << (shamt(LEAF_ZOOM) + 1 - 5);

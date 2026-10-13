@@ -52,7 +52,7 @@ const _: () = assert!(FIRST_GROUP + VARIANTS.len() <= GROUPS, "a draw group each
 const CELL_SHAMT: u32 = 12;
 const CELL: f64 = (1u32 << CELL_SHAMT) as f64;
 /// The cells around the world, so a cell's hash wraps with the map.
-const CELLS_AROUND: i64 = 1 << (pxl_spec::space::coord::pvf3::core::IVEC_X_W - CELL_SHAMT);
+const CELLS_AROUND: i64 = 1 << (pxl_spec::space::coord::world::EXTENT[0] - CELL_SHAMT);
 /// A block is built and drawn as one, this many cells a side.
 const BLOCK_CELLS: u32 = 16;
 const BLOCK: f64 = CELL * BLOCK_CELLS as f64;

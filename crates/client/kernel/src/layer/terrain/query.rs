@@ -9,7 +9,7 @@ use pxl_spec::block::cube::Ground;
 use pxl_spec::block::limit::bedrock;
 use pxl_spec::block::sample::{TileSource, TileView};
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::coord::pvf3::pvf3;
+use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
@@ -149,7 +149,7 @@ fn relief(d: &Drawn, (zoom, at): Node<2>) -> [i16; 2] {
 /// A node's center, in units.
 fn center_of((zoom, at): Node<2>) -> [f64; 2] {
     let base = base_of(zoom, [at[0], at[1], 0]);
-    [pvf3::X(&base), pvf3::Y(&base)].map(|v| pvf3::to_real(v) + units(zoom) / 2.0)
+    [i64::from(base[0]), i64::from(base[1])].map(|v| q3::to_real(v) + units(zoom) / 2.0)
 }
 
 /// Whether a node is past the service area. It never straddles the area's

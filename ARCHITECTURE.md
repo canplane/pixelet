@@ -29,7 +29,7 @@ The parts follow that order. **The model** is what it carries: what a size and a
 
 ## Every size is a zoom
 
-The X lane of a position is one world of 2^24 units, so a thing the world over 2^z wide is at zoom z — z is 24 less the log of its side in units, a bigger zoom is finer, and one zoom finer is half as wide (`pxl-spec space/coord/zoom.rs`). Sizes had been said three ways, a zoom for a tile, a scale for a cell and a fixed tier for the rest, and the conversions between them were where facts went double; one number for all of them leaves nothing to convert ([every size is a zoom](./decision/20261006-every-size-is-a-zoom.md)).
+X goes once round the world in 2^24 units, so a thing the world over 2^z wide is at zoom z — z is 24 less the log of its side in units, a bigger zoom is finer, and one zoom finer is half as wide (`pxl-spec space/coord/zoom.rs`). Sizes had been said three ways, a zoom for a tile, a scale for a cell and a fixed tier for the rest, and the conversions between them were where facts went double; one number for all of them leaves nothing to convert ([every size is a zoom](./decision/20261006-every-size-is-a-zoom.md)).
 
 | Zoom | Side   | What it sizes                                            |
 | ---- | ------ | -------------------------------------------------------- |
@@ -38,26 +38,15 @@ The X lane of a position is one world of 2^24 units, so a thing the world over 2
 | z15  | `512u` | a leaf tile: the finest terrain is fetched and stored at |
 | z5   |        | the coarsest tile, where the pyramid stops for now       |
 
-The words for what is sized build on one another. A **cell** is the granule at a zoom, named and possibly empty: a **pixel** is a cell carrying a 2D sample, a **voxel** a cell carrying a material. A **tile** is what is fetched and stored as one: a layer's tile holds a count of its cells a side that is the layer's own and the same at every zoom (`pxl-spec space/layer/lattice.rs` `Lattice`), so a tile's zoom is its cells' less a constant — terrain's tile is 512 cells, its z24 cells making z15 tiles. The tiles of every zoom make one tree, the **pyramid**: a tile at z covers the 2 × 2 under it at z + 1, and its name, a 2D Morton key a digit a zoom (`space/hierarchy/morton.rs`), is a prefix of theirs. A **chunk** is what is built and drawn as one, the view's unit, and the view defines it. A **block** is a thing placed, never a size. A lattice address goes to its cell at any zoom and back by the same two operations (`zoom.rs` `idx`, `from_idx`). A tile's zoom is a web map's tile zoom, and a z24 cell a web map's z16 pixel, which only the 3857 adapter says (`web_zoom_of`).
+The words for what is sized build on one another. A **cell** is the granule at a zoom, named and possibly empty: a **pixel** is a cell carrying a 2D sample, a **voxel** a cell carrying a material. A **tile** is what is fetched and stored as one: a layer's tile holds a count of its cells a side that is the layer's own and the same at every zoom (`pxl-spec space/layer/lattice.rs` `Lattice`), so a tile's zoom is its cells' less a constant — terrain's tile is 512 cells, its z24 cells making z15 tiles. The tiles of every zoom make one tree, the **pyramid**: a tile at z covers the 2 × 2 under it at z + 1, and its name, a 2D Morton key a digit a zoom (`space/hierarchy/morton.rs`), is a prefix of theirs. A **chunk** is what is built and drawn as one, the view's unit, and the view defines it. A **block** is a thing placed, never a size. A position goes to its cell at any zoom and back by the same two operations (`zoom.rs` `index_of`, `base_of`). A tile's zoom is a web map's tile zoom, and a z24 cell a web map's z16 pixel, which only the 3857 adapter says (`web_zoom_of`).
 
-## A position — PVF3
+## A position
 
-A position is **PVF3**, a Packed 3-Vector with Fixed-point arithmetic: 96 bits of fixed point, in two words, which unit cell and where inside it. A point and a displacement share the form, but only a displacement adds to a point.
+A position is a **`Q3`**, three `i32`, one an axis, each counting 256ths of a unit: which unit cell and where inside it (`pxl-spec space/coord/q3.rs`). An axis holds as many index bits as the world is wide on it, 24 across, 24 up the map and 16 in height (`space/coord/world.rs` `EXTENT`), over 8 bits of fraction, so X and Y fill their `i32` and Z takes 24 bits of its own. All of it is integer, so a coordinate is the same bits on every machine, and the shell reads coordinates through the kernel rather than decoding them itself.
 
-```text
-IVec, one 64-bit word                 FVec, one 32-bit word
-┌───────────┬───────────┬────────┐    ┌──────┬──────┬──────┬──────┐
-│     X     │     Y     │   Z    │    │      │  X   │  Y   │  Z   │
-│  24 bits  │  24 bits  │   16   │    │unused│  8   │  8   │  8   │
-│   63..40  │   39..16  │  15..0 │    │31..24│23..16│ 15..8│  7..0│
-└───────────┴───────────┴────────┘    └──────┴──────┴──────┴──────┘
-signed; X is cyclic, so the world     unsigned residues:
-wraps at the longitude seam           1/256 of a unit on each axis
-```
+X fills its `i32` exactly and goes once round the world in it, so X wraps as the type does, and the short way between two positions takes X's difference wrapping (`world::between`). Y and Z do not go round: a position enters the world only through `world::at`, which holds them at its ends. A displacement is never a position by itself.
 
-Each field is a **lane** of its word. The arithmetic is integer — a lane is computed as `i64` and packed back — so a coordinate is the same bits on every machine. There is one implementation of the packing, and it stays one because the shell reads coordinates through the kernel rather than decoding them itself.
-
-The Web Mercator adapter (EPSG:3857) gives the unit its meaning: `1u` is a z24 cell's side, about 2.389 Mercator meters at the equator. Distortion and the tile-constant vertical scale live in the adapter. PVF3 is a plane: it follows 3857 and leaves the poles out (`space/coord/adapter/4326.rs` `CLAMP_LAT`), and the pyramid never leaves it. The planet around it is a sphere, a second domain and not a copy of this one; what is drawn there is Drawing's.
+The Web Mercator adapter (EPSG:3857) gives the unit its meaning: `1u` is a z24 cell's side, about 2.389 Mercator meters at the equator. Distortion and the tile-constant vertical scale live in the adapter. A position is on a plane: it follows 3857 and leaves the poles out (`space/coord/adapter/4326.rs` `CLAMP_LAT`), and the pyramid never leaves it. The planet around it is a sphere, a second domain and not a copy of this one; what is drawn there is Drawing's.
 
 ## The layers
 
@@ -356,7 +345,7 @@ Two choices outlive a frame. Depth is reversed float, near at 1, so precision fa
 
 ## Past the pyramid: the sky and the sphere
 
-The pyramid ends where PVF3 does: it is planar, follows 3857, and leaves the poles out. The planet is larger than that plane, and something has to be drawn past every tile — the sky, the sun and moon, and the ground beyond what the terrain reaches. What decides whether a thing of that kind is a layer is not where it is but whether there is anything to hold.
+The pyramid ends where a position does: it is planar, follows 3857, and leaves the poles out. The planet is larger than that plane, and something has to be drawn past every tile — the sky, the sun and moon, and the ground beyond what the terrain reaches. What decides whether a thing of that kind is a layer is not where it is but whether there is anything to hold.
 
 - **Stored data** has extent and is held at resolutions, so it is a layer of the pyramid, refined by the eye's rule like any other. The Earth's picture is one.
 - **An evaluated model** is computed per pixel from a few parameters, and has nothing to hold at a resolution: the sun, the moon and the stars by the wall clock and the anchor, the scattering by its tables, the clouds by their field. None of them needs a pyramid.
@@ -450,7 +439,7 @@ What the tree took from work done before it, or found it had arrived at: each li
 | Google Earth and the web map's tile pyramid                                                                                                   | the pyramid (`pxl-spec space/`)                                                                               | Structure, storage, tiling and invalidation across zooms                                                                                 |
 | Cesium 3D Tiles, `skipLevelOfDetail` and `preloadAncestors`                                                                                   | `pxl-kernel io/demand.rs`                                                                                     | A tile tree whose nodes arrive out of order; a held ancestor shown at once                                                               |
 | Morton order                                                                                                                                  | tile and shard names (`pxl-spec space/hierarchy/morton.rs`)                                                   | One base-4 digit a zoom, coarsest first                                                                                                  |
-| Web Mercator (EPSG:3857), WGS 84                                                                                                              | `pxl-spec space/coord/`                                                                                       | The plane PVF3 follows; the sphere's radius                                                                                              |
+| Web Mercator (EPSG:3857), WGS 84                                                                                                              | `pxl-spec space/coord/`                                                                                       | The plane a position follows; the sphere's radius                                                                                        |
 | Mapbox's globe                                                                                                                                | `pxl-spec space/coord/globe.rs`                                                                               | Mercator laid on the sphere in the center's frame                                                                                        |
 | Cozzi and Ring's horizon cull                                                                                                                 | `pxl-kernel chunk/table.rs`                                                                                   | A point is over the horizon while E·P ≥ r²                                                                                               |
 | Earth Engine's `MODE` pyramiding                                                                                                              | `pxl-spec bake/fold.rs`                                                                                       | A 2 × 2 majority fold of the zoom under it                                                                                               |

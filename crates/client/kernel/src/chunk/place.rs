@@ -39,8 +39,7 @@ use xpute_kit::status::errno::Errno;
 use fnv::FnvHashSet;
 use pxl_spec::bake::tile::place::{stands, PlaceTile, PLACE_FIRST, PLACE_LATTICE, SPACING_CELLS};
 use pxl_spec::space::camera::grid::px_per_unit;
-use pxl_spec::space::coord::pvf3::pack;
-use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
+use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world::{point, REACH};
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
@@ -54,7 +53,7 @@ struct Placement {
     set: Option<u32>,
     drawn: Vec<u32>,
     /// Nearest the eye first: screen box, label, and where it stands.
-    hits: Vec<([f64; 4], Label, Pvf3)>,
+    hits: Vec<([f64; 4], Label, Q3)>,
     /// Kept so a settled turn asks the heap for nothing; a chunk's markers
     /// in a run a cell.
     found: Vec<Shown>,
@@ -66,9 +65,9 @@ struct Placement {
     /// Places, ground or objects moved since `found` was read.
     moved: bool,
     mounted: Vec<(Chunk, bool, bool)>,
-    labeled: Vec<(Label, Pvf3)>,
+    labeled: Vec<(Label, Q3)>,
     /// Last turn's `labeled`, its buffer reused.
-    spare: Vec<(Label, Pvf3)>,
+    spare: Vec<(Label, Q3)>,
     /// Markers and lines not ready yet, kept to become so.
     pending: Vec<Label>,
     instances: Vec<f32>,
@@ -80,7 +79,7 @@ static PLACEMENT: Global<Placement> = Global::new();
 #[derive(Clone, Copy)]
 struct Shown {
     label: Label,
-    stands: Pvf3,
+    stands: Q3,
     cell_zoom: Zoom,
     crowd: Option<Crowd>,
 }
@@ -96,7 +95,7 @@ impl Shown {
 #[derive(Clone, Copy)]
 struct Crowd {
     cell: (Zoom, [i64; 3]),
-    count_at: Option<Pvf3>,
+    count_at: Option<Q3>,
 }
 
 /// What `found` was read from: the drawn chunks, and whether places were on.
@@ -150,7 +149,7 @@ fn markers(chunk: Chunk, found: &mut Vec<Shown>) {
 
 /// Where the count of a cell's markers stands: at its middle, half a marker
 /// at `marker` over what is drawn there first within it, or over its floor.
-fn crowd_at(zoom: Zoom, at: [i64; 3], marker: Zoom, detail: Zoom) -> Pvf3 {
+fn crowd_at(zoom: Zoom, at: [i64; 3], marker: Zoom, detail: Zoom) -> Q3 {
     let c = cube(zoom, at);
     let [x, y, _] = c.center();
     let top = surface(&point(x, y, c.min[2]), (c.max[2], c.min[2]), detail).unwrap_or(c.min[2]);
@@ -160,7 +159,7 @@ fn crowd_at(zoom: Zoom, at: [i64; 3], marker: Zoom, detail: Zoom) -> Pvf3 {
 /// A marker at its own cell's center, half a cell over the floor it stands
 /// on, where the dot under its pill is drawn, and its base; its words by
 /// their hash, so words changed under one entry are another badge.
-fn marker_at(at: EntryAt, words: &str) -> (Label, Pvf3, V3) {
+fn marker_at(at: EntryAt, words: &str) -> (Label, Q3, V3) {
     let c = cube(at.zoom(), at.at());
     let [x, y, z] = c.center();
     let mut h = fnv::FnvHasher::default();
@@ -171,8 +170,8 @@ fn marker_at(at: EntryAt, words: &str) -> (Label, Pvf3, V3) {
 
 /// The height a ray down over `at` from `high` first meets what is drawn,
 /// above `low`; none where nothing there is known.
-fn surface(at: &Pvf3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
-    let xy = pack::unpack(at.i, at.f);
+fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
+    let xy = q3::unpack(at);
     let ray = Ray {
         origin: [xy[0], xy[1], high],
         direction: [0.0, 0.0, -1.0],
@@ -335,8 +334,8 @@ pub fn step(ctx: &mut TickContext) {
 /// Where a tap on a billboard goes: to its place; a marker someone put up is
 /// its entry's, which the tool held decides what to do with.
 pub enum Went {
-    To(Pvf3),
-    Marker(EntryAt, Pvf3),
+    To(Q3),
+    Marker(EntryAt, Q3),
 }
 
 /// `ndc` in [−1, 1], y up. The badge that took the tap, if any.

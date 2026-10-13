@@ -65,7 +65,7 @@ pub struct Pyramid {
 }
 
 impl Pyramid {
-    /// What the node at `zoom`, `at` holds, X in the lane's copy, with
+    /// What the node at `zoom`, `at` holds, X as the world names it, with
     /// nothing over it known: its own record, or a leaf over it, found up its
     /// line. A descent asks this once, at its root.
     pub fn held(&self, zoom: Zoom, at: [i64; 3]) -> Held {
@@ -168,8 +168,8 @@ impl Pyramid {
         }
         // Over the shard's cubes, up to the world's roots: each node the fold
         // of what is under it, none where nothing is. A node's X is named as
-        // the lane names it at its own zoom (`wrap_cell`), so the root at zoom
-        // 0 is the whole round, both halves of the lane's copy under it.
+        // the world names it at its own zoom (`wrap_cell`), so the root at zoom
+        // 0 is the whole round, both halves of it under it.
         for z in (0..CUBE_ZOOM).rev() {
             let c = wrap_cell(z, at.map(|v| v >> (zoom - z)));
             let kids: [Option<Record>; 8] = core::array::from_fn(|k| self.records.get(&(z + 1, wrap_cell(z + 1, child_cube(z, c, k)))).copied());

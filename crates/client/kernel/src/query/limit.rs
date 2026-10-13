@@ -16,14 +16,14 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use super::World;
 use crate::io::source;
-use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::coord::q3::{self, Q3};
 
 impl World<'_> {
     /// Whether the leaf cell under `at` is the service area's and off its
     /// edge (`pxl-spec block/limit.rs` `at_edge`), where the wall stands:
     /// known before any of its ground arrives.
-    pub fn within(&self, at: &Pvf3) -> bool {
-        let [x, y] = [pvf3::X(at), pvf3::Y(at)].map(pvf3::to_real);
+    pub fn within(&self, at: &Q3) -> bool {
+        let [x, y] = [i64::from(at[0]), i64::from(at[1])].map(q3::to_real);
         let leaf = units(GROUND.cell());
         !at_edge(|dx, dy| source::past_at([x + dx as f64 * leaf, y + dy as f64 * leaf]))
     }

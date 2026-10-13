@@ -1,16 +1,17 @@
 // pxl-kernel/view/frame/coord.test.rs
 
 use super::*;
-use pxl_spec::space::coord::pvf3::ivec;
-use pxl_spec::space::coord::pvf3::pvf3;
+use pxl_spec::space::coord::q3;
+use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::ROUND;
+use pxl_spec::space::coord::zoom::{index_of, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix64;
 
 /// Taken back by its cell, a point the floats leave a hair under itself
 /// would fall a 256th of a unit each trip; on whichever lap it is read.
 #[test]
 fn a_canonical_point_comes_back_through_floats() {
-    let one = pxl_spec::space::coord::pvf3::core::ONE as i64;
+    let one = q3::ONE;
     let mut rng = SplitMix64::new(0x9e37_79b9_7f4a_7c15);
     let mut next = |span: i64| (u64::from(rng.next_u32()) % (2 * span as u64 + 1)) as i64 - span;
     let nears = [0.0, 249_856.0, -3.0 * ROUND, 2.5 * ROUND, -(1 << 23) as f64];
@@ -27,7 +28,7 @@ fn a_canonical_point_comes_back_through_floats() {
             let (u, f) = (unit(next(1 << 21)), fraction(next(1 << 21)));
             u * one + f
         });
-        let p = pvf3::gather(comps[0], comps[1], comps[2]);
+        let p = world::at(comps[0], comps[1], comps[2]);
         for near in nears {
             let w = canonical_to_world(&p, near);
             assert!((w[0] - near).abs() <= ROUND / 2.0, "{n}: {comps:?} unwrapped off {near}");
@@ -43,5 +44,5 @@ fn x_is_continuous_across_the_seam() {
     let west = world::point(-ROUND / 2.0 + 1.0, 0.0, 0.0);
     let eye = ROUND / 2.0;
     assert_eq!(canonical_to_world(&west, eye)[0] - canonical_to_world(&east, eye)[0], 2.0);
-    assert_eq!(ivec::X(world_to_canonical(&[eye + 1.0, 0.0, 0.0]).i), ivec::X(west.i));
+    assert_eq!(index_of(UNIT_ZOOM, &world_to_canonical(&[eye + 1.0, 0.0, 0.0]))[0], index_of(UNIT_ZOOM, &west)[0]);
 }

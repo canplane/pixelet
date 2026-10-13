@@ -3,19 +3,19 @@
 //! A node's one key at any zoom: its index's digits in two's complement, as
 //! the signed indices are, interleaved a zoom at a time from the coarsest in
 //! `slot_of`'s order, left-aligned, then a 1 that marks where they end. An
-//! axis has a digit from the zoom its lane reaches: X and Y from z1, Z, 16
-//! bits under X's 24, from z9, so a 3D key is the 2D one to z8 and an axis's
+//! axis has a digit from the zoom its extent reaches (`world.rs` `EXTENT`): X
+//! and Y from z1, Z, 16 bits under X's 24, from z9, so a 3D key is the 2D one to z8 and an axis's
 //! first digit is its sign. A coarser key's digits prefix a finer one's over
 //! the same ground, in any number of axes.
 
 use super::tree::Node;
-use crate::space::coord::pvf3::core::{IVEC_X_W, IVEC_Y_W, IVEC_Z_W};
+use crate::space::coord::world::EXTENT;
 use crate::space::coord::zoom::{Zoom, UNIT_ZOOM};
 use core::fmt;
 
-const LANES: [u32; 3] = [IVEC_X_W, IVEC_Y_W, IVEC_Z_W];
+const LANES: [u32; 3] = EXTENT;
 
-/// The digits axis `axis` has at `zoom`: one a zoom from where its lane reaches.
+/// The digits axis `axis` has at `zoom`: one a zoom from where its extent reaches.
 #[inline]
 const fn digits(axis: usize, zoom: Zoom) -> u32 {
     (zoom as u32).saturating_sub(UNIT_ZOOM as u32 - LANES[axis])
@@ -157,7 +157,7 @@ fn signed(v: i64, width: u32) -> i64 {
     }
 }
 
-const _: () = assert!(IVEC_X_W == UNIT_ZOOM as u32 && IVEC_Y_W == IVEC_X_W, "X and Y digit from z1");
+const _: () = assert!(EXTENT[0] == UNIT_ZOOM as u32 && EXTENT[1] == EXTENT[0], "X and Y digit from z1");
 
 #[cfg(test)]
 #[path = "morton.test.rs"]
