@@ -422,8 +422,6 @@ dependencies = [
 name = "gpu-query-runner"
 version = "0.0.0"
 dependencies = [
- "gpu-query-shader",
- "naga 30.0.1",
  "pollster",
  "pxl-spec",
  "wgpu",
@@ -433,7 +431,6 @@ dependencies = [
 name = "gpu-query-shader"
 version = "0.0.0"
 dependencies = [
- "pxl-spec",
  "spirv-std",
 ]
 

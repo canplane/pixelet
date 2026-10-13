@@ -7,10 +7,5 @@ publish = false
 [lib]
 crate-type = ["lib", "dylib"]
 
-[features]
-# Calls pxl-spec as it is: stops at `std` (wall-std.txt).
-spec = ["dep:pxl-spec"]
-
 [dependencies]
 spirv-std = "=0.10.0-alpha.1"
-pxl-spec = { path = "../../crates/spec", optional = true }

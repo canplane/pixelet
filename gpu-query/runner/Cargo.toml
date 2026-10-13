@@ -5,10 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-# The truth: pxl-spec itself, compiled for the CPU.
+# The same source, compiled for the CPU: pxl-spec itself.
 pxl-spec = { path = "../../crates/spec" }
 wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
 pollster = "1"
-naga = { version = "30", features = ["wgsl-in", "msl-out"] }
-# The same probe source, compiled for the CPU, to tell the GPU path from the probe.
-gpu-query-shader = { path = "../shader" }
