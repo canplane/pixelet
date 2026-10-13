@@ -11,6 +11,12 @@ fn zoom_at(r: f64) -> i32 {
     GROUND.tile_zoom_of_grid(cell_at(r))
 }
 
+/// The distance just short of `r` as the rule reads a distance: the f32
+/// before it (pxl-portable `cast::cell_at`).
+fn short_of(r: f64) -> f64 {
+    f64::from(f32::from_bits((r as f32).to_bits() - 1))
+}
+
 /// Feet on a tile's corners, edges and inside, either side of the origin.
 fn feet(zoom: Zoom) -> Vec<[f64; 2]> {
     let span = units(zoom);
@@ -57,7 +63,7 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
 fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {
     for zoom in GROUND.top()..=LEAF_ZOOM {
         let r = GROUND.demand_reach(zoom);
-        assert_eq!(zoom_at(r * (1.0 - 1e-12)), zoom as i32, "z{zoom} is asked for up to its radius");
+        assert_eq!(zoom_at(short_of(r)), zoom as i32, "z{zoom} is asked for up to its radius");
         assert_eq!(zoom_at(r), zoom as i32 - 1, "and not at it");
     }
 }
@@ -77,6 +83,6 @@ fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
     }
     for z in GROUND.top() as i32..=LEAF_ZOOM as i32 + 3 {
         assert_eq!(zoom_at(split_distance(GROUND.grid_zoom(z as Zoom))), z, "a zoom begins at its split distance");
-        assert_eq!(zoom_at(split_distance(GROUND.grid_zoom(z as Zoom - 1)) * (1.0 - 1e-12)), z, "and ends where the next coarser begins");
+        assert_eq!(zoom_at(short_of(split_distance(GROUND.grid_zoom(z as Zoom - 1)))), z, "and ends where the next coarser begins");
     }
 }

@@ -3,15 +3,16 @@
 //! The camera grid, the one resolution: a cell is an angle about the eye,
 //! its zoom the distance's, and a chunk a cube of its cells.
 
-use crate::space::coord::zoom::{units, Zoom, FINEST_ZOOM, UNIT_ZOOM};
+use crate::space::coord::zoom::{units, Zoom};
 
 /// The camera grid, the one knob of resolution: a cell is an angle of
 /// 1/`SPLIT` radians about the eye, and the block it is drawn with, whole,
 /// spans at least one cell from any direction, so a zoom's block is drawn
 /// from half `SPLIT` of its sides away out to `SPLIT` of them. Pixels are a screen's, derived from it
 /// (`target_cell_px`). One cell of the grid is one thing drawn; what lies
-/// inside it is its layer's to fold.
-pub const SPLIT: f64 = 96.0;
+/// inside it is its layer's to fold (pxl-portable, which a GPU's cast sizes
+/// its cells by too).
+pub const SPLIT: f64 = pxl_portable::cast::SPLIT as f64;
 
 /// The view `SPLIT` is stated at: 1080 px high and 50° across it.
 pub const REFERENCE_VIEWPORT_H: f64 = 1080.0;
@@ -40,9 +41,9 @@ pub const fn split_distance(cell_zoom: Zoom) -> f64 {
 /// the grid's cells there, `r / SPLIT`. A block drawn whole, all its faces, is
 /// at least its side wide from any direction, so the face a ray meets does
 /// not enter. Finer than the ground's near the eye, held to what a zoom can
-/// name.
+/// name: pxl-portable's, the one rule the CPU and a GPU's cast size by.
 pub fn cell_at(r: f64) -> Zoom {
-    (UNIT_ZOOM as f64 - libm::floor(libm::log2(r / split_distance(UNIT_ZOOM)))).clamp(0.0, FINEST_ZOOM as f64) as Zoom
+    pxl_portable::cast::cell_at(r as f32)
 }
 
 /// The criterion's one scale factor, at least 1: every zoom's split

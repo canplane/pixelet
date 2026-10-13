@@ -10,18 +10,19 @@
 //! crosses nothing that moved since it was cast answers what it answered,
 //! so only those that do are cast again: reuse that cannot change the result.
 
+use pxl_portable::cast;
 use pxl_spec::block::Block;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::{self, V3};
-use pxl_spec::space::coord::world::nearest_box;
+use pxl_spec::space::coord::world::{nearest_box, point};
 use pxl_spec::space::coord::zoom::{of_side, Zoom};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 
 use crate::param;
-use crate::query::{Detail, Ray, World};
+use crate::query::{asked, Detail, Ray, World};
 use crate::view::frame::pose::view;
 use crate::view::observation::observation;
 
@@ -87,13 +88,64 @@ impl Lens {
         core::array::from_fn(|k| 2.0 * libm::atan(self.tan[k]) / f64::from(across[k].max(1)))
     }
 
-    /// The direction through the middle of cell `[i, j]` of `across`.
-    fn through(&self, across: [u32; 2], [i, j]: [u32; 2]) -> V3 {
-        let step = self.step(across);
-        let at = |k: usize, n: u32| libm::tan(-libm::atan(self.tan[k]) + step[k] * (f64::from(n) + 0.5));
-        let (tx, ty) = (at(0, i), at(1, j));
-        unit(core::array::from_fn(|k| self.forward[k] + tx * self.right[k] + ty * self.up[k])).unwrap_or(self.forward)
+    /// The tangent of the middle of cell `n` of `across` on axis `k`, from the
+    /// optical axis: the one statement of it, which a GPU's cast reads too.
+    fn tangent(&self, across: [u32; 2], k: usize, n: u32) -> f32 {
+        libm::tan(-libm::atan(self.tan[k]) + self.step(across)[k] * (f64::from(n) + 0.5)) as f32
     }
+
+    /// The direction through the middle of cell `[i, j]` of `across`
+    /// (pxl-portable `cast::through`).
+    fn through(&self, across: [u32; 2], [i, j]: [u32; 2]) -> V3 {
+        let f32s = |v: V3| v.map(|c| c as f32);
+        cast::through(f32s(self.forward), f32s(self.right), f32s(self.up), self.tangent(across, 0, i), self.tangent(across, 1, j)).map(f64::from)
+    }
+}
+
+/// The camera grid's cells across and up the screen at `tau`; none without
+/// a screen.
+pub fn grid_across(o: &Observation, tau: Tau) -> Option<[u32; 2]> {
+    Lens::of(o).map(|l| l.across(tau))
+}
+
+/// What a GPU's cast of `across` cells reads (pxl-render
+/// frame/shader/cast.gen.wgsl `cast_cs`, group 0): `eye`, binding 0, as five
+/// vec4s — the eye's Q3 position; the unit forward and the reach; the unit
+/// right and τ; the unit up; the cells across and up and the zooms a block is
+/// asked at — and `tangents`, binding 6, each column's tangent then each
+/// row's, as the CPU's cast forms its directions. None without a screen.
+pub fn gpu_cast(o: &Observation, tau: Tau, across: [u32; 2], eye: &mut [u32; 20], tangents: &mut Vec<f32>) -> Option<()> {
+    let lens = Lens::of(o)?;
+    let q = point(o.eye[0], o.eye[1], o.eye[2]);
+    let w = |v: f64| (v as f32).to_bits();
+    let [f, r, u] = [lens.forward, lens.right, lens.up];
+    let [coarsest, finest] = asked();
+    *eye = [
+        q[0] as u32,
+        q[1] as u32,
+        q[2] as u32,
+        0,
+        w(f[0]),
+        w(f[1]),
+        w(f[2]),
+        w(o.far()),
+        w(r[0]),
+        w(r[1]),
+        w(r[2]),
+        w(tau.scale()),
+        w(u[0]),
+        w(u[1]),
+        w(u[2]),
+        0,
+        across[0],
+        across[1],
+        coarsest,
+        finest,
+    ];
+    tangents.clear();
+    tangents.extend((0..across[0]).map(|i| lens.tangent(across, 0, i)));
+    tangents.extend((0..across[1]).map(|j| lens.tangent(across, 1, j)));
+    Some(())
 }
 
 /// Where a cell's ray stopped: in the block it met, `t` from the eye, and

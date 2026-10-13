@@ -26,7 +26,7 @@ pub const SHARD_ZOOM: Zoom = UNIT_ZOOM - EXTENT[2] as Zoom;
 pub const CUBE_ZOOM: Zoom = SHARD_ZOOM + 1;
 
 /// The finest a point resolves: a fraction's step.
-pub const FINEST_ZOOM: Zoom = UNIT_ZOOM + FRAC_W as Zoom;
+pub use pxl_portable::cast::FINEST_ZOOM;
 
 /// log2 of `z`'s side in units: negative where finer than a unit.
 pub const fn shamt(zoom: Zoom) -> i32 {

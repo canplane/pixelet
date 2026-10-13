@@ -8,6 +8,7 @@
 
 #![no_std]
 
+pub mod cast;
 pub mod caves;
 #[path = "cube.spec.rs"]
 pub mod cube;
