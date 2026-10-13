@@ -74,6 +74,7 @@ const UP: usize = FRAME_AT[17];
 const CELL: usize = FRAME_AT[18];
 const GIZMO: usize = FRAME_AT[19];
 const SHADOW_RIM: usize = FRAME_AT[20];
+const GRID: usize = FRAME_AT[21];
 
 /// The ray, the celestial pole, and whether the Moon's face has arrived.
 pub(crate) const SKY_FLOATS: usize = 16;
@@ -913,6 +914,8 @@ impl Renderer {
         }
         u[EDGE_STRENGTH] = s[STAGE_AT::EDGE_STRENGTH] as f32;
         u[CELL] = s[STAGE_AT::LOD_CELL] as f32;
+        u[GRID] = s[STAGE_AT::CAMERA_GRID] as f32;
+        u[GRID + 1] = s[STAGE_AT::CAMERA_GRID + 1] as f32;
         u[ENV..ENV + 24].copy_from_slice(&env[0..24]);
         u[OTHER..OTHER + 8].copy_from_slice(&env[ENV_OTHER_LIGHT..ENV_OTHER_LIGHT + 8]);
         u[LOW_SPEC] = s[STAGE_AT::LOW_SPEC] as f32;

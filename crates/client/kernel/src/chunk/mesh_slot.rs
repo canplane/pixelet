@@ -6,32 +6,43 @@
 //!
 //! Two pools: chunks of a leaf's cells or finer (six-word textured boxes, a
 //! group of its own, since a group is one format) and coarser chunks
-//! (four-word boxes, shared groups). A tier with more boxes than a slot fills several, chained. A mesh is never cut to a
-//! slot, which left steep ground missing (2026-09-26), nor baked coarser to
-//! fit, which was a second quality policy.
+//! (four-word boxes, shared groups). A tier with more boxes than a slot
+//! fills several, chained. A mesh is never cut to a slot, which left steep
+//! ground missing (2026-09-26), nor baked coarser to fit.
+//!
+//! A pool is sized for two casts' worth of chunks: a cast makes a chunk
+//! only where a ray of the camera grid stops (`chunk/domain.rs`), and the
+//! grid has at most `GRID_CELLS_MAX` cells (`view/sight.rs` `tau`); each
+//! chunk takes a slot, and its boxes past that slot at most a slot more for
+//! each ray stopped in it, since a ray's block is at most one box.
+//! What is resident is not bounded by that: a drawn chunk waits for any
+//! current piece that holds it or is held by it (`chunk/table.rs`
+//! `materialize`), across casts.
 
 use pxl_render::mesh::chunk::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::param::{ARENA_COARSE_GROUPS, COARSE_POOL_BYTES, FINE_POOL_BYTES};
+use crate::param::{ARENA_COARSE_GROUPS, COARSE_POOL_BYTES, FINE_POOL_BYTES, GRID_CELLS_MAX};
 use pxl_spec::space::coord::zoom::Zoom;
 
 const COARSE_GROUPS: u32 = ARENA_COARSE_GROUPS;
 
-/// One box per column: ground is a heightfield, so a column is one run per chunk.
-pub const FINE_BOXES: u32 = CHUNK_CELLS * CHUNK_CELLS;
-/// A coarse chunk's cells at the boxes each draws.
-pub const COARSE_BOXES: u32 = ((CHUNK_CELLS * CHUNK_CELLS) as f64 * crate::param::COARSE_BOXES_PER_CELL) as u32;
+/// Chunks a pool is sized for: two casts' worth, each a chunk at most for
+/// every cell of the camera grid.
+const CHUNKS: u32 = 2 * GRID_CELLS_MAX as u32;
 
-/// Slots each pool's bytes hold.
-const FINE_SLOTS: u32 = FINE_POOL_BYTES / (FINE_BOXES * FINE_BOX_WORDS * 4);
-const GROUP_SLOTS: u32 = COARSE_POOL_BYTES / COARSE_GROUPS / (COARSE_BOXES * COARSE_BOX_WORDS * 4);
+/// Slots a pool holds: each chunk's first, and as many again for boxes past
+/// it.
+const FINE_SLOTS: u32 = 2 * CHUNKS;
+const GROUP_SLOTS: u32 = FINE_SLOTS.div_ceil(COARSE_GROUPS);
 
-/// Most slots a coarse-pool tier can fill: a chunk bakes to at most two boxes
-/// a cell (each cell plus the floor under it). A bound from the
-/// representation, which `RESERVE` keeps free for one coarsening.
-pub const COARSE_TIER_SLOTS: u32 = (2 * CHUNK_CELLS.pow(3)).div_ceil(COARSE_BOXES);
+/// A slot's boxes: its pool's bytes shared out among its slots.
+pub const FINE_BOXES: u32 = FINE_POOL_BYTES / (FINE_SLOTS * FINE_BOX_WORDS * 4);
+pub const COARSE_BOXES: u32 = COARSE_POOL_BYTES / COARSE_GROUPS / (GROUP_SLOTS * COARSE_BOX_WORDS * 4);
+
+// A ray's block is one cell of its chunk (`chunk/domain.rs`), at most one
+// box: a slot holds at least that.
+const _: () = assert!(FINE_BOXES >= 1 && COARSE_BOXES >= 1, "a slot holds less than a ray's block makes");
 
 pub const POOLS: usize = 2;
 

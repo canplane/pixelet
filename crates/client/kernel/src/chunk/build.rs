@@ -4,18 +4,15 @@
 //! decision about a chunk is the table's (table.rs); this acts on what it asks.
 
 mod bake;
-mod run;
 mod shape;
 
 pub use bake::BAKE_BYTES;
 pub use shape::draws_as_held;
 
 use bake::BakeJob;
-use run::{RunHold, RunsJob, RUN_SETS};
 
-use crate::query::{Blocks, Composer};
 use pxl_render::mesh::chunk::{BakeContext, Heights};
-use pxl_render::mesh::run::RunWriter;
+use pxl_spec::block::sample::Blocks;
 
 use crate::Build;
 
@@ -111,20 +108,17 @@ impl<T> core::ops::Index<&u32> for ByMount<T> {
 
 #[derive(Clone, Copy, Default)]
 pub struct BuildStat {
-    pub runs: u32,
     pub bakes: u32,
     pub starved: u32,
 }
 
 pub struct Builder {
     chunks: ByMount<Chunk>,
-    direct: RunWriter,
     bake: BakeContext,
+    /// The one open bake, and what it reads: its chunk's blocks, composed
+    /// when it begins and held until it ends.
     bake_job: Option<BakeJob>,
-    composer: Composer,
     blocks: Blocks,
-    run_holds: [Option<RunHold>; RUN_SETS],
-    runs_job: Option<RunsJob>,
     pub stat: BuildStat,
 }
 
@@ -132,13 +126,9 @@ impl Default for Builder {
     fn default() -> Builder {
         Builder {
             chunks: ByMount::new(),
-            direct: RunWriter::new(),
             bake: BakeContext::default(),
             bake_job: None,
-            composer: Composer::default(),
             blocks: Blocks::default(),
-            run_holds: [const { None }; RUN_SETS],
-            runs_job: None,
             stat: BuildStat::default(),
         }
     }
@@ -149,12 +139,8 @@ impl Builder {
         self.chunks.get(&id).map(|c| c.generation)
     }
 
-    pub fn holders(&self) -> [Option<u32>; 2] {
-        [self.bake_job.as_ref().map(|j| j.id), self.runs_job.as_ref().map(|j| j.id)]
-    }
-
-    pub fn bake_context(&self) -> &BakeContext {
-        &self.bake
+    pub fn holder(&self) -> Option<u32> {
+        self.bake_job.as_ref().map(|j| j.id)
     }
 
     pub fn add(&mut self, id: u32, at: PyramidChunk) {
@@ -171,12 +157,11 @@ impl Builder {
 
     pub fn remove(&mut self, id: u32) {
         self.abort_work_of(id);
-        self.leave_runs(id);
         self.chunks.remove(&id);
     }
 
     pub fn source(&mut self, id: u32) {
-        self.drop_work(id);
+        self.abort_work_of(id);
         if let Some(c) = self.chunks.get_mut(&id) {
             c.generation = c.generation.wrapping_add(1);
         }
@@ -191,24 +176,14 @@ impl Builder {
         let Some(c) = self.chunks.get_mut(&id) else { return };
         c.want = want;
         if !want {
-            if matches!(&self.bake_job, Some(j) if j.id == id) {
-                self.abort_bake();
-            }
-            self.end_runs_job(|j| j.id == id);
-            self.leave_runs(id);
+            self.abort_work_of(id);
         }
-    }
-
-    fn drop_work(&mut self, id: u32) {
-        self.abort_work_of(id);
-        self.leave_runs(id);
     }
 
     fn abort_work_of(&mut self, id: u32) {
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake();
         }
-        self.end_runs_job(|j| j.id == id);
     }
 
     /// Heap refused a block: give up every slot held, since each is another
@@ -216,7 +191,6 @@ impl Builder {
     fn refuse(&mut self, id: u32) {
         self.stat.starved += 1;
         self.abort_work_of(id);
-        self.leave_runs(id);
         let releases = crate::io::host::heap_stat().releases;
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
@@ -224,30 +198,21 @@ impl Builder {
     }
 
     fn unwant(&mut self, id: u32) {
-        let Some(c) = self.chunks.get_mut(&id) else { return };
-        c.want = false;
-        self.end_runs_job(|j| j.id == id);
-        self.leave_runs(id);
+        if let Some(c) = self.chunks.get_mut(&id) {
+            c.want = false;
+        }
     }
 
-    /// Advances chunks under the budget, slot holders first. At least one step
-    /// is taken. A heap refusal ends the tick: the heap will not change within
-    /// it, and a refusal is not free (direct runs are written before their
-    /// block is asked for).
+    /// Advances chunks under the budget, the bake's holder first. At least
+    /// one step is taken. A heap refusal ends the tick: the heap will not
+    /// change within it.
     pub fn tick(&mut self, build: &mut Build, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent) -> bool) -> bool {
         let t0 = now();
         let starved = self.stat.starved;
         let mut stepped = false;
         let mut worked = false;
-        let mut first = [None; 2 + RUN_SETS];
-        let users = self.run_holds.iter().flatten().map(|h| h.id);
-        for (n, id) in self.holders().into_iter().chain(users.map(Some)).enumerate() {
-            if !first[..n].contains(&id) {
-                first[n] = id;
-            }
-        }
-        let is_first = |id: u32| first.contains(&Some(id));
-        for id in first.iter().flatten().copied().chain(order.iter().copied().filter(|&id| !is_first(id))) {
+        let first = self.holder();
+        for id in first.into_iter().chain(order.iter().copied().filter(|&id| Some(id) != first)) {
             loop {
                 if stepped && now() - t0 >= budget_ms {
                     return worked;
@@ -276,12 +241,7 @@ impl Builder {
         if c.refused.is_some_and(|r| r == crate::io::host::heap_stat().releases) {
             return Progress::Blocked;
         }
-        if self.runs_of(id).is_none() {
-            return self.advance_runs(build, id);
-        }
-        // Another chunk of the column made the runs; this one bakes its cut too.
-        self.run_set_for(id);
-        self.advance_bake(id, emit)
+        self.advance_bake(build, id, emit)
     }
 }
 

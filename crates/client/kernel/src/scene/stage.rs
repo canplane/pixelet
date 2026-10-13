@@ -82,9 +82,11 @@ pub fn stage_write() {
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
     s[STAGE_AT::FOV] = v.fov;
-    // The camera grid's cell angle: the largest drawn cell per unit of
-    // distance, since a cell is drawn from its split distance on.
-    s[STAGE_AT::LOD_CELL] = crate::view::sight::cell_angle(crate::chunk::quality::effective().tau());
+    // The camera grid's cell angle: the footprint a drawn block covers per
+    // unit of distance, square on.
+    s[STAGE_AT::LOD_CELL] = crate::view::sight::cell_angle(crate::view::sight::effective());
+    let grid = crate::view::sight::current().map_or([0.0; 2], |s| s.step());
+    s[STAGE_AT::CAMERA_GRID..STAGE_AT::CAMERA_GRID + 2].copy_from_slice(&grid);
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
@@ -218,8 +220,8 @@ pub fn visible_step(ctx: &mut TickContext) {
     crate::chunk::source::chunk_sources_step();
     let draw = laid().is_some_and(|k| {
         let moving = k.sched.tick(frame, &now);
-        if let Some(d) = crate::chunk::domain::current() {
-            k.scene.coverage.step(&mut k.draw, settings_store().world_gizmo, d.pieces(), k.sched.drawn());
+        if let Some(g) = crate::chunk::domain::current() {
+            k.scene.coverage.step(&mut k.draw, settings_store().world_gizmo, g.pieces(), k.sched.drawn());
         }
         let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
         k.scene.begin(&mut k.draw, &k.models, frame.eye);

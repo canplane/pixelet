@@ -2,10 +2,7 @@
 
 //! What the table counts for the profiler: chunks by state, and what is held.
 
-use crate::mem::MB;
 use crate::profiler::frame::ZOOMS;
-
-use xpute_kit::math::scalar::round;
 
 use super::*;
 
@@ -18,8 +15,6 @@ pub struct ChunkCounts {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ChunkHeld {
-    pub run_sets: u32,
-    pub run_set_mb: u32,
     pub tiers: u32,
 }
 
@@ -91,12 +86,7 @@ impl Scheduler {
     }
 
     pub fn held(&self) -> ChunkHeld {
-        let (run_sets, run_bytes) = self.builder.run_sets();
-        let mut out = ChunkHeld {
-            run_sets,
-            run_set_mb: round(run_bytes as f64 / MB) as u32,
-            ..ChunkHeld::default()
-        };
+        let mut out = ChunkHeld::default();
         for s in &self.slots {
             out.tiers += s.tiers.len() as u32;
         }

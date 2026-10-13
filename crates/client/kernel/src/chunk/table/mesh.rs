@@ -1,6 +1,6 @@
 // pxl-kernel/chunk/table/mesh.rs
 
-//! The mesh slots' chains: a tier holds its slots at once, is written a part at a time, and lands whole or not at all.
+//! The mesh slots' chains: a tier holds slots of its own at once, is written a part at a time, and lands whole or not at all.
 
 use pxl_render::gpu::arena::{arena_epoch, arena_write};
 use pxl_render::mesh::chunk::box_bounds;
@@ -9,8 +9,8 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::mem::base::ptr_at;
 
+use super::pool_of;
 use crate::chunk::build::{BuildEvent, Builder};
-use crate::chunk::frontier::pool_of;
 use crate::chunk::mesh_slot::{capacity, group_box_words, slot_at, Pool, FINE_BOXES};
 use pxl_spec::space::coord::zoom::units;
 
@@ -75,12 +75,10 @@ pub(super) fn let_go(meshes: &mut Meshes, at: usize, id: u32) {
     }
 }
 
-/// Drops the tiers `keep` rejects, and their slots unless a kept or landing tier shares them.
-pub(super) fn prune(s: &mut Slot, meshes: &mut Meshes, keep: impl Fn(&Tier) -> bool, landing: Option<usize>) {
+/// Drops the tiers `keep` rejects, and their slots: no two tiers share one.
+pub(super) fn prune(s: &mut Slot, meshes: &mut Meshes, keep: impl Fn(&Tier) -> bool) {
     for t in s.tiers.iter().filter(|t| !keep(t)) {
-        if landing != Some(t.slot.index) && !s.tiers.iter().any(|k| keep(k) && k.slot.index == t.slot.index) {
-            let_go(meshes, t.slot.index, s.id);
-        }
+        let_go(meshes, t.slot.index, s.id);
     }
     s.tiers.retain(keep);
 }
@@ -99,10 +97,6 @@ impl<T: Copy> Held<T> {
 
     pub(super) fn iter(&self) -> impl Iterator<Item = &T> {
         self.items[..self.len].iter().flatten()
-    }
-
-    pub(super) fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.items[..self.len].iter_mut().flatten()
     }
 
     pub(super) fn len(&self) -> usize {
@@ -140,46 +134,30 @@ pub(super) struct Landing {
     pub(super) generation: u32,
     pub(super) first: usize,
     pub(super) slots: u32,
-    /// Slots of the tier it is rebuilt over, which it writes over.
-    pub(super) over: u32,
     pub(super) bounds: Option<Aabb>,
 }
 
 /// Holds every slot a tier of `boxes` fills at once, or records the need and
-/// refuses; a rebuild reuses the old tier's slots and claims only the extra.
+/// refuses. A rebuild takes slots of its own: the drawn tier's stay as they
+/// are drawn until the new one lands whole.
 pub(super) fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: BuildEvent) -> bool {
     let BuildEvent::Reserve { id, generation, boxes } = e else { return false };
     // One bake is open at a time: a leftover landing is from one that closed
     // without landing.
     if let Some(l) = meshes.landing.take() {
-        release(meshes, l);
+        let_go(meshes, l.first, l.id);
     }
     let Some(i) = place[id as usize].get() else { return false };
     let s = &slots[i];
-    let pool = pool_of(s.chunk);
     let k = boxes.div_ceil(capacity(s.chunk.cell_zoom())).max(1);
-    let over = s.tiers.iter().next().map(|t| t.slot.index);
-    let taken = match over {
-        Some(first) => Some((first, (0..).take_while(|&n| chained(meshes, first, n).is_some()).count() as u32)),
-        None => claim(meshes, pool, k, id).map(|first| (first, 0)),
-    };
-    let Some((first, held)) = taken else {
+    let Some(first) = claim(meshes, pool_of(s.chunk), k, id) else {
         return refuse(slots, i, meshes, generation, k);
     };
-    if held > 0 && k > held {
-        let last = chained(meshes, first, held - 1).unwrap_or(first);
-        let more = claim(meshes, pool, k - held, id);
-        match more {
-            Some(more) => meshes.next[last] = Nth::of(more),
-            None => return refuse(slots, i, meshes, generation, k),
-        }
-    }
     meshes.landing = Some(Landing {
         id,
         generation,
         first,
         slots: k,
-        over: held,
         bounds: None,
     });
     true
@@ -190,17 +168,7 @@ pub(super) fn reserve(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e:
 pub(super) fn settle(meshes: &mut Meshes, builder: &Builder) {
     let open = builder.baking();
     if let Some(l) = meshes.landing.take_if(|l| open != Some((l.id, l.generation))) {
-        release(meshes, l);
-    }
-}
-
-pub(super) fn release(meshes: &mut Meshes, l: Landing) {
-    if l.over == 0 {
         let_go(meshes, l.first, l.id);
-    } else if let Some(last) = chained(meshes, l.first, l.over - 1) {
-        if let Some(more) = meshes.next[last].take() {
-            let_go(meshes, more, l.id);
-        }
     }
 }
 
@@ -284,12 +252,7 @@ pub(super) fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: Bu
             if box_cnt > 0 {
                 return;
             }
-            let over = s.tiers.iter().next().map(|t| t.slot.index);
-            let taken = match over {
-                Some(first) => Some(first),
-                None => claim(meshes, pool_of(s.chunk), 1, id),
-            };
-            let Some(first) = taken else {
+            let Some(first) = claim(meshes, pool_of(s.chunk), 1, id) else {
                 refuse(slots, i, meshes, generation, 1);
                 return;
             };
@@ -298,31 +261,17 @@ pub(super) fn land(slots: &mut [Slot], place: &[Nth], meshes: &mut Meshes, e: Bu
                 generation,
                 first,
                 slots: 1,
-                over: 0,
                 bounds: None,
             }
         }
     };
-    if landing.over > landing.slots {
-        if let Some(last) = chained(meshes, landing.first, landing.slots - 1) {
-            if let Some(tail) = meshes.next[last].take() {
-                let_go(meshes, tail, id);
-            }
-        }
-    }
     if landing.slots > 1 {
         meshes.chained += 1;
     }
     let slot = slot_at(landing.first);
     let s = &mut slots[i];
     let layout = s.layout;
-    prune(s, meshes, |t| layout == Some(t.generation), Some(slot.index));
-    // An older-generation tier on the same slots now shows these boxes.
-    for t in s.tiers.iter_mut().filter(|t| t.slot.index == slot.index) {
-        t.box_cnt = box_cnt;
-        t.bounds = landing.bounds;
-        t.heights = heights;
-    }
+    prune(s, meshes, |t| layout == Some(t.generation));
     s.tiers.push(Tier {
         generation,
         bounds: landing.bounds,

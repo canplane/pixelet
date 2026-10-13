@@ -181,7 +181,7 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/indicator/camera_gizmo.rs). */
+  /** The camera grid over the screen, the one the rays are cast through, a cell a ray, and the chunks tinted by how many zooms a face is off the one the grid's rule draws there: green at it, blue finer, red coarser (scene/indicator/camera_gizmo.rs). */
   camera_gizmo: {
     key: 16 as number,
     kind: "toggle",

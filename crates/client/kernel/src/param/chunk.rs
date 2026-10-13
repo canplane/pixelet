@@ -4,36 +4,6 @@
 
 use pxl_spec::space::layer::lattice::TILE_CHUNKS;
 
-// ---- temporal smoothness of the quality ----
-
-/// One quality step: half a zoom of every split distance, so a step reads
-/// as ground drawn a little farther out rather than a zoom jumping.
-pub const TAU_STEP: f64 = core::f64::consts::SQRT_2;
-
-/// Twelve half-zooms; coarser than that a view is its top zoom and saves nothing.
-pub const TAU_STEPS: usize = 12;
-
-/// How long a finer step must have had room before it is taken, so a pan
-/// does not build and discard a zoom each time. Coarser is immediate.
-pub const QUALITY_WAIT_MS: f64 = 1_000.0;
-
-/// Share of each pool kept free before a finer step, so the next eye move
-/// does not take it straight back.
-pub const QUALITY_MARGIN: f64 = 0.05;
-
-// ---- concurrency ----
-
-/// Refinements under way at once; each holds the piece it replaces, so each
-/// is a slot past the frontier the quality policy keeps free.
-pub const REFINEMENTS_IN_FLIGHT: u32 = 32;
-
-// ---- the frontier's time ----
-
-/// How long the goal must ask for a coarser piece before it replaces the
-/// finer ones, as for a finer quality step, so a turn that comes back finds
-/// them still drawn.
-pub const COARSEN_HOLD_MS: f64 = QUALITY_WAIT_MS;
-
 // ---- device budget: memory ----
 
 /// Bytes of meshes drawn at a leaf's cells or finer: about the flat-ground
@@ -46,11 +16,6 @@ pub const COARSE_POOL_BYTES: u32 = 115 << 20;
 
 /// Groups the coarser meshes are bound in, each one storage binding.
 pub const ARENA_COARSE_GROUPS: u32 = 5;
-
-/// Boxes a coarse chunk draws a cell, as a slot is sized for: the ground's,
-/// the floor and skirt under it, what objects add. A larger mesh fills more
-/// slots, never a coarser cube.
-pub const COARSE_BOXES_PER_CELL: f64 = 4.44;
 
 // ---- decor's tiers ----
 
@@ -72,9 +37,6 @@ pub const COMMITS_PER_FRAME: u32 = 8;
 
 // ---- a bake's slices ----
 
-/// Rows a bake writes or meshes a step, so one chunk never takes a turn's
-/// budget whole; the mesher is handed it.
-pub const BAKE_ROWS_PER_STEP: u32 = 8;
-
-/// Boxes the mesher emits a step, for the same budget.
+/// Boxes the mesher makes or emits a step, so one chunk never takes a
+/// turn's budget whole.
 pub const BAKE_BOXES_PER_STEP: u32 = 512;

@@ -1,9 +1,8 @@
 // pxl-render/frame/shader/camera_grid.wgsl
 
-// The camera grid fixed to the screen: the sphere about the eye cut into cells
-// of one solid angle, a cell's angle squared (`pxl-kernel view/sight.rs`
-// `Lens::error`), in rings a cell apart about the optical axis, each ring cut
-// into as many as fit, so a cell here holds the area a chunk's cell is split to.
+// The camera grid fixed to the screen, the one the rays were cast through
+// (`pxl-kernel view/sight.rs` `Lens`): from one edge of the view to the
+// other, a cell at each step of angle across and up (`frame_grid`).
 
 const COLOR = vec4f(1.0, 1.0, 1.0, 0.55);
 
@@ -30,18 +29,12 @@ fn edge(v: f32, w: f32) -> f32 {
 fn fs(v: VertexOut) -> @location(0) vec4f {
   let m = sky_ray();
   let dir = m * vec3f(v.ndc, 1.0);
-  let x = dot(dir, normalize(m[0]));
-  let y = dot(dir, normalize(m[1]));
-  let a = frame_cell();
-  // acos would lose its bits at the axis.
-  let r = atan2(length(vec2f(x, y)), dot(dir, normalize(m[2]))) / a;
-  // Ring k spans [(k − ½)a, (k + ½)a]; the one on the axis is a single cell.
-  let ring = round(r);
-  let n = max(1.0, round(TAU * sin(ring * a) / a));
-  let phi = atan2(y, x);
-  // Measured on both sides of the seam at ±π, so it draws no line.
-  let dphi = min(fwidth(phi), fwidth(fract(phi / TAU) * TAU));
-  let sectors = edge(phi * n / TAU, n * dphi / TAU) * step(1.5, n);
-  let line = max(edge(r - 0.5, fwidth(r)), sectors);
+  let forward = length(m[2]);
+  let z = dot(dir, m[2] / forward);
+  // Each axis's angle from the view's edge, counted in cells.
+  let angle = vec2f(atan2(dot(dir, normalize(m[0])), z), atan2(dot(dir, normalize(m[1])), z));
+  let half = vec2f(atan2(length(m[0]), forward), atan2(length(m[1]), forward));
+  let u = (angle + half) / max(frame_grid(), vec2f(1e-9));
+  let line = max(edge(u.x, fwidth(u.x)), edge(u.y, fwidth(u.y))) * step(1e-9, frame_grid().x);
   return vec4f(to_srgb(COLOR.rgb), COLOR.a * line);
 }

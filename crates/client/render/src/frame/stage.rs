@@ -5,7 +5,7 @@
 
 use xpute_guest::global::Global;
 
-pub const STAGE_WORDS: usize = STAGE_AT::CLOUDS + 1;
+pub const STAGE_WORDS: usize = STAGE_AT::CAMERA_GRID + 2;
 
 /// Where each value sits in the lane.
 #[allow(non_snake_case)]
@@ -32,6 +32,9 @@ pub mod STAGE_AT {
     pub const SCREEN_AO: usize = 64;
     /// How much of the clouds shows, none to all.
     pub const CLOUDS: usize = 65;
+    /// The camera grid's cell as the last cast's rays went through it, its
+    /// angles across and up the screen (2).
+    pub const CAMERA_GRID: usize = 66;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

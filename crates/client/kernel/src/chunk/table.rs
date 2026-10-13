@@ -1,10 +1,16 @@
 // pxl-kernel/chunk/table.rs
 
-//! The chunks' table: which chunks are mounted, the role each has in the
-//! frontier (frontier.rs), which generation of its tier each shows, and what
-//! to build next.
+//! The chunks' table: which chunks are mounted, whether each is drawn or
+//! still building toward what the eye's observation makes (domain.rs), which generation of its tier
+//! each shows, and what to build next.
 //! Every mounted chunk holds a mesh slot or has one held for it, so the table
 //! is never larger than the arena.
+//!
+//! What is drawn moves to the goal by whole swaps: the goal's chunks and the
+//! drawn ones they overlap, an ancestor and its descendant, swap together once
+//! every goal chunk among them is built, so a change is latency, never a hole
+//! or a place drawn twice. A drawn chunk no goal chunk overlaps goes at once:
+//! no ray stops in it.
 
 mod census;
 mod mesh;
@@ -34,8 +40,7 @@ use xpute_guest::sched::edge::Notify;
 use xpute_guest::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
 use crate::chunk::build::{draws_as_held, BuildEvent, Builder};
-use crate::chunk::frontier::{pool_of, Env, Frontier, Now, Slots};
-use crate::chunk::mesh_slot::{group_bytes, group_is_fine, slot_at, MeshSlot, Pool, ARENA, OCCUPANCY};
+use crate::chunk::mesh_slot::{group_bytes, group_is_fine, slot_at, MeshSlot, Pool, OCCUPANCY};
 use crate::chunk::source::{compared, draws, written_in};
 use crate::layer::object::preview::RenderEdits;
 use crate::layer::object::store::EntryAt;
@@ -47,11 +52,17 @@ use xpute_guest::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::chunk::domain::{self, Domain};
+use crate::chunk::domain;
 use crate::chunk::Chunk;
 use crate::io::demand::Order;
 use crate::layer::Base as _;
 use pxl_spec::bake::tile::terrain::TerrainTile;
+
+/// A chunk's pool, by its cells alone: a mesh too big for one slot fills
+/// more slots and is never drawn coarser for it.
+pub(super) fn pool_of(c: Chunk) -> Pool {
+    Pool::of(c.cell_zoom())
+}
 
 /// `.fixed.mounts`, handed in at boot.
 pub static MOUNTS_RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
@@ -157,6 +168,9 @@ struct Sources {
     /// finer tile arriving rebuilds the chunk and its shared edges.
     read_from: Option<Zoom>,
     beside_from: [Option<Zoom>; 8],
+    /// The blocks the rays stopped on in it, which alone are drawn, as a
+    /// hash: a cast that stops elsewhere in it rebuilds it.
+    seen: u64,
 }
 
 impl Sources {
@@ -164,13 +178,20 @@ impl Sources {
         let settings = settings_store();
         let drawn = |at: &EntryAt| draws(k, *at) && draws_as_held(k, at.zoom());
         let world = World::now();
-        let column = world.read(k.node(), k.cell_zoom()).value();
+        let ground = world.read(k.node(), k.cell_zoom()).value();
+        let seen = domain::current().map_or(0, |g| {
+            use core::hash::Hasher;
+            let mut h = fnv::FnvHasher::default();
+            g.seen_in(k).flatten().for_each(|v| h.write_i64(v));
+            h.finish()
+        });
         Sources {
             textured: settings.textures,
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
-            read_from: column.map(|c| c.ground.from.zoom),
-            beside_from: column.map_or([None; 8], |c| c.beside.map(|b| b.map(|s| s.from.zoom))),
+            read_from: ground.map(|c| c.own.from.zoom),
+            beside_from: ground.map_or([None; 8], |c| c.beside.map(|b| b.map(|s| s.from.zoom))),
+            seen,
         }
     }
 }
@@ -208,11 +229,6 @@ impl Slot {
     fn tier(&self, generation: u32) -> Option<&Tier> {
         self.tiers.iter().find(|t| t.generation == generation)
     }
-
-    /// Slots held for it and not yet taken: none while it has a tier, whose slots a rebuild takes.
-    fn reserves(&self, generation: u32) -> Option<(Pool, u32)> {
-        (self.tiers.len() == 0).then(|| (pool_of(self.chunk), self.slots_for(generation)))
-    }
 }
 
 pub struct Scheduler {
@@ -225,9 +241,9 @@ pub struct Scheduler {
     place: &'static mut [Nth],
     mounts: Free,
     index: Index,
-    /// Whether a goal was published at the last tick: a recheck before one
+    /// Whether a goal was made at the last tick: a recheck before one
     /// decides nothing (`recheck`), so its first one rechecks every chunk.
-    domain_seen: bool,
+    goal_seen: bool,
     frame: Option<Frame>,
     /// An input changed that no recheck has seen; the next tick rechecks every
     /// chunk. Frames are requested until then, or the world stops at the last frame.
@@ -255,7 +271,12 @@ struct Scratch {
     eligible: Vec<usize>,
     drawn: Vec<Chunk>,
     building: Vec<(Chunk, bool)>,
-    frontier: Frontier,
+    /// The goal's chunks not drawn and the drawn ones not in it, and the
+    /// swap each is in, by its first member.
+    moving: Vec<Chunk>,
+    swap: Vec<usize>,
+    /// By a swap's first member: whether a goal chunk in it is not built.
+    waiting: Vec<bool>,
 }
 
 impl Default for Scheduler {
@@ -282,23 +303,18 @@ fn under_budget<T: Copy>(items: &[T], cap: u32, deadline: f64, hard: f64, now: &
     run_under_budget(items.iter().copied(), step, opts)
 }
 
-struct Pieces<'a> {
-    d: &'a Domain,
-    table: &'a Scheduler,
+/// Whether the ground `c` reads is held, its own tile or a coarser one standing in.
+fn buildable(c: Chunk) -> bool {
+    TerrainTile::residency().read(c.node(), c.cell_zoom()).value().is_some()
 }
 
-impl Env for Pieces<'_> {
-    fn slots(&self, c: Chunk) -> (Pool, u32) {
-        (pool_of(c), self.table.slots_of(c))
+/// The swap `k` is in: the first member it was joined to, path halved.
+fn root(swap: &mut [usize], mut k: usize) -> usize {
+    while swap[k] != k {
+        swap[k] = swap[swap[k]];
+        k = swap[k];
     }
-
-    fn buildable(&self, c: Chunk) -> bool {
-        TerrainTile::residency().read(c.node(), c.cell_zoom()).value().is_some()
-    }
-
-    fn order(&self, c: Chunk) -> Order {
-        self.d.order_of(c)
-    }
+    k
 }
 
 fn same_view(a: &Frame, b: &Frame) -> bool {
@@ -349,7 +365,7 @@ impl Scheduler {
             place,
             mounts: Free { lane: free, len: OCCUPANCY },
             index: Index { lane: index, len: 0 },
-            domain_seen: false,
+            goal_seen: false,
             frame: None,
             view_dirty: true,
             commit_left: 0,
@@ -363,10 +379,6 @@ impl Scheduler {
             changes: 0,
             changes_peak: 0,
         }
-    }
-
-    pub fn slots_of(&self, c: Chunk) -> u32 {
-        self.find(&c).map_or(1, |i| self.slots[i].slots_for(self.generation(i)))
     }
 
     pub fn pace(&self) -> [u32; 2] {
@@ -397,16 +409,8 @@ impl Scheduler {
         self.zoom_boxes.iter().any(|&n| n > 0)
     }
 
-    /// Each mounted chunk a tier of fills more than one mesh slot, and how
-    /// many, sorted: what the walk prices it at (`slots_of`).
-    pub fn priced(&self, out: &mut Vec<(Chunk, u32)>) {
-        out.clear();
-        out.extend(self.slots.iter().enumerate().map(|(i, s)| (s.chunk, s.slots_for(self.generation(i)))).filter(|&(_, k)| k != 1));
-        out.sort_unstable();
-    }
-
     fn add(&mut self, k: Chunk) {
-        // The frontier starts no move without room, so running out of mounts is a bug.
+        // A chunk is added only while a mount is free (`materialize`), so running out is a bug.
         let id = self.mounts.pop().or_bug(Errno::ENOSPC);
         let edits = crate::chunk::source::previewed();
         let sources = Sources::of(k, edits);
@@ -431,8 +435,8 @@ impl Scheduler {
         if let Some(frame) = self.frame {
             slot.in_frustum = visible(&frame, &slot);
         }
-        if let Some(d) = domain::current() {
-            slot.order = d.order_of(k);
+        if let Some(g) = domain::current() {
+            slot.order = g.order_of(k);
         }
         let n = self.index.partition_point(|&(c, _)| c < k);
         self.index.insert(n, (k, id));
@@ -476,7 +480,7 @@ impl Scheduler {
     }
 
     /// Sources changed: the old tiers stay drawn until a layout of the new
-    /// generation is whole, and the rebuild goes into the old tier's slot.
+    /// generation is whole, the rebuild landing in slots of its own.
     fn source(&mut self, i: usize) {
         self.view_dirty = true;
         let id = self.slots[i].id;
@@ -489,11 +493,17 @@ impl Scheduler {
     }
 
     /// A tile that goes is not a change: a build finds no tile and waits, and
-    /// what is drawn stays drawn.
+    /// what is drawn stays drawn. Only the goal's chunks are built: a drawn
+    /// one the goal left shows what it showed until its swap, since built to
+    /// the cast that left it, it would show nothing in place.
     pub fn sources_step(&mut self) {
         let edits = crate::chunk::source::previewed();
+        let pieces = domain::current().map_or(&[][..], |g| g.pieces());
         for i in 0..self.slots.len() {
             let k = self.slots[i].chunk;
+            if pieces.binary_search(&k).is_err() {
+                continue;
+            }
             let sources = Sources::of(k, edits);
             if written_in(k) || sources != self.slots[i].sources {
                 self.slots[i].sources = sources;
@@ -532,25 +542,11 @@ impl Scheduler {
         worked
     }
 
-    /// Free slots per pool after what mounted chunks will take.
-    fn free(&self) -> Slots {
-        let mut free = ARENA;
-        for (at, h) in self.meshes.holder.iter().enumerate() {
-            if !h.is_none() {
-                let p = Pool::at(at) as usize;
-                free[p] = free[p].saturating_sub(1);
-            }
-        }
-        for (i, s) in self.slots.iter().enumerate() {
-            if let Some((p, k)) = s.reserves(self.generation(i)) {
-                free[p as usize] = free[p as usize].saturating_sub(k);
-            }
-        }
-        free
-    }
-
+    /// Toward the goal: building what it asks for and nothing else, then
+    /// each swap whose goal chunks are all built.
     fn materialize(&mut self, sc: &mut Scratch) {
-        let Some(d) = domain::current() else { return };
+        let Some(g) = domain::current() else { return };
+        let pieces = g.pieces();
         sc.drawn.clear();
         sc.building.clear();
         for s in self.slots.iter() {
@@ -561,38 +557,72 @@ impl Scheduler {
         }
         sc.drawn.sort_unstable();
         sc.building.sort_unstable_by_key(|&(c, _)| c);
-        let now = Now {
-            ms: xpute_guest::clock::now(),
-            goal: d.pieces(),
-            drawn: &sc.drawn,
-            building: &sc.building,
-            free: self.free(),
-        };
-        let plan = sc.frontier.plan(&now, &Pieces { d, table: self });
-        self.moves = (plan.refused, plan.waiting + plan.held);
-        self.refined = self.refined.wrapping_add(plan.refined);
-        self.changes_peak = self.changes_peak.max(self.changes);
-        self.changes = plan.swaps().count() as u32;
-
-        for &k in plan.cancel.iter().chain(&plan.drop) {
-            self.remove(k);
-        }
-        for (leave, enter) in plan.swaps() {
-            for &k in leave {
-                self.remove(k);
+        for &(c, _) in &sc.building {
+            if pieces.binary_search(&c).is_err() {
+                self.remove(c);
             }
-            for &k in enter {
-                if let Some(i) = self.find(&k) {
-                    self.slots[i].role = Role::Drawn;
+        }
+        let mut started = 0;
+        for &c in pieces {
+            if started >= param::STARTS_PER_FRAME || self.mounts.len == 0 {
+                break;
+            }
+            if self.find(&c).is_none() && buildable(c) {
+                self.add(c);
+                self.counts.added += 1;
+                started += 1;
+            }
+        }
+
+        // The swaps: what moves, joined where one holds another.
+        sc.moving.clear();
+        sc.moving.extend(pieces.iter().copied().filter(|c| sc.drawn.binary_search(c).is_err()));
+        sc.moving.extend(sc.drawn.iter().copied().filter(|c| pieces.binary_search(c).is_err()));
+        sc.moving.sort_unstable();
+        sc.swap.clear();
+        sc.swap.extend(0..sc.moving.len());
+        for k in 0..sc.moving.len() {
+            for a in sc.moving[k].ancestors() {
+                if let Ok(j) = sc.moving.binary_search(&a) {
+                    let (x, y) = (root(&mut sc.swap, k), root(&mut sc.swap, j));
+                    sc.swap[x.max(y)] = x.min(y);
                 }
+            }
+        }
+        // A swap is made once every goal chunk in it is built.
+        let built = |c: Chunk| self.find(&c).is_some_and(|i| self.slots[i].layout.is_some());
+        sc.waiting.clear();
+        sc.waiting.resize(sc.moving.len(), false);
+        for k in 0..sc.moving.len() {
+            let c = sc.moving[k];
+            if pieces.binary_search(&c).is_ok() && !built(c) {
+                let r = root(&mut sc.swap, k);
+                sc.waiting[r] = true;
+            }
+        }
+        let (mut swaps, mut held) = (0, 0);
+        for k in 0..sc.moving.len() {
+            let r = root(&mut sc.swap, k);
+            if sc.waiting[r] {
+                held += u32::from(r == k);
+                continue;
+            }
+            swaps += u32::from(r == k);
+            let c = sc.moving[k];
+            match pieces.binary_search(&c) {
+                Ok(_) => {
+                    if let Some(i) = self.find(&c) {
+                        self.slots[i].role = Role::Drawn;
+                    }
+                }
+                Err(_) => self.remove(c),
             }
             self.view_dirty = true;
         }
-        for &k in &plan.start {
-            xpute_kit::ensure!(self.find(&k).is_none(), ENOTRECOVERABLE);
-            self.add(k);
-            self.counts.added += 1;
-        }
+        self.moves = (0, held);
+        self.refined = self.refined.wrapping_add(swaps);
+        self.changes_peak = self.changes_peak.max(self.changes);
+        self.changes = swaps;
     }
 
     /// The arena was recreated with the device: forget every tier. A layout kept
@@ -621,9 +651,9 @@ impl Scheduler {
             self.view_dirty = true;
         }
         self.frame = Some(frame);
-        let domain = domain::current().is_some();
-        if domain != self.domain_seen {
-            self.domain_seen = domain;
+        let goal = domain::current().is_some();
+        if goal != self.goal_seen {
+            self.goal_seen = goal;
             self.view_dirty = true;
         }
 
@@ -710,10 +740,10 @@ impl Scheduler {
     }
 
     fn refresh(&mut self, frame: &Frame) {
-        let domain = domain::current();
+        let goal = domain::current();
         for i in 0..self.slots.len() {
             let visible = visible(frame, &self.slots[i]);
-            let order = domain.map_or(Order::LAST, |d| d.order_of(self.slots[i].chunk));
+            let order = goal.map_or(Order::LAST, |g| g.order_of(self.slots[i].chunk));
             let s = &mut self.slots[i];
             s.order = order;
             let was = s.in_frustum;
@@ -725,10 +755,10 @@ impl Scheduler {
     }
 
     fn order(&self, idx: &mut Vec<usize>, keys: &mut Vec<Priority>) {
-        let holders = self.builder.holders();
+        let holder = self.builder.holder();
         keys.clear();
         keys.extend(self.slots.iter().map(|s| Priority {
-            holds: holders.contains(&Some(s.id)),
+            holds: holder == Some(s.id),
             order: s.order,
         }));
         idx.clear();
@@ -764,7 +794,7 @@ impl Scheduler {
 
     fn release_tiers(&mut self, i: usize, keep: impl Fn(u32) -> bool) {
         let s = &mut self.slots[i];
-        prune(s, &mut self.meshes, |t| keep(t.generation), None);
+        prune(s, &mut self.meshes, |t| keep(t.generation));
         if s.layout.is_some_and(|g| s.tier(g).is_none()) {
             s.layout = None;
         }

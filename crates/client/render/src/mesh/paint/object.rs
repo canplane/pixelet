@@ -9,7 +9,6 @@ use pxl_spec::block::object::{cube_id, decor_ids, decor_num_id, ALL_CUBES};
 use crate::mesh::paint::palette::rgb255;
 use crate::mesh::paint::palette::LAYER_IDX;
 use crate::mesh::word::NO_LAYER;
-use crate::mesh::word::{pack_material, Side};
 use pxl_spec::block::object::{cube_rgb, Cube};
 use std::sync::LazyLock;
 use xpute_kit::status::bug::OrBug;
@@ -31,7 +30,7 @@ pub static PAINTER: LazyLock<Painter> = LazyLock::new(Painter::new);
 
 pub struct Painter {
     kinds: Vec<Kind>,
-    materials: Vec<u32>,
+    swatches: Vec<[u8; 3]>,
     layers: Vec<u8>,
 }
 
@@ -45,41 +44,41 @@ impl Painter {
     pub fn new() -> Painter {
         let mut p = Painter {
             kinds: Vec::new(),
-            materials: Vec::new(),
+            swatches: Vec::new(),
             layers: Vec::new(),
         };
         for &cube in ALL_CUBES.iter() {
-            let (material, layer) = solid_material(cube);
-            p.set(cube_id(cube), Kind::Solid, material, layer);
+            let (swatch, layer) = solid_look(cube);
+            p.set(cube_id(cube), Kind::Solid, swatch, layer);
         }
-        p.set(AIR, Kind::Air, 0, NO_LAYER as u8);
+        p.set(AIR, Kind::Air, [0; 3], NO_LAYER as u8);
         for &id in decor_ids.iter() {
-            p.set(decor_num_id(id), Kind::Decor, 0, NO_LAYER as u8);
+            p.set(decor_num_id(id), Kind::Decor, [0; 3], NO_LAYER as u8);
         }
         p
     }
 
     /// A state past a leaf's width is a catalog bug and is not set, rather than
     /// sizing the tables to it.
-    fn set(&mut self, state: u32, kind: Kind, material: u32, layer: u8) {
+    fn set(&mut self, state: u32, kind: Kind, swatch: [u8; 3], layer: u8) {
         if state >= u16::MAX as u32 {
             return;
         }
         let i = state as usize;
         if i >= self.kinds.len() {
             self.kinds.resize(i + 1, Kind::Untaught);
-            self.materials.resize(i + 1, 0);
+            self.swatches.resize(i + 1, [0; 3]);
             self.layers.resize(i + 1, NO_LAYER as u8);
         }
         self.kinds[i] = kind;
-        self.materials[i] = material;
+        self.swatches[i] = swatch;
         self.layers[i] = layer;
     }
 
-    /// None for untaught, air and decor.
-    pub fn material_of(&self, state: u32) -> Option<(u32, u8)> {
+    /// Its swatch and texture layer; none for untaught, air and decor.
+    pub fn look_of(&self, state: u32) -> Option<([u8; 3], u8)> {
         match self.kind(state) {
-            Kind::Solid => Some((self.materials[state as usize], self.layers[state as usize])),
+            Kind::Solid => Some((self.swatches[state as usize], self.layers[state as usize])),
             _ => None,
         }
     }
@@ -89,12 +88,9 @@ impl Painter {
     }
 }
 
-/// Its material word and texture layer. A cube of a look takes its ground's
-/// color and layer, but the class stays OBJECT: a terrain class would stop the
-/// cube shielding what is beneath it from occlusion culling.
-pub fn solid_material(cube: Cube) -> (u32, u8) {
-    let rgb = rgb255(cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE));
-    (pack_material(Side::OBJECT, rgb), LAYER_IDX(cube) as u8)
+/// Its swatch and texture layer: a cube of a look takes its ground's.
+pub fn solid_look(cube: Cube) -> ([u8; 3], u8) {
+    (rgb255(cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE)), LAYER_IDX(cube) as u8)
 }
 
 #[cfg(test)]

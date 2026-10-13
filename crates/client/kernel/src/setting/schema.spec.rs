@@ -208,7 +208,7 @@ pub enum SettingKey {
     performance_overlay = 14,
     /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs).
     world_gizmo = 15,
-    /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the chunks tinted by the share of a grid cell a face shows the eye: green within a quarter to one, blue finer, red coarser (scene/indicator/camera_gizmo.rs).
+    /// The camera grid over the screen, the one the rays are cast through, a cell a ray, and the chunks tinted by how many zooms a face is off the one the grid's rule draws there: green at it, blue finer, red coarser (scene/indicator/camera_gizmo.rs).
     camera_gizmo = 16,
     person = 17,
     pet = 18,

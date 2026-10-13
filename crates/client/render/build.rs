@@ -17,8 +17,18 @@ fn main() {
         let name = path.file_name().expect("a shader's name");
         std::fs::write(out.join(name), stripped(&text)).expect("the stripped shader");
     }
+    // The chunk box's mask bits, from the one statement the mesher compiles.
+    std::fs::write(out.join("faces.wgsl"), MASK.iter().map(|(name, v)| format!("const {name}: u32 = {v}u;\n")).collect::<String>()).expect("the mask's shader");
     println!("cargo:rerun-if-changed=src/frame/shader");
+    println!("cargo:rerun-if-changed=src/mesh/mask.rs");
 }
+
+macro_rules! bits {
+    ($($name:ident = $v:expr),* $(,)?) => {
+        const MASK: &[(&str, u32)] = &[$((stringify!($name), $v)),*];
+    };
+}
+include!("src/mesh/mask.rs");
 
 /// WGSL has no string literals, so `//` always starts a comment. Lines are never
 /// joined, so tokens cannot run together; block comments are left alone.

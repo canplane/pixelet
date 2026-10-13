@@ -39,7 +39,9 @@ struct Frame {
   gizmo: f32,
   // How far the chunks that cast reach, a share of the shadow map's half width.
   shadow_rim: f32,
-  _p14: vec2f,
+  // The camera grid's cell as the rays were cast through it, its angles
+  // across and up the screen (`pxl-kernel view/sight.rs` `Lens::step`).
+  grid: vec2f,
 };
 
 // Read field by field from vec4 words, never as a struct: a struct here lost
@@ -69,6 +71,7 @@ fn frame_up() -> vec3f { return frame_words[21].xyz; }
 fn frame_cell() -> f32 { return frame_words[21].w; }
 fn frame_gizmo() -> f32 { return frame_words[22].x; }
 fn frame_shadow_rim() -> f32 { return frame_words[22].y; }
+fn frame_grid() -> vec2f { return frame_words[22].zw; }
 
 fn on_globe(p: vec3f) -> vec3f {
   return on_globe_of(p, frame_planet(), frame_globe());

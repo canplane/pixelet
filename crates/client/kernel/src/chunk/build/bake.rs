@@ -7,17 +7,17 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk::{box_words, Step, COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_spec::block::stand::z_unit;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::Block;
 
 use crate::chunk::build::BAKE_RANGE;
+use crate::chunk::source::draws;
+use crate::layer::Base as _;
+use crate::query::World;
 use crate::setting::store::settings_store;
 
 use crate::chunk::mesh_slot::{capacity, COARSE_BOXES, FINE_BOXES};
-use pxl_spec::space::coord::zoom::{count, units};
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
 
 use super::*;
 
@@ -42,36 +42,30 @@ impl Builder {
         }
     }
 
-    pub(super) fn advance_bake(&mut self, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
+    pub(super) fn advance_bake(&mut self, build: &mut Build, id: u32, emit: &mut impl FnMut(BuildEvent) -> bool) -> Progress {
         let holding = matches!(&self.bake_job, Some(j) if j.id == id);
-        let c = &self.chunks[&id];
-        let runs = self.runs_of(id).or_bug(Errno::ENOTRECOVERABLE);
-        let set = Self::run_set(&runs, pxl_spec::block::sample::span(self.chunks[&id].at.zoom(), runs.zoom));
+        let c = self.chunks[&id];
         if !holding {
             if self.bake_job.is_some() {
                 return Progress::Blocked;
             }
-            let cell_zoom = c.at.cell_zoom();
-            let z = z_unit(runs.zoom);
-            // Textured where the cells drawn are a leaf's or finer, folded or not.
-            let (unit, fine) = (units(runs.zoom), cell_zoom >= GROUND.cell());
-            if self
-                .bake
-                .begin(
-                    &set,
-                    count(runs.zoom, cell_zoom),
-                    unit,
-                    z,
-                    fine,
-                    settings_store().textures,
-                    (crate::param::BAKE_ROWS_PER_STEP, crate::param::BAKE_BOXES_PER_STEP),
-                    run::window(c.at, runs.zoom),
-                )
-                .is_err()
-            {
-                self.refuse(id);
-                return Progress::Blocked;
+            // Its blocks as the world answers them, as a preview shows them.
+            let edits = crate::chunk::source::previewed();
+            let hide = edits.hide.filter(|&e| draws_as_held(c.at, e.zoom()));
+            let carve = edits.carve.filter(|&e| draws(c.at, e) && draws_as_held(c.at, e.zoom()));
+            let world = World::new(TerrainTile::residency(), build.store).previewing(hide, carve);
+            let (cell, (zoom, at)) = (c.at.cell_zoom(), c.at.node());
+            // What the rays stopped on in it, which alone is drawn.
+            let seen = crate::chunk::domain::current().into_iter().flat_map(|d| d.seen_in(c.at));
+            match world.compose((zoom, at), cell, seen, &mut self.blocks).value() {
+                None => return Progress::Blocked,
+                Some(Err(_)) => {
+                    self.refuse(id);
+                    return Progress::Blocked;
+                }
+                Some(Ok(())) => {}
             }
+            self.bake.begin(cell, settings_store().textures, crate::param::BAKE_BOXES_PER_STEP);
             self.bake_job = Some(BakeJob {
                 id,
                 generation: c.generation,
@@ -79,7 +73,7 @@ impl Builder {
                 handed: 0,
             });
         }
-        match self.bake.step(&set) {
+        match self.bake.step(&self.blocks) {
             Step::Working => Progress::Busy,
             Step::Refused => {
                 self.bake_job = None;
