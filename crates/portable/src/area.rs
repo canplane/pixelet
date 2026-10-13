@@ -9,7 +9,7 @@
 //! straddles.
 
 use crate::cube::{sentinel, Ground};
-use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
+use crate::{wrap_index as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
 
 const VOID: u32 = sentinel::void as u32;
 const UNKNOWN: u32 = sentinel::unknown as u32;
@@ -43,15 +43,6 @@ pub fn past(area: &impl Area, leaf: [i32; 2]) -> bool {
         i += 1;
     }
     true
-}
-
-/// X named as the world names it at `zoom`: from minus half its count to
-/// under half (pxl-spec space/coord/world.rs `wrap_index`).
-fn wrap(zoom: Zoom, x: i32) -> i32 {
-    match zoom {
-        0 => 0,
-        z => x.wrapping_shl(32 - z) >> (32 - z),
-    }
 }
 
 /// The leaf tile holding leaf cell `cell`.

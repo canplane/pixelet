@@ -17,6 +17,7 @@
 
 use crate::area::{walled, Area};
 use crate::cube::{ground, sentinel, Ground};
+use crate::lattice::EXTENT;
 pub use crate::lattice::TILE_CELLS;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
 
@@ -53,6 +54,40 @@ const _: () = assert!(EXTENT_SPAN.is_power_of_two(), "an index cell is a block o
 /// The index lane's cells' zoom on a leaf tile.
 pub const EXTENT_CELL: Zoom = LEAF_ZOOM + EXTENT_SPAN.trailing_zeros() as Zoom;
 
+/// Cells in a tile's index lane: its `EXTENT` cells, each the lowest and the
+/// highest the ground draws over it; its coarser levels follow them
+/// (`EXTENT.coarse_index`).
+pub const EXTENT_LANE: u32 = EXTENT.tile_cells() * EXTENT.tile_cells();
+
+/// How far past the lane's facts the client draws a cell, down and up: the
+/// way's own cell under a bore's or a cutting's surface. Every read of the
+/// lane widens by it.
+pub const DRAWN_PAST: [i32; 2] = [-1, 0];
+
+/// What is drawn over the cell of `across` × `across` index cells at
+/// `(x, y)` of a tile's index lane, widened by `DRAWN_PAST`: one read at any
+/// size, a coarser level holding the join of the cells under it. `lane`
+/// reads the lane's cell `i`, its coarser levels from `EXTENT_LANE`; `across`
+/// a power of two and `(x, y)` a multiple of it.
+pub fn over(lane: impl Fn(u32) -> [i32; 2], [x, y]: [u32; 2], across: u32) -> [i32; 2] {
+    let j = across.trailing_zeros();
+    let [lo, hi] = lane(if j == 0 { EXTENT.cell_index(x, y) } else { EXTENT_LANE + EXTENT.coarse_index(j, x, y) });
+    [lo + DRAWN_PAST[0], hi + DRAWN_PAST[1]]
+}
+
+/// The lowest and highest the ground draws over the column of the node
+/// `(zoom, c)`, from the index lane `lane` of the tile at `from` it lies in.
+pub fn relief(lane: impl Fn(u32) -> [i32; 2], from: Zoom, (zoom, c): (Zoom, [i32; 2])) -> [i32; 2] {
+    let index = EXTENT.cell_zoom(from);
+    let (first, across) = if zoom < index {
+        ([c[0] << (index - zoom), c[1] << (index - zoom)], 1 << (index - zoom))
+    } else {
+        ([c[0] >> (zoom - index), c[1] >> (zoom - index)], 1)
+    };
+    let n = EXTENT.tile_cells() as i32;
+    over(lane, [(first[0] & (n - 1)) as u32, (first[1] & (n - 1)) as u32], across)
+}
+
 /// A layer of ground cells under a face, in leaf cells, before the stone.
 const FILLER_DEPTH: i32 = 3;
 /// Sandstone under a sand or beach face's filler, in leaf cells.
@@ -77,14 +112,28 @@ pub trait Tile {
 /// coarser tile standing in invents nothing; off `tile`, which knows nothing
 /// there, `void` at sea level.
 pub fn read(tile: &impl Tile, v: [i32; 2], n: u32) -> (u32, i32) {
-    let n = n as i32;
-    let (x, y) = (v[0].div_euclid(n), v[1].div_euclid(n));
-    let cells = TILE_CELLS as i32;
-    if x < 0 || y < 0 || x >= cells || y >= cells {
+    if !holds(v, n) {
         return (VOID, 0);
     }
     let at = |v: i32| (v as f32 + 0.5) / n as f32;
-    (tile.look(x as u32, y as u32), bicubic(|i| tile.ele(i), at(v[0]), at(v[1])))
+    (look(tile, v, n), bicubic(|i| tile.ele(i), at(v[0]), at(v[1])))
+}
+
+/// Whether `tile` holds the cell `v` of a tile `n` × `n` times finer.
+fn holds(v: [i32; 2], n: u32) -> bool {
+    let n = n as i32;
+    let (x, y) = (v[0].div_euclid(n), v[1].div_euclid(n));
+    let cells = TILE_CELLS as i32;
+    x >= 0 && y >= 0 && x < cells && y < cells
+}
+
+/// `read`'s look alone.
+pub fn look(tile: &impl Tile, v: [i32; 2], n: u32) -> u32 {
+    if !holds(v, n) {
+        return VOID;
+    }
+    let n = n as i32;
+    tile.look(v[0].div_euclid(n) as u32, v[1].div_euclid(n) as u32)
 }
 
 /// Four cells a zoom finer, `dx + 2·dy`, as one: the looks' majority, the

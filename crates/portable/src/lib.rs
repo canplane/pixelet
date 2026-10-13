@@ -53,6 +53,15 @@ pub const SHARD_ZOOM: Zoom = UNIT_ZOOM - HEIGHT_BITS;
 /// grid's cells a side (pxl-spec space/camera/grid.rs).
 pub const CHUNK_STEPS: Zoom = 5;
 
+/// X named as the world names it at `zoom`, X going round: from minus half
+/// its count to under half (pxl-spec space/coord/world.rs `wrap_index`).
+pub fn wrap_index(zoom: Zoom, x: i32) -> i32 {
+    match zoom {
+        0 => 0,
+        z => x.wrapping_shl(32 - z) >> (32 - z),
+    }
+}
+
 /// How many `inner` cells stand across one `outer`, which is no finer.
 pub const fn count(inner: Zoom, outer: Zoom) -> u32 {
     if inner < outer {

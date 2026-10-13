@@ -22,7 +22,7 @@
 //! a node can have, and from a child it steps to the next across the face
 //! it leaves by, so no frame holds its siblings.
 
-use crate::{Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
+use crate::{wrap_index, Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
 /// The camera grid, the one knob of resolution: a cell is an angle of
 /// 1/`SPLIT` radians about the eye (pxl-spec space/camera/grid.rs).
@@ -161,11 +161,7 @@ impl Place {
     pub fn node(self, ray: &Ray) -> [i32; 3] {
         let g = Place::grid(self.zoom);
         let at = |a: usize| (self.corner[a].wrapping_add(ray.unit[a].wrapping_shl(g - UNIT_ZOOM))) >> (g - self.zoom);
-        let x = match self.zoom {
-            0 => 0,
-            z => at(0).wrapping_shl(32 - z) >> (32 - z),
-        };
-        [x, at(1), at(2)]
+        [wrap_index(self.zoom, at(0)), at(1), at(2)]
     }
 }
 

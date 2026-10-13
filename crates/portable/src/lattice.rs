@@ -17,7 +17,7 @@ use crate::{count, Zoom, CHUNK_STEPS, FINEST_ZOOM, LEAF_CELL, LEAF_ZOOM, SHARD_Z
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Lattice {
     cell: Zoom,
-    scale_steps: i8,
+    scale_steps: i32,
 }
 
 impl Lattice {
@@ -31,11 +31,11 @@ impl Lattice {
 
     /// Drawn in the camera grid's cells `steps` zooms coarser than its own,
     /// or where negative, finer.
-    pub const fn scaled(self, steps: i8) -> Lattice {
+    pub const fn scaled(self, steps: i32) -> Lattice {
         Lattice { scale_steps: steps, ..self }
     }
 
-    pub const fn scale_steps(self) -> i8 {
+    pub const fn scale_steps(self) -> i32 {
         self.scale_steps
     }
 
@@ -76,12 +76,12 @@ impl Lattice {
 
     /// The grid's cell a tile at `zoom` is drawn in.
     pub const fn grid_zoom(self, zoom: Zoom) -> Zoom {
-        (self.cell_zoom(zoom) as i32 - self.scale_steps as i32) as Zoom
+        (self.cell_zoom(zoom) as i32 - self.scale_steps) as Zoom
     }
 
     /// The tile whose cells fold into the grid's cell `cell`, past the pyramid's ends too.
     pub const fn tile_zoom_of_grid(self, cell: Zoom) -> i32 {
-        self.tile_zoom(cell) + self.scale_steps as i32
+        self.tile_zoom(cell) + self.scale_steps
     }
 
     /// Its cells' zoom on a tile at `z`.
