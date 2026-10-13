@@ -271,6 +271,11 @@ pub struct In<B> {
 pub trait Query {
     type At: Copy;
     type Block: Copy;
+    /// What one ray's walk carries from node to node besides its line, and
+    /// what it starts with: kept apart from the query, which a GPU holds as
+    /// its buffers alone.
+    type Walk: Copy;
+    const WALK: Self::Walk;
     /// What no block fills: air, or void.
     const AIR: Self::Block;
     /// A root of zoom 0, `node` the world's.
@@ -278,9 +283,10 @@ pub trait Query {
     /// The child `node` at `zoom` of the node `at` was handed for, with what
     /// that one found handed down.
     fn child(&mut self, at: &Self::At, zoom: Zoom, node: [i32; 3]) -> Self::At;
-    /// What is in the node `node` at `zoom`, `at` what its ancestors handed
-    /// it, asked from `far` to `near`, the ray in it from `t0`.
-    fn node(&mut self, at: &mut Self::At, zoom: Zoom, node: [i32; 3], asked: [Zoom; 2], t0: f32) -> In<Self::Block>;
+    /// What is in the node `(zoom, index)`, `at` what its ancestors handed
+    /// it and `line` what each of them, at each zoom over it, was handed,
+    /// asked from `far` to `near`, the ray in it from `t0`.
+    fn node(&mut self, walk: &mut Self::Walk, line: &Line<Self::At>, at: &mut Self::At, node: (Zoom, [i32; 3]), asked: [Zoom; 2], t0: f32) -> In<Self::Block>;
     fn fills(&self, block: &Self::Block) -> bool;
 }
 
@@ -321,6 +327,10 @@ pub struct Met<A, B> {
 /// child it is in and where the ray leaves that child follow from the node's
 /// place by the slab test, so no entry holds them.
 const DEPTH: usize = FINEST_ZOOM as usize + 1;
+
+/// The descent's stack as a node's query reads it: by zoom, what each node
+/// over it was handed.
+pub type Line<A> = [A; DEPTH];
 
 /// The first block `ray` meets within its reach that `until` stops at, at
 /// the zoom `detail` asks where it meets it: down the pyramid from the
@@ -394,6 +404,7 @@ fn stops<Q: Query>(q: &Q, ray: &Ray, until: Until, place: Place, block: &Q::Bloc
 fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at: Q::At, root: Place, span: (f32, f32, u32)) -> Met<Q::At, Q::Block> {
     let dlen = libm::sqrtf(ray.direction[0] * ray.direction[0] + ray.direction[1] * ray.direction[1] + ray.direction[2] * ray.direction[2]);
     let mut stack = [root_at; DEPTH];
+    let mut walk = Q::WALK;
     // The node being entered, and the ray within it.
     let (mut at, mut place, (mut t0, mut t1, mut axis)) = (root_at, root, span);
     let mut visits = 0;
@@ -404,7 +415,7 @@ fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at
             let (min, side) = (place.min(ray), place.side());
             let near = [min[0].max(0.0).min(min[0] + side), min[1].max(0.0).min(min[1] + side), min[2].max(0.0).min(min[2] + side)];
             let asked = [detail.at(t1 * dlen), detail.at(libm::sqrtf(near[0] * near[0] + near[1] * near[1] + near[2] * near[2]))];
-            let i = q.node(&mut at, place.zoom, place.node(ray), asked, t0);
+            let i = q.node(&mut walk, &stack, &mut at, (place.zoom, place.node(ray)), asked, t0);
             visits += 1;
             let stop = Stop {
                 t: t0,

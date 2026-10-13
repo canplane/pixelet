@@ -66,6 +66,50 @@ impl Tile for Framed<'_> {
     }
 }
 
+/// The finest held tile on a node's line at or over a zoom: its zoom in the
+/// high byte, its window word (frame plus one) under it; 0 where none is.
+fn held_of((zoom, word): (u32, u32)) -> u32 {
+    if word == 0 {
+        0
+    } else {
+        zoom << 24 | word
+    }
+}
+
+/// What a node is handed down on the GPU: its caves, and the finest held
+/// tile on its line at or over its zoom (`held_of`), which its children
+/// step from with one look at the window rather than a walk up it.
+#[derive(Clone, Copy)]
+pub struct Down {
+    cave: Cave,
+    held: u32,
+}
+
+/// What the walk reads of a column of cells at a zoom.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum Read {
+    /// Nothing read yet.
+    None,
+    /// The ground's cell.
+    Cell,
+    /// Past the service area: the Earth's.
+    Earth,
+    /// No tile held over it.
+    Lacks,
+}
+
+/// The column of cells the walk read last, at its zoom: a ray passes a
+/// column's blocks one after another, so each is handed the read rather
+/// than reading it again.
+#[derive(Clone, Copy)]
+pub struct Column {
+    zoom: u32,
+    at: [i32; 2],
+    read: Read,
+    cell: ground::Cell,
+}
+
 /// The world as the GPU holds it (pxl-kernel scene/cast.rs fills it): the
 /// ground's held tiles, the service area, and the caves. Ways, what is
 /// placed and decor are not here (pxl-portable `cast::Query`).
@@ -111,15 +155,16 @@ impl World<'_> {
         [w.x, w.y, w.z, w.w][(i % 4) as usize] as u32
     }
 
-    /// The finest held tile over the tile `t` at `zoom`, down to the top: its
-    /// zoom and its window word, 0 where none is.
-    fn drawn(&self, zoom: u32, t: [i32; 2]) -> (u32, u32) {
+    /// The finest held tile over the tile `t` at `zoom`, down to the top
+    /// (`held_of`): for a tile beside a node's own, whose line the descent
+    /// did not walk.
+    fn beside(&self, zoom: u32, t: [i32; 2]) -> u32 {
         let mut z = zoom;
         loop {
             let s = zoom - z;
             let w = self.held(z, [t[0] >> s, t[1] >> s]);
             if w != 0 || z == GROUND.top() {
-                return (z, w);
+                return held_of((z, w));
             }
             z -= 1;
         }
@@ -132,16 +177,17 @@ impl World<'_> {
     }
 
     /// The ground's cell `g` of the tiles at `zoom`, counted in their cells,
-    /// off the finest held tile over it: its look and height, `void` where
-    /// none is held; and whether only its look is asked.
-    fn cell(&self, zoom: u32, g: [i32; 2], only_look: bool) -> (u32, i32) {
+    /// off the finest held tile over it: `own` where it lies in the tile
+    /// `tile`, else the window's; its look and height, `void` where none is
+    /// held; and whether only its look is asked.
+    fn cell(&self, zoom: u32, g: [i32; 2], (tile, own): ([i32; 2], u32), only_look: bool) -> (u32, i32) {
         let shamt = GROUND.tile_cell_shamt();
         let t = [wrap_index(zoom, g[0] >> shamt), g[1] >> shamt];
-        let (from, w) = self.drawn(zoom, t);
-        if w == 0 {
+        let held = if t[0] == tile[0] && t[1] == tile[1] { own } else { self.beside(zoom, t) };
+        if held == 0 {
             return (VOID, 0);
         }
-        let s = zoom - from;
+        let s = zoom - (held >> 24);
         // Its place from the held tile's first cell, in the asked tile's cells.
         let first = |v: i32| (v >> s) << (shamt + s);
         let mask = (1u32 << (zoom + shamt)) - 1;
@@ -149,7 +195,7 @@ impl World<'_> {
         let tile = Framed {
             looks: self.looks,
             heights: self.heights,
-            frame: w - 1,
+            frame: (held & 0xff_ffff) - 1,
         };
         if only_look {
             (ground::look(&tile, v, 1 << s), 0)
@@ -160,16 +206,16 @@ impl World<'_> {
 
     /// The ground's cell `b` of `zoom` as the grid reads it, before the
     /// area's edge is laid: the tile cell drawing it, or the four it folds a
-    /// zoom finer (`ground::fold`), off the tiles at `read`; its look alone
-    /// where `only_look`.
-    fn ground_at(&self, read: u32, zoom: u32, b: [i32; 2], only_look: bool) -> (u32, f32, [u32; 4]) {
+    /// zoom finer (`ground::fold`), off the tiles at `read`, `own` the held
+    /// tile over its own; its look alone where `only_look`.
+    fn ground_at(&self, read: u32, zoom: u32, b: [i32; 2], own: ([i32; 2], u32), only_look: bool) -> (u32, f32, [u32; 4]) {
         let k = GROUND.cell_zoom(read) as i32 - zoom as i32;
         // Tile cells it folds: four a zoom finer, else the one holding it.
         let (n, first) = if k == 1 { (4, [2 * b[0], 2 * b[1]]) } else { (1, [b[0] >> -k, b[1] >> -k]) };
         let mut four = [(VOID, 0); 4];
         let mut q = 0;
         while q < n {
-            four[q as usize] = self.cell(read, [first[0] + (q & 1) as i32, first[1] + (q >> 1) as i32], only_look);
+            four[q as usize] = self.cell(read, [first[0] + (q & 1) as i32, first[1] + (q >> 1) as i32], own, only_look);
             q += 1;
         }
         if n == 4 {
@@ -182,73 +228,117 @@ impl World<'_> {
 
     /// Whether the cell `b` of `zoom` is gone: past the area, or nothing
     /// known of it.
-    fn gone(&self, read: u32, zoom: u32, b: [i32; 2]) -> bool {
-        area::past(self, area::tile_at(zoom, b)) || self.ground_at(read, zoom, b, true).0 == UNKNOWN
+    fn gone(&self, read: u32, zoom: u32, b: [i32; 2], own: ([i32; 2], u32)) -> bool {
+        area::past(self, area::tile_at(zoom, b)) || self.ground_at(read, zoom, b, own, true).0 == UNKNOWN
     }
 
-    /// What is in the block `c` at `zoom`, its caves `cave`, at its own
-    /// zoom (pxl-kernel query/node.rs `drawn`): past the area, the Earth's;
-    /// else the ground's cell off the tile drawing that zoom's cells, the
-    /// area's edge laid on it, and the caves' value.
-    fn block(&self, cave: Cave, zoom: u32, c: [i32; 3]) -> In<u32> {
-        let b = [c[0], c[1]];
+    /// The column `b` of `zoom` as its blocks read it (pxl-kernel
+    /// query/node.rs `drawn`): past the area, the Earth's; else the ground's
+    /// cell off the tile drawing that zoom's cells, `own` the held tile over
+    /// it, the area's edge laid on it.
+    fn column(&self, zoom: u32, b: [i32; 2], own: ([i32; 2], u32)) -> Column {
+        let mut column = Column {
+            zoom,
+            at: b,
+            read: Read::Lacks,
+            cell: ground::Cell { look: VOID, top: 0, fold: [VOID; 4] },
+        };
         if area::past(self, area::tile_at(zoom, b)) {
-            return In {
-                kind: Kind::Block,
-                block: area::earth(c[2]),
-            };
+            column.read = Read::Earth;
+            return column;
+        }
+        if own.1 == 0 {
+            return column;
         }
         let read = GROUND.read_zoom(zoom);
-        // No tile held over its own: the lack.
-        if self.drawn(read, [b[0] >> (zoom - read), b[1] >> (zoom - read)]).1 == 0 {
-            return In { kind: Kind::Lacks, block: VOID };
-        }
-        let (look, h, fold) = self.ground_at(read, zoom, b, false);
+        let (look, h, fold) = self.ground_at(read, zoom, b, own, false);
         let gone = look == UNKNOWN;
         let beside = !gone && zoom >= LEAF_CELL && Ground::grounds(look) && {
             let mut any = false;
             let mut k = 0;
             while k < 9 {
                 let (dx, dy) = (k % 3 - 1, k / 3 - 1);
-                any = any || (k != 4 && self.gone(read, zoom, [wrap_index(zoom, b[0] + dx), b[1] + dy]));
+                any = any || (k != 4 && self.gone(read, zoom, [wrap_index(zoom, b[0] + dx), b[1] + dy], own));
                 k += 1;
             }
             any
         };
-        let cell = ground::Cell {
+        column.read = Read::Cell;
+        column.cell = ground::Cell {
             look: area::wall(look, zoom, gone, beside),
             top: ground::blocks(zoom, h),
             fold,
         };
-        In {
-            kind: Kind::Block,
-            block: cell.block(zoom, c[2], cave.hollow()).0,
+        column
+    }
+
+    /// The held tile over the node `c` at `zoom`'s own tile at `read`: its
+    /// ancestor's at that zoom, on `line`, or its own.
+    fn own(line: &cast::Line<Down>, at: &Down, zoom: u32, read: u32, c: [i32; 3]) -> ([i32; 2], u32) {
+        let s = zoom - read;
+        ([c[0] >> s, c[1] >> s], if read == zoom { at.held } else { line[read as usize].held })
+    }
+
+    /// What is in the block `c` at `zoom` at its own zoom, its column read
+    /// once (`column`) and its caves' value.
+    fn block(&self, last: &mut Column, line: &cast::Line<Down>, at: &Down, zoom: u32, c: [i32; 3]) -> In<u32> {
+        let b = [c[0], c[1]];
+        if last.read == Read::None || last.zoom != zoom || last.at[0] != b[0] || last.at[1] != b[1] {
+            let own = World::own(line, at, zoom, GROUND.read_zoom(zoom), c);
+            *last = self.column(zoom, b, own);
+        }
+        match last.read {
+            Read::Earth => In {
+                kind: Kind::Block,
+                block: area::earth(c[2]),
+            },
+            Read::Cell => In {
+                kind: Kind::Block,
+                block: last.cell.block(zoom, c[2], at.cave.hollow()).0,
+            },
+            _ => In { kind: Kind::Lacks, block: VOID },
         }
     }
 }
 
-/// What a node is handed down on the GPU: its caves.
 impl Query for World<'_> {
-    type At = Cave;
+    type At = Down;
     type Block = u32;
     const AIR: u32 = VOID;
+    type Walk = Column;
+    const WALK: Column = Column {
+        zoom: 0,
+        at: [0, 0],
+        read: Read::None,
+        cell: ground::Cell { look: VOID, top: 0, fold: [VOID; 4] },
+    };
 
-    fn root(&mut self, node: [i32; 3]) -> Cave {
-        Cave::of(0, node)
+    fn root(&mut self, node: [i32; 3]) -> Down {
+        Down { cave: Cave::of(0, node), held: 0 }
     }
 
-    fn child(&mut self, cave: &Cave, zoom: u32, node: [i32; 3]) -> Cave {
-        cave.child(zoom, node)
+    /// A child at a tile's zoom looks at the window for its own tile; past
+    /// the leaves its parent's is its own.
+    fn child(&mut self, at: &Down, zoom: u32, node: [i32; 3]) -> Down {
+        let own = if zoom >= GROUND.top() && zoom <= LEAF_ZOOM {
+            held_of((zoom, self.held(zoom, [node[0], node[1]])))
+        } else {
+            0
+        };
+        Down {
+            cave: at.cave.child(zoom, node),
+            held: if own != 0 { own } else { at.held },
+        }
     }
 
-    /// What is in the node `c` at `zoom` (pxl-kernel query/node.rs `World::node`): at
-    /// `near` or finer, or finer than the ground's cells, where the world
-    /// holds nothing finer, the block; coarser, past the area the Earth's,
-    /// else the ground's one rule over the lowest and highest its held tile's
-    /// index lane holds under it (`ground::empty`).
-    fn node(&mut self, cave: &mut Cave, zoom: u32, c: [i32; 3], [far, near]: [u32; 2], _t0: f32) -> In<u32> {
+    /// What is in the node `c` at `zoom` (pxl-kernel query/node.rs
+    /// `World::node`): at `near` or finer, or finer than the ground's cells,
+    /// where the world holds nothing finer, the block; coarser, past the area
+    /// the Earth's, else the ground's one rule over the lowest and highest
+    /// its held tile's index lane holds under it (`ground::empty`).
+    fn node(&mut self, last: &mut Column, line: &cast::Line<Down>, at: &mut Down, (zoom, c): (u32, [i32; 3]), [far, near]: [u32; 2], _t0: f32) -> In<u32> {
         if zoom >= near || zoom >= LEAF_CELL {
-            return self.block(*cave, zoom, c);
+            return self.block(last, line, at, zoom, c);
         }
         let split = In { kind: Kind::Split, block: VOID };
         let empty = In { kind: Kind::Block, block: VOID };
@@ -258,16 +348,13 @@ impl Query for World<'_> {
         if zoom < GROUND.top() {
             return split;
         }
-        let cell = near.min(GROUND.grid_zoom(zoom.min(LEAF_ZOOM)));
-        let read = GROUND.read_zoom(cell);
-        let s = zoom - read;
-        let (from, w) = self.drawn(read, [c[0] >> s, c[1] >> s]);
-        if w == 0 {
+        let read = GROUND.read_zoom(near.min(GROUND.grid_zoom(zoom.min(LEAF_ZOOM))));
+        let (_, held) = World::own(line, at, zoom, read, c);
+        if held == 0 {
             return In { kind: Kind::Lacks, block: VOID };
         }
-        let relief = ground::relief(|i| self.index(w - 1, i), from, (zoom, [c[0], c[1]]));
-        let hollow = cave.whole(zoom) == (true, true);
-        if ground::empty(self, (zoom, c), relief, [far, near], hollow) {
+        let relief = ground::relief(|i| self.index((held & 0xff_ffff) - 1, i), held >> 24, (zoom, [c[0], c[1]]));
+        if ground::empty(self, (zoom, c), relief, [far, near], at.cave.whole(zoom) == (true, true)) {
             empty
         } else {
             split
@@ -282,7 +369,7 @@ impl Query for World<'_> {
 /// The lane's cell for a ray: the value it stopped on, its kind (ground)
 /// and the face it entered through, then how far as f32 bits, then the
 /// nodes its descent asked about; where it met nothing, the first two zero.
-fn word(ray: &cast::Ray, met: Met<Cave, u32>) -> UVec4 {
+fn word(ray: &cast::Ray, met: Met<Down, u32>) -> UVec4 {
     if met.ends != Ends::Stop {
         return UVec4::new(0, 0, met.visits, 0);
     }
