@@ -9,7 +9,8 @@ fn at(why: Why, seen: bool, near: f64) -> Ask {
 }
 
 fn key(stream: Stream, ask: Ask) -> (u8, f64) {
-    let r = Policy::standard().rank(stream, 0, ask, 0.0);
+    let subject = Tile::new(GROUND.top(), [0, 0]).subject();
+    let r = Policy::standard().rank(stream, subject, ask, 0.0);
     (r.class, r.distance)
 }
 
