@@ -63,21 +63,33 @@ fn side_of(decor: &Decor, c: &Candidate) -> i64 {
     i64::from(x.max(y))
 }
 
+/// Cells about a node its decor reads: the faces a turn is voted from, and
+/// the widest box's footing past the cell it stands in.
+pub fn ring(decors: &[Decor]) -> u32 {
+    decors.iter().map(|d| i64::from(d.widest())).fold(ALIGN_NEIGHBOR_RADIUS, i64::max) as u32
+}
+
 /// What the ground grows of `decor` in `region`, on the node `node` of grid
-/// cells at `cell`, whose first leaf cell's corner lies at `origin`: each
-/// candidate faces as its cell's face says and stands at the height the
-/// chunk draws there, so what is grown is what is drawn. A tree coarser than
+/// cells at `cell` read into `face` (`World::surfaces`, `ring` about it),
+/// whose first leaf cell's corner lies at `origin`: each candidate faces as
+/// its cell's face says, stands at the height the chunk draws there, and
+/// grows where its footing does (`World::grows`), so what is grown is what is
+/// drawn. A tree coarser than
 /// a leaf's stands on the grass the view sees, not on leaf cells it cannot. A
 /// box is counted in leaf cells, so the ground grows a kind of `scale_steps`
-/// 0 alone. `candidates` is the caller's room.
+/// 0 alone. `placed` is what placed decor claims about `region`
+/// (`World::placed_claims`), read once for every candidate in it;
+/// `candidates` is the caller's room.
 #[allow(clippy::too_many_arguments)]
 pub fn grow<E: From<TryReserveError>>(
     world: &World,
+    face: &mut Surfaces,
     decor: &Decor,
     node: Node<2>,
     cell: Zoom,
     origin: [i64; 2],
     region: Aabb,
+    placed: &[Aabb],
     candidates: &mut Vec<Candidate>,
     mut sink: impl FnMut(Instance) -> Result<(), E>,
 ) -> Result<(), E> {
@@ -97,35 +109,26 @@ pub fn grow<E: From<TryReserveError>>(
     )?;
     let (x0, y0) = GROUND.read_at(node, cell);
     let unit = units(atom);
-    let grown = world.surfaces(node, cell, ALIGN_NEIGHBOR_RADIUS as u32, |face| {
-        for &candidate in candidates.iter() {
-            let at = [0, 1].map(|k| i64::from([x0, y0][k]) + (candidate.cell[k] - min[k]).div_euclid(per));
-            let Some(i) = stand(decor, face, candidate, at) else { continue };
-            let Source::Ground([gx, gy, z]) = i.source else { continue };
-            // In the region holding the cell it stands on.
-            let at = [(gx as f64 + 0.5) * unit, (gy as f64 + 0.5) * unit, z as f64];
-            if (0..2).all(|k| (region.min[k]..region.max[k]).contains(&at[k])) && region.min[2] < at[2] && at[2] <= region.max[2] {
-                sink(i)?;
-            }
+    for &candidate in candidates.iter() {
+        let at = [0, 1].map(|k| i64::from([x0, y0][k]) + (candidate.cell[k] - min[k]).div_euclid(per));
+        let Some(i) = stand(decor, face, candidate, at) else { continue };
+        let Source::Ground([gx, gy, z]) = i.source else { continue };
+        // In the region holding the cell it stands on.
+        let at = [(gx as f64 + 0.5) * unit, (gy as f64 + 0.5) * unit, z as f64];
+        if (0..2).all(|k| (region.min[k]..region.max[k]).contains(&at[k])) && region.min[2] < at[2] && at[2] <= region.max[2] && world.grows(face, decor, &i, placed) {
+            sink(i)?;
         }
-        Ok(())
-    });
-    grown.value().flatten().unwrap_or(Ok(()))
+    }
+    Ok(())
 }
 
-/// What the ground grows of `decor` in the leaf `cell`: the leaf scatter,
-/// cell by cell, which a region grows the same (pxl-spec procedural.test.rs).
-pub fn grown_at(world: &World, decor: &Decor, cell: [i64; 2]) -> Option<Instance> {
+/// What the ground stands of `decor` in the leaf `cell` on `face`, the
+/// leaf's ground read about it (`World::grown_in`): the leaf scatter, cell
+/// by cell, which a region grows the same (pxl-spec procedural.test.rs).
+pub fn grown_at(face: &Surfaces, decor: &Decor, cell: [i64; 2]) -> Option<Instance> {
     let candidate = scatter_at(decor.seed, decor.density, cell, i64::from(decor.widest()), |c| side_of(decor, c))?;
-    let node = (GROUND.cell_zoom(LEAF_ZOOM), cell);
-    let grid = GROUND.grid_zoom(LEAF_ZOOM);
-    let (x0, y0) = GROUND.read_at(node, grid);
-    // Only the resident leaf can say.
-    world
-        .surfaces(node, grid, ALIGN_NEIGHBOR_RADIUS as u32, |face| stand(decor, face, candidate, [x0, y0].map(i64::from)))
-        .exact()
-        .flatten()
-        .flatten()
+    let (x0, y0) = GROUND.read_at((GROUND.cell_zoom(LEAF_ZOOM), cell), GROUND.grid_zoom(LEAF_ZOOM));
+    stand(decor, face, candidate, [x0, y0].map(i64::from))
 }
 
 /// A candidate on the face's cell `at`, at the height the chunk draws there;

@@ -14,7 +14,7 @@ use crate::bake::way::half_cells;
 use crate::block::cube::Ground;
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::pvf3::ivec::gather;
-use crate::space::coord::zoom::{of_side, units, Zoom};
+use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
@@ -253,90 +253,69 @@ fn slot(c: [i64; 3]) -> u64 {
     (c[0] & 1 | (c[1] & 1) << 1 | (c[2] & 1) << 2) as u64
 }
 
-/// Whether the cube at `zoom` holding `at`, in units, is a cave's air. A cube
-/// is its parent's value unless its parent turned it, and a parent turns at
-/// most one of its eight, so the majority of any cube's children is the
-/// cube: the caves fold to themselves at every zoom. Past the leaves a cube
-/// is its leaf's.
-pub fn hollow_at(zoom: Zoom, at: [f64; 3]) -> bool {
-    let mut hollow = false;
-    for z in CAVE_COARSEST..=zoom.min(GROUND.cell()) {
-        let c = at.map(|v| (v / units(z)).floor() as i64);
-        let (turn, live) = draws(z - 1, c.map(|v| v >> 1));
-        hollow ^= turn == Some(slot(c));
-        if live >> slot(c) & 1 == 0 {
-            break;
-        }
-    }
-    hollow
+/// The caves at a cube as its parent hands them down, so a descent asks
+/// each cube's draws once rather than again from the caves' first zoom:
+/// its value, and whether anything under it differs (`live`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Cave {
+    hollow: bool,
+    live: bool,
 }
 
-/// Every hollow cube meeting `min..max`, in units, no finer than `zoom`: a
-/// cube a cave holds whole, or one at `zoom`, which is the majority of what
-/// is under it. Only cubes that draw are descended, so it costs the caves'
-/// nodes there, not the region's cells.
-pub fn caves(min: [f64; 3], max: [f64; 3], zoom: Zoom, visit: &mut dyn FnMut(Zoom, [i64; 3])) {
-    let (root, finest) = (CAVE_COARSEST - 1, zoom.min(GROUND.cell()));
-    let side = units(root);
-    let [lo, hi] = [min, max].map(|p| p.map(|v| (v / side).floor() as i64));
-    for x in lo[0]..=hi[0] {
-        for y in lo[1]..=hi[1] {
-            for z in lo[2]..=hi[2] {
-                descend(root, [x, y, z], false, true, finest, [min, max], visit);
+impl Cave {
+    /// Any cube coarser than the caves' first: solid, and every cube of the
+    /// caves' first zoom under it draws.
+    pub const ROOT: Cave = Cave { hollow: false, live: true };
+
+    /// The eight children of the cube `c` at `zoom` whose caves are `self`,
+    /// by their place (`slot`): its draws, one hash, turn one or none, and
+    /// say which draw again. Past the leaves a cube is its leaf's.
+    pub fn children(self, zoom: Zoom, c: [i64; 3]) -> [Cave; 8] {
+        if zoom < CAVE_COARSEST - 1 {
+            return [Cave::ROOT; 8];
+        }
+        if !self.live || zoom >= GROUND.cell() {
+            return [Cave { live: false, ..self }; 8];
+        }
+        let (turn, live) = draws(zoom, c);
+        core::array::from_fn(|k| Cave {
+            hollow: self.hollow ^ (turn == Some(k as u64)),
+            live: live >> k & 1 == 1,
+        })
+    }
+
+    /// The child `c` at `zoom` of a cube whose caves are `self`.
+    pub fn child(self, zoom: Zoom, c: [i64; 3]) -> Cave {
+        self.children(zoom - 1, c.map(|v| v >> 1))[slot(c) as usize]
+    }
+
+    /// The caves at the cube `c` at `zoom`, down its line from the caves'
+    /// first, for an asker with nothing handed down.
+    pub fn of(zoom: Zoom, c: [i64; 3]) -> Cave {
+        let mut cave = Cave::ROOT;
+        for z in CAVE_COARSEST..=zoom.min(GROUND.cell()) {
+            cave = cave.child(z, c.map(|v| v >> (zoom - z)));
+            if !cave.live {
+                break;
             }
         }
-    }
-}
-
-fn descend(z: Zoom, c: [i64; 3], hollow: bool, live: bool, finest: Zoom, [min, max]: [[f64; 3]; 2], visit: &mut dyn FnMut(Zoom, [i64; 3])) {
-    let side = units(z);
-    if (0..3).any(|k| (c[k] + 1) as f64 * side <= min[k] || c[k] as f64 * side >= max[k]) {
-        return;
-    }
-    if !live || z >= finest {
-        if hollow {
-            visit(z, c);
-        }
-        return;
-    }
-    let (turn, lives) = draws(z, c);
-    for k in 0..8u64 {
-        let child = [0, 1, 2].map(|a| 2 * c[a] + (k >> a & 1) as i64);
-        descend(z + 1, child, hollow ^ (turn == Some(k)), lives >> k & 1 == 1, finest, [min, max], visit);
-    }
-}
-
-/// The caves down one column `side` units wide, its center `x`, `y` in
-/// units: its cubes are the column's own, or past the leaves its leaf's.
-pub struct Caves {
-    at: [f64; 2],
-    zoom: Zoom,
-}
-
-impl Caves {
-    pub fn column(x: f64, y: f64, side: f64) -> Caves {
-        Caves {
-            at: [x, y],
-            zoom: of_side(side).min(GROUND.cell()),
-        }
+        cave
     }
 
-    /// Whether the cell centered at `z`, in units, is a cave's air.
-    pub fn hollow(&mut self, z: f64) -> bool {
-        hollow_at(self.zoom, [self.at[0], self.at[1], z])
+    /// Whether the cube is a cave's air. A cube is its parent's value unless
+    /// its parent turned it, and a parent turns at most one of its eight, so
+    /// the majority of any cube's children is the cube: the caves fold to
+    /// themselves at every zoom.
+    pub fn hollow(self) -> bool {
+        self.hollow
     }
 
-    /// The cube `z`, in units, is in: where it ends, and whether it is
-    /// hollow, as every cell in it is.
-    pub fn stretch(&mut self, z: f64) -> (f64, bool) {
-        let side = units(self.zoom);
-        (((z / side).floor() + 1.0) * side, self.hollow(z))
+    /// What the caves are all through a cube at `zoom`: its value where
+    /// nothing under it differs, a leaf's or finer always; none coarser than
+    /// the caves' first.
+    pub fn whole(self, zoom: Zoom) -> Option<bool> {
+        (zoom >= CAVE_COARSEST && (!self.live || zoom >= GROUND.cell())).then_some(self.hollow)
     }
-}
-
-/// Whether the leaf cell centered at `at`, in units, is a cave's air.
-pub fn hollow(at: [f64; 3]) -> bool {
-    hollow_at(GROUND.cell(), at)
 }
 
 #[cfg(test)]

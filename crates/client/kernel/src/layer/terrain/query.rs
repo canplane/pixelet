@@ -11,7 +11,7 @@ use pxl_spec::block::sample::{TileSource, TileView};
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::pvf3::pvf3;
 use pxl_spec::space::coord::world::point;
-use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom};
+use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
 use pxl_spec::space::layer::tile::{tile_at, Tile};
@@ -86,6 +86,36 @@ impl Residency<TerrainTile> {
     /// says `tile` exactly: one walk of `tile`'s line.
     pub(crate) fn drawn(&self, tile: Tile) -> Option<Drawn<'_>> {
         self.drawn_of(&self.line(tile))
+    }
+
+    /// The lowest and highest the ground holds over the column `node`'s own
+    /// cells, a tunnel's floor and a deck's top among them, in leaf cells: the
+    /// index lane of the tile `line` draws it from, one look-up whatever the
+    /// node's size (`relief`). A coarser tile standing in bounds it as surely,
+    /// its lane its children's carried up (`pxl-spec bake/fold.rs`
+    /// `fold_index`), and names the tile lacked. None for a column a shard or
+    /// finer past the service area, where no tile is; where none is held, the
+    /// lack, never nothing.
+    pub fn relief(&self, line: &Line, node: Node<2>) -> Answer<Option<[i32; 2]>> {
+        if node.0 >= SHARD_ZOOM && past(node) {
+            return Answer::Exact(None);
+        }
+        let Some(d) = self.drawn_of(line) else {
+            return Answer::Nothing(line.tile);
+        };
+        let r = Some(relief(&d, node).map(i32::from));
+        match d.exact {
+            true => Answer::Exact(r),
+            false => Answer::Coarser(r, d.tile),
+        }
+    }
+
+    /// The cells of the tile `line` walked to, read off the tile it is drawn
+    /// from: exact where a resident tile says it, coarser where one over it
+    /// only draws it, the lack where none is held.
+    pub fn cells_of(&self, line: &Line) -> Answer<Source<'_>> {
+        let Some(d) = self.drawn_of(line) else { return Answer::Nothing(line.tile) };
+        d.answer(d.source())
     }
 
     /// As `drawn`, its tile's line already walked.
@@ -227,9 +257,7 @@ impl Query for Residency<TerrainTile> {
         })
     }
 
-    fn read(&self, (zoom, [x, y, _]): Node<3>, cell: Zoom) -> Answer<Source<'_>> {
-        let p = GROUND.read_tile((zoom, [x, y]), cell);
-        let Some(d) = self.drawn(p) else { return Answer::Nothing(p) };
-        d.answer(d.source())
+    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Source<'_>> {
+        self.cells_of(&self.cursor(node, cell))
     }
 }

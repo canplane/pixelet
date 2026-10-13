@@ -3,33 +3,33 @@
 //! Placed objects, kept as their one record: each leaf's catalog value at its
 //! node and the handle of what it carries beyond it (`ext.rs`), in one sparse
 //! tree a shard (`space/hierarchy/sparse_tree.rs`). A write arrives as
-//! `<key, id, ext>` (`morton::key_of`). What a node at any zoom shows is read
-//! from the leaves over and under it, folding by the objects' majority, and
-//! never kept. A leaf that carries a record is never joined, its handle its
-//! own, and is never split: a placement takes an empty cell and an erase
-//! takes the whole leaf.
+//! `<key, id, ext>` (`morton::key_of`). What a node at any zoom holds is the
+//! pyramid's (`pyramid.rs`), derived from this record beside it and refolded
+//! by each write over the nodes it changes, read through the layer's query
+//! (`Query::cursor`, `Query::child`, `Store::value`). A leaf that carries a
+//! record is never joined, its handle its own, and is never split: a
+//! placement takes an empty cell and an erase takes the whole leaf.
 
 use fnv::FnvHashMap;
 use xpute_guest::global::Global;
 
-use std::collections::TryReserveError;
-
 pub use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::constant::OBJECT_FINEST;
-use pxl_spec::block::object::{cube_of, decor_id_from_num, object_value_is_decor, object_value_is_marker, object_value_is_voxel, Cube};
+use pxl_spec::block::object::{cube_of, decor_id_from_num, object_value_is_decor, object_value_is_marker, Cube};
 use pxl_spec::block::{cube, DecorId};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::pvf3::pvf3::Pvf3;
-use pxl_spec::space::coord::world::{around, node_near, wrap_index, REACH};
-use pxl_spec::space::coord::zoom::{base_of, count, cube, index_of, of_side, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::coord::world::{node_near, wrap_index};
+use pxl_spec::space::coord::zoom::{base_of, cube, index_of, of_side, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{child_cube, key_of, node_of};
 use pxl_spec::space::hierarchy::sparse_tree::{Slot, SparseTree};
-use pxl_spec::space::hierarchy::tree::{first_descendant_of, region, Node};
+use pxl_spec::space::hierarchy::tree::{region, Node};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::kernel;
 use crate::layer::object::ext::{Ext, Pools, NONE};
+use crate::layer::object::pyramid::{Held, Pyramid};
 use crate::layer::{Answer, Bound, Query};
 use crate::sched::edge::request_world_tick;
 use pxl_spec::block::ext::class_of;
@@ -119,21 +119,21 @@ pub struct Leaf {
     pub ext: u16,
 }
 
-const EMPTY: Leaf = Leaf { id: VOID as u16, ext: NONE };
+pub(super) const EMPTY: Leaf = Leaf { id: VOID as u16, ext: NONE };
 
-fn key(zoom: Zoom, at: [i64; 3]) -> u128 {
+pub(super) fn key(zoom: Zoom, at: [i64; 3]) -> u128 {
     key_of::<3>(zoom, at)
 }
 
 /// The shard a node is under.
-fn shard(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
+pub(super) fn shard(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
     [at[0] >> (zoom - SHARD_ZOOM), at[1] >> (zoom - SHARD_ZOOM), 0]
 }
 
 /// The 2×2×2 children folded (pxl-spec bake/fold.rs): the share of the cube
 /// filled, the mean of theirs, and the kind most of that fill is, a tie to
 /// the corner `majority`'s alternates to. A non-voxel value fills nothing.
-fn fold_cell(children: [(u16, f64); 8], zoom: Zoom) -> (u16, f64) {
+pub(super) fn fold_cell(children: [(u16, f64); 8], zoom: Zoom) -> (u16, f64) {
     let fill = children.iter().map(|c| c.1).sum::<f64>() / 8.0;
     let of = |kind: u16| children.iter().filter(|c| c.0 == kind).map(|c| c.1).sum::<f64>();
     let mut order = children;
@@ -153,7 +153,7 @@ fn fold_cell(children: [(u16, f64); 8], zoom: Zoom) -> (u16, f64) {
 /// What a folded cube shows: its kind where it is half full or more, so a
 /// lone cube goes at the first fold and a wall keeps whole cells, and the
 /// volume is rounded once, where it is drawn, not at every zoom on the way.
-fn shown((kind, fill): (u16, f64)) -> u16 {
+pub(super) fn shown((kind, fill): (u16, f64)) -> u16 {
     if fill >= 0.5 {
         kind
     } else {
@@ -193,9 +193,11 @@ impl Write {
 pub struct Store {
     shards: FnvHashMap<u128, Tree>,
     ext: Pools,
+    /// What each node holds at every zoom, derived from `shards`.
+    pyramid: Pyramid,
 }
 
-type Tree = SparseTree<Leaf, 3>;
+pub(super) type Tree = SparseTree<Leaf, 3>;
 
 /// A node met in a descent: its zoom, its index and cube in the asker's frame,
 /// its value if it is a leaf; whether to go under it.
@@ -223,28 +225,12 @@ impl Store {
         })
     }
 
-    /// What a node holds: a leaf's value and whether it fills its cube, or
-    /// its children folded.
-    fn fold(&self, tree: &Tree, slot: Slot<Leaf>, zoom: Zoom, at: [i64; 3], hide: Option<u128>) -> (u16, f64) {
-        match slot {
-            Slot::Leaf(v) if v == EMPTY || hide == Some(key(zoom, at)) || !object_value_is_voxel(u32::from(v.id)) => (EMPTY.id, 0.0),
-            Slot::Leaf(v) => (v.id, 1.0),
-            Slot::Branch(block) => {
-                let mut kids = [(EMPTY.id, 0.0); 8];
-                for (k, s) in tree.block(block).enumerate() {
-                    kids[k] = self.fold(tree, s, zoom + 1, child_cube(zoom, at, k), hide);
-                }
-                fold_cell(kids, zoom)
-            }
-        }
-    }
-
     /// Every node anything is under, from the roots down, in `about`'s
     /// frame, a node entered where `enter` says so: its zoom, its index and
     /// cube there, and its value if it is a leaf.
     fn descend(&self, about: f64, enter: &mut Enter) {
         for (&k, tree) in &self.shards {
-            self.walk_column(tree, node_of::<3>(k).1, about, enter);
+            self.walk_shard(tree, node_of::<3>(k).1, about, enter);
         }
     }
 
@@ -257,13 +243,13 @@ impl Store {
             for x in across(0) {
                 let shard = [wrap_index(SHARD_ZOOM, x), y, 0];
                 if let Some(tree) = self.shards.get(&key(SHARD_ZOOM, shard)) {
-                    self.walk_column(tree, shard, about(region), enter);
+                    self.walk_shard(tree, shard, about(region), enter);
                 }
             }
         }
     }
 
-    fn walk_column(&self, tree: &Tree, shard: [i64; 3], about: f64, enter: &mut Enter) {
+    fn walk_shard(&self, tree: &Tree, shard: [i64; 3], about: f64, enter: &mut Enter) {
         for (s, slot) in tree.block(0).enumerate() {
             self.walk(tree, slot, CUBE_ZOOM, child_cube(SHARD_ZOOM, shard, s), about, enter);
         }
@@ -330,68 +316,11 @@ impl Store {
         self.find(zoom, at).is_some_and(|f| f.slot != Slot::Leaf(EMPTY))
     }
 
-    /// What the objects fold to in the cells `from..to` of `target`, at every
-    /// height, with `hide` left out.
-    fn fold_at(&self, target: Zoom, from: [i64; 2], to: [i64; 2], hide: Option<EntryAt>, out: &mut FnvHashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
-        out.clear();
-        let mut refused = Ok(());
-        let hide = hide.map(|h| key(h.zoom(), h.at()));
-        let inside = |x: i64, y: i64| (from[0]..to[0]).contains(&x) && (from[1]..to[1]).contains(&y);
-        let side = units(target);
-        let query = Aabb {
-            min: [from[0] as f64 * side, from[1] as f64 * side, REACH.min[2]],
-            max: [to[0] as f64 * side, to[1] as f64 * side, REACH.max[2]],
-        };
-        self.descend_in(&query, &mut |zoom, at, whole, leaf| {
-            if whole.meet(query).is_none() || refused.is_err() {
-                return false;
-            }
-            let leaf = leaf.filter(|_| hide != Some(key(zoom, at)));
-            if zoom < target && leaf.is_none() {
-                return true;
-            }
-            let v = u32::from(match leaf {
-                Some(v) => v.id,
-                None => self.find(zoom, at).map_or(EMPTY.id, |f| shown(self.fold(f.tree, f.slot, f.zoom, at, hide))),
-            });
-            if !object_value_is_voxel(v) {
-                return false;
-            }
-            // A leaf coarser than the cell is each of its cells.
-            let cells = i64::from(count(target, zoom));
-            let [x0, y0, z0] = first_descendant_of(at, u32::from(target - zoom));
-            for dz in 0..cells {
-                for y in (y0..y0 + cells).filter(|&y| (from[1]..to[1]).contains(&y)) {
-                    for x in (x0..x0 + cells).filter(|&x| inside(x, y)) {
-                        if refused.is_ok() {
-                            refused = try_insert(out, [x, y, z0 + dz], v);
-                        }
-                    }
-                }
-            }
-            false
-        });
-        refused
-    }
-
-    /// The leaf holding the cube at `zoom`, X in the asker's frame, or the
-    /// cube itself as its eight fold to, and whether it is that fold.
-    pub fn node(&self, zoom: Zoom, at: [i64; 3]) -> (Entry, bool) {
-        let empty = (Entry { zoom, at, state: VOID, ext: NONE }, false);
-        let Some(f) = self.find(zoom, at) else { return empty };
-        match f.slot {
-            Slot::Leaf(EMPTY) => empty,
-            Slot::Leaf(v) => (Entry::of(f.zoom, at.map(|c| c >> (zoom - f.zoom)), v), false),
-            branch => (
-                Entry {
-                    zoom,
-                    at,
-                    state: u32::from(shown(self.fold(f.tree, branch, zoom, at, None))),
-                    ext: NONE,
-                },
-                true,
-            ),
-        }
+    /// What the node at `zoom`, `at` holding `held` (`Query::cursor`,
+    /// `Query::child`) folds to as a cell of that zoom is drawn, X in the
+    /// lane's copy, `hide` left out: the pyramid's, read as kept.
+    pub fn value(&self, held: Held, zoom: Zoom, at: [i64; 3], hide: Option<EntryAt>) -> Option<u32> {
+        self.pyramid.value(held, zoom, at, hide)
     }
 
     /// The value placed at exactly this node, if one is.
@@ -435,6 +364,7 @@ impl Store {
             };
             let value = Leaf { id: id16, ext: handle };
             let shard = key(SHARD_ZOOM, shard(zoom, at));
+            self.pyramid.forget(self.shards.get(&shard), zoom, at);
             let tree = match self.shards.get_mut(&shard) {
                 Some(tree) => tree,
                 None if value == EMPTY => continue,
@@ -446,6 +376,7 @@ impl Store {
             if tree.uniform() == Some(EMPTY) {
                 self.shards.remove(&shard);
             }
+            self.pyramid.refold(self.shards.get(&shard), zoom, at);
         }
         changed
     }
@@ -477,6 +408,7 @@ impl Store {
         self.each(&mut |e| held.push(e.cube()));
         self.shards.clear();
         self.ext.clear();
+        self.pyramid.clear();
         held
     }
 }
@@ -496,63 +428,16 @@ fn about(b: &Aabb) -> f64 {
     (b.min[0] + b.max[0]) / 2.0
 }
 
-fn try_insert(out: &mut FnvHashMap<[i64; 3], u32>, k: [i64; 3], v: u32) -> Result<(), TryReserveError> {
-    if out.len() == out.capacity() {
-        out.try_reserve(out.len().max(16))?;
-    }
-    out.insert(k, v);
-    Ok(())
-}
-
-/// A node's objects at a cell zoom, as the query reads them: the store and
-/// what was asked, folded when read, nothing kept.
+/// A node's leaves at a cell zoom, as the query reads them: the store and
+/// what was asked. What the node holds folded is the pyramid's
+/// (`Query::cursor`, `Store::value`).
 #[derive(Clone, Copy)]
 pub struct Cells<'a> {
     store: &'a Store,
     node: Node<3>,
-    cell: Zoom,
 }
 
 impl Cells<'_> {
-    /// The cells, X and Y at the asked zoom, of the node's shard and `apron`
-    /// more on each side.
-    pub fn column_cells(&self, apron: i64) -> ([i64; 2], [i64; 2]) {
-        let (zoom, at) = self.node;
-        let [x, y, _] = first_descendant_of(at, u32::from(self.cell - zoom));
-        let n = i64::from(count(self.cell, zoom));
-        ([x - apron, y - apron], [x + n + apron, y + n + apron])
-    }
-
-    /// What the objects fold to over the node's shard and `apron` more cells
-    /// on each side, at the asked zoom, with `hide` left out.
-    pub fn fold(&self, apron: i64, hide: Option<EntryAt>, out: &mut FnvHashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
-        let (from, to) = self.column_cells(apron);
-        self.store.fold_at(self.cell, from, to, hide, out)
-    }
-
-    /// Cuts the cells `carve` covers to air in `out`, as `fold` writes them:
-    /// an eraser's preview.
-    pub fn carve(&self, apron: i64, carve: EntryAt, out: &mut FnvHashMap<[i64; 3], u32>) -> Result<(), TryReserveError> {
-        let (from, _) = self.column_cells(apron);
-        let own = carve.zoom();
-        let [ix, iy, iz] = index_of(self.cell, &base_of(own, carve.at()));
-        let ix = from[0] + (ix - from[0]).rem_euclid(around(self.cell));
-        let n = if own < self.cell { i64::from(count(self.cell, own)) } else { 1 };
-        for dz in 0..n {
-            for dy in 0..n {
-                for dx in 0..n {
-                    try_insert(out, [ix + dx, iy + dy, iz + dz], AIR)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// The leaf holding the node, or the node as its eight fold to, and whether it is that fold.
-    pub fn node(&self) -> (Entry, bool) {
-        self.store.node(self.node.0, self.node.1)
-    }
-
     /// Every leaf inside the node, or the one over it.
     pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
         let (zoom, at) = self.node;
@@ -582,16 +467,31 @@ impl Cells<'_> {
 
 impl Query for Store {
     type Record<'a> = Cells<'a>;
-    type Cursor = ();
+    /// What a cube holds, its parent's handed down (`pyramid.rs` `Held`);
+    /// a node over the ground's two axes is read under it.
+    type Cursor = Held;
 
-    fn cursor<const D: usize>(&self, _: Node<D>, _: Zoom) {}
+    fn cursor<const D: usize>(&self, (zoom, at): Node<D>, _: Zoom) -> Held {
+        match D {
+            3 => self.pyramid.held(zoom, [at[0], at[1], at[2]]),
+            _ => Held::Folded(EMPTY.id, 0.0),
+        }
+    }
 
-    fn child<const D: usize>(&self, _: &(), _: Node<D>, _: Zoom) {}
+    fn child<const D: usize>(&self, parent: &Held, (zoom, at): Node<D>, _: Zoom) -> Held {
+        match D {
+            3 => self.pyramid.child(*parent, zoom, [at[0], at[1], at[2]]),
+            _ => *parent,
+        }
+    }
 
     /// All resident, so every answer is exact. Read at `cell`: a node held
     /// finer than its cells is one cube and `finest` one past `cell`, so the
     /// cost is the asker's resolution — one find for a node read whole.
-    fn bound<const D: usize>(&self, _: &(), node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+    fn bound<const D: usize>(&self, held: &Held, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
+        if *held == Held::Nothing {
+            return Answer::Exact(None);
+        }
         let mut out: Option<Bound> = None;
         let mut hold = |aabb: Aabb, finest: Zoom| out = Bound::join(out, Some(Bound { aabb, finest }));
         let whole = region(node);
@@ -624,8 +524,8 @@ impl Query for Store {
         Answer::Exact(out)
     }
 
-    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Cells<'_>> {
-        Answer::Exact(Cells { store: self, node, cell })
+    fn read(&self, node: Node<3>, _: Zoom) -> Answer<Cells<'_>> {
+        Answer::Exact(Cells { store: self, node })
     }
 }
 

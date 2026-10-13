@@ -1,378 +1,306 @@
 // pxl-kernel/view/sight.rs
 
-//! What the eye observes, for the domain: the observation's cell and what
-//! the screen's patches touch.
+//! What the eye observes: one ray a cell of the camera grid, cast down the
+//! pyramid against what is held (`World::first_hit`), the same wherever the
+//! eye is (decision/20261012-the-ground-is-a-grid-then-overwrites.md, "What
+//! is drawn"). Where each ray stops, how far, and the tiles its descent
+//! lacked are the observation; what is made of it is the chunks'.
 //!
-//! The cell is a solid angle, `τ / SPLIT` radians a side; inside it nothing
-//! is promised. Refinement only stops an error from showing the eye more than
-//! a cell's area (`Lens::error`). A piece contributes where a patch's
-//! footprint touches it. Patches are the estimator's resolution, not cells, and
-//! do not depend on quality, so one cast serves every step. Footprints are
-//! reused across small moves (`Sight`) as an acceleration only.
+//! A cast runs a slice a turn and is published whole. A ray whose path
+//! crosses nothing that moved since it was cast answers what it answered,
+//! so only those that do are cast again: reuse that cannot change the result.
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::{Tau, SPLIT};
+use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::{dot3, len3, sub3, V3};
+use pxl_spec::space::coord::world::nearest_box;
+use pxl_spec::space::coord::zoom::{of_side, Zoom};
 use pxl_spec::space::layer::tile::Tile;
+use xpute_guest::global::Global;
 
 use crate::param;
 use crate::query::{Detail, Ray, World};
+use crate::view::frame::pose::view;
+use crate::view::observation::observation;
 
-/// Distance past the met face so a seen point lies in the chunk that holds it.
+/// Distance past the met face, so a stop lies in the block the ray met.
 const INSIDE: f64 = 1e-6;
 
+/// The camera grid's cell at `tau`, as an angle.
 pub fn cell_angle(tau: Tau) -> f64 {
     tau.scale() / SPLIT
 }
 
+/// The quality: a cell spans as many logical pixels at the optical axis as
+/// the camera grid's at the reference view (`target_cell_px`), never finer
+/// than `SPLIT`, and the grid holds no more than `GRID_CELLS_MAX` cells. The
+/// screen plane stands `height / (2 · tan(fov / 2))` pixels from the eye, so
+/// `n` of them span `2 · atan(n / 2 / that)`. The grid is the screen's angles
+/// across, `a`, and up, `b`, cut into cells `c` a side, ⌈a / c⌉ · ⌈b / c⌉ of
+/// them, at most (a / c + 1)(b / c + 1): the least `c` that keeps that within
+/// the most is the root of `ab·u² + (a + b)·u + 1 − most` in `u = 1 / c`.
+pub fn tau() -> Tau {
+    let v = view();
+    let tan_up = libm::tan(v.fov.to_radians() / 2.0);
+    let half = target_cell_px() * tan_up / v.height;
+    let [a, b] = [libm::atan(tan_up * v.width / v.height), libm::atan(tan_up)].map(|t| 2.0 * t);
+    let most = param::GRID_CELLS_MAX;
+    let u = (-(a + b) + libm::sqrt((a + b) * (a + b) + 4.0 * a * b * (most - 1.0))) / (2.0 * a * b);
+    let cell = (2.0 * libm::atan(half)).max(1.0 / u);
+    Tau::of((cell * SPLIT).max(1.0))
+}
+
+/// The screen as the eye sees it: its axes and the tangents of its half-angles.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Lens {
-    pub eye: V3,
-    pub forward: V3,
-    pub right: V3,
-    pub up: V3,
-    pub tan: [f64; 2],
+struct Lens {
+    forward: V3,
+    right: V3,
+    up: V3,
+    tan: [f64; 2],
 }
 
 impl Lens {
     /// From the frustum's planes (left, right, bottom, top, near, far; normals
     /// in): the axes are differences of opposite normals and the tangents their
     /// ratios. None without a screen.
-    pub fn of(o: &Observation) -> Option<Lens> {
+    fn of(o: &Observation) -> Option<Lens> {
         let planes = o.frustum?.planes;
         let n = |k: usize| -> V3 { [planes[k * 4], planes[k * 4 + 1], planes[k * 4 + 2]] };
         let forward = unit(n(4))?;
         let right = unit(sub3(&n(0), &n(1)))?;
         let up = unit(sub3(&n(2), &n(3)))?;
         let tan = [dot3(&n(0), &forward) / dot3(&n(0), &right), dot3(&n(2), &forward) / dot3(&n(2), &up)];
-        tan.iter().all(|t| t.is_finite() && *t > 0.0).then_some(Lens { eye: o.eye, forward, right, up, tan })
+        tan.iter().all(|t| t.is_finite() && *t > 0.0).then_some(Lens { forward, right, up, tan })
     }
 
-    /// The width the error box at `at` shows the eye: the square root of the
-    /// solid angle its silhouette covers, seen along `at`'s direction clamped
-    /// to the screen's edge. By area the box may span 2^¼ of the width on one
-    /// axis, as a cube does seen along a face's diagonal.
-    ///
-    /// An overestimate: the silhouette is taken at the nearest distance the box
-    /// allows, its diagonal nearer. Unbounded where the box reaches the eye.
-    pub fn error(&self, at: V3, error: V3) -> f64 {
-        let d = sub3(&at, &self.eye);
-        let depth = len3(&d) - len3(&error);
-        if depth < INSIDE {
-            return f64::INFINITY;
-        }
-        let [tx, ty] = self.toward(&d);
-        let q = unit(std::array::from_fn(|k| self.forward[k] + tx * self.right[k] + ty * self.up[k])).unwrap_or(self.forward);
-        // A box's silhouette: each face's area as the directions to it meet it,
-        // which turn from `q` by up to its diagonal over its nearest distance.
-        let turn = len3(&error) / depth;
-        let meet = |k: usize| (q[k].abs() + turn).min(1.0);
-        let area = error[1] * error[2] * meet(0) + error[0] * error[2] * meet(1) + error[0] * error[1] * meet(2);
-        area.sqrt() / depth
+    /// The camera grid's cells across and up the screen at `tau`, at equal
+    /// steps of angle about the optical axis.
+    fn across(&self, tau: Tau) -> [u32; 2] {
+        self.tan.map(|t| ((2.0 * libm::atan(t) / cell_angle(tau)).ceil() as u32).max(1))
     }
 
-    /// The screen's tangents toward `d` from the eye, clamped to its edge.
-    fn toward(&self, d: &V3) -> [f64; 2] {
-        let f = dot3(d, &self.forward);
-        let on = |axis: V3, k: usize| {
-            let t = dot3(d, &axis);
-            let t = if f > INSIDE { t / f } else { t.signum() * f64::INFINITY };
-            if t.is_nan() {
-                0.0
-            } else {
-                t.clamp(-self.tan[k], self.tan[k])
-            }
-        };
-        [on(self.right, 0), on(self.up, 1)]
-    }
-}
-
-/// The screen in patches no wider than the camera grid's cell at `tau`
-/// (`cell_angle`), at equal steps of angle about the optical axis; the eye
-/// casts them at `OBSERVED_TAU`.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Grid {
-    lens: Lens,
-    across: [u32; 2],
-}
-
-impl Grid {
-    pub fn of(lens: Lens, tau: Tau) -> Grid {
-        Grid {
-            lens,
-            across: lens.tan.map(|t| ((2.0 * libm::atan(t) / cell_angle(tau)).ceil() as u32).max(1)),
-        }
+    /// A cell of `across`, as its angles across and up: the view's angle
+    /// on each axis cut into as many.
+    fn step(&self, across: [u32; 2]) -> [f64; 2] {
+        core::array::from_fn(|k| 2.0 * libm::atan(self.tan[k]) / f64::from(across[k].max(1)))
     }
 
-    pub fn count(&self) -> u32 {
-        self.across[0] * self.across[1]
-    }
-
-    pub fn lens(&self) -> &Lens {
-        &self.lens
-    }
-
-    pub fn across(&self) -> [u32; 2] {
-        self.across
-    }
-
-    pub fn corner(&self, [i, j]: [u32; 2]) -> V3 {
-        let l = self.lens;
-        let at = |k: usize, n: u32| {
-            let half = libm::atan(l.tan[k]);
-            libm::tan(-half + 2.0 * half * n as f64 / self.across[k] as f64)
-        };
+    /// The direction through the middle of cell `[i, j]` of `across`.
+    fn through(&self, across: [u32; 2], [i, j]: [u32; 2]) -> V3 {
+        let step = self.step(across);
+        let at = |k: usize, n: u32| libm::tan(-libm::atan(self.tan[k]) + step[k] * (f64::from(n) + 0.5));
         let (tx, ty) = (at(0, i), at(1, j));
-        unit(std::array::from_fn(|k| l.forward[k] + tx * l.right[k] + ty * l.up[k])).unwrap_or(l.forward)
-    }
-
-    /// Footprints of the patches `recast` names; each shared corner is cast once.
-    /// `met` is reused across casts so casting stops allocating once warm.
-    pub fn footprints(&self, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, meet: &mut dyn FnMut(V3) -> Met, each: &mut OnPatch) -> u32 {
-        let [nx, ny] = self.across;
-        let eye = self.lens.eye;
-        met.clear();
-        met.resize(((nx + 1) * (ny + 1)) as usize, None);
-        let mut rays = 0;
-        for j in 0..ny {
-            for i in 0..nx {
-                let patch = (j * nx + i) as usize;
-                if !recast(patch) {
-                    continue;
-                }
-                let mut seen = false;
-                let mut lacks: Lacks = [None; 4];
-                let points = [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]].map(|c| {
-                    let (hit, lack) = *met[(c[1] * (nx + 1) + c[0]) as usize].get_or_insert_with(|| {
-                        rays += 1;
-                        meet(self.corner(c))
-                    });
-                    seen |= hit.is_some();
-                    if let Some(l) = lack.filter(|l| !lacks.contains(&Some(*l))) {
-                        lacks[lacks.iter().position(Option::is_none).unwrap_or(3)] = Some(l);
-                    }
-                    hit.unwrap_or_else(|| {
-                        let direction = self.corner(c);
-                        (std::array::from_fn(|k| eye[k] + direction[k] * far), far)
-                    })
-                });
-                each(patch, seen.then(|| Footprint::of(eye, points)), lacks);
-            }
-        }
-        rays
+        unit(core::array::from_fn(|k| self.forward[k] + tx * self.right[k] + ty * self.up[k])).unwrap_or(self.forward)
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Footprint {
-    /// Convex hull of the corners along the ground, counter-clockwise.
-    hull: [[f64; 2]; 4],
-    sides: usize,
-    bounds: (f64, f64, f64, f64),
-    z: (f64, f64),
-    pub near: f64,
-    pub reach: (f64, f64, f64, f64),
+/// Where a cell's ray stopped: in the block it met, `t` from the eye, and
+/// the zoom that block is drawn at there.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Stop {
+    pub at: V3,
+    pub t: f64,
+    pub zoom: Zoom,
 }
 
-impl Footprint {
-    pub fn of(eye: V3, points: [(V3, f64); 4]) -> Footprint {
-        let xy: [[f64; 2]; 4] = points.map(|(p, _)| [p[0], p[1]]);
-        let z = points.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), (p, _)| (lo.min(p[2]), hi.max(p[2])));
-        let near = points.iter().map(|&(_, t)| t).fold(f64::INFINITY, f64::min);
-        let bounds = xy.iter().fold((f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY), |b, p| {
-            (b.0.min(p[0]), b.1.min(p[1]), b.2.max(p[0]), b.3.max(p[1]))
-        });
-        let reach = (bounds.0.min(eye[0]), bounds.1.min(eye[1]), bounds.2.max(eye[0]), bounds.3.max(eye[1]));
-        let (hull, sides) = hull(xy);
-        Footprint { hull, sides, bounds, z, near, reach }
-    }
-
-    pub fn aabb(&self) -> Aabb {
-        let (x0, y0, x1, y1) = self.bounds;
-        Aabb {
-            min: [x0, y0, self.z.0],
-            max: [x1, y1, self.z.1],
-        }
-    }
-
-    /// The heights its rays landed at within `b`, none where they landed
-    /// nowhere in it.
-    pub fn landed(&self, b: &Aabb) -> Option<(f64, f64)> {
-        self.touches(b).then(|| (self.z.0.max(b.min[2]), self.z.1.min(b.max[2])))
-    }
-
-    /// Separating-axis test: the box's axes, then each hull edge's normal.
-    pub fn touches(&self, b: &Aabb) -> bool {
-        let (bx0, by0, bx1, by1) = self.bounds;
-        let (x0, y0, w, h) = (b.min[0], b.min[1], b.max[0] - b.min[0], b.max[1] - b.min[1]);
-        if b.min[2] > self.z.1 || b.max[2] < self.z.0 || x0 > bx1 || x0 + w < bx0 || y0 > by1 || y0 + h < by0 {
-            return false;
-        }
-        let (hull, n) = (&self.hull[..self.sides], self.sides);
-        !(0..n).filter(|_| n > 1).any(|k| {
-            let (p, q) = (hull[k], hull[(k + 1) % n]);
-            let axis = [q[1] - p[1], p[0] - q[0]];
-            let at = |v: [f64; 2]| v[0] * axis[0] + v[1] * axis[1];
-            let hull = hull.iter().map(|&v| at(v)).fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(v), hi.max(v)));
-            let (ax, ay) = ((axis[0] * w).abs(), (axis[1] * h).abs());
-            let low = at([x0, y0]) + (axis[0] * w).min(0.0) + (axis[1] * h).min(0.0);
-            let square = (low, low + ax + ay);
-            hull.1 < square.0 || square.1 < hull.0
-        })
-    }
+/// One cell's ray as cast: where it stopped, none where it met nothing
+/// within reach, and the tile its descent lacked.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Cell {
+    stop: Option<Stop>,
+    lack: Option<Tile>,
 }
 
-/// Andrew's monotone chain, on the stack: four points give a chain of at most eight.
-fn hull(mut points: [[f64; 2]; 4]) -> ([[f64; 2]; 4], usize) {
-    points.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
-    let cross = |o: [f64; 2], a: [f64; 2], b: [f64; 2]| (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-    let mut chain = [[0.0; 2]; 8];
-    let mut len = 0;
-    for pass in [false, true] {
-        let start = len;
-        for k in 0..4 {
-            let p = points[if pass { 3 - k } else { k }];
-            while len >= start + 2 && cross(chain[len - 2], chain[len - 1], p) <= 0.0 {
-                len -= 1;
-            }
-            chain[len] = p;
-            len += 1;
-        }
-        len -= 1;
-    }
-    if len == 0 {
-        (chain[0], len) = (points[0], 1);
-    }
-    let mut out = [[0.0; 2]; 4];
-    out[..len.min(4)].copy_from_slice(&chain[..len.min(4)]);
-    (out, len.min(4))
-}
-
-pub trait Observer {
-    /// Returns how many rays were cast.
-    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnPatch) -> u32;
-}
-
-pub type OnPatch<'a> = dyn FnMut(usize, Option<Footprint>, Lacks) + 'a;
-
-pub type Lacks = [Option<Tile>; 4];
-
-/// A lack is given as a requirement (zoom and ground), never as a tile,
-/// which is the layer's to name.
-pub type Met = (Option<(V3, f64)>, Option<Tile>);
-
-/// Corner rays against what is resident, at the target quality's zooms, so
-/// the answer is the same whichever step is in force.
-pub struct EdgeRays<'a>(pub World<'a>, pub Tau);
-
-impl Observer for EdgeRays<'_> {
-    fn observe(&self, grid: &Grid, far: f64, recast: &dyn Fn(usize) -> bool, met: &mut Vec<Option<Met>>, each: &mut OnPatch) -> u32 {
-        let eye = grid.lens().eye;
-        grid.footprints(
-            far,
-            recast,
-            met,
-            &mut |direction| {
-                let ray = Ray { origin: eye, direction, reach: far };
-                let answer = self.0.first_hit(&ray, Detail::Distance(self.1));
-                let lack = answer.lack();
-                let hit = answer.value().flatten().map(|hit| (std::array::from_fn(|k| hit.point[k] - hit.normal[k] * INSIDE), hit.t));
-                (hit, lack)
-            },
-            each,
-        )
-    }
-}
-
+/// An observation, whole: what the eye observed from, at which quality, and
+/// what each of the camera grid's cells met.
 #[derive(Default)]
 pub struct Sight {
-    cast: Option<(Lens, [u32; 2], f64)>,
-    patches: Vec<Option<Footprint>>,
-    lacks: Vec<Lacks>,
-    eyes: Vec<V3>,
-    recast: Vec<bool>,
-    met: Vec<Option<Met>>,
+    observation: Option<Observation>,
+    tau: Option<Tau>,
+    lens: Option<Lens>,
+    across: [u32; 2],
+    cells: Vec<Cell>,
+    /// Made whole again at each publish.
+    stops: Vec<Stop>,
+    lacks: Vec<Tile>,
+    /// Which cast this is, so a reader knows when to read it again.
+    generation: u32,
 }
 
 impl Sight {
-    /// Recasts every patch where the screen changed shape, the eye turned or the
-    /// far edge moved past `REUSE_SHIFT` of a patch, or `everything` is set; and
-    /// any patch the eye moved that much relative to, or whose rays cross `moved`
-    /// ground. Returns rays cast.
-    pub fn observe(&mut self, o: &Observation, observer: &impl Observer, everything: bool, moved: &[(f64, f64, f64)]) -> u32 {
-        let Some(lens) = Lens::of(o) else {
-            self.cast = None;
-            self.patches.clear();
-            self.lacks.clear();
-            self.eyes.clear();
-            return 0;
+    pub fn observation(&self) -> Option<&Observation> {
+        self.observation.as_ref()
+    }
+
+    pub fn tau(&self) -> Option<Tau> {
+        self.tau
+    }
+
+    /// The camera grid's cell as cast, its angles across and up the
+    /// screen (`Lens::step`); none before a screen.
+    pub fn step(&self) -> [f64; 2] {
+        self.lens.map_or([0.0; 2], |l| l.step(self.across))
+    }
+
+    /// Where the rays stopped.
+    pub fn stops(&self) -> &[Stop] {
+        &self.stops
+    }
+
+    /// The tiles the rays' descents lacked, sorted.
+    pub fn lacks(&self) -> &[Tile] {
+        &self.lacks
+    }
+
+    pub fn generation(&self) -> u32 {
+        self.generation
+    }
+
+    /// Whether cell `k`'s ray, as cast, crosses `b`: from the eye to where it
+    /// stopped, or to the far edge where it met nothing. On the eye's lap.
+    fn crosses(&self, k: usize, b: &Aabb) -> bool {
+        let (Some(o), Some(lens)) = (self.observation, self.lens) else { return true };
+        let [nx, _] = self.across;
+        let d = lens.through(self.across, [k as u32 % nx, k as u32 / nx]);
+        let end = self.cells[k].stop.map_or(o.far(), |s| s.t);
+        nearest_box(b, o.eye[0]).span_along(o.eye, d).is_some_and(|(enter, leave, _)| enter <= end && leave >= 0.0)
+    }
+}
+
+/// A cast under way: the cells left to cast, by index.
+struct Cast {
+    sight: Sight,
+    left: Vec<u32>,
+}
+
+#[derive(Default)]
+struct Casting {
+    published: Sight,
+    job: Option<Cast>,
+    spare: Option<Sight>,
+    /// Where the world moved since the last cast began.
+    moved: Vec<Aabb>,
+    left: Vec<u32>,
+    generation: u32,
+    /// Rays cast since `take_rays`.
+    rays: u32,
+}
+
+static CASTING: Global<Casting> = Global::new();
+
+/// Starts the next cast when the observation or the quality moved, or the
+/// world did where a ray passed; a cast under way is never restarted.
+pub fn start() {
+    let c = CASTING.get(Casting::default);
+    if c.job.is_some() {
+        return;
+    }
+    let (o, tau) = (observation(), tau());
+    let lens = o.as_ref().and_then(Lens::of);
+    let p = &c.published;
+    let same = p.observation == o && p.tau == Some(tau) && p.lens == lens;
+    if same && c.moved.is_empty() {
+        return;
+    }
+    let mut sight = c.spare.take().unwrap_or_default();
+    let mut left = core::mem::take(&mut c.left);
+    left.clear();
+    (sight.observation, sight.tau, sight.lens) = (o, Some(tau), lens);
+    sight.across = lens.map_or([0, 0], |l| l.across(tau));
+    let n = (sight.across[0] * sight.across[1]) as usize;
+    sight.cells.clear();
+    if same {
+        // The same cells: a ray that crosses nothing moved answers as it did.
+        sight.cells.extend_from_slice(&p.cells);
+        left.extend((0..n as u32).filter(|&k| c.moved.iter().any(|b| p.crosses(k as usize, b))));
+    } else {
+        sight.cells.resize(n, Cell::default());
+        left.extend(0..n as u32);
+    }
+    c.moved.clear();
+    // Cast from the last, popped from the end, so the first cell goes first.
+    left.reverse();
+    c.job = Some(Cast { sight, left });
+}
+
+/// A slice of the cast; publishes it whole. Returns whether one is still under way.
+pub fn advance(stop: &dyn Fn() -> bool) -> bool {
+    // At least a slice a turn.
+    const SLICE: u32 = 16;
+    let c = CASTING.get(Casting::default);
+    let Some(job) = c.job.as_mut() else { return false };
+    let (Some(o), Some(tau), Some(lens)) = (job.sight.observation, job.sight.tau, job.sight.lens) else {
+        job.left.clear();
+        return publish(c);
+    };
+    let world = World::now();
+    let mut k = 0;
+    while let Some(cell) = job.left.pop() {
+        let [nx, _] = job.sight.across;
+        let direction = lens.through(job.sight.across, [cell % nx, cell / nx]);
+        let ray = Ray {
+            origin: o.eye,
+            direction,
+            reach: o.far(),
         };
-        let patch = Tau::of(param::OBSERVED_TAU);
-        let grid = Grid::of(lens, patch);
-        let shift = param::REUSE_SHIFT * cell_angle(patch);
-        let whole = everything
-            || self.cast.is_none_or(|(was, across, far)| {
-                let turned = [(was.forward, lens.forward), (was.right, lens.right), (was.up, lens.up)]
-                    .iter()
-                    .map(|&(a, b)| libm::acos(dot3(&a, &b).clamp(-1.0, 1.0)))
-                    .fold(0.0, f64::max);
-                let reshaped = (0..2).any(|k| (was.tan[k] - lens.tan[k]).abs() > 1e-9 * lens.tan[k]);
-                across != grid.across() || reshaped || turned > shift || (o.far() - far).abs() > shift * far
-            });
-        if whole {
-            let n = grid.count() as usize;
-            self.patches.clear();
-            self.patches.resize(n, None);
-            self.lacks.clear();
-            self.lacks.resize(n, [None; 4]);
-            self.eyes.clear();
-            self.eyes.resize(n, lens.eye);
-        }
-        // A patch that met nothing is measured against the far edge.
-        let stale = |k: usize| {
-            let moved_eye = len3(&sub3(&lens.eye, &self.eyes[k]));
-            whole
-                || match &self.patches[k] {
-                    Some(f) => {
-                        let (x0, y0, x1, y1) = f.reach;
-                        moved_eye > shift * f.near || moved.iter().any(|&(x, y, side)| x < x1 && x + side > x0 && y < y1 && y + side > y0)
-                    }
-                    None => moved_eye > shift * o.far() || !moved.is_empty(),
-                }
-        };
-        let mut recast = core::mem::take(&mut self.recast);
-        recast.clear();
-        recast.extend((0..grid.count() as usize).map(stale));
-        let (patches, lacks, eyes) = (&mut self.patches, &mut self.lacks, &mut self.eyes);
-        let rays = observer.observe(&grid, o.far(), &|k| recast[k], &mut self.met, &mut |k, f, lacked| {
-            patches[k] = f;
-            lacks[k] = lacked;
-            eyes[k] = lens.eye;
+        let answer = world.first_hit(&ray, Detail::Distance(tau));
+        let lack = answer.lack();
+        let met = answer.value().flatten().map(|hit| Stop {
+            at: core::array::from_fn(|a| hit.point[a] - hit.normal[a] * INSIDE),
+            t: hit.t,
+            zoom: of_side(hit.cube.max[0] - hit.cube.min[0]),
         });
-        self.recast = recast;
-        // Kept from the last full cast, so a slow turn is measured whole rather
-        // than a frame at a time.
-        if whole {
-            self.cast = Some((lens, grid.across(), o.far()));
+        job.sight.cells[cell as usize] = Cell { stop: met, lack };
+        c.rays += 1;
+        k += 1;
+        if k % SLICE == 0 && stop() {
+            return true;
         }
-        rays
     }
+    publish(c)
+}
 
-    pub fn footprints(&self) -> impl Iterator<Item = &Footprint> {
-        self.patches.iter().flatten()
-    }
+fn publish(c: &mut Casting) -> bool {
+    let Some(Cast { mut sight, left }) = c.job.take() else { return false };
+    sight.stops.clear();
+    sight.stops.extend(sight.cells.iter().filter_map(|cell| cell.stop));
+    sight.lacks.clear();
+    sight.lacks.extend(sight.cells.iter().filter_map(|cell| cell.lack));
+    sight.lacks.sort_unstable();
+    sight.lacks.dedup();
+    c.generation = c.generation.wrapping_add(1);
+    sight.generation = c.generation;
+    c.spare = Some(core::mem::replace(&mut c.published, sight));
+    c.left = left;
+    false
+}
 
-    pub fn lacks(&self) -> impl Iterator<Item = &Tile> {
-        self.lacks.iter().flatten().flatten()
-    }
+/// The world moved in `regions`: the rays that crossed them are cast again.
+pub fn moved(regions: impl IntoIterator<Item = Aabb>) {
+    CASTING.get(Casting::default).moved.extend(regions);
+}
+
+/// The quality in force: the published cast's, else the one asked for now.
+pub fn effective() -> Tau {
+    current().and_then(Sight::tau).unwrap_or_else(tau)
+}
+
+/// The last cast published; none before the first.
+pub fn current() -> Option<&'static Sight> {
+    let c = CASTING.get(Casting::default);
+    (c.published.generation != 0).then_some(&c.published)
+}
+
+pub fn casting() -> bool {
+    CASTING.get(Casting::default).job.is_some()
+}
+
+pub fn take_rays() -> u32 {
+    core::mem::take(&mut CASTING.get(Casting::default).rays)
 }
 
 fn unit(v: V3) -> Option<V3> {
     let l = len3(&v);
     (l > 1e-12 && l.is_finite()).then(|| v.map(|c| c / l))
 }
-
-#[cfg(test)]
-#[path = "sight.test.rs"]
-mod test;

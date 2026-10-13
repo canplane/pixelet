@@ -7,21 +7,21 @@
 use crate::chunk::Chunk as PyramidChunk;
 use crate::layer::Query;
 use pxl_render::gpu::api::word_bytes;
-use pxl_spec::space::camera::grid::target_cell_px;
+use pxl_spec::space::camera::grid::{px_per_unit, split_distance, REFERENCE_FOV_DEG, REFERENCE_VIEWPORT_H};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::hierarchy::tree::Node;
-use pxl_spec::space::layer::lattice::GROUND;
 
 use std::collections::TryReserveError;
 
 use crate::chunk::decor::instance::{DecorScratch, GroupLanes, DECOR_GROUPS, HIDDEN_FLAG};
-use crate::layer::instance::{Meta, Source};
+use crate::decor::strike::reach;
+use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::meta::placed;
 use crate::layer::object::store::{EntryAt, Store};
-use crate::query::grow;
 use crate::query::World;
+use crate::query::{grow, ring, Surfaces};
 use pxl_spec::block::decor::Decor;
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::Zoom;
 
 /// A decor is drawn as a model down to `DECOR_MODEL_PX`, then as a sprite
 /// down to `DECOR_SPRITE_PX`. No fade: the edge is per instance, so it staggers.
@@ -34,9 +34,10 @@ pub fn decor_sprite_px() -> f64 {
 }
 
 /// Whether a decor `extent_u` wide is a sprite's worth anywhere a chunk of
-/// `cell_zoom` is drawn: its cell is `target_cell_px` where it begins.
+/// `cell_zoom` is drawn: as it spans where that zoom begins, at the
+/// reference view.
 fn decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
-    extent_u / units(cell_zoom) * target_cell_px() >= decor_sprite_px()
+    extent_u / split_distance(cell_zoom) * px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) >= decor_sprite_px()
 }
 
 pub struct DecorBuild<'s> {
@@ -78,24 +79,44 @@ impl<'s> DecorBuild<'s> {
     pub fn build(scratch: &'s mut DecorScratch, decors: &[Decor], ground: Option<&Ground>, hide: Option<DecorHide>, store: &Store, grows: bool, at: PyramidChunk) -> Option<DecorBuild<'s>> {
         let (cell_zoom, chunk) = (at.cell_zoom(), at.region());
         scratch.clear();
-        for decor in decors {
-            if decor.variant_count() == 0 {
-                continue;
-            }
-            // Past what a block holds, the decors after have none.
-            let first = scratch.group_count;
-            if first + decor.variant_count() as usize > DECOR_GROUPS {
-                break;
-            }
-            scratch.group_count += decor.variant_count() as usize;
-            if !decor_shown(decor.extent(), cell_zoom) {
-                continue;
-            }
-            Self::placed(scratch, decor, first, store, at).ok()?;
-            if let Some(ground) = ground.filter(|_| grows) {
-                Self::grown(scratch, decor, first, ground, chunk).ok()?;
-            }
+        // The ground every decor grows on, read once for all of them, and
+        // what placed decor claims about the chunk, as far as a box standing
+        // in it reaches past it.
+        let world = World::now();
+        if grows && ground.is_some() {
+            let r = reach();
+            let about = Aabb {
+                min: chunk.min.map(|v| v - r),
+                max: chunk.max.map(|v| v + r),
+            };
+            world.placed_claims(&about, &mut scratch.placed).ok()?;
         }
+        let mut each = |mut face: Option<(&mut Surfaces, &Ground)>| -> Result<(), TryReserveError> {
+            for decor in decors {
+                if decor.variant_count() == 0 {
+                    continue;
+                }
+                // Past what a block holds, the decors after have none.
+                let first = scratch.group_count;
+                if first + decor.variant_count() as usize > DECOR_GROUPS {
+                    break;
+                }
+                scratch.group_count += decor.variant_count() as usize;
+                if !decor_shown(decor.extent(), cell_zoom) {
+                    continue;
+                }
+                Self::placed(scratch, decor, first, store, at)?;
+                if let Some((face, ground)) = face.as_mut() {
+                    Self::grown(scratch, &world, face, decor, first, ground, chunk)?;
+                }
+            }
+            Ok(())
+        };
+        let built = match ground.filter(|_| grows) {
+            Some(g) => world.surfaces(g.node, g.cell, ring(decors), |face| each(Some((face, g)))).value(),
+            None => None,
+        };
+        built.unwrap_or_else(|| each(None)).ok()?;
         Some(DecorBuild {
             scratch,
             corner: [chunk.min[0], chunk.min[1]],
@@ -122,18 +143,13 @@ impl<'s> DecorBuild<'s> {
     }
 
     /// What the ground grows here, where the chunks draw its footing.
-    fn grown(scratch: &mut DecorScratch, decor: &Decor, first: usize, ground: &Ground, chunk: Aabb) -> Result<(), TryReserveError> {
-        let world = World::now();
-        let mut candidates = core::mem::take(&mut scratch.candidates);
-        let zoom = GROUND.read_zoom(ground.cell);
-        let grew = grow(&world, decor, ground.node, ground.cell, ground.origin, chunk, &mut candidates, |i| {
+    fn grown(scratch: &mut DecorScratch, world: &World, face: &mut Surfaces, decor: &Decor, first: usize, ground: &Ground, chunk: Aabb) -> Result<(), TryReserveError> {
+        let (mut candidates, placed) = (core::mem::take(&mut scratch.candidates), core::mem::take(&mut scratch.placed));
+        let grew = grow(world, face, decor, ground.node, ground.cell, ground.origin, chunk, &placed, &mut candidates, |i: Instance| {
             let Meta::Decor(m) = i.meta;
-            if !world.grows(decor, &i, zoom) {
-                return Ok(());
-            }
             scratch.push(first + m.variant as usize, i)
         });
-        scratch.candidates = candidates;
+        (scratch.candidates, scratch.placed) = (candidates, placed);
         grew
     }
 

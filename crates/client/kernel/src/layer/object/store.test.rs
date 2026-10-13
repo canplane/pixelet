@@ -5,6 +5,8 @@ use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;
+use crate::layer::object::pyramid::Held;
+use crate::layer::Query;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::block::object::{cube_id, Cube};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
@@ -25,9 +27,9 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
                 ext: None
             }])
             .is_empty());
-        assert_eq!(
-            store.node(OBJECT_FINEST, first_descendant_of(at, u32::from(OBJECT_FINEST - OBJECT_COARSEST))).0.state,
-            3,
+        let finest = at.map(|v| v << (OBJECT_FINEST - OBJECT_COARSEST));
+        assert!(
+            matches!(store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST), Held::Leaf { leaf, .. } if leaf.id == 3),
             "a cell leaf covers its steps"
         );
         let mut met = Vec::new();
@@ -82,8 +84,9 @@ fn some_node(rng: &mut Rng, reach: f64) -> Node<3> {
     (zoom, at)
 }
 
-/// Whole cells from a corner, and what the store keeps folded at `zoom`'s
-/// cells, with the corner in that zoom's cells.
+/// Whole cells from a corner, and what the objects' pyramid holds at
+/// `zoom`'s cells, read through the store's query, with the corner in that
+/// zoom's cells.
 fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (FnvHashMap<[i64; 3], u32>, [i64; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
@@ -96,7 +99,16 @@ fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (FnvHashMap<[i64; 3], u
     let corner = base.map(|v| v >> (GROUND.cell() - target));
     let per = 64 >> (GROUND.cell() - target);
     let mut out = FnvHashMap::default();
-    store.fold_at(target, corner, [corner[0] + per, corner[1] + per], None, &mut out).unwrap();
+    for z in -4..8 {
+        for y in corner[1]..corner[1] + per {
+            for x in corner[0]..corner[0] + per {
+                let held = store.cursor((target, [x, y, z]), target);
+                if let Some(v) = store.value(held, target, [x, y, z], None) {
+                    out.insert([x, y, z], v);
+                }
+            }
+        }
+    }
     (out, corner)
 }
 
@@ -217,7 +229,7 @@ fn eight_markers_filling_a_cell_stay_eight() {
 }
 
 #[test]
-fn a_column_read_whole_meets_its_leaves() {
+fn a_shard_read_whole_meets_its_leaves() {
     let mut store = Store::default();
     let at = [5, 7, 2];
     store.write([Write {

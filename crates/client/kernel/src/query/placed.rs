@@ -12,7 +12,6 @@ use pxl_spec::space::hierarchy::tree::Node;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use super::decor::shares;
 use super::world::World;
 use crate::layer::object::store::{Cells, Entry, EntryAt};
 use crate::layer::Query;
@@ -23,22 +22,11 @@ impl<'a> World<'a> {
         self.cells((at.zoom(), at.at())).placed().filter(|e| !object_value_is_air(e.state))
     }
 
-    /// What stands in the coarsest object cell `at` lies in, air left out.
-    pub fn placed_in(&self, at: &Pvf3) -> Vec<Entry> {
-        let mut out = Vec::new();
-        self.cells((OBJECT_COARSEST, index_of(OBJECT_COARSEST, at))).entries(&mut |entry| {
-            if !object_value_is_air(entry.state) {
-                out.push(*entry);
-            }
-        });
-        out
-    }
-
     /// What is placed sharing room with `space`, air left out, that `which` takes.
     pub fn placed_sharing(&self, space: &Aabb, which: impl Fn(&Entry) -> bool) -> Option<Entry> {
         let mut met = None;
         self.objects.entries_in(space, &mut |e| {
-            if met.is_none() && !object_value_is_air(e.state) && shares(&e.cube(), space) && which(e) {
+            if met.is_none() && !object_value_is_air(e.state) && e.cube().shares(*space) && which(e) {
                 met = Some(*e);
             }
         });

@@ -1,44 +1,40 @@
 // pxl-kernel/query/surface.rs
 
-//! The ground's face over a node at once, a ring of its tile's cells
-//! around it too: each cell's top and look as the chunks drawing it compose
-//! them, its bridges' and tunnels' at grade included, read in one pass
-//! rather than cell by cell. What a policy over the ground's face — where
-//! decor stands, which way it faces — reads, knowing no tile.
+//! The ground over a node at once, a ring of its tile's cells around it
+//! too, read as the chunks draw it: each cell's top and face, its ways at
+//! grade included, from one window read once rather than cell by cell. What
+//! a policy over the ground —
+//! where decor stands, which way it faces, whether its footing holds —
+//! reads, knowing no tile.
 
 use pxl_spec::bake::tile::terrain::GroundId;
-use pxl_spec::block::sample::{beside_index, Around, ChunkSample, APRON};
-use pxl_spec::space::coord::pvf3::ivec;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::global::Global;
 
-use super::block::Surface;
+use super::block::{Surface, Window};
 use super::world::World;
-use crate::io::source;
-use crate::layer::{Answer, Query};
+use crate::layer::Answer;
 
 /// A node's cells and the ring around them, in its tile's cells.
-pub struct Surfaces<'s> {
-    sample: &'s ChunkSample,
-    /// The first cell read, the ring's.
-    first: [i64; 2],
+pub struct Surfaces<'w> {
+    window: &'w mut Window,
+    /// The tile's first cell, at its cells' zoom.
+    origin: [i64; 2],
+    /// A cell's side, in units.
+    side: f64,
 }
 
-impl Surfaces<'_> {
+impl<'w> Surfaces<'w> {
     /// The surface of the tile's cell `at`; none where it has no ground or
     /// was not read.
     pub fn at(&self, at: [i64; 2]) -> Option<Surface> {
-        let span = i64::from(self.sample.span);
-        let [x, y] = [at[0] - self.first[0], at[1] - self.first[1]];
-        if !(0..span).contains(&x) || !(0..span).contains(&y) {
-            return None;
-        }
-        let i = (y * span + x) as usize;
-        self.sample.has_ground(i).then(|| Surface {
-            top: f64::from(self.sample.ele[i]),
-            block: self.sample.block[i],
+        let grid = self.window.grid()?;
+        let i = grid.index([self.origin[0] + at[0], self.origin[1] + at[1]])?;
+        grid.top(i).map(|t| Surface {
+            top: f64::from(t) * self.side,
+            block: grid.face(i),
         })
     }
 
@@ -46,42 +42,32 @@ impl Surfaces<'_> {
     pub fn look(&self, at: [i64; 2]) -> Option<GroundId> {
         self.at(at).map(|s| s.block)
     }
+
+    /// A cell's side, in units.
+    pub(super) fn side(&self) -> f64 {
+        self.side
+    }
+
+    /// Its cells' zoom.
+    pub(super) fn cell(&self) -> Zoom {
+        self.window.cell()
+    }
 }
 
-static SAMPLE: Global<ChunkSample> = Global::new();
+/// The window the ground is read into, kept between asks so a settled ask
+/// takes nothing from the heap.
+static WINDOW: Global<Window> = Global::new();
 
 impl World<'_> {
-    /// The ground's face over the node `node` of grid cells at `cell`, read
-    /// off the tile those cells read as a chunk is, and `ring` of its cells
-    /// past it on every side, the tiles beside included; none inside where
-    /// the heap refused it room. `f` asks the world nothing: it reads the
-    /// query's one scratch.
-    pub fn surfaces<R>(&self, node: Node<2>, cell: Zoom, ring: u32, f: impl FnOnce(&Surfaces) -> R) -> Answer<Option<R>> {
-        let mut beside = [None; 8];
-        for ([qx, qy], p) in GROUND.read_beside(node, cell, ring) {
-            // A tile is read at its own cells.
-            beside[beside_index(qx, qy)] = self.terrain.read((p.zoom, [ivec::X(p.tile), ivec::Y(p.tile), 0]), GROUND.grid_zoom(p.zoom)).value();
-        }
-        let answer = self.terrain.read((node.0, [node.1[0], node.1[1], 0]), cell);
-        let own = match answer {
-            Answer::Exact(own) | Answer::Coarser(own, _) => own,
-            Answer::Nothing(lack) => return Answer::Nothing(lack),
-        };
-        let around = Around {
-            own: own.view(),
-            beside: beside.map(|b| b.map(|s| s.view())),
-            past: source::past_at,
-        };
-        let (x0, y0) = GROUND.read_at(node, cell);
-        let span = GROUND.read_side(node.0, cell) + 2 * ring;
-        let first = [i64::from(x0) - i64::from(ring), i64::from(y0) - i64::from(ring)];
-        let sample = SAMPLE.get(|| ChunkSample::of_span(span));
-        if sample.block.len() < (span * span) as usize {
-            *sample = ChunkSample::of_span(span);
-        }
-        // `read` reads from an apron's width before its first.
-        let read = sample.read(&around, first.map(|v| v + i64::from(APRON)), span, GROUND.cell_zoom(GROUND.read_zoom(cell))).is_ok();
-        let sample = &*sample;
-        answer.map(|_| read.then(|| f(&Surfaces { sample, first })))
+    /// The ground over the node `node` of grid cells at `cell`, read off
+    /// the tile those cells read as a chunk is, at its own cells, and `ring`
+    /// of its cells past it on every side, the tiles beside included
+    /// (`World::window_ground`); nothing where it is not held or the heap
+    /// refused it room. `f` reads that one window.
+    pub fn surfaces<R>(&self, node: Node<2>, cell: Zoom, ring: u32, f: impl FnOnce(&mut Surfaces) -> R) -> Answer<R> {
+        // The tile's own cells, which fold nothing.
+        let own = GROUND.cell_zoom(GROUND.read_zoom(cell));
+        let window = WINDOW.get(Window::default);
+        self.window_ground(node, cell, own, ring, window).map(|origin| f(&mut Surfaces { window, origin, side: units(own) }))
     }
 }

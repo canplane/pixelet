@@ -19,7 +19,7 @@ use crate::io::source;
 use pxl_spec::space::coord::pvf3::pvf3::{self, Pvf3};
 
 impl World<'_> {
-    /// Whether the leaf column under `at` is the service area's and off its
+    /// Whether the leaf cell under `at` is the service area's and off its
     /// edge (`pxl-spec block/limit.rs` `at_edge`), where the wall stands:
     /// known before any of its ground arrives.
     pub fn within(&self, at: &Pvf3) -> bool {
@@ -28,10 +28,10 @@ impl World<'_> {
         !at_edge(|dx, dy| source::past_at([x + dx as f64 * leaf, y + dy as f64 * leaf]))
     }
 
-    /// Whether `space` may hold an edit: every leaf column under it is the
+    /// Whether `space` may hold an edit: every leaf cell under it is the
     /// service area's, and there `space` lies over the bedrock and under the
     /// ceiling of ground the world knows exactly, no tile not yet held
-    /// (`pxl-spec block/limit.rs`), and no column is bedrock, the wall: what
+    /// (`pxl-spec block/limit.rs`), and no cell is bedrock, the wall: what
     /// is `unknown` is neither placed on nor taken.
     pub fn editable(&self, space: &Aabb) -> bool {
         let unit = units(GROUND.cell());
@@ -43,11 +43,10 @@ impl World<'_> {
                 // ground there, not its runs: a fold draws no bedrock.
                 self.within(&center)
                     && self
-                        .runs_at(&center, LEAF_ZOOM, |_, surface| {
-                            surface.is_some_and(|s| s.block != sentinel::unknown && floor(s.top) <= space.min[2] && space.max[2] <= ceiling(s.top))
-                        })
+                        .surface(&center, LEAF_ZOOM)
                         .exact()
-                        == Some(true)
+                        .flatten()
+                        .is_some_and(|s| s.block != sentinel::unknown && floor(s.top) <= space.min[2] && space.max[2] <= ceiling(s.top))
             })
         })
     }

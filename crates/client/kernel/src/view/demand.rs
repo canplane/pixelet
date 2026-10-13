@@ -39,8 +39,8 @@ use crate::io::request::declare;
 use crate::io::source;
 use crate::layer::residency::floor::{self, Fallback, Floor};
 use crate::layer::residency::{Candidate, Residency, Victim};
-use crate::view::observation::{observation, ByFootprints};
-use crate::view::sight::Footprint;
+use crate::view::observation::{observation, BySight};
+use crate::view::sight::Stop;
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// A layer as the view asks of it: its demand, held beside its records.
@@ -95,8 +95,8 @@ struct Seen {
     floor: Vec<Tile>,
     destination: Option<Tile>,
     tau: Tau,
-    /// The published goal's.
-    footprints: Vec<Footprint>,
+    /// The published cast's.
+    stops: Vec<Stop>,
     lacks: Vec<Tile>,
 }
 
@@ -110,12 +110,12 @@ impl Victim for Farthest<'_> {
     }
 }
 
-/// The goal materialization last published, which demand follows: what it
-/// was observed from, the footprints its rays met and the tiles they lacked.
+/// The cast last published, which demand follows: what it was observed
+/// from, where its rays stopped and the tiles they lacked.
 #[derive(Clone, Copy)]
 pub struct Published<'a> {
     pub observation: &'a Observation,
-    pub footprints: &'a [Footprint],
+    pub stops: &'a [Stop],
     pub lacks: &'a [Tile],
 }
 
@@ -201,7 +201,7 @@ impl<L: Observed> Demand<L> {
         // the floor's eye, if not `o`'s
         floor_at: Option<&Observation>,
         destination: impl Iterator<Item = Tile>,
-        estimator: &ByFootprints,
+        estimator: &BySight,
         top: Zoom,
     ) {
         let mut demand = core::mem::take(&mut self.demand);
@@ -316,7 +316,7 @@ impl<L: Observed> Demand<L> {
             floor: Vec::new(),
             destination: None,
             tau,
-            footprints: Vec::new(),
+            stops: Vec::new(),
             lacks: Vec::new(),
         });
         // the floor follows the live eye, so a jump asks for it at once
@@ -334,8 +334,8 @@ impl<L: Observed> Demand<L> {
         };
         let o = seen_from.map(|o| Observation { reach: o.reach.min(L::reach()), ..o });
         (now.o, now.destination, now.tau) = (o, destination, tau);
-        now.footprints.clear();
-        now.footprints.extend_from_slice(published.as_ref().map_or(&[], |d| d.footprints));
+        now.stops.clear();
+        now.stops.extend_from_slice(published.as_ref().map_or(&[], |d| d.stops));
         now.lacks.clear();
         now.lacks.extend_from_slice(published.as_ref().map_or(&[], |d| d.lacks));
         if core::mem::take(&mut self.moved) | (self.last.as_ref() != Some(&now)) {
@@ -344,11 +344,11 @@ impl<L: Observed> Demand<L> {
                 o.as_ref(),
                 live.as_ref(),
                 line,
-                &ByFootprints {
+                &BySight {
                     tau,
                     lattice: L::LATTICE,
                     top,
-                    footprints: published.as_ref().map_or(&[], |d| d.footprints),
+                    stops: published.as_ref().map_or(&[], |d| d.stops),
                     lacks: published.as_ref().map_or(&[], |d| d.lacks),
                 },
                 top,

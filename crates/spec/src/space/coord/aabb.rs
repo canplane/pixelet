@@ -19,6 +19,11 @@ impl Aabb {
         (0..3).all(|k| min[k] <= max[k]).then_some(Aabb { min, max })
     }
 
+    /// Whether the two share room, not only a face.
+    pub fn shares(self, other: Aabb) -> bool {
+        (0..3).all(|k| self.min[k] < other.max[k] && other.min[k] < self.max[k])
+    }
+
     pub fn join(self, other: Aabb) -> Aabb {
         Aabb {
             min: std::array::from_fn(|k| self.min[k].min(other.min[k])),

@@ -4,7 +4,7 @@
 // parent as the bake folds them, and objects written into a store.
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
+use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::bake::tile::terrain::Ground;
 use pxl_spec::block::cube::{self, ground, sentinel};
 use pxl_spec::block::object::{cube_id, Cube};
@@ -43,10 +43,31 @@ fn top() -> Tile {
     Tile::new(LEAF_ZOOM - 1, ivec::gather(40, -20, 0))
 }
 
+/// The tiles held, and over each its line up to the coarsest zoom the
+/// source supplies whole, as the floor holds it all around the eye
+/// (`layer/residency/floor.rs`): a tile's coarser pictures here are the
+/// same ground, each marking its children held.
 fn resident(held: &[(Tile, TerrainTile)]) -> Residency<TerrainTile> {
+    use pxl_spec::bake::tile::terrain::Index;
+    use pxl_spec::bake::tile::Occupancy;
     let mut residency = Residency::default();
+    let mut admitted: Vec<Tile> = Vec::new();
     for (p, tile) in held {
-        residency.admit(*p, &Keep, |_| Ok::<_, ()>(tile.clone())).unwrap();
+        let line = std::iter::successors(Some(*p), |q| (q.zoom > GROUND.top()).then(|| q.parent()));
+        for (k, q) in line.enumerate() {
+            if admitted.contains(&q) {
+                continue;
+            }
+            admitted.push(q);
+            let picture = match k {
+                0 => tile.clone(),
+                _ => TerrainTile {
+                    index: Index::new(tile.index.extent().to_vec(), Occupancy::of_slots([true; 4])),
+                    ..tile.clone()
+                },
+            };
+            residency.admit(q, &Keep, |_| Ok::<_, ()>(picture)).unwrap();
+        }
     }
     residency
 }
@@ -174,42 +195,30 @@ fn flat_at_five() -> (Residency<TerrainTile>, [f64; 2]) {
     (resident(&[(leaf, flat)]), [x0 + 10.0, y0 + 10.0])
 }
 
-/// A quarter of a cell dug a cell deep is struck at its bottom, the rest of
-/// the cell at the surface: a ray meets what is placed at its own size, as a
-/// chunk drawing it as held does, while a walker, a cell wide, stands on top.
+/// A dig is met as the cells asked fold it, nothing finer: at the leaves' cells
+/// a cell dug less than half is whole, its top met by a ray and stood on by a
+/// walker, and a cell dug half or more is air, the ground under it met.
 #[test]
-fn a_cell_dug_in_part_is_met_where_each_part_is_drawn() {
+fn a_dig_is_met_as_the_cells_asked_fold_it() {
     use crate::layer::object::store::AIR;
     let _g = serial();
     let (residency, [x, y]) = flat_at_five();
-    let mut store = Store::default();
-    for z in [4.0, 4.5] {
-        write(&mut store, [x, y, z], OBJECT_COARSEST + 1, AIR);
-    }
-    let access = World::new(&residency, &store);
-    for (at, top) in [([x + 0.25, y + 0.25], 4.0), ([x + 0.75, y + 0.75], 5.0)] {
-        // A walker is the cell's width: it stands on the cell's top.
-        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(5.0)), "{at:?}");
+    let half = units(OBJECT_COARSEST + 1);
+    let dug = |n: usize| {
+        let mut store = Store::default();
+        for k in 0..n {
+            let [dx, dy, dz] = [k & 1, k >> 1 & 1, k >> 2 & 1].map(|b| b as f64 * half);
+            write(&mut store, [x + dx, y + dy, 4.0 + dz], OBJECT_COARSEST + 1, AIR);
+        }
+        store
+    };
+    for (n, top) in [(1, 5.0), (3, 5.0), (4, 4.0), (8, 4.0)] {
+        let store = dug(n);
+        let access = World::new(&residency, &store);
+        let at = [x + half / 2.0, y + half / 2.0];
         let hit = access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).exact().flatten().unwrap();
-        assert_eq!(hit.point[2], top, "{hit:?}");
-    }
-}
-
-/// A cell dug at the finest zoom is met there, not folded to a coarser one.
-#[test]
-fn a_cell_dug_at_the_finest_is_met_as_held() {
-    use crate::layer::object::store::AIR;
-    let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
-    let mut store = Store::default();
-    let side = units(OBJECT_FINEST);
-    write(&mut store, [x, y, 5.0 - side], OBJECT_FINEST, AIR);
-    let access = World::new(&residency, &store);
-    for (at, top) in [([x + side / 2.0, y + side / 2.0], 5.0 - side), ([x + 0.5, y + 0.5], 5.0)] {
-        // A walker is the cell's width: it stands on the cell's top.
-        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(5.0)), "{at:?}");
-        let hit = access.first_hit(&down(at), Detail::Zoom(LEAF_ZOOM)).exact().flatten().unwrap();
-        assert_eq!(hit.point[2], top, "{hit:?}");
+        assert_eq!(hit.point[2], top, "{n} of 8 dug: {hit:?}");
+        assert_eq!(access.surface_support(&point(at[0], at[1])), Answer::Exact(Some(top)), "{n} of 8 dug");
     }
 }
 
@@ -283,20 +292,4 @@ fn a_height_stands_on_the_floor_nearest_it() {
     write(&mut store, [x, y, 8.0], OBJECT_COARSEST, red);
     let access = World::new(&residency, &store);
     assert_eq!(access.support_nearest(&world::point(x + 0.5, y + 0.5, 9.0)), Answer::Exact(Some(10.0)));
-}
-
-/// A walker is a ground cell wide: what is held finer anywhere in a cell, a
-/// thin rail along its far edge, is climbed, not walked through.
-#[test]
-fn a_walker_meets_what_is_held_finer_anywhere_in_a_cell() {
-    let _g = serial();
-    let (residency, [x, y]) = flat_at_five();
-    let mut store = Store::default();
-    let red = cube_id(Cube::Object(cube::Object::red));
-    let side = units(OBJECT_FINEST);
-    write(&mut store, [x + 2.0 - side, y, 5.0], OBJECT_FINEST, red);
-    let access = World::new(&residency, &store);
-    let from = world::point(x + 0.5, y + 0.5, over(5.0));
-    let to = access.step_slide(&from, &world::point(x + 1.5, y + 0.5, 0.0), &from, true).unwrap();
-    assert_eq!(pvf3::to_real(pvf3::Z(&to)), over(5.0 + side), "{to:?}");
 }

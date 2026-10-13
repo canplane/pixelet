@@ -6,8 +6,9 @@
 use crate::space::coord::zoom::{units, Zoom, UNIT_ZOOM};
 
 /// The camera grid, the one knob of resolution: a cell is an angle of
-/// 1/`SPLIT` radians about the eye, so it is drawn from `SPLIT` of its sides
-/// away out to twice that. Pixels are a screen's, derived from it
+/// 1/`SPLIT` radians about the eye, and the block it is drawn with, whole,
+/// spans at least one cell from any direction, so a zoom's block is drawn
+/// from half `SPLIT` of its sides away out to `SPLIT` of them. Pixels are a screen's, derived from it
 /// (`target_cell_px`). One cell of the grid is one thing drawn; what lies
 /// inside it is its layer's to fold.
 pub const SPLIT: f64 = 96.0;
@@ -22,23 +23,26 @@ pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
     viewport_h / (2.0 * libm::tan((fov_deg * core::f64::consts::PI) / 360.0))
 }
 
-/// The pixels a cell spans at its zoom's split distance, at the reference
-/// view: about twelve.
+/// The pixels a camera grid's cell spans, at the reference view: about
+/// twelve. A block drawn for it spans that to twice that.
 pub fn target_cell_px() -> f64 {
     px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / SPLIT
 }
 
-/// Where ground starts being drawn with cells at `cell_zoom` at `Tau::FINEST`, going out.
+/// Where ground starts being drawn with cells at `cell_zoom` at `Tau::FINEST`,
+/// going out: where its side spans two of the camera grid's cells.
 pub const fn split_distance(cell_zoom: Zoom) -> f64 {
-    SPLIT * units(cell_zoom)
+    SPLIT * units(cell_zoom) / 2.0
 }
 
 /// The camera grid's cell zoom at `r` from the eye: the widest cell whose
-/// split distance is within `r`. Distance only: with the surface angle in,
-/// the skyline would be drawn coarsest. Finer than the ground's near the
-/// eye, held to what a zoom can name.
+/// split distance is within `r`, which is the finest whose side spans one of
+/// the grid's cells there, `r / SPLIT`. A block drawn whole, all its faces, is
+/// at least its side wide from any direction, so the face a ray meets does
+/// not enter. Finer than the ground's near the eye, held to what a zoom can
+/// name.
 pub fn cell_at(r: f64) -> Zoom {
-    (UNIT_ZOOM as f64 - libm::floor(libm::log2(r / SPLIT))).clamp(0.0, Zoom::MAX as f64) as Zoom
+    (UNIT_ZOOM as f64 - libm::floor(libm::log2(r / split_distance(UNIT_ZOOM)))).clamp(0.0, Zoom::MAX as f64) as Zoom
 }
 
 /// The criterion's one scale factor, at least 1: every zoom's split

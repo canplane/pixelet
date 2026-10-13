@@ -199,7 +199,7 @@ fn one_thing(a: Label, b: Label) -> bool {
 /// every name out again; whole pixels, so only the view's size or angle does.
 fn spacing_px() -> f64 {
     let v = crate::view::frame::pose::view();
-    let cell = crate::view::sight::cell_angle(crate::chunk::quality::target()) * px_per_unit(v.height, v.fov);
+    let cell = crate::view::sight::cell_angle(crate::view::sight::tau()) * px_per_unit(v.height, v.fov);
     libm::round(f64::from(SPACING_CELLS) * cell)
 }
 

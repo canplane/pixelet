@@ -47,12 +47,14 @@ pub fn chunk_sources_step() {
     }
 }
 
-/// The chunk with a cell of apron across, what its runs' fold reads (`Store::fold_at`).
+/// The chunk and a cell about it on every side, what its blocks read
+/// (`query/block.rs` `World::compose`): the ring whose blocks decide its
+/// rim's faces.
 fn reach(k: PyramidChunk) -> Aabb {
-    let (cell, r) = (units(k.cell_zoom()), k.region());
+    let (apron, r) = (units(k.cell_zoom()), k.region());
     Aabb {
-        min: [r.min[0] - cell, r.min[1] - cell, r.min[2]],
-        max: [r.max[0] + cell, r.max[1] + cell, r.max[2]],
+        min: r.min.map(|v| v - apron),
+        max: r.max.map(|v| v + apron),
     }
 }
 

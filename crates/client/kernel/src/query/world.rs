@@ -8,7 +8,7 @@ use crate::layer::residency::Line;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 
-use super::block::Column;
+use super::block::Ground;
 use crate::layer::object::store::EntryAt;
 
 use super::decor::Grown;
@@ -79,7 +79,7 @@ impl<'a> World<'a> {
 
 impl Query for World<'_> {
     type Record<'b>
-        = Column<'b>
+        = Ground<'b>
     where
         Self: 'b;
 
@@ -100,8 +100,10 @@ impl Query for World<'_> {
         self.terrain.bound(at, node, cell).map(|ground| Bound::join(ground, objects))
     }
 
-    /// A chunk column's records to compose its blocks from.
-    fn read(&self, node: Node<3>, cell: Zoom) -> Answer<Column<'_>> {
-        self.column(node, cell)
+    /// What answered the ground a node's cells are read from, the tiles
+    /// beside it included, which a build is keyed by; what is in its blocks
+    /// is the world's one query's (`World::node`).
+    fn read(&self, node @ (zoom, [x, y, _]): Node<3>, cell: Zoom) -> Answer<Ground<'_>> {
+        self.ground(&self.terrain.cursor(node, cell), (zoom, [x, y]), cell, 1)
     }
 }

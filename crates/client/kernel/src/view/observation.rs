@@ -20,7 +20,7 @@ use crate::query::World;
 use crate::view::frame::pose::globe;
 use crate::view::frame::pose::view;
 use crate::view::reach::{eye_height, reach_at};
-use crate::view::sight::Footprint;
+use crate::view::sight::Stop;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 
 pub fn eye() -> Option<V3> {
@@ -56,22 +56,22 @@ pub fn within<const D: usize>(node: Node<D>, cell: Zoom) -> Option<Aabb> {
     }
 }
 
-/// The estimator from what the screen's patches saw: the ground their footprints touch
-/// at each zoom whose band holds it, plus what their rays lacked. Ground no
-/// ray reaches is left to the floor. A lack is recast when it arrives, so
-/// requirements grow toward what exact records would give and never rest
-/// short of it.
-pub struct ByFootprints<'a> {
+/// The estimator from what the camera grid's rays observed: at each stop,
+/// the tile of the zoom whose band holds its distance, plus what the rays
+/// lacked. Ground no ray reaches is left to the floor. A lack is cast again
+/// when it arrives, so requirements grow toward what exact records would
+/// give and never rest short of it.
+pub struct BySight<'a> {
     pub tau: Tau,
     /// The layer's, whose tiles' cells say which zoom a distance asks for.
     pub lattice: Lattice,
     /// The coarsest zoom the source supplies whole; no requirement is coarser.
     pub top: Zoom,
-    pub footprints: &'a [Footprint],
+    pub stops: &'a [Stop],
     pub lacks: &'a [Tile],
 }
 
-impl ByFootprints<'_> {
+impl BySight<'_> {
     /// The tiles required: each at a zoom whose band holds what its column
     /// is known to hold, as `at` reads at that zoom's cells.
     pub fn requirements(&self, o: &Observation, each: &mut dyn FnMut(Tile)) {
@@ -87,26 +87,15 @@ impl ByFootprints<'_> {
                 each(p);
             }
         }
-        for f in self.footprints {
-            let b = f.aabb();
-            for zoom in (self.top..=LEAF_ZOOM).rev() {
-                let Some((_, to)) = band(o, self.tau, self.lattice, self.top, zoom) else { break };
-                let reach = to.min(o.far());
-                let lo = [b.min[0].max(o.eye[0] - reach), b.min[1].max(o.eye[1] - reach)];
-                let hi = [b.max[0].min(o.eye[0] + reach), b.max[1].min(o.eye[1] + reach)];
-                if lo[0] > hi[0] || lo[1] > hi[1] {
-                    continue;
-                }
-                let span = units(zoom);
-                let rows = |k: usize| (lo[k] / span).floor() as i64..=(hi[k] / span).floor() as i64;
-                for y in rows(1).filter(|y| tile_rows(zoom).contains(y)) {
-                    for x in rows(0) {
-                        let p = tile_at(zoom, [x, y]);
-                        if f.touches(&p.region()) && required(zoom, p.node()) {
-                            each(p);
-                        }
-                    }
-                }
+        for stop in self.stops {
+            let zoom = (self.top..=LEAF_ZOOM)
+                .rev()
+                .find(|&z| band(o, self.tau, self.lattice, self.top, z).is_some_and(|(from, to)| (from..to).contains(&stop.t)));
+            let Some(zoom) = zoom else { continue };
+            let side = units(zoom);
+            let [x, y] = [0, 1].map(|k| (stop.at[k] / side).floor() as i64);
+            if tile_rows(zoom).contains(&y) {
+                each(tile_at(zoom, [x, y]));
             }
         }
     }
