@@ -81,8 +81,8 @@ impl<'s> DecorBuild<'s> {
         scratch.clear();
         // The ground every decor grows on, read once for all of them, and
         // what placed decor claims about the chunk, as far as a box standing
-        // in it reaches past it.
-        let world = World::now();
+        // in it reaches past it: the world as drawn, as the chunk's mesh is.
+        let world = World::now().previewed();
         if grows && ground.is_some() {
             let r = reach();
             let about = Aabb {
