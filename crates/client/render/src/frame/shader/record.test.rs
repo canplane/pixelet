@@ -16,3 +16,15 @@ fn every_shader_compiles_and_validates() {
         }
     }
 }
+
+/// The caves' WGSL, generated from their one Rust source
+/// (`script/cave-wgsl.ts`), validates as WebGPU takes it, every capability
+/// off: no 64-bit integer and no f64 reached it.
+#[test]
+fn the_generated_caves_compile_and_validate() {
+    let src = include_str!("cave.gen.wgsl");
+    let module = naga::front::wgsl::parse_str(src).unwrap_or_else(|e| panic!("cave.gen.wgsl: {}", e.emit_to_string(src)));
+    if let Err(e) = Validator::new(ValidationFlags::all(), Capabilities::empty()).validate(&module) {
+        panic!("cave.gen.wgsl: {}", e.emit_to_string(src));
+    }
+}

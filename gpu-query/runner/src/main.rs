@@ -1,4 +1,5 @@
-//! Runs the WGSL rust-gpu made of pxl-spec's gpu-portable caves (cave.wgsl)
+//! Runs the checked-in WGSL rust-gpu made of pxl-spec's gpu-portable caves
+//! (render's frame/shader/cave.gen.wgsl, `script/cave-wgsl.ts`)
 //! on the GPU over a tile's nodes, X across the wrap and every axis across
 //! zero, and diffs each node's bits against the same source on the CPU,
 //! pxl-spec's own `Cave` and `node_seed`.
@@ -22,7 +23,7 @@ fn main() {
     let info = adapter.get_info();
     println!("adapter: {} ({:?}); no feature asked for", info.name, info.backend);
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).expect("device");
-    let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../cave.wgsl")).expect("cave.wgsl");
+    let source = include_str!("../../../crates/client/render/src/frame/shader/cave.gen.wgsl");
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("cave"),
         source: wgpu::ShaderSource::Wgsl(source.into()),
