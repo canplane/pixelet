@@ -30,7 +30,9 @@ pub const SHADER_IMPOSTOR_BAKE: u32 = 22;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 23;
 pub const SHADER_CAMERA_GRID: u32 = 24;
 pub const SHADER_BADGE_REGION: u32 = 25;
-pub const SHADERS: u32 = 26;
+/// The camera grid's cells drawn straight to the screen (frame/screen_cells.rs).
+pub const SHADER_SCREEN_CELLS: u32 = 26;
+pub const SHADERS: u32 = 27;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -120,6 +122,7 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_DEBUG => wgsl!("frame", "globe", "encode", "debug"),
         SHADER_CAMERA_GRID => wgsl!("frame", "globe", "encode", "sky_words", "camera_grid"),
+        SHADER_SCREEN_CELLS => wgsl!("frame", "globe", "encode", "sky_words", "screen_cells"),
         SHADER_MIPS => wgsl!("mips"),
         SHADER_SHEET => wgsl!("sheet"),
         SHADER_IMPOSTOR => wgsl!(
@@ -222,7 +225,9 @@ pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 37;
 pub const PIPELINE_BADGE_REGION: u32 = 39;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/renderer.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 40;
-pub const PIPELINES: u32 = 41;
+/// The camera grid's cells, opaque at their rays' depth (frame/screen_cells.rs).
+pub const PIPELINE_SCREEN_CELLS: u32 = 41;
+pub const PIPELINES: u32 = 42;
 
 // Record words: shader, has fragment, topology, cull, depth write, depth
 // compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
@@ -546,6 +551,15 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             },
             &[],
             &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM]])],
+        ),
+        PIPELINE_SCREEN_CELLS => record(
+            Head {
+                depth_write: true,
+                blend: OPAQUE,
+                ..blended(SHADER_SCREEN_CELLS, CULL_NONE, 0, 0.0)
+            },
+            &[],
+            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM], [2, FRAGMENT, STORAGE]])],
         ),
         PIPELINE_CHUNK_DEPTH => record(depth_only(SHADER_CHUNK), &chunk_lanes(true), &chunk_groups()),
         PIPELINE_CHUNK_COARSE_DEPTH => record(at_coarse(depth_only(SHADER_CHUNK)), &chunk_lanes(false), &chunk_groups()),

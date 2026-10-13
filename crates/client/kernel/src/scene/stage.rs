@@ -233,7 +233,6 @@ pub fn visible_step(ctx: &mut TickContext) {
         let animating = k.scene.tick(&mut k.draw, &k.models, &frame);
         k.scene.begin(&mut k.draw, &k.models, frame.eye);
         crate::scene::indicator::camera_gizmo::draw(&mut k.draw, settings_store().camera_gizmo);
-        k.sched.draw(&frame, &mut k.draw);
         moving || animating
     });
     // Decor lists after the chunks have listed theirs.

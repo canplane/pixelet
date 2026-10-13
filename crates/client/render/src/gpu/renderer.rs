@@ -17,8 +17,10 @@ use crate::frame::draw::{
     uniform_of, Lists, CHUNK_UNIT, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX,
     PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
+use crate::frame::screen_cells::{screen_cells_mut, FACE_SHIFT, KIND_GROUND, KIND_PLACED, KIND_SHIFT, SCREEN_CELLS_MAX, VALUE_BITS};
 use crate::frame::shader::record::{
-    FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_DEBUG_FACE, PIPELINE_SKY,
+    FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS,
+    PIPELINE_SKY,
 };
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
@@ -42,6 +44,8 @@ use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
+use crate::mesh::paint::ground::{ground, look};
+use pxl_spec::block::Block;
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use pxl_spec::space::coord::zoom::units;
@@ -687,6 +691,68 @@ impl DebugPass {
     }
 }
 
+/// The camera grid's cells as the last cast met them, drawn straight to the
+/// screen at their rays' depth (frame/screen_cells.rs), uploaded once a cast.
+struct ScreenCellsPass {
+    built: Built,
+    group: u32,
+    buffer: u32,
+    generation: u32,
+    words: Vec<u32>,
+}
+
+impl ScreenCellsPass {
+    fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> ScreenCellsPass {
+        let built = pipelines.build(g, PIPELINE_SCREEN_CELLS, format::CANVAS);
+        let buffer = object();
+        g.buffer(buffer, word_bytes(4 * (1 + SCREEN_CELLS_MAX)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let group = object();
+        let mut entries = [0u32; 15];
+        entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
+        entries[5..10].copy_from_slice(&buffer_entry(1, sky_buffer));
+        entries[10..].copy_from_slice(&buffer_entry(2, buffer));
+        g.bind_group(group, built.layouts[0], &entries);
+        ScreenCellsPass {
+            built,
+            group,
+            buffer,
+            generation: 0,
+            words: Vec::new(),
+        }
+    }
+
+    /// A new cast's cells, each its block's swatch, its face, how far and
+    /// what it met, after the grid's size.
+    fn prepare(&mut self, g: &Gpu) {
+        let cells = screen_cells_mut();
+        if cells.generation == self.generation {
+            return;
+        }
+        self.generation = cells.generation;
+        let n = (cells.across[0] * cells.across[1]) as usize;
+        self.words.clear();
+        self.words.extend_from_slice(&[cells.across[0], cells.across[1], 0, 0]);
+        for &[w0, w1] in &cells.cells[..n.min(SCREEN_CELLS_MAX)] {
+            let (value, kind, face) = (w0 & ((1 << VALUE_BITS) - 1), (w0 >> KIND_SHIFT) & 3, (w0 >> FACE_SHIFT) & 7);
+            let rgb = match kind {
+                KIND_GROUND => ground(value as u8).0,
+                KIND_PLACED => look(Block::Placed(value)).0,
+                _ => [0; 3],
+            };
+            self.words.extend_from_slice(&[u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 255]), face, w1, kind]);
+        }
+        g.write_buffer(self.buffer, 0, bytes(&self.words));
+    }
+
+    /// Returns the group 0 it leaves bound.
+    fn draw(&self, g: &Gpu, pass: u32) -> u32 {
+        g.set_pipeline(pass, self.built.pipeline);
+        g.set_bind_group(pass, 0, self.group, &[]);
+        g.draw(pass, 3, 1, 0, 0);
+        self.group
+    }
+}
+
 /// A variant picker case: its own frame, drawn at one sample with no shadow.
 struct Case {
     frame_buffer: u32,
@@ -755,6 +821,7 @@ pub struct Renderer {
     puck: PuckPass,
     badges: BadgePass,
     debug: DebugPass,
+    screen: ScreenCellsPass,
     cases: [Option<Case>; SURFACES],
     order: Vec<u32>,
 }
@@ -819,6 +886,7 @@ impl Renderer {
             puck: PuckPass::new(g, &mut pipelines, frame_buffer, air),
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer, sky_buffer),
+            screen: ScreenCellsPass::new(g, &mut pipelines, frame_buffer, sky_buffer),
             pipelines,
             frame_buffer,
             frame: [0.0; FRAME_FLOATS],
@@ -1048,6 +1116,7 @@ impl Renderer {
         self.puck.prepare_zone(g, &draws, b);
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
+        self.screen.prepare(g);
         self.prepare_cases(g, &draws, uniforms, input.cases);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
@@ -1086,7 +1155,8 @@ impl Renderer {
         let pass = object();
         g.pass(pass, encoder, &pass_desc(canvas_view, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
         let chunk = [self.chunk.pipeline, self.chunk_coarse.pipeline];
-        let mut bound = self.draw_opaque(g, pass, &draws, b, Stage::Lit, chunk, self.bind_group, self.models.frame, None);
+        self.draw_opaque(g, pass, &draws, b, Stage::Lit, chunk, self.bind_group, self.models.frame, None);
+        let mut bound = self.screen.draw(g, pass);
         // Last among opaque pipelines: alpha-tested fragments they discard were already filled.
         self.impostor.draw(g, pass, draws.of(PIPELINE_IMPOSTOR), b, (self.models.frame, &mut bound));
         // At the far plane after the opaque world, so only empty pixels run the sky shader.
