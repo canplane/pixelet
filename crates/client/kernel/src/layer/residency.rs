@@ -184,7 +184,7 @@ impl Default for Lines {
 impl Line {
     /// Over the top: nothing.
     const ABOVE: Line = Line {
-        tile: Tile { zoom: 0, tile: 0 },
+        tile: Tile { zoom: 0, at: [0, 0] },
         drawn: None,
         source: None,
         settled: false,

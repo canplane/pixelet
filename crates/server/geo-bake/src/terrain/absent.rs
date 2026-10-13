@@ -49,9 +49,9 @@ impl Absence {
 
 impl Absent<TerrainTile> for Absence {
     fn at(&self, p: Tile) -> Cow<'_, TerrainTile> {
-        if self.coverage.holds(p.zoom, p.tile) {
+        if self.coverage.holds(p.zoom, p.at) {
             Cow::Borrowed(&self.sea)
-        } else if !self.coverage.meets(p.zoom, p.tile) {
+        } else if !self.coverage.meets(p.zoom, p.at) {
             Cow::Borrowed(&self.unknown)
         } else {
             let children = p.children().map(|c| self.at(c));

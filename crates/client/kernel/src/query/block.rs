@@ -8,7 +8,6 @@ use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::sample::{beside_index, shades, Around, Blocks, Grid, Refused};
 use pxl_spec::block::Block;
 use pxl_spec::space::camera::grid::CHUNK_STEPS;
-use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::coord::world::wrap_index;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::Node;
@@ -74,10 +73,10 @@ impl<'a> World<'a> {
         let mut beside = [None; 8];
         for ([qx, qy], p) in GROUND.read_beside(node, cell, ring << folds(cell)) {
             // A tile is read at its own cells.
-            beside[beside_index(qx, qy)] = self.terrain.read((p.zoom, [ivec::X(p.tile), ivec::Y(p.tile), 0]), GROUND.grid_zoom(p.zoom)).value();
+            beside[beside_index(qx, qy)] = self.terrain.read((p.zoom, [p.at[0], p.at[1], 0]), GROUND.grid_zoom(p.zoom)).value();
         }
         let tile = line.tile;
-        let mut first = [ivec::X(tile.tile), ivec::Y(tile.tile)].map(|v| v << (cell - tile.zoom));
+        let mut first = tile.at.map(|v| v << (cell - tile.zoom));
         let x = node.1[0] << (cell - node.0);
         first[0] = x - wrap_index(cell, x - first[0]);
         self.terrain.cells_of(line).map(|own| Ground { own, beside, tile, first, cell })

@@ -6,7 +6,6 @@
 use super::tile::{tile_at, tile_rows, Cell, Tile, LEAF_ZOOM};
 use crate::bake::constant::EXTENT_CELL;
 use crate::space::camera::grid::{split_distance, Tau, CHUNK_CELLS, CHUNK_STEPS};
-use crate::space::coord::pvf3::ivec;
 use crate::space::coord::pvf3::Pvf3;
 use crate::space::coord::zoom::{count, index_of, Zoom, FINEST_ZOOM, SHARD_ZOOM};
 use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, offset_in, parent_of, slot_of};
@@ -90,7 +89,7 @@ impl Lattice {
         let (side, across) = (self.read_side(node.0, cell), self.tile_cells());
         let steps = move |v: u32| [0, -1, 1].into_iter().filter(move |&q| q == 0 || (q < 0 && v < apron) || (q > 0 && v + side + apron > across));
         let tile = self.read_tile(node, cell);
-        let [px, py] = [ivec::X(tile.tile), ivec::Y(tile.tile)];
+        let [px, py] = tile.at;
         let zoom = tile.zoom;
         let rows = tile_rows(zoom);
         steps(y0)

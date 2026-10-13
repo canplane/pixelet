@@ -10,7 +10,6 @@ use pxl_spec::space::coord::world::{around, wrap_index};
 use pxl_spec::space::layer::demand::{REACH_ACROSS, REACH_TILES};
 
 use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
@@ -97,7 +96,7 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
 /// answers: residency as the GPU reads it, kept nowhere.
 pub fn earth_window(floor: impl Iterator<Item = Tile> + Clone) -> ([i32; 2], [u32; REACH_TILES as usize]) {
     let mut layers = [0; REACH_TILES as usize];
-    let at = |p: Tile| [ivec::X(p.tile), ivec::Y(p.tile)];
+    let at = |p: Tile| p.at;
     let Some([first, _]) = floor.clone().next().map(at) else { return ([0; 2], layers) };
     // X wraps: the window's west tile is the one fewest tiles east of the first.
     let around = around(EARTH_ZOOM);

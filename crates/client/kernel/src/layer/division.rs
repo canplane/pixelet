@@ -8,7 +8,7 @@
 use pxl_spec::bake::tile::division::{self, Division, DivisionTile, DIVISION_LEAF};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::pvf3::Pvf3;
-use pxl_spec::space::coord::zoom::{idx, Zoom};
+use pxl_spec::space::coord::zoom::{index_of, Zoom};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
@@ -42,7 +42,10 @@ impl Base for DivisionTile {
 
 /// The finest tile of the focus's line, which demand asks for with the line.
 pub fn line(focus: Option<Pvf3>) -> Option<Tile> {
-    focus.map(|at| Tile::over(DivisionTile::LEAF, idx(LEAF_ZOOM, at.i)))
+    focus.map(|at| {
+        let [x, y, _] = index_of(LEAF_ZOOM, &at);
+        Tile::over(DivisionTile::LEAF, [x, y])
+    })
 }
 
 /// The divisions of the cell `at` is in, broad to narrow, from the deepest

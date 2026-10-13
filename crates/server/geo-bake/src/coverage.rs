@@ -9,7 +9,6 @@ use std::sync::LazyLock;
 
 use postgres::{Client, NoTls};
 use pxl_geo_spec::table::CATALOG;
-use pxl_spec::space::coord::pvf3::ivec::{self, IVec};
 use pxl_spec::space::coord::zoom::{count, shamt, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
@@ -64,10 +63,10 @@ impl Node {
     }
 
     /// Its tiles at `zoom`, at or under it.
-    pub fn tiles(self, zoom: Zoom) -> Vec<IVec> {
+    pub fn tiles(self, zoom: Zoom) -> Vec<[i64; 2]> {
         let shift = u32::from(zoom - self.zoom);
         let (n, [x0, y0]) = (1i64 << shift, first_descendant_of(self.at, shift));
-        (y0..y0 + n).flat_map(|y| (x0..x0 + n).map(move |x| ivec::gather(x, y, 0))).collect()
+        (y0..y0 + n).flat_map(|y| (x0..x0 + n).map(move |x| [x, y])).collect()
     }
 
     /// What a shard holds: its rect grown by `SHARD_APRON`.
@@ -112,39 +111,37 @@ impl Coverage {
     /// These shards, each a tile at `SHARD_ZOOM`.
     pub fn of_shards(shards: impl IntoIterator<Item = Tile>) -> Coverage {
         Coverage {
-            shards: shards.into_iter().map(|t| [ivec::X(t.tile), ivec::Y(t.tile)]).collect(),
+            shards: shards.into_iter().map(|t| t.at).collect(),
         }
     }
 
-    fn shard_of(zoom: Zoom, tile: IVec) -> Shard {
-        ancestor_of([ivec::X(tile), ivec::Y(tile)], u32::from(zoom - SHARD_ZOOM))
+    fn shard_of(zoom: Zoom, tile: [i64; 2]) -> Shard {
+        ancestor_of(tile, u32::from(zoom - SHARD_ZOOM))
     }
 
-    pub fn contains(&self, leaf: IVec) -> bool {
+    pub fn contains(&self, leaf: [i64; 2]) -> bool {
         self.shards.contains(&Self::shard_of(LEAF_ZOOM, leaf))
     }
 
     /// Whether the tile at `zoom` and `tile` covers any leaf held.
-    pub fn meets(&self, zoom: Zoom, tile: IVec) -> bool {
+    pub fn meets(&self, zoom: Zoom, tile: [i64; 2]) -> bool {
         if zoom >= SHARD_ZOOM {
             return self.shards.contains(&Self::shard_of(zoom, tile));
         }
-        let at = [ivec::X(tile), ivec::Y(tile)];
-        self.shards.iter().any(|&s| ancestor_of(s, u32::from(SHARD_ZOOM - zoom)) == at)
+        self.shards.iter().any(|&s| ancestor_of(s, u32::from(SHARD_ZOOM - zoom)) == tile)
     }
 
     /// Whether every leaf under the tile at `zoom` and `tile` is held.
-    pub fn holds(&self, zoom: Zoom, tile: IVec) -> bool {
+    pub fn holds(&self, zoom: Zoom, tile: [i64; 2]) -> bool {
         if zoom >= SHARD_ZOOM {
             return self.meets(zoom, tile);
         }
-        let at = [ivec::X(tile), ivec::Y(tile)];
-        let under = self.shards.iter().filter(|&&s| ancestor_of(s, u32::from(SHARD_ZOOM - zoom)) == at).count();
+        let under = self.shards.iter().filter(|&&s| ancestor_of(s, u32::from(SHARD_ZOOM - zoom)) == tile).count();
         under == (count(SHARD_ZOOM, zoom) as usize).pow(2)
     }
 
     /// Every leaf held.
-    pub fn tiles(&self) -> Vec<IVec> {
+    pub fn tiles(&self) -> Vec<[i64; 2]> {
         self.shards().flat_map(|s| s.tiles(LEAF_ZOOM)).collect()
     }
 
@@ -153,7 +150,7 @@ impl Coverage {
     }
 
     /// The shard a tile's bake reads: its own, which holds its apron.
-    pub fn around(&self, zoom: Zoom, tile: IVec) -> BTreeSet<Node> {
+    pub fn around(&self, zoom: Zoom, tile: [i64; 2]) -> BTreeSet<Node> {
         let at = Self::shard_of(zoom, tile);
         self.shards.contains(&at).then_some(Node { zoom: SHARD_ZOOM, at }).into_iter().collect()
     }

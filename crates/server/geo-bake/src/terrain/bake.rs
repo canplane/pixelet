@@ -5,7 +5,6 @@
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{Ground, TerrainTile};
 use pxl_spec::space::coord::adapter::epsg3857::{self, G3857};
-use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 
 use crate::separation::Drawn;
@@ -25,7 +24,7 @@ pub fn assemble(surface: Surface, lines: Separation) -> TerrainTile {
 }
 
 /// `drawn`: the ranges of the tile's ways its lines draw.
-pub fn bake_surface(tile_idx: IVec, source: TileSource, drawn: &[Drawn]) -> Surface {
+pub fn bake_surface(tile_idx: [i64; 2], source: TileSource, drawn: &[Drawn]) -> Surface {
     let tile_min = epsg3857::get_tile_bbox(LEAF_ZOOM, tile_idx)[0];
     let mut features: Vec<Feature> = Vec::new();
     features.extend(source.building_rows.iter().flat_map(|row| buildings(row, tile_min)));

@@ -82,7 +82,7 @@ fn epsg3857_project_pvf3_x_subtraction_takes_the_short_antimeridian_path() {
 fn epsg3857_tile_bbox_preserves_the_exclusive_positive_world_boundary() {
     // The last tile before X's positive edge at 2^23 units.
     let last = (1i64 << 23) / crate::space::coord::zoom::units(Z15) as i64 - 1;
-    let tile_idx = ivec::gather(last, last, 0);
+    let tile_idx = [last, last];
     let [_, max] = get_tile_bbox(Z15, tile_idx);
 
     assert_almost(max[0], half_world(), 1e-8);

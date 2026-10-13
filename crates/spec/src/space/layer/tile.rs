@@ -8,7 +8,6 @@
 use super::lattice::{Lattice, GROUND};
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::pvf3::core::FRAC_W;
-use crate::space::coord::pvf3::ivec::{self, IVec, TO_XY};
 use crate::space::coord::pvf3::pack;
 use crate::space::coord::pvf3::pvf3::{self, Pvf3};
 use crate::space::coord::world::{self, around, wrap_index};
@@ -19,40 +18,35 @@ use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
 /// world 2^15 round.
 pub const LEAF_ZOOM: Zoom = 15;
+const _: () = assert!(morton::bits::<2>(LEAF_ZOOM) < 63, "a tile's key fits its subject's word");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Tile {
     /// Its size's.
     pub zoom: Zoom,
-    /// Z is zero.
-    pub tile: IVec,
+    /// Its index at its zoom.
+    pub at: [i64; 2],
 }
 
 impl Tile {
-    pub fn new(zoom: Zoom, tile: IVec) -> Tile {
-        Tile { zoom, tile: TO_XY(tile) }
+    pub fn new(zoom: Zoom, at: [i64; 2]) -> Tile {
+        Tile { zoom, at }
     }
 
-    /// The tile at `z` a leaf lies under.
-    pub fn over(zoom: Zoom, leaf: IVec) -> Tile {
-        let [x, y] = ancestor_of([ivec::X(leaf), ivec::Y(leaf)], u32::from(LEAF_ZOOM - zoom));
-        Tile::new(zoom, ivec::gather(x, y, 0))
-    }
-
-    fn at(self) -> [i64; 2] {
-        [ivec::X(self.tile), ivec::Y(self.tile)]
+    /// The tile at `z` the leaf `leaf` lies under.
+    pub fn over(zoom: Zoom, leaf: [i64; 2]) -> Tile {
+        Tile::new(zoom, ancestor_of(leaf, u32::from(LEAF_ZOOM - zoom)))
     }
 
     #[inline]
     pub fn parent(self) -> Tile {
-        let [x, y] = parent_of(self.at());
-        Tile::new(self.zoom - 1, ivec::gather(x, y, 0))
+        Tile::new(self.zoom - 1, parent_of(self.at))
     }
 
     /// Its 2D key, X wrapped at the seam; its name is the key written
     /// (`morton::write_name`).
     pub fn key(self) -> u128 {
-        let [x, y] = self.at();
+        let [x, y] = self.at;
         key_of::<2>(self.zoom, [wrap_index(self.zoom, x), y])
     }
 
@@ -73,25 +67,21 @@ impl Tile {
 
     /// Its place among its parent's `children`.
     pub fn slot(self) -> usize {
-        slot_of(self.at())
+        slot_of(self.at)
     }
 
     /// In `slot_of`'s order.
     pub fn children(self) -> [Tile; 4] {
-        std::array::from_fn(|slot| {
-            let [x, y] = child_of(self.at(), slot);
-            Tile::new(self.zoom + 1, ivec::gather(x, y, 0))
-        })
+        std::array::from_fn(|slot| Tile::new(self.zoom + 1, child_of(self.at, slot)))
     }
 
     pub fn node(self) -> Node<2> {
-        (self.zoom, self.at())
+        (self.zoom, self.at)
     }
 
     /// Its first leaf.
-    pub fn first_leaf(self) -> IVec {
-        let [x, y] = first_descendant_of(self.at(), u32::from(LEAF_ZOOM - self.zoom));
-        ivec::gather(x, y, 0)
+    pub fn first_leaf(self) -> [i64; 2] {
+        first_descendant_of(self.at, u32::from(LEAF_ZOOM - self.zoom))
     }
 
     pub fn span(self) -> f64 {
@@ -110,13 +100,15 @@ impl Tile {
         region(self.node())
     }
 
-    /// A demand's subject: the key with the zoom in the Z lane.
+    /// A demand's subject: its key's high half, which holds every digit and
+    /// the end bit of a key no finer than z31.
     pub fn subject(self) -> u64 {
-        ivec::gather(ivec::X(self.tile), ivec::Y(self.tile), self.zoom as i64)
+        (self.key() >> 64) as u64
     }
 
     pub fn of_subject(subject: u64) -> Tile {
-        Tile::new(ivec::Z(subject) as Zoom, subject)
+        let (zoom, at) = node_of::<2>(u128::from(subject) << 64);
+        Tile::new(zoom, at)
     }
 }
 
@@ -129,7 +121,7 @@ pub fn top_over(leaf: Zoom, top: Zoom) -> Zoom {
 /// The 4×4 tiles a zoom finer around a tile's children, each at
 /// `neighbor_index`; X wraps and a tile past Y's edge has no object.
 pub fn neighborhood(p: Tile) -> [Tile; 16] {
-    let [x, y] = child_of(p.at(), 0);
+    let [x, y] = child_of(p.at, 0);
     std::array::from_fn(|k| {
         let (qx, qy) = ((k % 4) as i64 - 1, (k / 4) as i64 - 1);
         tile_at(p.zoom + 1, [x + qx, y + qy])
@@ -150,7 +142,7 @@ pub fn tile_rows(zoom: Zoom) -> std::ops::Range<i64> {
 
 /// The tile at `z` at (x, y), X wrapped around the world.
 pub fn tile_at(zoom: Zoom, [x, y]: [i64; 2]) -> Tile {
-    Tile::new(zoom, ivec::gather(wrap_index(zoom, x), y, 0))
+    Tile::new(zoom, [wrap_index(zoom, x), y])
 }
 
 /// Where a tile's own children sit in its neighborhood, in `slot_of`'s order.
@@ -176,8 +168,7 @@ impl Cell {
     }
 
     pub fn tile(self) -> Tile {
-        let [x, y] = ancestor_of(self.at, self.shamt());
-        Tile::new(self.tile_zoom(), ivec::gather(x, y, 0))
+        Tile::new(self.tile_zoom(), ancestor_of(self.at, self.shamt()))
     }
 
     /// Its place in its tile, as every lane of the tile numbers it.

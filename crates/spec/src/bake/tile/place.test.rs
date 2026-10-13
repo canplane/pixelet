@@ -1,10 +1,9 @@
 // pxl-spec/bake/tile/place.test.rs
 
 use super::*;
-use crate::space::coord::pvf3::ivec;
 
 fn leaf() -> Tile {
-    Tile::new(LEAF_ZOOM, ivec::gather(6, 4, 0))
+    Tile::new(LEAF_ZOOM, [6, 4])
 }
 
 /// The middle of ground leaf cell (x, y) of `leaf()`.

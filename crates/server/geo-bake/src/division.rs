@@ -16,7 +16,6 @@ use pxl_spec::bake::tile::division::{Division, DivisionTile, DIVISION_LEAF, NONE
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::division::Subtype;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, mer_from_u, u_from_mer};
-use pxl_spec::space::coord::pvf3::ivec::IVec;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::tile::Tile;
@@ -74,7 +73,7 @@ impl Numbered {
 }
 
 /// None where no cell is in a division.
-pub fn leaf(client: &mut Client, tile: IVec) -> Result<Option<DivisionTile>, String> {
+pub fn leaf(client: &mut Client, tile: [i64; 2]) -> Result<Option<DivisionTile>, String> {
     let db = |e: postgres::Error| e.to_string();
     let [min, max] = get_tile_bbox(DIVISION_LEAF, tile);
     let side = max[0] - min[0];

@@ -1,6 +1,7 @@
 // pxl-spec/space/layer/tile.test.rs
 
 use super::*;
+use crate::space::coord::pvf3::ivec;
 use crate::space::coord::world::{around, nearest, ROUND};
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::lattice::*;
@@ -89,7 +90,7 @@ fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_zooms_coarser() {
 /// `child_cells` inverts `parent_cell` in every lattice.
 #[test]
 fn a_parent_cell_and_its_child_cells_are_one_relation() {
-    let p = Tile::new(13, ivec::gather(-5, 7, 0));
+    let p = Tile::new(13, [-5, 7]);
     let around = neighborhood(p);
     assert!((0..4).all(|q| around[CHILDREN[q]] == p.children()[q]));
     for lattice in [GROUND, Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 4)] {
@@ -126,7 +127,7 @@ fn a_point_goes_round_in_x_and_stops_at_the_edge_in_y() {
 /// A Bundang tile, (11569, 3671): rows count from the south and a first
 /// digit is the signs, written out because the orientation is what can be
 /// silently wrong. The bucket's keys are these names.
-const BUNDANG: IVec = 12720250262323200;
+const BUNDANG: [i64; 2] = [11569, 3671];
 const BUNDANG_NAME: &str = "010332102130223";
 
 #[test]
@@ -152,7 +153,7 @@ fn every_tile_survives_its_name_at_every_zoom() {
     for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
         for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
             for zoom in GROUND.top()..=LEAF_ZOOM {
-                let p = Tile::over(zoom, ivec::gather(x, y, 0));
+                let p = Tile::over(zoom, [x, y]);
                 assert_eq!(Tile::of_name(&p.name()), Some(p), "({x}, {y}) at z{zoom}");
             }
         }

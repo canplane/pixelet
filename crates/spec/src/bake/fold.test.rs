@@ -169,5 +169,5 @@ fn zero_tile() -> TerrainTile {
 #[test]
 fn the_zero_tile_folds_to_itself() {
     let zero = zero_tile();
-    assert_eq!(fold_terrain(neighborhood(Tile::new(LEAF_ZOOM - 1, 0)).map(|_| Some(&zero)), LEAF_ZOOM - 1).as_ref(), Some(&zero));
+    assert_eq!(fold_terrain(neighborhood(Tile::new(LEAF_ZOOM - 1, [0, 0])).map(|_| Some(&zero)), LEAF_ZOOM - 1).as_ref(), Some(&zero));
 }

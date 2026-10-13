@@ -10,7 +10,6 @@ use postgres::types::ToSql;
 use postgres::Client;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg3857::{self, mer_from_u};
-use pxl_spec::space::coord::pvf3::ivec::IVec;
 
 use crate::separation::{self, source::Store};
 use crate::terrain::bake::assemble;
@@ -38,7 +37,7 @@ pub const GROUND_READS: [&str; 1] = [HAS_GROUND_SQL];
 pub const READS: [&[&str]; 3] = [&GROUND_READS, &repository::READS, &separation::source::READS];
 
 /// A tile nothing is drawn in is open water; a cheap check, not the carve.
-pub fn has_ground(client: &mut Client, tiles: &[IVec]) -> Result<Vec<bool>, postgres::Error> {
+pub fn has_ground(client: &mut Client, tiles: &[[i64; 2]]) -> Result<Vec<bool>, postgres::Error> {
     let bbox: Vec<[f64; 4]> = tiles
         .iter()
         .map(|&p| {
@@ -61,7 +60,7 @@ pub fn has_ground(client: &mut Client, tiles: &[IVec]) -> Result<Vec<bool>, post
 
 /// A leaf: its separation solved, its surface painted around its lines, the two
 /// one tile.
-pub fn bake_leaf(r: &mut separation::Reader<impl Store>, tile: IVec) -> Result<TerrainTile, String> {
+pub fn bake_leaf(r: &mut separation::Reader<impl Store>, tile: [i64; 2]) -> Result<TerrainTile, String> {
     let solved = separation::solve_tile(r, tile)?;
     let surface = fetch_surface(r.repo, r.client, tile, &solved.drawn)?;
     let lines = bake_separation(&solved.lines, epsg3857::get_tile_bbox(LEAF_ZOOM, tile)[0]).ok_or("a tile's separation overflow a record")?;

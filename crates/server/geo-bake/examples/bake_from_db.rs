@@ -3,7 +3,7 @@
 //! Bakes single tiles straight from the geo DB, without the walk's threads,
 //! resume or manifest, for inspecting one tile.
 //!
-//!   cargo run -p pxl-geo-bake --example bake_from_db -- <dir> <tile>...
+//!   cargo run -p pxl-geo-bake --example bake_from_db -- <dir> <leaf name>...
 
 use std::fs;
 use std::sync::Arc;
@@ -14,10 +14,11 @@ use pxl_geo_bake::separation::{self, source::Disk};
 use pxl_geo_bake::terrain::leaf::{self, bake_leaf};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_spec::bake::tile::terrain;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let (dir, tiles) = args.split_first().expect("usage: <dir> <tile>...");
+    let (dir, tiles) = args.split_first().expect("usage: <dir> <leaf name>...");
 
     let coverage = Coverage::of_source().expect("coverage");
     let (_, mut client) = Overture::reading(&leaf::READS, &Coverage::of_source().expect("coverage").shards().collect()).expect("geo DB");
@@ -26,7 +27,7 @@ fn main() {
     let memo = std::env::temp_dir().join("pxl-source");
 
     for tile in tiles {
-        let idx = tile.parse().expect("tile_idx");
+        let idx = Tile::of_name(tile).filter(|t| t.zoom == LEAF_ZOOM).expect("a leaf's name").at;
         assert!(coverage.contains(idx), "{tile} is not a tile of the coverage");
         let reader = &mut separation::Reader {
             client: &mut client,

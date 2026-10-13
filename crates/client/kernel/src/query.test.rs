@@ -8,7 +8,6 @@ use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::bake::tile::terrain::Ground;
 use pxl_spec::block::cube::{self, ground, sentinel};
 use pxl_spec::block::object::{cube_id, Cube};
-use pxl_spec::space::coord::pvf3::ivec;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 
 use super::*;
@@ -40,7 +39,7 @@ impl Victim for Keep {
 }
 
 fn top() -> Tile {
-    Tile::new(LEAF_ZOOM - 1, ivec::gather(40, -20, 0))
+    Tile::new(LEAF_ZOOM - 1, [40, -20])
 }
 
 /// The tiles held, and over each its line up to the coarsest zoom the
