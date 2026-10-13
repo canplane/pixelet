@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run -A
-// Holds the tree to the AGENTS.md rules a machine can decide: the header
+// Holds the tree to the rules a machine can decide: the header
 // path, cited paths and names existing, the lattice's arithmetic only in
 // `space/`, no raw pointer casts in offset crates, `@expo/ui` only in the
 // sheet. `decision/` is exempt from cited paths.
@@ -165,7 +165,7 @@ for (const f of files) {
 
 if (problems.length) {
   console.error(problems.join("\n"));
-  console.error(`\ncheck-rules: ${problems.length} (AGENTS.md says why each rule is there)`);
+  console.error(`\ncheck-rules: ${problems.length}`);
   Deno.exit(1);
 }
 console.log("check-rules: headers, cited paths, the lattice, the memory's offsets and SwiftUI's place hold");
