@@ -115,8 +115,8 @@
     "PIPELINE": { "$value": 9, "$doc": ["id, module, format, the record's words, the record, then the group layouts"] },
     "BIND_GROUP": { "$value": 10, "$doc": ["id, layout, then (binding, resource, object, offset, size) words"] },
     "DESTROY": { "$value": 11, "$doc": ["id"] },
-    "WRITE_BUFFER": { "$value": 12, "$doc": ["id, offset, the bytes"] },
-    "WRITE_TEXTURE": { "$value": 13, "$doc": ["id, layer, width, height, the bytes: the first mip of one layer, whole"] },
+    "UPLOAD_BUFFER": { "$value": 12, "$doc": ["id, offset, address, length: the bytes at that address in the module's memory, read when the page replays the turn, so the range lives unwritten until then: the owner's own where it does, else a copy in the stream"] },
+    "UPLOAD_TEXTURE": { "$value": 13, "$doc": ["id, layer, width, height, address, length: the first mip of one layer, whole, as UPLOAD_BUFFER reads its bytes"] },
     "ENCODER": { "$value": 14, "$doc": ["id"] },
     "PASS": { "$value": 15, "$doc": ["id, encoder, the pass's description (api.rs pass_desc)"] },
     "SET_PIPELINE": { "$value": 16, "$doc": ["pass, pipeline"] },
@@ -132,7 +132,10 @@
     "CURRENT": { "$value": 26, "$doc": ["surface, view: a view of the surface's texture for this frame"] },
     "QUERY_SET": { "$value": 27, "$doc": ["id, count"] },
     "TIMESTAMPS": { "$value": 28, "$doc": ["encoder, query set, written: the pairs of the spans set in `written` read once the GPU has them"] },
-    "COPY_TEXTURE": { "$value": 31, "$doc": ["encoder, source, x, y, target, x, y, layer, width, height: a region of one texture's first mip into another's layer"] }
+    "COPY_TEXTURE": { "$value": 31, "$doc": ["encoder, source, x, y, target, x, y, layer, width, height: a region of one texture's first mip into another's layer"] },
+    "COMPUTE_PIPELINE": { "$value": 29, "$doc": ["id, module, then the group layouts: the module's one compute entry"] },
+    "COMPUTE_PASS": { "$value": 30, "$doc": ["id, encoder"] },
+    "DISPATCH": { "$value": 32, "$doc": ["pass, workgroups across, up, deep"] }
   },
   "record": {
     "$type": "u32",
@@ -178,6 +181,7 @@
     "VERTEX": 1,
     "FRAGMENT": 2,
     "BOTH": 3,
+    "COMPUTE": 4,
     "UNIFORM": 0,
     "UNIFORM_DYNAMIC": 1,
     "STORAGE": 2,
@@ -186,6 +190,7 @@
     "DEPTH": 5,
     "SAMPLER": 6,
     "SAMPLER_COMPARISON": 7,
-    "TEXTURE_UNFILTERED": 8
+    "TEXTURE_UNFILTERED": 8,
+    "STORAGE_RW": 9
   }
 }

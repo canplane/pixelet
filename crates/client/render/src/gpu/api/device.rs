@@ -82,9 +82,11 @@ enum Object {
     Shader(wgpu::ShaderModule),
     Layout(wgpu::BindGroupLayout),
     Pipeline(wgpu::RenderPipeline),
+    ComputePipeline(wgpu::ComputePipeline),
     Group(wgpu::BindGroup),
     Encoder(wgpu::CommandEncoder),
     Pass(Box<wgpu::RenderPass<'static>>),
+    ComputePass(Box<wgpu::ComputePass<'static>>),
     QuerySet(wgpu::QuerySet, u32),
 }
 
@@ -468,6 +470,9 @@ fn layout_entries(words: &[u32]) -> Vec<wgpu::BindGroupLayoutEntry> {
             if stages & record::FRAGMENT != 0 {
                 visibility |= wgpu::ShaderStages::FRAGMENT;
             }
+            if stages & record::COMPUTE != 0 {
+                visibility |= wgpu::ShaderStages::COMPUTE;
+            }
             let buffer = |ty, dynamic| wgpu::BindingType::Buffer {
                 ty,
                 has_dynamic_offset: dynamic,
@@ -482,6 +487,7 @@ fn layout_entries(words: &[u32]) -> Vec<wgpu::BindGroupLayoutEntry> {
                 record::UNIFORM => buffer(wgpu::BufferBindingType::Uniform, false),
                 record::UNIFORM_DYNAMIC => buffer(wgpu::BufferBindingType::Uniform, true),
                 record::STORAGE => buffer(wgpu::BufferBindingType::Storage { read_only: true }, false),
+                record::STORAGE_RW => buffer(wgpu::BufferBindingType::Storage { read_only: false }, false),
                 record::TEXTURE => texture(wgpu::TextureSampleType::Float { filterable: true }, wgpu::TextureViewDimension::D2),
                 record::TEXTURE_ARRAY => texture(wgpu::TextureSampleType::Float { filterable: true }, wgpu::TextureViewDimension::D2Array),
                 record::DEPTH => texture(wgpu::TextureSampleType::Depth, wgpu::TextureViewDimension::D2),
@@ -669,6 +675,42 @@ impl Gpu {
         d.put(id, Object::Layout(l));
     }
 
+    /// The module's one compute entry, over `layouts`.
+    pub fn compute_pipeline(&self, id: u32, module: u32, layouts: &[u32]) {
+        let Some(d) = device() else { return };
+        let Some(Object::Shader(module)) = d.get(module) else { return };
+        let Some(layouts) = layouts.iter().map(|&l| d.layout(l).map(Some)).collect::<Option<Vec<_>>>() else {
+            return;
+        };
+        let layout = d.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &layouts,
+            immediate_size: 0,
+        });
+        let p = d.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&layout),
+            module,
+            entry_point: None,
+            compilation_options: Default::default(),
+            cache: None,
+        });
+        d.put(id, Object::ComputePipeline(p));
+    }
+
+    pub fn compute_pass(&self, id: u32, encoder: u32) {
+        let Some(d) = device() else { return };
+        let Some(Object::Encoder(e)) = d.get_mut(encoder) else { return };
+        let p = e.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None, timestamp_writes: None }).forget_lifetime();
+        d.put(id, Object::ComputePass(Box::new(p)));
+    }
+
+    pub fn dispatch(&self, pass: u32, x: u32, y: u32, z: u32) {
+        if let Some(Object::ComputePass(p)) = device().and_then(|d| d.get_mut(pass)) {
+            p.dispatch_workgroups(x, y, z);
+        }
+    }
+
     pub fn pipeline(&self, id: u32, words: &[u32], layouts: &[u32], module: u32, fmt: u32) {
         let Some(d) = device() else { return };
         let Some(Object::Shader(module)) = d.get(module) else { return };
@@ -813,6 +855,11 @@ impl Gpu {
         d.belt.write_buffer(encoder, &b, offset as u64, size).copy_from_slice(bytes);
     }
 
+    /// The bytes are taken at once here, from wherever they are.
+    pub fn upload_buffer(&self, id: u32, offset: u32, bytes: &[u8]) {
+        self.write_buffer(id, offset, bytes);
+    }
+
     pub fn write_texture(&self, id: u32, layer: u32, width: u32, height: u32, bytes: &[u8]) {
         let Some(d) = device() else { return };
         let Some(Object::Texture(texture)) = d.get(id) else { return };
@@ -948,12 +995,23 @@ impl Gpu {
         d.put(id, Object::Pass(Box::new(p)));
     }
 
+    /// A render pass takes a render pipeline and a compute pass a compute one.
     pub fn set_pipeline(&self, pass: u32, pipeline: u32) {
         let Some(d) = device() else { return };
-        let Some(Object::Pipeline(p)) = d.get(pipeline) else { return };
-        let p = p.clone();
-        if let Some(pass) = d.pass(pass) {
-            pass.set_pipeline(&p);
+        match d.get(pipeline) {
+            Some(Object::Pipeline(p)) => {
+                let p = p.clone();
+                if let Some(pass) = d.pass(pass) {
+                    pass.set_pipeline(&p);
+                }
+            }
+            Some(Object::ComputePipeline(p)) => {
+                let p = p.clone();
+                if let Some(Object::ComputePass(pass)) = d.get_mut(pass) {
+                    pass.set_pipeline(&p);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -961,8 +1019,10 @@ impl Gpu {
         let Some(d) = device() else { return };
         let Some(Object::Group(g)) = d.get(group) else { return };
         let g = g.clone();
-        if let Some(pass) = d.pass(pass) {
-            pass.set_bind_group(index, &g, offsets);
+        match d.get_mut(pass) {
+            Some(Object::Pass(p)) => p.set_bind_group(index, &g, offsets),
+            Some(Object::ComputePass(p)) => p.set_bind_group(index, &g, offsets),
+            _ => {}
         }
     }
 

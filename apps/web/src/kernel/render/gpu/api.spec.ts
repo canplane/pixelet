@@ -114,10 +114,10 @@ export const op = {
   BIND_GROUP: 10 as number,
   /** id */
   DESTROY: 11 as number,
-  /** id, offset, the bytes */
-  WRITE_BUFFER: 12 as number,
-  /** id, layer, width, height, the bytes: the first mip of one layer, whole */
-  WRITE_TEXTURE: 13 as number,
+  /** id, offset, address, length: the bytes at that address in the module's memory, read when the page replays the turn, so the range lives unwritten until then: the owner's own where it does, else a copy in the stream */
+  UPLOAD_BUFFER: 12 as number,
+  /** id, layer, width, height, address, length: the first mip of one layer, whole, as UPLOAD_BUFFER reads its bytes */
+  UPLOAD_TEXTURE: 13 as number,
   /** id */
   ENCODER: 14 as number,
   /** id, encoder, the pass's description (api.rs pass_desc) */
@@ -150,6 +150,12 @@ export const op = {
   TIMESTAMPS: 28 as number,
   /** encoder, source, x, y, target, x, y, layer, width, height: a region of one texture's first mip into another's layer */
   COPY_TEXTURE: 31 as number,
+  /** id, module, then the group layouts: the module's one compute entry */
+  COMPUTE_PIPELINE: 29 as number,
+  /** id, encoder */
+  COMPUTE_PASS: 30 as number,
+  /** pass, workgroups across, up, deep */
+  DISPATCH: 32 as number,
 } as const;
 
 /** A pipeline record's codes (shader.rs), and HEAD, the words it opens with
@@ -193,6 +199,7 @@ export const record = {
   VERTEX: 1 as number,
   FRAGMENT: 2 as number,
   BOTH: 3 as number,
+  COMPUTE: 4 as number,
   UNIFORM: 0 as number,
   UNIFORM_DYNAMIC: 1 as number,
   STORAGE: 2 as number,
@@ -202,4 +209,5 @@ export const record = {
   SAMPLER: 6 as number,
   SAMPLER_COMPARISON: 7 as number,
   TEXTURE_UNFILTERED: 8 as number,
+  STORAGE_RW: 9 as number,
 } as const;

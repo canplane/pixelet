@@ -1,8 +1,11 @@
 // pxl-render/gpu/api/record.rs
 
 //! The renderer's calls as records in the kernel's memory, which the page runs
-//! after the turn. A record carries everything it names, bytes included, so
-//! the kernel reusing memory afterwards cannot reach what the page runs.
+//! after the turn. A record carries numbers and the address and length of
+//! the bytes it uploads, read when the page replays the turn: the range
+//! lives unwritten until then (`op::UPLOAD_BUFFER`). An owner whose range
+//! does is named as it is; any other's bytes are copied into the stream,
+//! which lives until then, and the copy is named.
 
 use xpute_guest::global::Global;
 use xpute_guest::ipc::stream::{Stream, WORD};
@@ -16,6 +19,9 @@ const HEAD: usize = stream::HEAD as usize;
 
 static STREAM: Global<Option<Stream>> = Global::new();
 
+/// Where the stream's words begin in the module's memory.
+static BASE: Global<u32> = Global::new();
+
 pub struct Gpu(());
 
 static GPU: Gpu = Gpu(());
@@ -27,6 +33,7 @@ pub unsafe fn install(at: u32) -> u32 {
     // SAFETY: the caller's range.
     let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize), stream::BYTES as usize / WORD) };
     STREAM.set(Some(Stream::new(words, HEAD)));
+    BASE.set(at);
     at
 }
 
@@ -61,14 +68,33 @@ pub fn frame_room() -> bool {
     true
 }
 
-// Each upload's arguments, which its record takes as an array of this length.
-const WRITE_BUFFER_ARGS: usize = 2;
-const WRITE_TEXTURE_ARGS: usize = 4;
+// Each upload's arguments: its own, then the bytes' address and length.
+const UPLOAD_BUFFER_ARGS: usize = 4;
+const UPLOAD_TEXTURE_ARGS: usize = 6;
 
-/// Whether an upload of `bytes` fits, leaving `stream::RESERVE` for what cannot wait.
+/// Whether a copy of `bytes` into the stream fits, leaving `stream::RESERVE`
+/// for what cannot wait.
 pub fn room(bytes: u32) -> bool {
-    let args = if WRITE_BUFFER_ARGS > WRITE_TEXTURE_ARGS { WRITE_BUFFER_ARGS } else { WRITE_TEXTURE_ARGS };
-    STREAM.get(|| None).as_ref().is_some_and(|s| s.fits(args, Some(bytes as usize), stream::RESERVE as usize))
+    STREAM.get(|| None).as_ref().is_some_and(|s| s.fits(UPLOAD_TEXTURE_ARGS, Some(bytes as usize), stream::RESERVE as usize))
+}
+
+/// An upload whose bytes are copied into the stream: `args` ends in the
+/// address and length, the address made that of the copy once it is in.
+fn upload_copied(code: u32, args: &mut [u32], bytes: &[u8]) {
+    let s = stream();
+    let words = s.left() / WORD;
+    let n = args.len();
+    s.record(code, args, &[], Some(bytes));
+    // A dropped record took no room; one taken began where the room did.
+    if s.left() / WORD == words {
+        return;
+    }
+    let total = stream::BYTES as usize / WORD;
+    let record = *BASE.get(|| 0) as usize + (total - words) * WORD;
+    // The record: its code and length, its arguments, the bytes' length, the bytes.
+    args[n - 2] = (record + (2 + n + 1) * WORD) as u32;
+    // SAFETY: the stream's own words, just recorded, the address argument among them.
+    unsafe { *ptr_at::<u32>(record + (2 + n - 2) * WORD) = args[n - 2] };
 }
 
 fn put(code: u32, args: &[u32]) {
@@ -116,6 +142,11 @@ impl Gpu {
         w[4 + record.len()..].copy_from_slice(layouts);
     }
 
+    /// The module's one compute entry, over `layouts`.
+    pub fn compute_pipeline(&self, id: u32, module: u32, layouts: &[u32]) {
+        stream().record(op::COMPUTE_PIPELINE, &[id, module], layouts, None);
+    }
+
     /// Entries are (binding, resource kind, object, offset, size; 0 the whole buffer).
     pub fn bind_group(&self, id: u32, layout: u32, entries: &[u32]) {
         stream().record(op::BIND_GROUP, &[id, layout], entries, None);
@@ -125,14 +156,22 @@ impl Gpu {
         put(op::DESTROY, &[id]);
     }
 
+    /// `bytes` copied into the stream: any range, however soon its owner
+    /// rewrites it.
     pub fn write_buffer(&self, id: u32, offset: u32, bytes: &[u8]) {
-        let args: [u32; WRITE_BUFFER_ARGS] = [id, offset];
-        stream().record(op::WRITE_BUFFER, &args, &[], Some(bytes));
+        let mut args: [u32; UPLOAD_BUFFER_ARGS] = [id, offset, 0, bytes.len() as u32];
+        upload_copied(op::UPLOAD_BUFFER, &mut args, bytes);
+    }
+
+    /// `bytes` read where they are: their owner keeps them unwritten until
+    /// the page replays the turn.
+    pub fn upload_buffer(&self, id: u32, offset: u32, bytes: &[u8]) {
+        put(op::UPLOAD_BUFFER, &[id, offset, bytes.as_ptr() as u32, bytes.len() as u32]);
     }
 
     pub fn write_texture(&self, id: u32, layer: u32, width: u32, height: u32, bytes: &[u8]) {
-        let args: [u32; WRITE_TEXTURE_ARGS] = [id, layer, width, height];
-        stream().record(op::WRITE_TEXTURE, &args, &[], Some(bytes));
+        let mut args: [u32; UPLOAD_TEXTURE_ARGS] = [id, layer, width, height, 0, bytes.len() as u32];
+        upload_copied(op::UPLOAD_TEXTURE, &mut args, bytes);
     }
 
     pub fn encoder(&self, id: u32) {
@@ -147,6 +186,14 @@ impl Gpu {
     /// NONE or 0 for what is absent.
     pub fn pass(&self, id: u32, encoder: u32, desc: &[u32]) {
         stream().record(op::PASS, &[id, encoder], desc, None);
+    }
+
+    pub fn compute_pass(&self, id: u32, encoder: u32) {
+        put(op::COMPUTE_PASS, &[id, encoder]);
+    }
+
+    pub fn dispatch(&self, pass: u32, x: u32, y: u32, z: u32) {
+        put(op::DISPATCH, &[pass, x, y, z]);
     }
 
     pub fn set_pipeline(&self, pass: u32, pipeline: u32) {

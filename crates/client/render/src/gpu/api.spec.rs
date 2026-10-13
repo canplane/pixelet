@@ -132,10 +132,10 @@ pub mod op {
     pub const BIND_GROUP: u32 = 10;
     /// id
     pub const DESTROY: u32 = 11;
-    /// id, offset, the bytes
-    pub const WRITE_BUFFER: u32 = 12;
-    /// id, layer, width, height, the bytes: the first mip of one layer, whole
-    pub const WRITE_TEXTURE: u32 = 13;
+    /// id, offset, address, length: the bytes at that address in the module's memory, read when the page replays the turn, so the range lives unwritten until then: the owner's own where it does, else a copy in the stream
+    pub const UPLOAD_BUFFER: u32 = 12;
+    /// id, layer, width, height, address, length: the first mip of one layer, whole, as UPLOAD_BUFFER reads its bytes
+    pub const UPLOAD_TEXTURE: u32 = 13;
     /// id
     pub const ENCODER: u32 = 14;
     /// id, encoder, the pass's description (api.rs pass_desc)
@@ -168,6 +168,12 @@ pub mod op {
     pub const TIMESTAMPS: u32 = 28;
     /// encoder, source, x, y, target, x, y, layer, width, height: a region of one texture's first mip into another's layer
     pub const COPY_TEXTURE: u32 = 31;
+    /// id, module, then the group layouts: the module's one compute entry
+    pub const COMPUTE_PIPELINE: u32 = 29;
+    /// id, encoder
+    pub const COMPUTE_PASS: u32 = 30;
+    /// pass, workgroups across, up, deep
+    pub const DISPATCH: u32 = 32;
     pub const KEYS: &[&str] = &[
         "BUFFER",
         "TEXTURE",
@@ -179,8 +185,8 @@ pub mod op {
         "PIPELINE",
         "BIND_GROUP",
         "DESTROY",
-        "WRITE_BUFFER",
-        "WRITE_TEXTURE",
+        "UPLOAD_BUFFER",
+        "UPLOAD_TEXTURE",
         "ENCODER",
         "PASS",
         "SET_PIPELINE",
@@ -197,6 +203,9 @@ pub mod op {
         "QUERY_SET",
         "TIMESTAMPS",
         "COPY_TEXTURE",
+        "COMPUTE_PIPELINE",
+        "COMPUTE_PASS",
+        "DISPATCH",
     ];
 }
 
@@ -241,6 +250,7 @@ pub mod record {
     pub const VERTEX: u32 = 1;
     pub const FRAGMENT: u32 = 2;
     pub const BOTH: u32 = 3;
+    pub const COMPUTE: u32 = 4;
     pub const UNIFORM: u32 = 0;
     pub const UNIFORM_DYNAMIC: u32 = 1;
     pub const STORAGE: u32 = 2;
@@ -250,6 +260,7 @@ pub mod record {
     pub const SAMPLER: u32 = 6;
     pub const SAMPLER_COMPARISON: u32 = 7;
     pub const TEXTURE_UNFILTERED: u32 = 8;
+    pub const STORAGE_RW: u32 = 9;
     pub const KEYS: &[&str] = &[
         "HEAD",
         "TRIANGLES",
@@ -282,6 +293,7 @@ pub mod record {
         "VERTEX",
         "FRAGMENT",
         "BOTH",
+        "COMPUTE",
         "UNIFORM",
         "UNIFORM_DYNAMIC",
         "STORAGE",
@@ -291,5 +303,6 @@ pub mod record {
         "SAMPLER",
         "SAMPLER_COMPARISON",
         "TEXTURE_UNFILTERED",
+        "STORAGE_RW",
     ];
 }

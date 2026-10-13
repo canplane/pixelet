@@ -9,7 +9,7 @@
 import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { f32, f64, u32 } from "@xpute/kit/abi/word.ts";
 import { handle_slot } from "@xpute/host/abi/handle.ts";
-import { bytes_of, each_record, text_of } from "@xpute/host/ipc/stream.ts";
+import { each_record, text_of } from "@xpute/host/ipc/stream.ts";
 
 import { DEV_BUNDLE } from "@/config/bundle.ts";
 import { address, compare, dimension, filter, format, load, op, record, resource, stamp, stream } from "@/kernel/render/gpu/api.spec.ts";
@@ -22,9 +22,11 @@ type GpuObject =
   | GPUShaderModule
   | GPUBindGroupLayout
   | GPURenderPipeline
+  | GPUComputePipeline
   | GPUBindGroup
   | GPUCommandEncoder
   | GPURenderPassEncoder
+  | GPUComputePassEncoder
   | GPUQuerySet;
 
 interface Surface {
@@ -189,6 +191,9 @@ function put(id: u32, object: GpuObject): void {
   objects[handle_slot(id)] = object;
 }
 
+/** The module's linear memory as the turn being replayed sees it. */
+let moduleMemory: ArrayBuffer | null = null;
+
 function gpu(): GPUDevice {
   if (device === null) throw new Error("[gpu] a call with no device");
   return device;
@@ -198,10 +203,12 @@ function layoutEntries(words: U32Array): GPUBindGroupLayoutEntry[] {
   const out: GPUBindGroupLayoutEntry[] = [];
   for (let k = 0; k < words.length; k += 3) {
     const [binding, stages, kind] = [words[k], words[k + 1], words[k + 2]];
-    const e: GPUBindGroupLayoutEntry = { binding, visibility: (stages & record.VERTEX ? GPUShaderStage.VERTEX : 0) | (stages & record.FRAGMENT ? GPUShaderStage.FRAGMENT : 0) };
+    const visibility = (stages & record.VERTEX ? GPUShaderStage.VERTEX : 0) | (stages & record.FRAGMENT ? GPUShaderStage.FRAGMENT : 0) | (stages & record.COMPUTE ? GPUShaderStage.COMPUTE : 0);
+    const e: GPUBindGroupLayoutEntry = { binding, visibility };
     if (kind === record.UNIFORM) e.buffer = { type: "uniform" };
     else if (kind === record.UNIFORM_DYNAMIC) e.buffer = { type: "uniform", hasDynamicOffset: true };
     else if (kind === record.STORAGE) e.buffer = { type: "read-only-storage" };
+    else if (kind === record.STORAGE_RW) e.buffer = { type: "storage" };
     else if (kind === record.TEXTURE) e.texture = {};
     else if (kind === record.TEXTURE_ARRAY) e.texture = { viewDimension: "2d-array" };
     else if (kind === record.DEPTH) e.texture = { sampleType: "depth" };
@@ -320,6 +327,7 @@ function readTimestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: u
 /** With no device the records are dropped: the kernel remakes everything on the next one. */
 export function runGpuStream(memory: ArrayBuffer, at: u32): void {
   gpuMsAt ??= { memory, at: at + stream.GPU_MS * 4 };
+  moduleMemory = memory;
   if (device === null) return;
   each_record(memory, at, stream.HEAD, runGpuRecord);
 }
@@ -403,6 +411,11 @@ function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
       put(id, d.createRenderPipeline(pipelineDescriptor(w.subarray(a + 4, a + 4 + len), layouts, get<GPUShaderModule>(module), textureFormat(fmt))));
       break;
     }
+    case op.COMPUTE_PIPELINE: {
+      const layouts = Array.from(w.subarray(a + 2, k), (l) => get<GPUBindGroupLayout>(l));
+      put(w[a], d.createComputePipeline({ layout: d.createPipelineLayout({ bindGroupLayouts: layouts }), compute: { module: get<GPUShaderModule>(w[a + 1]) } }));
+      break;
+    }
     case op.BIND_GROUP:
       put(w[a], d.createBindGroup({ layout: get<GPUBindGroupLayout>(w[a + 1]), entries: groupEntries(w.subarray(a + 2, k)) }));
       break;
@@ -412,11 +425,14 @@ function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
       objects[slot] = undefined;
       break;
     }
-    case op.WRITE_BUFFER:
-      d.queue.writeBuffer(get<GPUBuffer>(w[a]), w[a + 1], w.buffer, w.byteOffset + 4 * (a + 3), w[a + 2]);
+
+    // The bytes at an address in the module's memory, which lives unwritten
+    // until this replay: the owner's own range or a copy in the stream.
+    case op.UPLOAD_BUFFER:
+      d.queue.writeBuffer(get<GPUBuffer>(w[a]), w[a + 1], moduleMemory!, w[a + 2], w[a + 3]);
       break;
-    case op.WRITE_TEXTURE:
-      d.queue.writeTexture({ texture: get<GPUTexture>(w[a]), origin: [0, 0, w[a + 1]] }, bytes_of(w, a + 4), { bytesPerRow: w[a + 2] * 4 }, [w[a + 2], w[a + 3], 1]);
+    case op.UPLOAD_TEXTURE:
+      d.queue.writeTexture({ texture: get<GPUTexture>(w[a]), origin: [0, 0, w[a + 1]] }, new Uint8Array(moduleMemory!, w[a + 4], w[a + 5]), { bytesPerRow: w[a + 2] * 4 }, [w[a + 2], w[a + 3], 1]);
       break;
     case op.ENCODER:
       put(w[a], d.createCommandEncoder());
@@ -431,13 +447,23 @@ function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
     case op.PASS:
       put(w[a], beginPass(get<GPUCommandEncoder>(w[a + 1]), w.subarray(a + 2, k)));
       break;
-    case op.SET_PIPELINE:
-      get<GPURenderPassEncoder>(w[a]).setPipeline(get<GPURenderPipeline>(w[a + 1]));
+    case op.COMPUTE_PASS:
+      put(w[a], get<GPUCommandEncoder>(w[a + 1]).beginComputePass());
       break;
+    case op.DISPATCH:
+      get<GPUComputePassEncoder>(w[a]).dispatchWorkgroups(w[a + 1], w[a + 2], w[a + 3]);
+      break;
+    // A render pass takes a render pipeline and a compute pass a compute one.
+    case op.SET_PIPELINE: {
+      const p = get<GPURenderPassEncoder | GPUComputePassEncoder>(w[a]);
+      if (p instanceof GPUComputePassEncoder) p.setPipeline(get<GPUComputePipeline>(w[a + 1]));
+      else p.setPipeline(get<GPURenderPipeline>(w[a + 1]));
+      break;
+    }
     // Hundreds of calls a frame: the offsets overload avoids an array per call.
     case op.SET_BIND_GROUP:
-      if (n === 3) get<GPURenderPassEncoder>(w[a]).setBindGroup(w[a + 1], get<GPUBindGroup>(w[a + 2]));
-      else get<GPURenderPassEncoder>(w[a]).setBindGroup(w[a + 1], get<GPUBindGroup>(w[a + 2]), w, a + 3, n - 3);
+      if (n === 3) get<GPURenderPassEncoder | GPUComputePassEncoder>(w[a]).setBindGroup(w[a + 1], get<GPUBindGroup>(w[a + 2]));
+      else get<GPURenderPassEncoder | GPUComputePassEncoder>(w[a]).setBindGroup(w[a + 1], get<GPUBindGroup>(w[a + 2]), w, a + 3, n - 3);
       break;
     case op.SET_VERTEX_BUFFER: {
       const p = get<GPURenderPassEncoder>(w[a]);
@@ -458,7 +484,7 @@ function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
       get<GPURenderPassEncoder>(w[a]).drawIndexed(w[a + 1], w[a + 2], w[a + 3], 0, w[a + 4]);
       break;
     case op.END:
-      get<GPURenderPassEncoder>(w[a]).end();
+      get<GPURenderPassEncoder | GPUComputePassEncoder>(w[a]).end();
       break;
     case op.SUBMIT:
       d.queue.submit([get<GPUCommandEncoder>(w[a]).finish()]);
