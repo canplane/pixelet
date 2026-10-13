@@ -182,25 +182,29 @@ impl Place {
 /// held to `t0`.
 pub fn slab(ray: &Ray, min: [f32; 3], side: f32, t0: f32, t1: f32) -> (f32, f32, u32) {
     let (mut enter, mut leave, mut axis) = (t0, t1, 0);
-    // The extremes are finite: WGSL has no infinite literal.
-    let mut near_most = f32::MIN;
+    // The nearest plane yet, once an axis the ray moves along gave one.
+    let (mut near_most, mut moved) = (0.0, false);
     let mut a = 0;
     while a < 3 {
         let d = ray.direction[a];
-        if d == 0.0 {
+        // An axis the ray runs beside: within the box, any t; outside it,
+        // none past the span's ends.
+        let (near, far) = if d == 0.0 {
             if 0.0 < min[a] || 0.0 > min[a] + side {
-                leave = f32::MIN;
+                (t1, t0)
+            } else {
+                (t0, t1)
             }
         } else {
             let (p, q) = (min[a] / d, (min[a] + side) / d);
             let (near, far) = if d > 0.0 { (p, q) } else { (q, p) };
-            if near > near_most {
-                near_most = near;
-                axis = a as u32;
+            if !moved || near > near_most {
+                (near_most, moved, axis) = (near, true, a as u32);
             }
-            enter = enter.max(near);
-            leave = leave.min(far);
-        }
+            (near, far)
+        };
+        enter = enter.max(near);
+        leave = leave.min(far);
         a += 1;
     }
     (enter, leave, axis)
@@ -209,14 +213,13 @@ pub fn slab(ray: &Ray, min: [f32; 3], side: f32, t0: f32, t1: f32) -> (f32, f32,
 /// The axis across which the ray leaves the box from `min`, `side` wide:
 /// the first of its far faces it reaches.
 fn leaves(ray: &Ray, min: [f32; 3], side: f32) -> u32 {
-    let (mut best, mut axis) = (f32::MAX, 0);
+    let (mut best, mut moved, mut axis) = (0.0, false, 0);
     let mut a = 0;
     while a < 3 {
         let d = ray.direction[a];
         let t = if d > 0.0 { (min[a] + side) / d } else { min[a] / d };
-        if d != 0.0 && t < best {
-            best = t;
-            axis = a as u32;
+        if d != 0.0 && (!moved || t < best) {
+            (best, moved, axis) = (t, true, a as u32);
         }
         a += 1;
     }
