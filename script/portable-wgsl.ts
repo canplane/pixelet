@@ -1,10 +1,11 @@
 #!/usr/bin/env -S deno run -A
-// pxl-portable's WGSL: the entries gpu-query/shader makes of the one Rust
-// source the CPU compiles too (crates/portable, over xpute-kit's
+// pxl-portable's WGSL: the cast's entry gpu-query/shader makes of the one
+// Rust source the CPU compiles too (crates/portable, over xpute-kit's
 // math/rng.rs), through rust-gpu inside a Linux container, into the
 // checked-in crates/client/render/src/frame/shader/cast.gen.wgsl. An
 // everyday build reads that file and needs neither rust-gpu nor its nightly
-// nor the container.
+// nor the container. The harness's entries are built too, beside it in
+// gpu-query's target, for gpu-query/runner; they are not checked in.
 //
 //   deno run -A script/portable-wgsl.ts            write it
 //   deno run -A script/portable-wgsl.ts --check    fail if it is not current
@@ -33,7 +34,7 @@ const HEADER = [
 function generate(): string {
   // The toolchain comes from gpu-query/rust-toolchain.toml, which rustup's
   // cargo installs on first use.
-  const script = "cargo run -q --release -p gpu-query-builder";
+  const script = "cargo run -q --release -p gpu-query-builder && cargo run -q --release -p gpu-query-builder -- --harness";
   const out = new Deno.Command("docker", {
     args: [
       "run",

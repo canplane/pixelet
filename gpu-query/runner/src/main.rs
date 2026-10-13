@@ -1,5 +1,5 @@
-//! Runs the checked-in WGSL rust-gpu made of pxl-portable (render's
-//! frame/shader/cast.gen.wgsl, `script/portable-wgsl.ts`) on the GPU and
+//! Runs the harness's WGSL rust-gpu made of pxl-portable (`script/portable-wgsl.ts`
+//! builds it beside the cast's, into gpu-query's target) on the GPU and
 //! diffs each answer's bits against the same source on the CPU: the caves
 //! and a node's seed over a tile's nodes, X across the wrap and every axis
 //! across zero, as pxl-spec has them; and a leaf tile's ground, each cell's
@@ -86,7 +86,7 @@ fn main() {
     let info = adapter.get_info();
     println!("adapter: {} ({:?}); no feature asked for", info.name, info.backend);
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).expect("device");
-    let source = include_str!("../../../crates/client/render/src/frame/shader/cast.gen.wgsl");
+    let source = include_str!("../../target-linux/spirv-builder-harness/spirv-unknown-naga-wgsl/release/deps/gpu_query_shader.wgsl");
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("portable"),
         source: wgpu::ShaderSource::Wgsl(source.into()),
@@ -101,7 +101,7 @@ fn main() {
             cache: None,
         })
     };
-    let (caves, seeds, grounds) = (pipeline_of("main_cs"), pipeline_of("seed_cs"), pipeline_of("ground_cs"));
+    let (caves, seeds, grounds) = (pipeline_of("harness_main_cs"), pipeline_of("harness_seed_cs"), pipeline_of("harness_ground_cs"));
     let n = (ACROSS[0] * ACROSS[1] * ACROSS[2]) as usize;
     let words_of = |v: &[u32]| {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
