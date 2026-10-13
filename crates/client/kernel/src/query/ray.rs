@@ -116,8 +116,9 @@ impl<'a> Query for Walker<'_, 'a> {
         self.world.start((0, node.map(i64::from)))
     }
 
-    fn child(&mut self, at: &At, k: u32) -> At {
-        self.world.child(at, k as usize)
+    /// The child is the one its index's low bits name.
+    fn child(&mut self, at: &At, _: Zoom, node: [i32; 3]) -> At {
+        self.world.child(at, (node[0] & 1 | (node[1] & 1) << 1 | (node[2] & 1) << 2) as usize)
     }
 
     /// The world's answer (`World::node`), the first lack kept; a node
@@ -125,7 +126,7 @@ impl<'a> Query for Walker<'_, 'a> {
     /// the ray passes within where decor is drawn as held strikes what
     /// stands near it, and a node no block under fills is still gone into
     /// where decor may stand in it, down to the leaf cells.
-    fn node(&mut self, at: &mut At, asked: [Zoom; 2], t0: f32) -> cast::In<Option<Block>> {
+    fn node(&mut self, at: &mut At, _: Zoom, _: [i32; 3], asked: [Zoom; 2], t0: f32) -> cast::In<Option<Block>> {
         let (zoom, c) = at.node;
         let t0 = f64::from(t0);
         if zoom == GROUND.cell() {

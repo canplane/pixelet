@@ -144,13 +144,41 @@ impl Place {
         ]
     }
 
+    /// A child of a node at `zoom`: its corner is the parent's times `m`,
+    /// plus `h` where it is the upper half on an axis.
+    const fn step(zoom: Zoom) -> (i32, i32) {
+        if zoom < UNIT_ZOOM {
+            (1, 1 << (UNIT_ZOOM - zoom - 1))
+        } else {
+            (2, 1)
+        }
+    }
+
     /// Its child `k`, `dx + 2·dy + 4·dz`.
     pub fn child(self, k: u32) -> Place {
-        let z = self.zoom;
-        let (m, h) = if z < UNIT_ZOOM { (1, 1 << (UNIT_ZOOM - z - 1)) } else { (2, 1) };
+        let (m, h) = Place::step(self.zoom);
         let at = |a: usize| self.corner[a] * m + ((k >> a) & 1) as i32 * h;
         Place {
-            zoom: z + 1,
+            zoom: self.zoom + 1,
+            corner: [at(0), at(1), at(2)],
+        }
+    }
+
+    /// Which child of its parent it is, `dx + 2·dy + 4·dz`: its index's low
+    /// bits, the origin's unit cell put back on its corner.
+    pub fn slot(self, ray: &Ray) -> u32 {
+        let g = Place::grid(self.zoom);
+        let bit = |a: usize| ((self.corner[a].wrapping_add(ray.unit[a].wrapping_shl(g - UNIT_ZOOM)) >> (g - self.zoom)) & 1) as u32;
+        bit(0) | bit(1) << 1 | bit(2) << 2
+    }
+
+    /// Its parent: `child`'s inverse.
+    pub fn parent(self, ray: &Ray) -> Place {
+        let k = self.slot(ray);
+        let (m, h) = Place::step(self.zoom - 1);
+        let at = |a: usize| (self.corner[a] - ((k >> a) & 1) as i32 * h) / m;
+        Place {
+            zoom: self.zoom - 1,
             corner: [at(0), at(1), at(2)],
         }
     }
@@ -247,11 +275,12 @@ pub trait Query {
     const AIR: Self::Block;
     /// A root of zoom 0, `node` the world's.
     fn root(&mut self, node: [i32; 3]) -> Self::At;
-    /// `at`'s child `k`, with what it found handed down.
-    fn child(&mut self, at: &Self::At, k: u32) -> Self::At;
-    /// What is in `at`'s node, asked from `far` to `near`, the ray in it
-    /// from `t0`.
-    fn node(&mut self, at: &mut Self::At, asked: [Zoom; 2], t0: f32) -> In<Self::Block>;
+    /// The child `node` at `zoom` of the node `at` was handed for, with what
+    /// that one found handed down.
+    fn child(&mut self, at: &Self::At, zoom: Zoom, node: [i32; 3]) -> Self::At;
+    /// What is in the node `node` at `zoom`, `at` what its ancestors handed
+    /// it, asked from `far` to `near`, the ray in it from `t0`.
+    fn node(&mut self, at: &mut Self::At, zoom: Zoom, node: [i32; 3], asked: [Zoom; 2], t0: f32) -> In<Self::Block>;
     fn fills(&self, block: &Self::Block) -> bool;
 }
 
@@ -286,19 +315,11 @@ pub struct Met<A, B> {
     pub visits: u32,
 }
 
-/// One zoom of the descent: the node, the ray within it, and the child it
-/// is in and the ray's exit from that child.
-#[derive(Clone, Copy)]
-struct Frame<A> {
-    at: A,
-    place: Place,
-    t1: f32,
-    child: u32,
-    child_leave: f32,
-    child_exit: u32,
-}
-
-/// The frames of a descent, one a zoom.
+/// The descent's stack: a zoom's entry is what the query handed its node
+/// (`Query::At`), the one thing the node's parent cannot work out again
+/// without asking the world from the top. Where the ray is in the node, the
+/// child it is in and where the ray leaves that child follow from the node's
+/// place by the slab test, so no entry holds them.
 const DEPTH: usize = FINEST_ZOOM as usize + 1;
 
 /// The first block `ray` meets within its reach that `until` stops at, at
@@ -372,15 +393,7 @@ fn stops<Q: Query>(q: &Q, ray: &Ray, until: Until, place: Place, block: &Q::Bloc
 /// that face is the node's own.
 fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at: Q::At, root: Place, span: (f32, f32, u32)) -> Met<Q::At, Q::Block> {
     let dlen = libm::sqrtf(ray.direction[0] * ray.direction[0] + ray.direction[1] * ray.direction[1] + ray.direction[2] * ray.direction[2]);
-    let empty = Frame {
-        at: root_at,
-        place: root,
-        t1: 0.0,
-        child: 0,
-        child_leave: 0.0,
-        child_exit: 0,
-    };
-    let mut stack = [empty; DEPTH];
+    let mut stack = [root_at; DEPTH];
     // The node being entered, and the ray within it.
     let (mut at, mut place, (mut t0, mut t1, mut axis)) = (root_at, root, span);
     let mut visits = 0;
@@ -391,7 +404,7 @@ fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at
             let (min, side) = (place.min(ray), place.side());
             let near = [min[0].max(0.0).min(min[0] + side), min[1].max(0.0).min(min[1] + side), min[2].max(0.0).min(min[2] + side)];
             let asked = [detail.at(t1 * dlen), detail.at(libm::sqrtf(near[0] * near[0] + near[1] * near[1] + near[2] * near[2]))];
-            let i = q.node(&mut at, asked, t0);
+            let i = q.node(&mut at, place.zoom, place.node(ray), asked, t0);
             visits += 1;
             let stop = Stop {
                 t: t0,
@@ -428,23 +441,15 @@ fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at
                 k |= (upper as u32) << a;
                 a += 1;
             }
+            stack[place.zoom as usize] = at;
             let kid = place.child(k);
-            let (kmin, kside) = (kid.min(ray), kid.side());
-            let span = slab(ray, kmin, kside, t0, t1);
-            stack[place.zoom as usize] = Frame {
-                at,
-                place,
-                t1,
-                child: k,
-                child_leave: span.1,
-                child_exit: leaves(ray, kmin, kside),
-            };
-            at = q.child(&at, k);
-            (place, (t0, t1, axis)) = (kid, span);
+            at = q.child(&at, kid.zoom, kid.node(ray));
+            (place, (t0, t1, axis)) = (kid, slab(ray, kid.min(ray), kid.side(), t0, t1));
             continue;
         }
         // On past it: to the next child of the nearest ancestor that has
-        // one across the face the ray leaves its current child by.
+        // one across the face the ray leaves its current child by, the ray
+        // in that ancestor up to where it leaves the ancestor's box.
         loop {
             if place.zoom == root.zoom {
                 return Met {
@@ -459,29 +464,20 @@ fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at
                     visits,
                 };
             }
-            let z = (place.zoom - 1) as usize;
-            let f = stack[z];
-            let e = f.child_exit;
+            let e = leaves(ray, place.min(ray), place.side());
+            let k = place.slot(ray);
+            let parent = place.parent(ray);
             let bit = 1 << e;
             let forward = ray.direction[e as usize] > 0.0;
-            let upper = f.child & bit != 0;
-            if forward == upper || ray.direction[e as usize] == 0.0 {
-                // The face is the node's own: on past the node.
-                place = f.place;
+            if forward == (k & bit != 0) || ray.direction[e as usize] == 0.0 {
+                // The face is the parent's own: on past the parent.
+                (place, t1) = (parent, slab(ray, parent.min(ray), parent.side(), 0.0, ray.reach).1);
                 continue;
             }
-            let child = f.child ^ bit;
-            let kid = f.place.child(child);
-            let (kmin, kside) = (kid.min(ray), kid.side());
-            let span = slab(ray, kmin, kside, f.child_leave, f.t1);
-            stack[z] = Frame {
-                child,
-                child_leave: span.1,
-                child_exit: leaves(ray, kmin, kside),
-                ..f
-            };
-            at = q.child(&f.at, child);
-            (place, (t0, t1, axis)) = (kid, span);
+            let kid = parent.child(k ^ bit);
+            let end = slab(ray, parent.min(ray), parent.side(), 0.0, ray.reach).1;
+            at = q.child(&stack[parent.zoom as usize], kid.zoom, kid.node(ray));
+            (place, (t0, t1, axis)) = (kid, slab(ray, kid.min(ray), kid.side(), t1, end));
             break;
         }
     }

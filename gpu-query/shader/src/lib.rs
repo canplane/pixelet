@@ -34,14 +34,6 @@ pub struct Eye {
     pub across_range: UVec4,
 }
 
-/// A node as the GPU's descent reaches it: its zoom and index, and its caves.
-#[derive(Clone, Copy)]
-pub struct At {
-    zoom: u32,
-    node: [i32; 3],
-    cave: Cave,
-}
-
 const VOID: u32 = sentinel::void as u32;
 const UNKNOWN: u32 = sentinel::unknown as u32;
 
@@ -194,12 +186,11 @@ impl World<'_> {
         area::past(self, area::tile_at(zoom, b)) || self.ground_at(read, zoom, b, true).0 == UNKNOWN
     }
 
-    /// What is in `at`'s block at its own zoom (pxl-kernel query/node.rs
-    /// `drawn`): past the area, the Earth's; else the ground's cell off the
-    /// tile drawing that zoom's cells, the area's edge laid on it, and the
-    /// caves' value.
-    fn block(&self, at: &At) -> In<u32> {
-        let (zoom, c) = (at.zoom, at.node);
+    /// What is in the block `c` at `zoom`, its caves `cave`, at its own
+    /// zoom (pxl-kernel query/node.rs `drawn`): past the area, the Earth's;
+    /// else the ground's cell off the tile drawing that zoom's cells, the
+    /// area's edge laid on it, and the caves' value.
+    fn block(&self, cave: Cave, zoom: u32, c: [i32; 3]) -> In<u32> {
         let b = [c[0], c[1]];
         if area::past(self, area::tile_at(zoom, b)) {
             return In {
@@ -231,43 +222,33 @@ impl World<'_> {
         };
         In {
             kind: Kind::Block,
-            block: cell.block(zoom, c[2], at.cave.hollow()).0,
+            block: cell.block(zoom, c[2], cave.hollow()).0,
         }
     }
 }
 
+/// What a node is handed down on the GPU: its caves.
 impl Query for World<'_> {
-    type At = At;
+    type At = Cave;
     type Block = u32;
     const AIR: u32 = VOID;
 
-    fn root(&mut self, node: [i32; 3]) -> At {
-        At {
-            zoom: 0,
-            node,
-            cave: Cave::of(0, node),
-        }
+    fn root(&mut self, node: [i32; 3]) -> Cave {
+        Cave::of(0, node)
     }
 
-    fn child(&mut self, at: &At, k: u32) -> At {
-        let z = at.zoom + 1;
-        let node = [2 * at.node[0] + (k & 1) as i32, 2 * at.node[1] + (k >> 1 & 1) as i32, 2 * at.node[2] + (k >> 2 & 1) as i32];
-        At {
-            zoom: z,
-            node,
-            cave: at.cave.child(z, node),
-        }
+    fn child(&mut self, cave: &Cave, zoom: u32, node: [i32; 3]) -> Cave {
+        cave.child(zoom, node)
     }
 
-    /// What is in `at`'s node (pxl-kernel query/node.rs `World::node`): at
+    /// What is in the node `c` at `zoom` (pxl-kernel query/node.rs `World::node`): at
     /// `near` or finer, or finer than the ground's cells, where the world
     /// holds nothing finer, the block; coarser, past the area the Earth's,
     /// else the ground's one rule over the lowest and highest its held tile's
     /// index lane holds under it (`ground::empty`).
-    fn node(&mut self, at: &mut At, [far, near]: [u32; 2], _t0: f32) -> In<u32> {
-        let (zoom, c) = (at.zoom, at.node);
+    fn node(&mut self, cave: &mut Cave, zoom: u32, c: [i32; 3], [far, near]: [u32; 2], _t0: f32) -> In<u32> {
         if zoom >= near || zoom >= LEAF_CELL {
-            return self.block(at);
+            return self.block(*cave, zoom, c);
         }
         let split = In { kind: Kind::Split, block: VOID };
         let empty = In { kind: Kind::Block, block: VOID };
@@ -285,7 +266,7 @@ impl Query for World<'_> {
             return In { kind: Kind::Lacks, block: VOID };
         }
         let relief = ground::relief(|i| self.index(w - 1, i), from, (zoom, [c[0], c[1]]));
-        let hollow = at.cave.whole(zoom) == (true, true);
+        let hollow = cave.whole(zoom) == (true, true);
         if ground::empty(self, (zoom, c), relief, [far, near], hollow) {
             empty
         } else {
@@ -301,7 +282,7 @@ impl Query for World<'_> {
 /// The lane's cell for a ray: the value it stopped on, its kind (ground)
 /// and the face it entered through, then how far as f32 bits, then the
 /// nodes its descent asked about; where it met nothing, the first two zero.
-fn word(ray: &cast::Ray, met: Met<At, u32>) -> UVec4 {
+fn word(ray: &cast::Ray, met: Met<Cave, u32>) -> UVec4 {
     if met.ends != Ends::Stop {
         return UVec4::new(0, 0, met.visits, 0);
     }
