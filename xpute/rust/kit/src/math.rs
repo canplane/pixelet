@@ -1,6 +1,5 @@
 // xpute-kit/math.rs
 
 pub mod rng;
-#[path = "math/rng.gpu.rs"]
-pub mod rng_gpu;
+#[cfg(feature = "std")]
 pub mod scalar;
