@@ -346,12 +346,15 @@ pub fn lay(cell: Zoom, [lo, hi]: [i32; 2], wall: bool, [z0, z1]: [i32; 2]) -> La
 /// may take with a cave through all of it (`hollow`). Coarser than a shard,
 /// the Earth past the service area may be in it too, its face at sea level.
 ///
-/// One test for all those zooms, from the node's own bound: a block's top
-/// and bedrock at any of them lie within half a block of the face they
-/// round (`blocks`, to even), so within half a block of the coarsest, and a
-/// face block is at most the coarsest's tall. Where a zoom's rounding would
-/// have let the node be empty and the test does not, the node is split: the
-/// cautious answer a coarse node may give.
+/// `lay` at each zoom, in one test. The node's bottom and top are whole
+/// blocks of every zoom finer than it, an even count of each, and `blocks`
+/// rounds a height to the nearest block, a tie to the even one: so a height
+/// rounds to at most the bottom at a zoom exactly when it is at most half
+/// that zoom's block over it, and the finest zoom asked says it for all of
+/// them; while the top is a face block under a rounded height exactly when
+/// that height is more than half a block over the top, and the coarsest
+/// says it. One zoom's cells cannot be over the ground where another's are
+/// under it, so one of the two holds for every zoom or neither does.
 pub fn empty(area: &impl Area, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far, near]: [Zoom; 2], hollow: bool) -> bool {
     let [lo, hi] = if zoom < SHARD_ZOOM { [lo.min(0), hi.max(0)] } else { [lo, hi] };
     let coarsest = if far > zoom + 1 { far } else { zoom + 1 };
@@ -361,17 +364,19 @@ pub fn empty(area: &impl Area, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], 
     // Leaf cells cut 2^e a side, the finest asked's blocks where finer than
     // the leaves, so every height here is a whole count.
     let e = near.max(LEAF_CELL) - LEAF_CELL;
-    let (slack, face) = if coarsest < LEAF_CELL {
-        (1 << (LEAF_CELL - coarsest - 1), 1 << (LEAF_CELL - coarsest))
-    } else {
-        (0, 1)
-    };
     let s = LEAF_CELL + e - zoom;
     let (bottom, top) = (c[2] << s, (c[2] + 1) << s);
-    if bottom >= (hi + slack) << e {
+    // Half a block of a zoom, in those units; none at the leaves or finer,
+    // where a height is whole blocks.
+    let half = |z: Zoom| if z < LEAF_CELL { 1 << (LEAF_CELL - z - 1 + e) } else { 0 };
+    if hi << e <= bottom + half(near) {
         return true;
     }
-    hollow && top <= (lo - slack - face) << e && bottom >= (hi.min(0) - BEDROCK_DEPTH + slack) << e && !walled(area, near, (zoom, [c[0], c[1]]))
+    // Under a face block at every zoom: past half the coarsest's block over
+    // the top, or at the leaves or finer, a leaf cell over it.
+    let under = if coarsest < LEAF_CELL { lo << e > top + half(coarsest) } else { lo << e >= top + (1 << e) };
+    let rock = (hi.min(0) - BEDROCK_DEPTH) << e;
+    hollow && under && rock <= bottom + half(near) && !walled(area, near, (zoom, [c[0], c[1]]))
 }
 
 /// A cell's ground, as the grid reads it: its look (`unknown` for the wall),
