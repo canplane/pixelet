@@ -1,0 +1,27 @@
+    Finished `release` profile [optimized] target(s) in 0.38s
+     Running `target-linux/release/gpu-query-builder`
+error: `u8` type used without `OpCapability Int8`
+    |
+note: used from within `<gpu_query_shader::probe::Cave>::whole`
+   --> <shader/src/lib.rs>:114:16
+    |
+114 |         pub fn whole(self, zoom: Zoom) -> Option<bool> {
+    |                ^^^^^
+note: called by `gpu_query_shader::answer`
+   --> <shader/src/lib.rs>:135:22
+    |
+135 |     let whole = cave.whole(zoom);
+    |                      ^^^^^^^^^^^
+note: called by `gpu_query_shader::main_cs`
+   --> <shader/src/lib.rs>:148:27
+    |
+148 |         out[i as usize] = answer(ask, [id.x, id.y, id.z]);
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by GLCompute entry-point `main_cs`
+   --> <shader/src/lib.rs>:141:8
+    |
+141 | pub fn main_cs(
+    |        ^^^^^^^
+
+error: could not compile `gpu-query-shader` (lib) due to 1 previous error
+failed: build failed

@@ -1,0 +1,95 @@
+    Finished `release` profile [optimized] target(s) in 0.13s
+     Running `target-linux/release/gpu-query-builder`
+error: cannot offset a pointer to an arbitrary element
+   --> </usr/local/rustup/toolchains/nightly-2026-04-11-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ptr/mut_ptr.rs>:961:18
+    |
+961 |         unsafe { intrinsics::offset(self, count) }
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: used from within `<*mut i64>::add`
+   --> </usr/local/rustup/toolchains/nightly-2026-04-11-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ptr/mut_ptr.rs>:961:18
+    |
+961 |         unsafe { intrinsics::offset(self, count) }
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `<core::array::drain::Drain<i64, 3, core::ops::try_trait::Wrapped<i64, i64, <gpu_query_shader::probe::Cave>::of::{closure#0}>>>::new`
+   --> </usr/local/rustup/toolchains/nightly-2026-04-11-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/array/drain.rs>:27:71
+    |
+ 27 |             let end = if T::IS_ZST { null_mut() } else { ptr.as_ptr().add(N) };
+    |                                                                       ^^^^^^
+note: called by `<[i64; 3]>::try_map::<core::ops::try_trait::NeverShortCircuit<i64>, core::ops::try_trait::Wrapped<i64, i64, <gpu_query_shader::probe::Cave>::of::{closure#0}>>`
+   --> </usr/local/rustup/toolchains/nightly-2026-04-11-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/array/mod.rs>:634:30
+    |
+634 |         let mut f = unsafe { drain::Drain::new(&mut me, &mut f) };
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `<[i64; 3]>::map::<<gpu_query_shader::probe::Cave>::of::{closure#0}, i64>`
+   --> </usr/local/rustup/toolchains/nightly-2026-04-11-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/array/mod.rs>:589:14
+    |
+589 |         self.try_map(NeverShortCircuit::wrap_mut_1(f)).0
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `<gpu_query_shader::probe::Cave>::of`
+   --> <shader/src/lib.rs>:91:40
+    |
+ 91 |                 cave = cave.child(z, c.map(|v| v >> (zoom - z)));
+    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::answer`
+   --> <shader/src/lib.rs>:123:16
+    |
+123 |     let cave = Cave::of(zoom, c);
+    |                ^^^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::main_cs`
+   --> <shader/src/lib.rs>:137:27
+    |
+137 |         out[i as usize] = answer(ask, [id.x, id.y, id.z]);
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `main_cs`
+   --> <shader/src/lib.rs>:130:8
+    |
+130 | pub fn main_cs(
+    |        ^^^^^^^
+
+error: cannot cast between pointer types
+       from `*[i64; 3]`
+         to `*[i64]`
+   --> </usr/local/rustup/toolchains/nightly-2026-04-11-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/array/mod.rs>:154:11
+    |
+154 |     match try_from_fn_erased(&mut array, cb) {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: used from within `core::array::try_from_fn::<core::ops::try_trait::NeverShortCircuit<i64>, 3, &mut core::array::drain::Drain<i64, 3, core::ops::try_trait::Wrapped<i64, i64, <gpu_query_shader::probe::Cave>::of::{closure#0}>>>`
+   --> </usr/local/rustup/toolchains/nightly-2026-04-11-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/array/mod.rs>:154:11
+    |
+154 |     match try_from_fn_erased(&mut array, cb) {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `<[i64; 3]>::try_map::<core::ops::try_trait::NeverShortCircuit<i64>, core::ops::try_trait::Wrapped<i64, i64, <gpu_query_shader::probe::Cave>::of::{closure#0}>>`
+   --> </usr/local/rustup/toolchains/nightly-2026-04-11-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/array/mod.rs>:635:9
+    |
+635 |         try_from_fn(&mut f)
+    |         ^^^^^^^^^^^^^^^^^^^
+note: called by `<[i64; 3]>::map::<<gpu_query_shader::probe::Cave>::of::{closure#0}, i64>`
+   --> </usr/local/rustup/toolchains/nightly-2026-04-11-aarch64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/array/mod.rs>:589:14
+    |
+589 |         self.try_map(NeverShortCircuit::wrap_mut_1(f)).0
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `<gpu_query_shader::probe::Cave>::of`
+   --> <shader/src/lib.rs>:91:40
+    |
+ 91 |                 cave = cave.child(z, c.map(|v| v >> (zoom - z)));
+    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::answer`
+   --> <shader/src/lib.rs>:123:16
+    |
+123 |     let cave = Cave::of(zoom, c);
+    |                ^^^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::main_cs`
+   --> <shader/src/lib.rs>:137:27
+    |
+137 |         out[i as usize] = answer(ask, [id.x, id.y, id.z]);
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `main_cs`
+   --> <shader/src/lib.rs>:130:8
+    |
+130 | pub fn main_cs(
+    |        ^^^^^^^
+
+error: could not compile `gpu-query-shader` (lib) due to 2 previous errors
+failed: build failed

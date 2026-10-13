@@ -1,0 +1,27 @@
+    Finished `release` profile [optimized] target(s) in 0.39s
+     Running `target-linux/release/gpu-query-builder`
+error: Expected Result Type to be a pointer or int or float vector or scalar type: Bitcast
+  |
+  = note: module `/w/gpu-query/target-linux/spirv-builder/spirv-unknown-naga-wgsl/release/deps/gpu_query_shader.spv`
+
+warning: an unknown error occurred
+  |
+  = note: spirv-opt failed, leaving as unoptimized
+  = note: module `/w/gpu-query/target-linux/spirv-builder/spirv-unknown-naga-wgsl/release/deps/gpu_query_shader.spv`
+
+error: error:0:0 - Expected Result Type to be a pointer or int or float vector or scalar type: Bitcast
+         %616 = OpBitcast %bool %600
+       
+  |
+  = note: spirv-val failed
+  = note: module `/w/gpu-query/target-linux/spirv-builder/spirv-unknown-naga-wgsl/release/deps/gpu_query_shader.spv`
+
+error: Naga failed to parse spv: 
+       
+       Shader '' parsing error: InvalidTypeWidth(1)
+       
+       
+
+warning: `gpu-query-shader` (lib) generated 1 warning
+error: could not compile `gpu-query-shader` (lib) due to 3 previous errors; 1 warning emitted
+failed: build failed

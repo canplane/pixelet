@@ -1,0 +1,158 @@
+    Finished `release` profile [optimized] target(s) in 0.14s
+     Running `target-linux/release/gpu-query-builder`
+error: `i64` type used without `OpCapability Int64`
+    |
+    = note: used by unnamed type
+    = note: used by unnamed type
+note: used from within `gpu_query_shader::probe::node_seed::<3>`
+   --> <shader/src/lib.rs>:46:43
+    |
+ 46 |         let mut h = derive_seed_u64(seed, u64::from(zoom));
+    |                                           ^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::probe::draws`
+   --> <shader/src/lib.rs>:58:17
+    |
+ 58 |         let h = node_seed(CAVES, (z, c));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `<gpu_query_shader::probe::Cave>::children`
+   --> <shader/src/lib.rs>:81:32
+    |
+ 81 |             let (turn, live) = draws(zoom, c);
+    |                                ^^^^^^^^^^^^^^
+note: called by `<gpu_query_shader::probe::Cave>::child`
+   --> <shader/src/lib.rs>:93:18
+    |
+ 93 |             self.children(zoom - 1, [c[0] >> 1, c[1] >> 1, c[2] >> 1])[slot(c) as usize]
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `<gpu_query_shader::probe::Cave>::of`
+   --> <shader/src/lib.rs>:100:29
+    |
+100 |                 cave = cave.child(z, [c[0] >> s, c[1] >> s, c[2] >> s]);
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::answer`
+   --> <shader/src/lib.rs>:132:16
+    |
+132 |     let cave = Cave::of(zoom, c);
+    |                ^^^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::main_cs`
+   --> <shader/src/lib.rs>:146:27
+    |
+146 |         out[i as usize] = answer(ask, [id.x, id.y, id.z]);
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by GLCompute entry-point `main_cs`
+   --> <shader/src/lib.rs>:139:8
+    |
+139 | pub fn main_cs(
+    |        ^^^^^^^
+
+error: `u8` type used without `OpCapability Int8`
+    |
+note: used from within `gpu_query_shader::answer`
+   --> <shader/src/lib.rs>:131:16
+    |
+131 |     let zoom = ask.zoom as u8;
+    |                ^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::main_cs`
+   --> <shader/src/lib.rs>:146:27
+    |
+146 |         out[i as usize] = answer(ask, [id.x, id.y, id.z]);
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by GLCompute entry-point `main_cs`
+   --> <shader/src/lib.rs>:139:8
+    |
+139 | pub fn main_cs(
+    |        ^^^^^^^
+
+error: `u64` type used without `OpCapability Int64`
+    |
+note: used from within `gpu_query_shader::probe::derive_seed_u64`
+   --> <shader/src/lib.rs>:33:12
+    |
+ 33 |     pub fn derive_seed_u64(base: u64, tag: u64) -> u64 {
+    |            ^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::probe::node_seed::<3>`
+   --> <shader/src/lib.rs>:44:20
+    |
+ 44 |         let seed = derive_seed_u64(MASTER_SEED, tag);
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::probe::draws`
+   --> <shader/src/lib.rs>:58:17
+    |
+ 58 |         let h = node_seed(CAVES, (z, c));
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `<gpu_query_shader::probe::Cave>::children`
+   --> <shader/src/lib.rs>:81:32
+    |
+ 81 |             let (turn, live) = draws(zoom, c);
+    |                                ^^^^^^^^^^^^^^
+note: called by `<gpu_query_shader::probe::Cave>::child`
+   --> <shader/src/lib.rs>:93:18
+    |
+ 93 |             self.children(zoom - 1, [c[0] >> 1, c[1] >> 1, c[2] >> 1])[slot(c) as usize]
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `<gpu_query_shader::probe::Cave>::of`
+   --> <shader/src/lib.rs>:100:29
+    |
+100 |                 cave = cave.child(z, [c[0] >> s, c[1] >> s, c[2] >> s]);
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::answer`
+   --> <shader/src/lib.rs>:132:16
+    |
+132 |     let cave = Cave::of(zoom, c);
+    |                ^^^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::main_cs`
+   --> <shader/src/lib.rs>:146:27
+    |
+146 |         out[i as usize] = answer(ask, [id.x, id.y, id.z]);
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by GLCompute entry-point `main_cs`
+   --> <shader/src/lib.rs>:139:8
+    |
+139 | pub fn main_cs(
+    |        ^^^^^^^
+
+error: `f64` type used without `OpCapability Float64`
+    |
+note: used from within `gpu_query_shader::probe::u32_to_unit`
+   --> <shader/src/lib.rs>:36:12
+    |
+ 36 |     pub fn u32_to_unit(x: u32) -> f64 {
+    |            ^^^^^^^^^^^
+note: called by `gpu_query_shader::probe::draws`
+   --> <shader/src/lib.rs>:59:11
+    |
+ 59 |         ((u32_to_unit(h as u32) < CAVE_TURN).then_some((h >> 32) & 7), (h >> 40) as u8)
+    |           ^^^^^^^^^^^^^^^^^^^^^
+note: called by `<gpu_query_shader::probe::Cave>::children`
+   --> <shader/src/lib.rs>:81:32
+    |
+ 81 |             let (turn, live) = draws(zoom, c);
+    |                                ^^^^^^^^^^^^^^
+note: called by `<gpu_query_shader::probe::Cave>::child`
+   --> <shader/src/lib.rs>:93:18
+    |
+ 93 |             self.children(zoom - 1, [c[0] >> 1, c[1] >> 1, c[2] >> 1])[slot(c) as usize]
+    |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `<gpu_query_shader::probe::Cave>::of`
+   --> <shader/src/lib.rs>:100:29
+    |
+100 |                 cave = cave.child(z, [c[0] >> s, c[1] >> s, c[2] >> s]);
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::answer`
+   --> <shader/src/lib.rs>:132:16
+    |
+132 |     let cave = Cave::of(zoom, c);
+    |                ^^^^^^^^^^^^^^^^^
+note: called by `gpu_query_shader::main_cs`
+   --> <shader/src/lib.rs>:146:27
+    |
+146 |         out[i as usize] = answer(ask, [id.x, id.y, id.z]);
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: called by GLCompute entry-point `main_cs`
+   --> <shader/src/lib.rs>:139:8
+    |
+139 | pub fn main_cs(
+    |        ^^^^^^^
+
+error: could not compile `gpu-query-shader` (lib) due to 4 previous errors
+failed: build failed

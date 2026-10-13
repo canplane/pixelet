@@ -1,0 +1,35 @@
+    Finished `release` profile [optimized] target(s) in 0.13s
+     Running `target-linux/release/gpu-query-builder`
+error: Structure id 14 decorated as Block for variable in Uniform storage class must follow relaxed uniform buffer layout rules: member 1 at offset 4 is not aligned to 16
+  |
+  = note: module `/w/gpu-query/target-linux/spirv-builder/spirv-unknown-naga-wgsl/release/deps/gpu_query_shader.spv`
+
+warning: an unknown error occurred
+  |
+  = note: spirv-opt failed, leaving as unoptimized
+  = note: module `/w/gpu-query/target-linux/spirv-builder/spirv-unknown-naga-wgsl/release/deps/gpu_query_shader.spv`
+
+error: error:0:0 - Structure id 14 decorated as Block for variable in Uniform storage class must follow relaxed uniform buffer layout rules: member 1 at offset 4 is not aligned to 16
+       This is may be allowed if you enable the uniformBufferStandardLayout feature (or use the --uniform-buffer-standard-layout command line flag)
+         %Ask = OpTypeStruct %uint %_arr_int_uint_3 %_arr_uint_uint_3
+       
+  |
+  = note: spirv-val failed
+  = note: module `/w/gpu-query/target-linux/spirv-builder/spirv-unknown-naga-wgsl/release/deps/gpu_query_shader.spv`
+
+error: Naga validation failed: 
+       
+       Shader validation error: Global variable [1] 'ask' is invalid
+         ┌─ :1:1
+         │
+       1 │ 
+         │   naga::ir::GlobalVariable [1]
+         │
+         = Alignment requirements for address space Uniform are not met by [4]
+         = The array stride 4 is not a multiple of the required alignment 16
+       
+       
+
+warning: `gpu-query-shader` (lib) generated 1 warning
+error: could not compile `gpu-query-shader` (lib) due to 3 previous errors; 1 warning emitted
+failed: build failed

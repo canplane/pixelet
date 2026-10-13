@@ -1,0 +1,9 @@
+# A scratch workspace for the GPU-query verification (branch gpu-query only):
+# can pxl-spec's world query, unchanged, compile for the CPU and for WGSL?
+[workspace]
+resolver = "2"
+members = ["builder", "shader", "runner"]
+
+[profile.release.build-override]
+opt-level = 3
+codegen-units = 16
