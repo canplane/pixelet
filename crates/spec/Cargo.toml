@@ -19,6 +19,7 @@ fnv.workspace = true
 libm.workspace = true
 serde = { version = "1", features = ["derive"], optional = true }
 xpute-kit = { path = "../../xpute/rust/kit" }
+pxl-portable = { path = "../portable" }
 
 [dev-dependencies]
 hex.workspace = true

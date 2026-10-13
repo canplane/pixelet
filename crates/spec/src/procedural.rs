@@ -6,7 +6,6 @@
 use std::collections::TryReserveError;
 
 use xpute_kit::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
-use xpute_kit::math::rng_gpu::derive_seed_u32;
 use xpute_kit::math::scalar::round;
 
 use crate::bake::separation::{slab_depth, Crossing, Occupies, STACKED_DECK_HEADROOM_M};
@@ -18,12 +17,8 @@ use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
-/// A node's seed and the caves, in the form the GPU takes too.
-mod portable;
-pub use portable::{node_seed, Cave, CAVE_COARSEST};
-
-/// The leaves' cell zoom, where the caves' draws stop (`portable`).
-const LEAF_CELL: Zoom = GROUND.cell();
+/// A node's seed and the caves, one source with the GPU's (pxl-portable).
+pub use pxl_portable::caves::{node_seed, Cave, CAVE_COARSEST};
 
 // ---- scatter: a Poisson process on the leaf cell lattice ----
 

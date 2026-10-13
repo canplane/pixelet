@@ -12,7 +12,7 @@
 //! outer face stands on the area's edge at every zoom (`pxl-spec
 //! block/sample.rs` `wall_off`).
 
-pub const BEDROCK_DEPTH: i32 = 64;
+pub use pxl_portable::ground::BEDROCK_DEPTH;
 pub const HEADROOM: f64 = 128.0;
 
 /// The lowest a block may reach under ground whose face is at `ele`, in

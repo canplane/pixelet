@@ -15,7 +15,7 @@ use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, 
 
 /// The leaves' zoom: the finest tile any layer is kept in, a page of the
 /// world 2^15 round.
-pub const LEAF_ZOOM: Zoom = 15;
+pub use pxl_portable::LEAF_ZOOM;
 const _: () = assert!(morton::bits::<2>(LEAF_ZOOM) < 63, "a tile's key fits its subject's word");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

@@ -423,6 +423,7 @@ name = "gpu-query-runner"
 version = "0.0.0"
 dependencies = [
  "pollster",
+ "pxl-portable",
  "pxl-spec",
  "wgpu",
 ]
@@ -431,6 +432,7 @@ dependencies = [
 name = "gpu-query-shader"
 version = "0.0.0"
 dependencies = [
+ "pxl-portable",
  "spirv-std",
 ]
 
@@ -1028,11 +1030,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
 
 [[package]]
+name = "pxl-portable"
+version = "0.0.0"
+dependencies = [
+ "libm",
+ "xpute-kit",
+]
+
+[[package]]
 name = "pxl-spec"
 version = "0.0.0"
 dependencies = [
  "fnv",
  "libm",
+ "pxl-portable",
  "xpute-kit",
 ]
 

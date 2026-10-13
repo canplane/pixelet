@@ -24,11 +24,11 @@
 //! the node's parent found, handed down, as surely or more cautiously, which
 //! only splits more, never from detail finer than asked:
 //!
-//! - the ground: by its one rule (`sample::lay`, as `carves` asks it of a
-//!   block) over the lowest and highest its tile index holds under the node
-//!   (`Residency::relief`, its lane the union of the finer ones'), every cell
-//!   under it at each zoom asked over the ground, or ground a cave may take
-//!   with a cave through all of it;
+//! - the ground: by its one rule (pxl-portable `ground::lay`, as a cell's
+//!   block asks it of one block) over the lowest and highest its tile index
+//!   holds under the node (`Residency::relief`, its lane the union of the
+//!   finer ones'), every cell under it at each zoom asked over the ground, or
+//!   ground a cave may take with a cave through all of it;
 //! - the ways: the ground's index pyramid as it is, which carries the ways'
 //!   heights with the ground's; a way a coarser tile drops as narrower than
 //!   half its cell is dropped there, as its level of detail does;
@@ -39,7 +39,8 @@
 //! A source not holding the node answers that it lacks it, never air and
 //! never that nothing fills.
 
-use pxl_spec::block::sample::{at as one_rule, lay, walled, Grid, Lay};
+use pxl_portable::ground::{lay, Lay};
+use pxl_spec::block::sample::{at as one_rule, walled, Grid};
 use pxl_spec::block::Block;
 use pxl_spec::procedural::Cave;
 use pxl_spec::space::coord::world::wrap_cell;
@@ -204,14 +205,14 @@ impl World<'_> {
             let Some([lo, hi]) = relief else { return In::Empty };
             // Coarser than a shard, the Earth past the service area may be in
             // it too, its face at sea level.
-            let [lo, hi] = (if zoom < SHARD_ZOOM { [lo.min(0), hi.max(0)] } else { [lo, hi] }).map(f64::from);
+            let [lo, hi] = if zoom < SHARD_ZOOM { [lo.min(0), hi.max(0)] } else { [lo, hi] };
             // At each zoom asked, every cell under it over the ground, or
             // ground a cave may take with a cave through all of it, by the
             // ground's one rule.
             let hollow = at.cave.whole(zoom) == (true, true);
             let empty = (far.max(zoom + 1)..=near).all(|z| {
                 let u = units(z);
-                let blocks = [(whole.min[2] / u).floor() as i64, (whole.max[2] / u).ceil() as i64];
+                let blocks = [(whole.min[2] / u).floor() as i32, (whole.max[2] / u).ceil() as i32];
                 let wall = walled(z, source::past_at, [whole.min[0], whole.min[1]], [whole.max[0], whole.max[1]]);
                 match lay(z, [lo, hi], wall, blocks) {
                     Lay::Air => true,

@@ -7,5 +7,6 @@ publish = false
 [dependencies]
 # The same source, compiled for the CPU: pxl-spec itself.
 pxl-spec = { path = "../../crates/spec" }
+pxl-portable = { path = "../../crates/portable" }
 wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
 pollster = "1"

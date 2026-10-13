@@ -1,24 +1,12 @@
-//! One compute entry that asks the caves per node, and one that hands back a
-//! node's seed, from pxl-spec's gpu-portable source taken as it is
-//! (crates/spec/src/procedural/portable.rs) over xpute-kit's
-//! (xpute/rust/kit/src/math/rng.gpu.rs). Only what the portable module asks
-//! of its parent is given here.
+//! One compute entry that asks the caves per node, one that hands back a
+//! node's seed, and one that reads a tile's ground per cell, from
+//! pxl-portable, the one source pxl-spec takes too.
 
 #![cfg_attr(target_arch = "spirv", no_std)]
 
-#[path = "../../../xpute/rust/kit/src/math/rng.gpu.rs"]
-pub mod rng_gpu;
-
-/// What `portable` takes from its parent in pxl-spec (`procedural.rs`).
-use rng_gpu::derive_seed_u32;
-pub type Zoom = u32;
-/// `GROUND.cell()`; a value pxl-spec's own differs from shows in the diff.
-const LEAF_CELL: Zoom = 24;
-
-#[path = "../../../crates/spec/src/procedural/portable.rs"]
-pub mod portable;
-
-use portable::Cave;
+use pxl_portable::caves::{self, Cave};
+use pxl_portable::ground::{self, Tile, TILE_CELLS};
+use pxl_portable::LEAF_CELL;
 use spirv_std::glam::UVec3;
 use spirv_std::spirv;
 
@@ -65,6 +53,50 @@ pub fn seed_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] out: &mut [u32],
 ) {
     if let Some(i) = index(ask, id) {
-        out[i] = portable::node_seed(0xca7e_0001, (ask.zoom, node(ask, [id.x, id.y, id.z])));
+        out[i] = caves::node_seed(0xca7e_0001, (ask.zoom, node(ask, [id.x, id.y, id.z])));
+    }
+}
+
+/// One tile's frame in the ground buffers: 4 looks a word and 2 heights a
+/// word, low first.
+pub struct Frame<'a> {
+    pub looks: &'a [u32],
+    pub heights: &'a [u32],
+}
+
+impl Tile for Frame<'_> {
+    fn look(&self, x: u32, y: u32) -> u32 {
+        let i = (y * TILE_CELLS + x) as usize;
+        self.looks[i / 4] >> (8 * (i % 4)) & 0xff
+    }
+    fn ele(&self, i: usize) -> i32 {
+        // The half's sign carried up: shifted to the top, then back.
+        ((self.heights[i / 2] >> (16 * (i % 2))) << 16) as i32 >> 16
+    }
+}
+
+/// Cell `id` of the tile at the leaves: its look in bits 0..8, its block
+/// at `ask.first[2]` without caves in bits 8..16, its height in the high half.
+pub fn ground_of(ask: &Ask, tile: &Frame, id: [u32; 2]) -> u32 {
+    let (look, h) = ground::read(tile, [id[0] as i32, id[1] as i32], 1);
+    let cell = ground::Cell {
+        look,
+        top: ground::blocks(LEAF_CELL, h as f32),
+        fold: [look; 4],
+    };
+    let (block, _) = cell.block(LEAF_CELL, ask.first[2], false);
+    look | block << 8 | (h as u32 & 0xffff) << 16
+}
+
+#[spirv(compute(threads(8, 8, 1)))]
+pub fn ground_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] ask: &Ask,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] out: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] heights: &[u32],
+) {
+    if let Some(i) = index(ask, id) {
+        out[i] = ground_of(ask, &Frame { looks, heights }, [id.x, id.y]);
     }
 }

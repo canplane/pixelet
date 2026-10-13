@@ -8,26 +8,17 @@
 
 use fnv::FnvHashMap;
 
-use crate::bake::fold::majority;
 use crate::bake::separation::{Crossing, Occupies};
-use crate::bake::surface::bicubic;
 use crate::bake::tile::terrain::GroundId;
 use crate::block::cube::{ground, sentinel, Ground};
-use crate::block::limit::{at_edge, floor};
+use crate::block::limit::at_edge;
 use crate::block::Block;
 use crate::procedural::{pier_stands, Frame};
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::{units, Zoom, SHARD_ZOOM};
 use crate::space::hierarchy::tree::{ancestor_of, offset_in};
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
-use xpute_kit::math::scalar::round;
-
-/// Minecraft Beta's filler under a cell's face: `stoneNoise / 3 + 3`, its
-/// noise left out for now.
-const FILLER_DEPTH: i32 = 3;
-
-/// Its sandstone under sand: `rand.nextInt(4)`, here its mean rounded up.
-const SANDSTONE_DEPTH: i32 = 2;
+use pxl_portable::ground::{blocks, face_height, fold, read, Cell};
 
 /// A building's concrete: nothing in the catalog is a pier's own.
 const PIER: GroundId = ground::building;
@@ -87,21 +78,12 @@ pub struct TileSource<'a> {
     pub n: u32,
 }
 
-impl TileSource<'_> {
-    /// The source cell holding the drawn tile's cell `at`, and the texel its
-    /// center reads, so a coarser tile invents nothing; none off the source
-    /// tile, which knows nothing there.
-    fn texel(&self, at: [i64; 2]) -> Option<([u32; 2], [f64; 2])> {
-        let n = i64::from(self.n);
-        let v = [self.origin[0] + at[0], self.origin[1] + at[1]];
-        let t = v.map(|v| v.div_euclid(n));
-        let cells = 0..i64::from(TILE_CELLS);
-        (cells.contains(&t[0]) && cells.contains(&t[1])).then(|| (t.map(|t| t as u32), v.map(|v| (v as f64 + 0.5) / n as f64)))
+impl pxl_portable::ground::Tile for TileView<'_> {
+    fn look(&self, x: u32, y: u32) -> u32 {
+        u32::from(self.cells[GROUND.cell_index(x, y) as usize])
     }
-
-    /// The look of the tile's own cell.
-    pub fn look(&self, tx: u32, ty: u32) -> GroundId {
-        self.tile.cells[GROUND.cell_index(tx, ty) as usize]
+    fn ele(&self, i: usize) -> i32 {
+        i32::from(self.ele[i])
     }
 }
 
@@ -140,57 +122,12 @@ impl<'a> Around<'a> {
 }
 
 /// The drawn tile's cells `x0..` of row `y`, counted from the own tile's
-/// first, into `out`: each its look and its height in leaf cells; none where
-/// nothing is known.
-fn read_row(around: &Around, y: i64, x0: i64, out: &mut [Option<(GroundId, i32)>]) {
+/// first, into `out`: each its look and its height in leaf cells; `void`
+/// where nothing is known.
+fn read_row(around: &Around, y: i64, x0: i64, out: &mut [(u32, i32)]) {
     for (v, x) in out.iter_mut().zip(x0..) {
         let (s, at, _) = around.of([x, y]);
-        *v = s.texel(at).map(|(c, t)| (s.look(c[0], c[1]), i32::from(bicubic(s.tile.ele, t[0], t[1]))));
-    }
-}
-
-/// A height in leaf cells as blocks at `cell`: past the leaves a leaf cell is
-/// `2^(cell − leaf)` blocks, under them a block `2^(leaf − cell)` leaf
-/// cells, the nearest.
-fn blocks(cell: Zoom, h: f64) -> i32 {
-    let d = cell as i32 - GROUND.cell() as i32;
-    if d >= 0 {
-        (h as i32) << d
-    } else {
-        round(h / f64::from(1 << -d)) as i32
-    }
-}
-
-/// What the ground is over some blocks of its cells.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Lay {
-    /// Over every top: none of it is ground.
-    Air,
-    /// Ground a cave may take, all of it: under every face block, over every
-    /// bedrock, off the service area's wall; the caves' hash says which.
-    Open,
-    /// Some of it may be ground no cave takes: a face block, the bedrock,
-    /// the wall.
-    Kept,
-}
-
-/// What the ground is over the blocks `z0..z1` of `cell`, in cells whose
-/// faces lie between `lo` and `hi` (leaf cells, as `Grid::face_height`
-/// gives them) and where the service area's wall may stand or not (`walled`):
-/// the ground's one rule of where it stands and where a cave may take it,
-/// asked of one block (`Grid::carves`) or of the blocks under a node at
-/// each zoom a reader asks within it (pxl-kernel `World::node`). A top and a bedrock are
-/// the face's, rounded to blocks as the grid rounds them.
-pub fn lay(cell: Zoom, [lo, hi]: [f64; 2], wall: bool, [z0, z1]: [i64; 2]) -> Lay {
-    let top = |h: f64| i64::from(blocks(cell, h));
-    let rock = |h: f64| i64::from(blocks(cell, floor(h)));
-    let lb = 1i64 << (cell as i32 - GROUND.cell() as i32).max(0);
-    if z0 >= top(hi) {
-        Lay::Air
-    } else if !wall && z1 <= top(lo) - lb && z0 >= rock(hi) {
-        Lay::Open
-    } else {
-        Lay::Kept
+        *v = read(&s.tile, [0, 1].map(|a| (s.origin[a] + at[a]) as i32), s.n);
     }
 }
 
@@ -248,7 +185,7 @@ pub struct Grid {
     /// the drawn tile's cells the window folds, the lines over each cell, a
     /// cell's decks and piers, and the bores' air with its way.
     look: Vec<GroundId>,
-    cells: Vec<Option<(GroundId, i32)>>,
+    cells: Vec<(u32, i32)>,
     crossing: Vec<(usize, usize, Crossing)>,
     slabs: Vec<Slab>,
     bores: Vec<([i64; 3], GroundId)>,
@@ -299,7 +236,7 @@ impl Grid {
             0.. => (span as usize) << k,
             _ => (0..2).map(|a| (drawn(rel[a] + i64::from(span) - 1) - from[a] + 1) as usize).max().unwrap_or(0),
         };
-        fit(&mut self.cells, across * across, None)?;
+        fit(&mut self.cells, across * across, (u32::from(sentinel::void), 0))?;
         for (y, row) in self.cells.chunks_mut(across).take(across).enumerate() {
             read_row(around, from[1] + y as i64, from[0], row);
         }
@@ -312,15 +249,10 @@ impl Grid {
             let read = |c: [i64; 2]| self.cells[(c[1] - from[1]) as usize * across + (c[0] - from[0]) as usize];
             let (look, h, fold) = if k == 1 {
                 let c = [0, 1].map(|a| drawn(rel[a] + g[a]));
-                let four = [[0, 0], [1, 0], [0, 1], [1, 1]].map(|[dx, dy]| read([c[0] + dx, c[1] + dy]));
-                let looks = four.map(|v| v.map_or(sentinel::void, |(l, _)| l));
-                let grounded = four.iter().flatten().filter(|(l, _)| Ground::of(*l).is_some());
-                let (sum, count) = grounded.fold((0.0, 0.0), |(s, c), &(_, h)| (s + f64::from(h), c + 1.0));
-                (majority(looks, cell), if count > 0.0 { sum / count } else { 0.0 }, looks)
+                fold([[0, 0], [1, 0], [0, 1], [1, 1]].map(|[dx, dy]| read([c[0] + dx, c[1] + dy])), cell)
             } else {
-                let v = read([0, 1].map(|a| drawn(rel[a] + g[a])));
-                let look = v.map_or(sentinel::void, |(l, _)| l);
-                (look, v.map_or(0.0, |(_, h)| f64::from(h)), [look; 4])
+                let (look, h) = read([0, 1].map(|a| drawn(rel[a] + g[a])));
+                (look, h as f32, [look; 4])
             };
             let center = [0, 1].map(|a| (first[a] + g[a]) as f64 * side + side / 2.0);
             let key = center.map(|v| (v / shard).floor() as i64);
@@ -332,8 +264,8 @@ impl Grid {
                     past
                 }
             };
-            self.look[i] = if past { sentinel::unknown } else { look };
-            self.fold[i] = fold;
+            self.look[i] = if past { sentinel::unknown } else { byte(look) };
+            self.fold[i] = fold.map(byte);
             self.top[i] = blocks(cell, h);
         }
         // As read, the area's edge marked: what `wall_off` reads.
@@ -357,7 +289,7 @@ impl Grid {
             let (x, y) = (i as i64 % span, i as i64 / span);
             *look = match g {
                 sentinel::unknown => sentinel::void,
-                g if leaf && Ground::of(g).is_some() && at_edge(|dx, dy| past(x + dx, y + dy)) => sentinel::unknown,
+                g if leaf && Ground::grounds(u32::from(g)) && at_edge(|dx, dy| past(x + dx, y + dy)) => sentinel::unknown,
                 g => g,
             };
         }
@@ -417,7 +349,7 @@ impl Grid {
             same
         });
         let (cell, span) = (self.cell, i64::from(self.span));
-        let in_blocks = |v: [i32; 2]| v.map(|v| blocks(cell, f64::from(v)));
+        let in_blocks = |v: [i32; 2]| v.map(|v| blocks(cell, v as f32));
         let mut ways = core::mem::take(&mut self.ways);
         let mut slabs = core::mem::take(&mut self.slabs);
         let mut bores = core::mem::take(&mut self.bores);
@@ -433,7 +365,7 @@ impl Grid {
                 let o = crossing[i].2;
                 i += 1;
                 // Bedrock wins over a way, as it does over the ground's face.
-                if Ground::of(o.kind).is_none() || self.look[col] == sentinel::unknown {
+                if !Ground::grounds(u32::from(o.kind)) || self.look[col] == sentinel::unknown {
                     continue;
                 }
                 let ground = self.face_height(col);
@@ -489,7 +421,7 @@ impl Grid {
     /// Whether cell `i` has ground: a look, or the bedrock walling the
     /// service area from inside; a void cell has none.
     fn grounded(&self, i: usize) -> bool {
-        Ground::of(self.face[i]).is_some() || self.face[i] == sentinel::unknown
+        self.cell(i).grounded()
     }
 
     /// Its blocks under `top` are ground; none where it has none.
@@ -502,89 +434,38 @@ impl Grid {
         self.face[i]
     }
 
-    /// The looks block `g` of cell `i` folds: a summary's face folds the
-    /// looks under it; a block at the leaves or finer, or under a face, is
-    /// its own.
-    fn folds(&self, i: usize, g: GroundId) -> [GroundId; 4] {
-        match self.leaf() || g != self.face[i] {
-            true => [g; 4],
-            false => self.fold[i],
-        }
-    }
-
-    /// Whether its cells are a leaf's or finer: laid in strata, not a summary.
-    fn leaf(&self) -> bool {
-        self.scale.is_some()
-    }
-
     /// What the ways write in block `b`: a deck's, a pier's or a bore's
     /// block, or a bore's air; none where they write nothing.
     fn way(&self, b: [i64; 3]) -> Option<Option<GroundId>> {
         self.ways.get(&b).copied()
     }
 
-    /// Cell `i`'s face in leaf cells, as its top draws it: what the ground's
-    /// bedrock and the ways over it are told from, so they meet the ground
-    /// drawn at every zoom. Past the leaves a leaf height shifted, under them
-    /// the mean as its blocks round it.
+    /// Cell `i`'s face in leaf cells, as its top draws it: what the ways
+    /// over it are told from, so they meet the ground drawn at every zoom
+    /// (pxl-portable `face_height`).
     fn face_height(&self, i: usize) -> i32 {
-        let d = self.cell as i32 - GROUND.cell() as i32;
-        match self.scale {
-            Some(s) => self.top[i] / s,
-            None => self.top[i] << -d,
-        }
+        face_height(self.cell, self.top[i])
     }
 
-    /// The top of the bedrock under cell `i` (`limit::floor`), in blocks.
-    fn rock(&self, i: usize) -> i32 {
-        blocks(self.cell, floor(f64::from(self.face_height(i))))
+    /// Cell `i`'s ground as the one rule takes it (pxl-portable `Cell`).
+    fn cell(&self, i: usize) -> Cell {
+        Cell {
+            look: u32::from(self.face[i]),
+            top: self.top[i],
+            fold: self.fold[i].map(u32::from),
+        }
     }
 
     /// What the ground is in block `z` of cell `i`: by depth under its top,
     /// none over it.
     fn block(&self, i: usize, z: i32) -> Option<GroundId> {
-        let top = self.top(i).filter(|&t| z < t)?;
-        Some(self.by_depth(i, top, z))
+        Some(byte(self.cell(i).block(self.cell, z, false).0)).filter(|&g| g != sentinel::void)
     }
+}
 
-    /// What cell `i`'s ground is at `z` under its `top`, as Minecraft Beta
-    /// lays a column of its world (`ChunkProviderGenerate.replaceBlocksForBiome`): its
-    /// face on top, its filler under it, sand over sandstone, stone under
-    /// all and bedrock under the floor (`limit::floor`), every depth a leaf
-    /// cell thick in any zoom's cells. A cell coarser than the leaves' is a
-    /// summary of the faces under it, its ground its face whole.
-    fn by_depth(&self, i: usize, top: i32, z: i32) -> GroundId {
-        let look = self.face[i];
-        let Some(s) = self.scale.filter(|_| look != sentinel::unknown) else { return look };
-        // Water's filler is water, as sand's is sand: under a face it is the
-        // same block, never dirt.
-        let (filler, sandstone) = match look {
-            ground::sand | ground::beach => (ground::sand, SANDSTONE_DEPTH),
-            ground::water => (ground::water, 0),
-            _ => (ground::soil, 0),
-        };
-        let face = top - s;
-        let filled = face - FILLER_DEPTH * s;
-        if z >= face {
-            look
-        } else if z >= filled {
-            filler
-        } else if z >= filled - sandstone * s {
-            ground::sandstone
-        } else if z >= self.rock(i) {
-            ground::stone
-        } else {
-            sentinel::unknown
-        }
-    }
-
-    /// Whether a cave may take block `z` of cell `i`, by the ground's one
-    /// rule (`lay`): under its face block, over its bedrock, not the wall,
-    /// so a cave never opens the surface. The ways are written over it.
-    fn carves(&self, i: usize, z: i32) -> bool {
-        let face = f64::from(self.face_height(i));
-        self.top(i).is_some() && lay(self.cell, [face, face], self.face[i] == sentinel::unknown, [i64::from(z), i64::from(z) + 1]) == Lay::Open
-    }
+/// A look the one rule gives in a word, back to the byte it was read from.
+fn byte(look: u32) -> GroundId {
+    look as GroundId
 }
 
 /// `b` written as `block` into `ways`, room asked for first.
@@ -613,12 +494,9 @@ pub fn at(grid: &Grid, b: [i64; 3], placed: Option<u32>, hollow: bool) -> Option
         return way.map(|g| Block::Ground(g, [g; 4]));
     }
     let i = grid.index([b[0], b[1]])?;
-    let z = b[2] as i32;
-    let g = grid.block(i, z)?;
-    if hollow && grid.carves(i, z) {
-        return None;
-    }
-    Some(Block::Ground(g, grid.folds(i, g)))
+    let (g, fold) = grid.cell(i).block(grid.cell, b[2] as i32, hollow);
+    let g = byte(g);
+    (g != sentinel::void).then_some(Block::Ground(g, fold.map(byte)))
 }
 
 /// The six blocks across a block's faces.

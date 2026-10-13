@@ -8,8 +8,8 @@
 
 #[path = "block/color.spec.rs"]
 pub mod color;
-#[path = "block/cube.spec.rs"]
-pub mod cube;
+/// The ground and the cubes, one table with the GPU's (pxl-portable).
+pub use pxl_portable::cube;
 #[path = "block/decor.spec.rs"]
 pub mod decor;
 pub mod ext;

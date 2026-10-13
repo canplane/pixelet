@@ -1669,6 +1669,7 @@ dependencies = [
  "libm",
  "postgres",
  "pxl-geo-spec",
+ "pxl-portable",
  "pxl-server",
  "pxl-spec",
  "serde",
@@ -1698,6 +1699,7 @@ dependencies = [
  "fnv",
  "indexmap",
  "libm",
+ "pxl-portable",
  "pxl-render",
  "pxl-spec",
  "xpute-guest",
@@ -1716,6 +1718,14 @@ dependencies = [
  "pxl-render",
  "wgpu",
  "xpute-guest",
+ "xpute-kit",
+]
+
+[[package]]
+name = "pxl-portable"
+version = "0.0.0"
+dependencies = [
+ "libm",
  "xpute-kit",
 ]
 
@@ -1754,6 +1764,7 @@ dependencies = [
  "fnv",
  "hex",
  "libm",
+ "pxl-portable",
  "serde",
  "serde_json",
  "xpute-kit",

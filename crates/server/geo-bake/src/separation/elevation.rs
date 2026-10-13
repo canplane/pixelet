@@ -8,7 +8,7 @@
 use fnv::FnvHashMap;
 
 use crate::terrain::CELL_U;
-use pxl_spec::bake::surface::bicubic;
+use pxl_portable::ground::bicubic;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg3857::u_from_mer;
 use pxl_spec::space::coord::zoom::index_of;
@@ -24,7 +24,7 @@ pub fn sample_cells(eles: &FnvHashMap<[i64; 2], Vec<i16>>, points: &[[f64; 2]]) 
             let ele = eles.get(&tile).ok_or_else(|| format!("tile {tile:?} is not held"))?;
             let [min, _] = epsg3857::get_tile_bbox(LEAF_ZOOM, tile);
             let (tx, ty) = (u_from_mer(x - min[0]) / CELL_U, u_from_mer(y - min[1]) / CELL_U);
-            Ok(i32::from(bicubic(ele, tx, ty)))
+            Ok(bicubic(|i| i32::from(ele[i]), tx as f32, ty as f32))
         })
         .collect()
 }

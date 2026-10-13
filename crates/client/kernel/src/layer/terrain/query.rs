@@ -4,7 +4,8 @@
 //! from, or the nearest resident tile over it, at that tile's cells; it is
 //! exact where that tile says it, coarser where one over it only draws it.
 
-use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile};
+use pxl_portable::ground::Tile as _;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::block::cube::Ground;
 use pxl_spec::block::limit::bedrock;
 use pxl_spec::block::sample::{TileSource, TileView};
@@ -159,10 +160,10 @@ fn past(node: Node<2>) -> bool {
 }
 
 /// The look of the cell at a node's center in the tile `d` answers.
-fn look_at(d: &Drawn, node: Node<2>) -> GroundId {
+fn look_at(d: &Drawn, node: Node<2>) -> u32 {
     let [x, y] = center_of(node);
     let [x, y] = GROUND.cell_of(d.from.zoom, &point(x, y, 0.0)).in_tile();
-    d.source().view().look(x, y)
+    d.source().view().tile.look(x, y)
 }
 
 /// The ring of cells at `fine` about a node, or of nodes where it is finer.
@@ -233,7 +234,7 @@ impl Query for Residency<TerrainTile> {
                 continue;
             };
             lack = lack.or((!b.exact).then_some(b.tile));
-            if Ground::of(look_at(&b, beside)).is_some() {
+            if Ground::grounds(look_at(&b, beside)) {
                 lo = lo.min(i32::from(relief(&b, beside)[0]));
             }
         }

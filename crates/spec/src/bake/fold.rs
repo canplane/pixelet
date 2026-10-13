@@ -17,24 +17,7 @@ use super::surface::extent_of;
 use super::tile::terrain::{join, Ground, Index, TerrainTile};
 use super::tile::Occupancy;
 use crate::space::coord::zoom::Zoom;
-
-/// The value filling more than half of a 2×2 (or 2×2×2) block, `v[dx + 2·dy +
-/// 4·dz]`; otherwise the tie child's. The tie corner alternates with the
-/// parent cell's zoom, since a fixed corner drifts the map half a coarse cell a step.
-pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
-    let tie = v[if parent & 1 == 1 { 0 } else { N - 1 }];
-    let count = |x: T| v.iter().filter(|&&y| y == x).count();
-    let mut half = None;
-    for &x in &v {
-        match count(x) {
-            n if 2 * n > N => return x,
-            n if 2 * n == N && half.is_some_and(|h| h != x) => return tie,
-            n if 2 * n == N => half = Some(x),
-            _ => {}
-        }
-    }
-    half.unwrap_or(tie)
-}
+use pxl_portable::ground::majority;
 
 /// A cell is one look, so the majority is the look's.
 pub fn fold_ground(children: [&Ground; 4], zoom: Zoom) -> Ground {

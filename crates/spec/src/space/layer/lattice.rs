@@ -224,7 +224,7 @@ impl Lattice {
 /// ground keeps in cells follows it. A grid cell is drawn from the ground's
 /// records a zoom finer: their surfaces' mean and their fill (pxl-render
 /// mesh/chunk.rs).
-pub const GROUND: Lattice = Lattice::new(LEAF_ZOOM + 9).scaled(1);
+pub const GROUND: Lattice = Lattice::new(pxl_portable::LEAF_CELL).scaled(1);
 
 /// The zooms a grid cell folds of the ground's cells, which the chunk's runs
 /// and the mesher are laid out by: the ground's scale, never finer than the grid.
