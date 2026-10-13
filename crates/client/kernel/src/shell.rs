@@ -162,8 +162,8 @@ pub fn go_to_degrees(lon: f64, lat: f64) {
 }
 
 /// Set outright, for kernel tests and A/B comparisons at the same view.
-pub fn set_view(dist: Option<f64>, polar: Option<f64>) {
-    crate::control::camera::controller::set_intent(IntentPatch { dist, azimuth: None, polar });
+pub fn set_view(dist: Option<f64>, polar: Option<f64>, azimuth: Option<f64>) {
+    crate::control::camera::controller::set_intent(IntentPatch { dist, azimuth, polar });
 }
 
 /// The compass is asked for where it is used (`tracking_action`).

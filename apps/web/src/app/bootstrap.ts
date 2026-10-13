@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 
+import { pinEye } from "@/feature/debug/eye.ts";
 import { boot_kernel, on_kernel_stop } from "@/kernel/boot.ts";
 import { stop_code } from "@/kernel/host.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
@@ -22,6 +23,7 @@ export function bootstrapApp(): void {
   boot_kernel().then(
     () => {
       console.info("[boot] the kernel started");
+      if (__IS_DEV__) pinEye();
       useBootStore.setState({ boot: Boot.Started });
       on_kernel_stop(() => useBootStore.setState({ boot: Boot.Stopped, stop: stop_code() }));
     },

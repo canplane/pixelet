@@ -614,7 +614,8 @@ pub enum Command {
     /// The tracking button's press, as the button showed it.
     INPUT_TRACKING = 0x1104,
     /// Where the camera stands, set outright rather than driven: what the kernel's own
-    /// test puts a view at, and what an A/B reads two builds at the same view with.
+    /// test puts a view at, and what an A/B reads two builds at the same view with
+    /// (a development page's `?eye=`, feature/debug/eye.ts).
     INPUT_VIEW = 0x1105,
     /// The compass's press: north up.
     INPUT_COMPASS_RESET = 0x1107,
@@ -1454,6 +1455,7 @@ impl InputTracking {
 pub struct InputView {
     pub dist: Option<f64>,
     pub polar: Option<f64>,
+    pub azimuth: Option<f64>,
 }
 
 impl InputView {
@@ -1465,6 +1467,10 @@ impl InputView {
                 None => None,
             },
             polar: match f.at(1)?.opt() {
+                Some(c) => Some(finite(c.get_number()?)?),
+                None => None,
+            },
+            azimuth: match f.at(2)?.opt() {
                 Some(c) => Some(finite(c.get_number()?)?),
                 None => None,
             },

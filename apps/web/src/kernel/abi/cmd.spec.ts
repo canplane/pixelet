@@ -321,7 +321,8 @@ export const enum Command {
   /** The tracking button's press, as the button showed it. */
   INPUT_TRACKING = 0x1104,
   /** Where the camera stands, set outright rather than driven: what the kernel's own
-   * test puts a view at, and what an A/B reads two builds at the same view with. */
+   * test puts a view at, and what an A/B reads two builds at the same view with
+   * (a development page's `?eye=`, feature/debug/eye.ts). */
   INPUT_VIEW = 0x1105,
   /** The compass's press: north up. */
   INPUT_COMPASS_RESET = 0x1107,
@@ -822,10 +823,11 @@ export function encode_input_tracking(p: InputTracking): U8Array {
 export interface InputView {
   dist: f64 | null;
   polar: f64 | null;
+  azimuth: f64 | null;
 }
 
 export function encode_input_view(p: InputView): U8Array {
-  return packet((b) => b.f64(p.dist).f64(p.polar));
+  return packet((b) => b.f64(p.dist).f64(p.polar).f64(p.azimuth));
 }
 
 /** Command.INPUT_GO_TO's packet. */

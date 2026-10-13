@@ -132,7 +132,7 @@ export function PerformanceOverlay() {
     const w = globalThis as ProfilerGlobals;
     w.__pxl_profiler_trace = profilerTraceSave;
     w.__pxl_profiler_log = profilerLog;
-    w.__pxl_view = (dist, polar) => kernel_command(Command.INPUT_VIEW, encode_input_view({ dist, polar }));
+    w.__pxl_view = (dist, polar) => kernel_command(Command.INPUT_VIEW, encode_input_view({ dist, polar, azimuth: null }));
     w.__pxl_gauge = (windowMs) => profilerGaugeRead(windowMs);
     return () => {
       profilerLog(false);

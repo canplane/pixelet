@@ -175,7 +175,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::INPUT_VIEW => {
             let p = abi::InputView::read(packet(pkt)?)?;
-            ui::set_view(p.dist, p.polar);
+            ui::set_view(p.dist, p.polar, p.azimuth);
             applied(s)
         }
         Command::INPUT_COMPASS_RESET => {

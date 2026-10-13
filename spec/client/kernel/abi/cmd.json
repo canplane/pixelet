@@ -1275,7 +1275,8 @@
           "value": 4357,
           "$doc": [
             "Where the camera stands, set outright rather than driven: what the kernel's own",
-            "test puts a view at, and what an A/B reads two builds at the same view with."
+            "test puts a view at, and what an A/B reads two builds at the same view with",
+            "(a development page's `?eye=`, feature/debug/eye.ts)."
           ],
           "packet": [
             {
@@ -1285,6 +1286,11 @@
             },
             {
               "name": "polar",
+              "type": "f64",
+              "optional": true
+            },
+            {
+              "name": "azimuth",
               "type": "f64",
               "optional": true
             }
