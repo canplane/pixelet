@@ -160,6 +160,7 @@ pub fn stage_render() {
             tangents,
             frames: crate::scene::cast::FRAMES,
             window: crate::scene::cast::window(o),
+            shards: crate::scene::cast::shards(),
             upload: &mut terrain_upload,
         }),
         text: text_raster,

@@ -35,6 +35,22 @@ fn on_gpu() -> &'static mut Vec<Option<Tile>> {
     ON_GPU.get(|| vec![None; FRAMES as usize])
 }
 
+/// The shards the service area serves, as the GPU reads them.
+static SHARDS: Global<Vec<[i32; 4]>> = Global::new();
+
+/// Each shard the service area serves: its tile zoom, x (as `wrap_index`
+/// names it) and y, and a spare; one serving nothing (zoom 255) where none
+/// is declared, since a binding holds at least one.
+pub fn shards() -> &'static [[i32; 4]] {
+    let s = SHARDS.get(Vec::new);
+    s.clear();
+    crate::io::source::served(&mut |zoom, [x, y]| s.push([zoom as i32, x, y, 0]));
+    if s.is_empty() {
+        s.push([255, 0, 0, 0]);
+    }
+    s
+}
+
 /// The window's words, kept so a frame takes nothing from the heap.
 static WINDOW: Global<Vec<i32>> = Global::new();
 
@@ -63,8 +79,9 @@ pub fn eye(o: &Observation) -> Option<([u32; CAST_EYE_WORDS], &'static [f32])> {
 }
 
 /// Per tile zoom from the top to the leaves, the tiles about the eye the GPU
-/// holds: the window's south-west tile and two spare, then `REACH_ACROSS`²
-/// words row by row, each its frame plus one, zero where the GPU holds none.
+/// holds: the window's south-west tile, `REACH_ACROSS` and a spare, then
+/// `REACH_ACROSS`² words row by row, each its frame plus one, zero where the
+/// GPU holds none.
 pub fn window(o: &Observation) -> &'static [i32] {
     let w = WINDOW.get(Vec::new);
     w.clear();
@@ -72,7 +89,7 @@ pub fn window(o: &Observation) -> &'static [i32] {
     let half = i64::from(REACH_ACROSS / 2);
     for zoom in GROUND.top()..=LEAF_ZOOM {
         let at = [0, 1].map(|k| (o.eye[k] / units(zoom)).floor() as i64 - half);
-        w.extend_from_slice(&[at[0] as i32, at[1] as i32, 0, 0]);
+        w.extend_from_slice(&[at[0] as i32, at[1] as i32, REACH_ACROSS as i32, 0]);
         for dy in 0..i64::from(REACH_ACROSS) {
             for dx in 0..i64::from(REACH_ACROSS) {
                 let p = tile_at(zoom, [at[0] + dx, at[1] + dy]);
@@ -87,7 +104,8 @@ pub fn window(o: &Observation) -> &'static [i32] {
 }
 
 /// Each held tile the GPU does not yet hold in its frame to `write`: its
-/// frame, ground looks, padded heights and extents.
+/// frame, ground looks, padded heights, and its index's extents and their
+/// coarse levels.
 pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::residency();
     for (p, tile) in terrain.held() {
@@ -96,7 +114,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
         if *slot == Some(p) {
             continue;
         }
-        write(frame, &tile.ground.cells, bytes(&tile.ele), bytes(tile.index.extent()));
+        write(frame, &tile.ground.cells, bytes(&tile.ele), bytes(tile.index.extent()), bytes(tile.index.coarse()));
         *slot = Some(p);
     }
 }

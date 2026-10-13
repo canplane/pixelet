@@ -47,7 +47,7 @@ use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::mesh::paint::ground::ground;
 use crate::mesh::paint::object::PAINTER;
-use pxl_spec::bake::tile::terrain::{ELE_LANE, EXTENT_LANE, GROUND_LANE};
+use pxl_spec::bake::tile::terrain::{COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use pxl_spec::space::coord::zoom::units;
@@ -151,9 +151,11 @@ pub struct Cast<'a> {
     /// The terrain frames the GPU keeps a slot for.
     pub frames: u32,
     /// Per tile zoom from the top to the leaves: the window's south-west
-    /// tile (x, y, two spare), then its tiles row by row, each its frame
-    /// plus one, zero where none is held; four a row of the buffer.
+    /// tile, its tiles across and a spare, then its tiles row by row, each
+    /// its frame plus one, zero where none is held; four a row of the buffer.
     pub window: &'a [i32],
+    /// Each shard the service area serves: its tile zoom, x and y, a spare.
+    pub shards: &'a [[i32; 4]],
     /// Hands each tile whose frame the GPU does not yet hold to the writer:
     /// its frame, ground looks, padded heights and extents, each where it
     /// lives, unwritten until the page replays the turn.
@@ -162,8 +164,9 @@ pub struct Cast<'a> {
 
 pub const CAST_EYE_WORDS: usize = 20;
 
-/// Takes a tile's frame, ground looks, padded heights and extents.
-pub type TerrainWrite<'a> = dyn FnMut(u32, &[u8], &[u8], &[u8]) + 'a;
+/// Takes a tile's frame, ground looks, padded heights, and its index's
+/// extents and their coarse levels.
+pub type TerrainWrite<'a> = dyn FnMut(u32, &[u8], &[u8], &[u8], &[u8]) + 'a;
 
 pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
@@ -756,18 +759,22 @@ struct CastBuffers {
     tangents: u32,
     /// Tangents the buffer holds.
     tangent_room: usize,
+    shards: u32,
+    /// Shards the buffer holds.
+    shard_room: usize,
     across: [u32; 2],
 }
 
 /// A terrain frame's lanes on the GPU, each a whole number of words.
 const LOOK_BYTES: u32 = GROUND_LANE as u32;
 const HEIGHT_BYTES: u32 = (ELE_LANE * 2).next_multiple_of(4) as u32;
-const EXTENT_BYTES: u32 = (EXTENT_LANE * 4) as u32;
+/// The index's extents, then their coarse levels.
+const EXTENT_BYTES: u32 = ((EXTENT_LANE + COARSE_LANE) * 4) as u32;
 
 /// The cast's group 0: the eye, the window, the tiles' looks, heights and
-/// extents, the lane it writes and the lane's tangents.
-const CAST_GROUP: [u32; 21] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE_RW, 6, COMPUTE, STORAGE,
+/// extents, the lane it writes, the lane's tangents and the served shards.
+const CAST_GROUP: [u32; 24] = [
+    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE_RW, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE,
 ];
 
 impl ScreenCellsPass {
@@ -812,7 +819,7 @@ impl ScreenCellsPass {
         entries[10..15].copy_from_slice(&buffer_entry(2, self.lane));
         entries[15..].copy_from_slice(&buffer_entry(3, self.colors));
         g.bind_group(self.group, self.built.layouts[0], &entries);
-        if let Some(c) = self.cast.as_mut().filter(|c| c.tangents != 0) {
+        if let Some(c) = self.cast.as_mut().filter(|c| c.tangents != 0 && c.shards != 0) {
             c.group = cast_group(g, c, self.lane);
         }
         // A new lane holds no cast.
@@ -854,22 +861,36 @@ impl ScreenCellsPass {
                 extents: buffer(frames * EXTENT_BYTES, storage),
                 tangents: 0,
                 tangent_room: 0,
+                shards: 0,
+                shard_room: 0,
                 across: [0; 2],
             };
             self.cast = Some(c);
         }
         let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
-        (cast.upload)(&mut |frame, looks, heights, extents| {
+        (cast.upload)(&mut |frame, looks, heights, extents, coarse| {
             g.upload_buffer(c.looks, frame * LOOK_BYTES, looks);
             g.upload_buffer(c.heights, frame * HEIGHT_BYTES, heights);
             g.upload_buffer(c.extents, frame * EXTENT_BYTES, extents);
+            g.upload_buffer(c.extents, frame * EXTENT_BYTES + extents.len() as u32, coarse);
         });
         xpute_kit::ensure!(cast.window.len() <= c.window_words, ENOTRECOVERABLE, cast.window.len());
         g.write_buffer(c.window, 0, bytes(cast.window));
         g.write_buffer(c.eye, 0, bytes(&cast.eye));
         c.across = [cast.eye[16], cast.eye[17]];
-        let regroup = cast.tangents.len() > c.tangent_room;
-        if regroup {
+        let shards_grow = cast.shards.len() > c.shard_room;
+        if shards_grow {
+            if c.shards != 0 {
+                release(c.shards);
+            }
+            c.shard_room = cast.shards.len();
+            c.shards = object();
+            g.buffer(c.shards, word_bytes(4 * c.shard_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        }
+        g.write_buffer(c.shards, 0, bytes(cast.shards));
+        let tangents_grow = cast.tangents.len() > c.tangent_room;
+        let regroup = tangents_grow || shards_grow;
+        if tangents_grow {
             if c.tangents != 0 {
                 release(c.tangents);
             }
@@ -914,8 +935,8 @@ const CAST_WORKGROUP: u32 = 8;
 
 fn cast_group(g: &Gpu, c: &CastBuffers, lane: u32) -> u32 {
     let group = object();
-    let mut entries = [0u32; 35];
-    for (k, id) in [c.eye, c.window, c.looks, c.heights, c.extents, lane, c.tangents].into_iter().enumerate() {
+    let mut entries = [0u32; 40];
+    for (k, id) in [c.eye, c.window, c.looks, c.heights, c.extents, lane, c.tangents, c.shards].into_iter().enumerate() {
         entries[5 * k..5 * k + 5].copy_from_slice(&buffer_entry(k as u32, id));
     }
     g.bind_group(group, c.built.layouts[0], &entries);
