@@ -111,8 +111,6 @@ impl<'a> Query for Walker<'_, 'a> {
     type At = At;
     type Block = Option<Block>;
     const AIR: Option<Block> = None;
-    type Walk = ();
-    const WALK: () = ();
 
     fn root(&mut self, node: [i32; 3]) -> At {
         self.world.start((0, node.map(i64::from)))
@@ -128,7 +126,7 @@ impl<'a> Query for Walker<'_, 'a> {
     /// the ray passes within where decor is drawn as held strikes what
     /// stands near it, and a node no block under fills is still gone into
     /// where decor may stand in it, down to the leaf cells.
-    fn node(&mut self, _: &mut (), _: &cast::Line<At>, at: &mut At, _: (Zoom, [i32; 3]), asked: [Zoom; 2], t0: f32) -> cast::In<Option<Block>> {
+    fn node(&mut self, at: &mut At, _: Zoom, _: [i32; 3], asked: [Zoom; 2], t0: f32) -> cast::In<Option<Block>> {
         let (zoom, c) = at.node;
         let t0 = f64::from(t0);
         if zoom == GROUND.cell() {
