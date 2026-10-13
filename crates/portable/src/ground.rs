@@ -15,9 +15,12 @@
 //! height a CPU and a GPU compute from this one source can differ in the
 //! last bit where it rounds to a block at a half.
 
-use crate::area::{walled, Area};
+use crate::area::{earth, past, tile_at, walled, Area};
+use crate::cast::{In, Kind};
+use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
 use crate::lattice::EXTENT;
+use crate::lattice::GROUND;
 pub use crate::lattice::TILE_CELLS;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
 
@@ -386,6 +389,84 @@ pub fn empty(area: &impl Area, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], 
 /// so its top, rounded as the grid rounds it, is at most `hi`'s.
 pub fn above(cell: Zoom, z: i32, hi: i32) -> bool {
     z >= blocks(cell, hi as f32)
+}
+
+/// How the ground is held where a node reads it: the CPU's residency, a
+/// GPU's window over the tiles it was handed.
+pub trait Held: Area {
+    /// The lowest and highest the index lane of the finest held tile its
+    /// cells at `cell` are read from holds over the node `(zoom, c)`
+    /// (`relief`); false where no tile over it is held.
+    fn relief(&mut self, cell: Zoom, node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
+    /// The column of the block `c` at `zoom` as the grid reads it, the
+    /// service area's edge laid on it (`Cell`); false where it cannot be read.
+    fn cell(&mut self, zoom: Zoom, c: [i32; 3]) -> (Cell, bool);
+}
+
+/// The ground's answer for a node, the one way a descent asks the ground,
+/// `cave` the caves there and `block` whether it is asked at its own zoom:
+/// past the service area, the Earth's; else the node's own bound first, the
+/// index lane of the tile its cells are read from — a block over it is air,
+/// else its cell's block (`Cell::block`), its look and its fold's four; a
+/// coarser node nothing under fills at the zooms asked (`empty`) a block of
+/// air its size, else split; where no tile over it is held, the lack.
+pub fn node(held: &mut impl Held, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far, near]: [Zoom; 2], block: bool) -> In<(u32, [u32; 4])> {
+    let air = In {
+        kind: Kind::Block,
+        block: (VOID, [VOID; 4]),
+    };
+    let split = In {
+        kind: Kind::Split,
+        block: (VOID, [VOID; 4]),
+    };
+    let lacks = In {
+        kind: Kind::Lacks,
+        block: (VOID, [VOID; 4]),
+    };
+    // Past the area: a block's own Earth, or a node's where it is all over
+    // sea level. No node a shard or finer straddles the area.
+    if zoom >= SHARD_ZOOM && past(held, tile_at(zoom, [c[0], c[1]])) {
+        let earth = earth(c[2]);
+        return if block {
+            In {
+                kind: Kind::Block,
+                block: (earth, [earth; 4]),
+            }
+        } else if earth == VOID {
+            air
+        } else {
+            split
+        };
+    }
+    // Coarser than any tile, no one index holds it.
+    if zoom < GROUND.top() {
+        return split;
+    }
+    // A block's cells are its zoom's; a coarser node's, the cells a tile at
+    // its zoom reads, no finer than asked.
+    let cell = if block { zoom } else { near.min(GROUND.grid_zoom(zoom.min(LEAF_ZOOM))) };
+    let (relief, ok) = held.relief(cell, (zoom, c));
+    if !ok {
+        return lacks;
+    }
+    if block {
+        if above(zoom, c[2], relief[1]) {
+            return air;
+        }
+        let (column, ok) = held.cell(zoom, c);
+        if !ok {
+            return lacks;
+        }
+        return In {
+            kind: Kind::Block,
+            block: column.block(zoom, c[2], cave.hollow()),
+        };
+    }
+    if empty(held, (zoom, c), relief, [far, near], cave.whole(zoom) == (true, true)) {
+        air
+    } else {
+        split
+    }
 }
 
 /// A cell's ground, as the grid reads it: its look (`unknown` for the wall),

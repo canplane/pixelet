@@ -39,20 +39,21 @@
 //! A source not holding the node answers that it lacks it, never air and
 //! never that nothing fills.
 
-use pxl_portable::area;
+use pxl_portable::area::Area;
+use pxl_portable::cast::Kind;
 use pxl_portable::cube::sentinel;
-use pxl_portable::ground;
-use pxl_spec::block::sample::{at as one_rule, Grid};
+use pxl_portable::ground::{self, Cell};
+use pxl_spec::bake::tile::terrain::GroundId;
+use pxl_spec::block::sample::Grid;
 use pxl_spec::block::Block;
 use pxl_spec::procedural::Cave;
 use pxl_spec::space::coord::world::wrap_cell;
-use pxl_spec::space::coord::zoom::{cube, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{cube, Zoom};
 use pxl_spec::space::hierarchy::tree::{child_of, Node};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 
-use super::block::earth;
 use super::world::World;
 use crate::io::source;
 use crate::layer::object::pyramid::Held;
@@ -124,33 +125,36 @@ impl World<'_> {
     }
 
     /// What is in `at`'s block, at its own zoom, `coarsest` or finer: none
-    /// where it is air or void, else what fills it or not, by the one rule
-    /// over each source's answer there, each handed down — what is placed,
-    /// the objects' record, a preview's cut its air; the ground's cell off
-    /// the tile drawing that zoom's cells, with its crossings and the ring
-    /// about it; and the caves' value.
+    /// where it is air or void, else what fills it or not, the layers read
+    /// top down, each handed down — what is placed, the objects' record, a
+    /// preview's cut its air; what the ways write; and the ground's, by its
+    /// one answer for a node (pxl-portable `ground::node`): the Earth's past
+    /// the service area, air over its tile's bound, else its cell off the
+    /// tile drawing that zoom's cells, with the ring about it, and the caves'
+    /// value.
     fn drawn(&self, at: &mut At) -> Answer<Option<Block>> {
         let (zoom, b) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        // Past the service area: the Earth's ground, solid to sea level. The
-        // area runs on shards' edges, which no block straddles.
-        if source::past_at([0, 1].map(|k| (b[k] as f64 + 0.5) * units(zoom))) {
-            return Answer::Exact(earth(b));
-        }
         // A preview applies at its entry's zoom or finer, where it is drawn
         // as held; coarser, the stored fold stands.
         let placed = match self.carve.is_some_and(|e| zoom >= e.zoom() && cube(e.zoom(), e.at()).shares(cube(zoom, b))) {
             true => Some(AIR),
             false => at.placed.value(self.hide),
         };
-        let line = self.line(at, zoom);
-        self.ground(&line, (zoom, [b[0], b[1]]), zoom, 1).and_then(|g| {
-            let grid = CELL.get(Grid::default);
-            match grid.read(&g.around(), zoom, g.tile.zoom, g.first_at(zoom), [b[0] - 1, b[1] - 1], 3) {
-                Ok(()) => Answer::Exact(one_rule(grid, b, placed, at.cave.hollow())),
-                // The heap refused a 3 × 3 grid's room.
-                Err(_) => Answer::Nothing(g.tile),
-            }
+        if let Some(state) = placed {
+            return Answer::Exact(Some(Block::Placed(state)));
+        }
+        let cave = at.cave;
+        let mut reading = Reading::new(self, at);
+        let ground = ground::node(&mut reading, cave, (zoom, b.map(|v| v as i32)), [zoom, zoom], true);
+        // The ways are read with the cell, and stand within its tile's bound.
+        let grid = reading.read.then(|| CELL.get(Grid::default));
+        reading.answer(ground.kind != Kind::Lacks, || match grid {
+            Some(grid) => grid.ways_over(b, ground.block),
+            None => (ground.block.0 != u32::from(sentinel::void)).then(|| {
+                let g = ground.block.0 as GroundId;
+                Block::Ground(g, ground.block.1.map(|v| v as GroundId))
+            }),
         })
     }
 
@@ -179,41 +183,126 @@ impl World<'_> {
 
     /// What is in `at`'s node, asked from `far` to `near`, the zooms a reader
     /// asks within it: at `near` (or finer), or where the world holds nothing
-    /// finer than the node (`whole`), the block (`drawn`); coarser, whether
-    /// anything under it fills at those zooms.
+    /// finer than the node (`whole`), the block (`drawn`); coarser, what is
+    /// placed under it splits it, else the ground's one answer for a node
+    /// (pxl-portable `ground::node`), whether anything under it fills at
+    /// those zooms.
     pub(super) fn node(&self, at: &mut At, [far, near]: [Zoom; 2]) -> Answer<In> {
         let (zoom, c) = at.node;
         if zoom >= near || self.whole(at) {
             return self.drawn(at).map(In::Block);
         }
-        let whole = cube(zoom, c);
         if at.placed != Held::Nothing {
             return Answer::Exact(In::Split);
         }
-        // Past the service area: the Earth's ground, solid to sea level. The
-        // area runs on shards' edges, which no node a shard or finer straddles.
-        if zoom >= SHARD_ZOOM && source::past_at([0, 1].map(|k| (whole.min[k] + whole.max[k]) / 2.0)) {
-            return Answer::Exact(if area::earth(c[2] as i32) == u32::from(sentinel::void) { In::Empty } else { In::Split });
-        }
-        // Coarser than any tile, no one index holds it.
-        if zoom < GROUND.top() {
-            return Answer::Exact(In::Split);
-        }
-        // The ground's line at the cells a tile at the node's zoom reads, no
-        // finer than asked. Not held, no block under it is: the lack, never
-        // that nothing fills.
-        let line = self.line(at, near.min(GROUND.grid_zoom(zoom.min(LEAF_ZOOM))));
-        self.terrain.relief(&line, (zoom, [c[0], c[1]])).map(|relief| {
-            let Some(relief) = relief else { return In::Empty };
-            // At each zoom asked, every cell under it over the ground, or
-            // ground a cave may take with a cave through all of it, by the
-            // ground's one rule.
-            let hollow = at.cave.whole(zoom) == (true, true);
-            if ground::empty(&source::Declared, (zoom, c.map(|v| v as i32)), relief, [far, near], hollow) {
-                In::Empty
-            } else {
-                In::Split
-            }
+        let cave = at.cave;
+        let mut reading = Reading::new(self, at);
+        let ground = ground::node(&mut reading, cave, (zoom, c.map(|v| v as i32)), [far, near], false);
+        reading.answer(ground.kind != Kind::Lacks, || match ground.kind {
+            Kind::Split => In::Split,
+            _ => In::Empty,
         })
+    }
+}
+
+/// The ground as a node's reading holds it (pxl-portable `ground::Held`):
+/// the world's residency down the node's line, the first tile it found
+/// lacked or only a coarser one standing in for, and whether the cell's grid
+/// was read, so the ways over it can be.
+struct Reading<'r, 'a> {
+    world: &'r World<'a>,
+    at: &'r mut At,
+    lacked: Option<Tile>,
+    coarser: Option<Tile>,
+    read: bool,
+}
+
+impl<'r, 'a> Reading<'r, 'a> {
+    fn new(world: &'r World<'a>, at: &'r mut At) -> Reading<'r, 'a> {
+        Reading {
+            world,
+            at,
+            lacked: None,
+            coarser: None,
+            read: false,
+        }
+    }
+
+    /// `of` as the reading went: where `held`, exact, or coarser for the
+    /// first tile only a coarser one stood in for; else the lack.
+    fn answer<T>(&self, held: bool, of: impl FnOnce() -> T) -> Answer<T> {
+        match (held, self.lacked, self.coarser) {
+            (false, Some(l), _) => Answer::Nothing(l),
+            (_, _, Some(l)) => Answer::Coarser(of(), l),
+            _ => Answer::Exact(of()),
+        }
+    }
+
+    /// `answer`'s value, noting its lack.
+    fn take<T>(&mut self, a: Answer<T>) -> Option<T> {
+        match a {
+            Answer::Exact(v) => Some(v),
+            Answer::Coarser(v, l) => {
+                self.coarser.get_or_insert(l);
+                Some(v)
+            }
+            Answer::Nothing(l) => {
+                self.lacked = Some(l);
+                None
+            }
+        }
+    }
+}
+
+impl Area for Reading<'_, '_> {
+    fn ends(&self) -> bool {
+        source::Declared.ends()
+    }
+    fn shards(&self) -> u32 {
+        source::Declared.shards()
+    }
+    fn shard(&self, i: u32) -> (Zoom, [i32; 2]) {
+        source::Declared.shard(i)
+    }
+}
+
+impl ground::Held for Reading<'_, '_> {
+    /// The index lane over the node, off its line at `cell`; a node with no
+    /// ground under it, lowest over highest.
+    fn relief(&mut self, cell: Zoom, _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
+        let (zoom, c) = self.at.node;
+        let line = self.world.line(self.at, cell);
+        let none = [i32::from(i16::MAX), i32::from(i16::MIN)];
+        match self.take(self.world.terrain.relief(&line, (zoom, [c[0], c[1]]))) {
+            Some(r) => (r.unwrap_or(none), true),
+            None => (none, false),
+        }
+    }
+
+    /// The block's cell and the ring about it read into the grid (`CELL`),
+    /// as the ways over it are read with it.
+    fn cell(&mut self, zoom: Zoom, _: [i32; 3]) -> (Cell, bool) {
+        let (_, b) = self.at.node;
+        let none = Cell {
+            look: u32::from(sentinel::void),
+            top: 0,
+            fold: [u32::from(sentinel::void); 4],
+        };
+        let line = self.world.line(self.at, zoom);
+        let Some(g) = self.take(self.world.ground(&line, (zoom, [b[0], b[1]]), zoom, 1)) else {
+            return (none, false);
+        };
+        let grid = CELL.get(Grid::default);
+        match grid.read(&g.around(), zoom, g.tile.zoom, g.first_at(zoom), [b[0] - 1, b[1] - 1], 3) {
+            Ok(()) => {
+                self.read = true;
+                (grid.cell_at([b[0], b[1]]).unwrap_or(none), true)
+            }
+            // The heap refused a 3 × 3 grid's room.
+            Err(_) => {
+                self.lacked = Some(g.tile);
+                (none, false)
+            }
+        }
     }
 }

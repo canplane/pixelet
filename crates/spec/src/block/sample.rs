@@ -456,26 +456,23 @@ fn put(ways: &mut FnvHashMap<[i64; 3], Option<GroundId>>, b: [i64; 3], block: Op
     Ok(())
 }
 
-/// What is in a block, the one answer, the layers read top down: what is
-/// placed there, air included; else what the ways write; else the ground's
-/// grid by depth, with a cave's air where a cave may take it (`Grid::carves`)
-/// and the caves' hash says so at the block's zoom (`procedural.rs`
-/// `Cave::hollow`), asked of this block alone: where a cave runs on or opens is
-/// never worked out.
-/// `grid` holds the block's cell and the ring about it (`Grid::read`),
-/// `placed` is what the objects fold to at the block's zoom and `hollow` the
-/// caves' value at it. None is void or air.
-pub fn at(grid: &Grid, b: [i64; 3], placed: Option<u32>, hollow: bool) -> Option<Block> {
-    if let Some(state) = placed {
-        return Some(Block::Placed(state));
+impl Grid {
+    /// The column `c` as the ground's one rule takes it (pxl-portable
+    /// `Cell`, `ground::node`); none outside the grid.
+    pub fn cell_at(&self, c: [i64; 2]) -> Option<Cell> {
+        self.index(c).map(|i| self.cell(i))
     }
-    if let Some(way) = grid.way(b) {
-        return way.map(|g| Block::Ground(g, [g; 4]));
+
+    /// Block `b` with what the ways write over the ground's block `ground`
+    /// there (pxl-portable `Cell::block`), the layers read top down: what the
+    /// ways write, air included; else the ground's. None is void or air.
+    pub fn ways_over(&self, b: [i64; 3], (g, fold): (u32, [u32; 4])) -> Option<Block> {
+        if let Some(way) = self.way(b) {
+            return way.map(|g| Block::Ground(g, [g; 4]));
+        }
+        let g = byte(g);
+        (g != sentinel::void).then_some(Block::Ground(g, fold.map(byte)))
     }
-    let i = grid.index([b[0], b[1]])?;
-    let (g, fold) = grid.cell(i).block(grid.cell, b[2] as i32, hollow);
-    let g = byte(g);
-    (g != sentinel::void).then_some(Block::Ground(g, fold.map(byte)))
 }
 
 /// The six blocks across a block's faces.

@@ -28,10 +28,10 @@ use crate::space::coord::aabb::Aabb;
 use crate::space::coord::zoom::{units, Zoom, UNIT_ZOOM};
 
 /// What is in a block: the ground's look, a way's or a pier's, or what is
-/// placed, air included (`sample::at` answers which). Where there is none,
-/// it is void. The ground's carries the looks its block folds: coarser than
-/// the leaves a cell folds the cells under it, its color theirs; at the
-/// leaves and finer, its own four times.
+/// placed, air included (pxl-kernel query/node.rs `drawn` answers which).
+/// Where there is none, it is void. The ground's carries the looks its block
+/// folds: coarser than the leaves a cell folds the cells under it, its color
+/// theirs; at the leaves and finer, its own four times.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Block {
     Ground(GroundId, [GroundId; 4]),

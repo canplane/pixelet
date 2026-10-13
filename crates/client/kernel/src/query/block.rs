@@ -6,7 +6,6 @@
 
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::sample::{beside_index, shades, Around, Blocks, Grid, Refused};
-use pxl_spec::block::Block;
 use pxl_spec::space::camera::grid::CHUNK_STEPS;
 use pxl_spec::space::coord::world::wrap_index;
 use pxl_spec::space::coord::zoom::{units, Zoom};
@@ -166,12 +165,6 @@ impl<'a> World<'a> {
             None => Answer::Exact(Ok(())),
         }
     }
-}
-
-/// The Earth's ground past the service area, solid to sea level.
-pub(super) fn earth(b: [i64; 3]) -> Option<Block> {
-    let g = pxl_portable::area::earth(b[2] as i32) as GroundId;
-    (g != pxl_spec::block::cube::sentinel::void).then_some(Block::Ground(g, [g; 4]))
 }
 
 /// The ground's grid a reader reads its cells into (`World::window_ground`),

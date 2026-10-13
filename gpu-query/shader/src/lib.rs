@@ -9,12 +9,12 @@
 pub mod harness;
 
 use pxl_portable::area::{self, Area};
-use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
+use pxl_portable::cast::{self, Detail, Ends, In, Met, Query, Until};
 use pxl_portable::caves::Cave;
 use pxl_portable::cube::{sentinel, Ground};
 use pxl_portable::ground::{self, Tile, ELE_PADDED_SPAN, EXTENT_LANE};
 use pxl_portable::lattice::{EXTENT, GROUND, TILE_CELLS};
-use pxl_portable::{wrap_index, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
+use pxl_portable::{wrap_index, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::spirv;
 
@@ -185,12 +185,25 @@ impl World<'_> {
     fn gone(&self, read: u32, zoom: u32, b: [i32; 2]) -> bool {
         area::past(self, area::tile_at(zoom, b)) || self.ground_at(read, zoom, b, true).0 == UNKNOWN
     }
+}
 
-    /// What is in the block `c` at `zoom`, its caves `cave`, at its own
-    /// zoom (pxl-kernel query/node.rs `drawn`), inside the area and its tile
-    /// held: the ground's cell off the tile drawing that zoom's cells, the
-    /// area's edge laid on it, and the caves' value.
-    fn block(&self, cave: Cave, zoom: u32, c: [i32; 3]) -> In<u32> {
+/// The ground as the GPU holds it, for pxl-portable's one answer for a node.
+impl ground::Held for World<'_> {
+    /// The index lane over the node, off the finest held tile over it at the
+    /// tile zoom its cells at `cell` are read from.
+    fn relief(&mut self, cell: u32, (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
+        let read = GROUND.read_zoom(cell);
+        let s = zoom - read;
+        let (from, w) = self.drawn(read, [c[0] >> s, c[1] >> s]);
+        if w == 0 {
+            return ([0, 0], false);
+        }
+        (ground::relief(|i| self.index(w - 1, i), from, (zoom, [c[0], c[1]])), true)
+    }
+
+    /// The block's column off the tile drawing that zoom's cells, the area's
+    /// edge laid on it (pxl-kernel query/node.rs `drawn`).
+    fn cell(&mut self, zoom: u32, c: [i32; 3]) -> (ground::Cell, bool) {
         let b = [c[0], c[1]];
         let read = GROUND.read_zoom(zoom);
         let (look, h, fold) = self.ground_at(read, zoom, b, false);
@@ -210,10 +223,7 @@ impl World<'_> {
             top: ground::blocks(zoom, h),
             fold,
         };
-        In {
-            kind: Kind::Block,
-            block: cell.block(zoom, c[2], cave.hollow()).0,
-        }
+        (cell, true)
     }
 }
 
@@ -231,52 +241,13 @@ impl Query for World<'_> {
         cave.child(zoom, node)
     }
 
-    /// What is in the node `c` at `zoom` (pxl-kernel query/node.rs
-    /// `World::node`): past the area, the Earth's; else first its own bound,
-    /// the lowest and highest its held tile's index lane holds under it — at
-    /// `near` or finer, or finer than the ground's cells, where the world
-    /// holds nothing finer, a block over it is air and one not is its cell
-    /// (`block`); coarser, the ground's one rule over it (`ground::empty`).
-    fn node(&mut self, cave: &mut Cave, zoom: u32, c: [i32; 3], [far, near]: [u32; 2], _t0: f32) -> In<u32> {
-        // At `near` or finer, or finer than the ground's cells, where the
-        // world holds nothing finer: the block.
-        let block = zoom >= near || zoom >= LEAF_CELL;
-        let split = In { kind: Kind::Split, block: VOID };
-        let empty = In { kind: Kind::Block, block: VOID };
-        // Past the area, the Earth's: a block's own, or a node's where it is
-        // all over sea level. No node a shard or finer straddles the area.
-        if zoom >= SHARD_ZOOM && area::past(self, area::tile_at(zoom, [c[0], c[1]])) {
-            return if block {
-                In {
-                    kind: Kind::Block,
-                    block: area::earth(c[2]),
-                }
-            } else if area::earth(c[2]) == VOID {
-                empty
-            } else {
-                split
-            };
-        }
-        if zoom < GROUND.top() {
-            return split;
-        }
-        // The held tile its cells are read from, and its bound over the node.
-        let read = GROUND.read_zoom(if block { zoom } else { near.min(GROUND.grid_zoom(zoom.min(LEAF_ZOOM))) });
-        let s = zoom - read;
-        let (from, w) = self.drawn(read, [c[0] >> s, c[1] >> s]);
-        if w == 0 {
-            return In { kind: Kind::Lacks, block: VOID };
-        }
-        let relief = ground::relief(|i| self.index(w - 1, i), from, (zoom, [c[0], c[1]]));
-        if block {
-            // Over the bound, air with no cell read; else its cell.
-            return if ground::above(zoom, c[2], relief[1]) { empty } else { self.block(*cave, zoom, c) };
-        }
-        if ground::empty(self, (zoom, c), relief, [far, near], cave.whole(zoom) == (true, true)) {
-            empty
-        } else {
-            split
-        }
+    /// What is in the node `c` at `zoom`: the ground's one answer for a
+    /// node (pxl-portable `ground::node`), asked at its own zoom at `near` or
+    /// finer, or finer than the ground's cells, where the world holds nothing
+    /// finer.
+    fn node(&mut self, cave: &mut Cave, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<u32> {
+        let i = ground::node(self, *cave, (zoom, c), asked, zoom >= asked[1] || zoom >= LEAF_CELL);
+        In { kind: i.kind, block: i.block.0 }
     }
 
     fn fills(&self, block: &u32) -> bool {
