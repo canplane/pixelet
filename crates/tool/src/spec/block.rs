@@ -311,7 +311,7 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     ]);
 
     // Rust
-    let mut rs = vec!["// pxl-spec/block/cube.spec.rs".to_string()];
+    let mut rs = vec!["// pxl-portable/cube.spec.rs".to_string()];
     rs.extend(head);
     rs.push(String::new());
     rs.extend(casing_note());
@@ -390,6 +390,13 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "            }".into(),
         "        }".into(),
         String::new(),
+        "        /// Whether a look read into a word, as a GPU has it with no byte, is one `of`".into(),
+        "        /// names.".into(),
+        format!(
+            "        pub const fn grounds(value: u32) -> bool {{ matches!(value, {}) }}",
+            runs(named(&ground).map(|e| e.value)).join(" | ")
+        ),
+        String::new(),
         "        /// A way: decor faces along it and no pier stands on it.".into(),
         format!(
             "        pub const fn transport(self) -> bool {{ matches!(self, {}) }}",
@@ -423,8 +430,20 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
     rs.extend(["                _ => None,".to_string(), "            }".into(), "        }".into(), "    }".into(), "}".into()]);
     Ok(vec![
         Output::new("apps/web/src/catalog/block/cube.spec.ts", file(&ts)),
-        Output::new("crates/spec/src/block/cube.spec.rs", file(&unwrapped(rs, "pub mod cubes {"))),
+        Output::new("crates/portable/src/cube.spec.rs", file(&unwrapped(rs, "pub mod cubes {"))),
     ])
+}
+
+/// Ascending values as patterns, each run of consecutive ones a range.
+fn runs(values: impl Iterator<Item = u32>) -> Vec<String> {
+    let mut out: Vec<(u32, u32)> = Vec::new();
+    for v in values {
+        match out.last_mut() {
+            Some((_, hi)) if *hi + 1 == v => *hi = v,
+            _ => out.push((v, v)),
+        }
+    }
+    out.into_iter().map(|(lo, hi)| if lo == hi { lo.to_string() } else { format!("{lo}..={hi}") }).collect()
 }
 
 pub fn decor_outputs() -> Result<Vec<Output>, String> {

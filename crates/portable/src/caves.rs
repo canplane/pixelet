@@ -1,14 +1,11 @@
-// pxl-spec/procedural/portable.rs
+// pxl-portable/caves.rs
 
-//! gpu-portable: one source for the CPU and, through rust-gpu, WGSL.
-//!
-//! A node's seed and the caves, in `core` alone: u32 hashes over i32 cells,
-//! u32 zooms, no `Option<bool>`, and index loops where rust-gpu lowers no
-//! array iterator. It names nothing but what its parent hands it (`super`:
-//! `Zoom`, the leaves' cell zoom, `derive_seed_u32`), so a shader crate can
-//! take the file as it is.
+//! gpu-portable: a node's seed and the caves, u32 hashes over i32 cells, no
+//! `Option<bool>`, and index loops where rust-gpu lowers no array iterator.
 
-use super::{derive_seed_u32, Zoom, LEAF_CELL};
+use xpute_kit::math::rng::derive_seed_u32;
+
+use crate::{Zoom, LEAF_CELL};
 
 /// The seed every procedural draw starts from (`node_seed`). Changing it
 /// reshuffles everything scattered.
