@@ -379,6 +379,15 @@ pub fn empty(area: &impl Area, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], 
     hollow && under && rock <= bottom + half(near) && !walled(area, near, (zoom, [c[0], c[1]]))
 }
 
+/// Whether the block `z` of a cell at `cell` lies over the ground wherever
+/// in the column the faces under it reach at most `hi` leaf cells: a cell's
+/// height is `bicubic`'s, held to the samples it reads, or a fold's mean of
+/// them, and `hi` bounds those samples (pxl-spec bake/surface.rs `bound`),
+/// so its top, rounded as the grid rounds it, is at most `hi`'s.
+pub fn above(cell: Zoom, z: i32, hi: i32) -> bool {
+    z >= blocks(cell, hi as f32)
+}
+
 /// A cell's ground, as the grid reads it: its look (`unknown` for the wall),
 /// its top in blocks of its zoom, its fold's four looks, and whether the
 /// service area's wall stands in it.

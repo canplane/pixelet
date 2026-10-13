@@ -187,22 +187,12 @@ impl World<'_> {
     }
 
     /// What is in the block `c` at `zoom`, its caves `cave`, at its own
-    /// zoom (pxl-kernel query/node.rs `drawn`): past the area, the Earth's;
-    /// else the ground's cell off the tile drawing that zoom's cells, the
+    /// zoom (pxl-kernel query/node.rs `drawn`), inside the area and its tile
+    /// held: the ground's cell off the tile drawing that zoom's cells, the
     /// area's edge laid on it, and the caves' value.
     fn block(&self, cave: Cave, zoom: u32, c: [i32; 3]) -> In<u32> {
         let b = [c[0], c[1]];
-        if area::past(self, area::tile_at(zoom, b)) {
-            return In {
-                kind: Kind::Block,
-                block: area::earth(c[2]),
-            };
-        }
         let read = GROUND.read_zoom(zoom);
-        // No tile held over its own: the lack.
-        if self.drawn(read, [b[0] >> (zoom - read), b[1] >> (zoom - read)]).1 == 0 {
-            return In { kind: Kind::Lacks, block: VOID };
-        }
         let (look, h, fold) = self.ground_at(read, zoom, b, false);
         let gone = look == UNKNOWN;
         let beside = !gone && zoom >= LEAF_CELL && Ground::grounds(look) && {
@@ -241,33 +231,48 @@ impl Query for World<'_> {
         cave.child(zoom, node)
     }
 
-    /// What is in the node `c` at `zoom` (pxl-kernel query/node.rs `World::node`): at
+    /// What is in the node `c` at `zoom` (pxl-kernel query/node.rs
+    /// `World::node`): past the area, the Earth's; else first its own bound,
+    /// the lowest and highest its held tile's index lane holds under it — at
     /// `near` or finer, or finer than the ground's cells, where the world
-    /// holds nothing finer, the block; coarser, past the area the Earth's,
-    /// else the ground's one rule over the lowest and highest its held tile's
-    /// index lane holds under it (`ground::empty`).
+    /// holds nothing finer, a block over it is air and one not is its cell
+    /// (`block`); coarser, the ground's one rule over it (`ground::empty`).
     fn node(&mut self, cave: &mut Cave, zoom: u32, c: [i32; 3], [far, near]: [u32; 2], _t0: f32) -> In<u32> {
-        if zoom >= near || zoom >= LEAF_CELL {
-            return self.block(*cave, zoom, c);
-        }
+        // At `near` or finer, or finer than the ground's cells, where the
+        // world holds nothing finer: the block.
+        let block = zoom >= near || zoom >= LEAF_CELL;
         let split = In { kind: Kind::Split, block: VOID };
         let empty = In { kind: Kind::Block, block: VOID };
+        // Past the area, the Earth's: a block's own, or a node's where it is
+        // all over sea level. No node a shard or finer straddles the area.
         if zoom >= SHARD_ZOOM && area::past(self, area::tile_at(zoom, [c[0], c[1]])) {
-            return if area::earth(c[2]) == VOID { empty } else { split };
+            return if block {
+                In {
+                    kind: Kind::Block,
+                    block: area::earth(c[2]),
+                }
+            } else if area::earth(c[2]) == VOID {
+                empty
+            } else {
+                split
+            };
         }
         if zoom < GROUND.top() {
             return split;
         }
-        let cell = near.min(GROUND.grid_zoom(zoom.min(LEAF_ZOOM)));
-        let read = GROUND.read_zoom(cell);
+        // The held tile its cells are read from, and its bound over the node.
+        let read = GROUND.read_zoom(if block { zoom } else { near.min(GROUND.grid_zoom(zoom.min(LEAF_ZOOM))) });
         let s = zoom - read;
         let (from, w) = self.drawn(read, [c[0] >> s, c[1] >> s]);
         if w == 0 {
             return In { kind: Kind::Lacks, block: VOID };
         }
         let relief = ground::relief(|i| self.index(w - 1, i), from, (zoom, [c[0], c[1]]));
-        let hollow = cave.whole(zoom) == (true, true);
-        if ground::empty(self, (zoom, c), relief, [far, near], hollow) {
+        if block {
+            // Over the bound, air with no cell read; else its cell.
+            return if ground::above(zoom, c[2], relief[1]) { empty } else { self.block(*cave, zoom, c) };
+        }
+        if ground::empty(self, (zoom, c), relief, [far, near], cave.whole(zoom) == (true, true)) {
             empty
         } else {
             split
