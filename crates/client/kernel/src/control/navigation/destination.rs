@@ -40,6 +40,11 @@ pub fn cancel() {
     *destination() = None;
 }
 
+/// The place asked for and not yet put.
+pub fn pending() -> Option<Q3> {
+    destination().map(|(at, _)| at)
+}
+
 /// Whose ground the terrain is asked for.
 pub fn tile() -> Option<Tile> {
     destination().map(|(at, _)| GROUND.cell_of(LEAF_ZOOM, &at).tile())

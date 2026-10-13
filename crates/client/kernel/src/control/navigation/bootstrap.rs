@@ -7,7 +7,7 @@ use pxl_spec::space::coord::q3::{FRAC_W, Q3};
 
 use crate::control::camera::controller::focus;
 use crate::control::camera::controller::Motion;
-use crate::control::navigation::destination::go_to_ground;
+use crate::control::navigation::destination::{go_to_ground, pending};
 use crate::control::navigation::off_center::off_center;
 use crate::control::navigation::support::unknown_z;
 use crate::control::sensor::reading::{device_location_store, DevicePoseStatus};
@@ -48,8 +48,9 @@ pub fn map_bootstrap_step() {
         None if center.is_none() && location_status == DevicePoseStatus::Error => fallback,
         None => return,
     };
-    // A real fix landing after the fallback takes over.
-    if center.is_none_or(|c| is_at(&c, &fallback)) {
+    // A real fix landing after the fallback takes over; a place asked for
+    // and not yet put, a search's or a pinned eye's, is not replaced.
+    if center.is_none_or(|c| is_at(&c, &fallback)) && pending().is_none_or(|p| is_at(&p, &fallback)) {
         go_to_ground(seed, Motion::Snap);
     }
 }
