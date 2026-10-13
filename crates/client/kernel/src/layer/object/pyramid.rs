@@ -32,6 +32,25 @@ pub enum Held {
     Folded(u16, f64),
 }
 
+impl Held {
+    /// What a node holding this folds to, as a cell of its zoom is drawn: the
+    /// leaf's value, or its fold where half of it or more is filled; none
+    /// where nothing that is a voxel is. `hide`, a preview's left-out leaf,
+    /// is left out where it is the leaf itself, at its zoom or finer;
+    /// coarser, the fold stands as stored.
+    pub fn value(self, hide: Option<EntryAt>) -> Option<u32> {
+        let v = u32::from(match self {
+            Held::Nothing => return None,
+            Held::Leaf { leaf, zoom, at } => match hide.is_some_and(|h| h.zoom() == zoom && h.at() == at) {
+                true => return None,
+                false => leaf.id,
+            },
+            Held::Folded(kind, fill) => shown((kind, fill)),
+        });
+        object_value_is_voxel(v).then_some(v)
+    }
+}
+
 /// A node's kept record, by its zoom and index: a leaf placed there, or
 /// the fold of the eight under it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -76,44 +95,6 @@ impl Pyramid {
             },
             covered => covered,
         }
-    }
-
-    /// What the node at `zoom`, `at` holding `held` folds to, as a cell of
-    /// that zoom is drawn: the leaf's value, or its fold where half of it or
-    /// more is filled; none where nothing that is a voxel is. `hide`, a
-    /// preview's left-out leaf, is folded out along its own line under the
-    /// node, the rest read as kept.
-    pub fn value(&self, held: Held, zoom: Zoom, at: [i64; 3], hide: Option<EntryAt>) -> Option<u32> {
-        let v = u32::from(match held {
-            Held::Nothing => return None,
-            Held::Leaf { leaf, zoom: z, at: a } => match hide.is_some_and(|h| h.zoom() == z && h.at() == a) {
-                true => return None,
-                false => leaf.id,
-            },
-            Held::Folded(kind, fill) => match hide.filter(|h| h.zoom() > zoom && h.at().map(|v| v >> (h.zoom() - zoom)) == at) {
-                Some(h) => shown(self.fold_hiding(zoom, at, h)),
-                None => shown((kind, fill)),
-            },
-        });
-        object_value_is_voxel(v).then_some(v)
-    }
-
-    /// The fold of the node at `zoom`, `at` with the leaf `hide` under it
-    /// left out: the line from it to the node folded again, every other
-    /// child read as kept.
-    fn fold_hiding(&self, zoom: Zoom, at: [i64; 3], hide: EntryAt) -> (u16, f64) {
-        let mut kids = [(EMPTY.id, 0.0); 8];
-        for (k, kid) in kids.iter_mut().enumerate() {
-            let c = child_cube(zoom, at, k);
-            let on_line = hide.at().map(|v| v >> (hide.zoom() - (zoom + 1))) == c;
-            *kid = match (self.records.get(&(zoom + 1, c)), on_line) {
-                (Some(Record::Folded(..)), true) => self.fold_hiding(zoom + 1, c, hide),
-                (Some(Record::Leaf(_)), true) if hide.zoom() == zoom + 1 => (EMPTY.id, 0.0),
-                (Some(r), _) => cell(*r),
-                (None, _) => (EMPTY.id, 0.0),
-            };
-        }
-        fold_cell(kids, zoom)
     }
 
     /// The records under the node at `zoom`, `at` of `tree`, as it stands

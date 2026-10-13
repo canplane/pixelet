@@ -134,9 +134,11 @@ impl World<'_> {
         if source::past_at([0, 1].map(|k| (b[k] as f64 + 0.5) * units(zoom))) {
             return Answer::Exact(earth(zoom, b));
         }
-        let placed = match self.carve.is_some_and(|e| cube(e.zoom(), e.at()).shares(cube(zoom, b))) {
+        // A preview applies at its entry's zoom or finer, where it is drawn
+        // as held; coarser, the stored fold stands.
+        let placed = match self.carve.is_some_and(|e| zoom >= e.zoom() && cube(e.zoom(), e.at()).shares(cube(zoom, b))) {
             true => Some(AIR),
-            false => self.objects.value(at.placed, zoom, wrap_cell(zoom, b), self.hide),
+            false => at.placed.value(self.hide),
         };
         let line = self.line(at, zoom);
         self.ground(&line, (zoom, [b[0], b[1]]), zoom, 1).and_then(|g| {

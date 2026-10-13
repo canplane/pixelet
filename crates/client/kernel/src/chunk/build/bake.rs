@@ -12,7 +12,6 @@ use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::Block;
 
 use crate::chunk::build::BAKE_RANGE;
-use crate::chunk::source::draws;
 use crate::layer::Base as _;
 use crate::query::World;
 use crate::setting::store::settings_store;
@@ -49,11 +48,8 @@ impl Builder {
             if self.bake_job.is_some() {
                 return Progress::Blocked;
             }
-            // Its blocks as the world answers them, as a preview shows them.
-            let edits = crate::chunk::source::previewed();
-            let hide = edits.hide.filter(|&e| draws_as_held(c.at, e.zoom()));
-            let carve = edits.carve.filter(|&e| draws(c.at, e) && draws_as_held(c.at, e.zoom()));
-            let world = World::new(TerrainTile::residency(), build.store).previewing(hide, carve);
+            // Its blocks as the world as drawn answers them, as the cast asked.
+            let world = World::new(TerrainTile::residency(), build.store).previewed();
             let (cell, (zoom, at)) = (c.at.cell_zoom(), c.at.node());
             // What the rays stopped on in it, which alone is drawn.
             let seen = crate::chunk::domain::current().into_iter().flat_map(|d| d.seen_in(c.at));

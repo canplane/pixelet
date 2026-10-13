@@ -9,6 +9,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 
 use super::block::Ground;
+use crate::layer::object::preview;
 use crate::layer::object::store::EntryAt;
 
 use super::decor::Grown;
@@ -36,6 +37,8 @@ pub struct World<'a> {
 }
 
 impl World<'static> {
+    /// The world as stored: what every mechanic asks, the pick, a walk, the
+    /// camera's clearance, an edit's reads and decor's footing.
     pub fn now() -> World<'static> {
         let objects: &'static Store = &kernel().objects;
         World::new(TerrainTile::residency(), objects)
@@ -61,7 +64,16 @@ impl<'a> World<'a> {
         }
     }
 
-    /// As a preview shows it: `hide` left out, `carve` cut to air.
+    /// As the pointer's preview draws it (`preview::current`): what the eye's
+    /// cast and the chunks' bake ask, and nothing else.
+    pub fn previewed(self) -> World<'a> {
+        let edits = preview::current();
+        self.previewing(edits.hide, edits.carve)
+    }
+
+    /// As a preview shows it: `hide` left out, `carve` cut to air, at the
+    /// entry's zoom or finer, where it is drawn as held; coarser, the stored
+    /// fold stands.
     pub fn previewing(self, hide: Option<EntryAt>, carve: Option<EntryAt>) -> World<'a> {
         World { hide, carve, ..self }
     }

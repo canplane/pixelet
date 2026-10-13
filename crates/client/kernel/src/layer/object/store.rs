@@ -316,13 +316,6 @@ impl Store {
         self.find(zoom, at).is_some_and(|f| f.slot != Slot::Leaf(EMPTY))
     }
 
-    /// What the node at `zoom`, `at` holding `held` (`Query::cursor`,
-    /// `Query::child`) folds to as a cell of that zoom is drawn, X in the
-    /// lane's copy, `hide` left out: the pyramid's, read as kept.
-    pub fn value(&self, held: Held, zoom: Zoom, at: [i64; 3], hide: Option<EntryAt>) -> Option<u32> {
-        self.pyramid.value(held, zoom, at, hide)
-    }
-
     /// The value placed at exactly this node, if one is.
     pub(crate) fn placed(&self, zoom: Zoom, at: [i64; 3]) -> Option<Entry> {
         let f = self.find(zoom, at)?;

@@ -220,7 +220,11 @@ pub fn world_turn() -> f64 {
     effect!(worst, decor, decor_assets_wanted());
     effect!(worst, objects, crate::layer::object::repository::step());
     effect!(worst, edit, {
-        if crate::chunk::source::preview(crate::control::interaction::edit::pending_step()) {
+        let edits = crate::control::interaction::edit::pending_step();
+        // A new preview moves the world as drawn where it was and where it is.
+        if let Some(was) = crate::layer::object::preview::set(edits) {
+            crate::chunk::source::chunk_sources_changed();
+            crate::view::sight::moved(was.cubes().chain(edits.cubes()));
             request_world_tick();
         }
     });

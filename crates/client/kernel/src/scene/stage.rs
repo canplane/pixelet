@@ -232,7 +232,7 @@ pub fn visible_step(ctx: &mut TickContext) {
     // Decor lists after the chunks have listed theirs.
     {
         let k = kernel();
-        let edits = crate::chunk::source::previewed();
+        let edits = crate::layer::object::preview::current();
         let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
         crate::chunk::decor::cell::step(&pxl_spec::block::decor::DECORS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
         crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);

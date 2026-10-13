@@ -412,7 +412,7 @@ impl Scheduler {
     fn add(&mut self, k: Chunk) {
         // A chunk is added only while a mount is free (`materialize`), so running out is a bug.
         let id = self.mounts.pop().or_bug(Errno::ENOSPC);
-        let edits = crate::chunk::source::previewed();
+        let edits = crate::layer::object::preview::current();
         let sources = Sources::of(k, edits);
         self.builder.add(id, k);
         self.builder.source(id);
@@ -497,7 +497,7 @@ impl Scheduler {
     /// one the goal left shows what it showed until its swap, since built to
     /// the cast that left it, it would show nothing in place.
     pub fn sources_step(&mut self) {
-        let edits = crate::chunk::source::previewed();
+        let edits = crate::layer::object::preview::current();
         let pieces = domain::current().map_or(&[][..], |g| g.pieces());
         for i in 0..self.slots.len() {
             let k = self.slots[i].chunk;

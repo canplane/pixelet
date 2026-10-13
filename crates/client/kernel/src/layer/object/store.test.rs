@@ -103,7 +103,7 @@ fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (FnvHashMap<[i64; 3], u
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
                 let held = store.cursor((target, [x, y, z]), target);
-                if let Some(v) = store.value(held, target, [x, y, z], None) {
+                if let Some(v) = held.value(None) {
                     out.insert([x, y, z], v);
                 }
             }

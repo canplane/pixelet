@@ -234,7 +234,8 @@ pub fn advance(stop: &dyn Fn() -> bool) -> bool {
         job.left.clear();
         return publish(c);
     };
-    let world = World::now();
+    // The world as drawn: the cast asks what the bake will compose.
+    let world = World::now().previewed();
     let mut k = 0;
     while let Some(cell) = job.left.pop() {
         let [nx, _] = job.sight.across;

@@ -90,7 +90,9 @@ pub struct PickResult {
 }
 
 /// In the root frame, from the eye.
-/// Decor is struck where the chunks drawing at `drawn` hold it.
+/// Decor is struck where the chunks drawing at `drawn` hold it. The world
+/// asked is the stored one (`World::now`), not as the eraser's preview draws
+/// it: what to erase is what is stored.
 pub fn ray_pick(origin: V3, direction: V3, drawn: Tau) -> Option<PickResult> {
     let ray = Ray {
         origin,

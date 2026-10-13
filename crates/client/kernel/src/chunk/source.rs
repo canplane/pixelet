@@ -8,7 +8,6 @@ use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::space::coord::aabb::Aabb;
 
 use crate::chunk::Chunk as PyramidChunk;
-use crate::layer::object::preview::RenderEdits;
 use crate::layer::object::store::Store;
 use crate::with_parts;
 use pxl_spec::space::coord::world::nearest_box;
@@ -17,24 +16,6 @@ use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use xpute_guest::global::Global;
 
 static SOURCES_CHANGED: Global<bool> = Global::new();
-
-/// The preview the pointer's edit hands the chunks, the one copy of it.
-static PREVIEW: Global<RenderEdits> = Global::new();
-
-/// The pointer's edit hands its preview here once a turn; whether it changed,
-/// in which case the chunks compare their sources at their next turn.
-pub fn preview(edits: RenderEdits) -> bool {
-    let changed = core::mem::replace(PREVIEW.get(RenderEdits::default), edits) != edits;
-    if changed {
-        chunk_sources_changed();
-    }
-    changed
-}
-
-/// What the drawn build leaves out now.
-pub fn previewed() -> RenderEdits {
-    *PREVIEW.get(RenderEdits::default)
-}
 
 /// The table compares every chunk's sources at its next turn (`sources_step`).
 pub fn chunk_sources_changed() {
