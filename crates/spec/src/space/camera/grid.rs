@@ -3,7 +3,7 @@
 //! The camera grid, the one resolution: a cell is an angle about the eye,
 //! its zoom the distance's, and a chunk a cube of its cells.
 
-use crate::space::coord::zoom::{units, Zoom, UNIT_ZOOM};
+use crate::space::coord::zoom::{units, Zoom, FINEST_ZOOM, UNIT_ZOOM};
 
 /// The camera grid, the one knob of resolution: a cell is an angle of
 /// 1/`SPLIT` radians about the eye, and the block it is drawn with, whole,
@@ -42,7 +42,7 @@ pub const fn split_distance(cell_zoom: Zoom) -> f64 {
 /// not enter. Finer than the ground's near the eye, held to what a zoom can
 /// name.
 pub fn cell_at(r: f64) -> Zoom {
-    (UNIT_ZOOM as f64 - libm::floor(libm::log2(r / split_distance(UNIT_ZOOM)))).clamp(0.0, Zoom::MAX as f64) as Zoom
+    (UNIT_ZOOM as f64 - libm::floor(libm::log2(r / split_distance(UNIT_ZOOM)))).clamp(0.0, FINEST_ZOOM as f64) as Zoom
 }
 
 /// The criterion's one scale factor, at least 1: every zoom's split

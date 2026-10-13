@@ -54,7 +54,8 @@ fn tile(layer: Stream, subject: u64, ask: Ask) -> Rank {
     Rank {
         class: base + !ask.order.seen as u8,
         distance: ask.order.near,
-        detail: Tile::of_subject(subject).zoom,
+        // A zoom fits the rank's byte.
+        detail: Tile::of_subject(subject).zoom as u8,
     }
 }
 

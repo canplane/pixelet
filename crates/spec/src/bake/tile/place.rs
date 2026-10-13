@@ -88,8 +88,8 @@ pub const fn shown(category: u16) -> Option<Zoom> {
     let (dot, icon) = (DOT_ZOOM[category as usize - 1], ICON_ZOOM[category as usize - 1]);
     match (dot, icon) {
         (0, 0) => None,
-        (0, z) | (z, 0) => Some(z),
-        (d, i) => Some(if d < i { d } else { i }),
+        (0, z) | (z, 0) => Some(z as Zoom),
+        (d, i) => Some((if d < i { d } else { i }) as Zoom),
     }
 }
 
@@ -172,7 +172,7 @@ impl PlaceTile {
                 category: self.categories[k],
                 id: self.ids.get(i),
             },
-            from: self.from[k],
+            from: Zoom::from(self.from[k]),
             at: self.at[k].map(u32::from),
         }
     }
@@ -184,7 +184,8 @@ impl PlaceTile {
     fn push(&mut self, h: &Placed) {
         self.at.push(h.at.map(|v| v as u16));
         self.categories.push(h.place.category);
-        self.from.push(h.from);
+        // The record keeps a zoom in a byte.
+        self.from.push(h.from as u8);
         self.names.push(h.place.name);
         self.ids.push(h.place.id);
     }
@@ -308,7 +309,7 @@ pub fn decode(bytes: &[u8]) -> Result<PlaceTile, MarshalError> {
                 category: categories[i],
                 id: ids.get(i as u32).ok_or_else(malformed)?,
             },
-            from: from[i],
+            from: Zoom::from(from[i]),
             at: [u32::from(at[2 * i]), u32::from(at[2 * i + 1])],
         });
     }

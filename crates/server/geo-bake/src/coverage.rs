@@ -64,7 +64,7 @@ impl Node {
 
     /// Its tiles at `zoom`, at or under it.
     pub fn tiles(self, zoom: Zoom) -> Vec<[i64; 2]> {
-        let shift = u32::from(zoom - self.zoom);
+        let shift = zoom - self.zoom;
         let (n, [x0, y0]) = (1i64 << shift, first_descendant_of(self.at, shift));
         (y0..y0 + n).flat_map(|y| (x0..x0 + n).map(move |x| [x, y])).collect()
     }
@@ -116,7 +116,7 @@ impl Coverage {
     }
 
     fn shard_of(zoom: Zoom, tile: [i64; 2]) -> Shard {
-        ancestor_of(tile, u32::from(zoom - SHARD_ZOOM))
+        ancestor_of(tile, zoom - SHARD_ZOOM)
     }
 
     pub fn contains(&self, leaf: [i64; 2]) -> bool {
@@ -128,7 +128,7 @@ impl Coverage {
         if zoom >= SHARD_ZOOM {
             return self.shards.contains(&Self::shard_of(zoom, tile));
         }
-        self.shards.iter().any(|&s| ancestor_of(s, u32::from(SHARD_ZOOM - zoom)) == tile)
+        self.shards.iter().any(|&s| ancestor_of(s, SHARD_ZOOM - zoom) == tile)
     }
 
     /// Whether every leaf under the tile at `zoom` and `tile` is held.
@@ -136,7 +136,7 @@ impl Coverage {
         if zoom >= SHARD_ZOOM {
             return self.meets(zoom, tile);
         }
-        let under = self.shards.iter().filter(|&&s| ancestor_of(s, u32::from(SHARD_ZOOM - zoom)) == tile).count();
+        let under = self.shards.iter().filter(|&&s| ancestor_of(s, SHARD_ZOOM - zoom) == tile).count();
         under == (count(SHARD_ZOOM, zoom) as usize).pow(2)
     }
 

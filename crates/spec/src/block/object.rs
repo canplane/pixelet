@@ -53,7 +53,7 @@ pub const fn marker_cell(cell: Zoom) -> i32 {
 /// where it is finer.
 pub fn marker_cell_of(cell: Zoom, at: EntryAt) -> (Zoom, [i64; 3]) {
     let z = (marker_cell(cell).max(0) as Zoom).min(at.zoom());
-    (z, ancestor_of(at.at(), u32::from(at.zoom() - z)))
+    (z, ancestor_of(at.at(), at.zoom() - z))
 }
 
 /// Whether a marker shows where the camera grid's cell is at `cell`: its

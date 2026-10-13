@@ -6,6 +6,7 @@
 use std::collections::TryReserveError;
 
 use xpute_kit::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
+use xpute_kit::math::rng_gpu::derive_seed_u32;
 use xpute_kit::math::scalar::round;
 
 use crate::bake::separation::{slab_depth, Crossing, Occupies, STACKED_DECK_HEADROOM_M};
@@ -14,23 +15,15 @@ use crate::bake::way::half_cells;
 use crate::block::cube::Ground;
 use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::Zoom;
-use crate::space::hierarchy::tree::Node;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::tile::{Tile, LEAF_ZOOM};
 
-/// Changing it reshuffles everything scattered.
-const MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
+/// A node's seed and the caves, in the form the GPU takes too.
+mod portable;
+pub use portable::{node_seed, Cave, CAVE_COARSEST};
 
-/// A node's seed for one use: `tag` names the use, and the node's zoom and
-/// each of its indices are folded in, in order. Every procedural draw seeds
-/// by it, each use under a tag of its own, so no two uses draw one stream.
-pub fn node_seed<const D: usize>(tag: u64, (zoom, at): Node<D>) -> u64 {
-    let seed = derive_seed_u64(MASTER_SEED, tag);
-    at.iter().fold(derive_seed_u64(seed, u64::from(zoom)), |h, &v| derive_seed_u64(h, v as u64))
-}
-
-/// The caves' tag (`node_seed`).
-const CAVES: u64 = 0xca7e_0001;
+/// The leaves' cell zoom, where the caves' draws stop (`portable`).
+const LEAF_CELL: Zoom = GROUND.cell();
 
 // ---- scatter: a Poisson process on the leaf cell lattice ----
 
@@ -55,7 +48,8 @@ fn each_candidate(tag: u64, density: f64, zoom: Zoom, [min, max]: [[i64; 2]; 2],
         let blocks = |k: usize| min[k].div_euclid(side)..=(max[k] - 1).div_euclid(side);
         for by in blocks(1) {
             for bx in blocks(0) {
-                let block = node_seed(tag, (born, [bx, by]));
+                // A tag's two words folded into the u32 `node_seed` takes.
+                let block = u64::from(node_seed((tag ^ tag >> 32) as u32, (born, [bx as i32, by as i32])));
                 let mut draws = SplitMix64::new(block);
                 let mut unit = || u32_to_unit(draws.next_u32());
                 for i in 0..poisson(mean, unit()) {
@@ -235,96 +229,6 @@ pub fn pier_stands(pier: [i32; 2], cell: GroundId, column: impl IntoIterator<Ite
         .into_iter()
         .any(|o| matches!(o.occupies(ground, u_per_m), Occupies::Over { slab, .. } if slab[1] <= surface - gap));
     (!lower).then_some(pier)
-}
-
-// ---- caves: a sparse tree of hashes ----
-
-/// The coarsest cube a cave takes, 32 units a side: nothing coarser is
-/// hollow, so every coarser fold of the caves is solid.
-pub const CAVE_COARSEST: Zoom = GROUND.cell() - 5;
-
-/// The chance a drawing cube turns one of its eight children over, the
-/// tree's own number: with each child drawing again at even odds (one hash
-/// bit), some 6% of the ground hollow.
-const CAVE_TURN: f64 = 1.0 / 4.0;
-
-/// A cube's draws, `c` at `z`: the child it turns over, if it turns one, and
-/// which of its eight draw again, a bit each. A child that does not draw is
-/// its value all through, so the caves are a sparse tree whose nodes are the
-/// cubes that draw, every cube at the root's zoom among them.
-fn draws(z: Zoom, c: [i64; 3]) -> (Option<u64>, u8) {
-    let h = node_seed(CAVES, (z, c));
-    ((u32_to_unit(h as u32) < CAVE_TURN).then_some((h >> 32) & 7), (h >> 40) as u8)
-}
-
-/// A child's place among its parent's eight.
-fn slot(c: [i64; 3]) -> u64 {
-    (c[0] & 1 | (c[1] & 1) << 1 | (c[2] & 1) << 2) as u64
-}
-
-/// The caves at a cube as its parent hands them down, so a descent asks
-/// each cube's draws once rather than again from the caves' first zoom:
-/// its value, and whether anything under it differs (`live`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Cave {
-    hollow: bool,
-    live: bool,
-}
-
-impl Cave {
-    /// Any cube coarser than the caves' first: solid, and every cube of the
-    /// caves' first zoom under it draws.
-    pub const ROOT: Cave = Cave { hollow: false, live: true };
-
-    /// The eight children of the cube `c` at `zoom` whose caves are `self`,
-    /// by their place (`slot`): its draws, one hash, turn one or none, and
-    /// say which draw again. Past the leaves a cube is its leaf's.
-    pub fn children(self, zoom: Zoom, c: [i64; 3]) -> [Cave; 8] {
-        if zoom < CAVE_COARSEST - 1 {
-            return [Cave::ROOT; 8];
-        }
-        if !self.live || zoom >= GROUND.cell() {
-            return [Cave { live: false, ..self }; 8];
-        }
-        let (turn, live) = draws(zoom, c);
-        core::array::from_fn(|k| Cave {
-            hollow: self.hollow ^ (turn == Some(k as u64)),
-            live: live >> k & 1 == 1,
-        })
-    }
-
-    /// The child `c` at `zoom` of a cube whose caves are `self`.
-    pub fn child(self, zoom: Zoom, c: [i64; 3]) -> Cave {
-        self.children(zoom - 1, c.map(|v| v >> 1))[slot(c) as usize]
-    }
-
-    /// The caves at the cube `c` at `zoom`, down its line from the caves'
-    /// first, for an asker with nothing handed down.
-    pub fn of(zoom: Zoom, c: [i64; 3]) -> Cave {
-        let mut cave = Cave::ROOT;
-        for z in CAVE_COARSEST..=zoom.min(GROUND.cell()) {
-            cave = cave.child(z, c.map(|v| v >> (zoom - z)));
-            if !cave.live {
-                break;
-            }
-        }
-        cave
-    }
-
-    /// Whether the cube is a cave's air. A cube is its parent's value unless
-    /// its parent turned it, and a parent turns at most one of its eight, so
-    /// the majority of any cube's children is the cube: the caves fold to
-    /// themselves at every zoom.
-    pub fn hollow(self) -> bool {
-        self.hollow
-    }
-
-    /// What the caves are all through a cube at `zoom`: its value where
-    /// nothing under it differs, a leaf's or finer always; none coarser than
-    /// the caves' first.
-    pub fn whole(self, zoom: Zoom) -> Option<bool> {
-        (zoom >= CAVE_COARSEST && (!self.live || zoom >= GROUND.cell())).then_some(self.hollow)
-    }
 }
 
 #[cfg(test)]

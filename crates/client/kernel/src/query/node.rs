@@ -101,7 +101,7 @@ impl World<'_> {
     pub(super) fn start(&self, (zoom, at): Node<3>) -> At {
         At {
             node: (zoom, at),
-            cave: Cave::of(zoom, at),
+            cave: Cave::of(zoom, at.map(|v| v as i32)),
             placed: self.objects.cursor((zoom, wrap_cell(zoom, at)), zoom),
             line: None,
         }
@@ -168,7 +168,7 @@ impl World<'_> {
         let (z, child) = (zoom + 1, child_of(c, k));
         At {
             node: (z, child),
-            cave: at.cave.child(z, child),
+            cave: at.cave.child(z, child.map(|v| v as i32)),
             placed: self.objects.child(&at.placed, (z, wrap_cell(z, child)), z),
             line: at.line,
         }
@@ -208,7 +208,7 @@ impl World<'_> {
             // At each zoom asked, every cell under it over the ground, or
             // ground a cave may take with a cave through all of it, by the
             // ground's one rule.
-            let hollow = at.cave.whole(zoom) == Some(true);
+            let hollow = at.cave.whole(zoom) == (true, true);
             let empty = (far.max(zoom + 1)..=near).all(|z| {
                 let u = units(z);
                 let blocks = [(whole.min[2] / u).floor() as i64, (whole.max[2] / u).ceil() as i64];

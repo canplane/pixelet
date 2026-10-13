@@ -134,7 +134,7 @@ impl Residency<TerrainTile> {
 /// pyramid's zooms.
 fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
     let read = GROUND.read_zoom(cell);
-    tile_at(read, ancestor_of([at[0], at[1]], u32::from(zoom - read)))
+    tile_at(read, ancestor_of([at[0], at[1]], zoom - read))
 }
 
 /// The index lane's extent over a node within the tile `d` answers, widened
@@ -221,7 +221,7 @@ impl Query for Residency<TerrainTile> {
                 edge = true;
                 continue;
             }
-            let tile = tile_at(line.tile.zoom, ancestor_of(beside.1, u32::from(beside.0 - line.tile.zoom)));
+            let tile = tile_at(line.tile.zoom, ancestor_of(beside.1, beside.0 - line.tile.zoom));
             let b = match last {
                 Some((t, b)) if t == tile => b,
                 _ if tile == line.tile => Some(d),

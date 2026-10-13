@@ -87,7 +87,7 @@ pub struct Residency<L: Base> {
 /// holds only what it asks for (`Base::ASKS`).
 impl<L: Base> Residency<L> {
     /// The zooms the layer's pyramid holds, its leaves to its lattice's top.
-    pub const ZOOMS: u32 = (L::LEAF - L::LATTICE.top() + 1) as u32;
+    pub const ZOOMS: u32 = (L::LEAF - L::LATTICE.top() + 1);
 
     /// A destination's line from its leaf to the top.
     pub const DESTINATION_TILES: u32 = Self::ZOOMS;

@@ -41,7 +41,7 @@ use pxl_spec::bake::tile::place::{stands, PlaceTile, PLACE_FIRST, PLACE_LATTICE,
 use pxl_spec::space::camera::grid::px_per_unit;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world::{point, REACH};
-use pxl_spec::space::coord::zoom::{cube, units, Zoom};
+use pxl_spec::space::coord::zoom::{cube, units, Zoom, FINEST_ZOOM};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, tile_rows};
@@ -249,7 +249,7 @@ pub fn step(ctx: &mut TickContext) {
     // A waiting marker stands over whatever stands at its place, with the words it has so far.
     let draft = draft();
     // A waiting marker is shown wherever it is.
-    let drafted = draft.map(|d| marker_at(d.at, &d.words)).map(|(label, stands, _)| (label, stands, Zoom::MAX));
+    let drafted = draft.map(|d| marker_at(d.at, &d.words)).map(|(label, stands, _)| (label, stands, FINEST_ZOOM));
     // The line is its speaker's, judged where it stands, as a marker by the chunk drawing it there.
     let line = shown_line();
     let said = line.zip(speaker()).and_then(|(label, (feet, over))| Some((label, over, sched.cells_at(&feet)?)));
@@ -354,16 +354,16 @@ pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<Went> {
 /// at the zoom those cells are drawn at, as it shows them (`Label::at`).
 fn places_in(chunk: Chunk, found: &mut Vec<Shown>) {
     let zoom = carto_zoom(chunk.cell_zoom());
-    if zoom < i32::from(PLACE_FIRST) {
+    if zoom < PLACE_FIRST as i32 {
         return;
     }
     let t = PLACE_LATTICE.read_zoom(chunk.cell_zoom());
     let (z, column) = chunk.column();
     let tiles: Vec<_> = if t <= z {
-        vec![tile_at(t, ancestor_of(column, u32::from(z - t)))]
+        vec![tile_at(t, ancestor_of(column, z - t))]
     } else {
         let n = 1i64 << (t - z);
-        let [x0, y0] = first_descendant_of(column, u32::from(t - z));
+        let [x0, y0] = first_descendant_of(column, t - z);
         (y0..y0 + n).filter(|y| tile_rows(t).contains(y)).flat_map(|y| (x0..x0 + n).map(move |x| tile_at(t, [x, y]))).collect()
     };
     let (h0, h1) = chunk.z_range();
@@ -373,7 +373,7 @@ fn places_in(chunk: Chunk, found: &mut Vec<Shown>) {
         let Some(src) = held.source(tile) else { continue };
         let Some(places) = held.get(src) else { continue };
         for (place, h) in places.iter() {
-            if i32::from(h.from) > zoom {
+            if h.from as i32 > zoom {
                 continue;
             }
             let ground = stands(src, h.at);

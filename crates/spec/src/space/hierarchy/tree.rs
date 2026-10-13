@@ -61,9 +61,9 @@ pub fn first_descendant_of<const D: usize>(at: [i64; D], steps: u32) -> [i64; D]
 /// Whether two nodes overlap; in one hierarchy they nest or are apart.
 pub fn share<const D: usize>((a_zoom, a): Node<D>, (b_zoom, b): Node<D>) -> bool {
     if a_zoom >= b_zoom {
-        ancestor_of(a, u32::from(a_zoom - b_zoom)) == b
+        ancestor_of(a, a_zoom - b_zoom) == b
     } else {
-        ancestor_of(b, u32::from(b_zoom - a_zoom)) == a
+        ancestor_of(b, b_zoom - a_zoom) == a
     }
 }
 

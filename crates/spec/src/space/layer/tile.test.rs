@@ -130,7 +130,7 @@ fn the_known_tile_is_named_as_the_bucket_holds_it() {
 fn a_coarser_tile_is_named_by_a_prefix_of_the_leaf_under_it() {
     for zoom in GROUND.top()..LEAF_ZOOM {
         let coarse = Tile::over(zoom, BUNDANG).name();
-        assert_eq!(coarse.len(), usize::from(zoom));
+        assert_eq!(coarse.len(), zoom as usize);
         assert!(BUNDANG_NAME.starts_with(&coarse), "z{zoom} {coarse}");
     }
 }
@@ -154,6 +154,6 @@ fn what_is_not_a_held_tile_s_name_is_refused() {
     assert_eq!(Tile::of_name("4"), None, "a digit is a zoom's two bits");
     assert_eq!(Tile::of_name("13211032031200a"), None);
     assert_eq!(Tile::of_name("-1321103203120"), None, "the digits carry the sign");
-    assert_eq!(Tile::of_name(&"0".repeat(usize::from(LEAF_ZOOM) + 1)), None, "nothing is finer than a leaf");
+    assert_eq!(Tile::of_name(&"0".repeat(LEAF_ZOOM as usize + 1)), None, "nothing is finer than a leaf");
     assert_eq!(Tile::of_name("0"), None, "coarser than the top");
 }

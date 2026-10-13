@@ -88,9 +88,9 @@ pub fn objects_met(store: &Store, k: PyramidChunk) -> Option<Vec<Met>> {
     let mut refused = false;
     store.read(k.node(), k.cell_zoom()).value()?.entries(&mut |e| {
         let from = if e.zoom >= zoom {
-            first_descendant_of(corner, u32::from(e.zoom - zoom))
+            first_descendant_of(corner, e.zoom - zoom)
         } else {
-            ancestor_of(corner, u32::from(zoom - e.zoom))
+            ancestor_of(corner, zoom - e.zoom)
         };
         refused |= out.try_reserve(1).is_err();
         if !refused {

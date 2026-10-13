@@ -109,7 +109,7 @@ impl CoverageGizmo {
         // Its lines are f32 about the corner under the eye of a tile about as wide as
         // the eye is high: what is near resolves, and a move rebuilds them once a height.
         let height = observation().map_or(0.0, |o| o.eye[2] - o.ground).max(1.0);
-        let zoom = within(height).clamp(i32::from(GROUND.top()), i32::from(LEAF_ZOOM)) as Zoom;
+        let zoom = within(height).clamp(GROUND.top() as i32, LEAF_ZOOM as i32) as Zoom;
         let span = units(zoom);
         let about = v.at().eye.map(|c| (c / span).floor() * span);
         let about = [about[0], about[1], 0.0];

@@ -52,14 +52,16 @@ fn a_finer_zoom_keeps_what_a_coarser_one_had() {
     }
 }
 
-/// Caves are some of the ground, not none and not most.
+/// Caves are some of the ground, not none and not most, over leaves spread
+/// across many of the caves' first cubes rather than in a few, where one
+/// cave decides the share.
 #[test]
 fn caves_hollow_a_little_of_the_ground() {
     let mut n = 0;
     for x in 0..64 {
         for y in 0..64 {
             for z in -32..0 {
-                n += usize::from(Cave::of(GROUND.cell(), [x, y, z]).hollow());
+                n += usize::from(Cave::of(GROUND.cell(), [x * 4093, y * 4099, z * 61]).hollow());
             }
         }
     }

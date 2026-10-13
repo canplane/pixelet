@@ -72,12 +72,12 @@ impl Lattice {
 
     pub fn read_tile(self, (zoom, column): (Zoom, [i64; 2]), cell: Zoom) -> Tile {
         let z = self.read_zoom(cell);
-        tile_at(z, ancestor_of(column, u32::from(zoom - z)))
+        tile_at(z, ancestor_of(column, zoom - z))
     }
 
     /// The node's first cell's place in the tile it reads, in that tile's cells.
     pub fn read_at(self, (zoom, column): (Zoom, [i64; 2]), cell: Zoom) -> (u32, u32) {
-        let [x, y] = offset_in(column, u32::from(zoom - self.read_zoom(cell)));
+        let [x, y] = offset_in(column, zoom - self.read_zoom(cell));
         let side = self.read_side(zoom, cell);
         (x as u32 * side, y as u32 * side)
     }
@@ -136,7 +136,7 @@ impl Lattice {
 
     /// `tile_cells` as a shift.
     pub const fn tile_cell_shamt(self) -> u32 {
-        (self.cell - LEAF_ZOOM) as u32
+        self.cell - LEAF_ZOOM
     }
 
     /// How many of its finest cells stand across one at `z`.

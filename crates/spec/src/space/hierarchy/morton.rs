@@ -18,7 +18,7 @@ const LANES: [u32; 3] = EXTENT;
 /// The digits axis `axis` has at `zoom`: one a zoom from where its extent reaches.
 #[inline]
 const fn digits(axis: usize, zoom: Zoom) -> u32 {
-    (zoom as u32).saturating_sub(UNIT_ZOOM as u32 - LANES[axis])
+    zoom.saturating_sub(UNIT_ZOOM - LANES[axis])
 }
 
 /// A key's digits at `zoom`.
@@ -44,7 +44,7 @@ pub fn key_of<const D: usize>(zoom: Zoom, at: [i64; D]) -> u128 {
 
 /// The zoom axis `axis`'s first digit is at.
 const fn first_zoom(axis: usize) -> Zoom {
-    (UNIT_ZOOM as u32 - LANES[axis] + 1) as Zoom
+    (UNIT_ZOOM - LANES[axis] + 1) as Zoom
 }
 
 /// `at`'s digits at `zoom`, coarsest first: zooms with the same axes are a
@@ -54,7 +54,7 @@ fn digits_of<const D: usize>(zoom: Zoom, at: &[i64; D]) -> u128 {
     let mut z = 1;
     while z <= zoom {
         let next = (0..D).map(first_zoom).filter(|&s| s > z).fold(zoom + 1, Zoom::min);
-        let (len, k) = (u32::from(next - z), axes::<D>(z).count() as u32);
+        let (len, k) = ((next - z), axes::<D>(z).count() as u32);
         let mut run = 0u128;
         for (p, i) in axes::<D>(z).enumerate() {
             // The axis's digits at zooms `z..next`, finest lowest.
@@ -157,7 +157,7 @@ fn signed(v: i64, width: u32) -> i64 {
     }
 }
 
-const _: () = assert!(EXTENT[0] == UNIT_ZOOM as u32 && EXTENT[1] == EXTENT[0], "X and Y digit from z1");
+const _: () = assert!(EXTENT[0] == UNIT_ZOOM && EXTENT[1] == EXTENT[0], "X and Y digit from z1");
 
 #[cfg(test)]
 #[path = "morton.test.rs"]

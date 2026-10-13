@@ -153,7 +153,7 @@ fn read_row(around: &Around, y: i64, x0: i64, out: &mut [Option<(GroundId, i32)>
 /// `2^(cell − leaf)` blocks, under them a block `2^(leaf − cell)` leaf
 /// cells, the nearest.
 fn blocks(cell: Zoom, h: f64) -> i32 {
-    let d = i32::from(cell) - i32::from(GROUND.cell());
+    let d = cell as i32 - GROUND.cell() as i32;
     if d >= 0 {
         (h as i32) << d
     } else {
@@ -184,7 +184,7 @@ pub enum Lay {
 pub fn lay(cell: Zoom, [lo, hi]: [f64; 2], wall: bool, [z0, z1]: [i64; 2]) -> Lay {
     let top = |h: f64| i64::from(blocks(cell, h));
     let rock = |h: f64| i64::from(blocks(cell, floor(h)));
-    let lb = 1i64 << (i32::from(cell) - i32::from(GROUND.cell())).max(0);
+    let lb = 1i64 << (cell as i32 - GROUND.cell() as i32).max(0);
     if z0 >= top(hi) {
         Lay::Air
     } else if !wall && z1 <= top(lo) - lb && z0 >= rock(hi) {
@@ -286,11 +286,11 @@ impl Grid {
         fit(&mut self.face, n, sentinel::void)?;
         fit(&mut self.fold, n, [sentinel::void; 4])?;
         (self.span, self.cell, self.first) = (span, cell, first);
-        let d = i32::from(cell) - i32::from(GROUND.cell());
+        let d = cell as i32 - GROUND.cell() as i32;
         self.scale = (d >= 0).then(|| 1 << d);
         // Drawn tile cells a cell folds, as a shift: past the leaves negative,
         // a drawn cell then spans several.
-        let k = i32::from(tile) + GROUND.tile_cell_shamt() as i32 - i32::from(cell);
+        let k = tile as i32 + GROUND.tile_cell_shamt() as i32 - cell as i32;
         xpute_kit::ensure!(k <= 1, EINVAL, k);
         let rel = [first[0] - tile_first[0], first[1] - tile_first[1]];
         let drawn = |g: i64| if k >= 0 { g << k } else { g >> -k };
@@ -528,7 +528,7 @@ impl Grid {
     /// drawn at every zoom. Past the leaves a leaf height shifted, under them
     /// the mean as its blocks round it.
     fn face_height(&self, i: usize) -> i32 {
-        let d = i32::from(self.cell) - i32::from(GROUND.cell());
+        let d = self.cell as i32 - GROUND.cell() as i32;
         match self.scale {
             Some(s) => self.top[i] / s,
             None => self.top[i] << -d,

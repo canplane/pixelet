@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::space::camera::grid::*;
+use crate::space::coord::zoom::FINEST_ZOOM;
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::tile::*;
 
@@ -64,8 +65,9 @@ fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {
 #[test]
 fn a_zoom_is_the_distance_alone_and_the_same_ratio_at_every_zoom() {
     let mut last = i32::MAX;
-    // Inside the world: no cell is coarser than z0's.
-    for r in core::iter::successors(Some(0.01), |r| Some(r * 1.01)).take_while(|r| r * 32.0 < split_distance(0)) {
+    // Inside the world: no cell is coarser than z0's, and none finer than a
+    // position names (`FINEST_ZOOM`), even scaled finer by 2^3 below.
+    for r in core::iter::successors(Some(split_distance(FINEST_ZOOM - 3)), |r| Some(r * 1.01)).take_while(|r| r * 32.0 < split_distance(0)) {
         let z = zoom_at(r);
         assert!(z <= last, "{r}: z{z} after z{last}");
         last = z;

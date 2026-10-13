@@ -53,7 +53,7 @@ impl<'a> Ground<'a> {
 
     /// The own tile's first cell at `zoom`.
     pub(super) fn first_at(&self, zoom: Zoom) -> [i64; 2] {
-        let d = i32::from(zoom) - i32::from(self.cell);
+        let d = zoom as i32 - self.cell as i32;
         self.first.map(|v| if d >= 0 { v << d } else { v >> -d })
     }
 }
@@ -62,7 +62,7 @@ impl<'a> Ground<'a> {
 /// shift: past the leaves none.
 fn folds(cell: Zoom) -> u32 {
     let tile = GROUND.read_zoom(cell);
-    u32::from(GROUND.cell_zoom(tile)).saturating_sub(u32::from(cell))
+    GROUND.cell_zoom(tile).saturating_sub(cell)
 }
 
 impl<'a> World<'a> {
@@ -94,7 +94,7 @@ impl<'a> World<'a> {
             return Answer::Exact([0; 2]);
         }
         self.ground(&self.terrain.cursor(node, cell), node, cell, ring).and_then(|g| {
-            let d = i32::from(zoom) - i32::from(node.0);
+            let d = zoom as i32 - node.0 as i32;
             let (own, across) = match d {
                 0.. => (node.1.map(|v| v << d), 1 << d),
                 _ => (node.1.map(|v| v >> -d), 1),

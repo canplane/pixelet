@@ -103,7 +103,7 @@ impl Pyramid {
         let Some(tree) = tree else { return };
         let (depth, slot) = match zoom {
             SHARD_ZOOM => (0, Slot::Branch(0)),
-            _ => tree.get(u32::from(zoom - SHARD_ZOOM), at),
+            _ => tree.get(zoom - SHARD_ZOOM, at),
         };
         // Over it a leaf: it holds no records of its own.
         if SHARD_ZOOM + depth as Zoom != zoom {

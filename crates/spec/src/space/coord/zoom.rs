@@ -10,7 +10,7 @@ use super::q3::{FRAC_W, Q3};
 use super::world::{self, EXTENT};
 use xpute_kit::math::scalar::round;
 
-pub type Zoom = u8;
+pub type Zoom = u32;
 
 /// A unit's: 1u is a z24 cell's side.
 pub const UNIT_ZOOM: Zoom = EXTENT[0] as Zoom;

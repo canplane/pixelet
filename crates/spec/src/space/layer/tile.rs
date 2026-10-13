@@ -33,7 +33,7 @@ impl Tile {
 
     /// The tile at `z` the leaf `leaf` lies under.
     pub fn over(zoom: Zoom, leaf: [i64; 2]) -> Tile {
-        Tile::new(zoom, ancestor_of(leaf, u32::from(LEAF_ZOOM - zoom)))
+        Tile::new(zoom, ancestor_of(leaf, LEAF_ZOOM - zoom))
     }
 
     #[inline]
@@ -79,7 +79,7 @@ impl Tile {
 
     /// Its first leaf.
     pub fn first_leaf(self) -> [i64; 2] {
-        first_descendant_of(self.at, u32::from(LEAF_ZOOM - self.zoom))
+        first_descendant_of(self.at, LEAF_ZOOM - self.zoom)
     }
 
     pub fn span(self) -> f64 {
@@ -210,25 +210,25 @@ impl Cell {
     pub fn up(self, steps: Zoom) -> Cell {
         Cell {
             zoom: self.zoom - steps,
-            at: ancestor_of(self.at, u32::from(steps)),
+            at: ancestor_of(self.at, steps),
             ..self
         }
     }
 
     /// Where `inner`, no coarser and inside this cell, lies in it, in `inner`'s sides.
     pub fn offset_of(self, inner: Cell) -> [u32; 2] {
-        offset_in(inner.at, u32::from(inner.zoom - self.zoom)).map(|v| v as u32)
+        offset_in(inner.at, inner.zoom - self.zoom).map(|v| v as u32)
     }
 
     /// Where this cell lies in the tile `steps` zooms coarser, in its own sides.
     pub fn in_tile_above(self, steps: Zoom) -> [i64; 2] {
-        offset_in(self.at, self.shamt() + u32::from(steps))
+        offset_in(self.at, self.shamt() + steps)
     }
 
     /// `offset_of`'s inverse.
     pub fn inner_at(self, lattice: Lattice, zoom: Zoom, offset: [u32; 2]) -> Cell {
         let zoom = lattice.cell_zoom(zoom);
-        let [x, y] = first_descendant_of(self.at, u32::from(zoom - self.zoom));
+        let [x, y] = first_descendant_of(self.at, zoom - self.zoom);
         Cell {
             lattice,
             zoom,

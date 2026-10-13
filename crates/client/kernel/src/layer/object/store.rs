@@ -217,7 +217,7 @@ impl Store {
         if zoom == SHARD_ZOOM {
             return Some(Found { tree, zoom, slot: Slot::Branch(0) });
         }
-        let (depth, slot) = tree.get(u32::from(zoom - SHARD_ZOOM), at);
+        let (depth, slot) = tree.get(zoom - SHARD_ZOOM, at);
         Some(Found {
             tree,
             zoom: SHARD_ZOOM + depth as Zoom,
@@ -363,7 +363,7 @@ impl Store {
                 None if value == EMPTY => continue,
                 None => self.shards.entry(shard).or_insert_with(|| Tree::new(EMPTY)),
             };
-            if tree.set(u32::from(zoom - SHARD_ZOOM), at, value) {
+            if tree.set(zoom - SHARD_ZOOM, at, value) {
                 changed.push(cube(zoom, at));
             }
             if tree.uniform() == Some(EMPTY) {

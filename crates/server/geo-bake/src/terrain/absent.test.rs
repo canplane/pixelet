@@ -9,7 +9,7 @@ use pxl_spec::space::layer::tile::LEAF_ZOOM;
 fn absence() -> (Absence, Tile, Tile) {
     let coverage = Coverage::of_source().expect("the source's coverage");
     let shard = coverage.shards().next().expect("a shard");
-    let [x, y] = first_descendant_of(shard.at, u32::from(LEAF_ZOOM - SHARD_ZOOM));
+    let [x, y] = first_descendant_of(shard.at, LEAF_ZOOM - SHARD_ZOOM);
     let inside = Tile::new(LEAF_ZOOM, [x, y]);
     let west = Tile::new(LEAF_ZOOM, [x - 1, y]);
     (Absence::new(coverage), inside, west)
