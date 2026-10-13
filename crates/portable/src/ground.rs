@@ -15,8 +15,10 @@
 //! height a CPU and a GPU compute from this one source can differ in the
 //! last bit where it rounds to a block at a half.
 
+use crate::area::{walled, Area};
 use crate::cube::{ground, sentinel, Ground};
-use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, UNIT_ZOOM};
+pub use crate::lattice::TILE_CELLS;
+use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
 
 // The catalog's looks this rule names, read into a word.
 const VOID: u32 = sentinel::void as u32;
@@ -27,9 +29,6 @@ const WATER: u32 = ground::water as u32;
 const SOIL: u32 = ground::soil as u32;
 const SANDSTONE: u32 = ground::sandstone as u32;
 const STONE: u32 = ground::stone as u32;
-
-/// Cells a tile is on a side, at every zoom.
-pub const TILE_CELLS: u32 = 1 << (LEAF_CELL - LEAF_ZOOM);
 
 /// Inner elevation samples across one leaf tile: a tile is about twice its
 /// side in units in meters wide and the source is about 30 m, rounded to 32 m.
@@ -45,6 +44,14 @@ pub const ELE_PADDED_SPAN: u32 = TILE_ELE_SPAN + 2 * ELE_PAD;
 pub const fn ele_index(x: u32, y: u32) -> usize {
     (y * ELE_PADDED_SPAN + x) as usize
 }
+
+/// Cells on a tile's side in its index lane (pxl-spec bake/tile/terrain.rs
+/// `Index`): one per elevation sample spacing, at 4 KiB a tile.
+pub const EXTENT_SPAN: u32 = TILE_ELE_SPAN;
+const _: () = assert!(EXTENT_SPAN.is_power_of_two(), "an index cell is a block of the lattice, a power of two of the unit");
+
+/// The index lane's cells' zoom on a leaf tile.
+pub const EXTENT_CELL: Zoom = LEAF_ZOOM + EXTENT_SPAN.trailing_zeros() as Zoom;
 
 /// A layer of ground cells under a face, in leaf cells, before the stone.
 const FILLER_DEPTH: i32 = 3;
@@ -281,6 +288,33 @@ pub fn lay(cell: Zoom, [lo, hi]: [i32; 2], wall: bool, [z0, z1]: [i32; 2]) -> La
     } else {
         Lay::Kept
     }
+}
+
+/// Whether nothing under the node `(zoom, c)` fills at the zooms from `far`
+/// to `near` a reader asks within it, by the ground's one rule (`lay`),
+/// where the faces under it lie between `lo` and `hi` leaf cells: at each
+/// zoom finer than the node, every cell under it over the ground, or ground
+/// a cave may take with a cave through all of it (`hollow`). Coarser than a
+/// shard, the Earth past the service area may be in it too, its face at sea
+/// level.
+pub fn empty(area: &impl Area, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], [far, near]: [Zoom; 2], hollow: bool) -> bool {
+    let [lo, hi] = if zoom < SHARD_ZOOM { [lo.min(0), hi.max(0)] } else { [lo, hi] };
+    let mut z = if far > zoom + 1 { far } else { zoom + 1 };
+    while z <= near {
+        let s = z - zoom;
+        let wall = walled(area, z, (zoom, [c[0], c[1]]));
+        match lay(z, [lo, hi], wall, [c[2] << s, (c[2] + 1) << s]) {
+            Lay::Air => {}
+            Lay::Open => {
+                if !hollow {
+                    return false;
+                }
+            }
+            Lay::Kept => return false,
+        }
+        z += 1;
+    }
+    true
 }
 
 /// A cell's ground, as the grid reads it: its look (`unknown` for the wall),

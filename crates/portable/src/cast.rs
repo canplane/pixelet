@@ -22,14 +22,7 @@
 //! a node can have, and from a child it steps to the next across the face
 //! it leaves by, so no frame holds its siblings.
 
-use crate::{Zoom, UNIT_ZOOM};
-
-/// A Q3 position's fraction bits: a unit is 256 steps (pxl-spec
-/// space/coord/q3.rs).
-pub const FRAC_W: u32 = 8;
-
-/// The finest zoom a position names: a step of a Q3.
-pub const FINEST_ZOOM: Zoom = UNIT_ZOOM + FRAC_W;
+use crate::{Zoom, FINEST_ZOOM, FRAC_W, UNIT_ZOOM};
 
 /// The camera grid, the one knob of resolution: a cell is an angle of
 /// 1/`SPLIT` radians about the eye (pxl-spec space/camera/grid.rs).
