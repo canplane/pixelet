@@ -96,7 +96,6 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
 
   const f = g.frames;
   const sheetPct = pct(g.sheet.used_px, g.sheet.size * g.sheet.size);
-  const [kept, possible] = [g.counters.faces_kept, g.counters.faces_possible];
   const heaviest = <T,>(rows: T[], by: (r: T) => number, n: number) => [...rows].sort((a, b) => by(b) - by(a)).slice(0, n).filter((r) => by(r) > 0);
   const worstLong = g.longs.reduce<LongFrame | null>((w, l) => (!w || l.durationMs > w.durationMs ? l : w), null);
 
@@ -160,8 +159,7 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
           {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} draws/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
           {heaviest(f.zoom_tris.map((t, k) => ({ k, t })), (r) => r.t, ZOOM_ROWS).map((r) => <Row key={r.k} k={`  ${zoomName(r.k)} triangles`} v={tris(r.t)} />)}
           <Row k="world surface" v={valueText("px", f.last.px)} />
-          <Row k="bakes/runs per s" v={`${round(f.backlogPerS[1])}/${round(f.backlogPerS[0])}`} />
-          <Row k="faces kept" v={`${pct(kept, possible)}%`} />
+          <Row k="bakes per s" v={`${round(f.backlogPerS)}`} />
         </>
       )}
 

@@ -3,7 +3,8 @@
 //! The block catalog: the generated tables — the ids' kinds, the cubes and
 //! their colors, the decors, the marker, what an id carries beyond itself —
 //! `object`, where a block becomes the value the object store keeps, and what
-//! is in each block of the world, composed from the ground and what is placed.
+//! is in each block of the world (`sample`): the ground's grid, then what
+//! overwrites it.
 
 #[path = "block/color.spec.rs"]
 pub mod color;
@@ -19,12 +20,34 @@ pub mod limit;
 pub mod marker;
 pub mod object;
 pub mod sample;
-pub mod stand;
 
 pub use decor::DecorId;
 
+use crate::bake::tile::terrain::GroundId;
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::zoom::{units, Zoom, UNIT_ZOOM};
+
+/// What is in a block: the ground's look, a way's or a pier's, or what is
+/// placed, air included (`sample::at` answers which). Where there is none,
+/// it is void. The ground's carries the looks its block folds: coarser than
+/// the leaves a cell folds the cells under it, its color theirs; at the
+/// leaves and finer, its own four times.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Block {
+    Ground(GroundId, [GroundId; 4]),
+    Placed(u32),
+}
+
+impl Block {
+    /// Whether it fills its block: ground does, and of what is placed a cube
+    /// that is not air; decor stands in a block it leaves empty.
+    pub fn fills(self) -> bool {
+        match self {
+            Block::Ground(..) => true,
+            Block::Placed(state) => !object::object_value_is_air(state) && object::cube_of(state).is_some(),
+        }
+    }
+}
 
 /// A catalog color, packed `0xRRGGBB` by the generator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

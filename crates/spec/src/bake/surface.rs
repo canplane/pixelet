@@ -8,6 +8,8 @@ use xpute_kit::math::scalar::round;
 
 use super::constant::{ele_index, ELE_PAD, ELE_PADDED_SPAN, EXTENT_CELL, TILE_ELE_SPAN};
 use super::separation::Separation;
+use super::tile::terrain::GroundId;
+use crate::block::cube::Ground;
 use crate::space::layer::lattice::{EXTENT, GROUND, TILE_CELLS};
 
 const CELL_STEP: f64 = TILE_CELLS as f64 / TILE_ELE_SPAN as f64;
@@ -73,15 +75,21 @@ pub fn bound(tile_ele: &[i16], [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> [i32; 
     [lo, hi]
 }
 
-/// Per `EXTENT` cell, the lowest and highest of the surface, any bridge top
-/// and any tunnel floor. Saturates at i16, about 78 km.
-pub fn extent_of(tile_ele: &[i16], separation: &Separation) -> Vec<[i16; 2]> {
-    let n = crate::space::coord::zoom::count(GROUND.cell(), EXTENT_CELL) as f64;
+/// Per `EXTENT` cell, the lowest and highest of the surface where a cell of
+/// it has one, any bridge top and any tunnel floor; where nothing stands,
+/// lowest over highest, so a node over it holds nothing (a void cell has no
+/// surface, whatever height is stored under it). Saturates at i16, about
+/// 78 km.
+pub fn extent_of(tile_ele: &[i16], cells: &[GroundId], separation: &Separation) -> Vec<[i16; 2]> {
+    let count = crate::space::coord::zoom::count(GROUND.cell(), EXTENT_CELL);
+    let n = f64::from(count);
     let side = EXTENT.tile_cells();
     (0..side * side)
         .map(|index| {
-            let [ex, ey] = EXTENT.in_tile(index).map(|v| v as f64 * n);
-            let [lo, hi] = bound(tile_ele, [ex, ex + n], [ey, ey + n]);
+            let [cx, cy] = EXTENT.in_tile(index).map(|v| v * count);
+            let ground = (cy..cy + count).any(|y| (cx..cx + count).any(|x| Ground::of(cells[GROUND.cell_index(x, y) as usize]).is_some()));
+            let [ex, ey] = [cx, cy].map(f64::from);
+            let [lo, hi] = if ground { bound(tile_ele, [ex, ex + n], [ey, ey + n]) } else { [i32::MAX, i32::MIN] };
             let high = separation.highest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MIN, i32::from);
             let low = separation.lowest_in([ex, ex + n], [ey, ey + n]).map_or(i32::MAX, i32::from);
             let clamp = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32) as i16;

@@ -61,10 +61,8 @@ pub struct FramesBlock {
     pub chunks: Spread,
     pub phases: [Spread; PHASES.len()],
     pub gpu_spans: [Spread; GPU_SPANS],
-    pub per_s_runs: f64,
     pub per_s_bakes: f64,
     pub backlog_s: f64,
-    pub backlog_per_s_runs: f64,
     pub backlog_per_s_bakes: f64,
     pub chunks_per_bake: f64,
     pub mounts_added: f64,
@@ -83,8 +81,7 @@ words!(FramesBlock, SUMMARY::frames::WORDS,
     dt => SUMMARY::frames::dt, task => SUMMARY::frames::task, offthread => SUMMARY::frames::offthread,
     gpu => SUMMARY::frames::gpu, sched => SUMMARY::frames::sched, chunks => SUMMARY::frames::chunks,
     phases => SUMMARY::frames::phases, gpu_spans => SUMMARY::frames::gpu_spans,
-    per_s_runs => SUMMARY::frames::per_s_runs, per_s_bakes => SUMMARY::frames::per_s_bakes,
-    backlog_s => SUMMARY::frames::backlog_s, backlog_per_s_runs => SUMMARY::frames::backlog_per_s_runs,
+    per_s_bakes => SUMMARY::frames::per_s_bakes, backlog_s => SUMMARY::frames::backlog_s,
     backlog_per_s_bakes => SUMMARY::frames::backlog_per_s_bakes, chunks_per_bake => SUMMARY::frames::chunks_per_bake,
     mounts_added => SUMMARY::frames::mounts_added, mounts_removed => SUMMARY::frames::mounts_removed,
     used_delta_mb => SUMMARY::frames::used_delta_mb, census => SUMMARY::frames::census,
@@ -124,14 +121,6 @@ words!(TasksBlock, SUMMARY::tasks::WORDS, slots => SUMMARY::tasks::slots);
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CountersBlock {
-    pub faces_kept: f64,
-    pub faces_possible: f64,
-    pub runs_culled: f64,
-    pub runs_total: f64,
-    /// A count, not the peak a slot is sized against.
-    pub coarse_boxes: f64,
-    pub coarse_low_fill: f64,
-    pub built_runs: f64,
     pub built_bakes: f64,
     pub built_starved: f64,
     pub sheet_repacks: f64,
@@ -157,10 +146,6 @@ impl CountersBlock {
 }
 
 words!(CountersBlock, SUMMARY::counters::WORDS,
-    faces_kept => SUMMARY::counters::faces_kept, faces_possible => SUMMARY::counters::faces_possible,
-    runs_culled => SUMMARY::counters::runs_culled, runs_total => SUMMARY::counters::runs_total,
-    coarse_boxes => SUMMARY::counters::coarse_boxes, coarse_low_fill => SUMMARY::counters::coarse_low_fill,
-    built_runs => SUMMARY::counters::built_runs,
     built_bakes => SUMMARY::counters::built_bakes, built_starved => SUMMARY::counters::built_starved,
     sheet_repacks => SUMMARY::counters::sheet_repacks,
     sheet_uploads => SUMMARY::counters::sheet_uploads,
@@ -184,8 +169,6 @@ words!(SheetBlock, SUMMARY::sheet::WORDS,
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct HeldBlock {
-    pub run_sets: f64,
-    pub run_set_mb: f64,
     pub tiers: f64,
     pub decor_blocks: f64,
     pub decor_instances: f64,
@@ -193,7 +176,6 @@ pub struct HeldBlock {
 }
 
 words!(HeldBlock, SUMMARY::held::WORDS,
-    run_sets => SUMMARY::held::run_sets, run_set_mb => SUMMARY::held::run_set_mb,
     tiers => SUMMARY::held::tiers, decor_blocks => SUMMARY::held::decor_blocks,
     decor_instances => SUMMARY::held::decor_instances, decor_bytes => SUMMARY::held::decor_bytes,
 );

@@ -89,30 +89,29 @@ pub mod FRAME {
     pub const heap_largest_free_mb: u32 = 122;
     pub const ring_cq_peak: u32 = 123;
     pub const ring_held_peak: u32 = 124;
-    pub const work_runs: u32 = 125;
-    pub const work_bakes: u32 = 126;
-    pub const work_fine_peak: u32 = 127;
-    pub const work_coarse_peak: u32 = 128;
-    pub const q_terrain: u32 = 129;
-    pub const q_place: u32 = 130;
-    pub const stale_hidden: u32 = 131;
-    pub const stale_uncovered: u32 = 132;
-    pub const stale_unready: u32 = 133;
-    pub const slot_waits: u32 = 134;
-    pub const slot_wait_zooms: u32 = 135;
-    pub const slot_chained: u32 = 136;
-    pub const cap_commit_left: u32 = 137;
-    pub const cap_record_refused: u32 = 138;
-    pub const turn_effects_ms: u32 = 139;
-    pub const turn_stage_ms: u32 = 140;
-    pub const turn_step_ms: u32 = 141;
-    pub const turn_step_name: u32 = 142;
-    pub const cover_rule: u32 = 143;
-    pub const cover_drawn: u32 = 144;
-    pub const cover_gaps: u32 = 145;
-    pub const view_rays: u32 = 146;
-    pub const view_visits: u32 = 147;
-    pub const WORDS: u32 = 148;
+    pub const work_bakes: u32 = 125;
+    pub const work_fine_peak: u32 = 126;
+    pub const work_coarse_peak: u32 = 127;
+    pub const q_terrain: u32 = 128;
+    pub const q_place: u32 = 129;
+    pub const stale_hidden: u32 = 130;
+    pub const stale_uncovered: u32 = 131;
+    pub const stale_unready: u32 = 132;
+    pub const slot_waits: u32 = 133;
+    pub const slot_wait_zooms: u32 = 134;
+    pub const slot_chained: u32 = 135;
+    pub const cap_commit_left: u32 = 136;
+    pub const cap_record_refused: u32 = 137;
+    pub const turn_effects_ms: u32 = 138;
+    pub const turn_stage_ms: u32 = 139;
+    pub const turn_step_ms: u32 = 140;
+    pub const turn_step_name: u32 = 141;
+    pub const cover_rule: u32 = 142;
+    pub const cover_drawn: u32 = 143;
+    pub const cover_gaps: u32 = 144;
+    pub const view_rays: u32 = 145;
+    pub const view_visits: u32 = 146;
+    pub const WORDS: u32 = 147;
     pub const KEYS: &[&str] = &[
         "t",
         "dt_ms",
@@ -159,7 +158,6 @@ pub mod FRAME {
         "heap_largest_free_mb",
         "ring_cq_peak",
         "ring_held_peak",
-        "work_runs",
         "work_bakes",
         "work_fine_peak",
         "work_coarse_peak",
@@ -204,7 +202,7 @@ pub mod FRAME_GROUPS {
     pub const stale: &[&str] = &["stale_hidden", "stale_uncovered", "stale_unready"];
     pub const slot: &[&str] = &["slot_waits", "slot_wait_zooms", "slot_chained"];
     pub const cap: &[&str] = &["cap_commit_left", "cap_record_refused"];
-    pub const work: &[&str] = &["work_runs", "work_bakes", "work_fine_peak", "work_coarse_peak"];
+    pub const work: &[&str] = &["work_bakes", "work_fine_peak", "work_coarse_peak"];
     pub const q: &[&str] = &["q_terrain", "q_place"];
     pub const tiles: &[&str] = &["tiles_total", "zoom_tiles", "tiles_place"];
     pub const cover: &[&str] = &["cover_rule", "cover_drawn", "cover_gaps"];
@@ -258,9 +256,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 148;
-    pub const prev: u32 = 149;
-    pub const WORDS: u32 = 297;
+    pub const has_prev: u32 = 147;
+    pub const prev: u32 = 148;
+    pub const WORDS: u32 = 295;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -326,19 +324,17 @@ pub mod SUMMARY {
         pub const chunks: u32 = 21;
         pub const phases: u32 = 24;
         pub const gpu_spans: u32 = 39;
-        pub const per_s_runs: u32 = 63;
-        pub const per_s_bakes: u32 = 64;
-        pub const backlog_s: u32 = 65;
-        pub const backlog_per_s_runs: u32 = 66;
-        pub const backlog_per_s_bakes: u32 = 67;
-        pub const chunks_per_bake: u32 = 68;
-        pub const mounts_added: u32 = 69;
-        pub const mounts_removed: u32 = 70;
-        pub const used_delta_mb: u32 = 71;
-        pub const census: u32 = 72;
-        pub const zoom_tris: u32 = 96;
-        pub const last: u32 = 120;
-        pub const WORDS: u32 = 268;
+        pub const per_s_bakes: u32 = 63;
+        pub const backlog_s: u32 = 64;
+        pub const backlog_per_s_bakes: u32 = 65;
+        pub const chunks_per_bake: u32 = 66;
+        pub const mounts_added: u32 = 67;
+        pub const mounts_removed: u32 = 68;
+        pub const used_delta_mb: u32 = 69;
+        pub const census: u32 = 70;
+        pub const zoom_tris: u32 = 94;
+        pub const last: u32 = 118;
+        pub const WORDS: u32 = 265;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -355,10 +351,8 @@ pub mod SUMMARY {
             "chunks",
             "phases",
             "gpu_spans",
-            "per_s_runs",
             "per_s_bakes",
             "backlog_s",
-            "backlog_per_s_runs",
             "backlog_per_s_bakes",
             "chunks_per_bake",
             "mounts_added",
@@ -371,43 +365,22 @@ pub mod SUMMARY {
         ];
     }
     pub mod tasks {
-        pub const AT: u32 = 273;
+        pub const AT: u32 = 270;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 125;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 398;
-        pub const faces_kept: u32 = 0;
-        pub const faces_possible: u32 = 1;
-        pub const runs_culled: u32 = 2;
-        pub const runs_total: u32 = 3;
-        pub const coarse_boxes: u32 = 4;
-        pub const coarse_low_fill: u32 = 5;
-        pub const built_runs: u32 = 6;
-        pub const built_bakes: u32 = 7;
-        pub const built_starved: u32 = 8;
-        pub const sheet_repacks: u32 = 9;
-        pub const sheet_uploads: u32 = 10;
-        pub const WORDS: u32 = 11;
-        pub const KEYS: &[&str] = &[
-            "AT",
-            "faces_kept",
-            "faces_possible",
-            "runs_culled",
-            "runs_total",
-            "coarse_boxes",
-            "coarse_low_fill",
-            "built_runs",
-            "built_bakes",
-            "built_starved",
-            "sheet_repacks",
-            "sheet_uploads",
-            "WORDS",
-        ];
+        pub const AT: u32 = 395;
+        pub const built_bakes: u32 = 0;
+        pub const built_starved: u32 = 1;
+        pub const sheet_repacks: u32 = 2;
+        pub const sheet_uploads: u32 = 3;
+        pub const WORDS: u32 = 4;
+        pub const KEYS: &[&str] = &["AT", "built_bakes", "built_starved", "sheet_repacks", "sheet_uploads", "WORDS"];
     }
     pub mod sheet {
-        pub const AT: u32 = 409;
+        pub const AT: u32 = 399;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -417,18 +390,16 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
     pub mod held {
-        pub const AT: u32 = 414;
-        pub const run_sets: u32 = 0;
-        pub const run_set_mb: u32 = 1;
-        pub const tiers: u32 = 2;
-        pub const decor_blocks: u32 = 3;
-        pub const decor_instances: u32 = 4;
-        pub const decor_bytes: u32 = 5;
-        pub const WORDS: u32 = 6;
-        pub const KEYS: &[&str] = &["AT", "run_sets", "run_set_mb", "tiers", "decor_blocks", "decor_instances", "decor_bytes", "WORDS"];
+        pub const AT: u32 = 404;
+        pub const tiers: u32 = 0;
+        pub const decor_blocks: u32 = 1;
+        pub const decor_instances: u32 = 2;
+        pub const decor_bytes: u32 = 3;
+        pub const WORDS: u32 = 4;
+        pub const KEYS: &[&str] = &["AT", "tiers", "decor_blocks", "decor_instances", "decor_bytes", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 420;
+        pub const AT: u32 = 408;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -436,7 +407,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 423;
+        pub const AT: u32 = 411;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -480,14 +451,14 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 441;
+        pub const AT: u32 = 429;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 602;
+        pub const AT: u32 = 590;
         pub const step: u32 = 0;
         pub const star: u32 = 1;
         pub const frames_held: u32 = 2;
@@ -500,7 +471,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, as zooms: `cell_want` the camera grid's cell the view wants there, at the distance it is met at, and `cell_drawn` the cells of the chunk drawn there now, coarser while the finer is on its way.
     pub mod view {
-        pub const AT: u32 = 609;
+        pub const AT: u32 = 597;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -537,7 +508,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 624;
+    pub const WORDS: u32 = 612;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "sheet", "held", "fetch", "peak", "steps", "quality", "view", "WORDS"];
 }
 

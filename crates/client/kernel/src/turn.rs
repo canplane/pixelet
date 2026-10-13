@@ -65,7 +65,7 @@ fn companion_props() -> Option<CompanionProps> {
         steered: crate::control::camera::input::steering(),
         following: crate::control::navigation::follow_mode::following(),
         eye,
-        tau: crate::chunk::quality::effective().tau(),
+        tau: crate::view::sight::effective(),
     })
 }
 
@@ -93,16 +93,16 @@ fn world_gizmo_tick(_: &mut TickContext) {
     frame_gizmo_step(show, focus, third_person.then(crate::control::camera::controller::azimuth));
 }
 
-/// The rays a new goal starts from.
+/// A new cast, where what it observes moved.
 fn sight_tick(_: &mut TickContext) {
-    crate::chunk::quality::sight();
+    crate::view::sight::start();
 }
 
 /// A slice of the goal walk, then quality. An unfinished walk asks for another turn.
 fn goal_tick(ctx: &mut TickContext) {
     let end = now() + ctx.budget.remaining() * crate::param::VIEW_SHARE;
-    crate::chunk::quality::step(&|| now() >= end);
-    if crate::chunk::domain::walking() {
+    crate::view::sight::advance(&|| now() >= end);
+    if crate::view::sight::casting() {
         ctx.invalidate();
     }
 }
@@ -112,12 +112,14 @@ fn demand_tick(_: &mut TickContext) {
     crate::view::demand::admit_arrived();
     changes_step();
     // Demand follows the goal the chunks published, at the quality decided first.
-    let published = crate::chunk::domain::current().map(|d| crate::view::demand::Published {
-        observation: d.observation(),
-        footprints: d.footprints(),
-        lacks: d.lacks(),
+    let published = crate::view::sight::current().and_then(|s| {
+        Some(crate::view::demand::Published {
+            observation: s.observation()?,
+            stops: s.stops(),
+            lacks: s.lacks(),
+        })
     });
-    let tau = crate::chunk::quality::effective().tau();
+    let tau = crate::view::sight::effective();
     TerrainTile::demand().step(crate::control::navigation::destination::tile(), published, tau);
     // Nothing is fetched while places are hidden.
     match crate::setting::store::settings_store().place {
@@ -129,7 +131,7 @@ fn demand_tick(_: &mut TickContext) {
 }
 
 fn camera_input_tick(_: &mut TickContext) {
-    camera_input_step(crate::chunk::quality::effective().tau());
+    camera_input_step(crate::view::sight::effective());
 }
 
 fn environment_tick(_: &mut TickContext) {
@@ -366,7 +368,7 @@ fn changes_step() {
     }
     if shared {
         crate::chunk::source::chunk_sources_changed();
-        crate::chunk::domain::moved(ground.iter().map(|p| p.region()).chain(written.iter().copied()));
+        crate::view::sight::moved(ground.iter().map(|p| p.region()).chain(written.iter().copied()));
         TerrainTile::demand().moved();
     }
     if shared || !places.is_empty() {

@@ -443,6 +443,6 @@ fn tap_at(x: f64, y: f64) {
         Some(BadgeTap::Go(at)) => crate::control::navigation::destination::go_to_place(at),
         Some(BadgeTap::Remove(e)) => crate::control::interaction::edit::remove(e),
         Some(BadgeTap::Wait(e)) => crate::control::interaction::edit::wait_at(e),
-        None => crate::control::interaction::tap(x, y, crate::chunk::quality::effective().tau()),
+        None => crate::control::interaction::tap(x, y, crate::view::sight::effective()),
     }
 }

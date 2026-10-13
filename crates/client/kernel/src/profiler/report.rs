@@ -29,7 +29,7 @@ pub struct HostFrameStat {
 const BOX_TRIANGLES: f64 = 12.0;
 
 struct Report {
-    last_work: (u32, u32),
+    last_work: u32,
     host: HostFrameStat,
 }
 
@@ -37,7 +37,7 @@ static REPORT: Global<Report> = Global::new();
 
 fn report() -> &'static mut Report {
     REPORT.get(|| Report {
-        last_work: (0, 0),
+        last_work: 0,
         host: HostFrameStat::default(),
     })
 }
@@ -70,14 +70,12 @@ pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
 
 fn work_sample(c: &mut Report, census: &Census) -> WorkSample {
     let st = kernel().sched.builder.stat;
-    let runs = st.runs;
     let sample = WorkSample {
-        runs: runs.wrapping_sub(c.last_work.0) as f64,
-        bakes: st.bakes.wrapping_sub(c.last_work.1) as f64,
+        bakes: st.bakes.wrapping_sub(c.last_work) as f64,
         fine_peak: census.fine_peak as f64,
         coarse_peak: census.coarse_peak as f64,
     };
-    c.last_work = (runs, st.bakes);
+    c.last_work = st.bakes;
     sample
 }
 
@@ -109,7 +107,7 @@ pub fn report_step(ctx: &mut TickContext) {
     let rings = profiler_take_rings();
     let work = work_sample(c, &census);
     let record_refused = TerrainTile::residency().take_refusals() as f64;
-    let [rays, visits] = crate::chunk::domain::take_work();
+    let [rays, visits] = [crate::view::sight::take_rays(), 0];
     if !profiler_recording() {
         return;
     }
@@ -166,16 +164,16 @@ pub fn report_step(ctx: &mut TickContext) {
         },
         turn: TurnSample::default(),
         cover: {
-            let domain = crate::chunk::domain::current();
-            // NaN: step 0 is past the arena
-            let rule = domain.map_or(0.0, |d| d.counted(0).map_or(f64::NAN, f64::from));
+            let goal = crate::chunk::domain::current();
+            let rule = goal.map_or(0.0, |g| g.pieces().len() as f64);
             // The goal's pieces a resident tile draws.
             let residency = TerrainTile::residency();
-            let drawn = domain.map_or(0, |d| d.pieces().iter().filter(|c| residency.read(c.node(), c.cell_zoom()).value().is_some()).count());
+            let drawn = goal.map_or(0, |g| g.pieces().iter().filter(|c| residency.read(c.node(), c.cell_zoom()).value().is_some()).count());
             CoverSample {
                 rule,
                 drawn: drawn as f64,
-                gaps: domain.map_or(0.0, |d| d.unanswered() as f64),
+                // The tiles the rays lacked.
+                gaps: crate::view::sight::current().map_or(0.0, |s| s.lacks().len() as f64),
             }
         },
         view: ViewSample {

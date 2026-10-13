@@ -42,7 +42,11 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         return Err(format!("{JSON}: TILE_ROOT.object {object:?} is not {{version}}/{{name}}"));
     }
     let object_doc = [format!("A kind's tile under `TILE_PREFIX` and the kind, `{object}`.")];
-    let sphere = roots.iter().find(|(n, _)| *n == "TILE_ROOT").and_then(|(_, r)| r.str_at("sphere")).ok_or(format!("{JSON}: TILE_ROOT has no sphere"))?;
+    let sphere = roots
+        .iter()
+        .find(|(n, _)| *n == "TILE_ROOT")
+        .and_then(|(_, r)| r.str_at("sphere"))
+        .ok_or(format!("{JSON}: TILE_ROOT has no sphere"))?;
     if sphere.is_empty() || !sphere.bytes().all(|b| b.is_ascii_lowercase()) || sphere.bytes().all(|b| (b'0'..=b'3').contains(&b)) {
         return Err(format!("{JSON}: TILE_ROOT.sphere {sphere:?} is no name a tile could have"));
     }

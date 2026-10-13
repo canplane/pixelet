@@ -10,10 +10,8 @@
 pub mod build;
 pub mod decor;
 pub mod domain;
-pub mod frontier;
 pub mod mesh_slot;
 pub mod place;
-pub mod quality;
 pub mod source;
 pub mod table;
 

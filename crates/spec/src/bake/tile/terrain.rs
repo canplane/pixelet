@@ -140,7 +140,7 @@ impl TerrainTile {
 
     /// A leaf, its index taken from its own surface and separation.
     pub fn leaf(ele: Vec<i16>, ground: Ground, separation: Separation) -> TerrainTile {
-        let extent = extent_of(&ele, &separation);
+        let extent = extent_of(&ele, &ground.cells, &separation);
         TerrainTile {
             ground,
             separation,

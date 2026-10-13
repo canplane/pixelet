@@ -107,7 +107,7 @@ pub fn fold_terrain(around: [Option<&TerrainTile>; 16], zoom: Zoom) -> Option<Te
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
     let separation = fold_separation(children.map(|t| &t.separation), zoom);
-    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &separation));
+    let index = fold_index(children.map(|t| &t.index), extent_of(&ele, &ground.cells, &separation));
     Some(TerrainTile {
         ground,
         separation,

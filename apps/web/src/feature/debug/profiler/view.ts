@@ -80,9 +80,9 @@ export interface FrameSummary {
   chunks: Spread;
   phases: { name: string; spread: Spread }[];
   gpu_spans: { name: string; spread: Spread }[];
-  perS: [f64, f64];
+  perS: f64;
   backlog_s: f64;
-  backlogPerS: [f64, f64];
+  backlogPerS: f64;
   chunks_per_bake: f64 | null;
   mounts: [f64, f64];
   used_delta_mb: f64;
@@ -151,9 +151,9 @@ function frameSummary(s: F64Array): FrameSummary | null {
     chunks: spreadAt(s, a + F.chunks),
     phases: PHASES.map((name, k) => ({ name, spread: spreadAt(s, a + F.phases + k * SPREAD.WORDS) })),
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.gpu_spans + k * SPREAD.WORDS) })),
-    perS: [s[a + F.per_s_runs], s[a + F.per_s_bakes]],
+    perS: s[a + F.per_s_bakes],
     backlog_s: s[a + F.backlog_s],
-    backlogPerS: [s[a + F.backlog_per_s_runs], s[a + F.backlog_per_s_bakes]],
+    backlogPerS: s[a + F.backlog_per_s_bakes],
     chunks_per_bake: nanNull(s[a + F.chunks_per_bake]),
     mounts: [s[a + F.mounts_added], s[a + F.mounts_removed]],
     used_delta_mb: s[a + F.used_delta_mb],

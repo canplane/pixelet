@@ -49,10 +49,7 @@ impl GhostDraw {
     /// Painted as `state` paints, or as untextured `rgb` where it paints
     /// nothing. Whether what is drawn changed.
     pub fn set_box(&mut self, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) -> bool {
-        let (rgb, layer) = match PAINTER.material_of(state) {
-            Some((m, l)) => ([(m >> 16) as u8, (m >> 8) as u8, m as u8], l),
-            None => ([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8),
-        };
+        let (rgb, layer) = PAINTER.look_of(state).unwrap_or(([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8));
         let offset = on_whole_units(at).1;
         let shape = Shape::Box {
             size_bits: size.to_bits(),

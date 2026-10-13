@@ -82,7 +82,6 @@
     "heap_largest_free_mb": 1,
     "ring_cq_peak": 1,
     "ring_held_peak": 1,
-    "work_runs": 1,
     "work_bakes": 1,
     "work_fine_peak": 1,
     "work_coarse_peak": 1,
@@ -166,7 +165,6 @@
       "cap_record_refused"
     ],
     "work": [
-      "work_runs",
       "work_bakes",
       "work_fine_peak",
       "work_coarse_peak"
@@ -306,10 +304,8 @@
       "chunks": "SPREAD",
       "phases": "PHASES * SPREAD",
       "gpu_spans": "GPU_SPAN_NAMES * SPREAD",
-      "per_s_runs": 1,
       "per_s_bakes": 1,
       "backlog_s": 1,
-      "backlog_per_s_runs": 1,
       "backlog_per_s_bakes": 1,
       "chunks_per_bake": 1,
       "mounts_added": 1,
@@ -323,13 +319,6 @@
       "slots": "STREAM_NAMES * TASK_SUMMARY"
     },
     "counters": {
-      "faces_kept": 1,
-      "faces_possible": 1,
-      "runs_culled": 1,
-      "runs_total": 1,
-      "coarse_boxes": 1,
-      "coarse_low_fill": 1,
-      "built_runs": 1,
       "built_bakes": 1,
       "built_starved": 1,
       "sheet_repacks": 1,
@@ -343,8 +332,6 @@
       "initial": 1
     },
     "held": {
-      "run_sets": 1,
-      "run_set_mb": 1,
       "tiers": 1,
       "decor_blocks": 1,
       "decor_instances": 1,
