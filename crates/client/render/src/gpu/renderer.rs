@@ -5,8 +5,8 @@
 //! perspective depth cancel, so far coplanar faces stop fighting.
 
 use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
-use pxl_spec::space::coord::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
-use pxl_spec::space::coord::v3::{norm3, sub3, V3};
+use pxl_spec::space::coord::mat4::{self, Mat4};
+use pxl_spec::space::coord::v3::{self, V3};
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
 use xpute_guest::mem::base::ptr_at;
@@ -176,8 +176,8 @@ pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
 /// projecting two points in the shader kept a direction to only ~1e-3 rad,
 /// which the secant carried out to kilometers at the horizon: the clouds shook.
 pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
-    let mut inv = mat4();
-    mat4_invert(&mut inv, view_proj);
+    let mut inv = mat4::new();
+    mat4::invert(&mut inv, view_proj);
     let point = |x: f64, y: f64| -> V3 {
         let clip = [x, y, 0.5, 1.0];
         let row = |r: usize| (0..4).map(|c| inv[c * 4 + r] * clip[c]).sum::<f64>();
@@ -186,7 +186,7 @@ pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
     };
     let c = point(0.0, 0.0);
     for (k, (to, from)) in [(point(1.0, 0.0), c), (point(0.0, 1.0), c), (c, *eye)].into_iter().enumerate() {
-        for (o, e) in out[at + 4 * k..at + 4 * k + 3].iter_mut().zip(sub3(&to, &from)) {
+        for (o, e) in out[at + 4 * k..at + 4 * k + 3].iter_mut().zip(v3::sub(&to, &from)) {
             *o = e as f32;
         }
     }
@@ -879,9 +879,9 @@ impl Renderer {
 
     fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32], reach: Option<f64>) {
         let s = stage_lane();
-        let (mut a, mut m, mut proj) = (mat4(), mat4(), mat4());
+        let (mut a, mut m, mut proj) = (mat4::new(), mat4::new(), mat4::new());
         a.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
-        mat4_mul(&mut proj, &GL_TO_WGPU, &a);
+        mat4::mul(&mut proj, &GL_TO_WGPU, &a);
         // The badges measure their size in view space.
         let b = &mut self.badges;
         put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
@@ -890,7 +890,7 @@ impl Renderer {
 
         let u = &mut self.frame;
         a.copy_from_slice(&s[STAGE_AT::EYE_VIEW_PROJ..STAGE_AT::EYE_VIEW_PROJ + 16]);
-        mat4_mul(&mut m, &GL_TO_WGPU, &a);
+        mat4::mul(&mut m, &GL_TO_WGPU, &a);
         put_mat(u, VIEW_PROJ, &m);
         // Everything is drawn in the eye's frame; positions are taken against the eye
         // in f64 before they are narrowed.
@@ -901,7 +901,7 @@ impl Renderer {
         let center: V3 = core::array::from_fn(|k| s[STAGE_AT::GLOBE_ANCHOR + k] - eye_world[k]);
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
-        let up = norm3(&sub3(&eye, &planet_center));
+        let up = v3::norm(&v3::sub(&eye, &planet_center));
         self.clouds.lay_out(g, &m, &eye, env, s[STAGE_AT::CLOUDS]);
         self.atmosphere.set_clouds(&clouds::field([eye_world[0], eye_world[1]], env));
         self.stars.lay_out(g, &m, env, width);
@@ -1158,13 +1158,13 @@ impl Renderer {
             let actor = [u[0] as f64, u[1] as f64, u[2] as f64];
             let mut frame = self.frame;
             let u = &mut frame;
-            let (mut proj, mut view, mut t, mut m, mut n) = (mat4(), mat4(), mat4(), mat4(), mat4());
-            mat4_perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, 0.1, 100.0);
-            mat4_look_at(&mut view, CASE_EYE, CASE_TARGET, [0.0, 0.0, 1.0]);
-            mat4_translation(&mut t, -actor[0], -actor[1], -actor[2]);
-            mat4_mul(&mut m, &GL_TO_WGPU, &proj);
-            mat4_mul(&mut n, &m, &view);
-            mat4_mul(&mut m, &n, &t);
+            let (mut proj, mut view, mut t, mut m, mut n) = (mat4::new(), mat4::new(), mat4::new(), mat4::new(), mat4::new());
+            mat4::perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, 0.1, 100.0);
+            mat4::look_at(&mut view, CASE_EYE, CASE_TARGET, [0.0, 0.0, 1.0]);
+            mat4::translation(&mut t, -actor[0], -actor[1], -actor[2]);
+            mat4::mul(&mut m, &GL_TO_WGPU, &proj);
+            mat4::mul(&mut n, &m, &view);
+            mat4::mul(&mut m, &n, &t);
             put_mat(u, VIEW_PROJ, &m);
             u[CAMERA_POS] = (CASE_EYE[0] + actor[0]) as f32;
             u[CAMERA_POS + 1] = (CASE_EYE[1] + actor[1]) as f32;

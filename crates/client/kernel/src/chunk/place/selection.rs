@@ -5,8 +5,8 @@
 //! camera, since a badge is drawn above its anchor), and with a box on
 //! screen, nearest first.
 
-use pxl_spec::space::coord::mat4::mat4_transform_point;
-use pxl_spec::space::coord::v3::{add3, dot3, sub3};
+use pxl_spec::space::coord::mat4;
+use pxl_spec::space::coord::v3;
 
 use crate::billboard::batch::BillboardBatch;
 use crate::view::frame::pose::globe;
@@ -28,9 +28,9 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>)
         // Placed on the planet once, as badge.wgsl does, and kept in the lanes.
         let from = [batch.local_x[i] - anchor[0], batch.local_y[i] - anchor[1], batch.local_z[i] - anchor[2]];
         let placed = globe.place(from);
-        let pos = add3(&anchor, &placed);
-        let to = sub3(&pos, &eye);
-        let dist2 = dot3(&to, &to);
+        let pos = v3::add(&anchor, &placed);
+        let to = v3::sub(&pos, &eye);
+        let dist2 = v3::dot(&to, &to);
         if !v.frustum.sees(pos, dist2.sqrt() * ANCHOR_REACH) {
             continue;
         }
@@ -53,7 +53,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, out: &mut Vec<u32>)
     for k in 0..n {
         let i = batch.order[k] as usize;
 
-        mat4_transform_point(&mut ndc, &v.world_view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
+        mat4::transform_point(&mut ndc, &v.world_view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
         let [sx, sy] = ndc_to_px([ndc[0], ndc[1]]);
 
         let w = batch.region_px[i] as f64;

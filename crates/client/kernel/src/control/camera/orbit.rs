@@ -9,7 +9,7 @@ pub mod terrain_gate;
 
 use pxl_spec::space::coord::q3::Q3;
 
-use pxl_spec::space::coord::v3::{add3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 use xpute_kit::math::scalar::clamp;
 
 use crate::approach::{approach_angle, approach_scalar, approach_vec};
@@ -129,7 +129,7 @@ pub(crate) fn put(at: Q3, snap: bool) {
         let (o, cam) = (orbit(), camera());
         let center = target(&mut o.to, focus_world().unwrap_or_default());
         let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
-        set_eye_world(&add3(&center, &e));
+        set_eye_world(&v3::add(&center, &e));
     }
 }
 
@@ -167,7 +167,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     // Written only where something moved, so nothing is written back at rest.
     if (center, o.dist, cam.polar, cam.azimuth) != was {
         let e = orbit_eye_offset(o.dist, cam.polar, cam.azimuth);
-        set_eye_world(&add3(&center, &e));
+        set_eye_world(&v3::add(&center, &e));
     }
     view_compose(crate::control::camera::controller::pose());
     Some(moving)

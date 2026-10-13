@@ -13,7 +13,7 @@
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::v3::{dot3, len3, sub3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest_box;
 use pxl_spec::space::coord::zoom::{of_side, Zoom};
 use pxl_spec::space::layer::tile::Tile;
@@ -68,9 +68,9 @@ impl Lens {
         let planes = o.frustum?.planes;
         let n = |k: usize| -> V3 { [planes[k * 4], planes[k * 4 + 1], planes[k * 4 + 2]] };
         let forward = unit(n(4))?;
-        let right = unit(sub3(&n(0), &n(1)))?;
-        let up = unit(sub3(&n(2), &n(3)))?;
-        let tan = [dot3(&n(0), &forward) / dot3(&n(0), &right), dot3(&n(2), &forward) / dot3(&n(2), &up)];
+        let right = unit(v3::sub(&n(0), &n(1)))?;
+        let up = unit(v3::sub(&n(2), &n(3)))?;
+        let tan = [v3::dot(&n(0), &forward) / v3::dot(&n(0), &right), v3::dot(&n(2), &forward) / v3::dot(&n(2), &up)];
         tan.iter().all(|t| t.is_finite() && *t > 0.0).then_some(Lens { forward, right, up, tan })
     }
 
@@ -302,6 +302,6 @@ pub fn take_rays() -> u32 {
 }
 
 fn unit(v: V3) -> Option<V3> {
-    let l = len3(&v);
+    let l = v3::len(&v);
     (l > 1e-12 && l.is_finite()).then(|| v.map(|c| c / l))
 }

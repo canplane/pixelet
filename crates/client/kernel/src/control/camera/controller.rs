@@ -6,9 +6,9 @@
 //! overrides either while it holds the pose, since a tracked turn can roll.
 
 use pxl_spec::space::camera::grid::SPLIT;
-use pxl_spec::space::coord::mat4::{mat4, mat4_mul, mat4_rotation_quat, mat4_rotation_z, mat4_transform_point, mat4_transpose, Mat4};
+use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::v3::{add3, sub3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 
 use crate::control::camera::orbit::orbit;
 use crate::control::camera::state::{camera_state, Intent, IntentPatch};
@@ -39,13 +39,13 @@ pub fn look_dir(polar: f64, azimuth: f64) -> V3 {
 /// Straight down at polar 0 with the azimuth up the screen; at the poles the
 /// azimuth only turns the screen about the look.
 pub fn look_rotation(polar: f64, azimuth: f64) -> Mat4 {
-    let mut about_z = mat4();
-    mat4_rotation_z(&mut about_z, azimuth);
+    let mut about_z = mat4::new();
+    mat4::rotation_z(&mut about_z, azimuth);
     let (s, c) = (libm::sin(polar), libm::cos(polar));
-    let mut about_x = mat4();
+    let mut about_x = mat4::new();
     (about_x[5], about_x[6], about_x[9], about_x[10]) = (c, -s, s, c);
-    let mut rotation: Mat4 = mat4();
-    mat4_mul(&mut rotation, &about_x, &about_z);
+    let mut rotation: Mat4 = mat4::new();
+    mat4::mul(&mut rotation, &about_x, &about_z);
     rotation
 }
 
@@ -216,12 +216,12 @@ pub fn pose() -> Option<ObserverPose> {
     let c = controllers();
     match (&c.tracked, c.base) {
         (Some(t), _) => {
-            let (mut camera_to_world, mut rotation, mut moved) = (mat4(), mat4(), [0.0; 3]);
-            mat4_mul(&mut camera_to_world, &t.world_turn, &t.turn);
-            mat4_transform_point(&mut moved, &t.world_turn, t.at[0], t.at[1], t.at[2]);
+            let (mut camera_to_world, mut rotation, mut moved) = (mat4::new(), mat4::new(), [0.0; 3]);
+            mat4::mul(&mut camera_to_world, &t.world_turn, &t.turn);
+            mat4::transform_point(&mut moved, &t.world_turn, t.at[0], t.at[1], t.at[2]);
             Some(ObserverPose {
-                eye: add3(&t.world_at, &moved),
-                rotation: *mat4_transpose(&mut rotation, &camera_to_world),
+                eye: v3::add(&t.world_at, &moved),
+                rotation: *mat4::transpose(&mut rotation, &camera_to_world),
             })
         }
         (None, _) => {
@@ -358,18 +358,18 @@ fn take_mode(want: CameraMode) -> bool {
 /// `q` (x, y, z, w) turns the camera's axes to the tracker's. The first of a
 /// run places the tracker's space so the camera stays where it is.
 pub fn tracked_pose(at: V3, q: [f64; 4]) {
-    let mut turn = mat4();
-    mat4_rotation_quat(&mut turn, q);
+    let mut turn = mat4::new();
+    mat4::rotation_quat(&mut turn, q);
     let c = controllers();
     if c.tracked.is_none() {
         let now = view().at();
-        let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) = (mat4(), mat4(), mat4(), [0.0; 3]);
-        mat4_transpose(&mut camera_to_world, &now.rotation);
-        mat4_mul(&mut world_turn, &camera_to_world, mat4_transpose(&mut turn_back, &turn));
-        mat4_transform_point(&mut moved, &world_turn, at[0], at[1], at[2]);
+        let (mut camera_to_world, mut turn_back, mut world_turn, mut moved) = (mat4::new(), mat4::new(), mat4::new(), [0.0; 3]);
+        mat4::transpose(&mut camera_to_world, &now.rotation);
+        mat4::mul(&mut world_turn, &camera_to_world, mat4::transpose(&mut turn_back, &turn));
+        mat4::transform_point(&mut moved, &world_turn, at[0], at[1], at[2]);
         c.tracked = Some(Tracked {
             world_turn,
-            world_at: sub3(&now.eye, &moved),
+            world_at: v3::sub(&now.eye, &moved),
             turn,
             at,
         });

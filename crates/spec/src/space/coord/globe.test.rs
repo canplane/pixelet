@@ -1,7 +1,7 @@
 // pxl-spec/space/coord/globe.test.rs
 
 use super::*;
-use crate::space::coord::v3::sub3;
+use crate::space::coord::v3;
 use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
 
 const SEOUL: f64 = 37.5665 * core::f64::consts::PI / 180.0;
@@ -65,7 +65,7 @@ fn the_sphere_is_one_whichever_point_it_is_laid_about() {
             let pts: [V3; 4] = core::array::from_fn(|_| [unit() * span, unit() * span, (unit() + 0.5) * 2.0e3]);
             let about_b = |v: V3| b.place([v[0] - off[0], v[1] - off[1], v[2]]);
             let (pa, pb): (Vec<V3>, Vec<V3>) = (pts.iter().map(|&p| a.place(p)).collect(), pts.iter().map(|&p| about_b(p)).collect());
-            let sub = |x: V3, y: V3| sub3(&x, &y);
+            let sub = |x: V3, y: V3| v3::sub(&x, &y);
             let apart = |x: V3, y: V3| sub(x, y).iter().map(|v| v * v).sum::<f64>().sqrt();
             for (i, j) in [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)] {
                 let (da, db) = (apart(pa[i], pa[j]) * meters_a, apart(pb[i], pb[j]) * meters_b);

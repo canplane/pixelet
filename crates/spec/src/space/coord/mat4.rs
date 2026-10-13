@@ -7,13 +7,13 @@ use super::v3::V3;
 
 pub type Mat4 = [f64; 16];
 
-pub fn mat4() -> Mat4 {
+pub fn new() -> Mat4 {
     let mut out = [0.0; 16];
-    mat4_identity(&mut out);
+    identity(&mut out);
     out
 }
 
-pub fn mat4_identity(out: &mut Mat4) -> &mut Mat4 {
+pub fn identity(out: &mut Mat4) -> &mut Mat4 {
     out.fill(0.0);
     out[0] = 1.0;
     out[5] = 1.0;
@@ -23,7 +23,7 @@ pub fn mat4_identity(out: &mut Mat4) -> &mut Mat4 {
 }
 
 /// out = a × b; `out` may be `a` or `b`.
-pub fn mat4_mul<'a>(out: &'a mut Mat4, a: &Mat4, b: &Mat4) -> &'a mut Mat4 {
+pub fn mul<'a>(out: &'a mut Mat4, a: &Mat4, b: &Mat4) -> &'a mut Mat4 {
     let (a00, a01, a02, a03) = (a[0], a[1], a[2], a[3]);
     let (a10, a11, a12, a13) = (a[4], a[5], a[6], a[7]);
     let (a20, a21, a22, a23) = (a[8], a[9], a[10], a[11]);
@@ -39,7 +39,7 @@ pub fn mat4_mul<'a>(out: &'a mut Mat4, a: &Mat4, b: &Mat4) -> &'a mut Mat4 {
 }
 
 /// The general inverse by cofactors; a singular matrix leaves `out` zero.
-pub fn mat4_invert<'a>(out: &'a mut Mat4, m: &Mat4) -> &'a mut Mat4 {
+pub fn invert<'a>(out: &'a mut Mat4, m: &Mat4) -> &'a mut Mat4 {
     let (n11, n21, n31, n41) = (m[0], m[1], m[2], m[3]);
     let (n12, n22, n32, n42) = (m[4], m[5], m[6], m[7]);
     let (n13, n23, n33, n43) = (m[8], m[9], m[10], m[11]);
@@ -73,17 +73,17 @@ pub fn mat4_invert<'a>(out: &'a mut Mat4, m: &Mat4) -> &'a mut Mat4 {
     out
 }
 
-pub fn mat4_translation(out: &mut Mat4, x: f64, y: f64, z: f64) -> &mut Mat4 {
-    mat4_identity(out);
+pub fn translation(out: &mut Mat4, x: f64, y: f64, z: f64) -> &mut Mat4 {
+    identity(out);
     out[12] = x;
     out[13] = y;
     out[14] = z;
     out
 }
 
-pub fn mat4_rotation_z(out: &mut Mat4, angle: f64) -> &mut Mat4 {
+pub fn rotation_z(out: &mut Mat4, angle: f64) -> &mut Mat4 {
     let (c, s) = (libm::cos(angle), libm::sin(angle));
-    mat4_identity(out);
+    identity(out);
     out[0] = c;
     out[1] = s;
     out[4] = -s;
@@ -92,10 +92,10 @@ pub fn mat4_rotation_z(out: &mut Mat4, angle: f64) -> &mut Mat4 {
 }
 
 /// The rotation a quaternion (x, y, z, w) turns by, normalized first.
-pub fn mat4_rotation_quat(out: &mut Mat4, [x, y, z, w]: [f64; 4]) -> &mut Mat4 {
+pub fn rotation_quat(out: &mut Mat4, [x, y, z, w]: [f64; 4]) -> &mut Mat4 {
     let n = libm::sqrt(x * x + y * y + z * z + w * w);
     let (x, y, z, w) = (x / n, y / n, z / n, w / n);
-    mat4_identity(out);
+    identity(out);
     out[0] = 1.0 - 2.0 * (y * y + z * z);
     out[1] = 2.0 * (x * y + z * w);
     out[2] = 2.0 * (x * z - y * w);
@@ -109,7 +109,7 @@ pub fn mat4_rotation_quat(out: &mut Mat4, [x, y, z, w]: [f64; 4]) -> &mut Mat4 {
 }
 
 /// A rotation's inverse, exactly: its transpose.
-pub fn mat4_transpose<'a>(out: &'a mut Mat4, m: &Mat4) -> &'a mut Mat4 {
+pub fn transpose<'a>(out: &'a mut Mat4, m: &Mat4) -> &'a mut Mat4 {
     for c in 0..4 {
         for r in 0..4 {
             out[c * 4 + r] = m[r * 4 + c];
@@ -119,7 +119,7 @@ pub fn mat4_transpose<'a>(out: &'a mut Mat4, m: &Mat4) -> &'a mut Mat4 {
 }
 
 /// GL's perspective: clip z in [-1, 1], `fov` the vertical angle in radians.
-pub fn mat4_perspective(out: &mut Mat4, fov: f64, aspect: f64, near: f64, far: f64) -> &mut Mat4 {
+pub fn perspective(out: &mut Mat4, fov: f64, aspect: f64, near: f64, far: f64) -> &mut Mat4 {
     let f = 1.0 / libm::tan(fov / 2.0);
     out.fill(0.0);
     out[0] = f / aspect;
@@ -140,7 +140,7 @@ fn or_one(l: f64) -> f64 {
 
 /// The view matrix of an eye at `eye` looking at `target` with `up` up:
 /// world to camera, the camera looking down its own −Z.
-pub fn mat4_look_at(out: &mut Mat4, eye: V3, target: V3, up: V3) -> &mut Mat4 {
+pub fn look_at(out: &mut Mat4, eye: V3, target: V3, up: V3) -> &mut Mat4 {
     let (mut zx, mut zy, mut zz) = (eye[0] - target[0], eye[1] - target[1], eye[2] - target[2]);
     let mut l = or_one(libm::hypot(libm::hypot(zx, zy), zz));
     zx /= l;
@@ -178,7 +178,7 @@ pub fn mat4_look_at(out: &mut Mat4, eye: V3, target: V3, up: V3) -> &mut Mat4 {
     out
 }
 
-pub fn mat4_transform_point<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
+pub fn transform_point<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
     let w = or_one(m[3] * x + m[7] * y + m[11] * z + m[15]);
     out[0] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
     out[1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
@@ -186,7 +186,7 @@ pub fn mat4_transform_point<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f6
     out
 }
 
-pub fn mat4_transform_direction<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
+pub fn transform_direction<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
     let ox = m[0] * x + m[4] * y + m[8] * z;
     let oy = m[1] * x + m[5] * y + m[9] * z;
     let oz = m[2] * x + m[6] * y + m[10] * z;
@@ -198,13 +198,13 @@ pub fn mat4_transform_direction<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z
 }
 
 /// The clip-space w of m × (x, y, z, 1): the point's depth for a projection.
-pub fn mat4_clip_w(m: &Mat4, x: f64, y: f64, z: f64) -> f64 {
+pub fn clip_w(m: &Mat4, x: f64, y: f64, z: f64) -> f64 {
     m[3] * x + m[7] * y + m[11] * z + m[15]
 }
 
 /// The frustum's six planes (nx, ny, nz, d), normals in, normalized: left,
 /// right, bottom, top, near, far.
-pub fn mat4_frustum_planes<'a>(out: &'a mut [f64; 24], m: &Mat4) -> &'a mut [f64; 24] {
+pub fn frustum_planes<'a>(out: &'a mut [f64; 24], m: &Mat4) -> &'a mut [f64; 24] {
     let rows = [[m[0], m[4], m[8], m[12]], [m[1], m[5], m[9], m[13]], [m[2], m[6], m[10], m[14]], [m[3], m[7], m[11], m[15]]];
     let w = rows[3];
     let mut put = |k: usize, a: [f64; 4], sign: f64| {

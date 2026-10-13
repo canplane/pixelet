@@ -8,7 +8,7 @@ pub mod celestial_position;
 pub mod cloud;
 
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
-use pxl_spec::space::coord::v3::len3;
+use pxl_spec::space::coord::v3;
 
 use crate::chunk::table::Frame;
 use crate::io::host::wall_now;
@@ -122,7 +122,7 @@ impl EnvironmentDraw {
         // and the planet falls away under a camera standing off it.
         let km_per_u = km_per_u();
         let r = globe().radius_u();
-        let over = len3(&[frame.camera[0], frame.camera[1], frame.camera[2] + r]) - r;
+        let over = v3::len(&[frame.camera[0], frame.camera[1], frame.camera[2] + r]) - r;
         let light = Light {
             sun: self.sun,
             moon: self.moon,

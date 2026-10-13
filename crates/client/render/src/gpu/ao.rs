@@ -5,7 +5,7 @@
 //! upsample to a one-byte map every lit pass reads at group 0 binding 7.
 //! About 11 bytes a pixel and one extra geometry pass.
 
-use pxl_spec::space::coord::mat4::{mat4_invert, Mat4};
+use pxl_spec::space::coord::mat4::{self, Mat4};
 
 use crate::frame::shader::record::{PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE, PIPELINE_AO_UPSAMPLE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
@@ -114,7 +114,7 @@ impl ScreenAo {
     pub fn lay_out(&mut self, g: &Gpu, proj: &Mat4, width: u32, height: u32) {
         let u = &mut self.uniform_words;
         let mut inv = [0.0; 16];
-        mat4_invert(&mut inv, proj);
+        mat4::invert(&mut inv, proj);
         put_mat(u, 0, proj);
         put_mat(u, 16, &inv);
         u[HALF] = (width / 2) as f32;

@@ -6,7 +6,7 @@
 //! the spec's colors (`gizmo_spec::frame`), which the shell's legend reads.
 
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::v3::{floor3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
@@ -81,7 +81,7 @@ fn sketch(s: &mut Sketch, focus: &Q3, heading: Option<f64>) {
     s.about = center;
     s.lines.clear();
     let ground = World::now().floor_under(focus, LEAF_ZOOM).value().flatten();
-    let cell = floor3(&[center[0], center[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
+    let cell = v3::floor(&[center[0], center[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
     s.cube(cell, units(GROUND.cell()));
     s.point(center, linear_rgb(frame::focus::rgb));
     // First person the eye is the focus, and nothing about it is seen.

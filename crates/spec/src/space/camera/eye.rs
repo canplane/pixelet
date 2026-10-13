@@ -3,7 +3,7 @@
 //! The observer: where the eye is, what it looks at and how far it sees.
 
 use crate::space::coord::aabb::Aabb;
-use crate::space::coord::v3::{dot3, V3};
+use crate::space::coord::v3::{self, V3};
 use crate::space::coord::world::nearest_box;
 
 /// Six planes, normals in, `n · x + d ≥ 0` inside, in world units.
@@ -15,13 +15,13 @@ pub struct Frustum {
 impl Frustum {
     /// Conservative: a sphere near a corner can pass every plane and still lie outside.
     pub fn sees(&self, center: V3, radius: f64) -> bool {
-        self.planes.as_chunks::<4>().0.iter().all(|p| dot3(&[p[0], p[1], p[2]], &center) + p[3] >= -radius)
+        self.planes.as_chunks::<4>().0.iter().all(|p| v3::dot(&[p[0], p[1], p[2]], &center) + p[3] >= -radius)
     }
 
     /// The same planes for points measured from `at`.
     pub fn about(mut self, at: V3) -> Frustum {
         for p in self.planes.as_chunks_mut::<4>().0 {
-            p[3] += dot3(&[p[0], p[1], p[2]], &at);
+            p[3] += v3::dot(&[p[0], p[1], p[2]], &at);
         }
         self
     }

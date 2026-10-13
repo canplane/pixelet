@@ -2,7 +2,7 @@
 //
 // What the tests share: an eye placed by the orbit's controls.
 
-use pxl_spec::space::coord::v3::{add3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 
 pub fn place(center: V3, dist: f64, polar: f64, azimuth: f64) {
     use crate::control::camera::controller::{camera, set_eye_world};
@@ -13,5 +13,5 @@ pub fn place(center: V3, dist: f64, polar: f64, azimuth: f64) {
     (cam.polar, cam.azimuth) = (polar, azimuth);
     camera_state().intent = Intent { dist, azimuth, polar };
     let e = orbit_eye_offset(dist, polar, azimuth);
-    set_eye_world(&add3(&center, &e));
+    set_eye_world(&v3::add(&center, &e));
 }

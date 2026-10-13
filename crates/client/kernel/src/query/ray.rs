@@ -23,7 +23,7 @@ use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::block::Block;
 use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::v3::{len3, sub3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::wrap_cell;
 use pxl_spec::space::coord::zoom::{cube, units, Zoom};
 use pxl_spec::space::hierarchy::tree::child_of;
@@ -233,7 +233,7 @@ impl<'a> World<'a> {
         }
         // The zooms the ray asks within it: at its point nearest the eye, and
         // as far as where the ray leaves it.
-        let zoom_at = |p: V3| walk.detail.at(len3(&sub3(&p, &ray.origin)));
+        let zoom_at = |p: V3| walk.detail.at(v3::len(&v3::sub(&p, &ray.origin)));
         let asked = [zoom_at(ray.at(t1)), zoom_at(whole.nearest(ray.origin))];
         let answer = match self.node(at, asked) {
             Answer::Nothing(l) => return Met::Lacks(l),

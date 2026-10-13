@@ -2,7 +2,7 @@
 
 //! A box of the world: two corners in units, its sides along the axes.
 
-use super::v3::{ceil3, floor3, len3, V3};
+use super::v3::{self, V3};
 
 /// An axis-aligned box, in units.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -41,7 +41,7 @@ impl Aabb {
 
     /// The bounding sphere's, about `center`.
     pub fn radius(self) -> f64 {
-        len3(&self.extent()) / 2.0
+        v3::len(&self.extent()) / 2.0
     }
 
     /// The slab test: where the ray enters and leaves, unclipped, and the axis
@@ -85,8 +85,8 @@ impl Aabb {
     /// Grown outward to whole cells of `side`.
     pub fn snapped_out(self, side: f64) -> Aabb {
         Aabb {
-            min: floor3(&self.min, side),
-            max: ceil3(&self.max, side),
+            min: v3::floor(&self.min, side),
+            max: v3::ceil(&self.max, side),
         }
     }
 

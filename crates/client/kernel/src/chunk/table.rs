@@ -34,7 +34,7 @@ use crate::profiler::frame::ZOOMS;
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::v3::{dot3, len3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::sched::edge::Notify;
 use xpute_guest::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
@@ -102,7 +102,7 @@ impl Frame {
         };
         let c = self.camera;
         // A sphere containing the camera is always visible.
-        if len3(&[c[0] - x, c[1] - y, c[2] - z]) <= radius {
+        if v3::len(&[c[0] - x, c[1] - y, c[2] - z]) <= radius {
             return true;
         }
         // Horizon cull (Cozzi & Ring): a point is above the eye's horizon while
@@ -111,7 +111,7 @@ impl Frame {
             && self.globe.is_none_or(|globe| {
                 let r = globe.radius_u();
                 let (e, p) = ([c[0], c[1], c[2] + r], [x, y, z + r]);
-                dot3(&e, &p) + radius * len3(&e) >= r * r
+                v3::dot(&e, &p) + radius * v3::len(&e) >= r * r
             })
     }
 

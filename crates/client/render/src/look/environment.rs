@@ -5,7 +5,7 @@
 //! sky's own, which the shaders read from its tables. Directions are
 //! in the map's axes (X east, Y north, Z up), as is the sky.
 
-use pxl_spec::space::coord::v3::{dot3, norm3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 
 use crate::look::atmosphere::{light_at, moon_phase_light, white, MOON_LIGHT, NIGHT_COLOR};
 
@@ -41,18 +41,18 @@ pub struct Light {
 pub(crate) const LUMA: [f64; 3] = [0.2126, 0.7152, 0.0722];
 
 fn luminance(c: [f64; 3]) -> f64 {
-    dot3(&LUMA, &c)
+    v3::dot(&LUMA, &c)
 }
 
 pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     // Both lights, summed so the light does not snap where they cross at dusk,
     // each as it reaches the air; the brighter at the eye casts the shadow.
-    let sun_dir = norm3(&light.sun);
+    let sun_dir = v3::norm(&light.sun);
     let w = white();
-    let moon_dir = norm3(&light.moon);
+    let moon_dir = v3::norm(&light.moon);
     // The stars are lost in the day.
     let night = 1.0 - smoothstep(-0.1, 0.0, sun_dir[2]);
-    let elongation = libm::acos(dot3(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
+    let elongation = libm::acos(v3::dot(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
     let phase = moon_phase_light(core::f64::consts::PI - elongation);
     // Wherever the Moon is up; by day the sun outshines it.
     let moon_color: [f64; 3] = core::array::from_fn(|k| NIGHT_COLOR[k] * MOON_LIGHT * phase * w[k]);

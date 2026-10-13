@@ -14,7 +14,7 @@ use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
-use pxl_spec::space::coord::v3::sub3;
+use pxl_spec::space::coord::v3;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
 
@@ -207,7 +207,7 @@ pub fn visible_step(ctx: &mut TickContext) {
         anchor,
         eye: e,
         frustum: v.frustum.about(anchor),
-        camera: sub3(&e, &anchor),
+        camera: v3::sub(&e, &anchor),
         delta_s: ctx.delta,
         remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,

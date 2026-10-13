@@ -4,7 +4,7 @@
 //! the way. The controls keep what was asked; the drawn orbit stops short.
 
 use pxl_spec::space::coord::q3::{self, Q3};
-use pxl_spec::space::coord::v3::{add3, V3};
+use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_kit::math::scalar::wrap;
@@ -77,7 +77,7 @@ fn penetration(at: &ViewPose) -> Option<f64> {
 /// The eye, local and canonical.
 fn eye(at: &ViewPose) -> (V3, Q3) {
     let offset = orbit_eye_offset(at.dist, at.polar, at.azimuth);
-    let world: V3 = add3(&at.target, &offset);
+    let world: V3 = v3::add(&at.target, &offset);
     (world, world_to_canonical(&world))
 }
 

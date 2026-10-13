@@ -11,7 +11,7 @@ use fnv::FnvHashMap;
 
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
 use pxl_render::frame::draw::MODEL_VERTEX_WORDS;
-use pxl_spec::space::coord::mat4::{mat4_transform_direction, mat4_transform_point};
+use pxl_spec::space::coord::mat4;
 use xpute_guest::mem::base::ptr_at;
 
 use crate::laid;
@@ -99,9 +99,9 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
                 let (mut x, mut y, mut z) = (prim.position[i * 3], prim.position[i * 3 + 1], prim.position[i * 3 + 2]);
                 let mut normal = prim.normal.as_ref().map_or([0.0, 1.0, 0.0], |nm| [nm[i * 3], nm[i * 3 + 1], nm[i * 3 + 2]]);
                 if still {
-                    let at = mat4_transform_point(&mut p, world_m, x as f64, y as f64, z as f64);
+                    let at = mat4::transform_point(&mut p, world_m, x as f64, y as f64, z as f64);
                     (x, y, z) = (at[0] as f32, at[1] as f32, at[2] as f32);
-                    let n = mat4_transform_direction(&mut p, world_m, normal[0] as f64, normal[1] as f64, normal[2] as f64);
+                    let n = mat4::transform_direction(&mut p, world_m, normal[0] as f64, normal[1] as f64, normal[2] as f64);
                     normal = [n[0] as f32, n[1] as f32, n[2] as f32];
                 }
                 put_f(words, lane(0) + v * 3, x);
@@ -129,7 +129,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
                 let at_y = if remap.is_some() || still {
                     y as f64
                 } else {
-                    mat4_transform_point(&mut p, world_m, x as f64, y as f64, z as f64)[1]
+                    mat4::transform_point(&mut p, world_m, x as f64, y as f64, z as f64)[1]
                 };
                 lo = lo.min(at_y);
                 hi = hi.max(at_y);

@@ -7,7 +7,7 @@
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg4326::{self, G4326};
-use pxl_spec::space::coord::mat4::{mat4, mat4_frustum_planes, mat4_invert, mat4_mul, mat4_perspective, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4};
+use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::nearest;
 
@@ -52,11 +52,11 @@ impl View {
             near: crate::param::NEAR,
             // Set with the camera; reversed depth takes an endless far until then.
             far: f64::INFINITY,
-            view_matrix: mat4(),
-            inv_view_matrix: mat4(),
-            proj: mat4(),
-            world_view_proj: mat4(),
-            inv_world_view_proj: mat4(),
+            view_matrix: mat4::new(),
+            inv_view_matrix: mat4::new(),
+            proj: mat4::new(),
+            world_view_proj: mat4::new(),
+            inv_world_view_proj: mat4::new(),
             frustum: Frustum::default(),
         }
     }
@@ -68,16 +68,16 @@ impl View {
     pub fn at(&self) -> ObserverPose {
         self.pose.unwrap_or(ObserverPose {
             eye: [0.0, 0.0, 1.0],
-            rotation: mat4(),
+            rotation: mat4::new(),
         })
     }
 
     /// Eye-relative matrices, as the GPU's points are (`DrawList::translation`):
     /// no eye position in either, so nothing large cancels in floats.
     pub fn eye_frame(&self) -> (Mat4, Mat4) {
-        let mut view_proj = mat4();
+        let mut view_proj = mat4::new();
         let rotation = self.at().rotation;
-        mat4_mul(&mut view_proj, &self.proj, &rotation);
+        mat4::mul(&mut view_proj, &self.proj, &rotation);
         (view_proj, rotation)
     }
 }
@@ -145,20 +145,20 @@ fn compose() {
     let v = view();
     let at = v.at();
     let e = at.eye;
-    let mut to_eye = mat4();
-    mat4_translation(&mut to_eye, -e[0], -e[1], -e[2]);
-    mat4_mul(&mut v.view_matrix, &at.rotation, &to_eye);
+    let mut to_eye = mat4::new();
+    mat4::translation(&mut to_eye, -e[0], -e[1], -e[2]);
+    mat4::mul(&mut v.view_matrix, &at.rotation, &to_eye);
     let vm = v.view_matrix;
-    mat4_invert(&mut v.inv_view_matrix, &vm);
+    mat4::invert(&mut v.inv_view_matrix, &vm);
     let altitude = e[2];
     v.near = near_clip_at(altitude);
     v.far = far_clip_at(altitude);
-    mat4_perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near, v.far);
+    mat4::perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near, v.far);
     let proj = v.proj;
-    mat4_mul(&mut v.world_view_proj, &proj, &vm);
+    mat4::mul(&mut v.world_view_proj, &proj, &vm);
     let lvp = v.world_view_proj;
-    mat4_invert(&mut v.inv_world_view_proj, &lvp);
-    mat4_frustum_planes(&mut v.frustum.planes, &lvp);
+    mat4::invert(&mut v.inv_world_view_proj, &lvp);
+    mat4::frustum_planes(&mut v.frustum.planes, &lvp);
 }
 
 /// `ndc_x`/`ndc_y` in [−1, 1], x right and y up; `direction` is unit.
@@ -166,8 +166,8 @@ pub fn view_ray(ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
     let v = view();
     *origin = v.at().eye;
     let mut far = [0.0; 3];
-    mat4_transform_point(&mut far, &v.inv_world_view_proj, ndc_x, ndc_y, 1.0);
-    mat4_transform_direction(direction, &mat4(), far[0] - origin[0], far[1] - origin[1], far[2] - origin[2]);
+    mat4::transform_point(&mut far, &v.inv_world_view_proj, ndc_x, ndc_y, 1.0);
+    mat4::transform_direction(direction, &mat4::new(), far[0] - origin[0], far[1] - origin[1], far[2] - origin[2]);
 }
 
 /// `ndc` in [−1, 1], y up, as logical pixels from the view's top left.

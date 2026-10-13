@@ -5,8 +5,8 @@
 //! `reach`), so its texel follows the camera grid. 16 MB at 2048, 4 MB at 1024
 //! on a phone.
 
-use pxl_spec::space::coord::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
-use pxl_spec::space::coord::v3::{dot3, norm3, V3};
+use pxl_spec::space::coord::mat4::{self, Mat4};
+use pxl_spec::space::coord::v3::{self, V3};
 
 use crate::frame::shader::record::FRAME_FLOATS;
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, Gpu, Stamp};
@@ -72,7 +72,7 @@ impl Shadow {
             blank_sampler,
             light_frame,
             light: [0.0; FRAME_FLOATS],
-            light_view_proj: mat4(),
+            light_view_proj: mat4::new(),
             texel: 0.0,
             size,
             bytes: size * size * 4,
@@ -98,20 +98,20 @@ impl Shadow {
         // the sun goes, on purpose: the sun read as moving. Turned on every
         // frame instead, the grid below snapped another way each time and a
         // wall's shadow flickered as fast as the frames came.
-        let sun = norm3(&[sun_dir[0] as f64, sun_dir[1] as f64, sun_dir[2] as f64]);
+        let sun = v3::norm(&[sun_dir[0] as f64, sun_dir[1] as f64, sun_dir[2] as f64]);
         let step = self.texel / reach;
         let from = match self.cast_from {
-            Some(from) if dot3(&from, &sun) > libm::cos(step) => from,
+            Some(from) if v3::dot(&from, &sun) > libm::cos(step) => from,
             _ => sun,
         };
         self.cast_from = Some(from);
         // Two reaches up the sun, so the sphere of `reach` about the target lies
         // between the planes a reach either side of it, whatever the sun's angle.
         let eye: V3 = core::array::from_fn(|k| target[k] + from[k] * 2.0 * reach);
-        let (mut view, mut proj) = (mat4(), mat4());
-        mat4_look_at(&mut view, eye, target, [0.0, 0.0, 1.0]);
+        let (mut view, mut proj) = (mat4::new(), mat4::new());
+        mat4::look_at(&mut view, eye, target, [0.0, 0.0, 1.0]);
         ortho(&mut proj, reach, reach, 3.0 * reach);
-        mat4_mul(&mut self.light_view_proj, &proj, &view);
+        mat4::mul(&mut self.light_view_proj, &proj, &view);
         // The map follows the eye, so its texels are slid onto a grid fixed in the
         // world: off it, every edge fell on other texels each frame as the view
         // moved, and shimmered (stable shadow maps, texel snapping).
