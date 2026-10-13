@@ -135,8 +135,8 @@ impl ResolutionMode {
 ///
 ///   cpu   — the CPU's cast, one a cell of the camera grid.
 ///   cells — the GPU, one a cell of the camera grid, as the CPU's cast.
-///   half  — one every second pixel each way.
-///   full  — one a pixel.
+///   half  — one every second CSS pixel each way.
+///   full  — one a CSS pixel, whatever the device draws it at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum RayDensity {
@@ -238,10 +238,12 @@ pub enum SettingKey {
     pet = 18,
     /// Who casts the rays the screen's cells draw, the CPU or the GPU, and how many (scene/cast.rs); RAY_DENSITIES says each.
     rays = 19,
+    /// Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl).
+    ray_steps = 20,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 20] = [
+    pub const ALL: [SettingKey; 21] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -262,6 +264,7 @@ impl SettingKey {
         SettingKey::person,
         SettingKey::pet,
         SettingKey::rays,
+        SettingKey::ray_steps,
     ];
 
     /// The setting a number names, or none for a number past the table.
@@ -291,6 +294,7 @@ impl SettingKey {
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
             SettingKey::rays => SettingKind::Choice,
+            SettingKey::ray_steps => SettingKind::Toggle,
         }
     }
 
@@ -317,6 +321,7 @@ impl SettingKey {
             SettingKey::person => "person",
             SettingKey::pet => "pet",
             SettingKey::rays => "rays",
+            SettingKey::ray_steps => "ray_steps",
         }
     }
 
@@ -334,7 +339,7 @@ impl SettingKey {
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::surface_follow | SettingKey::camera_gizmo | SettingKey::rays)
+        matches!(self, SettingKey::surface_follow | SettingKey::camera_gizmo | SettingKey::rays | SettingKey::ray_steps)
     }
 
     /// A choice's option a development build only offers.
@@ -374,6 +379,7 @@ pub struct Settings {
     pub person: u8,
     pub pet: u8,
     pub rays: RayDensity,
+    pub ray_steps: bool,
 }
 
 impl Settings {
@@ -399,6 +405,7 @@ impl Settings {
         person: 1,
         pet: 5,
         rays: RayDensity::cpu,
+        ray_steps: false,
     };
 
     /// A setting's value as it crosses: a toggle's 0 or 1, a choice's option
@@ -425,6 +432,7 @@ impl Settings {
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
             SettingKey::rays => self.rays as u32,
+            SettingKey::ray_steps => self.ray_steps as u32,
         }
     }
 
@@ -473,6 +481,7 @@ impl Settings {
                 Some(o) => self.rays = o,
                 None => return false,
             },
+            SettingKey::ray_steps if value <= 1 => self.ray_steps = value == 1,
             _ => return false,
         }
         true

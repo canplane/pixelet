@@ -103,6 +103,7 @@ pub fn stage_write() {
     s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { crate::param::RIM_INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
     s[STAGE_AT::CLOUDS] = crate::scene::environment::cloud::clouds_shown();
+    s[STAGE_AT::RAY_STEPS] = if settings.ray_steps { 1.0 } else { 0.0 };
 }
 
 pub fn stage_render() {
@@ -279,15 +280,15 @@ fn screen_cells(sight: &crate::view::sight::Sight) {
         return;
     }
     lane.across = sight.across();
-    for (word, stop) in lane.cells.iter_mut().zip(sight.cells()) {
+    for ((word, stop), steps) in lane.cells.iter_mut().zip(sight.cells()).zip(sight.steps()) {
         *word = match stop {
-            None => [KIND_NONE << KIND_SHIFT, 0],
+            None => [KIND_NONE << KIND_SHIFT, 0, steps, 0],
             Some(s) => {
                 let (kind, value) = match s.block {
                     Block::Ground(look, _) => (KIND_GROUND, u32::from(look)),
                     Block::Placed(v) => (KIND_PLACED, u32::from(u16::try_from(v).or_bug(Errno::ERANGE))),
                 };
-                [value | kind << KIND_SHIFT | u32::from(s.face) << FACE_SHIFT, (s.t as f32).to_bits()]
+                [value | kind << KIND_SHIFT | u32::from(s.face) << FACE_SHIFT, (s.t as f32).to_bits(), steps, 0]
             }
         };
     }

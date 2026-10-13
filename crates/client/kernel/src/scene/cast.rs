@@ -22,7 +22,6 @@ use crate::layer::Base as _;
 use crate::setting::schema_spec::RayDensity;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::view;
-use crate::view::frame::resolution::world_ratio;
 use crate::view::sight;
 
 /// The terrain frames the GPU keeps a tile's lanes for.
@@ -66,7 +65,9 @@ static TANGENTS: Global<Vec<f32>> = Global::new();
 pub fn eye(o: &Observation) -> Option<([u32; CAST_EYE_WORDS], &'static [f32])> {
     let tau = sight::tau();
     let v = view();
-    let px = [v.width, v.height].map(|n| (n * world_ratio()).ceil().max(1.0) as u32);
+    // The screen's CSS pixels, whatever the device draws them at: the screen
+    // pass spreads a cell over the pixels it covers.
+    let px = [v.width, v.height].map(|n| n.ceil().max(1.0) as u32);
     let across = match settings_store().rays {
         RayDensity::cpu => return None,
         RayDensity::cells => sight::grid_across(o, tau)?,

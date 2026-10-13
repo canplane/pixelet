@@ -811,7 +811,7 @@ impl ScreenCellsPass {
         }
         self.room = cells;
         self.lane = object();
-        g.buffer(self.lane, word_bytes(2 * (1 + cells)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        g.buffer(self.lane, word_bytes(4 * (1 + cells)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         self.group = object();
         let mut entries = [0u32; 20];
         entries[..5].copy_from_slice(&buffer_entry(0, self.frame_buffer));
@@ -830,16 +830,17 @@ impl ScreenCellsPass {
     /// eye handed over first; else a new CPU cast's, from where it lives,
     /// which no cast rewrites before the page replays this turn.
     fn prepare(&mut self, g: &Gpu, pipelines: &mut Pipelines, cast: Option<Cast>) {
+        let steps = u32::from(stage_lane()[STAGE_AT::RAY_STEPS] != 0.0);
         let Some(cast) = cast else {
             self.cast = None;
             let cells = screen_cells_mut();
+            g.write_buffer(self.lane, 0, bytes(&[cells.across[0], cells.across[1], steps, 0]));
             if cells.generation == self.generation {
                 return;
             }
             self.generation = cells.generation;
             let n = ((cells.across[0] * cells.across[1]) as usize).min(SCREEN_CELLS_MAX);
-            g.write_buffer(self.lane, 0, bytes(&cells.across));
-            g.upload_buffer(self.lane, 8, bytes(&cells.cells[..n]));
+            g.upload_buffer(self.lane, 16, bytes(&cells.cells[..n]));
             return;
         };
         if self.cast.is_none() {
@@ -906,7 +907,7 @@ impl ScreenCellsPass {
         if regroup || c.group == 0 {
             c.group = cast_group(g, c, self.lane);
         }
-        g.write_buffer(self.lane, 0, bytes(&c.across));
+        g.write_buffer(self.lane, 0, bytes(&[c.across[0], c.across[1], steps, 0]));
     }
 
     /// The GPU's cast into the lane, a ray a cell, where it runs.

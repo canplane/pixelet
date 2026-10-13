@@ -210,6 +210,14 @@ export const SETTINGS = {
     section: "debug",
     dev: true,
   },
+  /** Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl). */
+  ray_steps: {
+    key: 20 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+    dev: true,
+  },
 } as const;
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */

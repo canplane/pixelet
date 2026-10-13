@@ -5,7 +5,7 @@
 
 use xpute_guest::global::Global;
 
-pub const STAGE_WORDS: usize = STAGE_AT::CAMERA_GRID + 2;
+pub const STAGE_WORDS: usize = STAGE_AT::RAY_STEPS + 1;
 
 /// Where each value sits in the lane.
 #[allow(non_snake_case)]
@@ -35,6 +35,9 @@ pub mod STAGE_AT {
     /// The camera grid's cell as the last cast's rays went through it, its
     /// angles across and up the screen (2).
     pub const CAMERA_GRID: usize = 66;
+    /// 1 to colour each ray's cell by the nodes its descent asked, not by
+    /// what it met.
+    pub const RAY_STEPS: usize = 68;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

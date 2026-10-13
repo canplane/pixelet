@@ -75,8 +75,8 @@
       "",
       "  cpu   — the CPU's cast, one a cell of the camera grid.",
       "  cells — the GPU, one a cell of the camera grid, as the CPU's cast.",
-      "  half  — one every second pixel each way.",
-      "  full  — one a pixel."
+      "  half  — one every second CSS pixel each way.",
+      "  full  — one a CSS pixel, whatever the device draws it at."
     ]
   },
   "AO_MODES": {
@@ -281,6 +281,15 @@
       "kind": "choice",
       "default": "cpu",
       "options": "RAY_DENSITIES",
+      "section": "debug",
+      "dev": true
+    },
+    "ray_steps": {
+      "$doc": [
+        "Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl)."
+      ],
+      "kind": "toggle",
+      "default": false,
       "section": "debug",
       "dev": true
     }

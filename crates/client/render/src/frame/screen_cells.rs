@@ -2,8 +2,9 @@
 
 //! The camera grid's cells as the last published cast met them, one ray a
 //! cell, in one lane at a fixed address the kernel writes once a cast and
-//! the renderer reads in place (as `stage.rs`'s lane). A cell's two words:
-//! what the ray stopped on and through which face, and how far.
+//! the renderer reads in place (as `stage.rs`'s lane). A cell's four words:
+//! what the ray stopped on and through which face, how far, the nodes its
+//! descent asked, and a spare.
 
 use xpute_guest::global::Global;
 
@@ -27,8 +28,9 @@ pub struct ScreenCells {
     pub generation: u32,
     /// The grid's cells across and up the screen; cell `j · across[0] + i`.
     pub across: [u32; 2],
-    /// Word 0 as above; word 1 the distance along the unit ray, f32 bits.
-    pub cells: [[u32; 2]; SCREEN_CELLS_MAX],
+    /// Word 0 as above; word 1 the distance along the unit ray, f32 bits;
+    /// word 2 the nodes the ray's descent asked the world; word 3 spare.
+    pub cells: [[u32; 4]; SCREEN_CELLS_MAX],
 }
 
 static CELLS: Global<ScreenCells> = Global::new();
@@ -37,6 +39,6 @@ pub fn screen_cells_mut() -> &'static mut ScreenCells {
     CELLS.get(|| ScreenCells {
         generation: 0,
         across: [0; 2],
-        cells: [[0; 2]; SCREEN_CELLS_MAX],
+        cells: [[0; 4]; SCREEN_CELLS_MAX],
     })
 }
