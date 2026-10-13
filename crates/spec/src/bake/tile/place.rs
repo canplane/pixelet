@@ -43,7 +43,7 @@ const SPREAD_STEPS: Zoom = 2;
 /// than the camera grid: which zoom of Carto's a place is drawn at there,
 /// and so which categories show, is the tile zoom of the grid's cell
 /// (`Lattice::tile_zoom_of_grid`), past the leaf too.
-pub const PLACE_LATTICE: Lattice = Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i8));
+pub const PLACE_LATTICE: Lattice = Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i32));
 
 /// The cell a place keeps to itself, as a zoom under the tile. Seen at an
 /// icon's own cell, places a few metres apart stood side by side as near as

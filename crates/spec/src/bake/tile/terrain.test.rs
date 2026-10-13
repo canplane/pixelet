@@ -3,6 +3,7 @@
 use xpute_kit::golden::Golden;
 
 use super::*;
+use pxl_portable::ground::DRAWN_PAST;
 use xpute_kit::math::rng::SplitMix64;
 
 const GOLDEN: &str = include_str!("../../../golden/bake/terrain.tsv");
@@ -99,8 +100,8 @@ fn a_block_says_what_its_cells_say() {
                 for x in (0..n).step_by(side as usize) {
                     let lane = index.extent();
                     let cells = (y..y + side).flat_map(|cy| (x..x + side).map(move |cx| lane[EXTENT.cell_index(cx, cy) as usize]));
-                    let lo = cells.clone().map(|c| drawn(c)[0]).min().unwrap();
-                    let hi = cells.map(|c| drawn(c)[1]).max().unwrap();
+                    let lo = cells.clone().map(|c| i32::from(c[0]) + DRAWN_PAST[0]).min().unwrap();
+                    let hi = cells.map(|c| i32::from(c[1]) + DRAWN_PAST[1]).max().unwrap();
                     assert_eq!(index.over([x, y], side), [lo, hi], "{side} from ({x}, {y})");
                 }
             }

@@ -8,8 +8,13 @@
 #[cfg(feature = "harness")]
 pub mod harness;
 
+use pxl_portable::area::{self, Area};
 use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
 use pxl_portable::caves::Cave;
+use pxl_portable::cube::{sentinel, Ground};
+use pxl_portable::ground::{self, Tile, ELE_PADDED_SPAN, EXTENT_LANE};
+use pxl_portable::lattice::{EXTENT, GROUND, TILE_CELLS};
+use pxl_portable::{wrap_index, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
 use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec4};
 use spirv_std::spirv;
 
@@ -37,13 +42,204 @@ pub struct At {
     cave: Cave,
 }
 
-/// The world as the GPU holds it: the caves alone, for now.
-pub struct World;
+const VOID: u32 = sentinel::void as u32;
+const UNKNOWN: u32 = sentinel::unknown as u32;
 
-impl Query for World {
+/// Words a frame of looks holds: 4 a word.
+const LOOK_WORDS: u32 = TILE_CELLS * TILE_CELLS / 4;
+/// Words a frame of heights holds: 2 a word.
+const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
+/// Words a frame of the index lane holds: its cells, then its coarser levels.
+const INDEX_WORDS: u32 = EXTENT_LANE + EXTENT.coarse_cells();
+
+/// The low half of `w` shifted down by `s`, its sign carried.
+fn half(w: u32, s: u32) -> i32 {
+    ((w >> s) << 16) as i32 >> 16
+}
+
+/// One held tile's frame in the ground's buffers.
+pub struct Framed<'a> {
+    looks: &'a [u32],
+    heights: &'a [u32],
+    frame: u32,
+}
+
+impl Tile for Framed<'_> {
+    fn look(&self, x: u32, y: u32) -> u32 {
+        let i = y * TILE_CELLS + x;
+        self.looks[(self.frame * LOOK_WORDS + i / 4) as usize] >> (8 * (i % 4)) & 0xff
+    }
+    fn ele(&self, i: usize) -> i32 {
+        half(self.heights[(self.frame * ELE_WORDS) as usize + i / 2], 16 * (i as u32 % 2))
+    }
+}
+
+/// The world as the GPU holds it (pxl-kernel scene/cast.rs fills it): the
+/// ground's held tiles, the service area, and the caves. Ways, what is
+/// placed and decor are not here (pxl-portable `cast::Query`).
+pub struct World<'a> {
+    /// Per ground zoom from the top, a header — the south-west tile, the
+    /// tiles across — then a word a tile, its frame plus one, 0 where none
+    /// is held.
+    window: &'a [IVec4],
+    looks: &'a [u32],
+    heights: &'a [u32],
+    extents: &'a [u32],
+    /// The served shards: zoom, x, y.
+    shards: &'a [IVec4],
+}
+
+impl Area for World<'_> {
+    fn ends(&self) -> bool {
+        true
+    }
+    fn shards(&self) -> u32 {
+        self.shards.len() as u32
+    }
+    fn shard(&self, i: u32) -> (u32, [i32; 2]) {
+        let s = self.shards[i as usize];
+        (s.x as u32, [s.y, s.z])
+    }
+}
+
+impl World<'_> {
+    /// The word the window holds for the tile `t` at `zoom`: its frame plus
+    /// one, 0 where none is held or the window does not reach it.
+    fn held(&self, zoom: u32, t: [i32; 2]) -> u32 {
+        let across = self.window[0].z as u32;
+        let block = (zoom - GROUND.top()) * (1 + (across * across).div_ceil(4));
+        let h = self.window[block as usize];
+        let dx = (t[0] - h.x) as u32 & ((1u32 << zoom) - 1);
+        let dy = t[1] - h.y;
+        if dx >= across || dy < 0 || dy as u32 >= across {
+            return 0;
+        }
+        let i = dy as u32 * across + dx;
+        let w = self.window[(block + 1 + i / 4) as usize];
+        [w.x, w.y, w.z, w.w][(i % 4) as usize] as u32
+    }
+
+    /// The finest held tile over the tile `t` at `zoom`, down to the top: its
+    /// zoom and its window word, 0 where none is.
+    fn drawn(&self, zoom: u32, t: [i32; 2]) -> (u32, u32) {
+        let mut z = zoom;
+        loop {
+            let s = zoom - z;
+            let w = self.held(z, [t[0] >> s, t[1] >> s]);
+            if w != 0 || z == GROUND.top() {
+                return (z, w);
+            }
+            z -= 1;
+        }
+    }
+
+    /// The index lane's cell `i` of frame `f`: its lowest and highest.
+    fn index(&self, f: u32, i: u32) -> [i32; 2] {
+        let w = self.extents[(f * INDEX_WORDS + i) as usize];
+        [half(w, 0), half(w, 16)]
+    }
+
+    /// The ground's cell `g` of the tiles at `zoom`, counted in their cells,
+    /// off the finest held tile over it: its look and height, `void` where
+    /// none is held; and whether only its look is asked.
+    fn cell(&self, zoom: u32, g: [i32; 2], only_look: bool) -> (u32, i32) {
+        let shamt = GROUND.tile_cell_shamt();
+        let t = [wrap_index(zoom, g[0] >> shamt), g[1] >> shamt];
+        let (from, w) = self.drawn(zoom, t);
+        if w == 0 {
+            return (VOID, 0);
+        }
+        let s = zoom - from;
+        // Its place from the held tile's first cell, in the asked tile's cells.
+        let first = |v: i32| (v >> s) << (shamt + s);
+        let mask = (1u32 << (zoom + shamt)) - 1;
+        let v = [((g[0] - first(t[0])) as u32 & mask) as i32, g[1] - first(t[1])];
+        let tile = Framed {
+            looks: self.looks,
+            heights: self.heights,
+            frame: w - 1,
+        };
+        if only_look {
+            (ground::look(&tile, v, 1 << s), 0)
+        } else {
+            ground::read(&tile, v, 1 << s)
+        }
+    }
+
+    /// The ground's cell `b` of `zoom` as the grid reads it, before the
+    /// area's edge is laid: the tile cell drawing it, or the four it folds a
+    /// zoom finer (`ground::fold`), off the tiles at `read`; its look alone
+    /// where `only_look`.
+    fn ground_at(&self, read: u32, zoom: u32, b: [i32; 2], only_look: bool) -> (u32, f32, [u32; 4]) {
+        let k = GROUND.cell_zoom(read) as i32 - zoom as i32;
+        // Tile cells it folds: four a zoom finer, else the one holding it.
+        let (n, first) = if k == 1 { (4, [2 * b[0], 2 * b[1]]) } else { (1, [b[0] >> -k, b[1] >> -k]) };
+        let mut four = [(VOID, 0); 4];
+        let mut q = 0;
+        while q < n {
+            four[q as usize] = self.cell(read, [first[0] + (q & 1) as i32, first[1] + (q >> 1) as i32], only_look);
+            q += 1;
+        }
+        if n == 4 {
+            ground::fold(four, zoom)
+        } else {
+            let (look, h) = four[0];
+            (look, h as f32, [look; 4])
+        }
+    }
+
+    /// Whether the cell `b` of `zoom` is gone: past the area, or nothing
+    /// known of it.
+    fn gone(&self, read: u32, zoom: u32, b: [i32; 2]) -> bool {
+        area::past(self, area::tile_at(zoom, b)) || self.ground_at(read, zoom, b, true).0 == UNKNOWN
+    }
+
+    /// What is in `at`'s block at its own zoom (pxl-kernel query/node.rs
+    /// `drawn`): past the area, the Earth's; else the ground's cell off the
+    /// tile drawing that zoom's cells, the area's edge laid on it, and the
+    /// caves' value.
+    fn block(&self, at: &At) -> In<u32> {
+        let (zoom, c) = (at.zoom, at.node);
+        let b = [c[0], c[1]];
+        if area::past(self, area::tile_at(zoom, b)) {
+            return In {
+                kind: Kind::Block,
+                block: area::earth(c[2]),
+            };
+        }
+        let read = GROUND.read_zoom(zoom);
+        // No tile held over its own: the lack.
+        if self.drawn(read, [b[0] >> (zoom - read), b[1] >> (zoom - read)]).1 == 0 {
+            return In { kind: Kind::Lacks, block: VOID };
+        }
+        let (look, h, fold) = self.ground_at(read, zoom, b, false);
+        let gone = look == UNKNOWN;
+        let beside = !gone && zoom >= LEAF_CELL && Ground::grounds(look) && {
+            let mut any = false;
+            let mut k = 0;
+            while k < 9 {
+                let (dx, dy) = (k % 3 - 1, k / 3 - 1);
+                any = any || (k != 4 && self.gone(read, zoom, [wrap_index(zoom, b[0] + dx), b[1] + dy]));
+                k += 1;
+            }
+            any
+        };
+        let cell = ground::Cell {
+            look: area::wall(look, zoom, gone, beside),
+            top: ground::blocks(zoom, h),
+            fold,
+        };
+        In {
+            kind: Kind::Block,
+            block: cell.block(zoom, c[2], at.cave.hollow()).0,
+        }
+    }
+}
+
+impl Query for World<'_> {
     type At = At;
     type Block = u32;
-    const AIR: u32 = 0;
+    const AIR: u32 = VOID;
 
     fn root(&mut self, node: [i32; 3]) -> At {
         At {
@@ -63,21 +259,42 @@ impl Query for World {
         }
     }
 
-    fn node(&mut self, at: &mut At, [_, near]: [u32; 2], _t0: f32) -> In<u32> {
-        if at.zoom >= near {
-            return In {
-                kind: Kind::Block,
-                block: if at.cave.hollow() { 0 } else { 1 },
-            };
+    /// What is in `at`'s node (pxl-kernel query/node.rs `World::node`): at
+    /// `near` or finer, or finer than the ground's cells, where the world
+    /// holds nothing finer, the block; coarser, past the area the Earth's,
+    /// else the ground's one rule over the lowest and highest its held tile's
+    /// index lane holds under it (`ground::empty`).
+    fn node(&mut self, at: &mut At, [far, near]: [u32; 2], _t0: f32) -> In<u32> {
+        let (zoom, c) = (at.zoom, at.node);
+        if zoom >= near || zoom >= LEAF_CELL {
+            return self.block(at);
         }
-        match at.cave.whole(at.zoom) {
-            (true, true) => In { kind: Kind::Block, block: 0 },
-            _ => In { kind: Kind::Split, block: 0 },
+        let split = In { kind: Kind::Split, block: VOID };
+        let empty = In { kind: Kind::Block, block: VOID };
+        if zoom >= SHARD_ZOOM && area::past(self, area::tile_at(zoom, [c[0], c[1]])) {
+            return if area::earth(c[2]) == VOID { empty } else { split };
+        }
+        if zoom < GROUND.top() {
+            return split;
+        }
+        let cell = near.min(GROUND.grid_zoom(zoom.min(LEAF_ZOOM)));
+        let read = GROUND.read_zoom(cell);
+        let s = zoom - read;
+        let (from, w) = self.drawn(read, [c[0] >> s, c[1] >> s]);
+        if w == 0 {
+            return In { kind: Kind::Lacks, block: VOID };
+        }
+        let relief = ground::relief(|i| self.index(w - 1, i), from, (zoom, [c[0], c[1]]));
+        let hollow = at.cave.whole(zoom) == (true, true);
+        if ground::empty(self, (zoom, c), relief, [far, near], hollow) {
+            empty
+        } else {
+            split
         }
     }
 
     fn fills(&self, block: &u32) -> bool {
-        *block != 0
+        *block != VOID
     }
 }
 
@@ -97,8 +314,13 @@ fn word(ray: &cast::Ray, met: Met<At, u32>) -> UVec2 {
 pub fn cast_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] looks: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] heights: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] extents: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] lane: &mut [UVec2],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] tangents: &[f32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] shards: &[IVec4],
 ) {
     let across = eye.across_range;
     if id.x >= across.x || id.y >= across.y {
@@ -111,6 +333,13 @@ pub fn cast_cs(
         tau: eye.right_tau.w,
         range: [across.z, across.w],
     };
-    let met = cast::first(&mut World, &ray, detail, Until::Fills);
+    let mut world = World {
+        window,
+        looks,
+        heights,
+        extents,
+        shards,
+    };
+    let met = cast::first(&mut world, &ray, detail, Until::Fills);
     lane[(1 + id.y * across.x + id.x) as usize] = word(&ray, met);
 }

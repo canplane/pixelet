@@ -50,15 +50,6 @@ pub struct Index {
     pub occupancy: Occupancy,         // which children are tiles: none is asked for that is not
 }
 
-/// How far past the lane's facts the client draws a cell, down and up: the
-/// way's own cell under a bore's or a cutting's surface. Every read of the
-/// lane widens by it.
-pub const DRAWN_PAST: [i16; 2] = [-1, 0];
-
-pub fn drawn([lo, hi]: [i16; 2]) -> [i16; 2] {
-    [lo.saturating_add(DRAWN_PAST[0]), hi.saturating_add(DRAWN_PAST[1])]
-}
-
 /// Two extents as one: the lower of the lows, the higher of the highs.
 pub fn join([lo, hi]: [i16; 2], [o_lo, o_hi]: [i16; 2]) -> [i16; 2] {
     [lo.min(o_lo), hi.max(o_hi)]
@@ -79,13 +70,23 @@ impl Index {
         &self.extent
     }
 
+    /// The extent joined over each coarser cell, `EXTENT.coarse_index` order.
+    pub fn coarse(&self) -> &[[i16; 2]] {
+        &self.coarse
+    }
+
+    /// The lane as pxl-portable's reads take it: its cells, then its coarser
+    /// levels.
+    pub fn lane(&self, i: u32) -> [i32; 2] {
+        let i = i as usize;
+        let e = if i < EXTENT_LANE { self.extent[i] } else { self.coarse[i - EXTENT_LANE] };
+        e.map(i32::from)
+    }
+
     /// What is drawn over the cell of `across` × `across` index cells at
-    /// (x, y), widened by `drawn`; `across` a power of two and (x, y) a multiple of it.
-    pub fn over(&self, [x, y]: [u32; 2], across: u32) -> [i16; 2] {
-        drawn(match across.trailing_zeros() {
-            0 => self.extent[EXTENT.cell_index(x, y) as usize],
-            j => self.coarse[EXTENT.coarse_index(j, x, y) as usize],
-        })
+    /// (x, y) (pxl-portable `ground::over`).
+    pub fn over(&self, at: [u32; 2], across: u32) -> [i32; 2] {
+        pxl_portable::ground::over(|i| self.lane(i), at, across)
     }
 }
 

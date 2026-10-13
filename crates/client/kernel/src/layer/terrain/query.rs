@@ -105,7 +105,7 @@ impl Residency<TerrainTile> {
         let Some(d) = self.drawn_of(line) else {
             return Answer::Nothing(line.tile);
         };
-        let r = Some(relief(&d, node).map(i32::from));
+        let r = Some(relief(&d, node));
         match d.exact {
             true => Answer::Exact(r),
             false => Answer::Coarser(r, d.tile),
@@ -141,11 +141,8 @@ fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
 
 /// The index lane's extent over a node within the tile `d` answers, widened
 /// by what is drawn past it (`DRAWN_PAST`).
-fn relief(d: &Drawn, (zoom, at): Node<2>) -> [i16; 2] {
-    let index = EXTENT.cell_zoom(d.from.zoom);
-    let first = EXTENT.cell_of(d.from.zoom, &base_of(zoom, [at[0], at[1], 0]));
-    let across = if zoom < index { count(index, zoom) } else { 1 };
-    d.body.index.over(first.in_tile(), across)
+fn relief(d: &Drawn, (zoom, at): Node<2>) -> [i32; 2] {
+    pxl_portable::ground::relief(|i| d.body.index.lane(i), d.from.zoom, (zoom, at.map(|v| v as i32)))
 }
 
 /// A node's center, in units.
@@ -236,7 +233,7 @@ impl Query for Residency<TerrainTile> {
             };
             lack = lack.or((!b.exact).then_some(b.tile));
             if Ground::grounds(look_at(&b, beside)) {
-                lo = lo.min(i32::from(relief(&b, beside)[0]));
+                lo = lo.min(relief(&b, beside)[0]);
             }
         }
         if edge {
