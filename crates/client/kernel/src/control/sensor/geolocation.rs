@@ -8,6 +8,7 @@ use crate::abi::cmd::Message;
 use crate::control::sensor::reading::{device_location_store, Pose};
 use crate::sched::edge::wake_at;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
+use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_guest::clock::now;

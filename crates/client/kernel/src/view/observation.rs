@@ -4,6 +4,7 @@
 //! is known of what a box of the world holds.
 
 use crate::io::demand::Order;
+use pxl_spec::space::layer::lattice::demand_reach;
 
 use pxl_spec::space::camera::eye::{Frustum, Observation};
 use pxl_spec::space::camera::grid::Tau;
@@ -40,7 +41,7 @@ pub fn observation() -> Option<Observation> {
     Some(Observation {
         eye,
         frustum: Some(frustum_of_view()),
-        reach: GROUND.demand_reach(top),
+        reach: demand_reach(GROUND, top),
         fog: reach_at(eye[2]),
         planet: globe().radius_u(),
         ground: eye[2] - height,

@@ -21,6 +21,7 @@
 //!   deno task bake earth
 
 use pxl_spec::space::coord::world::around;
+use pxl_spec::space::layer::lattice::Cells;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 

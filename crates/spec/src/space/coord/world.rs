@@ -16,7 +16,7 @@ use super::zoom::{cube, units, Zoom};
 /// - Y, 24: the Mercator plane is a square;
 /// - Z, 16: ±2^15 units of height, as the terrain stores a height, an `i16`
 ///   in ground cells, a ground cell a unit (`bake/constant.rs`).
-pub const EXTENT: [u32; 3] = [pxl_portable::UNIT_ZOOM, pxl_portable::UNIT_ZOOM, 16];
+pub const EXTENT: [u32; 3] = [pxl_portable::UNIT_ZOOM, pxl_portable::UNIT_ZOOM, pxl_portable::HEIGHT_BITS];
 
 const _: () = assert!(
     EXTENT[0] + FRAC_W == i32::BITS && EXTENT[1] + FRAC_W == i32::BITS && EXTENT[2] + FRAC_W <= i32::BITS,

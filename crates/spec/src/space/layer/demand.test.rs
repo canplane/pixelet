@@ -3,6 +3,7 @@
 use super::*;
 use crate::space::camera::grid::*;
 use crate::space::coord::zoom::FINEST_ZOOM;
+use crate::space::layer::lattice::demand_reach;
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::tile::*;
 
@@ -33,7 +34,7 @@ fn feet(zoom: Zoom) -> Vec<[f64; 2]> {
 }
 
 fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Tile> {
-    tiles_within(zoom, foot, GROUND.demand_reach(zoom)).collect()
+    tiles_within(zoom, foot, demand_reach(GROUND, zoom)).collect()
 }
 
 #[test]
@@ -62,7 +63,7 @@ fn the_parents_of_a_zooms_tiles_lie_in_the_next_coarser_ones() {
 #[test]
 fn the_fault_bound_is_where_a_zoom_ends_and_holds_no_chunk() {
     for zoom in GROUND.top()..=LEAF_ZOOM {
-        let r = GROUND.demand_reach(zoom);
+        let r = demand_reach(GROUND, zoom);
         assert_eq!(zoom_at(short_of(r)), zoom as i32, "z{zoom} is asked for up to its radius");
         assert_eq!(zoom_at(r), zoom as i32 - 1, "and not at it");
     }

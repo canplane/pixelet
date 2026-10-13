@@ -18,6 +18,7 @@ use crate::space::coord::adapter::epsg3857::u_per_m;
 use crate::space::coord::zoom::{units, Zoom, SHARD_ZOOM};
 use crate::space::hierarchy::tree::{ancestor_of, offset_in};
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
+use pxl_portable::area::wall;
 use pxl_portable::ground::{blocks, face_height, fold, read, Cell};
 
 /// A building's concrete: nothing in the catalog is a pier's own.
@@ -129,23 +130,6 @@ fn read_row(around: &Around, y: i64, x0: i64, out: &mut [(u32, i32)]) {
         let (s, at, _) = around.of([x, y]);
         *v = read(&s.tile, [0, 1].map(|a| (s.origin[a] + at[a]) as i32), s.n);
     }
-}
-
-/// Whether the service area's wall may stand in the columns from `min` to
-/// `max` (units) at `cell` (`Grid::wall_off`): only a leaf's cells or finer
-/// are walled, a leaf cell with ground beside one past the area
-/// (`limit::at_edge`). The area runs on shards' edges, so columns no wider
-/// than a shard are asked at their corners a leaf cell out.
-pub fn walled(cell: Zoom, past: impl Fn([f64; 2]) -> bool, min: [f64; 2], max: [f64; 2]) -> bool {
-    if cell < GROUND.cell() {
-        return false;
-    }
-    if (0..2).any(|k| max[k] - min[k] > units(SHARD_ZOOM)) {
-        return true;
-    }
-    let leaf = units(GROUND.cell());
-    let ([x0, y0], [x1, y1]) = (min.map(|v| v - leaf), max.map(|v| v + leaf));
-    [[x0, y0], [x1, y0], [x0, y1], [x1, y1]].into_iter().any(past)
 }
 
 /// A deck's slab or a pier in one cell: `lo` up to `hi` exclusive, in
@@ -280,18 +264,13 @@ impl Grid {
     /// face; past the area is void at every zoom.
     fn wall_off(&mut self) {
         let (span, n) = (i64::from(self.span), (self.span * self.span) as usize);
-        let leaf = self.scale.is_some();
         // Read off `face`, still as read, so a wall laid is never read as
         // past the area.
         let marked = &self.face;
         let past = |x: i64, y: i64| (0..span).contains(&x) && (0..span).contains(&y) && marked[(y * span + x) as usize] == sentinel::unknown;
         for (i, (look, &g)) in self.look[..n].iter_mut().zip(&marked[..n]).enumerate() {
             let (x, y) = (i as i64 % span, i as i64 / span);
-            *look = match g {
-                sentinel::unknown => sentinel::void,
-                g if leaf && Ground::grounds(u32::from(g)) && at_edge(|dx, dy| past(x + dx, y + dy)) => sentinel::unknown,
-                g => g,
-            };
+            *look = byte(wall(u32::from(g), self.cell, g == sentinel::unknown, at_edge(|dx, dy| past(x + dx, y + dy))));
         }
     }
 

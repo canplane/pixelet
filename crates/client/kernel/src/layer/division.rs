@@ -9,6 +9,7 @@ use pxl_spec::bake::tile::division::{self, Division, DivisionTile, DIVISION_LEAF
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{index_of, Zoom};
+use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;

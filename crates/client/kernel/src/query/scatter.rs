@@ -7,6 +7,7 @@
 //! (`World::grows`), which way it faces and how high it stands its face's
 //! (`World::surfaces`).
 
+use pxl_spec::space::layer::lattice::Cells;
 use std::collections::TryReserveError;
 
 use pxl_spec::block::cube::Ground;

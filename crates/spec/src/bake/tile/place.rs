@@ -9,6 +9,7 @@
 //! (decision/20261009-places-follow-carto.md). It is one XTP tree, as every
 //! other baked tile is.
 
+use crate::space::layer::lattice::Cells;
 use fnv::FnvHashSet;
 
 use crate::asset::symbol::SYMBOLS;

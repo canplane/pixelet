@@ -14,6 +14,7 @@ use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
+use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
 use pxl_spec::space::layer::tile::{tile_at, Tile};
 

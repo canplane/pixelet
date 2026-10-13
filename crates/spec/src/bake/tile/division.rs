@@ -7,6 +7,7 @@
 //! only where it says more than its parent, which a reader that holds the
 //! parent then reads instead.
 
+use crate::space::layer::lattice::Cells;
 use fnv::FnvHashMap;
 
 use xpute_kit::status::error::MarshalError;

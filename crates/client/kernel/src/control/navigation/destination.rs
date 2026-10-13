@@ -7,6 +7,7 @@
 //! named with its own height is put as it is (`go_to`).
 
 use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 

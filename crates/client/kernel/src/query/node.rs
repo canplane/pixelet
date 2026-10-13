@@ -39,8 +39,10 @@
 //! A source not holding the node answers that it lacks it, never air and
 //! never that nothing fills.
 
-use pxl_portable::ground::{lay, Lay};
-use pxl_spec::block::sample::{at as one_rule, walled, Grid};
+use pxl_portable::area;
+use pxl_portable::cube::sentinel;
+use pxl_portable::ground;
+use pxl_spec::block::sample::{at as one_rule, Grid};
 use pxl_spec::block::Block;
 use pxl_spec::procedural::Cave;
 use pxl_spec::space::coord::world::wrap_cell;
@@ -133,7 +135,7 @@ impl World<'_> {
         // Past the service area: the Earth's ground, solid to sea level. The
         // area runs on shards' edges, which no block straddles.
         if source::past_at([0, 1].map(|k| (b[k] as f64 + 0.5) * units(zoom))) {
-            return Answer::Exact(earth(zoom, b));
+            return Answer::Exact(earth(b));
         }
         // A preview applies at its entry's zoom or finer, where it is drawn
         // as held; coarser, the stored fold stands.
@@ -191,7 +193,7 @@ impl World<'_> {
         // Past the service area: the Earth's ground, solid to sea level. The
         // area runs on shards' edges, which no node a shard or finer straddles.
         if zoom >= SHARD_ZOOM && source::past_at([0, 1].map(|k| (whole.min[k] + whole.max[k]) / 2.0)) {
-            return Answer::Exact(if whole.min[2] >= 0.0 { In::Empty } else { In::Split });
+            return Answer::Exact(if area::earth(c[2] as i32) == u32::from(sentinel::void) { In::Empty } else { In::Split });
         }
         // Coarser than any tile, no one index holds it.
         if zoom < GROUND.top() {
@@ -202,25 +204,12 @@ impl World<'_> {
         // that nothing fills.
         let line = self.line(at, near.min(GROUND.grid_zoom(zoom.min(LEAF_ZOOM))));
         self.terrain.relief(&line, (zoom, [c[0], c[1]])).map(|relief| {
-            let Some([lo, hi]) = relief else { return In::Empty };
-            // Coarser than a shard, the Earth past the service area may be in
-            // it too, its face at sea level.
-            let [lo, hi] = if zoom < SHARD_ZOOM { [lo.min(0), hi.max(0)] } else { [lo, hi] };
+            let Some(relief) = relief else { return In::Empty };
             // At each zoom asked, every cell under it over the ground, or
             // ground a cave may take with a cave through all of it, by the
             // ground's one rule.
             let hollow = at.cave.whole(zoom) == (true, true);
-            let empty = (far.max(zoom + 1)..=near).all(|z| {
-                let u = units(z);
-                let blocks = [(whole.min[2] / u).floor() as i32, (whole.max[2] / u).ceil() as i32];
-                let wall = walled(z, source::past_at, [whole.min[0], whole.min[1]], [whole.max[0], whole.max[1]]);
-                match lay(z, [lo, hi], wall, blocks) {
-                    Lay::Air => true,
-                    Lay::Open => hollow,
-                    Lay::Kept => false,
-                }
-            });
-            if empty {
+            if ground::empty(&source::Declared, (zoom, c.map(|v| v as i32)), relief, [far, near], hollow) {
                 In::Empty
             } else {
                 In::Split

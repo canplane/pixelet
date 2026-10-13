@@ -1,6 +1,7 @@
 // pxl-spec/bake/tile/place.test.rs
 
 use super::*;
+use crate::space::layer::lattice::Cells;
 
 fn leaf() -> Tile {
     Tile::new(LEAF_ZOOM, [6, 4])

@@ -27,6 +27,7 @@
 //!   cargo run --release -p pxl-kernel --example ray_steps -- [lon lat] [server]
 
 use fnv::FnvHashSet;
+use pxl_spec::space::layer::lattice::Cells;
 use std::cell::Cell;
 use std::process::Command;
 

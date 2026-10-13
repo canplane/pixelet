@@ -11,6 +11,7 @@
 use crate::layer::{Answer, Query};
 use crate::view::demand::Observed as _;
 use fnv::{FnvHashMap, FnvHashSet};
+use pxl_spec::space::layer::lattice::Cells;
 
 use pxl_render::frame::draw::DrawList;
 use pxl_spec::bake::tile::terrain::TerrainTile;

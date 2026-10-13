@@ -8,6 +8,7 @@
 //! it. The walk follows the detail rule, not the chunk the view chose, which
 //! may differ at a chunk's edge.
 
+use pxl_spec::space::layer::lattice::{demand_reach, Cells};
 use std::collections::TryReserveError;
 
 use pxl_spec::block::decor::{Decor, DECORS};
@@ -195,7 +196,7 @@ impl<'a> World<'a> {
         let Grown { models, tau } = self.decor?;
         // Held as it is out to where the leaves' tiles end.
         let held = match GROUND.z_at(tau, 0.0) {
-            LEAF_ZOOM => (GROUND.demand_reach(LEAF_ZOOM) / tau.scale()).min(ray.reach),
+            LEAF_ZOOM => (demand_reach(GROUND, LEAF_ZOOM) / tau.scale()).min(ray.reach),
             _ => return None,
         };
         let reach = reach();

@@ -7,6 +7,7 @@
 //! average, which preserves a column's volume. The index lane is carried up
 //! from the children's extents and widened by the parent's own surface.
 
+use crate::space::layer::lattice::Cells;
 use crate::space::layer::lattice::{EXTENT, GROUND, TILE_CELLS};
 use crate::space::layer::tile::{neighbor_index, CHILDREN};
 use xpute_kit::math::scalar::round;

@@ -11,6 +11,7 @@ use pxl_spec::space::camera::grid::CHUNK_STEPS;
 use pxl_spec::space::coord::world::wrap_index;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
@@ -168,8 +169,9 @@ impl<'a> World<'a> {
 }
 
 /// The Earth's ground past the service area, solid to sea level.
-pub(super) fn earth(cell: Zoom, b: [i64; 3]) -> Option<Block> {
-    ((b[2] as f64 + 1.0) * units(cell) <= 0.0).then_some(Block::Ground(pxl_spec::block::cube::sentinel::unknown, [pxl_spec::block::cube::sentinel::unknown; 4]))
+pub(super) fn earth(b: [i64; 3]) -> Option<Block> {
+    let g = pxl_portable::area::earth(b[2] as i32) as GroundId;
+    (g != pxl_spec::block::cube::sentinel::void).then_some(Block::Ground(g, [g; 4]))
 }
 
 /// The ground's grid a reader reads its cells into (`World::window_ground`),
