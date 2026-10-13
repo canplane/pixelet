@@ -276,11 +276,14 @@ pub enum Ends {
     Lacks,
 }
 
-/// What the walk met: how it ended, and where it stopped when it did.
+/// What the walk met: how it ended, where it stopped when it did, and how
+/// many nodes it asked the world about (`Query::node`), the one count of a
+/// ray's steps the CPU and a GPU both report.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Met<A, B> {
     pub ends: Ends,
     pub stop: Stop<A, B>,
+    pub visits: u32,
 }
 
 /// One zoom of the descent: the node, the ray within it, and the child it
@@ -320,6 +323,7 @@ pub fn first<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until) -> Me
             at: q.root(root.node(ray)),
             block: Q::AIR,
         },
+        visits: 0,
     };
     let mut t = 0.0;
     while t < ray.reach {
@@ -329,7 +333,9 @@ pub fn first<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until) -> Me
             break;
         }
         let at = q.root(root.node(ray));
+        let visits = met.visits;
         met = descend(q, ray, detail, until, at, root, span);
+        met.visits += visits;
         if met.ends != Ends::On {
             break;
         }
@@ -377,6 +383,7 @@ fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at
     let mut stack = [empty; DEPTH];
     // The node being entered, and the ray within it.
     let (mut at, mut place, (mut t0, mut t1, mut axis)) = (root_at, root, span);
+    let mut visits = 0;
     loop {
         // Only touched, at a face or an edge: not entered, nothing in it met.
         let mut into = false;
@@ -385,6 +392,7 @@ fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at
             let near = [min[0].max(0.0).min(min[0] + side), min[1].max(0.0).min(min[1] + side), min[2].max(0.0).min(min[2] + side)];
             let asked = [detail.at(t1 * dlen), detail.at(libm::sqrtf(near[0] * near[0] + near[1] * near[1] + near[2] * near[2]))];
             let i = q.node(&mut at, asked, t0);
+            visits += 1;
             let stop = Stop {
                 t: t0,
                 axis,
@@ -393,10 +401,10 @@ fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at
                 block: i.block,
             };
             match i.kind {
-                Kind::Lacks => return Met { ends: Ends::Lacks, stop },
+                Kind::Lacks => return Met { ends: Ends::Lacks, stop, visits },
                 Kind::Block => {
                     if stops(q, ray, until, place, &i.block) {
-                        return Met { ends: Ends::Stop, stop };
+                        return Met { ends: Ends::Stop, stop, visits };
                     }
                 }
                 Kind::Split => into = true,
@@ -448,6 +456,7 @@ fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at
                         at,
                         block: Q::AIR,
                     },
+                    visits,
                 };
             }
             let z = (place.zoom - 1) as usize;

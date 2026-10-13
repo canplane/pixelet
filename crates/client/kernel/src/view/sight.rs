@@ -162,11 +162,12 @@ pub struct Stop {
 }
 
 /// One cell's ray as cast: where it stopped, none where it met nothing
-/// within reach, and the tile its descent lacked.
+/// within reach, the tile its descent lacked, and the nodes it asked about.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Cell {
     stop: Option<Stop>,
     lack: Option<Tile>,
+    steps: u32,
 }
 
 /// An observation, whole: what the eye observed from, at which quality, and
@@ -209,6 +210,12 @@ impl Sight {
     /// or lacked.
     pub fn cells(&self) -> impl Iterator<Item = Option<Stop>> + '_ {
         self.cells.iter().map(|c| c.stop)
+    }
+
+    /// Each cell's ray's steps, as `cells`: the nodes its descent asked the
+    /// world about (pxl-portable `cast::Met::visits`).
+    pub fn steps(&self) -> impl Iterator<Item = u32> + '_ {
+        self.cells.iter().map(|c| c.steps)
     }
 
     /// Where the rays stopped.
@@ -313,7 +320,8 @@ pub fn advance(stop: &dyn Fn() -> bool) -> bool {
             direction,
             reach: o.far(),
         };
-        let answer = world.first_hit(&ray, Detail::Distance(tau));
+        let visits = core::cell::Cell::new(0);
+        let answer = world.counting(&visits).first_hit(&ray, Detail::Distance(tau));
         let lack = answer.lack();
         let met = answer.value().flatten().and_then(|hit| {
             let k = (0..3).find(|&k| hit.normal[k] != 0.0)?;
@@ -325,7 +333,11 @@ pub fn advance(stop: &dyn Fn() -> bool) -> bool {
                 face: (2 * k + usize::from(hit.normal[k] < 0.0)) as u8,
             })
         });
-        job.sight.cells[cell as usize] = Cell { stop: met, lack };
+        job.sight.cells[cell as usize] = Cell {
+            stop: met,
+            lack,
+            steps: visits.get() as u32,
+        };
         c.rays += 1;
         k += 1;
         if k % SLICE == 0 && stop() {

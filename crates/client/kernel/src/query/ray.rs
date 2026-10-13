@@ -126,7 +126,6 @@ impl<'a> Query for Walker<'_, 'a> {
     /// stands near it, and a node no block under fills is still gone into
     /// where decor may stand in it, down to the leaf cells.
     fn node(&mut self, at: &mut At, asked: [Zoom; 2], t0: f32) -> cast::In<Option<Block>> {
-        self.world.visit();
         let (zoom, c) = at.node;
         let t0 = f64::from(t0);
         if zoom == GROUND.cell() {
@@ -206,6 +205,9 @@ impl<'a> World<'a> {
         let o = ray.origin;
         let from = cast::Ray::of(point(o[0], o[1], o[2]), ray.direction.map(|v| v as f32), ray.reach as f32);
         let met = cast::first(&mut walker, &from, detail.portable(), until);
+        if let Some(v) = self.visits {
+            v.set(v.get() + u64::from(met.visits));
+        }
         let met = (met.ends == Ends::Stop).then(|| self.hit(ray, met.stop));
         let answer = match (met, walker.lack, walker.answered) {
             (h, None, _) => Answer::Exact(h),

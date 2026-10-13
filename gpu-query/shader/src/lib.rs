@@ -15,7 +15,7 @@ use pxl_portable::cube::{sentinel, Ground};
 use pxl_portable::ground::{self, Tile, ELE_PADDED_SPAN, EXTENT_LANE};
 use pxl_portable::lattice::{EXTENT, GROUND, TILE_CELLS};
 use pxl_portable::{wrap_index, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
-use spirv_std::glam::{IVec4, UVec2, UVec3, UVec4, Vec4};
+use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::spirv;
 
 /// The eye a cast is from (pxl-kernel view/sight.rs `gpu_cast`).
@@ -298,16 +298,17 @@ impl Query for World<'_> {
     }
 }
 
-/// The lane's word for where a ray stopped: the value, its kind (ground) and
-/// the face it entered through, then how far, as f32 bits; nothing met, zero.
-fn word(ray: &cast::Ray, met: Met<At, u32>) -> UVec2 {
+/// The lane's cell for a ray: the value it stopped on, its kind (ground)
+/// and the face it entered through, then how far as f32 bits, then the
+/// nodes its descent asked about; where it met nothing, the first two zero.
+fn word(ray: &cast::Ray, met: Met<At, u32>) -> UVec4 {
     if met.ends != Ends::Stop {
-        return UVec2::new(0, 0);
+        return UVec4::new(0, 0, met.visits, 0);
     }
     let s = met.stop;
     let down = ray.direction[s.axis as usize] > 0.0;
     let face = 2 * s.axis + down as u32;
-    UVec2::new(s.block | 1 << 16 | face << 18, s.t.to_bits())
+    UVec4::new(s.block | 1 << 16 | face << 18, s.t.to_bits(), met.visits, 0)
 }
 
 #[spirv(compute(threads(8, 8, 1)))]
@@ -318,7 +319,7 @@ pub fn cast_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] looks: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] heights: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] extents: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] lane: &mut [UVec2],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] lane: &mut [UVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] tangents: &[f32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] shards: &[IVec4],
 ) {

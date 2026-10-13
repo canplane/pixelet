@@ -78,14 +78,10 @@ impl<'a> World<'a> {
         World { hide, carve, ..self }
     }
 
+    /// Each ray it casts adds the nodes its descent asked about to `visits`
+    /// (pxl-portable `cast::Met::visits`).
     pub fn counting(self, visits: &'a std::cell::Cell<u64>) -> World<'a> {
         World { visits: Some(visits), ..self }
-    }
-
-    pub(super) fn visit(&self) {
-        if let Some(v) = self.visits {
-            v.set(v.get() + 1);
-        }
     }
 }
 
