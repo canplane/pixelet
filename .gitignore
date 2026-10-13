@@ -165,7 +165,7 @@ vite.config.ts.timestamp-*
 # AI coding tools
 # Assistant-specific directories stay untracked: the committed, vendor-neutral
 # content lives in AGENTS.md and .agents/, and these are expected to be local
-# symlinks into it (see AGENTS.md "Skills").
+# symlinks into it.
 # NOTE: git has no inline comments in .gitignore — a trailing `# ...` becomes
 # part of the pattern, so these must each sit on their own line.
 .claude/

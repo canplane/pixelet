@@ -17,7 +17,7 @@ Nothing now.
 - **Close the view's bound by area, and let the eye's rays measure it.**
   The cell is a solid angle (4b1fd556f) and a screen holds at most
   `GRID_CELLS_MAX`, but drawn cells are not yet held to a quarter of one:
-  the error box is a cube judged from a chunk's nearest point, so ground
+  a chunk's cells are sized by its distance alone, so ground
   seen at a grazing angle is drawn four and more times finer than its cell
   (the camera gizmo's blue, the far half of a 60° view). Decide in one
   design: the bound in the form it must hold (visible cells ≤ 4 × the
@@ -36,11 +36,24 @@ Nothing now.
   text misread, past frames gone, and a hole's cause guessed from its color
   (the bedrock folded black under far faces, 2026-10-12). A query asked of
   the running kernel and answered as text — what a screen point draws (the
-  chunk's zoom and node, its bound, the column's runs and blocks, the
+  chunk's zoom and node, its bound, the column's blocks, the
   cell's fill), the drawn chunks matching a condition — would let it read
   the state instead. The AI DSL experiment could start here. First see what
   the overlay's report already gives
   (`apps/web/src/feature/debug/profiler/report.ts`).
+- **The resident arena bound, against a moving eye.** One observation makes
+  at most N boxes in N chunks, N = `GRID_CELLS_MAX`
+  ([20261013-the-arena-is-bounded-by-the-camera-grid.md](./decision/20261013-the-arena-is-bounded-by-the-camera-grid.md)),
+  but what is resident is not bounded by N. A drawn chunk stays while its
+  swap group waits on an unbuilt current piece it overlaps (`chunk/table.rs`
+  `materialize`). Each such chunk is the only cover for part of that piece,
+  so none is spare. If builds lag casts and the eye keeps moving into new
+  ground, the waiting groups pile up until the slots run out (`OCCUPANCY`)
+  and the screen freezes. Three conditions conflict there: an observation
+  taken without delay, no hole, and resident memory in N. Choose which
+  gives: start a cast only once the last one's swaps are done (a delay), or
+  keep only the previous cast's cover (a hole). The pools stay sized by
+  `FINE_POOL_BYTES`/`COARSE_POOL_BYTES` until then.
 
 ## Parked, with the reason on file
 

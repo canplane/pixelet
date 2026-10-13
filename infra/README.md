@@ -35,6 +35,9 @@ pxl-geo reads db-geo through `DB_GEO_URL`. All spatial data is EPSG:3857.
 Passwords and `ADMIN_TOKEN` come from `.env` only, and production's are its
 own.
 
+**Never `down -v` db-geo** (`pixelet-db-geo`): its volume is a
+multi-gigabyte PostGIS dataset, hours of ingest to fill again.
+
 ## 2. Filling db-geo
 
 [geo/README.md](./geo/README.md) is the sources, the tables and how to run
@@ -145,6 +148,8 @@ everything that builds or answers a URL:
 free plan, which fails closed at 100k requests a day, so no read can bill.
 A paid Workers plan, the `r2.dev` URL or a custom domain on the bucket breaks
 that ([deployment hosting](../decision/20260816-deployment-hosting.md)).
+Writes are outside it, and nothing configures a spending cap: a publish is a
+pyramid's worth of Class A operations, so `deno task usage` comes before one.
 
 The Worker claims all four (`wrangler.jsonc` `run_worker_first`): the bucket
 answers `/tile/*`, under its path less the root, and `/asset/*`, under its
