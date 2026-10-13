@@ -10,6 +10,14 @@
       "camera_gizmo": {
         "label": "카메라 기즈모",
         "description": "광선이 지나가는 카메라 격자(칸 하나에 광선 하나)를 겹쳐 보여 주고, 그려진 셀이 격자가 그 자리에서 요구하는 줌과 맞는지 색으로 표시합니다. 맞으면 초록, 더 세밀하면 파랑, 더 거칠면 빨강입니다."
+      },
+      "rays": {
+        "label": "광선",
+        "description": "화면이 그리는 광선을 누가 몇 개 쏘는지입니다.",
+        "cpu": { "label": "CPU", "description": "CPU 관측, 카메라 격자 칸 하나에 광선 하나." },
+        "cells": { "label": "GPU, 격자 칸", "description": "GPU, 카메라 격자 칸 하나에 광선 하나." },
+        "half": { "label": "GPU, 절반 해상도", "description": "가로세로 두 픽셀마다 광선 하나." },
+        "full": { "label": "GPU, 전체 해상도", "description": "픽셀 하나에 광선 하나." }
       }
     }
   },

@@ -131,6 +131,30 @@ impl ResolutionMode {
     }
 }
 
+/// Who casts the eye's rays the screen's cells draw, and how many.
+///
+///   cpu   — the CPU's cast, one a cell of the camera grid.
+///   cells — the GPU, one a cell of the camera grid, as the CPU's cast.
+///   half  — one every second pixel each way.
+///   full  — one a pixel.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum RayDensity {
+    cpu = 0,
+    cells = 1,
+    half = 2,
+    full = 3,
+}
+
+impl RayDensity {
+    pub const ALL: [RayDensity; 4] = [RayDensity::cpu, RayDensity::cells, RayDensity::half, RayDensity::full];
+
+    /// The option an index names, or none for an index past the list.
+    pub fn of(index: u32) -> Option<RayDensity> {
+        RayDensity::ALL.get(index as usize).copied()
+    }
+}
+
 /// How a setting is held.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKind {
@@ -212,10 +236,12 @@ pub enum SettingKey {
     camera_gizmo = 16,
     person = 17,
     pet = 18,
+    /// Who casts the rays the screen's cells draw, the CPU or the GPU, and how many (scene/cast.rs); RAY_DENSITIES says each.
+    rays = 19,
 }
 
 impl SettingKey {
-    pub const ALL: [SettingKey; 19] = [
+    pub const ALL: [SettingKey; 20] = [
         SettingKey::textures,
         SettingKey::decor,
         SettingKey::clouds,
@@ -235,6 +261,7 @@ impl SettingKey {
         SettingKey::camera_gizmo,
         SettingKey::person,
         SettingKey::pet,
+        SettingKey::rays,
     ];
 
     /// The setting a number names, or none for a number past the table.
@@ -263,6 +290,7 @@ impl SettingKey {
             SettingKey::camera_gizmo => SettingKind::Toggle,
             SettingKey::person => SettingKind::Index,
             SettingKey::pet => SettingKind::Index,
+            SettingKey::rays => SettingKind::Choice,
         }
     }
 
@@ -288,6 +316,7 @@ impl SettingKey {
             SettingKey::camera_gizmo => "camera_gizmo",
             SettingKey::person => "person",
             SettingKey::pet => "pet",
+            SettingKey::rays => "rays",
         }
     }
 
@@ -298,13 +327,14 @@ impl SettingKey {
             SettingKey::orbit_obstacle => &["through", "stop", "climb"],
             SettingKey::ao => &["off", "corner", "screen"],
             SettingKey::resolution => &["auto", "fixed", "low"],
+            SettingKey::rays => &["cpu", "cells", "half", "full"],
             _ => &[],
         }
     }
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(self, SettingKey::surface_follow | SettingKey::camera_gizmo)
+        matches!(self, SettingKey::surface_follow | SettingKey::camera_gizmo | SettingKey::rays)
     }
 
     /// A choice's option a development build only offers.
@@ -343,6 +373,7 @@ pub struct Settings {
     pub camera_gizmo: bool,
     pub person: u8,
     pub pet: u8,
+    pub rays: RayDensity,
 }
 
 impl Settings {
@@ -367,6 +398,7 @@ impl Settings {
         camera_gizmo: false,
         person: 1,
         pet: 5,
+        rays: RayDensity::cpu,
     };
 
     /// A setting's value as it crosses: a toggle's 0 or 1, a choice's option
@@ -392,6 +424,7 @@ impl Settings {
             SettingKey::camera_gizmo => self.camera_gizmo as u32,
             SettingKey::person => self.person as u32,
             SettingKey::pet => self.pet as u32,
+            SettingKey::rays => self.rays as u32,
         }
     }
 
@@ -435,6 +468,10 @@ impl Settings {
             SettingKey::pet => match u8::try_from(value) {
                 Ok(n) => self.pet = n,
                 Err(_) => return false,
+            },
+            SettingKey::rays => match RayDensity::of(value) {
+                Some(o) => self.rays = o,
+                None => return false,
             },
             _ => return false,
         }

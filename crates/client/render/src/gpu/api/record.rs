@@ -75,7 +75,10 @@ const UPLOAD_TEXTURE_ARGS: usize = 6;
 /// Whether a copy of `bytes` into the stream fits, leaving `stream::RESERVE`
 /// for what cannot wait.
 pub fn room(bytes: u32) -> bool {
-    STREAM.get(|| None).as_ref().is_some_and(|s| s.fits(UPLOAD_TEXTURE_ARGS, Some(bytes as usize), stream::RESERVE as usize))
+    STREAM
+        .get(|| None)
+        .as_ref()
+        .is_some_and(|s| s.fits(UPLOAD_TEXTURE_ARGS, Some(bytes as usize), stream::RESERVE as usize))
 }
 
 /// An upload whose bytes are copied into the stream: `args` ends in the

@@ -201,6 +201,15 @@ export const SETTINGS = {
     default: 5 as number,
     section: "character",
   },
+  /** Who casts the rays the screen's cells draw, the CPU or the GPU, and how many (scene/cast.rs); RAY_DENSITIES says each. */
+  rays: {
+    key: 19 as number,
+    kind: "choice",
+    default: "cpu",
+    options: ["cpu", "cells", "half", "full"],
+    section: "debug",
+    dev: true,
+  },
 } as const;
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */

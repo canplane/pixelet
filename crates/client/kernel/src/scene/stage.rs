@@ -13,7 +13,7 @@ use pxl_render::frame::screen_cells::{screen_cells_mut, FACE_SHIFT, KIND_GROUND,
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
-use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
+use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::block::Block;
 use pxl_spec::space::coord::v3;
@@ -138,6 +138,9 @@ pub fn stage_render() {
         case_cnt += 1;
     }
     let (window, layers) = earth_window(Earth::demand().floor());
+    let o = crate::view::observation::observation();
+    let eye = o.as_ref().and_then(crate::scene::cast::eye);
+    let mut terrain_upload = crate::scene::cast::upload;
     let out = render_frame(FrameInput {
         lists,
         environment: &kernel().scene.environment.out,
@@ -152,6 +155,13 @@ pub fn stage_render() {
             layers: &layers,
             upload: &mut earth_upload,
         },
+        cast: o.as_ref().zip(eye).map(|(o, (eye, tangents))| Cast {
+            eye,
+            tangents,
+            frames: crate::scene::cast::FRAMES,
+            window: crate::scene::cast::window(o),
+            upload: &mut terrain_upload,
+        }),
         text: text_raster,
         billboards: billboard_sheet(),
         handheld: handheld(),

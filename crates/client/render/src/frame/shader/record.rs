@@ -32,7 +32,10 @@ pub const SHADER_CAMERA_GRID: u32 = 24;
 pub const SHADER_BADGE_REGION: u32 = 25;
 /// The camera grid's cells drawn straight to the screen (frame/screen_cells.rs).
 pub const SHADER_SCREEN_CELLS: u32 = 26;
-pub const SHADERS: u32 = 27;
+/// The eye's rays cast on the GPU into the screen's lane, generated from
+/// pxl-portable's descent (script/portable-wgsl.ts): its one compute entry.
+pub const SHADER_CAST: u32 = 27;
+pub const SHADERS: u32 = 28;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -123,6 +126,8 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_DEBUG => wgsl!("frame", "globe", "encode", "debug"),
         SHADER_CAMERA_GRID => wgsl!("frame", "globe", "encode", "sky_words", "camera_grid"),
         SHADER_SCREEN_CELLS => wgsl!("frame", "globe", "encode", "sky_words", "screen_cells"),
+        // As generated: no constants of ours before it to clash with its names.
+        SHADER_CAST => include_str!(concat!(env!("OUT_DIR"), "/shader/cast.gen.wgsl")),
         SHADER_MIPS => wgsl!("mips"),
         SHADER_SHEET => wgsl!("sheet"),
         SHADER_IMPOSTOR => wgsl!(

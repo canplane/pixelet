@@ -101,4 +101,16 @@ impl Pipelines {
         self.built_len += 1;
         b
     }
+
+    /// A compute pipeline over shader `kind`'s one compute entry and `group`,
+    /// group 0's (binding, stages, kind) words: made each call, as its one
+    /// owner makes it once.
+    pub fn build_compute(&mut self, g: &Gpu, kind: u32, group: &[u32]) -> Built {
+        let module = self.module(g, kind);
+        let mut b = Built::default();
+        b.layouts[0] = self.layout(g, group);
+        b.pipeline = object();
+        g.compute_pipeline(b.pipeline, module, &b.layouts[..1]);
+        b
+    }
 }

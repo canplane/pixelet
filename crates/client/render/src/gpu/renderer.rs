@@ -20,11 +20,12 @@ use crate::frame::draw::{
 use crate::frame::screen_cells::{screen_cells_mut, SCREEN_CELLS_MAX};
 use crate::frame::shader::record::{
     FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS,
-    PIPELINE_SKY,
+    PIPELINE_SKY, SHADER_CAST,
 };
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, frame_begin, frame_commit, frame_room, gpu, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
+use crate::gpu::api_spec::record::{COMPUTE, STORAGE, STORAGE_RW, UNIFORM};
 use crate::gpu::api_spec::{dimension, format, load, resource, surface_role};
 use crate::gpu::arena::{arena_buffer, arena_bytes, arena_lose};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
@@ -46,6 +47,7 @@ use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::mesh::paint::ground::ground;
 use crate::mesh::paint::object::PAINTER;
+use pxl_spec::bake::tile::terrain::{ELE_LANE, EXTENT_LANE, GROUND_LANE};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use pxl_spec::space::coord::zoom::units;
@@ -114,6 +116,9 @@ pub struct FrameInput<'a> {
     pub moon: fn() -> Option<u32>,
     pub earth: fn() -> Option<u32>,
     pub earth_tiles: EarthTiles<'a>,
+    /// The eye's rays cast on the GPU into the lane the screen's cells draw;
+    /// none, and the CPU's cast writes it.
+    pub cast: Option<Cast<'a>>,
     pub billboards: &'a mut Sheet,
     pub text: TextOf,
     /// A phone gets a smaller shadow map.
@@ -131,6 +136,36 @@ pub struct EarthTiles<'a> {
 
 /// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
+
+/// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`): the
+/// eye, its lane's tangents, the terrain's tiles as the GPU holds them, and
+/// the tiles to hand it.
+pub struct Cast<'a> {
+    /// The eye as five vec4s (pxl-kernel view/sight.rs `gpu_cast`): its
+    /// origin in Q3 steps, forward and the reach, right and τ, up, and the
+    /// lane's cells across and up with the zooms a block is asked at.
+    pub eye: [u32; CAST_EYE_WORDS],
+    /// Each column's tangent then each row's, where they live, unwritten
+    /// until the page replays the turn.
+    pub tangents: &'a [f32],
+    /// The terrain frames the GPU keeps a slot for.
+    pub frames: u32,
+    /// Per tile zoom from the top to the leaves: the window's south-west
+    /// tile (x, y, two spare), then its tiles row by row, each its frame
+    /// plus one, zero where none is held; four a row of the buffer.
+    pub window: &'a [i32],
+    /// Hands each tile whose frame the GPU does not yet hold to the writer:
+    /// its frame, ground looks, padded heights and extents, each where it
+    /// lives, unwritten until the page replays the turn.
+    pub upload: &'a mut TerrainUpload,
+}
+
+pub const CAST_EYE_WORDS: usize = 20;
+
+/// Takes a tile's frame, ground looks, padded heights and extents.
+pub type TerrainWrite<'a> = dyn FnMut(u32, &[u8], &[u8], &[u8]) + 'a;
+
+pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
 pub struct FrameOutput {
     /// A surface waits on a size to settle, so another turn is wanted.
@@ -692,47 +727,177 @@ impl DebugPass {
 }
 
 /// The rays' cells, drawn straight to the screen at their rays' depth and
-/// painted from the palette (frame/screen_cells.rs): the lane as the last
-/// cast wrote it, uploaded from where it lives once a cast.
+/// painted from the palette (frame/screen_cells.rs). The lane is written by
+/// the GPU's cast where it runs (`Cast`), else by the CPU's, uploaded from
+/// where it lives once a cast.
 struct ScreenCellsPass {
     built: Built,
     group: u32,
+    frame_buffer: u32,
+    sky_buffer: u32,
+    colors: u32,
     lane: u32,
+    /// Cells the lane holds past its header.
+    room: usize,
     generation: u32,
+    cast: Option<CastBuffers>,
 }
+
+/// What the GPU's cast reads and the lane it writes.
+struct CastBuffers {
+    built: Built,
+    group: u32,
+    eye: u32,
+    window: u32,
+    window_words: usize,
+    looks: u32,
+    heights: u32,
+    extents: u32,
+    tangents: u32,
+    /// Tangents the buffer holds.
+    tangent_room: usize,
+    across: [u32; 2],
+}
+
+/// A terrain frame's lanes on the GPU, each a whole number of words.
+const LOOK_BYTES: u32 = GROUND_LANE as u32;
+const HEIGHT_BYTES: u32 = (ELE_LANE * 2).next_multiple_of(4) as u32;
+const EXTENT_BYTES: u32 = (EXTENT_LANE * 4) as u32;
+
+/// The cast's group 0: the eye, the window, the tiles' looks, heights and
+/// extents, the lane it writes and the lane's tangents.
+const CAST_GROUP: [u32; 21] = [
+    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE_RW, 6, COMPUTE, STORAGE,
+];
 
 impl ScreenCellsPass {
     fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> ScreenCellsPass {
         let built = pipelines.build(g, PIPELINE_SCREEN_CELLS, format::CANVAS);
-        let lane = object();
-        g.buffer(lane, word_bytes(2 * (1 + SCREEN_CELLS_MAX)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         // Each ground look's swatch, then each placed value's, as the meshes paint them.
         let swatch = |rgb: [u8; 3]| u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 255]);
         let palette: Vec<u32> = (0..=u8::MAX).map(|g| swatch(ground(g).0)).chain(PAINTER.swatches().iter().map(|&rgb| swatch(rgb))).collect();
         let colors = object();
         g.buffer(colors, word_bytes(palette.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         g.write_buffer(colors, 0, bytes(&palette));
-        let group = object();
-        let mut entries = [0u32; 20];
-        entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
-        entries[5..10].copy_from_slice(&buffer_entry(1, sky_buffer));
-        entries[10..15].copy_from_slice(&buffer_entry(2, lane));
-        entries[15..].copy_from_slice(&buffer_entry(3, colors));
-        g.bind_group(group, built.layouts[0], &entries);
-        ScreenCellsPass { built, group, lane, generation: 0 }
+        let mut p = ScreenCellsPass {
+            built,
+            group: 0,
+            frame_buffer,
+            sky_buffer,
+            colors,
+            lane: 0,
+            room: 0,
+            generation: 0,
+            cast: None,
+        };
+        p.fit(g, SCREEN_CELLS_MAX);
+        p
     }
 
-    /// A new cast's lane: its size, then its cells, from where they live,
-    /// which no cast rewrites before the page replays this turn.
-    fn prepare(&mut self, g: &Gpu) {
-        let cells = screen_cells_mut();
-        if cells.generation == self.generation {
+    /// A lane of at least `cells`, its groups made again over it.
+    fn fit(&mut self, g: &Gpu, cells: usize) {
+        if cells <= self.room {
             return;
         }
-        self.generation = cells.generation;
-        let n = ((cells.across[0] * cells.across[1]) as usize).min(SCREEN_CELLS_MAX);
-        g.write_buffer(self.lane, 0, bytes(&cells.across));
-        g.upload_buffer(self.lane, 8, bytes(&cells.cells[..n]));
+        if self.lane != 0 {
+            release(self.lane);
+        }
+        self.room = cells;
+        self.lane = object();
+        g.buffer(self.lane, word_bytes(2 * (1 + cells)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        self.group = object();
+        let mut entries = [0u32; 20];
+        entries[..5].copy_from_slice(&buffer_entry(0, self.frame_buffer));
+        entries[5..10].copy_from_slice(&buffer_entry(1, self.sky_buffer));
+        entries[10..15].copy_from_slice(&buffer_entry(2, self.lane));
+        entries[15..].copy_from_slice(&buffer_entry(3, self.colors));
+        g.bind_group(self.group, self.built.layouts[0], &entries);
+        if let Some(c) = self.cast.as_mut().filter(|c| c.tangents != 0) {
+            c.group = cast_group(g, c, self.lane);
+        }
+        // A new lane holds no cast.
+        self.generation = 0;
+    }
+
+    /// The lane for this frame: the GPU's cast where it runs, its tiles and
+    /// eye handed over first; else a new CPU cast's, from where it lives,
+    /// which no cast rewrites before the page replays this turn.
+    fn prepare(&mut self, g: &Gpu, pipelines: &mut Pipelines, cast: Option<Cast>) {
+        let Some(cast) = cast else {
+            self.cast = None;
+            let cells = screen_cells_mut();
+            if cells.generation == self.generation {
+                return;
+            }
+            self.generation = cells.generation;
+            let n = ((cells.across[0] * cells.across[1]) as usize).min(SCREEN_CELLS_MAX);
+            g.write_buffer(self.lane, 0, bytes(&cells.across));
+            g.upload_buffer(self.lane, 8, bytes(&cells.cells[..n]));
+            return;
+        };
+        if self.cast.is_none() {
+            let built = pipelines.build_compute(g, SHADER_CAST, &CAST_GROUP);
+            let buffer = |size: u32, usage: u32| {
+                let id = object();
+                g.buffer(id, size, usage);
+                id
+            };
+            let (storage, frames) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, cast.frames);
+            let c = CastBuffers {
+                built,
+                group: 0,
+                eye: buffer(word_bytes(CAST_EYE_WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
+                window: buffer(word_bytes(cast.window.len()), storage),
+                window_words: cast.window.len(),
+                looks: buffer(frames * LOOK_BYTES, storage),
+                heights: buffer(frames * HEIGHT_BYTES, storage),
+                extents: buffer(frames * EXTENT_BYTES, storage),
+                tangents: 0,
+                tangent_room: 0,
+                across: [0; 2],
+            };
+            self.cast = Some(c);
+        }
+        let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
+        (cast.upload)(&mut |frame, looks, heights, extents| {
+            g.upload_buffer(c.looks, frame * LOOK_BYTES, looks);
+            g.upload_buffer(c.heights, frame * HEIGHT_BYTES, heights);
+            g.upload_buffer(c.extents, frame * EXTENT_BYTES, extents);
+        });
+        xpute_kit::ensure!(cast.window.len() <= c.window_words, ENOTRECOVERABLE, cast.window.len());
+        g.write_buffer(c.window, 0, bytes(cast.window));
+        g.write_buffer(c.eye, 0, bytes(&cast.eye));
+        c.across = [cast.eye[16], cast.eye[17]];
+        let regroup = cast.tangents.len() > c.tangent_room;
+        if regroup {
+            if c.tangents != 0 {
+                release(c.tangents);
+            }
+            c.tangent_room = cast.tangents.len();
+            c.tangents = object();
+            g.buffer(c.tangents, word_bytes(c.tangent_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        }
+        g.upload_buffer(c.tangents, 0, bytes(cast.tangents));
+        let cells = (c.across[0] * c.across[1]) as usize;
+        self.fit(g, cells);
+        let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
+        // A lane `fit` made again regroups the cast itself.
+        if regroup || c.group == 0 {
+            c.group = cast_group(g, c, self.lane);
+        }
+        g.write_buffer(self.lane, 0, bytes(&c.across));
+    }
+
+    /// The GPU's cast into the lane, a ray a cell, where it runs.
+    fn dispatch(&self, g: &Gpu, encoder: u32) {
+        let Some(c) = &self.cast else { return };
+        let pass = object();
+        g.compute_pass(pass, encoder);
+        g.set_pipeline(pass, c.built.pipeline);
+        g.set_bind_group(pass, 0, c.group, &[]);
+        g.dispatch(pass, c.across[0].div_ceil(CAST_WORKGROUP), c.across[1].div_ceil(CAST_WORKGROUP), 1);
+        g.end(pass);
+        release(pass);
     }
 
     /// Returns the group 0 it leaves bound.
@@ -742,6 +907,19 @@ impl ScreenCellsPass {
         g.draw(pass, 3, 1, 0, 0);
         self.group
     }
+}
+
+/// The cast's workgroup, a side: `cast_cs`'s.
+const CAST_WORKGROUP: u32 = 8;
+
+fn cast_group(g: &Gpu, c: &CastBuffers, lane: u32) -> u32 {
+    let group = object();
+    let mut entries = [0u32; 35];
+    for (k, id) in [c.eye, c.window, c.looks, c.heights, c.extents, lane, c.tangents].into_iter().enumerate() {
+        entries[5 * k..5 * k + 5].copy_from_slice(&buffer_entry(k as u32, id));
+    }
+    g.bind_group(group, c.built.layouts[0], &entries);
+    group
 }
 
 /// A variant picker case: its own frame, drawn at one sample with no shadow.
@@ -1073,6 +1251,7 @@ impl Renderer {
         self.layers.step(g, &self.mips, input.pack);
         self.moon.step(g, &self.mips, input.moon);
         self.atmosphere.earth_step(g, &self.mips, input.earth);
+        let cast = input.cast;
         let tiles = input.earth_tiles;
         self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload);
         self.badges.sync_sheet(g, &self.mips, input.billboards, input.text);
@@ -1107,7 +1286,7 @@ impl Renderer {
         self.puck.prepare_zone(g, &draws, b);
         self.badges.prepare(g, world.depth_view, (world.width, world.height), &draws, b);
         self.debug.prepare(g, &draws);
-        self.screen.prepare(g);
+        self.screen.prepare(g, &mut self.pipelines, cast);
         self.prepare_cases(g, &draws, uniforms, input.cases);
         let q = self.query_set;
         // A query no pass wrote holds an earlier frame's value, so which were written is passed along.
@@ -1126,6 +1305,7 @@ impl Renderer {
         frame_begin();
         let encoder = object();
         g.encoder(encoder);
+        self.screen.dispatch(g, encoder);
         if self.shadows {
             let pass = self.shadow.begin(g, encoder, &mut stamps[SPAN_SHADOW]);
             let chunk = [self.chunk_depth.pipeline, self.chunk_coarse_depth.pipeline];

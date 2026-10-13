@@ -4,6 +4,7 @@
 //! into the kernel's draw list as the chunks' table is (`chunk/table.rs`).
 
 pub mod actor;
+pub mod cast;
 pub mod character;
 pub mod environment;
 pub mod indicator;
