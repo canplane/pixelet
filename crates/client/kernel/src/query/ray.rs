@@ -84,6 +84,9 @@ pub struct Hit {
     /// The box struck.
     pub cube: Aabb,
     pub struck: Struck,
+    /// What the block met is, as the world answers it at its zoom; none for
+    /// decor, which is no block, and for what is climbed out of into air.
+    pub block: Option<Block>,
 }
 
 /// What a node gave the ray: where it stops, that it goes on past it, or
@@ -144,6 +147,7 @@ fn decor_hit(ray: &Ray, t: f64, i: Instance) -> Hit {
         normal: ray.direction.map(|v| -v),
         cube: base,
         struck: Struck::Decor(i),
+        block: None,
     }
 }
 
@@ -302,6 +306,7 @@ impl<'a> World<'a> {
             normal,
             cube: whole,
             struck,
+            block,
         })
     }
 }

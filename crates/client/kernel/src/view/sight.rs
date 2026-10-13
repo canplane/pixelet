@@ -10,6 +10,7 @@
 //! crosses nothing that moved since it was cast answers what it answered,
 //! so only those that do are cast again: reuse that cannot change the result.
 
+use pxl_spec::block::Block;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
@@ -102,6 +103,10 @@ pub struct Stop {
     pub at: V3,
     pub t: f64,
     pub zoom: Zoom,
+    /// The block it stopped on, and the face it entered through: `2 · axis`,
+    /// plus one where the face's outward normal points down the axis.
+    pub block: Block,
+    pub face: u8,
 }
 
 /// One cell's ray as cast: where it stopped, none where it met nothing
@@ -141,6 +146,17 @@ impl Sight {
     /// screen (`Lens::step`); none before a screen.
     pub fn step(&self) -> [f64; 2] {
         self.lens.map_or([0.0; 2], |l| l.step(self.across))
+    }
+
+    /// The grid's cells across and up the screen.
+    pub fn across(&self) -> [u32; 2] {
+        self.across
+    }
+
+    /// Each cell's stop, `j · across[0] + i`, none where its ray met nothing
+    /// or lacked.
+    pub fn cells(&self) -> impl Iterator<Item = Option<Stop>> + '_ {
+        self.cells.iter().map(|c| c.stop)
     }
 
     /// Where the rays stopped.
@@ -247,10 +263,15 @@ pub fn advance(stop: &dyn Fn() -> bool) -> bool {
         };
         let answer = world.first_hit(&ray, Detail::Distance(tau));
         let lack = answer.lack();
-        let met = answer.value().flatten().map(|hit| Stop {
-            at: core::array::from_fn(|a| hit.point[a] - hit.normal[a] * INSIDE),
-            t: hit.t,
-            zoom: of_side(hit.cube.max[0] - hit.cube.min[0]),
+        let met = answer.value().flatten().and_then(|hit| {
+            let k = (0..3).find(|&k| hit.normal[k] != 0.0)?;
+            Some(Stop {
+                at: core::array::from_fn(|a| hit.point[a] - hit.normal[a] * INSIDE),
+                t: hit.t,
+                zoom: of_side(hit.cube.max[0] - hit.cube.min[0]),
+                block: hit.block?,
+                face: (2 * k + usize::from(hit.normal[k] < 0.0)) as u8,
+            })
         });
         job.sight.cells[cell as usize] = Cell { stop: met, lack };
         c.rays += 1;

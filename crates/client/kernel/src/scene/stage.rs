@@ -9,14 +9,18 @@ use crate::chunk::table::Frame;
 use crate::laid;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::view::frame::pose::{globe, view_resize};
+use pxl_render::frame::screen_cells::{screen_cells_mut, FACE_SHIFT, KIND_GROUND, KIND_NONE, KIND_PLACED, KIND_SHIFT, SCREEN_CELLS_MAX};
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
+use pxl_spec::block::Block;
 use pxl_spec::space::coord::v3;
 use xpute_guest::clock::now;
 use xpute_guest::global::Global;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::mem::MB;
 use crate::profiler::frame::{DeviceSample, DrawCensus, GpuSample, CENSUS_PIPELINES};
@@ -87,6 +91,9 @@ pub fn stage_write() {
     s[STAGE_AT::LOD_CELL] = crate::view::sight::cell_angle(crate::view::sight::effective());
     let grid = crate::view::sight::current().map_or([0.0; 2], |s| s.step());
     s[STAGE_AT::CAMERA_GRID..STAGE_AT::CAMERA_GRID + 2].copy_from_slice(&grid);
+    if let Some(sight) = crate::view::sight::current() {
+        screen_cells(sight);
+    }
     s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { crate::param::EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { crate::param::AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
@@ -250,4 +257,29 @@ pub fn visible_step(ctx: &mut TickContext) {
 /// How long this turn's chunks took; none where the stage was empty.
 pub fn visible_pass() -> Option<f64> {
     pass().visible_pass
+}
+
+const _: () = assert!(crate::param::GRID_CELLS_MAX as usize <= SCREEN_CELLS_MAX, "the screen's cells past the lane");
+
+/// The published cast's cells into the renderer's lane, once a cast: what
+/// each cell's ray met and through which face, and how far.
+fn screen_cells(sight: &crate::view::sight::Sight) {
+    let lane = screen_cells_mut();
+    if lane.generation == sight.generation() {
+        return;
+    }
+    lane.across = sight.across();
+    for (word, stop) in lane.cells.iter_mut().zip(sight.cells()) {
+        *word = match stop {
+            None => [KIND_NONE << KIND_SHIFT, 0],
+            Some(s) => {
+                let (kind, value) = match s.block {
+                    Block::Ground(look, _) => (KIND_GROUND, u32::from(look)),
+                    Block::Placed(v) => (KIND_PLACED, u32::from(u16::try_from(v).or_bug(Errno::ERANGE))),
+                };
+                [value | kind << KIND_SHIFT | u32::from(s.face) << FACE_SHIFT, (s.t as f32).to_bits()]
+            }
+        };
+    }
+    lane.generation = sight.generation();
 }
