@@ -559,7 +559,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_SCREEN_CELLS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM], [2, FRAGMENT, STORAGE]])],
+            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM], [2, FRAGMENT, STORAGE], [3, FRAGMENT, STORAGE]])],
         ),
         PIPELINE_CHUNK_DEPTH => record(depth_only(SHADER_CHUNK), &chunk_lanes(true), &chunk_groups()),
         PIPELINE_CHUNK_COARSE_DEPTH => record(at_coarse(depth_only(SHADER_CHUNK)), &chunk_lanes(false), &chunk_groups()),

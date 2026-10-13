@@ -75,6 +75,11 @@ impl Painter {
         self.layers[i] = layer;
     }
 
+    /// Every state's swatch, by state: black where none is taught.
+    pub fn swatches(&self) -> &[[u8; 3]] {
+        &self.swatches
+    }
+
     /// Its swatch and texture layer; none for untaught, air and decor.
     pub fn look_of(&self, state: u32) -> Option<([u8; 3], u8)> {
         match self.kind(state) {

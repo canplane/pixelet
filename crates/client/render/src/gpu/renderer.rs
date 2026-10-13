@@ -17,7 +17,7 @@ use crate::frame::draw::{
     uniform_of, Lists, CHUNK_UNIT, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX,
     PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
-use crate::frame::screen_cells::{screen_cells_mut, FACE_SHIFT, KIND_GROUND, KIND_PLACED, KIND_SHIFT, SCREEN_CELLS_MAX, VALUE_BITS};
+use crate::frame::screen_cells::{screen_cells_mut, SCREEN_CELLS_MAX};
 use crate::frame::shader::record::{
     FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS,
     PIPELINE_SKY,
@@ -44,8 +44,8 @@ use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
-use crate::mesh::paint::ground::{ground, look};
-use pxl_spec::block::Block;
+use crate::mesh::paint::ground::ground;
+use crate::mesh::paint::object::PAINTER;
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use pxl_spec::space::coord::zoom::units;
@@ -691,57 +691,48 @@ impl DebugPass {
     }
 }
 
-/// The camera grid's cells as the last cast met them, drawn straight to the
-/// screen at their rays' depth (frame/screen_cells.rs), uploaded once a cast.
+/// The rays' cells, drawn straight to the screen at their rays' depth and
+/// painted from the palette (frame/screen_cells.rs): the lane as the last
+/// cast wrote it, uploaded from where it lives once a cast.
 struct ScreenCellsPass {
     built: Built,
     group: u32,
-    buffer: u32,
+    lane: u32,
     generation: u32,
-    words: Vec<u32>,
 }
 
 impl ScreenCellsPass {
     fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> ScreenCellsPass {
         let built = pipelines.build(g, PIPELINE_SCREEN_CELLS, format::CANVAS);
-        let buffer = object();
-        g.buffer(buffer, word_bytes(4 * (1 + SCREEN_CELLS_MAX)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        let lane = object();
+        g.buffer(lane, word_bytes(2 * (1 + SCREEN_CELLS_MAX)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        // Each ground look's swatch, then each placed value's, as the meshes paint them.
+        let swatch = |rgb: [u8; 3]| u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 255]);
+        let palette: Vec<u32> = (0..=u8::MAX).map(|g| swatch(ground(g).0)).chain(PAINTER.swatches().iter().map(|&rgb| swatch(rgb))).collect();
+        let colors = object();
+        g.buffer(colors, word_bytes(palette.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        g.write_buffer(colors, 0, bytes(&palette));
         let group = object();
-        let mut entries = [0u32; 15];
+        let mut entries = [0u32; 20];
         entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
         entries[5..10].copy_from_slice(&buffer_entry(1, sky_buffer));
-        entries[10..].copy_from_slice(&buffer_entry(2, buffer));
+        entries[10..15].copy_from_slice(&buffer_entry(2, lane));
+        entries[15..].copy_from_slice(&buffer_entry(3, colors));
         g.bind_group(group, built.layouts[0], &entries);
-        ScreenCellsPass {
-            built,
-            group,
-            buffer,
-            generation: 0,
-            words: Vec::new(),
-        }
+        ScreenCellsPass { built, group, lane, generation: 0 }
     }
 
-    /// A new cast's cells, each its block's swatch, its face, how far and
-    /// what it met, after the grid's size.
+    /// A new cast's lane: its size, then its cells, from where they live,
+    /// which no cast rewrites before the page replays this turn.
     fn prepare(&mut self, g: &Gpu) {
         let cells = screen_cells_mut();
         if cells.generation == self.generation {
             return;
         }
         self.generation = cells.generation;
-        let n = (cells.across[0] * cells.across[1]) as usize;
-        self.words.clear();
-        self.words.extend_from_slice(&[cells.across[0], cells.across[1], 0, 0]);
-        for &[w0, w1] in &cells.cells[..n.min(SCREEN_CELLS_MAX)] {
-            let (value, kind, face) = (w0 & ((1 << VALUE_BITS) - 1), (w0 >> KIND_SHIFT) & 3, (w0 >> FACE_SHIFT) & 7);
-            let rgb = match kind {
-                KIND_GROUND => ground(value as u8).0,
-                KIND_PLACED => look(Block::Placed(value)).0,
-                _ => [0; 3],
-            };
-            self.words.extend_from_slice(&[u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 255]), face, w1, kind]);
-        }
-        g.write_buffer(self.buffer, 0, bytes(&self.words));
+        let n = ((cells.across[0] * cells.across[1]) as usize).min(SCREEN_CELLS_MAX);
+        g.write_buffer(self.lane, 0, bytes(&cells.across));
+        g.upload_buffer(self.lane, 8, bytes(&cells.cells[..n]));
     }
 
     /// Returns the group 0 it leaves bound.
