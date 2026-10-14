@@ -3,10 +3,10 @@
 //! The pyramid as the client holds it, for every layer on the ground: the
 //! tiles held (residency.rs) and what an observation asks for of them.
 //!
-//! Asks are the observation's demand, as the estimator names it, merged with
+//! Asks are the live eye's demand, as the estimator names it, merged with
 //! the fallback's tiles and a destination's, the best reason per tile.
-//! Nothing drawn enters them but what the turn hands in: the goal the chunks
-//! last published and the quality's τ, decided first. Where a tile marks a
+//! Nothing drawn enters them but the quality's τ the turn hands in, decided
+//! first. Where a tile marks a
 //! child as no tile (`Base::occupancy`), its ground is the tile's and the
 //! child is never asked for.
 
@@ -88,10 +88,9 @@ impl Observed for Earth {
 
 /// Everything the asks depend on, as read; two turns agreeing on all of it
 /// ask for the same tiles, so the second decides nothing.
-#[derive(PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 struct Seen {
     o: Option<Observation>,
-    floor: Vec<Tile>,
     destination: Option<Tile>,
     tau: Tau,
 }
@@ -112,8 +111,8 @@ pub struct Demand<L: Observed> {
     demand: Vec<Tile>,
     wants: Vec<(u64, Ask)>,
     last: Option<Seen>,
-    /// What this turn reads, kept so a turn allocates nothing.
-    now: Option<Seen>,
+    /// The floor's tiles as last observed.
+    floor: Vec<Tile>,
     /// What it reads moved since it last observed.
     moved: bool,
     /// Reused across observations so observing stops allocating once warm.
@@ -128,7 +127,7 @@ impl<L: Observed> Default for Demand<L> {
             demand: Vec::new(),
             wants: Vec::new(),
             last: None,
-            now: None,
+            floor: Vec::new(),
             moved: false,
             asks: FnvHashMap::with_capacity_and_hasher(Residency::<L>::FRAMES as usize, Default::default()),
         }
@@ -154,7 +153,7 @@ impl<L: Observed> Demand<L> {
 
     /// The floor's tiles as last observed.
     pub fn floor(&self) -> impl Iterator<Item = Tile> + Clone + '_ {
-        self.last.iter().flat_map(|seen| seen.floor.iter().copied())
+        self.floor.iter().copied()
     }
 
     pub fn demand(&self) -> &[Tile] {
@@ -182,15 +181,7 @@ impl<L: Observed> Demand<L> {
     /// Builds the asks for `o`: the estimator's demand, the floor and the
     /// destination's line.
     #[allow(clippy::too_many_arguments)]
-    pub fn observe(
-        &mut self,
-        o: Option<&Observation>,
-        // the floor's eye, if not `o`'s
-        floor_at: Option<&Observation>,
-        destination: impl Iterator<Item = Tile>,
-        estimator: &ByEye,
-        top: Zoom,
-    ) {
+    pub fn observe(&mut self, o: Option<&Observation>, destination: impl Iterator<Item = Tile>, estimator: &ByEye, top: Zoom) {
         let mut demand = core::mem::take(&mut self.demand);
         demand.clear();
         let mut asks = core::mem::take(&mut self.asks);
@@ -231,13 +222,12 @@ impl<L: Observed> Demand<L> {
             }
             xpute_kit::ensure!(read.iter().all(|&n| n <= Residency::<L>::ZOOM_DEMAND_TILES), ENOTRECOVERABLE, *read.iter().max().unwrap_or(&0));
             if !matches!(L::ASKS, Asks::Line) {
-                let mut floor = 0u32;
-                let f = floor_at.unwrap_or(o);
-                Floor::<L>::floor(f, top, |p| {
-                    floor += 1;
+                self.floor.clear();
+                Floor::<L>::floor(o, top, |p| {
+                    self.floor.push(p);
                     ask(&mut asks, p, Ask { why: Why::Floor, order: order(o, p) });
                 });
-                xpute_kit::ensure!(floor <= Floor::<L>::TILES, ENOTRECOVERABLE, floor);
+                xpute_kit::ensure!(self.floor.len() <= Floor::<L>::TILES as usize, ENOTRECOVERABLE, self.floor.len());
             }
         }
         // The whole line, not only the finest tile: which one says the ground is
@@ -279,55 +269,33 @@ impl<L: Observed> Demand<L> {
         &self.wants
     }
 
-    /// The layer's turn. Quality is decided first so asks match what is drawn.
-    /// Observes again whenever anything in `Seen` changed.
+    /// The layer's turn, from the live eye: the eye that is coming, which
+    /// every cast reads as it arrives. Quality is decided first so asks match
+    /// what is drawn. Observes again whenever anything in `Seen` changed.
     ///
     /// `destination` is asked for with its line even with no observation yet:
-    /// at the first fix the camera waits for that ground. `far` cuts the
-    /// observation where the layer stops being drawn.
-    ///
-    /// `published` is what the cast last published was observed from, which
-    /// demand follows.
-    pub fn step(&mut self, destination: Option<Tile>, published: Option<&Observation>, tau: Tau) {
+    /// at the first fix the camera waits for that ground. A layer with a top
+    /// of its own is observed out to its own reach, unfogged.
+    pub fn step(&mut self, destination: Option<Tile>, tau: Tau) {
         // Nothing coarser than the layer's own top is drawn, whatever the source holds.
         let Some(top) = L::TOP.or(floor::top()).map(|t| t.max(L::LATTICE.top())) else { return };
-        let own = |o: Observation| match L::TOP {
+        let o = observation().map(|o| match L::TOP {
             Some(_) => Observation {
                 reach: L::reach(),
                 fog: f64::INFINITY,
                 ..o
             },
             None => o,
-        };
-        let live = observation().map(own);
-        let seen_from = live.map(|live| published.map_or(live, |d| own(*d)));
-        let mut now = self.now.take().unwrap_or_else(|| Seen {
-            o: None,
-            floor: Vec::new(),
-            destination: None,
-            tau,
         });
-        // the floor follows the live eye, so a jump asks for it at once
-        now.floor.clear();
-        if let Some(l) = &live {
-            Floor::<L>::floor(l, top, |p| now.floor.push(p));
-        }
-        if seen_from.is_none() && destination.is_none() {
-            self.now = Some(now);
+        if o.is_none() && destination.is_none() {
             return;
         }
-        let tau = match seen_from {
-            Some(_) => tau,
-            None => Tau::FINEST,
-        };
-        let o = seen_from.map(|o| Observation { reach: o.reach.min(L::reach()), ..o });
-        (now.o, now.destination, now.tau) = (o, destination, tau);
-        if core::mem::take(&mut self.moved) | (self.last.as_ref() != Some(&now)) {
+        let tau = if o.is_some() { tau } else { Tau::FINEST };
+        let now = Seen { o, destination, tau };
+        if core::mem::take(&mut self.moved) | (self.last != Some(now)) {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent())));
-            self.observe(o.as_ref(), live.as_ref(), line, &ByEye { tau, lattice: L::LATTICE, top }, top);
-            self.now = self.last.replace(now);
-        } else {
-            self.now = Some(now);
+            self.observe(o.as_ref(), line, &ByEye { tau, lattice: L::LATTICE, top }, top);
+            self.last = Some(now);
         }
         declare(L::STREAM, &self.wants);
     }

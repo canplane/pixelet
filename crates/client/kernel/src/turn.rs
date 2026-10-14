@@ -107,21 +107,20 @@ fn goal_tick(ctx: &mut TickContext) {
     }
 }
 
-/// Each pyramid layer's tiles, from the published goal.
+/// Each pyramid layer's tiles, from the live eye.
 fn demand_tick(_: &mut TickContext) {
     crate::view::demand::admit_arrived();
     changes_step();
-    // Demand follows the goal the chunks published, at the quality decided first.
-    let published = crate::view::sight::current().and_then(|s| s.observation());
+    // Demand follows the live eye, at the quality decided first.
     let tau = crate::view::sight::effective();
-    TerrainTile::demand().step(crate::control::navigation::destination::tile(), published, tau);
+    TerrainTile::demand().step(crate::control::navigation::destination::tile(), tau);
     // Nothing is fetched while places are hidden.
     match crate::setting::store::settings_store().place {
-        true => PlaceTile::demand().step(None, published, tau),
+        true => PlaceTile::demand().step(None, tau),
         false => PlaceTile::demand().idle(),
     }
-    Earth::demand().step(None, published, tau);
-    DivisionTile::demand().step(crate::layer::division::line(crate::control::camera::controller::focus()), published, tau);
+    Earth::demand().step(None, tau);
+    DivisionTile::demand().step(crate::layer::division::line(crate::control::camera::controller::focus()), tau);
 }
 
 fn camera_input_tick(_: &mut TickContext) {
