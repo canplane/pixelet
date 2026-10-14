@@ -3,8 +3,8 @@
 ## The main axis
 
 Every structural choice is judged by whether it moves the code further
-down one picture; [.agents/reference/calab-loader/](./.agents/reference/calab-loader/)
-is that picture at the size of one loader.
+down one picture; a user-level loader, kept in the agents' memory outside
+the tree, is that picture at the size of one loader.
 
 - **The eye decides.** The view is a grid of angular cells about the eye,
   one ray a cell; only what those rays observe is drawn, by the same rule
