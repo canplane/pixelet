@@ -1,24 +1,46 @@
 // pxl-kernel/layer/object/pyramid.rs
 
-//! The objects' pyramid: what each node holds at every zoom, kept beside the
-//! store's one record of what was placed and derived from it, as the bake
-//! folds the ground's tiles a zoom at a time. A leaf placed is its value; a
-//! node over leaves that differ is its eight children folded (`fold_cell`,
-//! the majority of their fill). The objects are not fetched today, so the
-//! layer folds its own pyramid from its writes, where a served tile would
-//! otherwise arrive: a write refolds the nodes over it, zoom by zoom, and
-//! nothing else. A reader asks a node by one look-up, what covers it handed
-//! down from its parent (`Held`), and never folds what is under it.
-
-use fnv::FnvHashMap;
+//! The objects' pyramid: what each node holds at every zoom, in the store's
+//! one tree itself, as the bake folds the ground's tiles a zoom at a time. A
+//! leaf placed is its value; a branch's slot holds its eight children folded
+//! (`fold_cell`, the majority of their fill), which each write folds again
+//! up its path. The objects are not fetched today, so the layer folds its
+//! own pyramid from its writes, where a served tile would otherwise arrive.
+//! A reader asks a node by one look-up, what covers it handed down from its
+//! parent (`Held`), and never folds what is under it.
 
 use pxl_spec::block::object::object_value_is_voxel;
 use pxl_spec::space::coord::world::wrap_cell;
-use pxl_spec::space::coord::zoom::{Zoom, CUBE_ZOOM, SHARD_ZOOM};
-use pxl_spec::space::hierarchy::morton::child_cube;
+use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::sparse_tree::Slot;
+use pxl_spec::space::hierarchy::tree::slot_of;
 
-use super::store::{fold_cell, shard, shown, EntryAt, Leaf, Tree, EMPTY};
+use super::store::{EntryAt, Leaf, Tree, EMPTY};
+
+/// A cube filled whole, as a fold's share counts it: a share is in 2⁻¹⁵ of
+/// its cube, floored at each fold, so eighths stay exact five folds deep.
+pub(super) const FULL: u16 = 1 << 15;
+
+/// A branch's word in the tree: its fold, the kind most of its fill is and
+/// the share filled.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Fold {
+    pub kind: u16,
+    pub fill: u16,
+}
+
+impl Fold {
+    fn of(word: u32) -> Fold {
+        Fold {
+            kind: word as u16,
+            fill: (word >> 16) as u16,
+        }
+    }
+
+    fn word(self) -> u32 {
+        u32::from(self.kind) | u32::from(self.fill) << 16
+    }
+}
 
 /// What a node holds, as a descent hands it down.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -27,12 +49,35 @@ pub enum Held {
     Nothing,
     /// A leaf placed at `zoom`, `at` covers it whole.
     Leaf { leaf: Leaf, zoom: Zoom, at: [i64; 3] },
-    /// Leaves under it differ: their fold, the kind most of its fill is and
-    /// the share filled.
-    Folded(u16, f64),
+    /// Leaves under it differ: their fold, and the block of its children.
+    Folded { fold: Fold, block: u32 },
 }
 
 impl Held {
+    /// What the node `at` of `zoom` holding `slot` holds, a leaf found over it
+    /// at `found`.
+    pub(super) fn of(slot: Slot<u32>, found: Zoom, (zoom, at): (Zoom, [i64; 3])) -> Held {
+        match slot {
+            Slot::Leaf(v) if v == EMPTY.word() => Held::Nothing,
+            Slot::Leaf(v) => Held::Leaf {
+                leaf: Leaf::of(v),
+                zoom: found,
+                at: wrap_cell(found, at.map(|v| v >> (zoom - found))),
+            },
+            Slot::Branch(block, f) => Held::Folded { fold: Fold::of(f), block },
+        }
+    }
+
+    /// What the child at `zoom`, `at` of a node holding this holds: a leaf
+    /// over the parent covers it too, nothing under nothing; under a fold,
+    /// its own slot by one look-up.
+    pub(super) fn child(self, tree: &Tree, zoom: Zoom, at: [i64; 3]) -> Held {
+        match self {
+            Held::Folded { block, .. } => Held::of(tree.child(block, slot_of(at)), zoom, (zoom, at)),
+            covered => covered,
+        }
+    }
+
     /// What a node holding this folds to, as a cell of its zoom is drawn: the
     /// leaf's value, or its fold where half of it or more is filled; none
     /// where nothing that is a voxel is. `hide`, a preview's left-out leaf,
@@ -45,153 +90,58 @@ impl Held {
                 true => return None,
                 false => leaf.id,
             },
-            Held::Folded(kind, fill) => shown((kind, fill)),
+            Held::Folded { fold, .. } => shown(fold),
         });
         object_value_is_voxel(v).then_some(v)
     }
 }
 
-/// A node's kept record, by its zoom and index: a leaf placed there, or
-/// the fold of the eight under it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Record {
-    Leaf(Leaf),
-    Folded(u16, f64),
-}
-
-#[derive(Default)]
-pub struct Pyramid {
-    records: FnvHashMap<(Zoom, [i64; 3]), Record>,
-}
-
-impl Pyramid {
-    /// What the node at `zoom`, `at` holds, X as the world names it, with
-    /// nothing over it known: its own record, or a leaf over it, found up its
-    /// line. A descent asks this once, at its root.
-    pub fn held(&self, zoom: Zoom, at: [i64; 3]) -> Held {
-        let mut z = zoom;
-        loop {
-            let a = wrap_cell(z, at.map(|v| v >> (zoom - z)));
-            match self.records.get(&(z, a)) {
-                Some(Record::Leaf(leaf)) => return Held::Leaf { leaf: *leaf, zoom: z, at: a },
-                Some(Record::Folded(kind, fill)) if z == zoom => return Held::Folded(*kind, *fill),
-                // Over it the leaves differ; under it nothing is kept: nothing.
-                Some(Record::Folded(..)) => return Held::Nothing,
-                None if z == 0 => return Held::Nothing,
-                None => z -= 1,
-            }
-        }
-    }
-
-    /// What the child at `zoom`, `at` of a node holding `parent` holds: a leaf
-    /// over the parent covers it too, nothing under nothing; under a fold,
-    /// its own record by one look-up.
-    pub fn child(&self, parent: Held, zoom: Zoom, at: [i64; 3]) -> Held {
-        match parent {
-            Held::Folded(..) => match self.records.get(&(zoom, at)) {
-                Some(Record::Leaf(leaf)) => Held::Leaf { leaf: *leaf, zoom, at },
-                Some(Record::Folded(kind, fill)) => Held::Folded(*kind, *fill),
-                None => Held::Nothing,
-            },
-            covered => covered,
-        }
-    }
-
-    /// The records under the node at `zoom`, `at` of `tree`, as it stands
-    /// before a write replaces it, let go.
-    pub(super) fn forget(&mut self, tree: Option<&Tree>, zoom: Zoom, at: [i64; 3]) {
-        let Some(tree) = tree else { return };
-        let (depth, slot) = match zoom {
-            SHARD_ZOOM => (0, Slot::Branch(0)),
-            _ => tree.get(zoom - SHARD_ZOOM, at),
-        };
-        // Over it a leaf: it holds no records of its own.
-        if SHARD_ZOOM + depth as Zoom != zoom {
-            return;
-        }
-        self.forget_under(tree, slot, zoom, at);
-    }
-
-    fn forget_under(&mut self, tree: &Tree, slot: Slot<Leaf>, zoom: Zoom, at: [i64; 3]) {
-        self.records.remove(&(zoom, at));
-        if let Slot::Branch(block) = slot {
-            for (k, s) in tree.block(block).enumerate() {
-                self.forget_under(tree, s, zoom + 1, child_cube(zoom, at, k));
-            }
-        }
-    }
-
-    /// The records on the line from its shard's root to the node at `zoom`,
-    /// `at` of `tree` as it stands after a write there, made again: each
-    /// level's eight as the tree holds them, a branch the fold of its eight,
-    /// from the deepest up. What the tree joined over the node is let go.
-    pub(super) fn refold(&mut self, tree: Option<&Tree>, zoom: Zoom, at: [i64; 3]) {
-        let root = shard(zoom, at);
-        let mut block = tree.map(|_| 0u32);
-        let mut line = [(0 as Zoom, [0i64; 3]); 64];
-        let mut n = 0;
-        for z in CUBE_ZOOM..=zoom {
-            let parent = match z {
-                CUBE_ZOOM => root,
-                _ => at.map(|v| v >> (zoom - (z - 1))),
-            };
-            let slots: [Slot<Leaf>; 8] = match (tree, block) {
-                (Some(t), Some(b)) => core::array::from_fn(|k| t.block(b).nth(k).unwrap_or(Slot::Leaf(EMPTY))),
-                // Joined over this level, or no tree: nothing kept here.
-                _ => [Slot::Leaf(EMPTY); 8],
-            };
-            let mine = at.map(|v| v >> (zoom - z));
-            block = None;
-            for (k, s) in slots.into_iter().enumerate() {
-                let c = child_cube(z - 1, parent, k);
-                match s {
-                    Slot::Leaf(v) if v == EMPTY => {
-                        self.records.remove(&(z, c));
-                    }
-                    Slot::Leaf(v) => {
-                        self.records.insert((z, c), Record::Leaf(v));
-                    }
-                    Slot::Branch(b) if c == mine => block = Some(b),
-                    // A branch off the line is as it was.
-                    Slot::Branch(_) => {}
-                }
-            }
-            if block.is_some() {
-                line[n] = (z, mine);
-                n += 1;
-            }
-        }
-        for &(z, c) in line[..n].iter().rev() {
-            let kids: [(u16, f64); 8] = core::array::from_fn(|k| self.records.get(&(z + 1, child_cube(z, c, k))).map_or((EMPTY.id, 0.0), |r| cell(*r)));
-            let (kind, fill) = fold_cell(kids, z);
-            self.records.insert((z, c), Record::Folded(kind, fill));
-        }
-        // Over the shard's cubes, up to the world's roots: each node the fold
-        // of what is under it, none where nothing is. A node's X is named as
-        // the world names it at its own zoom (`wrap_cell`), so the root at zoom
-        // 0 is the whole round, both halves of it under it.
-        for z in (0..CUBE_ZOOM).rev() {
-            let c = wrap_cell(z, at.map(|v| v >> (zoom - z)));
-            let kids: [Option<Record>; 8] = core::array::from_fn(|k| self.records.get(&(z + 1, wrap_cell(z + 1, child_cube(z, c, k)))).copied());
-            if kids.iter().all(Option::is_none) {
-                self.records.remove(&(z, c));
-            } else {
-                let (kind, fill) = fold_cell(kids.map(|r| r.map_or((EMPTY.id, 0.0), cell)), z);
-                self.records.insert((z, c), Record::Folded(kind, fill));
-            }
-        }
-    }
-
-    pub(super) fn clear(&mut self) {
-        self.records.clear();
-    }
+/// A branch of `tree` at `zoom`, its block's eight folded, as its word.
+pub(super) fn fold(tree: &Tree, block: u32, zoom: Zoom) -> u32 {
+    fold_cell(core::array::from_fn(|k| share(tree.child(block, k))), zoom).word()
 }
 
 /// A child's share in its parent's fold: a placed voxel fills it whole.
-fn cell(r: Record) -> (u16, f64) {
-    match r {
-        Record::Leaf(v) if v != EMPTY && object_value_is_voxel(u32::from(v.id)) => (v.id, 1.0),
-        Record::Leaf(_) => (EMPTY.id, 0.0),
-        Record::Folded(kind, fill) => (kind, fill),
+fn share(slot: Slot<u32>) -> Fold {
+    match slot {
+        Slot::Leaf(v) => {
+            let leaf = Leaf::of(v);
+            match leaf != EMPTY && object_value_is_voxel(u32::from(leaf.id)) {
+                true => Fold { kind: leaf.id, fill: FULL },
+                false => Fold { kind: EMPTY.id, fill: 0 },
+            }
+        }
+        Slot::Branch(_, f) => Fold::of(f),
+    }
+}
+
+/// The 2×2×2 children folded (pxl-spec bake/fold.rs): the share of the cube
+/// filled, the mean of theirs, and the kind most of that fill is, a tie to
+/// the corner `majority`'s alternates to. A non-voxel value fills nothing.
+fn fold_cell(children: [Fold; 8], zoom: Zoom) -> Fold {
+    let fill = children.iter().map(|c| u32::from(c.fill)).sum::<u32>() / 8;
+    let of = |kind: u16| children.iter().filter(|c| c.kind == kind).map(|c| u32::from(c.fill)).sum::<u32>();
+    let mut order = children;
+    if zoom & 1 == 0 {
+        order.reverse();
+    }
+    let mut best = (EMPTY.id, 0);
+    for c in order {
+        let w = of(c.kind);
+        if c.fill > 0 && w > best.1 {
+            best = (c.kind, w);
+        }
+    }
+    Fold { kind: best.0, fill: fill as u16 }
+}
+
+/// What a folded cube shows: its kind where it is half full or more, so a
+/// lone cube goes at the first fold and a wall keeps whole cells, and the
+/// volume is rounded once, where it is drawn, not at every zoom on the way.
+fn shown(f: Fold) -> u16 {
+    if f.fill >= FULL / 2 {
+        f.kind
+    } else {
+        EMPTY.id
     }
 }

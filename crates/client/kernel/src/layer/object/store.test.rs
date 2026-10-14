@@ -5,6 +5,10 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{base_of, UNIT_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
 
+use fnv::FnvHashMap;
+use pxl_spec::space::coord::zoom::SHARD_ZOOM;
+use pxl_spec::space::hierarchy::morton::child_cube;
+
 use super::*;
 use crate::layer::object::pyramid::Held;
 use crate::layer::Query;
