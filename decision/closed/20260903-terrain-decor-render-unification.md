@@ -161,8 +161,8 @@ instance. This is a real rendering-engine rewrite, not a wire-in:
   eventually for user-placed decor to work at all, but not required to do
   the geometry unification above.
 
-**Status: decided, explicitly not scheduled for this session** ("귀찮아서
-안 한다", direct user call, 2026-09-03) — not because of implementation size,
+**Status: decided, explicitly not scheduled for this session** (direct user
+call, 2026-09-03) — not because of implementation size,
 which is not a valid reason per the principle above, but because the user
 chose not to start it today. `decor_kinds.tsx`'s own "LONGER-TERM DIRECTION"
 doc comment carries the same decision; this file is the fuller record of how

@@ -91,7 +91,7 @@ geometry to hit-test against — is gone. Decor is now hit-tested with a real
 This was scoped as a deferred fast-follow earlier the same day, then done
 anyway once discussed — not because the estimate was wrong, but because the
 whole point of today was picking up exactly the things a prior session
-punted on "귀찮아서" (too much hassle). Verified with a new
+punted on as too much hassle. Verified with a new
 `decor_hit.test.ts` (registry + faceIndex resolution + procedural
 transparency + max_dist bounding + unregister) and live in a real populated
 scene: placing a tree, hovering it with the eraser (ghost appears exactly
