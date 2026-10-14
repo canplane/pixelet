@@ -781,12 +781,10 @@ const EXTENT_BYTES: u32 = ((EXTENT_LANE + COARSE_LANE) * 4) as u32;
 /// A frame's grid: an i32 height a cell, a cell a look.
 const GRID_BYTES: u32 = (GROUND_LANE * 4) as u32;
 
-/// The cast's group 0: the eye, the window, the tiles' looks, heights and
-/// extents, the lane it writes, the lane's tangents, the served shards and
-/// the tiles' grids.
-const CAST_GROUP: [u32; 27] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE_RW, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE, 8,
-    COMPUTE, STORAGE,
+/// The cast's group 0: the eye, the window, the tiles' looks, grids and
+/// extents, the lane it writes, the lane's tangents and the served shards.
+const CAST_GROUP: [u32; 24] = [
+    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE_RW, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE,
 ];
 
 /// `heights_cs`'s group 0: the fresh frames, the tiles' heights and the
@@ -988,8 +986,8 @@ const HEIGHTS_WORKGROUP: u32 = 8;
 
 fn cast_group(g: &Gpu, c: &CastBuffers, lane: u32) -> u32 {
     let group = object();
-    let mut entries = [0u32; 45];
-    for (k, id) in [c.eye, c.window, c.looks, c.heights, c.extents, lane, c.tangents, c.shards, c.grid].into_iter().enumerate() {
+    let mut entries = [0u32; 40];
+    for (k, id) in [c.eye, c.window, c.looks, c.grid, c.extents, lane, c.tangents, c.shards].into_iter().enumerate() {
         entries[5 * k..5 * k + 5].copy_from_slice(&buffer_entry(k as u32, id));
     }
     g.bind_group(group, c.built.layouts[0], &entries);

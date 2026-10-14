@@ -83,8 +83,8 @@ impl pxl_portable::ground::Tile for TileView<'_> {
     fn look(&self, x: u32, y: u32) -> u32 {
         u32::from(self.cells[GROUND.cell_index(x, y) as usize])
     }
-    fn ele(&self, i: usize) -> i32 {
-        i32::from(self.ele[i])
+    fn height(&self, x: u32, y: u32) -> i32 {
+        pxl_portable::ground::height(|i| i32::from(self.ele[i]), [x, y])
     }
 }
 

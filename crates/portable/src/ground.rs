@@ -99,34 +99,35 @@ const SANDSTONE_DEPTH: i32 = 2;
 /// whichever is lower, in leaf cells (pxl-spec block/limit.rs `floor`).
 pub const BEDROCK_DEPTH: i32 = 64;
 
-/// One tile as stored, read in place: its cells' looks and its padded
-/// elevation samples, a slice on the CPU and a frame of a storage buffer on
-/// the GPU.
+/// One tile as held, its cells read in place: a slice on the CPU, a frame
+/// of a storage buffer on the GPU.
 pub trait Tile {
     /// The look of the tile's cell `(x, y)`, `0..TILE_CELLS` each.
     fn look(&self, x: u32, y: u32) -> u32;
-    /// Elevation sample `i` (`ele_index`), in leaf cells.
-    fn ele(&self, i: usize) -> i32;
+    /// The height of the tile's cell `(x, y)`, in leaf cells (`height`).
+    fn height(&self, x: u32, y: u32) -> i32;
 }
 
 /// A cell `v` of a tile `n` × `n` times finer than `tile`, counted from
-/// `tile`'s first cell at that finer size: the look of `tile`'s cell holding
-/// it and the height the surface draws at its center, in leaf cells, so a
-/// coarser tile standing in invents nothing; off `tile`, which knows nothing
-/// there, `void` at sea level.
+/// `tile`'s first cell at that finer size: the look and height of `tile`'s
+/// cell holding it, so a coarser tile standing in draws its own cells and
+/// invents none finer; off `tile`, which knows nothing there, `void` at sea
+/// level.
 pub fn read(tile: &impl Tile, v: [i32; 2], n: u32) -> (u32, i32) {
     if !holds(v, n) {
         return (VOID, 0);
     }
-    (look(tile, v, n), height(|i| tile.ele(i), v, n))
+    let n = n as i32;
+    let (x, y) = (v[0].div_euclid(n) as u32, v[1].div_euclid(n) as u32);
+    (tile.look(x, y), tile.height(x, y))
 }
 
-/// `read`'s height alone, off the tile's elevation samples `ele`, the one
-/// producer of a cell's height: a GPU computes a held tile's cells' once,
-/// into its grid.
-pub fn height(ele: impl Fn(usize) -> i32, v: [i32; 2], n: u32) -> i32 {
-    let at = |v: i32| (v as f32 + 0.5) / n as f32;
-    bicubic(ele, at(v[0]), at(v[1]))
+/// The height the surface draws at the center of a tile's cell `(x, y)`,
+/// in leaf cells, off its padded elevation samples `ele` (`ele_index`): the
+/// one producer of a cell's height, which the CPU computes where a cell is
+/// read and a GPU once a held tile, into its grid.
+pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [u32; 2]) -> i32 {
+    bicubic(ele, x as f32 + 0.5, y as f32 + 0.5)
 }
 
 /// Whether `tile` holds the cell `v` of a tile `n` × `n` times finer.

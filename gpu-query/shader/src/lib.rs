@@ -58,10 +58,10 @@ fn ele(heights: &[u32], frame: u32, i: usize) -> i32 {
     half(heights[(frame * ELE_WORDS) as usize + i / 2], 16 * (i as u32 % 2))
 }
 
-/// One held tile's frame in the ground's buffers.
+/// One held tile's frame in the ground's buffers: its looks and its grid.
 pub struct Framed<'a> {
     looks: &'a [u32],
-    heights: &'a [u32],
+    grid: &'a [i32],
     frame: u32,
 }
 
@@ -70,8 +70,8 @@ impl Tile for Framed<'_> {
         let i = y * TILE_CELLS + x;
         self.looks[(self.frame * LOOK_WORDS + i / 4) as usize] >> (8 * (i % 4)) & 0xff
     }
-    fn ele(&self, i: usize) -> i32 {
-        ele(self.heights, self.frame, i)
+    fn height(&self, x: u32, y: u32) -> i32 {
+        self.grid[(self.frame * GRID_CELLS + y * TILE_CELLS + x) as usize]
     }
 }
 
@@ -84,7 +84,6 @@ pub struct World<'a> {
     /// is held.
     window: &'a [IVec4],
     looks: &'a [u32],
-    heights: &'a [u32],
     /// Per frame, its cells' heights (`heights_cs`).
     grid: &'a [i32],
     extents: &'a [u32],
@@ -144,9 +143,7 @@ impl World<'_> {
 
     /// The ground's cell `g` of the tiles at `zoom`, counted in their cells,
     /// off the finest held tile over it: its look and height, `void` where
-    /// none is held; and whether only its look is asked. A held tile's own
-    /// cell's height is its grid's; a coarser tile standing in reads its
-    /// samples (`ground::read`).
+    /// none is held; and whether only its look is asked.
     fn cell(&self, zoom: u32, g: [i32; 2], only_look: bool) -> (u32, i32) {
         let shamt = GROUND.tile_cell_shamt();
         let t = [wrap_index(zoom, g[0] >> shamt), g[1] >> shamt];
@@ -161,14 +158,11 @@ impl World<'_> {
         let v = [((g[0] - first(t[0])) as u32 & mask) as i32, g[1] - first(t[1])];
         let tile = Framed {
             looks: self.looks,
-            heights: self.heights,
+            grid: self.grid,
             frame: w - 1,
         };
         if only_look {
             (ground::look(&tile, v, 1 << s), 0)
-        } else if s == 0 {
-            let h = self.grid[(tile.frame * GRID_CELLS + v[1] as u32 * TILE_CELLS + v[0] as u32) as usize];
-            (ground::look(&tile, v, 1), h)
         } else {
             ground::read(&tile, v, 1 << s)
         }
@@ -290,12 +284,11 @@ pub fn cast_cs(
     #[spirv(uniform, descriptor_set = 0, binding = 0)] eye: &Eye,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] looks: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] heights: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] grid: &[i32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] extents: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] lane: &mut [UVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] tangents: &[f32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] shards: &[IVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] grid: &[i32],
 ) {
     let across = eye.across_range;
     if id.x >= across.x || id.y >= across.y {
@@ -311,7 +304,6 @@ pub fn cast_cs(
     let mut world = World {
         window,
         looks,
-        heights,
         grid,
         extents,
         shards,
@@ -331,6 +323,6 @@ pub fn heights_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] grid: &mut [i32],
 ) {
     let frame = fresh[id.z as usize];
-    let h = ground::height(move |i| ele(heights, frame, i), [id.x as i32, id.y as i32], 1);
+    let h = ground::height(move |i| ele(heights, frame, i), [id.x, id.y]);
     grid[(frame * GRID_CELLS + id.y * TILE_CELLS + id.x) as usize] = h;
 }

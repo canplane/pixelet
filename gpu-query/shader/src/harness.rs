@@ -66,9 +66,9 @@ impl Tile for Frame<'_> {
         let i = (y * TILE_CELLS + x) as usize;
         self.looks[i / 4] >> (8 * (i % 4)) & 0xff
     }
-    fn ele(&self, i: usize) -> i32 {
+    fn height(&self, x: u32, y: u32) -> i32 {
         // The half's sign carried up: shifted to the top, then back.
-        ((self.heights[i / 2] >> (16 * (i % 2))) << 16) as i32 >> 16
+        ground::height(|i| ((self.heights[i / 2] >> (16 * (i % 2))) << 16) as i32 >> 16, [x, y])
     }
 }
 
