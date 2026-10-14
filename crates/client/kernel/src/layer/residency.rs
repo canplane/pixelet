@@ -47,10 +47,12 @@ pub trait Victim {
     fn victim(&self, candidates: &[Candidate]) -> Option<usize>;
 }
 
-/// No frame for an empty tile, whose body is its own.
+/// No frame for an empty tile, whose body is its own. A framed tile of a
+/// layer whose cells a GPU draws is read once they are back (`Base::AWAITS`).
 struct Held<L> {
     body: L,
     frame: Option<u32>,
+    ready: bool,
 }
 
 struct Entry<L> {
@@ -220,13 +222,14 @@ impl<L: Base> Residency<L> {
         self.entry(p)?.held.as_ref()
     }
 
-    /// Held and asked for: what a reader may read.
+    /// Held, ready and asked for: what a reader may read.
     fn readable(&self, p: Tile) -> Option<&Held<L>> {
-        self.entry(p).filter(|e| e.ask.is_some())?.held.as_ref()
+        self.entry(p).filter(|e| e.ask.is_some())?.held.as_ref().filter(|h| h.ready)
     }
 
+    /// Held and asked for, its cells back or not: nothing more is fetched for it.
     pub fn resident(&self, p: Tile) -> bool {
-        self.readable(p).is_some()
+        self.entry(p).filter(|e| e.ask.is_some()).is_some_and(|e| e.held.is_some())
     }
 
     /// Held in a frame of its own, not as an empty tile.
@@ -245,7 +248,10 @@ impl<L: Base> Residency<L> {
 
     /// Every readable tile.
     pub fn held(&self) -> impl Iterator<Item = (Tile, &L)> {
-        self.tiles.iter().filter(|(_, e)| e.ask.is_some()).filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
+        self.tiles
+            .iter()
+            .filter(|(_, e)| e.ask.is_some())
+            .filter_map(|(&p, e)| Some((p, &e.held.as_ref().filter(|h| h.ready)?.body)))
     }
 
     pub fn frames_used(&self) -> u32 {
@@ -277,7 +283,7 @@ impl<L: Base> Residency<L> {
     /// descent pays one lookup a step and never walks back up.
     pub fn step(&self, parent: &Line, child: Tile) -> Line {
         let e = self.entry(child);
-        let held = e.filter(|e| e.ask.is_some()).and_then(|e| e.held.as_ref());
+        let held = e.filter(|e| e.ask.is_some()).and_then(|e| e.held.as_ref()).filter(|h| h.ready);
         // Answered for itself, or its parent holds no child there.
         let said = e.is_some_and(|e| e.answered) || parent.children.is_some_and(|o| !o.has_child(child.slot()));
         let over = match parent.resident() {
@@ -444,8 +450,21 @@ impl<L: Base> Residency<L> {
     }
 
     fn put(&mut self, p: Tile, body: L, frame: Option<u32>) {
-        self.entry_mut(p).held = Some(Held { body, frame });
+        let ready = frame.is_none() || !L::AWAITS;
+        self.entry_mut(p).held = Some(Held { body, frame, ready });
         self.moved.push(p);
+    }
+
+    /// Each framed tile not yet ready whose frame `back` says is, read from
+    /// now on: its answer moved as surely as one arriving.
+    pub fn ready(&mut self, back: impl Fn(u32) -> bool) {
+        for (&p, e) in &mut self.tiles {
+            let Some(h) = e.held.as_mut() else { continue };
+            if !h.ready && h.frame.is_some_and(&back) {
+                h.ready = true;
+                self.moved.push(p);
+            }
+        }
     }
 
     /// Returns the frame `p` was in, if any, for the caller to fill or free.

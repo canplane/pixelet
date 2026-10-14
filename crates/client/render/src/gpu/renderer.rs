@@ -20,7 +20,7 @@ use crate::frame::draw::{
 use crate::frame::screen_cells::SCREEN_CELLS_MAX;
 use crate::frame::shader::record::{
     FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS,
-    PIPELINE_SKY, SHADER_BOUND, SHADER_CAST,
+    PIPELINE_SKY, SHADER_BOUND, SHADER_CAST, SHADER_HEIGHTS,
 };
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
@@ -46,7 +46,7 @@ use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURN
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::mesh::paint::ground::look_words;
-use pxl_spec::bake::constant::{BOUND_LEVELS, GROUND_WORDS, LOOK_WORDS};
+use pxl_spec::bake::constant::{BOUND_LEVELS, GROUND_WORDS, HEIGHT_WORDS, LEVEL_WORDS, LOOK_WORDS};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::globe::{Globe, MERCATOR_RADIUS_U};
 use pxl_spec::space::coord::zoom::units;
@@ -115,8 +115,11 @@ pub struct FrameInput<'a> {
     pub moon: fn() -> Option<u32>,
     pub earth: fn() -> Option<u32>,
     pub earth_tiles: EarthTiles<'a>,
+    /// The terrain's held tiles, whose cells the GPU draws whether or not
+    /// an eye casts.
+    pub ground: GroundFrames<'a>,
     /// The eye's rays cast on the GPU into the lane the screen's cells draw;
-    /// none, and the CPU's cast writes it.
+    /// none without an eye, and the lane holds no cells.
     pub cast: Option<Cast<'a>>,
     pub billboards: &'a mut Sheet,
     pub text: TextOf,
@@ -136,9 +139,19 @@ pub struct EarthTiles<'a> {
 /// Hands each waiting tile's layer and texels to the writer while it takes them.
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
+/// The terrain's tiles as the GPU holds them: the frames it keeps a slot
+/// for, and the tiles to hand it.
+pub struct GroundFrames<'a> {
+    pub frames: u32,
+    /// Hands each tile whose frame the GPU does not yet hold to the writer:
+    /// its frame, its four looks a cell and its padded samples, and where
+    /// its cells come back to.
+    pub upload: &'a mut TerrainUpload,
+}
+
 /// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`): the
-/// eye, its lane's tangents, the terrain's tiles as the GPU holds them, the
-/// tiles to hand it, and what is placed.
+/// eye, its lane's tangents, the terrain's tiles as the GPU holds them, and
+/// what is placed.
 pub struct Cast<'a> {
     /// The eye as seven vec4s (pxl-kernel view/sight.rs `gpu_cast`, scene/
     /// cast.rs `eye`): its origin in Q3 steps, forward and the reach, right
@@ -148,18 +161,12 @@ pub struct Cast<'a> {
     /// Each column's tangent then each row's, where they live, unwritten
     /// until the page replays the turn.
     pub tangents: &'a [f32],
-    /// The terrain frames the GPU keeps a slot for.
-    pub frames: u32,
     /// Per tile zoom from the top to the leaves: the window's south-west
     /// tile, its tiles across and a spare, then its tiles row by row, each
     /// its frame plus one, zero where none is held; four a row of the buffer.
     pub window: &'a [i32],
     /// Each shard the service area serves: its tile zoom, x and y, a spare.
     pub shards: &'a [[i32; 4]],
-    /// Hands each tile whose frame the GPU does not yet hold to the writer:
-    /// its frame, ground looks and its cells' heights, each where it lives,
-    /// unwritten until the page replays the turn.
-    pub upload: &'a mut TerrainUpload,
     pub overwrites: Overwrites<'a>,
 }
 
@@ -175,8 +182,20 @@ pub struct Overwrites<'a> {
     pub revision: u32,
 }
 
-/// Takes a tile's frame, ground looks and its cells' heights.
-pub type TerrainWrite<'a> = dyn FnMut(u32, &[u8], &[u8]) + 'a;
+/// Where a held tile's cells, which the GPU draws, come back to in the
+/// module's memory (`Gpu::read_buffer`): its heights and its bound's levels,
+/// each with its word and the ticket that word holds.
+#[derive(Clone, Copy, Default)]
+pub struct CellsBack {
+    pub heights: u32,
+    pub levels: u32,
+    pub words: [u32; 2],
+    pub ticket: u32,
+}
+
+/// Takes a tile's frame, its four looks a cell, its padded samples and where
+/// its cells come back to, while the turn's stream has room for them.
+pub type TerrainWrite<'a> = dyn FnMut(u32, &[u8], &[u8], CellsBack) -> bool + 'a;
 
 pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
@@ -758,7 +777,27 @@ struct ScreenCellsPass {
     /// Cells the lane holds past its header.
     room: usize,
     generation: u32,
+    ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
+}
+
+/// The terrain's frames on the GPU and the passes that draw their cells.
+struct GroundBuffers {
+    /// Per frame, a held tile's looks as handed, its cells' heights and
+    /// their bound's levels, which `heights_cs` and `bound_cs` write in the
+    /// turn its tile lands there, and its samples as handed (pxl-portable
+    /// `GROUND_WORDS`).
+    ground: u32,
+    /// The frames that turn uploaded, `heights_cs`'s and `bound_cs`'s one
+    /// per `id.z`, and where each one's cells come back to.
+    fresh: u32,
+    fresh_len: u32,
+    backs: Vec<(u32, CellsBack)>,
+    heights_built: Built,
+    heights_group: u32,
+    bound_built: Built,
+    /// `bound_cs`'s group, its level at a dynamic offset (`LEVEL_STRIDE`).
+    bound_group: u32,
 }
 
 /// What the GPU's cast reads and the lane it writes.
@@ -768,10 +807,6 @@ struct CastBuffers {
     eye: u32,
     window: u32,
     window_words: usize,
-    /// Per frame, a held tile's looks and heights as handed, then its
-    /// bound's levels, which `bound_cs` writes over them on the GPU alone,
-    /// in the turn its tile lands there (pxl-portable `GROUND_WORDS`).
-    ground: u32,
     tangents: u32,
     /// Tangents the buffer holds.
     tangent_room: usize,
@@ -779,12 +814,6 @@ struct CastBuffers {
     /// Shards the buffer holds.
     shard_room: usize,
     across: [u32; 2],
-    /// The frames that turn uploaded, `bound_cs`'s one per `id.z`.
-    fresh: u32,
-    fresh_len: u32,
-    bound_built: Built,
-    /// `bound_cs`'s group, its level at a dynamic offset (`LEVEL_STRIDE`).
-    bound_group: u32,
     /// The overwrites' heap lane then their data lane, each `overwrite_room`
     /// words, the lanes' own room; the revision it holds, none at first.
     overwrites: u32,
@@ -792,15 +821,22 @@ struct CastBuffers {
     overwrite_revision: Option<u32>,
 }
 
-/// A held tile's frame on the GPU, and where its heights begin in it.
+/// A held tile's frame on the GPU, and where its heights, its levels and
+/// its samples begin in it.
 const GROUND_BYTES: u32 = GROUND_WORDS * 4;
 const HEIGHTS_AT: u32 = LOOK_WORDS * 4;
+const LEVELS_AT: u32 = HEIGHTS_AT + HEIGHT_WORDS * 4;
+const ELE_AT: u32 = LEVELS_AT + LEVEL_WORDS * 4;
 
 /// The cast's group 0: the eye, the window, the tiles' frames, the lane it
 /// writes, the lane's tangents, the served shards and the overwrites.
 const CAST_GROUP: [u32; 21] = [
     0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE_RW, 4, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE, STORAGE,
 ];
+
+/// `heights_cs`'s group 0: the fresh frames and the frames it writes the
+/// cells of.
+const HEIGHTS_GROUP: [u32; 6] = [0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW];
 
 /// `bound_cs`'s group 0: its level, the fresh frames and the frames it
 /// writes the levels of.
@@ -829,6 +865,7 @@ impl ScreenCellsPass {
             lane: 0,
             room: 0,
             generation: 0,
+            ground: None,
             cast: None,
         };
         p.fit(g, SCREEN_CELLS_MAX);
@@ -847,8 +884,8 @@ impl ScreenCellsPass {
         self.lane = object();
         g.buffer(self.lane, word_bytes(4 * (1 + cells)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         self.regroup(g);
-        if let Some(c) = self.cast.as_mut().filter(|c| c.tangents != 0 && c.shards != 0) {
-            c.group = cast_group(g, c, self.lane);
+        if let (Some(c), Some(gb)) = (self.cast.as_mut().filter(|c| c.tangents != 0 && c.shards != 0), &self.ground) {
+            c.group = cast_group(g, c, gb.ground, self.lane);
         }
         // A new lane holds no cast.
         self.generation = 0;
@@ -875,9 +912,67 @@ impl ScreenCellsPass {
         g.bind_group(self.group, self.built.layouts[0], &e);
     }
 
-    /// The lane for this frame: the GPU's cast where it runs, its tiles and
-    /// eye handed over first; else a new CPU cast's, from where it lives,
-    /// which no cast rewrites before the page replays this turn.
+    /// Each held tile the GPU does not yet hold handed to its frame, copied
+    /// into the turn's stream as it has room, the packets they live in let
+    /// go once handed; whether or not an eye casts, as a tile's cells are
+    /// no eye's.
+    fn hand(&mut self, g: &Gpu, pipelines: &mut Pipelines, ground: GroundFrames) {
+        let gb = self.ground.get_or_insert_with(|| {
+            let buffer = |size: u32, usage: u32| {
+                let id = object();
+                g.buffer(id, size, usage);
+                id
+            };
+            let (storage, frames) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, ground.frames);
+            let frames_buffer = buffer(frames * GROUND_BYTES, storage | buffer_usage::COPY_SRC);
+            let fresh = buffer(word_bytes(frames as usize), storage);
+            let heights_built = pipelines.build_compute(g, SHADER_HEIGHTS, &HEIGHTS_GROUP);
+            let heights_group = object();
+            let mut entries = [0u32; 10];
+            entries[..5].copy_from_slice(&buffer_entry(0, fresh));
+            entries[5..].copy_from_slice(&buffer_entry(1, frames_buffer));
+            g.bind_group(heights_group, heights_built.layouts[0], &entries);
+            let mut entries = [0u32; 15];
+            // Each level's number in its slot, written once.
+            let levels = buffer(BOUND_LEVELS * LEVEL_STRIDE, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            for j in 1..=BOUND_LEVELS {
+                g.write_buffer(levels, (j - 1) * LEVEL_STRIDE, bytes(&[j, 0, 0, 0]));
+            }
+            let bound_built = pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP);
+            let bound_group = object();
+            entries[..5].copy_from_slice(&[0, resource::BUFFER, levels, 0, 16]);
+            entries[5..10].copy_from_slice(&buffer_entry(1, fresh));
+            entries[10..].copy_from_slice(&buffer_entry(2, frames_buffer));
+            g.bind_group(bound_group, bound_built.layouts[0], &entries);
+            GroundBuffers {
+                ground: frames_buffer,
+                fresh,
+                fresh_len: 0,
+                backs: Vec::new(),
+                heights_built,
+                heights_group,
+                bound_built,
+                bound_group,
+            }
+        });
+        let mut fresh = 0;
+        gb.backs.clear();
+        (ground.upload)(&mut |frame, looks, samples, back| {
+            if !room((looks.len() + samples.len()) as u32) {
+                return false;
+            }
+            g.write_buffer(gb.ground, frame * GROUND_BYTES, looks);
+            g.write_buffer(gb.ground, frame * GROUND_BYTES + ELE_AT, samples);
+            g.write_buffer(gb.fresh, word_bytes(fresh as usize), bytes(&[frame]));
+            gb.backs.push((frame, back));
+            fresh += 1;
+            true
+        });
+        gb.fresh_len = fresh;
+    }
+
+    /// The lane for this frame: the GPU's cast where an eye casts, its eye
+    /// handed over first; else a lane of no cells.
     fn prepare(&mut self, g: &Gpu, pipelines: &mut Pipelines, cast: Option<Cast>) {
         let s = stage_lane();
         let steps = u32::from(s[STAGE_AT::RAY_STEPS] != 0.0);
@@ -887,7 +982,7 @@ impl ScreenCellsPass {
         let part = eye.map(|v| ((v - libm::floor(v)) as f32).to_bits());
         g.write_buffer(self.eye_at, 0, bytes(&[whole[0], whole[1], whole[2], 0, part[0], part[1], part[2], 0]));
         // No cast, no world: a lane of no cells.
-        let Some(cast) = cast else {
+        let (Some(cast), Some(ground)) = (cast, self.ground.as_ref().map(|gb| gb.ground)) else {
             self.cast = None;
             g.write_buffer(self.lane, 0, bytes(&[0u32, 0, steps, 0]));
             return;
@@ -899,36 +994,18 @@ impl ScreenCellsPass {
                 g.buffer(id, size, usage);
                 id
             };
-            let (storage, frames) = (buffer_usage::STORAGE | buffer_usage::COPY_DST, cast.frames);
-            let (ground, fresh) = (buffer(frames * GROUND_BYTES, storage), buffer(word_bytes(frames as usize), storage));
-            let mut entries = [0u32; 15];
-            // Each level's number in its slot, written once.
-            let levels = buffer(BOUND_LEVELS * LEVEL_STRIDE, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            for j in 1..=BOUND_LEVELS {
-                g.write_buffer(levels, (j - 1) * LEVEL_STRIDE, bytes(&[j, 0, 0, 0]));
-            }
-            let bound_built = pipelines.build_compute(g, SHADER_BOUND, &BOUND_GROUP);
-            let bound_group = object();
-            entries[..5].copy_from_slice(&[0, resource::BUFFER, levels, 0, 16]);
-            entries[5..10].copy_from_slice(&buffer_entry(1, fresh));
-            entries[10..].copy_from_slice(&buffer_entry(2, ground));
-            g.bind_group(bound_group, bound_built.layouts[0], &entries);
+            let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
             let c = CastBuffers {
                 built,
                 group: 0,
                 eye: buffer(word_bytes(CAST_EYE_WORDS), buffer_usage::UNIFORM | buffer_usage::COPY_DST),
                 window: buffer(word_bytes(cast.window.len()), storage),
                 window_words: cast.window.len(),
-                ground,
                 tangents: 0,
                 tangent_room: 0,
                 shards: 0,
                 shard_room: 0,
                 across: [0; 2],
-                fresh,
-                fresh_len: 0,
-                bound_built,
-                bound_group,
                 overwrites: 0,
                 overwrite_room: 0,
                 overwrite_revision: None,
@@ -936,14 +1013,6 @@ impl ScreenCellsPass {
             self.cast = Some(c);
         }
         let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
-        let mut fresh = 0;
-        (cast.upload)(&mut |frame, looks, heights| {
-            g.upload_buffer(c.ground, frame * GROUND_BYTES, looks);
-            g.upload_buffer(c.ground, frame * GROUND_BYTES + HEIGHTS_AT, heights);
-            g.write_buffer(c.fresh, word_bytes(fresh as usize), bytes(&[frame]));
-            fresh += 1;
-        });
-        c.fresh_len = fresh;
         xpute_kit::ensure!(cast.window.len() <= c.window_words, ENOTRECOVERABLE, cast.window.len());
         g.write_buffer(c.window, 0, bytes(cast.window));
         g.write_buffer(c.eye, 0, bytes(&cast.eye));
@@ -992,19 +1061,23 @@ impl ScreenCellsPass {
         let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
         // A lane `fit` made again regroups the cast itself.
         if regroup || c.group == 0 {
-            c.group = cast_group(g, c, self.lane);
+            c.group = cast_group(g, c, ground, self.lane);
         }
         g.write_buffer(self.lane, 0, bytes(&[c.across[0], c.across[1], steps, 0]));
     }
 
-    /// The grids of the frames this turn uploaded, from their heights, then
-    /// their bounds a level a dispatch, each over the one before: ahead
-    /// of the frame, as they outlive it, so no frame the window names is cast
-    /// before its grid is written, even when the frame proper is dropped.
+    /// The cells of the frames this turn uploaded, from their samples, then
+    /// their bounds a level a dispatch, each over the one before, and both
+    /// read back where the CPU looks them up: ahead of the frame, as they
+    /// outlive it, so no frame the window names is cast before its cells are
+    /// written, even when the frame proper is dropped.
     fn grids(&mut self, g: &Gpu, encoder: u32) {
-        let Some(c) = self.cast.as_mut().filter(|c| c.fresh_len != 0) else { return };
+        let Some(c) = self.ground.as_mut().filter(|c| c.fresh_len != 0) else { return };
         let pass = object();
         g.compute_pass(pass, encoder);
+        g.set_pipeline(pass, c.heights_built.pipeline);
+        g.set_bind_group(pass, 0, c.heights_group, &[]);
+        g.dispatch(pass, (TILE_CELLS / 2).div_ceil(BOUND_WORKGROUP), TILE_CELLS.div_ceil(BOUND_WORKGROUP), c.fresh_len);
         g.set_pipeline(pass, c.bound_built.pipeline);
         for j in 1..=BOUND_LEVELS {
             g.set_bind_group(pass, 0, c.bound_group, &[(j - 1) * LEVEL_STRIDE]);
@@ -1013,6 +1086,12 @@ impl ScreenCellsPass {
         }
         g.end(pass);
         release(pass);
+        for &(frame, back) in &c.backs {
+            let at = frame * GROUND_BYTES;
+            g.read_buffer(encoder, c.ground, at + HEIGHTS_AT, HEIGHT_WORDS * 4, back.heights, back.words[0], back.ticket);
+            g.read_buffer(encoder, c.ground, at + LEVELS_AT, LEVEL_WORDS * 4, back.levels, back.words[1], back.ticket);
+        }
+        c.backs.clear();
         c.fresh_len = 0;
     }
 
@@ -1039,13 +1118,13 @@ impl ScreenCellsPass {
 
 /// The cast's workgroup, a side: `cast_cs`'s.
 const CAST_WORKGROUP: u32 = 8;
-/// `bound_cs`'s workgroup, a side, a frame a layer.
+/// `heights_cs`'s and `bound_cs`'s workgroup, a side, a frame a layer.
 const BOUND_WORKGROUP: u32 = 8;
 
-fn cast_group(g: &Gpu, c: &CastBuffers, lane: u32) -> u32 {
+fn cast_group(g: &Gpu, c: &CastBuffers, ground: u32, lane: u32) -> u32 {
     let group = object();
     let mut entries = [0u32; 35];
-    for (k, id) in [c.eye, c.window, c.ground, lane, c.tangents, c.shards, c.overwrites].into_iter().enumerate() {
+    for (k, id) in [c.eye, c.window, ground, lane, c.tangents, c.shards, c.overwrites].into_iter().enumerate() {
         entries[5 * k..5 * k + 5].copy_from_slice(&buffer_entry(k as u32, id));
     }
     g.bind_group(group, c.built.layouts[0], &entries);
@@ -1392,6 +1471,7 @@ impl Renderer {
         self.moon.step(g, &self.mips, input.moon);
         self.atmosphere.earth_step(g, &self.mips, input.earth);
         let cast = input.cast;
+        self.screen.hand(g, &mut self.pipelines, input.ground);
         let tiles = input.earth_tiles;
         self.atmosphere.set_earth_tiles(g, tiles.window, tiles.layers, tiles.upload);
         self.badges.sync_sheet(g, &self.mips, input.billboards, input.text);

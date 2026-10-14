@@ -13,6 +13,7 @@ use crate::layer::residency::Residency;
 use crate::layer::Base;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 
 static PLACE: Global<Residency<PlaceTile>> = Global::new();
@@ -29,7 +30,7 @@ impl Base for PlaceTile {
     }
 
     /// Small, so held on the heap; the record is only a count slot.
-    fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PlaceTile, Failure> {
+    fn receive(_tile: Tile, _record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PlaceTile, Failure> {
         Ok(place::decode(pkt)?)
     }
 

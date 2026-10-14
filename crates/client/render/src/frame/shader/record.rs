@@ -39,7 +39,11 @@ pub const SHADER_CAST: u32 = 27;
 /// dispatch, generated with the cast from pxl-portable's `ground::join`: its
 /// one compute entry.
 pub const SHADER_BOUND: u32 = 28;
-pub const SHADERS: u32 = 29;
+/// Each newly held terrain frame's cells' heights off its samples,
+/// generated with the cast from pxl-portable's `ground::height`: its one
+/// compute entry.
+pub const SHADER_HEIGHTS: u32 = 29;
+pub const SHADERS: u32 = 30;
 
 /// The shader files with comments and indentation stripped by build.rs;
 /// constant.wgsl first.
@@ -155,6 +159,7 @@ pub fn source(kind: u32) -> &'static str {
         // As generated: no constants of ours before it to clash with its names.
         SHADER_CAST => include_str!(concat!(env!("OUT_DIR"), "/shader/cast.gen.wgsl")),
         SHADER_BOUND => include_str!(concat!(env!("OUT_DIR"), "/shader/bound.gen.wgsl")),
+        SHADER_HEIGHTS => include_str!(concat!(env!("OUT_DIR"), "/shader/heights.gen.wgsl")),
         SHADER_MIPS => wgsl!("mips"),
         SHADER_SHEET => wgsl!("sheet"),
         SHADER_IMPOSTOR => wgsl!(

@@ -9,7 +9,7 @@
       "The format each bake writes now, which a published name begins with.",
       "Bumped only by a change to how the client reads a tile."
     ],
-    "terrain": 9,
+    "terrain": 10,
     "place": 10,
     "division": 7,
     "earth": 1

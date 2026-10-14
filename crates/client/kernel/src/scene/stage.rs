@@ -12,7 +12,7 @@ use crate::view::frame::pose::{globe, view_resize};
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
-use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput};
+use pxl_render::gpu::renderer::{render_frame, Cast, EarthTiles, FrameInput, GroundFrames};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
 use xpute_guest::clock::now;
@@ -149,14 +149,16 @@ pub fn stage_render() {
             layers: &layers,
             upload: &mut earth_upload,
         },
+        ground: GroundFrames {
+            frames: crate::scene::cast::FRAMES,
+            upload: &mut terrain_upload,
+        },
         cast: o.as_ref().zip(eye).map(|(o, (eye, tangents))| Cast {
             eye,
             tangents,
-            frames: crate::scene::cast::FRAMES,
             window: crate::scene::cast::window(o),
             shards: crate::scene::cast::shards(),
             overwrites: crate::scene::cast::overwrites(),
-            upload: &mut terrain_upload,
         }),
         text: text_raster,
         billboards: billboard_sheet(),

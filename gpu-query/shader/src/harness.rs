@@ -78,7 +78,8 @@ impl Tile for Frame<'_> {
 /// Cell `id` of the tile at the leaves: its look in bits 0..8, its block
 /// at `ask.first[2]` without caves in bits 8..16, its height in the high half.
 pub fn ground_of(ask: &Ask, tile: &Frame, id: [u32; 2]) -> u32 {
-    let (look, h) = ground::read(tile, [id[0] as i32, id[1] as i32], 1);
+    let (w, h) = ground::read(tile, [id[0] as i32, id[1] as i32], 1);
+    let look = ground::own(w, LEAF_CELL);
     let cell = ground::Cell {
         look,
         top: ground::blocks(LEAF_CELL, h as f32),

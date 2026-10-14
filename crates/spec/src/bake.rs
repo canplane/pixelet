@@ -16,7 +16,6 @@ pub mod place_theme;
 pub mod published;
 pub mod separation;
 pub mod source;
-pub mod surface;
 pub mod tile;
 pub mod way;
 

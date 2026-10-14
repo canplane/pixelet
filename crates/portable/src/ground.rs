@@ -59,9 +59,12 @@ pub const BEDROCK_DEPTH: i32 = 64;
 /// One tile as held, its cells read in place: a resident record on the
 /// CPU, a frame of a storage buffer on the GPU.
 pub trait Tile {
-    /// The look of the tile's cell `(x, y)`, `0..TILE_CELLS` each.
+    /// The four looks the tile's cell `(x, y)` folds, a byte each,
+    /// `dx + 2·dy` (`looks`); a leaf's, and on the CPU any cell's, its own
+    /// four times.
     fn look(&self, x: u32, y: u32) -> u32;
-    /// The height of the tile's cell `(x, y)`, in leaf cells, as baked.
+    /// The height of the tile's cell `(x, y)`, in leaf cells, as a GPU
+    /// drew it from the tile's samples (`height`).
     fn height(&self, x: u32, y: u32) -> i32;
 }
 
@@ -71,8 +74,9 @@ pub trait Bound {
     /// cells: its height, and what its source draws over and under it
     /// there.
     fn cell(&self, x: u32, y: u32) -> [i32; 2];
-    /// Word `i` of the tile's bound's levels (`level_at`).
-    fn level(&self, i: u32) -> i32;
+    /// Entry `(x, y)` of level `j` of the tile's bound's levels, as a word
+    /// (`bound_word`).
+    fn level(&self, j: u32, at: [u32; 2]) -> i32;
 }
 
 /// A cell `v` of a tile `n` × `n` times finer than `tile`, counted from
@@ -89,10 +93,10 @@ pub fn read(tile: &impl Tile, v: [i32; 2], n: u32) -> (u32, i32) {
     (tile.look(x, y), tile.height(x, y))
 }
 
-/// The height the surface draws at the center of a leaf's cell `(x, y)`, in
-/// leaf cells, off its padded elevation samples `ele` (`ele_index`): the one
-/// producer of a cell's height, which the bake runs once a cell (pxl-spec
-/// bake/surface.rs `heights`); every coarser zoom's is folded from it.
+/// The height the surface draws at the center of a tile's cell `(x, y)`,
+/// in leaf cells, off its padded elevation samples `ele` (`ele_index`): the
+/// one producer of a cell's height, which a GPU runs once a cell of a held
+/// tile (`heights_cs`), and the CPU reads back.
 pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [u32; 2]) -> i32 {
     bicubic(ele, x as f32 + 0.5, y as f32 + 0.5)
 }
@@ -100,9 +104,10 @@ pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [u32; 2]) -> i32 {
 /// The levels of a held tile's bound over its cells' heights: each entry of
 /// level `j` the lowest and highest of the 2^j × 2^j cells under it, the
 /// join of four of level j − 1's (`join`), up to the tile whole; made
-/// where the tile is held, on the CPU and on a GPU alike, off its cells. A
-/// bound read off it is the cells' own, and a coarser zoom's cell, a mean
-/// of the cells under it (pxl-spec bake/fold.rs), lies in it too.
+/// where a GPU holds the tile, off its cells, and read back by the CPU. A
+/// bound read off it is that tile's cells' own; a zoom's tile is its own
+/// bicubic of its own samples, so a node is bounded by each zoom asked
+/// (`Held::relief`).
 pub const BOUND_LEVELS: u32 = TILE_CELLS.trailing_zeros();
 
 /// Where level `j`, from 1, begins among the levels, in words: each level's
@@ -113,14 +118,17 @@ pub const fn level_at(j: u32) -> u32 {
     (n - (n >> (2 * (j - 1)))) / 3
 }
 
-/// Words a held tile's frame gives each of its lanes: its looks, 4 a word;
-/// its cells' heights, 2 a word; its bound's levels, an entry a word.
-pub const LOOK_WORDS: u32 = TILE_CELLS * TILE_CELLS / 4;
+/// Words a held tile's frame gives each of its lanes: its looks, a cell's
+/// four a word; its cells' heights, 2 a word; its bound's levels, an entry
+/// a word; its padded samples as handed, 2 a word.
+pub const LOOK_WORDS: u32 = TILE_CELLS * TILE_CELLS;
 pub const HEIGHT_WORDS: u32 = TILE_CELLS * TILE_CELLS / 2;
 pub const LEVEL_WORDS: u32 = level_at(BOUND_LEVELS + 1);
+pub const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
 
-/// A held tile's frame on a GPU: its looks, its heights, then its levels.
-pub const GROUND_WORDS: u32 = LOOK_WORDS + HEIGHT_WORDS + LEVEL_WORDS;
+/// A held tile's frame on a GPU: its looks, its heights, its levels, then
+/// its samples. The heights and levels follow one another, read back whole.
+pub const GROUND_WORDS: u32 = LOOK_WORDS + HEIGHT_WORDS + LEVEL_WORDS + ELE_WORDS;
 
 /// An entry of a bound as a word, its lowest in the low half and its
 /// highest in the high: each a cell's height, an i16.
@@ -136,13 +144,12 @@ pub fn bound_of(w: i32) -> [i32; 2] {
 /// Entry `(x, y)` of level `j` of `tile`'s bound: the join of the four
 /// under it, at level 1 four cells' heights.
 pub fn join(tile: &impl Bound, j: u32, [x, y]: [u32; 2]) -> i32 {
-    let side = TILE_CELLS >> (j - 1);
     let under = |q: u32| {
         let (cx, cy) = (2 * x + q % 2, 2 * y + q / 2);
         if j == 1 {
             tile.cell(cx, cy)
         } else {
-            bound_of(tile.level(level_at(j - 1) + cy * side + cx))
+            bound_of(tile.level(j - 1, [cx, cy]))
         }
     };
     let [mut lo, mut hi] = under(0);
@@ -167,7 +174,7 @@ pub fn bounded(tile: &impl Bound, from: Zoom, (zoom, c): (Zoom, [i32; 2])) -> [i
     }
     let j = cell - zoom;
     let side = TILE_CELLS >> j;
-    bound_of(tile.level(level_at(j) + within(side, c[1]) * side + within(side, c[0])))
+    bound_of(tile.level(j, [within(side, c[0]), within(side, c[1])]))
 }
 
 /// Whether `tile` holds the cell `v` of a tile `n` × `n` times finer, `n` a
@@ -177,6 +184,22 @@ fn holds(v: [i32; 2], n: u32) -> bool {
     let (x, y) = (v[0] >> s, v[1] >> s);
     let cells = TILE_CELLS as i32;
     x >= 0 && y >= 0 && x < cells && y < cells
+}
+
+/// A cell's word's four looks, `dx + 2·dy`.
+pub fn looks(word: u32) -> [u32; 4] {
+    [word & 0xff, word >> 8 & 0xff, word >> 16 & 0xff, word >> 24]
+}
+
+/// Four looks as a cell's word.
+pub fn word([a, b, c, d]: [u32; 4]) -> u32 {
+    a | b << 8 | c << 16 | d << 24
+}
+
+/// A cell's own look at `cell`: the majority of the four it folds, as the
+/// bake folded it (`fold`).
+pub fn own(w: u32, cell: Zoom) -> u32 {
+    majority(looks(w), cell)
 }
 
 /// `read`'s look alone.
@@ -451,14 +474,13 @@ pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 /// How the ground is held where a node reads it: the CPU's residency, a
 /// GPU's window over the tiles it was handed.
 pub trait Held: Area {
-    /// The lowest and highest the ground's cells at `cell`, the finest zoom
-    /// asked, reach over the node `(zoom, c)`, off the finest held tile they
-    /// are read from (`bounded`); every coarser zoom's cells lie within it,
-    /// each a mean of the cells under it, folded from that tile or from a
-    /// coarser one standing in for it. A bound no tighter than the heights'
-    /// whole range (`UNBOUNDED`) where one tile cannot bound them, which only
-    /// splits more; false where no tile over it is held.
-    fn relief(&mut self, cell: Zoom, node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
+    /// The lowest and highest the ground's cells at the zooms `cells`, from
+    /// the coarsest to the finest asked, reach over the node `(zoom, c)`,
+    /// each off the finest held tile it is read from (`bounded`), which
+    /// bounds that tile's own cells alone; a bound no tighter than the
+    /// heights' whole range (`UNBOUNDED`) where the source cannot bound them,
+    /// which only splits more; false where no tile over it is held.
+    fn relief(&mut self, cells: [Zoom; 2], node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
     /// The column of the block `c` at `zoom` as the grid reads it, the
     /// service area's edge laid on it (`Cell`); false where it cannot be read.
     fn cell(&mut self, zoom: Zoom, c: [i32; 3]) -> (Cell, bool);
@@ -466,8 +488,8 @@ pub trait Held: Area {
 
 /// The ground's answer for a node, the one way a descent asks the ground,
 /// `cave` the caves there and `block` whether it is asked at its own zoom:
-/// past the service area, the Earth's; else the node's own bound first, the
-/// index lane of the tile its cells are read from — a block over it is air,
+/// past the service area, the Earth's; else the node's own bound first, of
+/// each zoom's tile its cells are read from (`Held::relief`) — a block over it is air,
 /// else its cell's block (`Cell::block`), its look and its fold's four; a
 /// coarser node nothing under fills at the zooms asked (`empty`) a block of
 /// air its size, else split; where no tile over it is held, the lack.
@@ -506,7 +528,7 @@ pub fn node(held: &mut impl Held, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far,
     // A block's cells are its zoom's; a coarser node's, those of each zoom
     // asked within it (`empty`).
     let cells = if block { [zoom, zoom] } else { [if far > zoom + 1 { far } else { zoom + 1 }, near] };
-    let (relief, ok) = held.relief(cells[1], (zoom, c));
+    let (relief, ok) = held.relief(cells, (zoom, c));
     if !ok {
         return lacks;
     }

@@ -40,8 +40,8 @@ impl Lattice {
 
     /// The coarsest tile it is kept in: the one whose cells fold into the
     /// coarsest grid cell any chunk has, a 3D root's (`SHARD_ZOOM`) cells. The
-    /// ground's lands on z5 exactly: z8's chunks have z13 cells, which the
-    /// ground's 512 a tile and its one step of scale make a z5 tile's.
+    /// ground's lands on z4 exactly: z8's chunks have z13 cells, which the
+    /// ground's 512 a tile make a z4 tile's.
     pub const fn top(self) -> Zoom {
         self.tile_zoom_of_grid(SHARD_ZOOM + CHUNK_STEPS) as Zoom
     }
@@ -118,10 +118,10 @@ impl Lattice {
 }
 
 /// The ground's tile is 512 cells a side, its one knob: every length the
-/// ground keeps in cells follows it. A grid cell is drawn from the ground's
-/// records a zoom finer: their surfaces' mean and their fill (pxl-render
-/// mesh/chunk.rs).
-pub const GROUND: Lattice = Lattice::new(LEAF_CELL).scaled(1);
+/// ground keeps in cells follows it. A grid cell is drawn from its own
+/// record: its height its tile's own surface there, its four looks the four
+/// a zoom finer's (pxl-spec bake/fold.rs).
+pub const GROUND: Lattice = Lattice::new(LEAF_CELL).scaled(0);
 
 /// Cells a ground tile is on a side, at every zoom.
 pub const TILE_CELLS: u32 = GROUND.tile_cells();

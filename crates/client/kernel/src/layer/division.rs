@@ -36,7 +36,7 @@ impl Base for DivisionTile {
     }
 
     /// A handful over the focus, so held on the heap with its names decoded.
-    fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<DivisionTile, Failure> {
+    fn receive(_tile: Tile, _record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<DivisionTile, Failure> {
         Ok(division::decode(pkt)?)
     }
 }

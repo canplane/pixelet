@@ -13,11 +13,11 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
-use xpute_guest::mem::base::ptr_at;
-use xpute_guest::mem::heap::{free, Block};
+use xpute_guest::mem::heap::Block;
 
 use crate::io::demand::{Phases, Stream};
 use crate::io::failure::Failure;
+use crate::layer::kept::Kept;
 use crate::layer::residency::Residency;
 use crate::layer::{Asks, Base};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -43,52 +43,29 @@ impl Base for Earth {
         EARTH.get(Residency::default)
     }
 
-    fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<Earth, Failure> {
+    fn receive(_tile: Tile, _record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<Earth, Failure> {
         earth::decode(pkt)?;
         Ok(Earth)
     }
-}
 
-/// Per frame, the packet whose texels are not yet on the GPU; a frame taken
-/// again replaces it.
-static UPLOADS: Global<Vec<Option<Block>>> = Global::new();
-
-fn uploads() -> &'static mut Vec<Option<Block>> {
-    UPLOADS.get(|| vec![None; Residency::<Earth>::FRAMES as usize])
-}
-
-fn view<'a>((at, bytes): Block) -> &'a [u8] {
-    // SAFETY: a body's block, kept here alone until it is freed.
-    unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at), bytes as usize) }
-}
-
-fn release(block: Option<Block>) {
-    if let Some(block) = block {
-        // SAFETY: a body's block, released once.
-        unsafe { free(block) };
+    /// The texels are kept until the GPU has them.
+    fn keep(record: Option<u32>, block: Block) {
+        kept().keep(record, block);
     }
 }
 
-/// The packet is kept until its texels are uploaded in the frame `record`
-/// took it into, or freed where no frame took it.
-pub fn keep(record: Option<u32>, block: Block) {
-    match record {
-        Some(record) => release(uploads()[record as usize].replace(block)),
-        None => release(Some(block)),
-    }
+/// The texels the GPU does not hold yet, off their packets.
+static KEPT: Global<Kept> = Global::new();
+
+fn kept() -> &'static mut Kept {
+    KEPT.get(|| Kept::new(Residency::<Earth>::FRAMES))
 }
 
 /// Each waiting packet's texels to `write`, into its frame's layer, while it
 /// takes them.
 pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool) {
-    for (record, slot) in uploads().iter_mut().enumerate() {
-        let Some(block) = *slot else { continue };
-        let Ok(texels) = earth::decode(view(block)) else { continue };
-        if !write(record as u32, texels) {
-            return;
-        }
-        release(slot.take());
-    }
+    // A packet `receive` read reads again.
+    kept().send(&mut |record, pkt| earth::decode(pkt).map_or(true, |texels| write(record, texels)));
 }
 
 /// The floor's tiles (`floor`, the view's) at the top as a window, its south-west tile first, and
@@ -105,7 +82,7 @@ pub fn earth_window(floor: impl Iterator<Item = Tile> + Clone) -> ([i32; 2], [u3
     let y0 = floor.clone().map(|p| at(p)[1]).min().unwrap_or(0);
     for p in floor {
         let Some(record) = Earth::residency().frame(p) else { continue };
-        if uploads()[record as usize].is_none() {
+        if !kept().waiting(record) {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
             layers[(dy * REACH_ACROSS + dx) as usize] = record + 1;

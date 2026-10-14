@@ -3,18 +3,19 @@
 //! What the GPU's cast of the eye's rays reads (pxl-render gpu/renderer.rs
 //! `Cast`): the eye as the rays leave it and its lane's tangents, the
 //! terrain's held tiles as a window
-//! a tile zoom, and each tile handed to the GPU once, from where it lives in
-//! its residency frame, which demand frees only by eviction before the stage
-//! writes, so the range stays unwritten until the page replays the turn.
+//! a tile zoom, and each tile handed to the GPU once: its four looks copied
+//! off its packet, its heights from where they live in its residency frame,
+//! which demand frees only by eviction before the stage writes, so the range
+//! stays unwritten until the page replays the turn.
 
 use pxl_render::gpu::api::bytes;
 use pxl_render::gpu::renderer::{Overwrites, TerrainWrite, CAST_EYE_WORDS};
-use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_spec::bake::tile::terrain::{handed, GroundId, TerrainTile, LOOK_LANE};
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::demand::REACH_ACROSS;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{tile_at, LEAF_ZOOM};
 use xpute_guest::global::Global;
 
 use crate::kernel;
@@ -22,6 +23,7 @@ use crate::layer::object::preview;
 use crate::layer::object::store::EntryAt;
 use crate::layer::residency::floor;
 use crate::layer::residency::Residency;
+use crate::layer::terrain::tile::{asked, cells_back, kept};
 use crate::layer::Base as _;
 use crate::setting::schema_spec::RayDensity;
 use crate::setting::store::settings_store;
@@ -32,12 +34,8 @@ use crate::view::sight;
 /// The terrain frames the GPU keeps a tile's lanes for.
 pub const FRAMES: u32 = Residency::<TerrainTile>::FRAMES;
 
-/// Per frame, the tile whose lanes the GPU holds there.
-static ON_GPU: Global<Vec<Option<Tile>>> = Global::new();
-
-fn on_gpu() -> &'static mut Vec<Option<Tile>> {
-    ON_GPU.get(|| vec![None; FRAMES as usize])
-}
+/// A leaf's looks expanded, four a cell, kept so a frame takes nothing from the heap.
+static LOOKS: Global<Vec<GroundId>> = Global::new();
 
 /// The shards the service area serves, as the GPU reads them.
 static SHARDS: Global<Vec<[i32; 4]>> = Global::new();
@@ -107,7 +105,7 @@ pub fn window(o: &Observation) -> &'static [i32] {
         for dy in 0..i64::from(REACH_ACROSS) {
             for dx in 0..i64::from(REACH_ACROSS) {
                 let p = tile_at(zoom, [at[0] + dx, at[1] + dy]);
-                let held = terrain.frame(p).filter(|&f| on_gpu()[f as usize] == Some(p));
+                let held = terrain.frame(p);
                 w.push(held.map_or(0, |f| f as i32 + 1));
             }
         }
@@ -125,17 +123,19 @@ pub fn overwrites() -> Overwrites<'static> {
     Overwrites { heap, data, room, revision }
 }
 
-/// Each held tile the GPU does not yet hold in its frame to `write`: its
-/// frame, ground looks and its cells' heights.
+/// Each tile the GPU does not yet hold in its frame to `write`, while it
+/// takes them: its frame, its four looks a cell and its samples, and where
+/// its cells come back to.
 pub fn upload(write: &mut TerrainWrite<'_>) {
-    let terrain = TerrainTile::residency();
-    for (p, tile) in terrain.held() {
-        let Some(frame) = terrain.frame(p) else { continue };
-        let slot = &mut on_gpu()[frame as usize];
-        if *slot == Some(p) {
-            continue;
+    let room = LOOKS.get(|| vec![0; LOOK_LANE]);
+    // A packet `receive` read reads again.
+    kept().send(&mut |frame, pkt| {
+        let Ok((looks, ele)) = handed(pkt, room) else { return true };
+        let back = cells_back(frame);
+        let taken = write(frame, looks, bytes(ele), back);
+        if taken {
+            asked(frame, back.ticket);
         }
-        write(frame, &tile.ground.cells, bytes(&tile.heights));
-        *slot = Some(p);
-    }
+        taken
+    });
 }

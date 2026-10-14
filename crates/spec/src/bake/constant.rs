@@ -13,7 +13,7 @@ pub use pxl_portable::ground::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPA
 
 /// A held tile's frame, its looks, its cells' heights, then their bound's
 /// levels (pxl-portable).
-pub use pxl_portable::ground::{level_at, BOUND_LEVELS, GROUND_WORDS, HEIGHT_WORDS, LEVEL_WORDS, LOOK_WORDS};
+pub use pxl_portable::ground::{level_at, BOUND_LEVELS, ELE_WORDS, GROUND_WORDS, HEIGHT_WORDS, LEVEL_WORDS, LOOK_WORDS};
 
 pub use super::object::OBJECT_TIERS;
 

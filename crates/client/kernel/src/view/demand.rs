@@ -18,7 +18,7 @@ use xpute_guest::global::Global;
 use crate::io::demand::Stream;
 use crate::io::fetch::{answer_settled, body, next_answered, release, Answered};
 use crate::io::request::attempt_of;
-use crate::layer::earth::{self, Earth};
+use crate::layer::earth::Earth;
 use crate::layer::{Asks, Base};
 use crate::sched::edge::world_edge;
 use pxl_spec::bake::tile::division::DivisionTile;
@@ -318,6 +318,8 @@ impl<L: Observed> Demand<L> {
 /// The pyramid tiles arrived, admitted against the view as many as the
 /// turn's quota allows and at least one; each fetch settles here.
 pub fn admit_arrived() {
+    // A tile whose cells the GPU drew is read once they are back, as one arriving.
+    TerrainTile::residency().ready(crate::layer::terrain::tile::back);
     let mut first = true;
     while first || !world_edge().spent() {
         let Some(Answered {
@@ -341,18 +343,7 @@ pub fn admit_arrived() {
             (Stream::terrain, block) => arrived::<TerrainTile>(tile, block, &mut phases),
             (Stream::place, block) => arrived::<PlaceTile>(tile, block, &mut phases),
             (Stream::division, block) => arrived::<DivisionTile>(tile, block, &mut phases),
-            (Stream::earth, None) => arrived::<Earth>(tile, None, &mut phases),
-            (Stream::earth, Some(b)) => {
-                let mut framed = None;
-                let result = Earth::demand().admit(tile, |record| {
-                    let earth = Earth::receive(record, body(b), &mut phases)?;
-                    framed = Some(record);
-                    Ok(earth)
-                });
-                // The texels are kept until the GPU has them.
-                earth::keep(framed, b);
-                result
-            }
+            (Stream::earth, block) => arrived::<Earth>(tile, block, &mut phases),
             (_, block) => {
                 release(block);
                 Err(Errno::ENOTRECOVERABLE.into())
@@ -368,7 +359,12 @@ fn arrived<L: Observed>(p: Tile, block: Option<Block>, phases: &mut Phases) -> R
         L::demand().absent(p);
         return Ok(());
     };
-    let result = L::demand().admit(p, |record| L::receive(record, body(b), phases));
-    release(Some(b));
+    let mut framed = None;
+    let result = L::demand().admit(p, |record| {
+        let tile = L::receive(p, record, body(b), phases)?;
+        framed = Some(record);
+        Ok(tile)
+    });
+    L::keep(framed, b);
     result
 }

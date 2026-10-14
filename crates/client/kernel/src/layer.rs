@@ -7,7 +7,8 @@ mod answer;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::Lattice;
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
+use xpute_guest::mem::heap::Block;
 
 use crate::io::demand::{Phases, Stream};
 use crate::io::failure::Failure;
@@ -16,6 +17,7 @@ use residency::Residency;
 pub mod division;
 pub mod earth;
 pub mod instance;
+pub mod kept;
 pub mod object;
 pub mod place;
 mod query;
@@ -57,10 +59,21 @@ pub trait Base: Clone + 'static {
     /// the ground stops.
     const TOP: Option<Zoom> = None;
 
+    /// Its framed tiles are read only once a GPU has drawn their cells and
+    /// they are back (`Residency::ready`), until then as if not held.
+    const AWAITS: bool = false;
+
     /// Its records, which it alone holds.
     fn residency() -> &'static mut Residency<Self>;
 
-    fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
+    fn receive(tile: Tile, record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
+
+    /// The packet a tile came in, once the frame `record` took the tile or
+    /// none did: freed, or kept where the GPU takes the tile off it
+    /// (`kept::Kept`).
+    fn keep(_record: Option<u32>, block: Block) {
+        crate::io::fetch::release(Some(block));
+    }
 
     /// A tile with nothing in it, which answers an absent tile at the top.
     fn empty() -> Option<Self> {

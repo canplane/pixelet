@@ -83,9 +83,10 @@ pub struct TileSource<'a> {
     pub n: u32,
 }
 
+/// The CPU holds a cell's own look alone: its four are it four times, as a leaf's.
 impl pxl_portable::ground::Tile for TileView<'_> {
     fn look(&self, x: u32, y: u32) -> u32 {
-        u32::from(self.cells[GROUND.cell_index(x, y) as usize])
+        pxl_portable::ground::word([u32::from(self.cells[GROUND.cell_index(x, y) as usize]); 4])
     }
     fn height(&self, x: u32, y: u32) -> i32 {
         i32::from(self.heights[GROUND.cell_index(x, y) as usize])
@@ -97,8 +98,8 @@ impl pxl_portable::ground::Bound for TileView<'_> {
     fn cell(&self, x: u32, y: u32) -> [i32; 2] {
         crate::bake::tile::terrain::cell_bound(self.heights, self.ways, x, y)
     }
-    fn level(&self, i: u32) -> i32 {
-        self.levels[i as usize]
+    fn level(&self, j: u32, at: [u32; 2]) -> i32 {
+        crate::bake::tile::terrain::level_bound(self.levels, self.ways, j, at)
     }
 }
 
@@ -247,10 +248,15 @@ impl Grid {
             let read = |c: [i64; 2]| self.cells[(c[1] - from[1]) as usize * across + (c[0] - from[0]) as usize];
             let (look, h, fold) = if k == 1 {
                 let c = [0, 1].map(|a| drawn(rel[a] + g[a]));
-                fold([[0, 0], [1, 0], [0, 1], [1, 1]].map(|[dx, dy]| read([c[0] + dx, c[1] + dy])), cell)
+                fold(
+                    [[0, 0], [1, 0], [0, 1], [1, 1]]
+                        .map(|[dx, dy]| read([c[0] + dx, c[1] + dy]))
+                        .map(|(w, h)| (pxl_portable::ground::own(w, cell + 1), h)),
+                    cell,
+                )
             } else {
-                let (look, h) = read([0, 1].map(|a| drawn(rel[a] + g[a])));
-                (look, h as f32, [look; 4])
+                let (w, h) = read([0, 1].map(|a| drawn(rel[a] + g[a])));
+                (pxl_portable::ground::own(w, cell), h as f32, pxl_portable::ground::looks(w))
             };
             let center = [0, 1].map(|a| (first[a] + g[a]) as f64 * side + side / 2.0);
             let key = center.map(|v| (v / shard).floor() as i64);

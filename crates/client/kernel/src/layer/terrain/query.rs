@@ -162,7 +162,7 @@ fn past(node: Node<2>) -> bool {
 fn look_at(d: &Drawn, node: Node<2>) -> u32 {
     let [x, y] = center_of(node);
     let [x, y] = GROUND.cell_of(d.from.zoom, &point(x, y, 0.0)).in_tile();
-    d.source().view().tile.look(x, y)
+    pxl_portable::ground::own(d.source().view().tile.look(x, y), GROUND.cell_zoom(d.from.zoom))
 }
 
 /// The ring of cells at `fine` about a node, or of nodes where it is finer.

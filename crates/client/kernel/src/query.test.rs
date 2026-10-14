@@ -70,7 +70,14 @@ fn resident(held: &[(Tile, TerrainTile)]) -> Residency<TerrainTile> {
     // asked is cache, which answers nothing.
     let asks: fnv::FnvHashMap<Tile, crate::io::demand::Ask> = admitted.iter().map(|&q| (q, crate::io::demand::Ask::PLAIN)).collect();
     residency.ask(&asks);
+    // Their cells as a GPU would hand them back, at once.
+    residency.ready(|_| true);
     residency
+}
+
+/// A leaf as a client holds it once its cells are back: each cell's height and look given.
+fn drawn(heights: Vec<i16>, ground: Ground, separation: pxl_spec::bake::separation::Separation) -> TerrainTile {
+    TerrainTile::drawn(heights, ground, separation, pxl_spec::bake::tile::Occupancy::LEAF)
 }
 
 fn point(x: f64, y: f64) -> Q3 {
@@ -98,7 +105,7 @@ fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
 fn where_the_terrain_gives_no_surface_only_what_is_placed_stands() {
     let _g = serial();
     let leaf = top().children()[0];
-    let void = TerrainTile::leaf(
+    let void = drawn(
         vec![0; CELLS],
         Ground {
             cells: vec![sentinel::void; SPAN * SPAN].into(),
@@ -133,7 +140,7 @@ fn a_deck_over_no_surface_is_met_where_it_is_drawn() {
     let leaf = top().children()[0];
     let mut separation = Builder::default();
     separation.push([([0.0, 10.5], 10), ([40.0, 10.5], 10)], 4 * POINT_SCALE as u8, ground::residential_road, Form::Bridge, 0);
-    let void = TerrainTile::leaf(
+    let void = drawn(
         vec![0; CELLS],
         Ground {
             cells: vec![sentinel::void; SPAN * SPAN].into(),
@@ -158,7 +165,7 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
     let n = pxl_spec::space::coord::world::around(LEAF_ZOOM);
     let flat = || {
         let cells = vec![ground::land; SPAN * SPAN];
-        TerrainTile::leaf(vec![5; CELLS], Ground { cells: cells.into() }, Default::default())
+        drawn(vec![5; CELLS], Ground { cells: cells.into() }, Default::default())
     };
     let tile = |x: i64| pxl_spec::space::layer::tile::tile_at(LEAF_ZOOM, [x, 0]);
     let residency = resident(&[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())]);
@@ -185,7 +192,7 @@ fn a_ray_across_the_antimeridian_meets_what_stands_past_it() {
 
 fn flat_at_five() -> (Residency<TerrainTile>, [f64; 2]) {
     let leaf = top().children()[0];
-    let flat = TerrainTile::leaf(
+    let flat = drawn(
         vec![5; CELLS],
         Ground {
             cells: vec![ground::land; SPAN * SPAN].into(),

@@ -2,8 +2,10 @@
 
 //! The cast's compute entry (`cast_cs`): each camera-grid cell's ray down
 //! the pyramid by pxl-portable's descent, the one the CPU's cast runs, over
-//! the world as the GPU holds it; and the levels of a held tile's bound,
-//! over the cells it was handed (`bound_cs`). Each entry is a module of its own. The harness's entries are behind its feature
+//! the world as the GPU holds it; and the ground a held tile is drawn from,
+//! its cells' heights off the samples it was handed (`heights_cs`) and their
+//! bound's levels (`bound_cs`), which the CPU reads back. Each entry is a
+//! module of its own. The harness's entries are behind its feature
 //! (`harness`).
 
 #![cfg_attr(target_arch = "spirv", no_std)]
@@ -15,7 +17,7 @@ use pxl_portable::area::{self, Area};
 use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
 use pxl_portable::caves::Cave;
 use pxl_portable::cube::{object, sentinel, Ground};
-use pxl_portable::ground::{self, level_at, Bound, Tile, GROUND_WORDS, HEIGHT_WORDS, LOOK_WORDS};
+use pxl_portable::ground::{self, level_at, Bound, Tile, GROUND_WORDS, HEIGHT_WORDS, LEVEL_WORDS, LOOK_WORDS};
 use pxl_portable::lattice::{GROUND, TILE_CELLS};
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
 use pxl_portable::{at, mask, wrap_index, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
@@ -57,8 +59,8 @@ const PLACED_AIR: u32 = PLACED_BLOCK | object::air as u32;
 const UNKNOWN: u32 = sentinel::unknown as u32;
 
 /// One held tile's frame in the ground's buffer (pxl-portable
-/// `GROUND_WORDS`): its looks, 4 a word, its cells' heights, 2 a word, then
-/// its bound's levels.
+/// `GROUND_WORDS`): its looks, a cell's four a word, its cells' heights, 2
+/// a word, its bound's levels, then its samples, 2 a word.
 pub struct Framed<'a> {
     ground: &'a [u32],
     frame: u32,
@@ -66,8 +68,7 @@ pub struct Framed<'a> {
 
 impl Tile for Framed<'_> {
     fn look(&self, x: u32, y: u32) -> u32 {
-        let i = y * TILE_CELLS + x;
-        at(self.ground, self.frame * GROUND_WORDS + i / 4) >> (8 * (i % 4)) & 0xff
+        at(self.ground, self.frame * GROUND_WORDS + y * TILE_CELLS + x)
     }
     fn height(&self, x: u32, y: u32) -> i32 {
         let i = y * TILE_CELLS + x;
@@ -81,8 +82,8 @@ impl Bound for Framed<'_> {
         let h = Tile::height(self, x, y);
         [h, h]
     }
-    fn level(&self, i: u32) -> i32 {
-        at(self.ground, self.frame * GROUND_WORDS + LOOK_WORDS + HEIGHT_WORDS + i) as i32
+    fn level(&self, j: u32, [x, y]: [u32; 2]) -> i32 {
+        at(self.ground, self.frame * GROUND_WORDS + LOOK_WORDS + HEIGHT_WORDS + level_at(j) + y * (TILE_CELLS >> j) + x) as i32
     }
 }
 
@@ -95,8 +96,9 @@ pub struct World<'a> {
     /// tiles across — then a word a tile, its frame plus one, 0 where none
     /// is held.
     window: &'a [IVec4],
-    /// Per frame, a held tile's looks and heights as handed, then its
-    /// bound's levels (`bound_cs`).
+    /// Per frame, a held tile's looks as handed, its cells' heights
+    /// (`heights_cs`), their bound's levels (`bound_cs`), and its samples
+    /// as handed.
     ground: &'a [u32],
     /// The served shards: zoom, x, y.
     shards: &'a [IVec4],
@@ -233,47 +235,47 @@ impl World<'_> {
     /// zoom finer (`ground::fold`), off the tiles at `read`; its look alone
     /// where `only_look`.
     fn ground_at(&self, read: u32, zoom: u32, b: [i32; 2], only_look: bool) -> (u32, f32, [u32; 4]) {
-        let k = GROUND.cell_zoom(read) as i32 - zoom as i32;
-        // Tile cells it folds: four a zoom finer, else the one holding it.
-        let (n, first) = if k == 1 { (4, [2 * b[0], 2 * b[1]]) } else { (1, [b[0] >> -k, b[1] >> -k]) };
-        let mut four = [(VOID, 0); 4];
-        let mut q = 0;
-        while q < n {
-            four[q as usize] = self.cell(read, [first[0] + (q & 1) as i32, first[1] + (q >> 1) as i32], only_look);
-            q += 1;
-        }
-        if n == 4 {
-            ground::fold(four, zoom)
-        } else {
-            let (look, h) = four[0];
-            (look, h as f32, [look; 4])
-        }
+        // The tile cell holding it: its own, or past the leaves a leaf's.
+        let k = zoom - GROUND.cell_zoom(read);
+        let (w, h) = self.cell(read, [b[0] >> k, b[1] >> k], only_look);
+        (ground::own(w, zoom - k), h as f32, ground::looks(w))
     }
 
     /// Whether the leaf cell `l` is gone: past the area, or nothing known
     /// of it, its look off the leaf tile drawing it.
     fn gone(&self, l: [i32; 2]) -> bool {
-        area::past(self, area::tile_at(LEAF_CELL, l)) || self.cell(LEAF_ZOOM, l, true).0 == UNKNOWN
+        area::past(self, area::tile_at(LEAF_CELL, l)) || ground::own(self.cell(LEAF_ZOOM, l, true).0, LEAF_CELL) == UNKNOWN
     }
 }
 
 /// The ground as the GPU holds it, for pxl-portable's one answer for a node.
 impl ground::Held for World<'_> {
-    /// The bound over the node of the finest held tile the finest asked
-    /// zoom reads its cells from (`ground::bounded`); none (`UNBOUNDED`) for
-    /// a node wider than that zoom's tile, which holds more than one.
-    fn relief(&mut self, finest: u32, (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
-        let read = GROUND.read_zoom(finest);
-        if read > zoom {
+    /// The join of the bounds over the node of each tile the zooms `cells`
+    /// read their cells from, the finest held over it at each
+    /// (`ground::bounded`), which bounds that tile's own cells alone; none
+    /// (`UNBOUNDED`) for a node wider than the finest asked's tile, which
+    /// holds more than one.
+    fn relief(&mut self, [coarsest, finest]: [u32; 2], (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
+        if GROUND.read_zoom(finest) > zoom {
             return (ground::UNBOUNDED, true);
         }
-        let s = zoom - read;
-        let (from, w) = self.drawn(read, [c[0] >> s, c[1] >> s]);
-        if w == 0 {
-            return ([0, 0], false);
+        let mut relief = [0, 0];
+        let mut z = coarsest;
+        while z <= finest {
+            let read = GROUND.read_zoom(z);
+            if z == coarsest || read != GROUND.read_zoom(z - 1) {
+                let s = zoom - read;
+                let (from, w) = self.drawn(read, [c[0] >> s, c[1] >> s]);
+                if w == 0 {
+                    return ([0, 0], false);
+                }
+                let tile = Framed { ground: self.ground, frame: w - 1 };
+                let [lo, hi] = ground::bounded(&tile, from, (zoom, [c[0], c[1]]));
+                relief = if z == coarsest { [lo, hi] } else { [relief[0].min(lo), relief[1].max(hi)] };
+            }
+            z += 1;
         }
-        let tile = Framed { ground: self.ground, frame: w - 1 };
-        (ground::bounded(&tile, from, (zoom, [c[0], c[1]])), true)
+        (relief, true)
     }
 
     /// The block's column off the tile drawing that zoom's cells, the area's
@@ -430,9 +432,32 @@ pub fn cast_cs(
     }
 }
 
+/// The cells' heights of the frames `fresh` names, the frames handed
+/// samples this turn, one a `z`: each word's two cells (`ground::height`)
+/// off the samples handed there.
+#[spirv(compute(threads(8, 8, 1)))]
+pub fn heights_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] fresh: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] ground: &mut [u32],
+) {
+    if id.x >= TILE_CELLS / 2 || id.y >= TILE_CELLS {
+        return;
+    }
+    let frame = fresh[id.z as usize];
+    let base = frame * GROUND_WORDS;
+    let w = {
+        let samples: &[u32] = ground;
+        let ele = move |i: usize| ((at(samples, base + LOOK_WORDS + HEIGHT_WORDS + LEVEL_WORDS + i as u32 / 2) >> (16 * (i as u32 % 2))) << 16) as i32 >> 16;
+        let (a, b) = (ground::height(ele, [2 * id.x, id.y]), ground::height(ele, [2 * id.x + 1, id.y]));
+        (a as u32 & 0xffff) | (b as u32) << 16
+    };
+    ground[(base + LOOK_WORDS + id.y * (TILE_CELLS / 2) + id.x) as usize] = w;
+}
+
 /// Level `level.x` of the bound of the frames `fresh` names, one a `z`,
 /// over the level under it, written before (`ground::join`), level 1 over
-/// the cells handed: a dispatch a level, from 1 up.
+/// the cells `heights_cs` drew: a dispatch a level, from 1 up.
 #[spirv(compute(threads(8, 8, 1)))]
 pub fn bound_cs(
     #[spirv(global_invocation_id)] id: UVec3,

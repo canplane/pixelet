@@ -3,7 +3,7 @@
 //! `.fixed.terrain`: the room every resident terrain tile lies in, and where
 //! a record's bytes are. A plane is one lane of every frame end to end;
 //! planes in order: ground, the separation's eight, heights, the ways'
-//! bound, the bound's levels.
+//! bound, the bound's levels, and the words its cells come back under.
 
 use pxl_spec::bake::constant::LEVEL_WORDS;
 use pxl_spec::bake::separation::{MAX_BOXES, MAX_LINES, MAX_POINTS};
@@ -19,7 +19,7 @@ pub static RANGE: crate::mem::fixed::Held = crate::mem::fixed::Held::new();
 
 const FRAMES: u32 = Residency::<TerrainTile>::FRAMES;
 
-/// One tile's ground: a `GroundId` a cell, no stride and no padding.
+/// One tile's ground: a cell's own look, a `GroundId` a cell, no stride and no padding.
 pub const GROUND_LANE_BYTES: u32 = TILE_CELLS * TILE_CELLS * core::mem::size_of::<GroundId>() as u32;
 
 pub const GROUND_BYTES: u32 = FRAMES * GROUND_LANE_BYTES;
@@ -52,24 +52,30 @@ pub const SEPARATION_BYTES: u32 = FRAMES * {
     sum
 };
 
-/// One tile's heights: an i16 a cell, as baked.
+/// One tile's heights: an i16 a cell, as the GPU drew them, read back.
 pub const HEIGHT_LANE_BYTES: u32 = TILE_CELLS * TILE_CELLS * 2;
 
 pub const HEIGHT_PLANE_BYTES: u32 = FRAMES * HEIGHT_LANE_BYTES;
 
-/// One tile's ways' bound by square, made from its lines where it lands
-/// (pxl-spec bake/tile/terrain.rs `ways_of`).
+/// One tile's ways' bound by square and its levels, made from its lines
+/// where it lands (pxl-spec bake/tile/terrain.rs `ways_of`).
 pub const WAYS_LANE_BYTES: u32 = WAYS_LANE as u32 * 4;
 
 pub const WAYS_PLANE_BYTES: u32 = FRAMES * WAYS_LANE_BYTES;
 
-/// One tile's bound's levels, made over its heights where it lands
-/// (pxl-portable `ground::join`): a word an entry.
+/// One tile's bound's levels over its cells, as the GPU made them
+/// (pxl-portable `ground::join`), read back: a word an entry.
 pub const LEVEL_LANE_BYTES: u32 = LEVEL_WORDS * 4;
 
 pub const LEVEL_PLANE_BYTES: u32 = FRAMES * LEVEL_LANE_BYTES;
 
-pub const TERRAIN_BYTES: u32 = GROUND_BYTES + SEPARATION_BYTES + HEIGHT_PLANE_BYTES + WAYS_PLANE_BYTES + LEVEL_PLANE_BYTES;
+/// One tile's two words its cells come back under, its heights' and its
+/// levels' (pxl-kernel layer/terrain/tile.rs `back`).
+pub const BACK_LANE_BYTES: u32 = 8;
+
+pub const BACK_PLANE_BYTES: u32 = FRAMES * BACK_LANE_BYTES;
+
+pub const TERRAIN_BYTES: u32 = GROUND_BYTES + SEPARATION_BYTES + HEIGHT_PLANE_BYTES + WAYS_PLANE_BYTES + LEVEL_PLANE_BYTES + BACK_PLANE_BYTES;
 
 const _: () = assert!(
     GROUND_LANE_BYTES.is_multiple_of(64),
@@ -100,4 +106,8 @@ pub const fn ways_off(record: u32) -> u32 {
 
 pub const fn level_off(record: u32) -> u32 {
     GROUND_BYTES + SEPARATION_BYTES + HEIGHT_PLANE_BYTES + WAYS_PLANE_BYTES + record * LEVEL_LANE_BYTES
+}
+
+pub const fn back_off(record: u32) -> u32 {
+    GROUND_BYTES + SEPARATION_BYTES + HEIGHT_PLANE_BYTES + WAYS_PLANE_BYTES + LEVEL_PLANE_BYTES + record * BACK_LANE_BYTES
 }
