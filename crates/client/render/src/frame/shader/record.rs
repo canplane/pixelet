@@ -69,6 +69,7 @@ pub fn source(kind: u32) -> &'static str {
             "shadow",
             "ao_map",
             "faces",
+            "paint",
             "chunk"
         ),
         SHADER_DECOR => wgsl!(
