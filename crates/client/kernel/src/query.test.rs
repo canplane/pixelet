@@ -68,6 +68,10 @@ fn resident(held: &[(Tile, TerrainTile)]) -> Residency<TerrainTile> {
             residency.admit(q, &Keep, |_| Ok::<_, ()>(picture)).unwrap();
         }
     }
+    // Asked for, as the floor asks for what it holds: a tile held but not
+    // asked is cache, which answers nothing.
+    let asks: fnv::FnvHashMap<Tile, crate::io::demand::Ask> = admitted.iter().map(|&q| (q, crate::io::demand::Ask::PLAIN)).collect();
+    residency.ask(&asks);
     residency
 }
 

@@ -2,8 +2,11 @@
 
 //! Residency: which of a layer's tiles are held, in which frame, and what
 //! answers a tile that is not. Any tile fits any frame. Tiles the fallback
-//! asks for are held hard; the rest is cache. A held tile is readable on its
-//! own, so a missing ancestor never hides a resident descendant. A miss
+//! asks for are held hard; the rest is cache. A tile is readable while it is
+//! held and asked for, on its own, so a missing ancestor never hides a
+//! resident descendant; a tile held only as cache is bytes kept for when it
+//! is asked again, and answers nothing, so what is read is a function of
+//! what this observation asks and never of where the eye has been. A miss
 //! falls back to the nearest resident tile over it (`drawn_from`).
 //!
 //! Capacity is asserted, not observed, since thrash here would be silent:
@@ -217,8 +220,13 @@ impl<L: Base> Residency<L> {
         self.entry(p)?.held.as_ref()
     }
 
+    /// Held and asked for: what a reader may read.
+    fn readable(&self, p: Tile) -> Option<&Held<L>> {
+        self.entry(p).filter(|e| e.ask.is_some())?.held.as_ref()
+    }
+
     pub fn resident(&self, p: Tile) -> bool {
-        self.held_as(p).is_some()
+        self.readable(p).is_some()
     }
 
     /// Held in a frame of its own, not as an empty tile.
@@ -228,15 +236,16 @@ impl<L: Base> Residency<L> {
 
     /// The frame a held tile is in; none for an empty one.
     pub fn frame(&self, p: Tile) -> Option<u32> {
-        self.held_as(p)?.frame
+        self.readable(p)?.frame
     }
 
     pub fn get(&self, p: Tile) -> Option<&L> {
-        self.held_as(p).map(|h| &h.body)
+        self.readable(p).map(|h| &h.body)
     }
 
+    /// Every readable tile.
     pub fn held(&self) -> impl Iterator<Item = (Tile, &L)> {
-        self.tiles.iter().filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
+        self.tiles.iter().filter(|(_, e)| e.ask.is_some()).filter_map(|(&p, e)| Some((p, &e.held.as_ref()?.body)))
     }
 
     pub fn frames_used(&self) -> u32 {
@@ -268,7 +277,7 @@ impl<L: Base> Residency<L> {
     /// descent pays one lookup a step and never walks back up.
     pub fn step(&self, parent: &Line, child: Tile) -> Line {
         let e = self.entry(child);
-        let held = e.and_then(|e| e.held.as_ref());
+        let held = e.filter(|e| e.ask.is_some()).and_then(|e| e.held.as_ref());
         // Answered for itself, or its parent holds no child there.
         let said = e.is_some_and(|e| e.answered) || parent.children.is_some_and(|o| !o.has_child(child.slot()));
         let over = match parent.resident() {
