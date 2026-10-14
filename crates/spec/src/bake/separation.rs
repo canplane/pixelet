@@ -261,6 +261,39 @@ impl Separation {
         self.segments_in(Form::rises, x, y).map(|[_, hi]| hi).max()
     }
 
+    /// The ways' bound over a tile of `side` cells a side, cut into
+    /// `across` × `across` squares row by row, into `out`: in each square the
+    /// highest top of a line that can rise and, under the lowest of one that
+    /// can sink, the way's own cell, wherever a segment's footprint reaches
+    /// it; lowest over highest where none does. One pass over the segments.
+    pub fn bound(&self, side: f64, across: u32, out: &mut [[i16; 2]]) {
+        out.fill([i16::MAX, i16::MIN]);
+        let step = side / f64::from(across);
+        let square = |v: f64| ((v / step).floor() as i64).clamp(0, i64::from(across) - 1) as usize;
+        for line in self.iter().filter(|d| d.form.rises() || d.form.sinks()) {
+            let half = line.footprint();
+            for s in 0..line.points.len().saturating_sub(1) {
+                let (a, b) = (line.point(s), line.point(s + 1));
+                let (ta, tb) = (line.tops[s], line.tops[s + 1]);
+                let ([x0, x1], [y0, y1]) = ([a[0].min(b[0]) - half, a[0].max(b[0]) + half], [a[1].min(b[1]) - half, a[1].max(b[1]) + half]);
+                if x1 < 0.0 || y1 < 0.0 || x0 > side || y0 > side {
+                    continue;
+                }
+                for y in square(y0)..=square(y1) {
+                    for x in square(x0)..=square(x1) {
+                        let o = &mut out[y * across as usize + x];
+                        if line.form.rises() {
+                            o[1] = o[1].max(ta.max(tb));
+                        }
+                        if line.form.sinks() {
+                            o[0] = o[0].min(ta.min(tb).saturating_sub(1));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// The lower and higher end of each segment whose footprint reaches the
     /// box, of the lines whose form `keeps`.
     fn segments_in(&self, keeps: fn(Form) -> bool, [x0, x1]: [f64; 2], [y0, y1]: [f64; 2]) -> impl Iterator<Item = [i16; 2]> + '_ {

@@ -1,6 +1,6 @@
 // pxl-spec/bake/tile/terrain.rs
 
-//! A baked terrain tile and its wire: `[ele, ground, extent, occupancy, separation]`.
+//! A baked terrain tile and its wire: `[heights, ground, occupancy, separation]`.
 
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
@@ -8,17 +8,18 @@ use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, Tr
 use std::borrow::Cow;
 
 use super::{occupancy_of, Occupancy};
-use crate::bake::constant::ELE_PADDED_SPAN;
+use crate::bake::constant::{level_at, BOUND_LEVELS, LEVEL_WORDS};
 use crate::bake::malformed;
 use crate::bake::separation::{self, Separation};
-use crate::bake::surface::extent_of;
-use crate::space::layer::lattice::{EXTENT, TILE_CELLS};
+use crate::space::layer::lattice::TILE_CELLS;
 
-/// A tile's lane lengths; a tile is these and no other size.
+/// A tile's lane lengths: a cell each; a tile is these and no other size.
 pub const GROUND_LANE: usize = (TILE_CELLS * TILE_CELLS) as usize;
-pub const ELE_LANE: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
-pub const EXTENT_LANE: usize = (EXTENT.tile_cells() * EXTENT.tile_cells()) as usize;
-pub const COARSE_LANE: usize = EXTENT.coarse_cells() as usize;
+pub const HEIGHT_LANE: usize = GROUND_LANE;
+pub const LEVEL_LANE: usize = LEVEL_WORDS as usize;
+/// Squares a side the ways' bound is held in (`Separation::bound`).
+pub const WAYS_ACROSS: u32 = 32;
+pub const WAYS_LANE: usize = (WAYS_ACROSS * WAYS_ACROSS) as usize;
 
 /// What a ground cell holds: the id of a cube of the ground's palette, a
 /// Carto look, which fits a byte (`block/cube.json`).
@@ -41,87 +42,67 @@ impl Ground {
     }
 }
 
-/// What a ray and a fetch need before the tiles under one are held. At every
-/// zoom, the leaf too, so a tile has one contract.
+/// A tile: one lane a fact the client cannot make. What it draws by rule —
+/// a slab, a bore, a pier — is not here.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Index {
-    extent: Cow<'static, [[i16; 2]]>, // lo, hi for each `EXTENT` cell, over this zoom and all finer: a ray above hi misses them
-    coarse: Cow<'static, [[i16; 2]]>, // `extent` joined over each coarser cell: rebuilt from it, never on the wire
-    pub occupancy: Occupancy,         // which children are tiles: none is asked for that is not
+pub struct TerrainTile {
+    pub ground: Ground,                 // a class a cell: the source rasterized, or its fold
+    pub separation: Separation,         // ways off the ground: source lines, tops solved offline
+    pub heights: Cow<'static, [i16]>,   // a cell's height in leaf cells: the surface's at a leaf, or its fold
+    pub occupancy: Occupancy,           // which children are tiles: none is asked for that is not
+    pub ways: Cow<'static, [[i16; 2]]>, // the ways' bound by square (`Separation::bound`): made from the lines wherever a tile is, never on the wire
+    pub levels: Cow<'static, [i32]>,    // its cells' bound (`levels`), the ways' joined: made from them wherever a tile is, never on the wire
 }
 
-/// Two extents as one: the lower of the lows, the higher of the highs.
-pub fn join([lo, hi]: [i16; 2], [o_lo, o_hi]: [i16; 2]) -> [i16; 2] {
-    [lo.min(o_lo), hi.max(o_hi)]
+/// What a cell of a tile reaches: its height, and in its square any way's
+/// top over it or a sunk way's own cell under it (`ways_of`).
+pub fn cell_bound(heights: &[i16], ways: &[[i16; 2]], x: u32, y: u32) -> [i32; 2] {
+    let h = i32::from(heights[(y * TILE_CELLS + x) as usize]);
+    let s = TILE_CELLS / WAYS_ACROSS;
+    let [lo, hi] = ways[((y / s) * WAYS_ACROSS + x / s) as usize];
+    [h.min(i32::from(lo)), h.max(i32::from(hi))]
 }
 
-impl Index {
-    pub fn new(extent: Vec<[i16; 2]>, occupancy: Occupancy) -> Index {
-        let mut coarse = vec![[0; 2]; COARSE_LANE];
-        coarse_of(&extent, &mut coarse);
-        Index {
-            extent: extent.into(),
-            coarse: coarse.into(),
-            occupancy,
-        }
-    }
+/// A tile's cells and ways, and its levels as far as they are made.
+struct Made<'a> {
+    heights: &'a [i16],
+    ways: &'a [[i16; 2]],
+    levels: &'a [i32],
+}
 
-    pub fn extent(&self) -> &[[i16; 2]] {
-        &self.extent
+impl pxl_portable::ground::Bound for Made<'_> {
+    fn cell(&self, x: u32, y: u32) -> [i32; 2] {
+        cell_bound(self.heights, self.ways, x, y)
     }
-
-    /// The extent joined over each coarser cell, `EXTENT.coarse_index` order.
-    pub fn coarse(&self) -> &[[i16; 2]] {
-        &self.coarse
-    }
-
-    /// The lane as pxl-portable's reads take it: its cells, then its coarser
-    /// levels.
-    pub fn lane(&self, i: u32) -> [i32; 2] {
-        let i = i as usize;
-        let e = if i < EXTENT_LANE { self.extent[i] } else { self.coarse[i - EXTENT_LANE] };
-        e.map(i32::from)
-    }
-
-    /// What is drawn over the cell of `across` × `across` index cells at
-    /// (x, y) (pxl-portable `ground::over`).
-    pub fn over(&self, at: [u32; 2], across: u32) -> [i32; 2] {
-        pxl_portable::ground::over(|i| self.lane(i), at, across)
+    fn level(&self, i: u32) -> i32 {
+        self.levels[i as usize]
     }
 }
 
-/// Each coarser cell from the four under it.
-fn coarse_of(lane: &[[i16; 2]], coarse: &mut [[i16; 2]]) {
-    xpute_kit::ensure!(lane.len() == EXTENT_LANE && coarse.len() == COARSE_LANE, ENOTRECOVERABLE);
-    let n = EXTENT.tile_cells();
-    for j in 1..=n.trailing_zeros() {
-        let side = 1u32 << j;
-        for by in (0..n).step_by(side as usize) {
-            for bx in (0..n).step_by(side as usize) {
-                let half = side / 2;
-                let quarter = |dx: u32, dy: u32| match j {
-                    1 => lane[EXTENT.cell_index(bx + dx, by + dy) as usize],
-                    _ => coarse[EXTENT.coarse_index(j - 1, bx + dx, by + dy) as usize],
-                };
-                let b = join(join(quarter(0, 0), quarter(half, 0)), join(quarter(0, half), quarter(half, half)));
-                coarse[EXTENT.coarse_index(j, bx, by) as usize] = b;
+/// The ways' bound off a tile's lines, by square, into `ways`.
+pub fn ways_of(separation: &Separation, ways: &mut [[i16; 2]]) {
+    separation.bound(f64::from(TILE_CELLS), WAYS_ACROSS, ways);
+}
+
+/// The levels of the bound over a tile's cells and ways (pxl-portable
+/// `ground::join`), each over the one before, into `levels`.
+pub fn levels(heights: &[i16], ways: &[[i16; 2]], levels: &mut [i32]) {
+    xpute_kit::ensure!(heights.len() == HEIGHT_LANE && ways.len() == WAYS_LANE && levels.len() == LEVEL_LANE, ENOTRECOVERABLE);
+    for j in 1..=BOUND_LEVELS {
+        let (made, rest) = levels.split_at_mut(level_at(j) as usize);
+        let side = TILE_CELLS >> j;
+        for y in 0..side {
+            for x in 0..side {
+                rest[(y * side + x) as usize] = pxl_portable::ground::join(&Made { heights, ways, levels: made }, j, [x, y]);
             }
         }
     }
 }
 
-/// A tile: one lane a fact the client cannot make. What it draws by rule —
-/// a slab, a bore, a pier — is not here.
-#[derive(Clone, Debug, PartialEq)]
-pub struct TerrainTile {
-    pub ground: Ground,           // a class a cell: the source rasterized
-    pub separation: Separation,   // ways off the ground: source lines, tops solved offline
-    pub ele: Cow<'static, [i16]>, // padded height samples, in leaf cells: from the raster
-    pub index: Index,             // bounds over the tile and all under it: no one tile holds them
-}
-
 // Made on first use: a constant array of zeros would ship in the module's data.
-static VOID_ELE: std::sync::LazyLock<Vec<i16>> = std::sync::LazyLock::new(|| vec![0; ELE_LANE]);
+static VOID_HEIGHTS: std::sync::LazyLock<Vec<i16>> = std::sync::LazyLock::new(|| vec![0; HEIGHT_LANE]);
+static VOID_LEVELS: std::sync::LazyLock<Vec<i32>> = std::sync::LazyLock::new(|| vec![0; LEVEL_LANE]);
+static VOID_WAYS: std::sync::LazyLock<Vec<[i16; 2]>> = std::sync::LazyLock::new(|| vec![[i16::MAX, i16::MIN]; WAYS_LANE]);
 static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> = std::sync::LazyLock::new(|| vec![crate::block::cube::sentinel::void; GROUND_LANE]);
 
 impl TerrainTile {
@@ -134,19 +115,31 @@ impl TerrainTile {
                 cells: Cow::Borrowed(&VOID_CELLS[..]),
             },
             separation: Separation::default(),
-            ele: Cow::Borrowed(&VOID_ELE[..]),
-            index: Index::new(vec![[0, 0]; EXTENT_LANE], Occupancy::ZERO),
+            heights: Cow::Borrowed(&VOID_HEIGHTS[..]),
+            occupancy: Occupancy::ZERO,
+            ways: Cow::Borrowed(&VOID_WAYS[..]),
+            levels: Cow::Borrowed(&VOID_LEVELS[..]),
         }
     }
 
-    /// A leaf, its index taken from its own surface and separation.
-    pub fn leaf(ele: Vec<i16>, ground: Ground, separation: Separation) -> TerrainTile {
-        let extent = extent_of(&ele, &ground.cells, &separation);
+    /// A leaf: its cells' looks and heights, and its separation.
+    pub fn leaf(heights: Vec<i16>, ground: Ground, separation: Separation) -> TerrainTile {
+        TerrainTile::of(heights, ground, separation, Occupancy::LEAF)
+    }
+
+    /// A tile of these lanes, its ways' bound and its levels made from them.
+    pub fn of(heights: Vec<i16>, ground: Ground, separation: Separation, occupancy: Occupancy) -> TerrainTile {
+        let mut ways = vec![[0; 2]; WAYS_LANE];
+        ways_of(&separation, &mut ways);
+        let mut made = vec![0; LEVEL_LANE];
+        levels(&heights, &ways, &mut made);
         TerrainTile {
             ground,
             separation,
-            ele: ele.into(),
-            index: Index::new(extent, Occupancy::LEAF),
+            heights: heights.into(),
+            occupancy,
+            ways: ways.into(),
+            levels: made.into(),
         }
     }
 }
@@ -155,10 +148,7 @@ impl TerrainTile {
 pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
-        b.i16_array(Some(&tile.ele))
-            .u8_array(Some(&tile.ground.cells))
-            .i16_array(Some(tile.index.extent.as_flattened()))
-            .u8(Some(tile.index.occupancy.bits()));
+        b.i16_array(Some(&tile.heights)).u8_array(Some(&tile.ground.cells)).u8(Some(tile.occupancy.bits()));
         separation::write_branch(&tile.separation, b);
     }));
     encoder().encode(&t, TreeEncoderOptions::default())
@@ -167,16 +157,15 @@ pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
 /// The record's lanes in `.fixed.terrain` a tile is decoded into.
 pub struct TileRoom {
     pub ground: &'static mut [GroundId],
-    pub ele: &'static mut [i16],
-    pub extent: &'static mut [[i16; 2]],
-    pub coarse: &'static mut [[i16; 2]],
+    pub heights: &'static mut [i16],
+    pub ways: &'static mut [[i16; 2]],
+    pub levels: &'static mut [i32],
     pub separation: separation::Room,
 }
 
 struct Lanes<'a> {
-    ele: &'a [i16],
+    heights: &'a [i16],
     ground: &'a [GroundId],
-    extent: &'a [[i16; 2]],
     occupancy: Occupancy,
     separation: separation::Lanes<'a>,
 }
@@ -184,81 +173,64 @@ struct Lanes<'a> {
 /// Refused unless every lane is a tile's length.
 fn read_tile(pkt: &[u8]) -> Result<Lanes<'_>, MarshalError> {
     let root = TreeReader::new(pkt)?.read_branch()?;
-    let ele = root.at(0)?.get_array::<i16>()?;
+    let heights = root.at(0)?.get_array::<i16>()?;
     let ground = root.at(1)?.get_array::<GroundId>()?;
-    let extent = pairs(root.at(2)?.get_array::<i16>()?)?;
-    let occupancy = occupancy_of(root.at(3)?.get_number()?)?;
-    let separation = separation::read_branch(root.at_branch(4)?)?;
-    if ele.len() != ELE_LANE || ground.len() != GROUND_LANE || extent.len() != EXTENT_LANE {
+    let occupancy = occupancy_of(root.at(2)?.get_number()?)?;
+    let separation = separation::read_branch(root.at_branch(3)?)?;
+    if heights.len() != HEIGHT_LANE || ground.len() != GROUND_LANE {
         return Err(malformed());
     }
     Ok(Lanes {
-        ele,
+        heights,
         ground,
-        extent,
         occupancy,
         separation,
     })
 }
 
-/// Decode straight into the tile's resident room; the index's coarse are
-/// built there before the tile is returned.
+/// Decode straight into the tile's resident room, its ways' bound and its
+/// levels made there from its lines and heights.
 pub fn decode_into(pkt: &[u8], room: TileRoom) -> Result<TerrainTile, MarshalError> {
     let Lanes {
-        ele,
+        heights,
         ground,
-        extent,
         occupancy,
         separation,
     } = read_tile(pkt)?;
-    if room.ele.len() != ELE_LANE || room.ground.len() != GROUND_LANE || room.extent.len() != EXTENT_LANE {
+    if room.heights.len() != HEIGHT_LANE || room.ways.len() != WAYS_LANE || room.levels.len() != LEVEL_LANE || room.ground.len() != GROUND_LANE {
         return Err(malformed());
     }
-    room.ele.copy_from_slice(ele);
+    room.heights.copy_from_slice(heights);
     room.ground.copy_from_slice(ground);
-    room.extent.copy_from_slice(extent);
-    coarse_of(room.extent, room.coarse);
     let TileRoom {
         ground,
-        ele,
-        extent,
-        coarse,
+        heights,
+        ways,
+        levels: made,
         separation: separation_room,
     } = room;
+    let separation = separation.into_room(separation_room);
+    ways_of(&separation, ways);
+    levels(heights, ways, made);
     Ok(TerrainTile {
         ground: Ground { cells: (&*ground).into() },
-        separation: separation.into_room(separation_room),
-        ele: (&*ele).into(),
-        index: Index {
-            extent: (&*extent).into(),
-            coarse: (&*coarse).into(),
-            occupancy,
-        },
+        separation,
+        heights: (&*heights).into(),
+        occupancy,
+        ways: (&*ways).into(),
+        levels: (&*made).into(),
     })
 }
 
 // Copied out, for a tile that outlives its packet.
 pub fn decode(pkt: &[u8]) -> Result<TerrainTile, MarshalError> {
     let Lanes {
-        ele,
+        heights,
         ground,
-        extent,
         occupancy,
         separation,
     } = read_tile(pkt)?;
-    Ok(TerrainTile {
-        ele: ele.to_vec().into(),
-        ground: Ground { cells: ground.to_vec().into() },
-        separation: separation.to_separation(),
-        index: Index::new(extent.to_vec(), occupancy),
-    })
-}
-
-fn pairs(flat: &[i16]) -> Result<&[[i16; 2]], MarshalError> {
-    match flat.as_chunks::<2>() {
-        (pairs, []) => Ok(pairs),
-        _ => Err(malformed()),
-    }
+    Ok(TerrainTile::of(heights.to_vec(), Ground { cells: ground.to_vec().into() }, separation.to_separation(), occupancy))
 }
 
 #[cfg(test)]

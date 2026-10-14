@@ -64,7 +64,11 @@ fn fit<T: Clone>(v: &mut Vec<T>, n: usize, fill: T) -> Result<(), Refused> {
 #[derive(Clone, Copy)]
 pub struct TileView<'a> {
     pub cells: &'a [GroundId],
-    pub ele: &'a [i16],
+    pub heights: &'a [i16],
+    /// Its ways' bound by square and its bound's levels (pxl-spec
+    /// bake/tile/terrain.rs `levels`), made from its lines and cells.
+    pub ways: &'a [[i16; 2]],
+    pub levels: &'a [i32],
     pub separation: &'a crate::bake::separation::Separation,
 }
 
@@ -84,7 +88,17 @@ impl pxl_portable::ground::Tile for TileView<'_> {
         u32::from(self.cells[GROUND.cell_index(x, y) as usize])
     }
     fn height(&self, x: u32, y: u32) -> i32 {
-        pxl_portable::ground::height(|i| i32::from(self.ele[i]), [x, y])
+        i32::from(self.heights[GROUND.cell_index(x, y) as usize])
+    }
+}
+
+/// The CPU draws the ways: a cell reaches its height and its square's ways.
+impl pxl_portable::ground::Bound for TileView<'_> {
+    fn cell(&self, x: u32, y: u32) -> [i32; 2] {
+        crate::bake::tile::terrain::cell_bound(self.heights, self.ways, x, y)
+    }
+    fn level(&self, i: u32) -> i32 {
+        self.levels[i as usize]
     }
 }
 

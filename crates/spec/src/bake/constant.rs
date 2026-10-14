@@ -5,19 +5,15 @@ use crate::space::coord::zoom::{Zoom, UNIT_ZOOM};
 use crate::space::layer::lattice::GROUND;
 
 // Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL
-// resample and the client's bicubic, and stored as i16 ground cells.
+// resample and the bake's bicubic, and stored as i16 ground cells.
 const _: () = assert!(EXTENT[2] == i16::BITS && GROUND.cell() == UNIT_ZOOM, "a height in i16 ground cells is the world's height");
-/// A tile's elevation samples and their padding, one table with the GPU's
-/// (pxl-portable).
+/// A leaf's elevation samples and their padding, which the bake draws its
+/// cells' heights off (pxl-portable).
 pub use pxl_portable::ground::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 
-/// The index lane's side and its cells' zoom, one table with the GPU's
-/// (pxl-portable).
-pub use pxl_portable::ground::{EXTENT_CELL, EXTENT_SPAN};
-
-/// A GPU's grid of a held tile, its cells' heights then their bound's
+/// A held tile's frame, its looks, its cells' heights, then their bound's
 /// levels (pxl-portable).
-pub use pxl_portable::ground::{BOUND_LEVELS, GRID_WORDS};
+pub use pxl_portable::ground::{level_at, BOUND_LEVELS, GROUND_WORDS, HEIGHT_WORDS, LEVEL_WORDS, LOOK_WORDS};
 
 pub use super::object::OBJECT_TIERS;
 

@@ -33,15 +33,15 @@ fn cpu(zoom: u32, c: [i32; 3]) -> u32 {
 /// and heights rolling over hills and under the sea, rough where they meet.
 struct Made {
     looks: Vec<u8>,
-    ele: Vec<i16>,
+    heights: Vec<i16>,
 }
 
 impl Tile for Made {
     fn look(&self, x: u32, y: u32) -> u32 {
         u32::from(self.looks[(y * TILE_CELLS + x) as usize])
     }
-    fn ele(&self, i: usize) -> i32 {
-        i32::from(self.ele[i])
+    fn height(&self, x: u32, y: u32) -> i32 {
+        i32::from(self.heights[(y * TILE_CELLS + x) as usize])
     }
 }
 
@@ -61,13 +61,17 @@ fn made() -> Made {
         })
         .collect();
     let side = ELE_PADDED_SPAN as usize;
-    let ele = (0..side * side)
+    let ele: Vec<i16> = (0..side * side)
         .map(|i| {
             let (x, y) = ((i % side) as f64, (i / side) as f64);
             (300.0 * (x / 5.0).sin() * (y / 7.0).cos() + 40.0 * (x + y) / side as f64 + (next() % 9) as f64 - 4.0) as i16
         })
         .collect();
-    Made { looks, ele }
+    // Its cells' heights as the bake draws them.
+    let heights = (0..TILE_CELLS * TILE_CELLS)
+        .map(|i| ground::height(|k| i32::from(ele[k]), [i % TILE_CELLS, i / TILE_CELLS]) as i16)
+        .collect();
+    Made { looks, heights }
 }
 
 /// pxl-portable's answer for a leaf cell, in `ground_cs`'s bits.
@@ -209,7 +213,7 @@ fn main() {
     // The ground: 4 looks a word and 2 heights a word, low first.
     let tile = made();
     let looks: Vec<u32> = tile.looks.chunks(4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
-    let mut halves = tile.ele.clone();
+    let mut halves = tile.heights.clone();
     halves.resize(halves.len().next_multiple_of(2), 0);
     let heights: Vec<u32> = halves.chunks(2).map(|h| u32::from(h[0] as u16) | u32::from(h[1] as u16) << 16).collect();
     let (looks, heights) = (words_of(&looks), words_of(&heights));

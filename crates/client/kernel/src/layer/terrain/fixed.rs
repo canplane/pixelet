@@ -2,16 +2,14 @@
 
 //! `.fixed.terrain`: the room every resident terrain tile lies in, and where
 //! a record's bytes are. A plane is one lane of every frame end to end;
-//! planes in order: ground, the separation's eight, elevation, index, coarser
-//! index cells. The elevation is its own plane because its 2,592-byte record
-//! is 32 past a cache line; held with the ground it would misalign every
-//! second tile's lanes.
+//! planes in order: ground, the separation's eight, heights, the ways'
+//! bound, the bound's levels.
 
-use pxl_spec::bake::constant::ELE_PADDED_SPAN;
+use pxl_spec::bake::constant::LEVEL_WORDS;
 use pxl_spec::bake::separation::{MAX_BOXES, MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::GroundId;
-use pxl_spec::bake::tile::terrain::COARSE_LANE;
-use pxl_spec::space::layer::lattice::{EXTENT, TILE_CELLS};
+use pxl_spec::bake::tile::terrain::WAYS_LANE;
+use pxl_spec::space::layer::lattice::TILE_CELLS;
 
 use crate::layer::residency::Residency;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -54,23 +52,24 @@ pub const SEPARATION_BYTES: u32 = FRAMES * {
     sum
 };
 
-/// Inner samples plus the two-cell skirt bicubic reads at the edges.
-pub const ELE_LANE_BYTES: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN * 2;
+/// One tile's heights: an i16 a cell, as baked.
+pub const HEIGHT_LANE_BYTES: u32 = TILE_CELLS * TILE_CELLS * 2;
 
-pub const ELE_PLANE_BYTES: u32 = FRAMES * ELE_LANE_BYTES;
+pub const HEIGHT_PLANE_BYTES: u32 = FRAMES * HEIGHT_LANE_BYTES;
 
-/// A cell's extent, as the index lane and its coarser cells both hold it.
-const EXTENT_BYTES: u32 = core::mem::size_of::<[i16; 2]>() as u32;
+/// One tile's ways' bound by square, made from its lines where it lands
+/// (pxl-spec bake/tile/terrain.rs `ways_of`).
+pub const WAYS_LANE_BYTES: u32 = WAYS_LANE as u32 * 4;
 
-pub const EXTENT_LANE_BYTES: u32 = EXTENT.tile_cells() * EXTENT.tile_cells() * EXTENT_BYTES;
+pub const WAYS_PLANE_BYTES: u32 = FRAMES * WAYS_LANE_BYTES;
 
-pub const EXTENT_PLANE_BYTES: u32 = FRAMES * EXTENT_LANE_BYTES;
+/// One tile's bound's levels, made over its heights where it lands
+/// (pxl-portable `ground::join`): a word an entry.
+pub const LEVEL_LANE_BYTES: u32 = LEVEL_WORDS * 4;
 
-pub const COARSE_LANE_BYTES: u32 = COARSE_LANE as u32 * EXTENT_BYTES;
+pub const LEVEL_PLANE_BYTES: u32 = FRAMES * LEVEL_LANE_BYTES;
 
-pub const COARSE_PLANE_BYTES: u32 = FRAMES * COARSE_LANE_BYTES;
-
-pub const TERRAIN_BYTES: u32 = GROUND_BYTES + SEPARATION_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES + COARSE_PLANE_BYTES;
+pub const TERRAIN_BYTES: u32 = GROUND_BYTES + SEPARATION_BYTES + HEIGHT_PLANE_BYTES + WAYS_PLANE_BYTES + LEVEL_PLANE_BYTES;
 
 const _: () = assert!(
     GROUND_LANE_BYTES.is_multiple_of(64),
@@ -91,14 +90,14 @@ pub const fn separation_off(record: u32, lane: usize) -> u32 {
     plane + record * SEPARATION_LANE_BYTES[lane]
 }
 
-pub const fn ele_off(record: u32) -> u32 {
-    GROUND_BYTES + SEPARATION_BYTES + record * ELE_LANE_BYTES
+pub const fn height_off(record: u32) -> u32 {
+    GROUND_BYTES + SEPARATION_BYTES + record * HEIGHT_LANE_BYTES
 }
 
-pub const fn extent_off(record: u32) -> u32 {
-    GROUND_BYTES + SEPARATION_BYTES + ELE_PLANE_BYTES + record * EXTENT_LANE_BYTES
+pub const fn ways_off(record: u32) -> u32 {
+    GROUND_BYTES + SEPARATION_BYTES + HEIGHT_PLANE_BYTES + record * WAYS_LANE_BYTES
 }
 
-pub const fn coarse_off(record: u32) -> u32 {
-    GROUND_BYTES + SEPARATION_BYTES + ELE_PLANE_BYTES + EXTENT_PLANE_BYTES + record * COARSE_LANE_BYTES
+pub const fn level_off(record: u32) -> u32 {
+    GROUND_BYTES + SEPARATION_BYTES + HEIGHT_PLANE_BYTES + WAYS_PLANE_BYTES + record * LEVEL_LANE_BYTES
 }

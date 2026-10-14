@@ -6,7 +6,6 @@
 //! alike. What places it in the world, a position's cell or a tile's
 //! neighbors, is pxl-spec's (space/layer/lattice.rs `Cells`).
 
-use crate::ground::EXTENT_CELL;
 use crate::{count, Zoom, CHUNK_STEPS, FINEST_ZOOM, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
 
 /// A layer's lattice: its cell is its tile's side over its own count of
@@ -116,30 +115,6 @@ impl Lattice {
         let n = self.tile_cells();
         [index % n, index / n]
     }
-
-    // A tile's coarser cells, j zooms up for j from 1, finest first, each zoom row by row.
-
-    pub const fn coarse_cells(self) -> u32 {
-        self.first_coarse(self.tile_cell_shamt() + 1)
-    }
-
-    pub const fn coarse_index(self, j: u32, tx: u32, ty: u32) -> u32 {
-        if j == 0 || j > self.tile_cell_shamt() {
-            panic!()
-        }
-        self.first_coarse(j) + (ty >> j) * (self.tile_cells() >> j) + (tx >> j)
-    }
-
-    const fn first_coarse(self, j: u32) -> u32 {
-        let mut first = 0;
-        let mut k = 1;
-        while k < j {
-            let side = self.tile_cells() >> k;
-            first += side * side;
-            k += 1;
-        }
-        first
-    }
 }
 
 /// The ground's tile is 512 cells a side, its one knob: every length the
@@ -147,9 +122,6 @@ impl Lattice {
 /// records a zoom finer: their surfaces' mean and their fill (pxl-render
 /// mesh/chunk.rs).
 pub const GROUND: Lattice = Lattice::new(LEAF_CELL).scaled(1);
-
-/// The index lane's lattice (pxl-spec bake/tile/terrain.rs `Index`).
-pub const EXTENT: Lattice = Lattice::new(EXTENT_CELL);
 
 /// Cells a ground tile is on a side, at every zoom.
 pub const TILE_CELLS: u32 = GROUND.tile_cells();

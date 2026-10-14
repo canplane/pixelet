@@ -7,7 +7,7 @@
 
 use crate::layer::residency::Residency;
 use pxl_spec::bake::separation::{self, MAX_BOXES, MAX_LINES, MAX_POINTS};
-use pxl_spec::bake::tile::terrain::{decode_into, GroundId, TerrainTile, TileRoom, COARSE_LANE, ELE_LANE, EXTENT_LANE, GROUND_LANE};
+use pxl_spec::bake::tile::terrain::{decode_into, GroundId, TerrainTile, TileRoom, GROUND_LANE, HEIGHT_LANE, LEVEL_LANE, WAYS_LANE};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use xpute_guest::mem::base::ptr_at;
 use xpute_kit::status::bug::OrBug;
@@ -17,7 +17,7 @@ use crate::io::failure::Failure;
 
 use crate::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::layer::terrain::fixed::RANGE;
-use crate::layer::terrain::fixed::{coarse_off, ele_off, extent_off, ground_off, separation_off, COARSE_LANE_BYTES, ELE_LANE_BYTES, EXTENT_LANE_BYTES, GROUND_LANE_BYTES, SEPARATION_LANE_BYTES};
+use crate::layer::terrain::fixed::{ground_off, height_off, level_off, separation_off, ways_off, GROUND_LANE_BYTES, HEIGHT_LANE_BYTES, LEVEL_LANE_BYTES, SEPARATION_LANE_BYTES, WAYS_LANE_BYTES};
 use crate::layer::Base;
 use pxl_spec::bake::tile::Occupancy;
 use xpute_guest::clock::now;
@@ -30,7 +30,7 @@ impl Base for TerrainTile {
     const LATTICE: Lattice = GROUND;
 
     fn occupancy(&self) -> Occupancy {
-        self.index.occupancy
+        self.occupancy
     }
     // The leaves carry the terrain topic; the zooms above are read through the
     // chunks that draw them.
@@ -60,11 +60,11 @@ impl Base for TerrainTile {
 unsafe fn room_of(record: u32) -> TileRoom {
     // Inside the range by the layout, so past its end is a bug.
     let lane = |off, bytes| RANGE.get().at(off, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
-    let (ground, ele, extent, coarse) = (
+    let (ground, heights, ways, levels) = (
         lane(ground_off(record), GROUND_LANE_BYTES),
-        lane(ele_off(record), ELE_LANE_BYTES),
-        lane(extent_off(record), EXTENT_LANE_BYTES),
-        lane(coarse_off(record), COARSE_LANE_BYTES),
+        lane(height_off(record), HEIGHT_LANE_BYTES),
+        lane(ways_off(record), WAYS_LANE_BYTES),
+        lane(level_off(record), LEVEL_LANE_BYTES),
     );
     let separation_lane = |k: usize| lane(separation_off(record, k), SEPARATION_LANE_BYTES[k]);
     // SAFETY: each lane is kernel memory at its own size, never freed, and the
@@ -72,9 +72,9 @@ unsafe fn room_of(record: u32) -> TileRoom {
     unsafe {
         TileRoom {
             ground: core::slice::from_raw_parts_mut(ptr_at::<GroundId>(ground), GROUND_LANE),
-            ele: core::slice::from_raw_parts_mut(ptr_at::<i16>(ele), ELE_LANE),
-            extent: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(extent), EXTENT_LANE),
-            coarse: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(coarse), COARSE_LANE),
+            heights: core::slice::from_raw_parts_mut(ptr_at::<i16>(heights), HEIGHT_LANE),
+            ways: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(ways), WAYS_LANE),
+            levels: core::slice::from_raw_parts_mut(ptr_at::<i32>(levels), LEVEL_LANE),
             separation: separation::Room {
                 starts: core::slice::from_raw_parts_mut(ptr_at::<u32>(separation_lane(0)), MAX_LINES + 1),
                 points: core::slice::from_raw_parts_mut(ptr_at::<[i16; 2]>(separation_lane(1)), MAX_POINTS),

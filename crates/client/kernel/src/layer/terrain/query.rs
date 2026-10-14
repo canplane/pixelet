@@ -15,7 +15,7 @@ use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::{base_of, count, units, Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::Cells;
-use pxl_spec::space::layer::lattice::{EXTENT, GROUND};
+use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, Tile};
 
 use crate::io::source;
@@ -48,7 +48,9 @@ impl<'a> Source<'a> {
 pub fn tile_view(tile: &TerrainTile) -> TileView<'_> {
     TileView {
         cells: &tile.ground.cells,
-        ele: &tile.ele,
+        heights: &tile.heights,
+        ways: &tile.ways,
+        levels: &tile.levels,
         separation: &tile.separation,
     }
 }
@@ -91,13 +93,12 @@ impl Residency<TerrainTile> {
     }
 
     /// The lowest and highest the ground holds over the column `node`'s own
-    /// cells, a tunnel's floor and a deck's top among them, in leaf cells: the
-    /// index lane of the tile `line` draws it from, one look-up whatever the
-    /// node's size (`relief`). A coarser tile standing in bounds it as surely,
-    /// its lane its children's carried up (`pxl-spec bake/fold.rs`
-    /// `fold_index`), and names the tile lacked. None for a column a shard or
-    /// finer past the service area, where no tile is; where none is held, the
-    /// lack, never nothing.
+    /// cells, in leaf cells: the bound over the cells of the tile `line`
+    /// draws it from, one look-up
+    /// whatever the node's size (`relief`). A coarser tile standing in draws
+    /// its own cells, which its bound holds, and names the tile lacked. None
+    /// for a column a shard or finer past the service area, where no tile
+    /// is; where none is held, the lack, never nothing.
     pub fn relief(&self, line: &Line, node: Node<2>) -> Answer<Option<[i32; 2]>> {
         if node.0 >= SHARD_ZOOM && past(node) {
             return Answer::Exact(None);
@@ -139,10 +140,10 @@ fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Tile {
     tile_at(read, ancestor_of([at[0], at[1]], zoom - read))
 }
 
-/// The index lane's extent over a node within the tile `d` answers, widened
-/// by what is drawn past it (`DRAWN_PAST`).
+/// The bound over the cells of the tile `d` answers under a node
+/// (pxl-portable `ground::bounded`).
 fn relief(d: &Drawn, (zoom, at): Node<2>) -> [i32; 2] {
-    pxl_portable::ground::relief(|i| d.body.index.lane(i), d.from.zoom, (zoom, at.map(|v| v as i32)))
+    pxl_portable::ground::bounded(&tile_view(d.body), d.from.zoom, (zoom, at.map(|v| v as i32)))
 }
 
 /// A node's center, in units.
@@ -193,7 +194,7 @@ impl Query for Residency<TerrainTile> {
         }
     }
 
-    /// From the index lane of the tile it is drawn from: the ground that can
+    /// From the bound of the tile it is drawn from: the ground that can
     /// show, down to a cell at `cell` under the lowest face about the node,
     /// its own or beside, under which every column is solid; so a step down to
     /// a column beside is walled, and a fold's cell shrunk by its fill stands
@@ -214,8 +215,8 @@ impl Query for Residency<TerrainTile> {
         let mut lack = (!d.exact).then_some(d.tile);
         let mut edge = false;
         let mut last: Option<(Tile, Option<Drawn>)> = None;
-        // The apron is a column of the chunk's cells; the index lane says no finer.
-        for beside in ring(EXTENT.cell_zoom(line.tile.zoom).min(cell), node) {
+        // The apron is a column of the chunk's cells, or the tile's where coarser.
+        for beside in ring(GROUND.cell_zoom(line.tile.zoom).min(cell), node) {
             if past(beside) {
                 edge = true;
                 continue;

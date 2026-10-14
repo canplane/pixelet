@@ -9,7 +9,7 @@
 
 use std::borrow::Cow;
 
-use pxl_spec::bake::tile::terrain::{Ground, TerrainTile, ELE_LANE};
+use pxl_spec::bake::tile::terrain::{Ground, TerrainTile, HEIGHT_LANE};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::block::cube::{ground, sentinel};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
@@ -27,13 +27,13 @@ pub struct Absence {
 /// A tile of one look at sea level: no lines, and no child under it.
 fn uniform(look: u8) -> TerrainTile {
     let mut t = TerrainTile::leaf(
-        vec![0; ELE_LANE],
+        vec![0; HEIGHT_LANE],
         Ground {
             cells: vec![look; (TILE_CELLS * TILE_CELLS) as usize].into(),
         },
         Default::default(),
     );
-    t.index.occupancy = Occupancy::ZERO;
+    t.occupancy = Occupancy::ZERO;
     t
 }
 

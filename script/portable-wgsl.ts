@@ -3,8 +3,8 @@
 // source the CPU compiles too (crates/portable, over xpute-kit's
 // math/rng.rs), through rust-gpu inside a Linux container, each a module of
 // its own checked in beside the renderer's shaders — the cast's
-// (crates/client/render/src/frame/shader/cast.gen.wgsl) and the ground's
-// grid's, its cells (heights.gen.wgsl) and their bound (bound.gen.wgsl). An
+// (crates/client/render/src/frame/shader/cast.gen.wgsl) and the bound over
+// a held tile's cells (bound.gen.wgsl). An
 // everyday build reads that file and needs neither rust-gpu nor its nightly
 // nor the container. The harness's entries are built too, beside them in
 // gpu-query's target, for gpu-query/runner; they are not checked in.
@@ -20,7 +20,7 @@ import { dirname, fromFileUrl, join } from "@std/path";
 const root = dirname(dirname(fromFileUrl(import.meta.url)));
 const shaders = join(root, "crates/client/render/src/frame/shader");
 // Each entry and the file it is checked in as.
-const ENTRIES = [["cast_cs", "cast.gen.wgsl"], ["heights_cs", "heights.gen.wgsl"], ["bound_cs", "bound.gen.wgsl"]];
+const ENTRIES = [["cast_cs", "cast.gen.wgsl"], ["bound_cs", "bound.gen.wgsl"]];
 // rust-gpu's own pin (rustc_codegen_spirv 0.10.0-alpha.1 build.rs), as gpu-query/rust-toolchain.toml holds it.
 const NIGHTLY = "nightly-2026-04-11";
 const IMAGE = "rust:1-bookworm";

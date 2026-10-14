@@ -12,7 +12,7 @@ use crate::space::hierarchy::tree::{ancestor_of, child_of, first_descendant_of, 
 /// A lattice's integer core — its zooms, its cells' indices, the ground's
 /// and the index lane's — is pxl-portable's, which a GPU reads tiles by
 /// too; placing it in the world is here (`Cells`).
-pub use pxl_portable::lattice::{Lattice, EXTENT, GROUND, TILE_CELLS};
+pub use pxl_portable::lattice::{Lattice, GROUND, TILE_CELLS};
 
 /// How far from an observer's foot a demand at `zoom` can lie: where the
 /// grid's cell a zoom coarser begins. Bounds the run along the ground too.

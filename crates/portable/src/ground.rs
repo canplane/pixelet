@@ -19,7 +19,6 @@ use crate::area::{earth, past, tile_at, walled, Area};
 use crate::cast::{In, Kind};
 use crate::caves::Cave;
 use crate::cube::{ground, sentinel, Ground};
-use crate::lattice::EXTENT;
 use crate::lattice::GROUND;
 pub use crate::lattice::TILE_CELLS;
 use crate::{Zoom, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
@@ -49,48 +48,6 @@ pub const fn ele_index(x: u32, y: u32) -> usize {
     (y * ELE_PADDED_SPAN + x) as usize
 }
 
-/// Cells on a tile's side in its index lane (pxl-spec bake/tile/terrain.rs
-/// `Index`): one per elevation sample spacing, at 4 KiB a tile.
-pub const EXTENT_SPAN: u32 = TILE_ELE_SPAN;
-const _: () = assert!(EXTENT_SPAN.is_power_of_two(), "an index cell is a block of the lattice, a power of two of the unit");
-
-/// The index lane's cells' zoom on a leaf tile.
-pub const EXTENT_CELL: Zoom = LEAF_ZOOM + EXTENT_SPAN.trailing_zeros() as Zoom;
-
-/// Cells in a tile's index lane: its `EXTENT` cells, each the lowest and the
-/// highest the ground draws over it; its coarser levels follow them
-/// (`EXTENT.coarse_index`).
-pub const EXTENT_LANE: u32 = EXTENT.tile_cells() * EXTENT.tile_cells();
-
-/// How far past the lane's facts the client draws a cell, down and up: the
-/// way's own cell under a bore's or a cutting's surface. Every read of the
-/// lane widens by it.
-pub const DRAWN_PAST: [i32; 2] = [-1, 0];
-
-/// What is drawn over the cell of `across` × `across` index cells at
-/// `(x, y)` of a tile's index lane, widened by `DRAWN_PAST`: one read at any
-/// size, a coarser level holding the join of the cells under it. `lane`
-/// reads the lane's cell `i`, its coarser levels from `EXTENT_LANE`; `across`
-/// a power of two and `(x, y)` a multiple of it.
-pub fn over(lane: impl Fn(u32) -> [i32; 2], [x, y]: [u32; 2], across: u32) -> [i32; 2] {
-    let j = across.trailing_zeros();
-    let [lo, hi] = lane(if j == 0 { EXTENT.cell_index(x, y) } else { EXTENT_LANE + EXTENT.coarse_index(j, x, y) });
-    [lo + DRAWN_PAST[0], hi + DRAWN_PAST[1]]
-}
-
-/// The lowest and highest the ground draws over the column of the node
-/// `(zoom, c)`, from the index lane `lane` of the tile at `from` it lies in.
-pub fn relief(lane: impl Fn(u32) -> [i32; 2], from: Zoom, (zoom, c): (Zoom, [i32; 2])) -> [i32; 2] {
-    let index = EXTENT.cell_zoom(from);
-    let (first, across) = if zoom < index {
-        ([c[0] << (index - zoom), c[1] << (index - zoom)], 1 << (index - zoom))
-    } else {
-        ([c[0] >> (zoom - index), c[1] >> (zoom - index)], 1)
-    };
-    let n = EXTENT.tile_cells() as i32;
-    over(lane, [(first[0] & (n - 1)) as u32, (first[1] & (n - 1)) as u32], across)
-}
-
 /// A layer of ground cells under a face, in leaf cells, before the stone.
 const FILLER_DEPTH: i32 = 3;
 /// Sandstone under a sand or beach face's filler, in leaf cells.
@@ -99,13 +56,23 @@ const SANDSTONE_DEPTH: i32 = 2;
 /// whichever is lower, in leaf cells (pxl-spec block/limit.rs `floor`).
 pub const BEDROCK_DEPTH: i32 = 64;
 
-/// One tile as held, its cells read in place: a slice on the CPU, a frame
-/// of a storage buffer on the GPU.
+/// One tile as held, its cells read in place: a resident record on the
+/// CPU, a frame of a storage buffer on the GPU.
 pub trait Tile {
     /// The look of the tile's cell `(x, y)`, `0..TILE_CELLS` each.
     fn look(&self, x: u32, y: u32) -> u32;
-    /// The height of the tile's cell `(x, y)`, in leaf cells (`height`).
+    /// The height of the tile's cell `(x, y)`, in leaf cells, as baked.
     fn height(&self, x: u32, y: u32) -> i32;
+}
+
+/// A tile's cells with its bound's levels made over them.
+pub trait Bound {
+    /// The lowest and highest the tile's cell `(x, y)` reaches, in leaf
+    /// cells: its height, and what its source draws over and under it
+    /// there.
+    fn cell(&self, x: u32, y: u32) -> [i32; 2];
+    /// Word `i` of the tile's bound's levels (`level_at`).
+    fn level(&self, i: u32) -> i32;
 }
 
 /// A cell `v` of a tile `n` × `n` times finer than `tile`, counted from
@@ -122,36 +89,41 @@ pub fn read(tile: &impl Tile, v: [i32; 2], n: u32) -> (u32, i32) {
     (tile.look(x, y), tile.height(x, y))
 }
 
-/// The height the surface draws at the center of a tile's cell `(x, y)`,
-/// in leaf cells, off its padded elevation samples `ele` (`ele_index`): the
-/// one producer of a cell's height, which the CPU computes where a cell is
-/// read and a GPU once a held tile, into its grid.
+/// The height the surface draws at the center of a leaf's cell `(x, y)`, in
+/// leaf cells, off its padded elevation samples `ele` (`ele_index`): the one
+/// producer of a cell's height, which the bake runs once a cell (pxl-spec
+/// bake/surface.rs `heights`); every coarser zoom's is folded from it.
 pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [u32; 2]) -> i32 {
     bicubic(ele, x as f32 + 0.5, y as f32 + 0.5)
 }
 
-/// The levels of a held tile's bound over its cells' heights, which follow
-/// its cells in a GPU's grid: each entry of level `j` the lowest and highest
-/// of the 2^j × 2^j cells under it, the join of four of level j − 1's
-/// (`join`), up to the tile whole. A bound read off it is the grid's own
-/// reads, so a cell's height, a fold's mean of them and a coarser tile's
-/// cell standing in all lie in it.
+/// The levels of a held tile's bound over its cells' heights: each entry of
+/// level `j` the lowest and highest of the 2^j × 2^j cells under it, the
+/// join of four of level j − 1's (`join`), up to the tile whole; made
+/// where the tile is held, on the CPU and on a GPU alike, off its cells. A
+/// bound read off it is the cells' own, and a coarser zoom's cell, a mean
+/// of the cells under it (pxl-spec bake/fold.rs), lies in it too.
 pub const BOUND_LEVELS: u32 = TILE_CELLS.trailing_zeros();
 
-/// Where level `j` of a tile's grid begins, in words: level 0 its cells,
-/// then each level's entries row by row, level `i` (TILE_CELLS / 2^i)² of
-/// them, so the levels before `j` are (4·n − 4·n / 4^j) / 3, n the cells.
-pub const fn bound_at(j: u32) -> u32 {
-    let n = 4 * TILE_CELLS * TILE_CELLS;
-    (n - (n >> (2 * j))) / 3
+/// Where level `j`, from 1, begins among the levels, in words: each level's
+/// entries row by row, level `i` (TILE_CELLS / 2^i)² of them, so the levels
+/// before `j` are (n − n / 4^(j−1)) / 3, n the cells.
+pub const fn level_at(j: u32) -> u32 {
+    let n = TILE_CELLS * TILE_CELLS;
+    (n - (n >> (2 * (j - 1)))) / 3
 }
 
-/// Words a tile's grid holds: its cells' heights, then its bound's levels.
-pub const GRID_WORDS: u32 = bound_at(BOUND_LEVELS + 1);
+/// Words a held tile's frame gives each of its lanes: its looks, 4 a word;
+/// its cells' heights, 2 a word; its bound's levels, an entry a word.
+pub const LOOK_WORDS: u32 = TILE_CELLS * TILE_CELLS / 4;
+pub const HEIGHT_WORDS: u32 = TILE_CELLS * TILE_CELLS / 2;
+pub const LEVEL_WORDS: u32 = level_at(BOUND_LEVELS + 1);
+
+/// A held tile's frame on a GPU: its looks, its heights, then its levels.
+pub const GROUND_WORDS: u32 = LOOK_WORDS + HEIGHT_WORDS + LEVEL_WORDS;
 
 /// An entry of a bound as a word, its lowest in the low half and its
-/// highest in the high: each a cell's height, which `bicubic` holds to its
-/// i16 samples.
+/// highest in the high: each a cell's height, an i16.
 pub fn bound_word([lo, hi]: [i32; 2]) -> i32 {
     lo & 0xffff | hi << 16
 }
@@ -161,16 +133,16 @@ pub fn bound_of(w: i32) -> [i32; 2] {
     [w << 16 >> 16, w >> 16]
 }
 
-/// Entry `(x, y)` of level `j` of a tile's bound off its grid, `grid` its
-/// word `i`: the join of the four under it, at level 1 four cells' heights.
-pub fn join(grid: impl Fn(u32) -> i32, j: u32, [x, y]: [u32; 2]) -> i32 {
+/// Entry `(x, y)` of level `j` of `tile`'s bound: the join of the four
+/// under it, at level 1 four cells' heights.
+pub fn join(tile: &impl Bound, j: u32, [x, y]: [u32; 2]) -> i32 {
     let side = TILE_CELLS >> (j - 1);
     let under = |q: u32| {
-        let w = grid(bound_at(j - 1) + (2 * y + q / 2) * side + 2 * x + q % 2);
+        let (cx, cy) = (2 * x + q % 2, 2 * y + q / 2);
         if j == 1 {
-            [w, w]
+            tile.cell(cx, cy)
         } else {
-            bound_of(w)
+            bound_of(tile.level(level_at(j - 1) + cy * side + cx))
         }
     };
     let [mut lo, mut hi] = under(0);
@@ -183,21 +155,19 @@ pub fn join(grid: impl Fn(u32) -> i32, j: u32, [x, y]: [u32; 2]) -> i32 {
     bound_word([lo, hi])
 }
 
-/// The lowest and highest the cells of the tile at `from` reach under the
-/// node `(zoom, c)` it holds, `grid` its grid's word `i`: one entry, of the
-/// level whose entries are the node's columns, or the cell holding a node
-/// finer than a cell.
-pub fn bounded(grid: impl Fn(u32) -> i32, from: Zoom, (zoom, c): (Zoom, [i32; 2])) -> [i32; 2] {
+/// The lowest and highest the cells of `tile`, at `from`, reach under the
+/// node `(zoom, c)` it holds: one entry, of the level whose entries are the
+/// node's columns, or the cell holding a node finer than a cell.
+pub fn bounded(tile: &impl Bound, from: Zoom, (zoom, c): (Zoom, [i32; 2])) -> [i32; 2] {
     let cell = GROUND.cell_zoom(from);
     let within = |side: u32, v: i32| (v & (side as i32 - 1)) as u32;
     if zoom >= cell {
         let s = zoom - cell;
-        let h = grid(within(TILE_CELLS, c[1] >> s) * TILE_CELLS + within(TILE_CELLS, c[0] >> s));
-        return [h, h];
+        return tile.cell(within(TILE_CELLS, c[0] >> s), within(TILE_CELLS, c[1] >> s));
     }
     let j = cell - zoom;
     let side = TILE_CELLS >> j;
-    bound_of(grid(bound_at(j) + within(side, c[1]) * side + within(side, c[0])))
+    bound_of(tile.level(level_at(j) + within(side, c[1]) * side + within(side, c[0])))
 }
 
 /// Whether `tile` holds the cell `v` of a tile `n` × `n` times finer, `n` a
@@ -468,27 +438,27 @@ pub fn empty(area: &impl Area, (zoom, c): (Zoom, [i32; 3]), [lo, hi]: [i32; 2], 
 }
 
 /// Whether the block `z` of a cell at `cell` lies over the ground wherever
-/// in the column the faces under it reach at most `hi` leaf cells: a cell's
-/// height is `bicubic`'s, held to the samples it reads, or a fold's mean of
-/// them, and `hi` bounds those samples (pxl-spec bake/surface.rs `bound`),
-/// so its top, rounded as the grid rounds it, is at most `hi`'s.
+/// in the column the faces under it reach at most `hi` leaf cells: `blocks`
+/// is monotone in a height, so a top rounded as the grid rounds it is at
+/// most `hi`'s.
 pub fn above(cell: Zoom, z: i32, hi: i32) -> bool {
     z >= blocks(cell, hi as f32)
 }
 
-/// A bound over every height a cell holds, i16's whole range (`bicubic`).
+/// A bound over every height a cell holds, i16's whole range.
 pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 
 /// How the ground is held where a node reads it: the CPU's residency, a
 /// GPU's window over the tiles it was handed.
 pub trait Held: Area {
-    /// The lowest and highest the ground's cells at the zooms `cells`, from
-    /// the coarsest to the finest asked, reach over the node `(zoom, c)`,
-    /// each off the finest held tile it is read from; a bound no tighter
-    /// than the heights' whole range (`UNBOUNDED`) where the source cannot
-    /// bound them, which only splits more; false where no tile over it is
-    /// held.
-    fn relief(&mut self, cells: [Zoom; 2], node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
+    /// The lowest and highest the ground's cells at `cell`, the finest zoom
+    /// asked, reach over the node `(zoom, c)`, off the finest held tile they
+    /// are read from (`bounded`); every coarser zoom's cells lie within it,
+    /// each a mean of the cells under it, folded from that tile or from a
+    /// coarser one standing in for it. A bound no tighter than the heights'
+    /// whole range (`UNBOUNDED`) where one tile cannot bound them, which only
+    /// splits more; false where no tile over it is held.
+    fn relief(&mut self, cell: Zoom, node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
     /// The column of the block `c` at `zoom` as the grid reads it, the
     /// service area's edge laid on it (`Cell`); false where it cannot be read.
     fn cell(&mut self, zoom: Zoom, c: [i32; 3]) -> (Cell, bool);
@@ -536,7 +506,7 @@ pub fn node(held: &mut impl Held, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far,
     // A block's cells are its zoom's; a coarser node's, those of each zoom
     // asked within it (`empty`).
     let cells = if block { [zoom, zoom] } else { [if far > zoom + 1 { far } else { zoom + 1 }, near] };
-    let (relief, ok) = held.relief(cells, (zoom, c));
+    let (relief, ok) = held.relief(cells[1], (zoom, c));
     if !ok {
         return lacks;
     }

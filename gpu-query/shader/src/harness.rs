@@ -56,8 +56,8 @@ pub fn seed_cs(
     }
 }
 
-/// One tile's frame in the ground buffers: 4 looks a word and 2 heights a
-/// word, low first.
+/// One tile's frame in the ground buffers: 4 looks a word and 2 cells'
+/// heights a word, low first.
 pub struct Frame<'a> {
     pub looks: &'a [u32],
     pub heights: &'a [u32],
@@ -69,8 +69,9 @@ impl Tile for Frame<'_> {
         self.looks[i / 4] >> (8 * (i % 4)) & 0xff
     }
     fn height(&self, x: u32, y: u32) -> i32 {
+        let i = (y * TILE_CELLS + x) as usize;
         // The half's sign carried up: shifted to the top, then back.
-        ground::height(|i| ((self.heights[i / 2] >> (16 * (i % 2))) << 16) as i32 >> 16, [x, y])
+        ((self.heights[i / 2] >> (16 * (i % 2))) << 16) as i32 >> 16
     }
 }
 

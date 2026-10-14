@@ -3,7 +3,7 @@
 use xpute_kit::golden::Golden;
 
 use super::*;
-use pxl_portable::ground::DRAWN_PAST;
+use pxl_portable::ground::bound_of;
 use xpute_kit::math::rng::SplitMix64;
 
 const GOLDEN: &str = include_str!("../../../golden/bake/terrain.tsv");
@@ -17,36 +17,25 @@ impl Rng {
     }
 }
 
-/// Random lanes, each index cell's lowest under its highest.
+/// Random lanes.
 fn tile(seed: u64) -> TerrainTile {
     let mut rng = Rng(SplitMix64::new(seed));
-    let ele: Vec<i16> = (0..ELE_LANE).map(|_| rng.next() as i16).collect();
+    let heights: Vec<i16> = (0..HEIGHT_LANE).map(|_| rng.next() as i16).collect();
     let cells: Vec<GroundId> = (0..GROUND_LANE).map(|_| rng.next() as GroundId).collect();
-    let extent: Vec<[i16; 2]> = (0..EXTENT_LANE)
-        .map(|_| {
-            let (a, b) = (rng.next() as i16, rng.next() as i16);
-            [a.min(b), a.max(b)]
-        })
-        .collect();
     let mut separation = separation::Builder::default();
     for _ in 0..3 {
         let points: Vec<([f64; 2], i16)> = (0..4).map(|_| ([(rng.next() % 600) as f64, (rng.next() % 600) as f64], rng.next() as i16)).collect();
         separation.push(points, 1 + (rng.next() % 200) as u8, rng.next() as u8, separation::Form::of((rng.next() % 3) as u8), rng.next() as u8);
     }
-    TerrainTile {
-        ele: ele.into(),
-        ground: Ground { cells: cells.into() },
-        separation: separation.finish(),
-        index: Index::new(extent, Occupancy::of_bits(0b10101).unwrap()),
-    }
+    TerrainTile::of(heights, Ground { cells: cells.into() }, separation.finish(), Occupancy::of_bits(0b10101).unwrap())
 }
 
 fn room() -> TileRoom {
     TileRoom {
         ground: vec![0; GROUND_LANE].leak(),
-        ele: vec![0; ELE_LANE].leak(),
-        extent: vec![[0; 2]; EXTENT_LANE].leak(),
-        coarse: vec![[0; 2]; COARSE_LANE].leak(),
+        heights: vec![0; HEIGHT_LANE].leak(),
+        ways: vec![[0; 2]; WAYS_LANE].leak(),
+        levels: vec![0; LEVEL_LANE].leak(),
         separation: separation::Room {
             starts: vec![0; separation::MAX_LINES + 1].leak(),
             points: vec![[0; 2]; separation::MAX_POINTS].leak(),
@@ -88,21 +77,19 @@ fn a_packet_that_is_not_a_tile_is_refused() {
     assert!(decode_into(&small, room).is_err());
 }
 
-/// Every index block is exactly the join of its cells, at every size.
+/// Every entry of every level is exactly the lowest and highest its cells reach.
 #[test]
-fn a_block_says_what_its_cells_say() {
+fn a_level_says_what_its_cells_say() {
     for seed in [1, 0x2545_f491, 0x9e37_79b9_7f4a_7c15] {
-        let index = tile(seed).index;
-        let n = EXTENT.tile_cells();
-        for j in 0..=n.trailing_zeros() {
-            let side = 1 << j;
-            for y in (0..n).step_by(side as usize) {
-                for x in (0..n).step_by(side as usize) {
-                    let lane = index.extent();
-                    let cells = (y..y + side).flat_map(|cy| (x..x + side).map(move |cx| lane[EXTENT.cell_index(cx, cy) as usize]));
-                    let lo = cells.clone().map(|c| i32::from(c[0]) + DRAWN_PAST[0]).min().unwrap();
-                    let hi = cells.map(|c| i32::from(c[1]) + DRAWN_PAST[1]).max().unwrap();
-                    assert_eq!(index.over([x, y], side), [lo, hi], "{side} from ({x}, {y})");
+        let tile = tile(seed);
+        let (heights, ways) = (&tile.heights, &tile.ways);
+        for j in 1..=BOUND_LEVELS {
+            let (side, n) = (1u32 << j, TILE_CELLS >> j);
+            for y in 0..n {
+                for x in 0..n {
+                    let cells = (y * side..(y + 1) * side).flat_map(|cy| (x * side..(x + 1) * side).map(move |cx| cell_bound(heights, ways, cx, cy)));
+                    let (lo, hi) = (cells.clone().map(|c| c[0]).min().unwrap(), cells.map(|c| c[1]).max().unwrap());
+                    assert_eq!(bound_of(tile.levels[(level_at(j) + y * n + x) as usize]), [lo, hi], "level {j} at ({x}, {y})");
                 }
             }
         }

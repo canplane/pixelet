@@ -127,7 +127,7 @@ pub fn overwrites() -> Overwrites<'static> {
 }
 
 /// Each held tile the GPU does not yet hold in its frame to `write`: its
-/// frame, ground looks and padded heights.
+/// frame, ground looks and its cells' heights.
 pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::residency();
     for (p, tile) in terrain.held() {
@@ -136,7 +136,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
         if *slot == Some(p) {
             continue;
         }
-        write(frame, &tile.ground.cells, bytes(&tile.ele));
+        write(frame, &tile.ground.cells, bytes(&tile.heights));
         *slot = Some(p);
     }
 }
