@@ -30,7 +30,7 @@ infra/
 | **db-geo**  | 5433:5432      | three sources, for the bakes | PostGIS 16-3.4 |
 
 pxl-api owns db-main and probes it at boot, but no route reads it yet
-([the server in Rust](../doc/decision/20260918-the-server-in-rust-and-the-line-already-drawn.md));
+([the server in Rust](../doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md));
 pxl-geo reads db-geo through `DB_GEO_URL`. All spatial data is EPSG:3857.
 Passwords and `ADMIN_TOKEN` come from `.env` only, and production's are its
 own.
@@ -147,7 +147,7 @@ everything that builds or answers a URL:
 **The bucket is private and the Worker is the only way into it**, on the
 free plan, which fails closed at 100k requests a day, so no read can bill.
 A paid Workers plan, the `r2.dev` URL or a custom domain on the bucket breaks
-that ([deployment hosting](../doc/decision/20260816-deployment-hosting.md)).
+that ([deployment hosting](../doc/minutes/20260816-deployment-hosting.md)).
 Writes are outside it, and nothing configures a spending cap: a publish is a
 pyramid's worth of Class A operations, so `deno task usage` comes before one.
 

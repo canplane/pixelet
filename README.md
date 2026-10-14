@@ -188,9 +188,8 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 ├── asset/                    # Shipped models, texture pack and sky, imported by nothing
 ├── script/                   # the tree's checks, the deployment smoke, the usage report
 ├── infra/                    # local and production compose files, and what fills db-geo
-└── doc/                      # The record: backlog.md what is queued, decision/ each decision
-                              #   and why (closed/ those no longer cited), experiment/ measurements,
-                              #   discussion/ what was weighed where nothing was decided
+└── doc/                      # The record: backlog.md what is queued, minutes/ each meeting's
+                              #   record (archive/ those retired), experiment/ measurements
 ```
 
 **What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the servers, the bakes and the asset ingest compile the model, so they are crates; the Overture and elevation ingests put a provider's data into Postgres sharing nothing with the model, so they are scripts under `infra/geo/`. The host and the shell are TypeScript because neither decides anything about the world; what they need of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is generated from.
@@ -230,7 +229,7 @@ The casing in the tree is not mixed by accident. Rust, the xpute packages and th
 
 ## Learn More
 
-[AGENTS.md](./AGENTS.md) is how to work in the tree, [doc/backlog.md](./doc/backlog.md) what is queued next, and [doc/decision/](./doc/decision/) why things went the way they did.
+[AGENTS.md](./AGENTS.md) is how to work in the tree, [doc/backlog.md](./doc/backlog.md) what is queued next, and [doc/minutes/](./doc/minutes/) why things went the way they did.
 
 `xpute/` is xpute's repository root, developed here and copied out byte for byte by `xpute/script/export.ts` (`deno task export:xpute`): [xpute/README.md](./xpute/README.md) and [xpute/ARCHITECTURE.md](./xpute/ARCHITECTURE.md) are the system under the application — its memory, rings, turn, handles, contract and wire formats — with `xpute/LICENSE` and `xpute/THIRD_PARTY_NOTICES.md` beside them. Nothing under it names pixelet.
 

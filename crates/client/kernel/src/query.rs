@@ -1,7 +1,7 @@
 // pxl-kernel/query.rs
 
 //! Queries over what is resident, all through the world's one query, what
-//! is in a node (`World::node`, doc/decision/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md):
+//! is in a node (`World::node`, doc/minutes/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md):
 //! a block at the zoom it is asked (`World::block`), and the first block a
 //! ray meets (`first_hit`), which an eye casts and a walker casts straight
 //! up and down its cell (`support.rs`). A query never fetches or holds

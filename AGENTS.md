@@ -17,7 +17,7 @@ the tree, is that picture at the size of one loader.
   storage representation stays behind the query.
 - **Drawing and mechanics compose the same blocks** (`pxl-spec block/`):
   the ground's grid, then what overwrites it
-  (doc/decision/20261012-the-ground-is-a-grid-then-overwrites.md). Control is
+  (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md). Control is
   headless; render only colors.
 - **Level of detail is the world there.** At each zoom the world is what
   its fold defines; what the fold discards is absent at that zoom, and finer

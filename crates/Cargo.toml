@@ -8,11 +8,11 @@
 # The client is one core, pxl-render and pxl-kernel, and client-bracket/ is
 # how it is plugged into a place to run: pxl-wasm, the one WebAssembly module the
 # main thread and each worker instantiate for themselves
-# (doc/decision/20260912-why-the-destination-is-wasm.md), and pxl-native, linked
+# (doc/minutes/20260912-why-the-destination-is-wasm.md), and pxl-native, linked
 # into a device's app, which draws with wgpu where the page's host draws with
 # the browser's WebGPU. A bracket is no domain: it gives the guest its
 # bounds, its clock and its doorbell (xpute-guest). The server end is native
-# (doc/decision/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl-geo
+# (doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl-geo
 # and pxl-api over pxl-server, pxl-geo-bake beside them for what is baked
 # rather than answered, and pxl-geo-spec where the two geo halves read the
 # same tables.

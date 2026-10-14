@@ -12,7 +12,7 @@ how each set gets built and checked; getting it into the bucket is
 [publish-bucket](../publish-bucket/SKILL.md).
 
 Background and the reasoning behind the design are in
-[doc/decision/20260816-deployment-hosting.md](../../../doc/decision/20260816-deployment-hosting.md).
+[doc/minutes/20260816-deployment-hosting.md](../../../doc/minutes/20260816-deployment-hosting.md).
 Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes

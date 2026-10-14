@@ -36,7 +36,7 @@
 pub const STACK_BYTES: u32 = 1048576;
 
 /// Messages the submission ring holds, and so payloads: one a slot
-/// (doc/decision/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
+/// (doc/minutes/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
 /// the ring checks, since a position is taken modulo it by masking.
 pub const SUBMISSION_CAPACITY: u32 = 2048;
 

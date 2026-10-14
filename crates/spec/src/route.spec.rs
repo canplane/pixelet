@@ -6,7 +6,7 @@
 // The app routes on paths of its own, so a relay tells a deep link from a
 // request meant for a server by a root alone — which is why the reservation is
 // on the server's side, where it never reaches an address bar
-// (doc/decision/20260910-one-server-root.md).
+// (doc/minutes/20260910-one-server-root.md).
 //
 // Every relay reads a root or a branch and never a route name: adding a route
 // is a change to the one server that answers it and to nothing else. This file

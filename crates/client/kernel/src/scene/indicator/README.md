@@ -1,7 +1,7 @@
 # Indicators (the one-off indicator tier)
 
 This directory is the current home of the "one-off indicator" rendering
-tier — see [doc/decision/20260907-world-rendering-tiers.md](/doc/decision/20260907-world-rendering-tiers.md)
+tier — see [doc/minutes/20260907-world-rendering-tiers.md](/doc/minutes/20260907-world-rendering-tiers.md)
 for the full taxonomy. `hover_cursor.rs` and `location_puck.rs` were
 already co-located here before that document named the pattern; this file
 just makes the grouping explicit.

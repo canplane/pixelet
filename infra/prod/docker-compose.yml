@@ -7,7 +7,7 @@
 # own idle footprint is small enough that two containers costs nothing
 # real on a 4GB box). db-geo only ever holds overture_places/
 # overture_division_areas/overture_divisions — see
-# doc/decision/20260908-overture-poi-adoption.md and the divisions/search
+# doc/minutes/20260908-overture-poi-adoption.md and the divisions/search
 # provider files for why terrain's own ingestion tables (overture_buildings/
 # overture_transportation/overture_base_*/elevation_raster) never
 # belong here at all (terrain is baked offline, already static on R2 —
@@ -49,7 +49,7 @@ services:
       - pixelet
 
   # crates/geo, the world's data server
-  # (doc/decision/20260918-the-server-in-rust-and-the-line-already-drawn.md). The
+  # (doc/minutes/20260918-the-server-in-rust-and-the-line-already-drawn.md). The
   # service is still called `api` because that is the hostname Caddy proxies to
   # and renaming it is a restart of the stack for a word.
   api:

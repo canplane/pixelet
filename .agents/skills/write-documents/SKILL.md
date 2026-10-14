@@ -1,6 +1,6 @@
 ---
 name: write-documents
-description: How the repository's prose documents are written and reviewed — README.md, ARCHITECTURE.*.md, doc/decision/ and the skills. Use before writing or reworking one, and when a document is hard to read but it is not obvious why.
+description: How the repository's prose documents are written and reviewed — README.md, ARCHITECTURE.*.md, doc/minutes/ and the skills. Use before writing or reworking one, and when a document is hard to read but it is not obvious why.
 ---
 
 # Writing the documents
@@ -260,7 +260,7 @@ for a document whose order is already right.
 breaks you wrote and imposes none. The convention is therefore per file, and
 the rule is to match the file's neighbors: `README.md` and the two
 `ARCHITECTURE` documents run a paragraph to one line, while `AGENTS.md`, the
-skills and `doc/decision/` wrap at about eighty columns. Reformatting a document to
+skills and `doc/minutes/` wrap at about eighty columns. Reformatting a document to
 the other convention makes a diff of the whole file for no reason.
 
 Diagrams are hand-aligned ASCII. Build them with a short script rather than by

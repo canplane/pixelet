@@ -1,7 +1,7 @@
 // pxl-spec/block/sample.rs
 
 //! What is in each block of the world, by one rule
-//! (doc/decision/20261012-the-ground-is-a-grid-then-overwrites.md): the ground's
+//! (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md): the ground's
 //! grid, each cell a block shifted up to its height (`bicubic`); then the caves, the ways off the ground and what is
 //! placed, each written over the one before. `at` answers one block, and
 //! `Blocks` holds a chunk's as a drawing of it asks them of the world.
@@ -488,7 +488,7 @@ pub fn shades([x, y, z]: [i64; 3]) -> bool {
 }
 
 /// A chunk's blocks as drawing what the rays stopped on in it reads them
-/// (doc/decision/20261012-the-ground-is-a-grid-then-overwrites.md,
+/// (doc/minutes/20261012-the-ground-is-a-grid-then-overwrites.md,
 /// "Observation determines materialization"): the blocks the rays stopped
 /// on, which alone are drawn, each whole, and the blocks about each its
 /// shading reads (`shades`),
