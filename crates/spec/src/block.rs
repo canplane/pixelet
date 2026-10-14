@@ -22,6 +22,7 @@ pub mod limit;
 pub mod marker;
 pub mod object;
 pub mod sample;
+pub mod volume;
 
 pub use decor::DecorId;
 

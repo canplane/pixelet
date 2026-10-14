@@ -29,11 +29,11 @@ use xpute_kit::status::errno::Errno;
 
 use crate::kernel;
 use crate::layer::object::ext::{Ext, Pools, NONE};
-use crate::layer::object::pyramid::fold;
 use crate::layer::{Answer, Bound, Query};
 use crate::sched::edge::request_world_tick;
 use pxl_spec::block::ext::class_of;
 use pxl_spec::block::placed::{self, Held};
+use pxl_spec::block::volume::fold;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Block {
@@ -152,10 +152,6 @@ fn path(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
     [at[0].rem_euclid(around(zoom)), at[1], at[2]]
 }
 
-/// The tree's root the objects are under, its block of the nodes of zoom 0
-/// (pxl-portable `placed::PLACED`).
-const PLACED: usize = 0;
-const _: () = assert!(Tree::root(PLACED) == placed::PLACED);
 
 /// The tree's lanes as pxl-portable `placed` reads them, the CPU as a GPU.
 pub struct Lanes<'a>(&'a Tree);
@@ -213,7 +209,7 @@ pub struct Store {
 impl Default for Store {
     fn default() -> Store {
         Store {
-            tree: Tree::new(EMPTY.word(), 1),
+            tree: Tree::new(EMPTY.word()),
             ext: Pools::default(),
             revision: 0,
         }
@@ -241,7 +237,7 @@ impl Store {
     /// The node `at` of `zoom` in the tree, or the leaf over it: the zoom it
     /// was found at and its slot.
     fn find(&self, zoom: Zoom, at: [i64; 3]) -> (Zoom, Slot<u32>) {
-        let (d, slot) = self.tree.get(PLACED, depth(zoom), path(zoom, at));
+        let (d, slot) = self.tree.get(depth(zoom), path(zoom, at));
         (d - 1, slot)
     }
 
@@ -250,7 +246,7 @@ impl Store {
     /// cube there, and its value if it is a leaf.
     fn descend(&self, about: f64, enter: &mut Enter) {
         for k in 0..8 {
-            self.walk(self.tree.child(Tree::root(PLACED), k), 0, root(k), about, enter);
+            self.walk(self.tree.child(placed::PLACED, k), 0, root(k), about, enter);
         }
     }
 
@@ -353,7 +349,7 @@ impl Store {
                 None => NONE,
             };
             let value = Leaf { id: id16, ext: handle }.word();
-            if self.tree.set(PLACED, depth(zoom), path(zoom, at), value, |tree, block, d| fold(tree, block, d - 1)) {
+            if self.tree.set(depth(zoom), path(zoom, at), value, |tree, block, d| fold(tree, block, d - 1)) {
                 changed.push(cube(zoom, at));
                 self.revision = self.revision.wrapping_add(1);
             }
@@ -384,7 +380,7 @@ impl Store {
     pub fn clear(&mut self) -> Vec<Aabb> {
         let mut held = Vec::new();
         self.each(&mut |e| held.push(e.cube()));
-        self.tree = Tree::new(EMPTY.word(), 1);
+        self.tree = Tree::new(EMPTY.word());
         self.ext.clear();
         self.revision = self.revision.wrapping_add(1);
         held
