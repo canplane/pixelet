@@ -31,7 +31,7 @@ fn bake_missing(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: Tile, as
         let d = data.clone();
         data.cache
             .once(p.name(), asked, move |lease| async move {
-                if !d.coverage.meets(p.zoom, p.tile) {
+                if !d.coverage.meets(p.zoom, p.at) {
                     return d.cache.publish(&p.name(), None).map_err(Failure::from);
                 }
                 if p.zoom < kind.leaf() {

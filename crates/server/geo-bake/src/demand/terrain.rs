@@ -17,8 +17,8 @@ pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, s
         cache,
         out,
         || {
-            let (_, mut client) = job::connect(&leaf::READS, &Coverage::of_source()?.around(p.zoom, p.tile), seconds)?;
-            if !leaf::has_ground(&mut client, &[p.tile]).map_err(|e| e.to_string())?[0] {
+            let (_, mut client) = job::connect(&leaf::READS, &Coverage::of_source()?.around(p.zoom, p.at), seconds)?;
+            if !leaf::has_ground(&mut client, &[p.at]).map_err(|e| e.to_string())?[0] {
                 return Ok(None);
             }
             let raster = std::sync::Arc::new(crate::elevation::Raster::open(&mut client)?);
@@ -29,7 +29,7 @@ pub(super) fn execute(p: Tile, cache: &std::path::Path, out: &std::path::Path, s
                 repo: &repo,
                 store: &mut crate::separation::source::Disk(&memo),
             };
-            Ok(Some(leaf::bake_leaf(reader, p.tile)?))
+            Ok(Some(leaf::bake_leaf(reader, p.at)?))
         },
         &Absence::new(Coverage::of_source()?),
     )
