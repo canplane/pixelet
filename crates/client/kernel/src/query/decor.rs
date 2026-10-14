@@ -30,7 +30,6 @@ use super::world::World;
 use crate::decor::strike::{reach, strike};
 use crate::layer::instance::{Instance, Meta, Source};
 use crate::layer::object::meta::placed;
-use crate::layer::object::pyramid::Held;
 use crate::layer::Query;
 use crate::model::registry::Models;
 
@@ -270,7 +269,7 @@ impl<'a> World<'a> {
                 (-1..=1).any(|dy| {
                     (-1..=1).any(|dx| {
                         let n = wrap_cell(z, [a[0] + dx, a[1] + dy, a[2] + dz]);
-                        self.objects.cursor((z, n), z) != Held::Nothing
+                        self.objects.cursor((z, n), z).holds()
                     })
                 })
             })

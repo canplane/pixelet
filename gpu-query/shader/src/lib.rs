@@ -13,11 +13,12 @@
 pub mod harness;
 
 use pxl_portable::area::{self, Area};
-use pxl_portable::cast::{self, Detail, Ends, In, Met, Query, Until};
+use pxl_portable::cast::{self, Detail, Ends, In, Kind, Met, Query, Until};
 use pxl_portable::caves::Cave;
-use pxl_portable::cube::{sentinel, Ground};
+use pxl_portable::cube::{object, sentinel, Ground};
 use pxl_portable::ground::{self, Tile, ELE_PADDED_SPAN, GRID_WORDS};
 use pxl_portable::lattice::{GROUND, TILE_CELLS};
+use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
 use pxl_portable::{wrap_index, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::spirv;
@@ -36,9 +37,24 @@ pub struct Eye {
     pub up: Vec4,
     /// The cells across and up, and the zooms a block is asked at.
     pub across_range: UVec4,
+    /// A preview's cut to air and its left-out leaf: X, Y, Z and the zoom,
+    /// -1 for none.
+    pub carve: IVec4,
+    pub hide: IVec4,
+}
+
+/// A preview's entry as pxl-portable `placed` takes it.
+fn cut(e: IVec4) -> Cut {
+    Cut {
+        zoom: e.w as u32,
+        at: [e.x, e.y, e.z],
+    }
 }
 
 const VOID: u32 = sentinel::void as u32;
+/// A block's word when what is placed answered it, over its value.
+const PLACED_BLOCK: u32 = 1 << 16;
+const PLACED_AIR: u32 = PLACED_BLOCK | object::air as u32;
 const UNKNOWN: u32 = sentinel::unknown as u32;
 
 /// Words a frame of looks holds: 4 a word.
@@ -74,8 +90,9 @@ impl Tile for Framed<'_> {
 }
 
 /// The world as the GPU holds it (pxl-kernel scene/cast.rs fills it): the
-/// ground's held tiles, the service area, and the caves. Ways, what is
-/// placed and decor are not here (pxl-portable `cast::Query`).
+/// ground's held tiles, the service area, the caves, and what is placed with
+/// a preview's cuts. The ways and decor are not here (pxl-portable
+/// `cast::Query`).
 pub struct World<'a> {
     /// Per ground zoom from the top, a header — the south-west tile, the
     /// tiles across — then a word a tile, its frame plus one, 0 where none
@@ -87,6 +104,21 @@ pub struct World<'a> {
     grid: &'a [i32],
     /// The served shards: zoom, x, y.
     shards: &'a [IVec4],
+    /// The overwrites' tree (pxl-kernel layer/object/store.rs): its heap
+    /// lane, then its data lane from half the buffer.
+    overwrites: &'a [u32],
+    /// The eye, whose preview cuts are read where something placed or cut
+    /// is asked about, not held through the descent.
+    eye: &'a Eye,
+}
+
+impl Lanes for World<'_> {
+    fn heap(&self, slot: u32) -> u32 {
+        self.overwrites[slot as usize]
+    }
+    fn data(&self, slot: u32) -> u32 {
+        self.overwrites[self.overwrites.len() / 2 + slot as usize]
+    }
 }
 
 impl Area for World<'_> {
@@ -245,45 +277,77 @@ impl ground::Held for World<'_> {
     }
 }
 
-/// What a node is handed down on the GPU: its caves.
+/// What a node is handed down on the GPU: its caves, and what is placed
+/// there.
+#[derive(Clone, Copy)]
+pub struct At {
+    cave: Cave,
+    placed: Held,
+}
+
 impl Query for World<'_> {
-    type At = Cave;
+    type At = At;
     type Block = u32;
     const AIR: u32 = VOID;
 
-    fn root(&mut self, node: [i32; 3]) -> Cave {
-        Cave::of(0, node)
+    fn root(&mut self, node: [i32; 3]) -> At {
+        At {
+            cave: Cave::of(0, node),
+            placed: placed::cursor(self, PLACED, 0, node),
+        }
     }
 
-    fn child(&mut self, cave: &Cave, zoom: u32, node: [i32; 3]) -> Cave {
-        cave.child(zoom, node)
+    fn child(&mut self, at: &At, zoom: u32, node: [i32; 3]) -> At {
+        At {
+            cave: at.cave.child(zoom, node),
+            placed: placed::child(self, at.placed, zoom, node),
+        }
     }
 
-    /// What is in the node `c` at `zoom`: the ground's one answer for a
-    /// node (pxl-portable `ground::node`), asked at its own zoom at `near` or
-    /// finer, or finer than the ground's cells, where the world holds nothing
-    /// finer.
-    fn node(&mut self, cave: &mut Cave, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<u32> {
-        let i = ground::node(self, *cave, (zoom, c), asked, zoom >= asked[1] || zoom >= LEAF_CELL);
+    /// What is in the node `c` at `zoom`, the layers top down: what is
+    /// placed, then the ground's one answer for a node (pxl-portable
+    /// `ground::node`); asked as a block at `near` or finer, or where the
+    /// world holds nothing finer — past the ground's cells, with nothing
+    /// placed or carved finer in it.
+    fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<u32> {
+        let mut block = zoom >= asked[1] || zoom >= LEAF_CELL;
+        // Asked of what is placed only where something is, or a preview cuts.
+        if at.placed.holds() || self.eye.carve.w >= 0 {
+            let carve = cut(self.eye.carve);
+            block = zoom >= asked[1] || zoom >= LEAF_CELL && placed::whole(at.placed, carve, zoom, c);
+            let over = placed::over(self, at.placed, carve, cut(self.eye.hide), zoom, c, block);
+            if over.says == BLOCK {
+                return In {
+                    kind: Kind::Block,
+                    block: PLACED_BLOCK | over.block,
+                };
+            }
+            if over.says == SPLIT {
+                return In { kind: Kind::Split, block: VOID };
+            }
+        }
+        let i = ground::node(self, at.cave, (zoom, c), asked, block);
         In { kind: i.kind, block: i.block.0 }
     }
 
     fn fills(&self, block: &u32) -> bool {
-        *block != VOID
+        *block != VOID && *block != PLACED_AIR
     }
 }
 
-/// The lane's cell for a ray: the value it stopped on, its kind (ground)
-/// and the face it entered through, then how far as f32 bits, then the
-/// nodes its descent asked about; where it met nothing, the first two zero.
-fn word(ray: &cast::Ray, met: Met<Cave, u32>) -> UVec4 {
+/// The lane's cell for a ray: the value it stopped on, its kind (ground or
+/// placed) and the face it entered through, then how far as f32 bits, then
+/// the nodes its descent asked about; where it met nothing, the first two
+/// zero.
+fn word(ray: &cast::Ray, met: Met<At, u32>) -> UVec4 {
     if met.ends != Ends::Stop {
         return UVec4::new(0, 0, met.visits, 0);
     }
     let s = met.stop;
     let down = ray.direction[s.axis as usize] > 0.0;
     let face = 2 * s.axis + down as u32;
-    UVec4::new(s.block | 1 << 16 | face << 18, s.t.to_bits(), met.visits, 0)
+    let kind = if s.block & PLACED_BLOCK != 0 { 2 } else { 1 };
+    UVec4::new(s.block & 0xffff | kind << 16 | face << 18, s.t.to_bits(), met.visits, 0)
 }
 
 #[spirv(compute(threads(8, 8, 1)))]
@@ -296,6 +360,7 @@ pub fn cast_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] lane: &mut [UVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] tangents: &[f32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] overwrites: &[u32],
 ) {
     let across = eye.across_range;
     if id.x >= across.x || id.y >= across.y {
@@ -308,7 +373,14 @@ pub fn cast_cs(
         tau: eye.right_tau.w,
         range: [across.z, across.w],
     };
-    let mut world = World { window, looks, grid, shards };
+    let mut world = World {
+        window,
+        looks,
+        grid,
+        shards,
+        overwrites,
+        eye,
+    };
     let met = cast::first(&mut world, &ray, detail, Until::Fills);
     lane[(1 + id.y * across.x + id.x) as usize] = word(&ray, met);
 }

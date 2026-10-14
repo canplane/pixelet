@@ -10,10 +10,10 @@ use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::hierarchy::morton::child_cube;
 
 use super::*;
-use crate::layer::object::pyramid::Held;
 use crate::layer::Query;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::block::object::{cube_id, Cube};
+use pxl_spec::block::placed::{self, Cut};
 use pxl_spec::space::layer::tile::LEAF_ZOOM;
 use xpute_kit::math::rng::SplitMix64;
 
@@ -34,7 +34,10 @@ fn a_write_is_read_back_and_undone_leaves_nothing_on_either_side_of_zero() {
             .is_empty());
         let finest = at.map(|v| v << (OBJECT_FINEST - OBJECT_COARSEST));
         assert!(
-            matches!(store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST), Held::Leaf { leaf, .. } if leaf.id == 3),
+            {
+                let held = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
+                held.holds() && !held.folded() && placed::value(&store.lanes(), held, Cut::NONE, OBJECT_FINEST, finest.map(|v| v as i32)) == 3
+            },
             "a cell leaf covers its steps"
         );
         let mut met = Vec::new();
@@ -108,7 +111,8 @@ fn folded(cells: &[(i64, i64, i64, u32)], zoom: Zoom) -> (FnvHashMap<[i64; 3], u
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
                 let held = store.cursor((target, [x, y, z]), target);
-                if let Some(v) = held.value(None) {
+                let v = placed::value(&store.lanes(), held, Cut::NONE, target, [x, y, z].map(|v| v as i32));
+                if v != VOID {
                     out.insert([x, y, z], v);
                 }
             }

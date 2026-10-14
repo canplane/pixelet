@@ -43,12 +43,13 @@ use pxl_portable::area::Area;
 use pxl_portable::cast::Kind;
 use pxl_portable::cube::sentinel;
 use pxl_portable::ground::{self, Cell};
+use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::tile::terrain::GroundId;
+use pxl_spec::block::placed::{self, Cut, Held, BLOCK, SPLIT};
 use pxl_spec::block::sample::Grid;
 use pxl_spec::block::Block;
 use pxl_spec::procedural::Cave;
-use pxl_spec::space::coord::world::wrap_cell;
-use pxl_spec::space::coord::zoom::{cube, Zoom};
+use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::{child_of, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
@@ -56,8 +57,6 @@ use xpute_guest::global::Global;
 
 use super::world::World;
 use crate::io::source;
-use crate::layer::object::pyramid::Held;
-use crate::layer::object::store::AIR;
 use crate::layer::residency::Line;
 use crate::layer::{Answer, Query};
 
@@ -106,7 +105,7 @@ impl World<'_> {
         At {
             node: (zoom, at),
             cave: Cave::of(zoom, at.map(|v| v as i32)),
-            placed: self.objects.cursor((zoom, wrap_cell(zoom, at)), zoom),
+            placed: self.objects.cursor((zoom, at), zoom),
             line: None,
         }
     }
@@ -135,14 +134,9 @@ impl World<'_> {
     fn drawn(&self, at: &mut At) -> Answer<Option<Block>> {
         let (zoom, b) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        // A preview applies at its entry's zoom or finer, where it is drawn
-        // as held; coarser, the stored fold stands.
-        let placed = match self.carve.is_some_and(|e| zoom >= e.zoom() && cube(e.zoom(), e.at()).shares(cube(zoom, b))) {
-            true => Some(AIR),
-            false => at.placed.value(self.hide),
-        };
-        if let Some(state) = placed {
-            return Answer::Exact(Some(Block::Placed(state)));
+        let placed = placed::over(&self.objects.lanes(), at.placed, self.cut(self.carve), self.cut(self.hide), zoom, b.map(|v| v as i32), true);
+        if placed.says == BLOCK {
+            return Answer::Exact(Some(Block::Placed(placed.block)));
         }
         let cave = at.cave;
         let mut reading = Reading::new(self, at);
@@ -165,8 +159,15 @@ impl World<'_> {
     /// none placed under it or one placed covering it whole.
     fn whole(&self, at: &At) -> bool {
         let (zoom, c) = at.node;
-        let carved = self.carve.is_some_and(|e| e.zoom() > zoom && cube(e.zoom(), e.at()).shares(cube(zoom, c)));
-        zoom >= GROUND.cell() && matches!(at.placed, Held::Nothing | Held::Leaf { .. }) && !carved
+        zoom >= GROUND.cell() && placed::whole(at.placed, self.cut(self.carve), zoom, c.map(|v| v as i32))
+    }
+
+    /// A preview's entry as pxl-portable `placed` takes it.
+    fn cut(&self, entry: Option<EntryAt>) -> Cut {
+        entry.map_or(Cut::NONE, |e| Cut {
+            zoom: e.zoom(),
+            at: e.at().map(|v| v as i32),
+        })
     }
 
     /// Its child `k`, in `child_of`'s order, with what it found handed down.
@@ -176,7 +177,7 @@ impl World<'_> {
         At {
             node: (z, child),
             cave: at.cave.child(z, child.map(|v| v as i32)),
-            placed: self.objects.child(&at.placed, (z, wrap_cell(z, child)), z),
+            placed: self.objects.child(&at.placed, (z, child), z),
             line: at.line,
         }
     }
@@ -192,7 +193,7 @@ impl World<'_> {
         if zoom >= near || self.whole(at) {
             return self.drawn(at).map(In::Block);
         }
-        if at.placed != Held::Nothing {
+        if placed::over(&self.objects.lanes(), at.placed, Cut::NONE, Cut::NONE, zoom, c.map(|v| v as i32), false).says == SPLIT {
             return Answer::Exact(In::Split);
         }
         let cave = at.cave;

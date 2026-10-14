@@ -11,6 +11,7 @@ pub mod color;
 /// The ground and the cubes, one table with the GPU's (pxl-portable).
 pub use pxl_portable::cube;
 pub use pxl_portable::mask;
+pub use pxl_portable::placed;
 #[path = "block/decor.spec.rs"]
 pub mod decor;
 pub mod ext;

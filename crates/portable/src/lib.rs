@@ -18,6 +18,7 @@ pub mod cube;
 pub mod ground;
 pub mod lattice;
 pub mod mask;
+pub mod placed;
 
 /// Every size is a zoom (pxl-spec space/coord/zoom.rs).
 pub type Zoom = u32;

@@ -162,6 +162,7 @@ pub fn stage_render() {
             frames: crate::scene::cast::FRAMES,
             window: crate::scene::cast::window(o),
             shards: crate::scene::cast::shards(),
+            overwrites: crate::scene::cast::overwrites(),
             upload: &mut terrain_upload,
         }),
         text: text_raster,

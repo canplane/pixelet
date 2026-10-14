@@ -536,4 +536,9 @@ impl Object {
             _ => None,
         }
     }
+
+    /// Whether a value read into a word, as a GPU has it, is one `of` names.
+    pub const fn objects(value: u32) -> bool {
+        matches!(value, 257..=271)
+    }
 }

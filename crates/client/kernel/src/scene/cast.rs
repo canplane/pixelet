@@ -8,7 +8,7 @@
 //! writes, so the range stays unwritten until the page replays the turn.
 
 use pxl_render::gpu::api::bytes;
-use pxl_render::gpu::renderer::{TerrainWrite, CAST_EYE_WORDS};
+use pxl_render::gpu::renderer::{Overwrites, TerrainWrite, CAST_EYE_WORDS};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::zoom::units;
@@ -17,6 +17,9 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
 
+use crate::kernel;
+use crate::layer::object::preview;
+use crate::layer::object::store::EntryAt;
 use crate::layer::residency::Residency;
 use crate::layer::Base as _;
 use crate::setting::schema_spec::RayDensity;
@@ -60,8 +63,10 @@ static TANGENTS: Global<Vec<f32>> = Global::new();
 
 /// The eye as the GPU's rays leave it, over a lane of the cells the `rays`
 /// setting asks, and the lane's column and row tangents: the CPU's cast's
-/// one rule (`sight::gpu_cast`). None where the CPU casts, or without a
-/// screen.
+/// one rule (`sight::gpu_cast`), then the pointer's preview as the CPU's
+/// eye casts through it (query/world.rs `previewed`), its cut to air and its
+/// left-out leaf, each X, Y, Z and the zoom, the zoom `u32::MAX` for none.
+/// None where the CPU casts, or without a screen.
 pub fn eye(o: &Observation) -> Option<([u32; CAST_EYE_WORDS], &'static [f32])> {
     let tau = sight::tau();
     let v = view();
@@ -76,6 +81,10 @@ pub fn eye(o: &Observation) -> Option<([u32; CAST_EYE_WORDS], &'static [f32])> {
     };
     let (mut eye, tangents) = ([0u32; CAST_EYE_WORDS], TANGENTS.get(Vec::new));
     sight::gpu_cast(o, tau, across, &mut eye, tangents)?;
+    let edits = preview::current();
+    let cut = |e: Option<EntryAt>| e.map_or([0, 0, 0, u32::MAX], |e| [e.at()[0] as u32, e.at()[1] as u32, e.at()[2] as u32, e.zoom()]);
+    eye[sight::EYE_WORDS..sight::EYE_WORDS + 4].copy_from_slice(&cut(edits.carve));
+    eye[sight::EYE_WORDS + 4..].copy_from_slice(&cut(edits.hide));
     Some((eye, tangents))
 }
 
@@ -102,6 +111,14 @@ pub fn window(o: &Observation) -> &'static [i32] {
         w.resize(w.len().next_multiple_of(4), 0);
     }
     w
+}
+
+/// What is placed, for the GPU: the objects' tree's lanes as they live, the
+/// room either has, and the store's revision, so the GPU takes them again
+/// only when they changed.
+pub fn overwrites() -> Overwrites<'static> {
+    let (heap, data, room, revision) = kernel().objects.raw_lanes();
+    Overwrites { heap, data, room, revision }
 }
 
 /// Each held tile the GPU does not yet hold in its frame to `write`: its

@@ -139,12 +139,13 @@ pub struct EarthTiles<'a> {
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
 /// The GPU's cast this frame (frame/shader/cast.gen.wgsl `cast_cs`): the
-/// eye, its lane's tangents, the terrain's tiles as the GPU holds them, and
-/// the tiles to hand it.
+/// eye, its lane's tangents, the terrain's tiles as the GPU holds them, the
+/// tiles to hand it, and what is placed.
 pub struct Cast<'a> {
-    /// The eye as five vec4s (pxl-kernel view/sight.rs `gpu_cast`): its
-    /// origin in Q3 steps, forward and the reach, right and τ, up, and the
-    /// lane's cells across and up with the zooms a block is asked at.
+    /// The eye as seven vec4s (pxl-kernel view/sight.rs `gpu_cast`, scene/
+    /// cast.rs `eye`): its origin in Q3 steps, forward and the reach, right
+    /// and τ, up, the lane's cells across and up with the zooms a block is
+    /// asked at, and a preview's cut to air and its left-out leaf.
     pub eye: [u32; CAST_EYE_WORDS],
     /// Each column's tangent then each row's, where they live, unwritten
     /// until the page replays the turn.
@@ -161,9 +162,20 @@ pub struct Cast<'a> {
     /// its frame, ground looks and padded heights, each where it lives,
     /// unwritten until the page replays the turn.
     pub upload: &'a mut TerrainUpload,
+    pub overwrites: Overwrites<'a>,
 }
 
-pub const CAST_EYE_WORDS: usize = 20;
+pub const CAST_EYE_WORDS: usize = 28;
+
+/// The overwrites' tree (pxl-kernel layer/object/store.rs) as it lives: its
+/// heap and data lanes, unwritten until the page replays the turn, the room
+/// either has before it grows, and the revision they are at.
+pub struct Overwrites<'a> {
+    pub heap: &'a [u32],
+    pub data: &'a [u32],
+    pub room: usize,
+    pub revision: u32,
+}
 
 /// Takes a tile's frame, ground looks and padded heights.
 pub type TerrainWrite<'a> = dyn FnMut(u32, &[u8], &[u8]) + 'a;
@@ -774,6 +786,11 @@ struct CastBuffers {
     bound_built: Built,
     /// `bound_cs`'s group, its level at a dynamic offset (`LEVEL_STRIDE`).
     bound_group: u32,
+    /// The overwrites' heap lane then their data lane, each `overwrite_room`
+    /// words, the lanes' own room; the revision it holds, none at first.
+    overwrites: u32,
+    overwrite_room: usize,
+    overwrite_revision: Option<u32>,
 }
 
 /// A terrain frame's lanes on the GPU, each a whole number of words.
@@ -783,9 +800,10 @@ const HEIGHT_BYTES: u32 = (ELE_LANE * 2).next_multiple_of(4) as u32;
 const GRID_BYTES: u32 = GRID_WORDS * 4;
 
 /// The cast's group 0: the eye, the window, the tiles' looks and grids, the
-/// lane it writes, the lane's tangents and the served shards.
-const CAST_GROUP: [u32; 21] = [
-    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE, STORAGE_RW, 5, COMPUTE, STORAGE, 6, COMPUTE, STORAGE,
+/// lane it writes, the lane's tangents, the served shards and the
+/// overwrites.
+const CAST_GROUP: [u32; 24] = [
+    0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE, STORAGE_RW, 5, COMPUTE, STORAGE, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE,
 ];
 
 /// `heights_cs`'s group 0: the fresh frames, the tiles' heights and the
@@ -914,6 +932,9 @@ impl ScreenCellsPass {
                 heights_group,
                 bound_built,
                 bound_group,
+                overwrites: 0,
+                overwrite_room: 0,
+                overwrite_revision: None,
             };
             self.cast = Some(c);
         }
@@ -951,6 +972,24 @@ impl ScreenCellsPass {
             g.buffer(c.tangents, word_bytes(c.tangent_room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
         }
         g.upload_buffer(c.tangents, 0, bytes(cast.tangents));
+        // Sized by the lanes' own room, so it is made again only when they grow.
+        let o = &cast.overwrites;
+        let overwrites_grow = o.room != c.overwrite_room;
+        if overwrites_grow {
+            if c.overwrites != 0 {
+                release(c.overwrites);
+            }
+            c.overwrite_room = o.room;
+            c.overwrites = object();
+            g.buffer(c.overwrites, word_bytes(2 * o.room), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+            c.overwrite_revision = None;
+        }
+        if c.overwrite_revision != Some(o.revision) {
+            g.upload_buffer(c.overwrites, 0, bytes(o.heap));
+            g.upload_buffer(c.overwrites, word_bytes(o.room), bytes(o.data));
+            c.overwrite_revision = Some(o.revision);
+        }
+        let regroup = regroup || overwrites_grow;
         let cells = (c.across[0] * c.across[1]) as usize;
         self.fit(g, cells);
         let c = self.cast.as_mut().or_bug(Errno::ENOTRECOVERABLE);
@@ -1012,8 +1051,8 @@ const HEIGHTS_WORKGROUP: u32 = 8;
 
 fn cast_group(g: &Gpu, c: &CastBuffers, lane: u32) -> u32 {
     let group = object();
-    let mut entries = [0u32; 35];
-    for (k, id) in [c.eye, c.window, c.looks, c.grid, lane, c.tangents, c.shards].into_iter().enumerate() {
+    let mut entries = [0u32; 40];
+    for (k, id) in [c.eye, c.window, c.looks, c.grid, lane, c.tangents, c.shards, c.overwrites].into_iter().enumerate() {
         entries[5 * k..5 * k + 5].copy_from_slice(&buffer_entry(k as u32, id));
     }
     g.bind_group(group, c.built.layouts[0], &entries);

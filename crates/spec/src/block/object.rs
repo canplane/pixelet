@@ -66,12 +66,6 @@ pub fn object_value_is_marker(value: u32) -> bool {
     kind_of(value) == Some(Kind::marker)
 }
 
-/// Whether a leaf is drawn as a voxel (a placeable cube or air) rather than
-/// an instance or nothing.
-pub fn object_value_is_voxel(value: u32) -> bool {
-    object_value_is_air(value) || cube_of(value).is_some()
-}
-
 pub fn decor_num_id(id: DecorId) -> u32 {
     id as u32
 }

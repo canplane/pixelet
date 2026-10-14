@@ -427,7 +427,19 @@ pub fn cube_outputs() -> Result<Vec<Output>, String> {
         "            match value {".into(),
     ]);
     rs.extend(colors.iter().map(|e| format!("                {} => Some(Object::{}),", e.value, e.name)));
-    rs.extend(["                _ => None,".to_string(), "            }".into(), "        }".into(), "    }".into(), "}".into()]);
+    rs.extend([
+        "                _ => None,".to_string(),
+        "            }".into(),
+        "        }".into(),
+        String::new(),
+        "        /// Whether a value read into a word, as a GPU has it, is one `of` names.".into(),
+        format!(
+            "        pub const fn objects(value: u32) -> bool {{ matches!(value, {}) }}",
+            runs(colors.iter().map(|e| e.value)).join(" | ")
+        ),
+        "    }".into(),
+        "}".into(),
+    ]);
     Ok(vec![
         Output::new("apps/web/src/catalog/block/cube.spec.ts", file(&ts)),
         Output::new("crates/portable/src/cube.spec.rs", file(&unwrapped(rs, "pub mod cubes {"))),

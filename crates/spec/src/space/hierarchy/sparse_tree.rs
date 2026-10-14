@@ -12,8 +12,7 @@
 //! goes without the others' blocks changing place.
 
 use super::tree::{children, slot_of};
-
-const BRANCH: u32 = 1 << 31;
+use pxl_portable::placed::BRANCH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slot<T> {
@@ -43,6 +42,21 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
             data: vec![value; roots * Self::WIDTH],
             free: Vec::new(),
         }
+    }
+
+    /// The heap lane, a word a slot: its child block with `BRANCH`, or 0.
+    pub fn heap(&self) -> &[u32] {
+        &self.heap
+    }
+
+    /// Slots either lane has room for before it grows.
+    pub fn room(&self) -> usize {
+        self.heap.capacity().min(self.data.capacity())
+    }
+
+    /// The data lane, a value a slot: a leaf's, or a branch's fold.
+    pub fn data(&self) -> &[T] {
+        &self.data
     }
 
     /// Root `root`'s block, its children's.

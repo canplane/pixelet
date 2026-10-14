@@ -395,7 +395,12 @@ fn grow(v: &mut Vec<Piece>) -> Result<(), Refused> {
 /// What the box of the block `b` shows and what the shader shades it by,
 /// read off the blocks about it `shades` names (pxl-portable `mask`).
 fn mask(blocks: &Blocks, b: [i64; 3]) -> u32 {
-    portable_mask(|[x, y, z]| blocks.block([b[0] + i64::from(x), b[1] + i64::from(y), b[2] + i64::from(z)]).or_bug(Errno::ENOTRECOVERABLE).is_some_and(Block::fills))
+    portable_mask(|[x, y, z]| {
+        blocks
+            .block([b[0] + i64::from(x), b[1] + i64::from(y), b[2] + i64::from(z)])
+            .or_bug(Errno::ENOTRECOVERABLE)
+            .is_some_and(Block::fills)
+    })
 }
 
 /// Every lateral edge a crease, so each shades as a silhouette.

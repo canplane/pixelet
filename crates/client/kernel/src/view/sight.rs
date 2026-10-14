@@ -108,19 +108,23 @@ pub fn grid_across(o: &Observation, tau: Tau) -> Option<[u32; 2]> {
     Lens::of(o).map(|l| l.across(tau))
 }
 
+/// The eye's words `gpu_cast` writes.
+pub const EYE_WORDS: usize = 20;
+
 /// What a GPU's cast of `across` cells reads (pxl-render
-/// frame/shader/cast.gen.wgsl `cast_cs`, group 0): `eye`, binding 0, as five
-/// vec4s — the eye's Q3 position; the unit forward and the reach; the unit
-/// right and τ; the unit up; the cells across and up and the zooms a block is
-/// asked at — and `tangents`, binding 6, each column's tangent then each
-/// row's, as the CPU's cast forms its directions. None without a screen.
-pub fn gpu_cast(o: &Observation, tau: Tau, across: [u32; 2], eye: &mut [u32; 20], tangents: &mut Vec<f32>) -> Option<()> {
+/// frame/shader/cast.gen.wgsl `cast_cs`, group 0): `eye`'s first
+/// `EYE_WORDS`, binding 0, as five vec4s — the eye's Q3 position; the unit
+/// forward and the reach; the unit right and τ; the unit up; the cells
+/// across and up and the zooms a block is asked at — and `tangents`, binding
+/// 5, each column's tangent then each row's, as the CPU's cast forms its
+/// directions. None without a screen.
+pub fn gpu_cast(o: &Observation, tau: Tau, across: [u32; 2], eye: &mut [u32], tangents: &mut Vec<f32>) -> Option<()> {
     let lens = Lens::of(o)?;
     let q = point(o.eye[0], o.eye[1], o.eye[2]);
     let w = |v: f64| (v as f32).to_bits();
     let [f, r, u] = [lens.forward, lens.right, lens.up];
     let [coarsest, finest] = asked();
-    *eye = [
+    eye[..EYE_WORDS].copy_from_slice(&[
         q[0] as u32,
         q[1] as u32,
         q[2] as u32,
@@ -141,7 +145,7 @@ pub fn gpu_cast(o: &Observation, tau: Tau, across: [u32; 2], eye: &mut [u32; 20]
         across[1],
         coarsest,
         finest,
-    ];
+    ]);
     tangents.clear();
     tangents.extend((0..across[0]).map(|i| lens.tangent(across, 0, i)));
     tangents.extend((0..across[1]).map(|j| lens.tangent(across, 1, j)));

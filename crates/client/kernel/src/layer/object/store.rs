@@ -29,10 +29,11 @@ use xpute_kit::status::errno::Errno;
 
 use crate::kernel;
 use crate::layer::object::ext::{Ext, Pools, NONE};
-use crate::layer::object::pyramid::{fold, Held};
+use crate::layer::object::pyramid::fold;
 use crate::layer::{Answer, Bound, Query};
 use crate::sched::edge::request_world_tick;
 use pxl_spec::block::ext::class_of;
+use pxl_spec::block::placed::{self, Held};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Block {
@@ -151,8 +152,22 @@ fn path(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
     [at[0].rem_euclid(around(zoom)), at[1], at[2]]
 }
 
-/// The tree's root the objects are under, its block of the nodes of zoom 0.
+/// The tree's root the objects are under, its block of the nodes of zoom 0
+/// (pxl-portable `placed::PLACED`).
 const PLACED: usize = 0;
+const _: () = assert!(Tree::root(PLACED) == placed::PLACED);
+
+/// The tree's lanes as pxl-portable `placed` reads them, the CPU as a GPU.
+pub struct Lanes<'a>(&'a Tree);
+
+impl placed::Lanes for Lanes<'_> {
+    fn heap(&self, slot: u32) -> u32 {
+        self.0.heap()[slot as usize]
+    }
+    fn data(&self, slot: u32) -> u32 {
+        self.0.data()[slot as usize]
+    }
+}
 
 /// The node of zoom 0 at the root's slot `k`.
 fn root(k: usize) -> [i64; 3] {
@@ -190,6 +205,9 @@ impl Write {
 pub struct Store {
     tree: Tree,
     ext: Pools,
+    /// Bumped by every write that changes the tree, so a reader holding a
+    /// copy of its lanes, the GPU's, knows to take them again.
+    revision: u32,
 }
 
 impl Default for Store {
@@ -197,6 +215,7 @@ impl Default for Store {
         Store {
             tree: Tree::new(EMPTY.word(), 1),
             ext: Pools::default(),
+            revision: 0,
         }
     }
 }
@@ -208,6 +227,17 @@ pub(super) type Tree = SparseTree<u32, 3>;
 type Enter<'a> = dyn FnMut(Zoom, [i64; 3], &Aabb, Option<Leaf>) -> bool + 'a;
 
 impl Store {
+    /// The tree's lanes, read where they live.
+    pub fn lanes(&self) -> Lanes<'_> {
+        Lanes(&self.tree)
+    }
+
+    /// The tree's heap and data lanes as they live, the room either has
+    /// before it grows, and the store's revision.
+    pub fn raw_lanes(&self) -> (&[u32], &[u32], usize, u32) {
+        (self.tree.heap(), self.tree.data(), self.tree.room(), self.revision)
+    }
+
     /// The node `at` of `zoom` in the tree, or the leaf over it: the zoom it
     /// was found at and its slot.
     fn find(&self, zoom: Zoom, at: [i64; 3]) -> (Zoom, Slot<u32>) {
@@ -325,6 +355,7 @@ impl Store {
             let value = Leaf { id: id16, ext: handle }.word();
             if self.tree.set(PLACED, depth(zoom), path(zoom, at), value, |tree, block, d| fold(tree, block, d - 1)) {
                 changed.push(cube(zoom, at));
+                self.revision = self.revision.wrapping_add(1);
             }
         }
         changed
@@ -355,6 +386,7 @@ impl Store {
         self.each(&mut |e| held.push(e.cube()));
         self.tree = Tree::new(EMPTY.word(), 1);
         self.ext.clear();
+        self.revision = self.revision.wrapping_add(1);
         held
     }
 }
@@ -403,27 +435,20 @@ impl Cells<'_> {
 
 impl Query for Store {
     type Record<'a> = Cells<'a>;
-    /// What a cube holds, its parent's handed down (`pyramid.rs` `Held`);
+    /// What a cube holds, its parent's handed down (pxl-portable `placed`);
     /// a node over the ground's two axes is read under it.
     type Cursor = Held;
 
     fn cursor<const D: usize>(&self, (zoom, at): Node<D>, _: Zoom) -> Held {
         match D {
-            3 => {
-                let at = [at[0], at[1], at[2]];
-                let (found, slot) = self.find(zoom, at);
-                Held::of(slot, found, (zoom, at))
-            }
-            _ => Held::Folded {
-                fold: Default::default(),
-                block: 0,
-            },
+            3 => placed::cursor(&self.lanes(), placed::PLACED, zoom, [at[0], at[1], at[2]].map(|v| v as i32)),
+            _ => Held::branch(0, zoom),
         }
     }
 
     fn child<const D: usize>(&self, parent: &Held, (zoom, at): Node<D>, _: Zoom) -> Held {
         match D {
-            3 => parent.child(&self.tree, zoom, [at[0], at[1], at[2]]),
+            3 => placed::child(&self.lanes(), *parent, zoom, [at[0], at[1], at[2]].map(|v| v as i32)),
             _ => *parent,
         }
     }
@@ -432,7 +457,7 @@ impl Query for Store {
     /// finer than its cells is one cube and `finest` one past `cell`, so the
     /// cost is the asker's resolution — one find for a node read whole.
     fn bound<const D: usize>(&self, held: &Held, node: Node<D>, cell: Zoom) -> Answer<Option<Bound>> {
-        if *held == Held::Nothing {
+        if !held.holds() {
             return Answer::Exact(None);
         }
         let mut out: Option<Bound> = None;
