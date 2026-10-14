@@ -51,7 +51,7 @@ use pxl_spec::space::coord::world::wrap_cell;
 use pxl_spec::space::coord::zoom::{cube, Zoom};
 use pxl_spec::space::hierarchy::tree::{child_of, Node};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::tile::Tile;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
 
 use super::world::World;
@@ -267,11 +267,13 @@ impl Area for Reading<'_, '_> {
 }
 
 impl ground::Held for Reading<'_, '_> {
-    /// The index lane over the node, off its line at `cell`; a node with no
-    /// ground under it, lowest over highest.
-    fn relief(&mut self, cell: Zoom, _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
+    /// The index lane over the node, off its line at the cells a tile at its
+    /// zoom reads, no finer than asked: a tile's lane joins its descendants'
+    /// (pxl-spec bake/fold.rs `fold_index`), so it bounds the finer tiles'
+    /// cells too; a node with no ground under it, lowest over highest.
+    fn relief(&mut self, cells: [Zoom; 2], _: (Zoom, [i32; 3])) -> ([i32; 2], bool) {
         let (zoom, c) = self.at.node;
-        let line = self.world.line(self.at, cell);
+        let line = self.world.line(self.at, cells[1].min(GROUND.grid_zoom(zoom.min(LEAF_ZOOM))));
         let none = [i32::from(i16::MAX), i32::from(i16::MIN)];
         match self.take(self.world.terrain.relief(&line, (zoom, [c[0], c[1]]))) {
             Some(r) => (r.unwrap_or(none), true),

@@ -189,18 +189,32 @@ impl World<'_> {
 
 /// The ground as the GPU holds it, for pxl-portable's one answer for a node.
 impl ground::Held for World<'_> {
-    /// The bound over the node of the finest held tile over it at the tile
-    /// zoom its cells at `cell` are read from, off that tile's grid
-    /// (`ground::bounded`).
-    fn relief(&mut self, cell: u32, (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
-        let read = GROUND.read_zoom(cell);
-        let s = zoom - read;
-        let (from, w) = self.drawn(read, [c[0] >> s, c[1] >> s]);
-        if w == 0 {
-            return ([0, 0], false);
+    /// The join of the bounds over the node of each tile the zooms `cells`
+    /// read their cells from, the finest held over it at each, off its grid
+    /// (`ground::bounded`), which bounds that tile's own cells alone; none
+    /// (`UNBOUNDED`) for a node wider than the finest asked's tile, which
+    /// holds more than one.
+    fn relief(&mut self, [coarsest, finest]: [u32; 2], (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
+        if GROUND.read_zoom(finest) > zoom {
+            return (ground::UNBOUNDED, true);
         }
-        let (grid, base) = (self.grid, (w - 1) * GRID_WORDS);
-        (ground::bounded(move |i| grid[(base + i) as usize], from, (zoom, [c[0], c[1]])), true)
+        let mut relief = [0, 0];
+        let mut z = coarsest;
+        while z <= finest {
+            let read = GROUND.read_zoom(z);
+            if z == coarsest || read != GROUND.read_zoom(z - 1) {
+                let s = zoom - read;
+                let (from, w) = self.drawn(read, [c[0] >> s, c[1] >> s]);
+                if w == 0 {
+                    return ([0, 0], false);
+                }
+                let (grid, base) = (self.grid, (w - 1) * GRID_WORDS);
+                let [lo, hi] = ground::bounded(move |i| grid[(base + i) as usize], from, (zoom, [c[0], c[1]]));
+                relief = if z == coarsest { [lo, hi] } else { [relief[0].min(lo), relief[1].max(hi)] };
+            }
+            z += 1;
+        }
+        (relief, true)
     }
 
     /// The block's column off the tile drawing that zoom's cells, the area's

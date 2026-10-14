@@ -469,13 +469,19 @@ pub fn above(cell: Zoom, z: i32, hi: i32) -> bool {
     z >= blocks(cell, hi as f32)
 }
 
+/// A bound over every height a cell holds, i16's whole range (`bicubic`).
+pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
+
 /// How the ground is held where a node reads it: the CPU's residency, a
 /// GPU's window over the tiles it was handed.
 pub trait Held: Area {
-    /// The lowest and highest the index lane of the finest held tile its
-    /// cells at `cell` are read from holds over the node `(zoom, c)`
-    /// (`relief`); false where no tile over it is held.
-    fn relief(&mut self, cell: Zoom, node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
+    /// The lowest and highest the ground's cells at the zooms `cells`, from
+    /// the coarsest to the finest asked, reach over the node `(zoom, c)`,
+    /// each off the finest held tile it is read from; a bound no tighter
+    /// than the heights' whole range (`UNBOUNDED`) where the source cannot
+    /// bound them, which only splits more; false where no tile over it is
+    /// held.
+    fn relief(&mut self, cells: [Zoom; 2], node: (Zoom, [i32; 3])) -> ([i32; 2], bool);
     /// The column of the block `c` at `zoom` as the grid reads it, the
     /// service area's edge laid on it (`Cell`); false where it cannot be read.
     fn cell(&mut self, zoom: Zoom, c: [i32; 3]) -> (Cell, bool);
@@ -520,10 +526,10 @@ pub fn node(held: &mut impl Held, cave: Cave, (zoom, c): (Zoom, [i32; 3]), [far,
     if zoom < GROUND.top() {
         return split;
     }
-    // A block's cells are its zoom's; a coarser node's, the cells a tile at
-    // its zoom reads, no finer than asked.
-    let cell = if block { zoom } else { near.min(GROUND.grid_zoom(zoom.min(LEAF_ZOOM))) };
-    let (relief, ok) = held.relief(cell, (zoom, c));
+    // A block's cells are its zoom's; a coarser node's, those of each zoom
+    // asked within it (`empty`).
+    let cells = if block { [zoom, zoom] } else { [if far > zoom + 1 { far } else { zoom + 1 }, near] };
+    let (relief, ok) = held.relief(cells, (zoom, c));
     if !ok {
         return lacks;
     }
