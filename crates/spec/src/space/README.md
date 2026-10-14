@@ -134,11 +134,11 @@ written once. What a node holds, whether it is resident, how it is stored
 and how a reader walks it are each tree's own, and follow from what it
 represents:
 
-|                                                  | axes | resident                             | a node holds                                                    | stored                                                           | walked                                                          |
-| ------------------------------------------------ | ---- | ------------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------- |
-| the pyramid (`layer/tile.rs`)                    | 2    | resident by tile: one can be missing | a layer's fold of all under it                                  | a record a tile                                                  | from a point, up to the nearest resident tile                   |
-| a tile's bound (`bake/tile/terrain.rs` `levels`) | 2    | with its tile                        | the lowest and highest drawn under a cell                       | made from its heights wherever the tile is, a level a zoom       | a coarse cell passed whole where a ray is above it              |
-| the objects (pxl-kernel object/store.rs)         | 3    | whole                                | its leaf's value, or the majority of its eight, read when asked | the leaves alone, one tree a column (`hierarchy/sparse_tree.rs`) | down a cube's key range, by a box, or along a ray nearest first |
+|                                                       | axes | resident                             | a node holds                                                    | stored                                                           | walked                                                          |
+| ----------------------------------------------------- | ---- | ------------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------- |
+| the pyramid (`layer/tile.rs`)                         | 2    | resident by tile: one can be missing | a layer's fold of all under it                                  | a record a tile                                                  | from a point, up to the nearest resident tile                   |
+| a tile's bound (`bake/tile/terrain.rs` `level_bound`) | 2    | with its tile                        | the lowest and highest drawn under a cell                       | made by the GPU from its cells and read back, a level a zoom     | a coarse cell passed whole where a ray is above it              |
+| the objects (pxl-kernel object/store.rs)              | 3    | whole                                | its leaf's value, or the majority of its eight, read when asked | the leaves alone, one tree a column (`hierarchy/sparse_tree.rs`) | down a cube's key range, by a box, or along a ray nearest first |
 
 The pyramid is a tree across zooms: every tile holds a summary of the
 ground under it — terrain's cells voted and averaged, places summed — so a

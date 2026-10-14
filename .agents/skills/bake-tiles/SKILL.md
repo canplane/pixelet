@@ -138,9 +138,10 @@ that, worked back from how far each thing draws:
   The tile keeps only its own cells, and its lines' runs within their
   footprint (pxl-spec bake/separation.rs `footprint`).
 - **Elevation** is sampled `ELE_PAD` samples past the tile, what a bicubic
-  window at the tile's edge reads; the bake draws each cell's height off it
-  once (pxl-spec bake/surface.rs `heights`), and the tile carries the
-  heights, not the samples. The published shards
+  window at the tile's edge reads; every zoom's tile carries the samples, a
+  parent's the average of its children's over the ring about them (pxl-spec
+  bake/fold.rs `fold_ele`), and the client's GPU draws each cell's height
+  off them. The published shards
   (`infra/geo/coverage.json`) are warped each to its own edges, so
   a padded grid at a shard's edge reads its neighbor's raster, and at the
   coverage's outer edge finds none.
