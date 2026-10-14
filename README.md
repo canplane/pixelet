@@ -189,7 +189,8 @@ The tree is grouped by where a thing runs, and the kernel's modules by where the
 ├── script/                   # the tree's checks, the deployment smoke, the usage report
 ├── infra/                    # local and production compose files, and what fills db-geo
 └── doc/                      # The record: backlog.md what is queued, decision/ each decision
-                              #   and why (closed/ those no longer cited), experiment/ measurements
+                              #   and why (closed/ those no longer cited), experiment/ measurements,
+                              #   discussion/ what was weighed where nothing was decided
 ```
 
 **What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the servers, the bakes and the asset ingest compile the model, so they are crates; the Overture and elevation ingests put a provider's data into Postgres sharing nothing with the model, so they are scripts under `infra/geo/`. The host and the shell are TypeScript because neither decides anything about the world; what they need of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is generated from.
