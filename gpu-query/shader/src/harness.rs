@@ -1,3 +1,5 @@
+// gpu-query-shader/harness.rs
+
 //! The harness's entries (gpu-query/runner): the caves per node, a node's
 //! seed, and a tile's ground per cell, each diffed against the CPU.
 

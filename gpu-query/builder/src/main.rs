@@ -1,3 +1,5 @@
+// gpu-query-builder/main.rs
+
 //! Builds the shader crate for `spirv-unknown-naga-wgsl` and prints where
 //! the WGSL lands, or the compiler's own error: each entry a module of its
 //! own, as a pipeline takes its module's one entry; or with `--harness` the

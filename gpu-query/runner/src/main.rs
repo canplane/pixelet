@@ -1,3 +1,5 @@
+// gpu-query-runner/main.rs
+
 //! Runs the harness's WGSL rust-gpu made of pxl-portable (`script/portable-wgsl.ts`
 //! builds it beside the cast's, into gpu-query's target) on the GPU and
 //! diffs each answer's bits against the same source on the CPU: the caves

@@ -1,3 +1,5 @@
+// gpu-query-shader/lib.rs
+
 //! The cast's compute entry (`cast_cs`): each camera-grid cell's ray down
 //! the pyramid by pxl-portable's descent, the one the CPU's cast runs, over
 //! the world as the GPU holds it; and the ground's grid it reads, a held
