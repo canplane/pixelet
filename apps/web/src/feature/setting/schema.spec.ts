@@ -205,7 +205,7 @@ export const SETTINGS = {
   rays: {
     key: 19 as number,
     kind: "choice",
-    default: "cpu",
+    default: "half",
     options: ["cpu", "cells", "half", "full"],
     section: "debug",
     dev: true,

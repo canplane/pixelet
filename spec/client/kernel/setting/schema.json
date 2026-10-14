@@ -279,7 +279,7 @@
     "rays": {
       "$doc": ["Who casts the rays the screen's cells draw, the CPU or the GPU, and how many (scene/cast.rs); RAY_DENSITIES says each."],
       "kind": "choice",
-      "default": "cpu",
+      "default": "half",
       "options": "RAY_DENSITIES",
       "section": "debug",
       "dev": true

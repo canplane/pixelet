@@ -404,7 +404,7 @@ impl Settings {
         camera_gizmo: false,
         person: 1,
         pet: 5,
-        rays: RayDensity::cpu,
+        rays: RayDensity::half,
         ray_steps: false,
     };
 
