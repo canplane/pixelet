@@ -8,7 +8,7 @@ _Started on December 15, 2025._
 
 **pixelet puts the real Earth into blocks — your street, its buildings, the river beside it, the hills behind it — and lets you build on it.**
 
-<img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.png" height="480">
+<img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.webp" width="100%">
 
 The planet is too large to load or draw at once, so pixelet follows one rule: **draw what the eye can tell apart, and nothing else.** A city, a mountain range or a tower behind a ridge costs the cells it covers on the screen, not what it holds.
 
