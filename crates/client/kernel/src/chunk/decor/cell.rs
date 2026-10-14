@@ -1,10 +1,10 @@
 // pxl-kernel/chunk/decor/cell.rs
 
-//! Decor as a payload of the chunks the terrain materializes: each mounted
-//! chunk holds the decor standing inside it, built over its zoom's tile and
-//! the object store, and drawn while the chunk is. A block is immutable once
-//! built; how each instance is drawn (`present`) is decided per frame and
-//! rebuilds nothing.
+//! Decor in the eye's cubes (view/observation.rs `cubes`): each holds the
+//! decor standing inside it, built over its zoom's tile and the object
+//! store, and drawn while it is in view. A block is immutable once built; how
+//! each instance is drawn (`present`) is decided per frame and rebuilds
+//! nothing.
 
 use crate::layer::Query;
 use fnv::FnvHashMap;
@@ -13,7 +13,7 @@ use pxl_render::frame::draw::{DrawList, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PI
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::{nearest, nearest_box};
-use pxl_spec::space::coord::zoom::cube;
+use pxl_spec::space::coord::zoom::{cube, units};
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_guest::mem::base::ptr_at;
 use xpute_guest::mem::heap::{alloc, free};
@@ -24,7 +24,7 @@ use crate::chunk::decor::build::{decor_gone_px, decor_sprite_px, DecorBuild, Dec
 use crate::chunk::decor::instance::{decor_groups, DecorScratch, GroupLanes};
 use crate::chunk::mesh_slot::OCCUPANCY;
 use crate::chunk::source::{objects_met, Met};
-use crate::chunk::table::Scheduler;
+use crate::chunk::table::Frame;
 use crate::chunk::Chunk;
 use crate::kernel;
 use crate::layer::object::store::Store;
@@ -46,7 +46,7 @@ struct Block {
     /// The lowest and highest instance, in units.
     heights: [f32; 2],
     sources: Sources,
-    /// Its chunk is drawn and in the frustum.
+    /// Its cube is in view.
     drawn: bool,
 }
 
@@ -73,6 +73,8 @@ struct Cells {
     scratch: Option<DecorScratch>,
     /// Kept so a settled turn asks the heap for nothing.
     mounted: Vec<(Chunk, bool, bool)>,
+    /// The same, in key order, for what is held.
+    keyed: Vec<Chunk>,
     gone: Vec<Chunk>,
     sprites: Vec<u32>,
 }
@@ -164,16 +166,32 @@ fn release(block: Block, draw: &mut DrawList) {
     unsafe { free((block.at as usize, block.bytes)) };
 }
 
-/// Builds the decor of the chunks the terrain has mounted, within what is
-/// left of the turn as the chunks' builds are, and lets go of what an
-/// unmounted chunk held.
-pub fn step(decors: &[Decor], store: &Store, sched: &Scheduler, draw: &mut DrawList, hide: Option<DecorHide>, frame_eye: V3, budget: &FrameBudget) {
+/// Builds the decor of the eye's cubes, within what is left of the turn, and
+/// lets go of what a cube no longer the eye's held.
+pub fn step(decors: &[Decor], store: &Store, frame: &Frame, draw: &mut DrawList, hide: Option<DecorHide>, budget: &FrameBudget) {
     let c = cells();
     let mut mounted = core::mem::take(&mut c.mounted);
-    sched.mounted(&mut mounted);
-    mounted.sort_unstable_by_key(|m| m.0);
+    mounted.clear();
+    // The eye's cubes in view, nearest first: what is built first is what is seen nearest.
+    if let Some(o) = observation() {
+        crate::view::observation::cubes(&o, crate::view::sight::tau(), &mut |(zoom, at)| {
+            let chunk = Chunk::indexed(zoom, at);
+            let b = chunk.region();
+            let center = core::array::from_fn(|k| (b.min[k] + b.max[k]) / 2.0);
+            if frame.sees(center, units(zoom) * 3f64.sqrt() / 2.0) {
+                mounted.push((chunk, true, true));
+            }
+        });
+        let near = |c: &Chunk| v3::len(&v3::sub(&nearest_box(&c.region(), o.eye[0]).nearest(o.eye), &o.eye));
+        mounted.sort_unstable_by(|a, b| near(&a.0).total_cmp(&near(&b.0)));
+    }
+    let mut keyed = core::mem::take(&mut c.keyed);
+    keyed.clear();
+    keyed.extend(mounted.iter().map(|m| m.0));
+    keyed.sort_unstable();
+    let frame_eye = frame.eye;
     let largest = largest_possible(decors);
-    let held = |k: &Chunk| mounted.binary_search_by_key(k, |m| m.0).is_ok_and(|i| may_show(mounted[i].0, largest));
+    let held = |k: &Chunk| keyed.binary_search(k).is_ok() && may_show(*k, largest);
     c.gone.clear();
     c.gone.extend(c.blocks.keys().copied().filter(|k| !held(k)));
     for k in c.gone.drain(..) {
@@ -205,6 +223,7 @@ pub fn step(decors: &[Decor], store: &Store, sched: &Scheduler, draw: &mut DrawL
         }
     }
     c.mounted = mounted;
+    c.keyed = keyed;
     present(c, draw, frame_eye);
 }
 

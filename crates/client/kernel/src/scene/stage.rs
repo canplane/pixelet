@@ -253,10 +253,10 @@ pub fn visible_step(ctx: &mut TickContext) {
         let k = kernel();
         let edits = crate::layer::object::preview::current();
         let hide = edits.hide.filter(|_| edits.hide_in.1).map(DecorHide::Placed).or(edits.scattered.map(DecorHide::Scattered));
-        crate::chunk::decor::cell::step(&pxl_spec::block::decor::DECORS, &k.objects, &k.sched, &mut k.draw, hide, frame.eye, &ctx.budget);
+        crate::chunk::decor::cell::step(&pxl_spec::block::decor::DECORS, &k.objects, &frame, &mut k.draw, hide, &ctx.budget);
         crate::scene::environment::cloud::step(&mut k.draw, &frame, &ctx.budget);
     }
-    crate::chunk::place::step(ctx);
+    crate::chunk::place::step(ctx, &frame);
     let k = kernel();
     k.billboards.draw(&mut k.draw, frame.eye);
     if draw {

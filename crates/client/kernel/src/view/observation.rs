@@ -7,11 +7,12 @@ use crate::io::demand::Order;
 use pxl_spec::space::layer::lattice::demand_reach;
 
 use pxl_spec::space::camera::eye::{Frustum, Observation};
-use pxl_spec::space::camera::grid::Tau;
+use pxl_spec::space::camera::grid::{Tau, CHUNK_STEPS};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::hierarchy::tree::{region, Node};
-use pxl_spec::space::layer::demand::{band, tiles_within};
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
@@ -54,6 +55,53 @@ pub fn within<const D: usize>(node: Node<D>, cell: Zoom) -> Option<Aabb> {
         Answer::Nothing(_) => Some(region(node)),
         held => held.value().flatten().map(|b| b.aabb),
     }
+}
+
+/// The cubes `CHUNK_STEPS` zooms over the cells a reader draws, the ground
+/// about the eye cut into one partition: from the coarsest squares within the
+/// far edge, a square splits into its four while its nearest point is nearer
+/// than its cell zoom's split distance (`Tau::split_distance`), the rule a
+/// ray's descent asks by, taken about the eye's height; each square left is
+/// at the zoom its nearest point asks, and in each, the cubes the world stands
+/// in there. A function of the eye and the world alone, never of what a ray
+/// met; a column it knows nothing of yet names none, as nothing there is to
+/// stand in.
+pub fn cubes(o: &Observation, tau: Tau, each: &mut dyn FnMut(Node<3>)) {
+    let Some(top) = floor::top() else { return };
+    let over = (o.eye[2] - o.ground).max(0.0);
+    let coarsest = GROUND.grid_zoom(top.max(GROUND.top())).max(CHUNK_STEPS);
+    let near = |zoom: Zoom, [x, y]: [i64; 2]| {
+        let side = units(zoom);
+        let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);
+        libm::hypot(libm::hypot(gap(x as f64 * side, o.eye[0]), gap(y as f64 * side, o.eye[1])), over)
+    };
+    let zoom = coarsest - CHUNK_STEPS;
+    let flat = (o.far() * o.far() - over * over).max(0.0).sqrt();
+    let mut stack: Vec<(Zoom, [i64; 2])> = squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)).collect();
+    while let Some((zoom, xy)) = stack.pop() {
+        let (cell, d) = (zoom + CHUNK_STEPS, near(zoom, xy));
+        if d > o.far() {
+            continue;
+        }
+        if cell < GROUND.cell() && d < tau.split_distance(cell) {
+            stack.extend((0..4).map(|k| (zoom + 1, [2 * xy[0] + (k & 1), 2 * xy[1] + (k >> 1)])));
+            continue;
+        }
+        let Some(b) = World::now().bounds((zoom, xy), cell).value().flatten() else { continue };
+        let side = units(zoom);
+        for z in (b.aabb.min[2] / side).floor() as i64..=(b.aabb.max[2] / side).floor() as i64 {
+            each((zoom, [xy[0], xy[1], z]));
+        }
+    }
+}
+
+/// The cell zoom the eye's rays draw at `at`: the camera grid's rule at its
+/// distance (`Tau::cell_at`), no coarser than a tile draws and no finer than
+/// the ground's cells.
+pub fn cell_at(o: &Observation, tau: Tau, at: V3) -> Option<Zoom> {
+    let top = floor::top()?;
+    let d = pxl_spec::space::coord::v3::len(&pxl_spec::space::coord::v3::sub(&at, &o.eye));
+    Some(tau.cell_at(d).clamp(GROUND.grid_zoom(top.max(GROUND.top())), GROUND.cell()))
 }
 
 /// How far from the eye a layer's tiles at `zoom` are asked for: at the

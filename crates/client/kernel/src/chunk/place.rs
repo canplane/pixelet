@@ -202,7 +202,7 @@ fn spacing_px() -> f64 {
     libm::round(f64::from(SPACING_CELLS) * cell)
 }
 
-pub fn step(ctx: &mut TickContext) {
+pub fn step(ctx: &mut TickContext, frame: &crate::chunk::table::Frame) {
     let p = PLACEMENT.get(Placement::default);
     if crate::view::observation::eye().is_none() {
         if let Some(set) = p.set.take() {
@@ -214,11 +214,18 @@ pub fn step(ctx: &mut TickContext) {
         return;
     }
     let _tiles = PlaceTile::demand();
-    if crate::chunk::domain::current().is_none() {
-        return;
-    }
-    let sched = &crate::kernel().sched;
-    sched.mounted(&mut p.mounted);
+    let Some(o) = crate::view::observation::observation() else { return };
+    let tau = crate::view::sight::tau();
+    // The eye's cubes in view (view/observation.rs `cubes`), as decor's are.
+    p.mounted.clear();
+    crate::view::observation::cubes(&o, tau, &mut |(zoom, at)| {
+        let chunk = Chunk::indexed(zoom, at);
+        let b = chunk.region();
+        let center = core::array::from_fn(|k| (b.min[k] + b.max[k]) / 2.0);
+        if frame.sees(center, pxl_spec::space::coord::zoom::units(zoom) * 3f64.sqrt() / 2.0) {
+            p.mounted.push((chunk, true, true));
+        }
+    });
     p.now.drawn.clear();
     p.now.drawn.extend(p.mounted.iter().filter(|m| m.1).map(|m| m.0));
     p.now.drawn.sort_unstable();
@@ -252,7 +259,7 @@ pub fn step(ctx: &mut TickContext) {
     let drafted = draft.map(|d| marker_at(d.at, &d.words)).map(|(label, stands, _)| (label, stands, FINEST_ZOOM));
     // The line is its speaker's, judged where it stands, as a marker by the chunk drawing it there.
     let line = shown_line();
-    let said = line.zip(speaker()).and_then(|(label, (feet, over))| Some((label, over, sched.cells_at(&feet)?)));
+    let said = line.zip(speaker()).and_then(|(label, (feet, over))| Some((label, over, crate::view::observation::cell_at(&o, tau, crate::view::frame::coord::to_world(&feet))?)));
     let is_drafted = |label: &Label| matches!(label, Label::Marker { at, .. } if Some(*at) == draft.map(|d| d.at));
     // A cell's markers but the waiting one: one is itself, more their count.
     let shown = found.chunk_by(|a, b| a.cell().is_some() && a.cell() == b.cell()).filter_map(|run| {
