@@ -12,7 +12,7 @@ import { handle_slot } from "@xpute/host/abi/handle.ts";
 import { each_record, text_of } from "@xpute/host/ipc/stream.ts";
 
 import { DEV_BUNDLE } from "@/config/bundle.ts";
-import { address, compare, dimension, filter, format, load, op, record, resource, stamp, stream } from "@/kernel/render/gpu/api.spec.ts";
+import { address, compare, dimension, filter, format, load, op, read, record, resource, stamp, stream } from "@/kernel/render/gpu/api.spec.ts";
 
 type GpuObject =
   | GPUBuffer
@@ -324,6 +324,27 @@ function readTimestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: u
   );
 }
 
+/** `length` bytes of `source` from `offset` into the module's memory at
+ * `address` once the GPU has them, the word at `word` holding `ticket` then
+ * marked done; only while that word still holds the ticket, which a later
+ * ask of the same range replaces. */
+function readBuffer(encoder: GPUCommandEncoder, source: GPUBuffer, offset: u32, length: u32, address: u32, word: u32, ticket: u32): void {
+  const staging = gpu().createBuffer({ size: length, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  encoder.copyBufferToBuffer(source, offset, staging, 0, length);
+  // The microtask runs only after the whole stream has submitted.
+  queueMicrotask(() =>
+    staging.mapAsync(GPUMapMode.READ).then(() => {
+      const memory = moduleMemory!;
+      const held = new Uint32Array(memory, word, 1);
+      if (held[0] === ticket) {
+        new Uint8Array(memory, address, length).set(new Uint8Array(staging.getMappedRange()));
+        held[0] = (ticket | read.DONE) >>> 0;
+      }
+      staging.destroy();
+    }, () => staging.destroy())
+  );
+}
+
 /** With no device the records are dropped: the kernel remakes everything on the next one. */
 export function runGpuStream(memory: ArrayBuffer, at: u32): void {
   gpuMsAt ??= { memory, at: at + stream.GPU_MS * 4 };
@@ -513,6 +534,9 @@ function runGpuRecord(code: u32, w: U32Array, a: u32, n: u32): void {
       break;
     case op.TIMESTAMPS:
       readTimestamps(get<GPUCommandEncoder>(w[a]), get<GPUQuerySet>(w[a + 1]), w[a + 2]);
+      break;
+    case op.READ_BUFFER:
+      readBuffer(get<GPUCommandEncoder>(w[a]), get<GPUBuffer>(w[a + 1]), w[a + 2], w[a + 3], w[a + 4], w[a + 5], w[a + 6]);
       break;
     default:
       throw new Error(`[gpu] record ${code}`);

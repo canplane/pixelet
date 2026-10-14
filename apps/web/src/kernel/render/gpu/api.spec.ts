@@ -156,6 +156,13 @@ export const op = {
   COMPUTE_PASS: 30 as number,
   /** pass, workgroups across, up, deep */
   DISPATCH: 32 as number,
+  /** encoder, id, offset, length, address, word, ticket: the buffer's bytes from offset, once the GPU has them, copied into the module's memory at address, and the word at `word` marked `read.DONE` over the ticket; only while that word still holds the ticket, so a range asked of again since takes the later answer alone */
+  READ_BUFFER: 33 as number,
+} as const;
+
+/** What READ_BUFFER leaves in its word: the ticket asked, with DONE set once the bytes are in. A ticket leaves DONE clear. */
+export const read = {
+  DONE: 2147483648 as number,
 } as const;
 
 /** A pipeline record's codes (shader.rs), and HEAD, the words it opens with

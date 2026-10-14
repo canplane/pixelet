@@ -174,6 +174,8 @@ pub mod op {
     pub const COMPUTE_PASS: u32 = 30;
     /// pass, workgroups across, up, deep
     pub const DISPATCH: u32 = 32;
+    /// encoder, id, offset, length, address, word, ticket: the buffer's bytes from offset, once the GPU has them, copied into the module's memory at address, and the word at `word` marked `read.DONE` over the ticket; only while that word still holds the ticket, so a range asked of again since takes the later answer alone
+    pub const READ_BUFFER: u32 = 33;
     pub const KEYS: &[&str] = &[
         "BUFFER",
         "TEXTURE",
@@ -206,7 +208,14 @@ pub mod op {
         "COMPUTE_PIPELINE",
         "COMPUTE_PASS",
         "DISPATCH",
+        "READ_BUFFER",
     ];
+}
+
+/// What READ_BUFFER leaves in its word: the ticket asked, with DONE set once the bytes are in. A ticket leaves DONE clear.
+pub mod read {
+    pub const DONE: u32 = 2147483648;
+    pub const KEYS: &[&str] = &["DONE"];
 }
 
 /// A pipeline record's codes (shader.rs), and HEAD, the words it opens with

@@ -252,6 +252,15 @@ impl Gpu {
         put(op::TIMESTAMPS, &[encoder, query_set, written]);
     }
 
+    /// `length` bytes of buffer `id` from `offset`, once the GPU has them,
+    /// into the module's memory at `address`, the word at `word` holding
+    /// `ticket` then marked done (`op::READ_BUFFER`): a turn or more later,
+    /// and only while that word still holds the ticket.
+    #[allow(clippy::too_many_arguments)]
+    pub fn read_buffer(&self, encoder: u32, id: u32, offset: u32, length: u32, address: u32, word: u32, ticket: u32) {
+        put(op::READ_BUFFER, &[encoder, id, offset, length, address, word, ticket]);
+    }
+
     /// Span `span`'s time in ms from the last frame read; past the last span, the whole frame.
     pub fn gpu_ms(&self, span: u32) -> f64 {
         let at = stream::GPU_MS as usize + 2 * span as usize;

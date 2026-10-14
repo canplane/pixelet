@@ -10,10 +10,11 @@ use std::sync::{Arc, Mutex};
 
 use xpute_guest::abi::handle::handle_slot;
 use xpute_guest::global::Global;
+use xpute_guest::mem::base::ptr_at;
 
 use super::NONE;
 use crate::frame::shader::record::VERTEX_ENTRY;
-use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, record, resource};
+use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, read, record, resource};
 
 /// RGBA, top row first, unconverted and not premultiplied, as the page's bitmap is.
 struct Image {
@@ -105,6 +106,16 @@ struct StampRead {
     written: u32,
 }
 
+/// A buffer's bytes on their way into the module's memory (`read_buffer`).
+struct BufferRead {
+    buffer: wgpu::Buffer,
+    address: u32,
+    word: u32,
+    ticket: u32,
+    /// COPIED, MAPPING, MAPPED, or FREE where the map failed.
+    state: Arc<AtomicU8>,
+}
+
 const FREE: u8 = 0;
 const COPIED: u8 = 1;
 const MAPPING: u8 = 2;
@@ -133,6 +144,7 @@ struct Device {
     frames: Vec<wgpu::SurfaceTexture>,
     stamps: Option<Stamps>,
     gpu_ms: Vec<f64>,
+    reads: Vec<BufferRead>,
     /// `Queue::write_buffer` makes a Metal buffer and mapping per write, a dozen a
     /// frame; the belt maps chunks once and reuses them.
     belt: wgpu::util::StagingBelt,
@@ -208,6 +220,7 @@ pub fn open_device(configure_at: ConfigureAt) -> Option<DeviceInfo> {
             frames: Vec::new(),
             stamps: None,
             gpu_ms: Vec::new(),
+            reads: Vec::new(),
             belt: wgpu::util::StagingBelt::new(device.clone(), BELT_CHUNK_BYTES),
             uploads: None,
             in_flight: Arc::new(AtomicU32::new(0)),
@@ -323,6 +336,7 @@ pub fn gpu_publish() {
         }
         let _ = d.device.poll(wgpu::PollType::Poll);
         read_stamps(d);
+        read_buffers(d);
     }
 }
 
@@ -362,6 +376,38 @@ fn read_stamps(d: &mut Device) {
         r.buffer.unmap();
         r.state.store(FREE, Ordering::Release);
     }
+}
+
+/// Each read the GPU has finished into the module's memory, while its word
+/// still holds its ticket; mapped once submitted.
+fn read_buffers(d: &mut Device) {
+    for r in &d.reads {
+        if r.state.load(Ordering::Acquire) == COPIED {
+            r.state.store(MAPPING, Ordering::Release);
+            let state = Arc::clone(&r.state);
+            r.buffer.slice(..).map_async(wgpu::MapMode::Read, move |result| {
+                state.store(if result.is_ok() { MAPPED } else { FREE }, Ordering::Release);
+            });
+        }
+    }
+    d.reads.retain(|r| match r.state.load(Ordering::Acquire) {
+        MAPPED => {
+            if let Ok(range) = r.buffer.slice(..).get_mapped_range() {
+                let word = ptr_at::<u32>(r.word as usize);
+                // SAFETY: the kernel's own word and range, which it asked to be
+                // written and does not write while the ticket is out.
+                unsafe {
+                    if *word == r.ticket {
+                        core::ptr::copy_nonoverlapping(range.as_ptr(), ptr_at::<u8>(r.address as usize), range.len());
+                        *word = r.ticket | read::DONE;
+                    }
+                }
+            }
+            false
+        }
+        FREE => false,
+        _ => true,
+    });
 }
 
 pub fn room(_bytes: u32) -> bool {
@@ -1165,5 +1211,32 @@ impl Gpu {
 
     pub fn gpu_ms(&self, span: u32) -> f64 {
         device().and_then(|d| d.gpu_ms.get(span as usize).copied()).unwrap_or(0.0)
+    }
+
+    /// `length` bytes of buffer `id` from `offset`, once the GPU has them,
+    /// into the module's memory at `address`, the word at `word` holding
+    /// `ticket` then marked done: polled at the turn's end, so a turn or more
+    /// later, and only while that word still holds the ticket.
+    #[allow(clippy::too_many_arguments)]
+    pub fn read_buffer(&self, encoder: u32, id: u32, offset: u32, length: u32, address: u32, word: u32, ticket: u32) {
+        let Some(d) = device() else { return };
+        let Some(source) = d.buffer(id).cloned() else { return };
+        let buffer = d.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: u64::from(length),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let Some(Object::Encoder(e)) = d.objects.get_mut(handle_slot(encoder) as usize).and_then(Option::as_mut) else {
+            return;
+        };
+        e.copy_buffer_to_buffer(&source, u64::from(offset), &buffer, 0, Some(u64::from(length)));
+        d.reads.push(BufferRead {
+            buffer,
+            address,
+            word,
+            ticket,
+            state: Arc::new(AtomicU8::new(COPIED)),
+        });
     }
 }
