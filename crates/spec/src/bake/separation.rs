@@ -18,11 +18,11 @@ use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use xpute_kit::math::scalar::round;
 
 /// Points are in eighths of the tile's cell, which an `i16` holds far past the tile's edge.
-pub const POINT_SCALE: f64 = 8.0;
+pub const POINT_SCALE: f64 = pxl_portable::ways::POINT_SCALE as f64;
 
 /// The farthest past half its width the client draws a line, in its tile's
 /// cells; the bake sizes a line's tile and extent by it.
-pub const LINE_PAST: f64 = 1.0;
+pub const LINE_PAST: f64 = pxl_portable::ways::LINE_PAST as f64;
 
 /// The widest a way is drawn, in its tile's cells: what a line's width byte
 /// holds. The ground draws a way no wider, so it is one width on and off a
@@ -42,12 +42,12 @@ pub fn slab_depth(u_per_m: f64) -> i32 {
 }
 
 /// What a line is, from the source's flags alone; the byte is the wire's.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Form {
-    Bridge = 0,   // a slab under its surface
-    Tunnel = 1,   // its clear height and shell over its surface
-    Approach = 2, // a bridge's or a tunnel's approach on the ground: an embankment or a cutting
+    Bridge = pxl_portable::ways::BRIDGE as u8, // a slab under its surface
+    Tunnel = pxl_portable::ways::TUNNEL as u8, // its clear height and shell over its surface
+    Approach = 2,                              // a bridge's or a tunnel's approach on the ground: an embankment or a cutting
 }
 
 impl Form {
