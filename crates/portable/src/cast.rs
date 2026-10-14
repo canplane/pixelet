@@ -176,7 +176,8 @@ impl Place {
     pub fn parent(self, ray: &Ray) -> Place {
         let k = self.slot(ray);
         let (m, h) = Place::step(self.zoom - 1);
-        let at = |a: usize| (self.corner[a] - ((k >> a) & 1) as i32 * h) / m;
+        // Exact: a child's corner is its parent's times `m`, 1 or 2, plus `h`.
+        let at = |a: usize| (self.corner[a] - ((k >> a) & 1) as i32 * h) >> (m >> 1);
         Place {
             zoom: self.zoom - 1,
             corner: [at(0), at(1), at(2)],
@@ -201,29 +202,30 @@ pub fn slab(ray: &Ray, min: [f32; 3], side: f32, t0: f32, t1: f32) -> (f32, f32,
     let (mut enter, mut leave, mut axis) = (t0, t1, 0);
     // The nearest plane yet, once an axis the ray moves along gave one.
     let (mut near_most, mut moved) = (0.0, false);
-    let mut a = 0;
-    while a < 3 {
-        let d = ray.direction[a];
+    // Each axis in turn, its components named, not indexed.
+    let mut each = |a: u32, d: f32, min: f32| {
         // An axis the ray runs beside: within the box, any t; outside it,
         // none past the span's ends.
         let (near, far) = if d == 0.0 {
-            if 0.0 < min[a] || 0.0 > min[a] + side {
+            if 0.0 < min || 0.0 > min + side {
                 (t1, t0)
             } else {
                 (t0, t1)
             }
         } else {
-            let (p, q) = (min[a] / d, (min[a] + side) / d);
+            let (p, q) = (min / d, (min + side) / d);
             let (near, far) = if d > 0.0 { (p, q) } else { (q, p) };
             if !moved || near > near_most {
-                (near_most, moved, axis) = (near, true, a as u32);
+                (near_most, moved, axis) = (near, true, a);
             }
             (near, far)
         };
         enter = enter.max(near);
         leave = leave.min(far);
-        a += 1;
-    }
+    };
+    each(0, ray.direction[0], min[0]);
+    each(1, ray.direction[1], min[1]);
+    each(2, ray.direction[2], min[2]);
     (enter, leave, axis)
 }
 
@@ -231,15 +233,15 @@ pub fn slab(ray: &Ray, min: [f32; 3], side: f32, t0: f32, t1: f32) -> (f32, f32,
 /// the first of its far faces it reaches.
 fn leaves(ray: &Ray, min: [f32; 3], side: f32) -> u32 {
     let (mut best, mut moved, mut axis) = (0.0, false, 0);
-    let mut a = 0;
-    while a < 3 {
-        let d = ray.direction[a];
-        let t = if d > 0.0 { (min[a] + side) / d } else { min[a] / d };
+    let mut each = |a: u32, d: f32, min: f32| {
+        let t = if d > 0.0 { (min + side) / d } else { min / d };
         if d != 0.0 && (!moved || t < best) {
-            (best, moved, axis) = (t, true, a as u32);
+            (best, moved, axis) = (t, true, a);
         }
-        a += 1;
-    }
+    };
+    each(0, ray.direction[0], min[0]);
+    each(1, ray.direction[1], min[1]);
+    each(2, ray.direction[2], min[2]);
     axis
 }
 
@@ -333,7 +335,7 @@ pub fn first<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until) -> Me
     // offset into it, negated.
     let mut root = Place {
         zoom: 0,
-        corner: [-ray.unit[0].rem_euclid(side), -ray.unit[1].rem_euclid(side), -ray.unit[2].rem_euclid(side)],
+        corner: [-(ray.unit[0] & (side - 1)), -(ray.unit[1] & (side - 1)), -(ray.unit[2] & (side - 1))],
     };
     let mut met = Met {
         ends: Ends::On,
@@ -361,8 +363,13 @@ pub fn first<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until) -> Me
             break;
         }
         // On to the root across the face the ray leaves by.
-        let k = leaves(ray, min, root.side()) as usize;
-        root.corner[k] += if ray.direction[k] > 0.0 { side } else { -side };
+        let k = leaves(ray, min, root.side());
+        let step = if crate::axis(ray.direction, k) > 0.0 { side } else { -side };
+        root.corner = [
+            root.corner[0] + (k == 0) as i32 * step,
+            root.corner[1] + (k == 1) as i32 * step,
+            root.corner[2] + (k == 2) as i32 * step,
+        ];
         t = span.1;
     }
     met
@@ -427,20 +434,16 @@ fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at
             // The child holding where the ray enters: past a mid plane on
             // each axis the ray has crossed by then.
             let half = place.child(7).min(ray);
-            let mut k = 0;
-            let mut a = 0;
-            while a < 3 {
-                let d = ray.direction[a];
-                let upper = if d > 0.0 {
-                    half[a] / d <= t0
+            let upper = |d: f32, half: f32| {
+                (if d > 0.0 {
+                    half / d <= t0
                 } else if d < 0.0 {
-                    half[a] / d > t0
+                    half / d > t0
                 } else {
-                    half[a] <= 0.0
-                };
-                k |= (upper as u32) << a;
-                a += 1;
-            }
+                    half <= 0.0
+                }) as u32
+            };
+            let k = upper(ray.direction[0], half[0]) | upper(ray.direction[1], half[1]) << 1 | upper(ray.direction[2], half[2]) << 2;
             stack[place.zoom as usize] = at;
             let kid = place.child(k);
             at = q.child(&at, kid.zoom, kid.node(ray));
@@ -468,8 +471,8 @@ fn descend<Q: Query>(q: &mut Q, ray: &Ray, detail: Detail, until: Until, root_at
             let k = place.slot(ray);
             let parent = place.parent(ray);
             let bit = 1 << e;
-            let forward = ray.direction[e as usize] > 0.0;
-            if forward == (k & bit != 0) || ray.direction[e as usize] == 0.0 {
+            let d = crate::axis(ray.direction, e);
+            if (d > 0.0) == (k & bit != 0) || d == 0.0 {
                 // The face is the parent's own: on past the parent.
                 (place, t1) = (parent, slab(ray, parent.min(ray), parent.side(), 0.0, ray.reach).1);
                 continue;

@@ -19,7 +19,7 @@ use pxl_portable::cube::{object, sentinel, Ground};
 use pxl_portable::ground::{self, Tile, ELE_PADDED_SPAN, GRID_WORDS};
 use pxl_portable::lattice::{GROUND, TILE_CELLS};
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
-use pxl_portable::{wrap_index, LEAF_CELL};
+use pxl_portable::{at, wrap_index, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::spirv;
 
@@ -82,10 +82,10 @@ pub struct Framed<'a> {
 impl Tile for Framed<'_> {
     fn look(&self, x: u32, y: u32) -> u32 {
         let i = y * TILE_CELLS + x;
-        self.looks[(self.frame * LOOK_WORDS + i / 4) as usize] >> (8 * (i % 4)) & 0xff
+        at(self.looks, self.frame * LOOK_WORDS + i / 4) >> (8 * (i % 4)) & 0xff
     }
     fn height(&self, x: u32, y: u32) -> i32 {
-        self.grid[(self.frame * GRID_WORDS + y * TILE_CELLS + x) as usize]
+        at(self.grid, self.frame * GRID_WORDS + y * TILE_CELLS + x)
     }
 }
 
@@ -114,10 +114,10 @@ pub struct World<'a> {
 
 impl Lanes for World<'_> {
     fn heap(&self, slot: u32) -> u32 {
-        self.overwrites[slot as usize]
+        at(self.overwrites, slot)
     }
     fn data(&self, slot: u32) -> u32 {
-        self.overwrites[self.overwrites.len() / 2 + slot as usize]
+        at(self.overwrites, self.overwrites.len() as u32 / 2 + slot)
     }
 }
 
@@ -129,7 +129,7 @@ impl Area for World<'_> {
         self.shards.len() as u32
     }
     fn shard(&self, i: u32) -> (u32, [i32; 2]) {
-        let s = self.shards[i as usize];
+        let s = at(self.shards, i);
         (s.x as u32, [s.y, s.z])
     }
 }
@@ -138,17 +138,22 @@ impl World<'_> {
     /// The word the window holds for the tile `t` at `zoom`: its frame plus
     /// one, 0 where none is held or the window does not reach it.
     fn held(&self, zoom: u32, t: [i32; 2]) -> u32 {
-        let across = self.window[0].z as u32;
+        let across = at(self.window, 0).z as u32;
         let block = (zoom - GROUND.top()) * (1 + (across * across).div_ceil(4));
-        let h = self.window[block as usize];
+        let h = at(self.window, block);
         let dx = (t[0] - h.x) as u32 & ((1u32 << zoom) - 1);
         let dy = t[1] - h.y;
         if dx >= across || dy < 0 || dy as u32 >= across {
             return 0;
         }
         let i = dy as u32 * across + dx;
-        let w = self.window[(block + 1 + i / 4) as usize];
-        [w.x, w.y, w.z, w.w][(i % 4) as usize] as u32
+        let w = at(self.window, block + 1 + i / 4);
+        (match i % 4 {
+            0 => w.x,
+            1 => w.y,
+            2 => w.z,
+            _ => w.w,
+        }) as u32
     }
 
     /// The finest held tile over the tile `t` at `zoom`, down to the top: its
@@ -243,7 +248,7 @@ impl ground::Held for World<'_> {
                     return ([0, 0], false);
                 }
                 let (grid, base) = (self.grid, (w - 1) * GRID_WORDS);
-                let [lo, hi] = ground::bounded(move |i| grid[(base + i) as usize], from, (zoom, [c[0], c[1]]));
+                let [lo, hi] = ground::bounded(move |i| at(grid, base + i), from, (zoom, [c[0], c[1]]));
                 relief = if z == coarsest { [lo, hi] } else { [relief[0].min(lo), relief[1].max(hi)] };
             }
             z += 1;
@@ -344,7 +349,7 @@ fn word(ray: &cast::Ray, met: Met<At, u32>) -> UVec4 {
         return UVec4::new(0, 0, met.visits, 0);
     }
     let s = met.stop;
-    let down = ray.direction[s.axis as usize] > 0.0;
+    let down = pxl_portable::axis(ray.direction, s.axis) > 0.0;
     let face = 2 * s.axis + down as u32;
     let kind = if s.block & PLACED_BLOCK != 0 { 2 } else { 1 };
     UVec4::new(s.block & 0xffff | kind << 16 | face << 18, s.t.to_bits(), met.visits, 0)
@@ -367,7 +372,7 @@ pub fn cast_cs(
         return;
     }
     let v3 = |v: Vec4| [v.x, v.y, v.z];
-    let direction = cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), tangents[id.x as usize], tangents[(across.x + id.y) as usize]);
+    let direction = cast::through(v3(eye.forward_far), v3(eye.right_tau), v3(eye.up), at(tangents, id.x), at(tangents, across.x + id.y));
     let ray = cast::Ray::of([eye.origin.x, eye.origin.y, eye.origin.z], direction, eye.forward_far.w);
     let detail = Detail {
         tau: eye.right_tau.w,
@@ -382,7 +387,11 @@ pub fn cast_cs(
         eye,
     };
     let met = cast::first(&mut world, &ray, detail, Until::Fills);
-    lane[(1 + id.y * across.x + id.x) as usize] = word(&ray, met);
+    let i = (1 + id.y * across.x + id.x) as usize;
+    if i < lane.len() {
+        // SAFETY: just bounded by the lane's own length.
+        unsafe { *lane.get_unchecked_mut(i) = word(&ray, met) };
+    }
 }
 
 /// The ground's grid of the frames `fresh` names, the frames uploaded this

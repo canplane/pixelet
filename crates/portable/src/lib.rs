@@ -55,6 +55,34 @@ pub const SHARD_ZOOM: Zoom = UNIT_ZOOM - HEIGHT_BITS;
 /// grid's cells a side (pxl-spec space/camera/grid.rs).
 pub const CHUNK_STEPS: Zoom = 5;
 
+/// Element `i` of `s`, a buffer the host wrote or a table, read totally:
+/// what lies outside it is `T::default()` — nothing held, void, zero — so
+/// no read aborts, and a GPU's code holds no path for one. The one fact of
+/// what is outside a buffer; a host that indexes past what it wrote breaks
+/// a contract, which the CPU's debug builds still catch.
+pub fn at<T: Copy + Default>(s: &[T], i: u32) -> T {
+    #[cfg(not(target_arch = "spirv"))]
+    debug_assert!((i as usize) < s.len(), "read past a buffer: {i} of {}", s.len());
+    if (i as usize) < s.len() {
+        // SAFETY: just bounded by the slice's own length.
+        unsafe { *s.get_unchecked(i as usize) }
+    } else {
+        T::default()
+    }
+}
+
+/// Component `a` of an axis triple, chosen rather than indexed, so no read
+/// aborts: past the third, the third.
+pub fn axis<T: Copy>(v: [T; 3], a: u32) -> T {
+    if a == 0 {
+        v[0]
+    } else if a == 1 {
+        v[1]
+    } else {
+        v[2]
+    }
+}
+
 /// X named as the world names it at `zoom`, X going round: from minus half
 /// its count to under half (pxl-spec space/coord/world.rs `wrap_index`).
 pub fn wrap_index(zoom: Zoom, x: i32) -> i32 {

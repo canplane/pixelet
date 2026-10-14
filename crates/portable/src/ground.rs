@@ -117,8 +117,8 @@ pub fn read(tile: &impl Tile, v: [i32; 2], n: u32) -> (u32, i32) {
     if !holds(v, n) {
         return (VOID, 0);
     }
-    let n = n as i32;
-    let (x, y) = (v[0].div_euclid(n) as u32, v[1].div_euclid(n) as u32);
+    let s = n.trailing_zeros();
+    let (x, y) = ((v[0] >> s) as u32, (v[1] >> s) as u32);
     (tile.look(x, y), tile.height(x, y))
 }
 
@@ -200,10 +200,11 @@ pub fn bounded(grid: impl Fn(u32) -> i32, from: Zoom, (zoom, c): (Zoom, [i32; 2]
     bound_of(grid(bound_at(j) + within(side, c[1]) * side + within(side, c[0])))
 }
 
-/// Whether `tile` holds the cell `v` of a tile `n` × `n` times finer.
+/// Whether `tile` holds the cell `v` of a tile `n` × `n` times finer, `n` a
+/// power of two, so a cell's coarser one is its index shifted, floored.
 fn holds(v: [i32; 2], n: u32) -> bool {
-    let n = n as i32;
-    let (x, y) = (v[0].div_euclid(n), v[1].div_euclid(n));
+    let s = n.trailing_zeros();
+    let (x, y) = (v[0] >> s, v[1] >> s);
     let cells = TILE_CELLS as i32;
     x >= 0 && y >= 0 && x < cells && y < cells
 }
@@ -213,8 +214,8 @@ pub fn look(tile: &impl Tile, v: [i32; 2], n: u32) -> u32 {
     if !holds(v, n) {
         return VOID;
     }
-    let n = n as i32;
-    tile.look(v[0].div_euclid(n) as u32, v[1].div_euclid(n) as u32)
+    let s = n.trailing_zeros();
+    tile.look((v[0] >> s) as u32, (v[1] >> s) as u32)
 }
 
 /// Four cells a zoom finer, `dx + 2·dy`, as one: the looks' majority, the
@@ -343,7 +344,13 @@ pub fn leaf_blocks(cell: Zoom) -> i32 {
 pub fn face_height(cell: Zoom, top: i32) -> i32 {
     let d = cell as i32 - LEAF_CELL as i32;
     if d >= 0 {
-        top / (1 << d)
+        // Divided by 2^d toward zero, as the grid draws a face under sea
+        // level.
+        if top < 0 {
+            -(-top >> d)
+        } else {
+            top >> d
+        }
     } else {
         top << -d
     }
