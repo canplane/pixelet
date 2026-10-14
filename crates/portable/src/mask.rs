@@ -43,7 +43,7 @@ pub const READS: u32 = {
 /// Which of the blocks about a block fill, as `about` names them, `fills`
 /// asked once of each `mask` reads (`READS`), from one place.
 pub fn filled(mut fills: impl FnMut([i32; 3]) -> bool) -> u32 {
-    let (mut bits, mut k) = (0, 0);
+    let (mut bits, mut k) = (0, 0u32);
     while k < 27 {
         if READS >> k & 1 == 1 && fills([(k % 3) as i32 - 1, (k / 3 % 3) as i32 - 1, (k / 9) as i32 - 1]) {
             bits |= 1 << k;
