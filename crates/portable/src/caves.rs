@@ -75,27 +75,23 @@ impl Cave {
     /// caves' first zoom under it draws.
     pub const ROOT: Cave = Cave { hollow: false, live: true };
 
-    /// The eight children of the cube `c` at `zoom` whose caves are `self`,
-    /// by their place (`slot`): its draws, one hash, turn one or none, and
-    /// say which draw again. Past the leaves a cube is its leaf's.
-    pub fn children(self, zoom: Zoom, c: [i32; 3]) -> [Cave; 8] {
-        if zoom < CAVE_COARSEST - 1 {
-            return [Cave::ROOT; 8];
+    /// The child `c` at `zoom` of a cube whose caves are `self`, by its
+    /// place among the eight (`slot`): its parent's draws, one hash, turn one
+    /// of them or none, and say which draw again. Past the leaves a cube is
+    /// its leaf's.
+    pub fn child(self, zoom: Zoom, c: [i32; 3]) -> Cave {
+        if zoom < CAVE_COARSEST {
+            return Cave::ROOT;
         }
-        if !self.live || zoom >= LEAF_CELL {
-            return [Cave { live: false, ..self }; 8];
+        if !self.live || zoom > LEAF_CELL {
+            return Cave { live: false, ..self };
         }
-        let (turns, turn, live) = draws(zoom, c);
-        let kid = |k: u32| Cave {
+        let (turns, turn, live) = draws(zoom - 1, [c[0] >> 1, c[1] >> 1, c[2] >> 1]);
+        let k = slot(c);
+        Cave {
             hollow: self.hollow ^ (turns && turn == k),
             live: live >> k & 1 == 1,
-        };
-        [kid(0), kid(1), kid(2), kid(3), kid(4), kid(5), kid(6), kid(7)]
-    }
-
-    /// The child `c` at `zoom` of a cube whose caves are `self`.
-    pub fn child(self, zoom: Zoom, c: [i32; 3]) -> Cave {
-        self.children(zoom - 1, [c[0] >> 1, c[1] >> 1, c[2] >> 1])[slot(c) as usize]
+        }
     }
 
     /// The caves at the cube `c` at `zoom`, down its line from the caves'
