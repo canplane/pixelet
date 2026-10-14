@@ -19,7 +19,6 @@ pub mod source;
 pub mod surface;
 pub mod tile;
 pub mod way;
-pub mod ways;
 
 /// A packet no bake writes, as every tile reader refuses it.
 #[track_caller]
