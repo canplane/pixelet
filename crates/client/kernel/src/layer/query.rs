@@ -1,7 +1,7 @@
 // pxl-kernel/layer/query.rs
 
 //! The query: the only place a layer's storage shape is known
-//! (decision/20260928-what-is-drawn-is-what-the-screen-covers.md, "The
+//! (doc/decision/20260928-what-is-drawn-is-what-the-screen-covers.md, "The
 //! query"). It is asked of a node of the one hierarchy, a cube by its zoom
 //! and index, the same of every layer; how a layer answers is its own. It
 //! knows nothing of the view: what a chunk is, and how fine its cells, are

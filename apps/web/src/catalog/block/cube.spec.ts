@@ -17,7 +17,7 @@ export const cube = {
     unknown: 0xff,
   },
   // The ground: one byte a cell, a look from OpenStreetMap Carto, numbered in
-  // the order Carto paints (decision/20261005-the-ground-is-a-carto-palette.md).
+  // the order Carto paints (doc/decision/20261005-the-ground-is-a-carto-palette.md).
   // `transport` marks a way: decor faces along it and no pier stands on it;
   // every look stands at its sampled height.
   ground: {

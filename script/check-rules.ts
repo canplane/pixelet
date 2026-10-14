@@ -2,7 +2,7 @@
 // Holds the tree to the rules a machine can decide: the header
 // path, cited paths and names existing, the lattice's arithmetic only in
 // `space/`, no raw pointer casts in offset crates, `@expo/ui` only in the
-// sheet. `decision/` is exempt from cited paths.
+// sheet. `doc/decision/` and `doc/experiment/` are exempt from cited paths.
 //   deno run -A script/check-rules.ts
 
 import { dirname, fromFileUrl, join, normalize } from "@std/path";
@@ -108,7 +108,7 @@ const NAMED = /^`?\s+`([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)`/;
 const PROSE = /\.(rs|tsx?|wgsl|md|jsonc?)$/;
 
 for (const f of files) {
-  if (f.startsWith("decision/") || !PROSE.test(f)) continue;
+  if (f.startsWith("doc/decision/") || f.startsWith("doc/experiment/") || !PROSE.test(f)) continue;
   const text = read(f);
   if (!text) continue;
   const doc = f.endsWith(".md") || f.endsWith(".json") || f.endsWith(".jsonc");

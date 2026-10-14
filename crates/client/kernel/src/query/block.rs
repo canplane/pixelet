@@ -129,7 +129,7 @@ impl<'a> World<'a> {
     }
     /// A chunk's blocks, into `into`, as drawing `seen`, the blocks the
     /// rays stopped on in it, reads them
-    /// (decision/20261012-the-ground-is-a-
+    /// (doc/decision/20261012-the-ground-is-a-
     /// grid-then-overwrites.md, "Observation determines materialization"):
     /// each seen block, drawn whole, and the blocks about it its shading
     /// reads (`shades`), each asked of the world's one

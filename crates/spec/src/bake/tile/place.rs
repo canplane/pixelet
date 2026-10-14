@@ -6,7 +6,7 @@
 //! would meet, a cell an icon wide keeps one, the first by the zoom its category
 //! shows from and then its id, so what is shown only grows with the zoom and
 //! a tile is its children with what shows from its zoom on
-//! (decision/20261009-places-follow-carto.md). It is one XTP tree, as every
+//! (doc/decision/20261009-places-follow-carto.md). It is one XTP tree, as every
 //! other baked tile is.
 
 use crate::space::layer::lattice::Cells;

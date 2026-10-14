@@ -1,7 +1,7 @@
 // pxl-portable/cast.rs
 
 //! gpu-portable: the first block a ray meets, at the zoom its distance asks
-//! (decision/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md),
+//! (doc/decision/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md),
 //! one descent for the CPU and the GPU over a query each answers its own
 //! way (`Query`). A node coarser than the zoom its distance asks is asked
 //! whether anything under it fills: nothing, and the ray goes on past it

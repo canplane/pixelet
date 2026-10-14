@@ -406,7 +406,7 @@ export default defineConfig(({ mode }) => {
 
   // Three local servers, one per root plus the tiles a deployment reads out of
   // the bucket instead. See
-  // decision/20260918-the-server-in-rust-and-the-line-already-drawn.md.
+  // doc/decision/20260918-the-server-in-rust-and-the-line-already-drawn.md.
   const geoBase = env.VITE_GEO_BASE_URL || geoBaseDefault;
   const tileBase = env.VITE_TILE_BASE_URL || tileBaseDefault;
   const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;

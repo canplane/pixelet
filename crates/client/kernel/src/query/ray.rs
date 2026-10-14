@@ -1,7 +1,7 @@
 // pxl-kernel/query/ray.rs
 
 //! The first block a ray meets, at the zoom its distance asks
-//! (decision/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md): the
+//! (doc/decision/20261013-a-ray-asks-the-world-whether-a-node-is-empty.md): the
 //! descent is pxl-portable's (`cast::first`), the one a GPU's cast runs too,
 //! and the world answers it here from everything it holds, each node handed
 //! what its parent found (`Walker`). What only the CPU answers — the ways,

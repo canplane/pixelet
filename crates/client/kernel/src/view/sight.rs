@@ -2,7 +2,7 @@
 
 //! What the eye observes: one ray a cell of the camera grid, cast down the
 //! pyramid against what is held (`World::first_hit`), the same wherever the
-//! eye is (decision/20261012-the-ground-is-a-grid-then-overwrites.md, "What
+//! eye is (doc/decision/20261012-the-ground-is-a-grid-then-overwrites.md, "What
 //! is drawn"). Where each ray stops, how far, and the tiles its descent
 //! lacked are the observation; what is made of it is the chunks'.
 //!
