@@ -130,6 +130,76 @@ pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [u32; 2]) -> i32 {
     bicubic(ele, x as f32 + 0.5, y as f32 + 0.5)
 }
 
+/// The levels of a held tile's bound over its cells' heights, which follow
+/// its cells in a GPU's grid: each entry of level `j` the lowest and highest
+/// of the 2^j × 2^j cells under it, the join of four of level j − 1's
+/// (`join`), up to the tile whole. A bound read off it is the grid's own
+/// reads, so a cell's height, a fold's mean of them and a coarser tile's
+/// cell standing in all lie in it.
+pub const BOUND_LEVELS: u32 = TILE_CELLS.trailing_zeros();
+
+/// Where level `j` of a tile's grid begins, in words: level 0 its cells,
+/// then each level's entries row by row, level `i` (TILE_CELLS / 2^i)² of
+/// them, so the levels before `j` are (4·n − 4·n / 4^j) / 3, n the cells.
+pub const fn bound_at(j: u32) -> u32 {
+    let n = 4 * TILE_CELLS * TILE_CELLS;
+    (n - (n >> (2 * j))) / 3
+}
+
+/// Words a tile's grid holds: its cells' heights, then its bound's levels.
+pub const GRID_WORDS: u32 = bound_at(BOUND_LEVELS + 1);
+
+/// An entry of a bound as a word, its lowest in the low half and its
+/// highest in the high: each a cell's height, which `bicubic` holds to its
+/// i16 samples.
+pub fn bound_word([lo, hi]: [i32; 2]) -> i32 {
+    lo & 0xffff | hi << 16
+}
+
+/// `bound_word`'s lowest and highest.
+pub fn bound_of(w: i32) -> [i32; 2] {
+    [w << 16 >> 16, w >> 16]
+}
+
+/// Entry `(x, y)` of level `j` of a tile's bound off its grid, `grid` its
+/// word `i`: the join of the four under it, at level 1 four cells' heights.
+pub fn join(grid: impl Fn(u32) -> i32, j: u32, [x, y]: [u32; 2]) -> i32 {
+    let side = TILE_CELLS >> (j - 1);
+    let under = |q: u32| {
+        let w = grid(bound_at(j - 1) + (2 * y + q / 2) * side + 2 * x + q % 2);
+        if j == 1 {
+            [w, w]
+        } else {
+            bound_of(w)
+        }
+    };
+    let [mut lo, mut hi] = under(0);
+    let mut q = 1;
+    while q < 4 {
+        let [l, h] = under(q);
+        (lo, hi) = (lo.min(l), hi.max(h));
+        q += 1;
+    }
+    bound_word([lo, hi])
+}
+
+/// The lowest and highest the cells of the tile at `from` reach under the
+/// node `(zoom, c)` it holds, `grid` its grid's word `i`: one entry, of the
+/// level whose entries are the node's columns, or the cell holding a node
+/// finer than a cell.
+pub fn bounded(grid: impl Fn(u32) -> i32, from: Zoom, (zoom, c): (Zoom, [i32; 2])) -> [i32; 2] {
+    let cell = GROUND.cell_zoom(from);
+    let within = |side: u32, v: i32| (v & (side as i32 - 1)) as u32;
+    if zoom >= cell {
+        let s = zoom - cell;
+        let h = grid(within(TILE_CELLS, c[1] >> s) * TILE_CELLS + within(TILE_CELLS, c[0] >> s));
+        return [h, h];
+    }
+    let j = cell - zoom;
+    let side = TILE_CELLS >> j;
+    bound_of(grid(bound_at(j) + within(side, c[1]) * side + within(side, c[0])))
+}
+
 /// Whether `tile` holds the cell `v` of a tile `n` × `n` times finer.
 fn holds(v: [i32; 2], n: u32) -> bool {
     let n = n as i32;

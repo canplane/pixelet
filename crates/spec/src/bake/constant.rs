@@ -15,6 +15,10 @@ pub use pxl_portable::ground::{ele_index, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPA
 /// (pxl-portable).
 pub use pxl_portable::ground::{EXTENT_CELL, EXTENT_SPAN};
 
+/// A GPU's grid of a held tile, its cells' heights then their bound's
+/// levels (pxl-portable).
+pub use pxl_portable::ground::{BOUND_LEVELS, GRID_WORDS};
+
 pub use super::object::OBJECT_TIERS;
 
 /// The objects' coarsest tier, a placed block, one unit: the ladder is the

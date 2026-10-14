@@ -1,8 +1,8 @@
 //! The cast's compute entry (`cast_cs`): each camera-grid cell's ray down
 //! the pyramid by pxl-portable's descent, the one the CPU's cast runs, over
-//! the world as the GPU holds it; and the ground's grid it reads
-//! (`heights_cs`), a held tile's cells' heights computed once. Each entry is
-//! a module of its own. The harness's entries are behind its feature
+//! the world as the GPU holds it; and the ground's grid it reads, a held
+//! tile's cells' heights computed once (`heights_cs`) and their bound's
+//! levels over them (`bound_cs`). Each entry is a module of its own. The harness's entries are behind its feature
 //! (`harness`).
 
 #![cfg_attr(target_arch = "spirv", no_std)]
@@ -14,8 +14,8 @@ use pxl_portable::area::{self, Area};
 use pxl_portable::cast::{self, Detail, Ends, In, Met, Query, Until};
 use pxl_portable::caves::Cave;
 use pxl_portable::cube::{sentinel, Ground};
-use pxl_portable::ground::{self, Tile, ELE_PADDED_SPAN, EXTENT_LANE};
-use pxl_portable::lattice::{EXTENT, GROUND, TILE_CELLS};
+use pxl_portable::ground::{self, Tile, ELE_PADDED_SPAN, GRID_WORDS};
+use pxl_portable::lattice::{GROUND, TILE_CELLS};
 use pxl_portable::{wrap_index, LEAF_CELL};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::spirv;
@@ -43,10 +43,6 @@ const UNKNOWN: u32 = sentinel::unknown as u32;
 const LOOK_WORDS: u32 = TILE_CELLS * TILE_CELLS / 4;
 /// Words a frame of heights holds: 2 a word.
 const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
-/// Cells a frame of the ground's grid holds.
-const GRID_CELLS: u32 = TILE_CELLS * TILE_CELLS;
-/// Words a frame of the index lane holds: its cells, then its coarser levels.
-const INDEX_WORDS: u32 = EXTENT_LANE + EXTENT.coarse_cells();
 
 /// The low half of `w` shifted down by `s`, its sign carried.
 fn half(w: u32, s: u32) -> i32 {
@@ -71,7 +67,7 @@ impl Tile for Framed<'_> {
         self.looks[(self.frame * LOOK_WORDS + i / 4) as usize] >> (8 * (i % 4)) & 0xff
     }
     fn height(&self, x: u32, y: u32) -> i32 {
-        self.grid[(self.frame * GRID_CELLS + y * TILE_CELLS + x) as usize]
+        self.grid[(self.frame * GRID_WORDS + y * TILE_CELLS + x) as usize]
     }
 }
 
@@ -84,9 +80,9 @@ pub struct World<'a> {
     /// is held.
     window: &'a [IVec4],
     looks: &'a [u32],
-    /// Per frame, its cells' heights (`heights_cs`).
+    /// Per frame, its cells' heights (`heights_cs`), then their bound's
+    /// levels (`bound_cs`).
     grid: &'a [i32],
-    extents: &'a [u32],
     /// The served shards: zoom, x, y.
     shards: &'a [IVec4],
 }
@@ -133,12 +129,6 @@ impl World<'_> {
             }
             z -= 1;
         }
-    }
-
-    /// The index lane's cell `i` of frame `f`: its lowest and highest.
-    fn index(&self, f: u32, i: u32) -> [i32; 2] {
-        let w = self.extents[(f * INDEX_WORDS + i) as usize];
-        [half(w, 0), half(w, 16)]
     }
 
     /// The ground's cell `g` of the tiles at `zoom`, counted in their cells,
@@ -199,8 +189,9 @@ impl World<'_> {
 
 /// The ground as the GPU holds it, for pxl-portable's one answer for a node.
 impl ground::Held for World<'_> {
-    /// The index lane over the node, off the finest held tile over it at the
-    /// tile zoom its cells at `cell` are read from.
+    /// The bound over the node of the finest held tile over it at the tile
+    /// zoom its cells at `cell` are read from, off that tile's grid
+    /// (`ground::bounded`).
     fn relief(&mut self, cell: u32, (zoom, c): (u32, [i32; 3])) -> ([i32; 2], bool) {
         let read = GROUND.read_zoom(cell);
         let s = zoom - read;
@@ -208,7 +199,8 @@ impl ground::Held for World<'_> {
         if w == 0 {
             return ([0, 0], false);
         }
-        (ground::relief(|i| self.index(w - 1, i), from, (zoom, [c[0], c[1]])), true)
+        let (grid, base) = (self.grid, (w - 1) * GRID_WORDS);
+        (ground::bounded(move |i| grid[(base + i) as usize], from, (zoom, [c[0], c[1]])), true)
     }
 
     /// The block's column off the tile drawing that zoom's cells, the area's
@@ -285,10 +277,9 @@ pub fn cast_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] window: &[IVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] looks: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] grid: &[i32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] extents: &[u32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] lane: &mut [UVec4],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] tangents: &[f32],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] lane: &mut [UVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] tangents: &[f32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] shards: &[IVec4],
 ) {
     let across = eye.across_range;
     if id.x >= across.x || id.y >= across.y {
@@ -301,13 +292,7 @@ pub fn cast_cs(
         tau: eye.right_tau.w,
         range: [across.z, across.w],
     };
-    let mut world = World {
-        window,
-        looks,
-        grid,
-        extents,
-        shards,
-    };
+    let mut world = World { window, looks, grid, shards };
     let met = cast::first(&mut world, &ray, detail, Until::Fills);
     lane[(1 + id.y * across.x + id.x) as usize] = word(&ray, met);
 }
@@ -324,5 +309,28 @@ pub fn heights_cs(
 ) {
     let frame = fresh[id.z as usize];
     let h = ground::height(move |i| ele(heights, frame, i), [id.x, id.y]);
-    grid[(frame * GRID_CELLS + id.y * TILE_CELLS + id.x) as usize] = h;
+    grid[(frame * GRID_WORDS + id.y * TILE_CELLS + id.x) as usize] = h;
+}
+
+/// Level `level.x` of the bound of the frames `fresh` names, one a `z`,
+/// over the level under it, written before (`ground::join`): a dispatch a
+/// level, from 1 up, after `heights_cs`.
+#[spirv(compute(threads(8, 8, 1)))]
+pub fn bound_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] level: &UVec4,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] fresh: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] grid: &mut [i32],
+) {
+    let j = level.x;
+    let side = TILE_CELLS >> j;
+    if id.x >= side || id.y >= side {
+        return;
+    }
+    let base = fresh[id.z as usize] * GRID_WORDS;
+    let w = {
+        let under: &[i32] = grid;
+        ground::join(move |i| under[(base + i) as usize], j, [id.x, id.y])
+    };
+    grid[(base + ground::bound_at(j) + id.y * side + id.x) as usize] = w;
 }

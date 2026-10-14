@@ -105,8 +105,7 @@ pub fn window(o: &Observation) -> &'static [i32] {
 }
 
 /// Each held tile the GPU does not yet hold in its frame to `write`: its
-/// frame, ground looks, padded heights, and its index's extents and their
-/// coarse levels.
+/// frame, ground looks and padded heights.
 pub fn upload(write: &mut TerrainWrite<'_>) {
     let terrain = TerrainTile::residency();
     for (p, tile) in terrain.held() {
@@ -115,7 +114,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
         if *slot == Some(p) {
             continue;
         }
-        write(frame, &tile.ground.cells, bytes(&tile.ele), bytes(tile.index.extent()), bytes(tile.index.coarse()));
+        write(frame, &tile.ground.cells, bytes(&tile.ele));
         *slot = Some(p);
     }
 }
