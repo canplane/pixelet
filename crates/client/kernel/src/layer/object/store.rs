@@ -151,6 +151,9 @@ fn path(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
     [at[0].rem_euclid(around(zoom)), at[1], at[2]]
 }
 
+/// The tree's root the objects are under, its block of the nodes of zoom 0.
+const PLACED: usize = 0;
+
 /// The node of zoom 0 at the root's slot `k`.
 fn root(k: usize) -> [i64; 3] {
     core::array::from_fn(|i| -(((k >> i) & 1) as i64))
@@ -192,7 +195,7 @@ pub struct Store {
 impl Default for Store {
     fn default() -> Store {
         Store {
-            tree: Tree::new(EMPTY.word()),
+            tree: Tree::new(EMPTY.word(), 1),
             ext: Pools::default(),
         }
     }
@@ -208,7 +211,7 @@ impl Store {
     /// The node `at` of `zoom` in the tree, or the leaf over it: the zoom it
     /// was found at and its slot.
     fn find(&self, zoom: Zoom, at: [i64; 3]) -> (Zoom, Slot<u32>) {
-        let (d, slot) = self.tree.get(depth(zoom), path(zoom, at));
+        let (d, slot) = self.tree.get(PLACED, depth(zoom), path(zoom, at));
         (d - 1, slot)
     }
 
@@ -217,7 +220,7 @@ impl Store {
     /// cube there, and its value if it is a leaf.
     fn descend(&self, about: f64, enter: &mut Enter) {
         for k in 0..8 {
-            self.walk(self.tree.child(0, k), 0, root(k), about, enter);
+            self.walk(self.tree.child(Tree::root(PLACED), k), 0, root(k), about, enter);
         }
     }
 
@@ -320,7 +323,7 @@ impl Store {
                 None => NONE,
             };
             let value = Leaf { id: id16, ext: handle }.word();
-            if self.tree.set(depth(zoom), path(zoom, at), value, |tree, block, d| fold(tree, block, d - 1)) {
+            if self.tree.set(PLACED, depth(zoom), path(zoom, at), value, |tree, block, d| fold(tree, block, d - 1)) {
                 changed.push(cube(zoom, at));
             }
         }
@@ -350,7 +353,7 @@ impl Store {
     pub fn clear(&mut self) -> Vec<Aabb> {
         let mut held = Vec::new();
         self.each(&mut |e| held.push(e.cube()));
-        self.tree = Tree::new(EMPTY.word());
+        self.tree = Tree::new(EMPTY.word(), 1);
         self.ext.clear();
         held
     }
