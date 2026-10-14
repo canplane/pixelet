@@ -4,8 +4,10 @@
 
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{Ground, TerrainTile};
+use pxl_spec::bake::way::lay;
+use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::adapter::epsg3857::{self, G3857};
-use pxl_spec::space::layer::tile::LEAF_ZOOM;
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::separation::Drawn;
 use crate::terrain::pipeline::feature::{local, Feature};
@@ -19,8 +21,11 @@ pub struct Surface {
     pub ground: Ground,
 }
 
-pub fn assemble(surface: Surface, lines: Separation) -> TerrainTile {
-    TerrainTile::leaf(surface.ele, surface.ground, lines)
+/// The approaches' looks laid into its cells (pxl-spec bake/way.rs `lay`).
+pub fn assemble(tile: [i64; 2], surface: Surface, lines: Separation) -> TerrainTile {
+    let mut looks = surface.ground.cells.into_owned();
+    lay(&lines, Frame::of(Tile::new(LEAF_ZOOM, tile)), &mut looks);
+    TerrainTile::leaf(surface.ele, Ground { cells: looks.into() }, lines)
 }
 
 /// `drawn`: the ranges of the tile's ways its lines draw.

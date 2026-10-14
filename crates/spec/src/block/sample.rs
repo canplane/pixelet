@@ -369,7 +369,8 @@ impl Grid {
                 }
                 let ground = self.face_height(col);
                 match o.occupies(ground, per_m) {
-                    Occupies::Grade => self.face[col] = o.kind,
+                    // An approach's look, laid into the cells by the bake (bake/way.rs `lay`).
+                    Occupies::Grade => {}
                     Occupies::Under { span } => {
                         let [lo, hi] = in_blocks(span);
                         for z in lo..hi {

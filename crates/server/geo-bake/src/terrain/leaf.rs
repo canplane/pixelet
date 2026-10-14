@@ -64,5 +64,5 @@ pub fn bake_leaf(r: &mut separation::Reader<impl Store>, tile: [i64; 2]) -> Resu
     let solved = separation::solve_tile(r, tile)?;
     let surface = fetch_surface(r.repo, r.client, tile, &solved.drawn)?;
     let lines = bake_separation(&solved.lines, epsg3857::get_tile_bbox(LEAF_ZOOM, tile)[0]).ok_or("a tile's separation overflow a record")?;
-    Ok(assemble(surface, lines))
+    Ok(assemble(tile, surface, lines))
 }
