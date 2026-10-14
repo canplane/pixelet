@@ -52,13 +52,21 @@ const NET_CREDITS = 6;
 
 export let strobe: Strobe;
 
+/** The page's one clock, in Unix milliseconds (WORLD_FRAME `unix_ms`). */
+let clock: () => f64 = () => Date.now();
+
+/** Replaces the clock, before the first frame. */
+export function set_clock(c: () => f64): void {
+  clock = c;
+}
+
 export function start_sched(): void {
   strobe = new Strobe(GUEST_DOORBELL, directory(GUEST.buffer).quantum(), (grant) => {
     if (driver === null) return;
     const { width: w, height: h, dpr } = driver();
     const width = Math.max(1, w);
     const height = Math.max(1, h);
-    const unix_ms = Date.now();
+    const unix_ms = clock();
     GUEST_DOORBELL.send(
       0,
       Command.WORLD_FRAME,
