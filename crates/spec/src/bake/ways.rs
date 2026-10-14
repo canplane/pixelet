@@ -4,7 +4,7 @@
 //! (pxl-portable ways.rs): its bridges' and tunnels' segments and the piers
 //! it stood, each listed in the bins of the tile's cells it reaches.
 
-use pxl_portable::ways::{self as region, BINS, BIN_CELLS, ENTRIES, FIRST, LAST, PIERS, PIER_WORDS, SEGMENTS, SEGMENT_WORDS, SLAB, TABLE};
+use pxl_portable::ways::{self as region, BINS, BIN_CELLS, BOUND, ENTRIES, FIRST, LAST, PIERS, PIER_WORDS, SEGMENTS, SEGMENT_WORDS, SLAB, TABLE, UNBOUND};
 
 use super::separation::Form;
 use crate::space::layer::lattice::TILE_CELLS;
@@ -89,6 +89,20 @@ pub fn region(segments: &[Segment], piers: &[Pier], slab: i32) -> Vec<u32> {
     out[SEGMENTS as usize] = kept.len() as u32;
     out[PIERS as usize] = piers.len() as u32;
     out[SLAB as usize] = slab as u32;
+    // each bin's bound, from the spans `may` reads
+    let pier_span = |p: &Pier| [i32::from(p.span[0]), i32::from(p.span[1])];
+    for (b, list) in lists.iter().enumerate() {
+        let spans = list.iter().map(|&id| match kept.get(usize::from(id)) {
+            Some(s) => {
+                let w = s.words();
+                region::span(w[2], w[3], slab)
+            }
+            None => pier_span(&piers[usize::from(id) - kept.len()]),
+        });
+        let (lo, hi) = spans.fold((i32::MAX, i32::MIN), |(lo, hi), [a, b]| (lo.min(a), hi.max(b)));
+        let clamp = |v: i32| v.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16 as u16 as u32;
+        out[BOUND as usize + b] = if lo > hi { UNBOUND } else { clamp(lo) | clamp(hi) << 16 };
+    }
     let mut e = 0usize;
     for (b, list) in lists.iter().enumerate() {
         out[TABLE as usize + b] = e as u32;

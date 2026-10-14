@@ -11,6 +11,8 @@
 //! A region, in words:
 //!
 //!   [segments, piers, slab depth, 0]
+//!   [each bin's bound: the lowest and highest leaf cell any of its entries
+//!    spans, low and high halves; low over high where it lists none]   BINS²
 //!   [each bin's first entry, row by row, then the end]   BINS² + 1
 //!   [entries, two a word, low first: a segment, or a pier past them]
 //!   [segments, SEGMENT_WORDS each]
@@ -30,8 +32,12 @@ pub const SEGMENTS: u32 = 0;
 pub const PIERS: u32 = 1;
 pub const SLAB: u32 = 2;
 pub const HEADER: u32 = 4;
+/// Each bin's bound.
+pub const BOUND: u32 = HEADER;
+/// A bin that lists nothing's bound.
+pub const UNBOUND: u32 = i16::MAX as u16 as u32 | (i16::MIN as u16 as u32) << 16;
 /// Each bin's first entry, the last word the entries' end.
-pub const TABLE: u32 = HEADER;
+pub const TABLE: u32 = BOUND + BINS * BINS;
 pub const ENTRIES: u32 = TABLE + BINS * BINS + 1;
 
 /// A segment: its two points in eighths of the tile's cells (X low, Y
@@ -111,6 +117,44 @@ fn pier(l: &impl Lines, j: u32) -> u32 {
     segment(l, l.word(SEGMENTS)) + PIER_WORDS * j
 }
 
+/// What a segment spans in leaf cells, low to high, given its tops' and its
+/// line's words: a deck from its slab's underside to its surface, a bore from
+/// its floor to its clear height over it. What `may` and a bin's bound read.
+pub fn span(tops: u32, line: u32, slab: i32) -> [i32; 2] {
+    let (ta, tb) = (lo16(tops) as i32, hi16(tops) as i32);
+    if line >> FORM & 0xf == BRIDGE {
+        [ta.min(tb) - slab, ta.max(tb)]
+    } else {
+        [ta.min(tb), ta.max(tb) + (line >> CLEAR) as i32]
+    }
+}
+
+/// The ways' bound over the square `sq` (the tile's cells): the lowest and
+/// highest leaf cell anything listed in the bins under it spans; low over
+/// high where nothing is. What a reader of a node's relief joins to the
+/// ground's: a bin's word at a time, never a line.
+pub fn relief(l: &impl Lines, sq: [f32; 4]) -> [i32; 2] {
+    let (mut lo, mut hi) = (i32::MAX, i32::MIN);
+    if l.word(SEGMENTS) + l.word(PIERS) == 0 {
+        return [lo, hi];
+    }
+    let (x0, x1, y0, y1) = (bin(sq[0]), bin(sq[2]), bin(sq[1]), bin(sq[3]));
+    let mut y = y0;
+    while y <= y1 {
+        let mut x = x0;
+        while x <= x1 {
+            let w = l.word(BOUND + y * BINS + x);
+            if w != UNBOUND {
+                lo = lo.min(lo16(w) as i32);
+                hi = hi.max(hi16(w) as i32);
+            }
+            x += 1;
+        }
+        y += 1;
+    }
+    [lo, hi]
+}
+
 /// Whether `[lo, hi)` fills the block `z`: half its height or more, so one
 /// block where it is a leaf cell tall (the fold's half-cell rule).
 fn fills(lo: i32, hi: i32, z: [i32; 2]) -> bool {
@@ -152,13 +196,8 @@ pub fn may(l: &impl Lines, sq: [f32; 4], z: [i32; 2]) -> bool {
         if a[0].max(c[0]) + half < sq[0] || a[0].min(c[0]) - half > sq[2] || a[1].max(c[1]) + half < sq[1] || a[1].min(c[1]) - half > sq[3] {
             continue;
         }
-        let (ta, tb) = (lo16(tops), hi16(tops));
-        let (lo, hi) = if line >> FORM & 0xf == BRIDGE {
-            (ta.min(tb) - slab as f32, ta.max(tb))
-        } else {
-            (ta.min(tb), ta.max(tb) + (line >> CLEAR) as f32)
-        };
-        if lo < z[1] as f32 && hi >= z[0] as f32 {
+        let [lo, hi] = span(tops, line, slab);
+        if lo < z[1] && hi >= z[0] {
             return true;
         }
     }
