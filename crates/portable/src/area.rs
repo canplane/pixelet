@@ -87,6 +87,22 @@ pub fn walled(area: &impl Area, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool
     past(area, tile_of(lo)) || past(area, tile_of([hi[0], lo[1]])) || past(area, tile_of([lo[0], hi[1]])) || past(area, tile_of(hi))
 }
 
+/// The leaf cells about the leaf cell holding the block `b` at `cell`, a
+/// leaf's or finer, that its eight neighbours lie in: bit `(dy + 1)·3 +
+/// (dx + 1)` for the leaf cell `dx, dy` from its own, its own never. A block
+/// within its leaf cell touches none; one on a leaf's edge or corner, the
+/// cells across them; at the leaves, all eight. Whether the block has
+/// ground beside one gone (`wall`) is whether any of these is.
+pub fn ring(cell: Zoom, b: [i32; 2]) -> u32 {
+    let m = (1 << (cell - LEAF_CELL)) - 1;
+    // Per axis, the leaf offsets its neighbours reach: 0 always, -1 at the
+    // leaf cell's low edge, +1 at its high one.
+    let reach = |v: i32| 0b010 | ((v & m == 0) as u32) | ((v & m == m) as u32) << 2;
+    let (x, y) = (reach(b[0]), reach(b[1]));
+    let row = |o: u32| if y >> o & 1 == 1 { x << (3 * o) } else { 0 };
+    (row(0) | row(1) | row(2)) & !(1 << 4)
+}
+
 /// A cell's look with the area's edge laid (pxl-spec block/sample.rs
 /// `Grid::wall_off`), `gone` where the cell is past the area or nothing is
 /// known of it, `beside` where one of the eight about it is: gone, void;

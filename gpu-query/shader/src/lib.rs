@@ -19,7 +19,7 @@ use pxl_portable::cube::{object, sentinel, Ground};
 use pxl_portable::ground::{self, Tile, ELE_PADDED_SPAN, GRID_WORDS};
 use pxl_portable::lattice::{GROUND, TILE_CELLS};
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
-use pxl_portable::{at, wrap_index, LEAF_CELL};
+use pxl_portable::{at, wrap_index, LEAF_CELL, LEAF_ZOOM};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::spirv;
 
@@ -219,10 +219,10 @@ impl World<'_> {
         }
     }
 
-    /// Whether the cell `b` of `zoom` is gone: past the area, or nothing
-    /// known of it.
-    fn gone(&self, read: u32, zoom: u32, b: [i32; 2]) -> bool {
-        area::past(self, area::tile_at(zoom, b)) || self.ground_at(read, zoom, b, true).0 == UNKNOWN
+    /// Whether the leaf cell `l` is gone: past the area, or nothing known
+    /// of it, its look off the leaf tile drawing it.
+    fn gone(&self, l: [i32; 2]) -> bool {
+        area::past(self, area::tile_at(LEAF_CELL, l)) || self.cell(LEAF_ZOOM, l, true).0 == UNKNOWN
     }
 }
 
@@ -263,12 +263,15 @@ impl ground::Held for World<'_> {
         let read = GROUND.read_zoom(zoom);
         let (look, h, fold) = self.ground_at(read, zoom, b, false);
         let gone = look == UNKNOWN;
+        // Ground beside one gone: of the leaf cells its neighbours lie in
+        // (`area::ring`), each read once, its look alone.
         let beside = !gone && zoom >= LEAF_CELL && Ground::grounds(look) && {
+            let (ring, s) = (area::ring(zoom, b), zoom - LEAF_CELL);
             let mut any = false;
             let mut k = 0;
             while k < 9 {
-                let (dx, dy) = (k % 3 - 1, k / 3 - 1);
-                any = any || (k != 4 && self.gone(read, zoom, [wrap_index(zoom, b[0] + dx), b[1] + dy]));
+                let l = [wrap_index(LEAF_CELL, (b[0] >> s) + (k % 3) as i32 - 1), (b[1] >> s) + (k / 3) as i32 - 1];
+                any = any || (ring >> k & 1 == 1 && self.gone(l));
                 k += 1;
             }
             any
