@@ -161,9 +161,16 @@ pub fn go_to_degrees(lon: f64, lat: f64) {
     crate::control::camera::controller::come_in_to_default();
 }
 
-/// Set outright, for kernel tests and A/B comparisons at the same view.
+/// Set outright, for kernel tests and A/B comparisons at the same view: the
+/// controls take what is asked and the drawn orbit stands there at once, as
+/// a place asked for is put (`Motion::Snap`), so the view is reached with no
+/// step taken, the clock standing or not.
 pub fn set_view(dist: Option<f64>, polar: Option<f64>, azimuth: Option<f64>) {
-    crate::control::camera::controller::set_intent(IntentPatch { dist, azimuth, polar });
+    let c = camera_state();
+    c.commit_intent(c.merged(IntentPatch { dist, azimuth, polar }));
+    if crate::control::camera::controller::active() == crate::control::camera::controller::Active::Orbit {
+        crate::control::camera::orbit::put_view();
+    }
 }
 
 /// The compass is asked for where it is used (`tracking_action`).
