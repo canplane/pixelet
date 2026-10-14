@@ -20,30 +20,7 @@ use crate::look::color::{linear, srgb};
 use crate::mesh::paint::ground::{ground, look};
 use crate::mesh::paint::palette::layer_mean;
 use crate::mesh::word::taps_of;
-
-macro_rules! bits {
-    ($($name:ident = $v:expr),* $(,)?) => {
-        $(const $name: u32 = $v;)*
-        /// The mask is a u32 vertex lane, so bits run to 31.
-        const _: () = assert!($($v < 1u64 << 32)&&*, "a mask bit past the lane");
-    };
-}
-include!("mask.rs");
-
-const ALL_FACES: u32 = FACE_BASE * ((1 << 6) - 1);
-const RISES_PX: u32 = RISES_BASE;
-const RISES_NX: u32 = RISES_BASE << 1;
-const RISES_PY: u32 = RISES_BASE << 2;
-const RISES_NY: u32 = RISES_BASE << 3;
-const DIPS_PX: u32 = DIPS_BASE;
-const DIPS_NX: u32 = DIPS_BASE << 1;
-const DIPS_PY: u32 = DIPS_BASE << 2;
-const DIPS_NY: u32 = DIPS_BASE << 3;
-const CREASE_PX: u32 = CREASE_BASE;
-const CREASE_NX: u32 = CREASE_BASE << 1;
-const CREASE_PY: u32 = CREASE_BASE << 2;
-const CREASE_NY: u32 = CREASE_BASE << 3;
-const ALL_CREASES: u32 = CREASE_PX | CREASE_NX | CREASE_PY | CREASE_NY;
+use pxl_spec::block::mask::{mask as portable_mask, ALL_CREASES, ALL_FACES};
 
 /// The fine format: corner and width in u16 steps of its cell, floor and height
 /// in u16 mesh steps, sRGB color, four layer taps, face mask.
@@ -416,53 +393,9 @@ fn grow(v: &mut Vec<Piece>) -> Result<(), Refused> {
 }
 
 /// What the box of the block `b` shows and what the shader shades it by,
-/// read off the blocks about it `shades` names: every face; along each edge
-/// of its top and bottom, and each upright edge, a crease where the block
-/// across it does not fill, and where the one over it rises or the one under
-/// it dips; over and under it, a cap where its own column goes on; at each
-/// upright edge, the block at the corner where only one of the two faces it
-/// joins is open; over its corners, the blocks that rise there.
+/// read off the blocks about it `shades` names (pxl-portable `mask`).
 fn mask(blocks: &Blocks, b: [i64; 3]) -> u32 {
-    let fills = |[x, y, z]: [i64; 3]| blocks.block([b[0] + x, b[1] + y, b[2] + z]).or_bug(Errno::ENOTRECOVERABLE).is_some_and(Block::fills);
-    let mut m = ALL_FACES;
-    let sides = [
-        ([1, 0], CREASE_PX, RISES_PX, DIPS_PX),
-        ([-1, 0], CREASE_NX, RISES_NX, DIPS_NX),
-        ([0, 1], CREASE_PY, RISES_PY, DIPS_PY),
-        ([0, -1], CREASE_NY, RISES_NY, DIPS_NY),
-    ];
-    for ([x, y], crease, rises, dips) in sides {
-        if !fills([x, y, 0]) {
-            m |= crease;
-        }
-        if fills([x, y, 1]) {
-            m |= rises;
-        }
-        if fills([x, y, -1]) {
-            m |= dips;
-        }
-    }
-    if fills([0, 0, 1]) {
-        m |= CAP_PZ;
-    }
-    if fills([0, 0, -1]) {
-        m |= CAP_NZ;
-    }
-    let corners = [
-        ([1, 1], DIAG_PP, DIAG_RISES_PP),
-        ([1, -1], DIAG_PN, DIAG_RISES_PN),
-        ([-1, 1], DIAG_NP, DIAG_RISES_NP),
-        ([-1, -1], DIAG_NN, DIAG_RISES_NN),
-    ];
-    for ([x, y], diag, rises) in corners {
-        if fills([x, 0, 0]) != fills([0, y, 0]) && fills([x, y, 0]) {
-            m |= diag;
-        }
-        if fills([x, y, 1]) {
-            m |= rises;
-        }
-    }
-    m
+    portable_mask(|[x, y, z]| blocks.block([b[0] + i64::from(x), b[1] + i64::from(y), b[2] + i64::from(z)]).or_bug(Errno::ENOTRECOVERABLE).is_some_and(Block::fills))
 }
 
 /// Every lateral edge a crease, so each shades as a silhouette.

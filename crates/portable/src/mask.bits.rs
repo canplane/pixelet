@@ -1,9 +1,10 @@
-// pxl-render/mesh/mask.rs
+// pxl-portable/mask.bits.rs
 
-// A chunk box's mask, the one statement of its bits: the mesher sets them
-// (`mesh/chunk.rs` `mask`), and build.rs writes them as the WGSL constants
-// the shaders read them by. A lateral kind's bits come in fours from
-// its base: +X, −X, +Y, −Y. The includer says what `bits!` makes of them.
+// A block's face bits, the one statement of them: `mask.rs` makes them its
+// constants and sets them (`mask`), and pxl-render's build.rs writes them as
+// the WGSL constants the shaders read them by. A lateral kind's bits come in
+// fours from its base: +X, −X, +Y, −Y. The includer says what `bits!` makes
+// of them.
 bits! {
     FACE_BASE = 1 << 0,
     RISES_BASE = 1 << 6,
