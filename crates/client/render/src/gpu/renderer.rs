@@ -45,8 +45,7 @@ use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
-use crate::mesh::paint::ground::ground;
-use crate::mesh::paint::object::PAINTER;
+use crate::mesh::paint::ground::look_words;
 use pxl_spec::bake::constant::{BOUND_LEVELS, GRID_WORDS};
 use pxl_spec::bake::tile::terrain::{ELE_LANE, GROUND_LANE};
 use pxl_spec::space::camera::grid::CHUNK_CELLS;
@@ -663,7 +662,7 @@ impl DebugPass {
         let grid_group = object();
         let mut entries = [0u32; 10];
         entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
-        entries[5..].copy_from_slice(&buffer_entry(1, sky_buffer));
+        entries[5..].copy_from_slice(&buffer_entry(19, sky_buffer));
         g.bind_group(grid_group, grid.layouts[0], &entries);
         DebugPass {
             built,
@@ -741,16 +740,21 @@ impl DebugPass {
     }
 }
 
-/// The rays' cells, drawn straight to the screen at their rays' depth and
-/// painted from the palette (frame/screen_cells.rs). The lane is written by
-/// the GPU's cast where it runs (`Cast`), else by the CPU's, uploaded from
-/// where it lives once a cast.
+/// The rays' cells, drawn straight to the screen where each pixel's ray
+/// meets the face its cell's ray met, painted as the chunks paint
+/// (frame/screen_cells.rs). The lane is written by the GPU's cast where it
+/// runs (`Cast`), else by the CPU's, uploaded from where it lives once a
+/// cast.
 struct ScreenCellsPass {
     built: Built,
     group: u32,
-    frame_buffer: u32,
+    /// The lit pass's entries it paints by (`Renderer::lit_entries`); none
+    /// until the renderer hands them.
+    lit: Vec<u32>,
     sky_buffer: u32,
-    colors: u32,
+    looks: u32,
+    /// Where the eye is in the world, as `screen_cells.wgsl`'s `eye_at`.
+    eye_at: u32,
     lane: u32,
     /// Cells the lane holds past its header.
     room: usize,
@@ -819,20 +823,21 @@ const BOUND_GROUP: [u32; 9] = [0, COMPUTE, UNIFORM_DYNAMIC, 1, COMPUTE, STORAGE,
 const LEVEL_STRIDE: u32 = UNIFORM_ALIGN_MAX;
 
 impl ScreenCellsPass {
-    fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, sky_buffer: u32) -> ScreenCellsPass {
+    fn new(g: &Gpu, pipelines: &mut Pipelines, sky_buffer: u32) -> ScreenCellsPass {
         let built = pipelines.build(g, PIPELINE_SCREEN_CELLS, format::CANVAS);
-        // Each ground look's swatch, then each placed value's, as the meshes paint them.
-        let swatch = |rgb: [u8; 3]| u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 255]);
-        let palette: Vec<u32> = (0..=u8::MAX).map(|g| swatch(ground(g).0)).chain(PAINTER.swatches().iter().map(|&rgb| swatch(rgb))).collect();
-        let colors = object();
-        g.buffer(colors, word_bytes(palette.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        g.write_buffer(colors, 0, bytes(&palette));
+        let words = look_words();
+        let looks = object();
+        g.buffer(looks, word_bytes(2 * words.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        g.write_buffer(looks, 0, bytes(&words));
+        let eye_at = object();
+        g.buffer(eye_at, word_bytes(8), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let mut p = ScreenCellsPass {
             built,
             group: 0,
-            frame_buffer,
+            lit: Vec::new(),
             sky_buffer,
-            colors,
+            looks,
+            eye_at,
             lane: 0,
             room: 0,
             generation: 0,
@@ -853,13 +858,7 @@ impl ScreenCellsPass {
         self.room = cells;
         self.lane = object();
         g.buffer(self.lane, word_bytes(4 * (1 + cells)), buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        self.group = object();
-        let mut entries = [0u32; 20];
-        entries[..5].copy_from_slice(&buffer_entry(0, self.frame_buffer));
-        entries[5..10].copy_from_slice(&buffer_entry(1, self.sky_buffer));
-        entries[10..15].copy_from_slice(&buffer_entry(2, self.lane));
-        entries[15..].copy_from_slice(&buffer_entry(3, self.colors));
-        g.bind_group(self.group, self.built.layouts[0], &entries);
+        self.regroup(g);
         if let Some(c) = self.cast.as_mut().filter(|c| c.tangents != 0 && c.shards != 0) {
             c.group = cast_group(g, c, self.lane);
         }
@@ -867,11 +866,38 @@ impl ScreenCellsPass {
         self.generation = 0;
     }
 
+    /// The lit pass's entries, handed again whenever one of its objects is
+    /// made again.
+    fn lit(&mut self, g: &Gpu, entries: Vec<u32>) {
+        self.lit = entries;
+        self.regroup(g);
+    }
+
+    fn regroup(&mut self, g: &Gpu) {
+        if self.lit.is_empty() || self.lane == 0 {
+            return;
+        }
+        release(self.group);
+        let mut e = self.lit.clone();
+        e.extend(buffer_entry(3, self.lane));
+        e.extend(buffer_entry(19, self.sky_buffer));
+        e.extend(buffer_entry(20, self.looks));
+        e.extend(buffer_entry(21, self.eye_at));
+        self.group = object();
+        g.bind_group(self.group, self.built.layouts[0], &e);
+    }
+
     /// The lane for this frame: the GPU's cast where it runs, its tiles and
     /// eye handed over first; else a new CPU cast's, from where it lives,
     /// which no cast rewrites before the page replays this turn.
     fn prepare(&mut self, g: &Gpu, pipelines: &mut Pipelines, cast: Option<Cast>) {
-        let steps = u32::from(stage_lane()[STAGE_AT::RAY_STEPS] != 0.0);
+        let s = stage_lane();
+        let steps = u32::from(s[STAGE_AT::RAY_STEPS] != 0.0);
+        // The eye's whole units wrap: a block's place is read off their low bits.
+        let eye: [f64; 3] = core::array::from_fn(|k| s[STAGE_AT::EYE + k]);
+        let whole = eye.map(|v| libm::floor(v) as i64 as u32);
+        let part = eye.map(|v| ((v - libm::floor(v)) as f32).to_bits());
+        g.write_buffer(self.eye_at, 0, bytes(&[whole[0], whole[1], whole[2], 0, part[0], part[1], part[2], 0]));
         let Some(cast) = cast else {
             self.cast = None;
             let cells = screen_cells_mut();
@@ -1153,7 +1179,7 @@ impl Renderer {
         let moon = ImageMap::new(g, MOON_TEX_SZ, MOON_TEX_SZ);
         let mut sky_entries = [0u32; 20 + AIR_WORDS];
         sky_entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
-        sky_entries[5..10].copy_from_slice(&buffer_entry(1, sky_buffer));
+        sky_entries[5..10].copy_from_slice(&buffer_entry(19, sky_buffer));
         sky_entries[10..15].copy_from_slice(&[2, resource::VIEW, moon.view, 0, 0]);
         sky_entries[15..20].copy_from_slice(&[3, resource::SAMPLER, moon.sampler, 0, 0]);
         sky_entries[20..].copy_from_slice(&air);
@@ -1192,7 +1218,7 @@ impl Renderer {
             puck: PuckPass::new(g, &mut pipelines, frame_buffer, air),
             badges: BadgePass::new(g, &mut pipelines, frame_buffer),
             debug: DebugPass::new(g, &mut pipelines, frame_buffer, sky_buffer),
-            screen: ScreenCellsPass::new(g, &mut pipelines, frame_buffer, sky_buffer),
+            screen: ScreenCellsPass::new(g, &mut pipelines, sky_buffer),
             pipelines,
             frame_buffer,
             frame: [0.0; FRAME_FLOATS],
@@ -1222,16 +1248,24 @@ impl Renderer {
         r
     }
 
+    /// What a block's face is painted by, wherever it is drawn from
+    /// (paint.wgsl): the frame, the shadow, the layers, the occlusion and
+    /// the air.
+    fn lit_entries(&self, frame: u32, shadow: [u32; 10]) -> Vec<u32> {
+        let mut e = Vec::with_capacity(35 + AIR_WORDS);
+        e.extend(buffer_entry(0, frame));
+        e.extend(shadow);
+        e.extend([4, resource::VIEW, self.layers.view, 0, 0]);
+        e.extend(buffer_entry(5, self.layers.table));
+        e.extend([6, resource::SAMPLER, self.layers.sampler, 0, 0]);
+        e.extend(self.ao.entry(7));
+        e.extend(self.atmosphere.entries());
+        e
+    }
+
     fn chunk_group(&self, g: &Gpu, frame: u32, shadow: [u32; 10]) -> u32 {
-        let mut e = [0u32; 40 + AIR_WORDS];
-        e[..5].copy_from_slice(&buffer_entry(0, frame));
-        e[5..15].copy_from_slice(&shadow);
-        e[15..20].copy_from_slice(&buffer_entry(3, self.draws_buffer));
-        e[20..25].copy_from_slice(&[4, resource::VIEW, self.layers.view, 0, 0]);
-        e[25..30].copy_from_slice(&buffer_entry(5, self.layers.table));
-        e[30..35].copy_from_slice(&[6, resource::SAMPLER, self.layers.sampler, 0, 0]);
-        e[35..40].copy_from_slice(&self.ao.entry(7));
-        e[40..].copy_from_slice(&self.atmosphere.entries());
+        let mut e = self.lit_entries(frame, shadow);
+        e.extend(buffer_entry(3, self.draws_buffer));
         let id = object();
         g.bind_group(id, self.chunk.layouts[0], &e);
         id
@@ -1242,6 +1276,8 @@ impl Renderer {
         release(self.light_group);
         self.bind_group = self.chunk_group(g, self.frame_buffer, self.shadow.entries(1));
         self.light_group = self.chunk_group(g, self.shadow.light_frame, self.shadow.blank_entries(1));
+        let lit = self.lit_entries(self.frame_buffer, self.shadow.entries(1));
+        self.screen.lit(g, lit);
     }
 
     /// The occlusion map is a new object, so every lit pass's group 0 is remade.

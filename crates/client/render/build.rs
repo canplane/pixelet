@@ -19,6 +19,14 @@ fn main() {
     }
     // The chunk box's mask bits, from the one statement the mesher compiles.
     std::fs::write(out.join("faces.wgsl"), MASK.iter().map(|(name, v)| format!("const {name}: u32 = {v}u;\n")).collect::<String>()).expect("the mask's shader");
+    // A unit's zoom and the ground's cell, from where the cast and the mesher
+    // read them: a ray's cell is painted by its block's zoom against these.
+    let lattice = format!(
+        "const UNIT_ZOOM: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\n",
+        pxl_portable::UNIT_ZOOM,
+        pxl_portable::lattice::GROUND.cell()
+    );
+    std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
     println!("cargo:rerun-if-changed=src/frame/shader");
     println!("cargo:rerun-if-changed=../../portable/src/mask.bits.rs");
 }

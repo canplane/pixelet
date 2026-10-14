@@ -1739,6 +1739,7 @@ dependencies = [
  "naga",
  "png 0.18.1",
  "pollster",
+ "pxl-portable",
  "pxl-spec",
  "wgpu",
  "xpute-guest",

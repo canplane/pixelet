@@ -13,7 +13,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::mesh::paint::object::PAINTER;
-use crate::mesh::paint::palette::{rgb255, LAYER_IDX};
+use crate::mesh::paint::palette::{layer_mean, rgb255, LAYER_IDX};
 use crate::mesh::word::NO_LAYER;
 
 /// Each byte's swatch and layer; a byte that is no look is drawn as unknown.
@@ -29,6 +29,19 @@ static LOOKS: LazyLock<[([u8; 3], u8); 256]> = LazyLock::new(|| {
 /// A ground look's swatch and layer.
 pub fn ground(g: GroundId) -> ([u8; 3], u8) {
     LOOKS[g as usize]
+}
+
+/// Each look as a ray's cell paints it (frame/shader/screen_cells.wgsl
+/// `drawn`), two words: its swatch with its layer in the top byte, then
+/// what it reads as from afar (`layer_mean`). The ground's looks by byte,
+/// then each placed value's, a value no look with its swatch alone.
+pub fn look_words() -> Vec<[u32; 2]> {
+    let words = |(rgb, layer): ([u8; 3], u8)| {
+        let far = layer_mean(u32::from(layer), rgb);
+        [u32::from_le_bytes([rgb[0], rgb[1], rgb[2], layer]), u32::from_le_bytes([far[0], far[1], far[2], 0])]
+    };
+    let placed = PAINTER.swatches().iter().enumerate().map(|(v, &rgb)| PAINTER.look_of(v as u32).unwrap_or((rgb, NO_LAYER as u8)));
+    (0..=u8::MAX).map(ground).chain(placed).map(words).collect()
 }
 
 /// What a block that fills is drawn as: its swatch and layer.

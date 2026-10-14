@@ -33,6 +33,10 @@ image-webp = { version = "0.2", optional = true }
 [features]
 device = ["dep:wgpu", "dep:pollster", "dep:png", "dep:image-webp"]
 
+[build-dependencies]
+# The zooms the screen's rays are painted by (build.rs `lattice.wgsl`).
+pxl-portable = { path = "../../portable" }
+
 [dev-dependencies]
 # The shaders' validator, under `cargo test` only: never in the module.
 naga = { version = "30", features = ["wgsl-in"] }

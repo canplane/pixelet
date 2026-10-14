@@ -133,7 +133,28 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_DEBUG => wgsl!("frame", "globe", "encode", "debug"),
         SHADER_CAMERA_GRID => wgsl!("frame", "globe", "encode", "sky_words", "camera_grid"),
-        SHADER_SCREEN_CELLS => wgsl!("frame", "globe", "encode", "sky_words", "screen_cells"),
+        SHADER_SCREEN_CELLS => wgsl!(
+            "frame",
+            "globe",
+            "encode",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_sky",
+            "atmos_eye",
+            "atmos_march",
+            "atmos_view",
+            "atmos_ground",
+            "shade",
+            "finish",
+            "shadow",
+            "ao_map",
+            "faces",
+            "lattice",
+            "paint",
+            "sky_words",
+            "screen_cells"
+        ),
         // As generated: no constants of ours before it to clash with its names.
         SHADER_CAST => include_str!(concat!(env!("OUT_DIR"), "/shader/cast.gen.wgsl")),
         SHADER_HEIGHTS => include_str!(concat!(env!("OUT_DIR"), "/shader/heights.gen.wgsl")),
@@ -481,6 +502,17 @@ fn chunk_groups() -> Vec<Vec<u32>> {
     g0.extend([[3, VERTEX, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
     vec![group(&g0)]
 }
+/// The lit pass's frame, shadow, occlusion, air and layers, all read where
+/// a pixel is painted; then the lane, the sky's words, the looks and the
+/// eye's place.
+fn screen_groups() -> Vec<u32> {
+    let a = air([FRAGMENT, FRAGMENT, NONE, FRAGMENT, FRAGMENT, NONE, NONE, NONE, FRAGMENT, FRAGMENT]);
+    let mut g = vec![[0, FRAGMENT, UNIFORM], [1, FRAGMENT, DEPTH], [2, FRAGMENT, SAMPLER_COMPARISON], [7, FRAGMENT, TEXTURE]];
+    g.extend(a);
+    g.extend([[3, FRAGMENT, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
+    g.extend([[19, FRAGMENT, UNIFORM], [20, FRAGMENT, STORAGE], [21, FRAGMENT, UNIFORM]]);
+    group(&g)
+}
 fn model_lanes(skinned: bool) -> Vec<Vec<u32>> {
     let mut lanes = vec![lane(12, 0, F32X3), lane(12, 1, F32X3), lane(8, 2, F32X2)];
     if skinned {
@@ -565,7 +597,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_CAMERA_GRID, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM]])],
+            &[group(&[[0, FRAGMENT, UNIFORM], [19, FRAGMENT, UNIFORM]])],
         ),
         PIPELINE_SCREEN_CELLS => record(
             Head {
@@ -574,7 +606,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_SCREEN_CELLS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM], [2, FRAGMENT, STORAGE], [3, FRAGMENT, STORAGE]])],
+            &[screen_groups()],
         ),
         PIPELINE_CHUNK_DEPTH => record(depth_only(SHADER_CHUNK), &chunk_lanes(true), &chunk_groups()),
         PIPELINE_CHUNK_COARSE_DEPTH => record(at_coarse(depth_only(SHADER_CHUNK)), &chunk_lanes(false), &chunk_groups()),
@@ -594,7 +626,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[],
             &[group(&[
                 [0, FRAGMENT, UNIFORM],
-                [1, FRAGMENT, UNIFORM],
+                [19, FRAGMENT, UNIFORM],
                 [2, FRAGMENT, TEXTURE_ARRAY],
                 [3, FRAGMENT, SAMPLER],
                 AIR[0],
