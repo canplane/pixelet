@@ -39,8 +39,7 @@ use crate::io::request::declare;
 use crate::io::source;
 use crate::layer::residency::floor::{self, Fallback, Floor};
 use crate::layer::residency::{Candidate, Residency, Victim};
-use crate::view::observation::{observation, BySight};
-use crate::view::sight::Stop;
+use crate::view::observation::{observation, ByEye};
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// A layer as the view asks of it: its demand, held beside its records.
@@ -95,9 +94,6 @@ struct Seen {
     floor: Vec<Tile>,
     destination: Option<Tile>,
     tau: Tau,
-    /// The published cast's.
-    stops: Vec<Stop>,
-    lacks: Vec<Tile>,
 }
 
 /// Evicts the tile last in view order.
@@ -108,15 +104,6 @@ impl Victim for Farthest<'_> {
         let order = |c: &Candidate| self.0.map_or(Order::LAST, |o| crate::view::observation::order_of_tile(o, self.1, c.tile));
         (0..candidates.len()).max_by_key(|&i| order(&candidates[i]))
     }
-}
-
-/// The cast last published, which demand follows: what it was observed
-/// from, where its rays stopped and the tiles they lacked.
-#[derive(Clone, Copy)]
-pub struct Published<'a> {
-    pub observation: &'a Observation,
-    pub stops: &'a [Stop],
-    pub lacks: &'a [Tile],
 }
 
 pub struct Demand<L: Observed> {
@@ -201,7 +188,7 @@ impl<L: Observed> Demand<L> {
         // the floor's eye, if not `o`'s
         floor_at: Option<&Observation>,
         destination: impl Iterator<Item = Tile>,
-        estimator: &BySight,
+        estimator: &ByEye,
         top: Zoom,
     ) {
         let mut demand = core::mem::take(&mut self.demand);
@@ -298,7 +285,10 @@ impl<L: Observed> Demand<L> {
     /// `destination` is asked for with its line even with no observation yet:
     /// at the first fix the camera waits for that ground. `far` cuts the
     /// observation where the layer stops being drawn.
-    pub fn step(&mut self, destination: Option<Tile>, published: Option<Published>, tau: Tau) {
+    ///
+    /// `published` is what the cast last published was observed from, which
+    /// demand follows.
+    pub fn step(&mut self, destination: Option<Tile>, published: Option<&Observation>, tau: Tau) {
         // Nothing coarser than the layer's own top is drawn, whatever the source holds.
         let Some(top) = L::TOP.or(floor::top()).map(|t| t.max(L::LATTICE.top())) else { return };
         let own = |o: Observation| match L::TOP {
@@ -310,14 +300,12 @@ impl<L: Observed> Demand<L> {
             None => o,
         };
         let live = observation().map(own);
-        let seen_from = live.map(|live| published.as_ref().map_or(live, |d| own(*d.observation)));
+        let seen_from = live.map(|live| published.map_or(live, |d| own(*d)));
         let mut now = self.now.take().unwrap_or_else(|| Seen {
             o: None,
             floor: Vec::new(),
             destination: None,
             tau,
-            stops: Vec::new(),
-            lacks: Vec::new(),
         });
         // the floor follows the live eye, so a jump asks for it at once
         now.floor.clear();
@@ -334,25 +322,9 @@ impl<L: Observed> Demand<L> {
         };
         let o = seen_from.map(|o| Observation { reach: o.reach.min(L::reach()), ..o });
         (now.o, now.destination, now.tau) = (o, destination, tau);
-        now.stops.clear();
-        now.stops.extend_from_slice(published.as_ref().map_or(&[], |d| d.stops));
-        now.lacks.clear();
-        now.lacks.extend_from_slice(published.as_ref().map_or(&[], |d| d.lacks));
         if core::mem::take(&mut self.moved) | (self.last.as_ref() != Some(&now)) {
             let line = destination.into_iter().flat_map(|p| std::iter::successors(Some(p), move |q| (q.zoom > top).then(|| q.parent())));
-            self.observe(
-                o.as_ref(),
-                live.as_ref(),
-                line,
-                &BySight {
-                    tau,
-                    lattice: L::LATTICE,
-                    top,
-                    stops: published.as_ref().map_or(&[], |d| d.stops),
-                    lacks: published.as_ref().map_or(&[], |d| d.lacks),
-                },
-                top,
-            );
+            self.observe(o.as_ref(), live.as_ref(), line, &ByEye { tau, lattice: L::LATTICE, top }, top);
             self.now = self.last.replace(now);
         } else {
             self.now = Some(now);

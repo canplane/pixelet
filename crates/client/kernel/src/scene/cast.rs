@@ -12,7 +12,7 @@ use pxl_render::gpu::renderer::{Overwrites, TerrainWrite, CAST_EYE_WORDS};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::demand::{band, REACH_ACROSS};
+use pxl_spec::space::layer::demand::REACH_ACROSS;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::tile::{tile_at, Tile, LEAF_ZOOM};
 use xpute_guest::global::Global;
@@ -26,6 +26,7 @@ use crate::layer::Base as _;
 use crate::setting::schema_spec::RayDensity;
 use crate::setting::store::settings_store;
 use crate::view::frame::pose::view;
+use crate::view::observation::reach;
 use crate::view::sight;
 
 /// The terrain frames the GPU keeps a tile's lanes for.
@@ -89,32 +90,19 @@ pub fn eye(o: &Observation) -> Option<([u32; CAST_EYE_WORDS], &'static [f32])> {
     Some((eye, tangents))
 }
 
-/// How far from the eye residency may hold a zoom's tiles: at the source's
-/// top the floor's ground (residency/floor.rs `TopRing`), past it the
-/// zoom's band (pxl-spec layer/demand.rs `band`), which every tile the view
-/// asks for at that zoom lies within; none before the source declares its
-/// top.
-fn reach(o: &Observation, zoom: u32) -> f64 {
-    let Some(top) = floor::top() else { return 0.0 };
-    if zoom == top {
-        let over = (o.eye[2] - o.ground).max(0.0);
-        return (o.far() * o.far() - over * over).max(0.0).sqrt();
-    }
-    band(o, sight::tau(), GROUND, top, zoom).map_or(0.0, |(_, to)| to)
-}
-
 /// Per tile zoom from the top to the leaves, the tiles about the eye the GPU
 /// holds: the window's south-west tile, `REACH_ACROSS` and a spare, then
 /// `REACH_ACROSS`² words row by row, each its frame plus one, zero where the
-/// GPU holds none. Its squares are those residency may hold there, within
-/// `reach` of the eye as `squares_within` counts them, so the GPU reads the
-/// tiles the CPU does.
+/// GPU holds none. Its squares are those the view asks for there, within
+/// view/observation.rs `reach` of the eye as `squares_within` counts them,
+/// so the GPU reads the tiles the CPU does.
 pub fn window(o: &Observation) -> &'static [i32] {
     let w = WINDOW.get(Vec::new);
     w.clear();
     let terrain = TerrainTile::residency();
+    let top = floor::top().map(|t| t.max(GROUND.top()));
     for zoom in GROUND.top()..=LEAF_ZOOM {
-        let r = reach(o, zoom);
+        let r = top.and_then(|top| reach(o, sight::effective(), GROUND, top, zoom)).unwrap_or(0.0);
         let at = [0, 1].map(|k| ((o.eye[k] - r) / units(zoom)).floor() as i64);
         w.extend_from_slice(&[at[0] as i32, at[1] as i32, REACH_ACROSS as i32, 0]);
         for dy in 0..i64::from(REACH_ACROSS) {

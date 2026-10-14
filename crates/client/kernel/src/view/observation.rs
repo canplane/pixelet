@@ -11,9 +11,9 @@ use pxl_spec::space::camera::grid::Tau;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::hierarchy::tree::{region, Node};
-use pxl_spec::space::layer::demand::band;
+use pxl_spec::space::layer::demand::{band, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::tile::{tile_at, tile_rows, Tile, LEAF_ZOOM};
+use pxl_spec::space::layer::tile::{Tile, LEAF_ZOOM};
 
 use crate::layer::residency::floor;
 use crate::layer::{Answer, Query};
@@ -21,8 +21,7 @@ use crate::query::World;
 use crate::view::frame::pose::globe;
 use crate::view::frame::pose::view;
 use crate::view::reach::{eye_height, reach_at};
-use crate::view::sight::Stop;
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::Zoom;
 
 pub fn eye() -> Option<V3> {
     Some(view().pose?.eye)
@@ -57,46 +56,34 @@ pub fn within<const D: usize>(node: Node<D>, cell: Zoom) -> Option<Aabb> {
     }
 }
 
-/// The estimator from what the camera grid's rays observed: at each stop,
-/// the tile of the zoom whose band holds its distance, plus what the rays
-/// lacked. Ground no ray reaches is left to the floor. A lack is cast again
-/// when it arrives, so requirements grow toward what exact records would
-/// give and never rest short of it.
-pub struct BySight<'a> {
+/// How far from the eye a layer's tiles at `zoom` are asked for: at the
+/// source's `top` the floor's (residency/floor.rs `ring`), past it the
+/// zoom's band (pxl-spec layer/demand.rs `band`); none past the far edge.
+pub fn reach(o: &Observation, tau: Tau, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {
+    if zoom == top {
+        return floor::ring(o);
+    }
+    band(o, tau, lattice, top, zoom).map(|(_, to)| to)
+}
+
+/// What the view asks a layer for: at each zoom under the source's top, which
+/// the floor holds, to the leaves, every tile within `reach` of the eye. It
+/// is a function of the eye alone, never of what the rays met, so what is
+/// asked, and so what is read, cannot depend on what was held before: the
+/// rays only see it arrive.
+pub struct ByEye {
     pub tau: Tau,
     /// The layer's, whose tiles' cells say which zoom a distance asks for.
     pub lattice: Lattice,
     /// The coarsest zoom the source supplies whole; no requirement is coarser.
     pub top: Zoom,
-    pub stops: &'a [Stop],
-    pub lacks: &'a [Tile],
 }
 
-impl BySight<'_> {
-    /// The tiles required: each at a zoom whose band holds what its column
-    /// is known to hold, as `at` reads at that zoom's cells.
+impl ByEye {
     pub fn requirements(&self, o: &Observation, each: &mut dyn FnMut(Tile)) {
-        let required = |zoom: Zoom, at: Node<2>| {
-            let Some((from, to)) = band(o, self.tau, self.lattice, self.top, zoom) else { return false };
-            let Some(held) = within(at, self.lattice.grid_zoom(zoom)) else { return false };
-            let m = o.measure(&held);
-            m.seen && m.near < to && m.near <= o.far() && m.far >= from
-        };
-        for &lack in self.lacks {
-            let line = std::iter::successors(Some(lack), |q| (q.zoom > self.top).then(|| q.parent()));
-            if let Some(p) = line.into_iter().find(|q| required(q.zoom, lack.node())) {
-                each(p);
-            }
-        }
-        for stop in self.stops {
-            let zoom = (self.top..=LEAF_ZOOM)
-                .rev()
-                .find(|&z| band(o, self.tau, self.lattice, self.top, z).is_some_and(|(from, to)| (from..to).contains(&stop.t)));
-            let Some(zoom) = zoom else { continue };
-            let side = units(zoom);
-            let [x, y] = [0, 1].map(|k| (stop.at[k] / side).floor() as i64);
-            if tile_rows(zoom).contains(&y) {
-                each(tile_at(zoom, [x, y]));
+        for zoom in self.top + 1..=LEAF_ZOOM {
+            if let Some(r) = reach(o, self.tau, self.lattice, self.top, zoom) {
+                tiles_within(zoom, [o.eye[0], o.eye[1]], r).for_each(&mut *each);
             }
         }
     }

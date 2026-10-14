@@ -112,13 +112,7 @@ fn demand_tick(_: &mut TickContext) {
     crate::view::demand::admit_arrived();
     changes_step();
     // Demand follows the goal the chunks published, at the quality decided first.
-    let published = crate::view::sight::current().and_then(|s| {
-        Some(crate::view::demand::Published {
-            observation: s.observation()?,
-            stops: s.stops(),
-            lacks: s.lacks(),
-        })
-    });
+    let published = crate::view::sight::current().and_then(|s| s.observation());
     let tau = crate::view::sight::effective();
     TerrainTile::demand().step(crate::control::navigation::destination::tile(), published, tau);
     // Nothing is fetched while places are hidden.
