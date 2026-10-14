@@ -310,8 +310,12 @@ impl<L: Base> Residency<L> {
     pub fn ask(&mut self, asks: &FnvHashMap<Tile, Ask>) {
         xpute_kit::ensure!(asks.len() <= Self::FRAMES as usize, ENOTRECOVERABLE, asks.len());
         for (&p, e) in &mut self.tiles {
+            let was = e.ask.is_some();
             e.ask = asks.get(&p).copied();
-            if e.ask.is_none() && core::mem::take(&mut e.answered) {
+            // A held tile asked for again, or no longer, is read or not: its
+            // answer moved as surely as one arriving or going.
+            let read = e.held.is_some() && was != e.ask.is_some();
+            if read | (e.ask.is_none() && core::mem::take(&mut e.answered)) {
                 self.moved.push(p);
             }
         }
