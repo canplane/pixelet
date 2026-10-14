@@ -1,7 +1,9 @@
 //! The cast's compute entry (`cast_cs`): each camera-grid cell's ray down
 //! the pyramid by pxl-portable's descent, the one the CPU's cast runs, over
-//! the world as the GPU holds it. The harness's entries are behind its
-//! feature (`harness`).
+//! the world as the GPU holds it; and the ground's grid it reads
+//! (`heights_cs`), a held tile's cells' heights computed once. Each entry is
+//! a module of its own. The harness's entries are behind its feature
+//! (`harness`).
 
 #![cfg_attr(target_arch = "spirv", no_std)]
 
@@ -41,12 +43,19 @@ const UNKNOWN: u32 = sentinel::unknown as u32;
 const LOOK_WORDS: u32 = TILE_CELLS * TILE_CELLS / 4;
 /// Words a frame of heights holds: 2 a word.
 const ELE_WORDS: u32 = (ELE_PADDED_SPAN * ELE_PADDED_SPAN).div_ceil(2);
+/// Cells a frame of the ground's grid holds.
+const GRID_CELLS: u32 = TILE_CELLS * TILE_CELLS;
 /// Words a frame of the index lane holds: its cells, then its coarser levels.
 const INDEX_WORDS: u32 = EXTENT_LANE + EXTENT.coarse_cells();
 
 /// The low half of `w` shifted down by `s`, its sign carried.
 fn half(w: u32, s: u32) -> i32 {
     ((w >> s) << 16) as i32 >> 16
+}
+
+/// Elevation sample `i` of frame `frame` of the tiles' heights.
+fn ele(heights: &[u32], frame: u32, i: usize) -> i32 {
+    half(heights[(frame * ELE_WORDS) as usize + i / 2], 16 * (i as u32 % 2))
 }
 
 /// One held tile's frame in the ground's buffers.
@@ -62,7 +71,7 @@ impl Tile for Framed<'_> {
         self.looks[(self.frame * LOOK_WORDS + i / 4) as usize] >> (8 * (i % 4)) & 0xff
     }
     fn ele(&self, i: usize) -> i32 {
-        half(self.heights[(self.frame * ELE_WORDS) as usize + i / 2], 16 * (i as u32 % 2))
+        ele(self.heights, self.frame, i)
     }
 }
 
@@ -76,6 +85,8 @@ pub struct World<'a> {
     window: &'a [IVec4],
     looks: &'a [u32],
     heights: &'a [u32],
+    /// Per frame, its cells' heights (`heights_cs`).
+    grid: &'a [i32],
     extents: &'a [u32],
     /// The served shards: zoom, x, y.
     shards: &'a [IVec4],
@@ -133,7 +144,9 @@ impl World<'_> {
 
     /// The ground's cell `g` of the tiles at `zoom`, counted in their cells,
     /// off the finest held tile over it: its look and height, `void` where
-    /// none is held; and whether only its look is asked.
+    /// none is held; and whether only its look is asked. A held tile's own
+    /// cell's height is its grid's; a coarser tile standing in reads its
+    /// samples (`ground::read`).
     fn cell(&self, zoom: u32, g: [i32; 2], only_look: bool) -> (u32, i32) {
         let shamt = GROUND.tile_cell_shamt();
         let t = [wrap_index(zoom, g[0] >> shamt), g[1] >> shamt];
@@ -153,6 +166,9 @@ impl World<'_> {
         };
         if only_look {
             (ground::look(&tile, v, 1 << s), 0)
+        } else if s == 0 {
+            let h = self.grid[(tile.frame * GRID_CELLS + v[1] as u32 * TILE_CELLS + v[0] as u32) as usize];
+            (ground::look(&tile, v, 1), h)
         } else {
             ground::read(&tile, v, 1 << s)
         }
@@ -279,6 +295,7 @@ pub fn cast_cs(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] lane: &mut [UVec4],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] tangents: &[f32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] shards: &[IVec4],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 8)] grid: &[i32],
 ) {
     let across = eye.across_range;
     if id.x >= across.x || id.y >= across.y {
@@ -295,9 +312,25 @@ pub fn cast_cs(
         window,
         looks,
         heights,
+        grid,
         extents,
         shards,
     };
     let met = cast::first(&mut world, &ray, detail, Until::Fills);
     lane[(1 + id.y * across.x + id.x) as usize] = word(&ray, met);
+}
+
+/// The ground's grid of the frames `fresh` names, the frames uploaded this
+/// turn, one a `z`: each cell's height (`ground::height`) of the tile held
+/// there, at its own cells.
+#[spirv(compute(threads(8, 8, 1)))]
+pub fn heights_cs(
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] fresh: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] heights: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] grid: &mut [i32],
+) {
+    let frame = fresh[id.z as usize];
+    let h = ground::height(move |i| ele(heights, frame, i), [id.x as i32, id.y as i32], 1);
+    grid[(frame * GRID_CELLS + id.y * TILE_CELLS + id.x) as usize] = h;
 }

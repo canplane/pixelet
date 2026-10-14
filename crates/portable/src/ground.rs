@@ -118,8 +118,15 @@ pub fn read(tile: &impl Tile, v: [i32; 2], n: u32) -> (u32, i32) {
     if !holds(v, n) {
         return (VOID, 0);
     }
+    (look(tile, v, n), height(|i| tile.ele(i), v, n))
+}
+
+/// `read`'s height alone, off the tile's elevation samples `ele`, the one
+/// producer of a cell's height: a GPU computes a held tile's cells' once,
+/// into its grid.
+pub fn height(ele: impl Fn(usize) -> i32, v: [i32; 2], n: u32) -> i32 {
     let at = |v: i32| (v as f32 + 0.5) / n as f32;
-    (look(tile, v, n), bicubic(|i| tile.ele(i), at(v[0]), at(v[1])))
+    bicubic(ele, at(v[0]), at(v[1]))
 }
 
 /// Whether `tile` holds the cell `v` of a tile `n` × `n` times finer.
