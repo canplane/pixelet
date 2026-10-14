@@ -19,7 +19,7 @@ use pxl_portable::cube::{object, sentinel, Ground};
 use pxl_portable::ground::{self, Tile, ELE_PADDED_SPAN, GRID_WORDS};
 use pxl_portable::lattice::{GROUND, TILE_CELLS};
 use pxl_portable::placed::{self, Cut, Held, Lanes, BLOCK, PLACED, SPLIT};
-use pxl_portable::{at, wrap_index, LEAF_CELL, LEAF_ZOOM};
+use pxl_portable::{at, mask, wrap_index, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
 use spirv_std::glam::{IVec4, UVec3, UVec4, Vec4};
 use spirv_std::spirv;
 
@@ -135,6 +135,45 @@ impl Area for World<'_> {
 }
 
 impl World<'_> {
+    /// Which of the blocks about the block `c` at `zoom` fill, as pxl-portable
+    /// `mask::filled` names them: a column at a time, each read once (its
+    /// cell, or the Earth past the area), its three blocks decided on values;
+    /// what is placed asked of each block, the caves only where one may open
+    /// it (`Cell::opens`).
+    fn about(&mut self, zoom: u32, c: [i32; 3]) -> u32 {
+        let (carve, hide) = (cut(self.eye.carve), cut(self.eye.hide));
+        let mut filled = 0;
+        let mut k = 0;
+        while k < 9 {
+            let n = [wrap_index(zoom, c[0] + (k % 3) as i32 - 1), c[1] + (k / 3) as i32 - 1];
+            let past = zoom >= SHARD_ZOOM && area::past(self, area::tile_at(zoom, n));
+            let (cell, _) = ground::Held::cell(self, zoom, [n[0], n[1], c[2]]);
+            let mut dz = 0;
+            while dz < 3 {
+                let (bit, b) = (1 << (dz * 9 + k), [n[0], n[1], c[2] + dz as i32 - 1]);
+                if mask::READS & bit != 0 {
+                    let held = placed::cursor(self, PLACED, zoom, b);
+                    let over = if held.holds() || self.eye.carve.w >= 0 {
+                        placed::over(self, held, carve, hide, zoom, b, true)
+                    } else {
+                        placed::Over { says: placed::UNDER, block: VOID }
+                    };
+                    let fills = if over.says == BLOCK {
+                        self.fills(&[PLACED_BLOCK | over.block, 0])
+                    } else if past {
+                        area::earth(b[2]) != VOID
+                    } else {
+                        cell.block(zoom, b[2], false).0 != VOID && !(cell.opens(zoom, b[2]) && Cave::of(zoom, b).hollow())
+                    };
+                    filled |= (fills as u32) * bit;
+                }
+                dz += 1;
+            }
+            k += 1;
+        }
+        filled
+    }
+
     /// The word the window holds for the tile `t` at `zoom`: its frame plus
     /// one, 0 where none is held or the window does not reach it.
     fn held(&self, zoom: u32, t: [i32; 2]) -> u32 {
@@ -293,10 +332,13 @@ pub struct At {
     placed: Held,
 }
 
+/// What a node is on the GPU: its value, and for the ground the four looks
+/// a coarse block folds, a byte each, `dx + 2·dy` (`ground::Cell`), what
+/// the screen paints a hit with.
 impl Query for World<'_> {
     type At = At;
-    type Block = u32;
-    const AIR: u32 = VOID;
+    type Block = [u32; 2];
+    const AIR: [u32; 2] = [VOID, 0];
 
     fn root(&mut self, node: [i32; 3]) -> At {
         At {
@@ -317,7 +359,7 @@ impl Query for World<'_> {
     /// `ground::node`); asked as a block at `near` or finer, or where the
     /// world holds nothing finer — past the ground's cells, with nothing
     /// placed or carved finer in it.
-    fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<u32> {
+    fn node(&mut self, at: &mut At, zoom: u32, c: [i32; 3], asked: [u32; 2], _t0: f32) -> In<[u32; 2]> {
         let mut block = zoom >= asked[1] || zoom >= LEAF_CELL;
         // Asked of what is placed only where something is, or a preview cuts.
         if at.placed.holds() || self.eye.carve.w >= 0 {
@@ -327,19 +369,23 @@ impl Query for World<'_> {
             if over.says == BLOCK {
                 return In {
                     kind: Kind::Block,
-                    block: PLACED_BLOCK | over.block,
+                    block: [PLACED_BLOCK | over.block, 0],
                 };
             }
             if over.says == SPLIT {
-                return In { kind: Kind::Split, block: VOID };
+                return In { kind: Kind::Split, block: [VOID, 0] };
             }
         }
         let i = ground::node(self, at.cave, (zoom, c), asked, block);
-        In { kind: i.kind, block: i.block.0 }
+        let (value, f) = i.block;
+        In {
+            kind: i.kind,
+            block: [value, f[0] & 0xff | (f[1] & 0xff) << 8 | (f[2] & 0xff) << 16 | (f[3] & 0xff) << 24],
+        }
     }
 
-    fn fills(&self, block: &u32) -> bool {
-        *block != VOID && *block != PLACED_AIR
+    fn fills(&self, block: &[u32; 2]) -> bool {
+        block[0] != VOID && block[0] != PLACED_AIR
     }
 }
 
@@ -347,15 +393,21 @@ impl Query for World<'_> {
 /// placed) and the face it entered through, then how far as f32 bits, then
 /// the nodes its descent asked about; where it met nothing, the first two
 /// zero.
-fn word(ray: &cast::Ray, met: Met<At, u32>) -> UVec4 {
+fn word(world: &mut World, ray: &cast::Ray, met: Met<At, [u32; 2]>, steps: bool) -> UVec4 {
     if met.ends != Ends::Stop {
-        return UVec4::new(0, 0, met.visits, 0);
+        return UVec4::new(0, 0, 0, met.visits);
     }
     let s = met.stop;
     let down = pxl_portable::axis(ray.direction, s.axis) > 0.0;
     let face = 2 * s.axis + down as u32;
-    let kind = if s.block & PLACED_BLOCK != 0 { 2 } else { 1 };
-    UVec4::new(s.block & 0xffff | kind << 16 | face << 18, s.t.to_bits(), met.visits, 0)
+    let [value, folds] = s.block;
+    let kind = if value & PLACED_BLOCK != 0 { 2 } else { 1 };
+    let (zoom, c) = (s.place.zoom, s.place.node(ray));
+    // The hit's face bits, the blocks about it asked at its zoom, each once
+    // (pxl-portable `mask`), as a chunk's box takes them.
+    let filled = world.about(zoom, c);
+    let w3 = if steps { met.visits } else { folds };
+    UVec4::new(value & 0xffff | kind << 16 | face << 18 | zoom << 21, s.t.to_bits(), mask::mask(filled), w3)
 }
 
 #[spirv(compute(threads(8, 8, 1)))]
@@ -390,10 +442,12 @@ pub fn cast_cs(
         eye,
     };
     let met = cast::first(&mut world, &ray, detail, Until::Fills);
+    let steps = at(&*lane, 0).z != 0;
+    let w = word(&mut world, &ray, met, steps);
     let i = (1 + id.y * across.x + id.x) as usize;
     if i < lane.len() {
         // SAFETY: just bounded by the lane's own length.
-        unsafe { *lane.get_unchecked_mut(i) = word(&ray, met) };
+        unsafe { *lane.get_unchecked_mut(i) = w };
     }
 }
 

@@ -8,8 +8,8 @@
 
 // The lane (`frame/screen_cells.rs`): the cells across and up and whether a
 // cell is coloured by its ray's steps, then a cell each, what its ray met
-// (value, kind, face), how far it went (f32 bits) and the nodes its descent
-// asked.
+// (value, kind, face, zoom), how far it went (f32 bits), its face bits, and
+// its fold's looks or, in the steps view, the nodes its descent asked.
 @group(0) @binding(2) var<storage, read> cells: array<vec4u>;
 // Each ground look's swatch, then each placed value's.
 @group(0) @binding(3) var<storage, read> palette: array<u32>;
@@ -80,7 +80,7 @@ fn fs(v: VertexOut) -> FragOut {
     let t = select(bitcast<f32>(c.y), FAR, kind == 0u);
     let clip = frame_view_proj() * vec4f(normalize(dir) * t, 1.0);
     var o: FragOut;
-    o.color = vec4f(turbo(log2(1.0 + f32(c.z)) / log2(1.0 + STEPS_MOST)), 1.0);
+    o.color = vec4f(turbo(log2(1.0 + f32(c.w)) / log2(1.0 + STEPS_MOST)), 1.0);
     o.depth = clip.z / clip.w;
     return o;
   }

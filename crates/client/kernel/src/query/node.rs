@@ -43,6 +43,7 @@ use pxl_portable::area::Area;
 use pxl_portable::cast::Kind;
 use pxl_portable::cube::sentinel;
 use pxl_portable::ground::{self, Cell};
+use pxl_portable::mask::{filled, mask};
 use pxl_spec::bake::constant::EntryAt;
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::block::placed::{self, Cut, Held, BLOCK, SPLIT};
@@ -97,6 +98,16 @@ impl World<'_> {
     /// (`drawn`).
     pub fn block(&self, node: Node<3>) -> Answer<Option<Block>> {
         self.drawn(&mut self.start(node))
+    }
+
+    /// The face bits of the block `b` of `zoom` (pxl-portable `mask`): the
+    /// blocks about it asked of the world's one query (`block`), each once,
+    /// as a chunk's box reads its own; one not held fills nothing.
+    pub fn faces(&self, (zoom, b): Node<3>) -> u32 {
+        mask(filled(|[x, y, z]| {
+            let n = [b[0] + i64::from(x), b[1] + i64::from(y), b[2] + i64::from(z)];
+            self.block((zoom, n)).value().flatten().is_some_and(Block::fills)
+        }))
     }
 
     /// A node with nothing handed down, a descent's root among them: each

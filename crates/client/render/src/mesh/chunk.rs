@@ -20,7 +20,7 @@ use crate::look::color::{linear, srgb};
 use crate::mesh::paint::ground::{ground, look};
 use crate::mesh::paint::palette::layer_mean;
 use crate::mesh::word::taps_of;
-use pxl_spec::block::mask::{mask as portable_mask, ALL_CREASES, ALL_FACES};
+use pxl_spec::block::mask::{filled, mask as portable_mask, ALL_CREASES, ALL_FACES};
 
 /// The fine format: corner and width in u16 steps of its cell, floor and height
 /// in u16 mesh steps, sRGB color, four layer taps, face mask.
@@ -395,12 +395,12 @@ fn grow(v: &mut Vec<Piece>) -> Result<(), Refused> {
 /// What the box of the block `b` shows and what the shader shades it by,
 /// read off the blocks about it `shades` names (pxl-portable `mask`).
 fn mask(blocks: &Blocks, b: [i64; 3]) -> u32 {
-    portable_mask(|[x, y, z]| {
+    portable_mask(filled(|[x, y, z]| {
         blocks
             .block([b[0] + i64::from(x), b[1] + i64::from(y), b[2] + i64::from(z)])
             .or_bug(Errno::ENOTRECOVERABLE)
             .is_some_and(Block::fills)
-    })
+    }))
 }
 
 /// Every lateral edge a crease, so each shades as a silhouette.

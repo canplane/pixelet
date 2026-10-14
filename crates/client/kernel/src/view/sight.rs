@@ -17,7 +17,7 @@ use pxl_spec::space::camera::grid::{target_cell_px, Tau, SPLIT};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::{nearest_box, point};
-use pxl_spec::space::coord::zoom::{of_side, Zoom};
+use pxl_spec::space::coord::zoom::{of_side, units, Zoom};
 use pxl_spec::space::layer::tile::Tile;
 use xpute_guest::global::Global;
 
@@ -163,6 +163,9 @@ pub struct Stop {
     /// plus one where the face's outward normal points down the axis.
     pub block: Block,
     pub face: u8,
+    /// The block's face bits (pxl-portable `mask`), as its chunk's box has
+    /// them.
+    pub faces: u32,
 }
 
 /// One cell's ray as cast: where it stopped, none where it met nothing
@@ -329,12 +332,15 @@ pub fn advance(stop: &dyn Fn() -> bool) -> bool {
         let lack = answer.lack();
         let met = answer.value().flatten().and_then(|hit| {
             let k = (0..3).find(|&k| hit.normal[k] != 0.0)?;
+            let zoom = of_side(hit.cube.max[0] - hit.cube.min[0]);
+            let block = hit.block?;
             Some(Stop {
                 at: core::array::from_fn(|a| hit.point[a] - hit.normal[a] * INSIDE),
                 t: hit.t,
-                zoom: of_side(hit.cube.max[0] - hit.cube.min[0]),
-                block: hit.block?,
+                zoom,
+                block,
                 face: (2 * k + usize::from(hit.normal[k] < 0.0)) as u8,
+                faces: world.faces((zoom, hit.cube.min.map(|v| (v / units(zoom)).round() as i64))),
             })
         });
         job.sight.cells[cell as usize] = Cell {

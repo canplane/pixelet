@@ -576,17 +576,23 @@ impl Cell {
         self.look == UNKNOWN || Ground::grounds(self.look)
     }
 
+    /// Whether a cave may take block `z` of the cell at `cell` (`lay`): ground
+    /// under its face, over its bedrock, off the area's wall.
+    pub fn opens(&self, cell: Zoom, z: i32) -> bool {
+        let face = face_height(cell, self.top);
+        lay(cell, [face, face], self.look == UNKNOWN, [z, z + 1]) == Lay::Open
+    }
+
     /// Block `z` of the cell at `cell`, a cave's air where `hollow` and a
-    /// cave may take it: the ground's look and its fold's four, `void` for
-    /// air.
+    /// cave may take it (`opens`): the ground's look and its fold's four,
+    /// `void` for air.
     pub fn block(&self, cell: Zoom, z: i32, hollow: bool) -> (u32, [u32; 4]) {
         let air = (VOID, [VOID; 4]);
         if !self.grounded() {
             return air;
         }
         let g = by_depth(cell, self.look, self.top, z);
-        let face = face_height(cell, self.top);
-        if g == VOID || hollow && lay(cell, [face, face], self.look == UNKNOWN, [z, z + 1]) == Lay::Open {
+        if g == VOID || hollow && self.opens(cell, z) {
             return air;
         }
         let folds = cell >= LEAF_CELL || g != self.look;

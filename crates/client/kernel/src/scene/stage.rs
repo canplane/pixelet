@@ -9,7 +9,7 @@ use crate::chunk::table::Frame;
 use crate::laid;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::view::frame::pose::{globe, view_resize};
-use pxl_render::frame::screen_cells::{screen_cells_mut, FACE_SHIFT, KIND_GROUND, KIND_NONE, KIND_PLACED, KIND_SHIFT, SCREEN_CELLS_MAX};
+use pxl_render::frame::screen_cells::{screen_cells_mut, FACE_SHIFT, KIND_GROUND, KIND_NONE, KIND_PLACED, KIND_SHIFT, SCREEN_CELLS_MAX, ZOOM_SHIFT};
 use pxl_render::frame::stage::{stage_lane_mut, STAGE_AT};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::pass::decor::GROUPS;
@@ -274,22 +274,25 @@ pub fn visible_pass() -> Option<f64> {
 const _: () = assert!(crate::param::GRID_CELLS_MAX as usize <= SCREEN_CELLS_MAX, "the screen's cells past the lane");
 
 /// The published cast's cells into the renderer's lane, once a cast: what
-/// each cell's ray met and through which face, and how far.
+/// each cell's ray met, through which face and at which zoom, how far, its
+/// face bits, and its fold's looks or, in the steps view, its steps.
 fn screen_cells(sight: &crate::view::sight::Sight) {
     let lane = screen_cells_mut();
     if lane.generation == sight.generation() {
         return;
     }
     lane.across = sight.across();
+    let steps_view = settings_store().ray_steps;
     for ((word, stop), steps) in lane.cells.iter_mut().zip(sight.cells()).zip(sight.steps()) {
         *word = match stop {
-            None => [KIND_NONE << KIND_SHIFT, 0, steps, 0],
+            None => [KIND_NONE << KIND_SHIFT, 0, 0, steps],
             Some(s) => {
-                let (kind, value) = match s.block {
-                    Block::Ground(look, _) => (KIND_GROUND, u32::from(look)),
-                    Block::Placed(v) => (KIND_PLACED, u32::from(u16::try_from(v).or_bug(Errno::ERANGE))),
+                let (kind, value, folds) = match s.block {
+                    Block::Ground(look, f) => (KIND_GROUND, u32::from(look), u32::from_le_bytes(f)),
+                    Block::Placed(v) => (KIND_PLACED, u32::from(u16::try_from(v).or_bug(Errno::ERANGE)), 0),
                 };
-                [value | kind << KIND_SHIFT | u32::from(s.face) << FACE_SHIFT, (s.t as f32).to_bits(), steps, 0]
+                let w0 = value | kind << KIND_SHIFT | u32::from(s.face) << FACE_SHIFT | s.zoom << ZOOM_SHIFT;
+                [w0, (s.t as f32).to_bits(), s.faces, if steps_view { steps } else { folds }]
             }
         };
     }

@@ -61,8 +61,9 @@ pub const CHUNK_STEPS: Zoom = 5;
 /// what is outside a buffer; a host that indexes past what it wrote breaks
 /// a contract, which the CPU's debug builds still catch.
 pub fn at<T: Copy + Default>(s: &[T], i: u32) -> T {
-    #[cfg(not(target_arch = "spirv"))]
-    debug_assert!((i as usize) < s.len(), "read past a buffer: {i} of {}", s.len());
+    // Debug builds only, as the shader crate's never are.
+    #[cfg(debug_assertions)]
+    assert!((i as usize) < s.len(), "read past a buffer: {i} of {}", s.len());
     if (i as usize) < s.len() {
         // SAFETY: just bounded by the slice's own length.
         unsafe { *s.get_unchecked(i as usize) }
