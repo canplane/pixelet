@@ -896,15 +896,11 @@
               "type": "f64"
             },
             {
-              "name": "delta_s",
+              "name": "frame_ms",
               "type": "f64",
               "$doc": [
-                "The frame interval and the turn, as the host measured them."
+                "The turn, as the host measured it."
               ]
-            },
-            {
-              "name": "frame_ms",
-              "type": "f64"
             },
             {
               "name": "interactive",
@@ -918,7 +914,8 @@
               "name": "unix_ms",
               "type": "f64",
               "$doc": [
-                "The wall clock, `Date.now()`."
+                "The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and",
+                "the step the tick takes, its change since the last frame."
               ]
             }
           ]

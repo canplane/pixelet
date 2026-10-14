@@ -620,17 +620,17 @@ export interface WorldFrame {
   width: f64;
   height: f64;
   dpr: f64;
-  /** The frame interval and the turn, as the host measured them. */
-  delta_s: f64;
+  /** The turn, as the host measured it. */
   frame_ms: f64;
   interactive: boolean;
   credits: u32;
-  /** The wall clock, `Date.now()`. */
+  /** The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and
+   * the step the tick takes, its change since the last frame. */
   unix_ms: f64;
 }
 
 export function encode_world_frame(p: WorldFrame): U8Array {
-  return packet((b) => b.f64(p.width).f64(p.height).f64(p.dpr).f64(p.delta_s).f64(p.frame_ms).bool(p.interactive).u32(p.credits).f64(p.unix_ms));
+  return packet((b) => b.f64(p.width).f64(p.height).f64(p.dpr).f64(p.frame_ms).bool(p.interactive).u32(p.credits).f64(p.unix_ms));
 }
 
 /** Command.WORLD_VISIBILITY's packet. */

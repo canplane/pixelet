@@ -1120,12 +1120,12 @@ pub struct WorldFrame {
     pub width: f64,
     pub height: f64,
     pub dpr: f64,
-    /// The frame interval and the turn, as the host measured them.
-    pub delta_s: f64,
+    /// The turn, as the host measured it.
     pub frame_ms: f64,
     pub interactive: bool,
     pub credits: u32,
-    /// The wall clock, `Date.now()`.
+    /// The page's one clock, in Unix milliseconds: the wall time the sky is placed by, and
+    /// the step the tick takes, its change since the last frame.
     pub unix_ms: f64,
 }
 
@@ -1136,11 +1136,10 @@ impl WorldFrame {
             width: finite(f.at(0)?.get_number()?)?,
             height: finite(f.at(1)?.get_number()?)?,
             dpr: finite(f.at(2)?.get_number()?)?,
-            delta_s: finite(f.at(3)?.get_number()?)?,
-            frame_ms: finite(f.at(4)?.get_number()?)?,
-            interactive: f.at(5)?.get_bool()?,
-            credits: integer::<u32>(f.at(6)?.get_number()?)?,
-            unix_ms: finite(f.at(7)?.get_number()?)?,
+            frame_ms: finite(f.at(3)?.get_number()?)?,
+            interactive: f.at(4)?.get_bool()?,
+            credits: integer::<u32>(f.at(5)?.get_number()?)?,
+            unix_ms: finite(f.at(6)?.get_number()?)?,
         })
     }
 }

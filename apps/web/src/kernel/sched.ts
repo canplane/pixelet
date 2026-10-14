@@ -53,7 +53,7 @@ const NET_CREDITS = 6;
 export let strobe: Strobe;
 
 export function start_sched(): void {
-  strobe = new Strobe(GUEST_DOORBELL, directory(GUEST.buffer).quantum(), (grant, delta_s) => {
+  strobe = new Strobe(GUEST_DOORBELL, directory(GUEST.buffer).quantum(), (grant) => {
     if (driver === null) return;
     const { width: w, height: h, dpr } = driver();
     const width = Math.max(1, w);
@@ -66,7 +66,6 @@ export function start_sched(): void {
         width,
         height,
         dpr,
-        delta_s,
         frame_ms: grant.frame_ms,
         interactive: grant.interactive,
         credits: NET_CREDITS,
