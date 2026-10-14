@@ -152,7 +152,6 @@ fn path(zoom: Zoom, at: [i64; 3]) -> [i64; 3] {
     [at[0].rem_euclid(around(zoom)), at[1], at[2]]
 }
 
-
 /// The tree's lanes as pxl-portable `placed` reads them, the CPU as a GPU.
 pub struct Lanes<'a>(&'a Tree);
 
