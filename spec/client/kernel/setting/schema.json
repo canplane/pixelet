@@ -69,12 +69,11 @@
     ]
   },
   "RAY_DENSITIES": {
-    "$value": ["cpu", "cells", "half", "full"],
+    "$value": ["cells", "half", "full"],
     "$doc": [
-      "Who casts the eye's rays the screen's cells draw, and how many.",
+      "How many of the eye's rays the GPU casts for the screen's cells.",
       "",
-      "  cpu   — the CPU's cast, one a cell of the camera grid.",
-      "  cells — the GPU, one a cell of the camera grid, as the CPU's cast.",
+      "  cells — one a cell of the camera grid.",
       "  half  — one every second CSS pixel each way.",
       "  full  — one a CSS pixel, whatever the device draws it at."
     ]
@@ -277,7 +276,7 @@
     "person": { "kind": "index", "default": { "$value": 1, "$type": "u8", "$doc": ["female-2, by its number in variant.json's person keys."] }, "section": "character" },
     "pet": { "kind": "index", "default": { "$value": 5, "$type": "u8", "$doc": ["chick, by its number in variant.json's pet keys."] }, "section": "character" },
     "rays": {
-      "$doc": ["Who casts the rays the screen's cells draw, the CPU or the GPU, and how many (scene/cast.rs); RAY_DENSITIES says each."],
+      "$doc": ["How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each."],
       "kind": "choice",
       "default": "half",
       "options": "RAY_DENSITIES",

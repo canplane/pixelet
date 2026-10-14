@@ -201,12 +201,12 @@ export const SETTINGS = {
     default: 5 as number,
     section: "character",
   },
-  /** Who casts the rays the screen's cells draw, the CPU or the GPU, and how many (scene/cast.rs); RAY_DENSITIES says each. */
+  /** How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each. */
   rays: {
     key: 19 as number,
     kind: "choice",
     default: "half",
-    options: ["cpu", "cells", "half", "full"],
+    options: ["cells", "half", "full"],
     section: "debug",
     dev: true,
   },

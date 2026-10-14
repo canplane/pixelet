@@ -14,7 +14,6 @@
       "rays": {
         "label": "Rays",
         "description": "Who casts the rays the screen draws, and how many.",
-        "cpu": { "label": "CPU", "description": "The CPU's cast, one ray a cell of the camera grid." },
         "cells": { "label": "GPU, grid cells", "description": "The GPU, one ray a cell of the camera grid." },
         "half": { "label": "GPU, half resolution", "description": "One ray every second CSS pixel each way." },
         "full": { "label": "GPU, full resolution", "description": "One ray a CSS pixel." }

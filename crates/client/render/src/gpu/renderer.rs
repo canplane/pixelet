@@ -17,7 +17,7 @@ use crate::frame::draw::{
     uniform_of, Lists, CHUNK_UNIT, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CAMERA_GRID, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX,
     PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
-use crate::frame::screen_cells::{screen_cells_mut, SCREEN_CELLS_MAX};
+use crate::frame::screen_cells::SCREEN_CELLS_MAX;
 use crate::frame::shader::record::{
     FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_DEBUG_FACE, PIPELINE_SCREEN_CELLS,
     PIPELINE_SKY, SHADER_BOUND, SHADER_CAST,
@@ -886,16 +886,10 @@ impl ScreenCellsPass {
         let whole = eye.map(|v| libm::floor(v) as i64 as u32);
         let part = eye.map(|v| ((v - libm::floor(v)) as f32).to_bits());
         g.write_buffer(self.eye_at, 0, bytes(&[whole[0], whole[1], whole[2], 0, part[0], part[1], part[2], 0]));
+        // No cast, no world: a lane of no cells.
         let Some(cast) = cast else {
             self.cast = None;
-            let cells = screen_cells_mut();
-            g.write_buffer(self.lane, 0, bytes(&[cells.across[0], cells.across[1], steps, 0]));
-            if cells.generation == self.generation {
-                return;
-            }
-            self.generation = cells.generation;
-            let n = ((cells.across[0] * cells.across[1]) as usize).min(SCREEN_CELLS_MAX);
-            g.upload_buffer(self.lane, 16, bytes(&cells.cells[..n]));
+            g.write_buffer(self.lane, 0, bytes(&[0u32, 0, steps, 0]));
             return;
         };
         if self.cast.is_none() {

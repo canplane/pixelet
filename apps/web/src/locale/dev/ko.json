@@ -14,7 +14,6 @@
       "rays": {
         "label": "광선",
         "description": "화면이 그리는 광선을 누가 몇 개 쏘는지입니다.",
-        "cpu": { "label": "CPU", "description": "CPU 관측, 카메라 격자 칸 하나에 광선 하나." },
         "cells": { "label": "GPU, 격자 칸", "description": "GPU, 카메라 격자 칸 하나에 광선 하나." },
         "half": { "label": "GPU, 절반 해상도", "description": "가로세로 두 CSS 픽셀마다 광선 하나." },
         "full": { "label": "GPU, 전체 해상도", "description": "CSS 픽셀 하나에 광선 하나." }

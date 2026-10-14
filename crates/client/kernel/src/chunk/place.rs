@@ -259,7 +259,9 @@ pub fn step(ctx: &mut TickContext, frame: &crate::chunk::table::Frame) {
     let drafted = draft.map(|d| marker_at(d.at, &d.words)).map(|(label, stands, _)| (label, stands, FINEST_ZOOM));
     // The line is its speaker's, judged where it stands, as a marker by the chunk drawing it there.
     let line = shown_line();
-    let said = line.zip(speaker()).and_then(|(label, (feet, over))| Some((label, over, crate::view::observation::cell_at(&o, tau, crate::view::frame::coord::to_world(&feet))?)));
+    let said = line
+        .zip(speaker())
+        .and_then(|(label, (feet, over))| Some((label, over, crate::view::observation::cell_at(&o, tau, crate::view::frame::coord::to_world(&feet))?)));
     let is_drafted = |label: &Label| matches!(label, Label::Marker { at, .. } if Some(*at) == draft.map(|d| d.at));
     // A cell's markers but the waiting one: one is itself, more their count.
     let shown = found.chunk_by(|a, b| a.cell().is_some() && a.cell() == b.cell()).filter_map(|run| {

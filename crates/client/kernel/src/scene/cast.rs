@@ -76,7 +76,6 @@ pub fn eye(o: &Observation) -> Option<([u32; CAST_EYE_WORDS], &'static [f32])> {
     // pass spreads a cell over the pixels it covers.
     let px = [v.width, v.height].map(|n| n.ceil().max(1.0) as u32);
     let across = match settings_store().rays {
-        RayDensity::cpu => return None,
         RayDensity::cells => sight::grid_across(o, tau)?,
         RayDensity::half => px.map(|n| n.div_ceil(2)),
         RayDensity::full => px,

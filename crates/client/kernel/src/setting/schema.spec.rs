@@ -131,23 +131,21 @@ impl ResolutionMode {
     }
 }
 
-/// Who casts the eye's rays the screen's cells draw, and how many.
+/// How many of the eye's rays the GPU casts for the screen's cells.
 ///
-///   cpu   — the CPU's cast, one a cell of the camera grid.
-///   cells — the GPU, one a cell of the camera grid, as the CPU's cast.
+///   cells — one a cell of the camera grid.
 ///   half  — one every second CSS pixel each way.
 ///   full  — one a CSS pixel, whatever the device draws it at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum RayDensity {
-    cpu = 0,
-    cells = 1,
-    half = 2,
-    full = 3,
+    cells = 0,
+    half = 1,
+    full = 2,
 }
 
 impl RayDensity {
-    pub const ALL: [RayDensity; 4] = [RayDensity::cpu, RayDensity::cells, RayDensity::half, RayDensity::full];
+    pub const ALL: [RayDensity; 3] = [RayDensity::cells, RayDensity::half, RayDensity::full];
 
     /// The option an index names, or none for an index past the list.
     pub fn of(index: u32) -> Option<RayDensity> {
@@ -236,7 +234,7 @@ pub enum SettingKey {
     camera_gizmo = 16,
     person = 17,
     pet = 18,
-    /// Who casts the rays the screen's cells draw, the CPU or the GPU, and how many (scene/cast.rs); RAY_DENSITIES says each.
+    /// How many rays the GPU casts for the screen's cells (scene/cast.rs); RAY_DENSITIES says each.
     rays = 19,
     /// Each ray's cell coloured by the nodes its descent asked the world, on one fixed log ramp up to 1024 (crates/client/render/src/frame/shader/screen_cells.wgsl).
     ray_steps = 20,
@@ -332,7 +330,7 @@ impl SettingKey {
             SettingKey::orbit_obstacle => &["through", "stop", "climb"],
             SettingKey::ao => &["off", "corner", "screen"],
             SettingKey::resolution => &["auto", "fixed", "low"],
-            SettingKey::rays => &["cpu", "cells", "half", "full"],
+            SettingKey::rays => &["cells", "half", "full"],
             _ => &[],
         }
     }
