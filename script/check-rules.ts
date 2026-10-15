@@ -2,24 +2,37 @@
 // Holds the tree to the rules a machine can decide: the header
 // path, cited paths and names existing, the lattice's arithmetic only in
 // `space/`, no raw pointer casts in offset crates, `@expo/ui` only in the
-// sheet. `doc/minutes/` and `doc/experiment/` are exempt from cited paths:
-// each names the files of its day.
+// sheet, each generated shader made from the sources the tree holds now.
+// `doc/minutes/` and `doc/experiment/` are exempt from cited paths: each
+// names the files of its day.
 //   deno run -A script/check-rules.ts
 
 import { dirname, fromFileUrl, join, normalize } from "@std/path";
+
+import { GENERATED, INPUTS, inputsDigest } from "./portable-wgsl.ts";
 
 const root = dirname(dirname(fromFileUrl(import.meta.url)));
 
 const listed = new TextDecoder().decode(
   (await new Deno.Command("git", { args: ["ls-files", "-co", "--exclude-standard"], cwd: root }).output()).stdout,
 );
-const files = listed.split("\n").filter((f) => f && !f.includes("node_modules/"));
+// The tree as it stands: a file deleted and not yet committed is gone, so
+// a removal is checked before it is committed.
+const files = listed.split("\n").filter((f) => f && !f.includes("node_modules/") && onDisk(f));
+
+function onDisk(f: string): boolean {
+  try {
+    return Deno.statSync(join(root, f)).isFile;
+  } catch {
+    return false;
+  }
+}
 
 function read(f: string): string | null {
   try {
     return Deno.readTextFileSync(join(root, f));
   } catch {
-    return null; // listed but deleted in the working tree
+    return null;
   }
 }
 
@@ -164,9 +177,17 @@ for (const f of files) {
   });
 }
 
+// A generated shader names the digest of the sources it was made from
+// (portable-wgsl.ts `inputsDigest`); one the tree has moved past is stale.
+const digest = await inputsDigest(root);
+for (const f of GENERATED) {
+  const made = read(f)?.split("\n").find((l) => l.startsWith(INPUTS))?.slice(INPUTS.length);
+  if (made !== digest) problems.push(`${f}: stale against pxl-portable's sources; run script/portable-wgsl.ts`);
+}
+
 if (problems.length) {
   console.error(problems.join("\n"));
   console.error(`\ncheck-rules: ${problems.length}`);
   Deno.exit(1);
 }
-console.log("check-rules: headers, cited paths, the lattice, the memory's offsets and SwiftUI's place hold");
+console.log("check-rules: headers, cited paths, the lattice, the memory's offsets, SwiftUI's place and the generated shaders hold");
