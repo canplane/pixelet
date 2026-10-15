@@ -595,7 +595,6 @@ export function encode_sensor_error(p: SensorError): U8Array {
 export interface WorldBoot {
   /** A development build, which offers the settings schema.json marks `dev`. */
   development: boolean;
-  handheld: boolean;
   geolocation: boolean;
   orientation: boolean;
   /** iOS 13+'s gate: requestPermission exists and must run inside a gesture. */
@@ -611,7 +610,7 @@ export interface WorldBoot {
 }
 
 export function encode_world_boot(p: WorldBoot): U8Array {
-  return packet((b) => b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).bool(p.orientation_silence_is_loss).str(p.settings));
+  return packet((b) => b.bool(p.development).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).bool(p.orientation_silence_is_loss).str(p.settings));
 }
 
 /** Command.WORLD_FRAME's packet. */

@@ -1,5 +1,5 @@
-// The chunk mesh: each box unfolded into a cube's six faces, a face the mask
-// lacks collapsed to nothing. No tone mapping, as three applied none here.
+// The ghost's boxes: each unfolded into a cube's six faces, a face the mask
+// lacks collapsed to nothing.
 
 // Two vec4s, not a vec3f followed by scalars: that layout inside a storage
 // array is read differently by two backends, everything past the first member sliding.
@@ -10,8 +10,6 @@ struct Draw {
 };
 
 @group(0) @binding(3) var<storage, read> draws: array<Draw>;
-// The last two words exist only in the fine format; a coarse draw binds the
-// same buffer for them so one shader serves both.
 struct BoxWords {
   @location(0) first: vec4<u32>,
   @location(1) rest: vec2<u32>,
@@ -28,34 +26,20 @@ struct Box {
 };
 
 const XY_STEPS: f32 = 256.0;
-const COARSE_XY_STEPS: f32 = 8.0;
-const NO_TAPS: u32 = 0xffffffffu;
 
 fn box_pair(word: u32, step: f32) -> vec2f {
   return vec2f(f32(word & 0xffffu), f32(word >> 16u)) * step;
 }
 
-fn box_of(words: BoxWords, d: Draw, fine: bool) -> Box {
-  let unit = d.measure.y;
+fn box_of(words: BoxWords, d: Draw) -> Box {
+  let step = d.measure.y / XY_STEPS;
   var b: Box;
   b.z = box_pair(words.first[2], d.measure.z);
-  if (fine) {
-    let step = unit / XY_STEPS;
-    b.min_xy = box_pair(words.first[0], step);
-    b.size_xy = box_pair(words.first[1], step);
-    b.rgb = words.first[3];
-    b.taps = words.rest[0];
-    b.faces = words.rest[1];
-    return b;
-  }
-  let step = unit / COARSE_XY_STEPS;
-  b.faces = words.first[0];
-  b.rgb = words.first[1];
-  let w = words.first[3];
-  b.min_xy = vec2f(f32(w & 0xffu), f32((w >> 8u) & 0xffu)) * step;
-  // A width is held one short, so a whole mesh across fits in a byte.
-  b.size_xy = (vec2f(f32((w >> 16u) & 0xffu), f32((w >> 24u) & 0xffu)) + 1.0) * step;
-  b.taps = NO_TAPS;
+  b.min_xy = box_pair(words.first[0], step);
+  b.size_xy = box_pair(words.first[1], step);
+  b.rgb = words.first[3];
+  b.taps = words.rest[0];
+  b.faces = words.rest[1];
   return b;
 }
 
@@ -105,24 +89,7 @@ struct VertexOut {
 // times the cube); the first box is the draw's first instance.
 @vertex
 fn vs(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
-  return chunk_vertex(v, words, true);
-}
-
-// The coarse format: the attribute stride is fixed per pipeline, so it is an
-// entry point rather than a per-draw number.
-@vertex
-fn vs_coarse(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
-  return chunk_vertex(v, words, false);
-}
-
-@vertex
-fn vs_depth(@builtin(vertex_index) v: u32, words: BoxWords) -> @builtin(position) vec4f {
-  return chunk_depth(v, words, true);
-}
-
-@vertex
-fn vs_coarse_depth(@builtin(vertex_index) v: u32, words: BoxWords) -> @builtin(position) vec4f {
-  return chunk_depth(v, words, false);
+  return box_vertex(v, words);
 }
 
 struct Corner {
@@ -155,14 +122,9 @@ fn corner_clip(c: Corner) -> vec4f {
   return frame_view_proj() * vec4f(c.world, 1.0);
 }
 
-fn chunk_depth(v: u32, words: BoxWords, fine: bool) -> vec4f {
+fn box_vertex(v: u32, words: BoxWords) -> VertexOut {
   let d = draws[v / BOX_VERTICES];
-  return corner_clip(box_corner(v % BOX_VERTICES, box_of(words, d, fine), d.place.xyz));
-}
-
-fn chunk_vertex(v: u32, words: BoxWords, fine: bool) -> VertexOut {
-  let d = draws[v / BOX_VERTICES];
-  let b = box_of(words, d, fine);
+  let b = box_of(words, d);
   let c = box_corner(v % BOX_VERTICES, b, d.place.xyz);
   var o: VertexOut;
   o.clip = corner_clip(c);
@@ -224,19 +186,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     screen_open(i.clip.xy),
     Seen(i.through, i.scattered, Light(i.sun, i.other, i.fill)),
   );
-  return vec4f(finish(cell_share(paint(s), i), i.clip.xy), i.opacity);
-}
-
-// Under the camera gizmo: how many zooms the face's cell is off the one the
-// camera grid's rule draws at its distance (`pxl-spec space/camera/grid.rs`
-// `cell_at`): the finest whose side covers the grid's cell angle there
-// (`frame_cell`), so a side of one to two cells' widths, as `cell_at`'s
-// floor of a log2 has it. At the rule's zoom green, finer blue, coarser red.
-fn cell_share(color: vec3f, i: VertexOut) -> vec3f {
-  if (frame_gizmo() < 0.5) {
-    return color;
-  }
-  let off = floor(log2(i.cell / (length(i.world_pos) * frame_cell())));
-  let tint = select(select(vec3f(0.1, 0.9, 0.2), vec3f(0.1, 0.3, 1.0), off < 0.0), vec3f(1.0, 0.15, 0.1), off > 0.0);
-  return mix(color, tint * 0.6, 0.45);
+  return vec4f(finish(paint(s), i.clip.xy), i.opacity);
 }

@@ -21,7 +21,6 @@
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
 pub const CENSUS_TAGS: &[&str] = &[
-    "chunk",
     "decor",
     "ghost_box",
     "ghost_box_coplanar",
@@ -31,7 +30,6 @@ pub const CENSUS_TAGS: &[&str] = &[
     "puck_beacon",
     "badge",
     "debug",
-    "chunk_coarse",
     "impostor",
 ];
 
@@ -55,37 +53,35 @@ pub mod FRAME {
     pub const task_ms: u32 = 12;
     pub const gpu_ms: u32 = 13;
     pub const gpu_spans: u32 = 14;
-    pub const draw_calls: u32 = 22;
-    pub const triangles: u32 = 23;
-    pub const census: u32 = 24;
-    pub const px: u32 = 48;
-    pub const gpu_skipped: u32 = 49;
-    pub const buffers: u32 = 50;
-    pub const buffer_mb: u32 = 51;
-    pub const arena_mb: u32 = 52;
-    pub const tex_depth_mb: u32 = 53;
-    pub const tex_shadow_mb: u32 = 54;
-    pub const tex_layers_mb: u32 = 55;
-    pub const tiles_total: u32 = 56;
-    pub const zoom_tiles: u32 = 57;
-    pub const tiles_place: u32 = 81;
-    pub const heap_used_mb: u32 = 82;
-    pub const heap_live_mb: u32 = 83;
-    pub const heap_run_mb: u32 = 84;
-    pub const heap_slot_mb: u32 = 85;
-    pub const heap_range_mb: u32 = 86;
-    pub const heap_refusals: u32 = 87;
-    pub const heap_largest_free_mb: u32 = 88;
-    pub const ring_cq_peak: u32 = 89;
-    pub const ring_held_peak: u32 = 90;
-    pub const q_terrain: u32 = 91;
-    pub const q_place: u32 = 92;
-    pub const cap_record_refused: u32 = 93;
-    pub const turn_effects_ms: u32 = 94;
-    pub const turn_stage_ms: u32 = 95;
-    pub const turn_step_ms: u32 = 96;
-    pub const turn_step_name: u32 = 97;
-    pub const WORDS: u32 = 98;
+    pub const draw_calls: u32 = 21;
+    pub const triangles: u32 = 22;
+    pub const census: u32 = 23;
+    pub const px: u32 = 43;
+    pub const gpu_skipped: u32 = 44;
+    pub const buffers: u32 = 45;
+    pub const buffer_mb: u32 = 46;
+    pub const tex_depth_mb: u32 = 47;
+    pub const tex_layers_mb: u32 = 48;
+    pub const tiles_total: u32 = 49;
+    pub const zoom_tiles: u32 = 50;
+    pub const tiles_place: u32 = 74;
+    pub const heap_used_mb: u32 = 75;
+    pub const heap_live_mb: u32 = 76;
+    pub const heap_run_mb: u32 = 77;
+    pub const heap_slot_mb: u32 = 78;
+    pub const heap_range_mb: u32 = 79;
+    pub const heap_refusals: u32 = 80;
+    pub const heap_largest_free_mb: u32 = 81;
+    pub const ring_cq_peak: u32 = 82;
+    pub const ring_held_peak: u32 = 83;
+    pub const q_terrain: u32 = 84;
+    pub const q_place: u32 = 85;
+    pub const cap_record_refused: u32 = 86;
+    pub const turn_effects_ms: u32 = 87;
+    pub const turn_stage_ms: u32 = 88;
+    pub const turn_step_ms: u32 = 89;
+    pub const turn_step_name: u32 = 90;
+    pub const WORDS: u32 = 91;
     pub const KEYS: &[&str] = &[
         "t",
         "dt_ms",
@@ -105,9 +101,7 @@ pub mod FRAME {
         "gpu_skipped",
         "buffers",
         "buffer_mb",
-        "arena_mb",
         "tex_depth_mb",
-        "tex_shadow_mb",
         "tex_layers_mb",
         "tiles_total",
         "zoom_tiles",
@@ -140,7 +134,7 @@ pub mod FRAME_GROUPS {
     pub const cap: &[&str] = &["cap_record_refused"];
     pub const q: &[&str] = &["q_terrain", "q_place"];
     pub const tiles: &[&str] = &["tiles_total", "zoom_tiles", "tiles_place"];
-    pub const device: &[&str] = &["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"];
+    pub const device: &[&str] = &["buffers", "buffer_mb", "tex_depth_mb", "tex_layers_mb"];
     pub const heap: &[&str] = &["heap_used_mb", "heap_live_mb", "heap_run_mb", "heap_slot_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"];
     pub const ring: &[&str] = &["ring_cq_peak", "ring_held_peak"];
     pub const KEYS: &[&str] = &["pace", "turn", "gpu", "cap", "q", "tiles", "device", "heap", "ring"];
@@ -187,9 +181,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 98;
-    pub const prev: u32 = 99;
-    pub const WORDS: u32 = 197;
+    pub const has_prev: u32 = 91;
+    pub const prev: u32 = 92;
+    pub const WORDS: u32 = 183;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -255,10 +249,10 @@ pub mod SUMMARY {
         pub const chunks: u32 = 21;
         pub const phases: u32 = 24;
         pub const gpu_spans: u32 = 39;
-        pub const used_delta_mb: u32 = 63;
-        pub const census: u32 = 64;
-        pub const last: u32 = 88;
-        pub const WORDS: u32 = 186;
+        pub const used_delta_mb: u32 = 60;
+        pub const census: u32 = 61;
+        pub const last: u32 = 81;
+        pub const WORDS: u32 = 172;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -282,20 +276,20 @@ pub mod SUMMARY {
         ];
     }
     pub mod tasks {
-        pub const AT: u32 = 191;
+        pub const AT: u32 = 177;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 125;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 316;
+        pub const AT: u32 = 302;
         pub const sheet_repacks: u32 = 0;
         pub const sheet_uploads: u32 = 1;
         pub const WORDS: u32 = 2;
         pub const KEYS: &[&str] = &["AT", "sheet_repacks", "sheet_uploads", "WORDS"];
     }
     pub mod sheet {
-        pub const AT: u32 = 318;
+        pub const AT: u32 = 304;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -305,7 +299,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "initial", "WORDS"];
     }
     pub mod held {
-        pub const AT: u32 = 323;
+        pub const AT: u32 = 309;
         pub const decor_blocks: u32 = 0;
         pub const decor_instances: u32 = 1;
         pub const decor_bytes: u32 = 2;
@@ -313,7 +307,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "decor_blocks", "decor_instances", "decor_bytes", "WORDS"];
     }
     pub mod fetch {
-        pub const AT: u32 = 326;
+        pub const AT: u32 = 312;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -321,7 +315,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 329;
+        pub const AT: u32 = 315;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -335,14 +329,14 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "present", "dt_ms", "sched_ms", "chunks_ms", "gpu_ms", "draw_calls", "triangles", "q_terrain", "q_place", "WORDS"];
     }
     pub mod steps {
-        pub const AT: u32 = 338;
+        pub const AT: u32 = 324;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
     pub mod quality {
-        pub const AT: u32 = 499;
+        pub const AT: u32 = 485;
         pub const step: u32 = 0;
         pub const star: u32 = 1;
         pub const frames_held: u32 = 2;
@@ -353,7 +347,7 @@ pub mod SUMMARY {
     }
     /// Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at.
     pub mod view {
-        pub const AT: u32 = 504;
+        pub const AT: u32 = 490;
         pub const dist: u32 = 0;
         pub const polar: u32 = 1;
         pub const azimuth: u32 = 2;
@@ -388,7 +382,7 @@ pub mod SUMMARY {
             "WORDS",
         ];
     }
-    pub const WORDS: u32 = 518;
+    pub const WORDS: u32 = 504;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "sheet", "held", "fetch", "peak", "steps", "quality", "view", "WORDS"];
 }
 

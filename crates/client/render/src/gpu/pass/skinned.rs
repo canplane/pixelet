@@ -6,7 +6,7 @@
 
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_SKINNED};
-use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_PREPASS};
+use crate::frame::shader::record::PIPELINE_SKINNED_PREPASS;
 use crate::gpu::api::{bytes, object, release, Gpu};
 use crate::gpu::api_spec::{address, compare, filter, format};
 use crate::gpu::pass::model::{draw_models, DrawUniforms, ModelDraw, Stage};
@@ -27,7 +27,6 @@ struct Skin {
 
 pub struct SkinnedPass {
     lit: Built,
-    depth: Built,
     prepass: Built,
     sampler: u32,
     uniforms: DrawUniforms,
@@ -41,7 +40,6 @@ impl SkinnedPass {
         g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::REPEAT, compare::NONE, 1);
         SkinnedPass {
             lit: pipelines.build(g, PIPELINE_SKINNED, format::CANVAS),
-            depth: pipelines.build(g, PIPELINE_SKINNED_DEPTH, format::CANVAS),
             prepass: pipelines.build(g, PIPELINE_SKINNED_PREPASS, format::CANVAS),
             sampler,
             uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
@@ -94,7 +92,6 @@ impl SkinnedPass {
         let Some(slots) = self.uniforms.slots() else { return };
         let pipeline = match stage {
             Stage::Lit => self.lit.pipeline,
-            Stage::Depth => self.depth.pipeline,
             Stage::Prepass => self.prepass.pipeline,
         };
         let palette_layout = self.lit.layouts[3];

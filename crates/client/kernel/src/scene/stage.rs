@@ -25,7 +25,6 @@ use xpute_kit::math::scalar::round;
 
 use crate::billboard::sheet::billboard_sheet;
 use crate::decor::assets::decor_assets;
-use crate::io::host::handheld;
 use crate::io::load::{load_image, Load};
 use crate::io::text::text_raster;
 use crate::kernel;
@@ -163,7 +162,6 @@ pub fn stage_render() {
         }),
         text: text_raster,
         billboards: billboard_sheet(),
-        handheld: handheld(),
     });
     if out.redraw {
         request_world_tick();
@@ -185,9 +183,7 @@ pub fn stage_render() {
         DeviceSample {
             buffers: stat.buffers,
             buffer_mb: round(stat.buffer_bytes / MB),
-            arena_mb: stat.arena_mb,
             depth_mb: stat.depth_mb,
-            shadow_mb: stat.shadow_mb,
             layers_mb: stat.layers_mb,
         },
     );

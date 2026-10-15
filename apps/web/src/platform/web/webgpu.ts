@@ -144,7 +144,7 @@ const VERTEX_FORMAT: Record<number, GPUVertexFormat> = {
   [record.U32]: "uint32",
   [record.U32X2]: "uint32x2",
 };
-const VERTEX_ENTRY: Record<number, string> = { [record.VS]: "vs", [record.VS_COARSE]: "vs_coarse", [record.VS_DEPTH]: "vs_depth", [record.VS_COARSE_DEPTH]: "vs_coarse_depth" };
+const VERTEX_ENTRY: Record<number, string> = { [record.VS]: "vs", [record.VS_DEPTH]: "vs_depth" };
 
 const ALPHA_BLEND: GPUBlendState = {
   color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },

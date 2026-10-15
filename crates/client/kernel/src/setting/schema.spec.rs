@@ -77,8 +77,8 @@ impl OrbitObstacleMode {
 /// Where the ambient occlusion comes from.
 ///
 ///   off    — none.
-///   corner — a chunk shades its own corners from the face bits the edge
-///            shading reads (crates/client/render/src/frame/shader/chunk.wgsl):
+///   corner — a face shades its own corners from the face bits the edge
+///            shading reads (crates/client/render/src/frame/shader/paint.wgsl):
 ///            the floor along a cube and the inside of a corner, over about
 ///            half a cell, scaling the ambient and hemisphere light only.
 ///            A few fragment ops behind a uniform.
@@ -164,21 +164,17 @@ pub enum SettingKind {
 #[repr(u32)]
 pub enum SettingKey {
     /// Ground color from the art pack (four taps of the layer array per
-    /// fragment) instead of the flat per-instance average. The chunk shader's
+    /// fragment) instead of the flat per-instance average. The paint shader's
     /// `frame.low_spec` is this, inverted.
     ///
     /// Low because the four taps are all of it: fill rate, which scales with
     /// the screen and not with the world, and nothing else — no geometry, no
     /// pass of its own, and no work off the GPU past an atlas the client
     /// already holds.
-    ///
-    /// It sources the chunks: the shader samples a leaf's layer or does not,
-    /// but a tier over it carries one color and no layer to sample, so which
-    /// color that is was baked in (mesh/chunk.rs).
     textures = 0,
     /// Procedurally scattered decor only; what the player placed stays.
     ///
-    /// Med because it is models rather than a shading term: a chunk builds its
+    /// Med because it is models rather than a shading term: a cube of the eye's builds its
     /// decor and the frame draws it, so what it costs follows what is in view.
     /// It has been the frame's own bottleneck — 20260912-what-to-render-when.md
     /// reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
@@ -206,7 +202,7 @@ pub enum SettingKey {
     surface_follow = 6,
     /// What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each.
     orbit_obstacle = 7,
-    /// Darkens cube edges that border open air (crates/client/render/src/frame/shader/chunk.wgsl).
+    /// Darkens cube edges that border open air (crates/client/render/src/frame/shader/paint.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
     edge_shade = 8,
     /// A uniform on an already-compiled shader term; not a pass.
@@ -228,7 +224,7 @@ pub enum SettingKey {
     performance_overlay = 14,
     /// Marks for the focus and the cell it floors to, and rings in the level, the view's upright and the north–south planes (scene/indicator/frame_gizmo.rs); and the drawn pieces, the goal's pieces nothing drawn covers by why, the tiles and the shards (scene/indicator/coverage_gizmo.rs).
     world_gizmo = 15,
-    /// The camera grid over the screen, the one the rays are cast through, a cell a ray, and the chunks tinted by how many zooms a face is off the one the grid's rule draws there: green at it, blue finer, red coarser (scene/indicator/camera_gizmo.rs).
+    /// The camera grid over the screen, the one the rays are cast through, a cell a ray (scene/indicator/camera_gizmo.rs).
     camera_gizmo = 16,
     person = 17,
     pet = 18,

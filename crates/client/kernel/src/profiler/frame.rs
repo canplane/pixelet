@@ -10,8 +10,8 @@ use xpute_guest::sched::tick::PHASES;
 use crate::profiler::spec::{CENSUS_TAGS, FRAME, LIMITS, SUMMARY, WORST};
 use crate::profiler::word::{words, Words};
 use pxl_render::frame::draw::{
-    PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR,
-    PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED,
+    PIPELINE_BADGE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
+    PIPELINE_SKINNED,
 };
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 
@@ -23,7 +23,6 @@ pub type DrawCensus = [[f64; 2]; CENSUS_LEN];
 /// The pipeline each tag counts, the tag its name: one a tag, so a tag added
 /// without its pipeline does not compile.
 pub const CENSUS_PIPELINES: [u32; CENSUS_LEN] = [
-    PIPELINE_CHUNK,
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,
     PIPELINE_GHOST_BOX_COPLANAR,
@@ -33,7 +32,6 @@ pub const CENSUS_PIPELINES: [u32; CENSUS_LEN] = [
     PIPELINE_PUCK_BEACON,
     PIPELINE_BADGE,
     PIPELINE_DEBUG,
-    PIPELINE_CHUNK_COARSE,
     PIPELINE_IMPOSTOR,
 ];
 
@@ -56,9 +54,7 @@ pub struct GpuSample {
 pub struct DeviceSample {
     pub buffers: f64,
     pub buffer_mb: f64,
-    pub arena_mb: f64,
     pub depth_mb: f64,
-    pub shadow_mb: f64,
     pub layers_mb: f64,
 }
 
@@ -175,8 +171,8 @@ words!(FrameSample, FRAME::WORDS,
     sched_ms => FRAME::sched_ms, budget_ms => FRAME::budget_ms, phases => FRAME::phases, chunks_ms => FRAME::chunks_ms, task_ms => FRAME::task_ms,
     gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans, gpu.draw_calls => FRAME::draw_calls, gpu.triangles => FRAME::triangles,
     gpu.census => FRAME::census, gpu.px => FRAME::px, gpu.skipped => FRAME::gpu_skipped,
-    device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb, device.arena_mb => FRAME::arena_mb,
-    device.depth_mb => FRAME::tex_depth_mb, device.shadow_mb => FRAME::tex_shadow_mb, device.layers_mb => FRAME::tex_layers_mb,
+    device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb,
+    device.depth_mb => FRAME::tex_depth_mb, device.layers_mb => FRAME::tex_layers_mb,
     tiles.total => FRAME::tiles_total, tiles.by_zoom => FRAME::zoom_tiles, tiles.place => FRAME::tiles_place,
     heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.run_mb => FRAME::heap_run_mb,
     heap.slot_mb => FRAME::heap_slot_mb, heap.range_mb => FRAME::heap_range_mb,

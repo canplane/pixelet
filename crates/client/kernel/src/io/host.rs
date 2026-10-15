@@ -109,15 +109,6 @@ pub fn stopped() -> bool {
     *STOPPED.get(|| false)
 }
 
-static HANDHELD: Global<bool> = Global::new();
-
-pub fn set_handheld(handheld: bool) {
-    HANDHELD.set(handheld);
-}
-
-pub fn handheld() -> bool {
-    *HANDHELD.get(|| false)
-}
 
 static DEVELOPMENT: Global<bool> = Global::new();
 

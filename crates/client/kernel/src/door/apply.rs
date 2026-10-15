@@ -82,7 +82,6 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             let p = abi::WorldBoot::read(packet(pkt)?)?;
             super::host_attached(s);
             crate::io::host::set_development(p.development);
-            crate::io::host::set_handheld(p.handheld);
             crate::turn::set_world_platform(crate::turn::Platform {
                 geolocation: p.geolocation,
                 orientation: device_orientation::OrientationPlatform {

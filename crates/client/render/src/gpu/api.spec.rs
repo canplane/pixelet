@@ -243,9 +243,7 @@ pub mod record {
     pub const ALPHA: u32 = 1;
     pub const ADD: u32 = 2;
     pub const VS: u32 = 0;
-    pub const VS_COARSE: u32 = 1;
-    pub const VS_DEPTH: u32 = 2;
-    pub const VS_COARSE_DEPTH: u32 = 3;
+    pub const VS_DEPTH: u32 = 1;
     pub const PER_VERTEX: u32 = 0;
     pub const PER_INSTANCE: u32 = 1;
     pub const U32X2: u32 = 6;
@@ -286,9 +284,7 @@ pub mod record {
         "ALPHA",
         "ADD",
         "VS",
-        "VS_COARSE",
         "VS_DEPTH",
-        "VS_COARSE_DEPTH",
         "PER_VERTEX",
         "PER_INSTANCE",
         "U32X2",

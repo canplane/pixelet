@@ -28,7 +28,6 @@ import { root, SETTINGS_PATH } from "@/kernel/abi/host.spec.ts";
 import { bytes_at } from "@/kernel/module.ts";
 import { gpuBoot } from "@platform/gpu.ts";
 import { onlineWatch } from "@platform/online.ts";
-import { HANDHELD } from "@platform/device.ts";
 import { start_sched, strobe } from "@/kernel/sched.ts";
 import { set_snapshot } from "@/kernel/snapshot.ts";
 
@@ -66,7 +65,6 @@ export async function boot_kernel(): Promise<void> {
   const boot = (settings: string) =>
     encode_world_boot({
       development: __IS_DEV__,
-      handheld: HANDHELD,
       geolocation: geolocationSupported(),
       orientation: orientationSupported(),
       orientation_permission: orientationNeedsPermission(),

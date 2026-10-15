@@ -833,10 +833,6 @@
               ]
             },
             {
-              "name": "handheld",
-              "type": "bool"
-            },
-            {
               "name": "geolocation",
               "type": "bool"
             },

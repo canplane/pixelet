@@ -1083,7 +1083,6 @@ impl SensorError {
 pub struct WorldBoot<'a> {
     /// A development build, which offers the settings schema.json marks `dev`.
     pub development: bool,
-    pub handheld: bool,
     pub geolocation: bool,
     pub orientation: bool,
     /// iOS 13+'s gate: requestPermission exists and must run inside a gesture.
@@ -1103,12 +1102,11 @@ impl<'a> WorldBoot<'a> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(WorldBoot {
             development: f.at(0)?.get_bool()?,
-            handheld: f.at(1)?.get_bool()?,
-            geolocation: f.at(2)?.get_bool()?,
-            orientation: f.at(3)?.get_bool()?,
-            orientation_permission: f.at(4)?.get_bool()?,
-            orientation_silence_is_loss: f.at(5)?.get_bool()?,
-            settings: f.at(6)?.get_str_ref()?,
+            geolocation: f.at(1)?.get_bool()?,
+            orientation: f.at(2)?.get_bool()?,
+            orientation_permission: f.at(3)?.get_bool()?,
+            orientation_silence_is_loss: f.at(4)?.get_bool()?,
+            settings: f.at(5)?.get_str_ref()?,
         })
     }
 }

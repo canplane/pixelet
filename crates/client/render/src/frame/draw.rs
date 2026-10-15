@@ -10,22 +10,19 @@ use xpute_guest::mem::heap::{alloc, free};
 
 /// Upload record: handle, address, byte length, vertex count, index count.
 pub const UPLOAD_WORDS: usize = 5;
-/// Draw record: handle or arena group, two pipeline-specific words, uniform index, pipeline.
+/// Draw record: handle, two pipeline-specific words, uniform index, pipeline.
 pub const DRAW_WORDS: usize = 5;
 /// Draw uniforms: eye-relative translation (3), a pipeline-specific float,
 /// opacity, padding to 32 bytes.
 pub const UNIFORM_FLOATS: usize = 8;
-/// Where a chunk draw's uniform holds its camera grid cell, in units.
-pub const CHUNK_UNIT: usize = 5;
 
 pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
     &uniforms[d[3] as usize * UNIFORM_FLOATS..][..UNIFORM_FLOATS]
 }
 
-/// Chunk draw: (arena group, box count, first box, uniform, pipeline).
+/// Box draw: (block handle, box count, first box, uniform, pipeline).
 /// Decor draw: (block handle, group, instance count, uniform, pipeline); the
 /// uniform carries the group's first lane word, stride and index-list start.
-pub const PIPELINE_CHUNK: u32 = 0;
 pub const PIPELINE_DECOR: u32 = 1;
 /// Half transparent and biased toward the eye.
 pub const PIPELINE_GHOST_BOX: u32 = 2;
@@ -46,9 +43,6 @@ pub const PIPELINE_BADGE: u32 = 8;
 pub const PIPELINE_DEBUG: u32 = 9;
 /// The camera grid over the screen: (0, 0, 0, uniform, pipeline); listed is shown.
 pub const PIPELINE_CAMERA_GRID: u32 = 38;
-/// The coarse four-word box format; its own pipeline because a pipeline's
-/// vertex stride is fixed.
-pub const PIPELINE_CHUNK_COARSE: u32 = 32;
 /// Decor drawn as sprites where a variant is too small on screen for its model.
 pub const PIPELINE_IMPOSTOR: u32 = 34;
 /// Rewrite record: handle, address, byte offset, length.
@@ -140,13 +134,6 @@ impl DrawList {
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], fourth, opacity, 0.0, 0.0, 0.0]);
         self.draws.extend_from_slice(&[handle, a, b, uniform, pipeline]);
-    }
-
-    /// `fine` picks the box format and so the pipeline; the mesh's floor is in `translation`.
-    #[allow(clippy::too_many_arguments)]
-    pub fn draw_arena(&mut self, group: u32, first_box: u32, box_cnt: u32, translation: [f32; 3], unit: f32, z_step: f32, fine: bool) {
-        let pipeline = if fine { PIPELINE_CHUNK } else { PIPELINE_CHUNK_COARSE };
-        self.draw_in(pipeline, group, box_cnt, first_box, translation, 1.0, unit, z_step);
     }
 
     /// The eighth float pads the record to two vec4s, the one layout a storage

@@ -12,7 +12,7 @@
 // for a read: the kernel writes numbers where they stay, and the words for them are
 // the shell's.
 
-export const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_box_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug", "chunk_coarse", "impostor"] as const;
+export const CENSUS_TAGS = ["decor", "ghost_box", "ghost_box_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug", "impostor"] as const;
 
 export const LIMITS = {
   REASONS: 4 as number,
@@ -33,37 +33,35 @@ export const FRAME = {
   task_ms: 12 as number,
   gpu_ms: 13 as number,
   gpu_spans: 14 as number,
-  draw_calls: 22 as number,
-  triangles: 23 as number,
-  census: 24 as number,
-  px: 48 as number,
-  gpu_skipped: 49 as number,
-  buffers: 50 as number,
-  buffer_mb: 51 as number,
-  arena_mb: 52 as number,
-  tex_depth_mb: 53 as number,
-  tex_shadow_mb: 54 as number,
-  tex_layers_mb: 55 as number,
-  tiles_total: 56 as number,
-  zoom_tiles: 57 as number,
-  tiles_place: 81 as number,
-  heap_used_mb: 82 as number,
-  heap_live_mb: 83 as number,
-  heap_run_mb: 84 as number,
-  heap_slot_mb: 85 as number,
-  heap_range_mb: 86 as number,
-  heap_refusals: 87 as number,
-  heap_largest_free_mb: 88 as number,
-  ring_cq_peak: 89 as number,
-  ring_held_peak: 90 as number,
-  q_terrain: 91 as number,
-  q_place: 92 as number,
-  cap_record_refused: 93 as number,
-  turn_effects_ms: 94 as number,
-  turn_stage_ms: 95 as number,
-  turn_step_ms: 96 as number,
-  turn_step_name: 97 as number,
-  WORDS: 98 as number,
+  draw_calls: 21 as number,
+  triangles: 22 as number,
+  census: 23 as number,
+  px: 43 as number,
+  gpu_skipped: 44 as number,
+  buffers: 45 as number,
+  buffer_mb: 46 as number,
+  tex_depth_mb: 47 as number,
+  tex_layers_mb: 48 as number,
+  tiles_total: 49 as number,
+  zoom_tiles: 50 as number,
+  tiles_place: 74 as number,
+  heap_used_mb: 75 as number,
+  heap_live_mb: 76 as number,
+  heap_run_mb: 77 as number,
+  heap_slot_mb: 78 as number,
+  heap_range_mb: 79 as number,
+  heap_refusals: 80 as number,
+  heap_largest_free_mb: 81 as number,
+  ring_cq_peak: 82 as number,
+  ring_held_peak: 83 as number,
+  q_terrain: 84 as number,
+  q_place: 85 as number,
+  cap_record_refused: 86 as number,
+  turn_effects_ms: 87 as number,
+  turn_stage_ms: 88 as number,
+  turn_step_ms: 89 as number,
+  turn_step_name: 90 as number,
+  WORDS: 91 as number,
 } as const;
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what was fetched, and what it all holds — and the report and the panel both follow it. */
@@ -74,7 +72,7 @@ export const FRAME_GROUPS = {
   cap: ["cap_record_refused"],
   q: ["q_terrain", "q_place"],
   tiles: ["tiles_total", "zoom_tiles", "tiles_place"],
-  device: ["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"],
+  device: ["buffers", "buffer_mb", "tex_depth_mb", "tex_layers_mb"],
   heap: ["heap_used_mb", "heap_live_mb", "heap_run_mb", "heap_slot_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"],
   ring: ["ring_cq_peak", "ring_held_peak"],
 } as const;
@@ -102,9 +100,9 @@ export const TASK = {
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */
 export const WORST = {
   sample: 0 as number,
-  has_prev: 98 as number,
-  prev: 99 as number,
-  WORDS: 197 as number,
+  has_prev: 91 as number,
+  prev: 92 as number,
+  WORDS: 183 as number,
 } as const;
 
 export const SPREAD = {
@@ -165,24 +163,24 @@ export const SUMMARY = {
     chunks: 21 as number,
     phases: 24 as number,
     gpu_spans: 39 as number,
-    used_delta_mb: 63 as number,
-    census: 64 as number,
-    last: 88 as number,
-    WORDS: 186 as number,
+    used_delta_mb: 60 as number,
+    census: 61 as number,
+    last: 81 as number,
+    WORDS: 172 as number,
   },
   tasks: {
-    AT: 191 as number,
+    AT: 177 as number,
     slots: 0 as number,
     WORDS: 125 as number,
   },
   counters: {
-    AT: 316 as number,
+    AT: 302 as number,
     sheet_repacks: 0 as number,
     sheet_uploads: 1 as number,
     WORDS: 2 as number,
   },
   sheet: {
-    AT: 318 as number,
+    AT: 304 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -191,21 +189,21 @@ export const SUMMARY = {
     WORDS: 5 as number,
   },
   held: {
-    AT: 323 as number,
+    AT: 309 as number,
     decor_blocks: 0 as number,
     decor_instances: 1 as number,
     decor_bytes: 2 as number,
     WORDS: 3 as number,
   },
   fetch: {
-    AT: 326 as number,
+    AT: 312 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   peak: {
-    AT: 329 as number,
+    AT: 315 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -218,13 +216,13 @@ export const SUMMARY = {
     WORDS: 9 as number,
   },
   steps: {
-    AT: 338 as number,
+    AT: 324 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
   quality: {
-    AT: 499 as number,
+    AT: 485 as number,
     step: 0 as number,
     star: 1 as number,
     frames_held: 2 as number,
@@ -234,7 +232,7 @@ export const SUMMARY = {
   },
   /** Where the camera and the pointer are as the read finds them, recording or not: angles in radians, `dist` and `hover_x`..`hover_z` in units, `center_z` and `hover_alt` in metres, and NaN where there is none; the hover is what the pointer meets as drawn, whether or not it could strike it there. Under the pointer, `cell_want` is the camera grid's cell there as a zoom, at the distance it is met at. */
   view: {
-    AT: 504 as number,
+    AT: 490 as number,
     dist: 0 as number,
     polar: 1 as number,
     azimuth: 2 as number,
@@ -251,7 +249,7 @@ export const SUMMARY = {
     cell_want: 13 as number,
     WORDS: 14 as number,
   },
-  WORDS: 518 as number,
+  WORDS: 504 as number,
 } as const;
 
 /** What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */

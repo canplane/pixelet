@@ -21,17 +21,13 @@
 
 export const SETTINGS = {
   /** Ground color from the art pack (four taps of the layer array per
-   * fragment) instead of the flat per-instance average. The chunk shader's
+   * fragment) instead of the flat per-instance average. The paint shader's
    * `frame.low_spec` is this, inverted.
    *
    * Low because the four taps are all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
    * pass of its own, and no work off the GPU past an atlas the client
-   * already holds.
-   *
-   * It sources the chunks: the shader samples a leaf's layer or does not,
-   * but a tier over it carries one color and no layer to sample, so which
-   * color that is was baked in (mesh/chunk.rs). */
+   * already holds. */
   textures: {
     key: 0 as number,
     kind: "toggle",
@@ -41,7 +37,7 @@ export const SETTINGS = {
   },
   /** Procedurally scattered decor only; what the player placed stays.
    *
-   * Med because it is models rather than a shading term: a chunk builds its
+   * Med because it is models rather than a shading term: a cube of the eye's builds its
    * decor and the frame draws it, so what it costs follows what is in view.
    * It has been the frame's own bottleneck — 20260912-what-to-render-when.md
    * reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
@@ -111,7 +107,7 @@ export const SETTINGS = {
     section: "camera",
     dev_options: ["through"],
   },
-  /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/chunk.wgsl).
+  /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
     key: 8 as number,
@@ -179,7 +175,7 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, the one the rays are cast through, a cell a ray, and the chunks tinted by how many zooms a face is off the one the grid's rule draws there: green at it, blue finer, red coarser (scene/indicator/camera_gizmo.rs). */
+  /** The camera grid over the screen, the one the rays are cast through, a cell a ray (scene/indicator/camera_gizmo.rs). */
   camera_gizmo: {
     key: 16 as number,
     kind: "toggle",
@@ -221,17 +217,13 @@ export const SETTINGS = {
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */
 export const SETTINGS_SHIPPED = {
   /** Ground color from the art pack (four taps of the layer array per
-   * fragment) instead of the flat per-instance average. The chunk shader's
+   * fragment) instead of the flat per-instance average. The paint shader's
    * `frame.low_spec` is this, inverted.
    *
    * Low because the four taps are all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
    * pass of its own, and no work off the GPU past an atlas the client
-   * already holds.
-   *
-   * It sources the chunks: the shader samples a leaf's layer or does not,
-   * but a tier over it carries one color and no layer to sample, so which
-   * color that is was baked in (mesh/chunk.rs). */
+   * already holds. */
   textures: {
     key: 0 as number,
     kind: "toggle",
@@ -241,7 +233,7 @@ export const SETTINGS_SHIPPED = {
   },
   /** Procedurally scattered decor only; what the player placed stays.
    *
-   * Med because it is models rather than a shading term: a chunk builds its
+   * Med because it is models rather than a shading term: a cube of the eye's builds its
    * decor and the frame draws it, so what it costs follows what is in view.
    * It has been the frame's own bottleneck — 20260912-what-to-render-when.md
    * reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
@@ -303,7 +295,7 @@ export const SETTINGS_SHIPPED = {
     section: "camera",
     dev_options: ["through"],
   },
-  /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/chunk.wgsl).
+  /** Darkens cube edges that border open air (crates/client/render/src/frame/shader/paint.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   edge_shade: {
     key: 8 as number,

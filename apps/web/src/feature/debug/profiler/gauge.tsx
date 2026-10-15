@@ -181,8 +181,8 @@ export function ProfilerGauge({ g }: { g: Gauge | null }) {
             }`}
           />
           <Row k="kernel memory" v={`${round(kernel_memory().byteLength / 1048576)} MB`} />
-          <Row k="buffers/arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}/${valueText("_mb", f.last.arena_mb)}`} />
-          <Row k="depth/shadow/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_shadow_mb}/${f.last.tex_layers_mb} MB`} />
+          <Row k="buffers" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)}`} />
+          <Row k="depth/layers" v={`${f.last.tex_depth_mb}/${f.last.tex_layers_mb} MB`} />
           {g.sheet.entries > 0 && <Row k="sheet" v={`${g.sheet.size}px ${g.sheet.entries} ${sheetPct}%`} warn={g.sheet.size > g.sheet.initial && sheetPct < ATLAS_SPARSE_PCT} />}
         </>
       )}

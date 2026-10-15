@@ -5,7 +5,6 @@
   ],
   "GPU_SPAN_NAMES": [
     "air",
-    "shadow",
     "prepass",
     "ao",
     "world",

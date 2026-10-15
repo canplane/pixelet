@@ -13,7 +13,6 @@ use crate::gpu::renderer::{frame_group, put_f32, put_u32, Scratch};
 #[derive(Clone, Copy)]
 pub enum Stage {
     Lit,
-    Depth,
     Prepass,
 }
 
@@ -22,32 +21,28 @@ pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> u32 {
     pipelines.build(g, PIPELINE_SKINNED, format::CANVAS).layouts[0]
 }
 
-/// The light's is none where nothing is drawn into a shadow map.
 pub struct FrameGroups {
     pub frame: u32,
-    pub light: u32,
     layout: u32,
     air: [u32; AIR_WORDS],
 }
 
 impl FrameGroups {
-    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5], air: [u32; AIR_WORDS]) -> FrameGroups {
+    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, shadow: [u32; 10], ao: [u32; 5], air: [u32; AIR_WORDS]) -> FrameGroups {
         FrameGroups {
             frame: frame_group(g, layout, frame_buffer, shadow, ao, air),
-            light: light.map_or(0, |(frame, entries)| frame_group(g, layout, frame, entries, ao, air)),
             layout,
             air,
         }
     }
 
-    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5]) {
+    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, shadow: [u32; 10], ao: [u32; 5]) {
         self.release();
-        *self = FrameGroups::new(g, self.layout, frame_buffer, shadow, light, ao, self.air);
+        *self = FrameGroups::new(g, self.layout, frame_buffer, shadow, ao, self.air);
     }
 
     pub fn release(&self) {
         release(self.frame);
-        release(self.light);
     }
 }
 

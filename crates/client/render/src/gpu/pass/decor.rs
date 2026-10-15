@@ -6,7 +6,7 @@
 
 use crate::frame::draw::uniform_of;
 use crate::frame::draw::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
-use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
+use crate::frame::shader::record::PIPELINE_DECOR_PREPASS;
 use crate::gpu::api::{object, release, Gpu};
 use crate::gpu::api_spec::{address, compare, filter, format};
 use crate::gpu::pass::impostor::Extent;
@@ -43,7 +43,6 @@ struct Skin {
 pub struct DecorPass {
     lit: Built,
     ghost: Built,
-    depth: Built,
     prepass: Built,
     sampler: u32,
     uniforms: DrawUniforms,
@@ -58,7 +57,6 @@ impl DecorPass {
         DecorPass {
             lit: pipelines.build(g, PIPELINE_DECOR, format::CANVAS),
             ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, format::CANVAS),
-            depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, format::CANVAS),
             prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, format::CANVAS),
             sampler,
             uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
@@ -128,7 +126,6 @@ impl DecorPass {
     pub fn draw(&mut self, g: &Gpu, pass: u32, draws: &Draws, blocks: &mut Blocks, stage: Stage, frame: (u32, &mut u32)) {
         let pipeline = match stage {
             Stage::Lit => self.lit.pipeline,
-            Stage::Depth => self.depth.pipeline,
             Stage::Prepass => self.prepass.pipeline,
         };
         self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, pipeline, frame);
